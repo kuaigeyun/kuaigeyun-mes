@@ -38,6 +38,7 @@ import { useResourcePermissions } from '../../../../../hooks/useResourcePermissi
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import {
+  applyPurchaseOrderChange,
   approvePurchaseOrderChange,
   createPurchaseOrderChangeFromOrder,
   deletePurchaseOrderChange,
@@ -854,6 +855,25 @@ const PurchaseOrderChangesPage: React.FC = () => {
               {detail.capabilities?.update?.allowed && purchaseOrderChangePerms.canUpdate ? (
                 <Button icon={<EditOutlined />} onClick={() => { setDetailOpen(false); openEdit(detail); }}>
                   {t('common.edit')}
+                </Button>
+              ) : null}
+              {detail.capabilities?.apply?.allowed &&
+              purchaseOrderChangePerms.canAction?.('execute') ? (
+                <Button
+                  type="primary"
+                  onClick={async () => {
+                    try {
+                      await applyPurchaseOrderChange(detail.id!);
+                      messageApi.success(t('app.kuaizhizao.purchaseOrderChange.applySuccess'));
+                      reloadTable();
+                      setChangeTrackingRefreshKey((k) => k + 1);
+                      setDetail(await getPurchaseOrderChange(detail.id!));
+                    } catch (e: any) {
+                      messageApi.error(e?.message || t('common.operationFailed'));
+                    }
+                  }}
+                >
+                  {t('app.kuaizhizao.purchaseOrderChange.applyConfirm')}
                 </Button>
               ) : null}
               <UniWorkflowActions {...rowActionKind('skip')}

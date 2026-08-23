@@ -458,6 +458,37 @@ async def _dispatch_purchase_request(
     _unsupported("purchase_request", action)
 
 
+async def _dispatch_purchase_arrival_delay(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaizhizao.schemas.purchase_arrival import ApproveDelayReportRequest
+    from apps.kuaizhizao.services.purchase_arrival_delay_service import PurchaseArrivalDelayService
+
+    svc = PurchaseArrivalDelayService()
+    if action == "submit":
+        return await svc.submit(tenant_id, entity_id, user_id)
+    if action == "approve":
+        return await svc.approve(
+            tenant_id,
+            entity_id,
+            ApproveDelayReportRequest(approved=True, review_remarks=reason),
+            user_id,
+        )
+    if action == "reject":
+        return await svc.approve(
+            tenant_id,
+            entity_id,
+            ApproveDelayReportRequest(approved=False, review_remarks=reason or "审批驳回"),
+            user_id,
+        )
+    _unsupported("purchase_arrival_delay", action)
+
+
 async def _dispatch_purchase_inquiry(
     action: str,
     *,
@@ -947,6 +978,7 @@ HANDLERS: Dict[str, DispatchFn] = {
     "demand": _dispatch_demand,
     "purchase_order": _dispatch_purchase_order,
     "purchase_order_change": _dispatch_purchase_order_change,
+    "purchase_arrival_delay": _dispatch_purchase_arrival_delay,
     "purchase_request": _dispatch_purchase_request,
     "purchase_inquiry": _dispatch_purchase_inquiry,
     "reporting_record": _dispatch_reporting_record,

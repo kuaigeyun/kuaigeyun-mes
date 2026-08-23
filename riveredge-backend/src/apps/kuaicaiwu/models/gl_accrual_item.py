@@ -17,9 +17,9 @@ class GlAccrualItem(BaseModel):
     item_name = fields.CharField(max_length=200, description="名称")
     # accrual=预提 deferred=待摊
     accrual_type = fields.CharField(max_length=20, default="accrual", description="类型")
-    total_amount = fields.DecimalField(max_digits=18, decimal_places=2, default=0, description="总额")
-    amortized_amount = fields.DecimalField(max_digits=18, decimal_places=2, default=0, description="已摊/已提")
-    period_amount = fields.DecimalField(max_digits=18, decimal_places=2, default=0, description="每期金额")
+    total_amount = fields.DecimalField(max_digits=20, decimal_places=4, default=0, description="总额")
+    amortized_amount = fields.DecimalField(max_digits=20, decimal_places=4, default=0, description="已摊/已提")
+    period_amount = fields.DecimalField(max_digits=20, decimal_places=4, default=0, description="每期金额")
     start_year = fields.IntField(description="起始年")
     start_month = fields.IntField(description="起始月")
     periods = fields.IntField(default=1, description="期数")

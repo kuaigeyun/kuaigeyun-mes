@@ -128,7 +128,7 @@ class ToolMaintenance(BaseModel):
     executor = fields.CharField(max_length=100, null=True, description="执行人")
     content = fields.TextField(null=True, description="维保内容")
     result = fields.CharField(max_length=50, default="完成", description="维保结果")
-    cost = fields.DecimalField(max_digits=10, decimal_places=2, default=0, description="维保费用")
+    cost = fields.DecimalField(max_digits=12, decimal_places=4, default=0, description="维保费用")
     
     remark = fields.TextField(null=True)
     attachments = fields.JSONField(null=True, description="附件列表")

@@ -9,6 +9,7 @@ import {
   BellOutlined,
   RocketOutlined,
   RollbackOutlined,
+  AlertOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -126,7 +127,7 @@ const PurchaseDashboard: React.FC = () => {
         icon: <InboxOutlined style={{ fontSize: 24, color: '#fff' }} />,
         gradient: 'linear-gradient(135deg, #ff4d4f 0%, #ff7875 100%)',
         boxShadow: '0 4px 12px rgba(255, 77, 79, 0.15)',
-        onClick: () => navigate('/apps/kuaizhizao/purchase-management/purchase-orders?status=approved'),
+        onClick: () => navigate('/apps/kuaizhizao/purchase-management/arrival-warnings'),
         sideMetrics: [{
           label: t('app.kuaizhizao.purchaseDashboard.kpi.overdue'),
           value: s?.overdue_receipts ?? 0,
@@ -149,6 +150,7 @@ const PurchaseDashboard: React.FC = () => {
     () => [
       { key: 'req', title: t('app.kuaizhizao.purchaseDashboard.shortcut.requisition'), icon: <FileSearchOutlined style={{ fontSize: 22, color: '#1890ff' }} />, path: '/apps/kuaizhizao/purchase-management/purchase-requisitions' },
       { key: 'po', title: t('app.kuaizhizao.purchaseDashboard.shortcut.purchaseOrder'), icon: <ShoppingCartOutlined style={{ fontSize: 22, color: '#52c41a' }} />, path: '/apps/kuaizhizao/purchase-management/purchase-orders' },
+      { key: 'warn', title: t('app.kuaizhizao.menu.purchase-management.arrival-warnings'), icon: <AlertOutlined style={{ fontSize: 22, color: '#fa541c' }} />, path: '/apps/kuaizhizao/purchase-management/arrival-warnings' },
       { key: 'supplier', title: t('app.kuaizhizao.purchaseDashboard.shortcut.supplier'), icon: <UserOutlined style={{ fontSize: 22, color: '#fa8c16' }} />, path: '/apps/kuaizhizao/purchase-management/suppliers' },
       { key: 'notice', title: t('app.kuaizhizao.purchaseDashboard.shortcut.receiptNotice'), icon: <BellOutlined style={{ fontSize: 22, color: '#722ed1' }} />, path: '/apps/kuaizhizao/purchase-management/receipt-notices' },
       { key: 'return', title: t('app.kuaizhizao.purchaseDashboard.shortcut.purchaseReturn'), icon: <RollbackOutlined style={{ fontSize: 22, color: '#ff4d4f' }} />, path: '/apps/kuaizhizao/purchase-management/purchase-returns' },

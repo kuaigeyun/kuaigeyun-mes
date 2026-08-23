@@ -90,6 +90,17 @@
     overflow: hidden;
   }
 
+  .roles-permissions-center-toolbar__role-name {
+    font-size: 16px;
+    font-weight: 600;
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .roles-permissions-center-toolbar__actions {
     flex-shrink: 0;
     display: flex;
@@ -134,18 +145,42 @@
     align-items: center;
     border-radius: var(--ant-border-radius, 6px);
     margin: 2px 0;
+    overflow: hidden;
+    max-width: 100%;
   }
 
   .roles-permissions-tree.ant-tree .ant-tree-node-content-wrapper:hover {
     background: var(--ant-color-fill-tertiary);
   }
 
+  .roles-permissions-tree.ant-tree .ant-tree-title {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+  }
+
   .role-tree-row__label {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    flex-wrap: nowrap;
+  }
+
+  .role-tree-row__name {
     flex: 1;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .role-tree-row__tags {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 6px;
   }
 
   .role-tree-row__actions {

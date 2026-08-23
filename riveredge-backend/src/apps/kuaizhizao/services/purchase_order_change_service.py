@@ -63,6 +63,38 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
         super().__init__(PurchaseOrderChangeOrder)
         self.business_config_service = BusinessConfigService()
 
+    async def _require_change_confirm(self, tenant_id: int) -> bool:
+        cfg = await self.business_config_service.get_business_config(tenant_id)
+        return bool(
+            cfg.get("parameters", {})
+            .get("procurement", {})
+            .get("require_purchase_order_change_confirm", False)
+        )
+
+    async def _rollup_po_delivery_date(self, order: PurchaseOrder) -> None:
+        remaining = await PurchaseOrderItem.filter(
+            tenant_id=order.tenant_id, order_id=order.id, deleted_at__isnull=True
+        ).all()
+        dates = [i.required_date for i in remaining if i.required_date]
+        if dates:
+            order.delivery_date = max(dates)
+        await order.save()
+
+    async def _sync_open_receipt_notice_dates(
+        self, tenant_id: int, order_id: int, delivery_date: date
+    ) -> None:
+        from apps.kuaizhizao.models.receipt_notice import ReceiptNotice
+
+        notices = await ReceiptNotice.filter(
+            tenant_id=tenant_id,
+            purchase_order_id=order_id,
+            deleted_at__isnull=True,
+            purchase_receipt_id__isnull=True,
+        ).all()
+        for notice in notices:
+            notice.planned_receipt_date = delivery_date
+            await notice.save()
+
     async def _generate_code(self, tenant_id: int) -> str:
         return await self.generate_code(tenant_id, "PURCHASE_ORDER_CHANGE_CODE", prefix="POC")
 
@@ -660,6 +692,8 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
         doc.updated_by_name = user_info["name"]
         await doc.save()
         if not audit_required:
+            if await self._require_change_confirm(tenant_id):
+                return await self._to_detail(doc)
             return await self.apply(tenant_id, change_id, operator_id)
         return await self._to_detail(doc)
 
@@ -685,6 +719,8 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
         doc.updated_by_name = user_info["name"]
         await doc.save()
         if body.approved:
+            if await self._require_change_confirm(tenant_id):
+                return await self._to_detail(doc)
             return await self.apply(tenant_id, change_id, operator_id)
         return await self._to_detail(doc)
 
@@ -838,7 +874,8 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
             order.total_amount = sum((Decimal(str(i.total_price or 0)) for i in remaining), Decimal("0"))
             order.updated_by = operator_id
             order.updated_by_name = operator_name
-            await order.save()
+            await self._rollup_po_delivery_date(order)
+            await self._sync_open_receipt_notice_dates(tenant_id, order.id, order.delivery_date)
 
             doc.status = OrderChangeApplyStatus.APPLIED.value
             doc.applied_at = resolve_business_datetime()
@@ -869,5 +906,8 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
             )
         except Exception:
             pass
+
+        from apps.kuaizhizao.services.purchase_arrival_delay_service import PurchaseArrivalDelayService
+        await PurchaseArrivalDelayService().mark_applied_for_change(tenant_id, change_id)
 
         return await self._to_detail(doc)

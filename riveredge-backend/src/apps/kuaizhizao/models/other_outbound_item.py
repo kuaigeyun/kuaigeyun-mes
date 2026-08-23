@@ -26,9 +26,9 @@ class OtherOutboundItem(BaseModel):
     material_unit = fields.CharField(max_length=20, description="物料单位")
 
     # 出库数量和价格
-    outbound_quantity = fields.DecimalField(max_digits=10, decimal_places=2, description="出库数量")
-    unit_price = fields.DecimalField(max_digits=10, decimal_places=2, default=0, description="单价")
-    total_amount = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="金额")
+    outbound_quantity = fields.DecimalField(max_digits=12, decimal_places=4, description="出库数量")
+    unit_price = fields.DecimalField(max_digits=12, decimal_places=4, default=0, description="单价")
+    total_amount = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="金额")
 
     # 库位信息
     location_id = fields.IntField(null=True, description="库位ID")

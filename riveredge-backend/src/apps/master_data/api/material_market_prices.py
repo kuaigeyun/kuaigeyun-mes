@@ -17,6 +17,7 @@ from apps.master_data.schemas.material_market_price_schemas import (
     MaterialMarketPriceListResponse,
     MaterialMarketPricePresetItem,
     MaterialMarketPriceResponse,
+    MaterialMarketPriceTrendResponse,
     MaterialMarketPriceUpdate,
     MaterialMarketSaleResolveResponse,
 )
@@ -165,6 +166,30 @@ async def upsert_market_price(
         return MaterialMarketPriceResponse.model_validate(payload)
     except NotFoundError as e:
         raise _http(status.HTTP_404_NOT_FOUND, getattr(e, "message", None) or str(e))
+    except ValidationError as e:
+        raise _http(status.HTTP_400_BAD_REQUEST, getattr(e, "message", None) or str(e))
+
+
+@router.get(
+    "/market-prices/trend",
+    response_model=MaterialMarketPriceTrendResponse,
+    summary="Get market price trend for a quote code",
+    dependencies=[_READ],
+)
+async def get_market_price_trend(
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    quote_code: str = Query(..., alias="quoteCode"),
+    days: int = Query(30, ge=1, le=366),
+    end_date: Optional[date] = Query(None, alias="endDate"),
+):
+    try:
+        payload = await MaterialMarketPriceService.get_price_trend(
+            tenant_id,
+            quote_code=quote_code,
+            days=days,
+            end_date=end_date,
+        )
+        return MaterialMarketPriceTrendResponse.model_validate(payload)
     except ValidationError as e:
         raise _http(status.HTTP_400_BAD_REQUEST, getattr(e, "message", None) or str(e))
 

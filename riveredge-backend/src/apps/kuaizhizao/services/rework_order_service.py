@@ -561,6 +561,39 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
             resp.original_work_order_code = original_work_order.code
         from apps.kuaizhizao.services.document_lifecycle_service import get_rework_order_lifecycle
         resp.lifecycle = get_rework_order_lifecycle(rework_order)
+        if rework_order_data.original_work_order_id and original_work_order:
+            from apps.kuaizhizao.services.kuaizhizao_business_notification import (
+                ACTION_REWORKED,
+                DOC_WORK_ORDER,
+                dispatch_kuaizhizao_notification,
+            )
+
+            try:
+                await dispatch_kuaizhizao_notification(
+                    tenant_id,
+                    trigger_document=DOC_WORK_ORDER,
+                    trigger_action=ACTION_REWORKED,
+                    variables={
+                        "work_order_code": original_work_order.code or str(original_work_order.id),
+                        "rework_order_code": rework_order.code or str(rework_order.id),
+                        "product_name": rework_order.product_name or "—",
+                        "quantity": str(rework_order.quantity or ""),
+                        "rework_reason": rework_order.rework_reason or "—",
+                        "detail_path": (
+                            f"/apps/kuaizhizao/production-execution/work-orders?highlight="
+                            f"{original_work_order.id}"
+                        ),
+                        "work_order_id": str(original_work_order.id),
+                    },
+                    context={"creator_user_id": original_work_order.created_by},
+                )
+            except Exception as exc:
+                logger.warning(
+                    "工单转返工消息提醒失败 tenant={} wo={}: {}",
+                    tenant_id,
+                    original_work_order.id,
+                    exc,
+                )
         return resp
 
     async def create_rework_order_from_work_order(

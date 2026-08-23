@@ -19,11 +19,12 @@ import {
   GLOBAL_DOC_LIST_FIELD_RANK,
   masterCrudCreatedUpdatedColumns,
 } from '../../../utils/materialListCore';
-import { materialMarketPriceApi } from '../../../services/material-market-price';
+import { MaterialMarketPriceTrendModal } from '../../../components/MaterialMarketPriceTrendModal';
 import type {
   MaterialMarketPrice,
   MaterialMarketPricePresetItem,
 } from '../../../types/material-market-price';
+import { materialMarketPriceApi } from '../../../services/material-market-price';
 
 function formatDate(v: unknown): string | undefined {
   if (!v) return undefined;
@@ -90,6 +91,8 @@ const MarketPricesPage: React.FC = () => {
   const [presetConfirmLoading, setPresetConfirmLoading] = useState(false);
   const [presetList, setPresetList] = useState<MaterialMarketPricePresetItem[]>([]);
   const [selectedPresetCodes, setSelectedPresetCodes] = useState<string[]>([]);
+  const [trendOpen, setTrendOpen] = useState(false);
+  const [trendRecord, setTrendRecord] = useState<MaterialMarketPrice | null>(null);
   const today = todaySiteDateString();
 
   const handleCreate = () => {
@@ -225,6 +228,11 @@ const MarketPricesPage: React.FC = () => {
     }
   };
 
+  const openTrend = (record: MaterialMarketPrice) => {
+    setTrendRecord(record);
+    setTrendOpen(true);
+  };
+
   const columns: ProColumns<MaterialMarketPrice>[] = useMemo(
     () => [
       {
@@ -312,9 +320,22 @@ const MarketPricesPage: React.FC = () => {
         key: 'action',
         valueType: 'option',
         fixed: 'right',
-        render: (_, record) =>
-          perms.canUpdate ? (
-            <Space>
+        render: (_, record) => {
+          const actions: React.ReactNode[] = [];
+          if (perms.canRead) {
+            actions.push(
+              <Button
+                key="detail"
+                {...rowActionKind('read')}
+                size="small"
+                onClick={() => openTrend(record)}
+              >
+                {t('common.detail')}
+              </Button>,
+            );
+          }
+          if (perms.canUpdate) {
+            actions.push(
               <Button
                 key="edit"
                 {...rowActionKind('update')}
@@ -323,7 +344,7 @@ const MarketPricesPage: React.FC = () => {
                 onClick={() => handleEdit(record)}
               >
                 {t('common.edit')}
-              </Button>
+              </Button>,
               <Popconfirm
                 key="delete"
                 {...rowActionKind('delete')}
@@ -333,18 +354,20 @@ const MarketPricesPage: React.FC = () => {
                 <Button type="link" size="small" danger icon={<DeleteOutlined />}>
                   {t('common.delete')}
                 </Button>
-              </Popconfirm>
-            </Space>
-          ) : null,
+              </Popconfirm>,
+            );
+          }
+          return actions.length > 0 ? <Space>{actions}</Space> : null;
+        },
       },
     ],
-    [t, perms.canUpdate, today],
+    [t, perms.canRead, perms.canUpdate, today],
   );
 
   return (
     <ListPageTemplate>
       <UniTable<MaterialMarketPrice>
-        columnPersistenceId="apps.master-data.pages.materials.market-prices.list-v3"
+        columnPersistenceId="apps.master-data.pages.materials.market-prices.list-v4"
         headerTitle={t('app.master-data.menu.materials.market-prices')}
         actionRef={actionRef}
         rowKey="uuid"
@@ -491,6 +514,17 @@ const MarketPricesPage: React.FC = () => {
           ]}
         />
       </Modal>
+
+      <MaterialMarketPriceTrendModal
+        open={trendOpen}
+        onClose={() => {
+          setTrendOpen(false);
+          setTrendRecord(null);
+        }}
+        quoteCode={trendRecord?.code}
+        quoteName={trendRecord?.name}
+        currentPrice={trendRecord ? numericPrice(trendRecord.unitPrice) : undefined}
+      />
     </ListPageTemplate>
   );
 };

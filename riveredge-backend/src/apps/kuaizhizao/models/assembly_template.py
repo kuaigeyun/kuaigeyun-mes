@@ -35,7 +35,7 @@ class AssemblyTemplate(BaseModel):
     product_material_name = fields.CharField(max_length=200, description="成品物料名称")
 
     base_quantity = fields.DecimalField(
-        max_digits=12, decimal_places=2, default=1, description="基准数量（BOM 展开基数）"
+        max_digits=14, decimal_places=4, default=1, description="基准数量（BOM 展开基数）"
     )
     source_type = fields.CharField(
         max_length=20, default="manual", description="来源类型（manual/bom）"
@@ -76,7 +76,7 @@ class AssemblyTemplateItem(BaseModel):
     quantity_per_base = fields.DecimalField(
         max_digits=12, decimal_places=4, description="单位成品用量"
     )
-    unit_price = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="默认单价")
+    unit_price = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="默认单价")
     remarks = fields.TextField(null=True, description="备注")
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")
 

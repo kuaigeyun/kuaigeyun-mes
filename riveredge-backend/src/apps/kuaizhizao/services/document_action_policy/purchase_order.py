@@ -9,6 +9,7 @@ from infra.exceptions.exceptions import BusinessLogicError
 from apps.kuaizhizao.constants import (
     DocumentStatus,
     LEGACY_AUDITED_VALUES,
+    ORDER_PUSHABLE_STATUSES,
     ReviewStatus,
     is_draft_status,
     is_pending_review_status,
@@ -45,6 +46,21 @@ def _is_audited_status(status: Any) -> bool:
     return normalized in (DocumentStatus.AUDITED.value, DocumentStatus.CONFIRMED.value) or raw in LEGACY_AUDITED_VALUES
 
 
+def _is_order_pushable_status(status: Any) -> bool:
+    """与 ORDER_PUSHABLE_STATUSES 一致：已审核/已确认/执行中均可继续下推收货。"""
+    raw = _norm(status)
+    if not raw:
+        return False
+    normalized = normalize_status(raw)
+    if normalized in (
+        DocumentStatus.AUDITED.value,
+        DocumentStatus.CONFIRMED.value,
+        DocumentStatus.IN_PROGRESS.value,
+    ):
+        return True
+    return raw in ORDER_PUSHABLE_STATUSES or normalized in ORDER_PUSHABLE_STATUSES
+
+
 def _is_rejected_status(status: Any) -> bool:
     raw = _norm(status)
     normalized = normalize_status(raw)
@@ -54,7 +70,7 @@ def _is_rejected_status(status: Any) -> bool:
 def _derive_outstanding_push_cap(status: Any, *, has_items: bool, has_outstanding: bool) -> ActionCapability:
     push_allowed = False
     push_reason = "purchase_order.push_receipt.not_audited"
-    if _is_audited_status(status):
+    if _is_order_pushable_status(status):
         if not has_items:
             push_reason = "purchase_order.push_receipt.no_items"
         elif not has_outstanding:
@@ -75,7 +91,7 @@ def _derive_receipt_notice_push_cap(
     """按行剩余可通知数量开门禁；已有通知单不阻断分批下推。"""
     push_allowed = False
     push_reason = "purchase_order.push_receipt.not_audited"
-    if _is_audited_status(status):
+    if _is_order_pushable_status(status):
         if not has_items:
             push_reason = "purchase_order.push_receipt.no_items"
         elif not has_pushable_notice_outstanding:
@@ -99,7 +115,7 @@ def _derive_purchase_receipt_push_cap(
 ) -> ActionCapability:
     push_allowed = False
     push_reason = "purchase_order.push_receipt.not_audited"
-    if _is_audited_status(status):
+    if _is_order_pushable_status(status):
         if not has_items:
             push_reason = "purchase_order.push_receipt.no_items"
         elif not has_pushable_outstanding:

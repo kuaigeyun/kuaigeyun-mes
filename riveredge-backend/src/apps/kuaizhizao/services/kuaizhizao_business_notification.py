@@ -16,6 +16,8 @@ DOC_WORK_ORDER = "work_order"
 DOC_QUALITY_EXCEPTION = "quality_exception"
 DOC_QUALITY_INSPECTION = "quality_inspection"
 DOC_EQUIPMENT_FAULT = "equipment_fault"
+DOC_INVENTORY_ALERT = "inventory_alert"
+DOC_SHIPMENT_NOTICE = "shipment_notice"
 
 ACTION_DELIVERY_DELAYED = "delivery_delayed"
 ACTION_CREATED = "created"
@@ -25,6 +27,16 @@ ACTION_REMIND_BATCHING = "remind_batching"
 ACTION_ISSUED = "issued"
 ACTION_REJECTED = "rejected"
 ACTION_PASSED = "passed"
+ACTION_APPROVED = "approved"
+ACTION_PUSHED_TO_WORK_ORDER = "pushed_to_work_order"
+ACTION_RELEASED = "released"
+ACTION_COMPLETED = "completed"
+ACTION_REWORKED = "reworked"
+ACTION_ASSIGNED = "assigned"
+ACTION_RESOLVED = "resolved"
+ACTION_TRIGGERED = "triggered"
+ACTION_ARRIVAL_OVERDUE = "arrival_overdue"
+ACTION_CONFIRMED = "confirmed"
 
 
 async def dispatch_kuaizhizao_notification(
@@ -67,3 +79,55 @@ async def dispatch_kuaizhizao_notification(
             exc,
         )
         return 0
+
+
+async def notify_sales_order_approved(
+    tenant_id: int,
+    *,
+    order_code: str,
+    customer_name: str,
+    delivery_date: str,
+    sales_order_id: int,
+    creator_user_id: Optional[int],
+    salesman_user_id: Optional[int],
+) -> int:
+    return await dispatch_kuaizhizao_notification(
+        tenant_id,
+        trigger_document=DOC_SALES_ORDER,
+        trigger_action=ACTION_APPROVED,
+        variables={
+            "order_code": order_code or str(sales_order_id),
+            "customer_name": customer_name or "—",
+            "delivery_date": delivery_date or "—",
+            "detail_path": f"/apps/kuaizhizao/sales-management/sales-orders?highlight={sales_order_id}",
+            "sales_order_id": str(sales_order_id),
+        },
+        context={
+            "creator_user_id": creator_user_id,
+            "salesman_user_id": salesman_user_id,
+        },
+    )
+
+
+async def notify_work_order_completed(
+    tenant_id: int,
+    *,
+    work_order_id: int,
+    work_order_code: str,
+    product_name: str,
+    completed_quantity: str,
+    creator_user_id: Optional[int],
+) -> int:
+    return await dispatch_kuaizhizao_notification(
+        tenant_id,
+        trigger_document=DOC_WORK_ORDER,
+        trigger_action=ACTION_COMPLETED,
+        variables={
+            "work_order_code": work_order_code or str(work_order_id),
+            "product_name": product_name or "—",
+            "completed_quantity": completed_quantity or "0",
+            "detail_path": f"/apps/kuaizhizao/production-execution/work-orders?highlight={work_order_id}",
+            "work_order_id": str(work_order_id),
+        },
+        context={"creator_user_id": creator_user_id},
+    )

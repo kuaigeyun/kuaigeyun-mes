@@ -41,7 +41,7 @@ class SettlementRecord(BaseModel):
     credit_doc_code = fields.CharField(max_length=50, description="贷方单据编号")
 
     # 金额
-    amount = fields.DecimalField(max_digits=14, decimal_places=2, description="本次核销金额")
+    amount = fields.DecimalField(max_digits=16, decimal_places=4, description="本次核销金额")
     currency = fields.CharField(max_length=10, default="CNY", description="币种")
 
     settlement_date = fields.DateField(description="核销日期")

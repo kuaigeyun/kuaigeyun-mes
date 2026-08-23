@@ -4,9 +4,10 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { Button, Card } from 'antd';
-import { BulbOutlined, CopyOutlined } from '@ant-design/icons';
+import { BulbOutlined, CopyOutlined, UnorderedListOutlined } from '@ant-design/icons';
 import type { TFunction } from 'i18next';
 import { DASHBOARD_SECTION_CARD_CLASS } from './dashboardCardSurface';
+import { DashboardUpdateLogModal } from './DashboardUpdateLogModal';
 
 const TIP_COUNT = 12;
 const ROTATE_MS = 10000;
@@ -39,6 +40,7 @@ export function DashboardUsageTipsCarousel({
 
   const [index, setIndex] = useState(0);
   const [fading, setFading] = useState(false);
+  const [updateLogOpen, setUpdateLogOpen] = useState(false);
 
   const commitText = gitCommit.trim() || '—';
 
@@ -98,9 +100,26 @@ export function DashboardUsageTipsCarousel({
           />
         </div>
         <div className="dashboard-usage-tips-footer__build">
-          {t('pages.dashboard.buildTimeLabel')}: {buildTimeDisplay}
+          <span className="dashboard-usage-tips-footer__build-text">
+            {t('pages.dashboard.buildTimeLabel')}: {buildTimeDisplay}
+          </span>
+          <Button
+            type="link"
+            size="small"
+            className="dashboard-usage-tips-footer__changelog-btn"
+            icon={<UnorderedListOutlined />}
+            onClick={() => setUpdateLogOpen(true)}
+          >
+            {t('pages.dashboard.updateLogButton')}
+          </Button>
         </div>
       </div>
+
+      <DashboardUpdateLogModal
+        open={updateLogOpen}
+        onClose={() => setUpdateLogOpen(false)}
+        t={t}
+      />
     </Card>
   );
 }

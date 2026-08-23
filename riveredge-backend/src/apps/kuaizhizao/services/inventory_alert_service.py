@@ -14,6 +14,7 @@ from decimal import Decimal
 
 from tortoise.queryset import Q
 from tortoise.transactions import in_transaction
+from loguru import logger
 
 from apps.kuaizhizao.models.inventory_alert import InventoryAlertRule, InventoryAlert
 from apps.kuaizhizao.schemas.inventory_alert import (
@@ -896,5 +897,33 @@ class InventoryAlertService(AppBaseService[InventoryAlert]):
             status="pending",
             triggered_at=now,
         )
-        return InventoryAlertResponse.model_validate(alert)
+        alert_resp = InventoryAlertResponse.model_validate(alert)
+        from apps.kuaizhizao.services.kuaizhizao_business_notification import (
+            ACTION_TRIGGERED,
+            DOC_INVENTORY_ALERT,
+            dispatch_kuaizhizao_notification,
+        )
+
+        alert_type_label = "低库存" if alert_type == "low_stock" else "高库存"
+        try:
+            await dispatch_kuaizhizao_notification(
+                tenant_id,
+                trigger_document=DOC_INVENTORY_ALERT,
+                trigger_action=ACTION_TRIGGERED,
+                variables={
+                    "material_code": alert.material_code or "",
+                    "material_name": alert.material_name or "",
+                    "warehouse_name": warehouse_name or "",
+                    "alert_type_label": alert_type_label,
+                    "current_quantity": str(quantity),
+                    "threshold_value": str(eff),
+                    "alert_message": message,
+                    "detail_path": "/apps/kuaizhizao/warehouse-management/inventory-alerts",
+                    "inventory_alert_id": str(alert.id),
+                },
+                context={"creator_user_id": operator_id},
+            )
+        except Exception as exc:
+            logger.warning("库存预警消息提醒失败 tenant={}: {}", tenant_id, exc)
+        return alert_resp
 

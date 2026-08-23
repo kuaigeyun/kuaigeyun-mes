@@ -82,7 +82,7 @@ class InventoryAlertRule(BaseModel):
     # 阈值配置
     threshold_type = fields.CharField(max_length=20, description="阈值类型（quantity/percentage/days）")
     threshold_value = fields.DecimalField(
-        max_digits=12, decimal_places=2, null=True, description="阈值数值（继承物料时可空）"
+        max_digits=14, decimal_places=4, null=True, description="阈值数值（继承物料时可空）"
     )
     inherit_material_threshold = fields.BooleanField(
         default=False, description="是否继承物料最低/最高库存作为数量阈值"
@@ -173,8 +173,8 @@ class InventoryAlert(BaseModel):
     warehouse_name = fields.CharField(max_length=200, description="仓库名称")
 
     # 预警信息
-    current_quantity = fields.DecimalField(max_digits=12, decimal_places=2, description="当前库存数量")
-    threshold_value = fields.DecimalField(max_digits=12, decimal_places=2, description="阈值数值")
+    current_quantity = fields.DecimalField(max_digits=14, decimal_places=4, description="当前库存数量")
+    threshold_value = fields.DecimalField(max_digits=14, decimal_places=4, description="阈值数值")
     alert_level = fields.CharField(max_length=20, default="warning", description="预警级别（info/warning/critical）")
     alert_message = fields.TextField(description="预警消息")
 

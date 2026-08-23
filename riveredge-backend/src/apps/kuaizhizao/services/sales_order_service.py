@@ -102,11 +102,28 @@ class SalesOrderService:
         material_map: Dict[int, Material],
         *,
         money_fn,
+        partner_settlement_method: Optional[str] = None,
     ) -> Dict[str, Any]:
+        from apps.kuaicaiwu.utils.price_settlement_helpers import (
+            derive_price_settlement_status,
+            derive_provisional_unit_price,
+        )
+
         req_qty = item_data.required_quantity
         tax_r = item_data.tax_rate or Decimal("0")
         is_gift = bool(getattr(item_data, "is_gift", False))
         unit_pr = item_data.unit_price or Decimal("0")
+        settlement_status = derive_price_settlement_status(
+            unit_price=unit_pr,
+            is_gift=is_gift,
+            partner_settlement_method=partner_settlement_method,
+            explicit_status=getattr(item_data, "price_settlement_status", None),
+        )
+        provisional_price = derive_provisional_unit_price(
+            unit_price=unit_pr,
+            reference_price=getattr(item_data, "provisional_unit_price", None),
+            settlement_status=settlement_status,
+        )
         mat_code, mat_name, mat_spec, mat_unit = SalesOrderService._material_fields_from_master_or_payload(
             item_data, material_map
         )
@@ -152,6 +169,8 @@ class SalesOrderService:
             "notes": item_data.notes,
             "is_gift": is_gift,
             "gift_ref_unit_price": gift_ref,
+            "price_settlement_status": settlement_status,
+            "provisional_unit_price": provisional_price,
             "_item_amount": item_amt,
         }
 
@@ -634,6 +653,8 @@ class SalesOrderService:
                 "tax_rate": getattr(it, "tax_rate", None) or Decimal("0"),
                 "item_amount": getattr(it, "total_amount", None) or Decimal("0"),
                 "is_gift": bool(getattr(it, "is_gift", False)),
+                "price_settlement_status": getattr(it, "price_settlement_status", None),
+                "provisional_unit_price": getattr(it, "provisional_unit_price", None),
                 "delivered_quantity": (
                     it.delivered_quantity
                     if getattr(it, "delivered_quantity", None) is not None
@@ -863,6 +884,10 @@ class SalesOrderService:
                     item_amount=it.total_amount if getattr(it, "total_amount", None) is not None else Decimal("0"),
                     is_gift=bool(getattr(it, "is_gift", False)),
                     gift_ref_unit_price=getattr(it, "gift_ref_unit_price", None),
+                    price_settlement_status=getattr(it, "price_settlement_status", None),
+                    provisional_unit_price=getattr(it, "provisional_unit_price", None),
+                    price_settled_at=getattr(it, "price_settled_at", None),
+                    price_settled_by=getattr(it, "price_settled_by", None),
                     notes=it.notes,
                     variant_attributes=getattr(it, "variant_attributes", None),
                     configurable_selections=getattr(it, "configurable_selections", None),
@@ -953,11 +978,28 @@ class SalesOrderService:
         assert_sales_order_capability(order, action, **ctx)
 
     async def _sync_demand_if_exists(self, tenant_id: int, order_id: int, operator_id: int) -> bool:
-        """
-        历史兼容占位：销售订单不再自动同步到需求池（Demand）。
-        仅保留显式「下推需求计算」路径创建/更新计算数据。
-        """
-        return False
+        """销售订单保存后，将关联 Demand/DemandItem 与订单明细对齐（策略 A）。"""
+        demand = await Demand.get_or_none(
+            tenant_id=tenant_id,
+            source_type="sales_order",
+            source_id=order_id,
+            deleted_at__isnull=True,
+        )
+        if not demand:
+            return False
+        try:
+            from apps.kuaizhizao.services.demand_service import DemandService
+
+            result = await DemandService().sync_from_upstream(
+                tenant_id=tenant_id,
+                source_type="sales_order",
+                source_id=order_id,
+                operator_id=operator_id,
+            )
+            return bool(result.get("synced"))
+        except Exception as e:
+            logger.warning("销售订单关联需求同步失败 order_id={}: {}", order_id, e)
+            return False
 
     def _is_audited(self, status: str) -> bool:
         """判断是否已审核（兼容中英文状态）"""
@@ -1391,14 +1433,16 @@ class SalesOrderService:
             if order_dict.get("total_amount") is None:
                 order_dict["total_amount"] = Decimal("0")
 
-            # 自动带出归属业务员
-            if not order_dict.get("salesman_id") and order_dict.get("customer_id"):
+            # 自动带出归属业务员与月结方式
+            partner_settlement_method = None
+            if order_dict.get("customer_id"):
                 from apps.master_data.models.customer import Customer
                 customer = await Customer.get_or_none(id=order_dict["customer_id"], deleted_at__isnull=True)
-                if customer and customer.salesman_id:
-                    order_dict["salesman_id"] = customer.salesman_id
-                    order_dict["salesman_name"] = customer.salesman_name
-
+                if customer:
+                    partner_settlement_method = customer.settlement_method_code
+                    if not order_dict.get("salesman_id") and customer.salesman_id:
+                        order_dict["salesman_id"] = customer.salesman_id
+                        order_dict["salesman_name"] = customer.salesman_name
 
             order = await SalesOrder.create(tenant_id=tenant_id, **order_dict)
 
@@ -1414,6 +1458,7 @@ class SalesOrderService:
                     item_data,
                     material_map,
                     money_fn=self._money,
+                    partner_settlement_method=partner_settlement_method,
                 )
                 total_qty += row["order_quantity"]
                 subtotal += row["_item_amount"]
@@ -1458,6 +1503,8 @@ class SalesOrderService:
                     notes=row["notes"],
                     is_gift=row["is_gift"],
                     gift_ref_unit_price=row["gift_ref_unit_price"],
+                    price_settlement_status=row["price_settlement_status"],
+                    provisional_unit_price=row["provisional_unit_price"],
                 )
             total_amt = sum(allocated_amounts, Decimal("0"))
             await SalesOrder.filter(id=order.id).update(
@@ -2682,6 +2729,22 @@ class SalesOrderService:
             out["demand_synced"] = demand_synced
             if auto_push_result:
                 out["auto_computation"] = auto_push_result
+            from apps.kuaizhizao.services.kuaizhizao_business_notification import (
+                notify_sales_order_approved,
+            )
+
+            try:
+                await notify_sales_order_approved(
+                    tenant_id,
+                    order_code=order_row.order_code or str(sales_order_id),
+                    customer_name=order_row.customer_name or "—",
+                    delivery_date=str(order_row.delivery_date or ""),
+                    sales_order_id=sales_order_id,
+                    creator_user_id=order_row.created_by,
+                    salesman_user_id=order_row.salesman_id,
+                )
+            except Exception as exc:
+                logger.warning("销售订单审核消息提醒失败 tenant={} order={}: {}", tenant_id, sales_order_id, exc)
             return SalesOrderResponse(**out)
 
         result = await UniAuditService.approve_with_flow_fallback(
@@ -3272,7 +3335,10 @@ class SalesOrderService:
             SOURCE_TYPE_MAKE,
             SOURCE_TYPE_OUTSOURCE,
             SOURCE_TYPE_CONFIGURE,
+            resolve_mrp_supply_source_type,
         )
+        from apps.kuaizhizao.utils.inventory_helper import get_material_inventory_info
+        from apps.master_data.models.material import Material
 
         # 汇总待生成工单的物料：material_id -> {qty, material_code, material_name, delivery_date}
         wo_pool: Dict[tuple[int, Optional[int]], Dict[str, Any]] = {}
@@ -3345,54 +3411,68 @@ class SalesOrderService:
                 only_approved=True,
                 use_default=True,
             )
+            material_row = await Material.get_or_none(
+                tenant_id=tenant_id, id=material_id, deleted_at__isnull=True
+            )
+            skip_root_wo = False
+            if material_row:
+                if resolve_mrp_supply_source_type(material_row) != SOURCE_TYPE_MAKE:
+                    skip_root_wo = True
+                else:
+                    inv = await get_material_inventory_info(tenant_id, material_id)
+                    avail = float(inv.get("available_quantity") or 0)
+                    if avail >= qty:
+                        skip_root_wo = True
             if bom and bom.bom_code:
                 # 有BOM：展开，成品+半成品（Make/Outsource/Configure）生成工单
-                _add_to_pool(
-                    it.material_id,
-                    it.material_code,
-                    it.material_name,
-                    qty,
-                    delivery_date,
-                    selected_work_center_id,
-                    selected_work_center_name,
-                )
-                variant_attrs = getattr(it, "variant_attributes", None)
-                cfg_selections = getattr(it, "configurable_selections", None)
-                if cfg_selections and isinstance(cfg_selections, dict):
-                    cfg_selections = {k: int(v) if v is not None else v for k, v in cfg_selections.items()}
-                requirements = await expand_bom_with_source_control(
-                    tenant_id=tenant_id,
-                    material_id=it.material_id,
-                    required_quantity=qty,
-                    only_approved=True,
-                    use_default_bom=True,
-                    variant_attributes=variant_attrs,
-                    configurable_selections=cfg_selections,
-                    flatten_intermediate_subassemblies=True,
-                )
-                for req in requirements:
-                    st = req.get("source_type")
-                    if st in (SOURCE_TYPE_MAKE, SOURCE_TYPE_OUTSOURCE, SOURCE_TYPE_CONFIGURE):
-                        _add_to_pool(
-                            req["material_id"],
-                            req["material_code"],
-                            req["material_name"],
-                            float(req["required_quantity"]),
-                            delivery_date,
-                            selected_work_center_id,
-                            selected_work_center_name,
-                        )
+                if not skip_root_wo:
+                    _add_to_pool(
+                        it.material_id,
+                        it.material_code,
+                        it.material_name,
+                        qty,
+                        delivery_date,
+                        selected_work_center_id,
+                        selected_work_center_name,
+                    )
+                    variant_attrs = getattr(it, "variant_attributes", None)
+                    cfg_selections = getattr(it, "configurable_selections", None)
+                    if cfg_selections and isinstance(cfg_selections, dict):
+                        cfg_selections = {k: int(v) if v is not None else v for k, v in cfg_selections.items()}
+                    requirements = await expand_bom_with_source_control(
+                        tenant_id=tenant_id,
+                        material_id=it.material_id,
+                        required_quantity=qty,
+                        only_approved=True,
+                        use_default_bom=True,
+                        variant_attributes=variant_attrs,
+                        configurable_selections=cfg_selections,
+                        flatten_intermediate_subassemblies=True,
+                    )
+                    for req in requirements:
+                        st = req.get("source_type")
+                        if st in (SOURCE_TYPE_MAKE, SOURCE_TYPE_OUTSOURCE, SOURCE_TYPE_CONFIGURE):
+                            _add_to_pool(
+                                req["material_id"],
+                                req["material_code"],
+                                req["material_name"],
+                                float(req["required_quantity"]),
+                                delivery_date,
+                                selected_work_center_id,
+                                selected_work_center_name,
+                            )
             else:
                 # 无BOM：仅成品工单
-                _add_to_pool(
-                    it.material_id,
-                    it.material_code,
-                    it.material_name,
-                    qty,
-                    delivery_date,
-                    selected_work_center_id,
-                    selected_work_center_name,
-                )
+                if not skip_root_wo:
+                    _add_to_pool(
+                        it.material_id,
+                        it.material_code,
+                        it.material_name,
+                        qty,
+                        delivery_date,
+                        selected_work_center_id,
+                        selected_work_center_name,
+                    )
 
         for mid, sel_qty in selected_by_material.items():
             remain = remaining_by_material.get(mid, Decimal("0"))
@@ -3491,6 +3571,39 @@ class SalesOrderService:
                 root_work_order_id=None,
                 created_by=created_by,
                 remarks=f"由销售订单 {order.order_code} 直推平级组",
+            )
+
+        wo_codes = ", ".join(
+            str(w.code if hasattr(w, "code") else w.get("code") or "")
+            for w in work_orders
+            if (w.code if hasattr(w, "code") else w.get("code"))
+        )
+        from apps.kuaizhizao.services.kuaizhizao_business_notification import (
+            ACTION_PUSHED_TO_WORK_ORDER,
+            DOC_SALES_ORDER,
+            dispatch_kuaizhizao_notification,
+        )
+
+        try:
+            await dispatch_kuaizhizao_notification(
+                tenant_id,
+                trigger_document=DOC_SALES_ORDER,
+                trigger_action=ACTION_PUSHED_TO_WORK_ORDER,
+                variables={
+                    "order_code": order.order_code or str(sales_order_id),
+                    "work_order_codes": wo_codes or "—",
+                    "customer_name": order.customer_name or "—",
+                    "detail_path": f"/apps/kuaizhizao/sales-management/sales-orders?highlight={sales_order_id}",
+                    "sales_order_id": str(sales_order_id),
+                },
+                context={"creator_user_id": order.created_by or created_by},
+            )
+        except Exception as exc:
+            logger.warning(
+                "销售订单下推工单消息提醒失败 tenant={} order={}: {}",
+                tenant_id,
+                sales_order_id,
+                exc,
             )
 
         return {

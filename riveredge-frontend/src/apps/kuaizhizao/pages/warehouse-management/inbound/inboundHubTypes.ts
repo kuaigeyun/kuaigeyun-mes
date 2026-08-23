@@ -51,6 +51,7 @@ export interface InboundHubOrder {
   warehouse_id?: number;
   warehouse_name?: string;
   total_quantity?: number;
+  total_amount?: number;
   total_items?: number;
   /** 采购等：操作员姓名；委外收货：用户 ID（勿当姓名展示） */
   received_by?: string | number;

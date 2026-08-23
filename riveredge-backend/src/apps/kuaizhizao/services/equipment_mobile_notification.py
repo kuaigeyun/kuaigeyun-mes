@@ -148,6 +148,75 @@ async def notify_equipment_fault_reported(
     )
 
 
+async def notify_equipment_fault_assigned(
+    *,
+    tenant_id: int,
+    fault: EquipmentFault,
+    repairer_id: Optional[int],
+    repairer_name: str,
+) -> None:
+    """故障派工维修后：走配置中心 equipment_fault:assigned 规则。"""
+    from apps.kuaizhizao.services.kuaizhizao_business_notification import (
+        ACTION_ASSIGNED,
+        DOC_EQUIPMENT_FAULT,
+        dispatch_kuaizhizao_notification,
+    )
+
+    equipment_label = (fault.equipment_name or fault.equipment_uuid or "").strip() or "设备"
+    fault_no = (fault.fault_no or "").strip() or str(fault.uuid)
+    handler_ids = [repairer_id] if repairer_id else []
+
+    await dispatch_kuaizhizao_notification(
+        tenant_id,
+        trigger_document=DOC_EQUIPMENT_FAULT,
+        trigger_action=ACTION_ASSIGNED,
+        variables={
+            "fault_no": fault_no,
+            "equipment_label": equipment_label,
+            "repairer_name": repairer_name or "—",
+            "fault_description": str(fault.fault_description or "")[:500],
+            "detail_path": "/apps/kuaizhizao/equipment-management/equipment-faults",
+            "equipment_fault_id": str(fault.id),
+        },
+        context={"form_notify_user_ids": handler_ids},
+    )
+
+
+async def notify_equipment_fault_resolved(
+    *,
+    tenant_id: int,
+    fault: EquipmentFault,
+    repairer_name: str,
+    repair_result: str,
+) -> None:
+    """故障维修完成后：走配置中心 equipment_fault:resolved 规则。"""
+    from apps.kuaizhizao.services.kuaizhizao_business_notification import (
+        ACTION_RESOLVED,
+        DOC_EQUIPMENT_FAULT,
+        dispatch_kuaizhizao_notification,
+    )
+
+    equipment_label = (fault.equipment_name or fault.equipment_uuid or "").strip() or "设备"
+    fault_no = (fault.fault_no or "").strip() or str(fault.uuid)
+
+    await dispatch_kuaizhizao_notification(
+        tenant_id,
+        trigger_document=DOC_EQUIPMENT_FAULT,
+        trigger_action=ACTION_RESOLVED,
+        variables={
+            "fault_no": fault_no,
+            "equipment_label": equipment_label,
+            "repairer_name": repairer_name or "—",
+            "repair_result": repair_result or "已修复",
+            "detail_path": "/apps/kuaizhizao/equipment-management/equipment-faults",
+            "equipment_fault_id": str(fault.id),
+        },
+        context={
+            "creator_user_id": fault.reporter_id,
+        },
+    )
+
+
 async def notify_spot_check_overdue_supervision(
     *,
     tenant_id: int,

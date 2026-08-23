@@ -78,6 +78,12 @@ export interface WorkOrderExecutionConfig {
   default_production_worker_mode?: string;
   /** 报工数量默认：reportable=本次可报，zero=0 */
   default_reporting_quantity_mode?: string;
+  /** 组织是否启用成品检验环节 */
+  fqc_stage_enabled?: boolean;
+  /** 组织是否启用成品检验模块 */
+  fqc_module_enabled?: boolean;
+  /** 成品检验合格才入库 */
+  require_fqc_before_finished_goods_receipt?: boolean;
 }
 
 export interface WorkOrderGroupMember {

@@ -20,7 +20,7 @@ import {
   ProFormText,
 } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Table, Form as AntForm, Select, InputNumber, Input, DatePicker, Dropdown, Row, Col, Typography, Spin, Empty, Descriptions } from 'antd';
-import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined, PrinterOutlined, MoreOutlined, ShoppingOutlined, DownOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined, MoreOutlined, ShoppingOutlined, DownOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { LinkedDocumentCode } from '../../../../../components/linked-document-code';
@@ -1187,19 +1187,8 @@ const DeliveryNotesPage: React.FC = () => {
           deleteConfirmTitle={(count) => t('app.kuaizhizao.deliveryNote.msg.deleteConfirm', { count })}
           showImportButton={false}
           showExportButton
-          toolBarActionsAfterBatch={[
-            <Button
-              key="delivery-note-toolbar-print"
-              icon={<PrinterOutlined />}
-              disabled={!canToolbarPrint}
-              onClick={() => {
-                const row = selectedDeliveryNoticeForBatch[0];
-                if (row) handlePrint(row);
-              }}
-            >
-              {t('components.uniAction.print')}
-            </Button>,
-            ...(canPrintQualityCertificate
+          rightToolBarActionsBeforeExport={
+            canPrintQualityCertificate
               ? [
                   <Button
                     key="delivery-note-toolbar-print-certificate"
@@ -1213,8 +1202,15 @@ const DeliveryNotesPage: React.FC = () => {
                     {t('app.kuaizhizao.deliveryNote.action.printCertificate')}
                   </Button>,
                 ]
-              : []),
-          ]}
+              : undefined
+          }
+          showPrintButton
+          printButtonDisabled={!canToolbarPrint}
+          printButtonText={t('components.uniAction.print')}
+          onPrint={() => {
+            const row = selectedDeliveryNoticeForBatch[0];
+            if (row) handlePrint(row);
+          }}
           onExport={async (type, keys, pageData) => {
             try {
               const chunkSize = 100;

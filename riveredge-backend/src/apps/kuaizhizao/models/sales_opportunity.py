@@ -21,7 +21,7 @@ class SalesOpportunity(BaseModel):
     stage_code = fields.CharField(max_length=50, description="漏斗阶段（字典 SALES_OPPORTUNITY_STAGE）")
     status = fields.CharField(max_length=20, default="open", description="open / won / lost")
 
-    expected_amount = fields.DecimalField(max_digits=18, decimal_places=2, null=True, description="预计金额")
+    expected_amount = fields.DecimalField(max_digits=20, decimal_places=4, null=True, description="预计金额")
     expected_close_date = fields.DateField(null=True, description="预计成交日期")
 
     owner_id = fields.IntField(null=True, description="负责人（业务员）ID")

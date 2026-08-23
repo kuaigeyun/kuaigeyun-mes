@@ -200,7 +200,12 @@ class _MaterialDisplayProvider:
         if extra:
             group_id = extra.get("group_id") or extra.get("groupId")
             if group_id is not None:
-                query = query.filter(group_id=int(group_id))
+                from apps.master_data.services.material_service import MaterialService
+
+                all_group_ids = await MaterialService._get_all_child_group_ids(
+                    tenant_id, int(group_id)
+                )
+                query = query.filter(group_id__in=all_group_ids)
             source_type = extra.get("source_type") or extra.get("sourceType")
             if source_type:
                 query = query.filter(source_type=str(source_type))

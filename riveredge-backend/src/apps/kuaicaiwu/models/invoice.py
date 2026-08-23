@@ -37,9 +37,9 @@ class Invoice(BaseModel):
     partner_address_phone = fields.CharField(max_length=200, null=True, description="往来单位地址及电话")
 
     # 金额信息
-    amount_excluding_tax = fields.DecimalField(max_digits=14, decimal_places=2, description="不含税金额")
-    tax_amount = fields.DecimalField(max_digits=14, decimal_places=2, description="税额")
-    total_amount = fields.DecimalField(max_digits=14, decimal_places=2, description="价税合计")
+    amount_excluding_tax = fields.DecimalField(max_digits=16, decimal_places=4, description="不含税金额")
+    tax_amount = fields.DecimalField(max_digits=16, decimal_places=4, description="税额")
+    total_amount = fields.DecimalField(max_digits=16, decimal_places=4, description="价税合计")
     tax_rate = fields.DecimalField(max_digits=6, decimal_places=4, default=0.13, description="税率")
 
     # 日期
@@ -94,9 +94,9 @@ class InvoiceItem(BaseModel):
     unit = fields.CharField(max_length=20, null=True, description="单位")
     quantity = fields.DecimalField(max_digits=12, decimal_places=4, null=True, description="数量")
     unit_price = fields.DecimalField(max_digits=12, decimal_places=4, null=True, description="单价(不含税)")
-    amount = fields.DecimalField(max_digits=14, decimal_places=2, description="金额(不含税)")
+    amount = fields.DecimalField(max_digits=16, decimal_places=4, description="金额(不含税)")
     tax_rate = fields.DecimalField(max_digits=6, decimal_places=4, description="税率")
-    tax_amount = fields.DecimalField(max_digits=14, decimal_places=2, description="税额")
+    tax_amount = fields.DecimalField(max_digits=16, decimal_places=4, description="税额")
 
     deleted_at = fields.DatetimeField(null=True, description="删除时间")
 

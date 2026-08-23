@@ -58,8 +58,8 @@ class Demand(BaseModel):
     delivery_date = fields.DateField(null=True, description="交货日期（销售订单专用）")
     
     # 金额信息（通用）
-    total_quantity = fields.DecimalField(max_digits=10, decimal_places=2, default=0, description="总数量")
-    total_amount = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="总金额")
+    total_quantity = fields.DecimalField(max_digits=12, decimal_places=4, default=0, description="总数量")
+    total_amount = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="总金额")
     
     # 状态（通用）
     status = fields.CharField(max_length=20, default=DemandStatus.DRAFT, description="需求状态")

@@ -50,9 +50,9 @@ class IncomingInspection(BaseModel):
     material_unit = fields.CharField(max_length=20, description="物料单位")
 
     # 检验信息
-    inspection_quantity = fields.DecimalField(max_digits=10, decimal_places=2, description="检验数量")
-    qualified_quantity = fields.DecimalField(max_digits=10, decimal_places=2, default=0, description="合格数量")
-    unqualified_quantity = fields.DecimalField(max_digits=10, decimal_places=2, default=0, description="不合格数量")
+    inspection_quantity = fields.DecimalField(max_digits=12, decimal_places=4, description="检验数量")
+    qualified_quantity = fields.DecimalField(max_digits=12, decimal_places=4, default=0, description="合格数量")
+    unqualified_quantity = fields.DecimalField(max_digits=12, decimal_places=4, default=0, description="不合格数量")
 
     # 检验结果
     inspection_result = fields.CharField(max_length=20, default="待检验", description="检验结果")

@@ -42,7 +42,7 @@
  * ```
  */
 
-import React, { ReactNode } from 'react';
+import React, { ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { Input, Space, Spin, Tree, theme } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
@@ -50,6 +50,31 @@ import type { DataNode, TreeProps } from 'antd/es/tree';
 import { TWO_COLUMN_LAYOUT, TWO_COLUMN_LEFT_PANEL_BACKGROUND } from './constants';
 
 const { useToken } = theme;
+
+function parsePanelWidthPx(value: number | string | undefined, fallback: number): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const parsed = parseInt(value, 10);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return fallback;
+}
+
+function clampPanelWidth(width: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, width));
+}
+
+function readStoredPanelWidth(storageKey: string | undefined, fallback: number): number {
+  if (!storageKey || typeof window === 'undefined') return fallback;
+  try {
+    const raw = window.localStorage.getItem(storageKey);
+    if (!raw) return fallback;
+    const parsed = parseInt(raw, 10);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  } catch {
+    return fallback;
+  }
+}
 
 /**
  * 左侧面板配置
@@ -136,6 +161,18 @@ export interface LeftPanelConfig {
    * 左侧面板最小宽度（默认：200px）
    */
   minWidth?: number | string;
+  /**
+   * 左侧面板最大宽度（默认可拖拽上限见 TWO_COLUMN_LAYOUT.LEFT_PANEL_MAX_WIDTH）
+   */
+  maxWidth?: number | string;
+  /**
+   * 是否允许拖拽右边缘调整宽度（与右侧面板之间的分隔条）
+   */
+  resizable?: boolean;
+  /**
+   * 拖拽宽度持久化 key（localStorage）；不传则仅会话内记忆
+   */
+  widthStorageKey?: string;
   /**
    * 左侧面板是否已收起（可选）
    */
@@ -226,8 +263,72 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
     tree,
     width = TWO_COLUMN_LAYOUT.LEFT_PANEL_WIDTH,
     minWidth = TWO_COLUMN_LAYOUT.LEFT_PANEL_MIN_WIDTH,
+    maxWidth = TWO_COLUMN_LAYOUT.LEFT_PANEL_MAX_WIDTH,
+    resizable = false,
+    widthStorageKey,
     collapsed = false,
   } = leftPanel;
+
+  const initialWidth = parsePanelWidthPx(width, TWO_COLUMN_LAYOUT.LEFT_PANEL_WIDTH);
+  const minWidthPx = parsePanelWidthPx(minWidth, TWO_COLUMN_LAYOUT.LEFT_PANEL_MIN_WIDTH);
+  const maxWidthPx = parsePanelWidthPx(maxWidth, TWO_COLUMN_LAYOUT.LEFT_PANEL_MAX_WIDTH);
+  const [panelWidth, setPanelWidth] = useState(() =>
+    clampPanelWidth(readStoredPanelWidth(widthStorageKey, initialWidth), minWidthPx, maxWidthPx),
+  );
+  const panelWidthRef = useRef(panelWidth);
+  panelWidthRef.current = panelWidth;
+
+  useEffect(() => {
+    const next = clampPanelWidth(
+      readStoredPanelWidth(widthStorageKey, parsePanelWidthPx(width, TWO_COLUMN_LAYOUT.LEFT_PANEL_WIDTH)),
+      minWidthPx,
+      maxWidthPx,
+    );
+    setPanelWidth(next);
+  }, [width, minWidthPx, maxWidthPx, widthStorageKey]);
+
+  const persistPanelWidth = useCallback(
+    (nextWidth: number) => {
+      if (!widthStorageKey || typeof window === 'undefined') return;
+      try {
+        window.localStorage.setItem(widthStorageKey, String(nextWidth));
+      } catch {
+        /* ignore quota / private mode */
+      }
+    },
+    [widthStorageKey],
+  );
+
+  const handleResizeStart = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      if (collapsed || !resizable) return;
+      event.preventDefault();
+      const startX = event.clientX;
+      const startWidth = panelWidthRef.current;
+
+      const handleMove = (moveEvent: MouseEvent) => {
+        const delta = moveEvent.clientX - startX;
+        const next = clampPanelWidth(startWidth + delta, minWidthPx, maxWidthPx);
+        setPanelWidth(next);
+      };
+
+      const handleUp = () => {
+        document.removeEventListener('mousemove', handleMove);
+        document.removeEventListener('mouseup', handleUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        persistPanelWidth(panelWidthRef.current);
+      };
+
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      document.addEventListener('mousemove', handleMove);
+      document.addEventListener('mouseup', handleUp);
+    },
+    [collapsed, maxWidthPx, minWidthPx, persistPanelWidth, resizable],
+  );
+
+  const resolvedLeftWidth = collapsed ? 0 : panelWidth;
 
   const {
     header,
@@ -295,8 +396,9 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
       <div
         className="two-column-layout-left"
         style={{
-          width: collapsed ? 0 : (typeof width === 'number' ? `${width}px` : width),
-          minWidth: collapsed ? 0 : (typeof minWidth === 'number' ? `${minWidth}px` : minWidth),
+          width: collapsed ? 0 : `${resolvedLeftWidth}px`,
+          minWidth: collapsed ? 0 : `${minWidthPx}px`,
+          maxWidth: collapsed ? 0 : `${maxWidthPx}px`,
           flexShrink: 0,
           borderTop: `1px solid ${token.colorBorder}`,
           borderBottom: `1px solid ${token.colorBorder}`,
@@ -411,6 +513,25 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
           </div>
         ) : null}
       </div>
+
+      {!collapsed && resizable ? (
+        <div
+          className="two-column-layout-resizer"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label={t('components.twoColumnLayout.resizeLeftPanel')}
+          onMouseDown={handleResizeStart}
+          style={{
+            width: 6,
+            flexShrink: 0,
+            cursor: 'col-resize',
+            position: 'relative',
+            zIndex: 2,
+            marginLeft: -3,
+            marginRight: -3,
+          }}
+        />
+      ) : null}
 
       {/* 右侧主内容区 */}
       <div

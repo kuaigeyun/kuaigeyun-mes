@@ -88,9 +88,9 @@ class ScrapRecord(BaseModel):
     product_name = fields.CharField(max_length=200, description="产品名称")
 
     # 报废信息
-    scrap_quantity = fields.DecimalField(max_digits=12, decimal_places=2, description="报废数量")
-    unit_cost = fields.DecimalField(max_digits=12, decimal_places=2, null=True, description="单位成本")
-    total_cost = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="总成本")
+    scrap_quantity = fields.DecimalField(max_digits=14, decimal_places=4, description="报废数量")
+    unit_cost = fields.DecimalField(max_digits=14, decimal_places=4, null=True, description="单位成本")
+    total_cost = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="总成本")
     scrap_reason = fields.TextField(description="报废原因")
     scrap_type = fields.CharField(max_length=20, default="other", description="报废类型（process/material/quality/equipment/other）")
 

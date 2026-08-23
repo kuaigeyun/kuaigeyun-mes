@@ -31,6 +31,7 @@ export interface OutboundHubOrder {
   warehouse_id?: number;
   warehouse_name?: string;
   total_quantity?: number;
+  total_amount?: number;
   total_items?: number;
   required_quantity_total?: number;
   picked_quantity_total?: number;

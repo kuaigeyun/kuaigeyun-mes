@@ -38,6 +38,7 @@ from apps.kuaizhizao.schemas.demand_computation import (
 )
 from apps.kuaizhizao.utils.material_source_helper import (
     get_material_source_type,
+    resolve_mrp_supply_source_type,
     validate_material_source_config,
     get_material_source_config,
     build_material_source_config,
@@ -656,16 +657,34 @@ def _collect_material_structure_gaps(
     if st == SOURCE_TYPE_MAKE:
         manufacturing_mode = source_config.get("manufacturing_mode")
         if not manufacturing_mode:
-            add_gap(
-                "source_config.manufacturing_mode",
-                "制造模式",
-                manufacturing_mode,
-                MANUFACTURING_MODE_ASSEMBLY,
-                "manufacturing_mode",
-            )
+            if not bom_ok:
+                add_gap(
+                    "_bom",
+                    "BOM配置",
+                    None,
+                    None,
+                    "info",
+                    blocking=True,
+                )
+            if not has_process_route:
+                add_gap(
+                    "process_route_id",
+                    "工艺路线",
+                    None,
+                    None,
+                    "process_route_id",
+                    blocking=True,
+                )
         elif manufacturing_mode == MANUFACTURING_MODE_FABRICATION:
             if not has_process_route:
-                add_gap("process_route_id", "工艺路线", None, None, "process_route_id")
+                add_gap(
+                    "process_route_id",
+                    "工艺路线",
+                    None,
+                    None,
+                    "process_route_id",
+                    blocking=True,
+                )
         elif manufacturing_mode == MANUFACTURING_MODE_ASSEMBLY:
             if not bom_ok:
                 add_gap(
@@ -676,11 +695,15 @@ def _collect_material_structure_gaps(
                     "info",
                     blocking=True,
                 )
-        else:
-            if not bom_ok:
-                add_gap("_bom", "BOM配置", None, None, "info", blocking=True)
-            if not has_process_route:
-                add_gap("process_route_id", "工艺路线", None, None, "process_route_id")
+            elif not has_process_route:
+                add_gap(
+                    "process_route_id",
+                    "工艺路线",
+                    None,
+                    None,
+                    "process_route_id",
+                    blocking=False,
+                )
     elif st == SOURCE_TYPE_PHANTOM:
         if not bom_ok:
             add_gap("_bom", "BOM配置", None, None, "info", blocking=True)
@@ -724,7 +747,7 @@ def _compute_supply_and_net(
     """
     include_safety = computation_params.get("include_safety_stock", True)
     include_in_transit = computation_params.get("include_in_transit", True)
-    include_reserved = computation_params.get("include_reserved", False)
+    include_reserved = computation_params.get("include_reserved", True)
     include_reorder = computation_params.get("include_reorder_point", False)
 
     # available = 在库 - 预留；include_reserved 为 true 时用 available（考虑预留），否则用 on_hand（在库）
@@ -1424,6 +1447,36 @@ class DemandComputationService(AppBaseService):
                     queue.append((int(cid), level + 1))
         return ordered, seed_id_set
 
+    async def validate_mrp_execution_scope(
+        self,
+        tenant_id: int,
+        computation: DemandComputation,
+        computation_params_override: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """收集 BOM 展开范围并校验物料来源/BOM 配置（执行/重算/预览前 fail-closed）。"""
+        from apps.kuaizhizao.utils.mrp_execution_validation import validate_mrp_scope_materials
+
+        material_ids, seed_id_set = await self._collect_computation_material_ids(
+            tenant_id, computation, computation_params_override
+        )
+        params = dict(computation.computation_params or {})
+        if computation_params_override:
+            params.update(computation_params_override)
+        return await validate_mrp_scope_materials(tenant_id, material_ids, params, seed_id_set)
+
+    async def _assert_mrp_execution_scope_or_raise(
+        self,
+        tenant_id: int,
+        computation: DemandComputation,
+        computation_params_override: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        from apps.kuaizhizao.utils.mrp_execution_validation import raise_if_mrp_scope_blocking
+
+        scope = await self.validate_mrp_execution_scope(
+            tenant_id, computation, computation_params_override
+        )
+        raise_if_mrp_scope_blocking(scope)
+
     async def preview_computation_readiness(
         self,
         tenant_id: int,
@@ -1464,11 +1517,31 @@ class DemandComputationService(AppBaseService):
             gaps.extend(_collect_material_mrp_gaps(material, source_type))
 
         gaps = _dedupe_readiness_gaps(gaps)
+
+        from apps.kuaizhizao.utils.mrp_execution_validation import (
+            scope_blocking_to_readiness_gaps,
+            validate_mrp_scope_materials,
+        )
+
+        scope_result = await validate_mrp_scope_materials(
+            tenant_id, material_ids, params, seed_id_set
+        )
+        material_by_id: Dict[int, Any] = {}
+        for mid in material_ids:
+            mat = await Material.get_or_none(tenant_id=tenant_id, id=mid, deleted_at__isnull=True)
+            if mat:
+                material_by_id[mid] = mat
+        gaps.extend(scope_blocking_to_readiness_gaps(scope_result, material_by_id=material_by_id))
+        gaps = _dedupe_readiness_gaps(gaps)
+        blocking_count = sum(1 for g in gaps if g.get("blocking") or g.get("value_type") == "info")
+
         return {
             "ready": len(gaps) == 0,
             "gaps": gaps,
             "material_count": len(material_ids),
             "gap_count": len(gaps),
+            "blocking_count": blocking_count,
+            "scope_validation_errors": scope_result.get("blocking_errors") or [],
         }
 
     async def backfill_materials_for_computation(
@@ -1629,10 +1702,16 @@ class DemandComputationService(AppBaseService):
                 f"只能执行待执行或失败状态的计算，当前状态: {computation.computation_status}"
             )
 
+        await self._sync_demands_for_computation(tenant_id, computation, operator_id)
+
         # 合并临时覆盖参数到 computation_params（仅本次执行生效，不持久化）
         if computation_params_override:
             base_params = computation.computation_params or {}
             computation.computation_params = {**base_params, **computation_params_override}
+
+        await self._assert_mrp_execution_scope_or_raise(
+            tenant_id, computation, computation_params_override
+        )
 
         operator = await User.get_or_none(id=operator_id) if operator_id else None
         retry_from_failed = computation.computation_status == DEMAND_COMPUTATION_STATUS_FAILED
@@ -1840,7 +1919,36 @@ class DemandComputationService(AppBaseService):
             elif rel.target_type == "purchase_order":
                 po = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=rel.target_id)
                 if po and po.status not in ("已完成", "已取消", "completed", "cancelled"):
-                    if po.delivery_date:
+                    from apps.kuaizhizao.services.purchase_arrival_warning_service import (
+                        PurchaseArrivalWarningService,
+                    )
+                    from apps.kuaizhizao.utils.purchase_arrival_warning import WARNING_LEVEL_OVERDUE
+
+                    warn_rows = await PurchaseArrivalWarningService().list_warnings(
+                        tenant_id,
+                        skip=0,
+                        limit=1000,
+                        warning_level=WARNING_LEVEL_OVERDUE,
+                    )
+                    po_overdue_lines = [
+                        r for r in warn_rows.get("data", []) if int(r.get("purchase_order_id") or 0) == po.id
+                    ]
+                    if po_overdue_lines:
+                        first = po_overdue_lines[0]
+                        downstream_alerts.append({
+                            "type": "purchase_order_overdue",
+                            "id": po.id,
+                            "code": po.order_code,
+                            "name": po.supplier_name,
+                            "delivery_date": first.get("required_date") or po.delivery_date,
+                            "status": po.status,
+                            "message": (
+                                f"下推采购单 {po.order_code} ({po.supplier_name}) "
+                                f"存在 {len(po_overdue_lines)} 条明细已逾期，"
+                                f"最近计划到货 {first.get('required_date')}。"
+                            ),
+                        })
+                    elif po.delivery_date:
                         delivery_dt = datetime.combine(po.delivery_date, datetime.min.time())
                         delivery_cmp = _to_utc_aware(delivery_dt)
                         if delivery_cmp is not None and delivery_cmp < now:
@@ -2066,6 +2174,10 @@ class DemandComputationService(AppBaseService):
             base_params = computation.computation_params or {}
             computation.computation_params = {**base_params, **computation_params_override}
 
+        await self._assert_mrp_execution_scope_or_raise(
+            tenant_id, computation, computation_params_override
+        )
+
         try:
             async with in_transaction():
                 if computation.computation_status == "失败":
@@ -2117,6 +2229,58 @@ class DemandComputationService(AppBaseService):
         except Exception:
             raise
 
+    async def _sync_demands_for_computation(
+        self,
+        tenant_id: int,
+        computation: DemandComputation,
+        operator_id: Optional[int],
+    ) -> None:
+        """重算/执行前从上游销售订单或销售预测刷新 DemandItem 数量。"""
+        from apps.kuaizhizao.services.demand_service import DemandService
+
+        demand_id_list = computation.demand_ids if computation.demand_ids else [computation.demand_id]
+        if not demand_id_list:
+            return
+
+        demand_svc = DemandService()
+        synced_sources: Set[Tuple[str, int]] = set()
+        effective_operator = operator_id or 0
+
+        for demand_id in demand_id_list:
+            demand = await Demand.get_or_none(
+                tenant_id=tenant_id,
+                id=demand_id,
+                deleted_at__isnull=True,
+            )
+            if not demand:
+                continue
+            source_type = (demand.source_type or "").strip()
+            source_id = demand.source_id
+            if source_type not in ("sales_order", "sales_forecast") or not source_id:
+                continue
+            source_key = (source_type, int(source_id))
+            if source_key in synced_sources:
+                continue
+            synced_sources.add(source_key)
+            try:
+                await demand_svc.sync_from_upstream(
+                    tenant_id=tenant_id,
+                    source_type=source_type,
+                    source_id=int(source_id),
+                    operator_id=effective_operator,
+                )
+            except Exception as e:
+                logger.warning(
+                    "计算前同步上游需求失败 computation_id={} source={}:{}: {}",
+                    computation.id,
+                    source_type,
+                    source_id,
+                    e,
+                )
+                raise BusinessLogicError(
+                    f"计算前无法从上游同步最新需求（{source_type} {source_id}）: {e}"
+                ) from e
+
     async def recompute_computation(
         self,
         tenant_id: int,
@@ -2129,6 +2293,25 @@ class DemandComputationService(AppBaseService):
         重新计算：仅允许对「完成」或「失败」的计算重新执行。
         重算前写入需求计算快照与重算历史；再删除原明细、重置状态并执行计算。
         """
+        computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=computation_id)
+        if not computation:
+            raise NotFoundError(f"需求计算不存在: {computation_id}")
+
+        from apps.kuaizhizao.services.document_action_policy.demand_computation import (
+            assert_demand_computation_capability,
+        )
+
+        assert_demand_computation_capability(computation, "recompute")
+
+        if computation.computation_status not in ("完成", "失败"):
+            raise BusinessLogicError(
+                f"只能对已完成或失败的计算执行重新计算，当前状态: {computation.computation_status}"
+            )
+
+        await self._sync_demands_for_computation(tenant_id, computation, operator_id)
+
+        await self._assert_mrp_execution_scope_or_raise(tenant_id, computation)
+
         snapshot_id_saved: Optional[int] = None
         firmed_planned_orders: Dict[int, Dict[str, Any]] = {}
         async with in_transaction():
@@ -2136,16 +2319,6 @@ class DemandComputationService(AppBaseService):
             if not computation:
                 raise NotFoundError(f"需求计算不存在: {computation_id}")
 
-            from apps.kuaizhizao.services.document_action_policy.demand_computation import (
-                assert_demand_computation_capability,
-            )
-
-            assert_demand_computation_capability(computation, "recompute")
-
-            if computation.computation_status not in ("完成", "失败"):
-                raise BusinessLogicError(
-                    f"只能对已完成或失败的计算执行重新计算，当前状态: {computation.computation_status}"
-                )
             # 重算前快照：当前汇总 + 明细
             items_before = await DemandComputationItem.filter(
                 tenant_id=tenant_id, computation_id=computation_id
@@ -2797,12 +2970,12 @@ class DemandComputationService(AppBaseService):
                 material = material_by_id.get(int(material_id))
                 if not material:
                     continue
-                source_type = material.source_type
+                source_type = resolve_mrp_supply_source_type(material)
                 source_config = build_material_source_config(material)
                 validation_passed, validation_errors = await validate_material_source_config(
                     tenant_id=tenant_id,
                     material_id=material_id,
-                    source_type=source_type or "Make",
+                    source_type=material.source_type or "Make",
                 )
                 resolved_source_config = resolve_computation_item_source_config(source_config)
 
@@ -2814,7 +2987,7 @@ class DemandComputationService(AppBaseService):
                     "in_transit_quantity": 0.0,
                     "total_quantity": _safe_float(inv_row.get("on_hand")),
                 }
-                if netting_params_for_supply.get("include_reserved", False):
+                if netting_params_for_supply.get("include_reserved", True):
                     beginning = _safe_float(inventory_info.get("available_quantity"))
                 else:
                     beginning = _safe_float(
@@ -2889,7 +3062,7 @@ class DemandComputationService(AppBaseService):
                 net_requirement = float(tp["net_requirement"] or 0)
                 in_transit_qty = sum(float(r.get("qty") or 0) for r in receipt_rows)
                 reserved_qty = _safe_float(inventory_info.get("reserved_quantity"))
-                available_inventory = _safe_float(inventory_info.get("available_quantity"))
+                available_inventory = beginning
 
                 delivery_date = tp.get("earliest_demand_date")
                 release_date = tp.get("release_date")
@@ -3163,7 +3336,7 @@ class DemandComputationService(AppBaseService):
             material = await Material.get_or_none(tenant_id=tenant_id, id=material_id)
             if not material:
                 continue
-            source_type = await get_material_source_type(tenant_id, material_id)
+            source_type = resolve_mrp_supply_source_type(material)
             top_version = bom_version
             top_use_default = use_default_bom
             if material_bom_versions:
@@ -3448,6 +3621,7 @@ class DemandComputationService(AppBaseService):
         allow_draft: bool = False,
         push_mode: Optional[str] = None,
         selected_item_ids: Optional[List[int]] = None,
+        include_sales_order_attachments: bool = False,
     ) -> Dict[str, Any]:
         """
         从需求计算结果一键生成工单和采购单
@@ -3524,6 +3698,15 @@ class DemandComputationService(AppBaseService):
         production_remaining_by_material = self._get_production_remaining_qty_by_material(items, exclusions)
         outsource_remaining_by_material = self._get_outsource_remaining_qty_by_material(items, exclusions)
         purchase_remaining_by_material = self._get_purchase_remaining_qty_by_material(items, exclusions)
+
+        from apps.kuaizhizao.utils.sales_order_attachment_carry import resolve_carried_sales_order_attachments
+
+        carried_sales_order_attachments = await resolve_carried_sales_order_attachments(
+            tenant_id=tenant_id,
+            computation_id=computation_id,
+            computation_ids=None,
+            include=include_sales_order_attachments,
+        )
         
         # 【第一阶段：预验证】先验证所有物料，如有错误且未允许草稿则立即失败
         validation_errors = []
@@ -3841,7 +4024,8 @@ class DemandComputationService(AppBaseService):
                     computation=computation,
                     items=items_for_supplier,
                     supplier_id=supplier_id,
-                    created_by=created_by
+                    created_by=created_by,
+                    attachments=carried_sales_order_attachments,
                 )
                 purchase_orders.append(purchase_order)
 
@@ -5514,6 +5698,19 @@ class DemandComputationService(AppBaseService):
             if st in (SOURCE_TYPE_MAKE, SOURCE_TYPE_CONFIGURE):
                 if item.suggested_work_order_quantity and item.suggested_work_order_quantity > 0:
                     make_count += 1
+                    validation_passed, errors = await validate_material_source_config(
+                        tenant_id=tenant_id,
+                        material_id=item.material_id,
+                        source_type=st,
+                    )
+                    if not validation_passed:
+                        validation_failures.append({
+                            "material_code": item.material_code,
+                            "material_name": item.material_name,
+                            "source_type": st,
+                            "errors": errors,
+                            "blocking_reason": "source_validation_failed",
+                        })
             elif st == SOURCE_TYPE_OUTSOURCE:
                 if item.suggested_work_order_quantity and item.suggested_work_order_quantity > 0:
                     outsource_count += 1
@@ -5526,7 +5723,9 @@ class DemandComputationService(AppBaseService):
                         validation_failures.append({
                             "material_code": item.material_code,
                             "material_name": item.material_name,
+                            "source_type": SOURCE_TYPE_OUTSOURCE,
                             "errors": errors,
+                            "blocking_reason": "source_validation_failed",
                         })
             elif st == SOURCE_TYPE_BUY:
                 if item.suggested_purchase_order_quantity and item.suggested_purchase_order_quantity > 0:
@@ -5632,6 +5831,9 @@ class DemandComputationService(AppBaseService):
             if po_blocking and po_reason:
                 blocking_reasons.append(po_reason)
 
+        if validation_failures:
+            blocking_reasons.insert(0, "demand_computation.push_work_order.source_validation_failed")
+
         preview_summary = "；".join(preview_summary_parts) if preview_summary_parts else None
         preview_tip = " ".join(preview_tip_parts) if preview_tip_parts else None
         pushable_count = sum(
@@ -5642,10 +5844,19 @@ class DemandComputationService(AppBaseService):
             and not outsource_only
             and not can_direct_wo
         )
-        has_blocking_issues = requires_production_plan or (
+        has_blocking_issues = requires_production_plan or bool(validation_failures) or (
             pushable_count == 0 and bool(production or purchase)
         )
         blocking_reason = blocking_reasons[0] if has_blocking_issues and blocking_reasons else None
+
+        from apps.kuaizhizao.utils.sales_order_attachment_carry import (
+            summarize_sales_order_attachments_for_computation,
+        )
+
+        source_sales_order_attachments = await summarize_sales_order_attachments_for_computation(
+            tenant_id=tenant_id,
+            computation_id=computation_id,
+        )
 
         return {
             "computation_id": computation_id,
@@ -5665,6 +5876,7 @@ class DemandComputationService(AppBaseService):
             "tip": preview_tip,
             "has_blocking_issues": has_blocking_issues,
             "blocking_reason": blocking_reason,
+            "source_sales_order_attachments": source_sales_order_attachments,
         }
 
     async def push_all(
@@ -5679,6 +5891,7 @@ class DemandComputationService(AppBaseService):
         purchase_requisition_item_ids: Optional[List[int]] = None,
         production_item_ids: Optional[List[int]] = None,
         purchase_order_item_ids: Optional[List[int]] = None,
+        include_sales_order_attachments: bool = False,
     ) -> Dict[str, Any]:
         """
         一键下推：按配置执行工单、采购申请/采购单、委外工单。
@@ -5731,6 +5944,9 @@ class DemandComputationService(AppBaseService):
                         int(i) for i in purchase_requisition_item_ids if i is not None
                     ],
                 }
+            if include_sales_order_attachments:
+                push_params = push_params or {}
+                push_params["include_sales_order_attachments"] = True
 
             push_service = DocumentPushPullService()
             try:
@@ -5765,6 +5981,7 @@ class DemandComputationService(AppBaseService):
                 generate_mode="purchase_only",
                 push_mode=resolved_push_mode,
                 selected_item_ids=purchase_order_item_ids,
+                include_sales_order_attachments=include_sales_order_attachments,
             )
             results["purchase_orders"] = r.get("purchase_orders", [])
 
@@ -6144,6 +6361,7 @@ class DemandComputationService(AppBaseService):
                 "inspection_required": True,
                 "source_type": "demand_computation",
                 "source_id": computation.id,
+                "demand_computation_item_id": item.id,
             }
             apply_create_audit(item_data, user)
             await PurchaseOrderItem.create(**item_data)
@@ -6168,7 +6386,8 @@ class DemandComputationService(AppBaseService):
         computation: DemandComputation,
         items: List[DemandComputationItem],
         supplier_id: int,
-        created_by: int
+        created_by: int,
+        attachments: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         """
         从多个计算结果明细创建采购单（按供应商分组，物料来源控制增强）
@@ -6244,6 +6463,8 @@ class DemandComputationService(AppBaseService):
                 "source_id": computation.id,
                 "notes": f"从需求计算 {computation.computation_code} 自动生成（按供应商分组）",
             }
+            if attachments:
+                order_data["attachments"] = attachments
             apply_create_audit(order_data, user)
             purchase_order = await PurchaseOrder.create(**order_data)
             
@@ -6284,6 +6505,7 @@ class DemandComputationService(AppBaseService):
                     "inspection_required": True,
                     "source_type": "demand_computation",
                     "source_id": computation.id,
+                    "demand_computation_item_id": item.id,
                 }
                 apply_create_audit(item_data, user)
                 await PurchaseOrderItem.create(**item_data)

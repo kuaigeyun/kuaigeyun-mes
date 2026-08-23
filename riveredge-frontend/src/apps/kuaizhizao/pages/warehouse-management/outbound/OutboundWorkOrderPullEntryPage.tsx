@@ -36,6 +36,7 @@ import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidate
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
 import { formatDateBySiteSetting, formatQuantity } from '../../../../../utils/format';
+import { translateWorkOrderLifecycleStatus } from '../../../utils/workOrderLifecycle';
 import { formatQuantityWithUnit } from '../../../../../utils/materialUnitDisplay';
 import {
   MaterialUnitSelect,
@@ -880,7 +881,7 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
                 </Col>
                 <Col xs={24} sm={12} lg={6}>
                   <Form.Item label={t('app.kuaizhizao.warehouseOutbound.entry.workOrderStatus')}>
-                    <ReadOnlyFormValue value={String(workOrder.status ?? '')} />
+                    <ReadOnlyFormValue value={translateWorkOrderLifecycleStatus(t, workOrder.status)} />
                   </Form.Item>
                 </Col>
                 <Col xs={24} sm={12} lg={6}>
@@ -901,9 +902,6 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
                 </Col>
                 <Col xs={24} sm={12} lg={6}>
                   <OutboundEntryOperatorField hook={operatorHook} />
-                </Col>
-                <Col xs={24}>
-                  <OutboundEntryRemarksSection value={notes} onChange={setNotes} />
                 </Col>
               </Row>
             </Form>
@@ -941,6 +939,11 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
               </div>
             </div>
           </div>
+          {workOrder ? (
+            <Form layout="vertical" requiredMark={false} style={{ marginTop: PAGE_SPACING.BLOCK_GAP }}>
+              <OutboundEntryRemarksSection value={notes} onChange={setNotes} />
+            </Form>
+          ) : null}
         </Card>
       </Spin>
       <Modal

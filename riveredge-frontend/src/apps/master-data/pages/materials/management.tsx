@@ -4218,7 +4218,9 @@ const MaterialsManagementPage: React.FC = () => {
               const searchLabel = (node as DataNode & { searchLabel?: string }).searchLabel
               if (!searchLabel) return node.title
               return (
-                <span className="material-group-tree-title-text">{searchLabel}</span>
+                <Tooltip title={searchLabel} mouseEnterDelay={0.4}>
+                  <span className="material-group-tree-title-text">{searchLabel}</span>
+                </Tooltip>
               )
             },
             onRightClick: info => {
@@ -4231,7 +4233,10 @@ const MaterialsManagementPage: React.FC = () => {
             },
           },
           width: 320,
-          minWidth: 200,
+          minWidth: 240,
+          maxWidth: 560,
+          resizable: true,
+          widthStorageKey: 'master-data.materials.leftPanelWidth',
         }}
         rightPanel={{
           // header removed as per request to only show material list

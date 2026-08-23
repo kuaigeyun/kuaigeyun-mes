@@ -27,21 +27,21 @@ class ProductionPlanItem(BaseModel):
     source_type = fields.CharField(max_length=20, null=True, description="物料来源类型（Make/Buy/Outsource等）")
 
     # 计划信息
-    planned_quantity = fields.DecimalField(max_digits=10, decimal_places=2, description="计划数量")
+    planned_quantity = fields.DecimalField(max_digits=12, decimal_places=4, description="计划数量")
     planned_date = fields.DateField(description="计划日期")
 
     # 库存信息
-    available_inventory = fields.DecimalField(max_digits=10, decimal_places=2, default=0, description="可用库存")
-    safety_stock = fields.DecimalField(max_digits=10, decimal_places=2, default=0, description="安全库存")
+    available_inventory = fields.DecimalField(max_digits=12, decimal_places=4, default=0, description="可用库存")
+    safety_stock = fields.DecimalField(max_digits=12, decimal_places=4, default=0, description="安全库存")
 
     # 需求信息
-    gross_requirement = fields.DecimalField(max_digits=10, decimal_places=2, null=True, description="毛需求")
-    net_requirement = fields.DecimalField(max_digits=10, decimal_places=2, null=True, description="净需求")
+    gross_requirement = fields.DecimalField(max_digits=12, decimal_places=4, null=True, description="毛需求")
+    net_requirement = fields.DecimalField(max_digits=12, decimal_places=4, null=True, description="净需求")
 
     # 建议行动
     suggested_action = fields.CharField(max_length=20, description="建议行动")
-    work_order_quantity = fields.DecimalField(max_digits=10, decimal_places=2, default=0, description="建议工单数量")
-    purchase_order_quantity = fields.DecimalField(max_digits=10, decimal_places=2, default=0, description="建议采购数量")
+    work_order_quantity = fields.DecimalField(max_digits=12, decimal_places=4, default=0, description="建议工单数量")
+    purchase_order_quantity = fields.DecimalField(max_digits=12, decimal_places=4, default=0, description="建议采购数量")
 
     # 执行状态
     execution_status = fields.CharField(max_length=20, default="未执行", description="执行状态")

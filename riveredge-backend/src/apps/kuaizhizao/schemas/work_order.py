@@ -488,7 +488,7 @@ class KittingRelatedOutsourceWorkOrderSummary(BaseModel):
     outsource_work_order_code: str = Field(..., description="关联委外工单编号")
     status: str = Field(..., description="委外工单状态")
     quantity: Decimal = Field(..., description="计划委外数量")
-    received_quantity: Decimal = Field(default=Decimal("0"), description="已收货数量")
+    received_quantity: Decimal = Field(default=Decimal("0"), description="合格收货数量（齐套进度展示）")
     progress_percent: float = Field(default=0.0, description="委外完成进度 0-100")
     supplier_name: Optional[str] = Field(None, description="委外供应商名称")
     planned_end_date: Optional[datetime] = Field(None, description="计划完工/结束时间")

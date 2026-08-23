@@ -15,7 +15,7 @@ import type { DataNode } from 'antd/es/tree';
 import type { ColumnsType } from 'antd/es/table';
 import { EditOutlined, DeleteOutlined, PlusOutlined, MinusCircleOutlined, CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined, UploadOutlined, DiffOutlined, HistoryOutlined, CalculatorOutlined, HighlightOutlined, MoreOutlined, UndoOutlined, StarOutlined, ProductOutlined, UnorderedListOutlined, ClusterOutlined, CopyOutlined, PrinterOutlined, SearchOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
+import { UniTable, type UniTableRequestMeta, readPersistedUniTableViewType, uniTableViewTypePreferencePath } from '../../../../../components/uni-table';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import {
   UniTableStackedPrimaryCell,
@@ -47,7 +47,7 @@ import { downloadFile } from '../../../../../utils';
 import { buildFutureDateShortcutFieldProps } from '../../../../../utils/futureDatePickerShortcuts';
 import type { User } from '../../../../../services/user';
 import { searchUserDisplay } from '../../../../../services/user';
-import { useGlobalStore } from '../../../../../stores';
+import { useGlobalStore, useUserPreferenceStore } from '../../../../../stores';
 import { displayItemsToUsers } from '../../../../../utils/userDisplay';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import {
@@ -80,10 +80,35 @@ import { isVariantSkuMaterial } from '../../../components/MaterialVariantCombina
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 import { UNI_TABLE_STATUS_BADGE_COLUMN_WIDTH } from '../../../../../utils/uniTableLayoutColumns';
-import { flattenBomGroupsForExport, resolveBomExportGroup } from './utils';
+import { flattenBomGroupsForExport, resolveBomExportGroup, loadBomExportNestedItems, collectBomExportMaterialIds, type BomExportGroupSummary } from './utils';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 const BOM_CUSTOM_FIELD_TABLE = 'master_data_boms';
 const BOM_RESOURCE = 'master-data:process:engineering-bom';
+const BOM_LIST_COLUMN_PERSISTENCE_ID = 'apps.master-data.pages.materials.bom.stacked-v2';
+const BOM_LIST_VIEW_TYPES = ['productBom', 'semiProductBom', 'allBom'] as const;
+type BomListViewType = (typeof BOM_LIST_VIEW_TYPES)[number];
+
+/** 与 UniTable 视图偏好恢复逻辑一致，避免 UI 为「全部 BOM」但首屏 request 仍用 productBom */
+function resolveInitialBomListViewType(): BomListViewType {
+  const allowed = BOM_LIST_VIEW_TYPES as unknown as readonly string[];
+  const fromServerPref = useUserPreferenceStore
+    .getState()
+    .getPreference<string | undefined>(
+      uniTableViewTypePreferencePath(BOM_LIST_COLUMN_PERSISTENCE_ID),
+      undefined,
+    );
+  if (fromServerPref && fromServerPref !== 'help' && allowed.includes(fromServerPref)) {
+    return fromServerPref as BomListViewType;
+  }
+  const fromLocal = readPersistedUniTableViewType(
+    BOM_LIST_COLUMN_PERSISTENCE_ID,
+    'productBom',
+    allowed,
+  );
+  return (BOM_LIST_VIEW_TYPES as readonly string[]).includes(fromLocal)
+    ? (fromLocal as BomListViewType)
+    : 'productBom';
+}
 
 function resolveBomMaterialImageFileUuid(raw: unknown): string | null {
   if (typeof raw === 'string') {
@@ -616,7 +641,13 @@ const BOMPage: React.FC = () => {
   const currentUser = useCurrentUser();
 
   /** BOM 视图类型（与 UniTable 视图联动）：productBom=成品 | semiProductBom=半成品 | allBom=全部 */
-  const bomViewTypeRef = useRef<'productBom' | 'semiProductBom' | 'allBom'>('productBom');
+  const bomViewTypeRef = useRef<BomListViewType>(resolveInitialBomListViewType());
+  const lastBomListSearchRef = useRef<{
+    includeObsolete: boolean;
+    materialId?: number;
+    approvalStatus?: string;
+    keyword?: string;
+  }>({ includeObsolete: false });
 
   /** 分组行 groupKey -> 该组内所有 BOM 的 uuid，用于批量删除时解析 */
   const groupKeyToUuidsRef = useRef<Map<string, string[]>>(new Map());
@@ -3213,7 +3244,7 @@ const BOMPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable<MaterialBOMRow>
         permissionResource={BOM_RESOURCE}
-        columnPersistenceId="apps.master-data.pages.materials.bom.stacked-v2"
+        columnPersistenceId={BOM_LIST_COLUMN_PERSISTENCE_ID}
         actionRef={actionRef}
         columns={groupColumns}
         viewTypes={['productBom', 'semiProductBom', 'allBom', 'help']}
@@ -3225,8 +3256,8 @@ const BOMPage: React.FC = () => {
           { key: 'allBom', label: t('app.master-data.bom.viewAllBom'), icon: UnorderedListOutlined, render: () => null },
         ]}
         onViewTypeChange={(key) => {
-          if (key === 'productBom' || key === 'semiProductBom' || key === 'allBom') {
-            bomViewTypeRef.current = key;
+          if ((BOM_LIST_VIEW_TYPES as readonly string[]).includes(key)) {
+            bomViewTypeRef.current = key as BomListViewType;
             actionRef.current?.reload();
           }
         }}
@@ -3248,6 +3279,12 @@ const BOMPage: React.FC = () => {
                 ? String(searchFormValues.approvalStatus)
                 : undefined;
             const keyword = normalizeBomKeyword(searchFormValues as Record<string, unknown>);
+            lastBomListSearchRef.current = {
+              includeObsolete,
+              materialId: materialId != null && !Number.isNaN(materialId) ? materialId : undefined,
+              approvalStatus,
+              keyword: keyword || undefined,
+            };
             const { data: groups, total } = await bomApi.getGroups({
               includeObsolete,
               skip,
@@ -3466,24 +3503,112 @@ const BOMPage: React.FC = () => {
         }}
         onExport={async (type, selectedRowKeys, currentPageData) => {
           try {
+            const search = lastBomListSearchRef.current;
+            const includeObsolete = search.includeObsolete;
+
+            const buildExportGroupRows = (
+              summaries: BomExportGroupSummary[],
+              batchItems: Record<string, BOM[]>,
+            ): BOMGroupRow[] =>
+              summaries.map((g) => {
+                const items = batchItems[`${g.material_id}|${g.version}`] ?? [];
+                const firstItem = items[0];
+                const syntheticFirst: BOM = firstItem ?? ({
+                  id: 0,
+                  uuid: '',
+                  tenantId: 0,
+                  materialId: g.material_id,
+                  componentId: 0,
+                  quantity: 0,
+                  isRequired: true,
+                  level: 0,
+                  version: g.version,
+                  bomCode: g.bom_code ?? '-',
+                  bomName: g.bom_name ?? undefined,
+                  isDefault: g.is_default,
+                  approvalStatus: (g.approval_status as BOM['approvalStatus']) ?? 'draft',
+                  isAlternative: false,
+                  priority: 0,
+                  isActive: true,
+                  createdAt: '',
+                  updatedAt: '',
+                  isObsolete: false,
+                } as BOM);
+                const groupKey = `group:${g.bom_code ?? '-'}|${g.material_id}|${g.version}`;
+                return {
+                  groupKey,
+                  bomCode: g.bom_code ?? '-',
+                  version: g.version,
+                  materialId: g.material_id,
+                  approvalStatus: (g.approval_status as BOM['approvalStatus']) ?? 'draft',
+                  firstItem: syntheticFirst,
+                  items,
+                  children: items.length
+                    ? items.map((item, idx) => ({ ...item, key: `${item.uuid}-child-${idx}` }))
+                    : undefined,
+                };
+              });
+
+            let rootSummaries: BomExportGroupSummary[] = [];
             let toExport: (BOMGroupRow | MaterialBOMRow)[] = [];
+
             if (type === 'selected' && selectedRowKeys?.length && currentPageData) {
               toExport = currentPageData.filter((r: any) => selectedRowKeys.includes(r.groupKey));
+              const resolved = toExport
+                .map((row) => resolveBomExportGroup(row))
+                .filter((g): g is NonNullable<ReturnType<typeof resolveBomExportGroup>> => g != null);
+              rootSummaries = resolved.map((g) => ({
+                material_id: g.materialId,
+                version: g.version,
+                bom_code: g.bomCode,
+                bom_name: g.bomName,
+                approval_status: g.approvalStatus,
+                is_default: true,
+              }));
             } else if (type === 'currentPage' && currentPageData) {
               toExport = currentPageData;
+              const resolved = toExport
+                .map((row) => resolveBomExportGroup(row))
+                .filter((g): g is NonNullable<ReturnType<typeof resolveBomExportGroup>> => g != null);
+              rootSummaries = resolved.map((g) => ({
+                material_id: g.materialId,
+                version: g.version,
+                bom_code: g.bomCode,
+                bom_name: g.bomName,
+                approval_status: g.approvalStatus,
+                is_default: true,
+              }));
             } else {
-              const result = await fetchAllListItems((p) => bomApi.list(p));
-              let { groupRows } = groupBomsByCode(result);
-              if (bomViewTypeRef.current === 'productBom') {
-                groupRows = filterToProductBomView(groupRows, result);
-              } else if (bomViewTypeRef.current === 'semiProductBom') {
-                groupRows = filterToSemiProductBomView(groupRows, result);
-              }
-              toExport = groupRows;
+              rootSummaries = await fetchAllListItems(async ({ skip, limit }) => {
+                const { data, total } = await bomApi.getGroups({
+                  includeObsolete,
+                  skip,
+                  limit,
+                  view: bomViewTypeRef.current,
+                  materialId: search.materialId,
+                  approvalStatus: search.approvalStatus,
+                  keyword: search.keyword,
+                });
+                return { data, total };
+              });
             }
-            if (toExport.length === 0) {
+
+            if (!rootSummaries.length) {
               messageApi.warning(t('app.master-data.noExportData'));
               return;
+            }
+
+            const exportNested = await loadBomExportNestedItems(
+              rootSummaries,
+              includeObsolete,
+              bomApi,
+            );
+
+            if (!toExport.length) {
+              toExport = buildExportGroupRows(
+                rootSummaries,
+                exportNested.batchItems as Record<string, BOM[]>,
+              );
             }
 
             const resolvedGroups = toExport
@@ -3524,11 +3649,18 @@ const BOMPage: React.FC = () => {
               }),
             }));
 
-            const materialsForExport = await ensureMaterialsByIds(collectBomMaterialIds(groupsForFlat));
+            const materialIdsForExport = collectBomExportMaterialIds(
+              groupsForFlat,
+              exportNested.batchItems,
+            );
+            const materialsForExport = await ensureMaterialsByIds(materialIdsForExport);
             const flatRows = flattenBomGroupsForExport(groupsForFlat, materialsForExport, {
               unitValueToLabel,
               yesLabel: IMPORT_YES_NO_OPTIONS[0],
               noLabel: IMPORT_YES_NO_OPTIONS[1],
+              issueMethodLabels: bomIssueMethodLabel,
+              expandNested: true,
+              exportContext: exportNested,
               approvalStatusLabels: {
                 draft: t('app.master-data.bom.statusDraft'),
                 pending: t('app.master-data.bom.statusPending'),
@@ -3549,11 +3681,14 @@ const BOMPage: React.FC = () => {
               { key: 'baseQuantity', title: t('app.master-data.bom.importHeaderBaseQuantity') },
               { key: 'parentCode', title: t('app.master-data.bom.importHeaderParentCode') },
               { key: 'componentCode', title: t('app.master-data.bom.importHeaderComponentCode') },
+              { key: 'componentName', title: t('app.master-data.bom.exportHeaderComponentName') },
+              { key: 'componentSpecification', title: t('app.master-data.bom.exportHeaderComponentSpecification') },
               { key: 'quantity', title: t('app.master-data.bom.importHeaderQuantity') },
               { key: 'unit', title: t('app.master-data.bom.importHeaderUnit') },
               { key: 'wasteRate', title: t('app.master-data.bom.importHeaderWasteRate') },
               { key: 'isRequired', title: t('app.master-data.bom.importHeaderIsRequired') },
               { key: 'isActive', title: t('app.master-data.bom.importHeaderIsActive') },
+              { key: 'issueMethod', title: t('app.master-data.bom.issueMethod') },
               { key: 'remark', title: t('common.remark') },
               { key: 'materialName', title: t('app.master-data.bom.importHeaderMaterialName') },
               { key: 'specification', title: t('app.master-data.bom.importHeaderSpecification') },

@@ -36,7 +36,9 @@ import { getDataDictionaryByCode, getDictionaryItemList, type DictionaryItem } f
 import { mapSystemDictionaryItemOptions, resolveSystemDictionaryItemLabel } from '../../../../../utils/systemDictionaryI18n';
 import { getFileDownloadUrl } from '../../../../../services/file';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import { LineUnitPriceWithTrendTrigger } from '../../../components/partner-material-price-trend';
 import { UniTable, readPersistedUniTableViewType, type UniTableRequestMeta} from '../../../../../components/uni-table';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import {
   UniTableStackedPrimaryCell,
   UniTableStackedLineBadge,
@@ -106,7 +108,7 @@ import {
   withdrawPurchaseOrder,
   revokePurchaseOrder,
   pushPurchaseOrderToReceipt,
-  pushPurchaseOrderToReceiptNotice, pushPurchaseOrderToInvoice, pushPurchaseOrderToPurchaseReturn,
+  pushPurchaseOrderToReceiptNotice, pushPurchaseOrderToReceiptNoticeFromPreview, pushPurchaseOrderToInvoice, pushPurchaseOrderToPurchaseReturn,
   getPurchaseOrderStatistics,
   previewPushToReceiptNotice, previewPushToReceipt, previewPushToInvoice, previewPushToPurchaseReturn,
   type DocumentPushPreview,
@@ -148,7 +150,7 @@ import {
   searchReferenceDisplay,
 } from '../../../../../utils/referenceDisplay';
 import { useGlobalStore } from '../../../../../stores';
-import { displayItemsToUsers } from '../../../../../utils/userDisplay';
+import { displayItemsToUsers, normalizeUserDisplayName } from '../../../../../utils/userDisplay';
 import {
   DocumentStatus,
   ReviewStatusEnum,
@@ -221,6 +223,56 @@ const PO_WORKFLOW_REJECTED_STATUSES = [
   DocumentStatus.REJECTED,
   ReviewStatusEnum.REJECTED,
 ];
+
+/** 归属采购员：与销售订单业务员字段一致，无匹配选项时用 buyer_name 回显 */
+const PurchaseOrderBuyerField: React.FC<{ userList: User[]; loading: boolean }> = ({ userList, loading }) => {
+  const { t } = useTranslation();
+  const form = AntForm.useFormInstance();
+  const buyerId = AntForm.useWatch('buyer_id', form);
+  const buyerName = AntForm.useWatch('buyer_name', form);
+
+  const options = useMemo(() => {
+    const base = userList.map((u) => ({
+      value: Number(u.id),
+      label: normalizeUserDisplayName(u.full_name || u.username),
+    }));
+    const bid =
+      buyerId != null && buyerId !== '' && Number.isFinite(Number(buyerId)) ? Number(buyerId) : NaN;
+    if (Number.isFinite(bid) && !base.some((o) => o.value === bid)) {
+      const label =
+        normalizeUserDisplayName(buyerName) || t('app.kuaizhizao.quotation.userFallback', { id: bid });
+      return [{ value: bid, label }, ...base];
+    }
+    return base;
+  }, [userList, buyerId, buyerName, t]);
+
+  return (
+    <>
+      <ProForm.Item
+        name="buyer_id"
+        label={t('app.kuaizhizao.purchaseOrder.form.buyer')}
+        normalize={(v) =>
+          v != null && v !== '' && Number.isFinite(Number(v)) ? Number(v) : undefined
+        }
+      >
+        <UniDropdown
+          placeholder={t('app.kuaizhizao.purchaseOrder.form.buyerPlaceholder')}
+          showSearch
+          allowClear
+          loading={loading}
+          style={{ width: '100%' }}
+          options={options}
+          onChange={(_val, opt: any) => {
+            form.setFieldsValue({ buyer_name: opt?.label });
+          }}
+        />
+      </ProForm.Item>
+      <AntForm.Item name="buyer_name" hidden>
+        <Input />
+      </AntForm.Item>
+    </>
+  );
+};
 
 /** 采购明细行（订单 + 明细合并，用于明细表格平铺） */
 type PurchaseOrderItemRow = PurchaseOrderItem & {
@@ -828,6 +880,7 @@ const PurchaseOrdersPage: React.FC = () => {
       sorter: true,
       ellipsis: true,
       hideInSearch: true,
+      render: (_: unknown, record: PurchaseOrder) => normalizeUserDisplayName(record.buyer_name) || '-',
     },
     {
       title: t('app.kuaizhizao.purchaseOrder.col.orderDate'),
@@ -2343,6 +2396,19 @@ const PurchaseOrdersPage: React.FC = () => {
       }
 
       const data = { ...values };
+      const buyerIdRaw = data.buyer_id;
+      if (buyerIdRaw != null && buyerIdRaw !== '' && Number.isFinite(Number(buyerIdRaw))) {
+        const buyerId = Number(buyerIdRaw);
+        if (!normalizeUserDisplayName(data.buyer_name)) {
+          const buyer = users.find((u) => Number(u.id) === buyerId);
+          if (buyer) {
+            data.buyer_name = normalizeUserDisplayName(buyer.full_name || buyer.username);
+          }
+        }
+      } else {
+        data.buyer_id = undefined;
+        data.buyer_name = undefined;
+      }
       // 处理附件
       const formAttachments = data.attachments || [];
       data.attachments = formAttachments.map((f: any) => {
@@ -2633,12 +2699,22 @@ const PurchaseOrdersPage: React.FC = () => {
                     autoLoad={false}
                     onSupplierPick={(s) => {
                       if (s) {
+                        const bIdRaw = (s as any).buyerId ?? (s as any).buyer_id;
+                        const bId =
+                          bIdRaw != null && bIdRaw !== '' && Number.isFinite(Number(bIdRaw))
+                            ? Number(bIdRaw)
+                            : undefined;
+                        const buyer = bId != null ? users.find((u) => Number(u.id) === bId) : undefined;
+                        const bName =
+                          (s as any).buyerName ??
+                          (s as any).buyer_name ??
+                          (buyer ? normalizeUserDisplayName(buyer.full_name || buyer.username) : '');
                         formRef.current?.setFieldsValue({
                           supplier_name: s.name ?? (s as any).supplier_name,
                           supplier_contact: (s as any).contact_person ?? s.contactPerson ?? (s as any).supplier_contact,
                           supplier_phone: s.phone ?? (s as any).supplier_phone,
-                          buyer_id: (s as any).buyerId || (s as any).buyer_id,
-                          buyer_name: (s as any).buyerName || (s as any).buyer_name,
+                          buyer_id: bId,
+                          buyer_name: normalizeUserDisplayName(bName),
                         });
                       } else {
                         formRef.current?.setFieldsValue({
@@ -2654,21 +2730,7 @@ const PurchaseOrdersPage: React.FC = () => {
                 </ProForm.Item>
               </Col>
               <Col span={8}>
-                <ProForm.Item name="buyer_id" label={t('app.kuaizhizao.purchaseOrder.form.buyer')}>
-                  <UniDropdown
-                    placeholder={t('app.kuaizhizao.purchaseOrder.form.buyerPlaceholder')}
-                    showSearch
-                    allowClear
-                    loading={usersLoading}
-                    options={users.map((u) => ({ label: u.full_name || u.username, value: u.id }))}
-                    onChange={(_val, opt: any) => {
-                      formRef.current?.setFieldsValue({ buyer_name: opt?.label });
-                    }}
-                  />
-                </ProForm.Item>
-                <AntForm.Item name="buyer_name" hidden>
-                  <Input />
-                </AntForm.Item>
+                <PurchaseOrderBuyerField userList={users} loading={usersLoading} />
               </Col>
             </Row>
           </div>
@@ -2936,28 +2998,45 @@ const PurchaseOrdersPage: React.FC = () => {
                   {
                     title: showTaxColumns ? t('app.kuaizhizao.purchaseOrder.col.taxUnitPrice') : t('app.kuaizhizao.purchaseOrder.col.unitPrice'),
                     dataIndex: 'unit_price',
-                    width: DOCUMENT_DETAIL_COL_WIDTH.unitPrice,
+                    width: DOCUMENT_DETAIL_COL_WIDTH.unitPrice + 28,
                     ...DOCUMENT_DETAIL_NUM_COL,
                     render: (_: any, __: any, index: number) => (
                       <AntForm.Item
                         noStyle
                         shouldUpdate={(prev: any, curr: any) =>
                           prev?.items?.[index]?.material_id !== curr?.items?.[index]?.material_id ||
-                          prev?.items?.[index]?.unit_price !== curr?.items?.[index]?.unit_price
+                          prev?.items?.[index]?.unit_price !== curr?.items?.[index]?.unit_price ||
+                          prev?.supplier_id !== curr?.supplier_id
                         }
                       >
-                        {() => (
-                          <AntForm.Item name={[index, 'unit_price']} rules={[{ required: true, message: t('common.required') }, { type: 'number', min: 0, message: t('app.kuaizhizao.purchaseOrder.form.gteZero') }]} style={{ margin: 0 }}>
-                            <InputNumber
-                              placeholder={showTaxColumns ? t('app.kuaizhizao.purchaseOrder.col.taxUnitPrice') : t('app.kuaizhizao.purchaseOrder.col.unitPrice')}
-                              min={0}
-                              precision={priceDecimals}
-                              prefix="¥"
-                              style={{ width: '100%' }}
-                              size={DOCUMENT_DETAIL_CONTROL_SIZE}
-                            />
-                          </AntForm.Item>
-                        )}
+                        {({ getFieldValue }) => {
+                          const row = normalizeFormListItems<any>(getFieldValue('items'))[index] ?? {};
+                          return (
+                            <AntForm.Item
+                              name={[index, 'unit_price']}
+                              rules={[
+                                { required: true, message: t('common.required') },
+                                { type: 'number', min: 0, message: t('app.kuaizhizao.purchaseOrder.form.gteZero') },
+                              ]}
+                              style={{ margin: 0 }}
+                            >
+                              <LineUnitPriceWithTrendTrigger
+                                side="purchase"
+                                materialId={row.material_id}
+                                partnerId={getFieldValue('supplier_id')}
+                                placeholder={
+                                  showTaxColumns
+                                    ? t('app.kuaizhizao.purchaseOrder.col.taxUnitPrice')
+                                    : t('app.kuaizhizao.purchaseOrder.col.unitPrice')
+                                }
+                                min={0}
+                                precision={priceDecimals}
+                                prefix="¥"
+                                size={DOCUMENT_DETAIL_CONTROL_SIZE}
+                              />
+                            </AntForm.Item>
+                          );
+                        }}
                       </AntForm.Item>
                     ),
                   },
@@ -3210,20 +3289,7 @@ const PurchaseOrdersPage: React.FC = () => {
             setTimeout(() => actionRef.current?.reload(), 0);
           }}
           detailTableColumns={detailTableColumns}
-          helpViewConfig={{
-            content: (
-              <div style={{ lineHeight: 1.8 }}>
-                <p>
-                  <strong>{t('components.uniTable.viewTable')}</strong>
-                  {t('app.kuaizhizao.purchaseOrder.helpTableView')}
-                </p>
-                <p>
-                  <strong>{t('components.uniTable.viewDetailTable')}</strong>
-                  {t('app.kuaizhizao.purchaseOrder.helpDetailTableView')}
-                </p>
-              </div>
-            ),
-          }}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.purchaseOrder)}
           rowKey={dataViewMode === 'detail' ? '_rowKey' : 'id'}
           rowClassName={(record) => {
             if (!highlightDeliveryOverdue) return '';
@@ -3305,7 +3371,7 @@ const PurchaseOrdersPage: React.FC = () => {
               capabilityKey="push_receipt_notice"
               permAllowed={purchaseOrderPerms.canAction?.('execute') ?? false}
               batchAllowed={purchaseOrderBatchPushReceiptNoticeAllowed}
-              onRun={(id) => pushPurchaseOrderToReceiptNotice(id)}
+              onRun={(id) => pushPurchaseOrderToReceiptNoticeFromPreview(id)}
               notAllowedMessage={t('app.kuaizhizao.purchaseOrder.batchPushNoticePartial', { count: 1 })}
               onSuccess={handlePurchaseOrderAuditBatchSuccess}
               labels={{

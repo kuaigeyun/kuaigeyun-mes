@@ -35,21 +35,21 @@ class DemandComputationItem(BaseModel):
     source_validation_errors = fields.JSONField(null=True, description="物料来源验证错误信息（JSON格式）")
     
     # 需求信息（通用）
-    required_quantity = fields.DecimalField(max_digits=10, decimal_places=2, description="需求数量")
-    available_inventory = fields.DecimalField(max_digits=10, decimal_places=2, default=0, description="可用库存")
-    net_requirement = fields.DecimalField(max_digits=10, decimal_places=2, description="净需求")
+    required_quantity = fields.DecimalField(max_digits=12, decimal_places=4, description="需求数量")
+    available_inventory = fields.DecimalField(max_digits=12, decimal_places=4, default=0, description="可用库存")
+    net_requirement = fields.DecimalField(max_digits=12, decimal_places=4, description="净需求")
     
     # MRP专用字段
-    gross_requirement = fields.DecimalField(max_digits=10, decimal_places=2, null=True, description="毛需求（MRP专用）")
-    safety_stock = fields.DecimalField(max_digits=10, decimal_places=2, null=True, description="安全库存（MRP专用）")
-    reorder_point = fields.DecimalField(max_digits=10, decimal_places=2, null=True, description="再订货点（MRP专用）")
-    planned_receipt = fields.DecimalField(max_digits=10, decimal_places=2, null=True, description="计划入库（MRP专用）")
-    planned_release = fields.DecimalField(max_digits=10, decimal_places=2, null=True, description="计划发放（MRP专用）")
+    gross_requirement = fields.DecimalField(max_digits=12, decimal_places=4, null=True, description="毛需求（MRP专用）")
+    safety_stock = fields.DecimalField(max_digits=12, decimal_places=4, null=True, description="安全库存（MRP专用）")
+    reorder_point = fields.DecimalField(max_digits=12, decimal_places=4, null=True, description="再订货点（MRP专用）")
+    planned_receipt = fields.DecimalField(max_digits=12, decimal_places=4, null=True, description="计划入库（MRP专用）")
+    planned_release = fields.DecimalField(max_digits=12, decimal_places=4, null=True, description="计划发放（MRP专用）")
     
     # LRP专用字段
     delivery_date = fields.DateField(null=True, description="交货日期（LRP专用）")
-    planned_production = fields.DecimalField(max_digits=10, decimal_places=2, null=True, description="计划生产（LRP专用）")
-    planned_procurement = fields.DecimalField(max_digits=10, decimal_places=2, null=True, description="计划采购（LRP专用）")
+    planned_production = fields.DecimalField(max_digits=12, decimal_places=4, null=True, description="计划生产（LRP专用）")
+    planned_procurement = fields.DecimalField(max_digits=12, decimal_places=4, null=True, description="计划采购（LRP专用）")
     production_start_date = fields.DateField(null=True, description="生产开始日期（LRP专用）")
     production_completion_date = fields.DateField(null=True, description="生产完成日期（LRP专用）")
     procurement_start_date = fields.DateField(null=True, description="采购开始日期（LRP专用）")
@@ -63,8 +63,8 @@ class DemandComputationItem(BaseModel):
     demand_item_ids = fields.JSONField(null=True, description="该计算行由哪些 DemandItem 汇总而来，用于追溯")
 
     # 建议行动
-    suggested_work_order_quantity = fields.DecimalField(max_digits=10, decimal_places=2, null=True, description="建议工单数量")
-    suggested_purchase_order_quantity = fields.DecimalField(max_digits=10, decimal_places=2, null=True, description="建议采购订单数量")
+    suggested_work_order_quantity = fields.DecimalField(max_digits=12, decimal_places=4, null=True, description="建议工单数量")
+    suggested_purchase_order_quantity = fields.DecimalField(max_digits=12, decimal_places=4, null=True, description="建议采购订单数量")
     
     # 详细结果（JSON格式，存储时间表、分解等详细信息）
     detail_results = fields.JSONField(null=True, description="详细结果（JSON格式）")

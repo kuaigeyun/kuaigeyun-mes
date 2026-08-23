@@ -78,7 +78,7 @@ class Stocktaking(BaseModel):
     total_items = fields.IntField(default=0, description="盘点物料总数")
     counted_items = fields.IntField(default=0, description="已盘点物料数")
     total_differences = fields.IntField(default=0, description="差异总数")
-    total_difference_amount = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="差异总金额")
+    total_difference_amount = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="差异总金额")
 
     # 备注
     remarks = fields.TextField(null=True, description="备注")
@@ -165,13 +165,13 @@ class StocktakingItem(BaseModel):
     batch_no = fields.CharField(max_length=100, null=True, description="批次号（可选）")
 
     # 数量信息
-    book_quantity = fields.DecimalField(max_digits=12, decimal_places=2, description="账面数量")
-    actual_quantity = fields.DecimalField(max_digits=12, decimal_places=2, null=True, description="实际数量")
-    difference_quantity = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="差异数量")
+    book_quantity = fields.DecimalField(max_digits=14, decimal_places=4, description="账面数量")
+    actual_quantity = fields.DecimalField(max_digits=14, decimal_places=4, null=True, description="实际数量")
+    difference_quantity = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="差异数量")
 
     # 金额信息
-    unit_price = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="单价")
-    difference_amount = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="差异金额")
+    unit_price = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="单价")
+    difference_amount = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="差异金额")
 
     # 盘点信息
     counted_by = fields.IntField(null=True, description="盘点人ID")

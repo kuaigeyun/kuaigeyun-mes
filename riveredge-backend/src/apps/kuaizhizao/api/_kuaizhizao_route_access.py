@@ -15,6 +15,7 @@ from core.config.permission_contract import build_permission_code
 # 审核走 audit 而非 approve 的模块（与 manifest 一致）
 _AUDIT_APPROVE_MODULES = frozenset({
     "purchase-order-change",
+    "purchase-arrival-delay",
     "sales-order-change",
 })
 
@@ -127,7 +128,7 @@ def resolve_kuaizhizao_module_action(
             return "submit"
         if any(k in p for k in ("/revoke", "/cancel", "/withdraw")):
             return "revoke"
-        if any(k in p for k in ("/execute", "/confirm", "/checkin", "/checkout")):
+        if any(k in p for k in ("/execute", "/confirm", "/checkin", "/checkout", "/apply")):
             return "execute"
         return "create"
     raise ValueError(f"Kuaizhizao: unsupported HTTP method {method!r} for path {path!r}")

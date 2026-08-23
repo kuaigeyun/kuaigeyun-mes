@@ -345,9 +345,19 @@
                         "permission": "kuaizhizao:purchase-order:read"
                     },
                     {
+                        "title": "app.kuaizhizao.menu.purchase-management.arrival-warnings",
+                        "path": "/apps/kuaizhizao/purchase-management/arrival-warnings",
+                        "sort_order": 4,
+                        "meta": {
+                            "node": "purchase_arrival_warning",
+                            "module": "purchase"
+                        },
+                        "permission": "kuaizhizao:purchase-arrival-warning:read"
+                    },
+                    {
                         "title": "app.kuaizhizao.menu.purchase-management.purchase-order-changes",
                         "path": "/apps/kuaizhizao/purchase-management/purchase-order-changes",
-                        "sort_order": 4,
+                        "sort_order": 5,
                         "meta": {
                             "node": "purchase_order_change",
                             "module": "purchase"
@@ -357,7 +367,7 @@
                     {
                         "title": "app.kuaizhizao.menu.purchase-management.receipt-notices",
                         "path": "/apps/kuaizhizao/purchase-management/receipt-notices",
-                        "sort_order": 5,
+                        "sort_order": 6,
                         "meta": {
                             "module": "purchase",
                             "node": "receipt_notice"
@@ -367,7 +377,7 @@
                     {
                         "title": "app.kuaizhizao.menu.purchase-management.purchase-returns",
                         "path": "/apps/kuaizhizao/purchase-management/purchase-returns",
-                        "sort_order": 6,
+                        "sort_order": 7,
                         "meta": {
                             "module": "purchase",
                             "node": "purchase_return"
@@ -377,7 +387,7 @@
                     {
                         "title": "app.kuaizhizao.menu.purchase-management.reports",
                         "icon": "fileText",
-                        "sort_order": 7,
+                        "sort_order": 8,
                         "children": [
                             {
                                 "title": "app.kuaizhizao.menu.reports.purchase-requisition-tracking",
@@ -1646,27 +1656,39 @@
                                 "permission": "kuaizhizao:warehouse-management-reports-inventory-ledger:read"
                             },
                             {
+                                "title": "app.kuaizhizao.menu.reports.inbound-summary",
+                                "path": "/apps/kuaizhizao/warehouse-management/reports/inbound-summary",
+                                "sort_order": 3,
+                                "permission": "kuaizhizao:warehouse-management-reports-inbound-summary:read"
+                            },
+                            {
+                                "title": "app.kuaizhizao.menu.reports.outbound-summary",
+                                "path": "/apps/kuaizhizao/warehouse-management/reports/outbound-summary",
+                                "sort_order": 4,
+                                "permission": "kuaizhizao:warehouse-management-reports-outbound-summary:read"
+                            },
+                            {
                                 "title": "app.kuaizhizao.menu.reports.slow-moving-inventory",
                                 "path": "/apps/kuaizhizao/warehouse-management/reports/slow-moving-inventory",
-                                "sort_order": 3,
+                                "sort_order": 5,
                                 "permission": "kuaizhizao:warehouse-management-reports-slow-moving-inventory:read"
                             },
                             {
                                 "title": "app.kuaizhizao.menu.reports.fifo-exception-audit",
                                 "path": "/apps/kuaizhizao/warehouse-management/reports/fifo-exception-audit",
-                                "sort_order": 4,
+                                "sort_order": 6,
                                 "permission": "kuaizhizao:warehouse-management-reports-fifo-exception-audit:read"
                             },
                             {
                                 "title": "app.kuaizhizao.menu.reports.stocktaking-history",
                                 "path": "/apps/kuaizhizao/warehouse-management/reports/stocktaking-history",
-                                "sort_order": 5,
+                                "sort_order": 7,
                                 "permission": "kuaizhizao:warehouse-management-reports-stocktaking-history:read"
                             },
                             {
                                 "title": "app.kuaizhizao.menu.reports.transfer-tracking",
                                 "path": "/apps/kuaizhizao/warehouse-management/reports/transfer-tracking",
-                                "sort_order": 6,
+                                "sort_order": 8,
                                 "permission": "kuaizhizao:warehouse-management-reports-transfer-tracking:read"
                             }
                         ]
@@ -2323,6 +2345,14 @@
             "master-data:warehouse:warehouse"
         ],
         "purchase-order-change": [
+            "master-data:supply-chain:supplier",
+            "master-data:material"
+        ],
+        "purchase-arrival-warning": [
+            "master-data:supply-chain:supplier",
+            "master-data:material"
+        ],
+        "purchase-arrival-delay": [
             "master-data:supply-chain:supplier",
             "master-data:material"
         ],
@@ -3312,11 +3342,18 @@
         "kuaizhizao:purchase-order-change:audit",
         "kuaizhizao:purchase-order-change:create",
         "kuaizhizao:purchase-order-change:delete",
+        "kuaizhizao:purchase-order-change:execute",
         "kuaizhizao:purchase-order-change:print",
         "kuaizhizao:purchase-order-change:read",
         "kuaizhizao:purchase-order-change:revoke",
         "kuaizhizao:purchase-order-change:submit",
         "kuaizhizao:purchase-order-change:update",
+        "kuaizhizao:purchase-arrival-warning:read",
+        "kuaizhizao:purchase-arrival-delay:audit",
+        "kuaizhizao:purchase-arrival-delay:create",
+        "kuaizhizao:purchase-arrival-delay:read",
+        "kuaizhizao:purchase-arrival-delay:submit",
+        "kuaizhizao:purchase-arrival-delay:update",
         "kuaizhizao:purchase-order:audit",
         "kuaizhizao:purchase-order:create",
         "kuaizhizao:purchase-order:delete",
@@ -3327,6 +3364,7 @@
         "kuaizhizao:purchase-order:revoke",
         "kuaizhizao:purchase-order:submit",
         "kuaizhizao:purchase-order:update",
+        "kuaizhizao:purchase-order-price-trend:read",
         "kuaizhizao:purchase-requisition:approve",
         "kuaizhizao:purchase-requisition:audit",
         "kuaizhizao:purchase-requisition:create",
@@ -3619,6 +3657,7 @@
         "kuaizhizao:sales-order:revoke",
         "kuaizhizao:sales-order:submit",
         "kuaizhizao:sales-order:update",
+        "kuaizhizao:sales-order-price-trend:read",
         "kuaizhizao:sales-review:approve",
         "kuaizhizao:sales-review:create",
         "kuaizhizao:sales-review:delete",
@@ -4152,6 +4191,14 @@
             "config_category": "procurement"
         },
         {
+            "node_key": "purchase_arrival_delay",
+            "entity_type": "purchase_arrival_delay",
+            "resource": "kuaizhizao:purchase-arrival-delay",
+            "name": "采购到货延期填报审核",
+            "template": "simple",
+            "config_category": "procurement"
+        },
+        {
             "node_key": "purchase_request",
             "entity_type": "purchase_request",
             "resource": "kuaizhizao:purchase-request",
@@ -4271,6 +4318,18 @@
             "module_icon": "tool",
             "auto_generate": true,
             "rule_code": "PURCHASE_ORDER_CHANGE_CODE",
+            "allow_manual_edit": true
+        },
+        {
+            "page_code": "kuaizhizao-purchase-arrival-delay",
+            "page_name": "采购到货延期填报",
+            "page_path": "/apps/kuaizhizao/purchase-management/arrival-warnings",
+            "code_field": "report_code",
+            "code_field_label": "延期填报单号",
+            "module": "快制造",
+            "module_icon": "tool",
+            "auto_generate": true,
+            "rule_code": "PURCHASE_ARRIVAL_DELAY_CODE",
             "allow_manual_edit": true
         },
         {

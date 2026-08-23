@@ -8,7 +8,7 @@
  * @date 2026-01-21
  */
 
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } from 'react';
 import { Space, Typography, Spin, Tooltip } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
@@ -77,6 +77,10 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({
     weatherRef.current = weather;
   }, [weather]);
 
+  useLayoutEffect(() => {
+    onWeatherChange?.(weather);
+  }, [weather, onWeatherChange]);
+
   /**
    * 加载天气数据
    * @param force 是否强制刷新
@@ -92,12 +96,10 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({
       const data = await getWeatherByIP(force, i18n.language);
       if (data) {
         setWeather(data);
-        onWeatherChange?.(data);
       } else if (!hasCurrentWeather) {
         // 只有既没有新数据也没有缓存数据时才报错
         setWeather(null);
         setError(t('components.weather.loadFailed'));
-        onWeatherChange?.(null);
       }
     } catch (err: unknown) {
       if (typeof window !== 'undefined') {
@@ -106,7 +108,6 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({
       if (!hasCurrentWeather) {
         setWeather(null);
         setError(err instanceof Error ? err.message : t('components.weather.loadFailed'));
-        onWeatherChange?.(null);
       }
     } finally {
       setLoading(false);
@@ -134,26 +135,19 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({
   }, [weather?.lat, weather?.lon, i18n.language]);
 
   useEffect(() => {
-    const timerId = window.setTimeout(() => {
-      const pageKey = `${WEATHER_REFRESH_ONCE_PER_PAGE_KEY}:${locationKey}`;
-      const cached = getCachedWeather(i18n.language);
-      if (cached && !isWeatherCacheExpired()) {
-        setWeather(cached);
-        onWeatherChange?.(cached);
-        window.sessionStorage.setItem(pageKey, '1');
-        return;
-      }
-      const hasCheckedThisPage = window.sessionStorage.getItem(pageKey) === '1';
-      if (!hasCheckedThisPage || !weatherRef.current) {
-        window.sessionStorage.setItem(pageKey, '1');
-        loadWeather(true);
-      }
-    }, 0);
-
-    return () => {
-      window.clearTimeout(timerId);
-    };
-  }, [loadWeather, locationKey, i18n.language, onWeatherChange]);
+    const pageKey = `${WEATHER_REFRESH_ONCE_PER_PAGE_KEY}:${locationKey}`;
+    const cached = getCachedWeather(i18n.language);
+    if (cached && !isWeatherCacheExpired()) {
+      setWeather(cached);
+      window.sessionStorage.setItem(pageKey, '1');
+      return;
+    }
+    const hasCheckedThisPage = window.sessionStorage.getItem(pageKey) === '1';
+    if (!hasCheckedThisPage || !weatherRef.current) {
+      window.sessionStorage.setItem(pageKey, '1');
+      loadWeather(true);
+    }
+  }, [loadWeather, locationKey, i18n.language]);
 
   const iconBox = mini ? 48 : 56;
   const tempSize = mini ? 16 : compact ? 24 : 20;

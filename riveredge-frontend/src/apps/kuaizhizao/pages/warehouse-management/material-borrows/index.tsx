@@ -12,7 +12,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormItem, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Col, DatePicker, Descriptions, Form as AntForm, Input, InputNumber, Modal, Row, Select, Space, Table, Tag, Typography } from 'antd';
-import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined, PrinterOutlined, ShoppingOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined, ShoppingOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
@@ -695,19 +695,13 @@ const MaterialBorrowsPage: React.FC = () => {
               return { data: [], success: false, total: 0 };
             }
           }}
-          toolBarActionsAfterBatch={[
-            <Button
-              key="material-borrow-toolbar-print"
-              icon={<PrinterOutlined />}
-              disabled={!canToolbarPrint}
-              onClick={() => {
-                const row = selectedMaterialBorrowForBatch[0];
-                if (row) handlePrint(row);
-              }}
-            >
-              {t('components.uniAction.print')}
-            </Button>,
-          ]}
+          showPrintButton
+          printButtonDisabled={!canToolbarPrint}
+          printButtonText={t('components.uniAction.print')}
+          onPrint={() => {
+            const row = selectedMaterialBorrowForBatch[0];
+            if (row) handlePrint(row);
+          }}
         />
       </ListPageTemplate>
 

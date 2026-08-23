@@ -73,6 +73,37 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         super().__init__(PurchaseOrder)
 
     @staticmethod
+    def _format_user_display_name(user: Any) -> str:
+        return str(getattr(user, "full_name", None) or getattr(user, "username", None) or user.id)
+
+    async def _resolve_buyer_fields(self, data: Dict[str, Any]) -> None:
+        """buyer_id 有值但 buyer_name 为空时，从用户主数据解析姓名；清空采购员时同步清空姓名。"""
+        if "buyer_id" not in data:
+            return
+        buyer_id = data.get("buyer_id")
+        if buyer_id is None or int(buyer_id or 0) <= 0:
+            data["buyer_name"] = None
+            return
+        if str(data.get("buyer_name") or "").strip():
+            return
+        data["buyer_name"] = await self.get_user_name(int(buyer_id))
+
+    async def _batch_buyer_display_names(
+        self, tenant_id: int, buyer_ids: List[int]
+    ) -> Dict[int, str]:
+        uid_set = list({int(i) for i in buyer_ids if i and int(i) > 0})
+        if not uid_set:
+            return {}
+        from infra.models.user import User as UserModel
+
+        users = await UserModel.filter(
+            tenant_id=tenant_id,
+            id__in=uid_set,
+            deleted_at__isnull=True,
+        ).all()
+        return {int(u.id): self._format_user_display_name(u) for u in users}
+
+    @staticmethod
     def _extract_material_purchase_benchmark_price(material: Material) -> Optional[Decimal]:
         """
         从物料默认值中提取采购基准价，用于采购价格偏差风控。
@@ -118,11 +149,11 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         if fluctuation_limit_percent <= 0:
             return
 
-        benchmark_price = PurchaseService._extract_material_purchase_benchmark_price(material)
-        if benchmark_price is None or benchmark_price <= 0:
+        current_price = Decimal(str(unit_price or 0))
+        if current_price <= 0:
             return
 
-        current_price = Decimal(str(unit_price or 0))
+        benchmark_price = PurchaseService._extract_material_purchase_benchmark_price(material)
         deviation_pct = (abs(current_price - benchmark_price) / benchmark_price) * Decimal("100")
         if deviation_pct > Decimal(str(fluctuation_limit_percent)):
             material_label = getattr(material, "main_code", None) or getattr(material, "code", None) or str(material.id)
@@ -237,11 +268,14 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                     order_dict["buyer_id"] = supplier.buyer_id
                     order_dict["buyer_name"] = supplier.buyer_name
 
+            await self._resolve_buyer_fields(order_dict)
+
             order = await PurchaseOrder.create(**order_dict)
 
             # 创建订单明细
             total_quantity = Decimal(0)
             total_amount = Decimal(0)
+            partner_settlement_method = supplier.settlement_method_code if supplier else None
 
             for item_data in order_data.items:
                 # 验证物料
@@ -265,11 +299,29 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                     item_dict["material_code"] = str(
                         material.main_code or getattr(material, "code", None) or ""
                     )[:50]
+                from apps.kuaicaiwu.utils.price_settlement_helpers import (
+                    derive_price_settlement_status,
+                    derive_provisional_unit_price,
+                )
+
+                settlement_status = derive_price_settlement_status(
+                    unit_price=item_data.unit_price,
+                    partner_settlement_method=partner_settlement_method,
+                    explicit_status=getattr(item_data, "price_settlement_status", None),
+                )
+                provisional_price = derive_provisional_unit_price(
+                    unit_price=item_data.unit_price,
+                    reference_price=getattr(item_data, "provisional_unit_price", None),
+                    settlement_status=settlement_status,
+                )
+
                 item_dict.update({
                     'tenant_id': tenant_id,
                     'order_id': order.id,
                     'total_price': total_price,
                     'outstanding_quantity': outstanding_quantity,
+                    'price_settlement_status': settlement_status,
+                    'provisional_unit_price': provisional_price,
                     'created_by': created_by,
                     'updated_by': created_by
                 })
@@ -323,6 +375,8 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         
         # 使用model_construct构建响应对象
         response = PurchaseOrderResponse.model_construct(**order_data)
+        if response.buyer_id and not str(response.buyer_name or "").strip():
+            response.buyer_name = await self.get_user_name(int(response.buyer_id))
         # 手动设置items（编码/名称以物料主数据为准，避免明细行仅存 material_id 时名称为空）
         response.items = []
         for item in items:
@@ -483,6 +537,21 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 items_by_order.setdefault(int(it.order_id), []).append(it)
             material_fallback = await self._load_material_fallback_for_po_items(tenant_id, all_items)
 
+        missing_buyer_ids = [
+            int(o.buyer_id)
+            for o in orders
+            if o.buyer_id and not str(o.buyer_name or "").strip()
+        ]
+        buyer_name_by_id = await self._batch_buyer_display_names(tenant_id, missing_buyer_ids)
+
+        from apps.kuaizhizao.services.purchase_arrival_warning_service import (
+            PurchaseArrivalWarningService,
+        )
+
+        overdue_by_po = await PurchaseArrivalWarningService().batch_po_has_arrival_overdue(
+            tenant_id, order_ids
+        )
+
         result = []
         for order in orders:
             totals = totals_by_order.get(order.id, {})
@@ -510,6 +579,10 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             )
             order_data = order.__dict__.copy()
             order_data.pop('items', None)
+            if order.buyer_id and not str(order_data.get("buyer_name") or "").strip():
+                resolved_buyer_name = buyer_name_by_id.get(int(order.buyer_id))
+                if resolved_buyer_name:
+                    order_data["buyer_name"] = resolved_buyer_name
             order_data['items_count'] = items_count
             order_data['downstream_push_progress'] = downstream_push_progress
             order_data['downstream_receipt_notice_codes'] = list(
@@ -521,6 +594,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             order_data['received_total'] = received_total
             order_data['outstanding_total'] = outstanding_total
             order_data['receipt_progress'] = receipt_progress
+            order_data['has_arrival_overdue'] = bool(overdue_by_po.get(int(order.id)))
             resp = PurchaseOrderListResponse.model_construct(**order_data)
             resp.items = []
             if params.include_items:
@@ -923,6 +997,8 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             update_dict['updated_by'] = updated_by
             update_dict['updated_by_name'] = user_info["name"]
 
+            await self._resolve_buyer_fields(update_dict)
+
             next_supplier_id = update_dict.get("supplier_id", order.supplier_id)
             next_status = update_dict.get("status", order.status)
             if int(next_supplier_id or 0) > 0 and next_status != DocumentStatus.DRAFT.value:
@@ -1237,6 +1313,33 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 order=order,
                 operator_id=approved_by,
             )
+            from apps.kuaizhizao.services.kuaizhizao_business_notification import (
+                ACTION_APPROVED,
+                DOC_PURCHASE_ORDER,
+                dispatch_kuaizhizao_notification,
+            )
+
+            try:
+                await dispatch_kuaizhizao_notification(
+                    tenant_id,
+                    trigger_document=DOC_PURCHASE_ORDER,
+                    trigger_action=ACTION_APPROVED,
+                    variables={
+                        "order_code": order.order_code or str(order_id),
+                        "supplier_name": order.supplier_name or "—",
+                        "delivery_date": str(order.delivery_date or ""),
+                        "detail_path": f"/apps/kuaizhizao/purchase-management/purchase-orders?highlight={order_id}",
+                        "purchase_order_id": str(order_id),
+                    },
+                    context={"creator_user_id": order.created_by},
+                )
+            except Exception as exc:
+                logger.warning(
+                    "采购订单审核消息提醒失败 tenant={} order={}: {}",
+                    tenant_id,
+                    order_id,
+                    exc,
+                )
 
         return await self.get_purchase_order_by_id(tenant_id, order_id)
 
@@ -1545,6 +1648,30 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         name = str(getattr(item, "material_name", None) or "").strip()[:200]
         return code, name
 
+    async def _resolve_po_push_line_warehouse(
+        self,
+        tenant_id: int,
+        item: PurchaseOrderItem,
+        *,
+        line_warehouses: Optional[Dict[int, int]] = None,
+        material_fallback: Optional[Dict[int, Dict[str, str]]] = None,
+    ) -> tuple[int, str]:
+        from apps.kuaizhizao.services.warehouse_service import _resolve_warehouse_name_by_id
+        from apps.kuaizhizao.utils.warehouse_resolver import resolve_inbound_warehouse_for_purchase_push
+
+        item_id = int(item.id)
+        explicit_wh: Optional[int] = None
+        if line_warehouses and item_id in line_warehouses:
+            explicit_wh = int(line_warehouses[item_id])
+        line_wh_id, line_wh_name = await resolve_inbound_warehouse_for_purchase_push(
+            tenant_id,
+            material_id=int(item.material_id) if item.material_id else None,
+            explicit_warehouse_id=explicit_wh,
+        )
+        if not line_wh_name:
+            line_wh_name = await _resolve_warehouse_name_by_id(tenant_id, line_wh_id) or ""
+        return line_wh_id, line_wh_name
+
     async def _build_outstanding_push_preview_items(
         self,
         tenant_id: int,
@@ -1616,10 +1743,8 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         tenant_id: int,
         preview_items: List[Dict[str, Any]],
     ) -> List[Dict[str, Any]]:
-        """为采购下推预览行补全物料默认入库仓库。"""
-        from apps.master_data.services.material_service import (
-            resolve_primary_default_warehouse_from_material,
-        )
+        """为采购下推预览行补全入库仓库（物料默认 → 租户默认仓）。"""
+        from apps.kuaizhizao.utils.warehouse_resolver import resolve_inbound_warehouse_for_purchase_push
 
         enriched: List[Dict[str, Any]] = []
         for row in preview_items:
@@ -1628,12 +1753,14 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             line_wh_name: Optional[str] = None
             material_id = item.get("material_id")
             if material_id:
-                material_wh = await resolve_primary_default_warehouse_from_material(
-                    tenant_id,
-                    material_id=int(material_id),
-                )
-                if material_wh:
-                    line_wh_id, line_wh_name = material_wh
+                try:
+                    line_wh_id, line_wh_name = await resolve_inbound_warehouse_for_purchase_push(
+                        tenant_id,
+                        material_id=int(material_id),
+                    )
+                except ValidationError:
+                    line_wh_id = None
+                    line_wh_name = None
             item["warehouse_id"] = line_wh_id
             item["warehouse_name"] = line_wh_name
             enriched.append(item)
@@ -2217,46 +2344,32 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
     # === 采购员赋能增强方法 ===
 
     async def get_material_price_history(self, tenant_id: int, material_id: int) -> MaterialPriceHistoryResponse:
-        """获取物料历史成交价"""
-        from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
-        from apps.kuaizhizao.constants import LEGACY_AUDITED_VALUES
+        """获取物料历史成交价（不限供应商，兼容旧接口）。"""
+        from apps.kuaizhizao.services.partner_material_price_trend_service import (
+            PartnerMaterialPriceTrendService,
+        )
 
-        # 获取该物料最近 10 次已审核订单的成交记录
-        items = await PurchaseOrderItem.filter(
+        trend = await PartnerMaterialPriceTrendService().get_purchase_price_history_all_suppliers(
             tenant_id=tenant_id,
             material_id=material_id,
-            order__status__in=LEGACY_AUDITED_VALUES
-        ).select_related("order").order_by("-order__order_date").limit(10).all()
-
-        history_items = []
-        prices = []
-        for item in items:
-            history_items.append(MaterialPriceHistoryItem(
-                order_id=item.order_id,
-                order_code=item.order.order_code,
-                order_date=item.order.order_date,
-                supplier_id=item.order.supplier_id,
-                supplier_name=item.order.supplier_name,
-                unit_price=item.unit_price,
-                # currency=item.order.currency
-            ))
-            prices.append(item.unit_price)
-
-        if not prices:
-            return MaterialPriceHistoryResponse(
-                material_id=material_id,
-                history_items=[],
-                average_price=0,
-                min_price=0,
-                max_price=0
+        )
+        history_items = [
+            MaterialPriceHistoryItem(
+                order_id=row.order_id,
+                order_code=row.order_code,
+                order_date=row.order_date,
+                supplier_id=row.partner_id,
+                supplier_name=row.partner_name or "",
+                unit_price=row.unit_price,
             )
-
+            for row in trend.history_items
+        ]
         return MaterialPriceHistoryResponse(
             material_id=material_id,
             history_items=history_items,
-            average_price=sum(prices) / len(prices),
-            min_price=min(prices),
-            max_price=max(prices)
+            average_price=trend.average_price,
+            min_price=trend.min_price,
+            max_price=trend.max_price,
         )
 
     async def get_purchase_order_changes(self, tenant_id: int, order_id: int):
@@ -2457,12 +2570,8 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         from apps.kuaizhizao.services.receipt_notice_service import ReceiptNoticeService
         from apps.kuaizhizao.schemas.receipt_notice import ReceiptNoticeCreate, ReceiptNoticeItemCreate
         from apps.kuaizhizao.services.warehouse_service import (
-            _resolve_warehouse_name_by_id,
             noticed_qty_by_po_item_ids,
             sync_purchase_order_receipt_quantities,
-        )
-        from apps.master_data.services.material_service import (
-            resolve_primary_default_warehouse_from_material,
         )
         from decimal import Decimal
 
@@ -2539,24 +2648,12 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 raise ValidationError(f"物料 {item.material_code or item.material_name or item.id} 的单价无效，无法下推收货通知")
 
             item_id = int(item.id)
-            line_wh_id: Optional[int] = None
-            line_wh_name: Optional[str] = None
-            if line_warehouses and item_id in line_warehouses:
-                line_wh_id = int(line_warehouses[item_id])
-            if (line_wh_id is None or line_wh_id <= 0) and item.material_id:
-                material_wh = await resolve_primary_default_warehouse_from_material(
-                    tenant_id,
-                    material_id=int(item.material_id),
-                )
-                if material_wh:
-                    line_wh_id, line_wh_name = material_wh
-            if line_wh_id is None or line_wh_id <= 0:
-                material_code, material_name = self._resolve_po_item_material_display(item, material_fallback)
-                raise ValidationError(
-                    f"请为物料 {material_code or material_name or item_id} 选择入库仓库"
-                )
-            if not line_wh_name:
-                line_wh_name = await _resolve_warehouse_name_by_id(tenant_id, line_wh_id)
+            line_wh_id, line_wh_name = await self._resolve_po_push_line_warehouse(
+                tenant_id,
+                item,
+                line_warehouses=line_warehouses,
+                material_fallback=material_fallback,
+            )
             if header_wh_id is None:
                 header_wh_id = line_wh_id
                 header_wh_name = line_wh_name
@@ -2616,7 +2713,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         """开口采购订单行：可转收货通知的剩余明细。"""
         from apps.kuaizhizao.services.warehouse_service import (
             noticed_qty_by_po_item_ids,
-            sync_purchase_order_receipt_quantities,
+            sync_purchase_order_receipt_quantities_batch,
         )
 
         po_query = PurchaseOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
@@ -2627,8 +2724,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         if not order_by_id:
             return {"data": [], "total": 0}
 
-        for oid in order_by_id:
-            await sync_purchase_order_receipt_quantities(tenant_id, oid)
+        await sync_purchase_order_receipt_quantities_batch(tenant_id, order_by_id.keys())
         items = await PurchaseOrderItem.filter(
             tenant_id=tenant_id, order_id__in=list(order_by_id.keys())
         ).all()
@@ -2700,12 +2796,8 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         from apps.kuaizhizao.services.receipt_notice_service import ReceiptNoticeService
         from apps.kuaizhizao.schemas.receipt_notice import ReceiptNoticeCreate, ReceiptNoticeItemCreate
         from apps.kuaizhizao.services.warehouse_service import (
-            _resolve_warehouse_name_by_id,
             noticed_qty_by_po_item_ids,
-            sync_purchase_order_receipt_quantities,
-        )
-        from apps.master_data.services.material_service import (
-            resolve_primary_default_warehouse_from_material,
+            sync_purchase_order_receipt_quantities_batch,
         )
 
         selected_ids = [int(v) for v in item_ids if v is not None]
@@ -2721,8 +2813,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         order_by_id = {int(o.id): o for o in orders}
         if len(order_by_id) != len(order_ids):
             raise NotFoundError("采购订单不存在")
-        for oid in order_ids:
-            await sync_purchase_order_receipt_quantities(tenant_id, oid)
+        await sync_purchase_order_receipt_quantities_batch(tenant_id, order_ids)
         noticed_raw = await noticed_qty_by_po_item_ids(tenant_id, order_ids)
         noticed_by_item = {int(k): float(v) for k, v in noticed_raw.items()}
 
@@ -2770,20 +2861,11 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                     raise ValidationError(
                         f"物料 {item.material_code or item.material_name or item.id} 的单价无效，无法下推收货通知"
                     )
-                line_wh_id: Optional[int] = None
-                line_wh_name: Optional[str] = None
-                material_wh = await resolve_primary_default_warehouse_from_material(
-                    tenant_id, material_id=int(item.material_id)
+                line_wh_id, line_wh_name = await self._resolve_po_push_line_warehouse(
+                    tenant_id,
+                    item,
+                    material_fallback=material_fallback,
                 )
-                if material_wh:
-                    line_wh_id, line_wh_name = material_wh
-                if line_wh_id is None or line_wh_id <= 0:
-                    material_code, material_name = self._resolve_po_item_material_display(item, material_fallback)
-                    raise ValidationError(
-                        f"请为物料 {material_code or material_name or item.id} 选择入库仓库"
-                    )
-                if not line_wh_name:
-                    line_wh_name = await _resolve_warehouse_name_by_id(tenant_id, line_wh_id)
                 if header_wh_id is None:
                     header_wh_id = line_wh_id
                     header_wh_name = line_wh_name

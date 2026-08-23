@@ -189,6 +189,15 @@ class ExceptionProcessService(AppBaseService[ExceptionProcessRecord]):
 
         logger.info(f"异常处理流程已启动: {process_record.id}, 异常类型: {data.exception_type}")
 
+        if data.exception_type == "quality" and data.assigned_to:
+            await self._notify_quality_exception_assigned(
+                tenant_id,
+                exception_id=data.exception_id,
+                assigned_to=int(data.assigned_to),
+                assigned_to_name=assigned_to_name or "",
+                creator_user_id=current_user_id,
+            )
+
         return ExceptionProcessRecordResponse.model_validate(process_record)
 
     async def assign_process(
@@ -248,6 +257,21 @@ class ExceptionProcessService(AppBaseService[ExceptionProcessRecord]):
         )
 
         logger.info(f"异常处理流程已分配: {process_record.id}, 分配给: {assigned_to_name}")
+
+        if process_record.exception_type == "quality" and process_record.exception_id:
+            start_history = await ExceptionProcessHistory.filter(
+                tenant_id=tenant_id,
+                process_record_id=process_record.id,
+                action="start",
+            ).order_by("id").first()
+            creator_user_id = start_history.action_by if start_history else current_user_id
+            await self._notify_quality_exception_assigned(
+                tenant_id,
+                exception_id=int(process_record.exception_id),
+                assigned_to=int(data.assigned_to),
+                assigned_to_name=assigned_to_name or "",
+                creator_user_id=creator_user_id,
+            )
 
         return ExceptionProcessRecordResponse.model_validate(process_record)
 
@@ -613,6 +637,57 @@ class ExceptionProcessService(AppBaseService[ExceptionProcessRecord]):
         if exception:
             exception.status = status
             await exception.save()
+
+    async def _notify_quality_exception_assigned(
+        self,
+        tenant_id: int,
+        *,
+        exception_id: int,
+        assigned_to: int,
+        assigned_to_name: str,
+        creator_user_id: Optional[int],
+    ) -> None:
+        from apps.kuaizhizao.services.kuaizhizao_business_notification import (
+            ACTION_ASSIGNED,
+            DOC_QUALITY_EXCEPTION,
+            dispatch_kuaizhizao_notification,
+        )
+
+        exception = await QualityException.get_or_none(
+            tenant_id=tenant_id,
+            id=exception_id,
+        )
+        if not exception:
+            return
+        code = str(getattr(exception, "uuid", None) or exception.id)
+        try:
+            await dispatch_kuaizhizao_notification(
+                tenant_id,
+                trigger_document=DOC_QUALITY_EXCEPTION,
+                trigger_action=ACTION_ASSIGNED,
+                variables={
+                    "exception_code": code,
+                    "assigned_to_name": assigned_to_name or "—",
+                    "material_name": exception.material_name or exception.material_code or "—",
+                    "severity": exception.severity or "",
+                    "problem_description": (exception.problem_description or "")[:500],
+                    "detail_path": (
+                        f"/apps/kuaizhizao/production-execution/quality-exceptions?highlight={exception.id}"
+                    ),
+                    "quality_exception_id": str(exception.id),
+                },
+                context={
+                    "creator_user_id": creator_user_id,
+                    "form_notify_user_ids": [assigned_to],
+                },
+            )
+        except Exception as exc:
+            logger.warning(
+                "质量异常分派消息提醒失败 tenant={} exception={}: {}",
+                tenant_id,
+                exception_id,
+                exc,
+            )
 
     async def _create_history(
         self,

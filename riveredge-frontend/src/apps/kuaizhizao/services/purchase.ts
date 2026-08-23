@@ -110,6 +110,7 @@ export interface PurchaseOrder {
   received_total?: number;
   outstanding_total?: number;
   receipt_progress?: number;
+  has_arrival_overdue?: boolean;
   created_at?: string;
   updated_at?: string;
   items?: PurchaseOrderItem[];
@@ -498,6 +499,36 @@ export async function pushPurchaseOrderToReceiptNotice(
   });
 }
 
+/** 批量下推：先取预览可下推明细与仓库，再提交（与单行预览下推口径一致） */
+export async function pushPurchaseOrderToReceiptNoticeFromPreview(id: number): Promise<any> {
+  const preview = await previewPushToReceiptNotice(id);
+  const rows = (preview.items || []).filter((row) => Number(row.max_push_quantity ?? 0) > 0);
+  if (!rows.length) {
+    return pushPurchaseOrderToReceiptNotice(id);
+  }
+  const selected_item_ids: number[] = [];
+  const notice_quantities: Record<number, number> = {};
+  const line_warehouses: Record<number, number> = {};
+  for (const row of rows) {
+    const itemId = Number(row.item_id);
+    if (!Number.isFinite(itemId) || itemId <= 0) continue;
+    selected_item_ids.push(itemId);
+    notice_quantities[itemId] = Number(row.max_push_quantity ?? 0);
+    const warehouseId = Number(row.warehouse_id);
+    if (Number.isFinite(warehouseId) && warehouseId > 0) {
+      line_warehouses[itemId] = warehouseId;
+    }
+  }
+  if (!selected_item_ids.length) {
+    return pushPurchaseOrderToReceiptNotice(id);
+  }
+  return pushPurchaseOrderToReceiptNotice(id, {
+    selected_item_ids,
+    notice_quantities,
+    line_warehouses: Object.keys(line_warehouses).length ? line_warehouses : undefined,
+  });
+}
+
 /**
  * 下推到采购发票
  */
@@ -567,6 +598,42 @@ export interface PurchaseTrackingResponse {
 export async function getMaterialPriceHistory(materialId: number): Promise<MaterialPriceHistoryResponse> {
   return apiRequest<MaterialPriceHistoryResponse>(`/apps/kuaizhizao/material-price-history/${materialId}`, {
     method: 'GET',
+  });
+}
+
+/** 采购订单行价格趋势（按供应商 + 物料） */
+export interface PurchaseOrderPriceTrendResponse {
+  side: 'purchase';
+  material_id: number;
+  partner_id: number;
+  partner_name?: string | null;
+  history_items: Array<{
+    order_id: number;
+    order_code: string;
+    order_date: string;
+    partner_id: number;
+    partner_name: string;
+    unit_price: number;
+    quantity?: number;
+  }>;
+  trend_points: Array<{ date: string; price: number; order_code: string }>;
+  average_price: number;
+  min_price: number;
+  max_price: number;
+}
+
+export async function getPurchaseOrderPriceTrend(params: {
+  materialId: number;
+  supplierId: number;
+  limit?: number;
+}): Promise<PurchaseOrderPriceTrendResponse> {
+  return apiRequest<PurchaseOrderPriceTrendResponse>('/apps/kuaizhizao/purchase-orders/price-trend', {
+    method: 'GET',
+    params: {
+      material_id: params.materialId,
+      supplier_id: params.supplierId,
+      limit: params.limit,
+    },
   });
 }
 

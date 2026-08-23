@@ -14,7 +14,7 @@ class SalesContractMilestone(BaseModel):
 
     milestone_name = fields.CharField(max_length=200, description="里程碑名称")
     planned_date = fields.DateField(description="计划日期")
-    planned_amount = fields.DecimalField(max_digits=14, decimal_places=2, default=0, description="计划金额")
+    planned_amount = fields.DecimalField(max_digits=16, decimal_places=4, default=0, description="计划金额")
     planned_ratio = fields.DecimalField(max_digits=8, decimal_places=4, null=True, description="计划比例 0~1")
 
     billing_trigger = fields.CharField(

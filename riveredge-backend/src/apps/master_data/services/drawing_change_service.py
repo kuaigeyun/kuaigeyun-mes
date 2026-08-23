@@ -8,7 +8,6 @@ from tortoise.expressions import Q
 
 from apps.common.audit_actor import apply_create_audit, apply_update_audit, audit_response_fields
 from apps.kuaiplm.services.engineering_change_audit import (
-    ensure_pending_change_approval_instance,
     is_audit_required,
     start_change_approval_flow,
 )
@@ -174,8 +173,6 @@ class DrawingChangeService:
         rows = await query.offset((page - 1) * page_size).limit(page_size).order_by("-created_at")
         items: List[DrawingChangeResponse] = []
         for row in rows:
-            if row.status == "pending":
-                await ensure_pending_change_approval_instance(tenant_id, "drawing", row)
             items.append(_to_response(row))
         return DrawingChangeListResponse(items=items, total=total)
 

@@ -35,7 +35,7 @@ class InstallExecutionJob(BaseModel):
 
     notes = fields.TextField(null=True, description="备注")
     total_cost_amount = fields.DecimalField(
-        max_digits=14, decimal_places=2, null=True, description="费用合计"
+        max_digits=16, decimal_places=4, null=True, description="费用合计"
     )
 
     started_at = fields.DatetimeField(null=True, description="开始时间")

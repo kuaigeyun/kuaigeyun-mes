@@ -1248,6 +1248,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                         required_date=item.required_date or max_required,
                         source_type="purchase_requisition",
                         source_id=item.id,
+                        demand_computation_item_id=item.demand_computation_item_id,
                         notes=item.notes,
                     )
                 )

@@ -51,8 +51,8 @@ class ShipmentNotice(BaseModel):
         description="关联销售出库单列表（多仓发货时 [{id, code}, ...]）",
     )
 
-    total_quantity = fields.DecimalField(max_digits=10, decimal_places=2, default=0, description="总数量")
-    total_amount = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="总金额")
+    total_quantity = fields.DecimalField(max_digits=12, decimal_places=4, default=0, description="总数量")
+    total_amount = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="总金额")
 
     notes = fields.TextField(null=True, description="备注")
     attachments = fields.JSONField(null=True, description="附件列表")

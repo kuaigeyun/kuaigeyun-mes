@@ -2,6 +2,11 @@
 
 export const CORE_NOTIFICATION_DOCUMENT_OPTIONS = [
   { value: 'sales_order', labelKey: 'pages.system.configCenter.notification.document.sales_order', fallback: '销售订单' },
+  {
+    value: 'sales_review',
+    labelKey: 'pages.system.configCenter.notification.document.sales_review',
+    fallback: '订单评审',
+  },
   { value: 'quotation', labelKey: 'pages.system.configCenter.notification.document.quotation', fallback: '报价单' },
   { value: 'purchase_order', labelKey: 'pages.system.configCenter.notification.document.purchase_order', fallback: '采购订单' },
   { value: 'work_order', labelKey: 'pages.system.configCenter.notification.document.work_order', fallback: '工单' },
@@ -19,6 +24,11 @@ export const CORE_NOTIFICATION_DOCUMENT_OPTIONS = [
     value: 'equipment_fault',
     labelKey: 'pages.system.configCenter.notification.document.equipment_fault',
     fallback: '设备故障单',
+  },
+  {
+    value: 'inventory_alert',
+    labelKey: 'pages.system.configCenter.notification.document.inventory_alert',
+    fallback: '库存预警',
   },
   {
     value: 'maintenance_order',
@@ -52,6 +62,23 @@ export const CORE_NOTIFICATION_ACTION_OPTIONS: Record<
       fallback: '交期延误',
     },
   ],
+  sales_review: [
+    {
+      value: 'issued',
+      labelKey: 'pages.system.configCenter.notification.action.sales_review.issued',
+      fallback: '下达评审',
+    },
+    {
+      value: 'rejected',
+      labelKey: 'pages.system.configCenter.notification.action.sales_review.rejected',
+      fallback: '评审驳回',
+    },
+    {
+      value: 'passed',
+      labelKey: 'pages.system.configCenter.notification.action.sales_review.passed',
+      fallback: '评审通过',
+    },
+  ],
   quotation: [
     { value: 'submitted', labelKey: 'common.submit', fallback: '提交' },
     { value: 'approved', labelKey: 'pages.system.configCenter.notification.action.quotation.approved', fallback: '审核通过' },
@@ -78,6 +105,11 @@ export const CORE_NOTIFICATION_ACTION_OPTIONS: Record<
       value: 'delivery_delayed',
       labelKey: 'pages.system.configCenter.notification.action.purchase_order.delivery_delayed',
       fallback: '交期延误',
+    },
+    {
+      value: 'arrival_overdue',
+      labelKey: 'pages.system.configCenter.notification.action.purchase_order.arrival_overdue',
+      fallback: '到货逾期',
     },
   ],
   work_order: [
@@ -110,6 +142,13 @@ export const CORE_NOTIFICATION_ACTION_OPTIONS: Record<
     { value: 'reported', labelKey: 'pages.system.configCenter.notification.action.equipment_fault.reported', fallback: '故障报修' },
     { value: 'assigned', labelKey: 'pages.system.configCenter.notification.action.equipment_fault.assigned', fallback: '派工维修' },
     { value: 'resolved', labelKey: 'pages.system.configCenter.notification.action.equipment_fault.resolved', fallback: '故障恢复' },
+  ],
+  inventory_alert: [
+    {
+      value: 'triggered',
+      labelKey: 'pages.system.configCenter.notification.action.inventory_alert.triggered',
+      fallback: '预警触发',
+    },
   ],
   maintenance_order: [
     { value: 'created', labelKey: 'pages.system.configCenter.notification.action.maintenance_order.created', fallback: '新建维保' },
@@ -144,11 +183,25 @@ export const CORE_NOTIFICATION_RECIPIENT_SCOPES = [
 /** 一期推荐节点（已接线）；其余动作可配但默认标为「更多」 */
 export const CORE_RECOMMENDED_NOTIFICATION_ACTIONS: ReadonlySet<string> = new Set([
   'sales_order:delivery_delayed',
+  'sales_order:approved',
+  'sales_order:pushed_to_work_order',
+  'sales_review:issued',
+  'sales_review:rejected',
+  'sales_review:passed',
   'purchase_order:delivery_delayed',
-  'quality_exception:created',
-  'quality_inspection:abnormal_detected',
-  'equipment_fault:reported',
+  'purchase_order:approved',
+  'purchase_order:arrival_overdue',
   'work_order:remind_batching',
+  'work_order:released',
+  'work_order:completed',
+  'work_order:reworked',
+  'quality_exception:created',
+  'quality_exception:assigned',
+  'equipment_fault:reported',
+  'equipment_fault:assigned',
+  'equipment_fault:resolved',
+  'inventory_alert:triggered',
+  'shipment_notice:confirmed',
 ]);
 
 export function isRecommendedNotificationAction(document: string, action: string): boolean {

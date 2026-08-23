@@ -26,9 +26,9 @@ class ProductionPickingItem(BaseModel):
     material_unit = fields.CharField(max_length=20, description="物料单位")
 
     # 需求数量
-    required_quantity = fields.DecimalField(max_digits=10, decimal_places=2, description="需求数量")
-    picked_quantity = fields.DecimalField(max_digits=10, decimal_places=2, default=0, description="已领料数量")
-    remaining_quantity = fields.DecimalField(max_digits=10, decimal_places=2, description="剩余数量")
+    required_quantity = fields.DecimalField(max_digits=12, decimal_places=4, description="需求数量")
+    picked_quantity = fields.DecimalField(max_digits=12, decimal_places=4, default=0, description="已领料数量")
+    remaining_quantity = fields.DecimalField(max_digits=12, decimal_places=4, description="剩余数量")
 
     # 库存信息
     warehouse_id = fields.IntField(description="仓库ID")

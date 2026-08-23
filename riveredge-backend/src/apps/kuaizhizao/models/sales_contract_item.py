@@ -18,11 +18,11 @@ class SalesContractItem(BaseModel):
     material_spec = fields.CharField(max_length=200, null=True, description="物料规格")
     material_unit = fields.CharField(max_length=20, description="物料单位")
 
-    contract_quantity = fields.DecimalField(max_digits=12, decimal_places=2, description="合同数量")
-    released_quantity = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="已释放数量")
-    unit_price = fields.DecimalField(max_digits=12, decimal_places=2, description="单价")
+    contract_quantity = fields.DecimalField(max_digits=14, decimal_places=4, description="合同数量")
+    released_quantity = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="已释放数量")
+    unit_price = fields.DecimalField(max_digits=14, decimal_places=4, description="单价")
     tax_rate = fields.DecimalField(max_digits=6, decimal_places=2, default=0, description="税率（%）")
-    total_amount = fields.DecimalField(max_digits=14, decimal_places=2, description="行金额")
+    total_amount = fields.DecimalField(max_digits=16, decimal_places=4, description="行金额")
 
     variant_attributes = fields.JSONField(null=True, description="属性组合")
     delivery_date = fields.DateField(null=True, description="交货日期")

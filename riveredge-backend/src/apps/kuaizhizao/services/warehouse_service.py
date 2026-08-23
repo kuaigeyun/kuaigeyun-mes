@@ -7,7 +7,7 @@ Author: Luigi Lu
 Date: 2025-12-30
 """
 
-from typing import List, Optional, Dict, Any, Tuple
+from typing import List, Optional, Dict, Any, Tuple, Iterable
 from datetime import datetime, date, timedelta
 from decimal import Decimal
 import json
@@ -1217,12 +1217,23 @@ async def sync_purchase_order_receipt_quantities(
     """
     if not purchase_order_id:
         return
+    await sync_purchase_order_receipt_quantities_batch(tenant_id, [int(purchase_order_id)])
+
+
+async def sync_purchase_order_receipt_quantities_batch(
+    tenant_id: int,
+    purchase_order_ids: Iterable[int],
+) -> None:
+    """批量回写多张采购订单行的已到货/未到货数量（固定查询次数，不随订单数线性增长）。"""
+    ids = sorted({int(i) for i in purchase_order_ids if i})
+    if not ids:
+        return
 
     from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
 
     order_items = await PurchaseOrderItem.filter(
         tenant_id=tenant_id,
-        order_id=purchase_order_id,
+        order_id__in=ids,
     ).all()
     if not order_items:
         return
@@ -7386,8 +7397,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
         order_by_id = {int(o.id): o for o in orders}
         if not order_by_id:
             return {"data": [], "total": 0}
-        for oid in order_by_id:
-            await sync_purchase_order_receipt_quantities(tenant_id, oid)
+        await sync_purchase_order_receipt_quantities_batch(tenant_id, order_by_id.keys())
         items = await PurchaseOrderItem.filter(
             tenant_id=tenant_id, order_id__in=list(order_by_id.keys())
         ).all()
@@ -7480,8 +7490,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
         order_by_id = {int(o.id): o for o in orders}
         if len(order_by_id) != len(order_ids):
             raise NotFoundError("采购订单不存在")
-        for oid in order_ids:
-            await sync_purchase_order_receipt_quantities(tenant_id, oid)
+        await sync_purchase_order_receipt_quantities_batch(tenant_id, order_ids)
         items = await PurchaseOrderItem.filter(tenant_id=tenant_id, id__in=selected_ids).all()
         occupied_by_item = await occupied_purchase_receipt_qty_by_po_item_ids(tenant_id, order_ids)
 

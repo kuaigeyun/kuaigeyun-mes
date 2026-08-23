@@ -71,9 +71,9 @@ class MaterialShortageException(BaseModel):
     material_name = fields.CharField(max_length=200, description="物料名称")
 
     # 缺料信息
-    shortage_quantity = fields.DecimalField(max_digits=12, decimal_places=2, description="缺料数量")
-    available_quantity = fields.DecimalField(max_digits=12, decimal_places=2, description="可用数量")
-    required_quantity = fields.DecimalField(max_digits=12, decimal_places=2, description="需求数量")
+    shortage_quantity = fields.DecimalField(max_digits=14, decimal_places=4, description="缺料数量")
+    available_quantity = fields.DecimalField(max_digits=14, decimal_places=4, description="可用数量")
+    required_quantity = fields.DecimalField(max_digits=14, decimal_places=4, description="需求数量")
 
     # 预警和处理信息
     alert_level = fields.CharField(max_length=20, default="medium", description="预警级别")

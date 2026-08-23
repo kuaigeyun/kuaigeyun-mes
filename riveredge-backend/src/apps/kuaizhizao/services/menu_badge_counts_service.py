@@ -181,6 +181,7 @@ async def _section_purchase(tenant_id: int, now_date) -> BadgeFragment:
     from apps.kuaizhizao.services.document_action_policy.warehouse_inbound_hub import (
         _INBOUND_PENDING_STATUSES,
     )
+    from apps.kuaizhizao.services.purchase_arrival_warning_service import PurchaseArrivalWarningService
 
     po = PurchaseOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
     po_terminal = list(dict.fromkeys([*_DOC_TERMINAL_STATUSES, "关闭"]))
@@ -196,7 +197,7 @@ async def _section_purchase(tenant_id: int, now_date) -> BadgeFragment:
     inbound_term = list(dict.fromkeys([*_DOC_TERMINAL_STATUSES, "关闭", "已入库"]))
 
     po_od, po_pending, po_prog, prq_pending, prq_prog, pr_pending, pr_exec = await asyncio.gather(
-        po.filter(delivery_date__lt=now_date, delivery_date__isnull=False).exclude(status__in=po_terminal).count(),
+        PurchaseArrivalWarningService().count_overdue_open_lines(tenant_id),
         po.filter(review_status__in=["PENDING", "PENDING_REVIEW", "待审核"]).exclude(status__in=po_terminal).count(),
         po.filter(status__in=[
             "IN_PROGRESS", "进行中", "APPROVED", "已审核", "CONFIRMED", "已确认",

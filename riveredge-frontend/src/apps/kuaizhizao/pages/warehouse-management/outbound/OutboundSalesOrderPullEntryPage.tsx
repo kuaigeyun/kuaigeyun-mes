@@ -40,6 +40,7 @@ import { getOutboundIssueTypeLabel } from './outboundHubTypes';
 import { OUTBOUND_LIST_PATH, outboundSalesOrderEntryPath } from './outboundPaths';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { toApiDateTimeString } from '../../../../../utils/formDate';
+import { reportDocumentStatusText } from '../../../utils/reportPresentation';
 
 const OutboundSalesOrderPullEntryPage: React.FC = () => {
   const { t } = useTranslation();
@@ -396,7 +397,7 @@ const OutboundSalesOrderPullEntryPage: React.FC = () => {
                 </Col>
                 <Col xs={24} sm={12} lg={6}>
                   <Form.Item label={t('app.kuaizhizao.warehouseOutbound.entry.orderStatus')}>
-                    <ReadOnlyFormValue value={String(order.status ?? '')} />
+                    <ReadOnlyFormValue value={reportDocumentStatusText(t, order.status)} />
                   </Form.Item>
                 </Col>
                 <Col xs={24} sm={12} lg={6}>
@@ -410,16 +411,6 @@ const OutboundSalesOrderPullEntryPage: React.FC = () => {
                 </Col>
                 <Col xs={24} sm={12} lg={6}>
                   <OutboundEntryOperatorField hook={operatorHook} />
-                </Col>
-                <Col xs={24}>
-                  <OutboundEntryRemarksSection value={notes} onChange={setNotes} />
-                </Col>
-                <Col xs={24}>
-                  <OutboundEntryAttachmentsSection
-                    category="sales_delivery_attachments"
-                    fileList={attachments}
-                    onChange={setAttachments}
-                  />
                 </Col>
               </Row>
               <Typography.Text strong style={{ display: 'block', marginTop: 16, marginBottom: 8 }}>
@@ -436,6 +427,12 @@ const OutboundSalesOrderPullEntryPage: React.FC = () => {
                 pagination={false}
                 dataSource={items}
                 columns={lineColumns}
+              />
+              <OutboundEntryRemarksSection value={notes} onChange={setNotes} />
+              <OutboundEntryAttachmentsSection
+                category="sales_delivery_attachments"
+                fileList={attachments}
+                onChange={setAttachments}
               />
             </Form>
           )}

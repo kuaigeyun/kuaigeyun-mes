@@ -15,6 +15,7 @@ import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFor
 import { App, Button, Space, Modal, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Spin, Switch, Tooltip, Dropdown, Select, Segmented, Tag, Alert, Typography, theme as AntdTheme } from 'antd';
 import { EyeOutlined, EditOutlined, ArrowDownOutlined, ArrowLeftOutlined, PlusOutlined, DeleteOutlined, RollbackOutlined, FileTextOutlined, SendOutlined, CopyOutlined, BellOutlined, AppstoreAddOutlined, CommentOutlined, StopOutlined, ImportOutlined, PrinterOutlined } from '@ant-design/icons';
 import { UniTable, readPersistedUniTableViewType, type UniTableRequestMeta } from '../../../../../components/uni-table';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import {
   UniTableStackedPrimaryCell,
@@ -128,6 +129,7 @@ import {
 } from '../../../components/document-detail-table/documentDetailTable';
 import { DocumentAmountSummary } from '../../../components/document-amount-summary/DocumentAmountSummary';
 import { computeSalesDocumentTotals } from '../../../utils/documentLineAmounts';
+import { LineUnitPriceWithTrendTrigger } from '../../../components/partner-material-price-trend';
 import {
   applyGiftToggleToLine,
   mapGiftFieldsForSubmit,
@@ -4121,16 +4123,24 @@ const SalesOrdersPage: React.FC = () => {
                           ? t('app.kuaizhizao.salesOrder.unitPriceColumnTaxInclusive')
                           : t('app.kuaizhizao.salesOrder.unitPriceColumnTaxExclusive'),
                       dataIndex: 'unit_price',
-                      width: DOCUMENT_DETAIL_COL_WIDTH.unitPrice,
+                      width: DOCUMENT_DETAIL_COL_WIDTH.unitPrice + 28,
                       ...DOCUMENT_DETAIL_NUM_COL,
                       render: (_: any, __: any, index: number) => (
-                        <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
+                        <AntForm.Item
+                          noStyle
+                          shouldUpdate={(prev: any, curr: any) =>
+                            prev?.items !== curr?.items || prev?.customer_id !== curr?.customer_id
+                          }
+                        >
                           {({ getFieldValue }) => {
                             const row = normalizeFormListItems<any>(getFieldValue('items'))[index] ?? {};
                             const isGift = Boolean(row.is_gift);
                             return (
                               <AntForm.Item name={[index, 'unit_price']} style={{ margin: 0 }}>
-                                <InputNumber
+                                <LineUnitPriceWithTrendTrigger
+                                  side="sales"
+                                  materialId={row.material_id}
+                                  partnerId={getFieldValue('customer_id')}
                                   placeholder={
                                     priceType === 'tax_inclusive'
                                       ? t('app.kuaizhizao.salesOrder.unitPricePlaceholderTaxInclusive')
@@ -4139,7 +4149,6 @@ const SalesOrdersPage: React.FC = () => {
                                   min={0}
                                   precision={2}
                                   prefix="¥"
-                                  style={{ width: '100%' }}
                                   size={DOCUMENT_DETAIL_CONTROL_SIZE}
                                   disabled={isGift}
                                 />
@@ -4576,14 +4585,7 @@ const SalesOrdersPage: React.FC = () => {
             setTimeout(() => actionRef.current?.reload(), 0);
           }}
           detailTableColumns={detailColumns}
-          helpViewConfig={{
-            content: (
-              <div style={{ lineHeight: 1.8 }}>
-                <p><strong>{t('components.uniTable.viewTable')}</strong>{t('app.kuaizhizao.salesOrder.helpTableView')}</p>
-                <p><strong>{t('components.uniTable.viewDetailTable')}</strong>{t('app.kuaizhizao.salesOrder.helpDetailTableView')}</p>
-              </div>
-            ),
-          }}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.salesOrder)}
           actionRef={actionRef}
           toolBarButtonSize="middle"
           columns={columns}

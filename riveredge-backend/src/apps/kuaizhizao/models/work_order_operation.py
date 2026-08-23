@@ -102,9 +102,9 @@ class WorkOrderOperation(BaseModel):
     setup_time = fields.DecimalField(max_digits=10, decimal_places=2, null=True, description="准备时间（小时）")
 
     # 完成信息
-    completed_quantity = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="已完成数量")
-    qualified_quantity = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="合格数量")
-    unqualified_quantity = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="不合格数量")
+    completed_quantity = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="已完成数量")
+    qualified_quantity = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="合格数量")
+    unqualified_quantity = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="不合格数量")
 
     # 状态信息
     status = fields.CharField(max_length=20, default="pending", description="工序状态（pending/in_progress/completed/cancelled）")

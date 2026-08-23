@@ -37,7 +37,7 @@ class AccountingEvent(BaseModel):
     target_doc_id = fields.IntField(null=True, description="目标单据ID")
     target_doc_code = fields.CharField(max_length=50, null=True, description="目标单据编号")
 
-    amount = fields.DecimalField(max_digits=14, decimal_places=2, null=True, description="业务金额")
+    amount = fields.DecimalField(max_digits=16, decimal_places=4, null=True, description="业务金额")
     currency = fields.CharField(max_length=10, default="CNY", description="币种")
     event_date = fields.DateField(description="事件日期")
 

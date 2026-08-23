@@ -1119,6 +1119,10 @@ export default {
   'pages.system.businessConfig.param.planning.require_production_plan.description': 'Yêu cầu kế hoạch sản xuất trước khi lập kế hoạch',
   'pages.system.businessConfig.param.procurement.require_purchase_requisition.name': 'Yêu cầu Yêu cầu mua hàng',
   'pages.system.businessConfig.param.procurement.require_purchase_requisition.description': 'Yêu cầu yêu cầu mua hàng trước khi tạo PO',
+  'pages.system.businessConfig.param.procurement.require_purchase_order_change_confirm.description': 'When enabled, approved PO changes must be manually applied',
+  'pages.system.businessConfig.param.procurement.require_purchase_order_change_confirm.name': 'Require PO Change Confirm',
+  'pages.system.businessConfig.param.procurement.arrival_imminent_days.description': 'Lines within this many days of required date are imminent (default 3)',
+  'pages.system.businessConfig.param.procurement.arrival_imminent_days.name': 'Arrival Imminent Days',
   'pages.system.businessConfig.param.purchase.auto_approval.name': 'Mua phê duyệt tự động',
   'pages.system.businessConfig.param.purchase.auto_approval.description': 'Tự động phê duyệt đơn đặt hàng',
   'pages.system.businessConfig.param.warehouse.location_management.name': 'Quản lý vị trí',
@@ -1967,6 +1971,7 @@ export default {
   'components.uniTable.showStatCards': 'Hiển thị thẻ thống kê',
   'components.uniTable.zebraStripe': 'Sọc ngựa vằn',
   'components.layoutTemplates.formModal.submitUpdate': 'Cập nhật',
+  'components.twoColumnLayout.resizeLeftPanel': 'Kéo để điều chỉnh độ rộng bảng bên trái',
   'components.layoutTemplates.documentFormPage.saveDraft': 'Lưu dưới dạng bản nháp',
   'components.layoutTemplates.documentFormPage.saveAndSubmit': 'Lưu và gửi',
   'components.layoutTemplates.formModal.checkFormHint': 'Vui lòng kiểm tra xem biểu mẫu đã được điền chính xác chưa',
@@ -2043,6 +2048,7 @@ export default {
   'components.documentAttachments.label': 'Tệp đính kèm',
   'components.documentAttachments.dragHint': 'Nhấp hoặc kéo tập tin vào đây để tải lên',
   'components.documentAttachments.dragSubHint': 'Hỗ trợ nhiều tệp, tối đa {{max}}',
+  'components.documentAttachments.openFailed': 'Không mở được tệp đính kèm. Vui lòng thử lại.',
   'components.dictionarySelect.loadOptionsFailed': 'Không tải được {{label}} tùy chọn',
   'components.dictionarySelect.fieldLabel': 'Nhãn',
   'components.dictionarySelect.unitItem': 'Tên đơn vị',
@@ -2670,6 +2676,7 @@ export default {
   'app.kuaicaiwu.menu.finance-management.sales-invoices': 'Hóa đơn bán hàng',
   'app.kuaicaiwu.menu.finance-management.settlement': 'giải quyết',
   'app.kuaicaiwu.menu.finance-management.partner-statements': 'Tuyên bố của đối tác',
+  'app.kuaicaiwu.menu.finance-management.price-settlement': 'Định giá tháng',
   'app.kuaicaiwu.menu.finance-management.aging-analysis': 'Phân tích tuổi nợ',
   'app.kuaicaiwu.menu.finance-management.document-reconciliation': 'Đối chiếu tài liệu',
   'app.kuaicaiwu.menu.finance-management.bank-accounts': 'Tài khoản ngân hàng',
@@ -4826,6 +4833,7 @@ export default {
   'app.kuaizhizao.menu.purchase-management.purchase-orders.new': 'Đơn hàng mới',
   'app.kuaizhizao.menu.purchase-management.purchase-orders.edit': 'Chỉnh sửa đơn đặt hàng',
   'app.kuaizhizao.menu.purchase-management.purchase-order-changes': 'Mua thay đổi đơn đặt hàng',
+  'app.kuaizhizao.menu.purchase-management.arrival-warnings': 'Cảnh báo nhận hàng mua',
   'app.kuaizhizao.menu.purchase-management.purchase-requisitions': 'Yêu cầu mua hàng',
   'app.kuaizhizao.menu.purchase-management.purchase-requisitions.new': 'Yêu cầu mua hàng mới',
   'app.kuaizhizao.menu.purchase-management.purchase-requisitions.edit': 'Chỉnh sửa yêu cầu mua hàng',
@@ -5032,6 +5040,43 @@ export default {
   'app.kuaizhizao.purchaseOrderChange.capability.purchase_order_change.approve.not_pending': 'Chỉ trạng thái chờ duyệt mới phê duyệt được',
   'app.kuaizhizao.purchaseOrderChange.capability.purchase_order_change.apply.not_audited': 'Phiếu thay đổi chưa được duyệt nên không thể có hiệu lực',
   'app.kuaizhizao.purchaseOrderChange.capability.purchase_order_change.reopen.not_supported': 'Phiếu thay đổi mua hàng không hỗ trợ sửa lại',
+  'app.kuaizhizao.purchaseOrderChange.applySuccess': 'Đã áp dụng thay đổi',
+  'app.kuaizhizao.purchaseOrderChange.applyConfirm': 'Xác nhận áp dụng',
+  'app.kuaizhizao.purchaseArrival.delayReason.other': 'Other',
+  'app.kuaizhizao.purchaseArrival.delayReason.paymentDelay': 'Payment Delay',
+  'app.kuaizhizao.purchaseArrival.delayReason.drawingChange': 'Drawing Change',
+  'app.kuaizhizao.purchaseArrival.delayReason.qualityRework': 'Quality Rework',
+  'app.kuaizhizao.purchaseArrival.delayReason.logistics': 'Logistics',
+  'app.kuaizhizao.purchaseArrival.delayReason.supplierCapacity': 'Supplier Capacity',
+  'app.kuaizhizao.purchaseArrival.impactDescriptionRequired': 'Please enter impact description',
+  'app.kuaizhizao.purchaseArrival.impactDescriptionHint': 'Required when impacted assembly cannot be resolved automatically',
+  'app.kuaizhizao.purchaseArrival.field.impactDescription': 'Impact Description',
+  'app.kuaizhizao.purchaseArrival.field.estimatedArrivalDate': 'Estimated Arrival Date',
+  'app.kuaizhizao.purchaseArrival.field.delayReason': 'Delay Reason',
+  'app.kuaizhizao.purchaseArrival.delaySubmitted': 'Delay report submitted',
+  'app.kuaizhizao.purchaseArrival.delayModalTitle': 'Report Arrival Delay',
+  'app.kuaizhizao.purchaseArrival.summary.imminent': 'Imminent {{count}}',
+  'app.kuaizhizao.purchaseArrival.summary.overdue': 'Overdue {{count}}',
+  'app.kuaizhizao.purchaseArrival.summary.total': '{{count}} open lines',
+  'app.kuaizhizao.purchaseArrival.action.viewChange': 'View Change Order',
+  'app.kuaizhizao.purchaseArrival.action.reportDelay': 'Report Delay',
+  'app.kuaizhizao.purchaseArrival.remainingDays': '{{days}} days left',
+  'app.kuaizhizao.purchaseArrival.overdueDays': '{{days}} days overdue',
+  'app.kuaizhizao.purchaseArrival.processing.rejected': 'Rejected',
+  'app.kuaizhizao.purchaseArrival.processing.changed': 'Applied',
+  'app.kuaizhizao.purchaseArrival.processing.changePending': 'Pending Apply',
+  'app.kuaizhizao.purchaseArrival.processing.approved': 'Approved',
+  'app.kuaizhizao.purchaseArrival.processing.pendingReview': 'Pending Review',
+  'app.kuaizhizao.purchaseArrival.processing.reported': 'Reported',
+  'app.kuaizhizao.purchaseArrival.processing.unprocessed': 'Unprocessed',
+  'app.kuaizhizao.purchaseArrival.level.overdue': 'Quá hạn',
+  'app.kuaizhizao.purchaseArrival.level.imminent': 'Sắp đến hạn',
+  'app.kuaizhizao.purchaseArrival.level.normal': 'Bình thường',
+  'app.kuaizhizao.purchaseArrival.col.processingStatus': 'Processing Status',
+  'app.kuaizhizao.purchaseArrival.col.impactedAssembly': 'Impacted Assembly',
+  'app.kuaizhizao.purchaseArrival.col.dayOffset': 'Days Left/Overdue',
+  'app.kuaizhizao.purchaseArrival.col.warningLevel': 'Mức cảnh báo',
+  'app.kuaizhizao.purchaseArrival.col.requiredDate': 'Ngày yêu cầu',
   'app.kuaizhizao.purchaseInquiry.lifecycleDraft': 'Bản nháp',
   'app.kuaizhizao.purchaseInquiry.lifecycleQuoting': 'Trích dẫn',
   'app.kuaizhizao.purchaseInquiry.lifecyclePendingCompare': 'Đang chờ so sánh',
@@ -6203,8 +6248,8 @@ export default {
   'app.kuaizhizao.menu.reports.inventory-ledger': 'Sổ cái hàng tồn kho',
   'app.kuaizhizao.menu.reports.inventory-age-analysis': 'Phân tích độ tuổi',
   'app.kuaizhizao.menu.reports.slow-moving-inventory': 'Di chuyển chậm',
-  'app.kuaizhizao.menu.reports.inbound-summary': 'Tóm tắt gửi đến',
-  'app.kuaizhizao.menu.reports.outbound-summary': 'Tóm tắt đi',
+  'app.kuaizhizao.menu.reports.inbound-summary': 'Bảng chi tiết nhập kho',
+  'app.kuaizhizao.menu.reports.outbound-summary': 'Bảng chi tiết xuất kho',
   'app.kuaizhizao.menu.reports.stocktaking-history': 'Kiểm kê',
   'app.kuaizhizao.menu.reports.transfer-tracking': 'Theo dõi chuyển nhượng',
   'app.kuaizhizao.menu.reports.receivable-age-analysis': 'Tuổi AR',
@@ -6658,6 +6703,7 @@ export default {
   'app.kuaizhizao.salesOrder.orderItems': 'Đặt hàng các mặt hàng',
   'app.kuaizhizao.salesOrder.importItems': 'Nhập khẩu mặt hàng',
   'app.kuaizhizao.salesOrder.unitPrice': 'Đơn giá',
+  'app.kuaizhizao.salesOrder.priceProvisional': 'Chờ định giá tháng',
   'app.kuaizhizao.sales.isGift': 'Quà tặng',
   'app.kuaizhizao.sales.giftRefUnitPrice': 'Đơn giá tham chiếu',
   'app.kuaizhizao.sales.materialNotGiftable': 'Vật tư này chưa bật cho phép tặng',
@@ -7003,6 +7049,7 @@ export default {
   'app.kuaizhizao.demandComputation.capability.demand_computation.push_purchase_requisition.no_purchase_items': 'Tính toán nhu cầu không có vật tư mua ngoài nên không thể tạo đề nghị mua hàng',
   'app.kuaizhizao.demandComputation.capability.demand_computation.push_work_order.no_pushable_items': 'Các dòng có thể tạo đều đã được dùng, không thể tạo lệnh sản xuất mới',
   'app.kuaizhizao.demandComputation.capability.demand_computation.push_work_order.no_production_items': 'Tính toán nhu cầu không có hàng tự sản xuất để tạo lệnh sản xuất',
+  'app.kuaizhizao.demandComputation.capability.demand_computation.push_work_order.source_validation_failed': 'Một số hàng tự sản xuất hoặc gia công có cấu hình nguồn chưa đầy đủ, không thể đẩy lệnh sản xuất',
   'app.kuaizhizao.purchaseRequisition.pull.failed': 'Không thể tạo yêu cầu mua hàng từ tính toán nhu cầu',
   'app.kuaizhizao.purchaseRequisition.convert.batchSupplier': 'Nhà cung cấp mặc định hàng loạt',
   'app.kuaizhizao.purchaseRequisition.convert.batchPlaceholder': 'Áp dụng nhà cung cấp đã chọn cho các hàng đã chọn',
@@ -7059,6 +7106,7 @@ export default {
   'app.kuaizhizao.purchaseOrder.col.materialName': 'Tên vật tư',
   'app.kuaizhizao.purchaseOrder.col.spec': 'Thông số kỹ thuật',
   'app.kuaizhizao.purchaseOrder.col.unitPrice': 'Đơn giá',
+  'app.kuaizhizao.purchaseOrder.priceProvisional': 'Chờ định giá tháng',
   'app.kuaizhizao.purchaseOrder.col.taxUnitPrice': 'Đơn giá gồm thuế',
   'app.kuaizhizao.purchaseOrder.col.exclAmount': 'Số tiền không bao gồm thuế',
   'app.kuaizhizao.purchaseOrder.col.inclTotal': 'Tổng cộng gồm thuế',
@@ -7281,6 +7329,17 @@ export default {
   'app.kuaizhizao.purchaseOrder.empower.currentVsAvg': 'Báo giá hiện tại so với mức trung bình:',
   'app.kuaizhizao.purchaseOrder.empower.priceLower': 'Thấp hơn',
   'app.kuaizhizao.purchaseOrder.empower.priceHigher': 'Cao hơn',
+  'app.kuaizhizao.priceTrend.modalTitleSales': 'Xu hướng giá bán',
+  'app.kuaizhizao.priceTrend.modalTitlePurchase': 'Xu hướng giá mua',
+  'app.kuaizhizao.priceTrend.noHistory': 'Chưa có giao dịch lịch sử',
+  'app.kuaizhizao.priceTrend.col.orderDate': 'Ngày đơn',
+  'app.kuaizhizao.priceTrend.col.orderCode': 'Số chứng từ',
+  'app.kuaizhizao.priceTrend.col.customer': 'Khách hàng',
+  'app.kuaizhizao.priceTrend.inlineAvg': 'TB ¥{{price}}',
+  'app.kuaizhizao.priceTrend.selectCustomerFirst': 'Vui lòng chọn khách hàng trước',
+  'app.kuaizhizao.priceTrend.selectSupplierFirst': 'Vui lòng chọn nhà cung cấp trước',
+  'app.kuaizhizao.priceTrend.selectMaterialFirst': 'Vui lòng chọn vật tư trước',
+  'app.kuaizhizao.priceTrend.openTrend': 'Xem xu hướng giá',
   'app.kuaizhizao.purchaseOrder.landingCost.title': 'Phân bổ chi phí hạ cánh - {{code}}',
   'app.kuaizhizao.purchaseOrder.landingCost.confirm': 'Phân bổ',
   'app.kuaizhizao.purchaseOrder.landingCost.method': 'Phương pháp phân bổ',
@@ -9085,6 +9144,11 @@ export default {
   'app.kuaizhizao.demandComputation.purchaseRequisition': 'Để yêu cầu mua hàng',
   'app.kuaizhizao.demandComputation.purchaseOrderOnly': 'Chỉ đặt hàng mua',
   'app.kuaizhizao.demandComputation.pushOutsourceHint': 'Các đơn hàng gia công được đẩy vào nhau; lỗi xác thực sẽ trở thành bản nháp để hoàn thiện ở hạ nguồn.',
+  'app.kuaizhizao.demandComputation.includeSalesOrderAttachments': 'Kèm tệp đính kèm đơn bán hàng nguồn ({{count}})',
+  'app.kuaizhizao.demandComputation.includeSalesOrderAttachmentsHintSingle':
+    'Sao chép tham chiếu tệp từ đơn bán hàng {{code}}, không tải lên lại',
+  'app.kuaizhizao.demandComputation.includeSalesOrderAttachmentsHintMultiple':
+    'Sao chép tham chiếu tệp từ đơn {{first}} và tổng {{count}} đơn, không tải lên lại',
   'app.kuaizhizao.demandComputation.pushPreviewColTarget': 'Chứng từ đích',
   'app.kuaizhizao.demandComputation.pushPreviewTargetPurchaseRequisition': 'Yêu cầu mua hàng',
   'app.kuaizhizao.demandComputation.pushPreviewTargetPurchaseOrder': 'Đơn hàng',
@@ -9104,6 +9168,12 @@ export default {
   'app.kuaizhizao.demandComputation.validationAllPassed': 'Tất cả đã qua',
   'app.kuaizhizao.demandComputation.validationHasFailed': 'Có lỗi',
   'app.kuaizhizao.demandComputation.validationCounts': 'Đạt/Không đạt/Tổng cộng',
+  'app.kuaizhizao.demandComputation.validationCountsDetail': 'Đạt {{passed}} / Không đạt {{failed}} / Tổng {{total}}',
+  'app.kuaizhizao.demandComputation.colSourceValidation': 'Kiểm tra nguồn',
+  'app.kuaizhizao.demandComputation.sourceValidationPassed': 'Đạt',
+  'app.kuaizhizao.demandComputation.sourceValidationFailed': 'Không đạt',
+  'app.kuaizhizao.demandComputation.readinessBlockingCannotSkip': 'Có mục không thể bỏ qua (ví dụ BOM hoặc cấu hình nguồn). Hãy bảo trì trong dữ liệu gốc hoặc thiết kế BOM trước khi thực thi',
+  'app.kuaizhizao.demandComputation.executionScopeValidationFailed': 'Kiểm tra trước MRP thất bại. Hãy bổ sung BOM và quy trình cho hàng tự sản xuất',
   'app.kuaizhizao.demandComputation.noStageData': 'Không có dữ liệu giai đoạn vòng đời',
   'app.kuaizhizao.demandComputation.noComputationItems': 'Không có mục tính toán',
   'app.kuaizhizao.demandComputation.noTimeline': 'Không có hồ sơ hoạt động',
@@ -9153,7 +9223,7 @@ export default {
   'app.kuaizhizao.demandComputation.executeFailed': 'Việc thực hiện tính toán không thành công',
   'app.kuaizhizao.demandComputation.readinessTitle': 'Bổ sung dữ liệu gốc',
   'app.kuaizhizao.demandComputation.readinessHint': 'Phát hiện {{count}} trường dữ liệu gốc cần thiết chưa được thiết lập. Có thể bổ sung và ghi lại vào vật liệu trước khi tiếp tục.',
-  'app.kuaizhizao.demandComputation.readinessBlockingHint': 'Một số mục (ví dụ BOM) cần bảo trì trong dữ liệu gốc hoặc thiết kế BOM. Vẫn có thể bỏ qua sau khi bổ sung các mục khác.',
+  'app.kuaizhizao.demandComputation.readinessBlockingHint': 'Một số mục (ví dụ BOM, quy trình) phải bảo trì trong dữ liệu gốc hoặc thiết kế BOM và không thể bỏ qua.',
   'app.kuaizhizao.demandComputation.analysisTitle': 'Phân tích kết quả - {{code}}',
   'app.kuaizhizao.demandComputation.analysisTabResults': 'Kết quả ({{count}})',
   'app.kuaizhizao.demandComputation.analysisTabMasterData': 'Dữ liệu gốc ({{count}})',
@@ -10768,6 +10838,7 @@ export default {
   'app.kuaizhizao.warehouseCommon.statExpired': 'Hết hạn',
   'app.kuaizhizao.warehouseCommon.groupTag': '{{key}}: {{count}} mục / {{qty}}',
   'app.kuaizhizao.warehouseCommon.showZeroStock': 'Hiển thị không có hàng',
+  'app.kuaizhizao.warehouseCommon.showAmount': 'Hiển thị số tiền',
   'app.kuaizhizao.warehouseCommon.hideZeroStock': 'Ẩn số không có hàng',
   'app.kuaizhizao.warehouseCommon.allStatus': 'Tất cả trạng thái',
   'app.kuaizhizao.warehouseCommon.allTypes': 'Tất cả',
@@ -14496,6 +14567,46 @@ export default {
   'app.kuaicaiwu.purchaseInvoice.detailTitle': 'Hoá đơn mua hàng',
   'app.kuaicaiwu.purchaseInvoice.detailTitleWithNumber': 'Hóa đơn mua hàng {{number}}',
   'app.kuaicaiwu.settlement.tabReceivable': 'Thanh toán khoản phải thu',
+  'app.kuaicaiwu.priceSettlement.title': 'Định giá tháng',
+  'app.kuaicaiwu.priceSettlement.sideSales': 'Bán hàng',
+  'app.kuaicaiwu.priceSettlement.sidePurchase': 'Mua hàng',
+  'app.kuaicaiwu.priceSettlement.selectCustomer': 'Chọn khách hàng',
+  'app.kuaicaiwu.priceSettlement.selectSupplier': 'Chọn nhà cung cấp',
+  'app.kuaicaiwu.priceSettlement.queryHintCustomer': 'Chọn khách hàng và kỳ định giá, rồi nhấn Tìm kiếm để tải dòng chờ định giá',
+  'app.kuaicaiwu.priceSettlement.queryHintSupplier': 'Chọn nhà cung cấp và kỳ định giá, rồi nhấn Tìm kiếm để tải dòng chờ định giá',
+  'app.kuaicaiwu.priceSettlement.emptyBeforeQueryCustomer': 'Chọn khách hàng và kỳ định giá, rồi nhấn Tìm kiếm',
+  'app.kuaicaiwu.priceSettlement.emptyBeforeQuerySupplier': 'Chọn nhà cung cấp và kỳ định giá, rồi nhấn Tìm kiếm',
+  'app.kuaicaiwu.priceSettlement.sourcePartnerBook': 'Giá thỏa thuận',
+  'app.kuaicaiwu.priceSettlement.sourceManual': 'Nhập tay',
+  'app.kuaicaiwu.priceSettlement.refresh': 'Làm mới',
+  'app.kuaicaiwu.priceSettlement.confirmApply': 'Xác nhận và áp dụng',
+  'app.kuaicaiwu.priceSettlement.noProvisionalRows': 'Không có dòng chờ định giá theo bộ lọc hiện tại',
+  'app.kuaicaiwu.priceSettlement.noRows': 'Không có dòng để định giá',
+  'app.kuaicaiwu.priceSettlement.priceRequired': 'Giá quyết toán trên mỗi dòng phải lớn hơn 0',
+  'app.kuaicaiwu.priceSettlement.loadFailed': 'Không tải được dòng chờ định giá',
+  'app.kuaicaiwu.priceSettlement.applySuccess': 'Lô {{code}} đã được áp dụng',
+  'app.kuaicaiwu.priceSettlement.applyFailed': 'Áp dụng định giá thất bại',
+  'app.kuaicaiwu.priceSettlement.resultTitle': 'Kết quả áp dụng',
+  'app.kuaicaiwu.priceSettlement.resultBatch': 'Mã lô',
+  'app.kuaicaiwu.priceSettlement.resultDelta': 'Tổng chênh lệch tài chính',
+  'app.kuaicaiwu.priceSettlement.resultReceivables': 'Điều chỉnh phải thu',
+  'app.kuaicaiwu.priceSettlement.resultPayables': 'Điều chỉnh phải trả',
+  'app.kuaicaiwu.priceSettlement.col.orderCode': 'Đơn hàng',
+  'app.kuaicaiwu.priceSettlement.col.material': 'Vật tư',
+  'app.kuaicaiwu.priceSettlement.col.materialCode': 'Mã vật tư',
+  'app.kuaicaiwu.priceSettlement.col.materialSpec': 'Quy cách',
+  'app.kuaicaiwu.priceSettlement.col.materialModel': 'Model',
+  'app.kuaicaiwu.priceSettlement.col.materialUnit': 'ĐVT',
+  'app.kuaicaiwu.priceSettlement.col.settledQty': 'SL quyết toán',
+  'app.kuaicaiwu.priceSettlement.col.beforePrice': 'Đơn giá cũ',
+  'app.kuaicaiwu.priceSettlement.col.suggestedPrice': 'Đề xuất',
+  'app.kuaicaiwu.priceSettlement.col.afterPrice': 'Giá quyết toán',
+  'app.kuaicaiwu.priceSettlement.inputAfterPrice': 'Nhập giá quyết toán',
+  'app.kuaicaiwu.priceSettlement.deltaUnitPreview': 'Chưa giao hàng, chênh đơn giá {{amount}}',
+  'app.kuaicaiwu.priceSettlement.col.delta': 'Chênh lệch',
+  'app.kuaicaiwu.priceSettlement.col.period': 'Kỳ định giá',
+  'app.kuaicaiwu.priceSettlement.col.priceSource': 'Nguồn giá',
+  'app.kuaicaiwu.priceSettlement.col.provisionalPrice': 'Giá tạm',
   'app.kuaicaiwu.settlement.tabPayable': 'Thanh toán khoản phải trả',
   'app.kuaicaiwu.settlement.helpTitle': 'Trợ giúp giải quyết',
   'app.kuaicaiwu.settlement.helpGotIt': 'Hiểu rồi',
@@ -14594,6 +14705,8 @@ export default {
   'app.kuaicaiwu.partnerStatement.deleteConfirm': 'Xóa câu lệnh {{code}}? Chỉ có thể xóa bản nháp.',
   'app.kuaicaiwu.partnerStatement.deleted': 'Đã xóa',
   'app.kuaicaiwu.partnerStatement.previewHint': 'Chọn đối tác và ngày bắt đầu/kết thúc, rồi nhấn Xem trước để xem chi tiết.',
+  'app.kuaicaiwu.partnerStatement.provisionalPricingHint': 'Còn {{count}} dòng đơn hàng chờ định giá tháng trong kỳ này',
+  'app.kuaicaiwu.partnerStatement.goPriceSettlement': 'Đi tới định giá tháng',
   'app.kuaicaiwu.partnerStatement.previewFooter': 'Báo cáo tóm tắt các khoản phải thu/phải trả đã được phê duyệt và các khoản thu/thanh toán đã được xác nhận. Chứng từ đã nằm trong báo cáo đối chiếu khác sẽ bị loại. Xuất Excel/PDF sau khi tạo để gửi cho đối tác.',
   'app.kuaicaiwu.partnerStatement.excludedStatedHint': 'Đã tự động loại {{count}} chứng từ đã có trong báo cáo đối chiếu khác',
   'app.kuaicaiwu.partnerStatement.periodAlreadyExists': 'Đơn vị này đã có bảng đối chiếu {{code}} trong {{period}}. Mở bảng hiện có hoặc xóa bản nháp rồi tạo lại',
@@ -16844,6 +16957,8 @@ export default {
   'app.master-data.bom.importHeaderBomName': 'Tên BOM',
   'app.master-data.bom.importHeaderBaseQuantity': 'Số lượng cơ sở',
   'app.master-data.bom.importHeaderComponentCode': 'Mã thành phần',
+  'app.master-data.bom.exportHeaderComponentName': 'Tên thành phần',
+  'app.master-data.bom.exportHeaderComponentSpecification': 'Quy cách thành phần',
   'app.master-data.bom.importHeaderQuantity': 'Số lượng thành phần',
   'app.master-data.bom.importHeaderUnit': 'Đơn vị thành phần',
   'app.master-data.bom.importHeaderWasteRate': 'Tỷ lệ lãng phí',
@@ -17076,7 +17191,9 @@ export default {
   'app.master-data.materialForm.materialNameRequired': 'Vui lòng nhập tên vật tư',
   'app.master-data.materialForm.materialNameMax': 'Tên tài liệu không được vượt quá 200 ký tự',
   'app.master-data.materialForm.materialGroup': 'Nhóm vật tư',
-  'app.master-data.materialForm.materialGroupPlaceholder': 'Chọn nhóm vật tư (tùy chọn)',
+  'app.master-data.materialForm.materialGroupPlaceholder': 'Chọn nhóm vật tư',
+  'app.master-data.materialForm.materialGroupFilterPlaceholder': 'Chọn nhóm vật tư (tùy chọn)',
+  'app.master-data.materialForm.materialGroupRequired': 'Vui lòng chọn nhóm vật tư',
   'app.master-data.materialForm.quickAddMaterialGroup': 'Thêm nhanh nhóm',
   'app.master-data.materialForm.quickAddProcessRoute': 'Thêm nhanh lộ trình công nghệ',
   'app.master-data.materialForm.quickAddSupplier': 'Thêm nhanh nhà cung cấp',
@@ -18830,12 +18947,14 @@ export default {
   'pages.system.configCenter.notification.scope.follower': 'Người theo dõi',
   'pages.system.configCenter.notification.error.actionMismatch': 'Hành động không khớp với tài liệu đã chọn. Vui lòng chọn lại.',
   'pages.system.configCenter.notification.document.sales_order': 'Lệnh bán hàng',
+  'pages.system.configCenter.notification.document.sales_review': 'Đánh giá đơn hàng',
   'pages.system.configCenter.notification.document.quotation': 'Trích dẫn',
   'pages.system.configCenter.notification.document.purchase_order': 'Đơn hàng',
   'pages.system.configCenter.notification.document.work_order': 'Lệnh sản xuất',
   'pages.system.configCenter.notification.document.quality_inspection': 'Kiểm tra chất lượng',
   'pages.system.configCenter.notification.document.quality_exception': 'Ngoại lệ chất lượng',
   'pages.system.configCenter.notification.document.equipment_fault': 'Lỗi thiết bị',
+  'pages.system.configCenter.notification.document.inventory_alert': 'Cảnh báo tồn kho',
   'pages.system.configCenter.notification.document.iot_alert': 'Cảnh báo thiết bị',
   'pages.system.configCenter.notification.document.maintenance_order': 'Lệnh bảo trì',
   'pages.system.configCenter.notification.document.shipment_notice': 'Thông báo vận chuyển',
@@ -18844,12 +18963,16 @@ export default {
   'pages.system.configCenter.notification.action.sales_order.approved': 'Đã duyệt',
   'pages.system.configCenter.notification.action.sales_order.pushed_to_work_order': 'Bị đẩy vào lệnh sản xuất',
   'pages.system.configCenter.notification.action.sales_order.delivery_delayed': 'Giao hàng chậm trễ',
+  'pages.system.configCenter.notification.action.sales_review.issued': 'Phát hành đánh giá',
+  'pages.system.configCenter.notification.action.sales_review.rejected': 'Từ chối đánh giá',
+  'pages.system.configCenter.notification.action.sales_review.passed': 'Đánh giá đạt',
   'pages.system.configCenter.notification.action.quotation.approved': 'Đã duyệt',
   'pages.system.configCenter.notification.action.quotation.customer_confirmed': 'Khách hàng xác nhận',
   'pages.system.configCenter.notification.action.quotation.converted_to_order': 'Chuyển thành đơn bán hàng',
   'pages.system.configCenter.notification.action.purchase_order.approved': 'Đã duyệt',
   'pages.system.configCenter.notification.action.purchase_order.pushed_to_receipt': 'Đã đẩy tới biên nhận',
   'pages.system.configCenter.notification.action.purchase_order.delivery_delayed': 'Giao hàng chậm trễ',
+  'pages.system.configCenter.notification.action.purchase_order.arrival_overdue': 'Quá hạn nhận hàng',
   'pages.system.configCenter.notification.action.work_order.remind_batching': 'Nhắc kho chuẩn bị liệu cạnh chuyền',
   'pages.system.configCenter.notification.action.work_order.released': 'Phát hành',
   'pages.system.configCenter.notification.action.work_order.started': 'Đã bắt đầu',
@@ -18866,6 +18989,7 @@ export default {
   'pages.system.configCenter.notification.action.equipment_fault.reported': 'Đã báo cáo',
   'pages.system.configCenter.notification.action.equipment_fault.assigned': 'Được giao sửa chữa',
   'pages.system.configCenter.notification.action.equipment_fault.resolved': 'Đã giải quyết',
+  'pages.system.configCenter.notification.action.inventory_alert.triggered': 'Cảnh báo kích hoạt',
   'pages.system.configCenter.notification.action.iot_alert.threshold_breached': 'Kích hoạt theo ngưỡng',
   'pages.system.configCenter.notification.action.iot_alert.device_offline': 'Thiết bị ngoại tuyến',
   'pages.system.configCenter.notification.action.maintenance_order.created': 'Tạo',
@@ -19061,6 +19185,10 @@ export default {
   'pages.system.configCenter.param.procurement_require_purchase_requisition_desc': 'Đơn hàng yêu cầu trưng dụng trước',
   'pages.system.configCenter.param.procurement_require_supplier_qualification': 'Yêu cầu đánh giá nhà cung cấp',
   'pages.system.configCenter.param.procurement_require_supplier_qualification_desc': 'Bật: nhà cung cấp mới phải hoàn tất đánh giá trước khi mua; tắt: tạo là đã được phép',
+  'pages.system.configCenter.param.procurement_require_purchase_order_change_confirm_desc': 'Manual apply after approval before PO is updated',
+  'pages.system.configCenter.param.procurement_require_purchase_order_change_confirm': 'Require PO change confirm',
+  'pages.system.configCenter.param.procurement_arrival_imminent_days_desc': 'Days before required date to flag imminent warning (default 3)',
+  'pages.system.configCenter.param.procurement_arrival_imminent_days': 'Arrival imminent days',
   'pages.system.configCenter.param.purchase_tolerance_percentage': 'Dung sai mua vượt mức (%)',
   'pages.system.configCenter.param.purchase_tolerance_percentage_desc': 'Tỷ lệ nhận thừa tối đa được phép so với số lượng PO (0-100).',
   'pages.system.configCenter.param.purchase_tolerance_percentage_guide': 'Khuyến nghị: 0-2% cho các bộ phận tiêu chuẩn, 3-5% cho các bộ phận được gia công bên ngoài. Quá cao có thể che giấu sự sai lệch trong mua hàng.',
@@ -22887,6 +23015,7 @@ export default {
   'pages.dashboard.todo.incomingInspectionPending': 'Cuộc kiểm tra sắp tới chờ xử lý xử lý: {{code}}',
   'pages.dashboard.todo.processInspectionPending': 'Đang chờ kiểm tra trong quá trình: {{code}}',
   'pages.dashboard.todo.finishedInspectionPending': 'Thành phẩm chờ xử lý kiểm tra: {{code}}',
+  'pages.dashboard.todo.approvalPending': 'Chờ phê duyệt: {{code}}',
   'pages.dashboard.todo.inspectionWorkOrderDesc': '{{label}} - Lệnh sản xuất {{workOrder}}',
   'pages.dashboard.todo.dotPairDesc': '{{left}} - {{right}}',
   'pages.dashboard.todo.priorityUrgent': 'Cấp bách',
@@ -22909,7 +23038,134 @@ export default {
   'pages.dashboard.todo.meta.segmentShippingAddress': 'Địa chỉ nhận hàng: {{address}}',
   'pages.dashboard.realtimeMessages': 'Tin nhắn trực tiếp',
   'pages.dashboard.versionLabel': 'Phiên bản',
-  'pages.dashboard.buildTimeLabel': 'Thời gian xây dựng/phát hành',
+  'pages.dashboard.buildTimeLabel': 'Thời gian phát hành',
+  'pages.dashboard.updateLogButton': 'Nhật ký cập nhật',
+  'pages.dashboard.updateLogModalTitle': 'Nhật ký cập nhật',
+  'pages.dashboard.updateLogTab.all': 'Tất cả',
+  'pages.dashboard.updateLogLatestTitle': 'Cập nhật mới nhất',
+  'pages.dashboard.updateLogEmpty': 'Chưa có bản ghi cập nhật',
+  'pages.dashboard.updateLogType.feature': 'Tính năng mới',
+  'pages.dashboard.updateLogType.improvement': 'Cải tiến',
+  'pages.dashboard.updateLogType.fix': 'Sửa lỗi',
+  'pages.dashboard.updateLogType.security': 'Bảo mật',
+  'pages.dashboard.updateLogTypeSection.feature': 'Tính năng mới',
+  'pages.dashboard.updateLogTypeSection.improvement': 'Cải tiến',
+  'pages.dashboard.updateLogTypeSection.fix': 'Sửa lỗi',
+  'pages.dashboard.updateLogTypeSection.security': 'Bảo mật',
+  'pages.dashboard.updateLog.entries.update-log-panel.title': 'Thêm nhật ký cập nhật vào thẻ phiên bản trên bảng điều khiển',
+  'pages.dashboard.updateLog.entries.sales-order-attachment-carry.title': 'Tùy chọn kèm tệp đơn bán hàng khi đẩy mua hàng từ tính toán nhu cầu',
+  'pages.dashboard.updateLog.entries.sales-order-attachment-carry.description':
+    'Khi đẩy yêu cầu mua hoặc đơn mua từ tính toán nhu cầu, có thể chọn kèm tệp đính kèm từ đơn bán hàng nguồn.',
+  'pages.dashboard.updateLog.entries.order-line-price-trend.title': 'Xu hướng giá dòng trên đơn bán và mua',
+  'pages.dashboard.updateLog.entries.order-line-price-trend.description':
+    'Khi tạo hoặc sửa đơn bán/mua, xem giá gần đây và biểu đồ xu hướng theo khách hàng hoặc nhà cung cấp và vật tư. Hiển thị được kiểm soát bằng quyền vai trò riêng.',
+  'pages.dashboard.updateLog.entries.mrp-recompute-upstream-quantity.title': 'Sửa tính lại MRP vẫn dùng số lượng cũ',
+  'pages.dashboard.updateLog.entries.mrp-recompute-upstream-quantity.description':
+    'Lưu đơn bán hoặc dự báo sẽ đồng bộ dòng nhu cầu liên quan. Tính lại hoặc chạy MRP sẽ làm mới từ chứng từ nguồn trước khi tính, không còn dùng snapshot lần đẩy đầu.',
+  'pages.dashboard.updateLog.entries.mrp-inventory-netting-basis.title': 'Sửa lệch giữa nhu cầu ròng MRP và tồn khả dụng',
+  'pages.dashboard.updateLog.entries.mrp-inventory-netting-basis.description':
+    'Mặc định trừ tồn đặt trước khi tính nhu cầu ròng; cột tồn khả dụng khớp cơ sở tính toán; sẵn sàng một phần không còn làm tròn thành 100% nên có thể đẩy lệnh sản xuất khi còn thiếu hụt thực tế.',
+  'pages.dashboard.updateLog.entries.mrp-make-bom-route-gate.title': 'Kiểm tra BOM và quy trình hàng tự sản xuất trước khi chạy MRP',
+  'pages.dashboard.updateLog.entries.mrp-make-bom-route-gate.description':
+    'Thực thi, tính lại và xem trước MRP sẽ kiểm tra BOM và quy trình trên cây BOM mở rộng. Khi chưa đặt chế độ sản xuất, cả hai đều bắt buộc để tránh tính xong nhưng không đẩy được lệnh sản xuất.',
+  'pages.dashboard.updateLog.entries.purchase-arrival-warning.title': 'Cảnh báo nhận hàng mua và xử lý trễ hạn',
+  'pages.dashboard.updateLog.entries.purchase-arrival-warning.description':
+    'Trang cảnh báo mới phân loại dòng PO mở thành bình thường, sắp đến hạn hoặc quá hạn theo ngày yêu cầu. Báo cáo trễ có thể qua duyệt, tự tạo phiếu thay đổi mua và ghi lại ngày giao. Có thể bật xác nhận thay đổi trong cấu hình. Nguồn MRP/PR tự phân tích lắp ráp bị ảnh hưởng; thống kê quá hạn trên dashboard và danh sách dùng chung một cơ sở theo dòng.',
+  'pages.dashboard.updateLog.entries.work-order-list-scroll-preserve.title': 'Sửa lỗi danh sách lệnh sản xuất nhảy về đầu sau thao tác',
+  'pages.dashboard.updateLog.entries.work-order-list-scroll-preserve.description':
+    'Sau khi bắt đầu công đoạn, báo công hoặc phát hành lệnh, danh sách không còn cuộn về dòng đầu. Thẻ công đoạn cập nhật tại chỗ thay vì reload toàn bộ; phát hành và làm mới trạng thái giữ vị trí cuộn của bảng và trang.',
+  'pages.dashboard.updateLog.entries.mrp-dual-source-buy-priority.title': 'Sửa lỗi vật tư vừa tự sản xuất vừa mua vẫn đẩy quy trình sản xuất',
+  'pages.dashboard.updateLog.entries.mrp-dual-source-buy-priority.description':
+    'Khi vật tư chọn cả Make và Buy, MRP gợi ý mua hàng cho nhu cầu ròng thay vì lệnh sản xuất. Đẩy thẳng lệnh sản xuất bỏ qua sản xuất cấp gốc; không tạo lệnh khi tồn kho đủ nhu cầu.',
+  'pages.dashboard.updateLog.entries.warehouse-hub-show-amount-toggle.title': 'Thêm công tắc hiển thị số tiền trên danh sách nhập xuất',
+  'pages.dashboard.updateLog.entries.warehouse-hub-show-amount-toggle.description':
+    'Thanh công cụ quản lý nhập/xuất kho (kể cả lĩnh sản xuất) có công tắc Hiển thị số tiền, mặc định tắt. Khi bật, danh sách hiển thị tổng tiền chứng từ và chi tiết hiển thị đơn giá và thành tiền dòng (nếu có dữ liệu).',
+  'pages.dashboard.updateLog.entries.last-operation-inbound-fqc-hints.title': 'Cải thiện hướng dẫn nhập kho công đoạn cuối và FQC',
+  'pages.dashboard.updateLog.entries.last-operation-inbound-fqc-hints.description':
+    'Form báo công cuối giải thích cần FQC trước khi ghi tồn; sau duyệt, toast làm rõ phiếu chờ nhập, chặn do chưa đạt FQC, hoặc đã ghi tồn; trung tâm cấu hình bổ sung quan hệ tự động nhập kho và tồn kho.',
+  'pages.dashboard.updateLog.entries.read-path-performance-batch-two.title': 'Tăng tốc lấy đơn mua hàng, lấy đơn QC và danh sách giá thị trường',
+  'pages.dashboard.updateLog.entries.read-path-performance-batch-two.description':
+    'Lấy đơn nhập mua và thông báo nhận hàng không còn ghi ngược số lượng theo từng đơn. Lấy đơn kiểm tra nhập/TP và xác nhận nhập kho giải quyết chính sách kiểm tra vật tư theo lô. Danh sách thay đổi kỹ thuật không còn tạo phiên duyệt từng dòng khi đọc. Danh sách giá nguyên liệu hôm nay kế thừa giá ngày trước chỉ đọc, không ghi khi mở danh sách. Đã bỏ backfill dữ liệu lịch sử khỏi API danh sách phiếu thu.',
+  'pages.dashboard.updateLog.entries.locale-pack-gap-sync.title': 'Đồng bộ gói ngôn ngữ và nâng độ phủ tiếng Lào',
+  'pages.dashboard.updateLog.entries.locale-pack-gap-sync.description':
+    'Các key i18n của phồn thể, Anh, Nhật, Việt và Lào đã khớp với tiếng Trung giản thể. Tiếng Lào được bổ sung dịch cho cấu hình hệ thống, Kuaizhizao, dữ liệu gốc và các module liên quan, kèm bảng thuật ngữ thủ công và script đồng bộ locale. Tỷ lệ fallback tiếng Anh trên giao diện Lào giảm từ khoảng 58% xuống khoảng 2%.',
+  'pages.dashboard.updateLog.entries.notification-high-value-scenes.title': 'Bật thêm cảnh báo nghiệp vụ trong Trung tâm cấu hình',
+  'pages.dashboard.updateLog.entries.notification-high-value-scenes.description':
+    'Thông báo Kuaizhizao bổ sung duyệt bán/mua, đẩy lệnh sản xuất, phát hành hoàn thành và làm lại lệnh sản xuất, phân công ngoại lệ chất lượng, cử thiết bị/khôi phục, cảnh báo tồn kho, quá hạn nhận hàng mua và xác nhận giao hàng. Quy tắc mặc định tắt; chỉ gửi sau khi chỉ định người nhận và bật quy tắc.',
+  'pages.dashboard.updateLog.entries.work-order-list-query-performance.title': 'Tăng tốc tải danh sách lệnh sản xuất và thẻ công đoạn',
+  'pages.dashboard.updateLog.entries.work-order-list-query-performance.description':
+    'Danh sách lệnh sản xuất, mở rộng thẻ công đoạn và lấy dữ liệu báo công trước đây truy vấn lặp công tắc duyệt và chính sách kiểm tra theo từng phiếu kiểm và từng công đoạn, nay chỉ giải quyết một lần cho cả trang; đọc danh sách không còn ghi bù dữ liệu lệnh tách. Số truy vấn không tăng theo số dòng mỗi trang nên chuyển trang và mở rộng nhanh hơn.',
+  'pages.dashboard.updateLog.entries.material-market-price-carry-forward-trend.title': 'Giá thị trường kế thừa ngày và biểu đồ 30 ngày',
+  'pages.dashboard.updateLog.entries.material-market-price-carry-forward-trend.description':
+    'Giá chưa thay đổi tự kế thừa từ ngày trước khi mở danh sách hoặc nhập preset. Thêm nút chi tiết xem biểu đồ biến động giá 30 ngày theo nguyên liệu.',
+  'pages.dashboard.updateLog.entries.material-batch-picker-group-descendants.title': 'Sửa lọc nhóm cha thiếu vật tư nhóm con trong chọn nhiều',
+  'pages.dashboard.updateLog.entries.material-batch-picker-group-descendants.description':
+    'Trong hộp chọn nhiều vật tư (vd. tạo BOM), chọn nhóm cha sẽ gồm vật tư thuộc mọi nhóm con, thống nhất với trang quản lý vật tư.',
+  'pages.dashboard.updateLog.entries.bom-list-all-view-first-load.title': 'Sửa thiếu dữ liệu lần đầu mở BOM Tất cả',
+  'pages.dashboard.updateLog.entries.bom-list-all-view-first-load.description':
+    'Khi lần trước chọn Tất cả BOM, lần vào lại sẽ tải đủ danh sách gồm BOM bán thành phẩm ngay lần đầu, không cần bấm tab lần nữa.',
+  'pages.dashboard.updateLog.entries.numeric-precision-decimal-places-4.title': 'Mở rộng số lẻ SL/đơn giá/tiền 0–4 và migrate DB',
+  'pages.dashboard.updateLog.entries.numeric-precision-decimal-places-4.description':
+    'Trung tâm cấu hình cho phép 0–4 chữ số thập phân cho số lượng, đơn giá và tiền; các cột nghiệp vụ liên quan đã migrate scale 2→4 để lưu đúng độ chính xác cấu hình.',
+  'pages.dashboard.updateLog.entries.outsource-readiness-kitting-fix.title': 'Sửa tỷ lệ đủ bộ gia công ngoài ảo và trang WO liên kết trống',
+  'pages.dashboard.updateLog.entries.outsource-readiness-kitting-fix.description':
+    'Nhấn WO gia công ngoài từ bảng đủ bộ sẽ mở Quản lý gia công ngoài kèm chi tiết; tỷ lệ đủ bộ chỉ tính tồn kho đạt ở kho chính/line-side, loại hàng không đạt khi nhận, tiến độ vật tư hiển thị số lượng đạt.',
+  'pages.dashboard.updateLog.entries.material-form-group-required-asterisk.title': 'Sửa thiếu dấu sao bắt buộc ở nhóm vật tư khi tạo/sửa',
+  'pages.dashboard.updateLog.entries.material-form-group-required-asterisk.description':
+    'Nhóm vật tư là bắt buộc (kể cả sinh mã chính theo nhóm). Form đã có dấu sao đỏ và thông báo xác thực; placeholder bỏ chữ «tùy chọn».',
+  'pages.dashboard.updateLog.entries.material-group-tree-resizable.title': 'Cây nhóm vật tư: kéo rộng và cuộn ngang',
+  'pages.dashboard.updateLog.entries.material-group-tree-resizable.description':
+    'Trang Quản lý vật tư: kéo cạnh trái để mở rộng cây nhóm (ghi nhớ độ rộng). Tên nhóm lồng sâu cuộn ngang; hover xem đầy đủ.',
+  'pages.dashboard.updateLog.entries.bom-list-export-detail.title': 'Sửa lỗi xuất BOM thiếu chi tiết thành phần con',
+  'pages.dashboard.updateLog.entries.bom-list-export-detail.description':
+    'Xuất danh sách BOM khớp cây hiển thị: mở rộng BOM bán thành phẩm nhiều cấp từng dòng; Excel bổ sung tên, quy cách và cách xuất kho thành phần; bỏ dòng trống khi không có con; xuất tất cả theo view và bộ lọc hiện tại.',
+  'pages.dashboard.updateLog.entries.inbound-hub-other-inbound-detail-qty.title': 'Sửa lỗi không hiển thị số lượng dòng nhập khác trên chi tiết Hub nhập kho',
+  'pages.dashboard.updateLog.entries.inbound-hub-other-inbound-detail-qty.description':
+    'Dòng nhập khác dùng inbound_quantity nhưng chi tiết Hub đọc receipt_quantity nên hiện «—». Đã thống nhất ánh xạ; tổng đầu phiếu và số lượng dòng khớp nhau.',
+  'pages.dashboard.updateLog.entries.document-form-page-bold-labels.title': 'Nhãn trường in đậm trên trang nhập chứng từ độc lập',
+  'pages.dashboard.updateLog.entries.document-form-page-bold-labels.description':
+    'Trang nhập kho/xuất từ lệnh SX, PO, đơn bán dùng nhãn trường in đậm thống nhất với modal.',
+  'pages.dashboard.updateLog.entries.warehouse-list-print-toolbar-right.title': 'Chuyển nút in sang bên phải thanh công cụ kho',
+  'pages.dashboard.updateLog.entries.warehouse-list-print-toolbar-right.description':
+    'Nút in trên danh sách nhập/xuất và chứng từ kho liên quan được đặt bên phải (cạnh xuất), bên trái giữ lọc, hiển thị số tiền và thao tác hàng loạt.',
+  'pages.dashboard.updateLog.entries.warehouse-pull-entry-form-ux.title': 'Cải thiện biểu mẫu nhập kho từ nguồn đơn',
+  'pages.dashboard.updateLog.entries.warehouse-pull-entry-form-ux.description':
+    'Khi tạo nhập/xuất từ lệnh sản xuất, PO hoặc đơn bán, trạng thái nguồn hiển thị theo ngôn ngữ; ghi chú chuyển xuống dưới bảng chi tiết; nhãn trường đầu trang in đậm như modal.',
+  'pages.dashboard.updateLog.entries.global-select-dropdown-full-text.title': 'Dropdown Select hiển thị đầy đủ nội dung tùy chọn',
+  'pages.dashboard.updateLog.entries.global-select-dropdown-full-text.description':
+    'Dropdown Select toàn site không còn ép bằng chiều rộng ô nhập; tên kho hoặc nhân sự dài hiển thị trọn một dòng.',
+  'pages.dashboard.updateLog.entries.warehouse-inbound-outbound-detail-reports.title': 'Thêm báo cáo chi tiết nhập xuất kho',
+  'pages.dashboard.updateLog.entries.warehouse-inbound-outbound-detail-reports.description':
+    'Bổ sung bảng chi tiết nhập kho và xuất kho trong báo cáo quản lý kho: một dòng một vật tư, sắp xếp theo thời gian nghiệp vụ giảm dần, gồm nhập mua, xuất bán và luồng di chuyển tồn kho; hỗ trợ lọc kỳ và tổng số lượng.',
+  'pages.dashboard.updateLog.entries.inspection-conduct-decimal-qty.title': 'Sửa lỗi gửi QC khi số lượng kiểm tra có số thập phân',
+  'pages.dashboard.updateLog.entries.inspection-conduct-decimal-qty.description':
+    'Khi thực hiện IQC/IPQC/FQC/OQC, tổng đạt + không đạt so với số lượng kiểm tra dùng Decimal 2 chữ số thập phân, tránh so sánh float với Decimal trong DB báo sai.',
+  'pages.dashboard.updateLog.entries.reporting-correct-producer.title': 'Sửa báo công: điều chỉnh nhân sự sản xuất',
+  'pages.dashboard.updateLog.entries.reporting-correct-producer.description':
+    'Hộp thoại sửa dữ liệu báo công thêm trường nhân sự sản xuất/nhóm làm việc, gửi cùng số lượng và thời gian báo công. Bản ghi đã duyệt sẽ tính lại hiệu suất khi đổi người hoặc thời gian báo công.',
+  'pages.dashboard.updateLog.entries.reporting-correct-reported-at.title': 'Sửa báo công: chỉnh thời gian báo công, bố cục 3 cột',
+  'pages.dashboard.updateLog.entries.reporting-correct-reported-at.description':
+    'Modal sửa báo công thêm trường thời gian báo công gửi lên API; số lượng và giờ làm việc xếp 3 cột; lý do sửa và ghi chú vẫn chiếm cả dòng.',
+  'pages.dashboard.updateLog.entries.po-list-buyer-name.title': 'Sửa lỗi cột người mua hàng trống trên danh sách đơn mua',
+  'pages.dashboard.updateLog.entries.po-list-buyer-name.description':
+    'Đã chọn người mua trong đơn nhưng danh sách hiển thị gạch ngang. Lưu đơn sẽ ghi đồng bộ tên người mua; danh sách và chi tiết bổ sung tên theo ID cho dữ liệu cũ.',
+  'pages.dashboard.updateLog.entries.po-batch-push-receipt-notice.title': 'Sửa lỗi đẩy hàng loạt đơn mua sang thông báo nhận hàng',
+  'pages.dashboard.updateLog.entries.po-batch-push-receipt-notice.description':
+    'Đơn mua đang thực hiện vẫn có thể đẩy tiếp thông báo nhận hàng theo lô. Đẩy hàng loạt sẽ lấy dòng còn đẩy được và kho nhập trước khi gửi, đồng thời hiển thị lỗi cụ thể khi thất bại.',
+  'pages.dashboard.updateLog.entries.document-attachment-download.title': 'Sửa lỗi xác thực khi mở tệp đính kèm chứng từ',
+  'pages.dashboard.updateLog.entries.document-attachment-download.description':
+    'Đơn bán hàng và chứng từ khác mở tệp đính kèm bằng URL có token xem trước, không còn nhảy sang trang lỗi ngữ cảnh tổ chức.',
+  'pages.dashboard.updateLog.entries.approval-workflow-todos.title': 'Phê duyệt quy trình trong việc cần làm trang chủ và module',
+  'pages.dashboard.updateLog.entries.approval-workflow-todos.description':
+    'Nhiệm vụ phê duyệt được giao cho bạn (ví dụ đơn bán hàng) hiển thị trong danh sách việc cần làm trên trang chủ và module.',
+  'pages.dashboard.updateLog.entries.price-settlement.title': 'Định giá tháng',
+  'pages.dashboard.updateLog.entries.price-settlement.description':
+    'Hỗ trợ đặt hàng giá 0 cho đối tác tháng, quyết toán hàng loạt và tự động tạo điều chỉnh phải thu/phải trả cho số lượng đã giao/nhận.',
+  'pages.dashboard.updateLog.entries.update-log-panel.description': 'Hiển thị cập nhật nền tảng theo loại; nhấn Nhật ký cập nhật để xem toàn bộ.',
+  'pages.dashboard.updateLog.entries.calendar-monday-first.title': 'Lịch bảng điều khiển bắt đầu tuần từ thứ Hai',
+  'pages.dashboard.updateLog.entries.weather-text-contrast.title': 'Cải thiện độ tương phản chữ ở phần đầu lịch thời tiết',
+  'pages.dashboard.updateLog.entries.weather-sky-background.title': 'Phần đầu lịch thời tiết dùng nền bầu trời liên kết thời tiết',
+  'pages.dashboard.updateLog.entries.weather-weekday-time.title': 'Điều chỉnh vị trí thứ, định dạng giờ và cỡ chữ trên lịch thời tiết',
   'pages.dashboard.operationCardsTitle': 'Hoạt động WIP',
   'pages.dashboard.operationCardsCount': 'hoạt động {{count}}',
   'pages.dashboard.operationCardsEmpty': 'Không có hoạt động nào đang diễn ra',
@@ -26512,7 +26768,8 @@ export default {
   'app.master-data.marketPrices.invalidForm': 'Biểu mẫu không hợp lệ',
   'app.master-data.marketPrices.keyword': 'Từ khóa',
   'app.master-data.marketPrices.loadPreset': 'Tải cài sẵn',
-  'app.master-data.marketPrices.loadPresetDesc': 'Tải mô tả đặt trước',
+  'app.master-data.marketPrices.loadPresetDesc':
+    'Chọn preset chưa có trong danh sách để nhập; mã đã tồn tại sẽ bỏ qua. Ngày hôm sau, giá chưa đổi sẽ tự kế thừa từ ngày trước.',
   'app.master-data.marketPrices.priceDate': 'Ngày giá',
   'app.master-data.marketPrices.priceDateRequired': 'Ngày giá yêu cầu',
   'app.master-data.marketPrices.priceInvalid': 'Giá không hợp lệ',
@@ -26522,6 +26779,14 @@ export default {
   'app.master-data.marketPrices.quoteCodeRequired': 'Mã báo giá là bắt buộc',
   'app.master-data.marketPrices.quoteName': 'Tên trích dẫn',
   'app.master-data.marketPrices.quoteNameRequired': 'Tên báo giá là bắt buộc',
+  'app.master-data.marketPrices.trendAboveAvg': 'Cao hơn trung bình',
+  'app.master-data.marketPrices.trendAvgPrice': 'Trung bình 30 ngày',
+  'app.master-data.marketPrices.trendBelowAvg': 'Thấp hơn trung bình',
+  'app.master-data.marketPrices.trendCurrentVsAvg': 'So với trung bình:',
+  'app.master-data.marketPrices.trendMaxPrice': 'Cao nhất 30 ngày',
+  'app.master-data.marketPrices.trendMinPrice': 'Thấp nhất 30 ngày',
+  'app.master-data.marketPrices.trendModalTitle': '{{name}} xu hướng 30 ngày',
+  'app.master-data.marketPrices.trendNoData': 'Không có báo giá hợp lệ trong 30 ngày qua',
   'app.master-data.marketPrices.unitPrice': 'Đơn giá',
   'app.master-data.marketPrices.unitPriceRequired': 'Đơn giá yêu cầu',
   'app.master-data.materialForm.mainCodeEditableExtra': 'Mã chính có thể chỉnh sửa bổ sung',
@@ -26776,6 +27041,422 @@ export default {
   'pages.infra.sensitiveWordBlacklist.batchDeleteAllowlistSuccess': 'Đã xóa {{count}} từ được phép',
   'ui.aiAssistant.actionExecuted': 'Đã thực hiện',
   'ui.aiAssistant.confirmAction': 'Xác nhận hành động',
+  // --- P0 locale gap sync (auto) ---
+  'app.haoligo.equipment.documents.outputPrefilledFieldTooltip': 'Không bắt buộc; điền mã số đơn hàng và bấm "Mang ra" để điền tự động hoặc bạn có thể điền thủ công.',
+  'app.haoligo.equipment.documents.outputWorkOrderTooltip':
+    'Không bắt buộc. Sau khi điền số thứ tự sản xuất, nhấp vào "Mang ra" ở bên phải để lấy mã thành phẩm, tên thành phẩm và số lượng dự kiến ​​từ bộ dữ liệu; khi không ràng buộc đơn hàng sản xuất, bạn có thể trực tiếp lựa chọn thiết bị và điền số lượng hoàn thành.',
+  'app.haoligo.equipment.hub.lead':
+    'Kế hoạch kiểm tra và sổ cái được lưu giữ ở đây; báo cáo và bảng điều khiển có thể được tìm thấy ở lối vào bên dưới. Tiền tố của bảng dữ liệu là haoligo_*, được tách biệt khỏi mô-đun thiết bị sản xuất nhanh.',
+  'app.haoligo.equipment.settings.outputDatasetIntro':
+    'Định cấu hình tập dữ liệu và ánh xạ cột được sử dụng cho truy vấn "Đơn hàng đầu ra thiết bị" theo số đơn hàng sản xuất (mã thành phẩm, tên thành phẩm, số lượng dự kiến, phù hợp với lệnh trưng dụng khuôn); nhấp vào "Mang ra" trong cửa sổ bật lên thứ tự đầu ra sau khi lưu. Nhấp vào "Bộ dữ liệu" trên thanh công cụ danh sách để định cấu hình.',
+  'app.haoligo.patrol.reports.chartDesc.areaVolumeTrend':
+    'Hiển thị những thay đổi về số lượng đăng ký theo khu vực kiểm tra và tháng, được sử dụng để xác định các khu vực có lượng tải cao liên tục.',
+  'app.haoligo.patrol.reports.chartDesc.deptHeadcountTrend':
+    'Đếm số lượng đăng ký sau khi loại bỏ trùng lặp theo hội thảo và tháng liên quan, phản ánh sự tham gia của tổ chức (số người và số lệnh công việc có ý nghĩa khác nhau).',
+  'app.haoligo.patrol.reports.chartDesc.issueTypeShare':
+    'Tỷ lệ thống kê dựa trên các loại sự cố bảo trì hệ thống được sử dụng để xác định các loại sự cố xảy ra cao và hướng dẫn các điểm kiểm tra, điểm đào tạo.',
+  'app.haoligo.patrol.reports.chartDesc.keywordCloud':
+    'Thực hiện phân đoạn từ và thống kê tần số từ dựa trên văn bản mô tả vấn đề để giúp khám phá các biểu thức lặp lại và các chủ đề rủi ro tiềm ẩn, đồng thời có thể được phân tích chéo với trường loại vấn đề.',
+  'app.haoligo.patrol.reports.chartDesc.monthlyCompletionRate':
+    'Thống kê tỷ lệ hoàn thành các lệnh công tác đã đăng ký trong từng tháng tự nhiên; nếu không có dữ liệu đăng ký trong tháng hiện tại, nó sẽ không được hiển thị.',
+  'app.haoligo.patrol.reports.chartDesc.monthlyOverdueRate':
+    'Tỷ lệ lệnh làm việc đã đăng ký vẫn đang trong giai đoạn kiểm tra hoặc bảo trì trong mỗi tháng tự nhiên được tính để đánh giá nguy cơ bị giam giữ.',
+  'app.haoligo.patrol.reports.chartDesc.monthlyVolume':
+    'Số lượng lệnh sản xuất được tổng hợp theo tháng tự nhiên của thời điểm đăng ký, thể hiện biến động hàng tháng và thời điểm kinh doanh cao điểm.',
+  'app.haoligo.patrol.reports.chartDesc.nodeCompletion':
+    'Tỷ lệ của mỗi nút quy trình được tính toán dựa trên các lệnh sản xuất đã đăng ký, được sử dụng để xác định các điểm nghẽn của quy trình và các liên kết bị mắc kẹt.',
+  'app.haoligo.patrol.reports.chartDesc.overdueRanking':
+    'Chỉ những lệnh công việc còn mở mới được người có trách nhiệm đếm và tổng hợp (nếu không chỉ định người chịu trách nhiệm thì lấy người đăng ký) để tạo điều kiện thuận lợi cho việc giám sát và điều phối cuộc họp thường xuyên.',
+  'app.haoligo.patrol.reports.chartDesc.statusDistribution':
+    'Hiển thị tỷ lệ các trạng thái như Kiểm tra, Bảo trì và Đã hoàn thành, được sử dụng để đánh giá áp lực tồn đọng và xử lý.',
+  'app.haoligo.patrol.reports.groupLead.area':
+    'Xu hướng số lượng đăng ký được hiển thị theo khu vực kiểm tra và các hội thảo liên quan, được sử dụng để xác định các lĩnh vực trọng điểm và áp lực hợp tác giữa các bộ phận.',
+  'app.haoligo.patrol.reports.groupLead.completion':
+    'Tỷ lệ các nút quy trình, tỷ lệ hoàn thành hàng tháng và cấu trúc lệnh công việc mở được trình bày để tạo điều kiện thuận lợi cho việc xem xét các cuộc họp định kỳ và thực hiện trách nhiệm.',
+  'app.haoligo.patrol.reports.groupLead.insights':
+    'Trích xuất và trực quan hóa tần số từ để mô tả vấn đề, xác định các biểu thức tần số cao và các vấn đề phổ biến tiềm ẩn, đồng thời so sánh và phân tích chúng với các loại vấn đề tiêu chuẩn.',
+  'app.haoligo.patrol.reports.groupLead.volume':
+    'Tóm tắt tỷ lệ các loại vấn đề, khối lượng đăng ký hàng tháng và phân bổ giai đoạn xử lý để hỗ trợ lập lịch ca và phân bổ nguồn lực tại chỗ.',
+  'app.haoligo.quality.workOrder.datasetIntro':
+    'Sau khi cấu hình, nhập số thứ tự vào cửa sổ đăng ký bật lên và nhấp vào "Mang ra". Bộ dữ liệu ERP sẽ được truy vấn theo thông số và ghi vào các trường như nhà xưởng, dây chuyền sản xuất, thiết bị, khuôn mẫu, mã số vật tư, model (nhà xưởng/thiết bị được khớp theo tên hoặc mã số của hệ thống); mỗi trường vẫn có thể được sửa đổi thủ công.',
+  'app.haoligo.quality.workOrder.scanTooltip':
+    'Sau khi điền số đơn hàng, nhấp vào “Mang ra” ở bên phải để lấy các thông tin liên quan từ bộ dữ liệu ERP; nếu tập dữ liệu không được định cấu hình, bạn có thể điền vào từng trường theo cách thủ công.',
+  'app.kuaiai.materialHealth.summaryStats':
+    'Tổng cộng {{total}} tài liệu chính đã được quét và tìm thấy {{issues}} vấn đề (tính đầy đủ/hợp lý {{completeness}}, mã hóa trùng lặp {{duplicate}})',
+  'app.kuaiai.settings.providerCardHint':
+    'Trước tiên, vui lòng tạo kết nối AI mới trong trình kết nối ứng dụng (cùng một nhà cung cấp có thể tạo nhiều mô hình khác nhau), sau đó chọn kết nối được sử dụng bởi cuộc trò chuyện hiện tại tại đây.',
+  'app.kuaicaiwu.notes.linkAmountMismatch': 'Số tiền hóa đơn không khớp với số tiền chứng từ (vé {{noteAmount}} / chứng từ {{voucherAmount}})',
+  'app.kuaizhizao.agileQuoting.adviceContent':
+    'Tỷ lệ chi phí nguyên liệu sản phẩm hiện tại là {{ratio}}%. Giá nguyên vật liệu thời gian gần đây biến động rất lớn. Nên thêm điều khoản "thời hạn hiệu lực" vào báo giá (khuyến nghị là 7 ngày).',
+  'app.kuaizhizao.agileQuoting.noData':
+    'Không tìm thấy dữ liệu giá cốt lõi, vui lòng đảm bảo rằng sản phẩm có BOM và định cấu hình định tuyến.',
+  'app.kuaizhizao.agileQuoting.priceModelHint':
+    '*Dựa trên mô hình "Chi phí + Lợi nhuận gộp". Đề xuất báo giá thực tế được điều chỉnh linh hoạt dựa trên mối quan hệ ở cấp độ khách hàng và quy mô đơn hàng.',
+  'app.kuaizhizao.batchingCenter.lineSideWarehousePickModalFallbackHint': 'Hiện tại không có kho kiểu kho phụ. Bạn có thể chọn một trong các kho sau làm kho mục tiêu.',
+  'app.kuaizhizao.batchingCenter.lineSideWarehousePickModalHint':
+    'Hệ thống không tìm thấy kho hàng mặc định. Vui lòng chọn thủ công kho mục tiêu để chuẩn bị nguyên liệu và tiếp tục tạo.',
+  'app.kuaizhizao.customerPool.confirmReleaseContent':
+    'Bạn có chắc chắn muốn phát hành "{{name}}" trở lại nhóm khách hàng công khai không? Sau khi phát hành, nó sẽ không còn thuộc về nhân viên bán hàng hiện tại nữa.',
+  'app.kuaizhizao.demandComputation.inboxSummaryTitle': 'Tổng số {{total}} ngoại lệ: Lỗi {{errors}}, Cảnh báo {{warnings}}',
+  'app.kuaizhizao.demandComputation.pushPreviewSummaryMerged': '{{code}}: {{docs}} sẽ được tạo; Các hàng {{pushable}}/{{total}} chi tiết có thể được đẩy xuống',
+  'app.kuaizhizao.demandManagement.businessModeTooltip':
+    'Khi nhấn "Tính toán nhu cầu", loại tính toán được thống nhất thành MRP; MTS/MTO/ATO được ghi vào đầu tính toán; khi ATO đang đẩy các lệnh sản xuất xuống, nó sẽ được điều khiển theo lệnh giống như MTO (chế độ sản xuất lệnh sản xuất là MTO).',
+  'app.kuaizhizao.demandManagement.deleteSkipped':
+    '{{skipped}} mục đã bị bỏ qua (không thể xóa trạng thái hoặc lập kế hoạch nhu cầu không theo cách thủ công). Chỉ có thể xóa "Kế hoạch nhu cầu" và dự thảo/đang chờ xem xét tại đây.',
+  'app.kuaizhizao.demandManagement.mergeComputationTooltip':
+    'Hợp nhất các yêu cầu đã chọn vào tính toán nhu cầu thống nhất, sau đó đẩy xuống các tài liệu xuôi dòng như đơn đặt hàng bán thành phẩm trong bảng tính toán.',
+  'app.kuaizhizao.demandManagement.mergeConfirm':
+    'Bạn có chắc chắn muốn kết hợp các yêu cầu {{count}} đã chọn để tính toán nhu cầu không? Các tính toán tổng hợp sẽ duy trì khả năng truy xuất nguồn gốc của từng nguồn nhu cầu.',
+  'app.kuaizhizao.demandManagement.pushToMrpConfirm':
+    'Bạn có chắc chắn muốn tạo một phép tính nhu cầu từ nhu cầu này không? Sau khi tạo, một nhiệm vụ tính toán nhu cầu sẽ được tạo ra.',
+  'app.kuaizhizao.demandManagement.withdrawConfirm':
+    'Bạn có chắc chắn muốn rút lại yêu cầu đẩy xuống cho yêu cầu này không? Sau khi rút, một nỗ lực sẽ được thực hiện để xóa tác vụ tính toán liên quan. Nếu nhiệm vụ xuôi dòng đã được thực thi thì việc rút tiền sẽ không được phép.',
+  'app.kuaizhizao.documentAction.install_execution.pull_from_sales_delivery.label': 'Tạo lệnh thực hiện cài đặt từ lệnh phát hành bán hàng',
+  'app.kuaizhizao.documentAction.install_execution.pull_from_sales_order.label': 'Tạo lệnh thực hiện cài đặt từ lệnh bán hàng',
+  'app.kuaizhizao.initialData.arIntro':
+    'Điền mã khách hàng và số tiền phải thu đối với khoản phải thu; điền mã nhà cung cấp và số tiền phải trả cho các khoản phải trả. Không có dữ liệu kinh doanh có liên quan để bỏ qua.',
+  'app.kuaizhizao.initialData.checklistHint':
+    'Mã nguyên vật liệu, mã kho trong dữ liệu nhập vào phải được lưu giữ trên hệ thống; thiếu chúng sẽ khiến hàng không được xác minh.',
+  'app.kuaizhizao.initialData.checklistHintShort':
+    'Lưu ý: Vật liệu và kho trong bảng phải tồn tại trong dữ liệu chính, nếu không các hàng dữ liệu tương ứng không thể vượt qua quá trình xác minh.',
+  'app.kuaizhizao.initialData.finishHint':
+    'Nếu có hàng dữ liệu bị lỗi, chúng có thể được sửa và nhập lại. Xin lưu ý: Mỗi lần nhập hàng tồn kho hoàn chỉnh và thành công sẽ tạo ra một tài liệu biên nhận mở đầu mới và nên tránh thực hiện lặp lại.',
+  'app.kuaizhizao.initialData.idempotencyBody':
+    'Mỗi lần nhập khẩu vượt qua quá trình xác minh sẽ tạo ra một chứng từ biên nhận mở đầu độc lập; nhập khẩu lặp lại sẽ dẫn đến nhập hàng tồn kho nhiều lần. Các trường hợp ngoại lệ cần được xử lý trong mô-đun lưu kho hoặc liên hệ với quản trị viên.',
+  'app.kuaizhizao.initialData.importInvFields':
+    'Các trường bắt buộc: mã nguyên vật liệu, mã kho, số lượng mở kho; các trường tùy chọn: số tiền mở, số lô, mã địa điểm. Tiêu đề hỗ trợ các phương pháp viết đồng nghĩa như "mã hóa" và "số".',
+  'app.kuaizhizao.initialData.pageIntro':
+    'Hãy làm theo các bước sau: mở kho là bước bắt buộc; nếu không có dữ liệu kinh doanh cho công việc đang tiến hành và các khoản phải thu, bạn có thể chọn bỏ qua các bước tương ứng.',
+  'app.kuaizhizao.initialData.skipWipBody':
+    'Vui lòng xác nhận rằng hiện tại không có dữ liệu công việc đang tiến hành nào được nhập hoặc nó có thể được thêm vào mô-đun công việc đang tiến hành tiếp theo. Sau khi bỏ qua, bạn vẫn có thể quay lại trình hướng dẫn này để thực hiện quá trình nhập.',
+  'app.kuaizhizao.initialData.snapshotAdvancedBody':
+    'Trong các trường hợp kho hàng thường xuyên được gửi và nhận hoặc cần phải được liên kết với sổ cái chung, nên chọn thời điểm khi hoạt động kinh doanh tương đối ổn định và thời hạn phải được bộ phận tài chính xác nhận.',
+  'app.kuaizhizao.initialData.snapshotAfterLaunch':
+    'Thời gian quyết toán đã chọn muộn hơn thời điểm kết thúc ngày ra mắt dự kiến. Vui lòng xem xét liệu có liên quan đến việc hòa giải tài chính hay không.',
+  'app.kuaizhizao.initialData.snapshotHint':
+    'Dùng để xác định thời điểm kết thúc kinh doanh tương ứng với số dư; hệ thống mặc định là 23:59:00 vào ngày tự nhiên trước đó, có thể được điều chỉnh theo tầm cỡ thanh toán tài chính.',
+  'app.kuaizhizao.initialData.wipIntro':
+    'Nếu không có công việc đang chờ xử lý, bạn có thể bỏ qua bước này. Việc nhập khẩu phải bao gồm: mã sản phẩm, mã quy trình và số lượng sản phẩm đang dở dang.',
+  'app.kuaizhizao.inventoryAlert.formInheritMaterialThresholdExtra':
+    'Sau khi bật nó lên, ngưỡng dữ liệu tổng thể của vật liệu sẽ được sử dụng; sau khi tắt có thể tùy chỉnh theo kho/nhóm. Chứng từ là nguồn sự thật mặc định và quy tắc là chiến lược ghi đè.',
+  'app.kuaizhizao.inventoryAlert.msgCheckSuccess':
+    'Kiểm tra đã hoàn tất: {{checked}} hàng tóm tắt, mới được kích hoạt {{triggered}}, được giải phóng tự động {{resolved}}',
+  'app.kuaizhizao.planControlTower.mrpExceptionInboxAlertDesc': 'Có {{errors}} lỗi và {{warnings}} cảnh báo. Hãy xử lý chúng trong MRP ngoại lệ tính toán nhu cầu.',
+  'app.kuaizhizao.purchaseInquiry.compareAwardPartialHint':
+    'Những dòng có trích dẫn có thể được trao giải riêng; những dòng không có trích dẫn sẽ không được trao giải.',
+  'app.kuaizhizao.quality.isoClauses.loadPresetSuccess':
+    'Mặc định đã được nhập: đã thêm {{created}} mục, đã bỏ qua {{skipped}} mục, {{linked}} mục được liên kết',
+  'app.kuaizhizao.quotation.batchCancelCustomerConfirmContent': 'Trả lại {{count}} trích dẫn đã chọn từ "Xác nhận khách hàng" thành "Đã gửi".',
+  'app.kuaizhizao.quotation.batchConfirmCustomerConfirm':
+    'Bạn có chắc chắn muốn đánh dấu các trích dẫn {{count}} đã chọn là "Xác nhận khách hàng" không? Chỉ những tài liệu được "Trích dẫn" và đáp ứng các điều kiện xác nhận mới thành công.',
+  'app.kuaizhizao.quotation.cancelCustomerConfirmContent': 'Trả lại báo giá từ "Xác nhận khách hàng" thành "Đã gửi" để rút lại đánh giá hoặc xóa tài liệu.',
+  'app.kuaizhizao.quotation.convertConfirm':
+    'Bạn có chắc chắn muốn chuyển đổi báo giá "{{code}}" thành đơn đặt hàng không? Sau khi chuyển đổi, một đơn bán hàng mới sẽ được tạo và liên kết.',
+  'app.kuaizhizao.quotation.customerConfirmContent':
+    'Được đánh dấu là "Xác nhận khách hàng", nghĩa là báo giá đã được khách hàng phê duyệt và đơn hàng có thể tiếp tục được đẩy.',
+  'app.kuaizhizao.quotation.pushToSalesContractConfirm':
+    'Bạn có chắc chắn muốn đẩy báo giá "{{code}}" vào hợp đồng mua bán không? Sau khi đẩy xuống, hợp đồng mua bán dự thảo sẽ được tạo và liên kết.',
+  'app.kuaizhizao.quotation.revokePushContent':
+    'Hủy liên kết đơn bán hàng đã xóa, khôi phục nó về "Xác nhận khách hàng" và chuyển lại sang đơn bán hàng.',
+  'app.kuaizhizao.quotation.saveAsRevisionHint':
+    'Sao chép phiên bản mới nhất dựa trên bộ truyện hiện tại dưới dạng bản sửa đổi nháp mới, các chi tiết và giá cả có thể được điều chỉnh trong phiên bản mới. Tiếp tục?',
+  'app.kuaizhizao.salesContract.terms.contentPlaceholderHint':
+    'Bạn có thể sử dụng {placeholder name} để điền thủ công vào nội dung hoặc sử dụng {@field name} để tự động liên kết tiêu đề hợp đồng. Ví dụ: phương thức thanh toán {@ Payment_terms}; thời gian giao hàng là {delivery Days} ngày làm việc.',
+  'app.kuaizhizao.salesContract.terms.fieldBindingAutoHint':
+    'Các phần giữ chỗ sau sẽ được tự động lấy từ trường tiêu đề ở trên. Sau khi sửa đổi tiêu đề, bản xem trước sẽ được cập nhật đồng thời nên không cần phải điền thủ công.',
+  'app.kuaizhizao.salesOrder.aiCreate.confirmMasterDesc':
+    'Các khách hàng hoặc tài liệu sau đây không khớp trong hệ thống. Vui lòng kiểm tra thông tin và xác nhận việc tạo mới; bạn cũng có thể bỏ qua việc tạo mới và chỉ điền nội dung đã xác định vào biểu mẫu.',
+  'app.kuaizhizao.salesOrder.aiCreate.customerCodeRuleRequired':
+    'Không thể tự động tạo khách hàng mới: Vui lòng kích hoạt tính năng đánh số tự động cho khách hàng trong quy tắc đánh số trước, hoặc tạo thủ công khách hàng trước khi ghi đơn hàng.',
+  'app.kuaizhizao.salesOrder.aiCreate.hint':
+    'Tải lên ảnh đơn đặt hàng, hợp đồng hoặc biên lai viết tay của khách hàng. Hệ thống nhận dạng văn bản thông qua điểm cuối hình ảnh OCR và DeepSeek sẽ điền vào biểu mẫu mới. Vui lòng định cấu hình URL cơ sở OCR và mô hình OCR trong Cấu hình hệ thống → Trình kết nối ứng dụng.',
+  'app.kuaizhizao.salesOrder.aiCreate.promptSampleOrder':
+    'Đặt hàng 100 miếng bu lông M8 cho khách hàng Máy móc Huadong, đơn giá là 0,5 nhân dân tệ, giao hàng vào thứ Sáu tuần sau',
+  'app.kuaizhizao.salesOrder.aiCreate.recognizeEmpty':
+    'Thông tin đơn đặt hàng hợp lệ không thể được xác định từ hình ảnh. Vui lòng tải lên một bức ảnh rõ ràng hơn hoặc sử dụng văn bản để mô tả đơn hàng.',
+  'app.kuaizhizao.salesOrder.aiCreate.welcomeDesc':
+    'Bạn có thể mô tả trực tiếp đơn hàng hoặc tải lên hình ảnh tài liệu để nhận dạng. Hỗ trợ nhiều đợt bổ sung, chẳng hạn như sửa đổi số lượng, thêm chi tiết và gửi lại.',
+  'app.kuaizhizao.salesOrder.configureVariantAttrsHint': 'Chọn từng giá trị thuộc tính; chọn "Chọn SKU" hoặc chọn SKU trước rồi tinh chỉnh.',
+  'app.kuaizhizao.shipmentNotice.capability.shipment_notice.notify.overdelivery_or_inventory': 'Số lượng thông báo vượt quá số lượng đặt trước hoặc số lượng hàng tồn kho có sẵn được thông báo.',
+  'app.kuaizhizao.warehouseInbound.fqc.ensureBlocked.content':
+    'Các vật liệu liên quan phải hoàn thành việc kiểm tra thành phẩm và vượt qua bài kiểm tra trước khi chúng có thể được xác nhận để lưu trữ.',
+  'app.kuaizhizao.warehouseInbound.iqc.ensureBlocked.content':
+    'Các vật liệu liên quan phải hoàn thành việc kiểm tra vật liệu đến và vượt qua cuộc kiểm tra trước khi chúng có thể được xác nhận để lưu trữ; nếu chưa hoàn thành sẽ được chuyển đi kiểm tra nguyên liệu đầu vào.',
+  'app.kuaizhizao.warehouseInbound.msg.noConfirmExecutePermission':
+    'Thiếu quyền thực thi xác nhận cho việc lưu kho. Vui lòng liên hệ với quản trị viên để cấp quyền "thực thi" quản lý kho trong ma trận vai trò.',
+  'app.kuaizhizao.warehouseOutbound.confirm.batchAllocationRequired':
+    'Nguyên liệu {{material}} Vui lòng phân bổ số lượng của vấn đề này theo số lô {{qty}} (số lô tùy chọn: {{batches}})',
+  'app.kuaizhizao.warehouseOutbound.confirm.batchSerialMultiNotSupported':
+    'Chứng từ {{material}} được quản lý theo số sê-ri. Vui lòng chỉ chọn một số lô cho cùng một lần lấy hàng.',
+  'app.kuaizhizao.workOrder.formAllowOpJumpExtra':
+    'Giá trị mặc định là lộ trình quy trình đã chọn; nó có thể được sửa đổi. Khi đóng cửa, công việc phải báo cáo theo trình tự và số làn xe phía dưới không vượt quá làn xe phía trên; khi nó được bật, các nút xử lý trong tuyến vẫn không thể bỏ qua.',
+  'app.kuaizhizao.workOrder.readinessConfirmPickingContent':
+    'Các bộ phận bốc xếp theo dòng {{count}} sẽ được tạo từ "{{warehouse}}" và được xác nhận để bốc xếp sản xuất (vấn đề chính thức). Tiếp tục?',
+  'app.kuaizhizao.workOrder.remindBatchingHint':
+    'Các nhiệm vụ chuẩn bị nguyên liệu bên lề sẽ được tạo/đồng bộ hóa và nhân viên kho hàng sẽ được thông báo qua tin nhắn tại địa điểm. Bên sản xuất không cần vào trung tâm nguyên liệu.',
+  'app.kuaizhizao.workReporting.postAction.last_inbound_confirmed': 'Xác nhận đã nhận hàng thành phẩm{{receiptLabel}}; kho được cập nhật.',
+  'app.kuaizhizao.workReporting.postAction.last_inbound_failed':
+    'Thao tác gửi tự động cuối cùng không thành công. Kiểm tra cài đặt kho mặc định hoặc tạo biên nhận theo cách thủ công trong Quản lý hàng nhập.',
+  'app.kuaizhizao.workReporting.postAction.last_inbound_fqc_blocked':
+    'Đã tạo biên nhận đang chờ xử lý{{receiptLabel}}, nhưng kho hàng không được đăng vì quá trình kiểm tra thành phẩm không được thông qua. Hoàn tất kiểm tra, sau đó xác nhận hàng đến trong Quản lý hàng đến.',
+  'app.kuaizhizao.workReporting.postAction.last_inbound_pending':
+    'Đã tạo biên nhận đang chờ xử lý{{receiptLabel}}. Hoàn tất việc kiểm tra thành phẩm (nếu được bật) và xác nhận hàng nhập vào trong Quản lý nhập hàng trước khi cập nhật hàng trong kho.',
+  'app.master-data.defaults.marketFloatFormulaHint':
+    'Các biến có sẵn là thị trường (giá thị trường cơ sở) và cố định (giá bán cố định), chẳng hạn như thị trường * 1.1 + cố định',
+  'app.master-data.defaults.salePriceMethodHint':
+    'Giá bán cố định trực tiếp duy trì giá bán của loại vật liệu này; liên kết giá thị trường tính giá bán khuyến nghị dựa trên giá thị trường cơ sở và công thức thả nổi.',
+  'app.master-data.marketPrices.loadPresetSuccess':
+    'Giá thị trường mặc định đã được nhập: {{created}} mặt hàng đã được thêm, {{skipped}} mặt hàng bị bỏ qua',
+  'app.master-data.materials.addComboRowHint':
+    'Chọn giá trị thuộc tính cho mỗi cột và lưu thành một hàng kết hợp độc lập (phù hợp với từng hàng trong Excel)',
+  'app.master-data.materials.autoGenerateHiddenHint':
+    'Việc tạo tự động hàng loạt chỉ khả dụng khi thuộc tính liệt kê ≤ {{maxAttrs}} và số lượng kết hợp ≤ {{maxCount}}.',
+  'app.master-data.materials.autoGenerateNotAvailable':
+    'Hiện tại có {{attrs}} thuộc tính liệt kê và khoảng {{count}} kết hợp, cho đến khi vượt quá mức tạo tự động (thuộc tính ≤{{maxAttrs}} và ≤{{maxCount}} mục). Vui lòng sử dụng "Thêm hàng" để thực hiện bảo trì thủ công.',
+  'app.master-data.materials.batchInspectionHint':
+    'Các tùy chọn kiểm tra chất lượng của vật liệu {{count}} đã chọn sẽ được cập nhật (các mục không được chọn sẽ không bị thay đổi; kế hoạch kiểm tra chất lượng tương ứng phải được chọn để kiểm tra chất lượng kế hoạch)',
+  'app.master-data.materials.batchTrackingHint':
+    'Các kích thước đã kiểm tra sẽ được ghi vào máy chủ cùng một lúc. Các quy tắc mặc định có thể được chỉ định khi bật theo đợt; tắt theo đợt sẽ tắt các công tắc tương ứng và xóa các quy tắc.',
+  'app.master-data.materials.generateVariantsConfirmLimited':
+    'Khoảng {{count}} kết hợp sẽ được tạo (những kết hợp đã tồn tại sẽ tự động bị bỏ qua). Khi có nhiều thuộc tính hoặc số lượng kết hợp lớn, vui lòng sử dụng "Thêm hàng" thủ công. Tiếp tục?',
+  'app.master-data.materials.groupInspectionStagesHint':
+    'Nó được sử dụng khi các vật liệu trong nhóm không được cấu hình riêng lẻ với các chiến lược kiểm tra chất lượng dựa trên kịch bản; vui lòng định cấu hình kiểm tra trong quá trình (IPQC) trong dữ liệu quy trình.',
+  'app.master-data.materials.legacyScopeDesc':
+    'Phiên bản cũ của phạm vi thuộc tính có thể được chia thành các chi tiết kết hợp {{count}} và sau đó được duy trì',
+  'app.master-data.materials.rewriteMainCodesHintGroup':
+    'Mã chủ sẽ được tạo lại cho tất cả các vật liệu thuộc nhóm hiện tại (bao gồm cả các nhóm con) theo “mã nhóm” và quy tắc mã hóa vật liệu của nhóm cấp cuối cùng mà mỗi vật liệu thuộc về. Khi vật liệu không được chọn sẽ thực hiện theo nhóm đã chọn ở bên trái.',
+  'app.master-data.materials.rewriteMainCodesHintSelected':
+    'Mã chính sẽ được tạo lại cho các vật liệu {{count}} đã chọn theo "mã nhóm" và quy tắc mã hóa vật liệu của nhóm cuối cùng mà mỗi vật liệu thuộc về. Các biến thể thuộc tính có cùng mã chính sẽ được cập nhật cùng nhau.',
+  'app.master-data.materials.rewriteMainCodesSuccess': 'Mã chính của nhóm {{families}} đã được viết lại và tổng cộng {{rows}} tài liệu đã được cập nhật.',
+  'app.master-data.materials.rewriteResetSequenceDesc':
+    'Khi được chọn, số sê-ri của từng nhóm cuối cùng sẽ được đặt lại về giá trị ban đầu trước khi viết lại và số đó sẽ được tính lại từ đầu.',
+  'app.master-data.materials.standardPresetHint':
+    'Thư viện mặc định được phân loại theo vật liệu sản xuất thường được sử dụng. Trước tiên, vui lòng hoàn tất "Cài đặt nhập" bên dưới, sau đó kiểm tra các mục sẽ được nhập vào bảng.',
+  'app.master-data.materials.standardPresetPresetGroupHint':
+    'Các nhóm vật liệu sẽ được tạo tự động hoặc tái sử dụng theo “loại phụ” của thư viện mặc định (mã nhóm bắt đầu bằng SP_) và các vật liệu sẽ được phân loại thành các nhóm tương ứng.',
+  'app.master-data.materials.variantComboImportHint':
+    'Bạn cũng có thể sử dụng "Nhập hàng loạt" để dán các kết hợp Excel theo cột thuộc tính (chỉ các hàng SKU trong tài liệu hiện tại mới được nhập).',
+  'app.master-data.operations.presetModalHint':
+    'Đầu tiên chọn ngành phân khu sản xuất, sau đó kiểm tra quy trình nhập khẩu; số quy trình và số sản phẩm bị lỗi sẽ được tạo tự động theo quy tắc mã hóa của tổ chức và các sản phẩm bị lỗi có cùng tên sẽ được sử dụng lại.',
+  'app.master-data.productionLines.dimensionHint':
+    'Dây chuyền sản xuất là lớp giữa của cây tổ chức nhà máy (nhóm dây chuyền thuộc phân xưởng), được sử dụng cho các nhóm dây chuyền sở hữu máy trạm và thiết bị; nó không tham gia vào việc lập kế hoạch sản xuất, điều động lao động hoặc kết nối kho hàng dọc tuyến. Hãy duy trì trung tâm làm việc để đảm bảo năng lực sản xuất và điều phối.',
+  'app.master-data.sop.batchCreatedHint':
+    '{{count}} SOP dự thảo đã được tạo. Nên nhập "Chỉnh sửa" từng cái một để hoàn thành việc thu thập thông tin cơ bản, hướng dẫn công việc và báo cáo công việc.',
+  'app.master-data.sop.batchRulesGroupDesc':
+    '{{count}} nhóm vật liệu đã được chọn: khoảng {{preview}} SOP sẽ được tạo (một cho mỗi nhóm × mỗi quy trình), số chứa "Mã nhóm vật liệu G" và tên chứa tên và mã nhóm.',
+  'app.master-data.sop.batchRulesMaterialDesc':
+    '{{count}} nguyên liệu đã chọn: Khoảng {{preview}} SOP sẽ được tạo (một cho mỗi nguyên liệu × mỗi quy trình). Định dạng đánh số là "Mã lộ trình-Mã quy trình-M-Mã chính", có tên vật liệu và mã chính trong tên.',
+  'app.master-data.sop.noBoundRouteDesc':
+    'Nhóm vật liệu/vật liệu hiện tại chưa bị ràng buộc với định tuyến. Vui lòng chọn lộ trình hiện có từ danh sách để tạo lô này (không cần ghi lại ràng buộc) hoặc tạo lộ trình mới và liên kết nó với nhóm vật liệu/vật liệu hiện tại.',
+  'app.master-data.sop.remarkPlaceholder':
+    'Hướng dẫn bổ sung, biện pháp phòng ngừa, v.v. (Đối với các bước của quy trình, vui lòng nhấp vào "Thiết kế" trong cột thao tác danh sách để định cấu hình trang thiết kế đồ họa)',
+  'app.master-data.source.defaultBomVersionHint':
+    'Tính toán nhu cầu sử dụng phiên bản mặc định khi "không được phép có nhiều phiên bản"; danh sách thành phần và cách sử dụng phải được duy trì trong thiết kế BOM.',
+  'app.master-data.source.defaultProcessRouteGroupHint':
+    'Nó được sử dụng khi các nguyên liệu trong nhóm không được phân định các lộ trình riêng biệt; vui lòng duy trì quy trình hoàn chỉnh và sự khác biệt về tài nguyên trên trang quy trình sản phẩm của từng tài liệu.',
+  'app.master-data.source.defaultProcessRouteMaterialHint':
+    'Chỉ mẫu lộ trình được chỉ định kế thừa xưởng/nhân sự/thiết bị mặc định của quy trình; vui lòng duy trì trình tự quy trình, giờ làm việc và đơn giá theo sản phẩm trên trang quy trình sản phẩm.',
+  'app.master-data.workCenters.dimensionHint':
+    'Trung tâm sản xuất lập kế hoạch và dữ liệu tổng thể về năng lực: lệnh sản xuất, quy trình, lịch trình, kho hàng và chi phí đều dựa trên thứ nguyên này. Thông qua liên kết trạm làm việc, không có sự tương ứng 1-1 với dây chuyền sản xuất.',
+  'apps.kuaizhizao.workOrder.quickReport.exceedEffective':
+    'Nó đã vượt quá con số có thể báo cáo lần này ({{max}}). Vui lòng điều chỉnh số lượng số đủ tiêu chuẩn hoặc không đủ tiêu chuẩn.',
+  'apps.kuaizhizao.workOrder.quickReport.exceedEffectiveSubmit': 'Số lượng công việc cần báo cáo không thể vượt quá số lượng có thể báo cáo lần này ({{max}})',
+  'apps.kuaizhizao.workOrder.quickReport.lastOpDirectInbound':
+    'Thao tác cuối cùng: Gửi thư trực tiếp đang bật. Sau khi phê duyệt, hệ thống sẽ cố gắng xác nhận đã nhận; nếu cần phải kiểm tra FG thì chỉ có một biên nhận đang chờ xử lý được tạo cho đến khi quá trình kiểm tra được thông qua.',
+  'apps.kuaizhizao.workOrder.quickReport.lastOpDirectInboundWithFqc':
+    'Hoạt động cuối cùng: Đang bật kiểm tra hàng hóa nhập và thành phẩm trực tiếp. Biên nhận được tạo sau khi được phê duyệt; hoàn tất kiểm tra và xác nhận hàng nhập trước khi hàng xuất hiện trong kho theo thời gian thực.',
+  'apps.kuaizhizao.workOrder.quickReport.lastOpInboundNotice':
+    'Thao tác cuối cùng: Thông báo gửi đến đang bật. Biên nhận đang chờ xử lý được tạo sau khi được phê duyệt; xác nhận hàng nhập vào trong Quản lý hàng nhập để cập nhật hàng trong kho.',
+  'apps.kuaizhizao.workOrder.quickReport.lastOpInboundNoticeWithFqc':
+    'Hoạt động cuối cùng: Thông báo nhập hàng và kiểm tra thành phẩm đang được bật. Hoàn tất kiểm tra, sau đó xác nhận hàng nhập vào trong Quản lý hàng nhập vào trước khi hàng xuất hiện trong kho theo thời gian thực.',
+  'apps.kuaizhizao.workOrder.quickReport.lastOpNoAutoInbound':
+    'Thao tác cuối cùng: Tự động gửi đến đã tắt. Tạo phiếu nhập thành phẩm thủ công tại module kho sau khi hoàn thành.',
+  'components.tenantBootstrap.description':
+    'Vui lòng đợi trong khi cài đặt các ứng dụng mặc định và tải dữ liệu hệ thống tiên quyết cho tổ chức mới. Sau khi hoàn tất, bạn có thể sử dụng hệ thống bình thường.',
+  'components.uniImport.mappingImportConfirmContentRest':
+    '. Sau khi tải bảng hiện có lên, hãy ánh xạ các cột Excel tới các trường hệ thống (hỗ trợ khớp tự động). Không cần phải thay đổi mẫu chuẩn trước khi nhập.',
+  'field.customer.revenueRecognitionOverrideDesc':
+    'Ghi đè thời điểm ghi nhận doanh thu mặc định của tổ chức; nếu không được chọn, nó sẽ nhất quán với "Cài đặt hệ thống → Trung tâm thông số → Tài chính". Được sử dụng để phân biệt khách hàng có nên tạo các khoản phải thu dựa trên hóa đơn đầu ra hay đầu ra.',
+  'field.department.datasetBindingInfo':
+    'Trong quá trình đồng bộ hóa: Nếu cột mã phòng ban được cấu hình và mã trong hàng không trống thì sẽ khớp theo mã, nếu không sẽ khớp theo tên phòng ban; nếu nó đã tồn tại, tên, mã (nếu được định cấu hình) và nhận xét (nếu được định cấu hình) sẽ được cập nhật, nếu chưa tồn tại, nó sẽ được thêm vào (sắp xếp là 0, được bật theo mặc định). Khi cột tham chiếu cha được định cấu hình, bộ phận cha sẽ được phân tích cú pháp ở vòng thứ hai.',
+  'field.department.syncIntroBody':
+    'Các truy vấn không có tham số sẽ được thực thi dựa trên tập dữ liệu đã lưu và các phòng ban sẽ được viết hoặc cập nhật dựa trên ánh xạ cột; khi cột tham chiếu cấp trên được định cấu hình, mối quan hệ cha-con sẽ được giải quyết sau khi tất cả các hàng được xử lý.',
+  'field.department.syncIntroWarning':
+    'Thời gian đồng bộ hóa liên quan đến số lượng hàng tập dữ liệu, cơ sở dữ liệu và điều kiện mạng và có thể dao động từ hàng chục giây đến vài phút. Khi quá trình đồng bộ hóa đã bắt đầu, vui lòng không đóng hoặc làm mới trang này cho đến khi quá trình đồng bộ hóa hoàn tất.',
+  'field.route.allowOperationJumpExtra':
+    'Toàn bộ tuyến đường được thống nhất là "được phép" hoặc "không được phép". Khi được phép, các quy trình nút có thể được đánh dấu theo trình tự quy trình; khi không được phép thì phải báo cáo theo trình tự.',
+  'field.supplier.payableRecognitionOverrideDesc':
+    'Ghi đè thời điểm xác nhận thanh toán mặc định của tổ chức; nếu không được chọn, nó sẽ nhất quán với "Cài đặt hệ thống → Trung tâm thông số → Tài chính". Được sử dụng để phân biệt nhà cung cấp xem các khoản phải trả được tạo ra dựa trên hóa đơn nhập kho hay hóa đơn đầu vào.',
+  'field.user.importMissingRefsHint':
+    'Những tên sau đây không tồn tại trong hệ thống. Vui lòng sửa tên trong mẫu nhập hoặc chọn tự động tạo tệp mới theo quy tắc mã hóa và tiếp tục nhập.',
+  'pages.infra.clientReleases.configHeaderDownloadEnabledTooltip':
+    'Sau khi đóng, client sẽ không còn xuất hiện trong mục "Quét mã QR để tải client" ở thanh trên cùng của giao diện chính sau khi đăng nhập.',
+  'pages.infra.clientReleases.configPushTestHint':
+    'Trước khi thử nghiệm, vui lòng cài đặt APK chính thức trên điện thoại của bạn, đăng nhập vào tài khoản tương ứng và cho phép thông báo. Trước tiên hãy chọn đối tượng thuê, sau đó chọn người dùng trong đối tượng thuê.',
+  'pages.infra.clientReleases.deleteConfirmDesc':
+    'Bản ghi phát hành cho phiên bản {{version}} ({{code}}) sẽ bị xóa và gói cài đặt/tệp OTA trên đĩa sẽ được dọn sạch (nếu không được các bản ghi khác tham chiếu). Hoạt động này là không thể đảo ngược.',
+  'pages.infra.clientReleases.editIdentityHint':
+    '{{client}} / {{platform}} / {{version}} ({{code}}). Không thể sửa đổi máy khách, nền tảng và số phiên bản; có thể thay đổi mô tả/thang độ xám/cập nhật bắt buộc và gói cài đặt có thể được thay thế tùy ý.',
+  'pages.infra.clientReleases.editPackageOptionalHint':
+    'Nếu đã có gói cài đặt thì có thể để trống; tải lên một tệp mới sẽ thay thế nó (phải phù hợp với số phiên bản hiện tại)',
+  'pages.infra.clientReleases.packageDetectedDesc':
+    'Phiên bản {{version}} - Số bản dựng {{code}} - Tên gói {{package}}. Khi gửi, việc xác minh sẽ nhất quán với thông tin trong APK.',
+  'pages.infra.clientReleases.packageReplaceMismatch':
+    'Phiên bản trong gói cài đặt không nhất quán với bản ghi phát hành hiện tại. Vui lòng tải lên APK phù hợp hoặc tạo bản ghi phát hành mới.',
+  'pages.infra.clientReleases.packageVersionMismatch':
+    'Phiên bản gói cài đặt là {{version}} ({{code}}), không phù hợp với bản ghi phát hành hiện tại {{expectedVersion}} ({{expectedCode}})',
+  'pages.infra.tenant.sharedQuotaOverQuotaHint':
+    'Số lượng người dùng kích hoạt hiện tại đã vượt quá giới hạn hạn ngạch. Người dùng hiện tại sẽ không bị ảnh hưởng, nhưng người dùng không thể được thêm hoặc kích hoạt cho đến khi số lượng người dùng hiệu quả giảm xuống dưới hạn mức.',
+  'pages.infra.tenant.syncLimitsFromPlanOverQuotaSuccess':
+    'Hạn ngạch được đồng bộ hóa. Số lượng người dùng được kích hoạt hiện tại đã vượt quá giới hạn trên mới. Người dùng hiện tại sẽ không bị ảnh hưởng, nhưng người dùng mới không thể được thêm cho đến khi người dùng bị xóa hoặc vô hiệu hóa và không đạt đủ hạn mức.',
+  'pages.system.applicationConnections.aiPanelHint':
+    'Key mô hình AI được lưu trong phần tích hợp trang web và không xuất hiện trong danh sách kết nối ứng dụng doanh nghiệp bên dưới. Để chọn kiểu máy sẽ sử dụng, vui lòng truy cập KU-AI → Cài đặt kiểu máy.',
+  'pages.system.applicationConnections.amapHint':
+    'Được sử dụng để hiển thị bản đồ theo dõi hậu cần; vui lòng tạo một ứng dụng trên nền tảng mở Amap và kích hoạt ứng dụng khách Web (API JS) và dịch vụ Web',
+  'pages.system.applicationConnections.cloudMarketHint':
+    'Được sử dụng cho API thị trường đám mây như truy vấn chuyển phát nhanh; vui lòng điền vào kịch bản, phương thức gọi và địa chỉ truy vấn',
+  'pages.system.applicationConnections.llmProviderKeyHint':
+    'Chỉ điền trạng thái kích hoạt của mô hình, địa chỉ API, tên mô hình và Khóa API tại đây. Để chọn sử dụng đầu nối và công tắc khả năng KU-AI nào, vui lòng đi tới "KU-AI → Cài đặt kiểu máy".',
+  'pages.system.applicationConnections.llmProviderKeySaveVerifyFailed':
+    'Bản lưu đã được gửi nhưng không thể xác nhận rằng Khóa đã được viết. Vui lòng làm mới và thử lại hoặc kiểm tra quyền cài đặt trang web.',
+  'pages.system.applications.customAppsEmptyDescription':
+    'Nếu bạn cần các chức năng độc quyền hoặc giải pháp dành riêng cho ngành phù hợp với doanh nghiệp của mình, chúng tôi có thể cung cấp dịch vụ tích hợp và tùy chỉnh phần mềm. Chào mừng bạn liên hệ với người quản lý tài khoản hoặc doanh nghiệp của chúng tôi để trao đổi nhu cầu của bạn và khám phá các cơ hội hợp tác.',
+  'pages.system.applications.dedicatedBindingHint':
+    'Sau khi ràng buộc, chỉ các tổ chức bị ràng buộc mới có thể xem ứng dụng tùy chỉnh trong trung tâm ứng dụng; các tổ chức không bị ràng buộc sẽ không nhìn thấy nó (quản trị viên nền tảng vẫn có thể duy trì nó). Có thể được ràng buộc riêng cho nhiều tổ chức.',
+  'pages.system.applications.resetHighRiskWarning':
+    'Cảnh báo hoạt động có rủi ro cao: "Đặt lại dữ liệu" sẽ xóa hoặc khởi tạo dữ liệu kinh doanh cốt lõi của ứng dụng. Vui lòng xác nhận hoặc liên hệ với bộ phận hỗ trợ kỹ thuật trước khi thực hiện.',
+  'pages.system.applications.resetWarn1':
+    'Thao tác đặt lại sẽ xóa tất cả các đơn đặt hàng bán hàng, lệnh sản xuất, luồng hàng tồn kho, lập kế hoạch nhu cầu và các dữ liệu kinh doanh khác trong ứng dụng "Sản xuất nhanh". Hành động này là không thể thay đổi được!',
+  'pages.system.applications.resetWarn2':
+    'Khi bạn nhấp vào Tiếp theo, dữ liệu không thể được phục hồi bằng các phương pháp thông thường. Bạn nên đảm bảo rằng không có hoạt động kinh doanh nào đang diễn ra và thông báo cho các thành viên nhóm có liên quan.',
+  'pages.system.applications.syncAllErrMenusDb':
+    'Cập nhật menu điều hướng không thành công: {{detail}}. Nếu bạn không có quyền quản lý menu, vui lòng liên hệ với quản trị viên để được cấp phép.',
+  'pages.system.applications.syncAllPartial':
+    'Đồng bộ hóa menu đã hoàn tất một phần ({{success}}/{{total}}). \\\n{{errors}}',
+  'pages.system.applications.syncAllSuccess': 'Đã hoàn tất đồng bộ hóa menu cho {{count}} ứng dụng, menu điều hướng đã được cập nhật.',
+  'pages.system.businessConfig.param.work_order.last_operation_auto_inbound_mode.description':
+    'Đối với mỗi báo cáo công việc được phê duyệt trong quy trình cuối cùng, một danh sách chờ sẽ được tạo dựa trên số lượng đủ tiêu chuẩn. Khi bật kiểm tra thành phẩm, lượng hàng tồn kho sẽ chỉ tăng sau khi vượt qua khâu kiểm tra và xác nhận nhập kho trong quản lý kho; "Thông báo nhập kho" chỉ tạo một lệnh nhập kho đang chờ xử lý và "lưu kho trực tiếp" sẽ cố gắng tự động xác nhận đơn hàng đó.',
+  'pages.system.businessConfig.qualityStageTogglesDesc':
+    'Sau khi đóng một liên kết nào đó, máy chủ sẽ từ chối tạo/đẩy xuống lệnh kiểm tra chất lượng tương ứng (có hiệu lực cùng với chế độ kiểm tra chất lượng nguyên liệu/quy trình). Sau khi bật kiểm tra vận chuyển: khi vấn đề bán hàng được "xác nhận" và thông báo vận chuyển được "thông báo về kho", nếu nguyên liệu dây chuyền yêu cầu kiểm tra chất lượng thì phải có chứng từ kiểm tra thành phẩm đã được kiểm tra và đủ tiêu chuẩn (khớp với đơn bán hàng hoặc kích thước của khách hàng); nếu tắt kiểm tra vận chuyển thì sẽ không có xác minh.',
+  'pages.system.configCenter.auditBinding.sectionDesc':
+    'Định cấu hình quy trình xem xét và phê duyệt thủ công cho từng tài liệu bên dưới. Khi tắt công tắc, nó sẽ tự động chuyển sau khi gửi. Khi được bật, nó sẽ bước vào quá trình xem xét sau khi gửi. Bạn phải chọn quy trình xem xét và phê duyệt tương ứng.',
+  'pages.system.configCenter.notification.form.fixedUsersPlaceholder':
+    'Được thông báo mỗi lần, người xuất hóa đơn không thể thay đổi; bạn có thể bỏ chọn thông số người dùng thanh toán',
+  'pages.system.configCenter.notification.form.formUserDefaultUsersPlaceholder': 'Biểu mẫu thanh toán sẽ được điền trước; sử dụng người mặc định ở đây nếu không thay đổi',
+  'pages.system.configCenter.notification.form.formUserSectionDesc':
+    'Nhân sự cố định và chỉ định người dùng thanh toán có thể được cấu hình cùng một lúc. Sau khi kiểm tra thông số người dùng thanh toán, người mặc định sẽ được điền trước vào biểu mẫu; khi thanh toán không được thay đổi, nó sẽ được gửi theo mặc định.',
+  'pages.system.configCenter.notification.preset.hint':
+    'Có thể tải các quy tắc đề xuất (tắt theo mặc định); tin nhắn trong trang web sẽ chỉ được gửi sau khi người nhận được định cấu hình và kích hoạt.',
+  'pages.system.configCenter.notification.preset.loadedAndUpdated':
+    'Đã thêm {{created}} mục và hoàn thành phạm vi người nhận gồm {{updated}} mục (hiện có tổng cộng {{total}} mục)',
+  'pages.system.configCenter.notification.preset.repairedTemplates':
+    '{{templatesCreated}} mẫu tin nhắn đã được tạo và các mẫu đã được thêm vào quy tắc {{repaired}} (hiện tại có tổng cộng {{total}} quy tắc)',
+  'pages.system.configCenter.notification.preset.scopesUpdated': 'Phạm vi nhận của quy tắc {{updated}} đã được hoàn thành theo mặc định (hiện có tổng cộng {{total}})',
+  'pages.system.configCenter.param.common_amount_decimal_places_desc': 'Hiển thị số tiền (số dòng, tổng tài liệu) và làm tròn số thập phân. 2 bit mặc định, phạm vi 0–4.',
+  'pages.system.configCenter.param.common_detail_basic_updated_at_enabled_desc':
+    'Sau khi mở, thời gian cập nhật sẽ được hiển thị trong phần “Thông tin cơ bản” của ngăn chi tiết tài liệu. Ẩn trường này khi đóng.',
+  'pages.system.configCenter.param.common_detail_full_chain_mode_desc':
+    'Nếu tắt, Tab liên kết đầy đủ sẽ không được hiển thị; nếu nó được bật, các tài liệu liên quan và thời gian tạo nút sẽ được hiển thị bình thường; nếu chỉ hiển thị tài liệu, nút tài liệu liên quan sẽ được hiển thị và thời gian tạo nút sẽ không được hiển thị.',
+  'pages.system.configCenter.param.common_detail_operation_log_enabled_desc':
+    'Sau khi mở, khối "Bản ghi hoạt động" sẽ được hiển thị trong ngăn chi tiết tài liệu. Ẩn khối này sau khi đóng.',
+  'pages.system.configCenter.param.common_price_decimal_places_desc':
+    'Nhập và hiển thị số chữ số thập phân cho đơn giá. 2 bit mặc định, phạm vi 0–4. Sau khi sửa đổi, các đầu vào đơn giá như đơn đặt hàng/yêu cầu mua hàng sẽ có hiệu lực ngay lập tức với độ chính xác này.',
+  'pages.system.configCenter.param.common_quantity_decimal_places_desc': 'Nhập và hiển thị số chữ số thập phân. 2 bit mặc định, phạm vi 0–4.',
+  'pages.system.configCenter.param.common_trial_run_mode_desc':
+    'Sau khi nó được ra mắt và bước vào giai đoạn vận hành thử nghiệm, một số hạn chế về xác minh và sửa đổi doanh nghiệp sẽ được nới lỏng hơn; các quy định cụ thể sẽ được tích hợp dần dần vào từng học phần. Xác minh nghiêm ngặt thông thường được khôi phục sau khi tắt máy.',
+  'pages.system.configCenter.param.reporting_default_production_worker_mode_desc':
+    'Khi biểu mẫu được mở để báo cáo công việc hoặc báo cáo nhanh, chiến lược mặc định cho trường nhân sự sản xuất là: người dùng hiện tại, công nhân được cử đến quy trình hoặc tự động (công việc được gửi trước, nếu không thì tệp quy trình mặc định là người dùng, sau đó là người dùng hiện tại). Nhân sự mặc định của tệp quy trình hiển thị dấu "Mặc định" trong danh sách thả xuống nhân sự.',
+  'pages.system.configCenter.param.reporting_default_reporting_quantity_mode_desc':
+    'Khi báo cáo công việc thông thường được mở, số lượng đủ tiêu chuẩn sẽ được đưa ra theo mặc định; số lượng không đủ tiêu chuẩn luôn là 0',
+  'pages.system.configCenter.param.work_order_last_operation_auto_inbound_mode_desc':
+    'Đối với mỗi báo cáo công việc được phê duyệt trong quy trình cuối cùng, một danh sách chờ sẽ được tạo dựa trên số lượng đủ tiêu chuẩn. Khi bật kiểm tra thành phẩm, lượng hàng tồn kho sẽ chỉ tăng sau khi vượt qua khâu kiểm tra và xác nhận nhập kho trong quản lý kho; "Thông báo nhập kho" chỉ tạo một lệnh nhập kho đang chờ xử lý và "lưu kho trực tiếp" sẽ cố gắng tự động xác nhận đơn hàng đó.',
+  'pages.system.configCenter.param.work_order_picking_confirm_allowed_functional_domains_desc':
+    'Khi "Chỉ kho có thể xác nhận việc lấy hàng" được bật, ngoài miền chức năng của kho, miền chức năng vai trò của việc lấy hàng cũng có thể được xác nhận. Miền chức năng được ưu tiên, mã vai trò là bổ sung.',
+  'pages.system.configCenter.param.work_order_picking_confirm_allowed_role_codes_desc':
+    'Bổ sung vai trò cho phép xác nhận chọn theo mã vai trò (kết hợp với miền chức năng). Khi tùy chỉnh mã, trước tiên nên đặt miền chức năng vai trò.',
+  'pages.system.configCenter.param.work_order_picking_confirm_warehouse_only_desc':
+    'Sau khi bật, chỉ các vai trò nội bộ có miền chức năng "Kho" (và được định cấu hình bằng mã vai trò bổ sung/miền chức năng) mới có thể xác nhận việc chọn sản xuất.',
+  'pages.system.configCenter.paramGroup.common_detail_drawer_desc':
+    'Kiểm soát việc hiển thị theo dõi liên kết đầy đủ, hồ sơ hoạt động và thời gian cập nhật thông tin cơ bản trong ngăn chi tiết tài liệu kinh doanh; tab hoặc trường tương ứng sẽ không còn được hiển thị sau khi đóng.',
+  'pages.system.configCenter.paramGroup.common_numeric_precision_desc':
+    'Theo mặc định, cài đặt số lượng, đơn giá và số lượng của mục phụ đều có 2 chữ số và phạm vi có thể định cấu hình là 0–4.',
+  'pages.system.configCenter.tenantInit.alertDesc':
+    'Khi tạo một tổ chức mới, nền tảng sẽ hoàn tất việc cài đặt/kích hoạt ứng dụng; Bên thuê có thể hoàn thiện ngôn ngữ, từ điển, thông số, quy tắc mã hóa, mẫu phê duyệt/thông báo/in tại đây và đồng bộ hóa menu của các ứng dụng đã cài đặt. Nó có thể được thực thi nhiều lần và dữ liệu hiện có sẽ được cập nhật đồng bộ.',
+  'pages.system.configCenter.tenantInit.itemDesc.application':
+    'Quét và cài đặt các ứng dụng cơ bản mặc định (sản xuất nhanh, R&D nhanh, tài chính nhẹ, văn phòng nhẹ, dữ liệu chính, v.v.)',
+  'pages.system.configCenter.tenantInit.itemDesc.data_dictionary': 'TIỀN TỆ, MÚI THỜI GIAN và từ điển hệ thống thuộc các ứng dụng đã cài đặt',
+  'pages.system.configCenter.tenantInit.itemDesc.kuaiai_faq_preset':
+    '15 câu hỏi và đáp án về vận hành nhà máy như lệnh sản xuất, báo cáo công việc, gia công, tồn kho, v.v.',
+  'pages.system.configCenter.tenantInit.itemDesc.menu_sync':
+    'Viết menu kê khai vào thanh bên theo ứng dụng đã cài đặt (ứng dụng chưa được cài đặt/bật, do quản trị viên nền tảng xử lý)',
+  'pages.system.configCenter.tenantInit.itemDesc.operation_preset':
+    'Nó đã được thay đổi thành tải theo ngành trong "Quản lý quy trình"; việc chọn tùy chọn này sẽ không tự động ghi dữ liệu. Vui lòng truy cập trang quy trình để chọn mặc định của ngành và quy trình.',
+  'pages.system.configCenter.tenantInit.itemDesc.variant_attribute_preset': 'Màu sắc, đặc điểm kỹ thuật, vật liệu, cấp độ, xử lý bề mặt, v.v.',
+  'pages.system.configCenter.tenantInit.requiredDesc':
+    'Không bao gồm đăng ký ứng dụng (do quản trị viên nền tảng xử lý): ngôn ngữ, từ điển hệ thống, tham số hệ thống, quy tắc mã hóa, cài đặt trước mẫu phê duyệt/nhắn tin/in và đồng bộ hóa menu cho các ứng dụng đã cài đặt.',
+  'pages.system.dataBackups.createSuccess':
+    'Tác vụ sao lưu đã được gửi và sẽ được thực thi bởi tác vụ nền (Taskiq). Vui lòng làm mới để xem trạng thái sau.',
+  'pages.system.dataBackups.fileNotOnServer':
+    'Tệp sao lưu không có trên máy chủ hiện tại. Vui lòng tải xuống trong cùng môi trường nơi tạo bản sao lưu hoặc tải tệp zip lên máy chủ này thông qua "Tải bản sao lưu lên" rồi khôi phục nó.',
+  'pages.system.dataBackups.restoreDataOnlyHint':
+    'Bản sao lưu này chỉ chứa các bảng dữ liệu và các tệp đính kèm sẽ không bị ghi đè hoặc khôi phục trong quá trình khôi phục; đường dẫn tệp trong bản ghi cơ sở dữ liệu vẫn được giữ lại. Nếu cần có tệp đính kèm, vui lòng sử dụng bản sao lưu "bảng dữ liệu + tệp" hoặc di chuyển các tệp tải lên riêng biệt.',
+  'pages.system.dataBackups.restoreSuccess':
+    'Tác vụ khôi phục đã được gửi và sẽ được thực thi bởi tác vụ nền (Taskiq). Vui lòng làm mới để xem trạng thái sau.',
+  'pages.system.datasets.tenantIsolationTip':
+    'Nguồn dữ liệu (cục bộ) mặc định của hệ thống: truy vấn tự động đưa vàorent_id và chỉ trả về dữ liệu đối tượng thuê hiện tại. Cơ sở dữ liệu của bên thứ ba không được đưa vào theo mặc định; nếu thư viện cũng có các cột đối tượng thuê và cần được cách ly, vui lòng đặt "tenant_isolation": true trong query_config đã lưu.',
+  'pages.system.inngest.intro':
+    'Logic không đồng bộ như phê duyệt, thông báo, tác vụ theo lịch trình và phát hiện ngoại lệ được thực hiện bởi hàng đợi Taskiq + PostgreSQL. Vui lòng chạy API, taskiq worker và bộ lập lịch taskiq cùng lúc (xem hướng dẫn triển khai phụ trợ).',
+  'pages.system.inngest.noIframe':
+    'Bảng điều khiển quy trình của bên thứ ba không còn được nhúng nữa; trạng thái nhiệm vụ có thể được xem thông qua bảng xếp hàng Taskiq trong giao diện doanh nghiệp, nhật ký và cơ sở dữ liệu.',
+  'pages.system.menus.customLayoutLoadDefaultConfirmContent':
+    'APP tùy chỉnh ở bên phải sẽ được ghi đè bằng cấu trúc menu ứng dụng hiện tại của hệ thống và bạn có thể tiếp tục điều chỉnh sau. Nó sẽ không có hiệu lực cho đến khi được lưu.',
+  'pages.system.menus.customLayoutStaleRefsRemoved': 'Tự động xóa {{count}} tham chiếu menu bị hỏng (menu bị tắt, xóa hoặc ứng dụng đã thay đổi)',
+  'pages.system.menus.restoreDefaultConfirm':
+    'Tất cả cấu trúc và tên menu sẽ được đồng bộ hóa lại từ tệp kê khai; trạng thái bật menu bạn đã điều chỉnh trên trang này sẽ được giữ lại. Nếu tên ứng dụng và cách sắp xếp đã được tùy chỉnh trong Trung tâm Ứng dụng, bạn cần khôi phục chúng trong Trung tâm Ứng dụng.',
+  'pages.system.printTemplatesDesign.cleanupLegacyDetailTextsConfirmDesc':
+    'Tất cả các hộp văn bản items.0.xxx / Operations.0.xxx (tổng cộng{{count}}) ở dạng "Mục 1" trên bản vẽ sẽ bị xóa mà không ảnh hưởng đến toàn bộ lịch trình. Sau khi xóa, vui lòng nhấp lại vào "Danh sách chi tiết" từ bên phải để chèn bảng.',
+  'pages.system.printTemplatesDesign.importConfirmDesc':
+    'Liên kết loại tài liệu và canvas hiện tại (không bao gồm UUID) sẽ bị ghi đè bằng cài đặt bố cục và trang trong tệp. Sau khi nhập, vui lòng nhấp vào "Lưu mẫu" để ghi vào cơ sở dữ liệu.',
+  'pages.system.printTemplatesDesign.importPortableTooltip':
+    'Chỉ hỗ trợ JSON riveredge-print-template-design được xuất trong trình thiết kế; không thay thế nó bằng việc xuất toàn bộ trang danh sách',
+  'pages.system.printTemplatesDesign.lineColumnsHint':
+    'Cấu hình hiển thị, thứ tự và chiều cao hàng của các cột chi tiết tại đây; vui lòng nhấp vào "Áp dụng cho Artboard" trước khi lưu mẫu. "Column Style" trong thuộc tính bên phải có thể đặt căn chỉnh cột theo cột. Sau khi sắp xếp, việc căn chỉnh sẽ tự động theo các trường cột.',
+  'pages.system.printTemplatesDesign.lineColumnsVisibilityOrderHint':
+    'Chọn để hiển thị cột này trong bảng in; di chuyển lên/xuống để điều chỉnh thứ tự cột (từ trái qua phải). Giữ ít nhất một cột.',
+  'pages.system.printTemplatesDesign.rowHeightAutoHint':
+    'Chiều cao dòng tối thiểu (đơn vị mm) có thể được đặt riêng cho tiêu đề bảng và thân bảng; khi có nhiều dòng văn bản thì chiều cao của dòng vẫn tăng theo nội dung.',
+  'pages.system.printTemplatesDesign.rowHeightFixedHint':
+    'Chiều cao hàng cố định (đơn vị: mm) có thể được đặt tương ứng cho tiêu đề bảng và thân bảng; chúng phù hợp với chiều cao tối thiểu của các ô trong bảng mẫu và phù hợp với các chi tiết hàng đơn.',
+  'pages.system.printTemplatesDesign.variableHint':
+    'Mẹo: Bấm vào một trường để thêm trường đó vào bản vẽ; các mục được đánh dấu bằng "Danh sách chi tiết" sẽ được chèn vào toàn bộ bảng (được liên kết với các mục/thao tác dữ liệu) và không cần phải thêm chúng theo từng cột.',
+  'pages.system.roles.dataGrantHint':
+    'Chỉ các tài nguyên doanh nghiệp đã được kiểm tra trong "Quyền chức năng" mới được hiển thị. Phạm vi dữ liệu chỉ có hiệu lực nếu bạn có thể truy cập chức năng này; bạn có thể sử dụng Tất cả, theo APP, theo mô-đun hoặc tìm kiếm để lọc trong danh sách hiện tại. Sau khi kiểm tra, hãy đặt phạm vi theo đợt và lưu nó.',
+  'pages.system.roles.dataGrantNeedFunction': 'Vui lòng kiểm tra ít nhất một mục trong "Quyền chức năng" trước khi định cấu hình phạm vi dữ liệu.',
+  'pages.system.roles.dataSaveEmpty':
+    'Vui lòng kiểm tra tài nguyên trước và đặt phạm vi lô thành "Tất cả/Bộ phận này/Tùy chỉnh" trước khi lưu hoặc sửa đổi phạm vi một hàng trước khi lưu.',
+  'pages.system.roles.fieldGrantHint':
+    'Chỉ các chính sách trường (văn bản rõ ràng/được giải mẫn cảm/ẩn) trong các tài nguyên được ủy quyền của "Quyền chức năng" mới được hiển thị. Bạn có thể lọc danh sách hiện tại theo Tất cả, theo APP, theo mô-đun hoặc tìm kiếm; sau khi kiểm tra thiết lập chế độ hiển thị theo đợt và lưu lại.',
+  'pages.system.roles.fieldGrantNeedFunction':
+    'Trước tiên, vui lòng kiểm tra ít nhất một mục trong "Quyền chức năng", sau đó định cấu hình phương thức hiển thị trường',
+  'pages.system.roles.functionGrantHint':
+    'Quyền chức năng kiểm soát các menu và thao tác có thể truy cập. Bạn có thể chọn tất cả, lọc theo APP (cấp 1), mô-đun (cấp 2) hoặc tìm kiếm (cấp 3 trở lên); thao tác phím tắt chỉ áp dụng cho phạm vi hiển thị hiện tại.',
+  'pages.system.roles.orphanPermissionsTooltip':
+    'Các quyền này đã tồn tại trong tổ chức, nhưng cây menu hiện tại không có mã_quyền tương ứng nào được kết nối. Các nguồn chủ yếu là: tuyên bố quyền của từng bảng kê khai ứng dụng, phạm vi dữ liệu (*:data:*) bắt nguồn từ "chế độ xem" hoặc dư lượng đồng bộ hóa lịch sử/phiên bản cũ. Để giảm bớt điều này: Hãy hoàn thành mục menu quyền trong tệp kê khai ứng dụng hoặc xóa mã không sử dụng khỏi tệp kê khai; ứng dụng giữ chỗ cần khai báo quyền truy cập phù hợp với tệp kê khai trong menu gốc.',
+  'pages.system.siteSettings.enableLaunchWizardTooltip':
+    'Sau khi đóng, thanh bên sẽ ẩn menu liên quan đến trình hướng dẫn trực tuyến và không thể truy cập trực tiếp vào trình hướng dẫn trực tuyến và trang tiến trình trực tuyến.',
+  'pages.system.siteSettings.enableSystemDashboardTooltip':
+    'Sau khi đóng, sidebar sẽ ẩn đi “dashboard” (bàn làm việc, bảng điều khiển thao tác); mặc định đăng nhập và logo ứng dụng sẽ chuyển đến trung tâm ứng dụng.',
+  'pages.system.siteSettings.integrationsDeepseekAiHint':
+    'Kiểm soát xem hộp thoại có gọi các công cụ tài liệu kinh doanh, kho kiến ​​thức RAG và mô tả hệ thống dành riêng cho doanh nghiệp hay không.',
+  'pages.system.siteSettings.integrationsDeepseekCustomPromptPlaceholder':
+    'Ví dụ: Công ty chúng tôi chủ yếu sử dụng các module sản xuất nhanh; Quá trình gia công đòi hỏi phải lập đơn hàng gia công trước tiên...',
+  'pages.system.siteSettings.integrationsDeepseekHint':
+    'Sau khi định cấu hình Khóa API DeepSeek, trợ lý KU-AI thanh trên cùng sẽ gọi mô hình lớn DeepSeek V4 thông qua proxy bảo mật phụ trợ.',
+  'pages.system.siteSettings.integrationsDeepseekOcrApiKeyTooltip':
+    'Khóa API khớp với điểm cuối OCR; để trống để sử dụng Khóa API DeepSeek ở trên (chỉ áp dụng khi cùng một nhà cung cấp dịch vụ)',
+  'pages.system.siteSettings.integrationsDeepseekOcrHint':
+    'API hội thoại DeepSeek không hỗ trợ nhập hình ảnh. Bản ghi AI của đơn đặt hàng cần định cấu hình điểm cuối trực quan OCR hỗ trợ image_url tại đây; văn bản được nhận dạng sau đó sẽ được cấu trúc theo mô hình DeepSeek ở trên. Ví dụ: URL cơ sở dòng chảy Silicon https://api.siliconflow.cn/v1, mô hình deepseek-ai/DeepSeek-OCR.',
+
   ...systemDictionaryVi,
   ...presetEntityVi,
   ...codeRulePageVi,

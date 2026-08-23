@@ -13,7 +13,7 @@ import { useNavigate } from 'react-router-dom';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormItem, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Col, Descriptions, Form, InputNumber, Modal, Row, Table, Tag, Typography } from 'antd';
-import { EyeOutlined, CheckCircleOutlined, DeleteOutlined, PrinterOutlined } from '@ant-design/icons';
+import { EyeOutlined, CheckCircleOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
@@ -660,19 +660,13 @@ const MaterialReturnsPage: React.FC = () => {
               return { data: [], success: false, total: 0 };
             }
           }}
-          toolBarActionsAfterBatch={[
-            <Button
-              key="material-return-toolbar-print"
-              icon={<PrinterOutlined />}
-              disabled={!canToolbarPrint}
-              onClick={() => {
-                const row = selectedMaterialReturnForBatch[0];
-                if (row) handlePrint(row);
-              }}
-            >
-              {t('components.uniAction.print')}
-            </Button>,
-          ]}
+          showPrintButton
+          printButtonDisabled={!canToolbarPrint}
+          printButtonText={t('components.uniAction.print')}
+          onPrint={() => {
+            const row = selectedMaterialReturnForBatch[0];
+            if (row) handlePrint(row);
+          }}
         />
       </ListPageTemplate>
 

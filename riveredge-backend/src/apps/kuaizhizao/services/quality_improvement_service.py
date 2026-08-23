@@ -644,6 +644,7 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
         from apps.kuaizhizao.services.document_action_policy.oqc_inspection import (
             assert_oqc_inspection_capability,
         )
+        from apps.kuaizhizao.services.inspection_quantity_utils import assert_inspection_quantities_balanced
         from apps.kuaizhizao.services.quality_service import (
             _apply_template_conduct_to_payload,
             _assert_unqualified_qty_when_steps_fail,
@@ -659,16 +660,21 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
 
         user_info = await self.get_user_info(user_id)
         conduct_data = payload.model_dump(exclude_unset=True)
+        qualified_quantity, unqualified_quantity = assert_inspection_quantities_balanced(
+            payload.qualified_quantity,
+            payload.unqualified_quantity,
+            row.inspection_quantity,
+        )
         _assert_unqualified_qty_when_steps_fail(
-            row, "other_checks", conduct_data, payload.unqualified_quantity
+            row, "other_checks", conduct_data, unqualified_quantity
         )
         inspector_id = _resolve_conduct_inspector_id(conduct_data, user_id)
         inspector_info = await self.get_user_info(inspector_id) if inspector_id != user_id else user_info
         conduct_extra = _apply_template_conduct_to_payload(row, "other_checks", conduct_data)
         row.inspection_result = payload.inspection_result
         row.quality_status = payload.quality_status
-        row.qualified_quantity = payload.qualified_quantity
-        row.unqualified_quantity = payload.unqualified_quantity
+        row.qualified_quantity = qualified_quantity
+        row.unqualified_quantity = unqualified_quantity
         row.release_decision = payload.release_decision
         row.release_note = payload.release_note
         row.notes = payload.notes

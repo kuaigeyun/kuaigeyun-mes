@@ -91,6 +91,7 @@ from .station_shift_handover import StationShiftHandover
 
 # 采购管理模块
 from .purchase_order import PurchaseOrder, PurchaseOrderItem
+from .purchase_arrival_delay_report import PurchaseArrivalDelayReport
 from .purchase_order_change_order import PurchaseOrderChangeOrder, PurchaseOrderChangeItem
 from .purchase_requisition import PurchaseRequisition, PurchaseRequisitionItem
 from .purchase_inquiry import (

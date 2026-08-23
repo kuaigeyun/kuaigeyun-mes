@@ -120,4 +120,8 @@ export async function previewPurchaseOrderChangeImpact(id: number): Promise<Chan
   return apiRequest(`/apps/kuaizhizao/purchase-order-change-orders/${id}/preview-impact`, { method: 'POST' });
 }
 
+export async function applyPurchaseOrderChange(id: number): Promise<PurchaseOrderChange> {
+  return apiRequest(`/apps/kuaizhizao/purchase-order-change-orders/${id}/apply`, { method: 'POST' });
+}
+
 export type { ChangeImpactPreview, OrderChangeItem };

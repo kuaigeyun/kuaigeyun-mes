@@ -20,7 +20,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormItem, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Form as AntForm, InputNumber, Input, Row, Col, Select, Typography, Descriptions } from 'antd';
-import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined, ThunderboltOutlined, ShoppingOutlined, PrinterOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined, ThunderboltOutlined, ShoppingOutlined } from '@ant-design/icons';
 import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
@@ -905,19 +905,13 @@ const OtherInboundPage: React.FC = () => {
               return { data: [], success: false, total: 0 };
             }
           }}
-          toolBarActionsAfterBatch={[
-            <Button
-              key="other-inbound-toolbar-print"
-              icon={<PrinterOutlined />}
-              disabled={!canToolbarPrint}
-              onClick={() => {
-                const row = selectedOtherInboundForBatch[0];
-                if (row) handlePrint(row);
-              }}
-            >
-              {t('components.uniAction.print')}
-            </Button>,
-          ]}
+          showPrintButton
+          printButtonDisabled={!canToolbarPrint}
+          printButtonText={t('components.uniAction.print')}
+          onPrint={() => {
+            const row = selectedOtherInboundForBatch[0];
+            if (row) handlePrint(row);
+          }}
         />
       </ListPageTemplate>
 

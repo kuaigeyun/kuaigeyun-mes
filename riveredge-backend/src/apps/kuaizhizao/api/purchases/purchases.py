@@ -28,6 +28,7 @@ from apps.kuaizhizao.schemas.purchase import (
     PriceComparisonResponse, LandingCostAllocationRequest, PurchaseOrderChangeResponse,
     PurchaseReceiptPullCandidateListResponse,
 )
+from apps.kuaizhizao.schemas.partner_material_price_trend import PartnerMaterialPriceTrendResponse
 from apps.kuaizhizao.services.purchase_service import PurchaseService
 from apps.kuaizhizao.services.purchase_inquiry_service import PurchaseInquiryService
 from apps.kuaizhizao.services.purchase_cost_service import PurchaseCostService
@@ -165,7 +166,11 @@ async def get_purchase_order_statistics(
         logger.warning(f"purchase-statistics in_progress: {e}"); in_progress_count = 0
 
     try:
-        overdue_count = await base.filter(delivery_date__lt=today, status__in=list(audited)).exclude(review_status__in=rejected).count()
+        from apps.kuaizhizao.services.purchase_arrival_warning_service import (
+            PurchaseArrivalWarningService,
+        )
+
+        overdue_count = await PurchaseArrivalWarningService().count_overdue_open_lines(tenant_id)
     except Exception as e:
         logger.warning(f"purchase-statistics overdue: {e}"); overdue_count = 0
 
@@ -236,6 +241,28 @@ async def get_purchase_order_statistics(
         },
     }
 
+
+
+@router.get(
+    "/purchase-orders/price-trend",
+    response_model=PartnerMaterialPriceTrendResponse,
+    summary="Purchase order line price trend by supplier and material",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:purchase-order-price-trend:read"))],
+)
+async def get_purchase_order_price_trend(
+    material_id: int = Query(..., description="物料ID"),
+    supplier_id: int = Query(..., description="供应商ID"),
+    limit: int = Query(10, ge=1, le=50, description="返回条数"),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    from apps.kuaizhizao.services.partner_material_price_trend_service import PartnerMaterialPriceTrendService
+
+    return await PartnerMaterialPriceTrendService().get_purchase_price_trend(
+        tenant_id=tenant_id,
+        material_id=material_id,
+        supplier_id=supplier_id,
+        limit=limit,
+    )
 
 
 @router.get(
@@ -847,7 +874,12 @@ async def print_purchase_order(
         return HTMLResponse(content=result.get("content", ""), status_code=200)
     return JSONResponse(content=result, status_code=200)
 
-@router.get("/material-price-history/{material_id}", response_model=MaterialPriceHistoryResponse, summary="Material historical purchase price")
+@router.get(
+    "/material-price-history/{material_id}",
+    response_model=MaterialPriceHistoryResponse,
+    summary="Material historical purchase price",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:purchase-order-price-trend:read"))],
+)
 async def get_material_price_history(
     material_id: int = Path(..., description="物料ID"),
     tenant_id: int = Depends(get_current_tenant)

@@ -14,7 +14,7 @@ import { rowActionKind } from '../../../../../components/uni-action';
 
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { inboundOutsourceEntryPath } from '../../warehouse-management/inbound/inboundPaths';
 import { outboundOutsourceEntryPath } from '../../warehouse-management/outbound/outboundPaths';
 import {
@@ -244,6 +244,8 @@ const OWO_STAT_SPARK_3 = [3, 4, 5, 6, 5, 7, 8];
 
 export const OutsourceWorkOrdersTable: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const highlightOpenedRef = useRef(false);
   const { t } = useTranslation();
   const pushToInboundAction = resolveKuaizhizaoDocumentAction(t, 'inbound.pull_from_outsource_work_order');
   const pushToOutboundAction = resolveKuaizhizaoDocumentAction(t, 'outbound.pull_from_outsource_work_order');
@@ -888,6 +890,28 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       messageApi.error(t('app.kuaizhizao.outsourceWorkOrder.fetchDetailFailed'));
     }
   };
+
+  useEffect(() => {
+    const highlightRaw = searchParams.get('highlight')?.trim();
+    if (!highlightRaw) {
+      highlightOpenedRef.current = false;
+      return;
+    }
+    if (highlightOpenedRef.current) {
+      return;
+    }
+    highlightOpenedRef.current = true;
+    void (async () => {
+      try {
+        const id = Number(highlightRaw);
+        if (Number.isFinite(id) && id > 0) {
+          await handleDetail({ id });
+        }
+      } catch {
+        messageApi.error(t('app.kuaizhizao.outsourceWorkOrder.fetchDetailFailed'));
+      }
+    })();
+  }, [searchParams, messageApi, t]);
 
   /**
    * 处理提交表单

@@ -24,6 +24,7 @@ import {
 } from '../../../services/production';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
+import { translateWorkOrderLifecycleStatus } from '../../../utils/workOrderLifecycle';
 import type { OutsourceReceiptLine } from '../../../components/OutsourceReceiptFormContent';
 import type { InboundOutsourcePullType } from './inboundCreateConfig';
 import { inboundReceiptTypeLabel } from './inboundHubTypes';
@@ -732,7 +733,7 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
                   </Col>
                   <Col xs={24} sm={12} lg={6}>
                     <Form.Item label={t('app.kuaizhizao.warehouseInbound.field.workOrderStatus')}>
-                      <ReadOnlyFormValue value={workOrder.status ? String(workOrder.status) : undefined} />
+                      <ReadOnlyFormValue value={translateWorkOrderLifecycleStatus(t, workOrder.status)} />
                     </Form.Item>
                   </Col>
                   <Col xs={24} sm={12} lg={6}>

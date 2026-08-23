@@ -204,9 +204,9 @@ REGISTRY_PARAM_CONTROL_META: Dict[str, Dict[str, Any]] = {
             },
         ],
     },
-    "parameters.common.quantity_decimal_places": {"type": "number", "min": 0, "max": 2},
+    "parameters.common.quantity_decimal_places": {"type": "number", "min": 0, "max": 4},
     "parameters.common.price_decimal_places": {"type": "number", "min": 0, "max": 4},
-    "parameters.common.amount_decimal_places": {"type": "number", "min": 0, "max": 2},
+    "parameters.common.amount_decimal_places": {"type": "number", "min": 0, "max": 4},
     "parameters.purchase.tolerance_percentage": {"type": "number", "min": 0, "max": 100},
     "parameters.purchase.price_fluctuation_limit_percent": {"type": "number", "min": 0, "max": 100},
     "parameters.work_order.material_shortage_block_level": {"type": "number", "min": 0, "max": 3},
@@ -294,6 +294,7 @@ REGISTRY_PARAM_CONTROL_META: Dict[str, Dict[str, Any]] = {
 PROCESS_KEYS = {
     "parameters.procurement.require_purchase_requisition",
     "parameters.procurement.require_supplier_qualification",
+    "parameters.procurement.require_purchase_order_change_confirm",
     "parameters.work_order.picking_issue_strategy",
     "parameters.work_order.picking_confirm_warehouse_only",
     "parameters.work_order.picking_confirm_allowed_role_codes",
@@ -364,6 +365,7 @@ PARAMETER_KEYS = {
     "parameters.sales.contract_auto_close_on_full_release",
     "parameters.sales.contract_milestone_required",
     "parameters.sales.sales_review",
+    "parameters.procurement.arrival_imminent_days",
     "parameters.automation.push_default_mode",
 }
 
@@ -378,6 +380,8 @@ IMPLEMENTED_PARAMETER_KEYS = {
     "parameters.common.amount_decimal_places",
     "parameters.procurement.require_purchase_requisition",
     "parameters.procurement.require_supplier_qualification",
+    "parameters.procurement.require_purchase_order_change_confirm",
+    "parameters.procurement.arrival_imminent_days",
     "parameters.work_order.picking_issue_strategy",
     "parameters.work_order.picking_confirm_warehouse_only",
     "parameters.work_order.picking_confirm_allowed_role_codes",
@@ -614,6 +618,8 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
     "procurement": {
         "require_purchase_requisition": False,
         "require_supplier_qualification": False,
+        "require_purchase_order_change_confirm": False,
+        "arrival_imminent_days": 3,
     },
     "planning": {
         "auto_push_sales_to_computation_on_approve": False,
@@ -911,9 +917,9 @@ class BusinessConfigService:
         return max(0, min(max_places, places))
 
     async def get_quantity_decimal_places(self, tenant_id: int) -> int:
-        """数量小数位（默认 2，上限 2，对齐主流数量 Decimal 字段）。"""
+        """数量小数位（默认 2，上限 4）。"""
         return await self._get_decimal_places_param(
-            tenant_id, "quantity_decimal_places", default=2, max_places=2
+            tenant_id, "quantity_decimal_places", default=2, max_places=4
         )
 
     async def get_price_decimal_places(self, tenant_id: int) -> int:
@@ -923,9 +929,9 @@ class BusinessConfigService:
         )
 
     async def get_amount_decimal_places(self, tenant_id: int) -> int:
-        """金额小数位（默认 2，上限 2，对齐金额 Decimal 字段）。"""
+        """金额小数位（默认 2，上限 4）。"""
         return await self._get_decimal_places_param(
-            tenant_id, "amount_decimal_places", default=2, max_places=2
+            tenant_id, "amount_decimal_places", default=2, max_places=4
         )
 
     async def allow_production_without_material(self, tenant_id: int) -> bool:

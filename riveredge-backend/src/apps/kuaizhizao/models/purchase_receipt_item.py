@@ -31,13 +31,13 @@ class PurchaseReceiptItem(BaseModel):
     material_unit = fields.CharField(max_length=20, description="物料单位")
 
     # 入库数量和价格
-    receipt_quantity = fields.DecimalField(max_digits=10, decimal_places=2, description="入库数量")
-    unit_price = fields.DecimalField(max_digits=10, decimal_places=2, description="单价")
-    total_amount = fields.DecimalField(max_digits=12, decimal_places=2, description="金额")
+    receipt_quantity = fields.DecimalField(max_digits=12, decimal_places=4, description="入库数量")
+    unit_price = fields.DecimalField(max_digits=12, decimal_places=4, description="单价")
+    total_amount = fields.DecimalField(max_digits=14, decimal_places=4, description="金额")
 
     # 质量信息
-    qualified_quantity = fields.DecimalField(max_digits=10, decimal_places=2, description="合格数量")
-    unqualified_quantity = fields.DecimalField(max_digits=10, decimal_places=2, description="不合格数量")
+    qualified_quantity = fields.DecimalField(max_digits=12, decimal_places=4, description="合格数量")
+    unqualified_quantity = fields.DecimalField(max_digits=12, decimal_places=4, description="不合格数量")
     quality_status = fields.CharField(max_length=20, default="合格", description="质量状态")
 
     # 行级入库仓库（可与表头不同；确认入库过账时优先于表头）

@@ -29,9 +29,9 @@ class Payment(BaseModel):
     supplier_name = fields.CharField(max_length=200, description="供应商名称")
 
     # 金额
-    total_amount = fields.DecimalField(max_digits=14, decimal_places=2, description="付款总额")
-    settled_amount = fields.DecimalField(max_digits=14, decimal_places=2, default=0, description="已核销金额")
-    unsettled_amount = fields.DecimalField(max_digits=14, decimal_places=2, description="待核销金额")
+    total_amount = fields.DecimalField(max_digits=16, decimal_places=4, description="付款总额")
+    settled_amount = fields.DecimalField(max_digits=16, decimal_places=4, default=0, description="已核销金额")
+    unsettled_amount = fields.DecimalField(max_digits=16, decimal_places=4, description="待核销金额")
 
     payment_date = fields.DateField(description="付款日期")
     payment_method = fields.CharField(max_length=50, description="付款方式 (银行转账/承兑汇票/现金等)")

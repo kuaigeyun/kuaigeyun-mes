@@ -34,7 +34,7 @@ class AfterSalesTicket(BaseModel):
     content = fields.TextField(description="问题描述")
     resolution = fields.TextField(null=True, description="处理结论")
 
-    claim_amount = fields.DecimalField(max_digits=14, decimal_places=2, null=True, description="索赔金额合计")
+    claim_amount = fields.DecimalField(max_digits=16, decimal_places=4, null=True, description="索赔金额合计")
 
     registered_at = fields.DatetimeField(description="登记时间")
     closed_at = fields.DatetimeField(null=True, description="关闭时间")

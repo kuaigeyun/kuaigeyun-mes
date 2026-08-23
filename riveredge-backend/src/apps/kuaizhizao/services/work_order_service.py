@@ -669,11 +669,17 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         self,
         tenant_id: int,
         work_orders: List[WorkOrder],
+        *,
+        process_inspection_audit_required: Optional[bool] = None,
     ) -> Dict[int, float]:
         """
         批量计算工单完工进度（0-100）：
         以最后一道工序的「有效合格 / 工单计划数量」。
         方案质检用过程检验放行数，未检完不得显示 100%。
+
+        Args:
+            process_inspection_audit_required: 「过程检验需审核」开关。调用方若已解析
+                （如列表接口批量取审核开关）则传入，避免本方法再查一次。
         """
         wo_by_id = {int(wo.id): wo for wo in work_orders if wo.id is not None}
         wo_ids = list(wo_by_id.keys())
@@ -728,6 +734,13 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 return 100.0
             return round(pct, 1)
 
+        # 审核开关同租户内恒定：循环外解析一次，否则每张过程检验单都会重查审核绑定
+        audit_required = process_inspection_audit_required
+        if audit_required is None:
+            audit_required = await BusinessConfigService().check_audit_required(
+                tenant_id, "process_inspection"
+            )
+
         result: Dict[int, float] = {}
         for wo_id, wo in wo_by_id.items():
             planned = float(wo.quantity or 0)
@@ -744,6 +757,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 last_op,
                 policy_cache=policy_cache,
                 inspections_by_op=inspections_by_wo_master.get(wo_id),
+                audit_required=audit_required,
             )
             result[wo_id] = _clamp((float(effective) / planned) * 100.0)
         return result
@@ -2427,22 +2441,10 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         order_clause = order_by if order_by else "-created_at"
         work_orders = await query.offset(skip).limit(limit).order_by(order_clause).all()
 
-        from apps.kuaizhizao.services.work_order_tree_service import (
-            WorkOrderTreeService,
-            is_split_child_code,
-        )
+        from apps.kuaizhizao.services.work_order_tree_service import WorkOrderTreeService
 
-        orphan_split_ids = [
-            wo.id
-            for wo in work_orders
-            if wo.id is not None
-            and wo.parent_work_order_id is None
-            and is_split_child_code(wo.code)
-        ]
-        if orphan_split_ids:
-            tree_svc = WorkOrderTreeService()
-            if await tree_svc.backfill_split_parent_links(tenant_id, child_ids=orphan_split_ids):
-                work_orders = await query.offset(skip).limit(limit).order_by(order_clause).all()
+        # 拆分工单的 parent_work_order_id 由拆分写入路径保证，历史数据由迁移 320 回填；
+        # 读接口不再做补写与整页重查。
 
         # 制造模式 / 规格：定义在「产品物料」主数据；工单通过 product_id 关联
         product_ids = list({wo.product_id for wo in work_orders if wo.product_id})
@@ -2600,16 +2602,24 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             tenant_id,
             [int(i) for i in wo_ids_for_cap],
         )
+        # 一次取齐本次响应需要的两个审核开关：工单（capabilities/enrich）与过程检验
+        # （完工进度按方案质检口径）。分开取会让后者退化成逐张检验单查询。
+        audit_required_map = await BusinessConfigService().get_audit_required_map(
+            tenant_id, ["work_order", "process_inspection"]
+        )
+        audit_required = bool(audit_required_map.get("work_order", False))
+
         push_progress_by_wo: Dict[int, float] = {}
         if include_downstream_push_progress and work_orders:
             push_progress_by_wo = await self._batch_work_order_downstream_push_progress(
                 tenant_id,
                 list(work_orders),
+                process_inspection_audit_required=bool(
+                    audit_required_map.get("process_inspection", False)
+                ),
             )
 
-        from core.services.approval.audit_record_enricher import audit_enabled_for, enrich_items
-
-        audit_required = await audit_enabled_for(tenant_id, "work_order")
+        from core.services.approval.audit_record_enricher import enrich_items
 
         for wo in work_orders:
             try:
@@ -4091,6 +4101,35 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 created_by=released_by,
             )
 
+            from apps.kuaizhizao.services.kuaizhizao_business_notification import (
+                ACTION_RELEASED,
+                DOC_WORK_ORDER,
+                dispatch_kuaizhizao_notification,
+            )
+
+            try:
+                await dispatch_kuaizhizao_notification(
+                    tenant_id,
+                    trigger_document=DOC_WORK_ORDER,
+                    trigger_action=ACTION_RELEASED,
+                    variables={
+                        "work_order_code": work_order.code or str(work_order_id),
+                        "product_name": work_order.product_name or "—",
+                        "quantity": str(work_order.quantity or ""),
+                        "planned_start_date": str(work_order.planned_start_date or ""),
+                        "detail_path": f"/apps/kuaizhizao/production-execution/work-orders?highlight={work_order_id}",
+                        "work_order_id": str(work_order_id),
+                    },
+                    context={"creator_user_id": work_order.created_by},
+                )
+            except Exception as exc:
+                logger.warning(
+                    "工单下达消息提醒失败 tenant={} wo={}: {}",
+                    tenant_id,
+                    work_order_id,
+                    exc,
+                )
+
             return await self.get_work_order_by_id(tenant_id, work_order_id)
 
     async def _ensure_planned_outsource_drafts(
@@ -4757,16 +4796,6 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             return False
         return bool(created)
 
-    async def ensure_split_children_have_operations(
-        self,
-        tenant_id: int,
-        split_rows: Iterable[WorkOrder],
-    ) -> None:
-        for row in split_rows:
-            if row.id is None or row.parent_work_order_id is None:
-                continue
-            await self.backfill_split_child_operations(tenant_id, row)
-
     async def _provision_split_work_order_operations(
         self,
         tenant_id: int,
@@ -5130,6 +5159,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             outsource_rows,
             policy_cache,
             inspections_by_op,
+            process_inspection_audit_required,
         ) = await asyncio.gather(
             batch_get_operation_defect_types_via_table(master_op_ids),
             _batch_sop_for_master_operations(
@@ -5145,6 +5175,8 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             ).exclude(status="cancelled").all(),
             build_operation_policy_cache(tenant_id, op_ids),
             load_process_inspections_by_operation(tenant_id, work_order_id),
+            # 审核开关同租户内恒定：与其它批量取数一并解析，避免逐工序逐检验单重查
+            BusinessConfigService().check_audit_required(tenant_id, "process_inspection"),
         )
         outsource_by_op_id = {row.work_order_operation_id: row for row in outsource_rows}
 
@@ -5210,6 +5242,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 op,
                 policy_cache=policy_cache,
                 inspections_by_op=inspections_by_op,
+                audit_required=process_inspection_audit_required,
             )
             qc_pending = Decimal("0")
             if mode == "plan":
@@ -6305,18 +6338,20 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         qty = float(owo.quantity or 0)
         if qty <= 0:
             return 0.0
-        return round(float(owo.received_quantity or 0) / qty * 100, 2)
+        qualified = float(owo.qualified_quantity or 0)
+        return round(qualified / qty * 100, 2)
 
     @staticmethod
     def _build_kitting_related_outsource_work_order_summary(
         owo: OutsourceWorkOrder,
     ) -> KittingRelatedOutsourceWorkOrderSummary:
+        qualified = Decimal(str(owo.qualified_quantity or 0))
         return KittingRelatedOutsourceWorkOrderSummary(
             outsource_work_order_id=int(owo.id),
             outsource_work_order_code=owo.code or str(owo.id),
             status=str(owo.status or ""),
             quantity=Decimal(str(owo.quantity or 0)),
-            received_quantity=Decimal(str(owo.received_quantity or 0)),
+            received_quantity=qualified,
             progress_percent=WorkOrderService._outsource_work_order_progress_percent(owo),
             supplier_name=owo.supplier_name,
             planned_end_date=owo.planned_end_date,
@@ -6880,21 +6915,17 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     wo_supply = effective
 
             related_outsource: Optional[KittingRelatedOutsourceWorkOrderSummary] = None
-            owo_supply = Decimal("0")
             if source_type == SOURCE_TYPE_OUTSOURCE:
                 child_owo = component_owos.get(int(req.component_id))
                 if child_owo:
                     related_outsource = self._build_kitting_related_outsource_work_order_summary(
                         child_owo
                     )
-                    # 委外已收货量计入齐套（草稿/未收货为 0，不得虚高齐套率）
-                    owo_supply = Decimal(str(child_owo.received_quantity or 0))
 
-            # 3.4 齐套可用：正式发料 + 线边 + 主仓 + 半成品有效完工 + 委外已收货
-            # work_order_supply_quantity 仅自制/可配置有效完工：委外已收货在主仓，须走线边备料，
-            # 不得计入「线边就绪」否则收货后永远不下推配料。
+            # 3.4 齐套可用：正式发料 + 线边 + 主仓 + 自制有效完工
+            # 委外合格品已入主仓/线边库存，由 locations 汇总计入；不得再叠加 received_quantity
             total_available = (
-                picked_qty + line_side_qty + main_warehouse_qty + wo_supply + owo_supply
+                picked_qty + line_side_qty + main_warehouse_qty + wo_supply
             )
             shortage_qty = required_qty - total_available
             if shortage_qty < 0:

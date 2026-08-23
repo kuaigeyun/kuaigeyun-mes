@@ -35,6 +35,7 @@ from .demand_computations.demand_computations import router as demand_computatio
 from .sales_orders.sales_orders import router as sales_order_router
 from .sales_order_changes.sales_order_changes import router as sales_order_change_router
 from .purchase_order_changes.purchase_order_changes import router as purchase_order_change_router
+from .purchase_arrival.purchase_arrival import router as purchase_arrival_router
 from .quotations.quotations import router as quotation_router
 from .sales_reviews.sales_reviews import router as sales_review_router
 from .sales_contracts.sales_contracts import router as sales_contract_router
@@ -106,6 +107,7 @@ router = APIRouter(tags=["App - Kuaige Zhizao - MES"])
 router.include_router(sales_order_router)  # 销售订单管理（独立API）- 优先匹配
 router.include_router(sales_order_change_router)  # 销售变更单
 router.include_router(purchase_order_change_router)  # 采购变更单
+router.include_router(purchase_arrival_router)  # 采购到货预警与延期填报
 router.include_router(quotation_router)  # 报价单管理
 router.include_router(sales_review_router)  # 订单评审
 router.include_router(sales_contract_terms_router)  # 条款项/条款组（须在 /{contract_id} 之前）

@@ -41,7 +41,7 @@ class MaterialReturn(BaseModel):
     review_remarks = fields.TextField(null=True, description="审核备注")
 
     status = fields.CharField(max_length=20, default="待归还", description="还料状态")
-    total_quantity = fields.DecimalField(max_digits=10, decimal_places=2, default=0, description="总归还数量")
+    total_quantity = fields.DecimalField(max_digits=12, decimal_places=4, default=0, description="总归还数量")
 
     notes = fields.TextField(null=True, description="备注")
     attachments = fields.JSONField(null=True, description="附件列表")

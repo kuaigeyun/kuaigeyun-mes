@@ -167,6 +167,10 @@ class DemandComputationReadinessResponse(BaseModel):
     gaps: List[DemandComputationReadinessGapItem] = Field(default_factory=list)
     material_count: int = 0
     gap_count: int = 0
+    blocking_count: int = Field(0, description="不可跳过的 blocking 缺失项数量")
+    scope_validation_errors: Optional[List[Dict[str, Any]]] = Field(
+        None, description="BOM 展开范围内来源校验 blocking 明细"
+    )
 
 
 class DemandComputationMaterialBackfillItem(BaseModel):

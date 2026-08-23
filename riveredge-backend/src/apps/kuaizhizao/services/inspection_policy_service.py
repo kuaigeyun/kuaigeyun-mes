@@ -248,43 +248,8 @@ async def resolve_effective_material_stage_policy(
     stage: InspectionStage,
 ) -> Tuple[str, Optional[int], str]:
     """物料级优先；物料未配置 inspection_stages 时继承分组默认（对齐工艺路线解析顺序）。"""
-    from apps.master_data.models.material import Material
-
-    if stage not in MATERIAL_INSPECTION_STAGE_KEYS:
-        return "none", None, "default_none"
-
-    mat = await Material.get_or_none(tenant_id=tenant_id, id=material_id, deleted_at__isnull=True)
-    if not mat:
-        return "none", None, "default_none"
-
-    raw_stages = getattr(mat, "inspection_stages", None)
-    if isinstance(raw_stages, dict) and raw_stages:
-        mat_stages = normalize_material_inspection_stages(raw_stages)
-        policy = normalize_stage_policy(mat_stages.get(stage))
-        has_custom = any(
-            normalize_stage_policy(mat_stages.get(k))["mode"] != "none"
-            for k in MATERIAL_INSPECTION_STAGE_KEYS
-        )
-        if has_custom:
-            return policy["mode"], policy["plan_id"], "material"
-        # 物料三场景均为 none：与未配置同理，继承分组默认
-
-    legacy_stages = normalize_material_inspection_stages(
-        None,
-        legacy_mode=getattr(mat, "inspection_mode", None),
-        legacy_plan_id=getattr(mat, "default_inspection_plan_id", None),
-    )
-    policy = normalize_stage_policy(legacy_stages.get(stage))
-    if policy["mode"] != "none":
-        return policy["mode"], policy["plan_id"], "material_legacy"
-
-    if mat.group_id:
-        grp_stages = await get_material_group_inspection_stages(tenant_id, mat.group_id)
-        grp_policy = normalize_stage_policy(grp_stages.get(stage))
-        if grp_policy["mode"] != "none":
-            return grp_policy["mode"], grp_policy["plan_id"], "material_group"
-
-    return "none", None, "default_none"
+    cache = await build_material_policy_cache(tenant_id, [int(material_id)], stage)
+    return cache.get(int(material_id), ("none", None, "default_none"))
 
 
 async def get_material_inspection_stages(tenant_id: int, material_id: int) -> Dict[str, Dict[str, Any]]:
@@ -300,17 +265,43 @@ async def get_material_inspection_stages(tenant_id: int, material_id: int) -> Di
     )
 
 
+def _operation_stages_from_row(op: Any) -> Dict[str, Dict[str, Any]]:
+    return normalize_operation_inspection_stages(
+        getattr(op, "inspection_stages", None),
+        legacy_mode=getattr(op, "inspection_mode", None),
+        legacy_plan_id=getattr(op, "default_inspection_plan_id", None),
+    )
+
+
 async def get_operation_inspection_stages(tenant_id: int, operation_id: int) -> Dict[str, Dict[str, Any]]:
     from apps.master_data.models.process import Operation
 
     op = await Operation.get_or_none(tenant_id=tenant_id, id=operation_id, deleted_at__isnull=True)
     if not op:
         return operation_stages_from_legacy("none", None)
-    return normalize_operation_inspection_stages(
-        getattr(op, "inspection_stages", None),
-        legacy_mode=getattr(op, "inspection_mode", None),
-        legacy_plan_id=getattr(op, "default_inspection_plan_id", None),
-    )
+    return _operation_stages_from_row(op)
+
+
+async def batch_get_operation_inspection_stages(
+    tenant_id: int,
+    operation_ids: List[int],
+) -> Dict[int, Dict[str, Dict[str, Any]]]:
+    """
+    批量取工序检验场景配置（一次查询）。
+
+    与 ``get_operation_inspection_stages`` 共用 ``_operation_stages_from_row``；
+    查不到的工序不进结果，由调用方按「未配置」处理。
+    """
+    if not operation_ids:
+        return {}
+    from apps.master_data.models.process import Operation
+
+    rows = await Operation.filter(
+        tenant_id=tenant_id,
+        id__in=list(operation_ids),
+        deleted_at__isnull=True,
+    ).only("id", "inspection_stages", "inspection_mode", "default_inspection_plan_id")
+    return {int(row.id): _operation_stages_from_row(row) for row in rows}
 
 
 def stage_plan_type(stage: InspectionStage) -> str:
@@ -603,6 +594,154 @@ async def set_quality_inspection_stage_toggles(
     return merged
 
 
+async def batch_get_materials_for_policy(
+    tenant_id: int,
+    material_ids: List[int],
+) -> Tuple[Dict[int, Any], Dict[int, Dict[str, Dict[str, Any]]]]:
+    """
+    批量取物料与分组检验场景配置（最多 2 次查询）。
+
+    与单条 ``resolve_effective_material_stage_policy`` 共用 ``resolve_material_stage_policy_from_rows``。
+    """
+    if not material_ids:
+        return {}, {}
+    from apps.master_data.models.material import Material, MaterialGroup
+
+    mats = await Material.filter(
+        tenant_id=tenant_id,
+        id__in=list(material_ids),
+        deleted_at__isnull=True,
+    ).only(
+        "id",
+        "inspection_stages",
+        "inspection_mode",
+        "default_inspection_plan_id",
+        "group_id",
+    )
+    mat_by_id = {int(row.id): row for row in mats}
+    group_ids = sorted({int(row.group_id) for row in mats if row.group_id})
+    group_stages_by_id: Dict[int, Dict[str, Dict[str, Any]]] = {}
+    if group_ids:
+        groups = await MaterialGroup.filter(
+            tenant_id=tenant_id,
+            id__in=group_ids,
+            deleted_at__isnull=True,
+        ).only("id", "inspection_stages")
+        for group in groups:
+            group_stages_by_id[int(group.id)] = normalize_material_inspection_stages(
+                getattr(group, "inspection_stages", None)
+            )
+    return mat_by_id, group_stages_by_id
+
+
+def resolve_material_stage_policy_from_rows(
+    cfg: QualityEffectiveConfig,
+    stage: InspectionStage,
+    mat: Optional[Any],
+    group_stages: Optional[Dict[str, Dict[str, Any]]],
+) -> Tuple[str, Optional[int], str]:
+    """
+    物料 IQC/FQC/OQC 策略判定（无 IO，唯一判定入口）。
+
+    单条解析与批量预取 ``build_material_policy_cache`` 共用本函数。
+    """
+    if stage not in MATERIAL_INSPECTION_STAGE_KEYS:
+        return "none", None, "default_none"
+    if not cfg["stage_enabled"].get(stage, True):
+        return "none", None, "stage_disabled"
+    module_key = STAGE_MODULE_KEY.get(stage)
+    if module_key and not cfg["module_enabled"].get(module_key, True):
+        return "none", None, "module_disabled"
+    if mat is None:
+        return "none", None, "default_none"
+
+    raw_stages = getattr(mat, "inspection_stages", None)
+    if isinstance(raw_stages, dict) and raw_stages:
+        mat_stages = normalize_material_inspection_stages(raw_stages)
+        policy = normalize_stage_policy(mat_stages.get(stage))
+        has_custom = any(
+            normalize_stage_policy(mat_stages.get(k))["mode"] != "none"
+            for k in MATERIAL_INSPECTION_STAGE_KEYS
+        )
+        if has_custom:
+            return policy["mode"], policy["plan_id"], "material"
+
+    legacy_stages = normalize_material_inspection_stages(
+        None,
+        legacy_mode=getattr(mat, "inspection_mode", None),
+        legacy_plan_id=getattr(mat, "default_inspection_plan_id", None),
+    )
+    policy = normalize_stage_policy(legacy_stages.get(stage))
+    if policy["mode"] != "none":
+        return policy["mode"], policy["plan_id"], "material_legacy"
+
+    if getattr(mat, "group_id", None) and group_stages is not None:
+        grp_policy = normalize_stage_policy(group_stages.get(stage))
+        if grp_policy["mode"] != "none":
+            return grp_policy["mode"], grp_policy["plan_id"], "material_group"
+
+    return "none", None, "default_none"
+
+
+async def build_material_policy_cache(
+    tenant_id: int,
+    material_ids: List[int],
+    stage: InspectionStage,
+) -> Dict[int, Tuple[str, Optional[int], str]]:
+    """
+    批量解析物料检验策略（IQC/FQC/OQC）。
+
+    固定 2–3 次查询（租户质量配置 + 物料批量 + 可选分组批量），不随物料数增长。
+    """
+    uniq: List[int] = []
+    seen: set[int] = set()
+    for mid in material_ids:
+        if mid is None:
+            continue
+        oid = int(mid)
+        if oid in seen:
+            continue
+        seen.add(oid)
+        uniq.append(oid)
+    if not uniq or stage not in MATERIAL_INSPECTION_STAGE_KEYS:
+        return {}
+    cfg = await get_quality_effective_config(tenant_id)
+    mat_by_id, group_stages_by_id = await batch_get_materials_for_policy(tenant_id, uniq)
+    result: Dict[int, Tuple[str, Optional[int], str]] = {}
+    for mid in uniq:
+        mat = mat_by_id.get(mid)
+        grp_stages = None
+        if mat is not None and mat.group_id is not None:
+            grp_stages = group_stages_by_id.get(int(mat.group_id))
+        result[mid] = resolve_material_stage_policy_from_rows(cfg, stage, mat, grp_stages)
+    return result
+
+
+def resolve_ipqc_policy_from_stages(
+    cfg: QualityEffectiveConfig,
+    op_stages: Optional[Dict[str, Dict[str, Any]]],
+) -> Tuple[str, Optional[int], str]:
+    """
+    工序过程检验策略判定（无 IO，唯一判定入口）。
+
+    单条解析 ``resolve_inspection_policy`` 与批量预取 ``build_operation_policy_cache``
+    共用本函数，避免两套语义漂移。
+
+    Args:
+        cfg: ``get_quality_effective_config`` 结果
+        op_stages: 工序 inspection_stages 规范化结果；None 表示工序不存在或未配置
+    """
+    if not cfg["stage_enabled"].get("ipqc", True):
+        return "none", None, "stage_disabled"
+    module_key = STAGE_MODULE_KEY.get("ipqc")
+    if module_key and not cfg["module_enabled"].get(module_key, True):
+        return "none", None, "module_disabled"
+    op_policy = normalize_stage_policy((op_stages or {}).get("ipqc"))
+    if op_policy["mode"] != "none":
+        return op_policy["mode"], op_policy["plan_id"], "operation"
+    return "none", None, "default_none"
+
+
 async def resolve_inspection_policy(
     tenant_id: int,
     stage: InspectionStage,
@@ -634,18 +773,23 @@ async def resolve_inspection_policy(
     if stage == "ipqc":
         if operation_id:
             op_stages = await get_operation_inspection_stages(tenant_id, operation_id)
-            op_policy = normalize_stage_policy(op_stages.get("ipqc"))
-            if op_policy["mode"] != "none":
-                return op_policy["mode"], op_policy["plan_id"], "operation"
-        elif operation_inspection_mode is not None:
+            return resolve_ipqc_policy_from_stages(cfg, op_stages)
+        if operation_inspection_mode is not None:
             leg = normalize_inspection_mode(operation_inspection_mode)
             if leg != "none":
                 return leg, None, "operation_legacy"
         return "none", None, "default_none"
 
     if material_id:
-        eff_mode, plan_id, reason = await resolve_effective_material_stage_policy(
-            tenant_id, material_id, stage
+        mat_by_id, group_stages_by_id = await batch_get_materials_for_policy(
+            tenant_id, [int(material_id)]
+        )
+        mat = mat_by_id.get(int(material_id))
+        grp_stages = None
+        if mat is not None and mat.group_id is not None:
+            grp_stages = group_stages_by_id.get(int(mat.group_id))
+        eff_mode, plan_id, reason = resolve_material_stage_policy_from_rows(
+            cfg, stage, mat, grp_stages
         )
         if eff_mode != "none":
             return eff_mode, plan_id, reason
@@ -782,21 +926,33 @@ def _ipqc_transferable_qualified_quantity(inspection: Any) -> Decimal:
         return Decimal("0")
 
 
-async def ipqc_inspection_passed_for_transfer(tenant_id: int, inspection: Any) -> bool:
+async def ipqc_inspection_passed_for_transfer(
+    tenant_id: int,
+    inspection: Any,
+    *,
+    audit_required: Optional[bool] = None,
+) -> bool:
     """
     过程检验是否可计入转下道。
 
     口径：检验已执行，且合格数量 > 0；需审核时另须审核通过。
     整单 quality_status 可为「不合格」（部分不合格），仍放行其中的合格数量。
+
+    Args:
+        audit_required: 调用方已解析的「过程检验需审核」开关。批量场景须传入，
+            否则本函数会按张检验单各查一次审核绑定，构成 N+1。
     """
     st = str(getattr(inspection, "status", "") or "").strip()
     if st not in _IPQC_CONDUCTED_STATUSES:
         return False
     if _ipqc_transferable_qualified_quantity(inspection) <= 0:
         return False
-    from infra.services.business_config_service import BusinessConfigService
+    if audit_required is None:
+        from infra.services.business_config_service import BusinessConfigService
 
-    audit_required = await BusinessConfigService().check_audit_required(tenant_id, "process_inspection")
+        audit_required = await BusinessConfigService().check_audit_required(
+            tenant_id, "process_inspection"
+        )
     if not audit_required:
         return True
     return getattr(inspection, "review_status", None) in _IQC_PASSED_REVIEW_STATUSES

@@ -32,7 +32,7 @@ class SparePart(BaseModel):
     supplier = fields.CharField(max_length=200, null=True, description="供应商")
     
     safety_stock = fields.IntField(default=0, description="安全库存")
-    price = fields.DecimalField(max_digits=10, decimal_places=2, null=True, description="参考单价")
+    price = fields.DecimalField(max_digits=12, decimal_places=4, null=True, description="参考单价")
     
     # 关联设备类型
     associated_equipment_categories = fields.JSONField(null=True, description="适用设备类型列表")

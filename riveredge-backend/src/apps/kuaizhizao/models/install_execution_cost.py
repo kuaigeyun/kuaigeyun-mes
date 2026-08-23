@@ -15,7 +15,7 @@ class InstallExecutionCost(BaseModel):
     line_no = fields.IntField(default=1, description="行号")
     # 人工 / 差旅 / 外协 / 物料
     cost_type = fields.CharField(max_length=20, description="费用类型")
-    amount = fields.DecimalField(max_digits=14, decimal_places=2, description="金额")
+    amount = fields.DecimalField(max_digits=16, decimal_places=4, description="金额")
     occurred_at = fields.DatetimeField(description="发生时间")
     description = fields.CharField(max_length=500, null=True, description="说明")
 

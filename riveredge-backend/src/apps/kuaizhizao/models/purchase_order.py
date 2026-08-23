@@ -49,15 +49,15 @@ class PurchaseOrder(BaseModel):
     order_type = fields.CharField(max_length=20, default="标准采购", description="订单类型")
 
     # 金额信息
-    total_quantity = fields.DecimalField(max_digits=10, decimal_places=2, default=0, description="总数量")
-    total_amount = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="订单总金额")
+    total_quantity = fields.DecimalField(max_digits=12, decimal_places=4, default=0, description="总数量")
+    total_amount = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="订单总金额")
     tax_rate = fields.DecimalField(max_digits=5, decimal_places=2, default=0, description="税率")
-    tax_amount = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="税额")
-    net_amount = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="净金额")
+    tax_amount = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="税额")
+    net_amount = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="净金额")
 
     # 费用信息
     fee_details = fields.JSONField(null=True, description="费用明细 (JSON)")
-    total_fee_amount = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="总费用金额")
+    total_fee_amount = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="总费用金额")
 
     # 币种和汇率
     currency = fields.CharField(max_length=10, default="CNY", description="币种")
@@ -79,7 +79,7 @@ class PurchaseOrder(BaseModel):
 
     # 预付款（审核通过后自动生成预付付款单）
     prepayment_amount = fields.DecimalField(
-        max_digits=12, decimal_places=2, null=True, description="预付款金额"
+        max_digits=14, decimal_places=4, null=True, description="预付款金额"
     )
     prepayment_bank_account_id = fields.IntField(null=True, description="预付款银行账户ID")
 
@@ -122,14 +122,18 @@ class PurchaseOrderItem(BaseModel):
     material_spec = fields.CharField(max_length=200, null=True, description="物料规格")
 
     # 采购信息
-    ordered_quantity = fields.DecimalField(max_digits=10, decimal_places=2, description="采购数量")
+    ordered_quantity = fields.DecimalField(max_digits=12, decimal_places=4, description="采购数量")
     unit = fields.CharField(max_length=20, description="单位")
     unit_price = fields.DecimalField(max_digits=10, decimal_places=4, description="单价")
-    total_price = fields.DecimalField(max_digits=12, decimal_places=2, description="总价")
+    total_price = fields.DecimalField(max_digits=14, decimal_places=4, description="总价")
+    price_settlement_status = fields.CharField(max_length=20, default="SETTLED", description="定价状态 PROVISIONAL|SETTLED")
+    provisional_unit_price = fields.DecimalField(max_digits=10, decimal_places=4, null=True, description="暂估参考单价")
+    price_settled_at = fields.DatetimeField(null=True, description="定价时间")
+    price_settled_by = fields.IntField(null=True, description="定价人ID")
 
     # 到货信息
-    received_quantity = fields.DecimalField(max_digits=10, decimal_places=2, default=0, description="已到货数量")
-    outstanding_quantity = fields.DecimalField(max_digits=10, decimal_places=2, default=0, description="未到货数量")
+    received_quantity = fields.DecimalField(max_digits=12, decimal_places=4, default=0, description="已到货数量")
+    outstanding_quantity = fields.DecimalField(max_digits=12, decimal_places=4, default=0, description="未到货数量")
 
     # 要求到货日期
     required_date = fields.DateField(description="要求到货日期")
@@ -142,12 +146,13 @@ class PurchaseOrderItem(BaseModel):
     # 来源信息（用于关联MRP/LRP运算结果）
     source_type = fields.CharField(max_length=50, null=True, description="来源类型")
     source_id = fields.IntField(null=True, description="来源ID")
+    demand_computation_item_id = fields.IntField(null=True, description="需求计算明细ID（溯源影响总成）")
 
     # 备注
     notes = fields.TextField(null=True, description="备注")
 
     # 费用分摊 (V2 增强)
-    landing_cost = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="分摊杂费/落地成本")
+    landing_cost = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="分摊杂费/落地成本")
     additional_fees_details = fields.JSONField(null=True, description="杂费分摊明细 (JSON)")
 
     deleted_at = fields.DatetimeField(null=True, description="删除时间")

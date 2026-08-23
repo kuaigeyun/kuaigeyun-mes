@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, type ProFormInstance } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Tooltip, Typography, Spin, Empty, Select, Input, InputNumber, theme as AntdTheme } from 'antd';
-import { CheckCircleOutlined, PlayCircleOutlined, RollbackOutlined, PrinterOutlined } from '@ant-design/icons';
+import { CheckCircleOutlined, PlayCircleOutlined, RollbackOutlined } from '@ant-design/icons';
 import { UniTable, type UniTableRequestMeta } from '../../../../../components/uni-table';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import {
@@ -45,6 +45,12 @@ import OutboundConfirmPreviewModal from './OutboundConfirmPreviewModal';
 import { formatDateTime, formatDateTimeBySiteSetting, formatQuantity } from '../../../../../utils/format';
 import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
+import {
+  WarehouseShowAmountSwitch,
+  appendWarehouseLineAmountColumns,
+  buildWarehouseTotalAmountListColumn,
+  useWarehouseShowAmount,
+} from '../shared/warehouseAmountDisplay';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
   DocumentPushProgressBar,
@@ -119,6 +125,8 @@ interface OutboundOrderItem {
   batch_number?: string;
   material_unit?: string;
   delivery_quantity?: number;
+  unit_price?: number;
+  total_amount?: number;
 }
 
 const SALES_DELIVERY_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_sales_deliveries';
@@ -145,6 +153,7 @@ const OutboundPage: React.FC = () => {
   const quickPullRef = useRef<OutboundQuickPullModalsRef>(null);
   const outboundTypeFilterRef = useRef<string>('all');
   const [outboundTypeFilter, setOutboundTypeFilter] = useState<string>('all');
+  const [showAmount, setShowAmount] = useWarehouseShowAmount();
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
 
   const handleOutboundTypeFilterChange = useCallback((value: string) => {
@@ -849,15 +858,21 @@ const OutboundPage: React.FC = () => {
   );
 
   const deliveryDetailColumns = useMemo(
-    () => [
-      { title: t('app.kuaizhizao.warehouseOutbound.col.materialCode'), dataIndex: 'material_code', width: 120 },
-      { title: t('app.kuaizhizao.warehouseOutbound.col.materialName'), dataIndex: 'material_name', width: 150 },
-      { title: t('app.kuaizhizao.warehouseOutbound.col.deliveryQty'), dataIndex: 'delivery_quantity', width: 100, align: 'right' as const },
-      { title: t('common.unit'), dataIndex: 'material_unit', width: 60 },
-      { title: t('app.kuaizhizao.warehouseOutbound.col.batchNo'), dataIndex: 'batch_number', width: 100 },
-      { title: t('common.remark'), dataIndex: 'notes' },
-    ],
-    [t],
+    () =>
+      appendWarehouseLineAmountColumns(
+        [
+          { title: t('app.kuaizhizao.warehouseOutbound.col.materialCode'), dataIndex: 'material_code', width: 120 },
+          { title: t('app.kuaizhizao.warehouseOutbound.col.materialName'), dataIndex: 'material_name', width: 150 },
+          { title: t('app.kuaizhizao.warehouseOutbound.col.deliveryQty'), dataIndex: 'delivery_quantity', width: 100, align: 'right' as const },
+          { title: t('common.unit'), dataIndex: 'material_unit', width: 60 },
+          { title: t('app.kuaizhizao.warehouseOutbound.col.batchNo'), dataIndex: 'batch_number', width: 100 },
+          { title: t('common.remark'), dataIndex: 'notes' },
+        ],
+        t,
+        showAmount,
+        -2,
+      ),
+    [t, showAmount],
   );
 
   const columns: ProColumns<OutboundOrder>[] = useMemo(
@@ -927,6 +942,7 @@ const OutboundPage: React.FC = () => {
       sorter: true,
       render: formatQuantity,
     },
+    ...buildWarehouseTotalAmountListColumn<OutboundOrder>(t, showAmount),
     {
       title: t('app.kuaizhizao.warehouseOutbound.col.totalItems'),
       dataIndex: 'total_items',
@@ -1162,6 +1178,7 @@ const OutboundPage: React.FC = () => {
       salesDeliveryAuditEnabled,
       handleProductionPickingAuditSuccess,
       handleSalesDeliveryAuditSuccess,
+      showAmount,
     ],
   );
 
@@ -1248,7 +1265,7 @@ const OutboundPage: React.FC = () => {
     <ListPageTemplate>
       <UniTable
         headerTitle={t('app.kuaizhizao.warehouseOutbound.title')}
-        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.outbound.v3"
+        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.outbound.v4"
         actionRef={actionRef}
         formRef={searchFormRef}
         rowKey={outboundRowKey}
@@ -1355,38 +1372,35 @@ const OutboundPage: React.FC = () => {
             ])}
           />,
         ]}
-        toolBarActionsAfterBatch={
-          outboundPerms.canPrint
-            ? [
-                <Button
-                  key="outbound-toolbar-print"
-                  icon={<PrinterOutlined />}
-                  disabled={!canToolbarPrint}
-                  onClick={() => {
-                    const key = selectedRowKeys[0];
-                    const row =
-                      selectedOutboundForBatch[0] ??
-                      (key != null ? resolveOutboundRowByKey(key) : undefined);
-                    if (row) {
-                      handlePrint(row);
-                      return;
-                    }
-                    const parsed = key != null ? parseOutboundRowKey(key) : null;
-                    const docType = parsed
-                      ? outboundTypeToPrintDocumentType(parsed.type as OutboundOrder['outbound_type'])
-                      : null;
-                    if (parsed && docType) {
-                      openPrint({ documentType: docType, documentId: parsed.id });
-                      return;
-                    }
-                    messageApi.warning(t('app.kuaizhizao.warehouseOutbound.msg.printNotSupported'));
-                  }}
-                >
-                  {t('components.uniAction.print')}
-                </Button>,
-              ]
-            : []
-        }
+        toolBarActionsAfterBatch={[
+          <WarehouseShowAmountSwitch
+            key="outbound-show-amount"
+            checked={showAmount}
+            onChange={setShowAmount}
+          />,
+        ]}
+        showPrintButton={outboundPerms.canPrint}
+        printButtonDisabled={!canToolbarPrint}
+        printButtonText={t('components.uniAction.print')}
+        onPrint={() => {
+          const key = selectedRowKeys[0];
+          const row =
+            selectedOutboundForBatch[0] ??
+            (key != null ? resolveOutboundRowByKey(key) : undefined);
+          if (row) {
+            handlePrint(row);
+            return;
+          }
+          const parsed = key != null ? parseOutboundRowKey(key) : null;
+          const docType = parsed
+            ? outboundTypeToPrintDocumentType(parsed.type as OutboundOrder['outbound_type'])
+            : null;
+          if (parsed && docType) {
+            openPrint({ documentType: docType, documentId: parsed.id });
+            return;
+          }
+          messageApi.warning(t('app.kuaizhizao.warehouseOutbound.msg.printNotSupported'));
+        }}
       />
 
       <OutboundQuickPullModals ref={quickPullRef} onSuccess={() => actionRef.current?.reload()} />

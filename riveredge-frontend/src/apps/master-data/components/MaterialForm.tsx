@@ -2303,6 +2303,10 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
           <ProFormItem
             name="groupId"
             label={t('app.master-data.materialForm.materialGroup')}
+            required
+            rules={[
+              { required: true, message: t('app.master-data.materialForm.materialGroupRequired') },
+            ]}
           >
             <UniDropdown
               placeholder={t('app.master-data.materialForm.materialGroupPlaceholder')}
@@ -2311,7 +2315,6 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
                 value: g.id,
               }))}
               showSearch
-              allowClear
               style={{ width: '100%' }}
               optionFilterProp="label"
               quickCreate={

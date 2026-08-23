@@ -701,11 +701,23 @@ class SalesForecastService(AppBaseService[SalesForecast]):
         )
 
     async def _sync_demand_if_exists(self, tenant_id: int, forecast_id: int, operator_id: int) -> bool:
-        """
-        历史兼容占位：销售预测不再自动同步到需求池（Demand）。
-        仅保留显式「下推需求计算」路径创建/更新计算数据。
-        """
-        return False
+        """销售预测保存后，将关联 Demand/DemandItem 与预测明细对齐（策略 A）。"""
+        demand = await self._get_demand_for_forecast(tenant_id, forecast_id)
+        if not demand:
+            return False
+        try:
+            from apps.kuaizhizao.services.demand_service import DemandService
+
+            result = await DemandService().sync_from_upstream(
+                tenant_id=tenant_id,
+                source_type="sales_forecast",
+                source_id=forecast_id,
+                operator_id=operator_id,
+            )
+            return bool(result.get("synced"))
+        except Exception as e:
+            logger.warning("销售预测关联需求同步失败 forecast_id={}: {}", forecast_id, e)
+            return False
 
     async def _create_demand_from_sales_forecast(
         self, tenant_id: int, forecast_id: int, created_by: int

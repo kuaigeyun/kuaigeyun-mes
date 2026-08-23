@@ -878,6 +878,8 @@ export default function App() {
       }}
       /** 状态类徽章默认 solid；分类/模式/编组等标识须显式 variant="filled" */
       tag={{ variant: 'solid' }}
+      /** Select/TreeSelect 下拉宽度随选项内容扩展，不与触发器等宽（个别页可显式 popupMatchSelectWidth 覆盖） */
+      popupMatchSelectWidth={false}
     >
       <AntdApp>
         {/* 无条件挂载：壳层加载阶段的请求错误提示也必须使用带主题的 App 实例 */}

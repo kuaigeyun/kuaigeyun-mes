@@ -33,15 +33,15 @@ class MRPResult(BaseModel):
     time_bucket = fields.CharField(max_length=20, default="日", description="时间段")
 
     # 库存参数
-    current_inventory = fields.DecimalField(max_digits=10, decimal_places=2, description="当前库存")
-    safety_stock = fields.DecimalField(max_digits=10, decimal_places=2, description="安全库存")
-    reorder_point = fields.DecimalField(max_digits=10, decimal_places=2, description="再订货点")
+    current_inventory = fields.DecimalField(max_digits=12, decimal_places=4, description="当前库存")
+    safety_stock = fields.DecimalField(max_digits=12, decimal_places=4, description="安全库存")
+    reorder_point = fields.DecimalField(max_digits=12, decimal_places=4, description="再订货点")
 
     # 运算结果
-    total_gross_requirement = fields.DecimalField(max_digits=10, decimal_places=2, description="总毛需求")
-    total_net_requirement = fields.DecimalField(max_digits=10, decimal_places=2, description="总净需求")
-    total_planned_receipt = fields.DecimalField(max_digits=10, decimal_places=2, description="总计划入库")
-    total_planned_release = fields.DecimalField(max_digits=10, decimal_places=2, description="总计划发放")
+    total_gross_requirement = fields.DecimalField(max_digits=12, decimal_places=4, description="总毛需求")
+    total_net_requirement = fields.DecimalField(max_digits=12, decimal_places=4, description="总净需求")
+    total_planned_receipt = fields.DecimalField(max_digits=12, decimal_places=4, description="总计划入库")
+    total_planned_release = fields.DecimalField(max_digits=12, decimal_places=4, description="总计划发放")
 
     # 建议行动
     suggested_work_orders = fields.IntField(default=0, description="建议工单数")

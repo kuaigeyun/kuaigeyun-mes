@@ -6,8 +6,7 @@ from typing import Optional, Tuple
 
 from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.master_data.models.warehouse import Warehouse
-from infra.exceptions.exceptions import BusinessLogicError
-
+from infra.exceptions.exceptions import BusinessLogicError, ValidationError
 
 async def resolve_source_warehouse_for_work_order(
     tenant_id: int,
@@ -42,6 +41,58 @@ async def resolve_source_warehouse_for_work_order(
     if not wh:
         raise BusinessLogicError("未找到可用主仓，请维护普通仓库或指定来源仓库")
     return wh.id, wh.name or ""
+
+
+async def resolve_inbound_warehouse_for_purchase_push(
+    tenant_id: int,
+    *,
+    material_id: Optional[int] = None,
+    explicit_warehouse_id: Optional[int] = None,
+) -> Tuple[int, str]:
+    """
+    采购下推收货通知/入库的行级入库仓库：
+    显式指定 → 物料默认仓库 → 租户首个启用 normal 仓 → 任意启用仓。
+    """
+    from apps.master_data.services.material_service import (
+        resolve_primary_default_warehouse_from_material,
+    )
+
+    if explicit_warehouse_id:
+        wh = await Warehouse.get_or_none(
+            id=int(explicit_warehouse_id),
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            is_active=True,
+        )
+        if wh:
+            return wh.id, wh.name or ""
+
+    if material_id:
+        material_wh = await resolve_primary_default_warehouse_from_material(
+            tenant_id,
+            material_id=int(material_id),
+        )
+        if material_wh:
+            return material_wh
+
+    wh = await Warehouse.filter(
+        tenant_id=tenant_id,
+        is_active=True,
+        deleted_at__isnull=True,
+        warehouse_type="normal",
+    ).order_by("id").first()
+    if wh:
+        return wh.id, wh.name or ""
+
+    wh = await Warehouse.filter(
+        tenant_id=tenant_id,
+        is_active=True,
+        deleted_at__isnull=True,
+    ).order_by("id").first()
+    if wh:
+        return wh.id, wh.name or ""
+
+    raise ValidationError("未配置可用入库仓库，请先在主数据维护仓库或为物料指定默认仓库")
 
 
 async def resolve_line_side_warehouse_for_work_order(

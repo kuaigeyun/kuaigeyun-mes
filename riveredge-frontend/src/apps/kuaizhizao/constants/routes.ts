@@ -37,7 +37,7 @@ export const ROUTES = {
   DEMAND_MANAGEMENT: `${APP_BASE}/plan-management/demand-management`,
   DEMAND_COMPUTATION: `${APP_BASE}/plan-management/demand-computation`,
   WORK_ORDERS: `${APP_BASE}/production-execution/work-orders`,
-  OUTSOURCE_WORK_ORDERS: `${APP_BASE}/production-execution/outsource-work-orders`,
+  OUTSOURCE_WORK_ORDERS: `${APP_BASE}/production-execution/outsource-management`,
   OUTSOURCE_ORDERS: `${APP_BASE}/production-execution/outsource-orders`,
   REPORTING: `${APP_BASE}/production-execution/reporting`,
   PACKING_BINDING: `${APP_BASE}/production-execution/packing-binding`,

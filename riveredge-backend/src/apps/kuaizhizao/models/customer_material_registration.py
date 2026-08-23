@@ -165,7 +165,7 @@ class CustomerMaterialRegistration(BaseModel):
     mapping_rule_id = fields.IntField(null=True, description="使用的映射规则ID（关联BarcodeMappingRule）")
 
     # 来料信息
-    quantity = fields.DecimalField(max_digits=12, decimal_places=2, description="来料数量")
+    quantity = fields.DecimalField(max_digits=14, decimal_places=4, description="来料数量")
     registration_date = fields.DatetimeField(description="登记日期")
 
     # 登记人信息
@@ -182,7 +182,7 @@ class CustomerMaterialRegistration(BaseModel):
     work_order_id = fields.IntField(null=True, description="工单ID")
     work_order_code = fields.CharField(max_length=50, null=True, description="工单编码")
     batch_number = fields.CharField(max_length=100, null=True, description="批号（单行登记兼容）")
-    total_quantity = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="来料总数量")
+    total_quantity = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="来料总数量")
 
     # 状态
     status = fields.CharField(max_length=20, default="pending", description="状态（pending/processed/cancelled）")
@@ -223,7 +223,7 @@ class CustomerMaterialRegistrationItem(BaseModel):
     material_name = fields.CharField(max_length=200, description="物料名称")
     material_spec = fields.CharField(max_length=200, null=True, description="物料规格")
     material_unit = fields.CharField(max_length=20, null=True, description="物料单位")
-    quantity = fields.DecimalField(max_digits=12, decimal_places=2, description="来料数量")
+    quantity = fields.DecimalField(max_digits=14, decimal_places=4, description="来料数量")
     barcode = fields.CharField(max_length=500, null=True, description="客户条码")
     barcode_type = fields.CharField(max_length=10, default="1d", description="条码类型")
     mapping_rule_id = fields.IntField(null=True, description="条码映射规则ID")

@@ -17,6 +17,7 @@ import {
   ProFormTextArea,
   ProFormItem,
   ProFormDependency,
+  ProFormDateTimePicker,
 } from '@ant-design/pro-components';
 import {
   App,
@@ -80,12 +81,13 @@ import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/Wa
 import { getSessionCurrentUser } from '../../../../../utils/sessionCurrentUser';
 import { hasModulePermission } from '../../../../../utils/permissionContract';
 import { useGlobalStore } from '../../../../../stores';
-import type { User } from '../../../../../services/user';
+import { resolveUserDisplay, type User } from '../../../../../services/user';
 import { getRemainingReportableQuantity, getStatusReportingCompleteQuantity, resolveDefaultReportingQuantityFields } from '../../../utils/workOrderReporting';
 import { coerceReportingCreateStrings } from '../../../utils/reportingPayload';
 import {
   resolveReportingWorkTimeForSubmit,
   toReportingDayjs,
+  formatReportingDateTime,
 } from '../../../utils/reportingWorkTime';
 import ReportableQuantityPanel from '../../../components/ReportableQuantityPanel';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
@@ -93,9 +95,11 @@ import ReportingInboundWarehouseField from '../../../components/ReportingInbound
 import { ReportingWorkTimeFields } from '../../../components/ReportingWorkTimeFields';
 import { ReportingProducerField } from '../../../components/ReportingProducerField';
 import {
+  buildLastInboundHintOptions,
   isInboundWarehouseRequiredForLastOperation,
   resolveIsLastOperation,
   resolveLastInboundHint,
+  showReportingPostActionNotices,
 } from '../../../utils/reportingLastOperation';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
@@ -300,10 +304,14 @@ const ReportingPage: React.FC = () => {
 
   const reportingAuditBatchHandlers = useMemo(
     () => ({
-      approve: (id: number) => reportingApi.approve(String(id)),
+      approve: async (id: number) => {
+        const res = await reportingApi.approve(String(id));
+        showReportingPostActionNotices(messageApi, t, res);
+        return res;
+      },
       revoke: (id: number) => reportingApi.revoke(String(id)),
     }),
-    [],
+    [messageApi, t],
   );
 
   const reportingAuditBatchBulkHandlers = useMemo(
@@ -473,6 +481,8 @@ const ReportingPage: React.FC = () => {
   );
   const createModalProxyWorkerRef = useRef<Pick<User, 'id' | 'full_name' | 'username'> | null>(null);
   const createModalTeamRef = useRef<{ id: number; name: string } | null>(null);
+  const correctModalProxyWorkerRef = useRef<Pick<User, 'id' | 'full_name' | 'username'> | null>(null);
+  const correctModalTeamRef = useRef<{ id: number; name: string } | null>(null);
 
   const openReportingCreateFromPullContext = useCallback(
     (workOrder: any, operations: any[], operation: any) => {
@@ -709,8 +719,8 @@ const ReportingPage: React.FC = () => {
 
   const reportLastInboundHint = useMemo(() => {
     if (!reportIsLastOperation) return '';
-    return resolveLastInboundHint(t, executionConfig?.last_operation_auto_inbound_mode);
-  }, [reportIsLastOperation, executionConfig?.last_operation_auto_inbound_mode, t]);
+    return resolveLastInboundHint(t, buildLastInboundHintOptions(executionConfig));
+  }, [reportIsLastOperation, executionConfig, t]);
 
   useEffect(() => {
     if (!reportingModalVisible || !reportIsLastOperation || !reportWorkOrderId) return;
@@ -938,6 +948,7 @@ const ReportingPage: React.FC = () => {
         }
       }
       messageApi.success(t('app.kuaizhizao.workReporting.createSuccess'));
+      showReportingPostActionNotices(messageApi, t, created);
       setReportingModalVisible(false);
       formRef.current?.resetFields();
       resetReportingFormFieldValues();
@@ -1046,15 +1057,55 @@ const ReportingPage: React.FC = () => {
     try {
       const detail = await reportingApi.get(record.id!.toString());
       const d = detail as ReportingRecord;
-      setCorrectFormInitialValues({
+      correctModalProxyWorkerRef.current = null;
+      correctModalTeamRef.current = null;
+
+      const initialValues: Record<string, unknown> = {
         reported_quantity: d.reported_quantity,
         qualified_quantity: d.qualified_quantity,
         unqualified_quantity: d.unqualified_quantity,
         work_hours: d.work_hours,
         work_start_time: toReportingDayjs(d.work_start_time),
         work_end_time: toReportingDayjs(d.work_end_time),
+        reported_at: toReportingDayjs(d.reported_at),
         remarks: d.remarks,
-      });
+      };
+
+      if (d.team_id) {
+        const teamId = Number(d.team_id);
+        const teamName = String(d.team_name || d.worker_name || '').trim();
+        correctModalTeamRef.current = { id: teamId, name: teamName };
+        initialValues.producer_mode = 'team';
+        initialValues.report_team_id = teamId;
+        initialValues.report_team_name = teamName;
+      } else if (d.worker_id) {
+        const workerId = Number(d.worker_id);
+        const workerName = String(d.worker_name || '').trim();
+        correctModalProxyWorkerRef.current = {
+          id: workerId,
+          full_name: workerName,
+          username: '',
+        };
+        initialValues.producer_mode = 'worker';
+        try {
+          const resolved = await resolveUserDisplay({ user_ids: [workerId] });
+          const item = resolved.find((u) => Number(u.id) === workerId);
+          if (item?.uuid) {
+            initialValues.proxy_worker_uuid = item.uuid;
+            correctModalProxyWorkerRef.current = {
+              id: workerId,
+              full_name: item.full_name || workerName,
+              username: item.username || '',
+            };
+          }
+        } catch {
+          /* 展示名解析失败时仍可按 worker_id 提交 */
+        }
+      } else {
+        initialValues.producer_mode = 'worker';
+      }
+
+      setCorrectFormInitialValues(initialValues);
       setCurrentReportingRecordForCorrect(d);
       setCorrectModalVisible(true);
     } catch (error) {
@@ -1078,8 +1129,13 @@ const ReportingPage: React.FC = () => {
 
       const correctedId = currentReportingRecordForCorrect.id;
       const workTime = resolveReportingWorkTimeForSubmit(values);
+      const reportedAtDayjs = toReportingDayjs(values.reported_at);
+      const reported_at = reportedAtDayjs
+        ? formatReportingDateTime(reportedAtDayjs)
+        : workTime.reported_at;
 
-      await reportingApi.correct(currentReportingRecordForCorrect.id.toString(), {
+      const producerMode = values.producer_mode === 'team' ? 'team' : 'worker';
+      const correctPayload: Record<string, unknown> = {
         correction_reason: values.correction_reason,
         reported_quantity: values.reported_quantity,
         qualified_quantity: values.qualified_quantity,
@@ -1087,8 +1143,37 @@ const ReportingPage: React.FC = () => {
         work_hours: workTime.work_hours,
         work_start_time: workTime.work_start_time ?? null,
         work_end_time: workTime.work_end_time ?? null,
+        reported_at,
         remarks: values.remarks,
-      });
+      };
+
+      if (producerMode === 'team') {
+        const team = correctModalTeamRef.current;
+        const teamId = Number(team?.id ?? values.report_team_id);
+        const teamName = String(team?.name || values.report_team_name || '').trim();
+        if (!Number.isFinite(teamId) || teamId <= 0 || !teamName) {
+          messageApi.warning(t('app.kuaizhizao.workReporting.formWorkGroupRequired'));
+          throw new Error(t('app.kuaizhizao.workReporting.formWorkGroupRequired'));
+        }
+        correctPayload.team_id = teamId;
+        correctPayload.team_name = teamName;
+        correctPayload.worker_name = teamName;
+      } else {
+        const proxyUser = correctModalProxyWorkerRef.current;
+        const workerId = Number(proxyUser?.id);
+        const workerName = String(
+          proxyUser?.full_name || proxyUser?.username || values.worker_name || '',
+        ).trim();
+        if (!Number.isFinite(workerId) || workerId <= 0 || !workerName) {
+          const workerRequiredMsg = t('app.kuaizhizao.workOrder.formWorkerPlaceholder');
+          messageApi.warning(workerRequiredMsg);
+          throw new Error(workerRequiredMsg);
+        }
+        correctPayload.worker_id = workerId;
+        correctPayload.worker_name = workerName;
+      }
+
+      await reportingApi.correct(currentReportingRecordForCorrect.id.toString(), correctPayload);
       messageApi.success(t('app.kuaizhizao.workReporting.correctSuccess'));
       setCorrectModalVisible(false);
       setCurrentReportingRecordForCorrect(null);
@@ -1108,7 +1193,12 @@ const ReportingPage: React.FC = () => {
         }
       }
     } catch (error: any) {
-      if (error.message !== t('app.kuaizhizao.workReporting.correctionReasonEmpty')) {
+      const skipMessages = [
+        t('app.kuaizhizao.workReporting.correctionReasonEmpty'),
+        t('app.kuaizhizao.workReporting.formWorkGroupRequired'),
+        t('app.kuaizhizao.workOrder.formWorkerPlaceholder'),
+      ];
+      if (!skipMessages.includes(error.message)) {
         const detail = error?.response?.data?.detail;
         const msg =
           (typeof detail === 'string' ? detail : detail?.message) ||
@@ -2136,10 +2226,13 @@ const ReportingPage: React.FC = () => {
       <FormModalTemplate
         title={t('app.kuaizhizao.workReporting.correctModalTitle')}
         open={correctModalVisible}
+        grid
         onClose={() => {
           setCorrectModalVisible(false);
           setCurrentReportingRecordForCorrect(null);
           setCorrectFormInitialValues(undefined);
+          correctModalProxyWorkerRef.current = null;
+          correctModalTeamRef.current = null;
           correctFormRef.current?.resetFields();
         }}
         onFinish={handleSubmitCorrect}
@@ -2149,16 +2242,48 @@ const ReportingPage: React.FC = () => {
       >
         {currentReportingRecordForCorrect && (
           <>
-            <Card size="small" style={{ marginBottom: 16 }}>
-              <Row gutter={16}>
-                <Col span={12}>
-                  <div>{t('app.kuaizhizao.workReporting.scrapWorkOrderCode')}{currentReportingRecordForCorrect.work_order_code}</div>
-                </Col>
-                <Col span={12}>
-                  <div>{t('app.kuaizhizao.workReporting.scrapOperation')}{currentReportingRecordForCorrect.operation_name}</div>
-                </Col>
-              </Row>
-            </Card>
+            <Col span={24}>
+              <Card size="small" style={{ marginBottom: 16 }}>
+                <Descriptions column={3} size="small">
+                  <Descriptions.Item label={t('app.kuaizhizao.workReporting.scrapWorkOrderCode')}>
+                    {currentReportingRecordForCorrect.work_order_code || '—'}
+                  </Descriptions.Item>
+                  <Descriptions.Item label={t('app.kuaizhizao.workReporting.scrapOperation')}>
+                    {currentReportingRecordForCorrect.operation_name || '—'}
+                  </Descriptions.Item>
+                  <Descriptions.Item label={t('app.kuaizhizao.workReporting.colReportedAt')}>
+                    {currentReportingRecordForCorrect.reported_at
+                      ? formatDateTime(currentReportingRecordForCorrect.reported_at, 'YYYY-MM-DD HH:mm')
+                      : '—'}
+                  </Descriptions.Item>
+                </Descriptions>
+              </Card>
+            </Col>
+            <ReportingProducerField
+              colProps={{ span: 16 }}
+              defaultBadgeUserIds={
+                currentReportingRecordForCorrect.worker_id
+                  ? [Number(currentReportingRecordForCorrect.worker_id)]
+                  : undefined
+              }
+              onWorkerChange={(u) => {
+                correctModalProxyWorkerRef.current = u;
+              }}
+              onTeamChange={(team) => {
+                correctModalTeamRef.current = team;
+              }}
+            />
+            <ProFormDateTimePicker
+              name="reported_at"
+              label={t('app.kuaizhizao.workReporting.colReportedAt')}
+              placeholder={t('app.kuaizhizao.reworkOrder.formReportedAtRequired')}
+              rules={[{ required: true, message: t('app.kuaizhizao.reworkOrder.formReportedAtRequired') }]}
+              fieldProps={{
+                format: 'YYYY-MM-DD HH:mm',
+                style: { width: '100%' },
+              }}
+              colProps={{ span: 8 }}
+            />
             <ProFormDigit
               name="reported_quantity"
               label={t('app.kuaizhizao.workReporting.colReportedQty')}
@@ -2166,6 +2291,7 @@ const ReportingPage: React.FC = () => {
               rules={[{ required: true, message: t('app.kuaizhizao.workReporting.formReportedQtyRequired') }]}
               min={0}
               fieldProps={{ precision: 2 }}
+              colProps={{ span: 8 }}
             />
             <ProFormDigit
               name="qualified_quantity"
@@ -2185,6 +2311,7 @@ const ReportingPage: React.FC = () => {
               ]}
               min={0}
               fieldProps={{ precision: 2 }}
+              colProps={{ span: 8 }}
             />
             <ProFormDigit
               name="unqualified_quantity"
@@ -2193,20 +2320,23 @@ const ReportingPage: React.FC = () => {
               rules={[{ required: true, message: t('app.kuaizhizao.workReporting.unqualifiedQtyRequired') }]}
               min={0}
               fieldProps={{ precision: 2 }}
+              colProps={{ span: 8 }}
             />
-            <ReportingWorkTimeFields colProps={{ span: 24 }} />
+            <ReportingWorkTimeFields colProps={{ span: 8 }} />
             <ProFormTextArea
               name="correction_reason"
               label={t('app.kuaizhizao.workReporting.correctionReason')}
               placeholder={t('app.kuaizhizao.workReporting.correctionReasonPlaceholder')}
               rules={[{ required: true, message: t('app.kuaizhizao.workReporting.correctionReasonRequired') }]}
               fieldProps={{ rows: 3 }}
+              colProps={{ span: 24 }}
             />
             <ProFormTextArea
               name="remarks"
               label={t('app.kuaizhizao.workReporting.remarksOptional')}
               placeholder={t('app.kuaizhizao.workReporting.formRemarksPlaceholder')}
               fieldProps={{ rows: 2 }}
+              colProps={{ span: 24 }}
             />
           </>
         )}

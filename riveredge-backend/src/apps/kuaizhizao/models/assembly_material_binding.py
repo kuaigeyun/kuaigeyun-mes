@@ -60,7 +60,7 @@ class AssemblyMaterialBinding(BaseModel):
     child_material_code = fields.CharField(max_length=50, description="子件物料编码")
     child_material_name = fields.CharField(max_length=200, description="子件物料名称")
     child_batch_no = fields.CharField(max_length=100, description="子件批次号")
-    quantity = fields.DecimalField(max_digits=12, decimal_places=2, description="消耗数量")
+    quantity = fields.DecimalField(max_digits=14, decimal_places=4, description="消耗数量")
 
     executed_by = fields.IntField(description="执行人ID")
     executed_by_name = fields.CharField(max_length=100, description="执行人姓名")

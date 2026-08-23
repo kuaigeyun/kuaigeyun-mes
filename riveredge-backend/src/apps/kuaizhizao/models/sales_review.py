@@ -55,7 +55,7 @@ class SalesReview(BaseModel):
     salesman_name = fields.CharField(max_length=100, null=True, description="业务员姓名")
 
     total_quantity = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="明细总数量")
-    total_amount = fields.DecimalField(max_digits=14, decimal_places=2, default=0, description="明细总金额")
+    total_amount = fields.DecimalField(max_digits=16, decimal_places=4, default=0, description="明细总金额")
 
     deleted_at = fields.DatetimeField(null=True, description="删除时间")
 

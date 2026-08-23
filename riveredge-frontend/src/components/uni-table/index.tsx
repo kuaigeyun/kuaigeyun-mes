@@ -745,6 +745,8 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    * 打印按钮文案（不传则用 i18n `components.uniTable.print`）
    */
   printButtonText?: string
+  /** 额外禁用打印（如选中行不可打印时），与「非单行选中」条件叠加 */
+  printButtonDisabled?: boolean
   /**
    * 功能资源前缀（app:module），用于按权限隐藏工具栏/行内按钮。
    * 不传时从当前路由在导航菜单上的 permission_code 自动解析。
@@ -1126,6 +1128,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   showPrintButton = false,
   onPrint,
   printButtonText,
+  printButtonDisabled = false,
   permissionResource: permissionResourceProp,
   completeCreateSourceResource,
   showCreateButton = false,
@@ -2573,7 +2576,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           key="print"
           size={toolBarButtonSize}
           icon={<PrinterOutlined />}
-          disabled={selectedRowKeys.length !== 1}
+          disabled={selectedRowKeys.length !== 1 || printButtonDisabled}
           onClick={() => onPrint(selectedRowKeys, tableData)}
         >
           {printButtonText ?? t('common.print')}

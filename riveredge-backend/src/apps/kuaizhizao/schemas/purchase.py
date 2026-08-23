@@ -110,6 +110,10 @@ class PurchaseOrderListResponse(PurchaseOrderResponse):
     received_total: Optional[Decimal] = Field(None, description="累计收货数量（列表用）")
     outstanding_total: Optional[Decimal] = Field(None, description="待收货数量（列表用）")
     receipt_progress: Optional[float] = Field(None, description="收货进度 0-100（列表用）")
+    has_arrival_overdue: Optional[bool] = Field(
+        None,
+        description="是否存在逾期未关闭明细行（行级预警口径）",
+    )
 
 
 # === 采购订单明细 ===
@@ -125,6 +129,8 @@ class PurchaseOrderItemBase(BaseSchema):
     unit: str = Field(..., max_length=20, description="单位")
     unit_price: Decimal = Field(..., ge=0, description="单价")
     total_price: Decimal = Field(..., ge=0, description="总价")
+    price_settlement_status: Optional[str] = Field(None, max_length=20, description="定价状态")
+    provisional_unit_price: Optional[Decimal] = Field(None, ge=0, description="暂估参考单价")
     received_quantity: Decimal = Field(default=Decimal(0), ge=0, description="已到货数量")
     outstanding_quantity: Decimal = Field(default=Decimal(0), ge=0, description="未到货数量")
     required_date: date = Field(..., description="要求到货日期")
@@ -133,6 +139,7 @@ class PurchaseOrderItemBase(BaseSchema):
     inspection_required: bool = Field(True, description="是否需要检验")
     source_type: Optional[str] = Field(None, max_length=50, description="来源类型")
     source_id: Optional[int] = Field(None, description="来源ID")
+    demand_computation_item_id: Optional[int] = Field(None, description="需求计算明细ID")
     notes: Optional[str] = Field(None, description="备注")
 
 
@@ -153,6 +160,8 @@ class PurchaseOrderItemResponse(PurchaseOrderItemBase):
     """采购订单明细响应Schema"""
     id: int = Field(..., description="明细ID")
     order_id: int = Field(..., description="订单ID")
+    price_settled_at: Optional[datetime] = Field(None, description="定价时间")
+    price_settled_by: Optional[int] = Field(None, description="定价人ID")
     # V2 落地成本增强
     landing_cost: Decimal = Field(default=Decimal(0), description="落地成本")
     additional_fees_details: Optional[List[dict]] = Field(None, description="费用明细")

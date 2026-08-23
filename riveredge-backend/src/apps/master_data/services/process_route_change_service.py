@@ -345,14 +345,6 @@ class ProcessRouteChangeService:
         
         items = []
         for change in changes:
-            if change.status == "pending":
-                from apps.kuaiplm.services.engineering_change_audit import (
-                    ensure_pending_change_approval_instance,
-                )
-
-                await ensure_pending_change_approval_instance(
-                    tenant_id, "process_route", change
-                )
             items.append(_to_process_route_change_response(change))
 
         return ProcessRouteChangeListResponse(items=items, total=total)

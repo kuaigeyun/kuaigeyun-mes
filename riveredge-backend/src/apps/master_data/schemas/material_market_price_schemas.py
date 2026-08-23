@@ -98,3 +98,24 @@ class MaterialMarketSaleResolveResponse(BaseModel):
     tax_rate: Decimal = Field(..., alias="taxRate")
     snapshot: Optional[Dict[str, Any]] = None
     message: Optional[str] = None
+
+
+class MaterialMarketPriceTrendPoint(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    price_date: date = Field(..., alias="priceDate")
+    unit_price: Decimal = Field(..., alias="unitPrice")
+    price_type: PriceType = Field(..., alias="priceType")
+
+
+class MaterialMarketPriceTrendResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    code: str
+    name: str
+    start_date: date = Field(..., alias="startDate")
+    end_date: date = Field(..., alias="endDate")
+    points: List[MaterialMarketPriceTrendPoint]
+    average_price: Decimal = Field(..., alias="averagePrice")
+    min_price: Decimal = Field(..., alias="minPrice")
+    max_price: Decimal = Field(..., alias="maxPrice")

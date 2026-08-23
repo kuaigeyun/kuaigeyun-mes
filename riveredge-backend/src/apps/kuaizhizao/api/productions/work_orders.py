@@ -591,6 +591,7 @@ async def get_work_order_execution_config(
 ):
     from infra.services.business_config_service import BusinessConfigService
     from apps.kuaizhizao.services.warehouse_service import ProductionPickingService
+    from apps.kuaizhizao.services.inspection_policy_service import get_quality_effective_config
 
     policy = await BusinessConfigService().get_work_order_picking_policy(tenant_id)
     last_inbound_mode = await BusinessConfigService().get_last_operation_auto_inbound_mode(tenant_id)
@@ -600,6 +601,7 @@ async def get_work_order_execution_config(
     default_reporting_quantity_mode = await BusinessConfigService().get_reporting_default_quantity_mode(
         tenant_id
     )
+    quality_cfg = await get_quality_effective_config(tenant_id)
     can_confirm_picking, role_codes, functional_domains = await ProductionPickingService().can_user_confirm_picking(
         tenant_id=tenant_id,
         user_id=current_user.id,
@@ -609,6 +611,11 @@ async def get_work_order_execution_config(
         "last_operation_auto_inbound_mode": last_inbound_mode,
         "default_production_worker_mode": default_production_worker_mode,
         "default_reporting_quantity_mode": default_reporting_quantity_mode,
+        "fqc_stage_enabled": bool(quality_cfg["stage_enabled"]["fqc"]),
+        "fqc_module_enabled": bool(quality_cfg["module_enabled"]["finished"]),
+        "require_fqc_before_finished_goods_receipt": bool(
+            quality_cfg["gate"]["require_fqc_before_finished_goods_receipt"]
+        ),
         "current_user_role_codes": sorted(role_codes),
         "current_user_functional_domains": sorted(functional_domains),
         "current_user_can_confirm_picking": can_confirm_picking,

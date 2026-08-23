@@ -97,7 +97,7 @@ export const PARAMETER_CATEGORIES: ConfigCategory[] = createCategories({
       sourcePath: 'parameters.common.quantity_decimal_places',
       type: 'number',
       min: 0,
-      max: 2,
+      max: 4,
       groupKey: 'common.numeric_precision',
       groupNameKey: 'pages.system.configCenter.paramGroup.common_numeric_precision',
       groupDescriptionKey: 'pages.system.configCenter.paramGroup.common_numeric_precision_desc',
@@ -123,7 +123,7 @@ export const PARAMETER_CATEGORIES: ConfigCategory[] = createCategories({
       sourcePath: 'parameters.common.amount_decimal_places',
       type: 'number',
       min: 0,
-      max: 2,
+      max: 4,
       groupKey: 'common.numeric_precision',
       groupNameKey: 'pages.system.configCenter.paramGroup.common_numeric_precision',
       groupDescriptionKey: 'pages.system.configCenter.paramGroup.common_numeric_precision_desc',
@@ -237,6 +237,8 @@ export const FLOW_CATEGORIES: ConfigCategory[] = createCategories({
   procurement: [
     { key: 'procurement.require_purchase_requisition', nameKey: 'pages.system.configCenter.param.procurement_require_purchase_requisition', descriptionKey: 'pages.system.configCenter.param.procurement_require_purchase_requisition_desc', source: 'business_config', sourcePath: 'parameters.procurement.require_purchase_requisition', type: 'boolean' },
     { key: 'procurement.require_supplier_qualification', nameKey: 'pages.system.configCenter.param.procurement_require_supplier_qualification', descriptionKey: 'pages.system.configCenter.param.procurement_require_supplier_qualification_desc', source: 'business_config', sourcePath: 'parameters.procurement.require_supplier_qualification', type: 'boolean' },
+    { key: 'procurement.arrival_imminent_days', nameKey: 'pages.system.configCenter.param.procurement_arrival_imminent_days', descriptionKey: 'pages.system.configCenter.param.procurement_arrival_imminent_days_desc', source: 'business_config', sourcePath: 'parameters.procurement.arrival_imminent_days', type: 'number' },
+    { key: 'procurement.require_purchase_order_change_confirm', nameKey: 'pages.system.configCenter.param.procurement_require_purchase_order_change_confirm', descriptionKey: 'pages.system.configCenter.param.procurement_require_purchase_order_change_confirm_desc', source: 'business_config', sourcePath: 'parameters.procurement.require_purchase_order_change_confirm', type: 'boolean' },
   ],
   production: [
     { key: 'work_order.picking_confirm_warehouse_only', nameKey: 'pages.system.configCenter.param.work_order_picking_confirm_warehouse_only', descriptionKey: 'pages.system.configCenter.param.work_order_picking_confirm_warehouse_only_desc', source: 'business_config', sourcePath: 'parameters.work_order.picking_confirm_warehouse_only', type: 'boolean' },

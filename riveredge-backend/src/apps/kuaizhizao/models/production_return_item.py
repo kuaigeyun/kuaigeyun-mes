@@ -27,7 +27,7 @@ class ProductionReturnItem(BaseModel):
     material_unit = fields.CharField(max_length=20, description="物料单位")
 
     # 退料数量
-    return_quantity = fields.DecimalField(max_digits=10, decimal_places=2, description="退料数量")
+    return_quantity = fields.DecimalField(max_digits=12, decimal_places=4, description="退料数量")
 
     # 库存信息
     warehouse_id = fields.IntField(description="仓库ID")

@@ -47,7 +47,7 @@ class PurchaseInquiry(BaseModel):
     review_status = fields.CharField(max_length=20, default=ReviewStatus.PENDING.value, description="审核状态")
     review_remarks = fields.TextField(null=True, description="审核备注")
 
-    total_quantity = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="总数量")
+    total_quantity = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="总数量")
     notes = fields.TextField(null=True, description="备注")
     attachments = fields.JSONField(null=True, description="附件列表")
     deleted_at = fields.DatetimeField(null=True, description="删除时间")
@@ -77,7 +77,7 @@ class PurchaseInquiryItem(BaseModel):
     material_name = fields.CharField(max_length=200, description="物料名称")
     material_spec = fields.CharField(max_length=200, null=True, description="物料规格")
     unit = fields.CharField(max_length=20, default="件", description="单位")
-    quantity = fields.DecimalField(max_digits=12, decimal_places=2, description="询价数量")
+    quantity = fields.DecimalField(max_digits=14, decimal_places=4, description="询价数量")
     required_date = fields.DateField(null=True, description="要求交期")
 
     source_requisition_item_id = fields.IntField(null=True, description="来源采购申请行ID")
@@ -143,7 +143,7 @@ class PurchaseSupplierQuote(BaseModel):
         description="提交渠道 internal/portal",
     )
     entered_by = fields.IntField(null=True, description="录入人ID")
-    total_amount = fields.DecimalField(max_digits=14, decimal_places=2, default=0, description="报价总金额")
+    total_amount = fields.DecimalField(max_digits=16, decimal_places=4, default=0, description="报价总金额")
     notes = fields.TextField(null=True, description="备注")
     deleted_at = fields.DatetimeField(null=True)
 
@@ -165,7 +165,7 @@ class PurchaseSupplierQuoteItem(BaseModel):
     tenant_id = fields.IntField(description="租户ID")
     quote_id = fields.IntField(description="报价头ID")
     inquiry_item_id = fields.IntField(description="询价明细ID")
-    quoted_quantity = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="报价数量")
+    quoted_quantity = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="报价数量")
     unit_price = fields.DecimalField(max_digits=12, decimal_places=4, default=0, description="报价单价")
     delivery_date = fields.DateField(null=True, description="承诺交期")
     lead_time_days = fields.IntField(null=True, description="交期天数")

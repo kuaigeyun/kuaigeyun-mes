@@ -73,7 +73,7 @@ class PackingBinding(BaseModel):
     packing_material_id = fields.IntField(null=True, description="包装物料ID（可选）")
     packing_material_code = fields.CharField(max_length=50, null=True, description="包装物料编码（可选）")
     packing_material_name = fields.CharField(max_length=200, null=True, description="包装物料名称（可选）")
-    packing_quantity = fields.DecimalField(max_digits=12, decimal_places=2, description="装箱数量")
+    packing_quantity = fields.DecimalField(max_digits=14, decimal_places=4, description="装箱数量")
     box_no = fields.CharField(max_length=100, null=True, description="箱号（可选）")
 
     # 绑定信息

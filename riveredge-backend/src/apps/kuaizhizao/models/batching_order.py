@@ -120,8 +120,8 @@ class BatchingOrderItem(BaseModel):
     material_name = fields.CharField(max_length=200, description="物料名称")
     unit = fields.CharField(max_length=20, default="", description="单位")
 
-    required_quantity = fields.DecimalField(max_digits=12, decimal_places=2, description="需求数量")
-    picked_quantity = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="已拣数量")
+    required_quantity = fields.DecimalField(max_digits=14, decimal_places=4, description="需求数量")
+    picked_quantity = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="已拣数量")
 
     warehouse_id = fields.IntField(description="仓库ID")
     warehouse_name = fields.CharField(max_length=200, description="仓库名称")

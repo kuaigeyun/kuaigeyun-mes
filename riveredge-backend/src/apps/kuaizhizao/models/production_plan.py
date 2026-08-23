@@ -44,7 +44,7 @@ class ProductionPlan(BaseModel):
     # 统计信息
     total_work_orders = fields.IntField(default=0, description="总工单数")
     total_purchase_orders = fields.IntField(default=0, description="总采购订单数")
-    total_cost = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="总成本")
+    total_cost = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="总成本")
 
     # 审核信息
     reviewer_id = fields.IntField(null=True, description="审核人ID")

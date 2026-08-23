@@ -27,11 +27,11 @@ class SalesOrderChangeOrder(BaseModel):
     review_time = fields.DatetimeField(null=True, description="审核时间")
     review_remarks = fields.TextField(null=True, description="审核备注")
 
-    before_total_quantity = fields.DecimalField(max_digits=12, decimal_places=2, default=0)
-    after_total_quantity = fields.DecimalField(max_digits=12, decimal_places=2, default=0)
-    before_total_amount = fields.DecimalField(max_digits=14, decimal_places=2, default=0)
-    after_total_amount = fields.DecimalField(max_digits=14, decimal_places=2, default=0)
-    delta_amount = fields.DecimalField(max_digits=14, decimal_places=2, default=0)
+    before_total_quantity = fields.DecimalField(max_digits=14, decimal_places=4, default=0)
+    after_total_quantity = fields.DecimalField(max_digits=14, decimal_places=4, default=0)
+    before_total_amount = fields.DecimalField(max_digits=16, decimal_places=4, default=0)
+    after_total_amount = fields.DecimalField(max_digits=16, decimal_places=4, default=0)
+    delta_amount = fields.DecimalField(max_digits=16, decimal_places=4, default=0)
 
     applied_at = fields.DatetimeField(null=True, description="生效时间")
     applied_by = fields.IntField(null=True, description="生效操作人")
@@ -69,15 +69,15 @@ class SalesOrderChangeItem(BaseModel):
     material_spec = fields.CharField(max_length=200, null=True)
     material_unit = fields.CharField(max_length=20, null=True)
 
-    before_quantity = fields.DecimalField(max_digits=12, decimal_places=2, null=True)
-    after_quantity = fields.DecimalField(max_digits=12, decimal_places=2, null=True)
+    before_quantity = fields.DecimalField(max_digits=14, decimal_places=4, null=True)
+    after_quantity = fields.DecimalField(max_digits=14, decimal_places=4, null=True)
     before_unit_price = fields.DecimalField(max_digits=12, decimal_places=4, null=True)
     after_unit_price = fields.DecimalField(max_digits=12, decimal_places=4, null=True)
     before_delivery_date = fields.DateField(null=True)
     after_delivery_date = fields.DateField(null=True)
-    before_amount = fields.DecimalField(max_digits=14, decimal_places=2, null=True)
-    after_amount = fields.DecimalField(max_digits=14, decimal_places=2, null=True)
-    delta_amount = fields.DecimalField(max_digits=14, decimal_places=2, default=0)
+    before_amount = fields.DecimalField(max_digits=16, decimal_places=4, null=True)
+    after_amount = fields.DecimalField(max_digits=16, decimal_places=4, null=True)
+    delta_amount = fields.DecimalField(max_digits=16, decimal_places=4, default=0)
 
     notes = fields.TextField(null=True)
 

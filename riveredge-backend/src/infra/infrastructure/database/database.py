@@ -288,6 +288,7 @@ TORTOISE_ORM = {
                 "apps.kuaizhizao.models.purchase_return",  # 采购退货模型
                 "apps.kuaizhizao.models.purchase_return_item",  # 采购退货明细模型
                 "apps.kuaizhizao.models.purchase_order",  # 采购订单模型
+                "apps.kuaizhizao.models.purchase_arrival_delay_report",  # 采购到货延期填报
                 "apps.kuaizhizao.models.purchase_requisition",  # 采购申请模型
                 "apps.kuaizhizao.models.incoming_inspection",  # 来料检验模型
                 "apps.kuaizhizao.models.process_inspection",  # 过程检验模型
@@ -323,6 +324,8 @@ TORTOISE_ORM = {
                 "apps.kuaicaiwu.models.finance_note",  # 应收应付票据
                 "apps.kuaicaiwu.models.gl_tax_settings",  # 税务设置
                 "apps.kuaicaiwu.models.tax_period_record",  # 税务属期
+                "apps.kuaicaiwu.models.price_settlement_batch",  # 月结定价单
+                "apps.kuaicaiwu.models.price_settlement_line",  # 月结定价单行
                 # 快研发 kuaiplm
                 "apps.kuaiplm.models.rd_project",
                 "apps.kuaiplm.models.gate_template",

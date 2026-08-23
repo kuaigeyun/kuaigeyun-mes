@@ -15,7 +15,6 @@ from apps.kuaicaiwu.schemas.finance import (
     ReceiptVoucherResponse, ReceiptVoucherListResponse,
 )
 from apps.kuaicaiwu.models.receipt import Receipt
-from apps.kuaicaiwu.services.finance_service import AccountSettlementService
 from apps.kuaicaiwu.services.receipt_pull_service import ReceiptPullService
 from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
@@ -183,17 +182,6 @@ async def list_receipts(
 ):
     """获取收款单列表"""
     from apps.kuaicaiwu.services.finance_list_core import apply_finance_voucher_list_filters
-
-    try:
-        settlement_service = AccountSettlementService()
-        await settlement_service.backfill_receipts_from_legacy_receivables(tenant_id, current_user.id)
-    except Exception as exc:
-        logger.warning(
-            "kuaicaiwu_receipts_backfill_failed tenant_id={} user_id={} error={}",
-            tenant_id,
-            current_user.id,
-            exc,
-        )
 
     query = Receipt.filter(tenant_id=tenant_id, deleted_at__isnull=True)
     if status:

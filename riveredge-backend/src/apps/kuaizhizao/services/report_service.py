@@ -4640,6 +4640,30 @@ class ReportService:
                     limit=lim,
                 )
             )
+        elif report_type in ["inbound-summary", "inbound_summary"]:
+            from apps.kuaizhizao.services.report_enhancements import build_inbound_detail
+            return self._wrap_report_payload(
+                await build_inbound_detail(
+                    tenant_id,
+                    date_start=date_start,
+                    date_end=date_end,
+                    warehouse_id=warehouse_id,
+                    material_id=material_id,
+                    keyword=keyword,
+                )
+            )
+        elif report_type in ["outbound-summary", "outbound_summary"]:
+            from apps.kuaizhizao.services.report_enhancements import build_outbound_detail
+            return self._wrap_report_payload(
+                await build_outbound_detail(
+                    tenant_id,
+                    date_start=date_start,
+                    date_end=date_end,
+                    warehouse_id=warehouse_id,
+                    material_id=material_id,
+                    keyword=keyword,
+                )
+            )
         return {"data": [], "success": True}
 
     async def _get_stocktaking_history(

@@ -152,6 +152,7 @@ import {
 import { DOCUMENT_SUBLINE_TABLE_PROPS } from '../../../../../components/document-subline-table';
 
 import { UniTable, readPersistedUniTableViewType } from '../../../../../components/uni-table';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -3306,33 +3307,7 @@ const SalesContractsPage: React.FC = () => {
 
         defaultViewType={viewTypeState === 'help' ? 'table' : viewTypeState}
 
-        helpViewConfig={{
-
-          content: (
-
-            <div style={{ lineHeight: 1.8 }}>
-
-              <p>
-
-                <strong>{t('components.uniTable.viewTable')}</strong>
-
-                {t('app.kuaizhizao.salesContract.helpTableView')}
-
-              </p>
-
-              <p>
-
-                <strong>{t('components.uniTable.viewDetailTable')}</strong>
-
-                {t('app.kuaizhizao.salesContract.helpDetailTableView')}
-
-              </p>
-
-            </div>
-
-          ),
-
-        }}
+        helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.salesContract)}
 
         onViewTypeChange={(v) => {
 

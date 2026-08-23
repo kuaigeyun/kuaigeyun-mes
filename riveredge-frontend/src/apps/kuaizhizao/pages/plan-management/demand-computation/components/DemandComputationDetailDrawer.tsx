@@ -627,15 +627,25 @@ export const DemandComputationDetailDrawer: React.FC<DemandComputationDetailDraw
                   <Space size={16} wrap>
                     <span>
                       {t('app.kuaizhizao.demandComputation.sourceValidation')}：
-                      <Tag color={validationResults.all_passed ? 'success' : 'error'} style={{ marginInlineStart: 8 }}>
-                        {validationResults.all_passed
-                          ? t('app.kuaizhizao.demandComputation.validationAllPassed')
-                          : t('app.kuaizhizao.demandComputation.validationHasFailed')}
+                      <Tag
+                        color={
+                          validationResults.failed_count && validationResults.failed_count > 0
+                            ? 'error'
+                            : 'success'
+                        }
+                        style={{ marginInlineStart: 8 }}
+                      >
+                        {validationResults.failed_count && validationResults.failed_count > 0
+                          ? t('app.kuaizhizao.demandComputation.validationHasFailed')
+                          : t('app.kuaizhizao.demandComputation.validationAllPassed')}
                       </Tag>
                     </span>
                     <span>
-                      {t('app.kuaizhizao.demandComputation.validationCounts')}：
-                      {`${validationResults.passed_count ?? 0} / ${validationResults.failed_count ?? 0} / ${validationResults.total_count ?? 0}`}
+                      {t('app.kuaizhizao.demandComputation.validationCountsDetail', {
+                        passed: validationResults.passed_count ?? 0,
+                        failed: validationResults.failed_count ?? 0,
+                        total: validationResults.total_count ?? 0,
+                      })}
                     </span>
                   </Space>
                   {validationResults.failed_count > 0 ? (
@@ -759,8 +769,8 @@ export const DemandComputationDetailDrawer: React.FC<DemandComputationDetailDraw
                               const p = Number(rate) * 100
                               if (p <= 0) return '0%'
                               if (p < 0.1) return '<0.1%'
-                              if (p < 1) return `${p.toFixed(1)}%`
-                              return `${Math.round(p)}%`
+                              if (p < 100) return `${p.toFixed(1)}%`
+                              return '100%'
                             })()
                           : null
                       return (
@@ -782,6 +792,24 @@ export const DemandComputationDetailDrawer: React.FC<DemandComputationDetailDraw
                     render: (type: string) => {
                       const label = getMaterialSourceTypeLabel(type, t)
                       return <Tag color={getMaterialSourceTypeTagColor(type)}>{label}</Tag>
+                    },
+                  },
+                  {
+                    title: t('app.kuaizhizao.demandComputation.colSourceValidation'),
+                    dataIndex: 'source_validation_passed',
+                    width: 108,
+                    render: (_: unknown, record: DemandComputationItem) => {
+                      const passed = record.source_validation_passed !== false
+                      const errors = record.source_validation_errors || []
+                      const tag = (
+                        <Tag color={passed ? 'success' : 'error'} style={{ margin: 0 }}>
+                          {passed
+                            ? t('app.kuaizhizao.demandComputation.sourceValidationPassed')
+                            : t('app.kuaizhizao.demandComputation.sourceValidationFailed')}
+                        </Tag>
+                      )
+                      if (passed || errors.length === 0) return tag
+                      return <Tooltip title={errors.join('；')}>{tag}</Tooltip>
                     },
                   },
                   ...(hideDeliveryRequirement

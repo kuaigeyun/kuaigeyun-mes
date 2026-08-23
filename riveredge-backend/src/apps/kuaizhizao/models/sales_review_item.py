@@ -19,7 +19,7 @@ class SalesReviewItem(BaseModel):
 
     quantity = fields.DecimalField(max_digits=14, decimal_places=4, description="数量")
     unit_price = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="单价")
-    amount = fields.DecimalField(max_digits=14, decimal_places=2, default=0, description="金额")
+    amount = fields.DecimalField(max_digits=16, decimal_places=4, default=0, description="金额")
     tech_requirements = fields.TextField(null=True, description="技术要求")
     notes = fields.TextField(null=True, description="备注")
 

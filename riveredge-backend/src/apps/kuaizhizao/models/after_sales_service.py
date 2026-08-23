@@ -80,11 +80,11 @@ class RepairOrder(BaseModel):
     warranty_status = fields.CharField(max_length=20, default="待判定", description="保内保外")
     warranty_override_reason = fields.TextField(null=True, description="改判原因")
 
-    labor_cost = fields.DecimalField(max_digits=14, decimal_places=2, null=True, description="人工费")
-    travel_cost = fields.DecimalField(max_digits=14, decimal_places=2, null=True, description="差旅费")
-    spare_part_cost = fields.DecimalField(max_digits=14, decimal_places=2, null=True, description="备件费")
-    outsource_cost = fields.DecimalField(max_digits=14, decimal_places=2, null=True, description="外协费")
-    total_cost = fields.DecimalField(max_digits=14, decimal_places=2, null=True, description="费用合计")
+    labor_cost = fields.DecimalField(max_digits=16, decimal_places=4, null=True, description="人工费")
+    travel_cost = fields.DecimalField(max_digits=16, decimal_places=4, null=True, description="差旅费")
+    spare_part_cost = fields.DecimalField(max_digits=16, decimal_places=4, null=True, description="备件费")
+    outsource_cost = fields.DecimalField(max_digits=16, decimal_places=4, null=True, description="外协费")
+    total_cost = fields.DecimalField(max_digits=16, decimal_places=4, null=True, description="费用合计")
 
     # 待派工 / 维修中 / 待验收 / 已关闭
     status = fields.CharField(max_length=20, default="待派工", description="状态")
@@ -121,7 +121,7 @@ class RepairOrderItem(BaseModel):
     material_unit = fields.CharField(max_length=20, null=True, description="单位")
     quantity = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="数量")
     unit_price = fields.DecimalField(max_digits=14, decimal_places=4, null=True, description="单价")
-    amount = fields.DecimalField(max_digits=14, decimal_places=2, null=True, description="金额")
+    amount = fields.DecimalField(max_digits=16, decimal_places=4, null=True, description="金额")
     notes = fields.TextField(null=True, description="备注")
     deleted_at = fields.DatetimeField(null=True, description="删除时间")
 
@@ -238,9 +238,9 @@ class ServiceSettlement(BaseModel):
     customer_id = fields.IntField(description="客户ID")
     customer_name = fields.CharField(max_length=200, description="客户名称快照")
 
-    warranty_free_amount = fields.DecimalField(max_digits=14, decimal_places=2, default=0, description="保内免收")
-    chargeable_amount = fields.DecimalField(max_digits=14, decimal_places=2, default=0, description="保外应收")
-    total_amount = fields.DecimalField(max_digits=14, decimal_places=2, default=0, description="合计金额")
+    warranty_free_amount = fields.DecimalField(max_digits=16, decimal_places=4, default=0, description="保内免收")
+    chargeable_amount = fields.DecimalField(max_digits=16, decimal_places=4, default=0, description="保外应收")
+    total_amount = fields.DecimalField(max_digits=16, decimal_places=4, default=0, description="合计金额")
 
     # 草稿 / 待审核 / 已审核
     status = fields.CharField(max_length=20, default="草稿", description="状态")
@@ -272,7 +272,7 @@ class ServiceSettlementItem(BaseModel):
     source_id = fields.IntField(description="来源单据ID")
     source_code = fields.CharField(max_length=50, description="来源单据编码")
     warranty_status = fields.CharField(max_length=20, null=True, description="保内保外")
-    amount = fields.DecimalField(max_digits=14, decimal_places=2, default=0, description="金额")
+    amount = fields.DecimalField(max_digits=16, decimal_places=4, default=0, description="金额")
     notes = fields.TextField(null=True, description="备注")
     deleted_at = fields.DatetimeField(null=True, description="删除时间")
 

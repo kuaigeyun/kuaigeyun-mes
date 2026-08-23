@@ -27,6 +27,7 @@ import { formatQuantity } from '../../../../../../utils/format'
 import { WorkOrderMaterialMovementsPanel } from './WorkOrderMaterialMovementsPanel'
 import { MODAL_ISOLATE_POINTER_PROPS } from '../../../../../../utils/modalEventIsolation'
 import { getAntdModal } from '../../../../../../utils/antdAppApis';
+import { ROUTES } from '../../../../constants/routes';
 /** 与后端 issue_method_resolver.resolve_issue_method / is_pick_list_material 一致 */
 function resolveIssueMethod(issueMethod: unknown, sourceType: unknown): string {
   const im = String(issueMethod ?? '')
@@ -893,7 +894,7 @@ const WorkOrderReadinessPopoverContent: React.FC<{
         (Number.isFinite(mainAvail) ? mainAvail : 0) + (Number.isFinite(lineAvail) ? lineAvail : 0)
       // 库位明细异常为空/全 0 时，回退主仓+线边汇总量（半成品入线边后齐套可见）
       const inventoryAvail = locSum > QTY_CMP_EPS ? locSum : fieldAvail
-      // work_order_supply_quantity 已含自制有效完工与委外已收货
+      // work_order_supply_quantity 仅自制/可配置有效完工；委外合格品走主仓/线边库存
       const totalAvail = inventoryAvail + woSupplySafe
       const materialCmp = isAvailableMeetsRequirement(totalAvail, requiredNum)
       const positiveLocs = locs.filter((loc) => {
@@ -1188,9 +1189,7 @@ const WorkOrderReadinessPopoverContent: React.FC<{
                           style={{ padding: 0, height: 'auto' }}
                           onClick={(e) => {
                             stopRowToggle(e)
-                            navigate(
-                              `/apps/kuaizhizao/production-execution/outsource-work-orders?highlight=${owo.id}`,
-                            )
+                            navigate(`${ROUTES.OUTSOURCE_WORK_ORDERS}?highlight=${owo.id}`)
                           }}
                         >
                           {owo.code}

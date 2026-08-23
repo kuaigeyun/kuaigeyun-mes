@@ -678,14 +678,15 @@ const RolesPermissionsPage: React.FC = () => {
     const treeNodes: DataNode[] = filteredRoles.map(role => ({
       title: (
         <div className="role-tree-row" style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', minWidth: 0 }}>
-          <Space size={6} style={{ flex: 1, minWidth: 0 }} className="role-tree-row__label">
+          <Space size={6} style={{ flex: 1, minWidth: 0 }} className="role-tree-row__label" wrap={false}>
             <TeamOutlined
               style={{
                 color: token.colorPrimary,
                 flexShrink: 0,
               }}
             />
-            <span>{resolvePresetRoleName(role, t)}</span>
+            <span className="role-tree-row__name">{resolvePresetRoleName(role, t)}</span>
+            <span className="role-tree-row__tags">
             {(role.user_count ?? 0) > 0 && (
               <Tooltip title={t('field.department.userCountTag', { count: role.user_count ?? 0 })}>
                 <Badge
@@ -715,6 +716,7 @@ const RolesPermissionsPage: React.FC = () => {
               )}
             {role.is_system && <Tag color="default">{t('pages.system.roles.system')}</Tag>}
             {!role.is_active && <Tag color="default">{t('common.disabled')}</Tag>}
+            </span>
           </Space>
           <Space size={4} className="role-tree-row__actions" onClick={(e) => e.stopPropagation()}>
             <Tooltip title={t('common.edit')}>
@@ -1702,8 +1704,8 @@ const RolesPermissionsPage: React.FC = () => {
         <div className="roles-permissions-column-header-row roles-permissions-column-header-row--primary roles-permissions-column-header-row--center">
           <div className="roles-permissions-center-toolbar">
             <div className="roles-permissions-center-toolbar__meta">
-              <Space size="small" style={{ minWidth: 0 }}>
-                <span style={{ fontSize: '16px', fontWeight: 600 }}>
+              <Space size="small" style={{ minWidth: 0, flex: 1 }} wrap={false}>
+                <span className="roles-permissions-center-toolbar__role-name">
                   {resolvePresetRoleName(selectedRole, t)}
                 </span>
                 <Tag color="blue" variant="filled" style={{ margin: 0 }}>{selectedRole.code}</Tag>

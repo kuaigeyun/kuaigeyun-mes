@@ -28,13 +28,13 @@ class SalesDeliveryItem(BaseModel):
     material_unit = fields.CharField(max_length=20, description="物料单位")
 
     # 出库数量和价格
-    delivery_quantity = fields.DecimalField(max_digits=10, decimal_places=2, description="出库数量")
-    unit_price = fields.DecimalField(max_digits=10, decimal_places=2, description="单价")
-    unit_cost = fields.DecimalField(max_digits=12, decimal_places=2, null=True, description="出库单位成本")
-    total_amount = fields.DecimalField(max_digits=12, decimal_places=2, description="金额")
+    delivery_quantity = fields.DecimalField(max_digits=12, decimal_places=4, description="出库数量")
+    unit_price = fields.DecimalField(max_digits=12, decimal_places=4, description="单价")
+    unit_cost = fields.DecimalField(max_digits=14, decimal_places=4, null=True, description="出库单位成本")
+    total_amount = fields.DecimalField(max_digits=14, decimal_places=4, description="金额")
     is_gift = fields.BooleanField(default=False, description="是否赠品")
     gift_ref_unit_price = fields.DecimalField(
-        max_digits=10, decimal_places=2, null=True, description="赠品参考单价"
+        max_digits=12, decimal_places=4, null=True, description="赠品参考单价"
     )
 
     # 库位信息

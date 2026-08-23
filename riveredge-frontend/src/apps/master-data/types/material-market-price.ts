@@ -56,3 +56,20 @@ export interface MaterialMarketSaleResolve {
   snapshot?: Record<string, unknown> | null;
   message?: string | null;
 }
+
+export interface MaterialMarketPriceTrendPoint {
+  priceDate: string;
+  unitPrice: number;
+  priceType: MarketPriceType;
+}
+
+export interface MaterialMarketPriceTrend {
+  code: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+  points: MaterialMarketPriceTrendPoint[];
+  averagePrice: number;
+  minPrice: number;
+  maxPrice: number;
+}

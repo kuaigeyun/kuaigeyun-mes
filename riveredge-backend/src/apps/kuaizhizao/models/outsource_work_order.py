@@ -90,7 +90,7 @@ class OutsourceWorkOrder(BaseModel):
     product_name = fields.CharField(max_length=200, description="产品名称")
 
     # 委外信息
-    quantity = fields.DecimalField(max_digits=12, decimal_places=2, description="计划委外数量")
+    quantity = fields.DecimalField(max_digits=14, decimal_places=4, description="计划委外数量")
     
     # 委外供应商信息
     supplier_id = fields.IntField(description="委外供应商ID（关联master-data的Supplier）")
@@ -101,8 +101,8 @@ class OutsourceWorkOrder(BaseModel):
     outsource_operation = fields.CharField(max_length=200, null=True, description="委外工序")
     
     # 委外价格
-    unit_price = fields.DecimalField(max_digits=12, decimal_places=2, null=True, description="委外单价")
-    total_amount = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="委外总金额（quantity × unit_price）")
+    unit_price = fields.DecimalField(max_digits=14, decimal_places=4, null=True, description="委外单价")
+    total_amount = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="委外总金额（quantity × unit_price）")
 
     # 状态和优先级
     status = fields.CharField(max_length=20, description="委外工单状态", default="draft")
@@ -122,12 +122,12 @@ class OutsourceWorkOrder(BaseModel):
     actual_end_date = fields.DatetimeField(null=True, description="实际结束时间")
 
     # 完成信息
-    received_quantity = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="已收货数量")
-    qualified_quantity = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="合格数量")
-    unqualified_quantity = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="不合格数量")
+    received_quantity = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="已收货数量")
+    qualified_quantity = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="合格数量")
+    unqualified_quantity = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="不合格数量")
     
     # 发料信息
-    issued_quantity = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="已发料数量（原材料）")
+    issued_quantity = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="已发料数量（原材料）")
 
     # 工单组
     work_order_group_id = fields.IntField(null=True, description="所属工单组 ID")
@@ -223,7 +223,7 @@ class OutsourceMaterialIssue(BaseModel):
     material_name = fields.CharField(max_length=200, description="物料名称")
 
     # 发料信息
-    quantity = fields.DecimalField(max_digits=12, decimal_places=2, description="发料数量")
+    quantity = fields.DecimalField(max_digits=14, decimal_places=4, description="发料数量")
     unit = fields.CharField(max_length=20, description="单位")
 
     # 仓库信息
@@ -316,11 +316,11 @@ class OutsourceMaterialReceipt(BaseModel):
     outsource_work_order_code = fields.CharField(max_length=50, description="委外工单编码")
 
     # 收货信息
-    quantity = fields.DecimalField(max_digits=12, decimal_places=2, description="收货数量")
-    qualified_quantity = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="合格数量")
-    unqualified_quantity = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="不合格数量")
-    process_waste_qty = fields.DecimalField(max_digits=12, decimal_places=2, null=True, description="工废数量")
-    material_waste_qty = fields.DecimalField(max_digits=12, decimal_places=2, null=True, description="料废数量")
+    quantity = fields.DecimalField(max_digits=14, decimal_places=4, description="收货数量")
+    qualified_quantity = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="合格数量")
+    unqualified_quantity = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="不合格数量")
+    process_waste_qty = fields.DecimalField(max_digits=14, decimal_places=4, null=True, description="工废数量")
+    material_waste_qty = fields.DecimalField(max_digits=14, decimal_places=4, null=True, description="料废数量")
     nonconformance_reason = fields.TextField(null=True, description="不合格原因")
     unit = fields.CharField(max_length=20, description="单位")
 
@@ -388,7 +388,7 @@ class OutsourceMaterialReturn(BaseModel):
     material_id = fields.IntField(description="物料ID")
     material_code = fields.CharField(max_length=50, description="物料编码")
     material_name = fields.CharField(max_length=200, description="物料名称")
-    quantity = fields.DecimalField(max_digits=12, decimal_places=2, description="退料数量")
+    quantity = fields.DecimalField(max_digits=14, decimal_places=4, description="退料数量")
     unit = fields.CharField(max_length=20, description="单位")
     warehouse_id = fields.IntField(null=True, description="入库仓库ID")
     warehouse_name = fields.CharField(max_length=200, null=True, description="仓库名称")
@@ -437,7 +437,7 @@ class OutsourceProductReturn(BaseModel):
     outsource_work_order_id = fields.IntField(description="委外工单ID")
     outsource_work_order_code = fields.CharField(max_length=50, description="委外工单编码")
     outsource_material_receipt_id = fields.IntField(null=True, description="委外收货单ID（可选）")
-    quantity = fields.DecimalField(max_digits=12, decimal_places=2, description="退货数量")
+    quantity = fields.DecimalField(max_digits=14, decimal_places=4, description="退货数量")
     unit = fields.CharField(max_length=20, description="单位")
     return_reason = fields.CharField(max_length=500, null=True, description="退货原因")
     status = fields.CharField(max_length=20, default="draft", description="状态")

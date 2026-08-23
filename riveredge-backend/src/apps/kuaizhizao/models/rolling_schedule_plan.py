@@ -54,8 +54,8 @@ class RollingSchedulePlanLine(BaseModel):
     sequence = fields.IntField(default=0, description="排序序号（越小越优先）")
 
     planned_quantity = fields.DecimalField(
-        max_digits=12,
-        decimal_places=2,
+        max_digits=14,
+        decimal_places=4,
         null=True,
         description="计划数量（支持部分结转）",
     )

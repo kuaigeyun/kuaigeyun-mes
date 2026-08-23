@@ -302,6 +302,13 @@ export interface DemandComputationReadiness {
   gaps: DemandComputationReadinessGap[];
   material_count: number;
   gap_count: number;
+  blocking_count?: number;
+  scope_validation_errors?: Array<{
+    material_id: number;
+    material_code: string;
+    material_name: string;
+    messages: string[];
+  }>;
 }
 
 /** 执行前就绪检查（可传入本次执行参数，与 preview/execute 一致） */
@@ -564,6 +571,14 @@ export interface ComputationPushPreviewItem {
   push_line_index?: number
 }
 
+export interface SourceSalesOrderAttachmentsPreview {
+  available: boolean
+  count: number
+  items: Array<{ uid: string; name: string; source_order_code?: string | null }>
+  source_order_codes: string[]
+  source_order_count: number
+}
+
 export interface PushPreview {
   computation_id: number
   computation_code?: string
@@ -582,6 +597,7 @@ export interface PushPreview {
   tip?: string | null
   has_blocking_issues?: boolean
   blocking_reason?: string | null
+  source_sales_order_attachments?: SourceSalesOrderAttachmentsPreview
 }
 
 export async function getPushPreview(
@@ -611,6 +627,7 @@ export async function pushAll(
     purchase_requisition_item_ids?: number[];
     production_item_ids?: number[];
     purchase_order_item_ids?: number[];
+    include_sales_order_attachments?: boolean;
   }
 ): Promise<{ success: boolean; message: string; results: Record<string, any> }> {
   return apiRequest(`/apps/kuaizhizao/demand-computations/${id}/push-all`, {

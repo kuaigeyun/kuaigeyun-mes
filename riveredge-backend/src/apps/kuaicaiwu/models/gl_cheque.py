@@ -17,7 +17,7 @@ class GlCheque(BaseModel):
     gl_account_id = fields.IntField(description="银行科目ID")
     issue_date = fields.DateField(description="签发日期")
     payee = fields.CharField(max_length=200, null=True, description="收款人")
-    amount = fields.DecimalField(max_digits=18, decimal_places=2, default=0, description="金额")
+    amount = fields.DecimalField(max_digits=20, decimal_places=4, default=0, description="金额")
     # issued / cleared / void
     status = fields.CharField(max_length=20, default="issued", description="状态")
     cleared_date = fields.DateField(null=True, description="核销日期")

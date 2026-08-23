@@ -952,7 +952,7 @@ const InventoryAlertPage: React.FC = () => {
             <ProFormSelect
               name="material_group_id"
               label={t('app.master-data.materialForm.materialGroup')}
-              placeholder={t('app.master-data.materialForm.materialGroupPlaceholder')}
+              placeholder={t('app.master-data.materialForm.materialGroupFilterPlaceholder')}
               disabled={!!currentRuleId}
               showSearch
               allowClear

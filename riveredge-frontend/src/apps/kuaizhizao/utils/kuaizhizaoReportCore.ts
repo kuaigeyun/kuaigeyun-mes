@@ -53,6 +53,8 @@ export const REPORT_TYPE_ROUTES: Record<string, ReportTypeRoute> = {
 
   inventory_summary: { api: 'inventory', backendType: 'inventory_summary', templateId: 'inventoryLedger' },
   inventory_ledger: { api: 'warehouse', backendType: 'inventory_ledger', templateId: 'inventoryLedger' },
+  inbound_summary: { api: 'warehouse', backendType: 'inbound_summary', templateId: 'queryTable' },
+  outbound_summary: { api: 'warehouse', backendType: 'outbound_summary', templateId: 'queryTable' },
   slow_moving: { api: 'warehouse', backendType: 'slow_moving', templateId: 'queryTable' },
   fifo_exception: { api: 'warehouse', backendType: 'fifo_exception', templateId: 'queryTable' },
   stocktaking_history: { api: 'warehouse', backendType: 'stocktaking', templateId: 'queryTable' },

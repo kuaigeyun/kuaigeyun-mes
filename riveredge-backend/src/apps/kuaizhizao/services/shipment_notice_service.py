@@ -1175,6 +1175,40 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
             user_id=notified_by,
         )
         updated = await ShipmentNotice.get(tenant_id=tenant_id, id=notice_id)
+        from apps.kuaizhizao.models.sales_order import SalesOrder
+        from apps.kuaizhizao.services.kuaizhizao_business_notification import (
+            ACTION_CONFIRMED,
+            DOC_SHIPMENT_NOTICE,
+            dispatch_kuaizhizao_notification,
+        )
+
+        sales_order = await SalesOrder.get_or_none(
+            tenant_id=tenant_id,
+            id=updated.sales_order_id,
+            deleted_at__isnull=True,
+        )
+        try:
+            await dispatch_kuaizhizao_notification(
+                tenant_id,
+                trigger_document=DOC_SHIPMENT_NOTICE,
+                trigger_action=ACTION_CONFIRMED,
+                variables={
+                    "notice_code": updated.notice_code or str(notice_id),
+                    "sales_order_code": updated.sales_order_code or "—",
+                    "customer_name": updated.customer_name or "—",
+                    "planned_ship_date": str(updated.planned_ship_date or ""),
+                    "detail_path": (
+                        f"/apps/kuaizhizao/sales-management/shipment-notices?highlight={notice_id}"
+                    ),
+                    "shipment_notice_id": str(notice_id),
+                },
+                context={
+                    "creator_user_id": getattr(updated, "created_by", None),
+                    "salesman_user_id": sales_order.salesman_id if sales_order else None,
+                },
+            )
+        except Exception as exc:
+            logger.warning("发货确认消息提醒失败 tenant={} notice={}: {}", tenant_id, notice_id, exc)
         resp = ShipmentNoticeResponse.model_validate(updated)
         return await self._enrich_notice_response(tenant_id, updated, resp)
 

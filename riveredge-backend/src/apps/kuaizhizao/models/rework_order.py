@@ -162,7 +162,7 @@ class ReworkOrder(BaseModel):
     operator_name = fields.CharField(max_length=100, null=True, description="操作员姓名")
 
     # 返工成本
-    cost = fields.DecimalField(max_digits=18, decimal_places=2, default=0, description="返工成本")
+    cost = fields.DecimalField(max_digits=20, decimal_places=4, default=0, description="返工成本")
 
     # 备注
     remarks = fields.TextField(null=True, description="备注")

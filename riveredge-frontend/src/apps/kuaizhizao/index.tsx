@@ -50,6 +50,7 @@ const OutsourceManagementPage = lazy(() => import('./pages/production-execution/
 const PurchaseDashboardPage = lazy(() => import('./pages/purchase-management/dashboard'));
 const PurchaseOrdersPage = lazy(() => import('./pages/purchase-management/purchase-orders'));
 const PurchaseOrderChangesPage = lazy(() => import('./pages/purchase-management/purchase-order-changes'));
+const PurchaseArrivalWarningsPage = lazy(() => import('./pages/purchase-management/arrival-warnings'));
 const PurchaseRequisitionsPage = lazy(() => import('./pages/purchase-management/purchase-requisitions'));
 const PurchaseInquiriesPage = lazy(() => import('./pages/purchase-management/purchase-inquiries'));
 const ReceiptNoticesPage = lazy(() => import('./pages/purchase-management/receipt-notices'));
@@ -213,6 +214,17 @@ const HourlyRatesPage = lazy(() => import('./pages/performance/hourly-rates'));
 const KpiDefinitionsPage = lazy(() => import('./pages/performance/kpi-definitions'));
 const SummariesPage = lazy(() => import('./pages/performance/summaries'));
 
+/** 委外工单列表已并入委外管理 Tab；保留旧书签路径并重定向 query */
+const RedirectOutsourceWorkOrdersToManagement: React.FC = () => {
+  const loc = useLocation();
+  return (
+    <Navigate
+      to={`/apps/kuaizhizao/production-execution/outsource-management${loc.search}`}
+      replace
+    />
+  );
+};
+
 /** 分析中心已迁至快报表：旧书签 /apps/kuaizhizao/analysis-center/... 跳转至对应快报表路径 */
 const RedirectAnalysisCenterToKuaireport: React.FC = () => {
   const loc = useLocation();
@@ -291,6 +303,8 @@ const SlowMovingInventoryPage = lazy(() => import('./pages/warehouse-management/
 const FifoExceptionAuditPage = lazy(() => import('./pages/warehouse-management/reports/FifoExceptionAudit'));
 const StocktakingHistoryPage = lazy(() => import('./pages/warehouse-management/reports/StocktakingHistory'));
 const TransferTrackingPage = lazy(() => import('./pages/warehouse-management/reports/TransferTracking'));
+const InboundDetailPage = lazy(() => import('./pages/warehouse-management/reports/InboundDetail'));
+const OutboundDetailPage = lazy(() => import('./pages/warehouse-management/reports/OutboundDetail'));
 
 // 绩效管理报表
 const EmployeeEfficiencyRankingPage = lazy(() => import('./pages/performance/reports/EmployeeEfficiencyRanking'));
@@ -316,6 +330,7 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="purchase-management/purchase-orders/:id/edit" element={withPageSuspense(PurchaseOrdersPage)} />
       <Route path="purchase-management/purchase-orders" element={withPageSuspense(PurchaseOrdersPage)} />
       <Route path="purchase-management/purchase-order-changes" element={withPageSuspense(PurchaseOrderChangesPage)} />
+      <Route path="purchase-management/arrival-warnings" element={withPageSuspense(PurchaseArrivalWarningsPage)} />
       <Route path="purchase-management/purchase-requisitions/new" element={withPageSuspense(PurchaseRequisitionsPage)} />
       <Route path="purchase-management/purchase-requisitions/:id/edit" element={withPageSuspense(PurchaseRequisitionsPage)} />
       <Route path="purchase-management/purchase-requisitions" element={withPageSuspense(PurchaseRequisitionsPage)} />
@@ -335,6 +350,10 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="production-execution/program-viewer/kiosk" element={withPageSuspense(ProgramViewerKioskPage)} />
       <Route path="production-execution/rework-orders" element={withPageSuspense(ReworkOrdersPage)} />
       <Route path="production-execution/outsource-management" element={withPageSuspense(OutsourceManagementPage)} />
+      <Route
+        path="production-execution/outsource-work-orders"
+        element={<RedirectOutsourceWorkOrdersToManagement />}
+      />
       <Route path="production-execution/packing-binding" element={withPageSuspense(PackingBindingPage)} />
       <Route path="production-execution/material-shortage-exceptions" element={withPageSuspense(MaterialShortageExceptionsPage)} />
       <Route path="production-execution/delivery-delay-exceptions" element={withPageSuspense(DeliveryDelayExceptionsPage)} />
@@ -610,6 +629,8 @@ const KuaizhizaoApp: React.FC = () => {
       {/* 仓储管理报表 */}
       <Route path="warehouse-management/reports/inventory-summary" element={withPageSuspense(InventorySummaryPage)} />
       <Route path="warehouse-management/reports/inventory-ledger" element={withPageSuspense(InventoryLedgerPage)} />
+      <Route path="warehouse-management/reports/inbound-summary" element={withPageSuspense(InboundDetailPage)} />
+      <Route path="warehouse-management/reports/outbound-summary" element={withPageSuspense(OutboundDetailPage)} />
       <Route path="warehouse-management/reports/slow-moving-inventory" element={withPageSuspense(SlowMovingInventoryPage)} />
       <Route path="warehouse-management/reports/fifo-exception-audit" element={withPageSuspense(FifoExceptionAuditPage)} />
       <Route path="warehouse-management/reports/stocktaking-history" element={withPageSuspense(StocktakingHistoryPage)} />

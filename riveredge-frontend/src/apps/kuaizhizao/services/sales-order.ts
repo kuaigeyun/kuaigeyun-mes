@@ -913,3 +913,39 @@ export async function reopenSalesOrder(id: number): Promise<SalesOrder> {
   });
 }
 
+/** 销售订单行价格趋势（按客户 + 物料） */
+export interface SalesOrderPriceTrendResponse {
+  side: 'sales';
+  material_id: number;
+  partner_id: number;
+  partner_name?: string | null;
+  history_items: Array<{
+    order_id: number;
+    order_code: string;
+    order_date: string;
+    partner_id: number;
+    partner_name: string;
+    unit_price: number;
+    quantity?: number;
+  }>;
+  trend_points: Array<{ date: string; price: number; order_code: string }>;
+  average_price: number;
+  min_price: number;
+  max_price: number;
+}
+
+export async function getSalesOrderPriceTrend(params: {
+  materialId: number;
+  customerId: number;
+  limit?: number;
+}): Promise<SalesOrderPriceTrendResponse> {
+  return apiRequest<SalesOrderPriceTrendResponse>('/apps/kuaizhizao/sales-orders/price-trend', {
+    method: 'GET',
+    params: {
+      material_id: params.materialId,
+      customer_id: params.customerId,
+      limit: params.limit,
+    },
+  });
+}
+

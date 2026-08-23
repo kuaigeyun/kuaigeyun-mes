@@ -69,7 +69,7 @@ class PurchaseRequisitionItem(BaseModel):
     unit = fields.CharField(max_length=20, default="件", description="单位")
 
     # 数量与价格
-    quantity = fields.DecimalField(max_digits=10, decimal_places=2, description="申请数量")
+    quantity = fields.DecimalField(max_digits=12, decimal_places=4, description="申请数量")
     suggested_unit_price = fields.DecimalField(max_digits=10, decimal_places=4, default=0, description="建议单价")
     required_date = fields.DateField(null=True, description="要求到货日期")
 

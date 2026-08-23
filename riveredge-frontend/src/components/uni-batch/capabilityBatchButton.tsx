@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { batchSomeCapabilityAllowed } from '../../hooks/useDocumentCapabilities';
 import { pickCapability, defaultAuditBatchAllowed } from './auditBatchMenu';
 import { UniBatchButton, type UniBatchButtonProps } from './index';
+import { getApiErrorMessage } from '../../utils/errorHandler';
 
 export type BulkCapabilityResult = {
   success_count?: number;
@@ -66,12 +67,14 @@ export async function runCapabilityBatchLoop(
 
   let success = 0;
   let failed = 0;
+  let lastError: unknown = null;
   for (const id of eligibleIds) {
     try {
       await onRun(id);
       success += 1;
-    } catch {
+    } catch (error) {
       failed += 1;
+      lastError = error;
     }
   }
 
@@ -79,7 +82,12 @@ export async function runCapabilityBatchLoop(
     message.success(t(`${i18nPrefix}.success`, { count: success }));
   }
   if (failed > 0) {
-    message.warning(t(`${i18nPrefix}.partial`, { success, failed }));
+    const reason = getApiErrorMessage(lastError, '');
+    if (reason) {
+      message.warning(t(`${i18nPrefix}.partialWithReason`, { success, failed, reason }));
+    } else {
+      message.warning(t(`${i18nPrefix}.partial`, { success, failed }));
+    }
   }
   onSuccess?.();
 }

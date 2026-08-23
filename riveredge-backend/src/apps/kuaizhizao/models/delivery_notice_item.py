@@ -26,9 +26,9 @@ class DeliveryNoticeItem(BaseModel):
     material_spec = fields.CharField(max_length=200, null=True, description="物料规格")
     material_unit = fields.CharField(max_length=20, description="物料单位")
 
-    notice_quantity = fields.DecimalField(max_digits=10, decimal_places=2, description="通知数量")
-    unit_price = fields.DecimalField(max_digits=10, decimal_places=2, default=0, description="单价")
-    total_amount = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="金额")
+    notice_quantity = fields.DecimalField(max_digits=12, decimal_places=4, description="通知数量")
+    unit_price = fields.DecimalField(max_digits=12, decimal_places=4, default=0, description="单价")
+    total_amount = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="金额")
 
     delivery_item_id = fields.IntField(null=True, description="销售出库明细ID（关联）")
 

@@ -38,6 +38,7 @@ import {
 import { PlusOutlined, SendOutlined, AppstoreAddOutlined, ImportOutlined, DownOutlined, RollbackOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable, readPersistedUniTableViewType } from '../../../../../components/uni-table';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import { UniCapabilityBatchButton } from '../../../../../components/uni-batch';
 import {
   UniTableStackedPrimaryCell,
@@ -1597,20 +1598,7 @@ const ReceiptNoticesPage: React.FC = () => {
           columns={columns}
           viewTypes={['table', 'detailTable', 'help']}
           defaultViewType={viewTypeState === 'help' ? 'table' : viewTypeState}
-          helpViewConfig={{
-            content: (
-              <div style={{ lineHeight: 1.8 }}>
-                <p>
-                  <strong>{t('components.uniTable.viewTable')}</strong>
-                  {t('app.kuaizhizao.receiptNotice.helpTableView')}
-                </p>
-                <p>
-                  <strong>{t('components.uniTable.viewDetailTable')}</strong>
-                  {t('app.kuaizhizao.receiptNotice.helpDetailTableView')}
-                </p>
-              </div>
-            ),
-          }}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.receiptNotice)}
           onViewTypeChange={(v) => {
             dataViewModeRef.current = resolveDetailTableViewMode(v as 'table' | 'detailTable' | 'help');
             setViewTypeState(v as 'table' | 'detailTable' | 'help');

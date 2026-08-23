@@ -22,9 +22,9 @@ class SalesContractChange(BaseModel):
     status = fields.CharField(max_length=20, default="草稿", description="状态")
     review_status = fields.CharField(max_length=20, default="待审核", description="审核状态")
 
-    delta_amount = fields.DecimalField(max_digits=14, decimal_places=2, default=0, description="金额变更量")
+    delta_amount = fields.DecimalField(max_digits=16, decimal_places=4, default=0, description="金额变更量")
     new_valid_to = fields.DateField(null=True, description="新终止日期")
-    new_total_amount = fields.DecimalField(max_digits=14, decimal_places=2, null=True, description="变更后合同总额")
+    new_total_amount = fields.DecimalField(max_digits=16, decimal_places=4, null=True, description="变更后合同总额")
 
     reason = fields.TextField(null=True, description="变更原因")
     new_contract_id = fields.IntField(null=True, description="变更生效后新版本合同ID")

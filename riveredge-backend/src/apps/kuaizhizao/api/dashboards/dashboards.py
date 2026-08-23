@@ -15,6 +15,10 @@ from pydantic import BaseModel, Field
 from datetime import date, datetime, timedelta
 
 from core.api.deps import get_current_user, get_current_tenant
+from core.services.user.approval_todo_mapper import (
+    approval_task_matches_module,
+    fetch_user_approval_todos,
+)
 from core.utils.api_cache import cache_by_kwargs
 from tortoise.expressions import Q
 from core.utils.timezone_utils import resolve_business_datetime, site_day_bounds_utc, to_api_isoformat
@@ -98,7 +102,7 @@ class TodoItem(BaseModel):
         ...,
         description=(
             "待办类型：work_order / exception / quality_inspection / warehouse / outbound / "
-            "purchase / sales / equipment"
+            "purchase / sales / equipment / approval"
         ),
     )
     title: str = Field(..., description="待办事项标题")
@@ -141,10 +145,18 @@ MODULE_TODO_ID_PREFIXES: dict[str, tuple[str, ...]] = {
 def _filter_todos_by_module(items: List[TodoItem], module: Optional[str]) -> List[TodoItem]:
     if not module:
         return items
-    prefixes = MODULE_TODO_ID_PREFIXES.get(module.strip().lower())
+    mod = module.strip().lower()
+    prefixes = MODULE_TODO_ID_PREFIXES.get(mod)
     if not prefixes:
         return items
-    return [t for t in items if any(t.id.startswith(p) for p in prefixes)]
+
+    def _matches(item: TodoItem) -> bool:
+        if item.id.startswith("approval_task_"):
+            entity_type = (item.meta or {}).get("entity_type")
+            return approval_task_matches_module(entity_type, mod)
+        return any(item.id.startswith(p) for p in prefixes)
+
+    return [t for t in items if _matches(t)]
 
 
 class StatisticsResponse(BaseModel):
@@ -184,11 +196,20 @@ def _parse_dashboard_period_utc(
     return start_utc, end_utc
 
 
+def _current_user_id(current_user: User = Depends(get_current_user)) -> int:
+    return int(current_user.id)
+
+
 @router.get("/todos", response_model=TodoListResponse, summary="List todos")
-@cache_by_kwargs(namespace="dashboard:todos", ttl=30)
+@cache_by_kwargs(
+    namespace="dashboard:todos",
+    ttl=30,
+    include_kwargs=("limit", "module", "approver_user_id"),
+)
 async def get_todos(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
+    approver_user_id: int = Depends(_current_user_id),
     limit: int = Query(20, ge=1, le=100, description="限制数量"),
     module: Optional[str] = Query(
         None,
@@ -1047,7 +1068,20 @@ async def get_todos(
             logger.error(f"获取成品检验待办失败: {e}")
             return []
 
+    async def _fetch_approval_tasks() -> List[TodoItem]:
+        try:
+            raw_items = await fetch_user_approval_todos(
+                tenant_id,
+                int(current_user.id),
+                limit=limit,
+            )
+            return [TodoItem(**item) for item in raw_items]
+        except Exception as e:
+            logger.error(f"获取审批待办失败: {e}")
+            return []
+
     results = await _asyncio.gather(
+        _fetch_approval_tasks(),
         _fetch_work_orders(),
         _fetch_material_shortages(),
         _fetch_delivery_delays(),
@@ -2200,6 +2234,7 @@ async def get_purchase_summary(
     """
     from apps.kuaizhizao.models.purchase_requisition import PurchaseRequisition
     from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderItem
+    from apps.kuaizhizao.services.purchase_arrival_warning_service import PurchaseArrivalWarningService
     from tortoise.functions import Sum
     import asyncio
 
@@ -2226,7 +2261,7 @@ async def get_purchase_summary(
     pending_requisitions, pending_receipts, overdue_receipts, new_requisitions = await asyncio.gather(
         q1,
         _count_purchase_orders_with_open_receipt(tenant_id),
-        _count_purchase_orders_with_open_receipt(tenant_id, overdue_before=now_date),
+        PurchaseArrivalWarningService().count_overdue_open_lines(tenant_id),
         q3,
     )
 

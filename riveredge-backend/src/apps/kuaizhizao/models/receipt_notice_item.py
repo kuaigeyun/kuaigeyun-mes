@@ -26,9 +26,9 @@ class ReceiptNoticeItem(BaseModel):
     material_spec = fields.CharField(max_length=200, null=True, description="物料规格")
     material_unit = fields.CharField(max_length=20, description="物料单位")
 
-    notice_quantity = fields.DecimalField(max_digits=10, decimal_places=2, description="通知数量")
-    unit_price = fields.DecimalField(max_digits=10, decimal_places=2, default=0, description="单价")
-    total_amount = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="金额")
+    notice_quantity = fields.DecimalField(max_digits=12, decimal_places=4, description="通知数量")
+    unit_price = fields.DecimalField(max_digits=12, decimal_places=4, default=0, description="单价")
+    total_amount = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="金额")
 
     purchase_order_item_id = fields.IntField(null=True, description="采购订单明细ID（关联）")
 

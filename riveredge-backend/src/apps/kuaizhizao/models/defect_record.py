@@ -99,7 +99,7 @@ class DefectRecord(BaseModel):
     product_name = fields.CharField(max_length=200, description="产品名称")
 
     # 不良品信息
-    defect_quantity = fields.DecimalField(max_digits=12, decimal_places=2, description="不良品数量")
+    defect_quantity = fields.DecimalField(max_digits=14, decimal_places=4, description="不良品数量")
     defect_type = fields.CharField(max_length=20, default="other", description="不良品类型（dimension/appearance/function/material/other）")
     defect_reason = fields.TextField(description="不良品原因")
     disposition = fields.CharField(max_length=20, default="quarantine", description="处理方式（quarantine/rework/scrap/accept/downgrade/other）")

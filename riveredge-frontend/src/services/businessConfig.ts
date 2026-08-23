@@ -110,11 +110,11 @@ export function resolveDetailTimeFieldHiddenMap(
   return out;
 }
 
-/** 与当前库字段 decimal_places 对齐的配置上限（配置页 max 同源） */
+/** 配置中心数值精度上限（与 configTree / 后端 parameters.common.* 校验 max 同源） */
 export const NUMERIC_PRECISION_STORAGE_CEILING = {
-  quantity: 2,
+  quantity: 4,
   price: 4,
-  amount: 2,
+  amount: 4,
 } as const;
 
 export type NumericPrecisionKind = keyof typeof NUMERIC_PRECISION_STORAGE_CEILING;

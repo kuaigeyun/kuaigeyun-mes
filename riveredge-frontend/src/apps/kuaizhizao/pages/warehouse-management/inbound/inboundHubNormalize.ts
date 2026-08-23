@@ -10,6 +10,7 @@ type InboundDetailItem = {
   material_unit?: string;
   unit?: string;
   receipt_quantity?: number;
+  inbound_quantity?: number;
   return_quantity?: number;
   quantity?: number;
   warehouse_name?: string;
@@ -18,6 +19,26 @@ type InboundDetailItem = {
   qualified_quantity?: number;
   unqualified_quantity?: number;
 };
+
+/** Hub 明细行数量：采购/成品用 receipt_quantity，其他入库用 inbound_quantity 等 */
+export function resolveInboundHubLineQuantity(row: Record<string, unknown> | InboundDetailItem): number | undefined {
+  const raw =
+    row.receipt_quantity ??
+    row.inbound_quantity ??
+    row.return_quantity ??
+    row.quantity;
+  if (raw == null || raw === '') return undefined;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+function normalizeInboundHubDetailItem(item: Record<string, unknown>): InboundDetailItem {
+  const qty = resolveInboundHubLineQuantity(item);
+  return {
+    ...(item as InboundDetailItem),
+    ...(qty != null ? { receipt_quantity: qty } : {}),
+  };
+}
 
 function pickString(row: Record<string, unknown>, ...keys: string[]): string | undefined {
   for (const key of keys) {
@@ -130,6 +151,14 @@ export function normalizeInboundHubDetail(
     if (!row.received_by_name) row.received_by_name = listRow.received_by_name;
     if (!row.received_at) row.received_at = listRow.received_at;
     if (!row.receipt_date) row.receipt_date = listRow.receipt_date;
+  }
+
+  if (Array.isArray(row.items)) {
+    row.items = row.items.map((it) =>
+      normalizeInboundHubDetailItem(
+        typeof it === 'object' && it != null ? (it as Record<string, unknown>) : {},
+      ),
+    );
   }
 
   const dateRaw = resolveInboundHubDateRaw(row as InboundHubOrder);

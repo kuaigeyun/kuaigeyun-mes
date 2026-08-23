@@ -35,10 +35,10 @@ class PartnerStatement(BaseModel):
     start_date = fields.DateField(description="开始日期")
     end_date = fields.DateField(description="结束日期")
 
-    opening_balance = fields.DecimalField(max_digits=14, decimal_places=2, description="期初余额")
-    debit_total = fields.DecimalField(max_digits=14, decimal_places=2, description="本期借方总额")
-    credit_total = fields.DecimalField(max_digits=14, decimal_places=2, description="本期贷方总额")
-    closing_balance = fields.DecimalField(max_digits=14, decimal_places=2, description="期末余额")
+    opening_balance = fields.DecimalField(max_digits=16, decimal_places=4, description="期初余额")
+    debit_total = fields.DecimalField(max_digits=16, decimal_places=4, description="本期借方总额")
+    credit_total = fields.DecimalField(max_digits=16, decimal_places=4, description="本期贷方总额")
+    closing_balance = fields.DecimalField(max_digits=16, decimal_places=4, description="期末余额")
 
     status = fields.CharField(max_length=20, default="Draft", description="状态 (Draft/Confirmed/Sent/Disputed)")
 

@@ -406,6 +406,160 @@ type BomExportGroupResolved = {
   items: Array<Record<string, unknown>>;
 };
 
+export type BomExportGroupSummary = {
+  material_id: number;
+  version: string;
+  bom_code?: string | null;
+  bom_name?: string | null;
+  approval_status?: string;
+  is_default?: boolean;
+};
+
+export type BomExportGroupHint = {
+  materialId: number;
+  version: string;
+  bomCode: string;
+  bomName: string;
+  approvalStatus?: string;
+  isDefault?: boolean;
+};
+
+export type BomExportContext = {
+  itemsIndex: Map<string, Array<Record<string, unknown>>>;
+  hintsByMaterialId: Map<number, BomExportGroupHint[]>;
+};
+
+type BomExportNestedApi = {
+  getGroups: (params?: {
+    includeObsolete?: boolean;
+    materialIds?: number[];
+  }) => Promise<{ data: BomExportGroupSummary[] }>;
+  getBatchItems: (
+    items: Array<{ material_id: number; version?: string }>,
+    includeObsolete?: boolean,
+  ) => Promise<Record<string, Array<Record<string, unknown>>>>;
+};
+
+export function bomItemsIndexKey(materialId: number, version: string): string {
+  return `${materialId}|${version || '1.0'}`;
+}
+
+export function appendBomExportHint(
+  hintsByMaterialId: Map<number, BomExportGroupHint[]>,
+  summary: BomExportGroupSummary,
+): void {
+  const materialId = Number(summary.material_id);
+  if (!Number.isFinite(materialId) || materialId <= 0) return;
+  const version = String(summary.version ?? '1.0');
+  const hint: BomExportGroupHint = {
+    materialId,
+    version,
+    bomCode: String(summary.bom_code ?? '-'),
+    bomName: String(summary.bom_name ?? ''),
+    approvalStatus: summary.approval_status,
+    isDefault: summary.is_default === true,
+  };
+  const list = hintsByMaterialId.get(materialId) ?? [];
+  if (!list.some((h) => h.version === hint.version && h.bomCode === hint.bomCode)) {
+    list.push(hint);
+    hintsByMaterialId.set(materialId, list);
+  }
+}
+
+export function pickDefaultBomExportHint(
+  hints: BomExportGroupHint[] | undefined,
+): BomExportGroupHint | null {
+  if (!hints?.length) return null;
+  return hints.find((h) => h.isDefault) ?? hints[hints.length - 1] ?? null;
+}
+
+/**
+ * 拉取导出所需 BOM 明细索引，并按列表相同规则 BFS 补齐半成品下级 BOM。
+ */
+export async function loadBomExportNestedItems(
+  rootGroups: BomExportGroupSummary[],
+  includeObsolete: boolean,
+  api: BomExportNestedApi,
+): Promise<BomExportContext & { batchItems: Record<string, Array<Record<string, unknown>>> }> {
+  const hintsByMaterialId = new Map<number, BomExportGroupHint[]>();
+  const mergedBatchItems: Record<string, Array<Record<string, unknown>>> = {};
+  const existingGroupKeys = new Set<string>();
+
+  rootGroups.forEach((g) => {
+    appendBomExportHint(hintsByMaterialId, g);
+    existingGroupKeys.add(bomItemsIndexKey(g.material_id, g.version));
+  });
+
+  if (rootGroups.length) {
+    const rootBatch = await api.getBatchItems(
+      rootGroups.map((g) => ({ material_id: g.material_id, version: g.version })),
+      includeObsolete,
+    );
+    Object.assign(mergedBatchItems, rootBatch);
+  }
+
+  let frontierSemiIds = new Set<number>();
+  for (const g of rootGroups) {
+    const items = mergedBatchItems[bomItemsIndexKey(g.material_id, g.version)] ?? [];
+    for (const it of items) {
+      const componentId = Number(it.componentId ?? it.component_id);
+      if (Number.isFinite(componentId) && componentId > 0) {
+        frontierSemiIds.add(componentId);
+      }
+    }
+  }
+
+  const processedSemiIds = new Set<number>();
+  while (frontierSemiIds.size > 0) {
+    const ids = Array.from(frontierSemiIds).filter((id) => !processedSemiIds.has(id));
+    ids.forEach((id) => processedSemiIds.add(id));
+    frontierSemiIds = new Set();
+    if (ids.length === 0) break;
+
+    const { data: semiGroups } = await api.getGroups({
+      includeObsolete,
+      materialIds: ids,
+    });
+    semiGroups.forEach((g) => appendBomExportHint(hintsByMaterialId, g));
+
+    const byMid = new Map<number, BomExportGroupSummary>();
+    for (const x of semiGroups) {
+      const cur = byMid.get(x.material_id);
+      if (!cur || x.is_default) byMid.set(x.material_id, x);
+    }
+    const needFetch = Array.from(byMid.values()).filter(
+      (g) => !existingGroupKeys.has(bomItemsIndexKey(g.material_id, g.version)),
+    );
+    if (needFetch.length === 0) continue;
+
+    const semiBatch = await api.getBatchItems(
+      needFetch.map((g) => ({ material_id: g.material_id, version: g.version })),
+      includeObsolete,
+    );
+    Object.assign(mergedBatchItems, semiBatch);
+    needFetch.forEach((g) => {
+      existingGroupKeys.add(bomItemsIndexKey(g.material_id, g.version));
+    });
+
+    for (const g of needFetch) {
+      const items = mergedBatchItems[bomItemsIndexKey(g.material_id, g.version)] ?? [];
+      for (const it of items) {
+        const componentId = Number(it.componentId ?? it.component_id);
+        if (componentId > 0 && !processedSemiIds.has(componentId)) {
+          frontierSemiIds.add(componentId);
+        }
+      }
+    }
+  }
+
+  const itemsIndex = new Map<string, Array<Record<string, unknown>>>();
+  Object.entries(mergedBatchItems).forEach(([key, items]) => {
+    itemsIndex.set(key, items);
+  });
+
+  return { batchItems: mergedBatchItems, itemsIndex, hintsByMaterialId };
+}
+
 /**
  * 从列表行（物料分组行 / 版本分组行）解析可导出的 BOM 组；子件叶行返回 null。
  */
@@ -464,105 +618,210 @@ function approvalStatusLabel(
   return labels[key] || String(status ?? '');
 }
 
+type BomExportFlatOptions = {
+  unitValueToLabel?: Record<string, string>;
+  approvalStatusLabels?: Record<string, string>;
+  issueMethodLabels?: Record<string, string>;
+  yesLabel?: string;
+  noLabel?: string;
+  exportContext?: BomExportContext;
+  expandNested?: boolean;
+};
+
+type BomExportLineMeta = {
+  bomCode: string;
+  bomName: string;
+  version: string;
+  approvalStatus?: string;
+};
+
+function appendCustomFieldsToExportRow(
+  flat: BomListExportRow,
+  item: Record<string, unknown>,
+): void {
+  Object.entries(item).forEach(([key, value]) => {
+    if (!key.startsWith('custom_')) return;
+    if (value == null || typeof value === 'object') {
+      flat[key] = value == null ? '' : JSON.stringify(value);
+    } else {
+      flat[key] = value as string | number | boolean;
+    }
+  });
+}
+
+function buildBomExportFlatRow(
+  item: Record<string, unknown>,
+  parentMaterialId: number,
+  lineMeta: BomExportLineMeta,
+  matById: Map<number, BomExportMaterialLike>,
+  options: BomExportFlatOptions,
+): BomListExportRow | null {
+  const componentId = Number(item.componentId ?? item.component_id);
+  if (!Number.isFinite(componentId) || componentId <= 0) return null;
+
+  const parent = matById.get(parentMaterialId);
+  const component = matById.get(componentId);
+  const parentCode = materialCodeOf(parent);
+  const parentName = String(parent?.name ?? '').trim();
+  const parentSpec = String(parent?.specification ?? '').trim();
+  const parentBaseUnit = String(parent?.baseUnit ?? '').trim();
+  const parentRouteName = String(
+    parent?.processRouteName ?? parent?.process_route_name ?? '',
+  ).trim();
+  const parentRouteCode = String(
+    parent?.processRouteCode ?? parent?.process_route_code ?? '',
+  ).trim();
+  const componentCode =
+    String(item.componentCode ?? item.component_code ?? '').trim() || materialCodeOf(component);
+  const componentName = String(component?.name ?? '').trim();
+  const componentSpec = String(component?.specification ?? '').trim();
+  const unitMap = options.unitValueToLabel ?? {};
+  const yes = options.yesLabel ?? '是';
+  const no = options.noLabel ?? '否';
+  const unitRaw = String(item.unit ?? '').trim();
+  const unit = unitRaw ? unitMap[unitRaw] || unitRaw : '';
+  const wasteRaw = item.wasteRate ?? item.waste_rate;
+  const wasteRate = wasteRaw == null || wasteRaw === '' ? 0 : Number(wasteRaw);
+  const isRequired = item.isRequired ?? item.is_required;
+  const isActive = item.isActive ?? item.is_active;
+  const issueMethodRaw = String(item.issueMethod ?? item.issue_method ?? 'pick').trim();
+  const issueMethodLabels = options.issueMethodLabels ?? {};
+  const flat: BomListExportRow = {
+    bomCode: lineMeta.bomCode || '',
+    bomName: lineMeta.bomName || '',
+    version: lineMeta.version || '1.0',
+    approvalStatus: approvalStatusLabel(lineMeta.approvalStatus, options.approvalStatusLabels ?? {}),
+    baseQuantity: Number(item.baseQuantity ?? item.base_quantity ?? 1) || 1,
+    parentCode,
+    componentCode,
+    componentName,
+    componentSpecification: componentSpec,
+    quantity: item.quantity == null || item.quantity === '' ? '' : Number(item.quantity),
+    unit,
+    wasteRate: Number.isFinite(wasteRate) ? wasteRate : 0,
+    isRequired: isRequired === false ? no : yes,
+    isActive: isActive === false ? no : yes,
+    issueMethod: issueMethodLabels[issueMethodRaw] || issueMethodRaw,
+    remark: String(item.remark ?? item.description ?? '').trim(),
+    materialName: parentName,
+    specification: parentSpec,
+    baseUnit: parentBaseUnit ? unitMap[parentBaseUnit] || parentBaseUnit : '',
+    processRouteCode: parentRouteCode,
+    processRouteName: parentRouteName,
+  };
+  appendCustomFieldsToExportRow(flat, item);
+  return flat;
+}
+
+function walkBomExportLines(
+  parentMaterialId: number,
+  lineMeta: BomExportLineMeta,
+  items: Array<Record<string, unknown>>,
+  matById: Map<number, BomExportMaterialLike>,
+  options: BomExportFlatOptions,
+  out: BomListExportRow[],
+  depth: number,
+  visitedComponentIds: Set<number>,
+): void {
+  if (depth > 20 || !items.length) return;
+
+  for (const item of items) {
+    const flat = buildBomExportFlatRow(item, parentMaterialId, lineMeta, matById, options);
+    if (!flat) continue;
+    out.push(flat);
+
+    if (!options.expandNested || !options.exportContext) continue;
+
+    const componentId = Number(item.componentId ?? item.component_id);
+    if (!Number.isFinite(componentId) || componentId <= 0 || visitedComponentIds.has(componentId)) {
+      continue;
+    }
+
+    const childHint = pickDefaultBomExportHint(
+      options.exportContext.hintsByMaterialId.get(componentId),
+    );
+    if (!childHint) continue;
+
+    const childItems =
+      options.exportContext.itemsIndex.get(
+        bomItemsIndexKey(componentId, childHint.version),
+      ) ?? [];
+    if (!childItems.length) continue;
+
+    const nextVisited = new Set(visitedComponentIds);
+    nextVisited.add(componentId);
+    walkBomExportLines(
+      componentId,
+      {
+        bomCode: childHint.bomCode,
+        bomName: childHint.bomName,
+        version: childHint.version,
+        approvalStatus: childHint.approvalStatus,
+      },
+      childItems,
+      matById,
+      options,
+      out,
+      depth + 1,
+      nextVisited,
+    );
+  }
+}
+
 /**
- * 将 BOM 分组展平为可导入格式的明细行（父件 + 子件一行）。
+ * 将 BOM 分组展平为可导入格式的明细行（父件 + 子件一行；可选按列表树规则多级展开）。
  */
 export function flattenBomGroupsForExport(
   rows: unknown[],
   materials: BomExportMaterialLike[],
-  options: {
-    unitValueToLabel?: Record<string, string>;
-    approvalStatusLabels?: Record<string, string>;
-    yesLabel?: string;
-    noLabel?: string;
-  } = {},
+  options: BomExportFlatOptions = {},
 ): BomListExportRow[] {
   const matById = new Map<number, BomExportMaterialLike>();
   materials.forEach((m) => {
     if (m?.id != null) matById.set(Number(m.id), m);
   });
-  const unitMap = options.unitValueToLabel ?? {};
-  const yes = options.yesLabel ?? '是';
-  const no = options.noLabel ?? '否';
-  const statusLabels = options.approvalStatusLabels ?? {};
   const out: BomListExportRow[] = [];
 
   for (const row of rows) {
     const group = resolveBomExportGroup(row);
-    if (!group) continue;
-    const parent = matById.get(group.materialId);
-    const parentCode = materialCodeOf(parent);
-    const parentName = String(parent?.name ?? '').trim();
-    const parentSpec = String(parent?.specification ?? '').trim();
-    const parentBaseUnit = String(parent?.baseUnit ?? '').trim();
-    const parentRouteName = String(
-      parent?.processRouteName ?? parent?.process_route_name ?? '',
-    ).trim();
-    const parentRouteCode = String(
-      parent?.processRouteCode ?? parent?.process_route_code ?? '',
-    ).trim();
-    const approval = approvalStatusLabel(group.approvalStatus, statusLabels);
-    const items = group.items.length
-      ? group.items
-      : [
-          {
-            componentId: undefined,
-            quantity: '',
-            unit: '',
-            wasteRate: 0,
-            isRequired: true,
-            isActive: true,
-            remark: '',
-          },
-        ];
+    if (!group || !group.items.length) continue;
 
-    for (const item of items) {
-      const componentId = Number(item.componentId ?? item.component_id);
-      const component =
-        Number.isFinite(componentId) && componentId > 0 ? matById.get(componentId) : undefined;
-      const componentCode =
-        String(item.componentCode ?? item.component_code ?? '').trim() || materialCodeOf(component);
-      const unitRaw = String(item.unit ?? '').trim();
-      const unit = unitRaw ? unitMap[unitRaw] || unitRaw : '';
-      const wasteRaw = item.wasteRate ?? item.waste_rate;
-      const wasteRate =
-        wasteRaw == null || wasteRaw === ''
-          ? 0
-          : Number(wasteRaw);
-      const isRequired = item.isRequired ?? item.is_required;
-      const isActive = item.isActive ?? item.is_active;
-      const flat: BomListExportRow = {
-        bomCode: group.bomCode || '',
-        bomName: group.bomName || '',
-        version: group.version || '1.0',
-        approvalStatus: approval,
-        baseQuantity: Number(item.baseQuantity ?? item.base_quantity ?? 1) || 1,
-        parentCode,
-        componentCode,
-        quantity: item.quantity == null || item.quantity === '' ? '' : Number(item.quantity),
-        unit,
-        wasteRate: Number.isFinite(wasteRate) ? wasteRate : 0,
-        isRequired: isRequired === false ? no : yes,
-        isActive: isActive === false ? no : yes,
-        remark: String(item.remark ?? item.description ?? '').trim(),
-        materialName: parentName,
-        specification: parentSpec,
-        baseUnit: parentBaseUnit ? unitMap[parentBaseUnit] || parentBaseUnit : '',
-        processRouteCode: parentRouteCode,
-        processRouteName: parentRouteName,
-      };
-      Object.entries(item).forEach(([key, value]) => {
-        if (!key.startsWith('custom_')) return;
-        if (value == null || typeof value === 'object') {
-          flat[key] = value == null ? '' : JSON.stringify(value);
-        } else {
-          flat[key] = value as string | number | boolean;
-        }
-      });
-      out.push(flat);
-    }
+    walkBomExportLines(
+      group.materialId,
+      {
+        bomCode: group.bomCode,
+        bomName: group.bomName,
+        version: group.version,
+        approvalStatus: group.approvalStatus,
+      },
+      group.items,
+      matById,
+      options,
+      out,
+      0,
+      new Set(),
+    );
   }
   return out;
+}
+
+/** 从 batchItems 索引收集导出所需的全部物料 ID */
+export function collectBomExportMaterialIds(
+  groups: unknown[],
+  batchItems: Record<string, Array<Record<string, unknown>>>,
+): number[] {
+  const ids = new Set<number>();
+  groups.forEach((row) => {
+    const group = resolveBomExportGroup(row);
+    if (group?.materialId) ids.add(group.materialId);
+  });
+  Object.values(batchItems).forEach((items) => {
+    items.forEach((item) => {
+      const componentId = Number(item.componentId ?? item.component_id);
+      if (Number.isFinite(componentId) && componentId > 0) ids.add(componentId);
+    });
+  });
+  return Array.from(ids);
 }
 
 /**

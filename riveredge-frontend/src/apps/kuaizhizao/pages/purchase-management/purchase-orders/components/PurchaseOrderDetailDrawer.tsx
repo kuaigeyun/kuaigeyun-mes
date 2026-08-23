@@ -27,6 +27,7 @@ import { getPurchaseOrderLifecycle } from '../../../../utils/purchaseOrderLifecy
 import { type PurchaseOrder, type PurchaseOrderItem } from '../../../../services/purchase';
 import { listPurchaseOrderChangesByOrder, type PurchaseOrderChange } from '../../../../services/purchase-order-change';
 import { alignDescriptionColumns } from '../../../sales-management/shared/documentFieldAlignment';
+import { MarkerTag } from '../../../../../../constants/statusBadges';
 import { formatDateTimeBySiteSetting } from '../../../../../../utils/format';
 import { resolveSystemDictionaryItemLabel } from '../../../../../../utils/systemDictionaryI18n';
 import { useAuditRequired } from '../../../../../../hooks/useAuditRequired';
@@ -446,7 +447,15 @@ export const PurchaseOrderDetailDrawer: React.FC<PurchaseOrderDetailDrawerProps>
                   dataIndex: 'unit_price',
                   width: 100,
                   align: 'right',
-                  render: (text: number) => `¥${text}`,
+                  render: (text: number, row: PurchaseOrderItem) => (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
+                      ¥{text}
+                      {(row as PurchaseOrderItem & { price_settlement_status?: string }).price_settlement_status ===
+                      'PROVISIONAL' ? (
+                        <MarkerTag color="warning">{t('app.kuaizhizao.purchaseOrder.priceProvisional')}</MarkerTag>
+                      ) : null}
+                    </span>
+                  ),
                 },
                 {
                   title: t('app.kuaizhizao.purchaseOrder.col.totalPrice'),

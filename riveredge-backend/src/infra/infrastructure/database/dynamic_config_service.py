@@ -275,6 +275,7 @@ class DynamicDatabaseConfigService:
                 f"apps.{module_code}.models.purchase_return_item",
                 f"apps.{module_code}.models.purchase_order",
                 f"apps.{module_code}.models.purchase_order_item",
+                f"apps.{module_code}.models.purchase_arrival_delay_report",
                 f"apps.{module_code}.models.purchase_requisition",
                 f"apps.{module_code}.models.purchase_requisition_item",
                 # 质量管理模块
@@ -495,6 +496,7 @@ class DynamicDatabaseConfigService:
                 f"apps.{module_code}.models.purchase_return_item",
                 f"apps.{module_code}.models.purchase_order",
                 f"apps.{module_code}.models.purchase_order_item",
+                f"apps.{module_code}.models.purchase_arrival_delay_report",
                 f"apps.{module_code}.models.purchase_requisition",
                 f"apps.{module_code}.models.purchase_requisition_item",
                 # 质量管理模块

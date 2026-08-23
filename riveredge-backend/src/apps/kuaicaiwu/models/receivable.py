@@ -30,9 +30,9 @@ class Receivable(BaseModel):
     customer_name = fields.CharField(max_length=200, description="客户名称")
 
     # 应收金额
-    total_amount = fields.DecimalField(max_digits=12, decimal_places=2, description="应收总金额")
-    received_amount = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="已收金额")
-    remaining_amount = fields.DecimalField(max_digits=12, decimal_places=2, description="剩余金额")
+    total_amount = fields.DecimalField(max_digits=14, decimal_places=4, description="应收总金额")
+    received_amount = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="已收金额")
+    remaining_amount = fields.DecimalField(max_digits=14, decimal_places=4, description="剩余金额")
 
     # 账期信息
     due_date = fields.DateField(description="到期日期")

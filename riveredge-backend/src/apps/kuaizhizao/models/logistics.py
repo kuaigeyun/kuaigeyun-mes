@@ -150,7 +150,7 @@ class FreightBill(BaseModel):
     carrier_name = fields.CharField(max_length=200, description="承运商名称")
     period_start = fields.DateField(null=True, description="结算期起")
     period_end = fields.DateField(null=True, description="结算期止")
-    total_amount = fields.DecimalField(max_digits=14, decimal_places=2, default=0, description="总金额")
+    total_amount = fields.DecimalField(max_digits=16, decimal_places=4, default=0, description="总金额")
     status = fields.CharField(max_length=20, default="draft", description="单据状态")
     review_status = fields.CharField(max_length=20, default="draft", description="审核状态")
     reviewer_id = fields.IntField(null=True, description="审核人")
@@ -172,7 +172,7 @@ class FreightBillItem(BaseModel):
     freight_order_id = fields.IntField(description="货运单ID")
     freight_order_code = fields.CharField(max_length=50, description="货运单号")
     fee_type = fields.CharField(max_length=30, default="base", description="费用类型")
-    amount = fields.DecimalField(max_digits=14, decimal_places=2, default=0, description="金额")
+    amount = fields.DecimalField(max_digits=16, decimal_places=4, default=0, description="金额")
     remark = fields.TextField(null=True, description="备注")
 
     class Meta:

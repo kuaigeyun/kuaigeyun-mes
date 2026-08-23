@@ -94,9 +94,9 @@ class ReportingRecord(BaseModel):
     recorded_by_name = fields.CharField(max_length=100, null=True, description="记录人姓名")
 
     # 报工数据
-    reported_quantity = fields.DecimalField(max_digits=12, decimal_places=2, description="报工数量")
-    qualified_quantity = fields.DecimalField(max_digits=12, decimal_places=2, description="合格数量")
-    unqualified_quantity = fields.DecimalField(max_digits=12, decimal_places=2, description="不合格数量")
+    reported_quantity = fields.DecimalField(max_digits=14, decimal_places=4, description="报工数量")
+    qualified_quantity = fields.DecimalField(max_digits=14, decimal_places=4, description="合格数量")
+    unqualified_quantity = fields.DecimalField(max_digits=14, decimal_places=4, description="不合格数量")
     work_hours = fields.DecimalField(max_digits=6, decimal_places=2, description="工时（小时）")
     work_start_time = fields.DatetimeField(null=True, description="工序开始时间")
     work_end_time = fields.DatetimeField(null=True, description="工序完成时间")

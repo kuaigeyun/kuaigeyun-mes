@@ -3,6 +3,7 @@ import type { TodoItem } from '../services/dashboard';
 import { joinDisplayParts } from './joinDisplayParts';
 
 function getTodoKind(id: string): string {
+  if (id.startsWith('approval_task_')) return 'approval_task';
   const lastUnderscore = id.lastIndexOf('_');
   if (lastUnderscore <= 0) return id;
   const suffix = id.slice(lastUnderscore + 1);
@@ -57,6 +58,7 @@ const TITLE_KEYS: Record<string, string> = {
   inspection_incoming: 'pages.dashboard.todo.incomingInspectionPending',
   inspection_process: 'pages.dashboard.todo.processInspectionPending',
   inspection_finished: 'pages.dashboard.todo.finishedInspectionPending',
+  approval_task: 'pages.dashboard.todo.approvalPending',
 };
 
 function renderMetaDescription(
@@ -178,6 +180,13 @@ function renderMetaDescription(
       return joinSegments(meta.operation_name, workOrder(meta.work_order_code), qty(meta.quantity));
     case 'inspection_finished':
       return joinSegments(meta.material_name, workOrder(meta.work_order_code), qty(meta.quantity));
+    case 'approval_task':
+      return joinSegments(
+        meta.document_code,
+        meta.submitter_name
+          ? t('pages.dashboard.todo.meta.segmentApplicant', { name: meta.submitter_name })
+          : undefined,
+      );
     default:
       return undefined;
   }
@@ -308,7 +317,10 @@ export function localizeDashboardTodoItem(item: TodoItem, t: TFunction): Localiz
 
   return {
     ...item,
-    title: titleKey ? t(titleKey, { code: param, name: param, title: param }) : item.title,
+    title:
+      titleKey && kind !== 'approval_task'
+        ? t(titleKey, { code: param, name: param, title: param })
+        : item.title,
     description,
     detail,
   };

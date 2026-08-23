@@ -3,14 +3,12 @@ import { Card, Row, Col, Tag, Popover, Table, Progress, Space, Typography, Empty
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
-  InfoCircleOutlined,
   ThunderboltOutlined,
   SolutionOutlined,
   SafetyOutlined,
   InboxOutlined,
 } from '@ant-design/icons';
 import {
-  getMaterialPriceHistory,
   getPurchaseOrderTracking,
   type PurchaseTrackingResponse,
 } from '../../../services/purchase';
@@ -289,98 +287,5 @@ export const FulfillmentTrackingTimeline: React.FC<{ orderId: number }> = ({ ord
         </Col>
       </Row>
     </div>
-  );
-};
-
-/** 物料历史价格洞察 */
-export const PriceHistoryInsight: React.FC<{ materialId: number; currentPrice?: number }> = ({ materialId, currentPrice }) => {
-  const { t } = useTranslation();
-  const { data, isLoading } = useQuery({
-    queryKey: ['materialPriceHistory', materialId],
-    queryFn: () => getMaterialPriceHistory(materialId),
-    enabled: !!materialId,
-  });
-  const toNumber = (v: unknown): number => {
-    const n = typeof v === 'number' ? v : Number(v);
-    return Number.isFinite(n) ? n : 0;
-  };
-  const avgPrice = toNumber(data?.average_price);
-  const minPrice = toNumber(data?.min_price);
-  const maxPrice = toNumber(data?.max_price);
-
-  const historyColumns = useMemo(
-    () => [
-      {
-        title: t('app.kuaizhizao.purchaseOrder.empower.purchaseDate'),
-        dataIndex: 'order_date',
-        key: 'date',
-        render: (d: string) => formatDateTime(d, 'YYYY-MM-DD'),
-      },
-      { title: t('app.kuaizhizao.purchaseOrder.col.supplier'), dataIndex: 'supplier_name', key: 'supplier', ellipsis: true },
-      {
-        title: t('app.kuaizhizao.purchaseOrder.empower.unitPrice'),
-        dataIndex: 'unit_price',
-        key: 'price',
-        render: (p: number) => (
-          <Text strong style={{ color: currentPrice && toNumber(p) < currentPrice ? '#52c41a' : 'inherit' }}>
-            ¥{toNumber(p).toFixed(2)}
-          </Text>
-        ),
-      },
-    ],
-    [t, currentPrice],
-  );
-
-  const content = (
-    <div style={{ width: 450 }}>
-      {isLoading ? (
-        <Spin size="small" />
-      ) : !data || data.history_items.length === 0 ? (
-        <Empty description={t('app.kuaizhizao.purchaseOrder.empower.noHistory')} />
-      ) : (
-        <>
-          <Space split={<div style={{ width: 1, height: 14, background: 'var(--river-divider-color)' }} />} style={{ marginBottom: 12, width: '100%', justifyContent: 'space-around' }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>{t('app.kuaizhizao.purchaseOrder.empower.avgPrice')}</div>
-              <Text strong style={{ color: '#1890ff' }}>¥{avgPrice.toFixed(2)}</Text>
-            </div>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>{t('app.kuaizhizao.purchaseOrder.empower.minPrice')}</div>
-              <Text strong style={{ color: '#52c41a' }}>¥{minPrice.toFixed(2)}</Text>
-            </div>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>{t('app.kuaizhizao.purchaseOrder.empower.maxPrice')}</div>
-              <Text strong style={{ color: '#ff4d4f' }}>¥{maxPrice.toFixed(2)}</Text>
-            </div>
-          </Space>
-
-          <Table
-            size="small"
-            dataSource={data.history_items}
-            pagination={false}
-            columns={historyColumns}
-          />
-          {currentPrice && avgPrice > 0 && (
-            <div style={{ marginTop: 12, padding: '8px 12px', background: '#f0faff', borderRadius: 4 }}>
-              <Text>
-                {t('app.kuaizhizao.purchaseOrder.empower.currentVsAvg')}
-                <Text strong style={{ color: currentPrice <= avgPrice ? '#52c41a' : '#ff4d4f', marginLeft: 4 }}>
-                  {currentPrice <= avgPrice
-                    ? t('app.kuaizhizao.purchaseOrder.empower.priceLower')
-                    : t('app.kuaizhizao.purchaseOrder.empower.priceHigher')}{' '}
-                  {Math.abs(((currentPrice - avgPrice) / avgPrice) * 100).toFixed(1)}%
-                </Text>
-              </Text>
-            </div>
-          )}
-        </>
-      )}
-    </div>
-  );
-
-  return (
-    <Popover content={content} title={t('app.kuaizhizao.purchaseOrder.empower.priceInsightTitle')} trigger="hover">
-      <InfoCircleOutlined style={{ color: '#1890ff', cursor: 'pointer', marginLeft: 4 }} />
-    </Popover>
   );
 };

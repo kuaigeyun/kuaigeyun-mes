@@ -9,7 +9,9 @@ import { type Dayjs } from 'dayjs';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import WeatherWidget from '../../../components/weather/WeatherWidget';
+import { getWeatherSkyGradient, isWeatherSkyLight } from '../../../components/weather/weatherBackground';
 import type { WeatherData } from '../../../services/weather';
+import { getCachedWeather } from '../../../services/weather';
 import { DASHBOARD_SECTION_CARD_CLASS } from './dashboardCardSurface';
 
 const { Text } = Typography;
@@ -18,19 +20,19 @@ const { Text } = Typography;
 export const DASHBOARD_CALENDAR_WIDGET_HEIGHT = 300;
 
 const WEEKDAY_KEYS = [
-  'pages.dashboard.calendarWeekSun',
   'pages.dashboard.calendarWeekMon',
   'pages.dashboard.calendarWeekTue',
   'pages.dashboard.calendarWeekWed',
   'pages.dashboard.calendarWeekThu',
   'pages.dashboard.calendarWeekFri',
   'pages.dashboard.calendarWeekSat',
+  'pages.dashboard.calendarWeekSun',
 ] as const;
 
 function buildCalendarDays(month: Dayjs): { date: Dayjs; inMonth: boolean }[] {
   const startOfMonth = month.startOf('month');
   const daysInMonth = month.daysInMonth();
-  const startPad = startOfMonth.day();
+  const startPad = (startOfMonth.day() + 6) % 7;
   const cells: { date: Dayjs; inMonth: boolean }[] = [];
 
   for (let i = 0; i < startPad; i += 1) {
@@ -55,6 +57,7 @@ export interface DashboardCalendarWeatherClockProps {
   cardRadius: number | string;
   lunarDateStr: string;
   t: TFunction;
+  weatherData?: WeatherData | null;
   onWeatherChange?: (data: WeatherData | null) => void;
 }
 
@@ -64,6 +67,7 @@ export function DashboardCalendarWeatherClock({
   cardRadius,
   lunarDateStr,
   t,
+  weatherData,
   onWeatherChange,
 }: DashboardCalendarWeatherClockProps) {
   const { i18n } = useTranslation();
@@ -74,8 +78,23 @@ export function DashboardCalendarWeatherClock({
   const cells = useMemo(() => buildCalendarDays(viewMonth), [viewMonth]);
   const weekdayLabels = useMemo(() => WEEKDAY_KEYS.map((key) => t(key)), [t]);
 
-  const timeText = currentTime.format('HH:mm:ss');
+  const effectiveWeather = weatherData ?? getCachedWeather(i18n.language);
+
+  const timeText = currentTime.format('HH:mm');
   const weekdayText = currentTime.format('dddd');
+  const lunarLineText = i18n.language?.startsWith('zh')
+    ? `${t('pages.dashboard.lunarLabel')} ${lunarDateStr} ${weekdayText}`
+    : weekdayText;
+
+  const skyBackground = useMemo(
+    () => getWeatherSkyGradient(effectiveWeather, isDark),
+    [effectiveWeather, isDark],
+  );
+  const skyLight = useMemo(
+    () => isWeatherSkyLight(effectiveWeather, isDark),
+    [effectiveWeather, isDark],
+  );
+  const weatherTone = skyLight ? 'light' : 'dark';
 
   return (
     <Card
@@ -103,11 +122,19 @@ export function DashboardCalendarWeatherClock({
         },
       }}
     >
-      <div className={`dashboard-cwc-top${isDark ? ' dashboard-cwc-top--dark' : ''}`}>
+      <div
+        className={[
+          'dashboard-cwc-top',
+          isDark ? 'dashboard-cwc-top--dark' : '',
+          skyLight ? 'dashboard-cwc-top--sky-light' : 'dashboard-cwc-top--sky-dark',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+        style={{ background: skyBackground }}
+      >
         <div className="dashboard-cwc-header">
           <div className="dashboard-cwc-header-left">
             <div className="dashboard-cwc-date-meta">
-              <Text className="dashboard-cwc-day-name">{weekdayText}</Text>
               <span className="dashboard-cwc-clock">{timeText}</span>
             </div>
             <div className="dashboard-cwc-month-nav">
@@ -138,7 +165,7 @@ export function DashboardCalendarWeatherClock({
           </div>
           <div className="dashboard-cwc-weather">
             <WeatherWidget
-              tone={isDark ? 'dark' : 'light'}
+              tone={weatherTone}
               onWeatherChange={onWeatherChange}
               compact
               mini
@@ -195,9 +222,7 @@ export function DashboardCalendarWeatherClock({
       </div>
 
       <Text ellipsis className="dashboard-cwc-lunar">
-        {i18n.language?.startsWith('zh')
-          ? `${t('pages.dashboard.lunarLabel')} ${lunarDateStr}`
-          : null}
+        {lunarLineText}
       </Text>
       </div>
     </Card>

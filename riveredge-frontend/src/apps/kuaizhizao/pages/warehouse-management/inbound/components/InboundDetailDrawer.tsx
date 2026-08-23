@@ -25,6 +25,7 @@ import {
   resolveInboundHubOperator,
   type InboundHubOrder,
 } from '../inboundHubTypes';
+import { resolveInboundHubLineQuantity } from '../inboundHubNormalize';
 
 export type InboundDetailRecord = InboundHubOrder & {
   workshop_name?: string;
@@ -234,7 +235,10 @@ export const InboundDetailDrawer: React.FC<InboundDetailDrawerProps> = ({
               dataIndex: 'receipt_quantity',
               width: 100,
               align: 'right',
-              render: (v, row) => formatQuantity(v ?? row.return_quantity ?? row.quantity),
+              render: (v, row) =>
+                formatQuantity(
+                  resolveInboundHubLineQuantity(row as Record<string, unknown>) ?? v ?? undefined,
+                ),
             },
             {
               title: t('common.unit'),

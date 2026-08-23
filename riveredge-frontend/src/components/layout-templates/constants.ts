@@ -237,8 +237,8 @@ export const TWO_COLUMN_LAYOUT = {
   LEFT_PANEL_WIDTH: 300,
   /** 左侧面板最小宽度 */
   LEFT_PANEL_MIN_WIDTH: 200,
-  /** 左侧面板最大宽度 */
-  LEFT_PANEL_MAX_WIDTH: 400,
+  /** 左侧面板最大宽度（拖拽上限） */
+  LEFT_PANEL_MAX_WIDTH: 560,
   /** 左/中栏顶部搜索区统一高度 */
   PANEL_HEADER_HEIGHT: 48,
   /** 两栏布局最小高度（确保初次渲染时容器有固定高度，避免表格一行一行加载） */
@@ -251,7 +251,7 @@ export const TWO_COLUMN_LAYOUT = {
 export const TWO_COLUMN_LEFT_PANEL_BACKGROUND =
   'color-mix(in srgb, var(--ant-color-bg-layout, #f5f5f5) 58%, var(--ant-color-fill-secondary, #e8e8e8) 42%)';
 
-/** 自定义字段 / 编号规则等：左侧功能页面列表项（默认与 hover 同为 fill-secondary） */
+/** 自定义字段 / 编号规则 / 线边备料等：左侧功能页面列表项（默认白底） */
 export const FEATURE_PAGE_LIST_ITEM_CLASS = 'feature-page-list-item';
 
 /** 功能页右栏标题行背景（与 TwoColumnLayout header 槽位配合） */

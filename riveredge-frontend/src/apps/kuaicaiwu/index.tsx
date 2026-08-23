@@ -43,6 +43,7 @@ const MarginReportPage = lazy(() => import('./pages/management-analysis/margin-r
 const SettlementPage = lazy(() => import('./pages/finance-management/settlement'));
 const PartnerStatementsPage = lazy(() => import('./pages/finance-management/partner-statements'));
 const PartnerStatementDetailPage = lazy(() => import('./pages/finance-management/partner-statements/detail'));
+const PriceSettlementPage = lazy(() => import('./pages/finance-management/price-settlement'));
 const DocumentReconciliationPage = lazy(() => import('./pages/finance-management/document-reconciliation'));
 const BankAccountsPage = lazy(() => import('./pages/finance-management/bank-accounts'));
 const NotesReceivablePage = lazy(() => import('./pages/finance-management/notes-receivable'));
@@ -83,6 +84,7 @@ const KuaicaiwuApp: React.FC = () => {
       <Route path="finance-management/settlement" element={withPageSuspense(SettlementPage)} />
       <Route path="finance-management/partner-statements" element={withPageSuspense(PartnerStatementsPage)} />
       <Route path="finance-management/partner-statements/:id" element={withPageSuspense(PartnerStatementDetailPage)} />
+      <Route path="finance-management/price-settlement" element={withPageSuspense(PriceSettlementPage)} />
       <Route
         path="finance-management/aging-analysis"
         element={<Navigate to="/apps/kuaicaiwu/finance-management/dashboard" replace />}

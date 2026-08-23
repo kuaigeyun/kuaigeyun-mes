@@ -43,8 +43,8 @@ class DeliveryNotice(BaseModel):
     sent_at = fields.DatetimeField(null=True, description="发送时间")
     signed_at = fields.DatetimeField(null=True, description="签收时间")
 
-    total_quantity = fields.DecimalField(max_digits=10, decimal_places=2, default=0, description="总数量")
-    total_amount = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="总金额")
+    total_quantity = fields.DecimalField(max_digits=12, decimal_places=4, default=0, description="总数量")
+    total_amount = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="总金额")
 
     notes = fields.TextField(null=True, description="备注")
     attachments = fields.JSONField(null=True, description="附件列表")

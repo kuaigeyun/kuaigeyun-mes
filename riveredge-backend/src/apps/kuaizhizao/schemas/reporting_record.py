@@ -5,7 +5,7 @@
 """
 
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Literal, Optional
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 from decimal import Decimal
 
@@ -93,12 +93,24 @@ class ReportingRecordUpdate(BaseModel):
     work_start_time: Optional[datetime] = Field(None, description="工序开始时间")
     work_end_time: Optional[datetime] = Field(None, description="工序完成时间")
     reported_at: Optional[datetime] = Field(None, description="报工时间")
+    worker_id: Optional[int] = Field(None, description="操作工ID（生产人员；按小组报工时可空）")
+    worker_name: Optional[str] = Field(None, description="操作工姓名（生产人员）")
+    team_id: Optional[int] = Field(None, description="工作小组ID")
+    team_name: Optional[str] = Field(None, max_length=100, description="工作小组名称")
     remarks: Optional[str] = Field(None, description="备注")
     sop_parameters: Optional[Any] = Field(None, description="SOP参数数据（JSON格式）")
     status: Optional[str] = Field(None, description="审核状态")
     approved_by: Optional[int] = Field(None, description="审核人ID")
     approved_by_name: Optional[str] = Field(None, description="审核人姓名")
     rejection_reason: Optional[str] = Field(None, description="驳回原因")
+
+
+class ReportingPostActionNotice(BaseModel):
+    """报工审核/生效后的附带提示（如末道工序自动入库）。"""
+
+    level: Literal["info", "warning", "success"] = Field("info", description="提示级别")
+    code: str = Field(..., description="前端 i18n 键后缀（apps.kuaizhizao.workReporting.postAction.*）")
+    receipt_code: Optional[str] = Field(None, description="关联入库单号（若有）")
 
 
 class ReportingRecordResponse(ReportingRecordBase):
@@ -126,6 +138,10 @@ class ReportingRecordResponse(ReportingRecordBase):
     updated_at: datetime = Field(..., description="更新时间")
     capabilities: Optional[ReportingRecordCapabilities] = Field(
         None, description="业务态动作能力（document_action_policy）"
+    )
+    post_action_notices: Optional[List[ReportingPostActionNotice]] = Field(
+        None,
+        description="报工生效后的附带提示（如末道待入库、成品检验未通过导致未入账）",
     )
 
 

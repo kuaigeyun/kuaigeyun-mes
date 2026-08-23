@@ -34,14 +34,14 @@ class SalesOrder(BaseModel):
     order_type = fields.CharField(max_length=20, default="MTO", description="订单类型")
 
     # 金额信息
-    total_quantity = fields.DecimalField(max_digits=10, decimal_places=2, default=0, description="总数量")
-    total_amount = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="总金额")
+    total_quantity = fields.DecimalField(max_digits=12, decimal_places=4, default=0, description="总数量")
+    total_amount = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="总金额")
     price_type = fields.CharField(max_length=20, default=DEFAULT_SALES_PRICE_TYPE, description="价格类型：含税/不含税")
-    discount_amount = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="整单优惠金额")
+    discount_amount = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="整单优惠金额")
 
     # 费用信息
     fee_details = fields.JSONField(null=True, description="费用明细 (JSON)")
-    total_fee_amount = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="总费用金额")
+    total_fee_amount = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="总费用金额")
 
     # 状态
     status = fields.CharField(max_length=20, default=DemandStatus.DRAFT, description="订单状态")
@@ -69,7 +69,7 @@ class SalesOrder(BaseModel):
 
     # 预收款（审核通过后自动生成预收收款单）
     prepayment_amount = fields.DecimalField(
-        max_digits=12, decimal_places=2, null=True, description="预收款金额"
+        max_digits=14, decimal_places=4, null=True, description="预收款金额"
     )
     prepayment_bank_account_id = fields.IntField(null=True, description="预收款银行账户ID")
 

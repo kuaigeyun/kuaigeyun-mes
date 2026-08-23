@@ -45,6 +45,7 @@ from apps.kuaizhizao.services.inspection_policy_service import (
     get_quality_effective_config,
     get_quality_inspection_stage_toggles,
     resolve_inspection_policy,
+    build_material_policy_cache,
     stage_plan_type,
 )
 from core.utils.timezone_utils import (
@@ -186,6 +187,8 @@ def _filter_items_by_selected_item_ids(
 from datetime import timedelta
 from decimal import Decimal
 
+from apps.kuaizhizao.services.inspection_quantity_utils import assert_inspection_quantities_balanced
+
 
 async def _get_quality_policy_flags(tenant_id: int) -> tuple[bool, bool]:
     """读取质量策略开关（来料检验、过程检验）。"""
@@ -300,6 +303,20 @@ def _semi_finished_goods_receipt_allows_fqc_creation(receipt: Any) -> bool:
 
 async def _collect_fqc_required_material_ids(tenant_id: int, lines: List[Any]) -> List[int]:
     """成品入库明细中 fqc 策略≠none 且数量>0 的物料 ID（去重保序）。"""
+    candidate_mids: List[int] = []
+    for item in lines:
+        mid = getattr(item, "material_id", None)
+        if not mid:
+            continue
+        qty = getattr(item, "receipt_quantity", None) or getattr(item, "qualified_quantity", None) or 0
+        try:
+            if float(qty) <= 0:
+                continue
+        except (TypeError, ValueError):
+            continue
+        candidate_mids.append(int(mid))
+    policy_cache = await build_material_policy_cache(tenant_id, candidate_mids, "fqc")
+
     needs_qc_mids: List[int] = []
     seen: set[int] = set()
     for item in lines:
@@ -315,8 +332,7 @@ async def _collect_fqc_required_material_ids(tenant_id: int, lines: List[Any]) -
         mid_int = int(mid)
         if mid_int in seen:
             continue
-        eff, _, _ = await resolve_inspection_policy(tenant_id, "fqc", material_id=mid_int)
-        if eff == "none":
+        if policy_cache.get(mid_int, ("none", None, ""))[0] == "none":
             continue
         seen.add(mid_int)
         needs_qc_mids.append(mid_int)
@@ -361,6 +377,20 @@ async def _ensure_fqc_for_work_order(
 
 async def _collect_iqc_required_material_ids(tenant_id: int, lines: List[Any]) -> List[int]:
     """采购入库明细中 iqc 策略≠none 且数量>0 的物料 ID（去重保序）。"""
+    candidate_mids: List[int] = []
+    for item in lines:
+        mid = getattr(item, "material_id", None)
+        if not mid:
+            continue
+        qty = getattr(item, "receipt_quantity", None) or getattr(item, "quantity", None) or 0
+        try:
+            if float(qty) <= 0:
+                continue
+        except (TypeError, ValueError):
+            continue
+        candidate_mids.append(int(mid))
+    policy_cache = await build_material_policy_cache(tenant_id, candidate_mids, "iqc")
+
     needs_qc_mids: List[int] = []
     seen: set[int] = set()
     for item in lines:
@@ -373,13 +403,13 @@ async def _collect_iqc_required_material_ids(tenant_id: int, lines: List[Any]) -
                 continue
         except (TypeError, ValueError):
             continue
-        eff, _, _ = await resolve_inspection_policy(tenant_id, "iqc", material_id=int(mid))
-        if eff == "none":
-            continue
         mid_int = int(mid)
-        if mid_int not in seen:
-            seen.add(mid_int)
-            needs_qc_mids.append(mid_int)
+        if mid_int in seen:
+            continue
+        if policy_cache.get(mid_int, ("none", None, ""))[0] == "none":
+            continue
+        seen.add(mid_int)
+        needs_qc_mids.append(mid_int)
     return needs_qc_mids
 
 
@@ -1050,16 +1080,16 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             operator_name = await self.get_user_name(inspected_by)
 
             # 计算合格/不合格数量
-            qualified_quantity = inspection_data.get('qualified_quantity', 0)
-            unqualified_quantity = inspection_data.get('unqualified_quantity', 0)
-
-            if qualified_quantity + unqualified_quantity != inspection_model.inspection_quantity:
-                raise ValidationError("合格数量和不合格数量之和必须等于检验数量")
+            qualified_quantity, unqualified_quantity = assert_inspection_quantities_balanced(
+                inspection_data.get("qualified_quantity", 0),
+                inspection_data.get("unqualified_quantity", 0),
+                inspection_model.inspection_quantity,
+            )
             _assert_unqualified_qty_when_steps_fail(
                 inspection_model, "other_checks", inspection_data, unqualified_quantity
             )
 
-            quality_status = "合格" if unqualified_quantity == 0 else "不合格"
+            quality_status = "合格" if unqualified_quantity == Decimal("0") else "不合格"
 
             conduct_payload = _apply_template_conduct_to_payload(
                 inspection_model,
@@ -1717,6 +1747,20 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                 inspection_by_material[int(mid)] = inspection
 
         plan_label_cache: Dict[int, Optional[str]] = {}
+        line_material_ids: List[int] = []
+        for item in receipt_items:
+            mid = getattr(item, "material_id", None)
+            if not mid:
+                continue
+            qty = getattr(item, "receipt_quantity", None) or getattr(item, "quantity", None) or 0
+            try:
+                if float(qty) <= 0:
+                    continue
+            except (TypeError, ValueError):
+                continue
+            line_material_ids.append(int(mid))
+        iqc_policy_cache = await build_material_policy_cache(tenant_id, line_material_ids, "iqc")
+
         line_summaries: List[EnsureIqcForPurchaseReceiptLineSummary] = []
         for item in receipt_items:
             mid = getattr(item, "material_id", None)
@@ -1730,7 +1774,7 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             if qty_f <= 0:
                 continue
             mid_int = int(mid)
-            eff_mode, _, _ = await resolve_inspection_policy(tenant_id, "iqc", material_id=mid_int)
+            eff_mode = iqc_policy_cache.get(mid_int, ("none", None, ""))[0]
             iqc_required = eff_mode != "none"
             plan_label: Optional[str] = None
             if iqc_required:
@@ -1969,6 +2013,20 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                 inspection_by_material[int(mid)] = inspection
 
         plan_label_cache: Dict[int, Optional[str]] = {}
+        line_material_ids: List[int] = []
+        for item in registration_items:
+            mid = getattr(item, "material_id", None)
+            if not mid:
+                continue
+            qty = getattr(item, "quantity", None) or getattr(item, "receipt_quantity", None) or 0
+            try:
+                if float(qty) <= 0:
+                    continue
+            except (TypeError, ValueError):
+                continue
+            line_material_ids.append(int(mid))
+        iqc_policy_cache = await build_material_policy_cache(tenant_id, line_material_ids, "iqc")
+
         line_summaries: List[EnsureIqcForPurchaseReceiptLineSummary] = []
         for item in registration_items:
             mid = getattr(item, "material_id", None)
@@ -1982,7 +2040,7 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             if qty_f <= 0:
                 continue
             mid_int = int(mid)
-            eff_mode, _, _ = await resolve_inspection_policy(tenant_id, "iqc", material_id=mid_int)
+            eff_mode = iqc_policy_cache.get(mid_int, ("none", None, ""))[0]
             iqc_required = eff_mode != "none"
             plan_label: Optional[str] = None
             if iqc_required:
@@ -2040,8 +2098,8 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
     ) -> str:
         mid = int(material_id)
         if mid not in cache:
-            eff, _, _ = await resolve_inspection_policy(tenant_id, "iqc", material_id=mid)
-            cache[mid] = eff
+            batch = await build_material_policy_cache(tenant_id, [mid], "iqc")
+            cache[mid] = batch.get(mid, ("none", None, ""))[0]
         return cache[mid]
 
     def _derive_iqc_pull_capability(
@@ -2958,16 +3016,16 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
             operator_name = await self.get_user_name(inspected_by)
 
             # 计算合格/不合格数量
-            qualified_quantity = inspection_data.get('qualified_quantity', 0)
-            unqualified_quantity = inspection_data.get('unqualified_quantity', 0)
-
-            if qualified_quantity + unqualified_quantity != inspection_model.inspection_quantity:
-                raise ValidationError("合格数量和不合格数量之和必须等于检验数量")
+            qualified_quantity, unqualified_quantity = assert_inspection_quantities_balanced(
+                inspection_data.get("qualified_quantity", 0),
+                inspection_data.get("unqualified_quantity", 0),
+                inspection_model.inspection_quantity,
+            )
             _assert_unqualified_qty_when_steps_fail(
                 inspection_model, "quality_characteristics", inspection_data, unqualified_quantity
             )
 
-            quality_status = "合格" if unqualified_quantity == 0 else "不合格"
+            quality_status = "合格" if unqualified_quantity == Decimal("0") else "不合格"
 
             conduct_payload = _apply_template_conduct_to_payload(
                 inspection_model, "quality_characteristics", inspection_data
@@ -4256,16 +4314,16 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
             operator_name = await self.get_user_name(inspected_by)
 
             # 计算合格/不合格数量
-            qualified_quantity = inspection_data.get('qualified_quantity', 0)
-            unqualified_quantity = inspection_data.get('unqualified_quantity', 0)
-
-            if qualified_quantity + unqualified_quantity != inspection_model.inspection_quantity:
-                raise ValidationError("合格数量和不合格数量之和必须等于检验数量")
+            qualified_quantity, unqualified_quantity = assert_inspection_quantities_balanced(
+                inspection_data.get("qualified_quantity", 0),
+                inspection_data.get("unqualified_quantity", 0),
+                inspection_model.inspection_quantity,
+            )
             _assert_unqualified_qty_when_steps_fail(
                 inspection_model, "other_checks", inspection_data, unqualified_quantity
             )
 
-            quality_status = "合格" if unqualified_quantity == 0 else "不合格"
+            quality_status = "合格" if unqualified_quantity == Decimal("0") else "不合格"
 
             conduct_payload = _apply_template_conduct_to_payload(
                 inspection_model, "other_checks", inspection_data
@@ -4759,6 +4817,20 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                 inspection_by_material[int(mid)] = inspection
 
         plan_label_cache: Dict[int, Optional[str]] = {}
+        line_material_ids: List[int] = []
+        for item in receipt_items:
+            mid = getattr(item, "material_id", None)
+            if not mid:
+                continue
+            qty = getattr(item, "receipt_quantity", None) or getattr(item, "qualified_quantity", None) or 0
+            try:
+                if float(qty) <= 0:
+                    continue
+            except (TypeError, ValueError):
+                continue
+            line_material_ids.append(int(mid))
+        fqc_policy_cache = await build_material_policy_cache(tenant_id, line_material_ids, "fqc")
+
         line_summaries: List[EnsureFqcForFinishedGoodsReceiptLineSummary] = []
         for item in receipt_items:
             mid = getattr(item, "material_id", None)
@@ -4772,7 +4844,7 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
             if qty_f <= 0:
                 continue
             mid_int = int(mid)
-            eff_mode, _, _ = await resolve_inspection_policy(tenant_id, "fqc", material_id=mid_int)
+            eff_mode = fqc_policy_cache.get(mid_int, ("none", None, ""))[0]
             fqc_required = eff_mode != "none"
             plan_label: Optional[str] = None
             if fqc_required:
@@ -5068,7 +5140,10 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
         ]
         material_snaps = await _load_material_snapshot_map(tenant_id, wo_material_ids)
 
-        policy_cache: Dict[int, str] = {}
+        full_policy_cache = await build_material_policy_cache(tenant_id, wo_material_ids, "fqc")
+        policy_cache: Dict[int, str] = {
+            mid: row[0] for mid, row in full_policy_cache.items()
+        }
         rows: List[Dict[str, Any]] = []
         for work_order in work_orders:
             wid = int(work_order.id)
@@ -5079,11 +5154,7 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
             mid = wf.get("material_id")
             fqc_eff: Optional[str] = None
             if mid:
-                mid_int = int(mid)
-                if mid_int not in policy_cache:
-                    eff, _, _ = await resolve_inspection_policy(tenant_id, "fqc", material_id=mid_int)
-                    policy_cache[mid_int] = eff
-                fqc_eff = policy_cache[mid_int]
+                fqc_eff = policy_cache.get(int(mid), "none")
 
             preview_items, fqc_eff = await self._build_pull_preview_items_for_work_order(
                 tenant_id,

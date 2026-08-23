@@ -9,6 +9,7 @@ Date: 2025-01-01
 
 import uuid
 import math
+from dataclasses import dataclass
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 from decimal import Decimal
@@ -214,6 +215,26 @@ async def sync_work_order_operations_completion(
         work_order.status = "completed"
         work_order.actual_end_date = work_order.actual_end_date or resolve_business_datetime()
         await work_order.save()
+        from apps.kuaizhizao.services.kuaizhizao_business_notification import (
+            notify_work_order_completed,
+        )
+
+        try:
+            await notify_work_order_completed(
+                tenant_id,
+                work_order_id=work_order_id,
+                work_order_code=work_order.code or str(work_order_id),
+                product_name=work_order.product_name or "—",
+                completed_quantity=str(work_order.completed_quantity or work_order.quantity or 0),
+                creator_user_id=work_order.created_by,
+            )
+        except Exception as exc:
+            logger.warning(
+                "工单完工消息提醒失败 tenant={} wo={}: {}",
+                tenant_id,
+                work_order_id,
+                exc,
+            )
     elif (
         not all_completed
         and work_order.status == "completed"
@@ -241,6 +262,50 @@ REPORTING_SORTABLE_FIELDS = frozenset({
     "created_at",
     "updated_at",
 })
+
+
+@dataclass
+class LastOperationInboundResult:
+    """末道工序自动入库执行结果（供报工响应附带提示）。"""
+
+    outcome: str
+    receipt_code: Optional[str] = None
+
+
+def _post_action_notices_from_last_inbound(
+    result: Optional[LastOperationInboundResult],
+) -> Optional[List["ReportingPostActionNotice"]]:
+    from apps.kuaizhizao.schemas.reporting_record import ReportingPostActionNotice
+
+    if not result:
+        return None
+    code_by_outcome = {
+        "pending_created": ("info", "last_inbound_pending"),
+        "confirmed": ("success", "last_inbound_confirmed"),
+        "confirm_blocked_fqc": ("warning", "last_inbound_fqc_blocked"),
+        "failed": ("warning", "last_inbound_failed"),
+    }
+    mapped = code_by_outcome.get(result.outcome)
+    if not mapped:
+        return None
+    level, code = mapped
+    return [
+        ReportingPostActionNotice(
+            level=level,
+            code=code,
+            receipt_code=result.receipt_code,
+        )
+    ]
+
+
+def _attach_inbound_notices(
+    response: ReportingRecordResponse,
+    result: Optional[LastOperationInboundResult],
+) -> ReportingRecordResponse:
+    notices = _post_action_notices_from_last_inbound(result)
+    if notices:
+        response.post_action_notices = notices
+    return response
 
 
 class ReportingService(AppBaseService[ReportingRecord]):
@@ -379,17 +444,19 @@ class ReportingService(AppBaseService[ReportingRecord]):
         tenant_id: int,
         reporting_record_id: int,
         acting_user_id: int,
-    ) -> None:
+    ) -> Optional[LastOperationInboundResult]:
         """
         业务参数「末道工序自动入库」：
         - direct_inbound：末道每笔已审核报工按合格数量各建一张入库单并确认入库
         - inbound_notice：同上建待入库单，不自动确认（预留成品检验流程）
         在报工事务提交之后调用，避免与报工嵌套事务冲突。
         """
+        from infra.exceptions.exceptions import BusinessLogicError
+
         try:
             mode = await BusinessConfigService().get_last_operation_auto_inbound_mode(tenant_id)
             if mode not in ("direct_inbound", "inbound_notice"):
-                return
+                return None
 
             record = await ReportingRecord.get_or_none(
                 id=reporting_record_id,
@@ -397,23 +464,23 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 deleted_at__isnull=True,
             )
             if not record or record.status != "approved":
-                return
+                return None
 
             if not await self._is_last_operation_for_work_order(
                 tenant_id,
                 record.work_order_id,
                 record.operation_id,
             ):
-                return
+                return None
 
             qualified = float(record.qualified_quantity or 0)
             if qualified <= 0:
-                return
+                return None
 
             if await self._direct_inbound_receipt_exists_for_reporting(
                 tenant_id, reporting_record_id
             ):
-                return
+                return None
 
             wo = await WorkOrder.get_or_none(
                 id=record.work_order_id,
@@ -421,7 +488,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 deleted_at__isnull=True,
             )
             if not wo or wo.status not in ("released", "in_progress", "completed"):
-                return
+                return None
 
             semi = await is_semi_finished_product_by_bom_role(tenant_id, wo.product_id)
 
@@ -452,7 +519,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
                         f" work_order_code={getattr(wo, 'code', '')} reporting_record_id={reporting_record_id}"
                         f" mode={mode}"
                     )
-                    return
+                    return LastOperationInboundResult(outcome="failed")
                 warehouse_id, warehouse_name = resolved
             receipt = await wh_svc.quick_receipt_from_work_order(
                 tenant_id=tenant_id,
@@ -464,30 +531,43 @@ class ReportingService(AppBaseService[ReportingRecord]):
             )
 
             receipt_code = receipt.receipt_code
+            inbound_outcome = "pending_created"
             if mode == "direct_inbound":
-                if semi:
-                    from apps.kuaizhizao.services.semi_finished_goods_receipt_service import (
-                        SemiFinishedGoodsReceiptService,
-                    )
+                try:
+                    if semi:
+                        from apps.kuaizhizao.services.semi_finished_goods_receipt_service import (
+                            SemiFinishedGoodsReceiptService,
+                        )
 
-                    confirmed = await SemiFinishedGoodsReceiptService().confirm_receipt(
-                        tenant_id=tenant_id,
-                        receipt_id=receipt.id,
-                        confirmed_by=acting_user_id,
-                    )
-                    receipt_code = confirmed.receipt_code
-                else:
-                    confirmed = await wh_svc.confirm_receipt(
-                        tenant_id=tenant_id,
-                        receipt_id=receipt.id,
-                        confirmed_by=acting_user_id,
-                    )
-                    receipt_code = confirmed.receipt_code
+                        confirmed = await SemiFinishedGoodsReceiptService().confirm_receipt(
+                            tenant_id=tenant_id,
+                            receipt_id=receipt.id,
+                            confirmed_by=acting_user_id,
+                        )
+                        receipt_code = confirmed.receipt_code
+                    else:
+                        confirmed = await wh_svc.confirm_receipt(
+                            tenant_id=tenant_id,
+                            receipt_id=receipt.id,
+                            confirmed_by=acting_user_id,
+                        )
+                        receipt_code = confirmed.receipt_code
+                    inbound_outcome = "confirmed"
+                except BusinessLogicError as confirm_err:
+                    msg = str(confirm_err)
+                    if "成品检验" in msg or "FQC" in msg.upper():
+                        logger.info(
+                            "末道工序直接入库因成品检验未通过而保留待入库："
+                            f" reporting_record_id={reporting_record_id} receipt={receipt_code} err={msg}"
+                        )
+                        inbound_outcome = "confirm_blocked_fqc"
+                    else:
+                        raise
 
             target_type = "semi_finished_goods_receipt" if semi else "finished_goods_receipt"
             relation_desc = (
                 "末道工序报工直接入库"
-                if mode == "direct_inbound"
+                if mode == "direct_inbound" and inbound_outcome == "confirmed"
                 else "末道工序报工入库通知"
             )
             try:
@@ -519,7 +599,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
                     rel_err,
                 )
 
-            if mode == "direct_inbound":
+            if inbound_outcome == "confirmed":
                 logger.info(
                     f"末道工序直接入库：报工 id={reporting_record_id} 已为工单 {wo.code} 确认"
                     f"{'半成品' if semi else '成品'}入库单 {receipt_code}，数量 {qualified}，仓库 id={warehouse_id}"
@@ -528,12 +608,18 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 logger.info(
                     f"末道工序入库通知：报工 id={reporting_record_id} 已为工单 {wo.code} 生成"
                     f"{'半成品' if semi else '成品'}待入库单 {receipt_code}，数量 {qualified}，仓库 id={warehouse_id}"
+                    f" outcome={inbound_outcome}"
                 )
+            return LastOperationInboundResult(
+                outcome=inbound_outcome,
+                receipt_code=receipt_code,
+            )
         except Exception as e:
             logger.warning(
                 f"末道工序自动入库失败：tenant_id={tenant_id}"
                 f" reporting_record_id={reporting_record_id} err={e}"
             )
+            return LastOperationInboundResult(outcome="failed")
 
     @staticmethod
     def _derive_work_hours_from_operation(
@@ -958,9 +1044,11 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 deleted_at__isnull=True,
             ).all()
             all_completed = len(all_operations) > 0 and all(op.status == 'completed' for op in all_operations)
+            wo_became_completed = False
             if all_completed and work_order.status != 'completed':
                 work_order.status = 'completed'
                 work_order.actual_end_date = work_order.actual_end_date or resolve_business_datetime()
+                wo_became_completed = True
             elif (
                 not all_completed
                 and work_order.status == 'completed'
@@ -979,6 +1067,30 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 work_order.qualified_quantity = Decimal("0")
             
             await work_order.save()
+
+            if wo_became_completed:
+                from apps.kuaizhizao.services.kuaizhizao_business_notification import (
+                    notify_work_order_completed,
+                )
+
+                try:
+                    await notify_work_order_completed(
+                        tenant_id,
+                        work_order_id=work_order.id,
+                        work_order_code=work_order.code or str(work_order.id),
+                        product_name=work_order.product_name or "—",
+                        completed_quantity=str(
+                            work_order.completed_quantity or work_order.quantity or 0
+                        ),
+                        creator_user_id=work_order.created_by,
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "工单完工消息提醒失败 tenant={} wo={}: {}",
+                        tenant_id,
+                        work_order.id,
+                        exc,
+                    )
 
             # 报工创建时若已自动审核，在此触发倒冲；待审核报工在 approve 流程触发
             if reporting_data.status == "approved":
@@ -1030,9 +1142,11 @@ class ReportingService(AppBaseService[ReportingRecord]):
             reporting_record_id_for_auto = reporting_record.id
 
         if trigger_direct_inbound and reporting_record_id_for_auto is not None:
-            await self._maybe_trigger_direct_finished_goods_inbound(
+            inbound_result = await self._maybe_trigger_direct_finished_goods_inbound(
                 tenant_id, reporting_record_id_for_auto, reported_by
             )
+        else:
+            inbound_result = None
 
         await self._sync_pending_inbound_receipts_if_needed(
             tenant_id=tenant_id,
@@ -1042,7 +1156,10 @@ class ReportingService(AppBaseService[ReportingRecord]):
             await self._refresh_performance_after_approved_reporting(
                 tenant_id, reporting_record
             )
-        return ReportingRecordResponse.model_validate(reporting_record)
+        return _attach_inbound_notices(
+            ReportingRecordResponse.model_validate(reporting_record),
+            inbound_result,
+        )
 
     async def get_reporting_record_by_id(
         self,
@@ -1092,16 +1209,15 @@ class ReportingService(AppBaseService[ReportingRecord]):
 
         scope=reportable：仅本次可报>0；scope=all：全部工序行。
         """
-        import asyncio
         from collections import defaultdict
 
         from apps.kuaizhizao.models.process_inspection import ProcessInspection
-        from apps.kuaizhizao.services.inspection_policy_service import resolve_inspection_policy
         from apps.kuaizhizao.services.over_report_rules import (
             max_completed_quantity_for_plan,
             tuple_from_model,
         )
         from apps.kuaizhizao.services.operation_transfer_service import (
+            build_operation_policy_cache,
             resolve_operation_transfer_qualified,
             sum_process_inspection_quality_quantities,
         )
@@ -1156,16 +1272,11 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 master_op_ids_set.add(int(op.operation_id))
 
         master_op_ids = list(master_op_ids_set)
-        if master_op_ids:
-            policy_rows = await asyncio.gather(
-                *[
-                    resolve_inspection_policy(tenant_id, "ipqc", operation_id=oid)
-                    for oid in master_op_ids
-                ]
-            )
-            policy_cache = {oid: row for oid, row in zip(master_op_ids, policy_rows)}
-        else:
-            policy_cache = {}
+        policy_cache = await build_operation_policy_cache(tenant_id, master_op_ids)
+        # 审核开关同租户内恒定：双重循环外解析一次，否则每工序都会重查审核绑定
+        process_inspection_audit_required = await BusinessConfigService().check_audit_required(
+            tenant_id, "process_inspection"
+        )
 
         inspections = await ProcessInspection.filter(
             tenant_id=tenant_id,
@@ -1204,6 +1315,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
                     op,
                     policy_cache=policy_cache,
                     inspections_by_op={master_id: op_inspections} if master_id else None,
+                    audit_required=process_inspection_audit_required,
                 )
 
                 completed = Decimal(str(op.completed_quantity or 0))
@@ -1532,14 +1644,16 @@ class ReportingService(AppBaseService[ReportingRecord]):
             response = ReportingRecordResponse.model_validate(record)
 
         if should_try_direct_inbound and reporting_record_id_for_inbound is not None:
-            await self._maybe_trigger_direct_finished_goods_inbound(
+            inbound_result = await self._maybe_trigger_direct_finished_goods_inbound(
                 tenant_id, reporting_record_id_for_inbound, approved_by
             )
+        else:
+            inbound_result = None
 
         if record.status == "approved":
             await self._refresh_performance_after_approved_reporting(tenant_id, record)
 
-        return response
+        return _attach_inbound_notices(response, inbound_result)
 
     async def revoke_reporting_approval(
         self,
@@ -2508,6 +2622,50 @@ class ReportingService(AppBaseService[ReportingRecord]):
             ):
                 raise ValidationError("合格数与不合格数之和不能超过报工数量")
 
+            producer_fields = {"worker_id", "worker_name", "team_id", "team_name"}
+            old_worker_id = reporting_record.worker_id
+            old_reported_at = reporting_record.reported_at
+
+            if producer_fields.intersection(update_data.keys()):
+                worker_id_raw = update_data.get("worker_id", reporting_record.worker_id)
+                team_id_raw = update_data.get("team_id", reporting_record.team_id)
+                worker_id_int: Optional[int] = None
+                if worker_id_raw is not None:
+                    try:
+                        worker_id_int = int(worker_id_raw)
+                    except Exception:
+                        raise ValidationError("报工操作工ID无效")
+                team_id_int: Optional[int] = None
+                if team_id_raw is not None:
+                    try:
+                        team_id_int = int(team_id_raw)
+                    except Exception:
+                        raise ValidationError("报工工作小组ID无效")
+
+                if worker_id_int is None and team_id_int is None:
+                    raise ValidationError("须指定生产人员或工作小组")
+
+                if team_id_int is not None:
+                    team_name = str(
+                        update_data.get("team_name", reporting_record.team_name) or ""
+                    ).strip()
+                    if not team_name:
+                        raise ValidationError("工作小组名称必填")
+                    update_data["team_id"] = team_id_int
+                    update_data["team_name"] = team_name
+                    update_data["worker_id"] = None
+                    update_data["worker_name"] = team_name
+                else:
+                    worker_name = str(
+                        update_data.get("worker_name", reporting_record.worker_name) or ""
+                    ).strip()
+                    if not worker_name:
+                        raise ValidationError("生产人员姓名必填")
+                    update_data["worker_id"] = worker_id_int
+                    update_data["worker_name"] = worker_name
+                    update_data["team_id"] = None
+                    update_data["team_name"] = None
+
             # 与创建口径一致：工时允许为 0；不允许负数
             if "work_hours" in update_data:
                 wh_corr = Decimal(str(update_data.get("work_hours") or 0))
@@ -2554,6 +2712,40 @@ class ReportingService(AppBaseService[ReportingRecord]):
                     work_order_id=updated_record.work_order_id
                 )
                 logger.info(f"报工记录 {record_id} 修正后，已重新计算工单 {updated_record.work_order_id} 的进度")
+
+            producer_changed = producer_fields.intersection(update_data_dict.keys())
+            reported_at_changed = "reported_at" in update_data_dict
+            if updated_record.status == "approved" and (producer_changed or reported_at_changed):
+                from apps.master_data.services.performance_calc_service import PerformanceCalcService
+
+                if old_worker_id and (
+                    (producer_changed and int(old_worker_id) != int(updated_record.worker_id or 0))
+                    or reported_at_changed
+                ):
+                    old_period = PerformanceCalcService._period_from_reported_at(old_reported_at)
+                    if old_period:
+                        await PerformanceCalcService.refresh_employee_period_from_reporting(
+                            tenant_id,
+                            int(old_worker_id),
+                            old_period,
+                        )
+                await self._refresh_performance_after_approved_reporting(tenant_id, updated_record)
+                if (
+                    reported_at_changed
+                    and old_worker_id
+                    and updated_record.worker_id
+                    and int(old_worker_id) == int(updated_record.worker_id)
+                    and old_reported_at
+                    and updated_record.reported_at
+                ):
+                    new_period = PerformanceCalcService._period_from_reported_at(updated_record.reported_at)
+                    old_period = PerformanceCalcService._period_from_reported_at(old_reported_at)
+                    if new_period and old_period and new_period != old_period:
+                        await PerformanceCalcService.refresh_employee_period_from_reporting(
+                            tenant_id,
+                            int(old_worker_id),
+                            old_period,
+                        )
 
             # 记录详细的修正历史（在remarks字段中记录，后续可以创建单独的修正历史表）
             # 修正历史已记录在remarks字段中（见上面的correction_note）

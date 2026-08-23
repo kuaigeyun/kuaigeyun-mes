@@ -28,16 +28,20 @@ class SalesOrderItem(BaseModel):
     material_unit = fields.CharField(max_length=20, description="物料单位")
 
     # 订单数量和价格
-    order_quantity = fields.DecimalField(max_digits=10, decimal_places=2, description="订单数量")
-    delivered_quantity = fields.DecimalField(max_digits=10, decimal_places=2, default=0, description="已交货数量")
-    remaining_quantity = fields.DecimalField(max_digits=10, decimal_places=2, description="剩余数量")
+    order_quantity = fields.DecimalField(max_digits=12, decimal_places=4, description="订单数量")
+    delivered_quantity = fields.DecimalField(max_digits=12, decimal_places=4, default=0, description="已交货数量")
+    remaining_quantity = fields.DecimalField(max_digits=12, decimal_places=4, description="剩余数量")
 
-    unit_price = fields.DecimalField(max_digits=10, decimal_places=2, description="单价（不含税）")
+    unit_price = fields.DecimalField(max_digits=12, decimal_places=4, description="单价（不含税）")
     tax_rate = fields.DecimalField(max_digits=6, decimal_places=2, default=0, description="税率（%）")
-    total_amount = fields.DecimalField(max_digits=12, decimal_places=2, description="价税合计")
+    total_amount = fields.DecimalField(max_digits=14, decimal_places=4, description="价税合计")
+    price_settlement_status = fields.CharField(max_length=20, default="SETTLED", description="定价状态 PROVISIONAL|SETTLED")
+    provisional_unit_price = fields.DecimalField(max_digits=10, decimal_places=4, null=True, description="暂估参考单价")
+    price_settled_at = fields.DatetimeField(null=True, description="定价时间")
+    price_settled_by = fields.IntField(null=True, description="定价人ID")
     is_gift = fields.BooleanField(default=False, description="是否赠品")
     gift_ref_unit_price = fields.DecimalField(
-        max_digits=10, decimal_places=2, null=True, description="赠品参考单价"
+        max_digits=12, decimal_places=4, null=True, description="赠品参考单价"
     )
 
     # 交货信息

@@ -15,9 +15,9 @@ class SemiFinishedGoodsReceiptItem(BaseModel):
     material_spec = fields.CharField(max_length=200, null=True, description="物料规格")
     material_unit = fields.CharField(max_length=20, description="物料单位")
 
-    receipt_quantity = fields.DecimalField(max_digits=10, decimal_places=2, description="入库数量")
-    qualified_quantity = fields.DecimalField(max_digits=10, decimal_places=2, description="合格数量")
-    unqualified_quantity = fields.DecimalField(max_digits=10, decimal_places=2, description="不合格数量")
+    receipt_quantity = fields.DecimalField(max_digits=12, decimal_places=4, description="入库数量")
+    qualified_quantity = fields.DecimalField(max_digits=12, decimal_places=4, description="合格数量")
+    unqualified_quantity = fields.DecimalField(max_digits=12, decimal_places=4, description="不合格数量")
 
     location_id = fields.IntField(null=True, description="库位ID")
     location_code = fields.CharField(max_length=50, null=True, description="库位编码")

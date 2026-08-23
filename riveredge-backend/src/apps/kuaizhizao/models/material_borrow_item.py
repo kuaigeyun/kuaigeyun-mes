@@ -28,8 +28,8 @@ class MaterialBorrowItem(BaseModel):
     material_unit = fields.CharField(max_length=20, description="物料单位")
 
     # 借出数量与归还数量
-    borrow_quantity = fields.DecimalField(max_digits=10, decimal_places=2, description="借出数量")
-    returned_quantity = fields.DecimalField(max_digits=10, decimal_places=2, default=0, description="已归还数量")
+    borrow_quantity = fields.DecimalField(max_digits=12, decimal_places=4, description="借出数量")
+    returned_quantity = fields.DecimalField(max_digits=12, decimal_places=4, default=0, description="已归还数量")
 
     # 仓库信息
     warehouse_id = fields.IntField(description="仓库ID")

@@ -7,16 +7,18 @@
 
 from __future__ import annotations
 
-import asyncio
 from collections import defaultdict
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 
 from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
 from apps.kuaizhizao.services.inspection_policy_service import (
+    batch_get_operation_inspection_stages,
+    get_quality_effective_config,
     ipqc_inspection_passed_for_transfer,
     resolve_inspection_policy,
     resolve_ipqc_plan_label_for_operation,
+    resolve_ipqc_policy_from_stages,
 )
 
 
@@ -30,12 +32,27 @@ def is_rework_verification_process_inspection(inspection: Any) -> bool:
 async def sum_plan_transfer_qualified_from_inspections(
     tenant_id: int,
     inspections: List[Any],
+    *,
+    audit_required: Optional[bool] = None,
 ) -> Decimal:
+    """
+    Args:
+        audit_required: 「过程检验需审核」开关，同一租户内恒定。调用方在循环外解析后传入，
+            避免逐张检验单重复查询审核绑定。
+    """
+    if audit_required is None and inspections:
+        from infra.services.business_config_service import BusinessConfigService
+
+        audit_required = await BusinessConfigService().check_audit_required(
+            tenant_id, "process_inspection"
+        )
     total = Decimal("0")
     for insp in inspections:
         if is_rework_verification_process_inspection(insp):
             continue
-        if await ipqc_inspection_passed_for_transfer(tenant_id, insp):
+        if await ipqc_inspection_passed_for_transfer(
+            tenant_id, insp, audit_required=audit_required
+        ):
             total += Decimal(str(getattr(insp, "qualified_quantity", None) or 0))
     return total
 
@@ -47,8 +64,14 @@ async def resolve_operation_transfer_qualified(
     *,
     policy_cache: Optional[Dict[int, Tuple[str, Optional[int], str]]] = None,
     inspections_by_op: Optional[Dict[int, List[Any]]] = None,
+    audit_required: Optional[bool] = None,
 ) -> Decimal:
-    """本道工序可转下道的合格数量（方案质检须过程检验放行后计入）。"""
+    """
+    本道工序可转下道的合格数量（方案质检须过程检验放行后计入）。
+
+    Args:
+        audit_required: 「过程检验需审核」开关；批量调用时由调用方解析一次后透传。
+    """
     master_op_id = int(woo.operation_id) if woo.operation_id is not None else 0
     if master_op_id <= 0:
         return Decimal(str(woo.qualified_quantity or 0))
@@ -77,7 +100,9 @@ async def resolve_operation_transfer_qualified(
     else:
         inspections = inspections_by_op.get(master_op_id, [])
 
-    return await sum_plan_transfer_qualified_from_inspections(tenant_id, inspections)
+    return await sum_plan_transfer_qualified_from_inspections(
+        tenant_id, inspections, audit_required=audit_required
+    )
 
 
 async def resolve_operation_display_unqualified(
@@ -135,6 +160,12 @@ async def build_operation_policy_cache(
     tenant_id: int,
     operation_ids: List[int],
 ) -> Dict[int, Tuple[str, Optional[int], str]]:
+    """
+    批量解析工序过程检验策略。
+
+    固定 2 次查询（租户质量配置 + 工序批量），不随工序数增长；
+    判定复用 ``resolve_ipqc_policy_from_stages``，与单条解析同一套语义。
+    """
     uniq: List[int] = []
     seen: set[int] = set()
     for op_id in operation_ids:
@@ -147,10 +178,12 @@ async def build_operation_policy_cache(
         uniq.append(oid)
     if not uniq:
         return {}
-    resolved = await asyncio.gather(
-        *[resolve_inspection_policy(tenant_id, "ipqc", operation_id=oid) for oid in uniq]
-    )
-    return {oid: policy for oid, policy in zip(uniq, resolved)}
+    cfg = await get_quality_effective_config(tenant_id)
+    stages_by_op = await batch_get_operation_inspection_stages(tenant_id, uniq)
+    return {
+        oid: resolve_ipqc_policy_from_stages(cfg, stages_by_op.get(oid))
+        for oid in uniq
+    }
 
 
 async def resolve_operation_inspection_plan_label(

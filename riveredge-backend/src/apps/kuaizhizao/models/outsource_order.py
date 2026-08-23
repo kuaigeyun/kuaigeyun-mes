@@ -96,12 +96,12 @@ class OutsourceOrder(BaseModel):
     supplier_name = fields.CharField(max_length=200, description="供应商名称")
 
     # 委外数量和金额
-    outsource_quantity = fields.DecimalField(max_digits=12, decimal_places=2, description="委外数量")
-    received_quantity = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="已接收数量")
-    qualified_quantity = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="合格数量")
-    unqualified_quantity = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="不合格数量")
-    unit_price = fields.DecimalField(max_digits=12, decimal_places=2, null=True, description="单价")
-    total_amount = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="总金额")
+    outsource_quantity = fields.DecimalField(max_digits=14, decimal_places=4, description="委外数量")
+    received_quantity = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="已接收数量")
+    qualified_quantity = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="合格数量")
+    unqualified_quantity = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="不合格数量")
+    unit_price = fields.DecimalField(max_digits=14, decimal_places=4, null=True, description="单价")
+    total_amount = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="总金额")
 
     # 时间信息
     planned_start_date = fields.DatetimeField(null=True, description="计划开始日期")

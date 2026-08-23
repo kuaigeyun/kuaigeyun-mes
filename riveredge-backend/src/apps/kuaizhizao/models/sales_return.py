@@ -53,8 +53,8 @@ class SalesReturn(BaseModel):
     return_type = fields.CharField(max_length=20, default="质量问题", description="退货类型（质量问题/客户取消/其他）")
 
     status = fields.CharField(max_length=20, default="待退货", description="退货状态")
-    total_quantity = fields.DecimalField(max_digits=10, decimal_places=2, default=0, description="总退货数量")
-    total_amount = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="总金额")
+    total_quantity = fields.DecimalField(max_digits=12, decimal_places=4, default=0, description="总退货数量")
+    total_amount = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="总金额")
 
     # 物流信息
     shipping_method = fields.CharField(max_length=50, null=True, description="退货方式")

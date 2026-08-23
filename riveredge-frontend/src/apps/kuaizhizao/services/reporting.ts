@@ -80,6 +80,11 @@ export interface ReportingRecord {
   status?: string;
   reported_at?: string;
   created_at?: string;
+  post_action_notices?: Array<{
+    level?: 'info' | 'warning' | 'success';
+    code?: string;
+    receipt_code?: string | null;
+  }>;
   [key: string]: unknown;
 }
 

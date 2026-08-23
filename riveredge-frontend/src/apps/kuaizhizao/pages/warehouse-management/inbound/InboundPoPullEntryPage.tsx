@@ -32,6 +32,7 @@ import { normalizeDocumentAttachments } from '../../../utils/documentAttachments
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
 import {formatDateBySiteSetting, formatQuantity} from '../../../../../utils/format';
+import { reportDocumentStatusText } from '../../../utils/reportPresentation';
 import { loadConfirmPreviewMaterialMeta, type ConfirmPreviewMaterialMeta } from './inboundItemTracking';
 import {
   enrichPurchaseOrderItemsMaterial,
@@ -751,7 +752,7 @@ const InboundPoPullEntryPage: React.FC = () => {
                   </Col>
                   <Col xs={24} sm={12} lg={6}>
                     <Form.Item label={t('app.kuaizhizao.warehouseInbound.field.orderStatus')}>
-                      <ReadOnlyFormValue value={order.status} />
+                      <ReadOnlyFormValue value={reportDocumentStatusText(t, order.status)} />
                     </Form.Item>
                   </Col>
                   <Col xs={24} sm={12} lg={6}>

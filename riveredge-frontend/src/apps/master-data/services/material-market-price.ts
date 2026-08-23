@@ -6,6 +6,7 @@ import type {
   MaterialMarketPriceCreate,
   MaterialMarketPricePresetItem,
   MaterialMarketPriceUpdate,
+  MaterialMarketPriceTrend,
   MaterialMarketSaleResolve,
 } from '../types/material-market-price';
 
@@ -51,6 +52,11 @@ export const materialMarketPriceApi = {
     api.put<MaterialMarketPrice>(`${BASE}/market-prices/${uuid}`, data),
 
   delete: (uuid: string) => api.delete(`${BASE}/market-prices/${uuid}`),
+
+  getTrend: (quoteCode: string, params?: { days?: number; endDate?: string }) =>
+    api.get<MaterialMarketPriceTrend>(`${BASE}/market-prices/trend`, {
+      params: { quoteCode, ...params },
+    }),
 
   resolveSale: (materialUuid: string, priceDate: string) =>
     api.get<MaterialMarketSaleResolve>(`${BASE}/market-prices/resolve-sale`, {

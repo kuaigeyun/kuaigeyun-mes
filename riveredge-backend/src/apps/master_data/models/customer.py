@@ -83,7 +83,7 @@ class Customer(BaseModel):
     )
     lead_source_code = fields.CharField(max_length=50, null=True, description="来源渠道（数据字典 PARTNER_SOURCE_CHANNEL）")
     credit_limit = fields.DecimalField(
-        max_digits=18, decimal_places=2, null=True, description="信用额度"
+        max_digits=20, decimal_places=4, null=True, description="信用额度"
     )
 
     # 开票资料（票面常用）

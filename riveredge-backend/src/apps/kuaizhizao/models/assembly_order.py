@@ -63,7 +63,7 @@ class AssemblyOrder(BaseModel):
     assembly_template_id = fields.IntField(null=True, description="套用的组装模板ID")
     assembly_template_code = fields.CharField(max_length=50, null=True, description="套用的组装模板编码")
 
-    total_quantity = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="组装数量（成品数量）")
+    total_quantity = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="组装数量（成品数量）")
     total_items = fields.IntField(default=0, description="组件明细数")
 
     remarks = fields.TextField(null=True, description="备注")
@@ -113,9 +113,9 @@ class AssemblyOrderItem(BaseModel):
     material_code = fields.CharField(max_length=50, description="组件物料编码")
     material_name = fields.CharField(max_length=200, description="组件物料名称")
 
-    quantity = fields.DecimalField(max_digits=12, decimal_places=2, description="消耗数量")
-    unit_price = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="单价")
-    amount = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="金额")
+    quantity = fields.DecimalField(max_digits=14, decimal_places=4, description="消耗数量")
+    unit_price = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="单价")
+    amount = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="金额")
 
     status = fields.CharField(max_length=20, default="pending", description="状态（pending/consumed）")
     remarks = fields.TextField(null=True, description="备注")

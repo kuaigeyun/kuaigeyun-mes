@@ -68,7 +68,7 @@ import { useGlobalStore } from '../../../stores';
 import { useThemeStore } from '../../../stores/themeStore';
 import { getUserByUuid, getUserList } from '../../../services/user';
 import { getWeatherAdaptiveTint } from '../../../components/weather/weatherBackground';
-import type { WeatherData } from '../../../services/weather';
+import { getCachedWeather, type WeatherData } from '../../../services/weather';
 import { formatLunarDate } from '../../../utils/lunarDate';
 import {
   DashboardCalendarWeatherClock,
@@ -213,8 +213,8 @@ export default function DashboardPage() {
   const currentUser = useCurrentUser();
   const [currentTime, setCurrentTime] = useState(dayjs());
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined);
-  /** 天气数据：用于首行天气区块背景渐变 */
-  const [weatherForDashboard, setWeatherForDashboard] = useState<WeatherData | null>(null);
+  /** 天气数据：用于首行天气区块背景渐变（首屏同步读缓存，避免背景与天气文案不同步） */
+  const [weatherForDashboard, setWeatherForDashboard] = useState<WeatherData | null>(() => getCachedWeather());
 
   // 时间范围筛选器状态
   const [timeRange, setTimeRange] = useState<DashboardTimeRange>('last30days');
@@ -867,6 +867,7 @@ export default function DashboardPage() {
             cardRadius={dashboardCardRadius}
             lunarDateStr={lunarDateStr}
             t={t}
+            weatherData={weatherForDashboard}
             onWeatherChange={setWeatherForDashboard}
           />
           {/* 右侧下区：快捷入口 + 使用小提示/版本 */}

@@ -16,7 +16,6 @@ import {
   CheckCircleOutlined,
   DeleteOutlined,
   RollbackOutlined,
-  PrinterOutlined,
 } from '@ant-design/icons';
 import { UniTable, type UniTableRequestMeta } from '../../../../../components/uni-table';
 import {
@@ -70,6 +69,12 @@ import {
   ratioToPushProgressPercent,
 } from '../../sales-management/shared/DocumentPushProgressBar';
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
+import {
+  WarehouseShowAmountSwitch,
+  appendWarehouseLineAmountColumns,
+  buildWarehouseTotalAmountListColumn,
+  useWarehouseShowAmount,
+} from '../shared/warehouseAmountDisplay';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import InboundQuickPullModals, {
   type InboundQuickPullModalsRef,
@@ -116,6 +121,7 @@ import { inboundReceiptTypeMarkerValueEnum, renderInboundReceiptTypeMarkerTag } 
 import {
   normalizeInboundHubDetail,
   resolveInboundHubDetailItems,
+  resolveInboundHubLineQuantity,
   resolveInboundHubStatusLabel,
   resolveInboundHubStatusTagColor,
 } from './inboundHubNormalize';
@@ -453,6 +459,7 @@ const InboundPage: React.FC = () => {
   const quickPullRef = useRef<InboundQuickPullModalsRef>(null);
   const receiptTypeFilterRef = useRef<string>('all');
   const [receiptTypeFilter, setReceiptTypeFilter] = useState<string>('all');
+  const [showAmount, setShowAmount] = useWarehouseShowAmount();
   const handleCreate = useCallback(() => {
     quickPullRef.current?.open('work_order');
   }, []);
@@ -1689,6 +1696,7 @@ const InboundPage: React.FC = () => {
       sorter: true,
       render: formatQuantity,
     },
+    ...buildWarehouseTotalAmountListColumn<InboundOrder>(t, showAmount),
     {
       title: t('app.kuaizhizao.warehouseInbound.col.totalItems'),
       dataIndex: 'total_items',
@@ -1867,6 +1875,7 @@ const InboundPage: React.FC = () => {
     finishedGoodsReceiptCustomFieldColumns,
     inboundPerms,
     packingBindingPerms.canRead,
+    showAmount,
   ],
   );
 
@@ -2011,11 +2020,118 @@ const InboundPage: React.FC = () => {
     [currentOrder],
   );
 
+  const inboundDetailLineColumns = useMemo(() => {
+    if (!currentOrder) return [];
+    if (currentOrder.receipt_type === 'production_return') {
+      return appendWarehouseLineAmountColumns(
+        [
+          { title: t('app.kuaizhizao.warehouseInbound.col.materialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
+          { title: t('app.kuaizhizao.warehouseInbound.col.materialName'), dataIndex: 'material_name', width: 150, ellipsis: true },
+          {
+            title: t('common.unit'),
+            dataIndex: 'material_unit',
+            width: 72,
+            render: (_: unknown, row: InboundOrderItem) => renderInboundDetailUnitCell(row),
+          },
+          {
+            title: t('app.kuaizhizao.warehouseInbound.col.returnQty'),
+            dataIndex: 'return_quantity',
+            width: 100,
+            align: 'right' as const,
+            render: formatQuantity,
+          },
+          { title: t('app.kuaizhizao.warehouseInbound.col.warehouseName'), dataIndex: 'warehouse_name', width: 120, ellipsis: true },
+          { title: t('app.kuaizhizao.warehouseInbound.col.locationCode'), dataIndex: 'location_code', width: 100, ellipsis: true, render: (v: unknown) => (v ? String(v) : '—') },
+          { title: t('app.kuaizhizao.warehouseInbound.col.batchNumber'), dataIndex: 'batch_number', width: 100, ellipsis: true, render: (v: unknown) => (v ? String(v) : '—') },
+        ],
+        t,
+        showAmount,
+      );
+    }
+    if (currentOrder.receipt_type === 'purchase') {
+      return appendWarehouseLineAmountColumns(
+        [
+          { title: t('app.kuaizhizao.warehouseInbound.col.materialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
+          { title: t('app.kuaizhizao.warehouseInbound.col.materialName'), dataIndex: 'material_name', width: 150, ellipsis: true },
+          {
+            title: t('app.kuaizhizao.warehouseInbound.col.actualQty'),
+            dataIndex: 'receipt_quantity',
+            width: 140,
+            align: 'right' as const,
+            render: (_: unknown, row: InboundOrderItem) => {
+              const editable = isEditablePurchaseReceipt(currentOrder) && row.id != null;
+              if (!editable) return formatQuantity(row.receipt_quantity);
+              const rid = Number(row.id);
+              return (
+                <InputNumber
+                  min={0.01}
+                  precision={2}
+                  value={editableReceiptQuantities[rid] ?? Number(row.receipt_quantity ?? 0)}
+                  onChange={(v) =>
+                    setEditableReceiptQuantities((prev) => ({ ...prev, [rid]: Number(v) || 0 }))
+                  }
+                  style={{ width: 110 }}
+                  size="small"
+                />
+              );
+            },
+          },
+          {
+            title: t('common.unit'),
+            dataIndex: 'material_unit',
+            width: 72,
+            render: (_: unknown, row: InboundOrderItem) => renderInboundDetailUnitCell(row),
+          },
+          { title: t('app.kuaizhizao.warehouseInbound.col.locationCode'), dataIndex: 'location_code', width: 100, ellipsis: true, render: (v: unknown) => (v ? String(v) : '—') },
+          { title: t('app.kuaizhizao.warehouseInbound.col.batchNumber'), dataIndex: 'batch_number', width: 100, ellipsis: true, render: (v: unknown) => (v ? String(v) : '—') },
+          {
+            title: t('app.kuaizhizao.warehouseInbound.col.serialNo'),
+            dataIndex: 'serial_numbers',
+            width: 88,
+            render: (v: unknown) => renderInboundDetailSerialCell(t, v),
+          },
+        ],
+        t,
+        showAmount,
+        -3,
+      );
+    }
+    return appendWarehouseLineAmountColumns(
+      [
+        { title: t('app.kuaizhizao.warehouseInbound.col.materialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
+        { title: t('app.kuaizhizao.warehouseInbound.col.materialName'), dataIndex: 'material_name', width: 150, ellipsis: true },
+        {
+          title: t('common.quantity'),
+          dataIndex: 'receipt_quantity',
+          width: 100,
+          align: 'right' as const,
+          render: (_: unknown, row: InboundOrderItem) =>
+            formatQuantity(resolveInboundHubLineQuantity(row as Record<string, unknown>)),
+        },
+        {
+          title: t('common.unit'),
+          dataIndex: 'material_unit',
+          width: 72,
+          render: (_: unknown, row: InboundOrderItem) => renderInboundDetailUnitCell(row),
+        },
+        { title: t('app.kuaizhizao.warehouseInbound.col.locationCode'), dataIndex: 'location_code', width: 100, ellipsis: true, render: (v: unknown) => (v ? String(v) : '—') },
+        { title: t('app.kuaizhizao.warehouseInbound.col.batchNumber'), dataIndex: 'batch_number', width: 100, ellipsis: true, render: (v: unknown) => (v ? String(v) : '—') },
+      ],
+      t,
+      showAmount,
+    );
+  }, [
+    currentOrder,
+    t,
+    showAmount,
+    editableReceiptQuantities,
+  ]);
+
   return (
     <ListPageTemplate>
       <UniTable
         headerTitle={t('app.kuaizhizao.warehouseInbound.title')}
-        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.inbound.v3"
+        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.inbound.v4"
         actionRef={actionRef}
         formRef={searchFormRef}
         rowKey={inboundRowKey}
@@ -2132,23 +2248,20 @@ const InboundPage: React.FC = () => {
             />,
           ];
         }}
-        toolBarActionsAfterBatch={
-          inboundPerms.canPrint
-            ? [
-                <Button
-                  key="inbound-toolbar-print"
-                  icon={<PrinterOutlined />}
-                  disabled={!canToolbarPrint}
-                  onClick={() => {
-                    const row = selectedInboundForBatch[0];
-                    if (row) handlePrint(row);
-                  }}
-                >
-                  {t('components.uniAction.print')}
-                </Button>,
-              ]
-            : []
-        }
+        toolBarActionsAfterBatch={[
+          <WarehouseShowAmountSwitch
+            key="inbound-show-amount"
+            checked={showAmount}
+            onChange={setShowAmount}
+          />,
+        ]}
+        showPrintButton={inboundPerms.canPrint}
+        printButtonDisabled={!canToolbarPrint}
+        printButtonText={t('components.uniAction.print')}
+        onPrint={() => {
+          const row = selectedInboundForBatch[0];
+          if (row) handlePrint(row);
+        }}
       />
 
       <InboundQuickPullModals
@@ -2463,7 +2576,7 @@ const InboundPage: React.FC = () => {
                   width: 100,
                   align: 'right',
                   render: (_: unknown, row: Record<string, unknown>) =>
-                    Number(row.receipt_quantity ?? row.return_quantity ?? row.quantity ?? 0),
+                    resolveInboundHubLineQuantity(row) ?? 0,
                 },
                 {
                   title: t('app.kuaizhizao.warehouseInbound.col.warehouse'),
@@ -2586,92 +2699,7 @@ const InboundPage: React.FC = () => {
                       rowKey={(r, idx) => (r.id != null ? String(r.id) : `m-${r.material_id ?? idx}`)}
                       pagination={false}
                       bordered
-                      columns={
-                        currentOrder.receipt_type === 'production_return'
-                          ? [
-                              { title: t('app.kuaizhizao.warehouseInbound.col.materialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
-                              { title: t('app.kuaizhizao.warehouseInbound.col.materialName'), dataIndex: 'material_name', width: 150, ellipsis: true },
-                              {
-                                title: t('common.unit'),
-                                dataIndex: 'material_unit',
-                                width: 72,
-                                render: (_: unknown, row: InboundOrderItem) => renderInboundDetailUnitCell(row),
-                              },
-                              {
-                                title: t('app.kuaizhizao.warehouseInbound.col.returnQty'),
-                                dataIndex: 'return_quantity',
-                                width: 100,
-                                align: 'right' as const,
-                                render: formatQuantity,
-                              },
-                              { title: t('app.kuaizhizao.warehouseInbound.col.warehouseName'), dataIndex: 'warehouse_name', width: 120, ellipsis: true },
-                              { title: t('app.kuaizhizao.warehouseInbound.col.locationCode'), dataIndex: 'location_code', width: 100, ellipsis: true, render: (v: unknown) => (v ? String(v) : '—') },
-                              { title: t('app.kuaizhizao.warehouseInbound.col.batchNumber'), dataIndex: 'batch_number', width: 100, ellipsis: true, render: (v: unknown) => (v ? String(v) : '—') },
-                            ]
-                          : currentOrder.receipt_type === 'purchase'
-                            ? [
-                                { title: t('app.kuaizhizao.warehouseInbound.col.materialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
-                                { title: t('app.kuaizhizao.warehouseInbound.col.materialName'), dataIndex: 'material_name', width: 150, ellipsis: true },
-                                {
-                                  title: t('app.kuaizhizao.warehouseInbound.col.actualQty'),
-                                  dataIndex: 'receipt_quantity',
-                                  width: 140,
-                                  align: 'right' as const,
-                                  render: (_: any, row: InboundOrderItem) => {
-                                    const editable = isEditablePurchaseReceipt(currentOrder) && row.id != null;
-                                    if (!editable) return formatQuantity(row.receipt_quantity);
-                                    const rid = Number(row.id);
-                                    return (
-                                      <InputNumber
-                                        min={0.01}
-                                        precision={2}
-                                        value={editableReceiptQuantities[rid] ?? Number(row.receipt_quantity ?? 0)}
-                                        onChange={(v) =>
-                                          setEditableReceiptQuantities((prev) => ({ ...prev, [rid]: Number(v) || 0 }))
-                                        }
-                                        style={{ width: 110 }}
-                                        size="small"
-                                      />
-                                    );
-                                  },
-                                },
-                                {
-                                  title: t('common.unit'),
-                                  dataIndex: 'material_unit',
-                                  width: 72,
-                                  render: (_: unknown, row: InboundOrderItem) => renderInboundDetailUnitCell(row),
-                                },
-                                { title: t('app.kuaizhizao.warehouseInbound.col.unitPrice'), dataIndex: 'unit_price', width: 90, align: 'right' as const },
-                                { title: t('app.kuaizhizao.warehouseInbound.col.amount'), dataIndex: 'total_amount', width: 100, align: 'right' as const },
-                                { title: t('app.kuaizhizao.warehouseInbound.col.locationCode'), dataIndex: 'location_code', width: 100, ellipsis: true, render: (v: unknown) => (v ? String(v) : '—') },
-                                { title: t('app.kuaizhizao.warehouseInbound.col.batchNumber'), dataIndex: 'batch_number', width: 100, ellipsis: true, render: (v: unknown) => (v ? String(v) : '—') },
-                                {
-                                  title: t('app.kuaizhizao.warehouseInbound.col.serialNo'),
-                                  dataIndex: 'serial_numbers',
-                                  width: 88,
-                                  render: (v: unknown) => renderInboundDetailSerialCell(t, v),
-                                },
-                              ]
-                            : [
-                                { title: t('app.kuaizhizao.warehouseInbound.col.materialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
-                                { title: t('app.kuaizhizao.warehouseInbound.col.materialName'), dataIndex: 'material_name', width: 150, ellipsis: true },
-                                {
-                                  title: t('common.quantity'),
-                                  dataIndex: 'receipt_quantity',
-                                  width: 100,
-                                  align: 'right' as const,
-                                  render: formatQuantity,
-                                },
-                                {
-                                  title: t('common.unit'),
-                                  dataIndex: 'material_unit',
-                                  width: 72,
-                                  render: (_: unknown, row: InboundOrderItem) => renderInboundDetailUnitCell(row),
-                                },
-                                { title: t('app.kuaizhizao.warehouseInbound.col.locationCode'), dataIndex: 'location_code', width: 100, ellipsis: true, render: (v: unknown) => (v ? String(v) : '—') },
-                                { title: t('app.kuaizhizao.warehouseInbound.col.batchNumber'), dataIndex: 'batch_number', width: 100, ellipsis: true, render: (v: unknown) => (v ? String(v) : '—') },
-                              ]
-                      }
+                      columns={inboundDetailLineColumns}
                       dataSource={inboundDetailItems}
                     />
                   </div>

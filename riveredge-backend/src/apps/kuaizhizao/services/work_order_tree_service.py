@@ -4,23 +4,14 @@
 
 from __future__ import annotations
 
-import re
 from collections import defaultdict
 from decimal import Decimal
 from typing import Iterable, List, Optional
 
-from apps.kuaizhizao.models.document_relation import DocumentRelation
 from apps.kuaizhizao.models.outsource_order import OutsourceOrder
 from apps.kuaizhizao.models.rework_order import ReworkOrder
 from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaizhizao.schemas.work_order import WorkOrderListResponse
-
-_SPLIT_CODE_SUFFIX = re.compile(r"^(.+)-(\d{3})$")
-
-
-def is_split_child_code(code: Optional[str]) -> bool:
-    return bool(_SPLIT_CODE_SUFFIX.match(code or ""))
-
 
 def _split_child_response(wo: WorkOrder) -> WorkOrderListResponse:
     item = WorkOrderListResponse.model_validate(wo)
@@ -73,81 +64,6 @@ def _outsource_child_response(parent_id: int, order: OutsourceOrder) -> WorkOrde
 
 
 class WorkOrderTreeService:
-    async def backfill_split_parent_links(
-        self,
-        tenant_id: int,
-        *,
-        child_ids: Optional[Iterable[int]] = None,
-    ) -> int:
-        """
-        为缺失 parent_work_order_id 的拆分工单补写父工单 ID（幂等）。
-        优先按编码 xxx-NNN 规则匹配；其次读「工单拆分」单据关联。
-        """
-        query = WorkOrder.filter(
-            tenant_id=tenant_id,
-            deleted_at__isnull=True,
-            parent_work_order_id__isnull=True,
-        )
-        if child_ids is not None:
-            ids = [int(i) for i in child_ids if i is not None]
-            if not ids:
-                return 0
-            query = query.filter(id__in=ids)
-
-        orphans = await query.all()
-        if not orphans:
-            return 0
-
-        updated = 0
-        by_parent_code: dict[str, list[WorkOrder]] = defaultdict(list)
-        unmatched: list[WorkOrder] = []
-
-        for wo in orphans:
-            match = _SPLIT_CODE_SUFFIX.match(wo.code or "")
-            if match:
-                by_parent_code[match.group(1)].append(wo)
-            else:
-                unmatched.append(wo)
-
-        if by_parent_code:
-            parents = await WorkOrder.filter(
-                tenant_id=tenant_id,
-                deleted_at__isnull=True,
-                code__in=list(by_parent_code.keys()),
-            ).only("id", "code")
-            parent_id_by_code = {row.code: row.id for row in parents if row.code}
-            for parent_code, children in by_parent_code.items():
-                parent_id = parent_id_by_code.get(parent_code)
-                if parent_id is None:
-                    unmatched.extend(children)
-                    continue
-                for child in children:
-                    child.parent_work_order_id = parent_id
-                    await child.save(update_fields=["parent_work_order_id"])
-                    updated += 1
-
-        if unmatched:
-            rel_query = DocumentRelation.filter(
-                tenant_id=tenant_id,
-                source_type="work_order",
-                target_type="work_order",
-                relation_desc="工单拆分",
-            )
-            target_ids = [wo.id for wo in unmatched if wo.id is not None]
-            if target_ids:
-                rel_query = rel_query.filter(target_id__in=target_ids)
-            rels = await rel_query.all()
-            rel_by_target = {rel.target_id: rel.source_id for rel in rels}
-            for child in unmatched:
-                parent_id = rel_by_target.get(child.id)
-                if parent_id is None:
-                    continue
-                child.parent_work_order_id = parent_id
-                await child.save(update_fields=["parent_work_order_id"])
-                updated += 1
-
-        return updated
-
     async def attach_tree_children(
         self,
         tenant_id: int,
@@ -190,9 +106,9 @@ class WorkOrderTreeService:
                 deleted_at__isnull=True,
             ).order_by("code").all()
 
-        from apps.kuaizhizao.services.work_order_service import WorkOrderService
-
-        await WorkOrderService().ensure_split_children_have_operations(tenant_id, split_rows)
+        # 拆分子工单的工序由拆分写入路径 _provision_split_work_order_operations 保证，
+        # 历史缺失数据用 scripts/backfill_split_child_operations.py 离线补齐；
+        # 列表读路径不再逐子工单补写（原实现为每子工单 2-4 次串行查询且会写库）。
 
         split_steps_by_id: dict[int, list] = {}
         split_ids = [row.id for row in split_rows if row.id is not None]

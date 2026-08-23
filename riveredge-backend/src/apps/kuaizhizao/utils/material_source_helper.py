@@ -213,6 +213,51 @@ async def get_material_source_type(
     return material.source_type
 
 
+def material_source_types_set(material: Material) -> set[str]:
+    """合并 source_config.source_types 与主来源 source_type。"""
+    cfg = normalize_source_config_payload(material.source_config or {})
+    result: set[str] = set()
+    types = cfg.get("source_types")
+    if isinstance(types, list):
+        for raw in types:
+            normalized = normalize_material_source_type(raw)
+            if normalized:
+                result.add(normalized)
+    primary = normalize_material_source_type(material.source_type)
+    if primary:
+        result.add(primary)
+    return result
+
+
+def is_make_and_buy_material(material: Material) -> bool:
+    """物料是否同时勾选自制与采购。"""
+    types = material_source_types_set(material)
+    return SOURCE_TYPE_MAKE in types and SOURCE_TYPE_BUY in types
+
+
+def resolve_mrp_supply_source_type(material: Material) -> str:
+    """
+    MRP 计划订单供应通道。
+
+    双选自制+采购时优先走采购（库存净算后不足部分给采购建议，不生成自制工单）。
+    单选仍按 material.source_type。
+    """
+    if is_make_and_buy_material(material):
+        return SOURCE_TYPE_BUY
+    primary = normalize_material_source_type(material.source_type)
+    return primary or SOURCE_TYPE_BUY
+
+
+async def get_material_mrp_supply_source_type(
+    tenant_id: int,
+    material_id: int,
+) -> Optional[str]:
+    material = await Material.get_or_none(tenant_id=tenant_id, id=material_id)
+    if not material:
+        return None
+    return resolve_mrp_supply_source_type(material)
+
+
 async def validate_material_source_config(
     tenant_id: int,
     material_id: int,
@@ -238,7 +283,8 @@ async def validate_material_source_config(
     source_config = material.source_config or {}
     
     if source_type == SOURCE_TYPE_MAKE:
-        # 自制件根据制造模式区分校验：工艺型工艺路线必填、BOM可选；组合型BOM必填、工艺路线可选
+        # 自制件根据制造模式区分校验：工艺型工艺路线必填、BOM可选；组合型BOM必填、工艺路线建议；
+        # 未设制造模式时 BOM 与工艺路线均必填（与 MRP 执行前 scope 校验一致）。
         from apps.master_data.models.material import BOM
         manufacturing_mode = source_config.get("manufacturing_mode")
         bom_count = await BOM.filter(
@@ -250,20 +296,16 @@ async def validate_material_source_config(
         has_process_route = bool(material.process_route_id)
 
         if manufacturing_mode == MANUFACTURING_MODE_FABRICATION:
-            # 工艺型：工艺路线必填，BOM 可选（不强制）
             if not has_process_route:
                 errors.append(f"工艺型自制件必须有工艺路线配置，物料: {material.main_code} ({material.name})")
         elif manufacturing_mode == MANUFACTURING_MODE_ASSEMBLY:
-            # 组合型：BOM 必填，工艺路线可选
             if bom_count == 0:
                 errors.append(f"组合型自制件必须有BOM配置，物料: {material.main_code} ({material.name})")
-            if not has_process_route:
-                errors.append(f"组合型自制件建议配置工艺路线（装配工序），物料: {material.main_code} ({material.name})")
         else:
-            # 未设置制造模式：允许“仅工艺路线”的自制件参与计算并生成建议工单。
-            # 过去这里会因缺 BOM 直接报错并阻断建议工单，导致机加工类半成品误拦截。
+            if bom_count == 0:
+                errors.append(f"自制件必须有BOM配置，物料: {material.main_code} ({material.name})")
             if not has_process_route:
-                errors.append(f"自制件建议配置工艺路线，物料: {material.main_code} ({material.name})")
+                errors.append(f"自制件必须有工艺路线配置，物料: {material.main_code} ({material.name})")
             
     elif source_type == SOURCE_TYPE_BUY:
         # 采购件未配置默认供应商时仅作建议，不判定为验证失败（可通过「下推到采购申请」处理）

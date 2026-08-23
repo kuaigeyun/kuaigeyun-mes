@@ -28,6 +28,7 @@ import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input, Row, C
 import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, PrinterOutlined, ImportOutlined, AppstoreAddOutlined, SendOutlined, CommentOutlined, RollbackOutlined, CheckOutlined, CloseCircleOutlined, UndoOutlined, BranchesOutlined, ReloadOutlined, FileTextOutlined, FormOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 import { ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
 import { UniTable, invalidateUniTableListCache, readPersistedUniTableViewType, type UniTableRequestMeta } from '../../../../../components/uni-table';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import {
   UniTableStackedPrimaryCell,
@@ -3900,20 +3901,7 @@ const QuotationsPage: React.FC = () => {
           columns={alignedListColumns}
           viewTypes={['table', 'detailTable', 'help']}
           defaultViewType={viewTypeState === 'help' ? 'table' : viewTypeState}
-          helpViewConfig={{
-            content: (
-              <div style={{ lineHeight: 1.8 }}>
-                <p>
-                  <strong>{t('components.uniTable.viewTable')}</strong>
-                  {t('app.kuaizhizao.quotation.helpTableView')}
-                </p>
-                <p>
-                  <strong>{t('components.uniTable.viewDetailTable')}</strong>
-                  {t('app.kuaizhizao.quotation.helpDetailTableView')}
-                </p>
-              </div>
-            ),
-          }}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.quotation)}
           onViewTypeChange={(v) => {
             dataViewModeRef.current = resolveDetailTableViewMode(v as 'table' | 'detailTable' | 'help');
             setViewTypeState(v as 'table' | 'detailTable' | 'help');

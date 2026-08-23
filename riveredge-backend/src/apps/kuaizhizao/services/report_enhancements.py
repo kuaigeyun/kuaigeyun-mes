@@ -317,7 +317,14 @@ async def collect_inventory_movement_events(
         if material_id:
             item_q = item_q.filter(material_id=material_id)
         for row in await item_q.values(
-            "delivery_id", "material_id", "material_code", "material_name", "delivery_quantity"
+            "delivery_id",
+            "material_id",
+            "material_code",
+            "material_name",
+            "material_spec",
+            "material_unit",
+            "batch_number",
+            "delivery_quantity",
         ):
             head = heads.get(row["delivery_id"], {})
             events.append({
@@ -327,6 +334,9 @@ async def collect_inventory_movement_events(
                 "material_id": row.get("material_id"),
                 "material_code": row.get("material_code"),
                 "material_name": row.get("material_name"),
+                "material_spec": row.get("material_spec") or "",
+                "material_unit": row.get("material_unit") or "",
+                "batch_number": row.get("batch_number") or "",
                 "warehouse_id": head.get("warehouse_id"),
                 "warehouse_name": head.get("warehouse_name") or "",
                 "qty_in": 0.0,
@@ -359,7 +369,14 @@ async def collect_inventory_movement_events(
         if material_id:
             item_q = item_q.filter(material_id=material_id)
         for row in await item_q.values(
-            "receipt_id", "material_id", "material_code", "material_name", "receipt_quantity"
+            "receipt_id",
+            "material_id",
+            "material_code",
+            "material_name",
+            "material_spec",
+            "material_unit",
+            "batch_number",
+            "receipt_quantity",
         ):
             head = heads.get(row["receipt_id"], {})
             events.append({
@@ -369,6 +386,9 @@ async def collect_inventory_movement_events(
                 "material_id": row.get("material_id"),
                 "material_code": row.get("material_code"),
                 "material_name": row.get("material_name"),
+                "material_spec": row.get("material_spec") or "",
+                "material_unit": row.get("material_unit") or "",
+                "batch_number": row.get("batch_number") or "",
                 "warehouse_id": head.get("warehouse_id"),
                 "warehouse_name": head.get("warehouse_name") or "",
                 "qty_in": float(row.get("receipt_quantity") or 0),
@@ -425,6 +445,9 @@ async def collect_inventory_movement_events(
                 "material_id": r.material_id,
                 "material_code": r.material_code or "",
                 "material_name": "",
+                "material_spec": "",
+                "material_unit": "",
+                "batch_number": r.batch_no or "",
                 "warehouse_id": wh_id,
                 "warehouse_name": wh_name,
                 "qty_in": qty if qty > 0 else 0.0,
@@ -634,6 +657,164 @@ async def build_inventory_ledger(
             "line_count": len(events),
         },
     }
+
+
+async def _enrich_movement_event_materials(tenant_id: int, events: List[dict]) -> None:
+    """补全流水行物料名称/规格/单位（生产移动等仅有 material_id）。"""
+    missing_ids = [
+        int(ev["material_id"])
+        for ev in events
+        if ev.get("material_id") is not None
+        and (
+            not str(ev.get("material_name") or "").strip()
+            or not str(ev.get("material_spec") or "").strip()
+            or not str(ev.get("material_unit") or "").strip()
+        )
+    ]
+    if not missing_ids:
+        return
+    from apps.master_data.models.material import Material
+
+    material_map: Dict[int, Dict[str, Any]] = {}
+    for row in await Material.filter(
+        tenant_id=tenant_id,
+        id__in=list(set(missing_ids)),
+        deleted_at__isnull=True,
+    ).values("id", "main_code", "name", "specification", "base_unit"):
+        material_map[int(row["id"])] = row
+    for ev in events:
+        mid = ev.get("material_id")
+        if mid is None:
+            continue
+        mat = material_map.get(int(mid))
+        if not mat:
+            continue
+        if not str(ev.get("material_code") or "").strip():
+            ev["material_code"] = mat.get("main_code") or ""
+        if not str(ev.get("material_name") or "").strip():
+            ev["material_name"] = mat.get("name") or ""
+        if not str(ev.get("material_spec") or "").strip():
+            ev["material_spec"] = mat.get("specification") or ""
+        if not str(ev.get("material_unit") or "").strip():
+            ev["material_unit"] = mat.get("base_unit") or ""
+
+
+async def build_warehouse_movement_detail(
+    tenant_id: int,
+    *,
+    direction: str,
+    date_start: Optional[datetime] = None,
+    date_end: Optional[datetime] = None,
+    warehouse_id: Optional[int] = None,
+    material_id: Optional[int] = None,
+    keyword: Optional[str] = None,
+) -> Dict[str, Any]:
+    """入库/出库明细：一行一物料，默认按业务时间倒序。"""
+    if direction not in {"inbound", "outbound"}:
+        raise ValueError(f"invalid direction: {direction}")
+    start_utc, end_exclusive = resolve_inventory_report_period(
+        date_start, date_end, default_start_days=90,
+    )
+    events = await collect_inventory_movement_events(
+        tenant_id,
+        date_start=start_utc,
+        date_end=end_exclusive,
+        warehouse_id=warehouse_id,
+        material_id=material_id,
+    )
+    await _enrich_movement_event_materials(tenant_id, events)
+
+    qty_key = "qty_in" if direction == "inbound" else "qty_out"
+    filtered = [ev for ev in events if float(ev.get(qty_key) or 0) > 0]
+
+    kw = (keyword or "").strip().lower()
+    if kw:
+        filtered = [
+            ev
+            for ev in filtered
+            if kw in str(ev.get("material_code") or "").lower()
+            or kw in str(ev.get("material_name") or "").lower()
+            or kw in str(ev.get("doc_code") or "").lower()
+            or kw in str(ev.get("warehouse_name") or "").lower()
+            or kw in str(ev.get("doc_type") or "").lower()
+        ]
+
+    rows: List[Dict[str, Any]] = []
+    for idx, ev in enumerate(filtered):
+        et = _event_time_utc(ev.get("event_time"))
+        sort_key = et.isoformat() if et else ""
+        display_at = et.strftime("%Y-%m-%d %H:%M") if et else None
+        qty = float(ev.get(qty_key) or 0)
+        rows.append({
+            "id": (
+                f"{ev.get('doc_code') or 'doc'}:"
+                f"{ev.get('material_id') or ev.get('material_code') or 'mat'}:"
+                f"{ev.get('warehouse_id') or 'wh'}:{idx}"
+            ),
+            "event_at": display_at,
+            "event_time": sort_key,
+            "order_code": ev.get("doc_code") or "",
+            "doc_type": ev.get("doc_type") or "",
+            "material_code": ev.get("material_code") or "",
+            "material_name": ev.get("material_name") or "",
+            "material_spec": ev.get("material_spec") or "",
+            "material_unit": ev.get("material_unit") or "",
+            "batch_number": ev.get("batch_number") or "",
+            "warehouse_name": ev.get("warehouse_name") or "",
+            "quantity": round(qty, 4),
+            "operator": ev.get("operator") or "",
+        })
+
+    rows.sort(key=lambda row: row.get("event_time") or "", reverse=True)
+    total_qty = round(sum(float(row.get("quantity") or 0) for row in rows), 4)
+    return {
+        "data": rows,
+        "success": True,
+        "summary": {
+            "quantity": total_qty,
+            "line_count": len(rows),
+        },
+    }
+
+
+async def build_inbound_detail(
+    tenant_id: int,
+    *,
+    date_start: Optional[datetime] = None,
+    date_end: Optional[datetime] = None,
+    warehouse_id: Optional[int] = None,
+    material_id: Optional[int] = None,
+    keyword: Optional[str] = None,
+) -> Dict[str, Any]:
+    return await build_warehouse_movement_detail(
+        tenant_id,
+        direction="inbound",
+        date_start=date_start,
+        date_end=date_end,
+        warehouse_id=warehouse_id,
+        material_id=material_id,
+        keyword=keyword,
+    )
+
+
+async def build_outbound_detail(
+    tenant_id: int,
+    *,
+    date_start: Optional[datetime] = None,
+    date_end: Optional[datetime] = None,
+    warehouse_id: Optional[int] = None,
+    material_id: Optional[int] = None,
+    keyword: Optional[str] = None,
+) -> Dict[str, Any]:
+    return await build_warehouse_movement_detail(
+        tenant_id,
+        direction="outbound",
+        date_start=date_start,
+        date_end=date_end,
+        warehouse_id=warehouse_id,
+        material_id=material_id,
+        keyword=keyword,
+    )
 
 
 async def build_slow_moving_inventory(

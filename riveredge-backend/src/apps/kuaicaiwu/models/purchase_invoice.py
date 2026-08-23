@@ -36,9 +36,9 @@ class PurchaseInvoice(BaseModel):
     tax_rate = fields.DecimalField(max_digits=5, decimal_places=2, description="税率")
 
     # 金额信息
-    invoice_amount = fields.DecimalField(max_digits=12, decimal_places=2, description="发票金额")
-    tax_amount = fields.DecimalField(max_digits=12, decimal_places=2, description="税额")
-    total_amount = fields.DecimalField(max_digits=12, decimal_places=2, description="价税合计")
+    invoice_amount = fields.DecimalField(max_digits=14, decimal_places=4, description="发票金额")
+    tax_amount = fields.DecimalField(max_digits=14, decimal_places=4, description="税额")
+    total_amount = fields.DecimalField(max_digits=14, decimal_places=4, description="价税合计")
 
     # 状态
     status = fields.CharField(max_length=20, default="未审核", description="发票状态")

@@ -32,6 +32,10 @@ import {
   PartnerStatementPreview,
 } from '../../../services/finance/partnerStatement';
 import {
+  priceSettlementService,
+  type ProvisionalSummary,
+} from '../../../services/finance/priceSettlement';
+import {
   partnerStatementExpandableProps,
   usePartnerStatementInboundDetail,
 } from '../../../components/PartnerStatementInboundDetail';
@@ -74,6 +78,7 @@ const PartnerStatementsPage: React.FC = () => {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [preview, setPreview] = useState<PartnerStatementPreview | null>(null);
+  const [provisionalSummary, setProvisionalSummary] = useState<ProvisionalSummary | null>(null);
   const { cache: previewLineDetailCache, loadLineDetail: loadPreviewLineDetail, clearCache: clearPreviewLineDetailCache } =
     usePartnerStatementInboundDetail();
   const [partnerId, setPartnerId] = useState<number | null>(null);
@@ -120,6 +125,7 @@ const PartnerStatementsPage: React.FC = () => {
   const resetCreate = () => {
     clearPreviewLineDetailCache();
     setPreview(null);
+    setProvisionalSummary(null);
     setPartnerId(null);
     const month = dayjs().subtract(1, 'month');
     setDateRange([month.startOf('month'), month.endOf('month')]);
@@ -141,6 +147,16 @@ const PartnerStatementsPage: React.FC = () => {
         end_date: periodRange.end.format('YYYY-MM-DD'),
       });
       setPreview(data);
+      try {
+        const summary = await priceSettlementService.getProvisionalSummary({
+          period: periodRange.label,
+          side: partnerType === 'Customer' ? 'sales' : 'purchase',
+          partner_id: partnerId,
+        });
+        setProvisionalSummary(summary);
+      } catch {
+        setProvisionalSummary(null);
+      }
     } catch (e: any) {
       messageApi.error(e?.message || t(`${PS}.previewFailed`));
     } finally {
@@ -591,6 +607,30 @@ const PartnerStatementsPage: React.FC = () => {
 
           {preview ? (
             <>
+              {provisionalSummary && provisionalSummary.provisional_line_count > 0 ? (
+                <Alert
+                  type="warning"
+                  showIcon
+                  title={t(`${PS}.provisionalPricingHint`, {
+                    count: provisionalSummary.provisional_line_count,
+                  })}
+                  action={
+                    <Button
+                      size="small"
+                      type="link"
+                      onClick={() =>
+                        navigate(
+                          `/apps/kuaicaiwu/finance-management/price-settlement?side=${
+                            partnerType === 'Customer' ? 'sales' : 'purchase'
+                          }&partnerId=${partnerId}&period=${periodRange.label}`,
+                        )
+                      }
+                    >
+                      {t(`${PS}.goPriceSettlement`)}
+                    </Button>
+                  }
+                />
+              ) : null}
               {preview.existing_period_statement_code && (preview.lines?.length ?? 0) > 0 ? (
                 <Alert
                   type="info"

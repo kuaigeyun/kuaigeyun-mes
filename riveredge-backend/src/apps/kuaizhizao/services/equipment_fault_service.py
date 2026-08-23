@@ -468,6 +468,20 @@ class EquipmentRepairService:
                     operator_id=data.repairer_id or created_by,
                     operator_name=data.repairer_name,
                 )
+            if equipment_fault:
+                from apps.kuaizhizao.services.equipment_mobile_notification import (
+                    notify_equipment_fault_assigned,
+                )
+
+                try:
+                    await notify_equipment_fault_assigned(
+                        tenant_id=tenant_id,
+                        fault=equipment_fault,
+                        repairer_id=data.repairer_id,
+                        repairer_name=data.repairer_name or "",
+                    )
+                except Exception as exc:
+                    logger.warning("设备派工消息提醒失败 tenant={}: {}", tenant_id, exc)
             return repair
         except IntegrityError:
             raise ValidationError(f"设备维修记录编号 {data.repair_no} 已存在")
@@ -623,6 +637,20 @@ class EquipmentRepairService:
                     equipment_fault=linked_fault,
                     repair_status=repair.status,
                 )
+                if linked_fault and update_data.get("status") == "已完成":
+                    from apps.kuaizhizao.services.equipment_mobile_notification import (
+                        notify_equipment_fault_resolved,
+                    )
+
+                    try:
+                        await notify_equipment_fault_resolved(
+                            tenant_id=tenant_id,
+                            fault=linked_fault,
+                            repairer_name=repair.repairer_name or "",
+                            repair_result=repair.repair_description or repair.repair_result or "已修复",
+                        )
+                    except Exception as exc:
+                        logger.warning("设备恢复消息提醒失败 tenant={}: {}", tenant_id, exc)
             # 已取消等不映射故障状态的路径也需刷新设备状态
             await sync_equipment_status_from_faults(tenant_id, repair.equipment_id)
         return repair

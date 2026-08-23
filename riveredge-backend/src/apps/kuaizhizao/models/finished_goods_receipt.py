@@ -43,7 +43,7 @@ class FinishedGoodsReceipt(BaseModel):
     review_remarks = fields.TextField(null=True, description="审核备注")
 
     status = fields.CharField(max_length=20, default="待入库", description="入库状态")
-    total_quantity = fields.DecimalField(max_digits=10, decimal_places=2, default=0, description="总入库数量")
+    total_quantity = fields.DecimalField(max_digits=12, decimal_places=4, default=0, description="总入库数量")
 
     notes = fields.TextField(null=True, description="备注")
     is_active = fields.BooleanField(default=True, description="是否有效")

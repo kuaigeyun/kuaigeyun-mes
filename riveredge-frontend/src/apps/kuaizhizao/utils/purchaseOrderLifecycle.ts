@@ -249,6 +249,7 @@ export interface PurchaseOrderLike {
   status?: string;
   review_status?: string;
   delivery_date?: string;
+  has_arrival_overdue?: boolean;
   lifecycle?: unknown;
 }
 
@@ -465,13 +466,17 @@ function isPurchaseOrderDeliveryHighlightExcluded(record: PurchaseOrderLike): bo
 }
 
 /**
- * 要求到货日已早于今天，且订单仍在履约链路中（与 purchase-orders/statistics overdue_count 口径一致）。
+ * 存在逾期未关闭明细行（行级 required_date 口径，与到货预警页一致）。
  */
 export function isPurchaseOrderDeliveryOverdue(
   record: PurchaseOrderLike,
   auditRequired = true,
 ): boolean {
   void auditRequired;
+  if (record.has_arrival_overdue === true) {
+    return !isPurchaseOrderDeliveryHighlightExcluded(record);
+  }
+
   const raw = record.delivery_date;
   if (raw == null || String(raw).trim() === '') return false;
   const d = dayjs(raw);

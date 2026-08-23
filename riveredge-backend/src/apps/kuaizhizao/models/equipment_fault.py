@@ -165,7 +165,7 @@ class EquipmentRepair(BaseModel):
     repair_date = fields.DatetimeField(description="维修日期")
     repair_type = fields.CharField(max_length=50, description="维修类型（现场维修、返厂维修、委外维修）")
     repair_description = fields.TextField(description="维修描述")
-    repair_cost = fields.DecimalField(max_digits=10, decimal_places=2, null=True, description="维修成本")
+    repair_cost = fields.DecimalField(max_digits=12, decimal_places=4, null=True, description="维修成本")
     repair_parts = fields.JSONField(null=True, description="维修备件（JSON格式）")
     repairer_id = fields.IntField(null=True, description="维修人员ID（用户ID）")
     repairer_name = fields.CharField(max_length=100, null=True, description="维修人员姓名")

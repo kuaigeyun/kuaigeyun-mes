@@ -30,7 +30,7 @@ class DemandItem(BaseModel):
     material_unit = fields.CharField(max_length=20, description="物料单位")
     
     # 需求数量（通用）
-    required_quantity = fields.DecimalField(max_digits=10, decimal_places=2, description="需求数量")
+    required_quantity = fields.DecimalField(max_digits=12, decimal_places=4, description="需求数量")
     
     # 销售预测专用字段
     forecast_date = fields.DateField(null=True, description="预测日期（销售预测专用）")
@@ -42,10 +42,10 @@ class DemandItem(BaseModel):
     
     # 销售订单专用字段
     delivery_date = fields.DateField(null=True, description="交货日期（销售订单专用）")
-    delivered_quantity = fields.DecimalField(max_digits=10, decimal_places=2, default=0, description="已交货数量")
-    remaining_quantity = fields.DecimalField(max_digits=10, decimal_places=2, description="剩余数量")
-    unit_price = fields.DecimalField(max_digits=10, decimal_places=2, null=True, description="单价")
-    item_amount = fields.DecimalField(max_digits=12, decimal_places=2, null=True, description="金额")
+    delivered_quantity = fields.DecimalField(max_digits=12, decimal_places=4, default=0, description="已交货数量")
+    remaining_quantity = fields.DecimalField(max_digits=12, decimal_places=4, description="剩余数量")
+    unit_price = fields.DecimalField(max_digits=12, decimal_places=4, null=True, description="单价")
+    item_amount = fields.DecimalField(max_digits=14, decimal_places=4, null=True, description="金额")
     delivery_status = fields.CharField(max_length=20, null=True, description="交货状态")
     
     # 关联工单（MTO模式）

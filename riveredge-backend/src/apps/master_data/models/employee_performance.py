@@ -222,13 +222,13 @@ class PerformanceSummary(BaseModel):
 
     # 汇总数据
     total_hours = fields.DecimalField(max_digits=10, decimal_places=2, default=0, description="总工时（小时）")
-    total_pieces = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="总件数（合格）")
-    total_unqualified = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="不合格件数")
+    total_pieces = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="总件数（合格）")
+    total_unqualified = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="不合格件数")
 
     # 金额
-    time_amount = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="计时金额（元）")
-    piece_amount = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="计件金额（元）")
-    total_amount = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="应发总额（元）")
+    time_amount = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="计时金额（元）")
+    piece_amount = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="计件金额（元）")
+    total_amount = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="应发总额（元）")
 
     # KPI
     kpi_score = fields.DecimalField(max_digits=6, decimal_places=2, null=True, description="KPI综合分")

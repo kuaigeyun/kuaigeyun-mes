@@ -33,13 +33,13 @@ class LRPResult(BaseModel):
     planning_horizon = fields.IntField(description="计划时域（天）")
 
     # 需求信息
-    required_quantity = fields.DecimalField(max_digits=10, decimal_places=2, description="需求数量")
-    available_inventory = fields.DecimalField(max_digits=10, decimal_places=2, description="可用库存")
+    required_quantity = fields.DecimalField(max_digits=12, decimal_places=4, description="需求数量")
+    available_inventory = fields.DecimalField(max_digits=12, decimal_places=4, description="可用库存")
 
     # 运算结果
-    net_requirement = fields.DecimalField(max_digits=10, decimal_places=2, description="净需求")
-    planned_production = fields.DecimalField(max_digits=10, decimal_places=2, description="计划生产")
-    planned_procurement = fields.DecimalField(max_digits=10, decimal_places=2, description="计划采购")
+    net_requirement = fields.DecimalField(max_digits=12, decimal_places=4, description="净需求")
+    planned_production = fields.DecimalField(max_digits=12, decimal_places=4, description="计划生产")
+    planned_procurement = fields.DecimalField(max_digits=12, decimal_places=4, description="计划采购")
 
     # 时间安排
     production_start_date = fields.DateField(null=True, description="生产开始日期")

@@ -28,10 +28,10 @@ class BankAccount(BaseModel):
     account_number = fields.CharField(max_length=64, null=True, description="银行账号")
     currency = fields.CharField(max_length=10, default="CNY", description="币种")
     opening_balance = fields.DecimalField(
-        max_digits=14, decimal_places=2, default=0, description="期初余额"
+        max_digits=16, decimal_places=4, default=0, description="期初余额"
     )
     current_balance = fields.DecimalField(
-        max_digits=14, decimal_places=2, default=0, description="当前余额"
+        max_digits=16, decimal_places=4, default=0, description="当前余额"
     )
     is_active = fields.BooleanField(default=True, description="是否启用")
     notes = fields.TextField(null=True, description="备注")

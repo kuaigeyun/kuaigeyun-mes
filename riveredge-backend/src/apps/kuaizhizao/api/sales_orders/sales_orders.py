@@ -41,6 +41,7 @@ from apps.kuaizhizao.schemas.sales_order import (
 )
 from apps.kuaizhizao.schemas.quote import QuoteBreakdownResponse
 from apps.kuaizhizao.schemas.sales_order_ocr import SalesOrderOcrParseTextRequest, SalesOrderOcrResult
+from apps.kuaizhizao.schemas.partner_material_price_trend import PartnerMaterialPriceTrendResponse
 
 # 初始化服务实例
 sales_order_service = SalesOrderService()
@@ -553,6 +554,28 @@ async def get_sales_order_statistics(
         }
     }
 
+
+
+@router.get(
+    "/price-trend",
+    response_model=PartnerMaterialPriceTrendResponse,
+    summary="Sales order line price trend by customer and material",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:sales-order-price-trend:read"))],
+)
+async def get_sales_order_price_trend(
+    material_id: int = Query(..., description="物料ID"),
+    customer_id: int = Query(..., description="客户ID"),
+    limit: int = Query(10, ge=1, le=50, description="返回条数"),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    from apps.kuaizhizao.services.partner_material_price_trend_service import PartnerMaterialPriceTrendService
+
+    return await PartnerMaterialPriceTrendService().get_sales_price_trend(
+        tenant_id=tenant_id,
+        material_id=material_id,
+        customer_id=customer_id,
+        limit=limit,
+    )
 
 
 @router.get("", response_model=SalesOrderListResponse, summary="List sales orders")

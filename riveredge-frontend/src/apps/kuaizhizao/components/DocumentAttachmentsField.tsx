@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { InboxOutlined } from '@ant-design/icons';
 import { ProFormUploadDragger } from '@ant-design/pro-components';
+import { App } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { uploadMultipleFiles } from '../../../services/file';
+import { buildDocumentAttachmentUploadHandlers } from '../utils/documentAttachments';
 
 interface DocumentAttachmentsFieldProps {
   /** 上传分类，如 sales_order_attachments */
@@ -20,6 +22,15 @@ export const DocumentAttachmentsField: React.FC<DocumentAttachmentsFieldProps> =
   name = 'attachments',
 }) => {
   const { t } = useTranslation();
+  const { message } = App.useApp();
+
+  const attachmentUploadHandlers = useMemo(
+    () =>
+      buildDocumentAttachmentUploadHandlers({
+        onOpenFailed: () => message.error(t('components.documentAttachments.openFailed')),
+      }),
+    [message, t],
+  );
 
   return (
     <ProFormUploadDragger
@@ -33,6 +44,8 @@ export const DocumentAttachmentsField: React.FC<DocumentAttachmentsFieldProps> =
       fieldProps={{
         multiple: true,
         style: { width: '100%' },
+        showUploadList: { showPreviewIcon: true, showDownloadIcon: true },
+        ...attachmentUploadHandlers,
         customRequest: async (options) => {
           try {
             const res = await uploadMultipleFiles([options.file as File], { category });

@@ -1119,6 +1119,10 @@ export default {
   'pages.system.businessConfig.param.planning.require_production_plan.description': 'Require production plan before scheduling',
   'pages.system.businessConfig.param.procurement.require_purchase_requisition.name': 'Require Purchase Requisition',
   'pages.system.businessConfig.param.procurement.require_purchase_requisition.description': 'Require purchase requisition before creating PO',
+  'pages.system.businessConfig.param.procurement.require_purchase_order_change_confirm.description': 'When enabled, approved PO changes must be manually applied',
+  'pages.system.businessConfig.param.procurement.require_purchase_order_change_confirm.name': 'Require PO Change Confirm',
+  'pages.system.businessConfig.param.procurement.arrival_imminent_days.description': 'Lines within this many days of required date are imminent (default 3)',
+  'pages.system.businessConfig.param.procurement.arrival_imminent_days.name': 'Arrival Imminent Days',
   'pages.system.businessConfig.param.purchase.auto_approval.name': 'Purchase Auto Approval',
   'pages.system.businessConfig.param.purchase.auto_approval.description': 'Auto approve purchase orders',
   'pages.system.businessConfig.param.warehouse.location_management.name': 'Location Management',
@@ -1967,6 +1971,7 @@ export default {
   'components.uniTable.showStatCards': 'Show stat cards',
   'components.uniTable.zebraStripe': 'Zebra stripe',
   'components.layoutTemplates.formModal.submitUpdate': 'Update',
+  'components.twoColumnLayout.resizeLeftPanel': 'Drag to resize left panel',
   'components.layoutTemplates.documentFormPage.saveDraft': 'Save as Draft',
   'components.layoutTemplates.documentFormPage.saveAndSubmit': 'Save and Submit',
   'components.layoutTemplates.formModal.checkFormHint': 'Please check that the form is filled in correctly',
@@ -2043,6 +2048,7 @@ export default {
   'components.documentAttachments.label': 'Attachments',
   'components.documentAttachments.dragHint': 'Click or drag files here to upload',
   'components.documentAttachments.dragSubHint': 'Supports multiple files, up to {{max}}',
+  'components.documentAttachments.openFailed': 'Failed to open attachment. Please try again.',
   'components.dictionarySelect.loadOptionsFailed': 'Failed to load {{label}} options',
   'components.dictionarySelect.fieldLabel': 'Label',
   'components.dictionarySelect.unitItem': 'Unit name',
@@ -2670,6 +2676,7 @@ export default {
   'app.kuaicaiwu.menu.finance-management.sales-invoices': 'Sales Invoices',
   'app.kuaicaiwu.menu.finance-management.settlement': 'Settlement',
   'app.kuaicaiwu.menu.finance-management.partner-statements': 'Partner Statements',
+  'app.kuaicaiwu.menu.finance-management.price-settlement': 'Monthly Price Settlement',
   'app.kuaicaiwu.menu.finance-management.aging-analysis': 'Aging Analysis',
   'app.kuaicaiwu.menu.finance-management.document-reconciliation': 'Document Reconciliation',
   'app.kuaicaiwu.menu.finance-management.bank-accounts': 'Bank Accounts',
@@ -4304,6 +4311,14 @@ export default {
   'app.kuaizhizao.workReporting.quantityMustBePositive': 'Reported quantity must be greater than 0',
   'app.kuaizhizao.workReporting.createSuccess': 'Reporting submitted',
   'app.kuaizhizao.workReporting.createFailed': 'Reporting failed',
+  'app.kuaizhizao.workReporting.postAction.last_inbound_pending':
+    'Pending receipt created{{receiptLabel}}. Complete finished goods inspection (if enabled) and confirm inbound in Inbound Management before stock updates.',
+  'app.kuaizhizao.workReporting.postAction.last_inbound_confirmed':
+    'Finished goods receipt confirmed{{receiptLabel}}; stock updated.',
+  'app.kuaizhizao.workReporting.postAction.last_inbound_fqc_blocked':
+    'Pending receipt created{{receiptLabel}}, but stock was not posted because finished goods inspection is not passed. Complete inspection, then confirm inbound in Inbound Management.',
+  'app.kuaizhizao.workReporting.postAction.last_inbound_failed':
+    'Last-operation auto inbound failed. Check default warehouse settings or create the receipt manually in Inbound Management.',
   'app.kuaizhizao.workReporting.noUnqualifiedForScrap': 'No unqualified quantity; cannot create scrap record',
   'app.kuaizhizao.workReporting.recordNotFound': 'Reporting record not found',
   'app.kuaizhizao.workReporting.scrapCreateSuccess': 'Scrap record created',
@@ -4826,6 +4841,7 @@ export default {
   'app.kuaizhizao.menu.purchase-management.purchase-orders.new': 'New Purchase Order',
   'app.kuaizhizao.menu.purchase-management.purchase-orders.edit': 'Edit Purchase Order',
   'app.kuaizhizao.menu.purchase-management.purchase-order-changes': 'Purchase Change Orders',
+  'app.kuaizhizao.menu.purchase-management.arrival-warnings': 'Purchase Arrival Warnings',
   'app.kuaizhizao.menu.purchase-management.purchase-requisitions': 'Purchase Requisitions',
   'app.kuaizhizao.menu.purchase-management.purchase-requisitions.new': 'New Purchase Requisition',
   'app.kuaizhizao.menu.purchase-management.purchase-requisitions.edit': 'Edit Purchase Requisition',
@@ -5032,6 +5048,43 @@ export default {
   'app.kuaizhizao.purchaseOrderChange.capability.purchase_order_change.approve.not_pending': 'Only documents pending approval can be approved',
   'app.kuaizhizao.purchaseOrderChange.capability.purchase_order_change.apply.not_audited': 'The change order has not been approved and cannot take effect',
   'app.kuaizhizao.purchaseOrderChange.capability.purchase_order_change.reopen.not_supported': 'Purchase change orders cannot be re-edited',
+  'app.kuaizhizao.purchaseOrderChange.applySuccess': 'Change applied',
+  'app.kuaizhizao.purchaseOrderChange.applyConfirm': 'Apply Change',
+  'app.kuaizhizao.purchaseArrival.delayReason.other': 'Other',
+  'app.kuaizhizao.purchaseArrival.delayReason.paymentDelay': 'Payment Delay',
+  'app.kuaizhizao.purchaseArrival.delayReason.drawingChange': 'Drawing Change',
+  'app.kuaizhizao.purchaseArrival.delayReason.qualityRework': 'Quality Rework',
+  'app.kuaizhizao.purchaseArrival.delayReason.logistics': 'Logistics',
+  'app.kuaizhizao.purchaseArrival.delayReason.supplierCapacity': 'Supplier Capacity',
+  'app.kuaizhizao.purchaseArrival.impactDescriptionRequired': 'Please enter impact description',
+  'app.kuaizhizao.purchaseArrival.impactDescriptionHint': 'Required when impacted assembly cannot be resolved automatically',
+  'app.kuaizhizao.purchaseArrival.field.impactDescription': 'Impact Description',
+  'app.kuaizhizao.purchaseArrival.field.estimatedArrivalDate': 'Estimated Arrival Date',
+  'app.kuaizhizao.purchaseArrival.field.delayReason': 'Delay Reason',
+  'app.kuaizhizao.purchaseArrival.delaySubmitted': 'Delay report submitted',
+  'app.kuaizhizao.purchaseArrival.delayModalTitle': 'Report Arrival Delay',
+  'app.kuaizhizao.purchaseArrival.summary.imminent': 'Imminent {{count}}',
+  'app.kuaizhizao.purchaseArrival.summary.overdue': 'Overdue {{count}}',
+  'app.kuaizhizao.purchaseArrival.summary.total': '{{count}} open lines',
+  'app.kuaizhizao.purchaseArrival.action.viewChange': 'View Change Order',
+  'app.kuaizhizao.purchaseArrival.action.reportDelay': 'Report Delay',
+  'app.kuaizhizao.purchaseArrival.remainingDays': '{{days}} days left',
+  'app.kuaizhizao.purchaseArrival.overdueDays': '{{days}} days overdue',
+  'app.kuaizhizao.purchaseArrival.processing.rejected': 'Rejected',
+  'app.kuaizhizao.purchaseArrival.processing.changed': 'Applied',
+  'app.kuaizhizao.purchaseArrival.processing.changePending': 'Pending Apply',
+  'app.kuaizhizao.purchaseArrival.processing.approved': 'Approved',
+  'app.kuaizhizao.purchaseArrival.processing.pendingReview': 'Pending Review',
+  'app.kuaizhizao.purchaseArrival.processing.reported': 'Reported',
+  'app.kuaizhizao.purchaseArrival.processing.unprocessed': 'Unprocessed',
+  'app.kuaizhizao.purchaseArrival.level.overdue': 'Overdue',
+  'app.kuaizhizao.purchaseArrival.level.imminent': 'Imminent',
+  'app.kuaizhizao.purchaseArrival.level.normal': 'Normal',
+  'app.kuaizhizao.purchaseArrival.col.processingStatus': 'Processing Status',
+  'app.kuaizhizao.purchaseArrival.col.impactedAssembly': 'Impacted Assembly',
+  'app.kuaizhizao.purchaseArrival.col.dayOffset': 'Days Left/Overdue',
+  'app.kuaizhizao.purchaseArrival.col.warningLevel': 'Warning Level',
+  'app.kuaizhizao.purchaseArrival.col.requiredDate': 'Required Date',
   'app.kuaizhizao.purchaseInquiry.lifecycleDraft': 'Draft',
   'app.kuaizhizao.purchaseInquiry.lifecycleQuoting': 'Quoting',
   'app.kuaizhizao.purchaseInquiry.lifecyclePendingCompare': 'Pending Comparison',
@@ -6203,8 +6256,8 @@ export default {
   'app.kuaizhizao.menu.reports.inventory-ledger': 'Inventory Ledger',
   'app.kuaizhizao.menu.reports.inventory-age-analysis': 'Age Analysis',
   'app.kuaizhizao.menu.reports.slow-moving-inventory': 'Slow-Moving',
-  'app.kuaizhizao.menu.reports.inbound-summary': 'Inbound Summary',
-  'app.kuaizhizao.menu.reports.outbound-summary': 'Outbound Summary',
+  'app.kuaizhizao.menu.reports.inbound-summary': 'Inbound Detail Report',
+  'app.kuaizhizao.menu.reports.outbound-summary': 'Outbound Detail Report',
   'app.kuaizhizao.menu.reports.stocktaking-history': 'Stocktaking',
   'app.kuaizhizao.menu.reports.transfer-tracking': 'Transfer Track',
   'app.kuaizhizao.menu.reports.receivable-age-analysis': 'AR Age',
@@ -6658,6 +6711,7 @@ export default {
   'app.kuaizhizao.salesOrder.orderItems': 'Order Items',
   'app.kuaizhizao.salesOrder.importItems': 'Import Items',
   'app.kuaizhizao.salesOrder.unitPrice': 'Unit Price',
+  'app.kuaizhizao.salesOrder.priceProvisional': 'Pending settlement',
   'app.kuaizhizao.sales.isGift': 'Gift',
   'app.kuaizhizao.sales.giftRefUnitPrice': 'Reference unit price',
   'app.kuaizhizao.sales.materialNotGiftable': 'This material is not marked as giftable',
@@ -7003,6 +7057,7 @@ export default {
   'app.kuaizhizao.demandComputation.capability.demand_computation.push_purchase_requisition.no_purchase_items': 'The requirement calculation contains no purchased items, so a purchase requisition cannot be created',
   'app.kuaizhizao.demandComputation.capability.demand_computation.push_work_order.no_pushable_items': 'All eligible lines are already used, so no new work order can be created',
   'app.kuaizhizao.demandComputation.capability.demand_computation.push_work_order.no_production_items': 'The requirement calculation contains no manufactured items for a work order',
+  'app.kuaizhizao.demandComputation.capability.demand_computation.push_work_order.source_validation_failed': 'Some make or outsource items have incomplete source configuration and cannot be pushed to work orders',
   'app.kuaizhizao.purchaseRequisition.pull.failed': 'Failed to create purchase requisition from demand computation',
   'app.kuaizhizao.purchaseRequisition.convert.batchSupplier': 'Batch Default Supplier',
   'app.kuaizhizao.purchaseRequisition.convert.batchPlaceholder': 'Apply selected supplier to checked rows',
@@ -7059,6 +7114,7 @@ export default {
   'app.kuaizhizao.purchaseOrder.col.materialName': 'Material Name',
   'app.kuaizhizao.purchaseOrder.col.spec': 'Spec',
   'app.kuaizhizao.purchaseOrder.col.unitPrice': 'Unit Price',
+  'app.kuaizhizao.purchaseOrder.priceProvisional': 'Pending settlement',
   'app.kuaizhizao.purchaseOrder.col.taxUnitPrice': 'Tax-inclusive Unit Price',
   'app.kuaizhizao.purchaseOrder.col.exclAmount': 'Tax-exclusive Amount',
   'app.kuaizhizao.purchaseOrder.col.inclTotal': 'Tax-inclusive Total',
@@ -7281,6 +7337,17 @@ export default {
   'app.kuaizhizao.purchaseOrder.empower.currentVsAvg': 'Current quote vs average:',
   'app.kuaizhizao.purchaseOrder.empower.priceLower': 'Lower',
   'app.kuaizhizao.purchaseOrder.empower.priceHigher': 'Higher',
+  'app.kuaizhizao.priceTrend.modalTitleSales': 'Sales price trend',
+  'app.kuaizhizao.priceTrend.modalTitlePurchase': 'Purchase price trend',
+  'app.kuaizhizao.priceTrend.noHistory': 'No historical transactions',
+  'app.kuaizhizao.priceTrend.col.orderDate': 'Order date',
+  'app.kuaizhizao.priceTrend.col.orderCode': 'Doc no.',
+  'app.kuaizhizao.priceTrend.col.customer': 'Customer',
+  'app.kuaizhizao.priceTrend.inlineAvg': 'Avg ¥{{price}}',
+  'app.kuaizhizao.priceTrend.selectCustomerFirst': 'Select a customer first',
+  'app.kuaizhizao.priceTrend.selectSupplierFirst': 'Select a supplier first',
+  'app.kuaizhizao.priceTrend.selectMaterialFirst': 'Select a material first',
+  'app.kuaizhizao.priceTrend.openTrend': 'View price trend',
   'app.kuaizhizao.purchaseOrder.landingCost.title': 'Landing Cost Allocation - {{code}}',
   'app.kuaizhizao.purchaseOrder.landingCost.confirm': 'Allocate',
   'app.kuaizhizao.purchaseOrder.landingCost.method': 'Allocation Method',
@@ -9085,6 +9152,11 @@ export default {
   'app.kuaizhizao.demandComputation.purchaseRequisition': 'To Purchase Requisition',
   'app.kuaizhizao.demandComputation.purchaseOrderOnly': 'Purchase Order Only',
   'app.kuaizhizao.demandComputation.pushOutsourceHint': 'Outsource work orders are pushed together; validation failures become drafts for downstream completion.',
+  'app.kuaizhizao.demandComputation.includeSalesOrderAttachments': 'Include source sales order attachments ({{count}})',
+  'app.kuaizhizao.demandComputation.includeSalesOrderAttachmentsHintSingle':
+    'Reference attachments from sales order {{code}} without re-uploading files',
+  'app.kuaizhizao.demandComputation.includeSalesOrderAttachmentsHintMultiple':
+    'Reference attachments from sales order {{first}} and {{count}} orders total without re-uploading files',
   'app.kuaizhizao.demandComputation.pushPreviewColTarget': 'Target Document',
   'app.kuaizhizao.demandComputation.pushPreviewTargetPurchaseRequisition': 'Purchase Request',
   'app.kuaizhizao.demandComputation.pushPreviewTargetPurchaseOrder': 'Purchase Order',
@@ -9104,6 +9176,12 @@ export default {
   'app.kuaizhizao.demandComputation.validationAllPassed': 'All Passed',
   'app.kuaizhizao.demandComputation.validationHasFailed': 'Has Failures',
   'app.kuaizhizao.demandComputation.validationCounts': 'Passed/Failed/Total',
+  'app.kuaizhizao.demandComputation.validationCountsDetail': 'Passed {{passed}} / Failed {{failed}} / Total {{total}}',
+  'app.kuaizhizao.demandComputation.colSourceValidation': 'Source validation',
+  'app.kuaizhizao.demandComputation.sourceValidationPassed': 'Passed',
+  'app.kuaizhizao.demandComputation.sourceValidationFailed': 'Failed',
+  'app.kuaizhizao.demandComputation.readinessBlockingCannotSkip': 'Blocking gaps (e.g. BOM or source config) must be fixed in master data or BOM design before execution',
+  'app.kuaizhizao.demandComputation.executionScopeValidationFailed': 'Pre-execution MRP validation failed. Complete BOM and process route for make items',
   'app.kuaizhizao.demandComputation.noStageData': 'No lifecycle stage data',
   'app.kuaizhizao.demandComputation.noComputationItems': 'No computation items',
   'app.kuaizhizao.demandComputation.noTimeline': 'No operation records',
@@ -9153,7 +9231,7 @@ export default {
   'app.kuaizhizao.demandComputation.executeFailed': 'Computation execution failed',
   'app.kuaizhizao.demandComputation.readinessTitle': 'Backfill master data',
   'app.kuaizhizao.demandComputation.readinessHint': '{{count}} required master-data field(s) are missing. Fill in here to write back to materials before continuing.',
-  'app.kuaizhizao.demandComputation.readinessBlockingHint': 'Some gaps (e.g. BOM) must be maintained in master data or BOM design. You can still skip after filling other fields.',
+  'app.kuaizhizao.demandComputation.readinessBlockingHint': 'Some gaps (e.g. BOM or process route) must be maintained in master data or BOM design and cannot be skipped.',
   'app.kuaizhizao.demandComputation.analysisTitle': 'Result analysis - {{code}}',
   'app.kuaizhizao.demandComputation.analysisTabResults': 'Results ({{count}})',
   'app.kuaizhizao.demandComputation.analysisTabMasterData': 'Master data ({{count}})',
@@ -10768,6 +10846,7 @@ export default {
   'app.kuaizhizao.warehouseCommon.statExpired': 'Expired',
   'app.kuaizhizao.warehouseCommon.groupTag': '{{key}}: {{count}} items / {{qty}}',
   'app.kuaizhizao.warehouseCommon.showZeroStock': 'Show zero stock',
+  'app.kuaizhizao.warehouseCommon.showAmount': 'Show amount',
   'app.kuaizhizao.warehouseCommon.hideZeroStock': 'Hide zero stock',
   'app.kuaizhizao.warehouseCommon.allStatus': 'All statuses',
   'app.kuaizhizao.warehouseCommon.allTypes': 'All',
@@ -14496,6 +14575,46 @@ export default {
   'app.kuaicaiwu.purchaseInvoice.detailTitle': 'Purchase Invoice',
   'app.kuaicaiwu.purchaseInvoice.detailTitleWithNumber': 'Purchase Invoice {{number}}',
   'app.kuaicaiwu.settlement.tabReceivable': 'Receivable Settlement',
+  'app.kuaicaiwu.priceSettlement.title': 'Monthly Price Settlement',
+  'app.kuaicaiwu.priceSettlement.sideSales': 'Sales',
+  'app.kuaicaiwu.priceSettlement.sidePurchase': 'Purchase',
+  'app.kuaicaiwu.priceSettlement.selectCustomer': 'Select customer',
+  'app.kuaicaiwu.priceSettlement.selectSupplier': 'Select supplier',
+  'app.kuaicaiwu.priceSettlement.queryHintCustomer': 'Select customer and period, then click Search to load provisional order lines',
+  'app.kuaicaiwu.priceSettlement.queryHintSupplier': 'Select supplier and period, then click Search to load provisional order lines',
+  'app.kuaicaiwu.priceSettlement.emptyBeforeQueryCustomer': 'Select customer and period, then click Search',
+  'app.kuaicaiwu.priceSettlement.emptyBeforeQuerySupplier': 'Select supplier and period, then click Search',
+  'app.kuaicaiwu.priceSettlement.sourcePartnerBook': 'Partner book',
+  'app.kuaicaiwu.priceSettlement.sourceManual': 'Manual',
+  'app.kuaicaiwu.priceSettlement.refresh': 'Refresh',
+  'app.kuaicaiwu.priceSettlement.confirmApply': 'Confirm and apply',
+  'app.kuaicaiwu.priceSettlement.noProvisionalRows': 'No provisional lines for current filters',
+  'app.kuaicaiwu.priceSettlement.noRows': 'No lines to settle',
+  'app.kuaicaiwu.priceSettlement.priceRequired': 'Settlement price must be greater than 0 on every line',
+  'app.kuaicaiwu.priceSettlement.loadFailed': 'Failed to load provisional lines',
+  'app.kuaicaiwu.priceSettlement.applySuccess': 'Batch {{code}} applied',
+  'app.kuaicaiwu.priceSettlement.applyFailed': 'Failed to apply settlement',
+  'app.kuaicaiwu.priceSettlement.resultTitle': 'Settlement result',
+  'app.kuaicaiwu.priceSettlement.resultBatch': 'Batch code',
+  'app.kuaicaiwu.priceSettlement.resultDelta': 'Total finance delta',
+  'app.kuaicaiwu.priceSettlement.resultReceivables': 'Receivable adjustments',
+  'app.kuaicaiwu.priceSettlement.resultPayables': 'Payable adjustments',
+  'app.kuaicaiwu.priceSettlement.col.orderCode': 'Order',
+  'app.kuaicaiwu.priceSettlement.col.material': 'Material',
+  'app.kuaicaiwu.priceSettlement.col.materialCode': 'Material code',
+  'app.kuaicaiwu.priceSettlement.col.materialSpec': 'Spec',
+  'app.kuaicaiwu.priceSettlement.col.materialModel': 'Model',
+  'app.kuaicaiwu.priceSettlement.col.materialUnit': 'Unit',
+  'app.kuaicaiwu.priceSettlement.col.settledQty': 'Settled qty',
+  'app.kuaicaiwu.priceSettlement.col.beforePrice': 'Before price',
+  'app.kuaicaiwu.priceSettlement.col.suggestedPrice': 'Suggested',
+  'app.kuaicaiwu.priceSettlement.col.afterPrice': 'Settle price',
+  'app.kuaicaiwu.priceSettlement.inputAfterPrice': 'Enter settle price',
+  'app.kuaicaiwu.priceSettlement.deltaUnitPreview': 'Not delivered; unit gap {{amount}}',
+  'app.kuaicaiwu.priceSettlement.col.delta': 'Delta',
+  'app.kuaicaiwu.priceSettlement.col.period': 'Period',
+  'app.kuaicaiwu.priceSettlement.col.priceSource': 'Price source',
+  'app.kuaicaiwu.priceSettlement.col.provisionalPrice': 'Provisional',
   'app.kuaicaiwu.settlement.tabPayable': 'Payable Settlement',
   'app.kuaicaiwu.settlement.helpTitle': 'Settlement Help',
   'app.kuaicaiwu.settlement.helpGotIt': 'Got it',
@@ -14594,6 +14713,8 @@ export default {
   'app.kuaicaiwu.partnerStatement.deleteConfirm': 'Delete statement {{code}}? Only drafts can be deleted.',
   'app.kuaicaiwu.partnerStatement.deleted': 'Deleted',
   'app.kuaicaiwu.partnerStatement.previewHint': 'Select partner and date range, then click Preview to view details.',
+  'app.kuaicaiwu.partnerStatement.provisionalPricingHint': '{{count}} order line(s) pending monthly price settlement in this period',
+  'app.kuaicaiwu.partnerStatement.goPriceSettlement': 'Go to price settlement',
   'app.kuaicaiwu.partnerStatement.previewFooter': 'Statements summarize approved receivables/payables and confirmed receipts/payments. Documents already on other statements are excluded. Export Excel/PDF after generation to send to the partner.',
   'app.kuaicaiwu.partnerStatement.excludedStatedHint': '{{count}} document(s) already on other statements were excluded',
   'app.kuaicaiwu.partnerStatement.periodAlreadyExists': 'A statement {{code}} already exists for this partner in {{period}}. Open it, or delete the draft and generate again',
@@ -16844,6 +16965,8 @@ export default {
   'app.master-data.bom.importHeaderBomName': 'BOM Name',
   'app.master-data.bom.importHeaderBaseQuantity': 'Base Quantity',
   'app.master-data.bom.importHeaderComponentCode': 'Component Code',
+  'app.master-data.bom.exportHeaderComponentName': 'Component Name',
+  'app.master-data.bom.exportHeaderComponentSpecification': 'Component Specification',
   'app.master-data.bom.importHeaderQuantity': 'Component Qty',
   'app.master-data.bom.importHeaderUnit': 'Component Unit',
   'app.master-data.bom.importHeaderWasteRate': 'Waste Rate',
@@ -17076,7 +17199,9 @@ export default {
   'app.master-data.materialForm.materialNameRequired': 'Please enter material name',
   'app.master-data.materialForm.materialNameMax': 'Material name cannot exceed 200 characters',
   'app.master-data.materialForm.materialGroup': 'Material Group',
-  'app.master-data.materialForm.materialGroupPlaceholder': 'Select material group (optional)',
+  'app.master-data.materialForm.materialGroupPlaceholder': 'Select material group',
+  'app.master-data.materialForm.materialGroupFilterPlaceholder': 'Select material group (optional)',
+  'app.master-data.materialForm.materialGroupRequired': 'Please select a material group',
   'app.master-data.materialForm.quickAddMaterialGroup': 'Quick add group',
   'app.master-data.materialForm.quickAddProcessRoute': 'Quick add process route',
   'app.master-data.materialForm.quickAddSupplier': 'Quick add supplier',
@@ -18830,12 +18955,14 @@ export default {
   'pages.system.configCenter.notification.scope.follower': 'Follower',
   'pages.system.configCenter.notification.error.actionMismatch': 'The action does not match the selected document. Please reselect.',
   'pages.system.configCenter.notification.document.sales_order': 'Sales order',
+  'pages.system.configCenter.notification.document.sales_review': 'Sales review',
   'pages.system.configCenter.notification.document.quotation': 'Quotation',
   'pages.system.configCenter.notification.document.purchase_order': 'Purchase order',
   'pages.system.configCenter.notification.document.work_order': 'Work order',
   'pages.system.configCenter.notification.document.quality_inspection': 'Quality inspection',
   'pages.system.configCenter.notification.document.quality_exception': 'Quality exception',
   'pages.system.configCenter.notification.document.equipment_fault': 'Equipment fault',
+  'pages.system.configCenter.notification.document.inventory_alert': 'Inventory alert',
   'pages.system.configCenter.notification.document.iot_alert': 'IoT alert',
   'pages.system.configCenter.notification.document.maintenance_order': 'Maintenance order',
   'pages.system.configCenter.notification.document.shipment_notice': 'Shipment notice',
@@ -18844,12 +18971,16 @@ export default {
   'pages.system.configCenter.notification.action.sales_order.approved': 'Approved',
   'pages.system.configCenter.notification.action.sales_order.pushed_to_work_order': 'Pushed to work order',
   'pages.system.configCenter.notification.action.sales_order.delivery_delayed': 'Delivery delayed',
+  'pages.system.configCenter.notification.action.sales_review.issued': 'Review issued',
+  'pages.system.configCenter.notification.action.sales_review.rejected': 'Review rejected',
+  'pages.system.configCenter.notification.action.sales_review.passed': 'Review passed',
   'pages.system.configCenter.notification.action.quotation.approved': 'Approved',
   'pages.system.configCenter.notification.action.quotation.customer_confirmed': 'Customer confirmed',
   'pages.system.configCenter.notification.action.quotation.converted_to_order': 'Converted to sales order',
   'pages.system.configCenter.notification.action.purchase_order.approved': 'Approved',
   'pages.system.configCenter.notification.action.purchase_order.pushed_to_receipt': 'Pushed to receipt',
   'pages.system.configCenter.notification.action.purchase_order.delivery_delayed': 'Delivery delayed',
+  'pages.system.configCenter.notification.action.purchase_order.arrival_overdue': 'Arrival overdue',
   'pages.system.configCenter.notification.action.work_order.remind_batching': 'Remind warehouse staging',
   'pages.system.configCenter.notification.action.work_order.released': 'Released',
   'pages.system.configCenter.notification.action.work_order.started': 'Started',
@@ -18866,6 +18997,7 @@ export default {
   'pages.system.configCenter.notification.action.equipment_fault.reported': 'Reported',
   'pages.system.configCenter.notification.action.equipment_fault.assigned': 'Assigned for repair',
   'pages.system.configCenter.notification.action.equipment_fault.resolved': 'Resolved',
+  'pages.system.configCenter.notification.action.inventory_alert.triggered': 'Alert triggered',
   'pages.system.configCenter.notification.action.iot_alert.threshold_breached': 'Threshold breached',
   'pages.system.configCenter.notification.action.iot_alert.device_offline': 'Device offline',
   'pages.system.configCenter.notification.action.maintenance_order.created': 'Created',
@@ -19061,6 +19193,10 @@ export default {
   'pages.system.configCenter.param.procurement_require_purchase_requisition_desc': 'Purchase order requires requisition first',
   'pages.system.configCenter.param.procurement_require_supplier_qualification': 'Require supplier qualification',
   'pages.system.configCenter.param.procurement_require_supplier_qualification_desc': 'When on, new suppliers must complete qualification before procurement; when off, suppliers are approved on creation',
+  'pages.system.configCenter.param.procurement_require_purchase_order_change_confirm_desc': 'Manual apply after approval before PO is updated',
+  'pages.system.configCenter.param.procurement_require_purchase_order_change_confirm': 'Require PO change confirm',
+  'pages.system.configCenter.param.procurement_arrival_imminent_days_desc': 'Days before required date to flag imminent warning (default 3)',
+  'pages.system.configCenter.param.procurement_arrival_imminent_days': 'Arrival imminent days',
   'pages.system.configCenter.param.purchase_tolerance_percentage': 'Purchase over-receipt tolerance (%)',
   'pages.system.configCenter.param.purchase_tolerance_percentage_desc': 'Maximum allowed over-receipt percentage against PO quantity (0-100).',
   'pages.system.configCenter.param.purchase_tolerance_percentage_guide': 'Recommended: 0-2% for standard parts, 3-5% for outsourced incoming. Too high may hide purchasing deviations.',
@@ -22887,6 +23023,7 @@ export default {
   'pages.dashboard.todo.incomingInspectionPending': 'Incoming inspection pending: {{code}}',
   'pages.dashboard.todo.processInspectionPending': 'In-process inspection pending: {{code}}',
   'pages.dashboard.todo.finishedInspectionPending': 'Finished goods inspection pending: {{code}}',
+  'pages.dashboard.todo.approvalPending': 'Approval pending: {{code}}',
   'pages.dashboard.todo.inspectionWorkOrderDesc': '{{label}} - Work order {{workOrder}}',
   'pages.dashboard.todo.dotPairDesc': '{{left}} - {{right}}',
   'pages.dashboard.todo.priorityUrgent': 'Urgent',
@@ -22909,7 +23046,134 @@ export default {
   'pages.dashboard.todo.meta.segmentShippingAddress': 'Ship to: {{address}}',
   'pages.dashboard.realtimeMessages': 'Live messages',
   'pages.dashboard.versionLabel': 'Version',
-  'pages.dashboard.buildTimeLabel': 'Build / release time',
+  'pages.dashboard.buildTimeLabel': 'Release time',
+  'pages.dashboard.updateLogButton': 'Changelog',
+  'pages.dashboard.updateLogModalTitle': 'Changelog',
+  'pages.dashboard.updateLogTab.all': 'All',
+  'pages.dashboard.updateLogLatestTitle': 'Latest updates',
+  'pages.dashboard.updateLogEmpty': 'No updates yet',
+  'pages.dashboard.updateLogType.feature': 'Feature',
+  'pages.dashboard.updateLogType.improvement': 'Improvement',
+  'pages.dashboard.updateLogType.fix': 'Fix',
+  'pages.dashboard.updateLogType.security': 'Security',
+  'pages.dashboard.updateLogTypeSection.feature': 'Features',
+  'pages.dashboard.updateLogTypeSection.improvement': 'Improvements',
+  'pages.dashboard.updateLogTypeSection.fix': 'Fixes',
+  'pages.dashboard.updateLogTypeSection.security': 'Security',
+  'pages.dashboard.updateLog.entries.update-log-panel.title': 'Added changelog to dashboard version card',
+  'pages.dashboard.updateLog.entries.sales-order-attachment-carry.title': 'Optional sales order attachments when pushing procurement',
+  'pages.dashboard.updateLog.entries.sales-order-attachment-carry.description':
+    'When pushing purchase requisitions or orders from demand computation, you can include source sales order attachments for buyers.',
+  'pages.dashboard.updateLog.entries.order-line-price-trend.title': 'Line price trend on sales and purchase orders',
+  'pages.dashboard.updateLog.entries.order-line-price-trend.description':
+    'When creating or editing sales and purchase orders, view recent prices and a trend chart per customer or supplier and material. Visibility is controlled by separate role permissions.',
+  'pages.dashboard.updateLog.entries.mrp-recompute-upstream-quantity.title': 'Fix MRP recompute using stale demand quantities',
+  'pages.dashboard.updateLog.entries.mrp-recompute-upstream-quantity.description':
+    'Saving a sales order or forecast now syncs linked demand lines. Recompute and execute MRP refresh from upstream before calculation instead of reusing the first push snapshot.',
+  'pages.dashboard.updateLog.entries.mrp-inventory-netting-basis.title': 'Fix MRP net requirement vs available inventory mismatch',
+  'pages.dashboard.updateLog.entries.mrp-inventory-netting-basis.description':
+    'Default netting now deducts reserved stock like the available inventory column. Stored available qty matches the netting basis, and partial readiness no longer rounds to 100%, so work orders can push when a real shortfall exists.',
+  'pages.dashboard.updateLog.entries.mrp-make-bom-route-gate.title': 'Validate make-item BOM and process route before MRP execution',
+  'pages.dashboard.updateLog.entries.mrp-make-bom-route-gate.description':
+    'Execute, recompute, and preview MRP now validate BOM and process route for make items across the exploded BOM tree. When manufacturing mode is unset, both are required so calculation cannot finish without pushable work orders.',
+  'pages.dashboard.updateLog.entries.purchase-arrival-warning.title': 'Purchase arrival warnings and delay handling',
+  'pages.dashboard.updateLog.entries.purchase-arrival-warning.description':
+    'New arrival warning page classifies open PO lines as normal, imminent, or overdue by required date. Delay reports can flow through approval, auto-create purchase change orders, and write back delivery dates. Optional change confirm in config center. MRP and requisition sources auto-resolve impacted assemblies; dashboard and list overdue counts now share one line-level basis.',
+  'pages.dashboard.updateLog.entries.work-order-list-scroll-preserve.title': 'Fix work order list jumping to top after actions',
+  'pages.dashboard.updateLog.entries.work-order-list-scroll-preserve.description':
+    'Starting an operation, reporting work, or releasing a work order no longer scrolls the list back to the first row. Operation cards refresh in place instead of redundant full reloads; release and status refresh preserve table body and page scroll position.',
+  'pages.dashboard.updateLog.entries.mrp-dual-source-buy-priority.title': 'Fix dual Make+Buy still pushing manufacturing flow',
+  'pages.dashboard.updateLog.entries.mrp-dual-source-buy-priority.description':
+    'When a material is both Make and Buy, MRP now suggests purchase for net demand instead of work orders. Direct work-order push skips root manufacturing; no WO when inventory covers demand.',
+  'pages.dashboard.updateLog.entries.warehouse-hub-show-amount-toggle.title': 'Show amount toggle on inbound/outbound lists',
+  'pages.dashboard.updateLog.entries.warehouse-hub-show-amount-toggle.description':
+    'Inbound and outbound management (including production picking) toolbars now have a Show amount switch, off by default. When on, list rows show document total amount and detail lines show unit price and line amount when available.',
+  'pages.dashboard.updateLog.entries.last-operation-inbound-fqc-hints.title': 'Last-operation inbound and FQC guidance improved',
+  'pages.dashboard.updateLog.entries.last-operation-inbound-fqc-hints.description':
+    'Last-operation reporting explains FQC before stock posts; after approval, toasts clarify pending receipt vs blocked confirm vs stock updated; config center documents auto inbound vs inventory timing.',
+  'pages.dashboard.updateLog.entries.read-path-performance-batch-two.title': 'Faster purchase pull, QC pull and market price list loading',
+  'pages.dashboard.updateLog.entries.read-path-performance-batch-two.description':
+    'Purchase receipt and receipt-notice pull queries no longer write back quantities per order. Incoming and finished-goods QC pull and inbound checks now resolve material inspection policies in batch. Engineering change lists no longer create approval instances row by row on read. Today\'s market price list carries forward prior-day prices read-only without writing on open. Legacy receipt backfill was removed from the receipt list API.',
+  'pages.dashboard.updateLog.entries.locale-pack-gap-sync.title': 'Locale packs aligned and Lao coverage improved',
+  'pages.dashboard.updateLog.entries.locale-pack-gap-sync.description':
+    'Traditional Chinese, English, Japanese, Vietnamese and Lao now share the same i18n keys as Simplified Chinese. Lao translations were backfilled for system config, Kuaizhizao, master data and related modules, with a manual glossary and locale sync scripts. English fallback in the Lao UI dropped from about 58% to about 2%.',
+  'pages.dashboard.updateLog.entries.notification-high-value-scenes.title': 'More business notification scenes in Config Center',
+  'pages.dashboard.updateLog.entries.notification-high-value-scenes.description':
+    'Kuaizhizao notifications now cover sales and purchase approval, push to work order, work order release, completion and rework, quality exception assignment, equipment dispatch and recovery, inventory alerts, purchase arrival overdue and shipment confirmation. Rules stay off by default; assign recipients and enable a rule to start sending.',
+  'pages.dashboard.updateLog.entries.work-order-list-query-performance.title': 'Faster work order list and operation card loading',
+  'pages.dashboard.updateLog.entries.work-order-list-query-performance.description':
+    'The work order list, operation card expansion and reporting pull query used to re-read audit switches and inspection policies once per inspection record and per operation. Each is now resolved once per page, and list reads no longer write back split work order data. Query count no longer grows with page size, so paging and expanding are faster.',
+  'pages.dashboard.updateLog.entries.material-market-price-carry-forward-trend.title': 'Market prices carry forward and 30-day trend detail',
+  'pages.dashboard.updateLog.entries.material-market-price-carry-forward-trend.description':
+    'Unchanged market prices carry forward from the previous business day when opening the list or importing presets. A new detail action shows a 30-day price trend chart per material.',
+  'pages.dashboard.updateLog.entries.material-batch-picker-group-descendants.title': 'Fix material picker parent group missing child-group items',
+  'pages.dashboard.updateLog.entries.material-batch-picker-group-descendants.description':
+    'In multi-select material dialogs (e.g. new BOM), choosing a parent material category now includes materials from all descendant groups, matching the material list page.',
+  'pages.dashboard.updateLog.entries.bom-list-all-view-first-load.title': 'Fix incomplete BOM list on first All BOM load',
+  'pages.dashboard.updateLog.entries.bom-list-all-view-first-load.description':
+    'When All BOM was the saved view, the first page load now fetches the full list including semi-finished BOMs without needing a second tab click.',
+  'pages.dashboard.updateLog.entries.numeric-precision-decimal-places-4.title': 'Expand qty/price/amount decimals to 0–4 with DB migration',
+  'pages.dashboard.updateLog.entries.numeric-precision-decimal-places-4.description':
+    'Config Center numeric precision now allows 0–4 decimal places for quantity, unit price, and amount; related business columns were migrated from scale 2 to 4 so configured precision persists in storage.',
+  'pages.dashboard.updateLog.entries.outsource-readiness-kitting-fix.title': 'Fix outsource kitting rate inflation and blank linked WO page',
+  'pages.dashboard.updateLog.entries.outsource-readiness-kitting-fix.description':
+    'Clicking an outsource WO from the readiness panel now opens Outsource Management with the detail drawer; kitting uses qualified stock in main/line-side warehouses only, excluding unqualified receipts, and material progress shows qualified quantity.',
+  'pages.dashboard.updateLog.entries.material-form-group-required-asterisk.title': 'Fix missing required asterisk on material group field',
+  'pages.dashboard.updateLog.entries.material-form-group-required-asterisk.description':
+    'Material group is required (including for group-based main code generation). The form now shows the red asterisk and validation message; placeholder no longer says optional.',
+  'pages.dashboard.updateLog.entries.material-group-tree-resizable.title': 'Material group tree: drag to widen and horizontal scroll',
+  'pages.dashboard.updateLog.entries.material-group-tree-resizable.description':
+    'On Material Management, drag the left panel edge to widen the group tree (width is remembered). Long nested group names scroll horizontally; hover shows the full label.',
+  'pages.dashboard.updateLog.entries.bom-list-export-detail.title': 'Fix BOM list export missing component details',
+  'pages.dashboard.updateLog.entries.bom-list-export-detail.description':
+    'BOM list export now matches the tree view: multi-level semi-finished BOMs expand row by row; Excel adds component name, specification, and issue method; empty placeholder rows removed; export all respects the current view and filters.',
+  'pages.dashboard.updateLog.entries.inbound-hub-other-inbound-detail-qty.title': 'Fix missing line qty for other inbound in inbound hub detail',
+  'pages.dashboard.updateLog.entries.inbound-hub-other-inbound-detail-qty.description':
+    'Other inbound lines use inbound_quantity; the inbound hub detail read receipt_quantity and showed dashes. Mapping is unified so header total and line quantities match.',
+  'pages.dashboard.updateLog.entries.document-form-page-bold-labels.title': 'Bold field labels on document entry pages',
+  'pages.dashboard.updateLog.entries.document-form-page-bold-labels.description':
+    'Standalone pull-entry pages (inbound/outbound from work orders, POs, sales orders) now use bold form labels consistent with form modals.',
+  'pages.dashboard.updateLog.entries.warehouse-list-print-toolbar-right.title': 'Print button moved to right toolbar on warehouse lists',
+  'pages.dashboard.updateLog.entries.warehouse-list-print-toolbar-right.description':
+    'Print on inbound, outbound, and related warehouse document lists is now on the right toolbar next to export; filters, amount toggle, and batch actions stay on the left.',
+  'pages.dashboard.updateLog.entries.warehouse-pull-entry-form-ux.title': 'Warehouse pull-entry form UX improvements',
+  'pages.dashboard.updateLog.entries.warehouse-pull-entry-form-ux.description':
+    'When creating inbound/outbound from work orders, POs, or sales orders, source document status shows in localized text; remarks sit below the detail table; header field labels are bold like form modals.',
+  'pages.dashboard.updateLog.entries.global-select-dropdown-full-text.title': 'Select dropdown shows full option text',
+  'pages.dashboard.updateLog.entries.global-select-dropdown-full-text.description':
+    'Select dropdowns no longer match input width; option text stays on one line so long warehouse and user names are easier to read and pick.',
+  'pages.dashboard.updateLog.entries.warehouse-inbound-outbound-detail-reports.title': 'Warehouse inbound and outbound detail reports added',
+  'pages.dashboard.updateLog.entries.warehouse-inbound-outbound-detail-reports.description':
+    'Added inbound and outbound detail reports under warehouse management: one row per material, sorted by business time descending, covering purchase receipts, sales shipments, and stock movements, with period filter and quantity totals.',
+  'pages.dashboard.updateLog.entries.inspection-conduct-decimal-qty.title': 'Fix QC submit error when inspection qty has decimals',
+  'pages.dashboard.updateLog.entries.inspection-conduct-decimal-qty.description':
+    'Incoming/process/finished/OQC conduct now compares qualified + unqualified vs inspection quantity using Decimal at 2 decimal places, avoiding false mismatches from float vs DB Decimal.',
+  'pages.dashboard.updateLog.entries.reporting-correct-producer.title': 'Reporting correction: adjust production worker',
+  'pages.dashboard.updateLog.entries.reporting-correct-producer.description':
+    'The reporting data correction dialog now includes production worker/work group fields, submitted with quantities and reported time. Approved records trigger performance recalculation when worker or reported time changes.',
+  'pages.dashboard.updateLog.entries.reporting-correct-reported-at.title': 'Reporting correction: edit reported time, 3-column layout',
+  'pages.dashboard.updateLog.entries.reporting-correct-reported-at.description':
+    'The reporting correction modal adds an editable reported-at field sent to the API; quantities and work time use a three-column grid; correction reason and remarks stay full width.',
+  'pages.dashboard.updateLog.entries.po-list-buyer-name.title': 'Fix missing buyer on purchase order list',
+  'pages.dashboard.updateLog.entries.po-list-buyer-name.description':
+    'Selected buyers appeared in the order form but showed as dashes in the list. Saves now persist buyer names, and list and detail views backfill names from buyer ID for existing orders.',
+  'pages.dashboard.updateLog.entries.po-batch-push-receipt-notice.title': 'Fix bulk push of purchase orders to receipt notices',
+  'pages.dashboard.updateLog.entries.po-batch-push-receipt-notice.description':
+    'In-progress purchase orders can continue partial receipt-notice pushes. Bulk push now loads pushable lines and resolves inbound warehouses before submit, and shows the server error when it fails.',
+  'pages.dashboard.updateLog.entries.document-attachment-download.title': 'Fix auth error when opening document attachments',
+  'pages.dashboard.updateLog.entries.document-attachment-download.description':
+    'Sales orders and other documents now open attachments with a preview token instead of a bare download URL that showed “organization context not set”.',
+  'pages.dashboard.updateLog.entries.approval-workflow-todos.title': 'Workflow approvals in home and module todos',
+  'pages.dashboard.updateLog.entries.approval-workflow-todos.description':
+    'Approval tasks assigned to you (e.g. sales orders) now appear in dashboard and module workbench todo lists.',
+  'pages.dashboard.updateLog.entries.price-settlement.title': 'Monthly price settlement',
+  'pages.dashboard.updateLog.entries.price-settlement.description':
+    'Support zero-price orders for monthly partners, batch settlement workbench, and automatic AR/AP delta adjustments for delivered/received quantities.',
+  'pages.dashboard.updateLog.entries.update-log-panel.description': 'Platform updates are grouped by type. Click Changelog to view all records.',
+  'pages.dashboard.updateLog.entries.calendar-monday-first.title': 'Dashboard calendar now starts weeks on Monday',
+  'pages.dashboard.updateLog.entries.weather-text-contrast.title': 'Improved text contrast on weather calendar header',
+  'pages.dashboard.updateLog.entries.weather-sky-background.title': 'Weather calendar header now uses sky-like background linked to weather',
+  'pages.dashboard.updateLog.entries.weather-weekday-time.title': 'Adjusted weekday position, time format, and clock size on weather calendar',
   'pages.dashboard.operationCardsTitle': 'WIP operations',
   'pages.dashboard.operationCardsCount': '{{count}} operations',
   'pages.dashboard.operationCardsEmpty': 'No operations in progress',
@@ -24623,6 +24887,16 @@ export default {
   'apps.kuaizhizao.workOrder.quickReport.planRemainingTitle': 'Plan remaining',
   'apps.kuaizhizao.workOrder.quickReport.materialRemainingTitle': 'Material remaining',
   'apps.kuaizhizao.workOrder.quickReport.effectiveReportableTitle': 'Max this reporting',
+  'apps.kuaizhizao.workOrder.quickReport.lastOpDirectInbound':
+    'Last operation: Direct inbound is on. After approval the system tries to confirm receipt; if FG inspection is required, only a pending receipt is created until inspection passes.',
+  'apps.kuaizhizao.workOrder.quickReport.lastOpDirectInboundWithFqc':
+    'Last operation: Direct inbound and finished goods inspection are on. A receipt is created after approval; complete inspection and confirm inbound before stock appears in real-time inventory.',
+  'apps.kuaizhizao.workOrder.quickReport.lastOpInboundNotice':
+    'Last operation: Inbound notice is on. A pending receipt is created after approval; confirm inbound in Inbound Management to update stock.',
+  'apps.kuaizhizao.workOrder.quickReport.lastOpInboundNoticeWithFqc':
+    'Last operation: Inbound notice and finished goods inspection are on. Complete inspection, then confirm inbound in Inbound Management before stock appears in real-time inventory.',
+  'apps.kuaizhizao.workOrder.quickReport.lastOpNoAutoInbound':
+    'Last operation: Auto inbound is off. Create finished goods receipt manually in warehouse module after completion.',
   'app.kuaizhizao.customerFollowUp.activityTypePlaceholder': 'Select activity type',
   'app.kuaizhizao.customerFollowUp.quickAddCustomer': 'Quick Add Customer',
   'app.kuaizhizao.salesForecast.importTitle': 'Import Sales Forecast',
@@ -26512,7 +26786,8 @@ export default {
   'app.master-data.marketPrices.invalidForm': 'Invalid Form',
   'app.master-data.marketPrices.keyword': 'Keyword',
   'app.master-data.marketPrices.loadPreset': 'Load Preset',
-  'app.master-data.marketPrices.loadPresetDesc': 'Load preset description',
+  'app.master-data.marketPrices.loadPresetDesc':
+    'Select presets not yet in the list to import; existing codes are skipped. On the next business day, unchanged prices carry forward from the previous day.',
   'app.master-data.marketPrices.priceDate': 'Price Date',
   'app.master-data.marketPrices.priceDateRequired': 'Price date required',
   'app.master-data.marketPrices.priceInvalid': 'Price Invalid',
@@ -26522,6 +26797,14 @@ export default {
   'app.master-data.marketPrices.quoteCodeRequired': 'Quote code is required',
   'app.master-data.marketPrices.quoteName': 'Quote Name',
   'app.master-data.marketPrices.quoteNameRequired': 'Quote name is required',
+  'app.master-data.marketPrices.trendAboveAvg': 'Above average',
+  'app.master-data.marketPrices.trendAvgPrice': '30-day average',
+  'app.master-data.marketPrices.trendBelowAvg': 'Below average',
+  'app.master-data.marketPrices.trendCurrentVsAvg': 'Current vs average:',
+  'app.master-data.marketPrices.trendMaxPrice': '30-day high',
+  'app.master-data.marketPrices.trendMinPrice': '30-day low',
+  'app.master-data.marketPrices.trendModalTitle': '{{name}} 30-day trend',
+  'app.master-data.marketPrices.trendNoData': 'No valid quotes in the last 30 days',
   'app.master-data.marketPrices.unitPrice': 'Unit Price',
   'app.master-data.marketPrices.unitPriceRequired': 'Unit price required',
   'app.master-data.materialForm.mainCodeEditableExtra': 'Main Code Editable Extra',
@@ -26776,6 +27059,409 @@ export default {
   'pages.infra.sensitiveWordBlacklist.batchDeleteAllowlistSuccess': 'Deleted {{count}} allowed word(s)',
   'ui.aiAssistant.actionExecuted': 'Executed',
   'ui.aiAssistant.confirmAction': 'Confirm action',
+  // --- P0 locale gap sync (auto) ---
+  'app.haoligo.equipment.documents.outputPrefilledFieldTooltip':
+    'Optional; fill in the order number and click "Bring Out" to fill it in automatically, or you can fill it in manually.',
+  'app.haoligo.equipment.documents.outputWorkOrderTooltip':
+    'Optional. After filling in the manufacturing order number, click "Bring Out" on the right to pull the finished product code, finished product name, and planned quantity from the data set; when not binding the manufacturing order, you can directly select the equipment and fill in the completed quantity.',
+  'app.haoligo.equipment.hub.lead':
+    'Inspection plans and ledgers are maintained here; reports and dashboards can be found at the entrance below. The data table prefix is ​​haoligo_*, which is isolated from the fast manufacturing equipment module.',
+  'app.haoligo.equipment.settings.outputDatasetIntro':
+    'Configure the data set and column mapping used for "Equipment Output Order" query by manufacturing order number (finished product code, finished product name, planned quantity, consistent with the mold requisition order); click "Bring Out" in the output order pop-up window after saving. Click "Dataset" on the list toolbar to configure.',
+  'app.haoligo.patrol.reports.chartDesc.areaVolumeTrend':
+    'Displays the changes in registration volume by inspection area and month, which is used to identify areas with sustained high load.',
+  'app.haoligo.patrol.reports.chartDesc.deptHeadcountTrend':
+    'Count the number of registrations after deduplication by associated workshop and month, reflecting the organization\'s participation (the number of persons and the number of work orders have different meanings).',
+  'app.haoligo.patrol.reports.chartDesc.issueTypeShare':
+    'Statistical proportions based on system maintenance problem types are used to identify high-occurrence types and guide inspection points and training points.',
+  'app.haoligo.patrol.reports.chartDesc.keywordCloud':
+    'Carry out word segmentation and word frequency statistics based on the problem description text to help discover repeated expressions and potential risk topics, and can be cross-analyzed with the problem type field.',
+  'app.haoligo.patrol.reports.chartDesc.monthlyCompletionRate':
+    'Statistics of the completed proportion of registered work orders in each natural month are calculated; if there is no registration data in the current month, it will not be displayed.',
+  'app.haoligo.patrol.reports.chartDesc.monthlyOverdueRate':
+    'The proportion of registered work orders that are still in the inspection or maintenance stage in each natural month is counted to assess the risk of detention.',
+  'app.haoligo.patrol.reports.chartDesc.monthlyVolume':
+    'The number of work orders is summarized according to the natural month of registration time, showing monthly fluctuations and business peaks.',
+  'app.haoligo.patrol.reports.chartDesc.nodeCompletion':
+    'The proportion of each process node is calculated based on the registered work orders, which is used to locate process bottlenecks and stranded links.',
+  'app.haoligo.patrol.reports.chartDesc.overdueRanking':
+    'Only open work orders are counted and aggregated by responsible person (if no responsible person is designated, the registrant is taken) to facilitate regular meeting supervision and coordination.',
+  'app.haoligo.patrol.reports.chartDesc.statusDistribution':
+    'Displays the proportion of statuses such as Inspection, Maintenance and Completed, which is used to evaluate the backlog and disposal pressure.',
+  'app.haoligo.patrol.reports.groupLead.area':
+    'The registration volume trend is displayed according to the inspection area and related workshops, which is used to identify key areas and cross-department collaborative pressure.',
+  'app.haoligo.patrol.reports.groupLead.completion':
+    'The proportion of process nodes, monthly completion rate and open work order structure are presented to facilitate review of regular meetings and implementation of responsibilities.',
+  'app.haoligo.patrol.reports.groupLead.insights':
+    'Extract and visualize word frequency for problem descriptions, identify high-frequency expressions and potential common problems, and compare and analyze them with standard problem types.',
+  'app.haoligo.patrol.reports.groupLead.volume':
+    'Summarize the proportion of problem types, monthly registration volume and disposal stage distribution to support shift scheduling and on-site resource allocation.',
+  'app.haoligo.quality.workOrder.datasetIntro':
+    'After configuration, enter the order number in the registration pop-up window and click "Bring Out". The ERP data set will be queried according to parameters and written into fields such as workshops, production lines, equipment, molds, material numbers, models (workshops/equipment are matched according to the name or number of the system); each field can still be modified manually.',
+  'app.haoligo.quality.workOrder.scanTooltip':
+    'After filling in the order number, click "Bring Out" on the right to pull the related information from the ERP data set; if the data set is not configured, you can fill in each field manually.',
+  'app.kuaiai.materialHealth.summaryStats':
+    'A total of {{total}} main materials were scanned and {{issues}} problems were found (completeness/reasonableness {{completeness}}, duplicate coding {{duplicate}})',
+  'app.kuaiai.settings.providerCardHint':
+    'Please first create a new AI connection in the application connector (the same provider can create multiple different models), and then select the connection used by the current conversation here.',
+  'app.kuaicaiwu.notes.linkAmountMismatch':
+    'The bill amount is inconsistent with the document amount (ticket {{noteAmount}} / document {{voucherAmount}})',
+  'app.kuaizhizao.agileQuoting.adviceContent':
+    'The current product material cost ratio is {{ratio}}%. The price of raw materials has fluctuated greatly recently. It is recommended to add a "validity period" clause in the quotation (7 days is recommended).',
+  'app.kuaizhizao.agileQuoting.noData': 'No core price data found, please ensure that the product has a BOM and routing configured.',
+  'app.kuaizhizao.agileQuoting.priceModelHint':
+    '*Based on "Cost + Gross Profit" model. Actual quotation suggestions are dynamically adjusted based on customer-level relationships and order size.',
+  'app.kuaizhizao.batchingCenter.lineSideWarehousePickModalFallbackHint':
+    'There are currently no side warehouse type warehouses. You can choose one of the following warehouses as the target warehouse.',
+  'app.kuaizhizao.batchingCenter.lineSideWarehousePickModalHint':
+    'The system does not find the default lineside warehouse. Please manually select the target warehouse for material preparation and continue creating it.',
+  'app.kuaizhizao.customerPool.confirmReleaseContent':
+    'Are you sure you want to release "{{name}}" back to the public client pool? After release, it will no longer belong to the current salesperson.',
+  'app.kuaizhizao.demandComputation.inboxSummaryTitle': 'Total {{total}} exceptions: Error {{errors}}, Warning {{warnings}}',
+  'app.kuaizhizao.demandComputation.pushPreviewSummaryMerged': '{{code}}: {{docs}} will be generated; detailed {{pushable}}/{{total}} rows can be pushed down',
+  'app.kuaizhizao.demandManagement.businessModeTooltip':
+    'When pushing down "Demand Calculation", the calculation type is unified to MRP; MTS / MTO / ATO are written into the calculation head; when ATO is pushing down work orders, it is the same order-driven as MTO (work order production mode is MTO).',
+  'app.kuaizhizao.demandManagement.deleteSkipped':
+    '{{skipped}} items have been skipped (non-manual demand planning or status cannot be deleted). Only "Demand Plan" and draft/pending review can be deleted here.',
+  'app.kuaizhizao.demandManagement.mergeComputationTooltip':
+    'Merge the selected requirements into unified demand calculation, and then push down downstream documents such as semi-finished product work orders in the calculation sheet.',
+  'app.kuaizhizao.demandManagement.mergeConfirm':
+    'Are you sure you want to combine the selected {{count}} requirements for demand calculation? Consolidated calculations will retain traceability of each demand source.',
+  'app.kuaizhizao.demandManagement.pushToMrpConfirm':
+    'Are you sure you want to create a demand calculation from this demand? After creation, a demand calculation task will be generated.',
+  'app.kuaizhizao.demandManagement.withdrawConfirm':
+    'Are you sure you want to withdraw the push-down for this requirement? After withdrawing, an attempt will be made to delete the associated computing task. If the downstream task has been executed, the withdrawal will not be allowed.',
+  'app.kuaizhizao.documentAction.install_execution.pull_from_sales_delivery.label': 'Create installation execution order from sales issue order',
+  'app.kuaizhizao.documentAction.install_execution.pull_from_sales_order.label': 'Create installation execution order from sales order',
+  'app.kuaizhizao.initialData.arIntro':
+    'Fill in the customer code and amount receivable for receivables; fill in the supplier code and amount payable for payables. There is no relevant business data to skip.',
+  'app.kuaizhizao.initialData.checklistHint':
+    'The material code and warehouse code in the imported data must have been maintained in the system; missing them will cause the row to fail to verify.',
+  'app.kuaizhizao.initialData.checklistHintShort':
+    'Note: The materials and warehouses in the table must already exist in the master data, otherwise the corresponding data rows cannot pass the verification.',
+  'app.kuaizhizao.initialData.finishHint':
+    'If there are failed data rows, they can be corrected and re-imported. Please note: Each complete and successful inventory import will generate a new opening receipt document, and repeated executions should be avoided.',
+  'app.kuaizhizao.initialData.idempotencyBody':
+    'Each import that passes verification will generate an independent opening receipt document; repeated imports will result in repeated entry of inventory. Exceptions need to be handled in the warehousing module or contact the administrator.',
+  'app.kuaizhizao.initialData.importInvFields':
+    'Required fields: material code, warehouse code, opening quantity; optional fields: opening amount, batch number, location code. The header supports synonymous writing methods such as "coding" and "number".',
+  'app.kuaizhizao.initialData.pageIntro':
+    'Please follow the steps: opening inventory is a required step; if there is no business data for work in progress and accounts receivable, you can choose to skip the corresponding steps.',
+  'app.kuaizhizao.initialData.skipWipBody':
+    'Please confirm that there is currently no imported work-in-progress data, or it may be added in the subsequent work-in-progress module. After skipping, you can still return to this wizard to perform the import.',
+  'app.kuaizhizao.initialData.snapshotAdvancedBody':
+    'In scenarios where warehousing is frequently sent and received or needs to be aligned with the general ledger, a time point when the business is relatively static should be selected, and the deadline should be confirmed by finance.',
+  'app.kuaizhizao.initialData.snapshotAfterLaunch':
+    'The selected settlement time is later than the end of the planned launch date. Please review if financial reconciliation is involved.',
+  'app.kuaizhizao.initialData.snapshotHint':
+    'Used to define the business cut-off time corresponding to the balance amount; the system defaults to 23:59:00 on the previous natural day, which can be adjusted according to the financial settlement caliber.',
+  'app.kuaizhizao.initialData.wipIntro':
+    'If there is no pending work-in-progress, you can skip this step. The import must include: product code, process code, and work in progress quantity.',
+  'app.kuaizhizao.inventoryAlert.formInheritMaterialThresholdExtra':
+    'After turning it on, the material master data threshold will be used; after turning it off, it can be customized by warehouse/group. The material is the default source of truth and the rule is the override strategy.',
+  'app.kuaizhizao.inventoryAlert.msgCheckSuccess':
+    'Check completed: summarized {{checked}} rows, newly triggered {{triggered}}, automatically released {{resolved}}',
+  'app.kuaizhizao.planControlTower.mrpExceptionInboxAlertDesc':
+    'There are {{errors}} errors and {{warnings}} warnings. Please handle them in the MRP exception of demand calculation.',
+  'app.kuaizhizao.purchaseInquiry.compareAwardPartialHint': 'Lines with quotations can be awarded separately; lines without quotations will remain unawarded.',
+  'app.kuaizhizao.quality.isoClauses.loadPresetSuccess':
+    'Default has been imported: added {{created}} items, skipped {{skipped}} items, associated {{linked}} items',
+  'app.kuaizhizao.quotation.batchCancelCustomerConfirmContent': 'Return the selected {{count}} quotations from "Customer Confirmation" to "Sent".',
+  'app.kuaizhizao.quotation.batchConfirmCustomerConfirm':
+    'Are you sure you want to mark the selected {{count}} quotes as "Customer Confirmation"? Only documents that are "Quoted" and meet the confirmation conditions will be successful.',
+  'app.kuaizhizao.quotation.cancelCustomerConfirmContent':
+    'Return the quotation from "Customer Confirmation" to "Sent" to withdraw review or delete the document.',
+  'app.kuaizhizao.quotation.convertConfirm':
+    'Are you sure you want to convert quotation "{{code}}" to a sales order? After conversion, a new sales order will be created and associated.',
+  'app.kuaizhizao.quotation.customerConfirmContent':
+    'Marked as "Customer Confirmation", it means that the quotation has been approved by the customer and the sales order can continue to be pushed.',
+  'app.kuaizhizao.quotation.pushToSalesContractConfirm':
+    'Are you sure you want to push the quotation "{{code}}" to a sales contract? After push down, a draft sales contract is created and associated.',
+  'app.kuaizhizao.quotation.revokePushContent':
+    'Unlink the deleted sales order, restore it to "Customer Confirmation", and transfer it to a sales order again.',
+  'app.kuaizhizao.quotation.saveAsRevisionHint':
+    'Copy the latest version based on the current series as a new draft revision, and the details and prices can be adjusted in the new version. Continue?',
+  'app.kuaizhizao.salesContract.terms.contentPlaceholderHint':
+    'You can use {placeholder name} to fill it in manually in the content, or use {@field name} to automatically associate the contract header. For example: billing method {@payment_terms}; delivery period is {delivery days} working days.',
+  'app.kuaizhizao.salesContract.terms.fieldBindingAutoHint':
+    'The following placeholders will be automatically taken from the header field above. After modifying the header, the preview will be updated simultaneously, so there is no need to fill it in manually.',
+  'app.kuaizhizao.salesOrder.aiCreate.confirmMasterDesc':
+    'The following customers or materials are not matched in the system. Please check the information and confirm the new creation; you can also skip the new creation and only fill in the identified content into the form.',
+  'app.kuaizhizao.salesOrder.aiCreate.customerCodeRuleRequired':
+    'Unable to automatically create a new customer: Please enable automatic numbering for the customer in the numbering rule first, or manually create the customer before recording the order.',
+  'app.kuaizhizao.salesOrder.aiCreate.hint':
+    'Upload a photo of a customer order, contract, or handwritten receipt. The system recognizes text through the OCR visual endpoint, and DeepSeek fills in the new form. Please configure the OCR Base URL and OCR model in System Configuration → Application Connector.',
+  'app.kuaizhizao.salesOrder.aiCreate.promptSampleOrder':
+    'Order 100 pieces of M8 bolts for customer Huadong Machinery, unit price is 0.5 yuan, delivery next Friday',
+  'app.kuaizhizao.salesOrder.aiCreate.recognizeEmpty':
+    'Valid sales order information cannot be identified from the picture. Please upload a clearer photo or use text to describe the order.',
+  'app.kuaizhizao.salesOrder.aiCreate.welcomeDesc':
+    'You can directly describe the order, or upload a picture of the document for identification. Supports multiple rounds of replenishment, such as modifying the quantity, adding details and sending again.',
+  'app.kuaizhizao.salesOrder.configureVariantAttrsHint':
+    'Select attribute values ​​one by one; choose either "Select SKU" or select SKU first and then fine-tune.',
+  'app.kuaizhizao.shipmentNotice.capability.shipment_notice.notify.overdelivery_or_inventory': 'The notification quantity exceeds the notifiable backorder quantity or available stock quantity.',
+  'app.kuaizhizao.warehouseInbound.fqc.ensureBlocked.content':
+    'Relevant materials must complete finished product inspection and pass the test before they can be confirmed for storage.',
+  'app.kuaizhizao.warehouseInbound.iqc.ensureBlocked.content':
+    'Relevant materials must complete incoming material inspection and pass the inspection before they can be confirmed for storage; if not completed, they will be directed to incoming material inspection.',
+  'app.kuaizhizao.warehouseInbound.msg.noConfirmExecutePermission':
+    'The confirmation execution permission for warehousing is missing. Please contact the administrator to grant the "execution" permission for warehousing management in the role matrix.',
+  'app.kuaizhizao.warehouseOutbound.confirm.batchAllocationRequired':
+    'Material {{material}} Please allocate the quantity of this issue according to the batch number {{qty}} (optional batch number: {{batches}})',
+  'app.kuaizhizao.warehouseOutbound.confirm.batchSerialMultiNotSupported':
+    'Material {{material}} is managed by serial number. Please select only one batch number for the same picking.',
+  'app.kuaizhizao.workOrder.formAllowOpJumpExtra':
+    'The default is with the selected process route; it can be modified. When it is closed, work must be reported in sequence and the number of lower lanes does not exceed the upper lane; when it is turned on, the node processes in the route still cannot be skipped.',
+  'app.kuaizhizao.workOrder.readinessConfirmPickingContent':
+    'The picking parts according to the {{count}} line will be created from "{{warehouse}}" and confirmed for production picking (formal issue). Continue?',
+  'app.kuaizhizao.workOrder.remindBatchingHint':
+    'Lineside material preparation tasks will be generated/synchronized and warehouse personnel will be notified through site messages. The production side does not need to enter the material center.',
+  'app.master-data.defaults.marketFloatFormulaHint':
+    'Available variables are market (base market price) and fixed (fixed selling price), such as market * 1.1 + fixed',
+  'app.master-data.defaults.salePriceMethodHint':
+    'The fixed selling price directly maintains the selling price of this material; the market price linkage calculates the recommended selling price based on the base market price and the floating formula.',
+  'app.master-data.marketPrices.loadPresetSuccess': 'Default market prices have been imported: {{created}} items added, {{skipped}} items skipped',
+  'app.master-data.materials.addComboRowHint':
+    'Select an attribute value for each column and save it as an independent combined row (consistent with each row in Excel)',
+  'app.master-data.materials.autoGenerateHiddenHint':
+    'Batch automatic generation is only available when the enumeration attribute ≤ {{maxAttrs}} and the number of combinations ≤ {{maxCount}}.',
+  'app.master-data.materials.autoGenerateNotAvailable':
+    'There are currently {{attrs}} enumeration attributes and about {{count}} combinations, until automatic generation is exceeded (≤{{maxAttrs}} attributes and ≤{{maxCount}} items). Please use "Add Row" to perform manual maintenance.',
+  'app.master-data.materials.batchInspectionHint':
+    'The quality inspection options of the selected {{count}} materials will be updated (unchecked items will not be changed; the corresponding quality inspection plan must be selected for plan quality inspection)',
+  'app.master-data.materials.batchTrackingHint':
+    'The checked dimensions will be written to the server all at once. Default rules can be specified when turned on in batches; turning off in batches will deactivate the corresponding switches and clear the rules.',
+  'app.master-data.materials.generateVariantsConfirmLimited':
+    'About {{count}} combinations will be generated (those that already exist will be automatically skipped). When there are many attributes or a large amount of combinations, please use manual "Add Row" instead. Continue?',
+  'app.master-data.materials.groupInspectionStagesHint':
+    'It is used when the materials in the group are not individually configured with scenario-based quality inspection strategies; please configure in-process inspection (IPQC) in the process data.',
+  'app.master-data.materials.legacyScopeDesc':
+    'The old version of the attribute range can be split into {{count}} combination details and then maintained',
+  'app.master-data.materials.rewriteMainCodesHintGroup':
+    'The master code will be regenerated for all materials under the current group (including sub-groups) according to the "group code" and material coding rules of the last-level group to which each material belongs. When the material is not selected, it will be executed according to the group selected on the left.',
+  'app.master-data.materials.rewriteMainCodesHintSelected':
+    'The master code will be regenerated for the selected {{count}} materials according to the "group code" and material coding rules of the final group to which each material belongs. Property variants under the same primary code will be updated together.',
+  'app.master-data.materials.rewriteMainCodesSuccess':
+    'The {{families}} group master code has been rewritten, and a total of {{rows}} materials have been updated.',
+  'app.master-data.materials.rewriteResetSequenceDesc':
+    'When checked, the serial number of each final group will be reset to the initial value before rewriting, and the number will be counted from the beginning.',
+  'app.master-data.materials.standardPresetHint':
+    'The default library is classified by commonly used manufacturing materials. Please complete the "Import Settings" below first, and then check the items to be imported in the table.',
+  'app.master-data.materials.standardPresetPresetGroupHint':
+    'Material groups will be automatically created or reused according to the "secondary type" of the default library (the group code starts with SP_), and the materials will be classified into the corresponding groups.',
+  'app.master-data.materials.variantComboImportHint':
+    'You can also use "Batch Import" to paste Excel combinations by attribute columns (only the SKU rows under the current material are imported).',
+  'app.master-data.operations.presetModalHint':
+    'First select the manufacturing subdivision industry, and then check the process to be imported; the process number and defective product number will be automatically generated according to the organization coding rules, and defective products with the same name will be reused.',
+  'app.master-data.productionLines.dimensionHint':
+    'The production line is the middle layer of the factory organization tree (the line group under the workshop), which is used for workstation ownership and equipment line groups; it does not participate in production scheduling, labor dispatch, or line-side warehouse matching. Please maintain the work center for production capacity and dispatch.',
+  'app.master-data.sop.batchCreatedHint':
+    '{{count}} draft SOPs have been created. It is recommended to enter "Edit" one by one to complete the collection of basic information, work instructions and work reports.',
+  'app.master-data.sop.batchRulesGroupDesc':
+    '{{count}} material groups have been selected: approximately {{preview}} SOPs will be generated (one for each group × each process), the number contains "G-Material Group Code", and the name contains the group name and code.',
+  'app.master-data.sop.batchRulesMaterialDesc':
+    'Selected {{count}} materials: About {{preview}} SOPs will be generated (one for each material × each process). The numbering format is "Route Code-Process Code-M-Main Code", with the material name and master code in the name.',
+  'app.master-data.sop.noBoundRouteDesc':
+    'The current material/material group has not been bound to the routing. Please select an existing route from the list for this batch creation (without writing back the binding), or create a new route and bind it to the current material/material group.',
+  'app.master-data.sop.remarkPlaceholder':
+    'Supplementary instructions, precautions, etc. (For process steps, please click "Design" in the list operation column to configure the graphical design page)',
+  'app.master-data.source.defaultBomVersionHint':
+    'Demand calculation uses the default version when "multiple versions are not allowed"; the component list and usage should be maintained in the BOM design.',
+  'app.master-data.source.defaultProcessRouteGroupHint':
+    'It is used when the materials in the group are not assigned separate routes; please maintain the complete process and resource differences on the product process page of each material.',
+  'app.master-data.source.defaultProcessRouteMaterialHint':
+    'Only the route template is assigned to inherit the default workshop/personnel/equipment of the process; please maintain the process sequence, working hours and piece-rate unit price on the product process page.',
+  'app.master-data.workCenters.dimensionHint':
+    'The work center is planning and capacity master data: work orders, processes, schedules, line warehouses and costs are based on this dimension. Through work station association, there is no one-to-one correspondence with the production line.',
+  'apps.kuaizhizao.workOrder.quickReport.exceedEffective':
+    'It has exceeded the number that can be reported this time ({{max}}). Please adjust the number of qualified or unqualified numbers.',
+  'apps.kuaizhizao.workOrder.quickReport.exceedEffectiveSubmit': 'The number of jobs to be reported cannot exceed the number that can be reported this time ({{max}})',
+  'components.tenantBootstrap.description':
+    'Please wait while installing default apps and loading prerequisite system data for the new organization. Once completed, you can use the system normally.',
+  'components.uniImport.mappingImportConfirmContentRest':
+    '. After uploading the existing table, map the Excel columns to the system fields (automatic matching is supported). There is no need to change to a standard template before importing.',
+  'field.customer.revenueRecognitionOverrideDesc':
+    'Override the organization\'s default revenue recognition time point; if not selected, it will be consistent with "System Settings → Parameter Center → Finance". Used to distinguish by customer whether to generate receivables based on outbound or output invoices.',
+  'field.department.datasetBindingInfo':
+    'During synchronization: If the department code column is configured and the code in the row is not empty, it will be matched by code, otherwise it will be matched by department name; if it already exists, the name, code (if configured) and remarks (if configured) will be updated, if it does not exist, it will be added (sort is 0, enabled by default). When the parent reference column is configured, the parent department is parsed in the second round.',
+  'field.department.syncIntroBody':
+    'Parameter-free queries will be executed based on the saved data set, and departments will be written or updated based on column mapping; when the superior reference column is configured, the parent-child relationship will be resolved after all rows are processed.',
+  'field.department.syncIntroWarning':
+    'The synchronization time is related to the number of data set rows, database and network conditions, and may range from tens of seconds to several minutes. Once synchronization has started, please do not close or refresh this page until it is complete.',
+  'field.route.allowOperationJumpExtra':
+    'The entire route is unified as "allowed" or "not allowed". When allowed, node processes can be marked in the process sequence; when not allowed, work orders must be reported in sequence.',
+  'field.supplier.payableRecognitionOverrideDesc':
+    'Override the organization\'s default payable confirmation time point; if not selected, it will be consistent with "System Settings → Parameter Center → Finance". Used to distinguish by supplier whether payables are generated based on warehousing or input invoices.',
+  'field.user.importMissingRefsHint':
+    'The following names do not exist in the system. Please correct the name in the import template, or choose to automatically create a new file according to encoding rules and continue importing.',
+  'pages.infra.clientReleases.configHeaderDownloadEnabledTooltip':
+    'After closing, the client will no longer appear in the "Scan QR code to download client" in the top bar of the main interface after logging in.',
+  'pages.infra.clientReleases.configPushTestHint':
+    'Before testing, please install the official APK on your phone, log in to the corresponding account, and allow notifications. Select the tenant first, and then select the users under the tenant.',
+  'pages.infra.clientReleases.deleteConfirmDesc':
+    'The release record for version {{version}} ({{code}}) will be deleted and the installation package/OTA file on disk will be cleaned up (if not referenced by other records). This operation is irreversible.',
+  'pages.infra.clientReleases.editIdentityHint':
+    '{{client}} / {{platform}} / {{version}} ({{code}}). The client, platform and version number cannot be modified; the description/grayscale/forced update can be changed, and the installation package can be optionally replaced.',
+  'pages.infra.clientReleases.editPackageOptionalHint':
+    'If there is already an installation package, it can be left blank; uploading a new file will replace it (must be consistent with the current version number)',
+  'pages.infra.clientReleases.packageDetectedDesc':
+    'Version {{version}} - Build number {{code}} - Package name {{package}}. When submitting, the verification will be consistent with the information in the APK.',
+  'pages.infra.clientReleases.packageReplaceMismatch':
+    'The version in the installation package is inconsistent with the current release record. Please upload a matching APK or create a new release record.',
+  'pages.infra.clientReleases.packageVersionMismatch':
+    'The installation package version is {{version}} ({{code}}), which is inconsistent with the current release record {{expectedVersion}} ({{expectedCode}})',
+  'pages.infra.tenant.sharedQuotaOverQuotaHint':
+    'The current number of activated users has exceeded the quota limit. Existing users will not be affected, but users cannot be added or activated until the number of effective users drops below the quota.',
+  'pages.infra.tenant.syncLimitsFromPlanOverQuotaSuccess':
+    'Quotas synchronized. The current number of enabled users has exceeded the new upper limit. Existing users will not be affected, but new users cannot be added until the users are deleted or deactivated and fall below the quota.',
+  'pages.system.applicationConnections.aiPanelHint':
+    'The AI ​​model key is saved in the site integration and does not appear in the business application connection list below. To choose which model to use, please go to KU-AI → Model Settings.',
+  'pages.system.applicationConnections.amapHint':
+    'Used for logistics tracking map display; please create an application on the Amap open platform and activate the Web client (JS API) and Web service',
+  'pages.system.applicationConnections.cloudMarketHint':
+    'Used for cloud market API such as express delivery query; please fill in the scenario, calling method and query address',
+  'pages.system.applicationConnections.llmProviderKeyHint':
+    'Only fill in the model\'s activation status, API address, model name and API Key here. To choose which connector and KU-AI capability switch to use, please go to "KU-AI → Model Settings".',
+  'pages.system.applicationConnections.llmProviderKeySaveVerifyFailed':
+    'The save has been submitted, but failed to confirm that the Key has been written. Please refresh and try again or check the site settings permissions.',
+  'pages.system.applications.customAppsEmptyDescription':
+    'If you need exclusive functions or industry-specific solutions that fit your business, we can provide software customization and integration services. Welcome to contact our business or account manager to communicate your needs and explore cooperation opportunities.',
+  'pages.system.applications.dedicatedBindingHint':
+    'After binding, only bound organizations can see the customized application in the application center; unbound organizations will not see it (the platform administrator can still maintain it). Can be bound separately for multiple organizations.',
+  'pages.system.applications.resetHighRiskWarning':
+    'High-risk operation warning: "Reset data" will clear or initialize the core business data of the application. Please confirm or contact technical support before executing.',
+  'pages.system.applications.resetWarn1':
+    'The reset operation will physically erase all sales orders, production work orders, inventory flow, demand planning and other business data under the "Quick Manufacturing" application. This action is irreversible!',
+  'pages.system.applications.resetWarn2':
+    'Once you click Next, the data cannot be recovered by conventional means. It is recommended that you ensure that there is no ongoing business and inform relevant team members.',
+  'pages.system.applications.syncAllErrMenusDb':
+    'Navigation menu update failed: {{detail}}. If you do not have menu management rights, please contact the administrator for authorization.',
+  'pages.system.applications.syncAllPartial': 'Menu synchronization partially completed ({{success}}/{{total}}). \\n{{errors}}',
+  'pages.system.applications.syncAllSuccess': 'Menu synchronization completed for {{count}} apps, navigation menu updated.',
+  'pages.system.businessConfig.param.work_order.last_operation_auto_inbound_mode.description':
+    'For each approved work report in the final process, a waiting list will be created based on the qualified quantity. When finished product inspection is turned on, the inventory will only increase after passing the inspection and confirming the warehousing in the warehousing management; "warehousing notification" only creates a pending warehousing order, and "direct warehousing" will try to confirm it automatically.',
+  'pages.system.businessConfig.qualityStageTogglesDesc':
+    'After closing a certain link, the server will refuse to create/push down the corresponding quality inspection order (effective together with the material/process quality inspection mode). After shipping inspection is turned on: when the sales issue is "confirmed" and the shipping notice is "notified to the warehouse", if the line material requires quality inspection, there must be an inspected and qualified finished product inspection document (matching the sales order or customer dimension); if shipping inspection is turned off, there will be no verification.',
+  'pages.system.configCenter.auditBinding.sectionDesc':
+    'Configure the manual review and approval process for each document below. When the switch is turned off, it will automatically pass after submission. When it is turned on, it will enter the review process after submission. You must select the corresponding review and approval process.',
+  'pages.system.configCenter.notification.form.fixedUsersPlaceholder': 'Notified every time, the biller cannot be changed; you can uncheck the billing user specification',
+  'pages.system.configCenter.notification.form.formUserDefaultUsersPlaceholder': 'The billing form will be pre-populated; use the default person here if not changed',
+  'pages.system.configCenter.notification.form.formUserSectionDesc':
+    'Fixed personnel and billing user designation can be configured at the same time. After checking the billing user specification, the default person will be pre-filled in the form; when billing is not changed, it will be sent by default.',
+  'pages.system.configCenter.notification.preset.hint':
+    'Recommendation rules can be loaded (off by default); in-site messages will be sent only after the recipient is configured and enabled.',
+  'pages.system.configCenter.notification.preset.loadedAndUpdated':
+    'Added {{created}} items and completed the recipient range of {{updated}} items (currently {{total}} items in total)',
+  'pages.system.configCenter.notification.preset.repairedTemplates':
+    '{{templatesCreated}} message templates have been created and templates have been added to {{repaired}} rules (currently there are {{total}} rules in total)',
+  'pages.system.configCenter.notification.preset.scopesUpdated':
+    'The receiving range of {{updated}} rules has been completed by default (currently {{total}} in total)',
+  'pages.system.configCenter.param.common_amount_decimal_places_desc': 'Amount (line amount, document total) display and rounding decimal places. Default 2 bits, range 0–4.',
+  'pages.system.configCenter.param.common_detail_basic_updated_at_enabled_desc':
+    'After opening, the update time will be displayed in the "Basic Information" of the document details drawer. Hide this field when closed.',
+  'pages.system.configCenter.param.common_detail_full_chain_mode_desc':
+    'If it is turned off, the full link Tab will not be displayed; if it is enabled, the associated documents and node creation time will be displayed normally; if only the document is displayed, the associated document node will be displayed, and the node creation time will not be displayed.',
+  'pages.system.configCenter.param.common_detail_operation_log_enabled_desc':
+    'After opening, the "Operation Record" block will be displayed in the document details drawer. Hide this block after closing.',
+  'pages.system.configCenter.param.common_price_decimal_places_desc':
+    'Enter and display the number of decimal places for the unit price. Default 2 bits, range 0–4. After modification, unit price inputs such as purchase orders/requisitions will take effect immediately with this accuracy.',
+  'pages.system.configCenter.param.common_quantity_decimal_places_desc': 'Enter and display the number of decimal places. Default 2 bits, range 0–4.',
+  'pages.system.configCenter.param.common_trial_run_mode_desc':
+    'After it is launched and enters the trial operation stage, some business verification and modification restrictions will be looser; specific rules will be gradually integrated with each module. Normal strict verification is restored after shutdown.',
+  'pages.system.configCenter.param.reporting_default_production_worker_mode_desc':
+    'When the form is opened for work reporting or quick reporting, the default strategy for the production personnel field is: current user, worker dispatched to the process, or automatic (work dispatched first, otherwise the process file defaults to the worker, then the current user). The default personnel of the process file displays the "Default" mark in the personnel drop-down list.',
+  'pages.system.configCenter.param.reporting_default_reporting_quantity_mode_desc':
+    'When the customary work report is opened, the qualified quantity is brought out by default; the unqualified quantity is always 0',
+  'pages.system.configCenter.param.work_order_last_operation_auto_inbound_mode_desc':
+    'For each approved work report in the final process, a waiting list will be created based on the qualified quantity. When finished product inspection is turned on, the inventory will only increase after passing the inspection and confirming the warehousing in the warehousing management; "warehousing notification" only creates a pending warehousing order, and "direct warehousing" will try to confirm it automatically.',
+  'pages.system.configCenter.param.work_order_picking_confirm_allowed_functional_domains_desc':
+    'When "Only warehouse can confirm picking" is turned on, in addition to the warehouse functional domain, the role functional domain of picking can also be confirmed. Functional domain takes priority, role code is supplementary.',
+  'pages.system.configCenter.param.work_order_picking_confirm_allowed_role_codes_desc':
+    'Supplement the role that allows confirmation of picking by role code (union with functional domain). When customizing code, it is recommended to set the role functional domain first.',
+  'pages.system.configCenter.param.work_order_picking_confirm_warehouse_only_desc':
+    'After it is turned on, only internal roles with the functional domain "Warehouse" (and configured with supplementary role codes/functional domains) can confirm production picking.',
+  'pages.system.configCenter.paramGroup.common_detail_drawer_desc':
+    'Controls the display of full-link tracking, operation records, and basic information update time in the business document details drawer; the corresponding tab or field will no longer be displayed after closing.',
+  'pages.system.configCenter.paramGroup.common_numeric_precision_desc':
+    'The quantity, unit price, and amount sub-item settings are all 2 digits by default, and the configurable range is 0–4.',
+  'pages.system.configCenter.tenantInit.alertDesc':
+    'When creating a new organization, the platform completes application installation/activation; the tenant side can complete the language, dictionary, parameters, encoding rules, approval/message/printing templates here, and synchronize the menus of installed applications. It can be executed repeatedly and existing data will be updated synchronously.',
+  'pages.system.configCenter.tenantInit.itemDesc.application':
+    'Scan and install default basic applications (fast manufacturing, fast R&D, light finance, light office, master data, etc.)',
+  'pages.system.configCenter.tenantInit.itemDesc.data_dictionary': 'CURRENCY, TIMEZONE and system dictionaries belonging to installed applications',
+  'pages.system.configCenter.tenantInit.itemDesc.kuaiai_faq_preset':
+    '15 questions and answers on factory operations such as production work orders, work reporting, outsourcing, inventory, etc.',
+  'pages.system.configCenter.tenantInit.itemDesc.menu_sync':
+    'Write manifest menu to sidebar by installed application (app is not installed/enabled, handled by platform administrator)',
+  'pages.system.configCenter.tenantInit.itemDesc.operation_preset':
+    'It has been changed to load by industry in "Process Management"; checking this option will not automatically write data. Please go to the process page to select industry and process defaults.',
+  'pages.system.configCenter.tenantInit.itemDesc.variant_attribute_preset': 'Color, specification, material, grade, surface treatment, etc.',
+  'pages.system.configCenter.tenantInit.requiredDesc':
+    'Does not include app registration (handled by platform administrator): languages, system dictionaries, system parameters, encoding rules, approval/messaging/printing template presets, and menu synchronization for installed apps.',
+  'pages.system.dataBackups.createSuccess':
+    'The backup task has been submitted and will be executed by the background task (Taskiq). Please refresh to view the status later.',
+  'pages.system.dataBackups.fileNotOnServer':
+    'The backup file is not on the current server. Please download it in the same environment where the backup was created, or upload the zip to this server through "Upload Backup" and then restore it.',
+  'pages.system.dataBackups.restoreDataOnlyHint':
+    'This backup only contains data tables, and attachment files will not be overwritten or restored during recovery; the file paths in the database records are still retained. If attachments are needed, please use "data table + file" backup or migrate uploads separately.',
+  'pages.system.dataBackups.restoreSuccess':
+    'The recovery task has been submitted and will be executed by the background task (Taskiq). Please refresh to view the status later.',
+  'pages.system.datasets.tenantIsolationTip':
+    'System default (local) data source: the query automatically injects tenant_id and only returns the current tenant data. Third-party databases are not injected by default; if the library also has tenant columns and needs to be isolated, please set "tenant_isolation": true in the saved query_config.',
+  'pages.system.inngest.intro':
+    'Asynchronous logic such as approval, messages, scheduled tasks, and exception detection are carried by Taskiq + PostgreSQL queue. Please run the API, taskiq worker and taskiq scheduler at the same time (see backend deployment instructions).',
+  'pages.system.inngest.noIframe':
+    'Third-party process consoles are no longer embedded; task status can be viewed through the Taskiq queue table in the business interface, logs, and database.',
+  'pages.system.menus.customLayoutLoadDefaultConfirmContent':
+    'The custom APP on the right will be overwritten with the current application menu structure of the system, and you can continue to adjust it later. It will not take effect until saved.',
+  'pages.system.menus.customLayoutStaleRefsRemoved':
+    'Automatically removed {{count}} broken menu references (menu disabled, deleted, or application changed)',
+  'pages.system.menus.restoreDefaultConfirm':
+    'All menu structures and names will be resynced from the manifest; the menu enabled status you adjusted on this page will be retained. If the application name and sorting have been customized in the Application Center, you need to restore them in the Application Center.',
+  'pages.system.printTemplatesDesign.cleanupLegacyDetailTextsConfirmDesc':
+    'All items.0.xxx / operations.0.xxx text boxes ({{count}} in total) in the form of "Item 1" on the artboard will be deleted without affecting the entire schedule. After deleting, please click "Detailed List" again from the right to insert the table.',
+  'pages.system.printTemplatesDesign.importConfirmDesc':
+    'The current canvas and document type association (excluding UUID) will be overwritten with the layout and page settings in the file. After importing, please click "Save Template" to write it to the database.',
+  'pages.system.printTemplatesDesign.importPortableTooltip':
+    'Only supports riveredge-print-template-design JSON exported in the designer; do not replace it with the full export of the list page',
+  'pages.system.printTemplatesDesign.lineColumnsHint':
+    'Configure the display, order and row height of the detail columns here; please click "Apply to Artboard" before saving the template. The "Column Style" in the properties on the right can set the alignment column by column. After sorting, the alignment will automatically follow the column fields.',
+  'pages.system.printTemplatesDesign.lineColumnsVisibilityOrderHint':
+    'Check to display this column in the printed table; move up/down to adjust the column order (from left to right). Keep at least one column.',
+  'pages.system.printTemplatesDesign.rowHeightAutoHint':
+    'The minimum line height (unit mm) can be set separately for the table header and table body; when there are multiple lines of text, the line height will still increase with the content.',
+  'pages.system.printTemplatesDesign.rowHeightFixedHint':
+    'Fixed row heights (unit: mm) can be set for the table header and table body respectively; they are consistent with the minimum height of the template table cells and are suitable for single row details.',
+  'pages.system.printTemplatesDesign.variableHint':
+    'Tip: Click a field to add it to the artboard; items marked with "Details List" will be inserted into the entire table (bound with data items/operations), and there is no need to add them column by column.',
+  'pages.system.roles.dataGrantHint':
+    'Only business resources that have been checked in "Function Permissions" are displayed. The data range takes effect only if you can access this function; you can use All, by APP, by module or search to filter within the current list. After checking, set the range in batches and save it.',
+  'pages.system.roles.dataGrantNeedFunction': 'Please check at least one item in "Function Permissions" before configuring the data range.',
+  'pages.system.roles.dataSaveEmpty':
+    'Please check the resources first and set the batch range to "All/This Department/Custom" before saving, or modify the single-row range before saving.',
+  'pages.system.roles.fieldGrantHint':
+    'Only the field policies (clear text/desensitized/hidden) under the authorized resources of "Function Permissions" are displayed. You can filter the current list by All, by APP, by module or search; after checking, set the display mode in batches and save it.',
+  'pages.system.roles.fieldGrantNeedFunction':
+    'Please check at least one item in "Function Permissions" first, and then configure the field display method',
+  'pages.system.roles.functionGrantHint':
+    'Function permissions control accessible menus and operations. You can select all, filter by APP (level 1), module (level 2) or search (level 3 and above); shortcut operations only apply to the currently visible range.',
+  'pages.system.roles.orphanPermissionsTooltip':
+    'These permissions already exist within the organization, but the current menu tree does not have a corresponding permission_code hooked up. The sources are mostly: permissions statement of each application manifest, data range (*:data:*) derived from "view", or historical/old version synchronization residue. To reduce this: Complete the permission menu item in the application manifest, or remove unused code from the manifest; the placeholder application needs to declare entry permissions consistent with the manifest in the root menu.',
+  'pages.system.siteSettings.enableLaunchWizardTooltip':
+    'After closing, the sidebar will hide the menu related to the online wizard, and the online wizard and online progress page cannot be directly accessed.',
+  'pages.system.siteSettings.enableSystemDashboardTooltip':
+    'After closing, the sidebar will hide the "dashboard" (workbench, operation dashboard); the login default and application logo will jump to the application center.',
+  'pages.system.siteSettings.integrationsDeepseekAiHint':
+    'Control whether the dialog calls business document tools, knowledge corpus RAG, and enterprise-specific system descriptions.',
+  'pages.system.siteSettings.integrationsDeepseekCustomPromptPlaceholder':
+    'For example: Our company mainly uses rapid manufacturing modules; the outsourcing process requires the establishment of outsourcing orders first...',
+  'pages.system.siteSettings.integrationsDeepseekHint':
+    'After configuring the DeepSeek API Key, the top bar KU-AI assistant will call the DeepSeek V4 large model through the backend security proxy.',
+  'pages.system.siteSettings.integrationsDeepseekOcrApiKeyTooltip':
+    'API Key matching the OCR endpoint; leave it blank to use the DeepSeek API Key above (only applicable when the same service provider)',
+  'pages.system.siteSettings.integrationsDeepseekOcrHint':
+    'DeepSeek conversation API does not support image input. Sales order AI recording needs to configure the OCR visual endpoint that supports image_url here; the recognized text is then structured by the DeepSeek model above. Example: Silicon Flow Base URL https://api.siliconflow.cn/v1, model deepseek-ai/DeepSeek-OCR.',
+
   ...systemDictionaryEn,
   ...presetEntityEn,
   ...codeRulePageEn,

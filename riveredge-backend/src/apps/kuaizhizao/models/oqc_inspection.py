@@ -44,9 +44,9 @@ class OQCInspection(BaseModel):
     material_unit = fields.CharField(max_length=20, null=True, description="物料单位（基础单位）")
     batch_number = fields.CharField(max_length=50, null=True, description="批次号")
 
-    inspection_quantity = fields.DecimalField(max_digits=12, decimal_places=2, description="检验数量")
-    qualified_quantity = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="合格数量")
-    unqualified_quantity = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="不合格数量")
+    inspection_quantity = fields.DecimalField(max_digits=14, decimal_places=4, description="检验数量")
+    qualified_quantity = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="合格数量")
+    unqualified_quantity = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="不合格数量")
 
     inspection_result = fields.CharField(max_length=20, default="待检验", description="检验结果")
     quality_status = fields.CharField(max_length=20, default="合格", description="质量状态")

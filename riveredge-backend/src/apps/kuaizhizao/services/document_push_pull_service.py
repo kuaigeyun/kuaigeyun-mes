@@ -22,6 +22,7 @@ from apps.kuaizhizao.services.document_relation_new_service import DocumentRelat
 from apps.kuaizhizao.services.demand_computation_service import DemandComputationService
 from apps.kuaizhizao.services.work_order_service import WorkOrderService
 from apps.kuaizhizao.services.purchase_service import PurchaseService
+from apps.kuaizhizao.utils.sales_order_attachment_carry import resolve_carried_sales_order_attachments
 from apps.kuaizhizao.schemas.demand_computation import DemandComputationCreate
 from apps.kuaizhizao.schemas.work_order import WorkOrderCreate
 from apps.kuaizhizao.schemas.purchase import PurchaseOrderCreate, PurchaseOrderItemCreate
@@ -334,6 +335,9 @@ class DocumentPushPullService:
             selected_item_ids=selected_ids,
             created_by=created_by,
             computation_id=computation_id,
+            include_sales_order_attachments=bool(
+                push_params and push_params.get("include_sales_order_attachments")
+            ),
         )
 
     async def create_purchase_requisition_from_computation_items(
@@ -343,6 +347,7 @@ class DocumentPushPullService:
         created_by: int,
         computation_id: Optional[int] = None,
         item_required_dates: Optional[Dict[int, Any]] = None,
+        include_sales_order_attachments: bool = False,
     ) -> Dict[str, Any]:
         """按计算明细 id 建一张采购申请，可跨多张已完成需求计算。"""
         from apps.kuaizhizao.models.demand_computation_item import DemandComputationItem
@@ -514,12 +519,19 @@ class DocumentPushPullService:
             raise BusinessLogicError("所选明细均不可下推，请重新选择")
 
         primary = computation_by_id[next(iter(used_computation_ids))]
+        carried_attachments = await resolve_carried_sales_order_attachments(
+            tenant_id=tenant_id,
+            computation_id=computation_id,
+            computation_ids=sorted(used_computation_ids),
+            include=include_sales_order_attachments,
+        )
         req_data = PurchaseRequisitionCreate(
             required_date=min(required_dates) if required_dates else None,
             source_type="DemandComputation",
             source_id=primary.id,
             source_code=primary.computation_code,
             items=req_items,
+            attachments=carried_attachments,
         )
 
         pr_service = PurchaseRequisitionService()

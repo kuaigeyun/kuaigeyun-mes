@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Optional
 
@@ -109,6 +109,66 @@ class MaterialMarketPriceService:
         }
 
     @staticmethod
+    async def _latest_prior_row_by_code(
+        tenant_id: int,
+        *,
+        before_date: date,
+    ) -> dict[str, MaterialMarketPrice]:
+        """读取各品种最近有效行情（不写库）。"""
+        prior_rows = await MaterialMarketPrice.filter(
+            tenant_id=tenant_id,
+            price_date__lt=before_date,
+            deleted_at=None,
+            unit_price__gt=0,
+        ).order_by("-price_date", "-id")
+        latest_by_code: dict[str, MaterialMarketPrice] = {}
+        for row in prior_rows:
+            if row.code not in latest_by_code:
+                latest_by_code[row.code] = row
+        return latest_by_code
+
+    @staticmethod
+    def _virtual_carry_forward_payload(
+        prior: MaterialMarketPrice,
+        price_date: date,
+    ) -> dict[str, Any]:
+        """将上日有效单价以只读形式展示在当日列表，不落库。"""
+        return {
+            "id": None,
+            "uuid": None,
+            "code": prior.code,
+            "name": prior.name,
+            "price_date": price_date,
+            "unit_price": prior.unit_price,
+            "price_type": prior.price_type,
+            "created_by": prior.created_by,
+            "created_by_name": prior.created_by_name,
+            "updated_by": prior.updated_by,
+            "updated_by_name": prior.updated_by_name,
+            "created_at": prior.created_at,
+            "updated_at": prior.updated_at,
+        }
+
+    @staticmethod
+    def _sort_market_price_payloads(
+        payloads: list[dict[str, Any]],
+        *,
+        sort_by: Optional[str],
+        sort_order: Optional[str],
+    ) -> list[dict[str, Any]]:
+        allowed = {"price_date", "unit_price", "code", "name", "created_at", "updated_at"}
+        key = sort_by if sort_by in allowed else "price_date"
+        reverse = (sort_order or "asc").lower() == "desc" if sort_by in allowed else True
+
+        def _sort_value(row: dict[str, Any]) -> Any:
+            value = row.get(key)
+            if value is None:
+                return ""
+            return value
+
+        return sorted(payloads, key=_sort_value, reverse=reverse)
+
+    @staticmethod
     async def list_prices(
         tenant_id: int,
         *,
@@ -123,11 +183,38 @@ class MaterialMarketPriceService:
         q = MaterialMarketPrice.filter(tenant_id=tenant_id, deleted_at=None)
         if quote_code:
             q = q.filter(code=_normalize_code(quote_code))
+        today = MaterialMarketPriceService._today()
+        virtual_carry = price_date is not None and price_date == today and not quote_code
         if price_date is not None:
             q = q.filter(price_date=price_date)
         if keyword and keyword.strip():
             kw = keyword.strip()
             q = q.filter(Q(code__icontains=kw) | Q(name__icontains=kw))
+
+        if virtual_carry:
+            rows = await q.order_by("-price_date", "-id")
+            payloads = [MaterialMarketPriceService._to_response_payload(row) for row in rows]
+            existing_codes = {str(row.get("code") or "") for row in payloads}
+            prior_by_code = await MaterialMarketPriceService._latest_prior_row_by_code(
+                tenant_id, before_date=today
+            )
+            kw = (keyword or "").strip()
+            for code, prior in prior_by_code.items():
+                if code in existing_codes:
+                    continue
+                if kw and kw not in code and kw not in str(prior.name or ""):
+                    continue
+                payloads.append(
+                    MaterialMarketPriceService._virtual_carry_forward_payload(prior, today)
+                )
+            payloads = MaterialMarketPriceService._sort_market_price_payloads(
+                payloads,
+                sort_by=sort_by,
+                sort_order=sort_order,
+            )
+            total = len(payloads)
+            return payloads[skip : skip + limit], total
+
         total = await q.count()
         order = "-price_date"
         allowed = {"price_date", "unit_price", "code", "name", "created_at", "updated_at"}
@@ -139,6 +226,146 @@ class MaterialMarketPriceService:
     @staticmethod
     def _today() -> date:
         return to_site_date(resolve_business_datetime())
+
+    @staticmethod
+    async def _latest_prior_price_row(
+        tenant_id: int,
+        code: str,
+        *,
+        before_date: date,
+    ) -> Optional[MaterialMarketPrice]:
+        return await MaterialMarketPrice.filter(
+            tenant_id=tenant_id,
+            code=code,
+            price_date__lt=before_date,
+            deleted_at=None,
+            unit_price__gt=0,
+        ).order_by("-price_date", "-id").first()
+
+    @staticmethod
+    async def ensure_carry_forward_for_date(
+        tenant_id: int,
+        price_date: date,
+        *,
+        user: Optional[User] = None,
+    ) -> int:
+        """为指定业务日补齐缺失行情行：沿用上日有效单价（仅创建，不覆盖已有行）。"""
+        prior_rows = await MaterialMarketPrice.filter(
+            tenant_id=tenant_id,
+            price_date__lt=price_date,
+            deleted_at=None,
+            unit_price__gt=0,
+        ).order_by("-price_date", "-id")
+        latest_by_code: dict[str, MaterialMarketPrice] = {}
+        for row in prior_rows:
+            if row.code not in latest_by_code:
+                latest_by_code[row.code] = row
+        created = 0
+        for code, prior in latest_by_code.items():
+            existing = await MaterialMarketPrice.get_or_none(
+                tenant_id=tenant_id,
+                code=code,
+                price_date=price_date,
+                deleted_at=None,
+            )
+            if existing:
+                continue
+            await MaterialMarketPrice.create(
+                tenant_id=tenant_id,
+                code=code,
+                name=prior.name,
+                price_date=price_date,
+                unit_price=prior.unit_price,
+                price_type=prior.price_type,
+                **_actor_fields(user, creating=True),
+            )
+            created += 1
+        return created
+
+    @staticmethod
+    async def _resolve_spot_row(
+        tenant_id: int,
+        code: str,
+        price_date: date,
+    ) -> Optional[MaterialMarketPrice]:
+        row = await MaterialMarketPrice.get_or_none(
+            tenant_id=tenant_id,
+            code=code,
+            price_date=price_date,
+            deleted_at=None,
+        )
+        if row and _as_decimal(row.unit_price) > 0:
+            return row
+        return await MaterialMarketPrice.filter(
+            tenant_id=tenant_id,
+            code=code,
+            price_date__lte=price_date,
+            deleted_at=None,
+            unit_price__gt=0,
+        ).order_by("-price_date", "-id").first()
+
+    @staticmethod
+    async def get_price_trend(
+        tenant_id: int,
+        *,
+        quote_code: str,
+        days: int = 30,
+        end_date: Optional[date] = None,
+    ) -> dict[str, Any]:
+        code = _normalize_code(quote_code)
+        if not code:
+            raise ValidationError("请输入行情品种编码")
+        if days < 1 or days > 366:
+            raise ValidationError("趋势天数须在 1–366 之间")
+        end = end_date or MaterialMarketPriceService._today()
+        start = end - timedelta(days=days - 1)
+        rows = await MaterialMarketPrice.filter(
+            tenant_id=tenant_id,
+            code=code,
+            price_date__gte=start,
+            price_date__lte=end,
+            deleted_at=None,
+            unit_price__gt=0,
+        ).order_by("price_date", "id")
+        if not rows:
+            name = code
+            latest = await MaterialMarketPrice.filter(
+                tenant_id=tenant_id,
+                code=code,
+                deleted_at=None,
+            ).order_by("-price_date", "-id").first()
+            if latest:
+                name = latest.name
+            return {
+                "code": code,
+                "name": name,
+                "start_date": start,
+                "end_date": end,
+                "points": [],
+                "average_price": Decimal("0"),
+                "min_price": Decimal("0"),
+                "max_price": Decimal("0"),
+            }
+        prices = [_as_decimal(row.unit_price) for row in rows]
+        total = sum(prices, Decimal("0"))
+        count = Decimal(len(prices))
+        return {
+            "code": code,
+            "name": rows[-1].name,
+            "start_date": start,
+            "end_date": end,
+            "points": [
+                {
+                    "price_date": row.price_date,
+                    "unit_price": row.unit_price,
+                    "price_type": row.price_type,
+                }
+                for row in rows
+            ],
+            "average_price": (total / count).quantize(_Q6, rounding=ROUND_HALF_UP),
+            "min_price": min(prices),
+            "max_price": max(prices),
+        }
 
     @staticmethod
     async def list_preset_preview(tenant_id: int) -> list[dict[str, Any]]:
@@ -184,13 +411,16 @@ class MaterialMarketPriceService:
             if existing:
                 skipped += 1
                 continue
+            prior = await MaterialMarketPriceService._latest_prior_price_row(
+                tenant_id, item["code"], before_date=today
+            )
             await MaterialMarketPrice.create(
                 tenant_id=tenant_id,
                 code=item["code"],
                 name=item["name"],
                 price_date=today,
-                unit_price=Decimal("0"),
-                price_type="tax_inclusive",
+                unit_price=prior.unit_price if prior else Decimal("0"),
+                price_type=prior.price_type if prior else "tax_inclusive",
                 **_actor_fields(user, creating=True),
             )
             created += 1
@@ -388,11 +618,8 @@ class MaterialMarketPriceService:
         formula = defaults.get("marketFloatFormula") or defaults.get("market_float_formula")
         if fixed < 0:
             raise ValidationError("固定售价不能为负")
-        spot = await MaterialMarketPrice.get_or_none(
-            tenant_id=tenant_id,
-            code=quote_code,
-            price_date=price_date,
-            deleted_at=None,
+        spot = await MaterialMarketPriceService._resolve_spot_row(
+            tenant_id, quote_code, price_date
         )
         if not spot or _as_decimal(spot.unit_price) <= 0:
             raise ValidationError("未维护该日原料行情，请到原料行情录入")

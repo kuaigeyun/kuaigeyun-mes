@@ -98,6 +98,7 @@ export const ReportingProducerField: React.FC<ReportingProducerFieldProps> = ({
               color: token.colorTextHeading,
               fontSize: token.fontSize,
               lineHeight: token.lineHeight,
+              fontWeight: 600,
             }}
           >
             {t('app.kuaizhizao.workReporting.formProxyWorker')}

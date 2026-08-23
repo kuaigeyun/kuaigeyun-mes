@@ -177,7 +177,7 @@ class MaintenanceExecution(BaseModel):
     executor_name = fields.CharField(max_length=100, null=True, description="执行人员姓名")
     execution_content = fields.TextField(null=True, description="执行内容")
     execution_result = fields.CharField(max_length=50, null=True, description="执行结果（正常、异常、待处理）")
-    maintenance_cost = fields.DecimalField(max_digits=10, decimal_places=2, null=True, description="维护成本")
+    maintenance_cost = fields.DecimalField(max_digits=12, decimal_places=4, null=True, description="维护成本")
     spare_parts_used = fields.JSONField(null=True, description="使用备件（JSON格式）")
     executed_items = fields.JSONField(null=True, description="已执行保养项（JSON格式）")
     

@@ -30,6 +30,7 @@ import { useResourcePermissions } from '../../../../../../hooks/useResourcePermi
 import { useKuaizhizaoPrintModal } from '../../../../hooks/useKuaizhizaoPrintModal';
 import { isManualAuditEnabled, type AuditStateLike } from '../../../../../../utils/auditMode';
 import { getFileDownloadUrl } from '../../../../../../services/file';
+import { openDocumentAttachment } from '../../../../utils/documentAttachments';
 import type { CustomField } from '../../../../../../services/customField';
 import type { AuditPhaseRecord } from '../../../../../../components/uni-audit/AuditPhaseBadge';
 import { WorkOrderMaterialMovementsPanel } from './WorkOrderMaterialMovementsPanel';
@@ -354,11 +355,13 @@ export const WorkOrderDetailDrawer: React.FC<WorkOrderDetailDrawerProps> = ({
             return (
               <Space wrap size={[8, 4]}>
                 {files.map((file, index) =>
-                  file.url ? (
+                  file.uid ? (
                     <Typography.Link
                       key={`${file.uid || file.name}-${index}`}
-                      href={file.url}
-                      target="_blank"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        void openDocumentAttachment({ uid: file.uid });
+                      }}
                     >
                       {file.name}
                     </Typography.Link>

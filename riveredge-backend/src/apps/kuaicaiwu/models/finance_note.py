@@ -25,7 +25,7 @@ class FinanceNote(BaseModel):
     bill_type = fields.CharField(max_length=30, description="bank_acceptance/commercial_acceptance")
     note_code = fields.CharField(max_length=50, description="系统单号")
     bill_no = fields.CharField(max_length=100, description="票号")
-    amount = fields.DecimalField(max_digits=14, decimal_places=2, description="票面金额")
+    amount = fields.DecimalField(max_digits=16, decimal_places=4, description="票面金额")
     issue_date = fields.DateField(description="出票日期")
     due_date = fields.DateField(description="到期日期")
     drawer_name = fields.CharField(max_length=200, null=True, description="出票人")
@@ -45,7 +45,7 @@ class FinanceNote(BaseModel):
     discount_bank = fields.CharField(max_length=200, null=True, description="贴现银行")
     discount_date = fields.DateField(null=True, description="贴现日期")
     discount_interest = fields.DecimalField(
-        max_digits=14, decimal_places=2, null=True, description="贴现利息"
+        max_digits=16, decimal_places=4, null=True, description="贴现利息"
     )
     settle_date = fields.DateField(null=True, description="兑付/托收日期")
     notes = fields.TextField(null=True, description="备注")

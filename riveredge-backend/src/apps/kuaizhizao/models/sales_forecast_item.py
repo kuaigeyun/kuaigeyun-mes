@@ -28,9 +28,9 @@ class SalesForecastItem(BaseModel):
     material_unit = fields.CharField(max_length=20, description="物料单位")
 
     # 预测数据
-    forecast_quantity = fields.DecimalField(max_digits=10, decimal_places=2, description="预测数量")
+    forecast_quantity = fields.DecimalField(max_digits=12, decimal_places=4, description="预测数量")
     consumed_quantity = fields.DecimalField(
-        max_digits=10, decimal_places=2, default=0, description="已被销售订单冲销的数量"
+        max_digits=12, decimal_places=4, default=0, description="已被销售订单冲销的数量"
     )
     forecast_date = fields.DateField(description="预测日期")
 

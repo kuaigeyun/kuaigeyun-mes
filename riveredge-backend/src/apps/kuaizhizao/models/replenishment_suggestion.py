@@ -77,13 +77,13 @@ class ReplenishmentSuggestion(BaseModel):
     warehouse_name = fields.CharField(max_length=200, description="仓库名称")
 
     # 库存信息
-    current_quantity = fields.DecimalField(max_digits=12, decimal_places=2, description="当前库存数量")
-    safety_stock = fields.DecimalField(max_digits=12, decimal_places=2, null=True, description="安全库存")
-    min_stock = fields.DecimalField(max_digits=12, decimal_places=2, null=True, description="最低库存")
-    max_stock = fields.DecimalField(max_digits=12, decimal_places=2, null=True, description="最高库存")
+    current_quantity = fields.DecimalField(max_digits=14, decimal_places=4, description="当前库存数量")
+    safety_stock = fields.DecimalField(max_digits=14, decimal_places=4, null=True, description="安全库存")
+    min_stock = fields.DecimalField(max_digits=14, decimal_places=4, null=True, description="最低库存")
+    max_stock = fields.DecimalField(max_digits=14, decimal_places=4, null=True, description="最高库存")
 
     # 补货建议信息
-    suggested_quantity = fields.DecimalField(max_digits=12, decimal_places=2, description="建议补货数量")
+    suggested_quantity = fields.DecimalField(max_digits=14, decimal_places=4, description="建议补货数量")
     priority = fields.CharField(max_length=20, default="medium", description="优先级（high/medium/low）")
     suggestion_type = fields.CharField(max_length=20, default="low_stock", description="建议类型（low_stock/demand_based/seasonal）")
 

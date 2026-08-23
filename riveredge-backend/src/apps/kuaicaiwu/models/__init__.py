@@ -32,6 +32,8 @@ from .gl_cheque import GlCheque
 from .finance_note import FinanceNote
 from .gl_tax_settings import GlTaxSettings
 from .tax_period_record import TaxPeriodRecord
+from .price_settlement_batch import PriceSettlementBatch
+from .price_settlement_line import PriceSettlementLine
 
 __all__ = [
     "Receivable",
@@ -65,4 +67,6 @@ __all__ = [
     "FinanceNote",
     "GlTaxSettings",
     "TaxPeriodRecord",
+    "PriceSettlementBatch",
+    "PriceSettlementLine",
 ]

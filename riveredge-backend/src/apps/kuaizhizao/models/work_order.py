@@ -90,7 +90,7 @@ class WorkOrder(BaseModel):
     product_name = fields.CharField(max_length=200, description="产品名称")
 
     # 生产信息
-    quantity = fields.DecimalField(max_digits=12, decimal_places=2, description="计划生产数量")
+    quantity = fields.DecimalField(max_digits=14, decimal_places=4, description="计划生产数量")
     production_mode = fields.CharField(max_length=10, description="生产模式（MTS/MTO）", default="MTS")
 
     # 销售订单关联（MTO模式）
@@ -156,9 +156,9 @@ class WorkOrder(BaseModel):
     actual_end_date = fields.DatetimeField(null=True, description="实际结束时间")
 
     # 完成信息
-    completed_quantity = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="已完成数量")
-    qualified_quantity = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="合格数量")
-    unqualified_quantity = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="不合格数量")
+    completed_quantity = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="已完成数量")
+    qualified_quantity = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="合格数量")
+    unqualified_quantity = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="不合格数量")
 
     # 批号/序列号追踪（模式由物料主数据快照；计划值开单/下达，确认值完工）
     tracking_mode = fields.CharField(

@@ -32,6 +32,7 @@ import {
   Table,
   type TableColumnsType,
   Switch,
+  Checkbox,
   Input,
   Select,
   Tabs,
@@ -299,7 +300,7 @@ function canExecuteComputation(status?: string): boolean {
 const PARAM_DEFAULTS: Record<string, any> = {
   include_safety_stock: true,
   include_in_transit: true,
-  include_reserved: false,
+  include_reserved: true,
   include_reorder_point: false,
   /** 建议工单/采购/委外量：net=净需求 gross=毛需求 */
   mrp_suggestion_basis: 'net' as 'net' | 'gross',
@@ -366,7 +367,7 @@ const NETTING_DEFAULTS_FOR_NET: Pick<
 > = {
   include_safety_stock: true,
   include_in_transit: true,
-  include_reserved: false,
+  include_reserved: true,
   include_reorder_point: false,
 }
 
@@ -850,10 +851,21 @@ const DemandComputationPage: React.FC = () => {
   const [pushPreviewLoadError, setPushPreviewLoadError] = useState<string | null>(null)
   const [pushMode, setPushMode] = useState<'draft' | 'confirm'>('draft')
   const [pushSelectedItemIds, setPushSelectedItemIds] = useState<number[]>([])
+  const [includeSalesOrderAttachments, setIncludeSalesOrderAttachments] = useState(false)
   const pushPreviewMergedSummary = useMemo(
     () => (pushPreviewData ? buildDemandPushPreviewSummary(pushPreviewData, t) : null),
     [pushPreviewData, t],
   )
+  const sourceSalesOrderAttachmentsPreview = pushPreviewData?.source_sales_order_attachments
+  const showIncludeSalesOrderAttachmentsOption = Boolean(
+    pushConfig.purchase && sourceSalesOrderAttachmentsPreview?.available,
+  )
+
+  React.useEffect(() => {
+    if (!showIncludeSalesOrderAttachmentsOption) {
+      setIncludeSalesOrderAttachments(false)
+    }
+  }, [showIncludeSalesOrderAttachmentsOption])
 
   type SourcePullPreviewKind = 'demand' | 'sales_order' | 'sales_forecast'
   /** 协调看板深链 / 工具栏：打开下推面板时的路径预设 */
@@ -1414,6 +1426,14 @@ const DemandComputationPage: React.FC = () => {
     [readinessGaps],
   )
 
+  const isReadinessGapBlocking = (gap: DemandComputationReadinessGap) =>
+    Boolean(gap.blocking || gap.value_type === 'info')
+
+  const hasBlockingReadinessGaps = useMemo(
+    () => readinessGaps.some(isReadinessGapBlocking),
+    [readinessGaps],
+  )
+
   const readinessGapsByField = useMemo(() => {
     const groups: Array<{ field: string; label: string; gaps: DemandComputationReadinessGap[] }> = []
     const indexByField = new Map<string, number>()
@@ -1665,6 +1685,10 @@ const DemandComputationPage: React.FC = () => {
   }
 
   const handleReadinessSkip = async () => {
+    if (hasBlockingReadinessGaps) {
+      messageApi.warning(t('app.kuaizhizao.demandComputation.readinessBlockingCannotSkip'))
+      return
+    }
     setReadinessSubmitting(true)
     try {
       await openPreviewFromExecute()
@@ -2081,6 +2105,8 @@ const DemandComputationPage: React.FC = () => {
           purchase_requisition_item_ids: purchaseRequisitionItemIds,
           production_item_ids: productionItemIds,
           purchase_order_item_ids: purchaseOrderItemIds,
+          include_sales_order_attachments:
+            showIncludeSalesOrderAttachmentsOption && includeSalesOrderAttachments,
         })
         if (hasProduction && hasPurchase) {
           messageApi.success(t('app.kuaizhizao.demandComputation.pushSuccess'))
@@ -2096,6 +2122,7 @@ const DemandComputationPage: React.FC = () => {
         return
       }
       setPushPanelRecord(null)
+      setIncludeSalesOrderAttachments(false)
       invalidateStatistics(); actionRef.current?.reload()
       if (drawerVisible && currentComputation?.id === record.id) {
         void getDemandComputation(record.id!, true)
@@ -3048,6 +3075,7 @@ const DemandComputationPage: React.FC = () => {
           setPushMode('draft')
           setPushConfig({})
           setPushSelectedItemIds([])
+          setIncludeSalesOrderAttachments(false)
         }}
       >
         {pushPanelLoading ? (
@@ -3101,6 +3129,28 @@ const DemandComputationPage: React.FC = () => {
                 <p style={{ fontSize: 12, color: '#666' }}>
                   {t('app.kuaizhizao.demandComputation.pushOutsourceHint')}
                 </p>
+                {showIncludeSalesOrderAttachmentsOption && sourceSalesOrderAttachmentsPreview ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <Checkbox
+                      checked={includeSalesOrderAttachments}
+                      onChange={(event) => setIncludeSalesOrderAttachments(event.target.checked)}
+                    >
+                      {t('app.kuaizhizao.demandComputation.includeSalesOrderAttachments', {
+                        count: sourceSalesOrderAttachmentsPreview.count,
+                      })}
+                    </Checkbox>
+                    <Typography.Text type="secondary" style={{ fontSize: 12, paddingLeft: 24 }}>
+                      {sourceSalesOrderAttachmentsPreview.source_order_count > 1
+                        ? t('app.kuaizhizao.demandComputation.includeSalesOrderAttachmentsHintMultiple', {
+                            first: sourceSalesOrderAttachmentsPreview.source_order_codes[0] || '',
+                            count: sourceSalesOrderAttachmentsPreview.source_order_count,
+                          })
+                        : t('app.kuaizhizao.demandComputation.includeSalesOrderAttachmentsHintSingle', {
+                            code: sourceSalesOrderAttachmentsPreview.source_order_codes[0] || '',
+                          })}
+                    </Typography.Text>
+                  </div>
+                ) : null}
               </>
             )}
             {pushPreviewData && (
@@ -3276,9 +3326,13 @@ const DemandComputationPage: React.FC = () => {
                 <Button key="cancel" onClick={() => setReadinessModalVisible(false)}>
                   {t('common.cancel')}
                 </Button>,
-                <Button key="skip" loading={readinessSubmitting} onClick={() => void handleReadinessSkip()}>
-                  {t('app.kuaizhizao.demandComputation.readinessSkipContinue')}
-                </Button>,
+                ...(hasBlockingReadinessGaps
+                  ? []
+                  : [
+                      <Button key="skip" loading={readinessSubmitting} onClick={() => void handleReadinessSkip()}>
+                        {t('app.kuaizhizao.demandComputation.readinessSkipContinue')}
+                      </Button>,
+                    ]),
                 <Button
                   key="backfill"
                   type="primary"

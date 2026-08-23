@@ -24,7 +24,7 @@ class AfterSalesTicketItem(BaseModel):
 
     batch_no = fields.CharField(max_length=100, null=True, description="批次号")
     quantity = fields.DecimalField(max_digits=14, decimal_places=4, null=True, description="数量")
-    claim_amount = fields.DecimalField(max_digits=14, decimal_places=2, null=True, description="行索赔金额")
+    claim_amount = fields.DecimalField(max_digits=16, decimal_places=4, null=True, description="行索赔金额")
     notes = fields.TextField(null=True, description="行备注")
     line_no = fields.IntField(default=1, description="行号")
 

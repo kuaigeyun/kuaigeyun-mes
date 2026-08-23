@@ -65,6 +65,8 @@ def resolve_kuaicaiwu_module_action(
                 "/match",
                 "/generate-from-events",
                 "/run",
+                "/apply",
+                "/batch-apply",
             )
         ):
             return "execute"

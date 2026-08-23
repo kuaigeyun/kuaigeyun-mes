@@ -87,6 +87,7 @@ import {
   QuestionCircleOutlined,
 } from '@ant-design/icons'
 import { UniTable, type UniTableRequestMeta } from '../../../../../components/uni-table'
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki'
 import { LinkedDocumentCode } from '../../../../../components/linked-document-code'
 import { UniBatchButton, UniBatchMenuButton, UniCapabilityBatchButton } from '../../../../../components/uni-batch'
 import {
@@ -252,6 +253,7 @@ import {
   workOrderRowExpandQueryKey,
   type WorkOrderOperationsBundle,
 } from './workOrderRowExpandCache'
+import { reloadWorkOrderListPreservingScroll } from './workOrderListScrollPreserve'
 const LazyUniMaterialSelect = lazy(() => import('../../../../../components/uni-material-select'))
 import { getWorkOrderLifecycle, buildWorkOrderLifecycleValueEnum, translateWorkOrderLifecycleStatus, LIST_LIFECYCLE_STAGE_FIELD, isWorkOrderPlannedEndOverdue, isWorkOrderPlannedDatesLocked } from '../../../utils/workOrderLifecycle'
 import { commitListPageSearchParams } from '../../../../../utils/listLifecycleStage'
@@ -280,9 +282,11 @@ import { ReportingProducerField } from '../../../components/ReportingProducerFie
 import { ReportingWorkTimeFields } from '../../../components/ReportingWorkTimeFields'
 import { resolveReportingWorkTimeForSubmit } from '../../../utils/reportingWorkTime'
 import {
+  buildLastInboundHintOptions,
   isInboundWarehouseRequiredForLastOperation,
   resolveIsLastOperation,
   resolveLastInboundHint,
+  showReportingPostActionNotices,
 } from '../../../utils/reportingLastOperation'
 import { coerceReportingCreateStrings } from '../../../utils/reportingPayload'
 import { getSessionCurrentUser } from '../../../../../utils/sessionCurrentUser'
@@ -1565,7 +1569,7 @@ const WorkOrdersPage: React.FC = () => {
       queryKey: [...WORK_ORDER_LIST_UNITABLE_QUERY_KEY],
       exact: false,
     })
-    actionRef.current?.reload?.()
+    void reloadWorkOrderListPreservingScroll(actionRef)
   }, [queryClient])
 
   const openWorkOrderReadinessModal = useCallback((workOrderId: number, workOrderCode?: string) => {
@@ -2204,8 +2208,14 @@ const WorkOrdersPage: React.FC = () => {
   const operationExpandedRowKeysRef = useRef(operationExpandedRowKeys)
   operationExpandedRowKeysRef.current = operationExpandedRowKeys
   const [expandedOperationsMap, setExpandedOperationsMap] = useState<Record<number, any[]>>({})
+  const expandedOperationsMapRef = useRef(expandedOperationsMap)
+  expandedOperationsMapRef.current = expandedOperationsMap
   const [expandedWorkOrderDetailMap, setExpandedWorkOrderDetailMap] = useState<Record<number, WorkOrder>>({})
+  const expandedWorkOrderDetailMapRef = useRef(expandedWorkOrderDetailMap)
+  expandedWorkOrderDetailMapRef.current = expandedWorkOrderDetailMap
   const [loadingOperationsMap, setLoadingOperationsMap] = useState<Record<number, boolean>>({})
+  const loadingOperationsMapRef = useRef(loadingOperationsMap)
+  loadingOperationsMapRef.current = loadingOperationsMap
 
   // 创建返工单相关状态
   const [reworkModalVisible, setReworkModalVisible] = useState(false)
@@ -2380,8 +2390,8 @@ const WorkOrdersPage: React.FC = () => {
 
   const quickReportingLastInboundHint = useMemo(() => {
     if (!quickReportingIsLastOperation) return ''
-    return resolveLastInboundHint(t, executionConfig?.last_operation_auto_inbound_mode)
-  }, [quickReportingIsLastOperation, executionConfig?.last_operation_auto_inbound_mode, t])
+    return resolveLastInboundHint(t, buildLastInboundHintOptions(executionConfig))
+  }, [quickReportingIsLastOperation, executionConfig, t])
 
   useEffect(() => {
     if (!quickReportingModalVisible || !quickReportingIsLastOperation || !quickReportingWorkOrder?.id) {
@@ -3708,6 +3718,7 @@ const WorkOrdersPage: React.FC = () => {
         }
       }
       messageApi.success('报工成功')
+      showReportingPostActionNotices(messageApi, t, created)
       const reportedWorkOrder = quickReportingWorkOrder
       setQuickReportingModalVisible(false)
       setQuickReportingWorkOrder(null)
@@ -3725,7 +3736,6 @@ const WorkOrdersPage: React.FC = () => {
       )
       applyWorkOrderExpandBundle(panelId, bundle, reportedWorkOrder)
       invalidateStatistics()
-      actionRef.current?.reload()
     } catch (error: any) {
       messageApi.error(error?.message || '报工失败')
       throw error
@@ -4213,7 +4223,6 @@ const WorkOrdersPage: React.FC = () => {
                 )
                 applyWorkOrderExpandBundle(panelId, bundle, workOrder)
                 invalidateStatistics()
-                actionRef.current?.reload()
               }
               const footerActionClickable = canStart || canReport || canWithdrawStart
               const actionBtnStyle = (clickable: boolean): React.CSSProperties => ({
@@ -4344,13 +4353,16 @@ const WorkOrdersPage: React.FC = () => {
     )
   }
 
+  const renderOperationCardRef = useRef(renderOperationCard)
+  renderOperationCardRef.current = renderOperationCard
+
   /**
    * 展开行：原有人机料法工序卡（派工 / 开始→报工 / 环形报工）
    */
   const renderWorkOrderOperationCardsPanel = useCallback(
     (record: WorkOrder) => {
-      const operations = expandedOperationsMap[record.id!] || []
-      const loading = loadingOperationsMap[record.id!]
+      const operations = expandedOperationsMapRef.current[record.id!] || []
+      const loading = loadingOperationsMapRef.current[record.id!]
 
       if (loading) {
         return (
@@ -4368,20 +4380,29 @@ const WorkOrdersPage: React.FC = () => {
         )
       }
 
-      const manufacturingMode = (expandedWorkOrderDetailMap[record.id!]?.manufacturing_mode ||
+      const manufacturingMode = (expandedWorkOrderDetailMapRef.current[record.id!]?.manufacturing_mode ||
         'fabrication') as 'fabrication' | 'assembly'
       return (
         <div className="wo-operation-cards-panel">
           <div style={{ display: 'flex', alignItems: 'stretch', flexWrap: 'wrap', gap: 8 }}>
             {operations.map((operation: any, index: number) =>
-              renderOperationCard(operation, record, index, operations.length, manufacturingMode),
+              renderOperationCardRef.current(
+                operation,
+                record,
+                index,
+                operations.length,
+                manufacturingMode,
+              ),
             )}
           </div>
         </div>
       )
     },
-    [expandedOperationsMap, loadingOperationsMap, expandedWorkOrderDetailMap, token.colorTextTertiary],
+    [token.colorTextTertiary],
   )
+
+  const renderWorkOrderOperationCardsPanelRef = useRef(renderWorkOrderOperationCardsPanel)
+  renderWorkOrderOperationCardsPanelRef.current = renderWorkOrderOperationCardsPanel
 
   /**
    * 处理批量生成二维码
@@ -5166,7 +5187,7 @@ const WorkOrdersPage: React.FC = () => {
       await workOrderApi.release(record.id!.toString(), { ignoreShortage })
       messageApi.success(t('app.kuaizhizao.workOrder.msgReleaseSuccess'))
       invalidateStatistics()
-      actionRef.current?.reload()
+      await reloadWorkOrderListPreservingScroll(actionRef)
     }
     try {
       let shortageLines: string[] = []
@@ -7514,7 +7535,7 @@ const WorkOrdersPage: React.FC = () => {
               }
               onClick={(e) => e.stopPropagation()}
             >
-              {renderWorkOrderOperationCardsPanel(panelRecord)}
+              {renderWorkOrderOperationCardsPanelRef.current(panelRecord)}
             </td>
           </tr>,
         )
@@ -7527,11 +7548,7 @@ const WorkOrdersPage: React.FC = () => {
     })
     Wrapper.displayName = 'WorkOrderTableBodyWrapper'
     return { body: { wrapper: Wrapper } }
-  }, [
-    operationPanelAnchorToRoot,
-    workOrderTableBodyColSpan,
-    renderWorkOrderOperationCardsPanel,
-  ])
+  }, [operationPanelAnchorToRoot, workOrderTableBodyColSpan])
 
   const workOrderTableRowClassName = useCallback(
     (record: WorkOrder) => {
@@ -7728,6 +7745,7 @@ const WorkOrdersPage: React.FC = () => {
       <ListPageTemplate statCards={statCards}>
         <UniTable<WorkOrder>
           className="kuaizhizao-work-orders-table"
+          scroll={{ scrollToFirstRowOnChange: false }}
           columnPersistenceId="apps.kuaizhizao.pages.production-execution.work-orders.batch-in-product-v2"
           headerTitle={t('app.kuaizhizao.workOrder.pageTitle')}
           formRef={tableSearchFormRef}
@@ -7936,6 +7954,7 @@ const WorkOrdersPage: React.FC = () => {
           onDelete={handleDelete}
           deleteConfirmTitle={(count) => t('app.kuaizhizao.workOrder.msgConfirmDeleteCount', { count })}
           viewTypes={['table', 'productTree', 'orderTree', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.workOrder)}
           customViews={[
             { key: 'productTree', label: t('app.kuaizhizao.workOrder.viewProductTree'), icon: ShoppingOutlined, render: renderProductTree },
             { key: 'orderTree', label: t('app.kuaizhizao.workOrder.viewOrderTree'), icon: FileTextOutlined, render: renderOrderTree },

@@ -21,6 +21,7 @@ import { DetailAuditPhaseTitleExtra } from '../../../../../../components/uni-aud
 import type { LifecycleResult } from '../../../../../../components/uni-lifecycle/types';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../../components/document-tracking-panel';
 import { DetailDrawerSection, useDetailDrawerDescriptionItems, type TraceBriefDocument } from '../../../../../../components/layout-templates';
+import { MarkerTag } from '../../../../../../constants/statusBadges';
 import type { ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { alignDescriptionColumns } from '../../shared/documentFieldAlignment';
 import { useResourcePermissions } from '../../../../../../hooks/useResourcePermissions';
@@ -602,7 +603,15 @@ export const SalesOrderDetailLinesPane: React.FC = () => {
                 dataIndex: 'unit_price',
                 width: 100,
                 align: 'right' as const,
-                render: (val: number) => <AmountDisplay resource={SO} fieldName="unit_price" value={val} />,
+                render: (val: number, record: SalesOrderItem) => (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
+                    <AmountDisplay resource={SO} fieldName="unit_price" value={val} />
+                    {(record as SalesOrderItem & { price_settlement_status?: string }).price_settlement_status ===
+                    'PROVISIONAL' ? (
+                      <MarkerTag color="warning">{t('app.kuaizhizao.salesOrder.priceProvisional')}</MarkerTag>
+                    ) : null}
+                  </span>
+                ),
               },
               {
                 title: t('app.kuaizhizao.salesOrder.taxRate'),
