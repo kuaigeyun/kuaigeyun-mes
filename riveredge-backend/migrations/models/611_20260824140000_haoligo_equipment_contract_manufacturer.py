@@ -85,10 +85,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             NOW(),
             NOW(),
             'EQC-' || c."id"::text,
-            COALESCE(
-                NULLIF(TRIM(c."supplier_name"), ''),
-                '历史合同厂商-' || c."id"::text
-            )
+            '历史合同厂商-' || c."id"::text
         FROM "haoligo_finance_equipment_contract" c
         WHERE c."manufacturer_id" IS NULL
           AND NOT EXISTS (
@@ -127,10 +124,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             NOW(),
             NOW(),
             'EQP-' || p."id"::text,
-            COALESCE(
-                NULLIF(TRIM(p."supplier_name"), ''),
-                '历史应付款厂商-' || p."id"::text
-            )
+            '历史应付款厂商-' || p."id"::text
         FROM "haoligo_finance_equipment_payable" p
         WHERE p."manufacturer_id" IS NULL
           AND NOT EXISTS (

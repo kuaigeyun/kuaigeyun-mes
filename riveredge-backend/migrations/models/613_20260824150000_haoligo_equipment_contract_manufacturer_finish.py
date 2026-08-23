@@ -1,4 +1,4 @@
-"""好力 GO — manufacturer 迁移最终收尾（不依赖 supplier 旧列）。"""
+"""好力 GO — manufacturer 迁移强制完成（supplier 列已删的脏库专用）。"""
 
 from tortoise import BaseDBAsyncClient
 
@@ -14,7 +14,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
                 WHERE table_name = 'haoligo_finance_equipment_contract'
                   AND column_name = 'manufacturer_id'
             ) THEN
-                RETURN;
+                RAISE EXCEPTION '613 跳过: manufacturer_id 列不存在，请先执行 611';
             END IF;
 
             INSERT INTO "haoligo_manufacturer" ("uuid", "tenant_id", "created_at", "updated_at", "code", "name")
@@ -23,7 +23,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
                 c."tenant_id",
                 NOW(),
                 NOW(),
-                'EQC-F-' || c."id"::text,
+                'EQC-613-' || c."id"::text,
                 '历史合同厂商-' || c."id"::text
             FROM "haoligo_finance_equipment_contract" c
             WHERE c."manufacturer_id" IS NULL
@@ -31,7 +31,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
                 SELECT 1 FROM "haoligo_manufacturer" m
                 WHERE m."tenant_id" = c."tenant_id"
                   AND m."deleted_at" IS NULL
-                  AND m."code" = 'EQC-F-' || c."id"::text
+                  AND m."code" = 'EQC-613-' || c."id"::text
               );
 
             UPDATE "haoligo_finance_equipment_contract" c
@@ -43,7 +43,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             WHERE c."manufacturer_id" IS NULL
               AND m."tenant_id" = c."tenant_id"
               AND m."deleted_at" IS NULL
-              AND m."code" = 'EQC-F-' || c."id"::text;
+              AND m."code" = 'EQC-613-' || c."id"::text;
 
             UPDATE "haoligo_finance_equipment_payable" p
             SET
@@ -61,7 +61,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
                 p."tenant_id",
                 NOW(),
                 NOW(),
-                'EQP-F-' || p."id"::text,
+                'EQP-613-' || p."id"::text,
                 '历史应付款厂商-' || p."id"::text
             FROM "haoligo_finance_equipment_payable" p
             WHERE p."manufacturer_id" IS NULL
@@ -69,7 +69,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
                 SELECT 1 FROM "haoligo_manufacturer" m
                 WHERE m."tenant_id" = p."tenant_id"
                   AND m."deleted_at" IS NULL
-                  AND m."code" = 'EQP-F-' || p."id"::text
+                  AND m."code" = 'EQP-613-' || p."id"::text
               );
 
             UPDATE "haoligo_finance_equipment_payable" p
@@ -81,7 +81,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             WHERE p."manufacturer_id" IS NULL
               AND m."tenant_id" = p."tenant_id"
               AND m."deleted_at" IS NULL
-              AND m."code" = 'EQP-F-' || p."id"::text;
+              AND m."code" = 'EQP-613-' || p."id"::text;
 
             IF EXISTS (
                 SELECT 1 FROM "haoligo_finance_equipment_contract"
@@ -90,26 +90,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
                 SELECT 1 FROM "haoligo_finance_equipment_payable"
                 WHERE "manufacturer_id" IS NULL
             ) THEN
-                RAISE EXCEPTION '612 收尾失败: 仍有 manufacturer_id 为空';
-            END IF;
-
-            IF EXISTS (
-                SELECT 1 FROM information_schema.columns
-                WHERE table_name = 'haoligo_finance_equipment_contract'
-                  AND column_name = 'supplier_id'
-            ) THEN
-                ALTER TABLE "haoligo_finance_equipment_contract"
-                    DROP CONSTRAINT IF EXISTS "haoligo_finance_equipment_contract_supplier_id_fkey";
-                ALTER TABLE "haoligo_finance_equipment_payable"
-                    DROP CONSTRAINT IF EXISTS "haoligo_finance_equipment_payable_supplier_id_fkey";
-                DROP INDEX IF EXISTS "idx_haoligo_fin_eq_contract_supplier";
-                DROP INDEX IF EXISTS "idx_haoligo_fin_eq_payable_supplier";
-                ALTER TABLE "haoligo_finance_equipment_contract"
-                    DROP COLUMN IF EXISTS "supplier_id",
-                    DROP COLUMN IF EXISTS "supplier_name";
-                ALTER TABLE "haoligo_finance_equipment_payable"
-                    DROP COLUMN IF EXISTS "supplier_id",
-                    DROP COLUMN IF EXISTS "supplier_name";
+                RAISE EXCEPTION '613 失败: 仍有 manufacturer_id 为空';
             END IF;
 
             IF EXISTS (
