@@ -24,47 +24,26 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             NOW(),
             NOW(),
             'EQM-' || fs."id"::text,
-            fs."supplier_name"
+            COALESCE(NULLIF(TRIM(fs."supplier_name"), ''), '历史材料供方-' || fs."id"::text)
         FROM "haoligo_finance_supplier" fs
-        WHERE fs."deleted_at" IS NULL
-          AND (
-            fs."id" IN (
+        WHERE fs."id" IN (
                 SELECT DISTINCT c."supplier_id"
                 FROM "haoligo_finance_equipment_contract" c
                 WHERE c."deleted_at" IS NULL
+                  AND c."supplier_id" IS NOT NULL
             )
             OR fs."id" IN (
                 SELECT DISTINCT p."supplier_id"
                 FROM "haoligo_finance_equipment_payable" p
                 WHERE p."deleted_at" IS NULL
+                  AND p."supplier_id" IS NOT NULL
             )
-          )
           AND NOT EXISTS (
             SELECT 1
             FROM "haoligo_manufacturer" m
             WHERE m."tenant_id" = fs."tenant_id"
               AND m."deleted_at" IS NULL
-              AND TRIM(LOWER(m."name")) = TRIM(LOWER(fs."supplier_name"))
-          );
-
-        INSERT INTO "haoligo_manufacturer" ("uuid", "tenant_id", "created_at", "updated_at", "code", "name")
-        SELECT
-            gen_random_uuid()::text,
-            c."tenant_id",
-            NOW(),
-            NOW(),
-            'EQC-' || c."id"::text,
-            c."supplier_name"
-        FROM "haoligo_finance_equipment_contract" c
-        WHERE c."deleted_at" IS NULL
-          AND c."manufacturer_id" IS NULL
-          AND TRIM(COALESCE(c."supplier_name", '')) <> ''
-          AND NOT EXISTS (
-            SELECT 1
-            FROM "haoligo_manufacturer" m
-            WHERE m."tenant_id" = c."tenant_id"
-              AND m."deleted_at" IS NULL
-              AND TRIM(LOWER(m."name")) = TRIM(LOWER(c."supplier_name"))
+              AND m."code" = 'EQM-' || fs."id"::text
           );
 
         UPDATE "haoligo_finance_equipment_contract" c
@@ -76,10 +55,29 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
         JOIN "haoligo_manufacturer" m
           ON m."tenant_id" = fs."tenant_id"
          AND m."deleted_at" IS NULL
-         AND TRIM(LOWER(m."name")) = TRIM(LOWER(fs."supplier_name"))
+         AND m."code" = 'EQM-' || fs."id"::text
         WHERE c."supplier_id" = fs."id"
           AND c."deleted_at" IS NULL
           AND c."manufacturer_id" IS NULL;
+
+        INSERT INTO "haoligo_manufacturer" ("uuid", "tenant_id", "created_at", "updated_at", "code", "name")
+        SELECT
+            gen_random_uuid()::text,
+            c."tenant_id",
+            NOW(),
+            NOW(),
+            'EQC-' || c."id"::text,
+            COALESCE(NULLIF(TRIM(c."supplier_name"), ''), '历史合同厂商-' || c."id"::text)
+        FROM "haoligo_finance_equipment_contract" c
+        WHERE c."deleted_at" IS NULL
+          AND c."manufacturer_id" IS NULL
+          AND NOT EXISTS (
+            SELECT 1
+            FROM "haoligo_manufacturer" m
+            WHERE m."tenant_id" = c."tenant_id"
+              AND m."deleted_at" IS NULL
+              AND m."code" = 'EQC-' || c."id"::text
+          );
 
         UPDATE "haoligo_finance_equipment_contract" c
         SET
@@ -89,10 +87,9 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
         FROM "haoligo_manufacturer" m
         WHERE c."deleted_at" IS NULL
           AND c."manufacturer_id" IS NULL
-          AND TRIM(COALESCE(c."supplier_name", '')) <> ''
           AND m."tenant_id" = c."tenant_id"
           AND m."deleted_at" IS NULL
-          AND TRIM(LOWER(m."name")) = TRIM(LOWER(c."supplier_name"));
+          AND m."code" = 'EQC-' || c."id"::text;
 
         UPDATE "haoligo_finance_equipment_payable" p
         SET
@@ -105,6 +102,26 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
           AND p."manufacturer_id" IS NULL
           AND c."manufacturer_id" IS NOT NULL;
 
+        INSERT INTO "haoligo_manufacturer" ("uuid", "tenant_id", "created_at", "updated_at", "code", "name")
+        SELECT
+            gen_random_uuid()::text,
+            fs."tenant_id",
+            NOW(),
+            NOW(),
+            'EQP-S-' || p."id"::text,
+            COALESCE(NULLIF(TRIM(fs."supplier_name"), ''), '历史应付款供方-' || p."id"::text)
+        FROM "haoligo_finance_equipment_payable" p
+        JOIN "haoligo_finance_supplier" fs ON fs."id" = p."supplier_id"
+        WHERE p."deleted_at" IS NULL
+          AND p."manufacturer_id" IS NULL
+          AND NOT EXISTS (
+            SELECT 1
+            FROM "haoligo_manufacturer" m
+            WHERE m."tenant_id" = p."tenant_id"
+              AND m."deleted_at" IS NULL
+              AND m."code" = 'EQP-S-' || p."id"::text
+          );
+
         UPDATE "haoligo_finance_equipment_payable" p
         SET
             "manufacturer_id" = m."id",
@@ -114,10 +131,61 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
         JOIN "haoligo_manufacturer" m
           ON m."tenant_id" = fs."tenant_id"
          AND m."deleted_at" IS NULL
-         AND TRIM(LOWER(m."name")) = TRIM(LOWER(fs."supplier_name"))
+         AND m."code" = 'EQP-S-' || p."id"::text
         WHERE p."supplier_id" = fs."id"
           AND p."deleted_at" IS NULL
           AND p."manufacturer_id" IS NULL;
+
+        INSERT INTO "haoligo_manufacturer" ("uuid", "tenant_id", "created_at", "updated_at", "code", "name")
+        SELECT
+            gen_random_uuid()::text,
+            p."tenant_id",
+            NOW(),
+            NOW(),
+            'EQP-' || p."id"::text,
+            COALESCE(NULLIF(TRIM(p."supplier_name"), ''), '历史应付款厂商-' || p."id"::text)
+        FROM "haoligo_finance_equipment_payable" p
+        WHERE p."deleted_at" IS NULL
+          AND p."manufacturer_id" IS NULL
+          AND NOT EXISTS (
+            SELECT 1
+            FROM "haoligo_manufacturer" m
+            WHERE m."tenant_id" = p."tenant_id"
+              AND m."deleted_at" IS NULL
+              AND m."code" = 'EQP-' || p."id"::text
+          );
+
+        UPDATE "haoligo_finance_equipment_payable" p
+        SET
+            "manufacturer_id" = m."id",
+            "manufacturer_code" = m."code",
+            "manufacturer_name" = m."name"
+        FROM "haoligo_manufacturer" m
+        WHERE p."deleted_at" IS NULL
+          AND p."manufacturer_id" IS NULL
+          AND m."tenant_id" = p."tenant_id"
+          AND m."deleted_at" IS NULL
+          AND m."code" = 'EQP-' || p."id"::text;
+
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1
+                FROM "haoligo_finance_equipment_contract"
+                WHERE "deleted_at" IS NULL
+                  AND "manufacturer_id" IS NULL
+            ) THEN
+                RAISE EXCEPTION '设备合同仍有 manufacturer_id 为空，请先清理脏数据';
+            END IF;
+            IF EXISTS (
+                SELECT 1
+                FROM "haoligo_finance_equipment_payable"
+                WHERE "deleted_at" IS NULL
+                  AND "manufacturer_id" IS NULL
+            ) THEN
+                RAISE EXCEPTION '设备应付款仍有 manufacturer_id 为空，请先清理脏数据';
+            END IF;
+        END $$;
 
         ALTER TABLE "haoligo_finance_equipment_contract"
             DROP CONSTRAINT IF EXISTS "haoligo_finance_equipment_contract_supplier_id_fkey";
