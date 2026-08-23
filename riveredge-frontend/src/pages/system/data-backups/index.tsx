@@ -48,6 +48,7 @@ import { useGlobalStore } from '../../../stores';
 import { getTenantId } from '../../../utils/auth';
 import { formatDateTime, todaySiteDateString } from '../../../utils/format';
 import { downloadRecordsAsXlsx } from '../../../utils/exportRecordsXlsx';
+import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
 
 function formatFileSize(bytes?: number): string {
   if (!bytes) return '-';
@@ -874,6 +875,7 @@ const DataBackupsPage: React.FC = () => {
             }
           }}
           viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('system.dataBackups')}
           defaultViewType="table"
           cardViewConfig={{
             renderCard,

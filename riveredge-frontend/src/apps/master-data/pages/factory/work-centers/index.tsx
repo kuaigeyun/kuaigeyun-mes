@@ -53,6 +53,7 @@ import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulkImport';
 import { formatDateTimeBySiteSetting, todaySiteDateString } from '../../../../../utils/format';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 /**
  * 工作中心列表页面组件
  */
@@ -605,6 +606,7 @@ const WorkCentersPage: React.FC = () => {
           actionRef={actionRef}
           columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
           viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('masterData.workCenters')}
           defaultViewType="table"
           loadingDelay={200}
           request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {

@@ -43,6 +43,7 @@ import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 import { mergeListKeyword } from '../../../../utils/tableQueryKey';
 import { getAntdModal } from '../../../../utils/antdAppApis';
 import { todaySiteDateString } from '../../../../utils/format';
+import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
 /**
  * 系统参数管理列表页面组件
  */
@@ -698,6 +699,7 @@ const SystemParameterListPage: React.FC = () => {
             onChange: setSelectedRowKeys,
           }}
           viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('system.systemParameters')}
           defaultViewType="table"
           cardViewConfig={{
             renderCard: renderParameterCard,

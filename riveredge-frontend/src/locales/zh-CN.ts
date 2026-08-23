@@ -11,6 +11,7 @@ import customFieldPageZh from './generated/customFieldPage/zh-CN';
 import helpPagesZh from './help-pages/zh-CN';
 import helpPagesRichZhPilot from './help-pages/rich/zh-CN-pilot';
 import helpPagesRichZhDocuments from './help-pages/rich/zh-CN/documents';
+import helpPagesRichZhListPages from './help-pages/rich/zh-CN/list-pages';
 
 export default {
   // 菜单翻译
@@ -27780,4 +27781,5 @@ export default {
   ...helpPagesZh,
   ...helpPagesRichZhPilot,
   ...helpPagesRichZhDocuments,
+  ...helpPagesRichZhListPages,
 };

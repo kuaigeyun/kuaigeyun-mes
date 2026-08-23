@@ -42,6 +42,7 @@ import relativeTime from 'dayjs/plugin/relativeTime';
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
 import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
+import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
 
 dayjs.extend(relativeTime);
 
@@ -825,6 +826,7 @@ const PrintDeviceListPage: React.FC = () => {
             messageApi.success(t('pages.system.printDevices.exportSuccess'));
           }}
           viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('system.printDevices')}
           defaultViewType="table"
           cardViewConfig={{
             renderCard,

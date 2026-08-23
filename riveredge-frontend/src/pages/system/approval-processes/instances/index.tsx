@@ -35,6 +35,7 @@ import { rowActionKind } from '../../../../components/uni-action';
 import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 import { formatDateBySiteSetting, todaySiteDateString } from '../../../../utils/format';
+import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
 
 const { TextArea } = Input;
 
@@ -608,6 +609,7 @@ const ApprovalInstanceListPage: React.FC = () => {
             }
           }}
           viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('system.approvalInstances')}
           defaultViewType="table"
           kanbanViewConfig={{
             statusField: 'status',

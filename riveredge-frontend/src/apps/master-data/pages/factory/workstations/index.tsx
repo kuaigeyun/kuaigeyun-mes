@@ -54,6 +54,7 @@ import {
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { formatDateTimeBySiteSetting, todaySiteDateString } from '../../../../../utils/format';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 /**
  * 工位管理列表页面组件
  */
@@ -791,6 +792,7 @@ const WorkstationsPage: React.FC = () => {
         }}
         rowKey="uuid"
         viewTypes={['table', 'help']}
+        helpViewConfig={buildListPageHelpViewConfig('masterData.workstations')}
         defaultViewType="table"
         showImportButton={true}
         onImport={handleImport}

@@ -39,6 +39,7 @@ import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/
 import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut'
 import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts'
 import { UniTable, readPersistedUniTableViewType } from '../../../../../components/uni-table'
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki'
 import { buildFactoryImportTemplate } from '../../../../../utils/spreadsheetImportTemplate'
 import { useImportMaterialUnitOptions } from '../../../../master-data/hooks/useImportMaterialUnitOptions'
 import { pickImportExampleValue } from '../../../../../utils/loadImportDictionaryValues'
@@ -1999,14 +2000,7 @@ export default function SalesForecastsPage() {
           detailTableColumns={detailTableColumns}
           viewTypes={['table', 'detailTable', 'help']}
           defaultViewType={viewTypeState === 'help' ? 'table' : viewTypeState}
-          helpViewConfig={{
-            content: (
-              <div style={{ lineHeight: 1.8 }}>
-                <p><strong>{t('app.kuaizhizao.salesForecast.helpViewTable')}</strong>: {t('app.kuaizhizao.salesForecast.helpViewTableDesc')}</p>
-                <p><strong>{t('app.kuaizhizao.salesForecast.helpViewDetail')}</strong>: {t('app.kuaizhizao.salesForecast.helpViewDetailDesc')}</p>
-              </div>
-            ),
-          }}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.salesForecast)}
           onViewTypeChange={(v) => {
             dataViewModeRef.current = resolveDetailTableViewMode(v as 'table' | 'detailTable' | 'help');
             setViewTypeState(v as 'table' | 'detailTable' | 'help');

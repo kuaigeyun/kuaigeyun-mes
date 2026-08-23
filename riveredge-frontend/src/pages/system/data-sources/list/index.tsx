@@ -72,6 +72,7 @@ import relativeTime from 'dayjs/plugin/relativeTime';
 import { extractProTableSort, mergeListKeyword, mapIntegrationConfigListSortField } from '../../../../utils/tableQueryKey';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 import { todaySiteDateString } from '../../../../utils/format';
+import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
 
 dayjs.extend(relativeTime);
 
@@ -1059,6 +1060,7 @@ const DataSourceListPage: React.FC = () => {
             messageApi.success(t('pages.system.dataSources.exportSuccess'));
           }}
           viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('system.dataSources')}
           defaultViewType="table"
           cardViewConfig={{
             renderCard,

@@ -55,6 +55,7 @@ import { useTrialRunMode } from '../../../../hooks/useTrialRunMode';
 import { resolvePresetDepartmentName } from '../../../../utils/presetEntityI18n';
 import { formatDateTimeBySiteSetting, todaySiteDateString } from '../../../../utils/format';
 import { importExcelMatrixInChunks } from '../../../../utils/chunkedBulkImport';
+import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
 
 const DepartmentListPage: React.FC = () => {
   const { t } = useTranslation();
@@ -680,6 +681,7 @@ const DepartmentListPage: React.FC = () => {
         columnPersistenceId="pages.system.departments.list-v1"
         permissionResource="system:department"
         viewTypes={['table', 'help']}
+        helpViewConfig={buildListPageHelpViewConfig('system.departments')}
         actionRef={actionRef}
         headerTitle={t('field.department.listTitle')}
         rowKey="uuid"

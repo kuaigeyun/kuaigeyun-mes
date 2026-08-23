@@ -57,6 +57,7 @@ import {
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { formatDateTimeBySiteSetting, todaySiteDateString } from '../../../../../utils/format';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 /**
  * 车间管理列表页面组件
  */
@@ -755,6 +756,7 @@ const WorkshopsPage: React.FC = () => {
         actionRef={actionRef}
         columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
         viewTypes={['table', 'help']}
+        helpViewConfig={buildListPageHelpViewConfig('masterData.workshops')}
         defaultViewType="table"
         onImport={handleImport}
         importHeaders={workshopImportTemplate.importHeaders}

@@ -30,6 +30,7 @@ import {
   MaterialStackedCell,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UniCapabilityBatchButton, UniAuditBatchMenuButton, createUniAuditBatchHandlers } from '../../../../../components/uni-batch';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import {
   UniPullQueryModal,
@@ -1673,20 +1674,7 @@ const SalesReturnsPage: React.FC = () => {
             setTimeout(() => actionRef.current?.reload(), 0);
           }}
           detailTableColumns={detailTableColumns}
-          helpViewConfig={{
-            content: (
-              <div style={{ lineHeight: 1.8 }}>
-                <p>
-                  <strong>{t('components.uniTable.viewTable')}</strong>
-                  {t('app.kuaizhizao.salesReturn.title')}
-                </p>
-                <p>
-                  <strong>{t('components.uniTable.viewDetailTable')}</strong>
-                  {t('app.kuaizhizao.salesReturn.title')}
-                </p>
-              </div>
-            ),
-          }}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.salesReturn)}
           rowKey={dataViewMode === 'detail' ? '_rowKey' : 'id'}
           columns={columns}
           onTableDataChange={(rows) => {

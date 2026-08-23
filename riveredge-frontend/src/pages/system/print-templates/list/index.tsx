@@ -49,6 +49,7 @@ import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
 import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 import { todaySiteDateString } from '../../../../utils/format';
+import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
 
 dayjs.extend(relativeTime);
 
@@ -773,6 +774,7 @@ const PrintTemplateListPage: React.FC = () => {
             onChange: setSelectedRowKeys,
           }}
           viewTypes={['table', 'card', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('system.printTemplates')}
           defaultViewType="table"
           cardViewConfig={{
             renderCard,

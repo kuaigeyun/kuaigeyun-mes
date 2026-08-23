@@ -32,6 +32,7 @@ import {
 import { getDepartmentTree, DepartmentTreeItem } from '../../../../services/department';
 import { useTrialRunMode } from '../../../../hooks/useTrialRunMode';
 import { resolvePresetPositionName } from '../../../../utils/presetEntityI18n';
+import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
 
 function toTreeData(items: DepartmentTreeItem[]): Array<{ title: string; value: string; key: string; children?: any[] }> {
   return items.map((item) => ({
@@ -319,6 +320,7 @@ const PositionListPage: React.FC = () => {
         <UniTable<Position>
           columnPersistenceId="pages.system.positions.list-v1"
           viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('system.positions')}
           actionRef={actionRef}
           columns={columns}
           request={async (params, _sort, _filter, searchFormValues) => {

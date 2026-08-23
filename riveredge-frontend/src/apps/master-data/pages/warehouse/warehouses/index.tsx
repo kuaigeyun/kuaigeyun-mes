@@ -57,6 +57,7 @@ import {
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { formatDateTimeBySiteSetting, todaySiteDateString } from '../../../../../utils/format';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 /**
  * 仓库管理列表页面组件
  */
@@ -829,6 +830,7 @@ const WarehousesPage: React.FC = () => {
         }}
         rowKey="uuid"
         viewTypes={['table', 'help']}
+        helpViewConfig={buildListPageHelpViewConfig('masterData.warehouses')}
         defaultViewType="table"
         showImportButton={true}
         onImport={handleImport}

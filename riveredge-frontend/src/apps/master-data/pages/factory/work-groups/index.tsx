@@ -47,6 +47,7 @@ import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulkImport';
 import { formatDateTimeBySiteSetting, todaySiteDateString } from '../../../../../utils/format';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 const WorkGroupsPage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -600,6 +601,7 @@ const WorkGroupsPage: React.FC = () => {
           actionRef={actionRef}
           columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
           viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('masterData.workGroups')}
           defaultViewType="table"
           loadingDelay={200}
           request={async (params, sort, _filter, searchFormValues) => {

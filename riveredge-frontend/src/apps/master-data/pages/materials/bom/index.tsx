@@ -82,6 +82,7 @@ import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 import { UNI_TABLE_STATUS_BADGE_COLUMN_WIDTH } from '../../../../../utils/uniTableLayoutColumns';
 import { flattenBomGroupsForExport, resolveBomExportGroup, loadBomExportNestedItems, collectBomExportMaterialIds, type BomExportGroupSummary } from './utils';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 const BOM_CUSTOM_FIELD_TABLE = 'master_data_boms';
 const BOM_RESOURCE = 'master-data:process:engineering-bom';
 const BOM_LIST_COLUMN_PERSISTENCE_ID = 'apps.master-data.pages.materials.bom.stacked-v2';
@@ -3248,6 +3249,7 @@ const BOMPage: React.FC = () => {
         actionRef={actionRef}
         columns={groupColumns}
         viewTypes={['productBom', 'semiProductBom', 'allBom', 'help']}
+        helpViewConfig={buildListPageHelpViewConfig('masterData.bom')}
         defaultViewType="productBom"
         tableViewTypes={['productBom', 'semiProductBom', 'allBom']}
         customViews={[

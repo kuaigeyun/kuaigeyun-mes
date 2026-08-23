@@ -45,6 +45,7 @@ import { apiRequest } from '../../../../services/api';
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
 import { getAntdModal } from '../../../../utils/antdAppApis';
 import { importInChunksViaPerItemCreate } from '../../../../utils/chunkedBulkImport';
+import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
 const statusTagMap: Record<TenantStatus, { color: string; textKey: string }> = {
   [TenantStatus.ACTIVE]: { color: 'success', textKey: 'pages.infra.tenant.statusActive' },
   [TenantStatus.INACTIVE]: { color: 'default', textKey: 'pages.infra.tenant.statusInactive' },
@@ -1286,6 +1287,7 @@ const SuperAdminTenantList: React.FC = () => {
       showExportButton={true}
       onExport={handleExport}
       viewTypes={['table', 'help']}
+      helpViewConfig={buildListPageHelpViewConfig('system.tenants')}
       defaultViewType="table"
       request={async (params, sort, _filter, searchFormValues) => {
         // 处理排序参数

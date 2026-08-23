@@ -45,6 +45,7 @@ import dayjs from 'dayjs';
 import { UniTable, readPersistedUniTableViewType, type UniTableRequestMeta} from '../../../../../components/uni-table';
 import { UniCapabilityBatchButton, UniAuditBatchMenuButton, createUniAuditBatchHandlers } from '../../../../../components/uni-batch';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import {
   UniPullQueryModal,
   isPullableScope,
@@ -1823,20 +1824,7 @@ const PurchaseReturnsPage: React.FC = () => {
             setTimeout(() => actionRef.current?.reload(), 0);
           }}
           detailTableColumns={detailTableColumns}
-          helpViewConfig={{
-            content: (
-              <div style={{ lineHeight: 1.8 }}>
-                <p>
-                  <strong>{t('components.uniTable.viewTable')}</strong>
-                  {t('app.kuaizhizao.purchaseReturn.title')}
-                </p>
-                <p>
-                  <strong>{t('components.uniTable.viewDetailTable')}</strong>
-                  {t('app.kuaizhizao.purchaseReturn.title')}
-                </p>
-              </div>
-            ),
-          }}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.purchaseReturn)}
           rowKey={dataViewMode === 'detail' ? '_rowKey' : 'id'}
           columns={columns}
           showAdvancedSearch={true}

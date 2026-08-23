@@ -50,6 +50,7 @@ import {
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { formatDateTimeBySiteSetting, todaySiteDateString } from '../../../../../utils/format';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 /**
  * 库区管理列表页面组件
  */
@@ -778,6 +779,7 @@ const StorageAreasPage: React.FC = () => {
         }}
         rowKey="uuid"
         viewTypes={['table', 'help']}
+        helpViewConfig={buildListPageHelpViewConfig('masterData.storageAreas')}
         defaultViewType="table"
         showImportButton={true}
         onImport={handleImport}

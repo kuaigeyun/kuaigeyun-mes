@@ -32,6 +32,7 @@ import {
   KUAIPLM_APPROVAL_TITLE_PREFIX_I18N,
   KUAIPLM_CHANGE_TYPE_I18N,
 } from '../../../apps/kuaiplm/components/kuaiplmMeta';
+import { buildListPageHelpViewConfig } from '../../../components/page-help-wiki';
 
 /** 后端写入的中文变更类型 → i18n key（与码表对齐，覆盖尚未出现的全部类型） */
 const APPROVAL_CHANGE_TYPE_LABEL_TO_I18N: Record<string, string> = {
@@ -627,6 +628,7 @@ const UserTasksPage: React.FC = () => {
             },
           }}
           viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('personal.tasks')}
           defaultViewType="table"
           kanbanViewConfig={useMemo(() => {
             if (taskType === 'pending') {

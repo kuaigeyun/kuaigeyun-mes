@@ -49,6 +49,7 @@ import { IMPORT_YES_NO_OPTIONS } from '../../../../../utils/loadImportDictionary
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { formatDateTimeBySiteSetting, todaySiteDateString } from '../../../../../utils/format';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 /**
  * 库位管理列表页面组件
  */
@@ -780,6 +781,7 @@ const StorageLocationsPage: React.FC = () => {
         }}
         rowKey="uuid"
         viewTypes={['table', 'help']}
+        helpViewConfig={buildListPageHelpViewConfig('masterData.storageLocations')}
         defaultViewType="table"
         showImportButton={true}
         onImport={handleImport}

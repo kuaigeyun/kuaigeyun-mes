@@ -15,6 +15,10 @@ export const RICH_DOCUMENT_HELP_KEYS: DocumentListHelpKey[] = [
   DOCUMENT_LIST_HELP_KEYS.shipmentNotice,
   DOCUMENT_LIST_HELP_KEYS.receiptNotice,
   DOCUMENT_LIST_HELP_KEYS.salesContract,
+  DOCUMENT_LIST_HELP_KEYS.salesReturn,
+  DOCUMENT_LIST_HELP_KEYS.salesForecast,
+  DOCUMENT_LIST_HELP_KEYS.purchaseInquiry,
+  DOCUMENT_LIST_HELP_KEYS.purchaseReturn,
 ];
 
 export const RICH_DOC_HELP_PROFILES: Record<DocumentListHelpKey, RichDocHelpProfile> = {

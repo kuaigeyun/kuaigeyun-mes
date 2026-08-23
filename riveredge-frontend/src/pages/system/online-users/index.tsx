@@ -29,6 +29,7 @@ import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { formatDateTime, todaySiteDateString } from '../../../utils/format';
 import { downloadRecordsAsXlsx } from '../../../utils/exportRecordsXlsx';
+import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
 
 dayjs.extend(relativeTime);
 
@@ -485,6 +486,7 @@ const OnlineUsersPage: React.FC = () => {
           ]}
           headerTitle={t('pages.system.onlineUsers.headerTitle')}
           viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('system.onlineUsers')}
           defaultViewType="table"
           cardViewConfig={{
             renderCard,

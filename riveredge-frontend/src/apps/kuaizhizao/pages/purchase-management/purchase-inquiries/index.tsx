@@ -21,6 +21,7 @@ import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFI
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import { SourceDocumentCode } from '../../../../../components/linked-document-code/SourceDocumentCode';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import { buildUniPushMenuItems, buildUniPushToolbarDisabledReason, UniPushToolbarButton } from '../../../../../components/uni-push';
 import {
   UniPullQueryModal,
@@ -1566,20 +1567,7 @@ const PurchaseInquiriesPage: React.FC = () => {
         request={request}
         viewTypes={['table', 'detailTable', 'help']}
         defaultViewType={viewTypeState === 'help' ? 'table' : viewTypeState}
-        helpViewConfig={{
-          content: (
-            <div style={{ lineHeight: 1.8 }}>
-              <p>
-                <strong>{t('components.uniTable.viewTable')}</strong>
-                {t('app.kuaizhizao.purchaseInquiry.helpTableView')}
-              </p>
-              <p>
-                <strong>{t('components.uniTable.viewDetailTable')}</strong>
-                {t('app.kuaizhizao.purchaseInquiry.helpDetailTableView')}
-              </p>
-            </div>
-          ),
-        }}
+        helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.purchaseInquiry)}
         onViewTypeChange={(v) => {
           dataViewModeRef.current = resolveDetailTableViewMode(v as 'table' | 'detailTable' | 'help');
           setViewTypeState(v as 'table' | 'detailTable' | 'help');
