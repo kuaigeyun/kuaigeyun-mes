@@ -21,4 +21,9 @@ export {
   resolveModuleRankBadgeStyle,
   resolveModuleFollowUpIconColors,
 } from './moduleDashboardTheme';
-export { showMasonryCard, masonryWeightFromRows, resolveMasonryEmptyFallback } from './masonryHelpers';
+export {
+  showMasonryCard,
+  masonryWeightFromRows,
+  resolveMasonryEmptyFallback,
+  MASONRY_CHART_WEIGHT,
+} from './masonryHelpers';

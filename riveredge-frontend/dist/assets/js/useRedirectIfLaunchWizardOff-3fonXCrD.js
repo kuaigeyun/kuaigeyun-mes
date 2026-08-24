@@ -1,1 +1,0 @@
-import{r as s}from"./vendor-D7Y39u1a.js";import{t as f,e as o,k as r}from"./clientRelease-KbeHB7Fi.js";function l(i=f()){const n=o(),e=r(a=>a.initialized),t=r(a=>a.configs.enable_launch_wizard!==!1);return s.useEffect(()=>{e&&(t||n(i,{replace:!0}))},[e,t,n,i]),{initialized:e,enabled:t}}export{l as u};

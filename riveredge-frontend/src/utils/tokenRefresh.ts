@@ -63,7 +63,8 @@ export async function refreshAccessTokenDetailed(): Promise<SilentRefreshResult>
         return { ok: false, reason: 'network' };
       }
 
-      if (res.status === 401 || res.status === 403) {
+      // 仅 401 表示令牌本身被拒绝。403 可能是网关/WAF/路径权限，不得当成会话失效。
+      if (res.status === 401) {
         return { ok: false, reason: 'rejected' };
       }
       if (!res.ok || !data?.access_token) {

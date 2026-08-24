@@ -328,7 +328,6 @@ const InspectionCenter: React.FC = () => {
 
   return (
     <ModuleCenterLayout
-      moduleHelpKey="quality"
       loading={summaryLoading && !summary}
       kpiRow={<ModuleKpiRow items={kpis} />}
       shortcutRow={<ModuleShortcutGrid items={shortcuts} />}

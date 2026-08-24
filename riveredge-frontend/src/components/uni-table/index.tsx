@@ -44,7 +44,7 @@ import {
   ProTableProps,
 } from '@ant-design/pro-components'
 import type { ColumnsState } from '@ant-design/pro-table'
-import { Button, Space, theme, Empty, ConfigProvider, Grid, Descriptions, Card, Tag, Tooltip } from 'antd'
+import { Button, Space, theme, Empty, ConfigProvider, Grid, Descriptions, Card, Tag, Tooltip, Checkbox } from 'antd'
 import {
   PlusOutlined,
   EditOutlined,
@@ -186,6 +186,11 @@ import {
   readAccountColumnsState,
   uniTableColumnsPreferenceField,
 } from './uniTableColumnPreference'
+import {
+  TABLE_ZEBRA_STRIPE_PREFERENCE_PATH,
+  readPersistedTableZebraStripe,
+  writePersistedTableZebraStripe,
+} from './uniTableZebraPreference'
 
 export { readPersistedUniTableViewType, uniTableViewTypePreferencePath } from './uniTableViewPreference'
 
@@ -266,6 +271,25 @@ function withToolbarItemKeys(nodes: ReactNode[], keyPrefix: string): ReactNode[]
     }
     return <React.Fragment key={key}>{node}</React.Fragment>
   })
+}
+
+function TableZebraStripeSwitch({
+  checked,
+  onChange,
+}: {
+  checked: boolean
+  onChange: (checked: boolean) => void
+}) {
+  const { t } = useTranslation()
+  return (
+    <Checkbox
+      checked={checked}
+      onChange={(e) => onChange(e.target.checked)}
+      className="uni-table-zebra-stripe-switch"
+    >
+      {t('components.uniTable.zebraStripe')}
+    </Checkbox>
+  )
 }
 
 /** 列展示重置按钮：同时恢复列显示和列宽到系统默认（需在 ProTable 内部渲染以访问 TableContext） */
@@ -1207,6 +1231,33 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   // 计算最终配置（优先使用 Props，其次使用用户偏好，最后使用全局配置）
   // 分页大小优先级：Props > User Preference > Config Store > Default(20)
   const defaultPageSize = defaultPageSizeProp ?? getPreference('ui.default_page_size', getConfig('ui.default_page_size', 20))
+
+  const serverZebraStripe = useUserPreferenceStore((s) => {
+    const ui = s.preferences?.ui as Record<string, unknown> | undefined
+    const value = ui?.table_zebra_stripe
+    return typeof value === 'boolean' ? value : undefined
+  })
+
+  const [zebraStripeEnabled, setZebraStripeEnabled] = useState(() =>
+    readPersistedTableZebraStripe(false),
+  )
+
+  useEffect(() => {
+    if (serverZebraStripe === undefined) return
+    setZebraStripeEnabled(serverZebraStripe)
+    writePersistedTableZebraStripe(serverZebraStripe)
+  }, [serverZebraStripe])
+
+  const handleZebraStripeChange = useCallback(
+    (enabled: boolean) => {
+      setZebraStripeEnabled(enabled)
+      writePersistedTableZebraStripe(enabled)
+      updatePreferences({ [TABLE_ZEBRA_STRIPE_PREFERENCE_PATH]: enabled }).catch((err) => {
+        console.error('[UniTable] sync zebra stripe preference failed', err)
+      })
+    },
+    [updatePreferences],
+  )
   
   const loadingDelay = loadingDelayProp ?? getConfig('ui.table_loading_delay', 0)
 
@@ -2630,7 +2681,12 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     setting: {
       listsHeight: 360,
       checkedReset: false,
-      extra: <TableColumnResetButton onResetResizable={handleColumnReset} />,
+      extra: (
+        <>
+          <TableZebraStripeSwitch checked={zebraStripeEnabled} onChange={handleZebraStripeChange} />
+          <TableColumnResetButton onResetResizable={handleColumnReset} />
+        </>
+      ),
     },
     fullScreen: false,
     ...mergedToolbarOptions,
@@ -2640,7 +2696,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       mergedToolbarOptions.reload?.()
       void reloadWithTanstackCacheBust()
     },
-  }), [mergedToolbarOptions, handleColumnReset, reloadWithTanstackCacheBust])
+  }), [mergedToolbarOptions, handleColumnReset, reloadWithTanstackCacheBust, zebraStripeEnabled, handleZebraStripeChange])
 
   const statCardsOptionsRender = useCallback(
     (_props: unknown, defaultDom: React.ReactNode[]) => {
@@ -3448,6 +3504,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           fillViewportBody ? 'uni-table-fill-viewport' : '',
           reportLayout ? 'uni-table-report' : '',
           isMobile ? 'uni-table-mobile' : '',
+          zebraStripeEnabled ? 'uni-table-zebra' : '',
         ]
           .filter(Boolean)
           .join(' ')}

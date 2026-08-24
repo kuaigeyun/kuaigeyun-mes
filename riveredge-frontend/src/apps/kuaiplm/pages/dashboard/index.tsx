@@ -362,7 +362,6 @@ const KuaiplmDashboard: React.FC = () => {
   return (
 
     <ModuleCenterLayout
-      moduleHelpKey="kuaiplm"
       loading={isLoading && !data}
 
       kpiRow={<ModuleKpiRow items={kpis} />}

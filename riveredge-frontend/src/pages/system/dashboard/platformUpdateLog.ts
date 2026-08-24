@@ -33,6 +33,22 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
   {
+    id: 'mrp-execute-core-exceptions-import-fix',
+    date: '2026-08-24',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.mrp-execute-core-exceptions-import-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mrp-execute-core-exceptions-import-fix.description',
+  },
+  {
+    id: 'purchase-price-trend-history-load-fix',
+    date: '2026-08-24',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-price-trend-history-load-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-price-trend-history-load-fix.description',
+  },
+  {
     id: 'production-return-hub-quantity-fix',
     date: '2026-08-24',
     type: 'fix',

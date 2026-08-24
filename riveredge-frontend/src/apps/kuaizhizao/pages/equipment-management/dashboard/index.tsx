@@ -27,6 +27,7 @@ import {
   showMasonryCard,
   masonryWeightFromRows,
   resolveMasonryEmptyFallback,
+  MASONRY_CHART_WEIGHT,
 } from '../../../components/module-center';
 import type { ModuleKpiDef, ModuleShortcutDef } from '../../../components/module-center';
 
@@ -43,6 +44,8 @@ const EquipmentStatusPie = lazy(async () => {
 });
 
 const SPOT_CHECK_PENDING = new Set(['draft', 'pending', '待执行', '草稿', 'DRAFT', 'PENDING']);
+const TABLE_DISPLAY_ROWS = 6;
+const TODO_DISPLAY_ROWS = 8;
 
 function unwrapList(res: unknown): Record<string, unknown>[] {
   if (Array.isArray(res)) return res as Record<string, unknown>[];
@@ -307,7 +310,10 @@ const EquipmentDashboard: React.FC = () => {
 
   const pendingFaults = recentFaults
     .filter((f) => !String(f.status).includes('完成') && !String(f.status).includes('fixed'))
-    .slice(0, 6);
+    .slice(0, TABLE_DISPLAY_ROWS);
+  const spotCheckRows = spotChecks.slice(0, TABLE_DISPLAY_ROWS);
+  const maintenanceRows = recentMaintenance.slice(0, TABLE_DISPLAY_ROWS);
+  const spareAlertRows = spareAlerts.slice(0, TABLE_DISPLAY_ROWS);
   const hasTrendData = (trendData?.items || []).some((it: { count?: number }) => Number(it.count) > 0);
   const hasStatusPieData = statusPieData.some((d) => Number(d.value) > 0);
 
@@ -321,16 +327,15 @@ const EquipmentDashboard: React.FC = () => {
   const masonryEmptyFallback = resolveMasonryEmptyFallback(masonryLoading, [
     todos.length > 0,
     pendingFaults.length > 0,
-    spotChecks.length > 0,
-    recentMaintenance.length > 0,
-    spareAlerts.length > 0,
+    spotCheckRows.length > 0,
+    maintenanceRows.length > 0,
+    spareAlertRows.length > 0,
     hasTrendData,
     hasStatusPieData,
   ]);
 
   return (
     <ModuleCenterLayout
-      moduleHelpKey="equipment"
       loading={summaryLoading && !s}
       kpiRow={<ModuleKpiRow items={kpis} />}
       shortcutRow={
@@ -339,7 +344,12 @@ const EquipmentDashboard: React.FC = () => {
       actionRow={
         <ModuleActionMasonry>
           {showMasonryCard(todosLoading, todos.length > 0, masonryEmptyFallback) ? (
-            <ModuleActionPanel layout="masonry" title={t('app.kuaizhizao.equipmentDashboard.todosTitle')} loading={todosLoading} masonryWeight={masonryWeightFromRows(todos.length)}>
+            <ModuleActionPanel
+              layout="masonry"
+              title={t('app.kuaizhizao.equipmentDashboard.todosTitle')}
+              loading={todosLoading}
+              masonryWeight={masonryWeightFromRows(Math.min(todos.length, TODO_DISPLAY_ROWS))}
+            >
               <ModuleTodoList items={todos} emptyText={t('app.kuaizhizao.equipmentDashboard.noTodos')} />
             </ModuleActionPanel>
           ) : null}
@@ -348,47 +358,47 @@ const EquipmentDashboard: React.FC = () => {
               layout="masonry"
               title={t('app.kuaizhizao.equipmentDashboard.pendingFaultsTitle')}
               loading={faultsLoading}
-              masonryWeight={masonryWeightFromRows(pendingFaults.length)}
+              masonryWeight={masonryWeightFromRows(pendingFaults.length, TABLE_DISPLAY_ROWS)}
               extra={<a onClick={() => navigate('/apps/kuaizhizao/equipment-management/equipment-faults')}>{t('app.kuaizhizao.equipmentDashboard.all')}</a>}
             >
               <Table tableLayout="fixed" size="small" dataSource={pendingFaults} pagination={false} rowKey={(r) => String(r.id ?? r.uuid)} columns={faultColumns} />
             </ModuleActionPanel>
           ) : null}
-          {showMasonryCard(spotChecksLoading, spotChecks.length > 0, masonryEmptyFallback) ? (
+          {showMasonryCard(spotChecksLoading, spotCheckRows.length > 0, masonryEmptyFallback) ? (
             <ModuleActionPanel
               layout="masonry"
               title={t('app.kuaizhizao.equipmentDashboard.spotChecksTitle')}
               loading={spotChecksLoading}
-              masonryWeight={masonryWeightFromRows(spotChecks.length)}
+              masonryWeight={masonryWeightFromRows(spotCheckRows.length, TABLE_DISPLAY_ROWS)}
               extra={<a onClick={() => navigate('/apps/kuaizhizao/equipment-management/spot-checks')}>{t('app.kuaizhizao.equipmentDashboard.all')}</a>}
             >
-              <Table tableLayout="fixed" size="small" dataSource={spotChecks.slice(0, 6)} pagination={false} rowKey={(r) => String(r.id ?? r.uuid)} columns={spotCheckColumns} />
+              <Table tableLayout="fixed" size="small" dataSource={spotCheckRows} pagination={false} rowKey={(r) => String(r.id ?? r.uuid)} columns={spotCheckColumns} />
             </ModuleActionPanel>
           ) : null}
-          {showMasonryCard(maintenanceLoading, recentMaintenance.length > 0, masonryEmptyFallback) ? (
+          {showMasonryCard(maintenanceLoading, maintenanceRows.length > 0, masonryEmptyFallback) ? (
             <ModuleActionPanel
               layout="masonry"
               title={t('app.kuaizhizao.equipmentDashboard.maintenanceDueTitle')}
               loading={maintenanceLoading}
-              masonryWeight={masonryWeightFromRows(Math.min(recentMaintenance.length, 6))}
+              masonryWeight={masonryWeightFromRows(maintenanceRows.length, TABLE_DISPLAY_ROWS)}
               extra={<a onClick={() => navigate('/apps/kuaizhizao/equipment-management/maintenance-plans')}>{t('app.kuaizhizao.equipmentDashboard.all')}</a>}
             >
-              <Table tableLayout="fixed" size="small" dataSource={recentMaintenance.slice(0, 6)} pagination={false} rowKey={(r) => String(r.id ?? r.uuid)} columns={maintenanceColumns} />
+              <Table tableLayout="fixed" size="small" dataSource={maintenanceRows} pagination={false} rowKey={(r) => String(r.id ?? r.uuid)} columns={maintenanceColumns} />
             </ModuleActionPanel>
           ) : null}
-          {showMasonryCard(spareAlertsLoading, spareAlerts.length > 0, masonryEmptyFallback) ? (
+          {showMasonryCard(spareAlertsLoading, spareAlertRows.length > 0, masonryEmptyFallback) ? (
             <ModuleActionPanel
               layout="masonry"
               title={t('app.kuaizhizao.equipmentDashboard.spareLowStockTitle')}
               loading={spareAlertsLoading}
-              masonryWeight={masonryWeightFromRows(Math.min(spareAlerts.length, 6))}
+              masonryWeight={masonryWeightFromRows(spareAlertRows.length, TABLE_DISPLAY_ROWS)}
               extra={<a onClick={() => navigate('/apps/kuaizhizao/equipment-management/spare-parts')}>{t('app.kuaizhizao.equipmentDashboard.all')}</a>}
             >
-              <Table tableLayout="fixed" size="small" dataSource={spareAlerts.slice(0, 6)} pagination={false} rowKey={(r, idx) => String(r.id ?? r.spare_part_id ?? idx)} columns={spareAlertColumns} />
+              <Table tableLayout="fixed" size="small" dataSource={spareAlertRows} pagination={false} rowKey={(r, idx) => String(r.id ?? r.spare_part_id ?? idx)} columns={spareAlertColumns} />
             </ModuleActionPanel>
           ) : null}
           {showMasonryCard(trendLoading, hasTrendData, masonryEmptyFallback) ? (
-            <ModuleChartPanel layout="masonry" title={t('app.kuaizhizao.equipmentDashboard.faultTrendTitle')} loading={trendLoading} masonryWeight={3}>
+            <ModuleChartPanel layout="masonry" title={t('app.kuaizhizao.equipmentDashboard.faultTrendTitle')} loading={trendLoading} masonryWeight={MASONRY_CHART_WEIGHT}>
               <ModuleChartMount height={240}>
                 {({ width, height }) => (
                   <Suspense fallback={null}>
@@ -399,7 +409,7 @@ const EquipmentDashboard: React.FC = () => {
             </ModuleChartPanel>
           ) : null}
           {showMasonryCard(false, hasStatusPieData, masonryEmptyFallback) ? (
-            <ModuleChartPanel layout="masonry" title={t('app.kuaizhizao.equipmentDashboard.statusDistributionTitle')} masonryWeight={3}>
+            <ModuleChartPanel layout="masonry" title={t('app.kuaizhizao.equipmentDashboard.statusDistributionTitle')} masonryWeight={MASONRY_CHART_WEIGHT}>
               <ModuleChartMount height={240}>
                 {({ width, height }) => (
                   <Suspense fallback={null}>

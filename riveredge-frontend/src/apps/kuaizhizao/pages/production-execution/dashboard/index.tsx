@@ -358,7 +358,6 @@ const ManufacturingDashboard: React.FC = () => {
 
   return (
     <ModuleCenterLayout
-      moduleHelpKey="production"
       loading={summaryLoading && !s}
       kpiRow={<ModuleKpiRow items={kpis} colProps={{ xs: 24, sm: 12, lg: 6 }} />}
       shortcutRow={<ModuleShortcutGrid items={shortcuts} />}

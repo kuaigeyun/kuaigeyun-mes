@@ -13,7 +13,7 @@ export interface ModuleActionMasonryProps {
 }
 
 const DEFAULT_PANEL_WEIGHT = 2;
-const DEFAULT_CHART_WEIGHT = 3;
+const DEFAULT_CHART_WEIGHT = 6;
 
 function resolveMasonryWeight(child: React.ReactNode): number {
   if (!isValidElement(child)) return DEFAULT_PANEL_WEIGHT;
@@ -41,8 +41,13 @@ function distributeRoundRobin(items: React.ReactNode[], columnCount: number): Re
 function distributeBalanced(items: React.ReactNode[], columnCount: number): React.ReactNode[][] {
   const cols: React.ReactNode[][] = Array.from({ length: columnCount }, () => []);
   const weights = new Array(columnCount).fill(0);
-  items.forEach((child) => {
-    const weight = resolveMasonryWeight(child);
+  const ranked = items.map((child, index) => ({
+    child,
+    index,
+    weight: resolveMasonryWeight(child),
+  }));
+  ranked.sort((a, b) => b.weight - a.weight || a.index - b.index);
+  ranked.forEach(({ child, weight }) => {
     let target = 0;
     for (let i = 1; i < columnCount; i += 1) {
       if (weights[i] < weights[target]) target = i;

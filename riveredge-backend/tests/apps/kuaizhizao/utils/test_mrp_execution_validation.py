@@ -16,7 +16,7 @@ from apps.kuaizhizao.utils.mrp_execution_validation import (
     raise_if_mrp_scope_blocking,
     validate_mrp_scope_materials,
 )
-from core.exceptions import BusinessLogicError
+from infra.exceptions.exceptions import BusinessLogicError
 
 
 def _make_material(

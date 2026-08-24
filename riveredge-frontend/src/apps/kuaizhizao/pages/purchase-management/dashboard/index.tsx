@@ -236,7 +236,6 @@ const PurchaseDashboard: React.FC = () => {
 
   return (
     <ModuleCenterLayout
-      moduleHelpKey="purchase"
       loading={summaryLoading && !s}
       kpiRow={<ModuleKpiRow items={kpis} />}
       shortcutRow={

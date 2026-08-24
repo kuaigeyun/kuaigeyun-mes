@@ -1,1 +1,0 @@
-import{j as t,T as a}from"./vendor-D7Y39u1a.js";import{E as m}from"./EquipmentImageList-Dl3omLJL.js";function g({uuids:s,width:n=104,height:o=104,emptyText:r="无"}){const e=(s??[]).filter(i=>typeof i=="string"&&i.trim());return e.length?t.jsx(m,{uuids:e,width:n,height:o}):typeof r=="string"?t.jsx(a.Text,{type:"secondary",children:r}):t.jsx(t.Fragment,{children:r})}export{g as M};

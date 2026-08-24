@@ -5,7 +5,7 @@
  */
 
 // 使用 Fetch API 进行 HTTP 请求
-import { clearAuth, getToken, isInfraSuperAdminUser } from '../utils/auth';
+import { clearAuth, getToken, isTokenExpired, isInfraSuperAdminUser } from '../utils/auth';
 import { updateLastActivity, incrementPendingRequests, decrementPendingRequests } from '../utils/activityUtils';
 import { handleNetworkError, handleServerError, withRetry } from '../utils/errorRecovery';
 import { navigateTo } from '../utils/navigation';
@@ -383,34 +383,49 @@ export async function apiRequest<T = any>(
           error.response = { data, status: response.status };
           throw error;
         } else {
-          // 其他接口返回 401：先尝试静默刷新并重试一次，避免仅因过期/竞态就踢出登录
-          if (!options?.__skipAuthRefresh) {
-            let refreshResult: Awaited<
-              ReturnType<
-                typeof import('../utils/tokenRefresh').refreshAccessTokenDetailed
-              >
-            >;
-            try {
-              const { refreshAccessTokenDetailed } = await import('../utils/tokenRefresh');
-              refreshResult = await refreshAccessTokenDetailed();
-            } catch {
-              // 续期模块异常等同网络失败，不清会话
-              const error = new Error('网络异常，请重试') as any;
-              error.response = { data, status: response.status };
-              error.isTransientAuthRefreshFailure = true;
-              throw error;
-            }
-            if (refreshResult.ok) {
-              return apiRequest<T>(url, { ...options, __skipAuthRefresh: true });
-            }
-            // 网络抖动导致续期失败：保留会话，让调用方重试；禁止 clearAuth 误踢操作中用户
-            if (refreshResult.reason === 'network') {
-              const error = new Error('网络异常，请重试') as any;
-              error.response = { data, status: response.status };
-              error.isTransientAuthRefreshFailure = true;
-              throw error;
-            }
-            // rejected / no_token：走下方登出
+          // 其它接口 401：只允许「访问令牌已失效且续期被服务端明确拒绝」时结束会话。
+          // 续期成功后同一接口仍 401 = 业务/权限/上下文问题，禁止 clearAuth。
+          const throwTransient401 = (message: string) => {
+            const error = new Error(message) as any;
+            error.response = { data, status: response.status };
+            error.isTransientAuthRefreshFailure = true;
+            throw error;
+          };
+
+          if (options?.__skipAuthRefresh) {
+            const error = new Error(
+              formatApiErrorDetail(data?.detail) || data?.message || '请求未被授权',
+            ) as any;
+            error.response = { data, status: response.status };
+            throw error;
+          }
+
+          let refreshResult: Awaited<
+            ReturnType<
+              typeof import('../utils/tokenRefresh').refreshAccessTokenDetailed
+            >
+          >;
+          try {
+            const { refreshAccessTokenDetailed } = await import('../utils/tokenRefresh');
+            refreshResult = await refreshAccessTokenDetailed();
+          } catch {
+            throwTransient401('网络异常，请重试');
+          }
+          if (refreshResult.ok) {
+            return apiRequest<T>(url, { ...options, __skipAuthRefresh: true });
+          }
+          if (refreshResult.reason === 'network') {
+            throwTransient401('网络异常，请重试');
+          }
+
+          const tokenNow = getToken();
+          if (tokenNow && !isTokenExpired(tokenNow)) {
+            throwTransient401(
+              formatApiErrorDetail(data?.detail) || data?.message || '请求未被授权',
+            );
+          }
+          if (refreshResult.reason !== 'rejected' && refreshResult.reason !== 'no_token') {
+            throwTransient401('网络异常，请重试');
           }
 
           clearAuth();

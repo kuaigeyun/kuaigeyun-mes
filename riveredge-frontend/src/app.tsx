@@ -118,21 +118,14 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
     isKuaireportSharedPath;
   const isInfraLoginPage = isPlatformAdminLoginPathname(pathname);
 
-  // ⚠️ 修复：公开页面若存在过期 token，立即清除，避免触发需认证的请求导致短暂错误提示（如 "Token缺失"）
-  // 使用 useLayoutEffect 在首屏绘制前同步执行，减少闪烁
+  // 分享页凭 URL token 访问，清除残留登录态，避免 401 被全局拦截器重定向到登录页。
+  // 登录页/帮助文档等公开路径不得因本地 JWT 过期就清会话：过期访问令牌仍可在刷新窗口内续期。
   React.useLayoutEffect(() => {
-    if (isPublicPath) {
-      const token = getToken();
-      // 分享页凭 URL token 访问，清除残留登录态，避免 401 被全局拦截器重定向到登录页
-      if (isKuaireportSharedPath && token) {
-        clearAuth();
-        setCurrentUser(undefined);
-      } else if (token && isTokenExpired(token)) {
-        clearAuth();
-        setCurrentUser(undefined);
-      }
+    if (isKuaireportSharedPath && getToken()) {
+      clearAuth();
+      setCurrentUser(undefined);
     }
-  }, [isPublicPath, isKuaireportSharedPath, setCurrentUser]);
+  }, [isKuaireportSharedPath, setCurrentUser]);
 
   // 使用 useMemo 计算是否应该获取用户信息，避免重复计算
   // ⚠️ 关键修复：在公开页面（如登录页）不应该尝试获取用户信息，避免后端未运行时出现连接错误
@@ -251,6 +244,12 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
 
       if (refreshResult.reason === 'network') {
         console.warn('获取用户信息失败且续期网络异常，暂保留会话:', error);
+        return;
+      }
+
+      const tokenAfterRefresh = getToken();
+      if (tokenAfterRefresh && !isTokenExpired(tokenAfterRefresh)) {
+        console.warn('获取用户信息失败但访问令牌仍有效，保留会话:', error);
         return;
       }
 

@@ -15,7 +15,7 @@ from apps.kuaizhizao.utils.material_source_helper import (
 )
 from apps.master_data.models.material import Material
 from apps.master_data.services.material_service import MaterialService
-from core.exceptions import BusinessLogicError
+from infra.exceptions.exceptions import BusinessLogicError
 
 
 def _material_bom_overridden(

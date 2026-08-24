@@ -23098,6 +23098,14 @@ export default {
   'pages.dashboard.updateLog.entries.read-path-performance-batch-two.title': 'Tăng tốc lấy đơn mua hàng, lấy đơn QC và danh sách giá thị trường',
   'pages.dashboard.updateLog.entries.read-path-performance-batch-two.description':
     'Lấy đơn nhập mua và thông báo nhận hàng không còn ghi ngược số lượng theo từng đơn. Lấy đơn kiểm tra nhập/TP và xác nhận nhập kho giải quyết chính sách kiểm tra vật tư theo lô. Danh sách thay đổi kỹ thuật không còn tạo phiên duyệt từng dòng khi đọc. Danh sách giá nguyên liệu hôm nay kế thừa giá ngày trước chỉ đọc, không ghi khi mở danh sách. Đã bỏ backfill dữ liệu lịch sử khỏi API danh sách phiếu thu.',
+  'pages.dashboard.updateLog.entries.mrp-execute-core-exceptions-import-fix.title':
+    'Sửa lỗi thiếu module khi chạy tính nhu cầu',
+  'pages.dashboard.updateLog.entries.mrp-execute-core-exceptions-import-fix.description':
+    'Sửa lỗi chạy tính nhu cầu sau khi đẩy từ đơn bán báo \"No module named core.exceptions\"; kiểm tra thực thi MRP dùng đúng đường dẫn module ngoại lệ.',
+  'pages.dashboard.updateLog.entries.purchase-price-trend-history-load-fix.title':
+    'Sửa lỗi tải xu hướng giá mua khi có lịch sử giao dịch',
+  'pages.dashboard.updateLog.entries.purchase-price-trend-history-load-fix.description':
+    'Sửa lỗi xem xu hướng giá trên dòng đơn mua trả lỗi máy chủ nội bộ khi đã có giao dịch lịch sử; giá trung bình, chi tiết và biểu đồ hiển thị bình thường.',
   'pages.dashboard.updateLog.entries.production-return-hub-quantity-fix.title':
     'Sửa hiển thị số lượng trả vật tư sản xuất trên hub nhập kho',
   'pages.dashboard.updateLog.entries.production-return-hub-quantity-fix.description':

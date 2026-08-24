@@ -23099,6 +23099,14 @@ export default {
   'pages.dashboard.updateLog.entries.read-path-performance-batch-two.title': '優化採購取單、質檢取單與行情列表載入速度',
   'pages.dashboard.updateLog.entries.read-path-performance-batch-two.description':
     '採購入庫與收貨通知取單不再逐張訂單寫回數量；來料/成品檢驗取單與入庫校驗改為批量解析物料質檢策略；工程變更列表讀取時不再逐行補建審批實例；原料行情當日列表改為只讀沿用上日單價、不再在打開列表時寫庫；收款單列表移除歷史資料回填。',
+  'pages.dashboard.updateLog.entries.mrp-execute-core-exceptions-import-fix.title':
+    '需求計算執行時報模組缺失修復',
+  'pages.dashboard.updateLog.entries.mrp-execute-core-exceptions-import-fix.description':
+    '修復銷售訂單下推需求計算後點擊執行計算回報「No module named core.exceptions」；MRP 執行校驗改為使用正確的例外模組路徑。',
+  'pages.dashboard.updateLog.entries.purchase-price-trend-history-load-fix.title':
+    '採購價格趨勢有歷史成交時載入失敗修復',
+  'pages.dashboard.updateLog.entries.purchase-price-trend-history-load-fix.description':
+    '修復採購訂單行查看價格趨勢時，存在歷史成交記錄會回報伺服器內部錯誤；有成交資料時可正常展示均價、明細與折線。',
   'pages.dashboard.updateLog.entries.production-return-hub-quantity-fix.title': '生產退料入庫數量列表展示修復',
   'pages.dashboard.updateLog.entries.production-return-hub-quantity-fix.description':
     '入庫 Hub 生產退料單列表與詳情補彙總退料數量，待退料與已退料不再顯示為「-」，入庫進度按數量正確展示。',

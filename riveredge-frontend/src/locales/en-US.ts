@@ -23106,6 +23106,14 @@ export default {
   'pages.dashboard.updateLog.entries.read-path-performance-batch-two.title': 'Faster purchase pull, QC pull and market price list loading',
   'pages.dashboard.updateLog.entries.read-path-performance-batch-two.description':
     'Purchase receipt and receipt-notice pull queries no longer write back quantities per order. Incoming and finished-goods QC pull and inbound checks now resolve material inspection policies in batch. Engineering change lists no longer create approval instances row by row on read. Today\'s market price list carries forward prior-day prices read-only without writing on open. Legacy receipt backfill was removed from the receipt list API.',
+  'pages.dashboard.updateLog.entries.mrp-execute-core-exceptions-import-fix.title':
+    'MRP execute module-not-found fix',
+  'pages.dashboard.updateLog.entries.mrp-execute-core-exceptions-import-fix.description':
+    'Fixes running demand calculation after sales-order push failing with \"No module named core.exceptions\"; MRP execution validation now imports the correct exceptions module.',
+  'pages.dashboard.updateLog.entries.purchase-price-trend-history-load-fix.title':
+    'Purchase price trend load failure with history',
+  'pages.dashboard.updateLog.entries.purchase-price-trend-history-load-fix.description':
+    'Fixes the purchase order line price-trend modal returning an internal server error when historical deals exist; average price, detail rows, and the chart now load correctly.',
   'pages.dashboard.updateLog.entries.production-return-hub-quantity-fix.title':
     'Production return inbound quantity on hub list',
   'pages.dashboard.updateLog.entries.production-return-hub-quantity-fix.description':

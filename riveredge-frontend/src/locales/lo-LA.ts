@@ -23322,6 +23322,14 @@ export default {
   'pages.dashboard.updateLog.entries.read-path-performance-batch-two.title': 'ການດຶງການຊື້ໄວຂຶ້ນ, ດຶງ QC ແລະລາຄາຕະຫຼາດການໂຫຼດ',
   'pages.dashboard.updateLog.entries.read-path-performance-batch-two.description':
     'ໃບຮັບເງິນຊື້ ແລະໃບຮັບ-ແຈ້ງການດຶງແບບສອບຖາມບໍ່ຂຽນຄືນປະລິມານຕໍ່ຄໍາສັ່ງ. ສິນຄ້າຂາເຂົ້າແລະສິນຄ້າສໍາເລັດຮູບ QC ດຶງແລະ inbound ການກວດສອບໃນປັດຈຸບັນແກ້ໄຂບັນຫານະໂຍບາຍການກວດກາວັດສະດຸໃນ batch. ລາຍຊື່ການປ່ຽນແປງທາງວິສະວະກໍາຈະບໍ່ສ້າງຕົວຢ່າງການອະນຸມັດແຖວຕໍ່ແຖວທີ່ອ່ານແລ້ວ. ບັນຊີລາຍຊື່ລາຄາຕະຫຼາດໃນມື້ນີ້ປະຕິບັດຕໍ່ລາຄາມື້ກ່ອນຫນ້າອ່ານໄດ້ເທົ່ານັ້ນໂດຍບໍ່ມີການຂຽນເປີດ. ການຕື່ມຂໍ້ມູນໃບຮັບເງິນເກົ່າຖືກລຶບອອກຈາກ API ລາຍຊື່ໃບຮັບ.',
+  'pages.dashboard.updateLog.entries.mrp-execute-core-exceptions-import-fix.title':
+    'ແກ້ຂາດໂມດູນເມື່ອປະຕິບັດການຄິດໄລ່ຄວາມຕ້ອງການ',
+  'pages.dashboard.updateLog.entries.mrp-execute-core-exceptions-import-fix.description':
+    'ແກ້ການປະຕິບັດການຄິດໄລ່ຄວາມຕ້ອງການຫຼັງດັນຈາກໃບສັ່ງຂາຍແລ້ວລາຍງານ \"No module named core.exceptions\"; ການກວດສອບປະຕິບັດ MRP ໃຊ້ເສັ້ນທາງໂມດູນຂໍ້ຜິດພາດທີ່ຖືກຕ້ອງ.',
+  'pages.dashboard.updateLog.entries.purchase-price-trend-history-load-fix.title':
+    'ແກ້ໂຫຼດແນວໂນ້ມລາຄາຊື້ລົ້ມເຫຼວເມື່ອມີປະຫວັດການຊື້ຂາຍ',
+  'pages.dashboard.updateLog.entries.purchase-price-trend-history-load-fix.description':
+    'ແກ້ການເບິ່ງແນວໂນ້ມລາຄາໃນແຖວໃບສັ່ງຊື້ແລ້ວລາຍງານຂໍ້ຜິດພາດພາຍໃນເຊີບເວີເມື່ອມີປະຫວັດການຊື້ຂາຍ; ສະແດງລາຄາສະເລ່ຍ ລາຍລະອຽດ ແລະເສັ້ນສະແດງໄດ້ປົກກະຕິ.',
   'pages.dashboard.updateLog.entries.production-return-hub-quantity-fix.title':
     'ແກ້ຈຳນວນຄືນວັດຖຸການຜະລິດໃນລາຍການ hub ນຳເຂົ້າ',
   'pages.dashboard.updateLog.entries.production-return-hub-quantity-fix.description':

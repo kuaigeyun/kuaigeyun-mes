@@ -1,0 +1,91 @@
+"""Batch 4 help wiring manifest (excludes HaoliGO)."""
+from __future__ import annotations
+
+# (page path relative to src, list pageKey)
+LIST_WIRE: list[tuple[str, str, str, str]] = [
+    ("apps/kuaicaiwu/pages/cost-management/cost-rules/index.tsx", "kuaicaiwu.costRules", "成本规则", "维护成本卷积、分摊与取值规则，供成本计算引擎引用。"),
+    ("apps/kuaizhizao/pages/performance/hourly-rates/index.tsx", "kuaizhizao.hourlyRates", "工时单价", "维护工序或工种的工时单价，供报工与绩效核算引用。"),
+    ("apps/kuaizhizao/pages/performance/summaries/index.tsx", "kuaizhizao.performanceSummaries", "绩效汇总", "按期间汇总员工或班组绩效结果，供薪酬核对。"),
+    ("apps/kuaizhizao/pages/performance/employee-configs/index.tsx", "kuaizhizao.employeeConfigs", "员工绩效配置", "维护员工与绩效方案、计件规则等关联配置。"),
+    ("apps/kuaizhizao/pages/performance/kpi-definitions/index.tsx", "kuaizhizao.kpiDefinitions", "KPI 定义", "定义绩效 KPI 指标、口径与目标，供汇总与看板使用。"),
+    ("apps/kuaizhizao/pages/performance/shifts/index.tsx", "kuaizhizao.shifts", "班次", "维护生产班次与上下班时间，供排班与报工归属。"),
+    ("apps/kuaizhizao/pages/performance/skills/index.tsx", "kuaizhizao.skills", "技能", "维护员工技能等级与认证，供派工与绩效加权。"),
+    ("apps/kuaizhizao/pages/performance/holidays/index.tsx", "kuaizhizao.holidays", "节假日", "维护企业日历中的节假日，影响工作日历与排班。"),
+    ("apps/kuaizhizao/pages/performance/work-calendar/index.tsx", "kuaizhizao.workCalendar", "工作日历", "维护工作日与休息安排，供 MRP 与绩效统计。"),
+    ("apps/kuaizhizao/pages/logistics-management/carriers/index.tsx", "kuaizhizao.carriers", "承运商", "维护物流承运商主数据，供运单与运费结算引用。"),
+    ("apps/kuaizhizao/pages/logistics-management/drivers/index.tsx", "kuaizhizao.drivers", "司机", "维护司机档案与所属承运商，供运单调度。"),
+    ("apps/kuaizhizao/pages/logistics-management/vehicles/index.tsx", "kuaizhizao.vehicles", "车辆", "维护车辆台账与载重属性，供运输计划引用。"),
+    ("apps/kuaizhizao/pages/plan-management/computation-history/index.tsx", "kuaizhizao.computationHistory", "运算历史", "查看 MRP 或需求运算的历史批次与结果摘要。"),
+    ("apps/kuaizhizao/pages/plan-management/demand-replan-dashboard/index.tsx", "kuaizhizao.demandReplanDashboard", "需求重排看板", "监控需求重排任务与异常，辅助计划员处理。"),
+    ("apps/kuaizhizao/pages/plan-management/scheduling/index.tsx", "kuaizhizao.scheduling", "排程", "对工单或订单进行产能排程与甘特调整。"),
+    ("apps/kuaizhizao/pages/quality-management/inspection-plans/index.tsx", "kuaizhizao.inspectionPlans", "检验计划", "维护来料/过程/成品检验计划与抽样方案。"),
+    ("apps/kuaizhizao/pages/quality-management/iso-clauses/index.tsx", "kuaizhizao.isoClauses", "ISO 条款", "维护质量体系标准条款库，供内审与文件引用。"),
+    ("apps/kuaizhizao/pages/quality-management/spc-monitor/index.tsx", "kuaizhizao.spcMonitor", "SPC 监控", "查看统计过程控制图与失控点，监控关键质量特性。"),
+    ("apps/kuaizhizao/pages/quality-management/system-documents/index.tsx", "kuaizhizao.systemDocuments", "体系文件", "维护质量手册、程序文件等体系文档台账。"),
+    ("apps/kuaizhizao/pages/warehouse-management/backflush-records/index.tsx", "kuaizhizao.backflushRecords", "倒冲记录", "查询倒冲发料过账记录，追溯工单物料消耗。"),
+    ("apps/kuaizhizao/pages/warehouse-management/barcode-mapping-rules/index.tsx", "kuaizhizao.barcodeMappingRules", "条码映射规则", "维护外部条码与内部物料/批次的映射规则。"),
+    ("apps/kuaizhizao/pages/warehouse-management/batch-inventory-query/index.tsx", "kuaizhizao.batchInventoryQuery", "批次库存查询", "按批次维度查询库存余额与库位分布。"),
+    ("apps/kuaizhizao/pages/warehouse-management/batching-center/index.tsx", "kuaizhizao.batchingCenter", "配料中心", "集中处理拣货、配料与发料任务。"),
+    ("apps/kuaizhizao/pages/warehouse-management/customer-material-registration/index.tsx", "kuaizhizao.customerMaterialRegistration", "客供料登记", "登记客户来料与退料，跟踪客供库存。"),
+    ("apps/kuaizhizao/pages/warehouse-management/line-side-warehouse/index.tsx", "kuaizhizao.lineSideWarehouse", "线边仓", "维护线边仓库存与补货，服务车间领用。"),
+    ("apps/kuaizhizao/pages/warehouse-management/replenishment-suggestions/index.tsx", "kuaizhizao.replenishmentSuggestions", "补货建议", "查看系统生成的补货建议并转补货或采购。"),
+    ("apps/kuaizhizao/pages/equipment-management/mold-maintenance-reminders/index.tsx", "kuaizhizao.moldMaintenanceReminders", "模具保养提醒", "展示模具保养到期与逾期提醒列表。"),
+    ("apps/kuaizhizao/pages/equipment-management/tool-maintenance-reminders/index.tsx", "kuaizhizao.toolMaintenanceReminders", "工装保养提醒", "展示工装保养到期与逾期提醒列表。"),
+    ("apps/kuaizhizao/pages/analysis-center/document-timing/index.tsx", "kuaizhizao.documentTiming", "单据时效分析", "分析各业务单据处理时长与瓶颈节点。"),
+    ("apps/master-data/pages/process/drawing-distributions/index.tsx", "masterData.drawingDistributions", "图纸发放", "记录图纸发放对象与版本，控制技术文件流转。"),
+    ("apps/master-data/pages/process/drawing-loans/index.tsx", "masterData.drawingLoans", "图纸借阅", "管理图纸借阅与归还，追溯查阅记录。"),
+    ("pages/infra/client-releases/index.tsx", "infra.clientReleases", "客户端发布", "管理桌面/移动端客户端版本发布包与更新说明。"),
+    ("pages/infra/license-management/index.tsx", "infra.licenseManagement", "许可证管理", "查看与维护站点许可证与功能授权。"),
+    ("pages/infra/packages/index.tsx", "infra.packages", "部署包", "管理应用部署包与版本，供运维发布。"),
+    ("pages/infra/scheduled-tasks/list/index.tsx", "infra.scheduledTasks", "定时任务", "配置与监控后台定时任务执行状态。"),
+    ("pages/infra/scripts/list/index.tsx", "infra.scripts", "脚本任务", "维护运维脚本与执行记录。"),
+    ("pages/infra/sensitive-word-blacklist/index.tsx", "infra.sensitiveWordBlacklist", "敏感词黑名单", "维护消息与内容过滤敏感词库。"),
+    ("pages/system/equipment-faults/list/index.tsx", "system.equipmentFaults", "设备故障代码", "维护标准故障代码字典，供维修单引用。"),
+    ("pages/system/maintenance-plans/list/index.tsx", "system.maintenancePlans", "保养计划模板", "维护跨租户或系统级保养计划模板（若启用）。"),
+    ("apps/kuaiai/pages/knowledge/index.tsx", "kuaiai.knowledge", "知识库", "维护 AI 知识库文档与分段，供问答检索。"),
+    ("apps/kuaiiot/pages/alerts/index.tsx", "kuaiiot.alerts", "IoT 告警", "查看与确认设备告警事件。"),
+    ("apps/kuaiiot/pages/connections/index.tsx", "kuaiiot.connections", "IoT 连接", "维护设备与网关连接通道配置。"),
+    ("apps/kuaiiot/pages/devices/index.tsx", "kuaiiot.devices", "IoT 设备", "登记数采设备档案与在线状态。"),
+    ("apps/kuaiiot/pages/edge-configs/index.tsx", "kuaiiot.edgeConfigs", "边缘配置", "维护边缘网关采集与转发配置。"),
+    ("apps/kuaiiot/pages/products/index.tsx", "kuaiiot.products", "IoT 产品", "维护物模型产品与点位模板。"),
+    ("apps/kuaiiot/pages/tags/index.tsx", "kuaiiot.tags", "IoT 标签", "维护采集点位标签与数据类型。"),
+    ("apps/kuaiplm/pages/change-management/index.tsx", "kuaiplm.changeManagement", "变更管理", "管理 ECR/ECN 变更申请与批准流程。"),
+    ("apps/kuaiplm/pages/knowledge-base/index.tsx", "kuaiplm.knowledgeBase", "PLM 知识库", "维护研发知识文档与分类。"),
+    ("apps/kuaiplm/pages/phase2/design-reviews/index.tsx", "kuaiplm.designReviews", "设计评审", "记录设计评审会议与结论。"),
+    ("apps/kuaiplm/pages/phase2/fmea/index.tsx", "kuaiplm.fmea", "FMEA", "维护失效模式与影响分析记录。"),
+    ("apps/kuaiplm/pages/phase2/requirements/index.tsx", "kuaiplm.requirements", "需求管理", "维护产品需求条目与追溯关系。"),
+    ("apps/kuaiplm/pages/rd-projects/index.tsx", "kuaiplm.rdProjects", "研发项目", "维护研发项目台账与里程碑。"),
+]
+
+# (path, DOCUMENT_LIST_HELP_KEYS property, kebab slug for content, title, p1)
+DOC_WIRE: list[tuple[str, str, str, str, str]] = [
+    ("apps/kuaizhizao/pages/after-sales-service/tickets/index.tsx", "afterSalesTicket", "after-sales-ticket", "服务工单", "服务工单记录客户报修与服务请求，驱动派工与结案。"),
+    ("apps/kuaizhizao/pages/after-sales-service/dispatch-orders/index.tsx", "afterSalesDispatch", "after-sales-dispatch", "派工单", "派工单将服务任务指派工程师并跟踪到场与完修。"),
+    ("apps/kuaizhizao/pages/after-sales-service/repair-orders/index.tsx", "afterSalesRepair", "after-sales-repair", "维修单", "维修单记录故障诊断、备件消耗与维修结果。"),
+    ("apps/kuaizhizao/pages/after-sales-service/install-execution/index.tsx", "afterSalesInstall", "after-sales-install", "安装执行", "安装执行单跟踪产品现场安装与验收。"),
+    ("apps/kuaizhizao/pages/after-sales-service/return-visits/index.tsx", "afterSalesReturnVisit", "after-sales-return-visit", "回访", "回访单记录客户服务满意度与后续跟进。"),
+    ("apps/kuaizhizao/pages/after-sales-service/service-assets/index.tsx", "afterSalesServiceAsset", "after-sales-service-asset", "服务资产", "登记客户在保设备与服务资产档案。"),
+    ("apps/kuaizhizao/pages/after-sales-service/service-settlements/index.tsx", "afterSalesSettlement", "after-sales-settlement", "服务结算", "服务结算单汇总工时、备件与费用。"),
+    ("apps/kuaizhizao/pages/after-sales-service/spare-part-requisitions/index.tsx", "afterSalesSpareRequisition", "after-sales-spare-requisition", "备件领用", "备件领用单记录维修备件出库。"),
+    ("apps/kuaizhizao/pages/logistics-management/freight-orders/index.tsx", "freightOrder", "freight-order", "运单", "运单记录货物运输计划、承运信息与在途状态。"),
+    ("apps/kuaizhizao/pages/logistics-management/freight-bills/index.tsx", "freightBill", "freight-bill", "运费单", "运费单汇总运输费用并与承运商对账。"),
+    ("apps/kuaizhizao/pages/production-execution/delivery-delay-exceptions/index.tsx", "deliveryDelayException", "delivery-delay-exception", "交期延误异常", "跟踪工单或订单交期延误异常与处置进度。"),
+    ("apps/kuaizhizao/pages/production-execution/material-shortage-exceptions/index.tsx", "materialShortageException", "material-shortage-exception", "缺料异常", "跟踪生产缺料异常、影响工单与补料状态。"),
+    ("apps/kuaizhizao/pages/production-execution/quality-exceptions/index.tsx", "qualityException", "quality-exception", "质量异常", "记录生产过程质量异常与纠正措施。"),
+    ("apps/kuaizhizao/pages/production-execution/exception-process/index.tsx", "exceptionProcess", "exception-process", "异常处理", "集中处理生产异常工单与关闭流程。"),
+    ("apps/kuaizhizao/pages/production-execution/packing-binding/index.tsx", "packingBinding", "packing-binding", "装箱绑定", "维护包装箱与序列号/批次绑定关系。"),
+    ("apps/kuaizhizao/pages/exception-management/delivery-delay/index.tsx", "exceptionDeliveryDelay", "exception-delivery-delay", "交期延误", "异常中心查看交期延误单据与预警。"),
+    ("apps/kuaizhizao/pages/exception-management/material-shortage/index.tsx", "exceptionMaterialShortage", "exception-material-shortage", "缺料异常", "异常中心查看缺料预警与关联工单。"),
+    ("apps/kuaizhizao/pages/quality-management/eight-d-reports/index.tsx", "eightDReport", "eight-d-report", "8D 报告", "8D 报告记录问题分析与纠正预防措施。"),
+    ("apps/kuaizhizao/pages/quality-management/internal-audits/index.tsx", "internalAudit", "internal-audit", "内部审核", "内部审核计划与不符合项跟踪。"),
+    ("apps/kuaizhizao/pages/quality-management/management-reviews/index.tsx", "managementReview", "management-review", "管理评审", "管理评审会议记录与决议跟踪。"),
+    ("apps/kuaizhizao/pages/quality-management/nonconforming-ledger/index.tsx", "nonconformingLedger", "nonconforming-ledger", "不合格台账", "汇总不合格品处置与复检结果。"),
+]
+
+MODULE_WIRE: list[tuple[str, str]] = [
+    ("apps/kuaizhizao/pages/plan-management/production-plans/ProductionControlTower.tsx", "plan"),
+]
+
+BATCH4_LIST_PAGE_KEYS = [item[1] for item in LIST_WIRE]
+BATCH4_DOC_KEYS = [item[2] for item in DOC_WIRE]
+BATCH4_DOC_REGISTRY = {item[1]: item[2] for item in DOC_WIRE}

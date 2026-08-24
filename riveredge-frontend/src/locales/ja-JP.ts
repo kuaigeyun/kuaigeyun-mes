@@ -23098,6 +23098,14 @@ export default {
   'pages.dashboard.updateLog.entries.read-path-performance-batch-two.title': '購買取込、検査取込と相場一覧の読み込みを高速化',
   'pages.dashboard.updateLog.entries.read-path-performance-batch-two.description':
     '購買入庫・入荷通知の取込で注文ごとの数量書き戻しを廃止。入荷/完成品検査の取込と入庫確認は物料検査方針を一括解決。工程変更一覧の読み取り時に承認インスタンスを行ごと補建しない。原料相場の当日一覧は前日単価を読み取り専用で表示し、一覧表示時の書き込みを廃止。入金伝票一覧から履歴データのバックフィルを削除。',
+  'pages.dashboard.updateLog.entries.mrp-execute-core-exceptions-import-fix.title':
+    '所要量計算実行時のモジュール欠如修正',
+  'pages.dashboard.updateLog.entries.mrp-execute-core-exceptions-import-fix.description':
+    '受注から所要量計算へ下押し後に実行すると「No module named core.exceptions」となる不具合を修正。MRP実行検証の例外インポート先を正しいパスに変更。',
+  'pages.dashboard.updateLog.entries.purchase-price-trend-history-load-fix.title':
+    '購買価格トレンドの履歴あり時ロード失敗修正',
+  'pages.dashboard.updateLog.entries.purchase-price-trend-history-load-fix.description':
+    '購買注文明細の価格トレンドで履歴成約がある場合にサーバー内部エラーになる不具合を修正。平均単価・明細・折れ線を正常表示。',
   'pages.dashboard.updateLog.entries.production-return-hub-quantity-fix.title':
     '生産返却入庫数量の一覧表示修正',
   'pages.dashboard.updateLog.entries.production-return-hub-quantity-fix.description':
