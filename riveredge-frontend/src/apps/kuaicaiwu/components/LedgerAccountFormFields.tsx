@@ -8,7 +8,7 @@ import type { BankAccount } from '../services/finance/bank-account';
 import {
   filterBankAccountsForPaymentMethod,
   formatBankAccountOptionLabel,
-  isAcceptanceBillPaymentMethod,
+  isNotePaymentMethod,
   isCashPaymentMethod,
   requiresLedgerAccount,
 } from '../utils/financeSharedOptions';
@@ -26,7 +26,7 @@ type Props = {
    * 父级已用 `grid={false}` + 手写 Row/Col 时开启：不再传 ProForm colProps，避免嵌套 Col 裁切标签。
    */
   omitColProps?: boolean;
-  /** 承兑汇票时关联票据台账 */
+  /** 付款方式为「票据」时关联应收/应付票据台账 */
   acceptanceNoteDirection?: FinanceNoteDirection;
   partnerFieldName?: 'customer_id' | 'supplier_id';
 };
@@ -89,7 +89,7 @@ export const LedgerAccountFormFields: React.FC<Props> = ({
       <SyncLedgerAccountWithPaymentMethod accounts={accounts} />
       <ProFormDependency name={['payment_method']}>
         {({ payment_method }) => {
-          if (isAcceptanceBillPaymentMethod(payment_method)) {
+          if (isNotePaymentMethod(payment_method)) {
             if (acceptanceNoteDirection) {
               return (
                 <AcceptanceBillLinkFields
@@ -183,7 +183,7 @@ export function resolveFinanceVoucherReferenceNote(
   bankAccountId: unknown,
   fallback?: string,
 ): string | undefined {
-  if (isAcceptanceBillPaymentMethod(paymentMethod)) {
+  if (isNotePaymentMethod(paymentMethod)) {
     const reference = String(fallback ?? '').trim();
     return reference || undefined;
   }

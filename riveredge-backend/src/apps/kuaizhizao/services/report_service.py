@@ -3560,6 +3560,14 @@ class ReportService:
                 tenant_id, [h.get("supplier_id") for h in heads]
             )
             site_today = to_site_date(resolve_business_datetime())
+            from apps.kuaizhizao.services.purchase_arrival_warning_service import (
+                PurchaseArrivalWarningService,
+            )
+            from apps.kuaizhizao.utils.purchase_arrival_warning import enrich_line_warning_fields
+
+            imminent_days = await PurchaseArrivalWarningService().get_arrival_imminent_days(
+                tenant_id
+            )
             for it in items:
                 head = head_map.get(it.get("order_id"), {})
                 sid = head.get("supplier_id")
@@ -3577,10 +3585,11 @@ class ReportService:
                 it["received_quantity"] = received
                 it["outstanding_quantity"] = pending
                 it["receipt_progress"] = round(received / ordered * 100, 1) if ordered else 0.0
-                dd = self._as_date(it.get("required_date"))
-                is_overdue = bool(pending > 0 and dd is not None and dd < site_today)
-                it["is_overdue"] = is_overdue
-                it["overdue_days"] = (site_today - dd).days if is_overdue and dd is not None else 0
+                it["required_date"] = self._as_date(it.get("required_date"))
+                # 与到货预警同一真源：站点日 + arrival_imminent_days（临期/逾期/正常）
+                enrich_line_warning_fields(
+                    it, site_today=site_today, imminent_days=imminent_days
+                )
             agg = await item_q.annotate(
                 total_ord=Sum("ordered_quantity"),
                 total_rcv=Sum("received_quantity"),

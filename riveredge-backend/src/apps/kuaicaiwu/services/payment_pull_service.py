@@ -330,7 +330,7 @@ class PaymentPullService(AppBaseService[Payment]):
         payment_id: int,
         operator_id: int,
     ) -> bool:
-        """确认草稿付款单时：若由应付单加载创建且尚未核销，补做核销。"""
+        """确认草稿付款单时：若由应付单加载创建且尚未核销，补做核销。预付款不自动核销。"""
         from apps.kuaizhizao.models.document_relation import DocumentRelation
 
         rel = await DocumentRelation.filter(
@@ -344,6 +344,9 @@ class PaymentPullService(AppBaseService[Payment]):
 
         payment = await Payment.get_or_none(tenant_id=tenant_id, id=payment_id, deleted_at__isnull=True)
         if not payment:
+            return False
+        if str(getattr(payment, "settlement_type", "normal") or "normal") == "prepayment":
+            # 预付款保留未核销余额，供预收预付余额与「预付转核销」使用，不因来源应付单自动核销。
             return False
         unsettled = Decimal(str(payment.unsettled_amount or 0))
         if unsettled <= 0:

@@ -5,11 +5,14 @@
  * 生产环境保持较短 staleTime，便于多 Tab 协作时较快看到他人变更。
  */
 
+import { isRequestCancellation } from '../utils/requestCancellation';
+
 const isDev = import.meta.env.DEV;
 
 /** 全局 query 默认项（main.tsx QueryClient） */
 export const defaultQueryOptions = {
   retry: (failureCount: number, error: any) => {
+    if (isRequestCancellation(error)) return false;
     if (error?.response?.status === 401) return false;
     if (error?.response?.status === 400) return false;
     if (error?.response?.status === 500) return false;

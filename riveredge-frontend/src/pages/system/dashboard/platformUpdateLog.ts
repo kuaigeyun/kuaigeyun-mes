@@ -33,6 +33,197 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
   {
+    id: 'partner-statement-preview-hierarchy-import-fix',
+    date: '2026-08-25',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.partner-statement-preview-hierarchy-import-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.partner-statement-preview-hierarchy-import-fix.description',
+  },
+  {
+    id: 'prepayment-balance-from-ar-fix',
+    date: '2026-08-25',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.prepayment-balance-from-ar-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.prepayment-balance-from-ar-fix.description',
+  },
+  {
+    id: 'finance-refund-partner-statement-links',
+    date: '2026-08-25',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.finance-refund-partner-statement-links.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.finance-refund-partner-statement-links.description',
+  },
+  {
+    id: 'finance-ar-ap-invoice-status-detail-unify',
+    date: '2026-08-25',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.finance-ar-ap-invoice-status-detail-unify.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.finance-ar-ap-invoice-status-detail-unify.description',
+  },
+  {
+    id: 'finance-voucher-refund-mirror',
+    date: '2026-08-25',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.finance-voucher-refund-mirror.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.finance-voucher-refund-mirror.description',
+  },
+  {
+    id: 'finance-note-bill-types-expand',
+    date: '2026-08-25',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.finance-note-bill-types-expand.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.finance-note-bill-types-expand.description',
+  },
+  {
+    id: 'receipt-payment-method-note-unify',
+    date: '2026-08-25',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.receipt-payment-method-note-unify.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.receipt-payment-method-note-unify.description',
+  },
+  {
+    id: 'sales-order-push-computation-demand-code-fix',
+    date: '2026-08-25',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-order-push-computation-demand-code-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-order-push-computation-demand-code-fix.description',
+  },
+  {
+    id: 'receipt-payment-amount-decimal-input-fix',
+    date: '2026-08-25',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.receipt-payment-amount-decimal-input-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.receipt-payment-amount-decimal-input-fix.description',
+  },
+  {
+    id: 'other-outbound-line-current-stock',
+    date: '2026-08-25',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.other-outbound-line-current-stock.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.other-outbound-line-current-stock.description',
+  },
+  {
+    id: 'purchase-arrival-impact-assembly-from-sales-fix',
+    date: '2026-08-25',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-arrival-impact-assembly-from-sales-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-arrival-impact-assembly-from-sales-fix.description',
+  },
+  {
+    id: 'purchase-cost-order-trial-material-fields-fix',
+    date: '2026-08-25',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-cost-order-trial-material-fields-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-cost-order-trial-material-fields-fix.description',
+  },
+  {
+    id: 'sales-order-reminder-user-list-fix',
+    date: '2026-08-25',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-order-reminder-user-list-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-order-reminder-user-list-fix.description',
+  },
+  {
+    id: 'tenant-switch-connection-storm-fix',
+    date: '2026-08-25',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.tenant-switch-connection-storm-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.tenant-switch-connection-storm-fix.description',
+  },
+  {
+    id: 'purchase-order-progress-arrival-warning-fix',
+    date: '2026-08-25',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-order-progress-arrival-warning-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-order-progress-arrival-warning-fix.description',
+  },
+  {
+    id: 'purchase-center-overdue-receipt-feed-fix',
+    date: '2026-08-25',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-center-overdue-receipt-feed-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-center-overdue-receipt-feed-fix.description',
+  },
+  {
+    id: 'advanced-search-column-filters-fix',
+    date: '2026-08-25',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.advanced-search-column-filters-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.advanced-search-column-filters-fix.description',
+  },
+  {
+    id: 'document-detail-attachments-display-fix',
+    date: '2026-08-25',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.document-detail-attachments-display-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.document-detail-attachments-display-fix.description',
+  },
+  {
+    id: 'rework-report-unqualified-writeback-fix',
+    date: '2026-08-25',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.rework-report-unqualified-writeback-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.rework-report-unqualified-writeback-fix.description',
+  },
+  {
+    id: 'inventory-ledger-movement-snapshot-fix',
+    date: '2026-08-25',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.inventory-ledger-movement-snapshot-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.inventory-ledger-movement-snapshot-fix.description',
+  },
+  {
+    id: 'kitting-outsource-related-doc-fix',
+    date: '2026-08-25',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kitting-outsource-related-doc-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kitting-outsource-related-doc-fix.description',
+  },
+  {
+    id: 'production-doc-data-scope-self-fix',
+    date: '2026-08-25',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.production-doc-data-scope-self-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.production-doc-data-scope-self-fix.description',
+  },
+  {
+    id: 'spoke-wheel-concentricity-api-fix',
+    date: '2026-08-25',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.spoke-wheel-concentricity-api-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.spoke-wheel-concentricity-api-fix.description',
+  },
+  {
+    id: 'industry-pack-platform',
+    date: '2026-08-25',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.industry-pack-platform.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.industry-pack-platform.description',
+  },
+  {
     id: 'mrp-execute-core-exceptions-import-fix',
     date: '2026-08-24',
     type: 'fix',

@@ -1732,11 +1732,30 @@ class MenuService:
         total = await MenuService._sync_builtin_system_menu_tree(tenant_id=tenant_id)
         need_permission_sync = False
         synced_app_codes: List[str] = []
+        industry_module_seen = False
+        from core.services.application.industry_pack_menu_service import (
+            IndustryPackMenuService,
+        )
+
+        if await IndustryPackMenuService._has_installed_industry_module(tenant_id):
+            industry_module_seen = True
         for app in apps:
             menu_config = app.get("menu_config")
             app_uuid = app.get("uuid")
+            app_code = str(app.get("code") or "")
             if app_uuid and not isinstance(app_uuid, str):
                 app_uuid = str(app_uuid)
+            from core.config.industry_pack import (
+                is_industry_module_app_code,
+                is_industry_pack_shell_code,
+            )
+
+            if is_industry_module_app_code(app_code):
+                industry_module_seen = True
+                continue
+            if is_industry_pack_shell_code(app_code):
+                industry_module_seen = True
+                continue
             if menu_config and app_uuid:
                 try:
                     count = await MenuService.sync_menus_from_application_config(
@@ -1755,6 +1774,13 @@ class MenuService:
                         synced_app_codes.append(str(app_code))
                 except Exception as e:
                     logger.warning(f"同步应用 {app.get('code')} 菜单失败: {e}")
+        if industry_module_seen:
+            try:
+                pack_count = await IndustryPackMenuService.reconcile_for_tenant(tenant_id)
+                total += pack_count
+                synced_app_codes.append("industry-pack")
+            except Exception as e:
+                logger.warning(f"同步行业包菜单失败: {e}")
         if need_permission_sync and not skip_permission_sync:
             try:
                 from core.services.authorization.permission_sync_service import PermissionSyncService

@@ -42,7 +42,21 @@ describe('buildDataPolicySavePayload', () => {
     ]);
   });
 
-  it('keeps existing policies only when batch is self and nothing selected', () => {
+  it('applies batch scope to all visible when none selected and batch is self', () => {
+    const payload = buildDataPolicySavePayload({
+      dataPolicies: [],
+      selectedResources: [],
+      visibleResources: ['app:a', 'app:b'],
+      batchScope: 'scope_self',
+      grantedKeys: granted,
+    });
+    expect(payload).toEqual([
+      { resource: 'app:a', scope_type: 'scope_self', scope_payload: undefined },
+      { resource: 'app:b', scope_type: 'scope_self', scope_payload: undefined },
+    ]);
+  });
+
+  it('merges existing policies with visible batch self when nothing selected', () => {
     const payload = buildDataPolicySavePayload({
       dataPolicies: [policy('app:a', 'scope_self')],
       selectedResources: [],
@@ -50,7 +64,10 @@ describe('buildDataPolicySavePayload', () => {
       batchScope: 'scope_self',
       grantedKeys: granted,
     });
-    expect(payload).toEqual([{ resource: 'app:a', scope_type: 'scope_self', scope_payload: undefined }]);
+    expect(payload).toEqual([
+      { resource: 'app:a', scope_type: 'scope_self', scope_payload: undefined },
+      { resource: 'app:b', scope_type: 'scope_self', scope_payload: undefined },
+    ]);
   });
 
   it('defaults acceptance custom payload to manufacturer partner scope', () => {

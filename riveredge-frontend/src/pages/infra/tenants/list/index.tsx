@@ -12,7 +12,7 @@ import { ActionType, ProColumns, ProForm, ProFormText, ProFormSelect, ProFormDig
 import type { ProDescriptionsItemProps } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Button, Space, Modal, List, Typography, Divider, Spin, Alert, Tooltip } from 'antd';
-import { CheckOutlined, CloseOutlined, EditOutlined, DeleteOutlined, SyncOutlined, StarOutlined, StarFilled } from '@ant-design/icons';
+import { CheckOutlined, CloseOutlined, EditOutlined, DeleteOutlined, SyncOutlined, StarOutlined, StarFilled, AppstoreOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../utils/errorHandler';
@@ -46,6 +46,7 @@ import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
 import { getAntdModal } from '../../../../utils/antdAppApis';
 import { importInChunksViaPerItemCreate } from '../../../../utils/chunkedBulkImport';
 import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
+import { TenantApplicationCenterPermissionsDrawer } from '../components/TenantApplicationCenterPermissionsDrawer';
 const statusTagMap: Record<TenantStatus, { color: string; textKey: string }> = {
   [TenantStatus.ACTIVE]: { color: 'success', textKey: 'pages.infra.tenant.statusActive' },
   [TenantStatus.INACTIVE]: { color: 'default', textKey: 'pages.infra.tenant.statusInactive' },
@@ -82,6 +83,8 @@ const SuperAdminTenantList: React.FC = () => {
   const [editingIsSubtenant, setEditingIsSubtenant] = useState(false);
   const [defaultTenantId, setDefaultTenantId] = useState<number | null>(null);
   const [defaultTenantLoadingId, setDefaultTenantLoadingId] = useState<number | null>(null);
+  const [appCenterPermTenant, setAppCenterPermTenant] = useState<Tenant | null>(null);
+  const [appCenterPermOpen, setAppCenterPermOpen] = useState(false);
 
   const loadDefaultTenantId = useCallback(async () => {
     try {
@@ -1151,6 +1154,19 @@ const SuperAdminTenantList: React.FC = () => {
             >
               {t('common.edit')}
             </Button>
+            <Button
+              key="app-center-permissions"
+              {...rowActionKind('update')}
+              data-action-priority={22}
+              size="small"
+              icon={<AppstoreOutlined />}
+              onClick={() => {
+                setAppCenterPermTenant(record);
+                setAppCenterPermOpen(true);
+              }}
+            >
+              {t('pages.infra.tenantApplicationCenterPermissions.title')}
+            </Button>
             {!record.is_subtenant && (
               <Button
                 key="create-subtenant"
@@ -1620,6 +1636,15 @@ const SuperAdminTenantList: React.FC = () => {
           </ProFormGroup>
         )}
     </FormModalTemplate>
+
+    <TenantApplicationCenterPermissionsDrawer
+      tenant={appCenterPermTenant}
+      open={appCenterPermOpen}
+      onClose={() => {
+        setAppCenterPermOpen(false);
+        setAppCenterPermTenant(null);
+      }}
+    />
     </>
   );
 };

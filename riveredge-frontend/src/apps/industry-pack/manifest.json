@@ -1,0 +1,9 @@
+{
+  "code": "industry-pack",
+  "name": "行业包",
+  "version": "1.0.0",
+  "description": "行业应用统一入口",
+  "icon": "layers",
+  "entry_point": "./index.tsx",
+  "route_path": "/apps/industry-pack"
+}

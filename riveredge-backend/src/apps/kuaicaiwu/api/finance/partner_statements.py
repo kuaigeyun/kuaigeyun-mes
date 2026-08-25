@@ -21,6 +21,7 @@ from apps.kuaicaiwu.schemas.finance import (
     PartnerStatementUpdateLinesRequest,
 )
 from apps.kuaicaiwu.services.partner_statement_service import PartnerStatementService
+from apps.kuaicaiwu.services.finance_settlement_hierarchy import order_lines_by_settlement_hierarchy  # noqa: F401
 from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user

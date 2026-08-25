@@ -3,7 +3,7 @@
  * 与 core/config/pro_app_catalog.py 的 PRO_APP_CODES 保持一致。
  *
  * 应用排序唯一真源：各应用 manifest.json → core_applications.sort_order（API 返回）。
- * 未入库占位使用同一 PRO 段编号（210–250），KU-AI 固定末位 250。
+ * 未入库占位使用同一 PRO 段编号（310–350），KU-AI 固定末位 350。
  * 快能源 / 快协同（kuaiems、kuaisrm）短期不做，不进清单。
  */
 
@@ -15,11 +15,11 @@ export const PRO_APP_CODES = [
 
 export type ProAppCode = (typeof PRO_APP_CODES)[number];
 
-/** 专业版应用 sort_order（与 manifest / 迁移 534 一致；KU-AI 末位） */
+/** 专业版应用 sort_order（与 manifest / 迁移一致；KU-AI 末位） */
 export const PRO_APP_SORT_ORDER: Record<ProAppCode, number> = {
-  kuaireport: 210,
-  kuaiiot: 220,
-  kuaiai: 250,
+  kuaireport: 310,
+  kuaiiot: 320,
+  kuaiai: 350,
 };
 
 type ProPlaceholderMeta = {

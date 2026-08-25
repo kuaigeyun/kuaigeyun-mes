@@ -163,6 +163,10 @@ ENTITY_MODEL_BY_RULE_CODE: Dict[str, Tuple[str, str]] = {
         "PurchaseOrderChangeOrder",
     ),
     "PURCHASE_ORDER_CODE": ("apps.kuaizhizao.models.purchase_order", "PurchaseOrder"),
+    "PURCHASE_ARRIVAL_DELAY_CODE": (
+        "apps.kuaizhizao.models.purchase_arrival_delay_report",
+        "PurchaseArrivalDelayReport",
+    ),
     "PURCHASE_RECEIPT_CODE": ("apps.kuaizhizao.models.purchase_receipt", "PurchaseReceipt"),
     "PURCHASE_REQUISITION_CODE": ("apps.kuaizhizao.models.purchase_requisition", "PurchaseRequisition"),
     "PURCHASE_RETURN_CODE": ("apps.kuaizhizao.models.purchase_return", "PurchaseReturn"),

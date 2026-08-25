@@ -138,6 +138,9 @@ export async function getInstalledApplicationList(params?: {
 }): Promise<Application[]> {
   return apiRequest<Application[]>('/core/applications/installed', {
     params,
+    // 壳层启动接口：后端 reload 时快速失败并出「重试」，避免空白转圈数分钟
+    timeoutMs: 15_000,
+    maxRetries: 1,
   });
 }
 
@@ -389,5 +392,33 @@ export async function syncApplicationManifest(appCode: string): Promise<{
 
   const result = await response.json();
   return result; // 返回完整的响应对象 { success, message, data }
+}
+
+export type AppCenterCategory = 'basic' | 'pro' | 'industry' | 'dedicated';
+
+export interface ApplicationCenterCategoryPermission {
+  allow_self_service_toggle: boolean;
+}
+
+export interface ApplicationCenterEffectiveCategory {
+  allow_self_service_toggle: boolean;
+  package_allows: boolean;
+  can_self_service_toggle: boolean;
+}
+
+export interface ApplicationCenterCapabilities {
+  is_infra_admin: boolean;
+  is_tenant_admin: boolean;
+  category_permissions: Record<AppCenterCategory, ApplicationCenterCategoryPermission>;
+  package: {
+    allow_pro_apps: boolean;
+    allowed_app_codes: string[];
+  };
+  effective: Record<AppCenterCategory, ApplicationCenterEffectiveCategory>;
+}
+
+/** 当前组织应用中心自主启停能力（分类权限 + 套餐 PRO 硬顶） */
+export async function getApplicationCenterCapabilities(): Promise<ApplicationCenterCapabilities> {
+  return apiRequest<ApplicationCenterCapabilities>('/core/applications/center-capabilities');
 }
 

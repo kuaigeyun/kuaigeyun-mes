@@ -45,6 +45,7 @@
         "@formily/json-schema": "^2.3.7",
         "@formily/react": "^2.3.7",
         "@iconify-json/fluent-color": "^1.2.21",
+        "@iconify-json/fluent-emoji-flat": "^1.2.5",
         "@iconify-json/solar": "^1.2.5",
         "@iconify/react": "^6.0.2",
         "@measured/puck": "^0.20.1",

@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional
 
 from apps.kuaizhizao.services.document_relation_service import DocumentRelationService
 from apps.kuaicaiwu.services.finance_aggregation_service import FinanceAggregationService
+from apps.kuaicaiwu.services.finance_settlement_hierarchy import order_lines_by_settlement_hierarchy
 from core.utils.timezone_utils import to_api_isoformat
 
 
@@ -259,7 +260,7 @@ class DocumentReconciliationService:
         sort_order: Optional[str] = None,
         operator_id: Optional[int] = None,
     ) -> Dict[str, Any]:
-        """预收/预付余额汇总（未核销余额 > 0 且 settlement_type=prepayment）。"""
+        """预收/预付余额汇总（未核销余额 > 0 且 settlement_type=prepayment，不含作废）。"""
         from apps.kuaicaiwu.models.receipt import Receipt
         from apps.kuaicaiwu.models.payment import Payment
 
@@ -279,13 +280,13 @@ class DocumentReconciliationService:
             settlement_type="prepayment",
             unsettled_amount__gt=0,
             deleted_at__isnull=True,
-        ).all()
+        ).exclude(status="Cancelled").all()
         payment_rows = await Payment.filter(
             tenant_id=tenant_id,
             settlement_type="prepayment",
             unsettled_amount__gt=0,
             deleted_at__isnull=True,
-        ).all()
+        ).exclude(status="Cancelled").all()
 
         customer_map: Dict[int, Dict[str, Any]] = {}
         for row in receipt_rows:
@@ -417,10 +418,6 @@ class DocumentReconciliationService:
         partner_type: str,
         items: List[Dict[str, Any]],
     ) -> List[Dict[str, Any]]:
-        from apps.kuaicaiwu.services.finance_settlement_hierarchy import (
-            order_lines_by_settlement_hierarchy,
-        )
-
         pt = partner_type.lower()
         if pt in ("customer", "客户"):
             return await order_lines_by_settlement_hierarchy(

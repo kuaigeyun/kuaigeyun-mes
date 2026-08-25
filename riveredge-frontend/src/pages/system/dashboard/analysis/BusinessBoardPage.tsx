@@ -10,6 +10,7 @@ import {
   SettingOutlined,
   PlusOutlined,
 } from '@ant-design/icons';
+import { Check, X } from 'lucide-react';
 import { Column, Area, Chart } from '@ant-design/charts';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
@@ -787,12 +788,14 @@ const BroadcastFeed: React.FC<BroadcastFeedProps> = ({ items, emptyText }) => {
               >
                 {it.operator_name} - {it.process_name} - {it.work_order_no}
               </span>
-              <span style={{ color: getBoardHud().emerald, fontFamily: clockFont, fontSize: 13 }}>
-                ✓{qualified}
+              <span style={{ color: getBoardHud().emerald, fontFamily: clockFont, fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+                <Check size={12} strokeWidth={2.5} aria-hidden />
+                {qualified}
               </span>
               {unqualified > 0 && (
-                <span style={{ color: getBoardHud().rose, fontFamily: clockFont, fontSize: 13 }}>
-                  ×{unqualified}
+                <span style={{ color: getBoardHud().rose, fontFamily: clockFont, fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+                  <X size={12} strokeWidth={2.5} aria-hidden />
+                  {unqualified}
                 </span>
               )}
             </div>
@@ -1836,7 +1839,7 @@ const BusinessBoardPage: React.FC = () => {
                               boxSizing: 'border-box'
                             }}>
                               {isDone ? (
-                                <span style={{ color: getBoardHud().bgDeep, fontSize: 13, fontWeight: 'bold' }}>✓</span>
+                                <Check size={13} strokeWidth={2.5} color={getBoardHud().bgDeep} aria-hidden />
                               ) : isActive ? (
                                 <span style={{ color: getBoardHud().cyan, fontSize: 8, fontWeight: 'bold', fontFamily: clockFont }}>{step!.progress}%</span>
                               ) : null}

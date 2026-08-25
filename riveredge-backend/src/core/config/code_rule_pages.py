@@ -39,6 +39,7 @@ PAGE_CODE_TO_FIXED_TEXT_PRESET: Dict[str, str] = {
     "kuaizhizao-production-outsource-product-return": "OPR",  # 委外退货
     "kuaizhizao-purchase-order": "CG",           # 采购
     "kuaizhizao-purchase-order-change": "CGBG",  # 采购变更单
+    "kuaizhizao-purchase-arrival-delay": "PAD",  # 采购到货延期填报
     "kuaizhizao-purchase-requisition": "CGSQ",   # 采购申请
     "kuaizhizao-purchase-inquiry": "CGXJ",       # 采购询价单
     "kuaizhizao-purchase-receipt": "CGSD",      # 采购收货
@@ -494,6 +495,18 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "module_icon": "tool",
         "auto_generate": True,
         "rule_code": "PURCHASE_ORDER_CHANGE_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaizhizao-purchase-arrival-delay",
+        "page_name": "采购到货延期填报",
+        "page_path": "/apps/kuaizhizao/purchase-management/arrival-warnings",
+        "code_field": "report_code",
+        "code_field_label": "延期填报单号",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "PURCHASE_ARRIVAL_DELAY_CODE",
         "allow_manual_edit": True,
     },
     {

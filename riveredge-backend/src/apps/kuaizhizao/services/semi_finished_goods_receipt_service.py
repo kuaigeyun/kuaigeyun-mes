@@ -390,7 +390,9 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
                         to_warehouse_id=wh_id,
                         idempotency_key=f"semi_finished_goods_receipt:{receipt_id}:inc:{item.id}",
                         quality_status="qualified",
-                    )
+                    operator_id=confirmed_by,
+                    operator_name=confirmer_name,
+                )
             except Exception as inv_e:
                 logger.error("半成品入库确认-更新库存失败: %s", inv_e)
                 raise
@@ -445,6 +447,9 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
                         source_type="semi_finished_goods_receipt_revoke",
                         source_doc_id=receipt_id,
                         source_doc_code=receipt.receipt_code,
+                        movement_type="semi_fg_receipt",
+                        from_warehouse_id=wh_id,
+                        operator_id=updated_by,
                     )
                 await SemiFinishedGoodsReceipt.filter(tenant_id=tenant_id, id=receipt_id).update(
                     status="待入库",

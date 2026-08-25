@@ -7,8 +7,7 @@ import type { TFunction } from 'i18next';
 const PAYMENT_METHOD_I18N: Record<string, string> = {
   银行转账: 'app.kuaicaiwu.financeUi.paymentMethod.bankTransfer',
   现金: 'app.kuaicaiwu.financeUi.paymentMethod.cash',
-  支票: 'app.kuaicaiwu.financeUi.paymentMethod.check',
-  承兑汇票: 'app.kuaicaiwu.financeUi.paymentMethod.acceptanceBill',
+  票据: 'app.kuaicaiwu.financeUi.paymentMethod.note',
   在线支付: 'app.kuaicaiwu.financeUi.paymentMethod.online',
   其他: 'app.kuaicaiwu.financeUi.paymentMethod.other',
 };
@@ -29,10 +28,11 @@ export function formatPaymentMethod(value: string | null | undefined, t: TFuncti
 /** 与后端收款/付款单 payment_method 存值一致 */
 export const BANK_TRANSFER_PAYMENT_METHOD = '银行转账';
 export const CASH_PAYMENT_METHOD = '现金';
-export const ACCEPTANCE_BILL_PAYMENT_METHOD = '承兑汇票';
+/** 收/付款方式「票据」：关联应收/应付票据台账（票种在台账内区分） */
+export const NOTE_PAYMENT_METHOD = '票据';
 
-export function isAcceptanceBillPaymentMethod(method: string | null | undefined): boolean {
-  return String(method || '').trim() === ACCEPTANCE_BILL_PAYMENT_METHOD;
+export function isNotePaymentMethod(method: string | null | undefined): boolean {
+  return String(method || '').trim() === NOTE_PAYMENT_METHOD;
 }
 
 export function isBankTransferPaymentMethod(method: string | null | undefined): boolean {

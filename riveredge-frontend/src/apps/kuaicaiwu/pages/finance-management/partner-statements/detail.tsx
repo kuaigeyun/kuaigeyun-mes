@@ -34,6 +34,8 @@ import {
   recalcPartnerStatementLines,
 } from '../../../utils/partnerStatementAmountUtils';
 import { usePartnerStatementLineColumns } from '../../../utils/partnerStatementLineColumns';
+import { useFinanceVoucherDetail } from '../../../components/FinanceVoucherDetailProvider';
+import { resolvePartnerStatementVoucherTarget } from '../../../utils/financeVoucherDocType';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 const PS = 'app.kuaicaiwu.partnerStatement';
 const PARTNER_STATEMENT_RESOURCE = 'kuaicaiwu:partner-statement';
@@ -155,12 +157,23 @@ const PartnerStatementDetailPage: React.FC = () => {
   }, [data, t]);
   const snap = data?.transaction_details?.partner_snapshot || {};
 
+  const { openFinanceVoucherDetail } = useFinanceVoucherDetail();
+
+  const handleDocCodeClick = useCallback(
+    (line: PartnerStatementLine) => {
+      const target = resolvePartnerStatementVoucherTarget(line);
+      if (target) openFinanceVoucherDetail(target);
+    },
+    [openFinanceVoucherDetail],
+  );
+
   const lineColumns = usePartnerStatementLineColumns({
     t,
     balanceLabel,
     editable: linesEditable,
     onStatementAmountChange: handleStatementAmountChange,
     lineKey: lineKeyFn,
+    onDocCodeClick: handleDocCodeClick,
   });
 
   const handleSaveLines = async () => {

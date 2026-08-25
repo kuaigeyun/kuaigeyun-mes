@@ -11,7 +11,7 @@ import asyncio
 import json
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union
 from decimal import Decimal
 
 from tortoise.exceptions import IntegrityError
@@ -2306,6 +2306,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
     async def list_work_orders(
         self,
         tenant_id: int,
+        current_user: Optional[User] = None,
         skip: int = 0,
         limit: int = 100,
         code: Optional[str] = None,
@@ -2363,6 +2364,14 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         ).filter(
             Q(group_role__isnull=True)
             | Q(group_role__in=["root", "component", "outsource_component"]),
+        )
+        from apps.kuaizhizao.services.kuaizhizao_data_scope import apply_kuaizhizao_list_scope
+
+        query = await apply_kuaizhizao_list_scope(
+            query,
+            tenant_id=tenant_id,
+            current_user=current_user,
+            resource="kuaizhizao:work-order",
         )
 
         # 添加筛选条件
@@ -6357,6 +6366,77 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             planned_end_date=owo.planned_end_date,
         )
 
+    async def _collect_work_order_subtree_ids(
+        self,
+        tenant_id: int,
+        wo: WorkOrder,
+    ) -> Set[int]:
+        """当前工单及其 BOM 子工单 ID（同组内向下展开）。"""
+        root_id = int(wo.id) if wo.id else 0
+        if not root_id:
+            return set()
+        ids: Set[int] = {root_id}
+        group_id = wo.work_order_group_id
+        frontier = [root_id]
+        while frontier:
+            q = WorkOrder.filter(
+                tenant_id=tenant_id,
+                bom_parent_work_order_id__in=frontier,
+                deleted_at__isnull=True,
+            )
+            if group_id:
+                q = q.filter(work_order_group_id=group_id)
+            children = await q.values_list("id", flat=True)
+            next_frontier: List[int] = []
+            for cid in children:
+                cid_int = int(cid)
+                if cid_int not in ids:
+                    ids.add(cid_int)
+                    next_frontier.append(cid_int)
+            frontier = next_frontier
+        return ids
+
+    async def _load_kitting_component_outsource_map(
+        self,
+        tenant_id: int,
+        wo: WorkOrder,
+    ) -> Dict[int, OutsourceWorkOrder]:
+        """
+        齐套面板委外关联：按工单组内全部委外子单匹配物料，而非仅 bom_parent=当前工单。
+        嵌套 BOM 下委外件的 bom_parent 往往指向中间层自制工单，根工单齐套会漏关联单号。
+        """
+        if wo.work_order_group_id:
+            rows = await OutsourceWorkOrder.filter(
+                tenant_id=tenant_id,
+                work_order_group_id=wo.work_order_group_id,
+                deleted_at__isnull=True,
+            ).order_by("-id").all()
+            if not rows:
+                subtree_ids = await self._collect_work_order_subtree_ids(tenant_id, wo)
+                rows = await OutsourceWorkOrder.filter(
+                    tenant_id=tenant_id,
+                    bom_parent_work_order_id__in=list(subtree_ids),
+                    deleted_at__isnull=True,
+                ).order_by("-id").all()
+        else:
+            subtree_ids = await self._collect_work_order_subtree_ids(tenant_id, wo)
+            if not subtree_ids:
+                return {}
+            rows = await OutsourceWorkOrder.filter(
+                tenant_id=tenant_id,
+                bom_parent_work_order_id__in=list(subtree_ids),
+                deleted_at__isnull=True,
+            ).order_by("-id").all()
+
+        result: Dict[int, OutsourceWorkOrder] = {}
+        for row in rows:
+            if not row.product_id:
+                continue
+            pid = int(row.product_id)
+            if pid not in result:
+                result[pid] = row
+        return result
+
     _KITTING_PO_TERMINAL_STATUSES = frozenset(
         {
             DocumentStatus.CANCELLED.value,
@@ -6767,7 +6847,6 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         picking_id_list = filter_gi_picking_ids(all_pickings)
 
         component_wos: Dict[int, WorkOrder] = {}
-        component_owos: Dict[int, OutsourceWorkOrder] = {}
         if wo.work_order_group_id:
             child_rows = await WorkOrder.filter(
                 tenant_id=tenant_id,
@@ -6776,13 +6855,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 deleted_at__isnull=True,
             ).all()
             component_wos = {int(r.product_id): r for r in child_rows if r.product_id}
-            outsource_rows = await OutsourceWorkOrder.filter(
-                tenant_id=tenant_id,
-                work_order_group_id=wo.work_order_group_id,
-                bom_parent_work_order_id=wo.id,
-                deleted_at__isnull=True,
-            ).all()
-            component_owos = {int(r.product_id): r for r in outsource_rows if r.product_id}
+        component_owos = await self._load_kitting_component_outsource_map(tenant_id, wo)
 
         # 半成品供给：按末道检验放行量预计算（未检完不得计入上游齐套）
         component_wo_effective: Dict[int, Decimal] = {}

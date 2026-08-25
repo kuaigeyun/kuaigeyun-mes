@@ -23,7 +23,7 @@ import { formatDateTime } from '../../../../../utils/format';
 import { toApiDateString } from '../../../../../utils/formDate';
 
 interface PurchaseCostResult {
-  material_id: number;
+  material_id?: number | null;
   material_code: string;
   material_name: string;
   purchase_order_code?: string;

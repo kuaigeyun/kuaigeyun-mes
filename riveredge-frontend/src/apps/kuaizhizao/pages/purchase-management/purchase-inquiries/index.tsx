@@ -74,6 +74,11 @@ import {
   type PurchaseInquiryVendor,
 } from '../../../services/purchase-inquiry';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import {
+  appendDocumentAttachmentsToSupplementary,
+  documentAttachmentsFromRecord,
+  hasDocumentAttachments,
+} from '../../../components/DocumentAttachmentsReadonly';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import {
   buildPurchaseInquiryLifecycleValueEnum,
@@ -1558,6 +1563,9 @@ const PurchaseInquiriesPage: React.FC = () => {
     'purchase_inquiry',
   );
 
+  const purchaseInquiryAttachments = documentAttachmentsFromRecord(detail);
+  const purchaseInquiryAttLabel = t('app.uniDetail.sectionAttachments');
+
   return (
     <ListPageTemplate>
       <UniTable<PurchaseInquiry>
@@ -1832,8 +1840,18 @@ const PurchaseInquiriesPage: React.FC = () => {
         }
         collaboration={detailCollaboration}
         collaborationAuditRecord={detail}
-        supplementaryTitle={t('app.kuaizhizao.purchaseInquiry.invitedVendors')}
-        supplementary={detailSupplementary}
+        supplementaryTitle={
+          detail
+            ? t('app.kuaizhizao.purchaseInquiry.invitedVendors')
+            : hasDocumentAttachments(purchaseInquiryAttachments)
+              ? purchaseInquiryAttLabel
+              : undefined
+        }
+        supplementary={appendDocumentAttachmentsToSupplementary(
+          detailSupplementary,
+          purchaseInquiryAttachments,
+          purchaseInquiryAttLabel,
+        )}
         linesTitle={t('app.kuaizhizao.purchaseInquiry.inquiryItems')}
         lines={detailLines}
         timeline={

@@ -2303,7 +2303,9 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                         movement_type="production_issue",
                         from_warehouse_id=wh_id,
                         idempotency_key=f"production_picking:{picking_id}:dec:{item.id}",
-                    )
+                    operator_id=confirmed_by,
+                    operator_name=confirmer_name,
+                )
                     required = item.required_quantity or Decimal(0)
                     remaining = required - qty
                     if remaining < 0:
@@ -2422,7 +2424,9 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                         ledger_production_date=ledger_production_date,
                         remark="撤回生产领料",
                         idempotency_key=f"production_picking:{picking_id}:withdraw:{item.id}",
-                    )
+                    operator_id=updated_by,
+                    operator_name=None,
+                )
                     required = item.required_quantity or Decimal(0)
                     await ProductionPickingItem.filter(
                         tenant_id=tenant_id, id=item.id, picking_id=picking_id
@@ -3488,7 +3492,9 @@ class ProductionReturnService(AppBaseService[ProductionReturn]):
                         movement_type="production_return",
                         to_warehouse_id=wh_id,
                         idempotency_key=f"production_return:{return_id}:inc:{item.id}",
-                    )
+                    operator_id=confirmed_by,
+                    operator_name=returner_name,
+                )
             except Exception as inv_e:
                 logger.error("生产退料确认-更新库存失败: %s", inv_e)
                 raise
@@ -3534,7 +3540,10 @@ class ProductionReturnService(AppBaseService[ProductionReturn]):
                         source_type="production_return_revoke",
                         source_doc_id=return_id,
                         source_doc_code=ret_obj.return_code,
-                    )
+                    movement_type="production_return",
+                    operator_id=updated_by,
+                    operator_name=None,
+                )
 
                 await ProductionReturn.filter(tenant_id=tenant_id, id=return_id).update(
                     status="待退料",
@@ -4033,7 +4042,9 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
                         to_warehouse_id=wh_id,
                         idempotency_key=f"finished_goods_receipt:{receipt_id}:inc:{item.id}",
                         quality_status="qualified",
-                    )
+                    operator_id=confirmed_by,
+                    operator_name=confirmer_name,
+                )
                 from apps.kuaicaiwu.services.inventory_cost_service import InventoryCostService
                 await InventoryCostService().apply_finished_goods_receipt_cost(
                     tenant_id, receipt_id, receipt.work_order_id
@@ -4088,7 +4099,10 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
                         source_type="finished_goods_receipt_revoke",
                         source_doc_id=receipt_id,
                         source_doc_code=receipt.receipt_code,
-                    )
+                    movement_type="other_outbound",
+                    operator_id=updated_by,
+                    operator_name=None,
+                )
 
                 await FinishedGoodsReceipt.filter(tenant_id=tenant_id, id=receipt_id).update(
                     status="待入库",
@@ -5663,6 +5677,8 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                     movement_type="sales_delivery_withdraw",
                     remark="撤回销售出库",
                     idempotency_key=f"sales_delivery:{delivery_id}:withdraw:{item.id}",
+                    operator_id=updated_by,
+                    operator_name=None,
                 )
                 item.status = "待出库"
                 item.delivery_time = None
@@ -6951,7 +6967,9 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                         movement_type="sales_delivery",
                         from_warehouse_id=wh_id,
                         idempotency_key=f"sales_delivery:{delivery_id}:dec:{item.id}",
-                    )
+                    operator_id=confirmed_by,
+                    operator_name=confirmer_name,
+                )
             except BusinessLogicError:
                 raise
             except ValueError as inv_e:
@@ -8587,7 +8605,9 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                         movement_type="purchase_receipt",
                         to_warehouse_id=line_wh,
                         idempotency_key=f"purchase_receipt:{receipt_id}:inc:{item.id}",
-                    )
+                    operator_id=confirmed_by,
+                    operator_name=confirmer_name,
+                )
                 from apps.kuaicaiwu.services.inventory_cost_service import InventoryCostService
                 await InventoryCostService().on_purchase_receipt_confirmed(tenant_id, receipt_id)
                 # #region agent log
@@ -8803,7 +8823,10 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                         source_type="purchase_receipt_revoke",
                         source_doc_id=receipt_id,
                         source_doc_code=receipt_obj.receipt_code,
-                    )
+                    movement_type="other_outbound",
+                    operator_id=updated_by,
+                    operator_name=None,
+                )
 
                 user_info = await self.get_user_info(updated_by)
                 await PurchaseReceipt.filter(tenant_id=tenant_id, id=receipt_id).update(
@@ -10949,7 +10972,10 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                         source_doc_id=return_id,
                         source_doc_code=return_obj.return_code,
                         ledger_production_date=to_site_date(receipt_time),
-                    )
+                    movement_type="other_inbound",
+                    operator_id=confirmed_by,
+                    operator_name=None,
+                )
             except Exception as inv_e:
                 logger.error("销售退货确认-更新库存失败: %s", inv_e)
                 raise
@@ -11187,6 +11213,9 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                     source_type="sales_return_withdraw",
                     source_doc_id=return_id,
                     source_doc_code=return_obj.return_code,
+                    movement_type="other_outbound",
+                    operator_id=updated_by,
+                    operator_name=None,
                 )
 
             await SalesReturn.filter(tenant_id=tenant_id, id=return_id).update(
@@ -12369,7 +12398,10 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                         source_doc_id=return_id,
                         source_doc_code=ret_obj.return_code,
                         enforce_fifo=enforce_fifo,
-                    )
+                    movement_type="other_outbound",
+                    operator_id=confirmed_by,
+                    operator_name=None,
+                )
             except Exception as inv_e:
                 logger.error("采购退货确认-更新库存失败: %s", inv_e)
                 if isinstance(inv_e, BusinessLogicError):
@@ -12603,6 +12635,9 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                     source_doc_id=return_id,
                     source_doc_code=return_obj.return_code,
                     ledger_production_date=ledger_production_date,
+                    movement_type="other_inbound",
+                    operator_id=updated_by,
+                    operator_name=None,
                 )
 
             await PurchaseReturn.filter(tenant_id=tenant_id, id=return_id).update(
@@ -12887,6 +12922,9 @@ class OtherInboundService(AppBaseService[OtherInbound]):
                     source_type="other_inbound_delete_cleanup",
                     source_doc_id=inbound_id,
                     source_doc_code=inbound_obj.inbound_code,
+                    movement_type="other_outbound",
+                    operator_id=updated_by,
+                    operator_name=None,
                 )
 
             suffix = "\n[库存修复] 已对软删已入库单冲减即时库存"
@@ -13048,7 +13086,10 @@ class OtherInboundService(AppBaseService[OtherInbound]):
                         source_doc_code=inbound.inbound_code,
                         ledger_production_date=to_site_date(receipt_time),
                         ledger_expiry_date=getattr(item, "expiry_date", None),
-                    )
+                    movement_type="other_inbound",
+                    operator_id=confirmed_by,
+                    operator_name=None,
+                )
             except Exception as inv_e:
                 logger.error("其他入库确认-更新库存失败: %s", inv_e)
                 raise
@@ -13134,7 +13175,10 @@ class OtherInboundService(AppBaseService[OtherInbound]):
                         source_type="other_inbound_revoke", 
                         source_doc_id=inbound_id,
                         source_doc_code=inbound_obj.inbound_code,
-                    )
+                    movement_type="other_outbound",
+                    operator_id=updated_by,
+                    operator_name=None,
+                )
                 
                 # 状态回归并清空接收人和接收时间
                 await OtherInbound.filter(tenant_id=tenant_id, id=inbound_id).update(
@@ -13497,7 +13541,10 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
                         source_doc_id=outbound_id,
                         source_doc_code=outbound_obj.outbound_code,
                         enforce_fifo=enforce_fifo,
-                    )
+                    movement_type="other_outbound",
+                    operator_id=confirmed_by,
+                    operator_name=None,
+                )
             except ValueError as inv_e:
                 logger.error("其他出库确认-更新库存失败: %s", inv_e)
                 raise BusinessLogicError(str(inv_e) or "库存不足，无法出库")
@@ -13591,7 +13638,10 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
                         source_type="other_outbound_revoke",
                         source_doc_id=outbound_id,
                         source_doc_code=outbound_obj.outbound_code,
-                    )
+                    movement_type="other_outbound",
+                    operator_id=updated_by,
+                    operator_name=None,
+                )
 
                 await OtherOutbound.filter(tenant_id=tenant_id, id=outbound_id).update(
                     status="待出库",
@@ -13918,7 +13968,10 @@ class MaterialBorrowService(AppBaseService[MaterialBorrow]):
                         source_doc_id=borrow_id,
                         source_doc_code=borrow_obj.borrow_code,
                         enforce_fifo=enforce_fifo,
-                    )
+                    movement_type="other_outbound",
+                    operator_id=confirmed_by,
+                    operator_name=None,
+                )
             except ValueError as inv_e:
                 logger.error("借料确认-更新库存失败: %s", inv_e)
                 raise BusinessLogicError(str(inv_e) or "库存不足，无法借出")
@@ -13977,7 +14030,10 @@ class MaterialBorrowService(AppBaseService[MaterialBorrow]):
                         source_type="material_borrow_withdraw",
                         source_doc_id=borrow_id,
                         source_doc_code=borrow_obj.borrow_code,
-                    )
+                    movement_type="other_outbound",
+                    operator_id=updated_by,
+                    operator_name=None,
+                )
 
                 await MaterialBorrow.filter(tenant_id=tenant_id, id=borrow_id).update(
                     status="待借出",
@@ -14246,7 +14302,10 @@ class MaterialReturnService(AppBaseService[MaterialReturn]):
                         source_doc_id=return_id,
                         source_doc_code=return_entity.return_code,
                         ledger_production_date=to_site_date(return_time),
-                    )
+                    movement_type="other_inbound",
+                    operator_id=confirmed_by,
+                    operator_name=confirmer_name,
+                )
             except Exception as inv_e:
                 logger.error("还料确认-更新库存失败: %s", inv_e)
                 raise

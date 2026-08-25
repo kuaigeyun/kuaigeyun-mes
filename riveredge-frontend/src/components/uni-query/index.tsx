@@ -23,6 +23,11 @@ import { QuickFilters } from './QuickFilters';
 import { AdvancedFilters } from './AdvancedFilters';
 import type { FilterGroup, FilterConfigData } from './types';
 import { convertFiltersToApiParams } from './filterUtils';
+import {
+  mergeColumnFilters,
+  parseColumnFiltersParam,
+  serializeColumnFiltersParam,
+} from './columnFilterContract';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import {
   LEGACY_LIST_LIFECYCLE_FIELD,
@@ -1021,12 +1026,20 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
         quickFilters,
       };
       const filterParams = convertFiltersToApiParams(filterConfig, columns);
-      
-      // 合并搜索参数和筛选参数
-      const finalSearchParams = {
+
+      // 合并搜索参数和筛选参数；column_filters 与表头列筛选合并，不互相覆盖
+      const priorColumnFilters = parseColumnFiltersParam(
+        (filteredValues as Record<string, unknown>).column_filters,
+      );
+      const nextColumnFilters = parseColumnFiltersParam(filterParams.column_filters);
+      const mergedColumnFilters = mergeColumnFilters(priorColumnFilters, nextColumnFilters);
+      const finalSearchParams: Record<string, unknown> = {
         ...filteredValues,
         ...filterParams,
       };
+      const serialized = serializeColumnFiltersParam(mergedColumnFilters);
+      if (serialized) finalSearchParams.column_filters = serialized;
+      else delete finalSearchParams.column_filters;
       
       // 调试日志（开发环境）
       if (process.env.NODE_ENV === 'development') {
@@ -1175,17 +1188,23 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
       quickFilters,
     };
     const filterParams = convertFiltersToApiParams(filterConfig, columns);
-    
-    // 合并搜索参数和筛选参数
-    const finalSearchParams = {
+
+    const priorColumnFilters = parseColumnFiltersParam(
+      (filteredValues as Record<string, unknown>).column_filters,
+    );
+    const nextColumnFilters = parseColumnFiltersParam(filterParams.column_filters);
+    const mergedColumnFilters = mergeColumnFilters(priorColumnFilters, nextColumnFilters);
+    const finalSearchParams: Record<string, unknown> = {
       ...filteredValues,
       ...filterParams,
-      // 保存筛选配置（用于恢复）
       _filterConfig: {
         groups: filterGroups,
         quickFilters,
       },
     };
+    const serialized = serializeColumnFiltersParam(mergedColumnFilters);
+    if (serialized) finalSearchParams.column_filters = serialized;
+    else delete finalSearchParams.column_filters;
     
     if (editingSearch) {
       // 更新现有搜索条件

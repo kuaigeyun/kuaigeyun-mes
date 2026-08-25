@@ -349,6 +349,9 @@ class AssemblyOrderService(AppBaseService[AssemblyOrder]):
             # 调用统一库存服务：消耗组件、增加成品
             from apps.kuaizhizao.services.inventory_service import InventoryService
 
+            user_info = await self.get_user_info(executed_by)
+            operator_name = user_info["name"]
+
             for item in items:
                 await InventoryService.decrease_stock(
                     tenant_id=tenant_id,
@@ -358,6 +361,10 @@ class AssemblyOrderService(AppBaseService[AssemblyOrder]):
                     source_type="assembly_order",
                     source_doc_id=order_id,
                     source_doc_code=order.code,
+                    movement_type="assembly_consume",
+                    from_warehouse_id=order.warehouse_id,
+                    operator_id=executed_by,
+                    operator_name=operator_name,
                 )
                 item.status = "consumed"
                 await item.save()
@@ -370,16 +377,19 @@ class AssemblyOrderService(AppBaseService[AssemblyOrder]):
                 source_type="assembly_order",
                 source_doc_id=order_id,
                 source_doc_code=order.code,
+                movement_type="assembly_receipt",
+                to_warehouse_id=order.warehouse_id,
+                operator_id=executed_by,
+                operator_name=operator_name,
             )
 
-            user_info = await self.get_user_info(executed_by)
             executed_at = resolve_business_datetime()
             order.status = "completed"
             order.executed_by = executed_by
-            order.executed_by_name = user_info["name"]
+            order.executed_by_name = operator_name
             order.executed_at = executed_at
             order.updated_by = executed_by
-            order.updated_by_name = user_info["name"]
+            order.updated_by_name = operator_name
             await order.save()
 
             # 创建装配物料绑定记录（可选，用于追溯）

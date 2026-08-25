@@ -21,15 +21,19 @@ import {
   formatPaymentMethod,
   formatPaymentSettlementType,
   formatReceiptSettlementType,
-  isAcceptanceBillPaymentMethod,
+  isNotePaymentMethod,
 } from '../../../utils/financeSharedOptions';
 import type { PaymentVoucher } from '../../../services/finance/payment';
 import type { ReceiptVoucher } from '../../../services/finance/receipt';
 import type { FinanceNote } from '../../../services/finance/note';
-import { formatNoteBillType } from '../../../utils/financeUiLabels';
+import { formatNoteBillType, renderRefundExecutionMarker } from '../../../utils/financeUiLabels';
+import { MarkerTag } from '../../../../../constants/statusBadges';
+import type { FinanceVoucherLinkHandlers } from '../../../components/FinanceVoucherDetailProvider';
+import type { FinanceVoucherLinkFields } from '../../../types/finance/financeVoucherLinks';
+import { FinanceVoucherRelationLinks } from '../../../utils/financeVoucherRelationLinks';
 
 export type FinanceVoucherKind = 'receipt' | 'payment';
-export type FinanceVoucherDetail = ReceiptVoucher | PaymentVoucher;
+export type FinanceVoucherDetail = (ReceiptVoucher | PaymentVoucher) & FinanceVoucherLinkFields;
 
 const RECEIPT_PLACEHOLDER: ReceiptVoucher = {
   id: 0,
@@ -76,6 +80,8 @@ export type FinanceVoucherDetailDrawerProps = {
   bankAccountLabel: string;
   linkedNote?: FinanceNote | null;
   linkedNotePath?: string;
+  linkHandlers?: FinanceVoucherLinkHandlers;
+  isRefund?: boolean;
 };
 
 export const FinanceVoucherDetailDrawer: React.FC<FinanceVoucherDetailDrawerProps> = ({
@@ -91,6 +97,8 @@ export const FinanceVoucherDetailDrawer: React.FC<FinanceVoucherDetailDrawerProp
   bankAccountLabel,
   linkedNote,
   linkedNotePath,
+  linkHandlers,
+  isRefund = false,
 }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -119,7 +127,7 @@ export const FinanceVoucherDetailDrawer: React.FC<FinanceVoucherDetailDrawerProp
           dataIndex: 'payment_method',
           render: (_, row) => formatPaymentMethod(row.payment_method, t),
         },
-        ...(isAcceptanceBillPaymentMethod(effective.payment_method)
+        ...(isNotePaymentMethod(effective.payment_method)
           ? [
               {
                 title: t('app.kuaicaiwu.common.referenceNumber'),
@@ -192,6 +200,23 @@ export const FinanceVoucherDetailDrawer: React.FC<FinanceVoucherDetailDrawerProp
           dataIndex: 'unsettled_amount',
           render: (_, row) => formatMoney(row.unsettled_amount),
         },
+        ...(String(effective.settlement_type || 'normal') !== 'refund'
+          ? [
+              {
+                title: t(`${prefix}.detail.refundedAmount`),
+                dataIndex: 'refunded_amount',
+                render: (_: unknown, row: FinanceVoucherDetail) => formatMoney(row.refunded_amount),
+              } as ProDescriptionsItemProps<FinanceVoucherDetail>,
+              {
+                title: t('app.kuaicaiwu.financeUi.refundExecution.label'),
+                dataIndex: 'refund_execution_status',
+                render: (_: unknown, row: FinanceVoucherDetail) => {
+                  const { label, color } = renderRefundExecutionMarker(row.refund_execution_status, t);
+                  return <MarkerTag color={color}>{label}</MarkerTag>;
+                },
+              } as ProDescriptionsItemProps<FinanceVoucherDetail>,
+            ]
+          : []),
         {
           title: t('common.remark'),
           dataIndex: 'notes',
@@ -199,11 +224,29 @@ export const FinanceVoucherDetailDrawer: React.FC<FinanceVoucherDetailDrawerProp
         },
         { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
       ] as ProDescriptionsItemProps<FinanceVoucherDetail>[]),
-    [bankAccountLabel, effective.payment_method, isReceipt, linkedNote, linkedNotePath, navigate, prefix, t],
+    [
+      bankAccountLabel,
+      effective.payment_method,
+      effective.settlement_type,
+      isReceipt,
+      linkedNote,
+      linkedNotePath,
+      navigate,
+      prefix,
+      t,
+    ],
   );
 
   const lifecycle = getFinanceVoucherLifecycle(effective as unknown as Record<string, unknown>, t);
   const steps = lifecycle.mainStages ?? [];
+  const isRefundVoucher =
+    isRefund || String(effective.settlement_type || 'normal') === 'refund';
+  const hasRelationContent =
+    contentReady
+    && Boolean(linkHandlers)
+    && ((isRefundVoucher && effective.source_voucher_id)
+      || (!isRefundVoucher && (effective.linked_refund_vouchers?.length ?? 0) > 0)
+      || (effective.linked_partner_statements?.length ?? 0) > 0);
   const code = isReceipt
     ? String((effective as ReceiptVoucher).receipt_code ?? '').trim()
     : String((effective as PaymentVoucher).payment_code ?? '').trim();
@@ -260,6 +303,19 @@ export const FinanceVoucherDetailDrawer: React.FC<FinanceVoucherDetailDrawerProp
           />
         ) : undefined
       }
+      lines={
+        hasRelationContent ? (
+          <FinanceVoucherRelationLinks
+            kind={kind}
+            isRefund={isRefundVoucher}
+            record={effective}
+            linkHandlers={linkHandlers}
+            t={t}
+          />
+        ) : undefined
+      }
+      linesTitle={t('app.kuaicaiwu.financeUi.voucher.relationsSection')}
+      linesVisible={hasRelationContent}
     />
   );
 };

@@ -66,6 +66,11 @@ import { alignProColumns, alignDescriptionColumns, GLOBAL_DOC_LIST_FIELD_RANK } 
 import { createListAuditPhaseColumn } from '../shared/listAuditPhaseColumn';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import {
+  DocumentAttachmentsReadonly,
+  documentAttachmentsFromRecord,
+  hasDocumentAttachments,
+} from '../../../components/DocumentAttachmentsReadonly';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import {
@@ -833,6 +838,10 @@ const SalesOrderChangesPage: React.FC = () => {
     'sales_order_change',
   );
 
+  const salesOrderChangeAttachments = documentAttachmentsFromRecord(detail);
+  const showSalesOrderChangeAttachments =
+    Boolean(detail) && hasDocumentAttachments(salesOrderChangeAttachments);
+
   return (
     <ListPageTemplate>
       <UniTable<SalesOrderChange>
@@ -1036,6 +1045,15 @@ const SalesOrderChangesPage: React.FC = () => {
         }
         collaboration={detailCollaboration}
         collaborationAuditRecord={detail}
+        supplementary={
+          showSalesOrderChangeAttachments ? (
+            <DocumentAttachmentsReadonly attachments={salesOrderChangeAttachments} />
+          ) : undefined
+        }
+        supplementaryTitle={
+          showSalesOrderChangeAttachments ? t('app.uniDetail.sectionAttachments') : undefined
+        }
+        supplementaryVisible={showSalesOrderChangeAttachments}
         lines={detail ? <OrderChangeItemsTable items={detail.items ?? []} /> : undefined}
       />
 

@@ -114,76 +114,88 @@
             "sort_order": 2
           },
           {
+            "title": "app.kuaicaiwu.menu.finance-management.receipt-refunds",
+            "path": "/apps/kuaicaiwu/finance-management/receipt-refunds",
+            "permission": "kuaicaiwu:receipt-refund:read",
+            "sort_order": 3
+          },
+          {
             "title": "app.kuaicaiwu.menu.finance-management.sales-invoices",
             "path": "/apps/kuaicaiwu/finance-management/sales-invoices",
             "permission": "kuaicaiwu:sales-invoice:read",
-            "sort_order": 3
+            "sort_order": 4
           },
           {
             "title": "app.kuaicaiwu.menu.finance-management.payables",
             "path": "/apps/kuaicaiwu/finance-management/payables",
             "permission": "kuaicaiwu:payable:read",
-            "sort_order": 4
+            "sort_order": 5
           },
           {
             "title": "app.kuaicaiwu.menu.finance-management.payments",
             "path": "/apps/kuaicaiwu/finance-management/payments",
             "permission": "kuaicaiwu:payment:read",
-            "sort_order": 5
+            "sort_order": 6
+          },
+          {
+            "title": "app.kuaicaiwu.menu.finance-management.payment-refunds",
+            "path": "/apps/kuaicaiwu/finance-management/payment-refunds",
+            "permission": "kuaicaiwu:payment-refund:read",
+            "sort_order": 7
           },
           {
             "title": "app.kuaicaiwu.menu.finance-management.purchase-invoices",
             "path": "/apps/kuaicaiwu/finance-management/purchase-invoices",
             "permission": "kuaicaiwu:purchase-invoice:read",
-            "sort_order": 6
+            "sort_order": 8
           },
           {
             "title": "app.kuaicaiwu.menu.finance-management.settlement",
             "path": "/apps/kuaicaiwu/finance-management/settlement",
             "permission": "kuaicaiwu:settlement:read",
-            "sort_order": 7
+            "sort_order": 9
           },
           {
             "title": "app.kuaicaiwu.menu.finance-management.partner-statements",
             "path": "/apps/kuaicaiwu/finance-management/partner-statements",
             "permission": "kuaicaiwu:partner-statement:read",
-            "sort_order": 8
+            "sort_order": 10
           },
           {
             "title": "app.kuaicaiwu.menu.finance-management.price-settlement",
             "path": "/apps/kuaicaiwu/finance-management/price-settlement",
             "permission": "kuaicaiwu:price-settlement:read",
-            "sort_order": 9
+            "sort_order": 11
           },
           {
             "title": "app.kuaicaiwu.menu.finance-management.prepayments",
             "path": "/apps/kuaicaiwu/finance-management/prepayments",
             "permission": "kuaicaiwu:prepayment:read",
-            "sort_order": 10
+            "sort_order": 12
           },
           {
             "title": "app.kuaicaiwu.menu.finance-management.document-reconciliation",
             "path": "/apps/kuaicaiwu/finance-management/document-reconciliation",
             "permission": "kuaicaiwu:document-reconciliation:read",
-            "sort_order": 11
+            "sort_order": 13
           },
           {
             "title": "app.kuaicaiwu.menu.finance-management.bank-accounts",
             "path": "/apps/kuaicaiwu/finance-management/bank-accounts",
             "permission": "kuaicaiwu:bank-account:read",
-            "sort_order": 12
+            "sort_order": 14
           },
           {
             "title": "app.kuaicaiwu.menu.finance-management.notes-receivable",
             "path": "/apps/kuaicaiwu/finance-management/notes-receivable",
             "permission": "kuaicaiwu:notes-receivable:read",
-            "sort_order": 13
+            "sort_order": 15
           },
           {
             "title": "app.kuaicaiwu.menu.finance-management.notes-payable",
             "path": "/apps/kuaicaiwu/finance-management/notes-payable",
             "permission": "kuaicaiwu:notes-payable:read",
-            "sort_order": 14
+            "sort_order": 16
           }
         ]
       },
@@ -397,6 +409,18 @@
     "kuaicaiwu:payment:audit",
     "kuaicaiwu:payment:reject",
     "kuaicaiwu:payment:print",
+    "kuaicaiwu:payment-refund:read",
+    "kuaicaiwu:payment-refund:create",
+    "kuaicaiwu:payment-refund:delete",
+    "kuaicaiwu:payment-refund:update",
+    "kuaicaiwu:payment-refund:import",
+    "kuaicaiwu:payment-refund:export",
+    "kuaicaiwu:payment-refund:submit",
+    "kuaicaiwu:payment-refund:revoke",
+    "kuaicaiwu:payment-refund:approve",
+    "kuaicaiwu:payment-refund:audit",
+    "kuaicaiwu:payment-refund:reject",
+    "kuaicaiwu:payment-refund:print",
     "kuaicaiwu:prepayment:read",
     "kuaicaiwu:prepayment:create",
     "kuaicaiwu:prepayment:delete",
@@ -433,6 +457,18 @@
     "kuaicaiwu:receipt:audit",
     "kuaicaiwu:receipt:reject",
     "kuaicaiwu:receipt:print",
+    "kuaicaiwu:receipt-refund:read",
+    "kuaicaiwu:receipt-refund:create",
+    "kuaicaiwu:receipt-refund:delete",
+    "kuaicaiwu:receipt-refund:update",
+    "kuaicaiwu:receipt-refund:import",
+    "kuaicaiwu:receipt-refund:export",
+    "kuaicaiwu:receipt-refund:submit",
+    "kuaicaiwu:receipt-refund:revoke",
+    "kuaicaiwu:receipt-refund:approve",
+    "kuaicaiwu:receipt-refund:audit",
+    "kuaicaiwu:receipt-refund:reject",
+    "kuaicaiwu:receipt-refund:print",
     "kuaicaiwu:receivable:read",
     "kuaicaiwu:receivable:create",
     "kuaicaiwu:receivable:delete",

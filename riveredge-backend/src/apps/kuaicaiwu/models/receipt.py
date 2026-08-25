@@ -40,7 +40,14 @@ class Receipt(BaseModel):
     settlement_type = fields.CharField(
         max_length=20,
         default="normal",
-        description="结算类型 normal/prepayment（预收）",
+        description="结算类型 normal/prepayment/refund",
+    )
+
+    refunded_amount = fields.DecimalField(
+        max_digits=16, decimal_places=4, default=0, description="已确认退款合计"
+    )
+    refund_execution_status = fields.CharField(
+        max_length=20, default="未退款", description="退款执行状态 未退款/部分退款/全部退款"
     )
 
     status = fields.CharField(max_length=20, default="Draft", description="状态 (Draft/Confirmed/Cancelled)")

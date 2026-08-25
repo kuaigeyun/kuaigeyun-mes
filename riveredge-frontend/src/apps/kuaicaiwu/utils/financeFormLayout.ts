@@ -8,3 +8,13 @@ export const financeFormGridProps = {
 
 export const financeColHalf = { span: 12 };
 export const financeColFull = { span: 24 };
+
+/**
+ * 金额录入：用 ProFormDigit，勿用 ProFormMoney。
+ * ProFormMoney 的 formatter 在输入末尾小数点时会剥掉「.」，导致无法输入小数。
+ */
+export const financeAmountDigitFieldProps = {
+  precision: 2,
+  prefix: '¥',
+  style: { width: '100%' as const },
+};

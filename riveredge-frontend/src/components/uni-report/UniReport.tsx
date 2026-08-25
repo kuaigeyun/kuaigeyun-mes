@@ -10,6 +10,7 @@ import {
   applyUniReportColumnQuery,
   type ReportColumnFilter,
   type ReportColumnFacets,
+  parseReportColumnFilters,
   resolveReportTableSort,
   resolveReportTableSortFromAntdSorter,
   serializeReportColumnFilters,
@@ -229,11 +230,7 @@ export function UniReport<T extends Record<string, unknown> = Record<string, unk
       facetRows: pageData as Record<string, unknown>[],
       onColumnFiltersChange: (next) => {
         setColumnFilters(next);
-        const merged: Record<string, unknown> = { ...(searchParamsRef.current || {}) };
-        const serialized = serializeReportColumnFilters(next);
-        if (serialized) merged.column_filters = serialized;
-        else delete merged.column_filters;
-        searchParamsRef.current = Object.keys(merged).length ? merged : undefined;
+        // 表头筛选只更新本地 state；与高级搜索 column_filters 在 request 时合并
         setPeriodRevision((e) => e + 1);
         actionRef.current?.reload?.();
       },
@@ -302,11 +299,20 @@ export function UniReport<T extends Record<string, unknown> = Record<string, unk
         ...(searchParamsRef.current || {}),
         ...(searchFormValues || {}),
       };
-      if (columnFilters.length) {
-        mergedSearch.column_filters = serializeReportColumnFilters(columnFilters);
-      }
-      searchValuesRef.current = mergedSearch;
-      searchParamsRef.current = mergedSearch;
+      // searchParamsRef 只保留高级搜索的 column_filters；表头筛选在请求时再合并，避免叠加重复
+      const fromAdvanced = parseReportColumnFilters(searchParamsRef.current?.column_filters);
+      const forRequest: Record<string, unknown> = { ...mergedSearch };
+      const serialized = serializeReportColumnFilters([...fromAdvanced, ...columnFilters]);
+      if (serialized) forRequest.column_filters = serialized;
+      else delete forRequest.column_filters;
+
+      const persistRef: Record<string, unknown> = { ...forRequest };
+      const advancedSerialized = serializeReportColumnFilters(fromAdvanced);
+      if (advancedSerialized) persistRef.column_filters = advancedSerialized;
+      else delete persistRef.column_filters;
+
+      searchValuesRef.current = forRequest;
+      searchParamsRef.current = persistRef;
 
       const fromArg = resolveReportTableSort(
         sort as Record<string, 'ascend' | 'descend' | null | undefined>,
@@ -319,7 +325,7 @@ export function UniReport<T extends Record<string, unknown> = Record<string, unk
         if (!request) {
           return { data: [], total: 0, success: true };
         }
-        const res = await request(params, proSort, filter, mergedSearch);
+        const res = await request(params, proSort, filter, forRequest);
         const rows = res.data ?? [];
         setPageData(rows);
         const facets = (res as { column_facets?: ReportColumnFacets }).column_facets;
@@ -329,7 +335,7 @@ export function UniReport<T extends Record<string, unknown> = Record<string, unk
 
         let summary = (res as { summary?: Record<string, number> }).summary;
         if (summaryRequest) {
-          summary = await summaryRequest(mergedSearch);
+          summary = await summaryRequest(forRequest);
         }
         if (summary) {
           setGlobalSummary(summary);

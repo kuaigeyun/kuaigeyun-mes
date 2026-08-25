@@ -7,6 +7,13 @@
 import type { ProColumns } from '@ant-design/pro-components';
 import type { FilterCondition, FilterGroup, FilterConfigData, FilterType, FilterOperator, ExtendedProColumns } from './types';
 import { FIELD_OPERATOR_MAP } from './types';
+import {
+  mapFilterOperatorToColumnFilterOp,
+  mergeColumnFilters,
+  parseColumnFiltersParam,
+  serializeColumnFiltersParam,
+  type AdvancedColumnFilter,
+} from './columnFilterContract';
 
 /**
  * 根据 valueType 推断筛选器类型
@@ -200,127 +207,78 @@ export function validateFilterCondition(
 }
 
 /**
- * 转换筛选条件为 API 参数
+ * 转换筛选条件为 column_filters 条目（高级搜索唯一契约）。
  */
-export function convertFilterConditionToApiParam(
+export function convertFilterConditionToColumnFilter(
   condition: FilterCondition,
-  column: ProColumns<any>
-): Record<string, any> {
+  column: ProColumns<any>,
+): AdvancedColumnFilter | null {
   const { filterConfig } = column as ExtendedProColumns;
-  const filterType = inferFilterType(column);
   const { field, operator, value } = condition;
-  
-  // 应用筛选值转换函数（如果存在）
+  const op = mapFilterOperatorToColumnFilterOp(operator);
+  if (!op || !field) return null;
+
   let transformedValue = value;
   if (filterConfig?.filterValueTransform) {
     transformedValue = filterConfig.filterValueTransform(value);
   }
-  
-  // 根据操作符转换为 API 参数
-  const params: Record<string, any> = {};
-  
-  switch (operator) {
-    case 'contains':
-      // 包含：使用模糊匹配，字段名作为 key
-      params[field] = transformedValue;
-      break;
-      
-    case 'equals':
-      // 等于：精确匹配
-      params[field] = transformedValue;
-      break;
-      
-    case 'not_equals':
-      // 不等于：使用排除参数（如果后端支持）
-      params[`${field}__ne`] = transformedValue;
-      break;
-      
-    case 'starts_with':
-      // 开头是：使用前缀匹配（如果后端支持）
-      params[`${field}__startswith`] = transformedValue;
-      break;
-      
-    case 'ends_with':
-      // 结尾是：使用后缀匹配（如果后端支持）
-      params[`${field}__endswith`] = transformedValue;
-      break;
-      
-    case 'is_empty':
-      // 为空：使用空值检查
-      params[`${field}__isnull`] = true;
-      break;
-      
-    case 'is_not_empty':
-      // 不为空：使用非空检查
-      params[`${field}__isnull`] = false;
-      break;
-      
-    case 'greater_than':
-      // 大于
-      params[`${field}__gt`] = transformedValue;
-      break;
-      
-    case 'greater_than_or_equal':
-      // 大于等于
-      params[`${field}__gte`] = transformedValue;
-      break;
-      
-    case 'less_than':
-      // 小于
-      params[`${field}__lt`] = transformedValue;
-      break;
-      
-    case 'less_than_or_equal':
-      // 小于等于
-      params[`${field}__lte`] = transformedValue;
-      break;
-      
-    case 'between':
-      // 介于：使用范围参数
-      if (Array.isArray(transformedValue) && transformedValue.length === 2) {
-        params[`${field}__gte`] = transformedValue[0];
-        params[`${field}__lte`] = transformedValue[1];
-      }
-      break;
-      
-    case 'before':
-      // 早于
-      params[`${field}__lt`] = transformedValue;
-      break;
-      
-    case 'after':
-      // 晚于
-      params[`${field}__gt`] = transformedValue;
-      break;
-      
-    case 'today':
-    case 'this_week':
-    case 'this_month':
-    case 'this_year':
-      // 日期快捷选项：转换为日期范围
-      const dateRange = convertDateShortcutToRange(operator);
-      if (dateRange) {
-        params[`${field}__gte`] = dateRange[0];
-        params[`${field}__lte`] = dateRange[1];
-      }
-      break;
-      
-    case 'in':
-      // 包含（多选）
-      params[field] = Array.isArray(transformedValue) ? transformedValue : [transformedValue];
-      break;
-      
-    case 'not_in':
-      // 不包含（排除多选）
-      params[`${field}__nin`] = Array.isArray(transformedValue) ? transformedValue : [transformedValue];
-      break;
-      
-    default:
-      // 默认：直接使用字段名和值
-      params[field] = transformedValue;
+
+  if (operator === 'is_empty') {
+    return { field, op: 'isnull', value: true };
   }
-  
-  return params;
+  if (operator === 'is_not_empty') {
+    return { field, op: 'isnull', value: false };
+  }
+
+  if (
+    operator === 'today' ||
+    operator === 'this_week' ||
+    operator === 'this_month' ||
+    operator === 'this_year'
+  ) {
+    const dateRange = convertDateShortcutToRange(operator);
+    if (!dateRange) return null;
+    return { field, op: 'between', value: dateRange[0], value_to: dateRange[1] };
+  }
+
+  if (operator === 'between') {
+    if (!Array.isArray(transformedValue) || transformedValue.length !== 2) return null;
+    return {
+      field,
+      op: 'between',
+      value: transformedValue[0] as string | number,
+      value_to: transformedValue[1] as string | number,
+    };
+  }
+
+  if (operator === 'in' || operator === 'not_in') {
+    const arr = Array.isArray(transformedValue) ? transformedValue : [transformedValue];
+    return {
+      field,
+      op,
+      value: arr.map((v) => (v == null ? '' : String(v))),
+    };
+  }
+
+  return {
+    field,
+    op,
+    value: transformedValue as string | number | boolean,
+  };
+}
+
+/**
+ * 转换筛选条件为 API 参数（column_filters 契约）。
+ */
+export function convertFilterConditionToApiParam(
+  condition: FilterCondition,
+  column: ProColumns<any>,
+): Record<string, any> {
+  const entry = convertFilterConditionToColumnFilter(condition, column);
+  if (!entry) return {};
+  return {
+    column_filters: serializeColumnFiltersParam([entry]),
+  };
 }
 
 /**
@@ -374,17 +332,16 @@ function convertDateShortcutToRange(operator: FilterOperator): [string, string] 
 }
 
 /**
- * 转换筛选组为 API 参数
+ * 转换筛选组为 column_filters 条目列表
  */
-export function convertFilterGroupToApiParams(
+export function collectColumnFiltersFromGroup(
   group: FilterGroup,
-  columns: ProColumns<any>[]
-): Record<string, any> {
-  const params: Record<string, any> = {};
-  
-  // 转换条件组中的条件
-  group.conditions.forEach(condition => {
-    const column = columns.find(col => {
+  columns: ProColumns<any>[],
+): AdvancedColumnFilter[] {
+  const entries: AdvancedColumnFilter[] = [];
+
+  group.conditions.forEach((condition) => {
+    const column = columns.find((col) => {
       const dataIndex = col.dataIndex;
       if (typeof dataIndex === 'string') {
         return dataIndex === condition.field;
@@ -394,63 +351,71 @@ export function convertFilterGroupToApiParams(
       }
       return false;
     });
-    
-    if (column) {
-      const conditionParams = convertFilterConditionToApiParam(condition, column);
-      Object.assign(params, conditionParams);
-    }
+    if (!column) return;
+    const entry = convertFilterConditionToColumnFilter(condition, column);
+    if (entry) entries.push(entry);
   });
-  
-  // 转换嵌套组（递归）
+
   if (group.groups && group.groups.length > 0) {
-    group.groups.forEach(nestedGroup => {
-      const nestedParams = convertFilterGroupToApiParams(nestedGroup, columns);
-      // 根据逻辑关系合并参数
-      if (group.logic === 'AND') {
-        // AND：合并所有参数
-        Object.assign(params, nestedParams);
-      } else {
-        // OR：需要特殊处理（可能需要后端支持 OR 查询）
-        // 这里先简单合并，实际使用时可能需要根据后端 API 调整
-        Object.assign(params, nestedParams);
-      }
+    group.groups.forEach((nestedGroup) => {
+      entries.push(...collectColumnFiltersFromGroup(nestedGroup, columns));
     });
   }
-  
-  return params;
+
+  return entries;
 }
 
 /**
- * 转换筛选配置为 API 参数
+ * 转换筛选组为 API 参数（仅聚合 column_filters）
+ */
+export function convertFilterGroupToApiParams(
+  group: FilterGroup,
+  columns: ProColumns<any>[],
+): Record<string, any> {
+  const entries = collectColumnFiltersFromGroup(group, columns);
+  const serialized = serializeColumnFiltersParam(entries);
+  return serialized ? { column_filters: serialized } : {};
+}
+
+/**
+ * 转换筛选配置为 API 参数。
+ * 高级条件唯一写入 column_filters；快速筛选仍写普通字段（工具栏快捷条件）。
  */
 export function convertFiltersToApiParams(
   filterConfig: FilterConfigData,
-  columns: ProColumns<any>[]
+  columns: ProColumns<any>[],
 ): Record<string, any> {
   const params: Record<string, any> = {};
-  
-  // 转换筛选组为查询参数
-  filterConfig.groups.forEach(group => {
-    const groupParams = convertFilterGroupToApiParams(group, columns);
-    Object.assign(params, groupParams);
+  const advanced: AdvancedColumnFilter[] = [];
+
+  filterConfig.groups.forEach((group) => {
+    advanced.push(...collectColumnFiltersFromGroup(group, columns));
   });
-  
-  // 转换快速筛选为查询参数
+
+  // 快速筛选：写入普通字段，并同步一条 eq/in 进 column_filters，避免报表只认 column_filters 时漏筛
   if (filterConfig.quickFilters) {
-    Object.keys(filterConfig.quickFilters).forEach(field => {
+    Object.keys(filterConfig.quickFilters).forEach((field) => {
       const values = filterConfig.quickFilters![field];
-      if (values && values.length > 0) {
-        // 快速筛选使用等于操作符
-        if (values.length === 1) {
-          params[field] = values[0];
-        } else {
-          // 多选：使用 in 操作符
-          params[field] = values;
-        }
+      if (!values || values.length === 0) return;
+      if (values.length === 1) {
+        params[field] = values[0];
+        advanced.push({ field, op: 'eq', value: values[0] as string | number });
+      } else {
+        params[field] = values;
+        advanced.push({ field, op: 'in', value: values.map(String) });
       }
     });
   }
-  
+
+  const existing = parseColumnFiltersParam(params.column_filters);
+  const merged = mergeColumnFilters(existing, advanced);
+  const serialized = serializeColumnFiltersParam(merged);
+  if (serialized) {
+    params.column_filters = serialized;
+  } else {
+    delete params.column_filters;
+  }
+
   return params;
 }
 

@@ -21,6 +21,8 @@ from tortoise.transactions import in_transaction
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from infra.services.business_config_service import BusinessConfigService
 
+from infra.models.user import User
+
 from apps.common.base_service import AppBaseService
 from apps.kuaizhizao.models.outsource_work_order import (
     OutsourceWorkOrder,
@@ -497,6 +499,7 @@ class OutsourceWorkOrderService(AppBaseService[OutsourceWorkOrder]):
     async def list_outsource_work_orders(
         self,
         tenant_id: int,
+        current_user: Optional[User] = None,
         skip: int = 0,
         limit: int = 100,
         status: Optional[str] = None,
@@ -529,17 +532,25 @@ class OutsourceWorkOrderService(AppBaseService[OutsourceWorkOrder]):
         Returns:
             OutsourceWorkOrderListResponse: 委外工单列表
         """
-        query = Q(tenant_id=tenant_id, deleted_at__isnull=True)
+        qs = OutsourceWorkOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        from apps.kuaizhizao.services.kuaizhizao_data_scope import apply_kuaizhizao_list_scope
+
+        qs = await apply_kuaizhizao_list_scope(
+            qs,
+            tenant_id=tenant_id,
+            current_user=current_user,
+            resource="kuaizhizao:outsource-order",
+        )
 
         if status:
-            query &= Q(status=status)
+            qs = qs.filter(status=status)
         if supplier_id:
-            query &= Q(supplier_id=supplier_id)
+            qs = qs.filter(supplier_id=supplier_id)
         if product_id:
-            query &= Q(product_id=product_id)
+            qs = qs.filter(product_id=product_id)
         kw = (keyword or "").strip()
         if kw:
-            query &= (
+            qs = qs.filter(
                 Q(code__icontains=kw)
                 | Q(name__icontains=kw)
                 | Q(product_name__icontains=kw)
@@ -547,30 +558,30 @@ class OutsourceWorkOrderService(AppBaseService[OutsourceWorkOrder]):
             )
         c = (code or "").strip()
         if c:
-            query &= Q(code__icontains=c)
+            qs = qs.filter(code__icontains=c)
         n = (name or "").strip()
         if n:
-            query &= Q(name__icontains=n)
+            qs = qs.filter(name__icontains=n)
         pn = (product_name or "").strip()
         if pn:
-            query &= Q(product_name__icontains=pn)
+            qs = qs.filter(product_name__icontains=pn)
         sn = (supplier_name or "").strip()
         if sn:
-            query &= Q(supplier_name__icontains=sn)
+            qs = qs.filter(supplier_name__icontains=sn)
         if priority:
-            query &= Q(priority=priority)
+            qs = qs.filter(priority=priority)
         if planned_start_from is not None:
-            query &= Q(planned_start_date__gte=planned_start_from)
+            qs = qs.filter(planned_start_date__gte=planned_start_from)
         if planned_start_to is not None:
-            query &= Q(planned_start_date__lte=planned_start_to)
+            qs = qs.filter(planned_start_date__lte=planned_start_to)
         if created_start_date is not None:
-            query &= Q(created_at__gte=datetime.combine(created_start_date, time.min))
+            qs = qs.filter(created_at__gte=datetime.combine(created_start_date, time.min))
         if created_end_date is not None:
-            query &= Q(created_at__lte=datetime.combine(created_end_date, time.max))
+            qs = qs.filter(created_at__lte=datetime.combine(created_end_date, time.max))
 
-        total = await OutsourceWorkOrder.filter(query).count()
+        total = await qs.count()
         order_clause = order_by if order_by else "-created_at"
-        work_orders = await OutsourceWorkOrder.filter(query).order_by(order_clause).offset(skip).limit(limit).all()
+        work_orders = await qs.order_by(order_clause).offset(skip).limit(limit).all()
 
         from apps.kuaizhizao.services.document_action_policy.enricher import (
             enrich_outsource_work_order_list_capabilities,

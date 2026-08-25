@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ProDescriptions } from '@ant-design/pro-components';
 import { Button, Statistic, Row, Col, Spin, Empty, Typography, Space } from 'antd';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
@@ -21,6 +21,7 @@ import {
   useDocumentTracking,
 } from '../../../../../components/document-tracking-panel';
 import { getReceivableLifecycle } from '../../../utils/receivableLifecycle';
+import { FinanceArApInvoiceStatusDetail } from '../../../utils/financeInvoiceStatusUi';
 
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 
@@ -72,6 +73,14 @@ const ReceivableDetail: React.FC = () => {
   const documentTracking = useDocumentTracking(
     data?.id != null ? 'receivable' : undefined,
     data?.id
+  );
+
+  const linkedSalesInvoices = useMemo(
+    () =>
+      documentTracking.data?.relations?.downstream?.filter(
+        (rel) => rel.type === 'sales_invoice' && !rel.is_deleted,
+      ) ?? [],
+    [documentTracking.data],
   );
 
   const openReceiptFromReceivable = () => {
@@ -154,12 +163,16 @@ const ReceivableDetail: React.FC = () => {
                 <ProDescriptions.Item label={t('app.kuaicaiwu.common.sourceDoc')}>
                   {data.source_code} ({data.source_type})
                 </ProDescriptions.Item>
-                <ProDescriptions.Item label={t(`${P}.invoiceStatus.label`)}>
-                  {data.invoice_issued ? (
-                    <span style={{ color: 'green' }}>{t(`${P}.invoiceStatus.issued`, { number: data.invoice_number })}</span>
-                  ) : (
-                    <span style={{ color: 'orange' }}>{t(`${P}.invoiceStatus.notIssued`)}</span>
-                  )}
+                <ProDescriptions.Item label={t(`${P}.col.invoiceStatus`)}>
+                  <FinanceArApInvoiceStatusDetail
+                    kind="receivable"
+                    invoiceStatus={data.invoice_status}
+                    invoicedAmount={data.invoiced_amount}
+                    remainingInvoiceAmount={data.remaining_invoice_amount}
+                    linkedInvoices={linkedSalesInvoices}
+                    onInvoiceClick={linked.openLinkedDocumentDetail}
+                    t={t}
+                  />
                 </ProDescriptions.Item>
                 <ProDescriptions.Item label={t('app.kuaicaiwu.common.businessStatus')}>{data.status}</ProDescriptions.Item>
                 <ProDescriptions.Item label={t('app.kuaicaiwu.common.reviewStatus')}>{data.review_status}</ProDescriptions.Item>
@@ -176,6 +189,25 @@ const ReceivableDetail: React.FC = () => {
                 </Col>
                 <Col xs={24} sm={8}>
                   <Statistic title={t(`${P}.col.remainingAmount`)} value={data.remaining_amount} precision={2} prefix="¥" styles={{ content: {color: '#cf1322' } }} />
+                </Col>
+              </Row>
+              <Row gutter={24} style={{ marginTop: 16 }}>
+                <Col xs={24} sm={8}>
+                  <Statistic title={t(`${P}.col.invoicedAmount`)} value={data.invoiced_amount ?? 0} precision={2} prefix="¥" />
+                </Col>
+                <Col xs={24} sm={8}>
+                  <Statistic
+                    title={t(`${P}.col.remainingInvoiceAmount`)}
+                    value={data.remaining_invoice_amount ?? 0}
+                    precision={2}
+                    prefix="¥"
+                    styles={{
+                      content: {
+                        color: Number(data.remaining_invoice_amount ?? 0) > 0 ? '#1677ff' : 'inherit',
+                        fontWeight: Number(data.remaining_invoice_amount ?? 0) > 0 ? 'bold' : 'normal',
+                      },
+                    }}
+                  />
                 </Col>
               </Row>
             </DetailDrawerSection>

@@ -7,7 +7,7 @@ import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react'
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Modal, Typography, Spin, Alert, Table, Empty, Form } from 'antd';
-import { ModalForm, ProForm, ProFormDatePicker, ProFormMoney, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
+import { ModalForm, ProForm, ProFormDatePicker, ProFormDigit, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import { EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -18,7 +18,12 @@ import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { DetailDrawerActions, ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { FinanceVoucherDetailDrawer } from '../shared/FinanceVoucherDetailDrawer';
-import { financeColFull, financeColHalf, financeFormGridProps } from '../../../utils/financeFormLayout';
+import {
+  financeAmountDigitFieldProps,
+  financeColFull,
+  financeColHalf,
+  financeFormGridProps,
+} from '../../../utils/financeFormLayout';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import {
   UniPullQueryModal,
@@ -47,7 +52,7 @@ import {
   assertBankAccountForPaymentMethod,
   formatBankAccountOptionLabel,
   BANK_TRANSFER_PAYMENT_METHOD,
-  isAcceptanceBillPaymentMethod,
+  isNotePaymentMethod,
 } from '../../../utils/financeSharedOptions';
 import {
   LedgerAccountFormFields,
@@ -74,8 +79,15 @@ import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { MarkerTag } from '../../../../../constants/statusBadges';
+import { renderRefundExecutionMarker } from '../../../utils/financeUiLabels';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
+import {
+  buildFinanceVoucherLinkHandlers,
+  useFinanceVoucherDetail,
+} from '../../../components/FinanceVoucherDetailProvider';
+import { canCreateRefundFromVoucher } from '../../../utils/financeVoucherDocType';
+import { RECEIPT_REFUND_RESOURCE } from '../../../services/finance/receipt-refund';
 type PullReceivableCandidate = ReceiptPullCandidate;
 
 const R = 'app.kuaicaiwu.receipt';
@@ -107,6 +119,16 @@ const ReceiptsPage: React.FC = () => {
   const location = useLocation();
   const pullFromReceivableAction = getKuaicaiwuDocumentAction('receipt.pull_from_receivable');
   const receiptPerms = useResourcePermissions(RECEIPT_RESOURCE);
+  const receiptRefundPerms = useResourcePermissions(RECEIPT_REFUND_RESOURCE);
+  const { openFinanceVoucherDetail } = useFinanceVoucherDetail();
+  const voucherLinkHandlers = useMemo(
+    () =>
+      buildFinanceVoucherLinkHandlers({
+        openVoucher: openFinanceVoucherDetail,
+        navigate,
+      }),
+    [navigate, openFinanceVoucherDetail],
+  );
 
   const paymentMethodOptions = useMemo(() => getPaymentMethodOptions(t), [t]);
   const receiptSettlementTypeOptions = useMemo(() => getReceiptSettlementTypeOptions(t), [t]);
@@ -141,7 +163,7 @@ const ReceiptsPage: React.FC = () => {
     try {
       const record = await receiptService.getReceipt(id);
       setDetailRecord(record);
-      if (isAcceptanceBillPaymentMethod(record.payment_method)) {
+      if (isNotePaymentMethod(record.payment_method)) {
         const noteRes = await financeNoteService.list('receivable', { receipt_id: id, limit: 1 });
         setLinkedNote(noteRes.data?.[0] ?? null);
       }
@@ -240,6 +262,7 @@ const ReceiptsPage: React.FC = () => {
       const maxPush = Number(data.items?.[0]?.max_push_quantity ?? 0);
       pullForm.setFieldsValue({
         source_code: data.source_code,
+        customer_id: data.customer_id,
         customer_name: data.customer_name,
         total_amount: maxPush > 0 ? maxPush : undefined,
         receipt_date: dayjs(),
@@ -607,6 +630,19 @@ const ReceiptsPage: React.FC = () => {
       ),
     },
     {
+      title: t('app.kuaicaiwu.financeUi.refundExecution.label'),
+      dataIndex: 'refund_execution_status',
+      width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
+      hideInSearch: true,
+      render: (_, record) => {
+        const { label, color } = renderRefundExecutionMarker(record.refund_execution_status, t);
+        return <MarkerTag color={color}>{label}</MarkerTag>;
+      },
+    },
+    {
       title: t(`${R}.col.receiptDate`),
       dataIndex: 'receipt_date',
       valueType: 'date',
@@ -715,6 +751,21 @@ const ReceiptsPage: React.FC = () => {
                 {t('app.kuaicaiwu.common.settle')}
               </Button>
             ) : null,
+            record.status === 'Confirmed'
+              && canCreateRefundFromVoucher(record, 'receipt')
+              && receiptRefundPerms.canCreate ? (
+              <Button
+                {...rowActionKind('submit')}
+                key="refund"
+                onClick={() =>
+                  navigate('/apps/kuaicaiwu/finance-management/receipt-refunds', {
+                    state: { pullSourceId: record.id },
+                  })
+                }
+              >
+                {t('app.kuaicaiwu.receiptRefund.pullCreate')}
+              </Button>
+            ) : null,
             record.status !== 'Cancelled' && record.settled_amount === 0 && receiptPerms.canAction?.('revoke') ? (
               <Button {...rowActionKind('revoke')} key="ca" onClick={() => handleCancel(record)}>
                 {t('app.kuaicaiwu.common.void')}
@@ -727,7 +778,7 @@ const ReceiptsPage: React.FC = () => {
             ) : null,
           ].filter(Boolean) as React.ReactNode[],
     },
-  ], [t, navigate, customerOptions, receiptSettlementTypeOptions, receiptPerms, openDetail]);
+  ], [t, navigate, customerOptions, receiptSettlementTypeOptions, receiptPerms, receiptRefundPerms, openDetail]);
 
   return (
     <ListPageTemplate>
@@ -926,12 +977,14 @@ const ReceiptsPage: React.FC = () => {
                 {...financeFormGridProps}
               >
                 <ProFormText name="source_code" label={t(`${R}.pullCol.receivableCode`)} readonly colProps={financeColHalf} />
+                <ProFormText name="customer_id" hidden />
                 <ProFormText name="customer_name" label={t('app.kuaicaiwu.common.customer')} readonly colProps={financeColHalf} />
-                <ProFormMoney
+                <ProFormDigit
                   name="total_amount"
                   label={t(`${R}.col.amount`)}
                   min={0.01}
                   rules={[{ required: true, message: t(`${R}.col.amount`) }]}
+                  fieldProps={financeAmountDigitFieldProps}
                   colProps={financeColHalf}
                 />
                 <ProFormDatePicker
@@ -987,11 +1040,12 @@ const ReceiptsPage: React.FC = () => {
           showSearch
           colProps={financeColHalf}
         />
-        <ProFormMoney
+        <ProFormDigit
           name="total_amount"
           label={t(`${R}.col.amount`)}
           min={0.01}
           rules={[{ required: true }]}
+          fieldProps={financeAmountDigitFieldProps}
           colProps={financeColHalf}
         />
         <ProFormDatePicker
@@ -1043,10 +1097,31 @@ const ReceiptsPage: React.FC = () => {
         bankAccountLabel={resolveBankLabel(detailRecord?.bank_account_id)}
         linkedNote={linkedNote}
         linkedNotePath="/apps/kuaicaiwu/finance-management/notes-receivable"
+        linkHandlers={voucherLinkHandlers}
+        isRefund={false}
         extra={
           detailRecord ? (
             <DetailDrawerActions
               items={[
+                {
+                  key: 'create-refund',
+                  visible:
+                    detailRecord.status === 'Confirmed'
+                    && canCreateRefundFromVoucher(detailRecord, 'receipt')
+                    && Boolean(receiptRefundPerms.canCreate),
+                  render: (
+                    <Button
+                      {...rowActionKind('submit')}
+                      onClick={() =>
+                        navigate('/apps/kuaicaiwu/finance-management/receipt-refunds', {
+                          state: { pullSourceId: detailRecord.id },
+                        })
+                      }
+                    >
+                      {t('app.kuaicaiwu.receiptRefund.pullCreate')}
+                    </Button>
+                  ),
+                },
                 {
                   key: 'confirm',
                   visible: detailRecord.status === 'Draft' && Boolean(receiptPerms.canAction?.('audit')),

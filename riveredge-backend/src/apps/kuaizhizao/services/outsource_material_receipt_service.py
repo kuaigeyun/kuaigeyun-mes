@@ -345,6 +345,8 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
                         "source_doc_id": material_receipt.id,
                         "source_doc_code": code,
                         "ledger_production_date": to_site_date(now),
+                        "operator_id": created_by,
+                        "operator_name": receiver_name,
                     }
                 payable_payload = {
                     "tenant_id": tenant_id,
@@ -387,6 +389,8 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
                     ledger_production_date=payload["ledger_production_date"],
                     movement_type="outsource_receipt",
                     to_warehouse_id=payload["warehouse_id"],
+                    operator_id=payload.get("operator_id"),
+                    operator_name=payload.get("operator_name"),
                     idempotency_key=(
                         f"outsource_material_receipt:{payload['source_doc_id']}:inc"
                     ),

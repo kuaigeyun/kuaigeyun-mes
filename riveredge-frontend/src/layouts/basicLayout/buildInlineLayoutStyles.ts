@@ -280,13 +280,12 @@ export function buildShellLayoutStyles(ctx: BasicLayoutStyleContext): string {
           max-width: 100% !important;
           left: 0 !important;
         }
-        /* 标签栏固定在顶部 */
+        /* 标签栏固定在顶部（勿加 padding-top：会压缩 40px 内容区，全屏按钮 40px 底线被 overflow 裁切） */
         html.riveredge-fullscreen-mode .uni-tabs-header,
         body.riveredge-fullscreen-mode .uni-tabs-header {
           top: 0 !important;
           position: sticky !important;
           z-index: 10 !important;
-          padding-top: 2px !important;
         }
         /* 标签栏和内容区域容器占据全屏 */
         html.riveredge-fullscreen-mode .uni-tabs-wrapper,
@@ -1110,18 +1109,19 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
           min-height: 76px;
           height: auto;
           cursor: pointer;
-          transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+          transition: background 0.2s ease, border-color 0.2s ease;
         }
         .riveredge-system-settings-item:hover {
           background: ${startMenuTheme.panelItemHoverBg};
           border-color: ${startMenuTheme.panelItemHoverBorder};
-          transform: translateY(-1px);
           box-shadow: none;
         }
         .riveredge-system-settings-item:focus-visible {
           outline: 2px solid var(--ant-colorPrimary);
           outline-offset: 1px;
         }
+        /* 图标不做 hover 缩放/位移：42px 矢量图标乘 1.08 再叠系统缩放（如 175%）是非整数倍，
+           每帧重算边缘抗锯齿，直边与密集平行线字形（拼图、表格）会肉眼可见地闪。hover 反馈由底色与边框承担 */
         .riveredge-system-settings-item-icon {
           width: 44px;
           height: 44px;
@@ -1134,7 +1134,6 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
           box-shadow: none;
           padding: 0;
           line-height: 1;
-          transition: transform 0.18s ease;
         }
         .riveredge-system-settings-item-icon .anticon,
         .riveredge-system-settings-item-icon svg {
@@ -1142,9 +1141,6 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
           width: 42px;
           height: 42px;
           color: currentColor;
-        }
-        .riveredge-system-settings-item:hover .riveredge-system-settings-item-icon {
-          transform: translateY(-1px);
         }
         .riveredge-system-settings-item-label {
           font-size: 13px;
@@ -2245,6 +2241,24 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
         }
         .ant-pro-global-header-logo h1{
         line-height: 31px !important;
+        }
+        /* 顶栏较窄：隐藏 LOGO 旁公司名，右侧组织切换仍展示全称，避免与操作区重叠 */
+        @media (max-width: 1400px) {
+          .ant-pro-layout .ant-pro-layout-header .ant-pro-global-header-logo h1,
+          .ant-pro-layout .ant-pro-layout-header .ant-pro-global-header-logo a h1,
+          .ant-pro-layout .ant-layout-header .ant-pro-global-header-logo h1,
+          .ant-pro-layout .ant-layout-header .ant-pro-global-header-logo a h1,
+          .ant-pro-layout-header .ant-pro-global-header-logo h1,
+          .ant-pro-layout-header .ant-pro-global-header-logo a h1,
+          .ant-layout-header .ant-pro-global-header-logo h1,
+          .ant-layout-header .ant-pro-global-header-logo a h1,
+          .ant-pro-global-header-logo h1,
+          .ant-pro-global-header-logo a h1 {
+            display: none !important;
+          }
+          .ant-pro-global-header-logo {
+            min-width: 0 !important;
+          }
         }
         /* ==================== 顶栏布局调整 ==================== */
         /* 顶栏主容器：左侧 LOGO组 + 分割线 + 面包屑，右侧 操作按钮组 */

@@ -1,4 +1,15 @@
 /* AI 问答弹窗：右下角固定、无遮罩，右侧与底部各 16px 间距，参考 SQLBot 智能客服 */
+@keyframes riveredgeAiPanelIn {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 14px, 0) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
 .ai-qa-modal-bottom-right {
   position: fixed !important;
   top: auto !important;
@@ -53,6 +64,18 @@
   position: relative;
   overflow: visible;
   border-radius: 16px;
+  transform-origin: right bottom;
+}
+
+.ai-qa-modal-bottom-right:not(.ai-qa-modal-hidden) .ai-qa-panel-glow {
+  animation: riveredgeAiPanelIn 0.26s cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-qa-modal-bottom-right:not(.ai-qa-modal-hidden) .ai-qa-panel-glow {
+    animation: none;
+  }
 }
 
 /* 外层轻微光晕，与页面背景拉开层次 */

@@ -1105,7 +1105,7 @@ class DocumentPrintService:
             document = await SalesOrder.get_or_none(tenant_id=tenant_id, id=document_id)
             if not document:
                 raise NotFoundError(f"销售订单不存在: {document_id}")
-            return await self._format_sales_order_data(document)
+            return await self._format_sales_order_data(document, loc)
 
         elif document_type == "sales_order_change":
             document = await SalesOrderChangeOrder.get_or_none(
@@ -1618,7 +1618,9 @@ class DocumentPrintService:
             "created_at": to_api_isoformat(forecast.created_at) if forecast.created_at else None,
         }
 
-    async def _format_sales_order_data(self, order: SalesOrder) -> Dict[str, Any]:
+    async def _format_sales_order_data(
+        self, order: SalesOrder, i18n: PrintLocalization
+    ) -> Dict[str, Any]:
         """格式化销售订单数据"""
         items = await SalesOrderItem.filter(
             tenant_id=order.tenant_id, sales_order_id=order.id
@@ -1676,7 +1678,8 @@ class DocumentPrintService:
             "delivery_date": to_api_isoformat(order.delivery_date) if order.delivery_date else None,
             "total_quantity": str(order.total_quantity),
             "total_amount": str(order.total_amount),
-            "status": order.status,
+            "status": i18n.document_status(order.status),
+            "status_code": order.status,
             "created_at": to_api_isoformat(order.created_at) if order.created_at else None,
             "items": items_data,
         }

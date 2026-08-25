@@ -29,6 +29,10 @@ from core.services.application.application_dedicated_binding_service import Appl
 from core.schemas.system_parameter import SystemParameterCreate, SystemParameterUpdate
 from core.services.system.system_parameter_service import SystemParameterService
 from infra.services.license_center_service import LicenseCenterService
+from core.config.industry_app_catalog import requires_pro_license_for_app
+from core.services.application.application_center_permission_service import (
+    ApplicationCenterPermissionService,
+)
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from loguru import logger
 
@@ -49,6 +53,28 @@ def _require_platform_admin(auth: AuthContext) -> None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="仅平台管理员可安装、卸载、启用或禁用应用。",
+        )
+
+
+async def _require_application_lifecycle_access(
+    auth: AuthContext,
+    tenant_id: int,
+    application: Dict[str, Any],
+) -> None:
+    """平台管理员始终允许；组织管理员须具备对应分类自主启停权限且套餐允许。"""
+    if auth.is_infra_admin:
+        return
+    if not auth.is_tenant_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="仅组织管理员或平台管理员可安装、卸载、启用或禁用应用。",
+        )
+    if not await ApplicationCenterPermissionService.can_self_service_toggle_app(
+        tenant_id, application
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="当前组织未开放该分类应用的自主启停权限，或套餐不支持该应用，请联系平台管理员。",
         )
 
 
@@ -155,12 +181,13 @@ def _build_key_digest(tenant_id: int, app_code: str, key: str) -> str:
 
 
 def _enrich_app_with_pro_info(app: dict, activated_codes: Set[str]) -> dict:
-    """从 manifest 读取 is_pro，并计算 can_access，注入到 app_data。"""
+    """从 manifest / 行业目录读取是否需 PRO 授权，并计算 can_access。"""
     code = app.get('code')
     manifest = ApplicationService._get_manifest_by_code(code) if code else None
-    is_pro = bool(manifest.get('is_pro', False)) if manifest else False
+    manifest_is_pro = bool(manifest.get('is_pro', False)) if manifest else False
+    is_pro = requires_pro_license_for_app(code, is_pro=manifest_is_pro)
     has_key_access = bool(code and code in activated_codes)
-    # 产品规则：PRO 应用必须先完成 License Key 激活；套餐权限不再作为绕过条件
+    # 产品规则：PRO / 付费行业应用必须先完成 License Key 激活
     can_access = not is_pro or has_key_access
     return {'is_pro': is_pro, 'can_access': can_access}
 
@@ -363,6 +390,21 @@ async def list_installed_applications(
     return result
 
 
+@router.get("/center-capabilities")
+async def get_application_center_capabilities(
+    tenant_id: int = Depends(get_current_tenant),
+    auth: AuthContext = Depends(get_auth_context),
+):
+    """应用中心自主启停能力（组织分类权限 + 套餐 PRO 硬顶）。"""
+    _require_tenant_or_platform_admin(auth)
+    caps = await ApplicationCenterPermissionService.build_center_capabilities(tenant_id)
+    return {
+        **caps,
+        "is_infra_admin": bool(auth.is_infra_admin),
+        "is_tenant_admin": bool(auth.is_tenant_admin),
+    }
+
+
 @router.get("/{uuid}", response_model=ApplicationResponse)
 async def get_application(
     uuid: str,
@@ -494,9 +536,9 @@ async def install_application(
         HTTPException: 当应用不存在时抛出
     """
     try:
-        _require_platform_admin(auth)
         existing = await ApplicationService.get_application_by_uuid(tenant_id=tenant_id, uuid=uuid)
         await _assert_application_visible_to_viewer(tenant_id, existing, auth)
+        await _require_application_lifecycle_access(auth, tenant_id, existing)
         application = await ApplicationService.install_application(
             tenant_id=tenant_id,
             uuid=uuid
@@ -545,9 +587,9 @@ async def uninstall_application(
         HTTPException: 当应用不存在时抛出
     """
     try:
-        _require_platform_admin(auth)
         existing = await ApplicationService.get_application_by_uuid(tenant_id=tenant_id, uuid=uuid)
         await _assert_application_visible_to_viewer(tenant_id, existing, auth)
+        await _require_application_lifecycle_access(auth, tenant_id, existing)
         application = await ApplicationService.uninstall_application(
             tenant_id=tenant_id,
             uuid=uuid
@@ -596,12 +638,12 @@ async def enable_application(
         HTTPException: 当应用不存在时抛出
     """
     try:
-        _require_platform_admin(auth)
         app_detail = await ApplicationService.get_application_by_uuid(
             tenant_id=tenant_id,
             uuid=uuid,
         )
         await _assert_application_visible_to_viewer(tenant_id, app_detail, auth)
+        await _require_application_lifecycle_access(auth, tenant_id, app_detail)
         activated_codes = await _get_activated_pro_codes(tenant_id)
         pro_info = _enrich_app_with_pro_info(app_detail, activated_codes)
         if pro_info.get("is_pro") and not pro_info.get("can_access"):
@@ -663,8 +705,8 @@ async def activate_pro_application(
     await _assert_application_visible_to_viewer(tenant_id, app, auth)
     app_code = app.get("code")
     manifest = ApplicationService._get_manifest_by_code(app_code) if app_code else None
-    is_pro = bool(manifest.get("is_pro", False)) if manifest else False
-    if not is_pro:
+    manifest_is_pro = bool(manifest.get("is_pro", False)) if manifest else False
+    if not requires_pro_license_for_app(app_code, is_pro=manifest_is_pro):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="当前应用不是 PRO 应用，无需输入 License Key。",
@@ -717,9 +759,9 @@ async def disable_application(
         HTTPException: 当应用不存在时抛出
     """
     try:
-        _require_platform_admin(auth)
         existing = await ApplicationService.get_application_by_uuid(tenant_id=tenant_id, uuid=uuid)
         await _assert_application_visible_to_viewer(tenant_id, existing, auth)
+        await _require_application_lifecycle_access(auth, tenant_id, existing)
         application = await ApplicationService.disable_application(
             tenant_id=tenant_id,
             uuid=uuid

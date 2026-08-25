@@ -572,6 +572,8 @@ class MaterialCallService(AppBaseService[MaterialCallRequest]):
                 from_warehouse_name=src_wh_name or None,
                 to_warehouse_id=tgt_wh_id,
                 to_warehouse_name=tgt_wh_name or None,
+                operator_id=user.id,
+                operator_name=(user.full_name or user.username or "").strip() or None,
                 idempotency_key=f"material_call:{call_req.id}:dec:{it.id}",
             )
             await InventoryService.increase_stock(
@@ -590,6 +592,8 @@ class MaterialCallService(AppBaseService[MaterialCallRequest]):
                 from_warehouse_name=src_wh_name or None,
                 to_warehouse_id=tgt_wh_id,
                 to_warehouse_name=tgt_wh_name or None,
+                operator_id=user.id,
+                operator_name=(user.full_name or user.username or "").strip() or None,
                 idempotency_key=f"material_call:{call_req.id}:inc:{it.id}",
             )
 

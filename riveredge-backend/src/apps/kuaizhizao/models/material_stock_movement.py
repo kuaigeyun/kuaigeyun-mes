@@ -25,6 +25,7 @@ class MaterialStockMovement(BaseModel):
     id = fields.IntField(pk=True, description="主键ID")
     material_id = fields.IntField(description="物料ID")
     material_code = fields.CharField(max_length=50, null=True, description="物料编码")
+    material_name = fields.CharField(max_length=200, null=True, description="物料名称（过账时落库）")
     batch_no = fields.CharField(max_length=100, null=True, description="批号")
 
     # staging_to_line | production_issue | production_return | backflush_consume |
@@ -79,3 +80,7 @@ MOVEMENT_PURCHASE_RECEIPT = "purchase_receipt"
 MOVEMENT_SALES_DELIVERY = "sales_delivery"
 MOVEMENT_OTHER_INBOUND = "other_inbound"
 MOVEMENT_OTHER_OUTBOUND = "other_outbound"
+MOVEMENT_ASSEMBLY_CONSUME = "assembly_consume"
+MOVEMENT_ASSEMBLY_RECEIPT = "assembly_receipt"
+MOVEMENT_DISASSEMBLY_CONSUME = "disassembly_consume"
+MOVEMENT_DISASSEMBLY_RECEIPT = "disassembly_receipt"

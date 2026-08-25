@@ -1,0 +1,37 @@
+{
+  "code": "spoke-wheel",
+  "name": "辐条轮毂",
+  "version": "0.1.0",
+  "description": "铝合金辐条轮毂 5 部件 + 总装调试业务模块(同心度 ≤ 0.8mm)",
+  "icon": "wheel",
+  "author": "xyt123lyq",
+  "author_github": "https://github.com/xyt123lyq",
+  "market_category": "industry",
+  "is_pro": false,
+  "entry_point": "../apps/spoke-wheel/index.tsx",
+  "route_path": "/apps/spoke-wheel",
+  "sort_order": 300,
+  "industry_pack_menu": {
+    "children": [
+      {
+        "title": "app.spoke-wheel.menu.assembly-debug",
+        "icon": "aim",
+        "path": "/apps/spoke-wheel/assembly-debug",
+        "permission": "spoke-wheel:assembly:read",
+        "sort_order": 300
+      }
+    ]
+  },
+  "permissions": [
+    "spoke-wheel:entry:read",
+    "spoke-wheel:assembly:read",
+    "spoke-wheel:assembly:create",
+    "spoke-wheel:assembly:update",
+    "spoke-wheel:concentricity:read",
+    "spoke-wheel:concentricity:create"
+  ],
+  "dependencies": {
+    "riveredge-backend": ">=1.0.0",
+    "riveredge-frontend": ">=1.0.0"
+  }
+}

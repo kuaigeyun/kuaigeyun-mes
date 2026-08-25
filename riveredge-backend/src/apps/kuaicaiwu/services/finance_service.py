@@ -1899,6 +1899,260 @@ class AccountSettlementService(AppBaseService[SettlementRecord]):
 
         return settlement
 
+    async def reverse_receivable_settlements_for_refund(
+        self,
+        tenant_id: int,
+        *,
+        source_receipt_id: int,
+        refund_receipt_id: int,
+        refund_amount: Decimal,
+        operator_id: int,
+    ) -> Decimal:
+        """冲回源收款单关联的应收核销，返回实际冲回金额。"""
+        from apps.kuaicaiwu.models.receipt import Receipt
+        from apps.kuaicaiwu.models.receivable import Receivable
+
+        source_receipt = await Receipt.get_or_none(
+            tenant_id=tenant_id, id=source_receipt_id, deleted_at__isnull=True
+        )
+        if not source_receipt:
+            raise NotFoundError("源收款单不存在")
+
+        remaining_to_reverse = Decimal(refund_amount).quantize(Decimal("0.01"))
+        if remaining_to_reverse <= 0:
+            raise ValidationError("退款金额须大于 0")
+
+        settlements = (
+            await SettlementRecord.filter(
+                tenant_id=tenant_id,
+                credit_doc_type="Receipt",
+                credit_doc_id=source_receipt_id,
+                debit_doc_type="Receivable",
+                is_active=True,
+                deleted_at__isnull=True,
+            )
+            .order_by("-settlement_date", "-id")
+            .all()
+        )
+
+        user_name = await self.get_user_name(operator_id)
+        today = resolve_business_datetime()
+        reversed_total = Decimal("0")
+
+        for settlement in settlements:
+            if remaining_to_reverse <= 0:
+                break
+            receivable = await Receivable.get_or_none(
+                tenant_id=tenant_id, id=settlement.debit_doc_id
+            )
+            if not receivable:
+                continue
+            settled_amt = Decimal(str(settlement.amount or 0)).quantize(Decimal("0.01"))
+            if settled_amt <= 0:
+                continue
+            chunk = min(remaining_to_reverse, settled_amt)
+
+            settlement_code = await self.generate_code(
+                tenant_id, "SETTLEMENT_CODE", prefix=f"HX{today.strftime('%Y%m%d')}"
+            )
+            await SettlementRecord.create(
+                tenant_id=tenant_id,
+                settlement_code=settlement_code,
+                partner_id=receivable.customer_id,
+                partner_name=receivable.customer_name,
+                debit_doc_type="Receipt",
+                debit_doc_id=refund_receipt_id,
+                debit_doc_code=str(
+                    (await Receipt.get_or_none(tenant_id=tenant_id, id=refund_receipt_id)).receipt_code
+                    or refund_receipt_id
+                ),
+                credit_doc_type="Receivable",
+                credit_doc_id=receivable.id,
+                credit_doc_code=receivable.receivable_code,
+                amount=chunk,
+                currency=settlement.currency or "CNY",
+                settlement_date=today.date(),
+                operator_id=operator_id,
+                operator_name=user_name,
+                notes=json.dumps(
+                    {
+                        "reversal": True,
+                        "original_settlement_id": settlement.id,
+                        "source_receipt_id": source_receipt_id,
+                    },
+                    ensure_ascii=False,
+                ),
+            )
+
+            new_received = (receivable.received_amount - chunk).quantize(Decimal("0.01"))
+            new_remaining = (receivable.total_amount - new_received).quantize(Decimal("0.01"))
+            if new_received <= 0:
+                new_received = Decimal("0")
+                status = "未收款"
+            elif new_remaining <= 0:
+                status = "已结清"
+                new_remaining = Decimal("0")
+            else:
+                status = "部分收款"
+            await Receivable.filter(tenant_id=tenant_id, id=receivable.id).update(
+                received_amount=new_received,
+                remaining_amount=new_remaining,
+                status=status,
+                updated_by=operator_id,
+                updated_by_name=user_name,
+            )
+
+            new_source_settled = (source_receipt.settled_amount - chunk).quantize(Decimal("0.01"))
+            new_source_unsettled = (source_receipt.total_amount - new_source_settled).quantize(
+                Decimal("0.01")
+            )
+            if new_source_settled < 0:
+                new_source_settled = Decimal("0")
+            if new_source_unsettled < 0:
+                new_source_unsettled = Decimal("0")
+            await Receipt.filter(tenant_id=tenant_id, id=source_receipt_id).update(
+                settled_amount=new_source_settled,
+                unsettled_amount=new_source_unsettled,
+                updated_by=operator_id,
+                updated_by_name=user_name,
+            )
+            source_receipt.settled_amount = new_source_settled
+            source_receipt.unsettled_amount = new_source_unsettled
+
+            remaining_to_reverse -= chunk
+            reversed_total += chunk
+
+        if reversed_total < Decimal(refund_amount).quantize(Decimal("0.01")):
+            raise ValidationError("可冲回核销金额不足，无法完成退款确认")
+
+        return reversed_total
+
+    async def reverse_payable_settlements_for_refund(
+        self,
+        tenant_id: int,
+        *,
+        source_payment_id: int,
+        refund_payment_id: int,
+        refund_amount: Decimal,
+        operator_id: int,
+    ) -> Decimal:
+        """冲回源付款单关联的应付核销，返回实际冲回金额。"""
+        from apps.kuaicaiwu.models.payment import Payment
+        from apps.kuaicaiwu.models.payable import Payable
+
+        source_payment = await Payment.get_or_none(
+            tenant_id=tenant_id, id=source_payment_id, deleted_at__isnull=True
+        )
+        if not source_payment:
+            raise NotFoundError("源付款单不存在")
+
+        remaining_to_reverse = Decimal(refund_amount).quantize(Decimal("0.01"))
+        if remaining_to_reverse <= 0:
+            raise ValidationError("退款金额须大于 0")
+
+        settlements = (
+            await SettlementRecord.filter(
+                tenant_id=tenant_id,
+                credit_doc_type="Payment",
+                credit_doc_id=source_payment_id,
+                debit_doc_type="Payable",
+                is_active=True,
+                deleted_at__isnull=True,
+            )
+            .order_by("-settlement_date", "-id")
+            .all()
+        )
+
+        user_name = await self.get_user_name(operator_id)
+        today = resolve_business_datetime()
+        reversed_total = Decimal("0")
+
+        for settlement in settlements:
+            if remaining_to_reverse <= 0:
+                break
+            payable = await Payable.get_or_none(tenant_id=tenant_id, id=settlement.debit_doc_id)
+            if not payable:
+                continue
+            settled_amt = Decimal(str(settlement.amount or 0)).quantize(Decimal("0.01"))
+            if settled_amt <= 0:
+                continue
+            chunk = min(remaining_to_reverse, settled_amt)
+
+            settlement_code = await self.generate_code(
+                tenant_id, "SETTLEMENT_CODE", prefix=f"HX{today.strftime('%Y%m%d')}"
+            )
+            refund_payment = await Payment.get_or_none(tenant_id=tenant_id, id=refund_payment_id)
+            await SettlementRecord.create(
+                tenant_id=tenant_id,
+                settlement_code=settlement_code,
+                partner_id=payable.supplier_id,
+                partner_name=payable.supplier_name,
+                debit_doc_type="Payment",
+                debit_doc_id=refund_payment_id,
+                debit_doc_code=str(
+                    getattr(refund_payment, "payment_code", None) or refund_payment_id
+                ),
+                credit_doc_type="Payable",
+                credit_doc_id=payable.id,
+                credit_doc_code=payable.payable_code,
+                amount=chunk,
+                currency=settlement.currency or "CNY",
+                settlement_date=today.date(),
+                operator_id=operator_id,
+                operator_name=user_name,
+                notes=json.dumps(
+                    {
+                        "reversal": True,
+                        "original_settlement_id": settlement.id,
+                        "source_payment_id": source_payment_id,
+                    },
+                    ensure_ascii=False,
+                ),
+            )
+
+            new_paid = (payable.paid_amount - chunk).quantize(Decimal("0.01"))
+            new_remaining = (payable.total_amount - new_paid).quantize(Decimal("0.01"))
+            if new_paid <= 0:
+                new_paid = Decimal("0")
+                status = "未付款"
+            elif new_remaining <= 0:
+                status = "已结清"
+                new_remaining = Decimal("0")
+            else:
+                status = "部分付款"
+            await Payable.filter(tenant_id=tenant_id, id=payable.id).update(
+                paid_amount=new_paid,
+                remaining_amount=new_remaining,
+                status=status,
+                updated_by=operator_id,
+                updated_by_name=user_name,
+            )
+
+            new_source_settled = (source_payment.settled_amount - chunk).quantize(Decimal("0.01"))
+            new_source_unsettled = (source_payment.total_amount - new_source_settled).quantize(
+                Decimal("0.01")
+            )
+            if new_source_settled < 0:
+                new_source_settled = Decimal("0")
+            if new_source_unsettled < 0:
+                new_source_unsettled = Decimal("0")
+            await Payment.filter(tenant_id=tenant_id, id=source_payment_id).update(
+                settled_amount=new_source_settled,
+                unsettled_amount=new_source_unsettled,
+                updated_by=operator_id,
+                updated_by_name=user_name,
+            )
+            source_payment.settled_amount = new_source_settled
+            source_payment.unsettled_amount = new_source_unsettled
+
+            remaining_to_reverse -= chunk
+            reversed_total += chunk
+
+        if reversed_total < Decimal(refund_amount).quantize(Decimal("0.01")):
+            raise ValidationError("可冲回核销金额不足，无法完成退款确认")
+
+        return reversed_total
+
     async def list_settlement_records(
         self,
         tenant_id: int,

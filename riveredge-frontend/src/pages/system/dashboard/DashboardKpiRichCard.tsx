@@ -159,28 +159,12 @@ function KpiStackBody({
         >
           {title}
         </Text>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, flexWrap: 'nowrap' }}>
-          <span
-            style={{
-              fontSize: 28,
-              color: mainColor,
-              fontWeight: 700,
-              fontVariantNumeric: 'tabular-nums',
-              lineHeight: 1.1,
-              letterSpacing: '-0.02em',
-            }}
-          >
+        <div className="dashboard-kpi-cell-main-row">
+          <span className="dashboard-kpi-cell-main-value" style={{ color: mainColor }}>
             {mainValue}
           </span>
           {mainSuffix ? (
-            <span
-              style={{
-                fontSize: 14,
-                color: token.colorTextTertiary,
-                fontWeight: 500,
-                flexShrink: 0,
-              }}
-            >
+            <span className="dashboard-kpi-cell-main-suffix">
               {mainSuffix}
             </span>
           ) : null}

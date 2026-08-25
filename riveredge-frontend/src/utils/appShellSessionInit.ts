@@ -19,8 +19,11 @@ import {
   fetchUserPreferenceRecord,
   languageListQueryKey,
 } from '../config/sessionQueries';
+import { isRequestCancellation } from './requestCancellation';
 
 let refreshInFlight: Promise<void> | null = null;
+let refreshInFlightKey: string | null = null;
+let refreshGeneration = 0;
 
 function resolveSessionTenantUserIds(): { tenantId: number | string | null; userId: number | string | null } {
   const user = getSessionCurrentUser();
@@ -36,13 +39,29 @@ export function applyAppShellFromLocalCache(): void {
   void applyLanguageFromLocalCache();
 }
 
+function sessionRefreshKey(): string {
+  const { tenantId, userId } = resolveSessionTenantUserIds();
+  return `${String(tenantId ?? '')}:${String(userId ?? '')}`;
+}
+
+/** cancelQueries 之后调用：丢弃旧壳层 Promise，避免新租户 await 到 CancelledError */
+export function abandonAppShellRefreshInFlight(): void {
+  refreshGeneration += 1;
+  refreshInFlight = null;
+  refreshInFlightKey = null;
+}
+
 /** 经 Query 缓存拉取站点设置/偏好并刷新主题与语言（可重复调用，内部去重） */
 export function refreshAppShellFromApi(options?: { force?: boolean }): Promise<void> {
-  if (refreshInFlight) {
+  const key = sessionRefreshKey();
+  // 同一会话可复用进行中的拉取；换租户后 key 变了，不得接上已被 cancelQueries 打成 CancelledError 的旧 Promise
+  if (refreshInFlight && refreshInFlightKey === key) {
     return refreshInFlight;
   }
 
-  refreshInFlight = (async () => {
+  const generation = ++refreshGeneration;
+  let run!: Promise<void>;
+  run = (async () => {
     if (!getToken() || isKuaireportSharedBrowsePath()) {
       applyAppShellFromLocalCache();
       return;
@@ -71,6 +90,7 @@ export function refreshAppShellFromApi(options?: { force?: boolean }): Promise<v
           })
         : Promise.resolve(null),
     ]);
+    if (generation !== refreshGeneration) return;
 
     const siteSettings =
       siteSetting?.settings && typeof siteSetting.settings === 'object'
@@ -107,9 +127,21 @@ export function refreshAppShellFromApi(options?: { force?: boolean }): Promise<v
       languageListResponse?.items ?? null,
       mergedPrefs,
     );
-  })().finally(() => {
-    refreshInFlight = null;
-  });
+  })()
+    .catch((error) => {
+      if (generation !== refreshGeneration && isRequestCancellation(error)) {
+        return;
+      }
+      throw error;
+    })
+    .finally(() => {
+      if (refreshInFlight === run) {
+        refreshInFlight = null;
+        refreshInFlightKey = null;
+      }
+    });
 
-  return refreshInFlight;
+  refreshInFlight = run;
+  refreshInFlightKey = key;
+  return run;
 }

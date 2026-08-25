@@ -7,13 +7,15 @@ import { useTranslation } from 'react-i18next';
 import KuaizhizaoReport from '../../../components/KuaizhizaoReport';
 import {
   purchaseOrderStatusEnum,
+  reportArrivalWarningText,
+  reportArrivalWarningValueEnum,
   reportDocumentStatusText,
-  reportOverdueText,
   reportPercent,
 } from '../../../utils/reportPresentation';
 
 const PurchaseOrderProgress: React.FC = () => {
   const { t } = useTranslation();
+  const warningLevelEnum = useMemo(() => reportArrivalWarningValueEnum(t), [t]);
   const columns: ProColumns[] = useMemo(
     () => [
       {
@@ -93,12 +95,13 @@ const PurchaseOrderProgress: React.FC = () => {
         hideInSearch: true,
       },
       {
-        title: t('app.kuaizhizao.reports.overdue'),
-        dataIndex: 'is_overdue',
+        title: t('app.kuaizhizao.purchaseArrival.col.warningLevel'),
+        dataIndex: 'warning_level',
         width: 110,
         hideInSearch: true,
+        valueEnum: warningLevelEnum,
         render: (_, record) =>
-          reportOverdueText(t, Boolean(record.is_overdue), record.overdue_days),
+          reportArrivalWarningText(t, record.warning_level, record.overdue_days),
       },
       {
         title: t('app.kuaizhizao.reports.documentStatus'),
@@ -114,7 +117,7 @@ const PurchaseOrderProgress: React.FC = () => {
         hideInSearch: true,
       },
     ],
-    [t],
+    [t, warningLevelEnum],
   );
 
   return (
@@ -122,7 +125,7 @@ const PurchaseOrderProgress: React.FC = () => {
       title={t('app.kuaizhizao.menu.reports.purchase-order-progress')}
       reportType="po_progress"
       summaryFields={['ordered_quantity', 'received_quantity', 'outstanding_quantity']}
-      columnPersistenceId="apps.kuaizhizao.pages.purchase-management.reports.PurchaseOrderProgress-v2"
+      columnPersistenceId="apps.kuaizhizao.pages.purchase-management.reports.PurchaseOrderProgress-v3"
       rowKey="id"
       columns={columns}
     />

@@ -3,9 +3,9 @@
 """
 
 from decimal import Decimal
-from typing import Any
+from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import Field
 
 from apps.kuaicaiwu.api._kuaicaiwu_route_access import require_kuaicaiwu_module_access
@@ -35,6 +35,33 @@ class PrepaymentApplyReceivableRequest(PrepaymentApplyRequest):
 class PrepaymentApplyPayableRequest(PrepaymentApplyRequest):
     payment_id: int
     payable_id: int
+
+
+@router.get("/balances", summary="预收/预付余额汇总")
+async def get_prepayment_balances(
+    partner_type: Optional[str] = Query(None, description="customer 或 supplier；传入时分页返回 items"),
+    keyword: Optional[str] = Query(None),
+    partner_name: Optional[str] = Query(None),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=200),
+    sort_field: Optional[str] = Query(None),
+    sort_order: Optional[str] = Query(None),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:prepayment:read")),
+    current_user: Any = Depends(get_current_user),
+):
+    from apps.kuaicaiwu.services.document_reconciliation_service import DocumentReconciliationService
+
+    return await DocumentReconciliationService().get_prepayment_balances(
+        current_user.tenant_id,
+        partner_type=partner_type,
+        keyword=keyword,
+        partner_name=partner_name,
+        skip=skip,
+        limit=limit,
+        sort_field=sort_field,
+        sort_order=sort_order,
+        operator_id=getattr(current_user, "id", None),
+    )
 
 
 @router.post("/apply-receivable", summary="预收转核销应收")

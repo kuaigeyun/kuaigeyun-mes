@@ -608,6 +608,7 @@ async def list_sales_orders(
         None,
         description="响应视图：options=选单轻量列表（跳过进度/capabilities；可配合 include_items）",
     ),
+    column_filters: Optional[str] = Query(None, description="列筛选 JSON（高级搜索）"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -645,6 +646,7 @@ async def list_sales_orders(
             pullable_only=pullable_only,
             pull_target=pull_target,
             view=view,
+            column_filters=column_filters,
             current_user=current_user,
         )
         payloads = [row.model_dump() for row in result.data]
@@ -1013,10 +1015,10 @@ async def push_sales_order_to_computation(
         return result
     except NotFoundError as e:
         raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/sales-orders/{sales_order_id}/push-to-computation", tenant_id)
-    except BusinessLogicError as e:
+    except (BusinessLogicError, ValidationError) as e:
         raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/sales-orders/{sales_order_id}/push-to-computation", tenant_id)
     except Exception as e:
-        logger.error(f"下推销售订单到需求计算失败: {e}")
+        logger.exception("下推销售订单到需求计算失败: {}", e)
         raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "下推销售订单到需求计算失败", "/sales-orders/{sales_order_id}/push-to-computation", tenant_id)
 
 

@@ -11,12 +11,17 @@ export const REPORT_COLUMN_FILTER_NONE = '__none__';
 export type ReportColumnFilterOp =
   | 'contains'
   | 'eq'
+  | 'ne'
   | 'gt'
   | 'lt'
   | 'gte'
   | 'lte'
   | 'between'
-  | 'in';
+  | 'in'
+  | 'nin'
+  | 'startswith'
+  | 'endswith'
+  | 'isnull';
 
 export type ReportColumnFilter = {
   field: string;

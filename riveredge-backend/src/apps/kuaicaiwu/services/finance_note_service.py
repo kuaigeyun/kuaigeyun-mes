@@ -19,7 +19,18 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
 
 _DIRECTIONS = frozenset({"receivable", "payable"})
-_BILL_TYPES = frozenset({"bank_acceptance", "commercial_acceptance"})
+_BILL_TYPES = frozenset(
+    {
+        "bank_acceptance",
+        "commercial_acceptance",
+        "bank_draft",
+        "bank_promissory_note",
+        "cheque",
+    }
+)
+_BILL_TYPE_LABELS = (
+    "bank_acceptance / commercial_acceptance / bank_draft / bank_promissory_note / cheque"
+)
 _RECEIVABLE_STATUSES = frozenset({"held", "endorsed", "discounted", "collected", "dishonored"})
 _PAYABLE_STATUSES = frozenset({"issued", "honored", "dishonored"})
 _RECEIVABLE_TERMINAL = frozenset({"endorsed", "discounted", "collected", "dishonored"})
@@ -43,7 +54,7 @@ class FinanceNoteService(AppBaseService[FinanceNote]):
     def normalize_bill_type(bill_type: str) -> str:
         value = str(bill_type or "").strip().lower()
         if value not in _BILL_TYPES:
-            raise ValidationError("票据类型仅支持 bank_acceptance 或 commercial_acceptance")
+            raise ValidationError(f"票据类型仅支持 {_BILL_TYPE_LABELS}")
         return value
 
     @staticmethod

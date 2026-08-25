@@ -14,6 +14,8 @@ from datetime import datetime
 import asyncpg
 
 from core.schemas.application import ApplicationCreate, ApplicationUpdate
+from core.config.industry_app_catalog import requires_pro_license_for_app
+from core.config.industry_pack import is_industry_module_app_code, is_industry_pack_shell_code
 from core.services.application.application_dedicated_binding_service import ApplicationDedicatedBindingService
 from core.utils.timezone_utils import now_utc
 from infra.models.tenant import Tenant
@@ -697,13 +699,21 @@ class ApplicationService:
         application['is_active'] = False
         
         # 自动同步应用菜单配置到菜单管理（批量扫描时可关闭，改由「一键同步菜单」或清单同步接口写入）
-        if sync_menus_after_install and application.get('menu_config'):
+        app_code = str(application.get("code") or "")
+        if is_industry_module_app_code(app_code):
+            from core.services.application.industry_pack_menu_service import IndustryPackMenuService
+
+            await IndustryPackMenuService.sync_after_industry_module_lifecycle(
+                tenant_id, activate_shell=False
+            )
+        elif sync_menus_after_install and application.get("menu_config"):
             from core.services.system.menu_service import MenuService
+
             await MenuService.sync_menus_from_application_config(
                 tenant_id=tenant_id,
-                application_uuid=str(application['uuid']),
-                menu_config=application['menu_config'],
-                is_active=application.get('is_active', False),
+                application_uuid=str(application["uuid"]),
+                menu_config=application["menu_config"],
+                is_active=application.get("is_active", False),
             )
 
         return application
@@ -751,9 +761,18 @@ class ApplicationService:
 
         app_code = str(application.get("code") or "")
         from core.services.system.menu_takeover_service import MenuTakeoverService
+
         await MenuTakeoverService.sync_for_application_lifecycle(
             tenant_id, app_code, enabled=False
         )
+
+        if is_industry_module_app_code(app_code):
+            from core.services.application.industry_pack_menu_service import IndustryPackMenuService
+
+            await IndustryPackMenuService.sync_after_industry_module_lifecycle(
+                tenant_id, activate_shell=False
+            )
+            return application
 
         # 自动删除关联菜单（软删除）
         from core.models.menu import Menu
@@ -790,7 +809,16 @@ class ApplicationService:
         application = await ApplicationService.get_application_by_uuid(tenant_id, uuid)
         app_code = str(application.get("code") or "")
         if app_code and not await ApplicationService._can_enable_or_install_app(tenant_id=tenant_id, app_code=app_code):
-            raise ValidationError("PRO 应用未激活 License Key，不允许启用")
+            controls = await ApplicationService._resolve_package_controls(tenant_id)
+            manifest = ApplicationService._get_manifest_by_code(app_code)
+            manifest_is_pro = bool(manifest.get("is_pro", False)) if manifest else False
+            if not await ApplicationService._is_app_allowed_by_package(tenant_id, app_code):
+                raise ValidationError("当前套餐未包含该应用，无法启用。")
+            if requires_pro_license_for_app(app_code, is_pro=manifest_is_pro) and not bool(
+                controls.get("allow_pro_apps")
+            ):
+                raise ValidationError("当前套餐不支持 PRO 应用，无法启用该应用。")
+            raise ValidationError("PRO 应用未激活 License Key，不允许启用。")
         
         # 更新数据库
         conn = await get_db_connection()
@@ -807,8 +835,18 @@ class ApplicationService:
         # 更新本地字典
         application['is_active'] = True
         
-        # 如果应用已安装且有菜单配置，确保菜单已同步并启用
-        if application.get('is_installed') and application.get('menu_config'):
+        app_code = str(application.get("code") or "")
+        if is_industry_module_app_code(app_code):
+            from core.services.application.industry_pack_menu_service import IndustryPackMenuService
+
+            await IndustryPackMenuService.sync_after_industry_module_lifecycle(
+                tenant_id, activate_shell=True
+            )
+        elif is_industry_pack_shell_code(app_code):
+            from core.services.application.industry_pack_menu_service import IndustryPackMenuService
+
+            await IndustryPackMenuService.rebuild_pack_menus(tenant_id)
+        elif application.get('is_installed') and application.get('menu_config'):
             from core.services.system.menu_service import MenuService
             # 重新同步菜单，确保菜单状态与应用状态一致
             await MenuService.sync_menus_from_application_config(
@@ -1320,6 +1358,11 @@ class ApplicationService:
                 if code in _PLACEHOLDER_APP_CODES:
                     logger.info(f"⏭️ 跳过占位应用注册: {code}")
                     continue
+                from core.config.industry_pack import is_industry_module_app_code
+
+                manifest_menu_config = manifest.get("menu_config")
+                if is_industry_module_app_code(code):
+                    manifest_menu_config = None
                 if ApplicationService._manifest_is_dedicated(manifest) and str(code) not in bound_for_scan:
                     logger.info(f"⏭️ 跳过未绑定当前租户的专用应用: {code} (tenant_id={tenant_id})")
                     continue
@@ -1352,7 +1395,7 @@ class ApplicationService:
                     version=manifest.get('version', '1.0.0'),
                     route_path=manifest.get('route_path'),
                     entry_point=manifest.get('entry_point'),
-                    menu_config=manifest.get('menu_config'),
+                    menu_config=manifest_menu_config,
                     permission_code=manifest.get('permission_code') or f"app:{code}",
                     is_system=False,  # 插件应用不是系统应用
                     is_active=is_active,  # 保持现有状态；新注册默认为停用
@@ -1441,6 +1484,16 @@ class ApplicationService:
                 # 暂时不跳过，继续处理下一个插件
                 continue
         
+        # 已安装行业模块时对齐 industry-pack 容器与侧栏菜单
+        try:
+            from core.services.application.industry_pack_menu_service import (
+                IndustryPackMenuService,
+            )
+
+            await IndustryPackMenuService.reconcile_for_tenant(tenant_id)
+        except Exception as e:
+            logger.warning(f"扫描后对齐行业包菜单失败（不影响应用注册）: {e}")
+
         # 所有应用注册完成后，统一清除菜单缓存，确保菜单一次性刷新
         if registered_apps:
             try:
@@ -1487,9 +1540,14 @@ class ApplicationService:
         if not await ApplicationService._is_app_allowed_by_package(tenant_id, app_code):
             return False
 
+        controls = await ApplicationService._resolve_package_controls(tenant_id)
         manifest = ApplicationService._get_manifest_by_code(app_code)
-        is_pro = bool(manifest.get("is_pro", False)) if manifest else False
-        if not is_pro:
+        manifest_is_pro = bool(manifest.get("is_pro", False)) if manifest else False
+        if requires_pro_license_for_app(app_code, is_pro=manifest_is_pro):
+            if not bool(controls.get("allow_pro_apps")):
+                return False
+
+        if not requires_pro_license_for_app(app_code, is_pro=manifest_is_pro):
             return True
 
         # 1) 平台许可证中心激活记录（标准路径）

@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { Alert, Badge, Modal, Tabs, Table, Tag, Typography, Space, Divider, theme } from 'antd';
 import type { TabsProps } from 'antd';
 import { ExclamationCircleOutlined, FileTextOutlined } from '@ant-design/icons';
+import { CheckCircle2, XCircle } from 'lucide-react';
 import {
   MODAL_CONFIG,
   SYSTEM_VIEWPORT_OFFSETS,
@@ -715,7 +716,10 @@ const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
       width: 100,
       align: 'center' as const,
       render: (value: boolean) => (
-        <Tag color={value ? 'success' : 'error'}>
+        <Tag
+          color={value ? 'success' : 'error'}
+          icon={value ? <CheckCircle2 size={12} strokeWidth={1.75} /> : <XCircle size={12} strokeWidth={1.75} />}
+        >
           {value ? t('components.techStackModal.tagFree') : t('components.techStackModal.tagRequired')}
         </Tag>
       ),
@@ -761,7 +765,10 @@ const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
             {t('components.techStackModal.overview.licenseIntro')}
           </Paragraph>
           <Paragraph>
-            {t('components.techStackModal.overview.redisWarning')}
+            <Space align="start">
+              <ExclamationCircleOutlined style={{ color: 'var(--ant-color-warning)', marginTop: 2 }} />
+              <span>{t('components.techStackModal.overview.redisWarning')}</span>
+            </Space>
           </Paragraph>
         </div>
       ),
@@ -818,11 +825,13 @@ const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
           <Paragraph>
             {t('components.techStackModal.copyright.softwareIntro')}
           </Paragraph>
-          <Paragraph style={{ paddingLeft: token.paddingLG }}>
-            ✅ {t('components.techStackModal.copyright.softwareItem1')}
+          <Paragraph style={{ paddingLeft: token.paddingLG, display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+            <CheckCircle2 size={16} strokeWidth={1.75} style={{ flexShrink: 0, marginTop: 2 }} aria-hidden />
+            <span>{t('components.techStackModal.copyright.softwareItem1')}</span>
           </Paragraph>
-          <Paragraph style={{ paddingLeft: token.paddingLG }}>
-            ✅ {t('components.techStackModal.copyright.softwareItem2')}
+          <Paragraph style={{ paddingLeft: token.paddingLG, display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+            <CheckCircle2 size={16} strokeWidth={1.75} style={{ flexShrink: 0, marginTop: 2 }} aria-hidden />
+            <span>{t('components.techStackModal.copyright.softwareItem2')}</span>
           </Paragraph>
           <Paragraph type="secondary" style={{ marginTop: 8 }}>
             {t('components.techStackModal.copyright.softwareNote')}

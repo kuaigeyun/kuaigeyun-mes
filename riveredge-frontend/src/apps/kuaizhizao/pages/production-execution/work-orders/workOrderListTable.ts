@@ -6,6 +6,7 @@ import type { ReactText } from 'react'
 import dayjs from 'dayjs'
 import { formatDateTime } from '../../../../../utils/format'
 import { stableJsonForQueryKey, extractProTableSort } from '../../../../../utils/tableQueryKey'
+import { swallowRequestCancellation } from '../../../../../utils/requestCancellation'
 import { resolveWorkOrderListStatusFilter } from '../../../utils/workOrderLifecycle'
 import { workOrderApi } from '../../../services/production'
 import {
@@ -560,5 +561,5 @@ export function prefetchDefaultWorkOrderList(queryClient: QueryClient, pageSize:
         persistSnapshot: false,
       }),
     staleTime: WORK_ORDER_LIST_STALE_MS,
-  })
+  }).catch(swallowRequestCancellation)
 }

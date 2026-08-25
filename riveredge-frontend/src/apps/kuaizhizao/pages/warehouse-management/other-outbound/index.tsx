@@ -61,6 +61,20 @@ import {
 } from '../../../utils/warehouseListCore';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
+import { loadAvailableQtyByMaterialId } from '../outbound/outboundConfirmInventoryOptions';
+
+/** 明细物料 ID 指纹：仅物料变化时触发库存重拉，忽略数量改动 */
+function otherOutboundMaterialIdsKey(items: unknown): string {
+  if (!Array.isArray(items)) return '';
+  const ids = [
+    ...new Set(
+      items
+        .map((it) => Number((it as { material_id?: unknown })?.material_id))
+        .filter((id) => Number.isFinite(id) && id > 0),
+    ),
+  ].sort((a, b) => a - b);
+  return ids.join(',');
+}
 
 const REASON_TYPES_FALLBACK = [
   { value: '盘亏', label: '盘亏' },
@@ -178,6 +192,10 @@ const OtherOutboundPage: React.FC = () => {
     resetSelectedWarehouseId,
   } = useWarehouseLocationOptions();
   const [reasonTypeOptions, setReasonTypeOptions] = useState<Array<{ label: string; value: string }>>([]);
+  /** 表头仓库下明细物料可出库库存（自购在库，与确认出库扣减口径一致） */
+  const [stockByMaterialId, setStockByMaterialId] = useState<Record<number, number>>({});
+  const [stockLoading, setStockLoading] = useState(false);
+  const [lineMaterialKey, setLineMaterialKey] = useState('');
 
   const defaultOutboundItem = {
     material_id: undefined,
@@ -189,6 +207,44 @@ const OtherOutboundPage: React.FC = () => {
     unit_price: 0,
   };
   const [reasonTypeLoading, setReasonTypeLoading] = useState(false);
+
+  const syncLineMaterialKeyFromForm = useCallback(() => {
+    setLineMaterialKey(otherOutboundMaterialIdsKey(formRef.current?.getFieldValue('items')));
+  }, []);
+
+  useEffect(() => {
+    if (!createModalVisible) {
+      setStockByMaterialId({});
+      setStockLoading(false);
+      setLineMaterialKey('');
+      return;
+    }
+    const mids = lineMaterialKey
+      .split(',')
+      .map((s) => Number(s))
+      .filter((id) => Number.isFinite(id) && id > 0);
+    const wid = Number(selectedWarehouseId) || 0;
+    if (!mids.length || wid <= 0) {
+      setStockByMaterialId({});
+      setStockLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setStockLoading(true);
+    void loadAvailableQtyByMaterialId(mids, wid)
+      .then((map) => {
+        if (!cancelled) setStockByMaterialId(map);
+      })
+      .catch(() => {
+        if (!cancelled) setStockByMaterialId({});
+      })
+      .finally(() => {
+        if (!cancelled) setStockLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [createModalVisible, selectedWarehouseId, lineMaterialKey]);
 
   useEffect(() => {
     const load = async () => {
@@ -524,7 +580,10 @@ const OtherOutboundPage: React.FC = () => {
         material_name: m.name ?? '',
         material_unit: m.baseUnit ?? '',
       }));
-      formRef.current?.setFieldsValue({ items: [...current, ...newRows] });
+      const nextItems = [...current, ...newRows];
+      formRef.current?.setFieldsValue({ items: nextItems });
+      // setFieldsValue 不触发 onValuesChange，需显式同步库存查询指纹
+      setLineMaterialKey(otherOutboundMaterialIdsKey(nextItems));
       messageApi.success(t('app.kuaizhizao.common.materialBatchAdded', { count: selected.length }));
     },
     [messageApi, t]
@@ -809,6 +868,11 @@ const OtherOutboundPage: React.FC = () => {
         width={MODAL_CONFIG.LARGE_WIDTH}
         initialValues={{ reason_type: '其他' }}
         grid={false}
+        onValuesChange={(changed, all) => {
+          if (changed.items !== undefined || changed.warehouse_id !== undefined) {
+            setLineMaterialKey(otherOutboundMaterialIdsKey(all?.items));
+          }
+        }}
       >
         <Row gutter={16}>
           <Col span={12}>
@@ -902,11 +966,14 @@ const OtherOutboundPage: React.FC = () => {
                                   material_name: 'name',
                                 }}
                                 onChange={(_val, material) => {
-                                  if (!material) return;
-                                  formRef.current?.setFieldValue(
-                                    ['items', index, 'material_unit'],
-                                    resolveMaterialScenarioUnit(material, 'sale'),
-                                  );
+                                  if (material) {
+                                    formRef.current?.setFieldValue(
+                                      ['items', index, 'material_unit'],
+                                      resolveMaterialScenarioUnit(material, 'sale'),
+                                    );
+                                  }
+                                  // 物料切换后立刻同步指纹（部分选材路径不走 onValuesChange）
+                                  syncLineMaterialKeyFromForm();
                                 }}
                                 fallbackOption={fallback}
                                 formItemProps={{ style: { margin: 0 } }}
@@ -940,6 +1007,38 @@ const OtherOutboundPage: React.FC = () => {
                                 noStyle
                               />
                             </AntForm.Item>
+                          );
+                        }}
+                      </AntForm.Item>
+                    ),
+                  },
+                  {
+                    title: t('app.kuaizhizao.warehouseOutbound.pull.colCurrentStock'),
+                    key: 'current_stock',
+                    width: 100,
+                    align: 'right' as const,
+                    render: (_: any, __: any, index: number) => (
+                      <AntForm.Item
+                        noStyle
+                        shouldUpdate={(prev, curr) =>
+                          prev?.items?.[index]?.material_id !== curr?.items?.[index]?.material_id ||
+                          prev?.items?.[index]?.outbound_quantity !== curr?.items?.[index]?.outbound_quantity ||
+                          prev?.warehouse_id !== curr?.warehouse_id
+                        }
+                      >
+                        {({ getFieldValue }) => {
+                          const mid = Number(getFieldValue(['items', index, 'material_id']) || 0);
+                          const wid = Number(getFieldValue('warehouse_id') || selectedWarehouseId || 0);
+                          if (!(mid > 0) || !(wid > 0)) return '—';
+                          if (stockLoading) return '…';
+                          const stock = stockByMaterialId[mid];
+                          if (stock == null) return '—';
+                          const qty = Number(getFieldValue(['items', index, 'outbound_quantity']) || 0);
+                          const insufficient = qty > 0 && stock < qty;
+                          return (
+                            <Typography.Text type={insufficient ? 'danger' : undefined}>
+                              {formatQuantity(stock)}
+                            </Typography.Text>
                           );
                         }}
                       </AntForm.Item>

@@ -4,6 +4,7 @@ import { useGlobalStore } from '../stores/globalStore';
 import { useThemeStore } from '../stores/themeStore';
 import { useUserPreferenceStore } from '../stores/userPreferenceStore';
 import { refreshAppShellFromApi } from '../utils/appShellSessionInit';
+import { isRequestCancellation } from '../utils/requestCancellation';
 
 /**
  * 等待主题与语言就绪后再展示主界面，避免英文界面中文闪烁。
@@ -47,7 +48,10 @@ export function useAppShellReady(): boolean {
         if (!cancelled) {
           setLocaleReady(true);
         }
-        void refreshAppShellFromApi({ force: true });
+        void refreshAppShellFromApi({ force: true }).catch((error) => {
+          if (cancelled || isRequestCancellation(error)) return;
+          throw error;
+        });
         return;
       }
 

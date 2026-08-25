@@ -222,6 +222,7 @@ class AuthService:
                 current_user,
                 request=request,
                 tenant_id=target_tenant_id,
+                record_login_audit=False,
             )
 
         q = Q(username=current_user.username)
@@ -244,6 +245,7 @@ class AuthService:
             target_user,
             request=request,
             tenant_id=target_tenant_id,
+            record_login_audit=False,
         )
     
     async def register(
@@ -795,7 +797,9 @@ class AuthService:
         self,
         user: User,
         request: Request = None,
-        tenant_id: Optional[int] = None
+        tenant_id: Optional[int] = None,
+        *,
+        record_login_audit: bool = True,
     ) -> dict:
         """
         生成登录成功的响应数据（Token 和用户信息）
@@ -804,9 +808,7 @@ class AuthService:
             user: 用户对象
             request: 请求对象
             tenant_id: 选定的组织 ID（可选）
-
-        Returns:
-            dict: 登录成功的响应数据
+            record_login_audit: 是否记登录审计并异步拉公网 IP；租户切换须为 False
         """
         # 判断是否为平台管理（系统级超级管理员）
         is_infra_admin = user.is_infra_admin
@@ -988,8 +990,8 @@ class AuthService:
         user.last_login = now_utc()
         await user.save(update_fields=["last_login", "updated_at"])
 
-        # 5. 记录登录日志和活动
-        if request:
+        # 5. 记录登录日志和活动（租户切换不记登录审计、不打外网 IP）
+        if request and record_login_audit:
             asyncio.create_task(self._log_login_attempt(
                 tenant_id=final_tenant_id,
                 user_id=user.id,

@@ -50,12 +50,33 @@ export function agingChartData(data: Record<string, AgingBucketData> | undefined
 const SETTLEMENT_TYPE_I18N_KEY: Record<string, string> = {
   normal: 'app.kuaicaiwu.financeUi.settlement.normal',
   prepayment: 'app.kuaicaiwu.financeUi.settlement.prepayment',
+  refund: 'app.kuaicaiwu.financeUi.settlement.refund',
 };
 
 export function formatSettlementType(value: string | null | undefined, t: TFunction): string {
   if (!value) return t('app.kuaicaiwu.financeUi.settlement.normal');
   const i18nKey = SETTLEMENT_TYPE_I18N_KEY[value];
   return i18nKey ? t(i18nKey) : value;
+}
+
+const REFUND_EXECUTION_STATUS_I18N_KEY: Record<string, string> = {
+  未退款: 'app.kuaicaiwu.financeUi.refundExecution.none',
+  部分退款: 'app.kuaicaiwu.financeUi.refundExecution.partial',
+  全部退款: 'app.kuaicaiwu.financeUi.refundExecution.full',
+};
+
+export function formatRefundExecutionStatus(value: string | null | undefined, t: TFunction): string {
+  if (!value) return t('app.kuaicaiwu.financeUi.refundExecution.none');
+  const i18nKey = REFUND_EXECUTION_STATUS_I18N_KEY[value];
+  return i18nKey ? t(i18nKey) : value;
+}
+
+export function renderRefundExecutionMarker(value: string | null | undefined, t: TFunction) {
+  const raw = String(value || '未退款');
+  const label = formatRefundExecutionStatus(raw, t);
+  if (raw === '全部退款') return { label, color: 'success' as const };
+  if (raw === '部分退款') return { label, color: 'warning' as const };
+  return { label, color: 'default' as const };
 }
 
 const TARGET_TYPE_I18N_KEY: Record<string, string> = {
@@ -120,7 +141,19 @@ export function formatBankDirection(
 const NOTE_BILL_TYPE_I18N_KEY: Record<string, string> = {
   bank_acceptance: 'app.kuaicaiwu.notes.billType.bankAcceptance',
   commercial_acceptance: 'app.kuaicaiwu.notes.billType.commercialAcceptance',
+  bank_draft: 'app.kuaicaiwu.notes.billType.bankDraft',
+  bank_promissory_note: 'app.kuaicaiwu.notes.billType.bankPromissoryNote',
+  cheque: 'app.kuaicaiwu.notes.billType.cheque',
 };
+
+/** 新建/筛选下拉顺序（与客户票种清单一致） */
+const NOTE_BILL_TYPE_ORDER: readonly string[] = [
+  'bank_acceptance',
+  'commercial_acceptance',
+  'bank_draft',
+  'bank_promissory_note',
+  'cheque',
+];
 
 export function formatNoteBillType(value: string | null | undefined, t: TFunction): string {
   if (!value) return '—';
@@ -129,7 +162,7 @@ export function formatNoteBillType(value: string | null | undefined, t: TFunctio
 }
 
 export function getNoteBillTypeSelectOptions(t: TFunction) {
-  return Object.keys(NOTE_BILL_TYPE_I18N_KEY).map((value) => ({
+  return NOTE_BILL_TYPE_ORDER.map((value) => ({
     label: formatNoteBillType(value, t),
     value,
   }));

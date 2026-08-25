@@ -88,6 +88,8 @@ export interface SalesOrder {
   demand_synced?: boolean;
   fee_details?: any[];
   total_fee_amount?: number;
+  /** 单据头附件（上传字段 attachments） */
+  attachments?: import('../utils/documentAttachments').DocumentAttachmentFile[];
   lifecycle?: Record<string, unknown>;
   audit?: Record<string, unknown>;
   capabilities?: SalesOrderCapabilities;
@@ -183,6 +185,8 @@ export interface SalesOrderListParams {
   pull_target?: 'sales_order_change' | 'after_sales_ticket' | 'sales_return' | 'shipment_notice' | 'sales_delivery' | 'demand_computation';
   /** options=选单轻量列表（跳过进度/capabilities；可配合 include_items） */
   view?: 'options';
+  /** 高级搜索 / 列筛选 JSON */
+  column_filters?: string;
 }
 
 /**

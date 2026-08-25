@@ -64,6 +64,11 @@ import { supplierApi } from '../../../../master-data/services/supply-chain';
 import { OrderChangeItemsTable } from '../../../components/order-change/OrderChangeItemsTable';
 import { OrderChangeImpactModal } from '../../../components/order-change/OrderChangeImpactModal';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import {
+  DocumentAttachmentsReadonly,
+  documentAttachmentsFromRecord,
+  hasDocumentAttachments,
+} from '../../../components/DocumentAttachmentsReadonly';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
@@ -712,6 +717,10 @@ const PurchaseOrderChangesPage: React.FC = () => {
     'purchase_order_change',
   );
 
+  const purchaseOrderChangeAttachments = documentAttachmentsFromRecord(detail);
+  const showPurchaseOrderChangeAttachments =
+    Boolean(detail) && hasDocumentAttachments(purchaseOrderChangeAttachments);
+
   return (
     <ListPageTemplate>
       <UniTable<PurchaseOrderChange>
@@ -919,6 +928,15 @@ const PurchaseOrderChangesPage: React.FC = () => {
             />
           ) : undefined
         }
+        supplementary={
+          showPurchaseOrderChangeAttachments ? (
+            <DocumentAttachmentsReadonly attachments={purchaseOrderChangeAttachments} />
+          ) : undefined
+        }
+        supplementaryTitle={
+          showPurchaseOrderChangeAttachments ? t('app.uniDetail.sectionAttachments') : undefined
+        }
+        supplementaryVisible={showPurchaseOrderChangeAttachments}
         lines={detail ? <OrderChangeItemsTable items={detail.items ?? []} /> : undefined}
         timeline={
           detail ? (

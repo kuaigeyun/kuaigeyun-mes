@@ -229,11 +229,15 @@ async def get_todos(
 
     async def _fetch_work_orders() -> List[TodoItem]:
         try:
-            wos = await WorkOrderService().list_work_orders(
-                tenant_id=tenant_id, status="released", skip=0, limit=limit,
+            work_orders, _total = await WorkOrderService().list_work_orders(
+                tenant_id=tenant_id,
+                current_user=current_user,
+                status="released",
+                skip=0,
+                limit=limit,
             )
             out: List[TodoItem] = []
-            for wo in wos:
+            for wo in work_orders:
                 qty = _format_qty(wo.quantity)
                 meta = _todo_meta(
                     product_name=wo.product_name,

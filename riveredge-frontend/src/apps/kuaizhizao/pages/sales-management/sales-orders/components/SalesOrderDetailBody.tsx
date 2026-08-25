@@ -31,6 +31,7 @@ import {
 } from '../../../../../../components/custom-fields';
 import type { CustomField } from '../../../../../../services/customField';
 import { getSalesOrderLifecycle } from '../../../../utils/salesOrderLifecycle';
+import { formatOrderChangeStatusLabel } from '../../../../utils/orderChangeLifecycle';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../../services/dataDictionary';
 import type { SalesOrder, SalesOrderItem } from '../../../../services/sales-order';
 import { listSalesOrderChangesByOrder, type SalesOrderChange } from '../../../../services/sales-order-change';
@@ -682,7 +683,12 @@ export const SalesOrderDetailTimelinePane: React.FC = () => {
             { title: t('app.kuaizhizao.salesOrderChange.colChangeCode'), dataIndex: 'change_code' },
             { title: t('app.kuaizhizao.salesOrderChange.colVersion'), dataIndex: 'change_version', width: 70 },
             { title: t('app.kuaizhizao.salesOrderChange.colDeltaAmount'), dataIndex: 'delta_amount', width: 100 },
-            { title: t('common.status'), dataIndex: 'status', width: 100 },
+            {
+              title: t('common.status'),
+              dataIndex: 'status',
+              width: 100,
+              render: (status: string) => formatOrderChangeStatusLabel(status, t),
+            },
             {
               title: t('app.kuaizhizao.salesOrderChange.colAppliedAt'),
               dataIndex: 'applied_at',

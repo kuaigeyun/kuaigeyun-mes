@@ -78,7 +78,7 @@ function buildFullscreenNavMenuItems(
   items: MenuDataItem[],
   navigate: (path: string) => void,
 ): ItemType[] {
-  const buildItems = (list: MenuDataItem[]): ItemType[] =>
+  const buildItems = (list: MenuDataItem[], depth = 0): ItemType[] =>
     list.flatMap((item): ItemType[] => {
       if (isAppGroupPlaceholderMenuItem(item) || item.hideInMenu) {
         return [];
@@ -105,7 +105,7 @@ function buildFullscreenNavMenuItems(
               labelText
             ),
             className: isAppGroup ? 'menu-group-title-app' : item.className,
-            children: buildItems(realChildren),
+            children: buildItems(realChildren, depth + 1),
           },
         ];
       }
@@ -113,9 +113,10 @@ function buildFullscreenNavMenuItems(
       return [
         {
           key: item.path || itemKey,
-          icon: item.icon ? <span className="anticon">{item.icon}</span> : undefined,
+          icon:
+            depth === 0 && item.icon ? <span className="anticon">{item.icon}</span> : undefined,
           label: labelText,
-          children: realChildren.length ? buildItems(realChildren) : undefined,
+          children: realChildren.length ? buildItems(realChildren, depth + 1) : undefined,
           onClick: realChildren.length
             ? undefined
             : () => {
@@ -1696,21 +1697,18 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           position: relative;
           background: ${tabFillColor};
           --ant-colorBgLayout: ${tabFillColor};
-          margin-top: ${isFullscreen ? '16px' : '0'} !important;
-          margin-right: ${isFullscreen ? '16px' : '0'} !important;
-          margin-bottom: ${isFullscreen ? '16px' : '0'} !important;
-          margin-left: ${isFullscreen ? '16px' : '0'} !important;
+          margin-top: 0 !important;
+          margin-right: 0 !important;
+          margin-bottom: 0 !important;
+          margin-left: 0 !important;
           padding-top: 0 !important;
           padding-bottom: 0 !important;
           box-sizing: border-box !important;
-          /* 修复滚动：使用 calc 计算确切的内容区高度（视口 - 顶栏 - 标签栏 - 间距）。
-             顶距 16px 由内层 page-outer / hmi / board 的 padding 承担，不在此用 margin 挖洞。
-             全屏时四边等距 16px，垂直需扣减 32px。
-             min-height 与 height 同步：Safari 26.x beta 在 max-height + flex 子项 min-height:0 组合下
-             会把普通页主内容区坍缩为 0（运营看板因有 min-height 保底而正常）。 */
-          height: calc(100vh - ${isFullscreen ? '0px' : '56px'} - ${isFullscreen ? '56px' : '40px'} - ${isFullscreen ? '32px' : '0px'}) !important;
-          max-height: calc(100vh - ${isFullscreen ? '0px' : '56px'} - ${isFullscreen ? '56px' : '40px'} - ${isFullscreen ? '32px' : '0px'}) !important;
-          min-height: calc(100vh - var(--header-height, ${isFullscreen ? '0px' : '56px'}) - var(--tabs-height, ${isFullscreen ? '56px' : '40px'}) - ${isFullscreen ? '32px' : '0px'}) !important;
+          /* 修复滚动：使用 calc 计算确切的内容区高度（视口 - 顶栏 - 标签栏）。
+             四边 16px 留白仅由内层 page-outer / hmi / board 的 padding 承担，勿在 content 再叠 margin。 */
+          height: calc(100vh - ${isFullscreen ? '0px' : '56px'} - 40px) !important;
+          max-height: calc(100vh - ${isFullscreen ? '0px' : '56px'} - 40px) !important;
+          min-height: calc(100vh - var(--header-height, ${isFullscreen ? '0px' : '56px'}) - var(--tabs-height, 40px)) !important;
           /* 彻底隐藏滚动条且不占用空间 */
           scrollbar-width: none !important;
           -ms-overflow-style: none !important;
@@ -2035,7 +2033,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           align-items: center;
           justify-content: center;
           width: 40px; /* 按钮宽度 40px，容器宽度也设置为 40px */
-          height: 40px; /* 与标签栏总高一致 */
+          height: ${isFullscreen ? '100%' : '40px'}; /* 全屏时随标签栏内容区高度，避免底线被裁切 */
           margin-left: 0;
           padding-bottom: 0 !important;
           padding-top: 0 !important;
@@ -2080,7 +2078,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         .uni-tabs-header-wrapper button.uni-tabs-fullscreen-button.ant-btn,
         .uni-tabs-header-wrapper button.uni-tabs-fullscreen-button.ant-btn-text {
           width: 40px !important; /* 正方形，与高度一致 */
-          height: 40px !important; /* 总高40px */
+          height: ${isFullscreen ? '100%' : '40px'} !important;
           padding: 13px !important; /* 四周padding相等（左右13px），图标14px居中 */
           color: ${tabsTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.85)' : token.colorPrimary} !important;
         }
@@ -2276,8 +2274,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         className="uni-tabs-wrapper"
         style={{
           '--header-height': isFullscreen ? '0px' : '56px',
-          // 普通页仅标签栏 40px；全屏另加顶距 16px
-          '--tabs-height': isFullscreen ? '56px' : '40px',
+          '--tabs-height': '40px',
           '--content-margin': '16px',
         } as CSSProperties}
       >

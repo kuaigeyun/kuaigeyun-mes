@@ -414,9 +414,11 @@ class PurchaseCostCalculationResponse(BaseModel):
     purchase_order_id: Optional[int] = Field(None, description="采购订单ID（实际成本时提供）")
     purchase_order_code: Optional[str] = Field(None, description="采购订单编码（实际成本时提供）")
     purchase_order_item_id: Optional[int] = Field(None, description="采购订单明细ID（实际成本时提供）")
-    material_id: int = Field(..., description="物料ID")
-    material_code: str = Field(..., description="物料编码")
-    material_name: str = Field(..., description="物料名称")
+    material_id: Optional[int] = Field(
+        None, description="物料ID（整单多物料汇总时可为空，明细见 cost_details）"
+    )
+    material_code: str = Field(..., description="物料编码（整单多物料时为汇总说明）")
+    material_name: str = Field(..., description="物料名称（整单多物料时为汇总说明）")
     supplier_id: Optional[int] = Field(None, description="供应商ID（实际成本时提供）")
     supplier_name: Optional[str] = Field(None, description="供应商名称（实际成本时提供）")
     source_type: str = Field("Buy", description="物料来源类型（Buy）")

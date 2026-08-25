@@ -24,6 +24,7 @@ import { QuantityWithUnitDisplay } from '../../../../../../components/quantity-w
 import { CustomFieldsDetailSection, hasCustomFieldsDetailContent } from '../../../../../../components/custom-fields';
 import { WarehouseTraceBriefPrimaryActions } from '../../../warehouse-management/WarehouseTraceBriefFooter';
 import { getPurchaseOrderLifecycle } from '../../../../utils/purchaseOrderLifecycle';
+import { formatOrderChangeStatusLabel } from '../../../../utils/orderChangeLifecycle';
 import { type PurchaseOrder, type PurchaseOrderItem } from '../../../../services/purchase';
 import { listPurchaseOrderChangesByOrder, type PurchaseOrderChange } from '../../../../services/purchase-order-change';
 import { alignDescriptionColumns } from '../../../sales-management/shared/documentFieldAlignment';
@@ -36,6 +37,11 @@ import { useKuaizhizaoPrintModal } from '../../../../hooks/useKuaizhizaoPrintMod
 import { DocumentStatus, ReviewStatusEnum } from '../../../../constants/documentStatus';
 import type { CustomField } from '../../../../../../services/customField';
 import type { AuditPhaseRecord } from '../../../../../../components/uni-audit/AuditPhaseBadge';
+import {
+  DocumentAttachmentsReadonly,
+  documentAttachmentsFromRecord,
+  hasDocumentAttachments,
+} from '../../../../components/DocumentAttachmentsReadonly';
 
 const PURCHASE_ORDER_RESOURCE = 'kuaizhizao:purchase-order';
 const PLACEHOLDER: PurchaseOrder = { id: 0 };
@@ -164,7 +170,12 @@ const PurchaseOrderChangeHistoryPane: React.FC<{ orderId: number; refreshKey: nu
           { title: t('app.kuaizhizao.purchaseOrder.col.changeCode'), dataIndex: 'change_code' },
           { title: t('app.kuaizhizao.purchaseOrder.col.changeVersion'), dataIndex: 'change_version', width: 70 },
           { title: t('app.kuaizhizao.purchaseOrder.col.deltaAmount'), dataIndex: 'delta_amount', width: 100 },
-          { title: t('common.status'), dataIndex: 'status', width: 100 },
+          {
+            title: t('common.status'),
+            dataIndex: 'status',
+            width: 100,
+            render: (status: string) => formatOrderChangeStatusLabel(status, t),
+          },
           {
             title: t('app.kuaizhizao.purchaseOrder.col.appliedAt'),
             dataIndex: 'applied_at',
@@ -201,6 +212,8 @@ export const PurchaseOrderDetailDrawer: React.FC<PurchaseOrderDetailDrawerProps>
   const showError = Boolean(error) && !contentReady && !loading;
   const showLoading = loading || (!contentReady && !showError);
   const effective = order ?? PLACEHOLDER;
+  const attachments = documentAttachmentsFromRecord(order);
+  const showAttachments = contentReady && hasDocumentAttachments(attachments);
 
   const tracking = useDocumentTracking(
     open && contentReady ? 'purchase_order' : undefined,
@@ -411,6 +424,13 @@ export const PurchaseOrderDetailDrawer: React.FC<PurchaseOrderDetailDrawerProps>
           />
         ) : null
       }
+      supplementary={
+        showAttachments ? <DocumentAttachmentsReadonly attachments={attachments} /> : undefined
+      }
+      supplementaryTitle={
+        showAttachments ? t('app.uniDetail.sectionAttachments') : undefined
+      }
+      supplementaryVisible={showAttachments}
       lines={
         contentReady ? (
           effective.items && effective.items.length > 0 ? (

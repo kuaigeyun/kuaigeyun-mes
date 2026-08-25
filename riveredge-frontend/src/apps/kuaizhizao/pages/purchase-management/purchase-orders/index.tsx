@@ -1328,6 +1328,17 @@ const PurchaseOrdersPage: React.FC = () => {
     }
   };
 
+  /** 采购中心等入口：navigate(..., { state: { openPurchaseOrderId } }) 打开详情抽屉 */
+  useEffect(() => {
+    if (isFormPage) return;
+    const raw = (location.state as { openPurchaseOrderId?: unknown } | null)?.openPurchaseOrderId;
+    const id = typeof raw === 'number' ? raw : raw != null ? Number(raw) : NaN;
+    if (!Number.isFinite(id) || id <= 0) return;
+    navigate(`${location.pathname}${location.search}`, { replace: true, state: {} });
+    void handleDetail({ id } as PurchaseOrder);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅响应路由 state 开单；handleDetail 用最新闭包
+  }, [location.state, location.pathname, location.search, navigate, isFormPage]);
+
   const resetPushPreviewModal = useCallback(() => {
     setPushPreviewOpen(false);
     setPushPreviewKind(null);
@@ -3591,6 +3602,9 @@ const PurchaseOrdersPage: React.FC = () => {
                   : apiParams.created_start_date;
               }
               apiParams.include_items = dataViewModeRef.current === 'detail';
+              if (typeof sf.column_filters === 'string' && sf.column_filters.trim()) {
+                apiParams.column_filters = sf.column_filters.trim();
+              }
 
               const toFlatRows = (orders: PurchaseOrder[]): PurchaseOrderItemRow[] => {
                 const flatRows: PurchaseOrderItemRow[] = [];

@@ -8,6 +8,7 @@ import './styles/theme-plain.less'
 import { useGlobalStore } from './stores/globalStore'
 import { queryClient } from './queryClient'
 import { purgeLegacyGlobalStoreUser, seedCurrentUserFromAuthStorage } from './utils/restoredUser'
+import { isRequestCancellation } from './utils/requestCancellation'
 import './initSpinIndicator'
 import './config/dayjs'
 
@@ -36,6 +37,10 @@ if (typeof window !== 'undefined') {
 
 if (typeof window !== 'undefined') {
   window.addEventListener('unhandledrejection', (event) => {
+    if (isRequestCancellation(event.reason)) {
+      event.preventDefault();
+      return;
+    }
     console.error('⚠️ 未处理的 Promise 错误:', event.reason);
     event.preventDefault();
   });

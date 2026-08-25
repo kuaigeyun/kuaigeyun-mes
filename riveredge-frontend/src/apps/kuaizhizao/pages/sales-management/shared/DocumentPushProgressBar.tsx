@@ -1,5 +1,5 @@
 import React from 'react';
-import { Popover } from 'antd';
+import { Popover, theme } from 'antd';
 import { UNI_TABLE_PROGRESS_COLUMN_WIDTH } from '../../../../../utils/uniTableLayoutColumns';
 
 export function clampPushProgressPercent(value: number): number {
@@ -146,8 +146,13 @@ export type DocumentPushProgressBarProps = {
   width?: number | string;
 };
 
-const BAR_HEIGHT = 20;
 const BAR_FONT_SIZE = 11;
+
+/** 与列表 StatusTag（antd Tag solid）外盒高度对齐：line-height + 上下边框 */
+function resolveListBadgeHeight(token: ReturnType<typeof theme.useToken>['token']): number {
+  const lineHeightPx = Math.round(Number(token.lineHeightSM) * Number(token.fontSizeSM));
+  return lineHeightPx + Number(token.lineWidth) * 2;
+}
 
 function resolvePushBarFillColor(
   status: DocumentPushProgressBarProps['status'],
@@ -201,15 +206,17 @@ export const DocumentPushProgressBar: React.FC<DocumentPushProgressBarProps> = R
   status,
   width = '100%',
 }) => {
+  const { token } = theme.useToken();
+  const barHeight = resolveListBadgeHeight(token);
   const displayPercent = clampPushProgressPercent(percent);
   const fillColor = resolvePushBarFillColor(status, displayPercent);
   const bar = (
-    <div style={{ position: 'relative', width, minWidth: 56, height: BAR_HEIGHT, cursor: 'default' }}>
+    <div style={{ position: 'relative', width, minWidth: 56, height: barHeight, cursor: 'default' }}>
       <div
         style={{
           width: '100%',
-          height: BAR_HEIGHT,
-          borderRadius: BAR_HEIGHT / 2,
+          height: barHeight,
+          borderRadius: barHeight / 2,
           background: 'var(--ant-color-fill-secondary)',
           overflow: 'hidden',
         }}
@@ -218,7 +225,7 @@ export const DocumentPushProgressBar: React.FC<DocumentPushProgressBarProps> = R
           style={{
             width: `${displayPercent}%`,
             height: '100%',
-            borderRadius: BAR_HEIGHT / 2,
+            borderRadius: barHeight / 2,
             background: fillColor,
             transition: 'width 0.2s ease',
           }}
@@ -231,9 +238,9 @@ export const DocumentPushProgressBar: React.FC<DocumentPushProgressBarProps> = R
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          height: BAR_HEIGHT,
+          height: barHeight,
           fontSize: BAR_FONT_SIZE,
-          lineHeight: `${BAR_HEIGHT}px`,
+          lineHeight: `${barHeight}px`,
           fontWeight: 500,
           fontVariantNumeric: 'tabular-nums',
           color: displayPercent >= 50 ? '#fff' : 'var(--ant-color-text)',

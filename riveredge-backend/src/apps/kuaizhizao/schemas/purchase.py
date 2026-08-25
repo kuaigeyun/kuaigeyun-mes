@@ -280,6 +280,7 @@ class PurchaseOrderListParams(BaseModel):
     pullable_only: Optional[bool] = None
     pull_target: Optional[str] = None
     include_items: bool = False
+    column_filters: Optional[str] = None
     skip: int = 0
     limit: int = 20
 

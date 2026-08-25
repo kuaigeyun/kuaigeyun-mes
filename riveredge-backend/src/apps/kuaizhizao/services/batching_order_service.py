@@ -677,6 +677,8 @@ class BatchingOrderService(AppBaseService[BatchingOrder]):
                     from_warehouse_id=src_wh,
                     to_warehouse_id=order.target_warehouse_id,
                     idempotency_key=f"batching_order:{order.id}:dec:{item.id}",
+                    operator_id=executed_by,
+                    operator_name=None,
                 )
                 await InventoryService.increase_stock(
                     tenant_id=tenant_id,
@@ -693,6 +695,8 @@ class BatchingOrderService(AppBaseService[BatchingOrder]):
                     from_warehouse_id=src_wh,
                     to_warehouse_id=order.target_warehouse_id,
                     idempotency_key=f"batching_order:{order.id}:inc:{item.id}",
+                    operator_id=executed_by,
+                    operator_name=None,
                 )
                 item.picked_quantity = pick_qty
                 item.status = "picked" if pick_qty >= item.required_quantity else "pending"

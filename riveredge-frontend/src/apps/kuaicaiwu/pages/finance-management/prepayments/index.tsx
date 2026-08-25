@@ -17,7 +17,6 @@ import { apiRequest } from '../../../../../services/api';
 import { receiptService, type ReceiptListParams } from '../../../services/finance/receipt';
 import { paymentService, type PaymentListParams } from '../../../services/finance/payment';
 import { bankAccountService, type BankAccount } from '../../../services/finance/bank-account';
-import { documentReconciliationService } from '../../../services/finance/document-reconciliation';
 import { prepaymentService } from '../../../services/finance/prepayment';
 import { receivableService } from '../../../services/finance/receivable';
 import { payableService } from '../../../services/finance/payable';
@@ -87,7 +86,7 @@ const PrepaymentsPage: React.FC = () => {
 
   const { data: balances } = useQuery({
     queryKey: ['prepaymentBalances'],
-    queryFn: () => documentReconciliationService.getPrepaymentBalances(),
+    queryFn: () => prepaymentService.getBalances(),
   });
 
   useEffect(() => {
@@ -231,7 +230,7 @@ const PrepaymentsPage: React.FC = () => {
       fixed: 'right',
       hideInSearch: true,
       render: (_, r) => [
-        prepaymentPerms.canUpdate ? (
+        prepaymentPerms.canUpdate && Number(r.unsettled_amount) > 0 ? (
         <a
           key="apply"
           onClick={async () => {
@@ -336,7 +335,7 @@ const PrepaymentsPage: React.FC = () => {
       fixed: 'right',
       hideInSearch: true,
       render: (_, r) => [
-        prepaymentPerms.canUpdate ? (
+        prepaymentPerms.canUpdate && Number(r.unsettled_amount) > 0 ? (
         <a
           key="apply"
           onClick={async () => {
@@ -421,7 +420,7 @@ const PrepaymentsPage: React.FC = () => {
                       const { current, pageSize } = params;
                       const listParams = resolvePrepaymentBalanceListParams(searchFormValues, sort);
                       try {
-                        const res = await documentReconciliationService.getPrepaymentBalances({
+                        const res = await prepaymentService.getBalances({
                           partner_type: 'customer',
                           skip: ((current || 1) - 1) * (pageSize || 20),
                           limit: pageSize || 20,
@@ -464,7 +463,6 @@ const PrepaymentsPage: React.FC = () => {
                         skip: ((current || 1) - 1) * (pageSize || 20),
                         limit: pageSize || 20,
                         settlement_type: 'prepayment',
-                        unsettled_only: true,
                         ...listParams,
                       };
                       try {
@@ -514,7 +512,7 @@ const PrepaymentsPage: React.FC = () => {
                       const { current, pageSize } = params;
                       const listParams = resolvePrepaymentBalanceListParams(searchFormValues, sort);
                       try {
-                        const res = await documentReconciliationService.getPrepaymentBalances({
+                        const res = await prepaymentService.getBalances({
                           partner_type: 'supplier',
                           skip: ((current || 1) - 1) * (pageSize || 20),
                           limit: pageSize || 20,
@@ -557,7 +555,6 @@ const PrepaymentsPage: React.FC = () => {
                         skip: ((current || 1) - 1) * (pageSize || 20),
                         limit: pageSize || 20,
                         settlement_type: 'prepayment',
-                        unsettled_only: true,
                         ...listParams,
                       };
                       try {

@@ -329,7 +329,11 @@ async def get_receivable(
 ):
     try:
         receivable = await receivable_service.get_receivable_by_id(tenant_id, id)
-        return receivable
+        enriched = await receivable_pull_service.enrich_push_sales_invoice_capabilities(
+            tenant_id,
+            [receivable.model_dump()],
+        )
+        return ReceivableResponse.model_validate(enriched[0])
     except NotFoundError as e:
         raise _http_exception_with_trace(404, str(e), "/receivables/{id}", tenant_id)
 

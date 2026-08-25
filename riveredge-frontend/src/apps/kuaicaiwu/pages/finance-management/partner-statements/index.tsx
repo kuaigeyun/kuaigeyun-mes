@@ -1,7 +1,7 @@
 /**
  * 往来对账列表页
  */
-import React, { useRef, useState, useEffect, useMemo } from 'react';
+import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import {
@@ -49,6 +49,8 @@ import {
   recalcPartnerStatementLines,
 } from '../../../utils/partnerStatementAmountUtils';
 import { usePartnerStatementLineColumns } from '../../../utils/partnerStatementLineColumns';
+import { useFinanceVoucherDetail } from '../../../components/FinanceVoucherDetailProvider';
+import { resolvePartnerStatementVoucherTarget } from '../../../utils/financeVoucherDocType';
 import { apiRequest } from '../../../../../services/api';
 import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
@@ -103,6 +105,15 @@ const PartnerStatementsPage: React.FC = () => {
   const statementPerms = useResourcePermissions(PARTNER_STATEMENT_RESOURCE);
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { openFinanceVoucherDetail } = useFinanceVoucherDetail();
+
+  const handleDocCodeClick = useCallback(
+    (line: PartnerStatementLine) => {
+      const target = resolvePartnerStatementVoucherTarget(line);
+      if (target) openFinanceVoucherDetail(target);
+    },
+    [openFinanceVoucherDetail],
+  );
 
   const partnerType = activeTab;
 
@@ -438,6 +449,7 @@ const PartnerStatementsPage: React.FC = () => {
     editable: true,
     onStatementAmountChange: handlePreviewStatementAmountChange,
     lineKey: previewLineKey,
+    onDocCodeClick: handleDocCodeClick,
   });
 
   const previewRowSelection = useMemo(

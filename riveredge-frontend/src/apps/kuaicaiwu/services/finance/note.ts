@@ -2,7 +2,12 @@ import { apiRequest } from '../../../../services/api';
 
 export type FinanceNoteDirection = 'receivable' | 'payable';
 
-export type FinanceNoteBillType = 'bank_acceptance' | 'commercial_acceptance';
+export type FinanceNoteBillType =
+  | 'bank_acceptance'
+  | 'commercial_acceptance'
+  | 'bank_draft'
+  | 'bank_promissory_note'
+  | 'cheque';
 
 export type FinanceNoteStatus =
   | 'held'

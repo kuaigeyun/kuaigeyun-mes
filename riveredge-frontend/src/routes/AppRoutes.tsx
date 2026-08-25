@@ -14,6 +14,7 @@
 import React, { Component, useEffect, useState, useMemo, useRef, Suspense, type ErrorInfo, type ReactNode } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { Alert, Button } from 'antd';
+import { AlertTriangle, CircleX, Lightbulb, Search } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { getInstalledApplicationList, scanPlugins } from '../services/application';
@@ -65,11 +66,17 @@ const AppErrorFallback: React.FC<{
   const { t } = useTranslation();
   return (
     <div style={appErrorPanelStyle}>
-      <h3 style={{ color: '#cf1322' }}>❌ {t('appRoutes.loadError')}</h3>
+      <h3 style={{ color: '#cf1322', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <CircleX size={20} strokeWidth={1.75} aria-hidden />
+        {t('appRoutes.loadError')}
+      </h3>
       <p><strong>{t('appRoutes.app')}:</strong> {appName}</p>
       <p><strong>{t('appRoutes.error')}:</strong> {error?.message || t('common.unknownError')}</p>
       <details>
-        <summary style={{ cursor: 'pointer', color: '#1890ff' }}>🔍 {t('appRoutes.viewDetails')}</summary>
+        <summary style={{ cursor: 'pointer', color: '#1890ff', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Search size={14} strokeWidth={1.75} aria-hidden />
+          {t('appRoutes.viewDetails')}
+        </summary>
         <pre style={{ marginTop: '10px', whiteSpace: 'pre-wrap', fontSize: '12px' }}>
           {error?.stack || 'No stack trace'}
         </pre>
@@ -184,6 +191,9 @@ const AppRoutes: React.FC = () => {
     enabled: isAuthenticated,
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
+    // 壳层：网络抖动最多再试 1 次；超时/502 由 apiRequest 快速失败后展示重试按钮
+    retry: 1,
+    retryDelay: 1000,
   });
 
   // 同步计算路由节点（useMemo 在渲染阶段执行，applications 可用时路由立即就绪，
@@ -257,7 +267,10 @@ const AppRoutes: React.FC = () => {
           boxSizing: 'border-box',
         }}
       >
-        <h3>⚠️ {t('appRoutes.noAppRoutes')}</h3>
+        <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <AlertTriangle size={20} strokeWidth={1.75} aria-hidden />
+          {t('appRoutes.noAppRoutes')}
+        </h3>
         <p>{t('appRoutes.currentPath')}: {window.location.pathname}</p>
         <p>{t('appRoutes.loadedRoutesCount')}: {appRoutes.length}</p>
         <p>{t('appRoutes.noAppRoutesHint')}</p>
@@ -270,8 +283,9 @@ const AppRoutes: React.FC = () => {
             <li>{t('appRoutes.troubleshoot4')}</li>
             <li>{t('appRoutes.troubleshoot5')}</li>
           </ol>
-          <p style={{ marginTop: '12px', color: '#666', fontSize: '12px' }}>
-            💡 {t('appRoutes.troubleshootTip')}
+          <p style={{ marginTop: '12px', color: '#666', fontSize: '12px', display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+            <Lightbulb size={14} strokeWidth={1.75} style={{ flexShrink: 0, marginTop: 2 }} aria-hidden />
+            <span>{t('appRoutes.troubleshootTip')}</span>
           </p>
         </div>
       </div>

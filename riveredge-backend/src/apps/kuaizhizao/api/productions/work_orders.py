@@ -532,6 +532,7 @@ async def list_work_orders(
         service = WorkOrderService()
         result, total = await service.list_work_orders(
             tenant_id=tenant_id,
+            current_user=current_user,
             skip=skip,
             limit=limit,
             code=code,
@@ -1479,6 +1480,7 @@ async def list_rework_orders(
             safe_order_by = order_by
     return await ReworkOrderService().list_rework_orders(
         tenant_id=tenant_id,
+        current_user=current_user,
         skip=skip,
         limit=limit,
         code=code,
@@ -1852,6 +1854,7 @@ async def list_outsource_orders(
             safe_order_by = order_by
     return await OutsourceService().list_outsource_orders(
         tenant_id=tenant_id,
+        current_user=current_user,
         skip=skip,
         limit=limit,
         work_order_id=work_order_id,

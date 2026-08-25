@@ -7,7 +7,7 @@ import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react'
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Modal, Typography, Spin, Alert, Table, Empty, Form } from 'antd';
-import { ModalForm, ProForm, ProFormDatePicker, ProFormMoney, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
+import { ModalForm, ProForm, ProFormDatePicker, ProFormDigit, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import { PlusOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -18,7 +18,12 @@ import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { DetailDrawerActions, ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { FinanceVoucherDetailDrawer } from '../shared/FinanceVoucherDetailDrawer';
-import { financeColFull, financeColHalf, financeFormGridProps } from '../../../utils/financeFormLayout';
+import {
+  financeAmountDigitFieldProps,
+  financeColFull,
+  financeColHalf,
+  financeFormGridProps,
+} from '../../../utils/financeFormLayout';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import {
   UniPullQueryModal,
@@ -46,7 +51,7 @@ import {
   assertBankAccountForPaymentMethod,
   formatBankAccountOptionLabel,
   BANK_TRANSFER_PAYMENT_METHOD,
-  isAcceptanceBillPaymentMethod,
+  isNotePaymentMethod,
 } from '../../../utils/financeSharedOptions';
 import {
   LedgerAccountFormFields,
@@ -73,9 +78,16 @@ import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { MarkerTag } from '../../../../../constants/statusBadges';
+import { renderRefundExecutionMarker } from '../../../utils/financeUiLabels';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
+import {
+  buildFinanceVoucherLinkHandlers,
+  useFinanceVoucherDetail,
+} from '../../../components/FinanceVoucherDetailProvider';
+import { canCreateRefundFromVoucher } from '../../../utils/financeVoucherDocType';
+import { PAYMENT_REFUND_RESOURCE } from '../../../services/finance/payment-refund';
 type PullPayableCandidate = PaymentPullCandidate;
 
 const P = 'app.kuaicaiwu.payment';
@@ -107,6 +119,16 @@ const PaymentsPage: React.FC = () => {
   const location = useLocation();
   const pullFromPayableAction = getKuaicaiwuDocumentAction('payment.pull_from_payable');
   const paymentPerms = useResourcePermissions(PAYMENT_RESOURCE);
+  const paymentRefundPerms = useResourcePermissions(PAYMENT_REFUND_RESOURCE);
+  const { openFinanceVoucherDetail } = useFinanceVoucherDetail();
+  const voucherLinkHandlers = useMemo(
+    () =>
+      buildFinanceVoucherLinkHandlers({
+        openVoucher: openFinanceVoucherDetail,
+        navigate,
+      }),
+    [navigate, openFinanceVoucherDetail],
+  );
 
   const paymentMethodOptions = useMemo(() => getPaymentMethodOptions(t), [t]);
   const paymentSettlementTypeOptions = useMemo(() => getPaymentSettlementTypeOptions(t), [t]);
@@ -141,7 +163,7 @@ const PaymentsPage: React.FC = () => {
     try {
       const record = await paymentService.getPayment(id);
       setDetailRecord(record);
-      if (isAcceptanceBillPaymentMethod(record.payment_method)) {
+      if (isNotePaymentMethod(record.payment_method)) {
         const noteRes = await financeNoteService.list('payable', { payment_id: id, limit: 1 });
         setLinkedNote(noteRes.data?.[0] ?? null);
       }
@@ -238,6 +260,7 @@ const PaymentsPage: React.FC = () => {
       const maxPush = Number(data.items?.[0]?.max_push_quantity ?? 0);
       pullForm.setFieldsValue({
         source_code: data.source_code,
+        supplier_id: data.supplier_id,
         supplier_name: data.supplier_name,
         total_amount: maxPush > 0 ? maxPush : undefined,
         payment_date: dayjs(),
@@ -574,6 +597,19 @@ const PaymentsPage: React.FC = () => {
       ),
     },
     {
+      title: t('app.kuaicaiwu.financeUi.refundExecution.label'),
+      dataIndex: 'refund_execution_status',
+      width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
+      hideInSearch: true,
+      render: (_, record) => {
+        const { label, color } = renderRefundExecutionMarker(record.refund_execution_status, t);
+        return <MarkerTag color={color}>{label}</MarkerTag>;
+      },
+    },
+    {
       title: t(`${P}.col.paymentDate`),
       dataIndex: 'payment_date',
       valueType: 'date',
@@ -682,6 +718,21 @@ const PaymentsPage: React.FC = () => {
                 {t('app.kuaicaiwu.common.settle')}
               </Button>
             ) : null,
+            record.status === 'Confirmed'
+              && canCreateRefundFromVoucher(record, 'payment')
+              && paymentRefundPerms.canCreate ? (
+              <Button
+                {...rowActionKind('submit')}
+                key="refund"
+                onClick={() =>
+                  navigate('/apps/kuaicaiwu/finance-management/payment-refunds', {
+                    state: { pullSourceId: record.id },
+                  })
+                }
+              >
+                {t('app.kuaicaiwu.paymentRefund.pullCreate')}
+              </Button>
+            ) : null,
             record.status !== 'Cancelled' && record.settled_amount === 0 && paymentPerms.canAction?.('revoke') ? (
               <Button {...rowActionKind('revoke')} key="ca" onClick={() => handleCancelVoucher(record)}>
                 {t('app.kuaicaiwu.common.void')}
@@ -689,7 +740,7 @@ const PaymentsPage: React.FC = () => {
             ) : null,
           ].filter(Boolean) as React.ReactNode[],
     },
-  ], [t, navigate, supplierOptions, paymentSettlementTypeOptions, paymentPerms, openDetail]);
+  ], [t, navigate, supplierOptions, paymentSettlementTypeOptions, paymentPerms, paymentRefundPerms, openDetail]);
 
   return (
     <ListPageTemplate>
@@ -883,12 +934,14 @@ const PaymentsPage: React.FC = () => {
                 {...financeFormGridProps}
               >
                 <ProFormText name="source_code" label={t(`${P}.sourcePayable`)} readonly colProps={financeColHalf} />
+                <ProFormText name="supplier_id" hidden />
                 <ProFormText name="supplier_name" label={t('app.kuaicaiwu.common.supplier')} readonly colProps={financeColHalf} />
-                <ProFormMoney
+                <ProFormDigit
                   name="total_amount"
                   label={t(`${P}.col.amount`)}
                   min={0.01}
                   rules={[{ required: true }]}
+                  fieldProps={financeAmountDigitFieldProps}
                   colProps={financeColHalf}
                 />
                 <ProFormDatePicker
@@ -944,11 +997,12 @@ const PaymentsPage: React.FC = () => {
           showSearch
           colProps={financeColHalf}
         />
-        <ProFormMoney
+        <ProFormDigit
           name="total_amount"
           label={t(`${P}.col.amount`)}
           min={0.01}
           rules={[{ required: true }]}
+          fieldProps={financeAmountDigitFieldProps}
           colProps={financeColHalf}
         />
         <ProFormDatePicker
@@ -1000,10 +1054,31 @@ const PaymentsPage: React.FC = () => {
         bankAccountLabel={resolveBankLabel(detailRecord?.bank_account_id)}
         linkedNote={linkedNote}
         linkedNotePath="/apps/kuaicaiwu/finance-management/notes-payable"
+        linkHandlers={voucherLinkHandlers}
+        isRefund={false}
         extra={
           detailRecord ? (
             <DetailDrawerActions
               items={[
+                {
+                  key: 'create-refund',
+                  visible:
+                    detailRecord.status === 'Confirmed'
+                    && canCreateRefundFromVoucher(detailRecord, 'payment')
+                    && Boolean(paymentRefundPerms.canCreate),
+                  render: (
+                    <Button
+                      {...rowActionKind('submit')}
+                      onClick={() =>
+                        navigate('/apps/kuaicaiwu/finance-management/payment-refunds', {
+                          state: { pullSourceId: detailRecord.id },
+                        })
+                      }
+                    >
+                      {t('app.kuaicaiwu.paymentRefund.pullCreate')}
+                    </Button>
+                  ),
+                },
                 {
                   key: 'confirm',
                   visible: detailRecord.status === 'Draft' && Boolean(paymentPerms.canAction?.('audit')),

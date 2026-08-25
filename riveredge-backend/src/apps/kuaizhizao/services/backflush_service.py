@@ -371,35 +371,10 @@ class BackflushService(AppBaseService[BackflushRecord]):
                     )
                     continue
 
-                # 扣减库存并创建成功记录（统一走 InventoryService，写物料移动流水）
+                # 先落倒冲记录再扣库存，流水 source_doc_id 指向记录真源
                 from apps.kuaizhizao.services.inventory_service import InventoryService
 
                 for pick in pick_list:
-                    await InventoryService._decrease_stock_no_atomic(
-                        tenant_id=tenant_id,
-                        material_id=cons["component_id"],
-                        quantity=pick["pick_quantity"],
-                        warehouse_id=pick["warehouse_id"],
-                        batch_no=pick.get("batch_no") or None,
-                        source_type="backflush_record",
-                        source_doc_id=report_id,
-                        source_doc_code=work_order.code,
-                        work_order_id=work_order_id,
-                        work_order_code=work_order.code,
-                        movement_type="backflush_consume",
-                        from_warehouse_id=pick["warehouse_id"],
-                        from_warehouse_name=pick.get("warehouse_name") or None,
-                        idempotency_key=(
-                            f"backflush:{report_id}:{cons['component_id']}:"
-                            f"{pick['warehouse_id']}:{pick.get('batch_no') or ''}:"
-                            f"{pick['inventory_id']}"
-                        ),
-                    )
-                    inv = await LineSideInventory.get_or_none(id=pick["inventory_id"])
-                    if inv and (inv.quantity or 0) <= 0 and inv.status != "consumed":
-                        inv.status = "consumed"
-                        await inv.save()
-
                     wh = warehouse_map.get(pick["warehouse_id"])
                     record = await BackflushRecord.create(
                         tenant_id=tenant_id,
@@ -424,6 +399,33 @@ class BackflushService(AppBaseService[BackflushRecord]):
                         processed_at=now_utc(),
                         **audit_kwargs,
                     )
+                    await InventoryService._decrease_stock_no_atomic(
+                        tenant_id=tenant_id,
+                        material_id=cons["component_id"],
+                        quantity=pick["pick_quantity"],
+                        warehouse_id=pick["warehouse_id"],
+                        batch_no=pick.get("batch_no") or None,
+                        source_type="backflush_record",
+                        source_doc_id=record.id,
+                        source_doc_code=work_order.code,
+                        work_order_id=work_order_id,
+                        work_order_code=work_order.code,
+                        movement_type="backflush_consume",
+                        from_warehouse_id=pick["warehouse_id"],
+                        from_warehouse_name=pick.get("warehouse_name") or None,
+                        operator_id=processed_by,
+                        operator_name=audit_kwargs.get("updated_by_name")
+                        or audit_kwargs.get("created_by_name"),
+                        idempotency_key=(
+                            f"backflush:{report_id}:{cons['component_id']}:"
+                            f"{pick['warehouse_id']}:{pick.get('batch_no') or ''}:"
+                            f"{pick['inventory_id']}"
+                        ),
+                    )
+                    inv = await LineSideInventory.get_or_none(id=pick["inventory_id"])
+                    if inv and (inv.quantity or 0) <= 0 and inv.status != "consumed":
+                        inv.status = "consumed"
+                        await inv.save()
                     records.append(record)
 
         logger.info(
@@ -496,30 +498,6 @@ class BackflushService(AppBaseService[BackflushRecord]):
             from apps.kuaizhizao.services.inventory_service import InventoryService
 
             for pick in pick_list:
-                await InventoryService._decrease_stock_no_atomic(
-                    tenant_id=tenant_id,
-                    material_id=failed.material_id,
-                    quantity=pick["pick_quantity"],
-                    warehouse_id=pick["warehouse_id"],
-                    batch_no=pick.get("batch_no") or None,
-                    source_type="backflush_record",
-                    source_doc_id=failed.report_id,
-                    source_doc_code=failed.work_order_code,
-                    work_order_id=failed.work_order_id,
-                    work_order_code=failed.work_order_code,
-                    movement_type="backflush_consume",
-                    from_warehouse_id=pick["warehouse_id"],
-                    from_warehouse_name=pick.get("warehouse_name") or None,
-                    idempotency_key=(
-                        f"backflush_retry:{failed_record_id}:{pick['inventory_id']}:"
-                        f"{pick.get('batch_no') or ''}"
-                    ),
-                )
-                inv = await LineSideInventory.get_or_none(id=pick["inventory_id"])
-                if inv and (inv.quantity or 0) <= 0 and inv.status != "consumed":
-                    inv.status = "consumed"
-                    await inv.save()
-
                 wh = warehouse_map.get(pick["warehouse_id"])
                 rec = await BackflushRecord.create(
                     tenant_id=tenant_id,
@@ -544,6 +522,32 @@ class BackflushService(AppBaseService[BackflushRecord]):
                     processed_at=now_utc(),
                     **audit_kwargs,
                 )
+                await InventoryService._decrease_stock_no_atomic(
+                    tenant_id=tenant_id,
+                    material_id=failed.material_id,
+                    quantity=pick["pick_quantity"],
+                    warehouse_id=pick["warehouse_id"],
+                    batch_no=pick.get("batch_no") or None,
+                    source_type="backflush_record",
+                    source_doc_id=rec.id,
+                    source_doc_code=failed.work_order_code,
+                    work_order_id=failed.work_order_id,
+                    work_order_code=failed.work_order_code,
+                    movement_type="backflush_consume",
+                    from_warehouse_id=pick["warehouse_id"],
+                    from_warehouse_name=pick.get("warehouse_name") or None,
+                    operator_id=processed_by,
+                    operator_name=audit_kwargs.get("updated_by_name")
+                    or audit_kwargs.get("created_by_name"),
+                    idempotency_key=(
+                        f"backflush_retry:{failed_record_id}:{pick['inventory_id']}:"
+                        f"{pick.get('batch_no') or ''}"
+                    ),
+                )
+                inv = await LineSideInventory.get_or_none(id=pick["inventory_id"])
+                if inv and (inv.quantity or 0) <= 0 and inv.status != "consumed":
+                    inv.status = "consumed"
+                    await inv.save()
                 if record is None:
                     record = rec
 

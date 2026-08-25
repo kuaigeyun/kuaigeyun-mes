@@ -20,6 +20,8 @@ from tortoise.expressions import Q
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from infra.services.business_config_service import BusinessConfigService
 
+from infra.models.user import User
+
 from apps.common.base_service import AppBaseService
 from apps.kuaizhizao.models.rework_order import ReworkOrder
 from apps.kuaizhizao.models.rework_order_operation import ReworkOrderOperation
@@ -779,6 +781,7 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
     async def list_rework_orders(
         self,
         tenant_id: int,
+        current_user: Optional[User] = None,
         skip: int = 0,
         limit: int = 100,
         code: Optional[str] = None,
@@ -813,6 +816,14 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
         query = ReworkOrder.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True
+        )
+        from apps.kuaizhizao.services.kuaizhizao_data_scope import apply_kuaizhizao_list_scope
+
+        query = await apply_kuaizhizao_list_scope(
+            query,
+            tenant_id=tenant_id,
+            current_user=current_user,
+            resource="kuaizhizao:rework-order",
         )
 
         # 应用过滤条件

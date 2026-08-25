@@ -67,6 +67,14 @@ async def _serialize(tenant_id: int, user_id: int, obj: Receipt) -> ReceiptVouch
     return ReceiptVoucherResponse.model_validate(masked)
 
 
+async def _serialize_detail(tenant_id: int, user_id: int, obj: Receipt) -> ReceiptVoucherResponse:
+    from apps.kuaicaiwu.services.finance_voucher_enrichment import enrich_voucher_detail
+
+    base = await _serialize(tenant_id, user_id, obj)
+    enriched = await enrich_voucher_detail(tenant_id, base.model_dump(), kind="receipt")
+    return ReceiptVoucherResponse.model_validate(enriched)
+
+
 @router.post("", response_model=ReceiptVoucherResponse, status_code=status.HTTP_201_CREATED)
 async def create_receipt(
     data: ReceiptVoucherCreate,
@@ -135,7 +143,10 @@ async def create_receipt(
                 receipt_code=str(receipt.receipt_code),
                 created_by=current_user.id,
             )
-            if str(data.source_type or "").strip() == "receivable":
+            if (
+                str(data.source_type or "").strip() == "receivable"
+                and str(data.settlement_type or "normal") != "prepayment"
+            ):
                 await receipt_pull_service.settle_pull_created_receipt(
                     tenant_id=tenant_id,
                     receivable_id=int(data.source_id),
@@ -184,14 +195,16 @@ async def list_receipts(
     from apps.kuaicaiwu.services.finance_list_core import apply_finance_voucher_list_filters
 
     query = Receipt.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+    if settlement_type:
+        query = query.filter(settlement_type=settlement_type)
+    else:
+        query = query.exclude(settlement_type="refund")
     if status:
         query = query.filter(status=status)
     if unsettled_only:
         query = query.filter(unsettled_amount__gt=0).exclude(status="Cancelled")
     if customer_id:
         query = query.filter(customer_id=customer_id)
-    if settlement_type:
-        query = query.filter(settlement_type=settlement_type)
 
     doc_date_start = start_date.isoformat() if start_date else None
     doc_date_end = end_date.isoformat() if end_date else None
@@ -267,7 +280,7 @@ async def get_receipt(
 ):
     """获取收款单详情"""
     receipt = await _get_or_404(tenant_id, id)
-    return await _serialize(tenant_id, current_user.id, receipt)
+    return await _serialize_detail(tenant_id, current_user.id, receipt)
 
 
 @router.put("/{id}", response_model=ReceiptVoucherResponse)

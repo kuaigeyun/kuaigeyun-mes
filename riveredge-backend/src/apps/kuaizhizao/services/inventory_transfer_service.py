@@ -654,6 +654,8 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
                     from_warehouse_id=item.from_warehouse_id,
                     to_warehouse_id=item.to_warehouse_id,
                     idempotency_key=f"inventory_transfer:{transfer_id}:dec:{item.id}",
+                    operator_id=executed_by,
+                    operator_name=None,
                 )
                 await InventoryService.increase_stock(
                     tenant_id=tenant_id,
@@ -668,6 +670,8 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
                     from_warehouse_id=item.from_warehouse_id,
                     to_warehouse_id=item.to_warehouse_id,
                     idempotency_key=f"inventory_transfer:{transfer_id}:inc:{item.id}",
+                    operator_id=executed_by,
+                    operator_name=None,
                 )
                 item.status = "transferred"
                 await item.save()

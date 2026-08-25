@@ -18,6 +18,8 @@ from tortoise.transactions import in_transaction
 
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
+from infra.models.user import User
+
 from apps.common.base_service import AppBaseService
 from apps.kuaizhizao.models.outsource_order import OutsourceOrder
 from apps.kuaizhizao.models.work_order import WorkOrder
@@ -505,6 +507,7 @@ class OutsourceService(AppBaseService[OutsourceOrder]):
     async def list_outsource_orders(
         self,
         tenant_id: int,
+        current_user: Optional[User] = None,
         skip: int = 0,
         limit: int = 100,
         work_order_id: Optional[int] = None,
@@ -539,6 +542,14 @@ class OutsourceService(AppBaseService[OutsourceOrder]):
         query = OutsourceOrder.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True
+        )
+        from apps.kuaizhizao.services.kuaizhizao_data_scope import apply_kuaizhizao_list_scope
+
+        query = await apply_kuaizhizao_list_scope(
+            query,
+            tenant_id=tenant_id,
+            current_user=current_user,
+            resource="kuaizhizao:outsource-order",
         )
 
         # 添加筛选条件

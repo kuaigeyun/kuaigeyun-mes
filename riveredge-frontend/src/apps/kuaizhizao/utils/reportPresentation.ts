@@ -26,6 +26,33 @@ export function reportOverdueText(
   return t('app.kuaizhizao.reports.overdueYes');
 }
 
+/** 采购到货预警等级文案（与 arrival_imminent_days / 到货预警页同一口径） */
+export function reportArrivalWarningText(
+  t: TFunction,
+  warningLevel: unknown,
+  overdueDays?: number,
+): string {
+  const level = String(warningLevel || '').trim();
+  if (level === 'overdue') {
+    return reportOverdueText(t, true, overdueDays);
+  }
+  if (level === 'imminent') {
+    return t('app.kuaizhizao.purchaseArrival.level.imminent');
+  }
+  if (level === 'normal') {
+    return t('app.kuaizhizao.purchaseArrival.level.normal');
+  }
+  return '-';
+}
+
+export function reportArrivalWarningValueEnum(t: TFunction): Record<string, { text: string }> {
+  return reportTextEnum({
+    normal: t('app.kuaizhizao.purchaseArrival.level.normal'),
+    imminent: t('app.kuaizhizao.purchaseArrival.level.imminent'),
+    overdue: t('app.kuaizhizao.purchaseArrival.level.overdue'),
+  });
+}
+
 /** 后端单据状态码 / 中文别名 → documentStatus.*（唯一文案源，禁止再自建残缺 map） */
 const DOCUMENT_STATUS_I18N_KEYS: Record<string, string> = {
   DRAFT: 'documentStatus.draft',

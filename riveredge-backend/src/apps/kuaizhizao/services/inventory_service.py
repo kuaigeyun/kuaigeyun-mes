@@ -22,7 +22,6 @@ from tortoise.exceptions import IntegrityError
 from tortoise.transactions import atomic, in_transaction
 
 from apps.kuaizhizao.models.material_stock_movement import (
-    MOVEMENT_ADJUST,
     MaterialStockMovement,
 )
 from apps.kuaizhizao.utils.inventory_helper import get_material_inventory_info
@@ -71,6 +70,30 @@ class InventoryService:
         return (wh.name or "").strip() or None if wh else None
 
     @staticmethod
+    async def _resolve_operator_name(
+        tenant_id: int,
+        operator_id: Optional[int],
+        operator_name: Optional[str],
+    ) -> tuple[Optional[int], Optional[str]]:
+        name = (operator_name or "").strip() or None
+        oid = int(operator_id) if operator_id is not None else None
+        if oid is not None and oid <= 0:
+            oid = None
+        if oid is not None and not name:
+            from infra.models.user import User
+
+            user = await User.get_or_none(id=oid, tenant_id=tenant_id)
+            if user is None:
+                user = await User.get_or_none(id=oid)
+            if user is not None:
+                name = (
+                    (getattr(user, "full_name", None) or "").strip()
+                    or (getattr(user, "username", None) or "").strip()
+                    or None
+                )
+        return oid, name
+
+    @staticmethod
     async def _record_stock_movement(
         *,
         tenant_id: int,
@@ -96,12 +119,29 @@ class InventoryService:
         idempotency_key: Optional[str] = None,
     ) -> None:
         """余额变更后追加流水；幂等键冲突时跳过（视为已过账）。"""
-        mt = (movement_type or "").strip() or MOVEMENT_ADJUST
-        if not movement_type:
-            logger.warning(
-                "InventoryService movement_type missing; fallback to adjust "
-                f"material={material_id} source={source_type}/{source_doc_id}"
+        from infra.exceptions.exceptions import ValidationError
+        from apps.master_data.models.material import Material
+
+        mt = (movement_type or "").strip()
+        if not mt:
+            raise ValidationError(
+                f"库存流水缺少 movement_type: material={material_id} "
+                f"source={source_type}/{source_doc_id}"
             )
+        if not material_id:
+            raise ValidationError(
+                f"库存流水缺少 material_id: source={source_type}/{source_doc_id}"
+            )
+
+        operator_id, operator_name = await InventoryService._resolve_operator_name(
+            tenant_id, operator_id, operator_name
+        )
+        if source_doc_id is not None and operator_id is None and not operator_name:
+            raise ValidationError(
+                f"单据库存过账必须指定操作人: source={source_type}/{source_doc_id} "
+                f"doc={source_doc_code or ''}"
+            )
+
         if idempotency_key:
             exists = await MaterialStockMovement.filter(
                 tenant_id=tenant_id, idempotency_key=idempotency_key
@@ -109,15 +149,22 @@ class InventoryService:
             if exists:
                 return
 
-        from apps.master_data.models.material import Material
-
         mat = await Material.get_or_none(
             tenant_id=tenant_id, id=material_id, deleted_at__isnull=True
         )
-        material_code = ""
-        if mat:
-            material_code = (
-                getattr(mat, "main_code", None) or getattr(mat, "code", None) or ""
+        if mat is None:
+            raise ValidationError(
+                f"库存过账物料不存在或已删除: material_id={material_id} "
+                f"source={source_type}/{source_doc_id}"
+            )
+        material_code = (
+            (getattr(mat, "main_code", None) or getattr(mat, "code", None) or "")
+        ).strip()
+        material_name = (getattr(mat, "name", None) or "").strip()
+        if not material_code or not material_name:
+            raise ValidationError(
+                f"物料主数据缺少编码或名称: material_id={material_id} "
+                f"code={material_code!r} name={material_name!r}"
             )
 
         if from_warehouse_id is not None and not from_warehouse_name:
@@ -133,7 +180,8 @@ class InventoryService:
             await MaterialStockMovement.create(
                 tenant_id=tenant_id,
                 material_id=material_id,
-                material_code=material_code or None,
+                material_code=material_code,
+                material_name=material_name,
                 batch_no=batch_no,
                 movement_type=mt,
                 quantity=Decimal(str(quantity)),
@@ -153,6 +201,8 @@ class InventoryService:
                 operator_name=operator_name,
                 remark=remark,
                 idempotency_key=idempotency_key,
+                created_by=operator_id,
+                created_by_name=operator_name,
             )
         except IntegrityError:
             logger.info(

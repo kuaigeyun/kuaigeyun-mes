@@ -587,3 +587,50 @@ export async function getTenantActivityLogs(
   });
 }
 
+export type AppCenterCategory = 'basic' | 'pro' | 'industry' | 'dedicated';
+
+export interface ApplicationCenterCategoryPermission {
+  allow_self_service_toggle: boolean;
+}
+
+export interface ApplicationCenterEffectiveCategory {
+  allow_self_service_toggle: boolean;
+  package_allows: boolean;
+  can_self_service_toggle: boolean;
+}
+
+export interface ApplicationCenterPermissionsPayload {
+  basic: ApplicationCenterCategoryPermission;
+  pro: ApplicationCenterCategoryPermission;
+  industry: ApplicationCenterCategoryPermission;
+  dedicated: ApplicationCenterCategoryPermission;
+}
+
+export interface ApplicationCenterPermissionsResponse {
+  tenant_id: number;
+  category_permissions: ApplicationCenterPermissionsPayload;
+  package: {
+    allow_pro_apps: boolean;
+    allowed_app_codes: string[];
+  };
+  effective: Record<AppCenterCategory, ApplicationCenterEffectiveCategory>;
+}
+
+export async function getTenantApplicationCenterPermissions(
+  tenantId: number,
+): Promise<ApplicationCenterPermissionsResponse> {
+  return apiRequest<ApplicationCenterPermissionsResponse>(
+    `/infra/tenants/${tenantId}/application-center-permissions`,
+  );
+}
+
+export async function updateTenantApplicationCenterPermissions(
+  tenantId: number,
+  data: ApplicationCenterPermissionsPayload,
+): Promise<ApplicationCenterPermissionsResponse> {
+  return apiRequest<ApplicationCenterPermissionsResponse>(
+    `/infra/tenants/${tenantId}/application-center-permissions`,
+    { method: 'PUT', data },
+  );
+}
+

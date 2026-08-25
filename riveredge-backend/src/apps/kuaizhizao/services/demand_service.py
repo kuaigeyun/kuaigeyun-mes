@@ -2021,7 +2021,7 @@ class DemandService(AppBaseService[Demand]):
         )
 
         if not demand_allows_computation_merge(demand):
-            raise ValidationError(
+            raise BusinessLogicError(
                 f"只能下推已审核/已确认的需求，当前状态：{demand.status}，审核状态：{demand.review_status}"
             )
 
@@ -2030,7 +2030,7 @@ class DemandService(AppBaseService[Demand]):
 
             exists = await DemandComputation.filter(tenant_id=tenant_id, demand_id=demand_id).exists()
             if exists:
-                raise ValidationError("该需求已经下推到需求计算，不能重复下推")
+                raise BusinessLogicError("该需求已经下推到需求计算，不能重复下推")
             logger.warning(f"需求 {demand.demand_code} 标记为已下推但未找到计算记录，允许重新下推")
 
         computation_type = "MRP"

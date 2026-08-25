@@ -133,6 +133,8 @@ export async function getNavigationMenuTree(options?: {
 }): Promise<MenuTree[]> {
   return apiRequest<MenuTree[]>('/core/menus/navigation-tree', {
     params: options?.fresh ? { fresh: true } : undefined,
+    timeoutMs: 15_000,
+    maxRetries: 1,
   });
 }
 

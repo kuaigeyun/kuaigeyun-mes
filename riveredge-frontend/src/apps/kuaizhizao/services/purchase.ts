@@ -118,6 +118,8 @@ export interface PurchaseOrder {
   change_reason?: string;
   fee_details?: any[];
   total_fee_amount?: number;
+  /** 单据头附件（上传字段 attachments） */
+  attachments?: import('../utils/documentAttachments').DocumentAttachmentFile[];
   capabilities?: PurchaseOrderCapabilities;
 }
 
@@ -166,6 +168,8 @@ export interface PurchaseOrderListParams {
   pull_target?: 'purchase_order_change';
   /** 附带订单明细（明细表格视图） */
   include_items?: boolean;
+  /** 高级搜索 / 列筛选 JSON */
+  column_filters?: string;
 }
 
 export interface PurchaseOrderListResponse {

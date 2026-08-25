@@ -10,6 +10,7 @@
  */
 
 import { getAntdMessage } from './antdAppApis';
+import { isRequestCancellation } from './requestCancellation';
 
 const getMessage = () => getAntdMessage();
 
@@ -81,6 +82,10 @@ export interface ErrorResponse {
  * @returns 错误消息字符串
  */
 export function handleError(error: any, defaultMessage: string = '操作失败'): string {
+  if (isRequestCancellation(error)) {
+    return '';
+  }
+
   const message = getMessage();
   
   // 如果是 ErrorResponse 格式

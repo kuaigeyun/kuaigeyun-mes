@@ -198,7 +198,11 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({
   }
 
   // 获取天气图标
-  const WeatherIcon = getWeatherIcon(displayWeather.iconCode, displayWeather.description);
+  const weatherIcon = getWeatherIcon(
+    displayWeather.iconCode,
+    displayWeather.description,
+    iconBox,
+  );
   const cityLabel = localizedCity ?? displayWeather.city;
 
   return (
@@ -208,7 +212,7 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({
     >
       {/* 天气图标 */}
       <div style={{ fontSize: iconBox, lineHeight: 1, flexShrink: 0 }}>
-        {WeatherIcon}
+        {weatherIcon}
       </div>
       
       {/* 天气信息 */}

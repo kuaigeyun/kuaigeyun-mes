@@ -9,7 +9,7 @@ Date: 2025-12-30
 
 from datetime import datetime, date
 from decimal import Decimal
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from pydantic import Field
 from core.schemas.base import BaseSchema
 
@@ -273,6 +273,20 @@ class ReceiptRecordCreate(ReceiptRecordBase):
 
 # === 付款单（独立凭证）===
 
+class FinanceVoucherLinkRef(BaseSchema):
+    """关联收/付款凭证简要引用"""
+    id: int
+    code: str
+
+
+class PartnerStatementBriefRef(BaseSchema):
+    """往来对账单简要引用"""
+    id: int
+    statement_code: str
+    statement_period: str
+    status: str
+
+
 class PaymentVoucherBase(BaseSchema):
     """付款单基础schema"""
     supplier_id: int = Field(..., description="供应商ID")
@@ -282,7 +296,7 @@ class PaymentVoucherBase(BaseSchema):
     payment_method: str = Field(..., max_length=50, description="付款方式")
     bank_account: Optional[str] = Field(None, max_length=100, description="出款账号")
     bank_account_id: Optional[int] = Field(None, description="银行账户ID")
-    settlement_type: str = Field("normal", max_length=20, description="结算类型 normal/prepayment")
+    settlement_type: str = Field("normal", max_length=20, description="结算类型 normal/prepayment/refund")
     notes: Optional[str] = Field(None, description="备注")
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
@@ -312,11 +326,18 @@ class PaymentVoucherResponse(PaymentVoucherBase):
     payment_code: str
     settled_amount: Decimal = Decimal("0")
     unsettled_amount: Decimal = Decimal("0")
+    refunded_amount: Decimal = Decimal("0")
+    refund_execution_status: str = "未退款"
     status: str = "Draft"
     created_at: datetime
     updated_at: datetime
     created_by_name: Optional[str] = None
     updated_by_name: Optional[str] = None
+    source_voucher_id: Optional[int] = Field(None, description="退款源付款单ID")
+    source_voucher_code: Optional[str] = Field(None, description="退款源付款单号")
+    linked_refund_vouchers: Optional[List["FinanceVoucherLinkRef"]] = None
+    linked_partner_statements: Optional[List["PartnerStatementBriefRef"]] = None
+    capabilities: Optional[Dict[str, Any]] = None
 
     class Config:
         from_attributes = True
@@ -341,7 +362,7 @@ class ReceiptVoucherBase(BaseSchema):
     payment_method: str = Field(..., max_length=50, description="收款方式")
     bank_account: Optional[str] = Field(None, max_length=100, description="收款账号")
     bank_account_id: Optional[int] = Field(None, description="银行账户ID")
-    settlement_type: str = Field("normal", max_length=20, description="结算类型 normal/prepayment")
+    settlement_type: str = Field("normal", max_length=20, description="结算类型 normal/prepayment/refund")
     notes: Optional[str] = Field(None, description="备注")
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
@@ -371,11 +392,18 @@ class ReceiptVoucherResponse(ReceiptVoucherBase):
     receipt_code: str
     settled_amount: Decimal = Decimal("0")
     unsettled_amount: Decimal = Decimal("0")
+    refunded_amount: Decimal = Decimal("0")
+    refund_execution_status: str = "未退款"
     status: str = "Draft"
     created_at: datetime
     updated_at: datetime
     created_by_name: Optional[str] = None
     updated_by_name: Optional[str] = None
+    source_voucher_id: Optional[int] = Field(None, description="退款源收款单ID")
+    source_voucher_code: Optional[str] = Field(None, description="退款源收款单号")
+    linked_refund_vouchers: Optional[List[FinanceVoucherLinkRef]] = None
+    linked_partner_statements: Optional[List[PartnerStatementBriefRef]] = None
+    capabilities: Optional[Dict[str, Any]] = None
 
     class Config:
         from_attributes = True
@@ -689,7 +717,7 @@ class MergeReceiptCreate(BaseSchema):
     payment_method: str = Field(..., max_length=50, description="收款方式")
     bank_account: Optional[str] = Field(None, max_length=100, description="收款账号")
     bank_account_id: Optional[int] = Field(None, description="银行账户ID")
-    settlement_type: str = Field("normal", max_length=20, description="结算类型 normal/prepayment")
+    settlement_type: str = Field("normal", max_length=20, description="结算类型 normal/prepayment/refund")
     notes: Optional[str] = Field(None, description="备注")
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
@@ -702,7 +730,7 @@ class MergePaymentCreate(BaseSchema):
     payment_method: str = Field(..., max_length=50, description="付款方式")
     bank_account: Optional[str] = Field(None, max_length=100, description="付款账号")
     bank_account_id: Optional[int] = Field(None, description="银行账户ID")
-    settlement_type: str = Field("normal", max_length=20, description="结算类型 normal/prepayment")
+    settlement_type: str = Field("normal", max_length=20, description="结算类型 normal/prepayment/refund")
     notes: Optional[str] = Field(None, description="备注")
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
 

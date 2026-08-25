@@ -89,6 +89,11 @@ import {
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import {
+  DocumentAttachmentsReadonly,
+  documentAttachmentsFromRecord,
+  hasDocumentAttachments,
+} from '../../../components/DocumentAttachmentsReadonly';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
@@ -1658,6 +1663,10 @@ const SalesReturnsPage: React.FC = () => {
     'sales_return',
   );
 
+  const salesReturnAttachments = documentAttachmentsFromRecord(returnDetail);
+  const showSalesReturnAttachments =
+    Boolean(returnDetail) && hasDocumentAttachments(salesReturnAttachments);
+
   return (
     <>
       <ListPageTemplate>
@@ -2417,6 +2426,15 @@ const SalesReturnsPage: React.FC = () => {
         collaboration={detailCollaboration}
         collaborationTitle={t('app.kuaizhizao.salesOrder.lifecycle')}
         collaborationAuditRecord={returnDetail}
+        supplementary={
+          showSalesReturnAttachments ? (
+            <DocumentAttachmentsReadonly attachments={salesReturnAttachments} />
+          ) : undefined
+        }
+        supplementaryTitle={
+          showSalesReturnAttachments ? t('app.uniDetail.sectionAttachments') : undefined
+        }
+        supplementaryVisible={showSalesReturnAttachments}
         traceDocument={salesReturnTraceDocument}
         linesTitle={t('app.kuaizhizao.salesReturn.itemsInfo')}
         lines={

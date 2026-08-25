@@ -2602,6 +2602,7 @@ async def list_outsource_work_orders(
                 safe_order_by = order_by
         return await outsource_work_order_service.list_outsource_work_orders(
             tenant_id=tenant_id,
+            current_user=current_user,
             skip=skip,
             limit=limit,
             status=status,

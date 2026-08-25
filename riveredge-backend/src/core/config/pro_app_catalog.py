@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from typing import FrozenSet, Optional
 
+from core.config.industry_app_catalog import PRO_INDUSTRY_APP_CODES
+
 GLOBAL_LICENSE_SCOPE = "*"
 
 PRO_APP_CODES: FrozenSet[str] = frozenset(
@@ -28,4 +30,4 @@ def is_valid_license_scope(app_code: Optional[str]) -> bool:
     normalized = normalize_license_scope(app_code)
     if normalized == GLOBAL_LICENSE_SCOPE:
         return True
-    return normalized in PRO_APP_CODES
+    return normalized in PRO_APP_CODES or normalized in PRO_INDUSTRY_APP_CODES

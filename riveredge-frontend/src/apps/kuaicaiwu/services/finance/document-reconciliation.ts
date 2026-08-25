@@ -47,25 +47,6 @@ export interface DocumentReconciliationGapResult {
   period?: { start?: string; end?: string };
 }
 
-export interface PrepaymentBalanceListParams {
-  partner_type?: 'customer' | 'supplier';
-  keyword?: string;
-  partner_name?: string;
-  skip?: number;
-  limit?: number;
-  sort_field?: string;
-  sort_order?: string;
-}
-
-export interface PrepaymentBalanceSummary {
-  customer_balances?: Array<Record<string, unknown>>;
-  supplier_balances?: Array<Record<string, unknown>>;
-  items?: Array<Record<string, unknown>>;
-  total?: number;
-  total_customer_prepayment?: number;
-  total_supplier_prepayment?: number;
-}
-
 export interface FinancePipelineSummary {
   open_receivable_amount?: number;
   open_payable_amount?: number;
@@ -100,7 +81,4 @@ export const documentReconciliationService = {
 
   getStandardChain: (flowType: 'sales' | 'purchase', documentType: string, documentId: number) =>
     apiRequest<Record<string, unknown>>(`${API}/chain/${flowType}/${documentType}/${documentId}`, { method: 'GET' }),
-
-  getPrepaymentBalances: (params?: PrepaymentBalanceListParams) =>
-    apiRequest<PrepaymentBalanceSummary>(`${API}/prepayment-balances`, { method: 'GET', params }),
 };

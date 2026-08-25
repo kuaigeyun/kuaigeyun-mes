@@ -5,6 +5,7 @@ import { getSiteSetting, type SiteSetting } from '../services/siteSetting';
 import { getUserPreference, type UserPreference } from '../services/userPreference';
 import { getLanguageList } from '../services/language';
 import { getTenantId } from '../utils/auth';
+import { isRequestCancellation } from '../utils/requestCancellation';
 import type { CurrentUser } from '../types/api';
 
 export const CURRENT_USER_QUERY_ROOT = 'currentUser' as const;
@@ -52,7 +53,8 @@ export async function fetchCurrentUserRecord(isInfraSuperAdmin: boolean): Promis
 export async function fetchSiteSettingRecord(): Promise<SiteSetting | null> {
   try {
     return await getSiteSetting();
-  } catch {
+  } catch (error) {
+    if (isRequestCancellation(error)) throw error;
     return null;
   }
 }
@@ -60,7 +62,8 @@ export async function fetchSiteSettingRecord(): Promise<SiteSetting | null> {
 export async function fetchUserPreferenceRecord(): Promise<UserPreference | null> {
   try {
     return await getUserPreference();
-  } catch {
+  } catch (error) {
+    if (isRequestCancellation(error)) throw error;
     return null;
   }
 }
@@ -68,7 +71,8 @@ export async function fetchUserPreferenceRecord(): Promise<UserPreference | null
 export async function fetchActiveLanguageList() {
   try {
     return await getLanguageList({ page_size: 20, is_active: true });
-  } catch {
+  } catch (error) {
+    if (isRequestCancellation(error)) throw error;
     return null;
   }
 }

@@ -21,7 +21,10 @@ service = FinanceNoteService()
 
 
 class FinanceNoteCreate(BaseSchema):
-    bill_type: str = Field(..., description="bank_acceptance/commercial_acceptance")
+    bill_type: str = Field(
+        ...,
+        description="bank_acceptance/commercial_acceptance/bank_draft/bank_promissory_note/cheque",
+    )
     bill_no: str = Field(..., max_length=100)
     amount: Decimal = Field(..., gt=0)
     issue_date: date

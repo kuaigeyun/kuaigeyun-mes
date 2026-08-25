@@ -35,6 +35,7 @@ import { useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useLocation } from 'react-router-dom'
 import { translatePathTitle } from '../../utils/menuTranslation'
+import { isRequestCancellation, swallowRequestCancellation } from '../../utils/requestCancellation'
 import {
   ProTable,
   ProCard,
@@ -2330,7 +2331,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
               }),
             staleTime: staleTimeMs,
             gcTime: gcTimeMs,
-          })
+          }).catch(swallowRequestCancellation)
         }
       } else {
         result = await runRequest()
@@ -2403,6 +2404,17 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       lastCommittedRequestResultRef.current = result
 
       return result
+    } catch (error) {
+      if (isRequestCancellation(error)) {
+        return (
+          lastCommittedRequestResultRef.current ?? {
+            data: [],
+            success: true,
+            total: 0,
+          }
+        )
+      }
+      throw error
     } finally {
       if (requestSeqRef.current === seq) {
         setRequestInFlight(false)

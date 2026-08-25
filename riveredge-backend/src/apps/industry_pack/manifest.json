@@ -1,0 +1,28 @@
+{
+  "code": "industry-pack",
+  "name": "行业包",
+  "version": "1.0.0",
+  "description": "行业应用统一入口，各行业模块作为子菜单挂载",
+  "icon": "layers",
+  "author": "RiverEdge Team",
+  "market_category": "industry",
+  "is_pro": false,
+  "hide_from_application_center": true,
+  "entry_point": "../apps/industry-pack/index.tsx",
+  "route_path": "/apps/industry-pack",
+  "sort_order": 290,
+  "menu_config": {
+    "title": "app.industry-pack.name",
+    "icon": "layers",
+    "path": "/apps/industry-pack",
+    "permission": "industry-pack:entry:read",
+    "children": []
+  },
+  "permissions": [
+    "industry-pack:entry:read"
+  ],
+  "dependencies": {
+    "riveredge-backend": ">=1.0.0",
+    "riveredge-frontend": ">=1.0.0"
+  }
+}

@@ -375,12 +375,26 @@ class PurchaseCostService:
         # 计算总成本和单位成本
         total_cost = total_purchase_price + total_purchase_fee
         unit_cost = total_cost / order.total_quantity if order.total_quantity > 0 else Decimal(0)
-        
+
+        if len(order_items) == 1:
+            only = order_items[0]
+            material_id = only.material_id
+            material_code = (only.material_code or "").strip() or f"物料#{only.material_id}"
+            material_name = (only.material_name or "").strip() or material_code
+        else:
+            material_id = None
+            material_code = f"{len(order_items)}种物料"
+            material_name = f"整单汇总（{len(order_items)}行）"
+
         return {
             "purchase_order_id": order.id,
             "purchase_order_code": order.order_code,
+            "material_id": material_id,
+            "material_code": material_code,
+            "material_name": material_name,
             "supplier_id": order.supplier_id,
             "supplier_name": order.supplier_name,
+            "source_type": "Buy",
             "quantity": order.total_quantity,
             "purchase_price": total_purchase_price,
             "purchase_fee": total_purchase_fee,

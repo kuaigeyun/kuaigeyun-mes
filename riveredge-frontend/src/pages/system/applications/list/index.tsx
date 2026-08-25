@@ -7,7 +7,7 @@
 
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ActionType, ProColumns, ProFormInstance, ProFormText, ProFormTextArea, ProFormDigit, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, Card, Dropdown, Modal, Popconfirm, Space, Switch, Tag, Typography, Alert, Divider, Menu, Breadcrumb, Tooltip, message, Row, Col, Tree, Select, Table } from 'antd';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
@@ -22,9 +22,17 @@ import {
   buildProPlaceholders,
   isPlaceholderApplication,
 } from '../proAppCatalog';
+import {
+  ALL_INDUSTRY_APP_CODES,
+  isIndustryAppCode,
+  requiresProLicense,
+  resolveFreeIndustryAuthorUsername,
+  shouldHideFromApplicationCenter,
+} from '../industryAppCatalog';
 import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer';
 import { getApiErrorMessage } from '../../../../utils/errorHandler';
 import { UniTable } from '../../../../components/uni-table';
+import './application-card.less';
 import { ApplicationHelpView } from '../../../../components/page-help-wiki';
 import { theme } from 'antd';
 import type { GlobalToken } from 'antd/es/theme/interface';
@@ -54,62 +62,19 @@ import {
   RightOutlined,
   ToolOutlined,
 } from '@ant-design/icons';
-import { Icon as IconifyIcon, addCollection } from '@iconify/react/dist/offline';
-import solarIcons from '@iconify-json/solar/icons.json';
-import './application-card.less';
-
-addCollection(solarIcons);
-
-/** 应用中心卡片：Solar Bold Duotone（按应用 code） */
-const APP_SOLAR_ICONS: Record<string, string> = {
-  kuaizhizao: 'solar:buildings-2-bold-duotone',
-  kuaicaiwu: 'solar:wallet-money-bold-duotone',
-  kuaireport: 'solar:chart-2-bold-duotone',
-  'master-data': 'solar:database-bold-duotone',
-  kuaiai: 'solar:magic-stick-3-bold-duotone',
-  kuaiiot: 'solar:cpu-bolt-bold-duotone',
-  kuaiplm: 'solar:layers-bold-duotone',
-  kuaioa: 'solar:document-text-bold-duotone',
-  kuaicrm: 'solar:hand-shake-bold-duotone',
-  kuaitms: 'solar:delivery-bold-duotone',
-  kuaiasms: 'solar:headphones-round-bold-duotone',
-  kuailtms: 'solar:test-tube-bold-duotone',
-  kuaiip: 'solar:shield-check-bold-duotone',
-  haoligo: 'solar:smartphone-bold-duotone',
-  bi: 'solar:pie-chart-bold-duotone',
-  crm: 'solar:hand-shake-bold-duotone',
-  erp: 'solar:cart-large-2-bold-duotone',
-  mes: 'solar:settings-bold-duotone',
-  wms: 'solar:box-bold-duotone',
-  oa: 'solar:document-text-bold-duotone',
-  scm: 'solar:structure-bold-duotone',
-  hr: 'solar:users-group-rounded-bold-duotone',
-};
-
-/** manifest.icon（Lucide/旧别名）→ Solar */
-const MANIFEST_ICON_TO_SOLAR: Record<string, string> = {
-  production: 'solar:buildings-2-bold-duotone',
-  factory: 'solar:buildings-2-bold-duotone',
-  calculator: 'solar:calculator-bold-duotone',
-  fileBarChart: 'solar:chart-2-bold-duotone',
-  'bar-chart': 'solar:chart-bold-duotone',
-  database: 'solar:database-bold-duotone',
-  sparkles: 'solar:magic-stick-3-bold-duotone',
-  cpu: 'solar:cpu-bolt-bold-duotone',
-  layers: 'solar:layers-bold-duotone',
-  shop: 'solar:shop-2-bold-duotone',
-  warehouse: 'solar:box-bold-duotone',
-  smartphone: 'solar:smartphone-bold-duotone',
-  thunderbolt: 'solar:bolt-bold-duotone',
-  bolt: 'solar:bolt-bold-duotone',
-  widget: 'solar:widget-bold-duotone',
-  appstore: 'solar:widget-5-bold-duotone',
-};
+import { Icon as IconifyIcon } from '@iconify/react/dist/offline';
+import { AlertTriangle } from 'lucide-react';
+import {
+  resolveAppSolarIcon,
+} from '../../../../utils/appSolarIcons';
 import { useGlobalStore } from '../../../../stores';
+import { getPlatformSettingsPublic } from '../../../../services/platformSettings';
 import {
   getApplicationList,
   getApplicationByUuid,
   getInstalledApplicationList,
+  getApplicationCenterCapabilities,
+  type ApplicationCenterCapabilities,
   installApplication,
   uninstallApplication,
   enableApplication,
@@ -152,32 +117,13 @@ const APP_ACTION_ICON = {
 } as const;
 
 /**
- * 应用中心分类（对齐未来仓库）：
+ * 应用中心分类：
  * - 基础：主仓开源
- * - 专业：专业版私有仓（通用高级插件）
- * - 行业：同属专业版私有仓，单独标签便于区分
+ * - 专业：私仓 kuaigeyun-pro（通用高级插件）
+ * - 行业：含主仓免费行业包与私仓付费行业包（见 industryAppCatalog）
  * - 定制：定制私有仓（is_dedicated）
  */
 const BASIC_APP_CODES = ['kuaizhizao', 'kuaiplm', 'kuaicaiwu', 'kuaioa', 'master-data'];
-/** 行业应用（代码仍归专业版仓库，筛选单独成档） */
-const INDUSTRY_APP_CODES = [
-  'kuaimachinery',
-  'kuaimolding',
-  'kuaielectronics',
-  'kuaiautoparts',
-  'kuaimedical',
-  'kuaifood',
-  'kuaipackaging',
-  'kuaihardware',
-  'kuaidiecasting',
-  'kuaiwiring',
-  'kuaimotor',
-  'kuaibattery',
-  'kuainewequipment',
-  'kuaisheetmetal',
-  'kuaimold',
-  'kuaisemiconductor',
-];
 
 const APP_DESCRIPTION_OVERRIDES: Record<string, string> = {
   // 快财务当前聚焦管理会计，不包含总账
@@ -189,16 +135,16 @@ type AppCategoryFilter = 'basic' | 'pro' | 'industry' | 'dedicated';
 /** 应用中心需一次性拉齐清单再前端分类，否则 sort_order 靠后的应用（如定制应用）会落在分页之外 */
 const APPLICATION_CENTER_LIST_LIMIT = 500;
 
-/** 专业版私有仓（含行业）：启用时走 License Key */
-const isProEdition = (edition: AppCategoryFilter): boolean =>
-  edition === 'pro' || edition === 'industry';
+/** 专业版或付费行业：启用时走 License Key */
+const needsLicenseKey = (app: { code?: string; is_pro?: boolean }): boolean =>
+  requiresProLicense(app);
 
 const resolveAppEdition = (
   app: { code?: string; is_pro?: boolean; is_dedicated?: boolean; isDedicated?: boolean },
 ): AppCategoryFilter => {
   if (Boolean(app?.is_dedicated ?? app?.isDedicated)) return 'dedicated';
   const code = String(app?.code || '');
-  if (INDUSTRY_APP_CODES.includes(code)) return 'industry';
+  if (isIndustryAppCode(code)) return 'industry';
   if ((PRO_APP_CODES as readonly string[]).includes(code)) return 'pro';
   if (BASIC_APP_CODES.includes(code)) return 'basic';
   // 未列入清单的非定制应用默认归入基础（主仓）
@@ -238,9 +184,7 @@ const getApplicationIcon = (
     return <img src={icon} alt={code} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />;
   }
   const solarIcon =
-    (icon && icon.startsWith('solar:') && icon) ||
-    APP_SOLAR_ICONS[code] ||
-    (icon ? MANIFEST_ICON_TO_SOLAR[icon] : undefined) ||
+    resolveAppSolarIcon(icon, code) ||
     'solar:widget-5-bold-duotone';
   return (
     <IconifyIcon
@@ -372,7 +316,48 @@ const ApplicationListPage: React.FC = () => {
   /** 平台管理员默认看「全部」，否则「通用」分类会隐藏定制应用 */
   const infraCategoryDefaultAppliedRef = useRef(false);
   const currentUser = useCurrentUser();
-  const canManageAppLifecycle = Boolean(currentUser?.is_infra_admin);
+  const isInfraAdmin = Boolean(currentUser?.is_infra_admin);
+
+  const { data: centerCapabilities } = useQuery({
+    queryKey: ['application-center-capabilities'],
+    queryFn: getApplicationCenterCapabilities,
+    staleTime: 30_000,
+  });
+
+  const { data: platformSettingsPublic } = useQuery({
+    queryKey: ['platformSettingsPublic'],
+    queryFn: getPlatformSettingsPublic,
+    staleTime: 60_000,
+  });
+  const showCustomAppsContactQr = platformSettingsPublic?.custom_apps_contact_qr_enabled === true;
+
+  const canToggleAppLifecycle = useCallback(
+    (app: Application | Record<string, unknown>): boolean => {
+      if (isInfraAdmin) return true;
+      const caps = centerCapabilities as ApplicationCenterCapabilities | undefined;
+      if (!caps?.is_tenant_admin) return false;
+      const edition = resolveAppEdition(app as Application);
+      const effective = caps.effective?.[edition];
+      if (!effective?.can_self_service_toggle) return false;
+      if (requiresProLicense(app as Application) && !caps.package?.allow_pro_apps) return false;
+      return true;
+    },
+    [centerCapabilities, isInfraAdmin],
+  );
+
+  const lifecycleDisabledTooltip = useCallback(
+    (app?: Application | Record<string, unknown>) => {
+      if (isInfraAdmin) return undefined;
+      if (!centerCapabilities?.is_tenant_admin) {
+        return t('pages.system.applications.platformAdminOnlyLifecycle');
+      }
+      if (app && requiresProLicense(app as Application) && !centerCapabilities.package?.allow_pro_apps) {
+        return t('pages.system.applications.lifecycleBlockedByPackagePro');
+      }
+      return t('pages.system.applications.lifecyclePermissionDenied');
+    },
+    [centerCapabilities, isInfraAdmin, t],
+  );
 
   /** static 目录通过 Vite publicDir 挂载到站点根路径，见 vite.config `publicDir` */
   const customAppsContactQrSrc = `${import.meta.env.BASE_URL}img/qr_code.png`;
@@ -398,28 +383,30 @@ const ApplicationListPage: React.FC = () => {
             {t('pages.system.applications.customAppsEmptyDescription')}
           </Paragraph>
         </div>
-        <div>
-          <img
-            src={customAppsContactQrSrc}
-            alt={t('pages.system.applications.customAppsEmptyQrAlt')}
-            width={200}
-            height={200}
-            style={{
-              width: 200,
-              height: 'auto',
-              maxWidth: 'min(240px, 85vw)',
-              borderRadius: themeToken.borderRadiusLG,
-              border: `1px solid ${themeToken.colorBorderSecondary}`,
-              boxShadow: themeToken.boxShadowTertiary,
-              display: 'block',
-              margin: '0 auto',
-              objectFit: 'contain',
-            }}
-          />
-          <Text type="secondary" style={{ display: 'block', marginTop: 12, fontSize: 13 }}>
-            {t('pages.system.applications.customAppsEmptyQrHint')}
-          </Text>
-        </div>
+        {showCustomAppsContactQr ? (
+          <div>
+            <img
+              src={customAppsContactQrSrc}
+              alt={t('pages.system.applications.customAppsEmptyQrAlt')}
+              width={200}
+              height={200}
+              style={{
+                width: 200,
+                height: 'auto',
+                maxWidth: 'min(240px, 85vw)',
+                borderRadius: themeToken.borderRadiusLG,
+                border: `1px solid ${themeToken.colorBorderSecondary}`,
+                boxShadow: themeToken.boxShadowTertiary,
+                display: 'block',
+                margin: '0 auto',
+                objectFit: 'contain',
+              }}
+            />
+            <Text type="secondary" style={{ display: 'block', marginTop: 12, fontSize: 13 }}>
+              {t('pages.system.applications.customAppsEmptyQrHint')}
+            </Text>
+          </div>
+        ) : null}
       </Space>
     </div>
   );
@@ -584,8 +571,8 @@ const ApplicationListPage: React.FC = () => {
   );
 
   const handleInstall = async (record: Application) => {
-    if (!canManageAppLifecycle) {
-      messageApi.warning(t('pages.system.applications.platformAdminOnlyLifecycle'));
+    if (!canToggleAppLifecycle(record)) {
+      messageApi.warning(lifecycleDisabledTooltip(record) ?? t('pages.system.applications.lifecyclePermissionDenied'));
       return;
     }
     if (isPlaceholderApplication(record)) {
@@ -606,8 +593,8 @@ const ApplicationListPage: React.FC = () => {
    * 处理卸载应用
    */
   const handleUninstall = async (record: Application) => {
-    if (!canManageAppLifecycle) {
-      messageApi.warning(t('pages.system.applications.platformAdminOnlyLifecycle'));
+    if (!canToggleAppLifecycle(record)) {
+      messageApi.warning(lifecycleDisabledTooltip(record) ?? t('pages.system.applications.lifecyclePermissionDenied'));
       return;
     }
     try {
@@ -624,8 +611,8 @@ const ApplicationListPage: React.FC = () => {
    * 处理启用/禁用应用
    */
   const handleToggleActive = async (record: Application, checked: boolean) => {
-    if (!canManageAppLifecycle) {
-      messageApi.warning(t('pages.system.applications.platformAdminOnlyLifecycle'));
+    if (!canToggleAppLifecycle(record)) {
+      messageApi.warning(lifecycleDisabledTooltip(record) ?? t('pages.system.applications.lifecyclePermissionDenied'));
       return;
     }
     if (isPlaceholderApplication(record)) {
@@ -634,9 +621,7 @@ const ApplicationListPage: React.FC = () => {
     }
     try {
       if (checked) {
-        const isProApp =
-          record.is_pro ||
-          isProEdition(resolveAppEdition(record));
+        const isProApp = requiresProLicense(record);
         if (isProApp && !record.can_access) {
           setProKeyTargetApp(record);
           setPendingEnableAfterActivation(true);
@@ -662,8 +647,8 @@ const ApplicationListPage: React.FC = () => {
 
   const handleActivateProKey = async (values: { license_key: string }) => {
     if (!proKeyTargetApp) return;
-    if (!canManageAppLifecycle) {
-      messageApi.warning(t('pages.system.applications.platformAdminOnlyLifecycle'));
+    if (pendingEnableAfterActivation && !canToggleAppLifecycle(proKeyTargetApp)) {
+      messageApi.warning(lifecycleDisabledTooltip(proKeyTargetApp) ?? t('pages.system.applications.lifecyclePermissionDenied'));
       return;
     }
     try {
@@ -1013,14 +998,14 @@ const ApplicationListPage: React.FC = () => {
               {...rowActionKind('skip')}
               title={t('pages.system.applications.uninstallConfirm')}
               onConfirm={() => handleUninstall(record)}
-              disabled={record.is_system || !canManageAppLifecycle}
+              disabled={record.is_system || !canToggleAppLifecycle(record)}
             >
               <Button
                 {...rowActionLabelKeep()}
                 {...rowActionToneDestructive()}
                 type="link"
                 size="small"
-                disabled={record.is_system || !canManageAppLifecycle}
+                disabled={record.is_system || !canToggleAppLifecycle(record)}
                 icon={<APP_ACTION_ICON.uninstall />}
               >
                 {t('pages.system.applications.uninstall')}
@@ -1047,13 +1032,13 @@ const ApplicationListPage: React.FC = () => {
               {...rowActionKind('skip')}
               title={t('pages.system.applications.installConfirm')}
               onConfirm={() => handleInstall(record)}
-              disabled={!canManageAppLifecycle}
+              disabled={!canToggleAppLifecycle(record)}
             >
               <Button
                 {...rowActionLabelKeep()}
                 type="link"
                 size="small"
-                disabled={!canManageAppLifecycle}
+                disabled={!canToggleAppLifecycle(record)}
                 icon={<APP_ACTION_ICON.install />}
               >
                 {t('pages.system.applications.install')}
@@ -1065,7 +1050,7 @@ const ApplicationListPage: React.FC = () => {
         return actions;
       },
     },
-  ], GLOBAL_DOC_LIST_FIELD_RANK), [t, canManageAppLifecycle, handleView, handleInstall, handleUninstall, showProUpgradeRequired, openDedicatedBindingModal]);
+  ], GLOBAL_DOC_LIST_FIELD_RANK), [t, canToggleAppLifecycle, handleView, handleInstall, handleUninstall, showProUpgradeRequired, openDedicatedBindingModal, currentUser?.is_infra_admin]);
 
   /**
    * 渲染应用卡片
@@ -1082,6 +1067,7 @@ const ApplicationListPage: React.FC = () => {
     const isPro = edition === 'pro';
     const isBasic = edition === 'basic';
     const hasTierBadge = isDedicated || isIndustry || isPro || isBasic;
+    const freeIndustryAuthor = resolveFreeIndustryAuthorUsername(application.code);
     const coverPaddingY = hasTierBadge ? CARD_TIER_BADGE_CLEARANCE : CARD_COVER_PADDING_Y;
     const menuItems = [
       {
@@ -1181,7 +1167,7 @@ const ApplicationListPage: React.FC = () => {
             <Popconfirm
               title={t('pages.system.applications.installConfirm')}
               onConfirm={() => handleInstall(application)}
-              disabled={!canManageAppLifecycle}
+              disabled={!canToggleAppLifecycle(application)}
             >
               <div 
                 style={{ margin: '-5px -12px', padding: '5px 12px' }} 
@@ -1192,7 +1178,7 @@ const ApplicationListPage: React.FC = () => {
             </Popconfirm>
           ),
           icon: <APP_ACTION_ICON.install />,
-          disabled: !canManageAppLifecycle,
+          disabled: !canToggleAppLifecycle(application),
         }
         : {
           key: 'uninstall',
@@ -1200,7 +1186,7 @@ const ApplicationListPage: React.FC = () => {
             <Popconfirm
               title={t('pages.system.applications.uninstallConfirm')}
               onConfirm={() => handleUninstall(application)}
-              disabled={application.is_system || !canManageAppLifecycle}
+              disabled={application.is_system || !canToggleAppLifecycle(application)}
             >
               <div 
                 style={{ margin: '-5px -12px', padding: '5px 12px' }} 
@@ -1212,7 +1198,7 @@ const ApplicationListPage: React.FC = () => {
           ),
           icon: <APP_ACTION_ICON.uninstall />,
           danger: true,
-          disabled: application.is_system || !canManageAppLifecycle,
+          disabled: application.is_system || !canToggleAppLifecycle(application),
         },
     ];
 
@@ -1361,7 +1347,7 @@ const ApplicationListPage: React.FC = () => {
                           {[
                               ...BASIC_APP_CODES,
                               ...PRO_APP_CODES,
-                              ...INDUSTRY_APP_CODES,
+                              ...ALL_INDUSTRY_APP_CODES,
                             ].includes(application.code) &&
                             renderBadge(
                               'APP',
@@ -1379,7 +1365,7 @@ const ApplicationListPage: React.FC = () => {
                               undefined,
                               { bg: themeToken.colorWarningBg, color: themeToken.colorWarningText },
                             )}
-                          {(application.is_pro || isProEdition(resolveAppEdition(application))) &&
+                          {(application.is_pro || needsLicenseKey(application)) &&
                             !application.can_access && (
                             <Tooltip
                               title={t('pages.system.applications.proLockedTag', {
@@ -1485,7 +1471,12 @@ const ApplicationListPage: React.FC = () => {
         </div>
         <div className="application-center-card__grow" />
         <div className="application-center-card__meta">
-          <span>{t('common.code')}: {application.code}</span>
+          <span>
+            {t('common.code')}: {application.code}
+            {freeIndustryAuthor
+              ? t('pages.system.applications.freeIndustryContributor', { name: freeIndustryAuthor })
+              : null}
+          </span>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
             <Tag
               color={application.is_installed ? 'success' : 'error'}
@@ -1510,12 +1501,12 @@ const ApplicationListPage: React.FC = () => {
         <div className="application-center-card__tray">
           <div className="application-center-card__tray-cell">
             <span style={{ fontSize: 12, color: themeToken.colorTextSecondary }}>{t('common.status')}</span>
-            <Tooltip title={!canManageAppLifecycle ? t('pages.system.applications.platformAdminOnlyLifecycle') : undefined}>
+            <Tooltip title={!canToggleAppLifecycle(application) ? lifecycleDisabledTooltip(application) : undefined}>
               <span style={{ display: 'inline-flex' }}>
                 <Switch
                   checked={application.is_active}
                   onChange={(checked) => handleToggleActive(application, checked)}
-                  disabled={!application.is_installed || !canManageAppLifecycle}
+                  disabled={!application.is_installed || !canToggleAppLifecycle(application)}
                   checkedChildren={t('common.enabled')}
                   unCheckedChildren={t('common.disabled')}
                 />
@@ -1614,7 +1605,9 @@ const ApplicationListPage: React.FC = () => {
                 (app) => !existingCodes.has(app.code as string),
               );
 
-              let filteredData = [...(allData || []), ...mergedPlaceholders].map((app) => {
+              let filteredData = [...(allData || []), ...mergedPlaceholders]
+                .filter((app) => !shouldHideFromApplicationCenter(app.code))
+                .map((app) => {
                 const overriddenDescription = APP_DESCRIPTION_OVERRIDES[app.code as string];
                 return overriddenDescription !== undefined
                   ? { ...app, description: overriddenDescription }
@@ -1665,8 +1658,8 @@ const ApplicationListPage: React.FC = () => {
                 value={appCategoryFilter}
                 options={[
                   { label: t('pages.system.applications.categoryBasic'), value: 'basic' },
-                  { label: t('pages.system.applications.categoryPro'), value: 'pro' },
                   { label: t('pages.system.applications.categoryIndustry'), value: 'industry' },
+                  { label: t('pages.system.applications.categoryPro'), value: 'pro' },
                   { label: t('pages.system.applications.categoryDedicated'), value: 'dedicated' },
                 ]}
                 onChange={(value) => {
@@ -1745,8 +1738,9 @@ const ApplicationListPage: React.FC = () => {
         <div style={{ padding: '8px 0' }}>
           {resetStage === 1 && (
             <div style={{ textAlign: 'center' }}>
-              <div style={{ marginBottom: 16, fontSize: 18, fontWeight: 500, color: '#ff4d4f' }}>
-                {t('pages.system.applications.resetWarnTitle', { defaultValue: '⚠️ 极大风险操作：数据重置' })}
+              <div style={{ marginBottom: 16, fontSize: 18, fontWeight: 500, color: '#ff4d4f', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                <AlertTriangle size={20} strokeWidth={1.75} aria-hidden />
+                {t('pages.system.applications.resetWarnTitle', { defaultValue: '极大风险操作：数据重置' })}
               </div>
               <p style={{ color: '#666', marginBottom: 24, padding: '0 20px', lineHeight: '1.6' }}>
                 {t('pages.system.applications.resetWarn1', { defaultValue: '重置操作将物理抹除“快制造”应用下所有的销售订单、生产工单、库存流水、需求计划等业务数据。此操作不可撤销！' })}

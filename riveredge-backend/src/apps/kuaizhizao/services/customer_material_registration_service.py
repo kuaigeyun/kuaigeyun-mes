@@ -812,6 +812,9 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
                 customer_id=registration.customer_id,
                 customer_name=registration.customer_name,
                 ledger_production_date=ledger_production_date,
+                movement_type="other_inbound",
+                to_warehouse_id=registration.warehouse_id,
+                operator_id=operator_id,
             )
 
     async def process_registration(
@@ -904,6 +907,9 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
                     source_doc_code=registration.registration_code,
                     ownership_type="customer_provided",
                     customer_id=registration.customer_id,
+                    movement_type="other_outbound",
+                    from_warehouse_id=registration.warehouse_id,
+                    operator_id=withdrawn_by,
                 )
 
             registration.status = "pending"

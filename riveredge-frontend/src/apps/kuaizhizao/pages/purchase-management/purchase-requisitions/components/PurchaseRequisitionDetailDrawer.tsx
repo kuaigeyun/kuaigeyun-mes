@@ -33,6 +33,11 @@ import { formatDateBySiteSetting } from '../../../../../../utils/format';
 import { useAuditRequired } from '../../../../../../hooks/useAuditRequired';
 import { useNumericPrecision } from '../../../../../../hooks/useNumericPrecision';
 import type { AuditPhaseRecord } from '../../../../../../components/uni-audit/AuditPhaseBadge';
+import {
+  DocumentAttachmentsReadonly,
+  documentAttachmentsFromRecord,
+  hasDocumentAttachments,
+} from '../../../../components/DocumentAttachmentsReadonly';
 
 const PURCHASE_REQUISITION_RESOURCE = 'kuaizhizao:purchase-requisition';
 const PLACEHOLDER: PurchaseRequisition = { id: 0 };
@@ -106,6 +111,8 @@ export const PurchaseRequisitionDetailDrawer: React.FC<PurchaseRequisitionDetail
   const showError = Boolean(error) && !contentReady && !loading;
   const showLoading = loading || (!contentReady && !showError);
   const effective = requisition ?? PLACEHOLDER;
+  const attachments = documentAttachmentsFromRecord(requisition as { attachments?: unknown });
+  const showAttachments = contentReady && hasDocumentAttachments(attachments);
 
   const tracking = useDocumentTracking(
     open && contentReady ? 'purchase_requisition' : undefined,
@@ -262,6 +269,13 @@ export const PurchaseRequisitionDetailDrawer: React.FC<PurchaseRequisitionDetail
           />
         ) : null
       }
+      supplementary={
+        showAttachments ? <DocumentAttachmentsReadonly attachments={attachments} /> : undefined
+      }
+      supplementaryTitle={
+        showAttachments ? t('app.uniDetail.sectionAttachments') : undefined
+      }
+      supplementaryVisible={showAttachments}
       lines={
         contentReady ? (
           effective.items && effective.items.length > 0 ? (

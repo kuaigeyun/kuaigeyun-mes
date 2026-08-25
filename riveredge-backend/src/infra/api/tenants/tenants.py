@@ -560,3 +560,89 @@ async def bulk_set_inactivity_timeout_for_all_tenants(
     )
     return BulkInactivityTimeoutResponse(**result)
 
+
+class ApplicationCenterCategoryPermission(BaseModel):
+    allow_self_service_toggle: bool = Field(
+        False,
+        description="是否允许组织管理员在应用中心自主安装/启用/禁用该分类应用",
+    )
+
+
+class ApplicationCenterPermissionsBody(BaseModel):
+    basic: ApplicationCenterCategoryPermission = Field(default_factory=ApplicationCenterCategoryPermission)
+    pro: ApplicationCenterCategoryPermission = Field(default_factory=ApplicationCenterCategoryPermission)
+    industry: ApplicationCenterCategoryPermission = Field(default_factory=ApplicationCenterCategoryPermission)
+    dedicated: ApplicationCenterCategoryPermission = Field(default_factory=ApplicationCenterCategoryPermission)
+
+
+class ApplicationCenterPermissionsResponse(BaseModel):
+    tenant_id: int
+    category_permissions: dict
+    package: dict
+    effective: dict
+
+
+@router.get(
+    "/{tenant_id}/application-center-permissions",
+    response_model=ApplicationCenterPermissionsResponse,
+    summary="Get tenant application center category permissions",
+)
+async def get_tenant_application_center_permissions(
+    tenant_id: int,
+    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
+    tenant_service: Any = Depends(get_tenant_service_with_fallback),
+):
+    _ = current_admin
+    tenant = await tenant_service.get_tenant_by_id(tenant_id)
+    if not tenant:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="组织不存在")
+    from core.services.application.application_center_permission_service import (
+        ApplicationCenterPermissionService,
+    )
+
+    caps = await ApplicationCenterPermissionService.build_center_capabilities(tenant_id)
+    return ApplicationCenterPermissionsResponse(
+        tenant_id=tenant_id,
+        category_permissions=caps["category_permissions"],
+        package=caps["package"],
+        effective=caps["effective"],
+    )
+
+
+@router.put(
+    "/{tenant_id}/application-center-permissions",
+    response_model=ApplicationCenterPermissionsResponse,
+    summary="Update tenant application center category permissions",
+)
+async def put_tenant_application_center_permissions(
+    tenant_id: int,
+    body: ApplicationCenterPermissionsBody,
+    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
+    tenant_service: Any = Depends(get_tenant_service_with_fallback),
+):
+    tenant = await tenant_service.get_tenant_by_id(tenant_id)
+    if not tenant:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="组织不存在")
+
+    from core.services.application.application_center_permission_service import (
+        ApplicationCenterPermissionService,
+    )
+
+    payload = {
+        "basic": body.basic.model_dump(),
+        "pro": body.pro.model_dump(),
+        "industry": body.industry.model_dump(),
+        "dedicated": body.dedicated.model_dump(),
+    }
+    await ApplicationCenterPermissionService.set_category_permissions(tenant_id, payload)
+    caps = await ApplicationCenterPermissionService.build_center_capabilities(tenant_id)
+    logger.info(
+        f"平台超级管理员 {current_admin.username} 更新组织 {tenant_id} 应用中心权限"
+    )
+    return ApplicationCenterPermissionsResponse(
+        tenant_id=tenant_id,
+        category_permissions=caps["category_permissions"],
+        package=caps["package"],
+        effective=caps["effective"],
+    )
+

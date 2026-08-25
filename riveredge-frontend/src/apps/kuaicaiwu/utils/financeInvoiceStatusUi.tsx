@@ -1,6 +1,8 @@
 import React from 'react';
+import { Space, Typography } from 'antd';
 import type { TFunction } from 'i18next';
 import { MarkerTag } from '../../../constants/statusBadges';
+import type { DocumentTrackingRelation } from '../../../services/documentTracking';
 
 const RECEIVABLE_INVOICE_STATUS_COLORS: Record<string, string> = {
   未开票: 'default',
@@ -53,5 +55,68 @@ export function renderPayableInvoiceStatusTag(
   const label = formatPayableInvoiceStatusLabel(status, t);
   return (
     <MarkerTag color={PAYABLE_INVOICE_STATUS_COLORS[status ?? ''] ?? 'default'}>{label}</MarkerTag>
+  );
+}
+
+function formatMoney(value: number | undefined): string {
+  return `¥${Number(value ?? 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`;
+}
+
+export type FinanceArApInvoiceStatusDetailProps = {
+  kind: 'receivable' | 'payable';
+  invoiceStatus?: string;
+  invoicedAmount?: number;
+  remainingInvoiceAmount?: number;
+  linkedInvoices?: DocumentTrackingRelation[];
+  onInvoiceClick?: (documentType: string, documentId: number) => void;
+  t: TFunction;
+};
+
+export function FinanceArApInvoiceStatusDetail({
+  kind,
+  invoiceStatus,
+  invoicedAmount,
+  remainingInvoiceAmount,
+  linkedInvoices = [],
+  onInvoiceClick,
+  t,
+}: FinanceArApInvoiceStatusDetailProps): React.ReactElement {
+  const prefix = kind === 'receivable' ? 'app.kuaicaiwu.receivable' : 'app.kuaicaiwu.payable';
+  const invoiceDocType = kind === 'receivable' ? 'sales_invoice' : 'purchase_invoice';
+  const statusTag =
+    kind === 'receivable'
+      ? renderReceivableInvoiceStatusTag(invoiceStatus, t)
+      : renderPayableInvoiceStatusTag(invoiceStatus, t);
+
+  return (
+    <Space direction="vertical" size={4}>
+      {statusTag}
+      {invoicedAmount != null || remainingInvoiceAmount != null ? (
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          {t(`${prefix}.invoiceStatus.detailSummary`, {
+            invoiced: formatMoney(invoicedAmount),
+            remaining: formatMoney(remainingInvoiceAmount),
+          })}
+        </Typography.Text>
+      ) : null}
+      {linkedInvoices.length > 0 ? (
+        <Space size={[8, 4]} wrap>
+          {linkedInvoices.map((inv) =>
+            onInvoiceClick && !inv.is_deleted ? (
+              <Typography.Link
+                key={`${inv.type}-${inv.id}`}
+                onClick={() => onInvoiceClick(invoiceDocType, inv.id)}
+              >
+                {inv.code || `#${inv.id}`}
+              </Typography.Link>
+            ) : (
+              <Typography.Text key={`${inv.type}-${inv.id}`} type="secondary">
+                {inv.code || `#${inv.id}`}
+              </Typography.Text>
+            ),
+          )}
+        </Space>
+      ) : null}
+    </Space>
   );
 }

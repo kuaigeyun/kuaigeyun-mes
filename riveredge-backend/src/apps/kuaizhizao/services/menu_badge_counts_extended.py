@@ -16,6 +16,7 @@ from apps.kuaizhizao.constants.purchase_inquiry import PurchaseInquiryStatus
 from apps.kuaizhizao.services.menu_badge_counts_service import (
     _DOC_TERMINAL_STATUSES,
     _RV_PENDING,
+    _gather_counts,
     _safe_section,
 )
 
@@ -84,7 +85,7 @@ async def _section_contracts_and_changes(tenant_id: int, now_date) -> BadgeFragm
         poc_od,
         poc_p,
         poc_x,
-    ) = await asyncio.gather(
+    ) = await _gather_counts(
         sc.filter(valid_to__lt=now_date, valid_to__isnull=False).exclude(status__in=_CONTRACT_TERMINAL).count(),
         sc.filter(review_status__in=_RV_PENDING).exclude(status__in=[*_CONTRACT_TERMINAL, "草稿", "DRAFT"]).count(),
         sc.filter(status__in=_CONTRACT_IN_PROGRESS).exclude(status__in=_CONTRACT_TERMINAL).count(),
@@ -121,7 +122,7 @@ async def _section_purchase_inquiry(tenant_id: int, now_date) -> BadgeFragment:
             ]
         )
     )
-    od, pending, prog = await asyncio.gather(
+    od, pending, prog = await _gather_counts(
         qs.filter(quote_deadline__lt=now_date, quote_deadline__isnull=False)
         .filter(status__in=_INQUIRY_OPEN)
         .count(),
@@ -153,7 +154,7 @@ async def _section_demand_and_reporting(tenant_id: int, now_date) -> BadgeFragme
     # 与列表「进行中」及 statistics.pending_count 对齐；含执行中的计算中态
     dc_open_statuses = ["进行中", "计算中", "pending", "running"]
     dm = Demand.filter(tenant_id=tenant_id, deleted_at__isnull=True)
-    dm_od, dm_p, dm_x, dc_x, rep_p = await asyncio.gather(
+    dm_od, dm_p, dm_x, dc_x, rep_p = await _gather_counts(
         dm.filter(end_date__lt=now_date, end_date__isnull=False).exclude(status__in=demand_term).count(),
         dm.filter(review_status__in=_RV_PENDING).exclude(status__in=[*demand_term, "DRAFT", "草稿"]).count(),
         dm.filter(status__in=audited, review_status__in=[ReviewStatus.APPROVED.value, "APPROVED", "已通过"])
@@ -179,7 +180,7 @@ async def _section_oqc(tenant_id: int) -> BadgeFragment:
     from apps.kuaizhizao.models.oqc_inspection import OQCInspection
 
     qs = OQCInspection.filter(tenant_id=tenant_id, deleted_at__isnull=True)
-    pending, prog = await asyncio.gather(
+    pending, prog = await _gather_counts(
         qs.filter(status="待检验").count(),
         qs.filter(status__in=["已检验", "待审核"], review_status__in=_RV_PENDING).count(),
     )
@@ -194,7 +195,7 @@ async def _section_finance_menus(tenant_id: int, now_date) -> BadgeFragment:
     from apps.kuaicaiwu.models.receipt import Receipt
     from apps.kuaicaiwu.models.receivable import Receivable
 
-    recv_od, recv_open, pay_open, pay_od = await asyncio.gather(
+    recv_od, recv_open, pay_open, pay_od = await _gather_counts(
         Receivable.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True,
@@ -214,7 +215,7 @@ async def _section_finance_menus(tenant_id: int, now_date) -> BadgeFragment:
     )
     recv_prog = max(0, recv_open - recv_od)
     pay_prog = max(0, pay_open - pay_od)
-    rc_draft, rc_open, pm_draft, pm_open = await asyncio.gather(
+    rc_draft, rc_open, pm_draft, pm_open = await _gather_counts(
         Receipt.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="Draft").count(),
         Receipt.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="Confirmed", unsettled_amount__gt=0)
         .exclude(status="Cancelled")
@@ -224,7 +225,7 @@ async def _section_finance_menus(tenant_id: int, now_date) -> BadgeFragment:
         .exclude(status="Cancelled")
         .count(),
     )
-    si_p, pi_p, prep_p, prep_x = await asyncio.gather(
+    si_p, pi_p, prep_p, prep_x = await _gather_counts(
         Invoice.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True,
@@ -254,7 +255,7 @@ async def _section_finance_menus(tenant_id: int, now_date) -> BadgeFragment:
             unsettled_amount__gt=0,
         ).count(),
     )
-    prep_pm_d, prep_pm_x = await asyncio.gather(
+    prep_pm_d, prep_pm_x = await _gather_counts(
         Payment.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True,
@@ -290,7 +291,7 @@ async def _section_after_sales(tenant_id: int, now: datetime) -> BadgeFragment:
     from apps.kuaizhizao.models.after_sales_ticket import AfterSalesTicket
     from apps.kuaizhizao.models.install_execution_job import InstallExecutionJob
 
-    ticket_p, ticket_x, install_p, install_x, repair_p, repair_x = await asyncio.gather(
+    ticket_p, ticket_x, install_p, install_x, repair_p, repair_x = await _gather_counts(
         AfterSalesTicket.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="待处理").count(),
         AfterSalesTicket.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="处理中").count(),
         InstallExecutionJob.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="待派工").count(),
@@ -298,7 +299,7 @@ async def _section_after_sales(tenant_id: int, now: datetime) -> BadgeFragment:
         RepairOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="待派工").count(),
         RepairOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True, status__in=["维修中", "待验收"]).count(),
     )
-    dispatch_od, dispatch_p, dispatch_x = await asyncio.gather(
+    dispatch_od, dispatch_p, dispatch_x = await _gather_counts(
         ServiceDispatchOrder.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True,
@@ -312,7 +313,7 @@ async def _section_after_sales(tenant_id: int, now: datetime) -> BadgeFragment:
             tenant_id=tenant_id, deleted_at__isnull=True, status__in=["已接单", "到场"]
         ).count(),
     )
-    as_spare_p, settle_p = await asyncio.gather(
+    as_spare_p, settle_p = await _gather_counts(
         AfterSalesSparePartRequisition.filter(
             tenant_id=tenant_id, deleted_at__isnull=True, status="待审核"
         ).count(),
@@ -332,14 +333,14 @@ async def _section_logistics(tenant_id: int, now: datetime) -> BadgeFragment:
     from apps.kuaizhizao.models.logistics import FreightBill, FreightOrder
 
     fo = FreightOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
-    fo_od, fo_p, fo_x = await asyncio.gather(
+    fo_od, fo_p, fo_x = await _gather_counts(
         fo.filter(planned_arrive_at__lt=now, planned_arrive_at__isnull=False)
         .exclude(status__in=_FREIGHT_TERMINAL)
         .count(),
         fo.filter(status__in=["draft", "scheduled", "草稿", "已计划"]).count(),
         fo.filter(status__in=["shipped", "in_transit", "arrived", "已发运", "运输中", "已到达"]).count(),
     )
-    fb_p, fb_x = await asyncio.gather(
+    fb_p, fb_x = await _gather_counts(
         FreightBill.filter(tenant_id=tenant_id, deleted_at__isnull=True, review_status="pending").count(),
         FreightBill.filter(tenant_id=tenant_id, deleted_at__isnull=True, review_status="approved")
         .exclude(status__in=["paid", "已支付"])
@@ -376,7 +377,7 @@ async def _section_equipment_documents(tenant_id: int, now: datetime, now_date) 
     app_term = ["已审核", "已驳回", "已完成", "已取消"]
     mold_maint_term = list(dict.fromkeys([*app_term, *_DOC_TERMINAL_STATUSES]))
 
-    eq_rep, eq_xfer, eq_scrap, spr, maint_exec_od, maint_exec_x, mold_trial_x = await asyncio.gather(
+    eq_rep, eq_xfer, eq_scrap, spr, maint_exec_od, maint_exec_x, mold_trial_x = await _gather_counts(
         EquipmentRepair.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="进行中").count(),
         EquipmentTransferApplication.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="已提交").count(),
         EquipmentScrapApplication.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="已提交").count(),
@@ -392,7 +393,7 @@ async def _section_equipment_documents(tenant_id: int, now: datetime, now_date) 
         ).count(),
         MoldTrial.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="进行中").count(),
     )
-    mold_b_od, mold_b_x, mold_m_od, mold_m_p, mold_m_x, mold_r_od, mold_r_p, mold_r_x, mold_s = await asyncio.gather(
+    mold_b_od, mold_b_x, mold_m_od, mold_m_p, mold_m_x, mold_r_od, mold_r_p, mold_r_x, mold_s = await _gather_counts(
         MoldBorrow.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True,
@@ -425,7 +426,7 @@ async def _section_equipment_documents(tenant_id: int, now: datetime, now_date) 
         MoldRepair.filter(tenant_id=tenant_id, deleted_at__isnull=True, status__in=["进行中", "已审核"]).count(),
         MoldScrapApplication.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="已提交").count(),
     )
-    tool_b_od, tool_b_x, tool_m_od, tool_m_p, tool_m_x, tool_r_od, tool_r_p, tool_r_x, tool_s, tool_led = await asyncio.gather(
+    tool_b_od, tool_b_x, tool_m_od, tool_m_p, tool_m_x, tool_r_od, tool_r_p, tool_r_x, tool_s, tool_led = await _gather_counts(
         ToolBorrow.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True,
@@ -483,7 +484,7 @@ async def _section_warehouse_extra(tenant_id: int, now_date) -> BadgeFragment:
     from apps.kuaizhizao.models.inventory_alert import InventoryAlert
     from apps.kuaizhizao.models.replenishment_suggestion import ReplenishmentSuggestion
 
-    bf_p, alert_p, alert_x, rep_od, rep_p = await asyncio.gather(
+    bf_p, alert_p, alert_x, rep_od, rep_p = await _gather_counts(
         BackflushRecord.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="pending").count(),
         InventoryAlert.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="pending").count(),
         InventoryAlert.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="processing").count(),

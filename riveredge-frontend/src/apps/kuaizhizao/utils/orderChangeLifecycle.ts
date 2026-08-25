@@ -108,3 +108,30 @@ export function isOrderChangePendingReview(record: { status?: string } | null | 
   if (!record) return false;
   return record.status === 'PENDING_REVIEW' || record.status === '待审核';
 }
+
+const ORDER_CHANGE_STATUS_TO_STAGE_KEY: Record<string, string> = {
+  草稿: 'pending_apply',
+  DRAFT: 'pending_apply',
+  待审核: 'pending_apply',
+  PENDING_REVIEW: 'pending_apply',
+  已审核: 'pending_apply',
+  AUDITED: 'pending_apply',
+  已生效: 'applied',
+  APPLIED: 'applied',
+  已驳回: 'rejected',
+  REJECTED: 'rejected',
+};
+
+/** 变更单状态码 → 展示文案（详情变更历史等；与 lifecycle 口径一致） */
+export function formatOrderChangeStatusLabel(
+  status: string | null | undefined,
+  t: LifecycleTranslateFn,
+): string {
+  const raw = String(status ?? '').trim();
+  if (!raw) return '-';
+  const stageKey =
+    ORDER_CHANGE_STATUS_TO_STAGE_KEY[raw] ?? ORDER_CHANGE_STATUS_TO_STAGE_KEY[raw.toUpperCase()];
+  const i18nKey = stageKey ? ORDER_CHANGE_STAGE_I18N_BY_KEY[stageKey] : undefined;
+  if (i18nKey) return requireI18nText(t, i18nKey);
+  return raw;
+}

@@ -86,6 +86,7 @@ import {
   isPendingReviewStatus,
 } from '../../../constants/documentStatus';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
+import { UniUserSelect } from '../../../../../components/uni-user-select';
 import { strokeColorWithAlpha } from '../../../../../components/common/StatCardTrendArea';
 import { useCustomFields } from '../../../../../hooks/useCustomFields';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
@@ -4635,6 +4636,9 @@ const SalesOrdersPage: React.FC = () => {
                 : apiParams.start_date;
             }
             apiParams.include_items = dataViewModeRef.current === 'detail';
+            if (typeof sf.column_filters === 'string' && sf.column_filters.trim()) {
+              apiParams.column_filters = sf.column_filters.trim();
+            }
 
             const toFlatRows = (orders: SalesOrder[], writeRowKeyMap: boolean): SalesOrderItemRow[] => {
               const map = new Map<string, number>();
@@ -5268,22 +5272,15 @@ const SalesOrdersPage: React.FC = () => {
         destroyOnHidden
       >
         <AntForm form={reminderForm} layout="vertical" style={{ marginTop: 16 }}>
-          <AntForm.Item
+          <UniUserSelect
             name="recipient_user_uuid"
             label={t('app.kuaizhizao.salesOrder.reminderRecipient')}
-            rules={[{ required: true, message: t('app.kuaizhizao.salesOrder.reminderRecipientRequired') }]}
-          >
-            <Select
-              placeholder={t('app.kuaizhizao.salesOrder.reminderRecipientPlaceholder')}
-              showSearch
-              optionFilterProp="label"
-              loading={usersLoading}
-              options={users.map((u) => ({
-                value: u.uuid,
-                label: u.full_name ? `${u.full_name} (${u.username})` : u.username,
-              }))}
-            />
-          </AntForm.Item>
+            placeholder={t('app.kuaizhizao.salesOrder.reminderRecipientPlaceholder')}
+            required
+            rules={[
+              { required: true, message: t('app.kuaizhizao.salesOrder.reminderRecipientRequired') },
+            ]}
+          />
           <AntForm.Item
             name="action_type"
             label={t('app.kuaizhizao.salesOrder.reminderAction')}

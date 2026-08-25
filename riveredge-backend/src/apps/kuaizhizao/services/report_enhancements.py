@@ -413,6 +413,10 @@ async def collect_inventory_movement_events(
             "adjust": "库存调整",
             "other_inbound": "其他入库",
             "other_outbound": "其他出库",
+            "assembly_consume": "组装领料",
+            "assembly_receipt": "组装入库",
+            "disassembly_consume": "拆卸领料",
+            "disassembly_receipt": "拆卸入库",
         }
         mq = MaterialStockMovement.filter(
             tenant_id=tenant_id,
@@ -444,7 +448,7 @@ async def collect_inventory_movement_events(
                 "doc_code": r.source_doc_code or "",
                 "material_id": r.material_id,
                 "material_code": r.material_code or "",
-                "material_name": "",
+                "material_name": r.material_name or "",
                 "material_spec": "",
                 "material_unit": "",
                 "batch_number": r.batch_no or "",
@@ -518,26 +522,6 @@ async def build_inventory_summary(
         rec = _touch(bucket, key)
         rec["qty_in"] += float(ev.get("qty_in") or 0)
         rec["qty_out"] += float(ev.get("qty_out") or 0)
-
-    missing_ids = [
-        int(info["material_id"])
-        for info in meta.values()
-        if info.get("material_id") and not str(info.get("material_name") or "").strip()
-    ]
-    if missing_ids:
-        from apps.master_data.models.material import Material
-
-        for row in await Material.filter(
-            tenant_id=tenant_id, id__in=list(set(missing_ids)), deleted_at__isnull=True
-        ).values("id", "main_code", "name"):
-            mid = int(row["id"])
-            for key, info in meta.items():
-                if int(info.get("material_id") or 0) != mid:
-                    continue
-                if not info.get("material_code"):
-                    info["material_code"] = row.get("main_code") or ""
-                if not info.get("material_name"):
-                    info["material_name"] = row.get("name") or ""
 
     items: List[Dict[str, Any]] = []
     for key, info in meta.items():
@@ -659,46 +643,6 @@ async def build_inventory_ledger(
     }
 
 
-async def _enrich_movement_event_materials(tenant_id: int, events: List[dict]) -> None:
-    """补全流水行物料名称/规格/单位（生产移动等仅有 material_id）。"""
-    missing_ids = [
-        int(ev["material_id"])
-        for ev in events
-        if ev.get("material_id") is not None
-        and (
-            not str(ev.get("material_name") or "").strip()
-            or not str(ev.get("material_spec") or "").strip()
-            or not str(ev.get("material_unit") or "").strip()
-        )
-    ]
-    if not missing_ids:
-        return
-    from apps.master_data.models.material import Material
-
-    material_map: Dict[int, Dict[str, Any]] = {}
-    for row in await Material.filter(
-        tenant_id=tenant_id,
-        id__in=list(set(missing_ids)),
-        deleted_at__isnull=True,
-    ).values("id", "main_code", "name", "specification", "base_unit"):
-        material_map[int(row["id"])] = row
-    for ev in events:
-        mid = ev.get("material_id")
-        if mid is None:
-            continue
-        mat = material_map.get(int(mid))
-        if not mat:
-            continue
-        if not str(ev.get("material_code") or "").strip():
-            ev["material_code"] = mat.get("main_code") or ""
-        if not str(ev.get("material_name") or "").strip():
-            ev["material_name"] = mat.get("name") or ""
-        if not str(ev.get("material_spec") or "").strip():
-            ev["material_spec"] = mat.get("specification") or ""
-        if not str(ev.get("material_unit") or "").strip():
-            ev["material_unit"] = mat.get("base_unit") or ""
-
-
 async def build_warehouse_movement_detail(
     tenant_id: int,
     *,
@@ -722,7 +666,6 @@ async def build_warehouse_movement_detail(
         warehouse_id=warehouse_id,
         material_id=material_id,
     )
-    await _enrich_movement_event_materials(tenant_id, events)
 
     qty_key = "qty_in" if direction == "inbound" else "qty_out"
     filtered = [ev for ev in events if float(ev.get(qty_key) or 0) > 0]
@@ -1473,19 +1416,9 @@ def inspection_pass_rate_row(row: dict) -> dict:
 
 def parse_column_filters_param(raw: Optional[Any]) -> List[Dict[str, Any]]:
     """解析前端 column_filters JSON 查询参数。"""
-    if not raw:
-        return []
-    if isinstance(raw, list):
-        return [x for x in raw if isinstance(x, dict)]
-    if isinstance(raw, str):
-        import json
+    from apps.kuaizhizao.utils.column_filters import parse_column_filters_param as _parse
 
-        try:
-            parsed = json.loads(raw)
-            return [x for x in parsed if isinstance(x, dict)] if isinstance(parsed, list) else []
-        except json.JSONDecodeError:
-            return []
-    return []
+    return _parse(raw)
 
 
 def _row_field_value(row: Dict[str, Any], field: str) -> Any:
@@ -1513,6 +1446,17 @@ REPORT_COLUMN_FILTER_BLANK = "__blank__"
 REPORT_COLUMN_FILTER_NONE = "__none__"
 
 
+def _normalize_filter_compare_token(field: str, raw: Any) -> str:
+    from apps.kuaizhizao.utils.column_filters import is_status_field, normalize_status_token
+
+    text = str(raw or "").strip()
+    if not text:
+        return ""
+    if is_status_field(field):
+        return normalize_status_token(text)
+    return text
+
+
 def _column_filter_value_key(raw: Any) -> str:
     if raw is None or raw == "":
         return REPORT_COLUMN_FILTER_BLANK
@@ -1521,21 +1465,40 @@ def _column_filter_value_key(raw: Any) -> str:
 
 def _match_column_filter(row: Dict[str, Any], flt: Dict[str, Any]) -> bool:
     field = str(flt.get("field") or "").strip()
-    if not field or field not in row and _row_field_value(row, field) is None:
+    if not field:
+        return True
+    raw = _row_field_value(row, field)
+    # 行上确无该字段时不误杀（空字符串仍参与匹配）
+    if raw is None and "." not in field and field not in row:
         return True
     op = str(flt.get("op") or "contains").strip()
-    raw = _row_field_value(row, field)
+    if op == "isnull":
+        flag = flt.get("value")
+        is_null = raw is None or raw == ""
+        if flag is False or flag == "false" or flag == 0 or flag == "0":
+            return not is_null
+        return is_null
     if op == "in":
         values = flt.get("value")
         if not isinstance(values, list) or not values:
             return True
-        if REPORT_COLUMN_FILTER_NONE in {str(v) for v in values}:
+        raw_tokens = {str(v) for v in values}
+        if REPORT_COLUMN_FILTER_NONE in raw_tokens:
             return False
-        allowed = {str(v) for v in values}
-        key = _column_filter_value_key(raw)
-        if key == REPORT_COLUMN_FILTER_BLANK:
-            return REPORT_COLUMN_FILTER_BLANK in allowed or "" in allowed
+        if raw in (None, ""):
+            return REPORT_COLUMN_FILTER_BLANK in raw_tokens or "" in raw_tokens
+        key = _normalize_filter_compare_token(field, raw)
+        allowed = {_normalize_filter_compare_token(field, v) for v in values}
         return key in allowed
+    if op == "nin":
+        values = flt.get("value")
+        if not isinstance(values, list) or not values:
+            return True
+        if raw in (None, ""):
+            return True
+        denied = {_normalize_filter_compare_token(field, v) for v in values}
+        key = _normalize_filter_compare_token(field, raw)
+        return key not in denied
     if op == "between":
         left = flt.get("value")
         right = flt.get("value_to")
@@ -1546,14 +1509,10 @@ def _match_column_filter(row: Dict[str, Any], flt: Dict[str, Any]) -> bool:
             return lnum <= num <= rnum
         text = str(raw or "")
         return str(left or "") <= text <= str(right or "")
-    if op in {"gt", "lt", "gte", "lte", "eq"}:
+    if op in {"gt", "lt", "gte", "lte"}:
         num = _coerce_filter_number(raw)
         target = _coerce_filter_number(flt.get("value"))
         if num is None or target is None:
-            text = str(raw or "")
-            cmp = str(flt.get("value") or "")
-            if op == "eq":
-                return text == cmp
             return True
         if op == "gt":
             return num > target
@@ -1561,14 +1520,23 @@ def _match_column_filter(row: Dict[str, Any], flt: Dict[str, Any]) -> bool:
             return num < target
         if op == "gte":
             return num >= target
-        if op == "lte":
-            return num <= target
-        return num == target
+        return num <= target
+    if op in {"eq", "ne"}:
+        left = _normalize_filter_compare_token(field, raw)
+        right = _normalize_filter_compare_token(field, flt.get("value"))
+        matched = left == right
+        return matched if op == "eq" else not matched
+    if op == "startswith":
+        text = str(raw or "").lower()
+        cmp = str(flt.get("value") or "").lower()
+        return text.startswith(cmp) if cmp else True
+    if op == "endswith":
+        text = str(raw or "").lower()
+        cmp = str(flt.get("value") or "").lower()
+        return text.endswith(cmp) if cmp else True
     text = str(raw or "").lower()
     cmp = str(flt.get("value") or "").lower()
-    if op == "eq":
-        return text == cmp
-    return cmp in text
+    return cmp in text if cmp else True
 
 
 def _sort_report_rows(items: List[Dict[str, Any]], order_by: Optional[str]) -> List[Dict[str, Any]]:

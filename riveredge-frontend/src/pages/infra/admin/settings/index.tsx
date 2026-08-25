@@ -9,10 +9,10 @@
  */
 
 import { useTranslation } from 'react-i18next';
-import { ProForm, ProFormText, ProFormTextArea, ProFormSelect } from '@ant-design/pro-components';
+import { ProForm, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Card, Button, Space, Upload, Form, ColorPicker, Row, Col, Input, Switch, Typography } from 'antd';
 import { UploadOutlined, DeleteOutlined, ReloadOutlined } from '@ant-design/icons';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { UploadFile, UploadProps } from 'antd';
 import { ListPageTemplate } from '../../../../components/layout-templates';
@@ -20,10 +20,8 @@ import { ThemedSegmented } from '../../../../components/themed-segmented';
 import {
   getPlatformSettings,
   updatePlatformSettings,
-  type PlatformSettings,
   type PlatformSettingsUpdateRequest,
 } from '../../../../services/platformSettings';
-import { getTenantList, getTenantById, TenantStatus } from '../../../../services/tenant';
 import { uploadFile, getSiteLogoPreview, invalidateSiteLogoPreviewCache, FileUploadResponse } from '../../../../services/file';
 import ImageCropper from '../../../../components/image-cropper';
 import { applyFavicon } from '../../../../utils/favicon';
@@ -89,51 +87,13 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
     placeholderData: (prev) => prev,
   });
 
-  const { data: activeTenants = [], isLoading: tenantsLoading } = useQuery({
-    queryKey: ['infraActiveTenantsForDefault'],
-    queryFn: async () => {
-      const result = await getTenantList(
-        { page: 1, page_size: 100, status: TenantStatus.ACTIVE },
-        true,
-      );
-      return result.items;
-    },
-    enabled: mode === 'basic',
-    staleTime: 60_000,
-  });
-
-  const { data: fallbackDefaultTenant } = useQuery({
-    queryKey: ['infraDefaultTenantOption', settings?.default_tenant_id],
-    queryFn: () => getTenantById(settings!.default_tenant_id!, true),
-    enabled:
-      mode === 'basic'
-      && !!settings?.default_tenant_id
-      && !activeTenants.some((tenant) => tenant.id === settings.default_tenant_id),
-    staleTime: 60_000,
-  });
-
-  const defaultTenantOptions = useMemo(() => {
-    const optionMap = new Map<number, { label: string; value: number }>();
-    for (const tenant of activeTenants) {
-      optionMap.set(tenant.id, { label: tenant.name, value: tenant.id });
-    }
-    if (fallbackDefaultTenant) {
-      optionMap.set(fallbackDefaultTenant.id, {
-        label: fallbackDefaultTenant.name,
-        value: fallbackDefaultTenant.id,
-      });
-    }
-    return Array.from(optionMap.values()).sort((a, b) =>
-      a.label.localeCompare(b.label, 'zh-CN'),
-    );
-  }, [activeTenants, fallbackDefaultTenant]);
-
   // 更新平台设置
   const updateMutation = useMutation({
     mutationFn: (data: PlatformSettingsUpdateRequest) => updatePlatformSettings(data),
     onSuccess: (data) => {
       messageApi.success(t('pages.infra.platform.updateSuccess'));
       // 立即同步本地表单与缓存，避免 UI 仍短暂显示旧值造成“没保存”的错觉
+      // 默认登录组织仅在组织管理维护，本页不读写 default_tenant_id
       form.setFieldsValue({
         platform_name: data.platform_name,
         platform_name_en: data.platform_name_en,
@@ -151,9 +111,9 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
         icp_license_en: data.icp_license_en,
         theme_color: data.theme_color || '#1890ff',
         tenant_auto_approve: data.tenant_auto_approve ?? false,
-        default_tenant_id: data.default_tenant_id ?? null,
         float_button_enabled: data.float_button_enabled ?? true,
         copyright_menu_enabled: data.copyright_menu_enabled ?? true,
+        custom_apps_contact_qr_enabled: data.custom_apps_contact_qr_enabled ?? false,
         login_guest_enabled: data.login_guest_enabled ?? true,
         login_client_win_enabled: data.login_client_win_enabled ?? true,
         login_client_android_enabled: data.login_client_android_enabled ?? true,
@@ -345,9 +305,9 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
         icp_license_en: settings.icp_license_en,
         theme_color: settings.theme_color || '#1890ff',
         tenant_auto_approve: settings.tenant_auto_approve ?? false,
-        default_tenant_id: settings.default_tenant_id ?? null,
         float_button_enabled: settings.float_button_enabled ?? true,
         copyright_menu_enabled: settings.copyright_menu_enabled ?? true,
+        custom_apps_contact_qr_enabled: settings.custom_apps_contact_qr_enabled ?? false,
         login_guest_enabled: settings.login_guest_enabled ?? true,
         login_client_win_enabled: settings.login_client_win_enabled ?? true,
         login_client_android_enabled: settings.login_client_android_enabled ?? true,
@@ -642,18 +602,20 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
    */
   const handleSave = async (values: PlatformSettingsUpdateRequest) => {
     const mergedValues = { ...form.getFieldsValue(true), ...values };
+    // 默认登录组织由组织管理维护，保存本页时不得带上以免误改
+    const { default_tenant_id: _omitDefaultTenantId, ...payload } = mergedValues;
     try {
       validateLoginVisualLayers(
-        isLoginVisualLayerEnabled(mergedValues.login_decoration_enabled),
-        isLoginVisualLayerEnabled(mergedValues.login_background_enabled),
+        isLoginVisualLayerEnabled(payload.login_decoration_enabled),
+        isLoginVisualLayerEnabled(payload.login_background_enabled),
       );
     } catch {
       messageApi.error(t('pages.system.siteSettings.loginVisualLayerAtLeastOne'));
       return;
     }
     await updateMutation.mutateAsync({
-      ...mergedValues,
-      platform_name: mergedValues.platform_name?.trim(),
+      ...payload,
+      platform_name: payload.platform_name?.trim(),
     });
   };
 
@@ -840,25 +802,20 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
                   </Form.Item>
                 </Col>
                 <Col xs={24} sm={12}>
-                  <ProFormSelect
-                    name="default_tenant_id"
-                    label={t('pages.infra.platform.defaultTenant')}
-                    tooltip={t('pages.infra.platform.defaultTenantTooltip')}
-                    placeholder={t('pages.infra.platform.defaultTenantPlaceholder')}
-                    allowClear
-                    showSearch
-                    fieldProps={{
-                      optionFilterProp: 'label',
-                      loading: tenantsLoading,
-                      options: defaultTenantOptions,
-                    }}
-                  />
-                </Col>
-                <Col xs={24} sm={12}>
                   <Form.Item
                     name="copyright_menu_enabled"
                     label={t('pages.infra.platform.copyrightMenuEnabled')}
                     tooltip={t('pages.infra.platform.copyrightMenuEnabledTooltip')}
+                    valuePropName="checked"
+                  >
+                    <Switch />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} sm={12}>
+                  <Form.Item
+                    name="custom_apps_contact_qr_enabled"
+                    label={t('pages.infra.platform.customAppsContactQrEnabled')}
+                    tooltip={t('pages.infra.platform.customAppsContactQrEnabledTooltip')}
                     valuePropName="checked"
                   >
                     <Switch />

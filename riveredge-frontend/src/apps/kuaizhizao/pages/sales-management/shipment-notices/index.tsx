@@ -85,6 +85,11 @@ import { pickImportExampleValue } from '../../../../../utils/loadImportDictionar
 import { buildFutureDateShortcutFieldProps } from '../../../../../utils/futureDatePickerShortcuts';
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import {
+  appendDocumentAttachmentsToSupplementary,
+  documentAttachmentsFromRecord,
+  hasDocumentAttachments,
+} from '../../../components/DocumentAttachmentsReadonly';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import { formatBusinessDateOnly, formatDateTime, formatQuantity, todaySiteDateString } from '../../../../../utils/format';
@@ -1569,6 +1574,21 @@ const ShipmentNoticesPage: React.FC = () => {
     'shipment_notice',
   );
 
+  const shipmentNoticeAttachments = documentAttachmentsFromRecord(noticeDetail);
+  const shipmentNoticeAttLabel = t('app.uniDetail.sectionAttachments');
+  const shipmentNoticeOqcSupplementary =
+    noticeDetail?.id != null ? (
+      <LinkedOqcPanel
+        shipmentNoticeId={noticeDetail.id}
+        active={detailDrawerVisible}
+        onNavigate={(path) => {
+          setDetailDrawerVisible(false);
+          setNoticeDetail(null);
+          navigate(path);
+        }}
+      />
+    ) : undefined;
+
   return (
     <>
       <ListPageTemplate>
@@ -1945,20 +1965,18 @@ const ShipmentNoticesPage: React.FC = () => {
             : undefined
         }
         collaborationAuditRecord={noticeDetail}
-        supplementaryTitle={t('app.kuaizhizao.shipmentNotice.oqcSection')}
-        supplementary={
-          noticeDetail?.id != null ? (
-            <LinkedOqcPanel
-              shipmentNoticeId={noticeDetail.id}
-              active={detailDrawerVisible}
-              onNavigate={(path) => {
-                setDetailDrawerVisible(false);
-                setNoticeDetail(null);
-                navigate(path);
-              }}
-            />
-          ) : undefined
+        supplementaryTitle={
+          noticeDetail?.id != null
+            ? t('app.kuaizhizao.shipmentNotice.oqcSection')
+            : hasDocumentAttachments(shipmentNoticeAttachments)
+              ? shipmentNoticeAttLabel
+              : undefined
         }
+        supplementary={appendDocumentAttachmentsToSupplementary(
+          shipmentNoticeOqcSupplementary,
+          shipmentNoticeAttachments,
+          shipmentNoticeAttLabel,
+        )}
         lines={
           noticeDetail ? (
             noticeDetail.items && noticeDetail.items.length > 0 ? (

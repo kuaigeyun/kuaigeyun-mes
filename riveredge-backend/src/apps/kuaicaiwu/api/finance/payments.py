@@ -59,6 +59,14 @@ def _serialize(obj: Payment) -> PaymentVoucherResponse:
     return PaymentVoucherResponse.model_validate(obj)
 
 
+async def _serialize_detail(tenant_id: int, obj: Payment) -> PaymentVoucherResponse:
+    from apps.kuaicaiwu.services.finance_voucher_enrichment import enrich_voucher_detail
+
+    base = _serialize(obj)
+    enriched = await enrich_voucher_detail(tenant_id, base.model_dump(), kind="payment")
+    return PaymentVoucherResponse.model_validate(enriched)
+
+
 @router.post("", response_model=PaymentVoucherResponse, status_code=status.HTTP_201_CREATED)
 async def create_payment(
     data: PaymentVoucherCreate,
@@ -127,7 +135,10 @@ async def create_payment(
                 payment_code=str(payment.payment_code),
                 created_by=current_user.id,
             )
-            if str(data.source_type or "").strip() == "payable":
+            if (
+                str(data.source_type or "").strip() == "payable"
+                and str(data.settlement_type or "normal") != "prepayment"
+            ):
                 await payment_pull_service.settle_pull_created_payment(
                     tenant_id=tenant_id,
                     payable_id=int(data.source_id),
@@ -175,14 +186,16 @@ async def list_payments(
     from apps.kuaicaiwu.services.finance_list_core import apply_finance_voucher_list_filters
 
     query = Payment.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+    if settlement_type:
+        query = query.filter(settlement_type=settlement_type)
+    else:
+        query = query.exclude(settlement_type="refund")
     if status:
         query = query.filter(status=status)
     if unsettled_only:
         query = query.filter(unsettled_amount__gt=0).exclude(status="Cancelled")
     if supplier_id:
         query = query.filter(supplier_id=supplier_id)
-    if settlement_type:
-        query = query.filter(settlement_type=settlement_type)
 
     doc_date_start = start_date.isoformat() if start_date else None
     doc_date_end = end_date.isoformat() if end_date else None
@@ -256,7 +269,7 @@ async def get_payment(
 ):
     """获取付款单详情"""
     payment = await _get_or_404(tenant_id, id)
-    return _serialize(payment)
+    return await _serialize_detail(tenant_id, payment)
 
 
 @router.put("/{id}", response_model=PaymentVoucherResponse)

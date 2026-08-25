@@ -157,6 +157,11 @@ import {
 } from '../../../../../utils/referenceDisplay';
 import { CustomerFollowUpFormModal, type CustomerFollowUpPreset } from '../../../components/CustomerFollowUpFormModal';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import {
+  DocumentAttachmentsReadonly,
+  documentAttachmentsFromRecord,
+  hasDocumentAttachments,
+} from '../../../components/DocumentAttachmentsReadonly';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import {
   applyGiftToggleToLine,
@@ -3882,6 +3887,10 @@ const QuotationsPage: React.FC = () => {
     );
   }
 
+  const quotationAttachments = documentAttachmentsFromRecord(quotationDetail);
+  const showQuotationAttachments =
+    Boolean(quotationDetail) && hasDocumentAttachments(quotationAttachments);
+
   return (
     <>
       <ListPageTemplate>
@@ -4300,6 +4309,15 @@ const QuotationsPage: React.FC = () => {
               })()
             : undefined
         }
+        supplementary={
+          showQuotationAttachments ? (
+            <DocumentAttachmentsReadonly attachments={quotationAttachments} />
+          ) : undefined
+        }
+        supplementaryTitle={
+          showQuotationAttachments ? t('app.uniDetail.sectionAttachments') : undefined
+        }
+        supplementaryVisible={showQuotationAttachments}
         lines={
           quotationDetail ? (
             <>

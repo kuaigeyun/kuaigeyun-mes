@@ -98,15 +98,23 @@ export default defineConfig({
         // ⚠️ 关键修复：增加超时时间，防止后端重启时连接超时
         timeout: 120000, // 菜单全量同步等重操作可能超过 30 秒，统一放宽到 120 秒
         ws: true, // 支持 WebSocket
-        // ⚠️ 关键修复：配置代理错误处理，防止后端重启导致前端服务崩溃
+        // 后端重启时必须立刻结束响应，否则浏览器 fetch 会一直挂到 proxy timeout（最长 120s）表现为页面转圈
         configure: (proxy, _options) => {
-          proxy.on('error', (err, _req, _res) => {
-            // 后端服务不可用时，只记录错误，不导致前端服务崩溃
-            // 这是关键：错误处理不会导致 Vite 服务崩溃
+          proxy.on('error', (err, _req, res) => {
             console.warn('⚠️ 代理错误（后端可能正在重启）:', err.message);
+            if (!res || res.writableEnded || res.headersSent) return;
+            try {
+              res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' });
+              res.end(
+                JSON.stringify({
+                  detail: '后端暂时不可用（可能正在重启），请稍后重试',
+                }),
+              );
+            } catch {
+              // 忽略二次写响应失败
+            }
           });
           proxy.on('proxyReq', (proxyReq, _req, _res) => {
-            // 设置更长的超时时间
             proxyReq.setTimeout(120000);
           });
         },

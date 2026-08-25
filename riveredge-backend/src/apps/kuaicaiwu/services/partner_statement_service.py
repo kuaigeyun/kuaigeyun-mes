@@ -29,6 +29,7 @@ from apps.kuaicaiwu.models.payable import Payable
 from apps.kuaicaiwu.models.payment import Payment
 from apps.kuaicaiwu.models.receivable import Receivable
 from apps.kuaicaiwu.models.receipt import Receipt
+from apps.kuaicaiwu.services.finance_settlement_hierarchy import order_lines_by_settlement_hierarchy
 from apps.master_data.models.customer import Customer
 from apps.master_data.models.supplier import Supplier
 from core.utils.timezone_utils import to_api_isoformat, today_site_str
@@ -462,10 +463,6 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         partner_type: str,
         lines: List[Dict[str, Any]],
     ) -> List[Dict[str, Any]]:
-        from apps.kuaicaiwu.services.finance_settlement_hierarchy import (
-            order_lines_by_settlement_hierarchy,
-        )
-
         if not lines:
             return lines
         if partner_type == "Customer":

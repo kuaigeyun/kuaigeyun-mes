@@ -12,6 +12,7 @@ from loguru import logger
 import asyncio
 import os
 import sys
+from typing import Any
 
 from infra.config.infra_config import infra_settings as settings
 
@@ -549,22 +550,60 @@ async def register_db(app) -> None:
         pass
 
 
+class _PooledConnectionProxy:
+    """
+    Tortoise 池内 asyncpg 连接的代理。
+
+    调用方仍写 ``await conn.close()``；此处把连接归还池，而不是关闭到服务器。
+    禁止在请求路径再 ``asyncpg.connect`` 开无限新连接。
+    """
+
+    __slots__ = ("_pool", "_conn", "_released")
+
+    def __init__(self, pool: Any, conn: Any) -> None:
+        object.__setattr__(self, "_pool", pool)
+        object.__setattr__(self, "_conn", conn)
+        object.__setattr__(self, "_released", False)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._conn, name)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        if name in _PooledConnectionProxy.__slots__:
+            object.__setattr__(self, name, value)
+            return
+        setattr(self._conn, name, value)
+
+    async def close(self) -> None:
+        if self._released:
+            return
+        object.__setattr__(self, "_released", True)
+        await self._pool.release(self._conn)
+
+
 async def get_db_connection():
     """
-    获取数据库连接
+    获取用于原生 SQL 的数据库连接。
 
-    返回一个新的 asyncpg 连接，用于直接数据库操作
-
-    Returns:
-        asyncpg.Connection: 数据库连接对象
+    - Tortoise 已初始化：从 ORM 同一 asyncpg 池 acquire；``close()`` 归还池。
+    - Tortoise 尚未初始化（启动期动态配置发现）：单次 ``asyncpg.connect``，用毕须 close。
 
     Raises:
         OperationalError: 当连接失败时抛出
     """
     try:
+        if Tortoise._inited:
+            client = Tortoise.get_connection("default")
+            pool = getattr(client, "_pool", None)
+            if pool is None:
+                await client.create_connection(with_db=True)
+                pool = client._pool
+            raw = await pool.acquire()
+            return _PooledConnectionProxy(pool, raw)
+
         import asyncpg
-        conn = await asyncpg.connect(**DB_CONFIG)
-        return conn
+
+        return await asyncpg.connect(**DB_CONFIG)
     except Exception as e:
         logger.error(f"获取数据库连接失败: {e}")
         raise OperationalError(f"数据库连接失败: {e}")
@@ -580,10 +619,12 @@ async def check_db_connection() -> bool:
         bool: True 如果连接正常，False 如果连接失败
     """
     try:
-        import asyncpg
-        conn = await asyncpg.connect(**DB_CONFIG)
-        await conn.close()
-        return True
+        conn = await get_db_connection()
+        try:
+            await conn.fetchval("SELECT 1")
+            return True
+        finally:
+            await conn.close()
     except Exception as e:
         logger.warning(f"数据库连接检查失败: {e}")
         return False

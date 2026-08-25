@@ -15,6 +15,7 @@ import { getTenantList, TenantStatus } from '../../services/tenant';
 import { getMyTenants, switchTenant, tenantNameFromLoginResponse } from '../../services/auth';
 import { setTenantId, getTenantId, isInfraSuperAdminUser, setToken, setUserInfo } from '../../utils/auth';
 import { applyTenantSwitchSideEffects } from '../../utils/applyTenantSwitch';
+import { isRequestCancellation } from '../../utils/requestCancellation';
 import { useGlobalStore } from '../../stores';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 
@@ -38,6 +39,7 @@ const TenantSelector: React.FC<TenantSelectorProps> = ({ headerLightText }) => {
   const isInfraSuperAdmin = isInfraSuperAdminUser(currentUser);
   const currentTenantId = currentUser?.tenant_id ?? getTenantId();
   const [switching, setSwitching] = React.useState(false);
+  const switchingRef = React.useRef(false);
 
   const { data: tenantOptions = [], isLoading } = useQuery({
     queryKey: ['tenant-selector-options', isInfraSuperAdmin],
@@ -54,9 +56,10 @@ const TenantSelector: React.FC<TenantSelectorProps> = ({ headerLightText }) => {
 
   const handleTenantChange = async (tenantId: string) => {
     const nextId = Number(tenantId);
-    if (!Number.isFinite(nextId) || nextId === currentTenantId) return;
+    if (!Number.isFinite(nextId) || nextId === currentTenantId || switchingRef.current) return;
 
     try {
+      switchingRef.current = true;
       setSwitching(true);
 
       if (isInfraSuperAdmin) {
@@ -70,7 +73,7 @@ const TenantSelector: React.FC<TenantSelectorProps> = ({ headerLightText }) => {
         setCurrentUser(nextUser as any);
         setUserInfo(nextUser);
         message.success(t('ui.message.switchedTenant'));
-        applyTenantSwitchSideEffects(queryClient, navigate);
+        await applyTenantSwitchSideEffects(queryClient, navigate);
         return;
       }
 
@@ -88,10 +91,13 @@ const TenantSelector: React.FC<TenantSelectorProps> = ({ headerLightText }) => {
       setCurrentUser(nextUser as any);
       setUserInfo(nextUser);
       message.success(t('ui.message.switchedTenant'));
-      applyTenantSwitchSideEffects(queryClient, navigate);
+      await applyTenantSwitchSideEffects(queryClient, navigate);
     } catch (error: any) {
-      message.error(error?.message || t('pages.login.tenantSelectFailed'));
+      if (!isRequestCancellation(error)) {
+        message.error(error?.message || t('pages.login.tenantSelectFailed'));
+      }
     } finally {
+      switchingRef.current = false;
       setSwitching(false);
     }
   };

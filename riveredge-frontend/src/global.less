@@ -1922,6 +1922,26 @@ code {
   font-size: 24px;
   line-height: 1;
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 系统彩色 Emoji：强制走本机 emoji 字体，避免回落为单色符号 */
+.system-emoji {
+  font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji', emoji;
+  font-style: normal;
+  font-weight: normal;
+  line-height: 1;
+  display: inline-block;
+  vertical-align: middle;
+  flex-shrink: 0;
+  -webkit-font-smoothing: auto;
+  user-select: none;
+}
+.system-emoji--weather {
+  transform: translateY(-8px);
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
 }
 .dashboard-welcome-line__text {
   margin: 0;
@@ -3326,12 +3346,14 @@ code {
   align-content: stretch;
 }
 .dashboard-kpi-panel--fill .dashboard-kpi-cell {
-  min-height: 100%;
-  height: auto;
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
 }
 .dashboard-kpi-panel--fill .dashboard-kpi-cell-inner {
   min-height: 0;
   height: 100%;
+  max-height: 100%;
 }
 .dashboard-kpi-panel .dashboard-kpi-panel-toolbar {
   overflow-x: auto;
@@ -3343,53 +3365,37 @@ code {
 .dashboard-kpi-panel-segmented.ant-segmented {
   max-width: 100%;
 }
-/* 5 列单行；窄屏自动折行，列间竖线分隔 */
+/* 5 列单行；较窄时横向滚动，避免在固定高度面板内折行导致主数值与底栏重叠 */
 .dashboard-kpi-panel-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0;
   background: transparent;
+  min-height: 0;
 }
 .dashboard-kpi-panel-grid .dashboard-kpi-cell {
   border-right: 1px solid var(--dashboard-card-border-color);
 }
-@media (min-width: 1200px) {
-  .dashboard-kpi-panel-grid .dashboard-kpi-cell:nth-child(5n) {
-    border-right: none;
-  }
+.dashboard-kpi-panel-grid .dashboard-kpi-cell:nth-child(5n) {
+  border-right: none;
 }
 @media (max-width: 1199px) {
   .dashboard-kpi-panel-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-  .dashboard-kpi-panel-grid .dashboard-kpi-cell:nth-child(5n) {
-    border-right: 1px solid var(--dashboard-card-border-color);
-  }
-  .dashboard-kpi-panel-grid .dashboard-kpi-cell:nth-child(3n) {
-    border-right: none;
-  }
-}
-@media (max-width: 767px) {
-  .dashboard-kpi-panel-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .dashboard-kpi-panel-grid .dashboard-kpi-cell:nth-child(3n) {
-    border-right: 1px solid var(--dashboard-card-border-color);
-  }
-  .dashboard-kpi-panel-grid .dashboard-kpi-cell:nth-child(2n) {
-    border-right: none;
-  }
-}
-@media (max-width: 575px) {
-  .dashboard-kpi-panel-grid {
-    grid-template-columns: minmax(0, 1fr);
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
   }
   .dashboard-kpi-panel-grid .dashboard-kpi-cell {
-    border-right: none;
-    border-bottom: 1px solid var(--dashboard-card-border-color);
+    flex: 1 0 132px;
+    min-width: 132px;
+    max-width: none;
+    border-right: 1px solid var(--dashboard-card-border-color);
   }
   .dashboard-kpi-panel-grid .dashboard-kpi-cell:last-child {
-    border-bottom: none;
+    border-right: none;
   }
 }
 .dashboard-kpi-cell {
@@ -3408,21 +3414,56 @@ code {
 .dashboard-kpi-cell-inner {
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: flex-start;
   height: 100%;
   min-height: calc(var(--dashboard-kpi-cell-height, 132px) - 28px);
-  gap: 10px;
+  gap: 8px;
 }
 .dashboard-kpi-cell-head {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-height: 0;
+  overflow: hidden;
+}
+.dashboard-kpi-cell-main-row {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+.dashboard-kpi-cell-main-value {
+  font-size: 28px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dashboard-kpi-cell-main-suffix {
+  font-size: 14px;
+  color: var(--ant-color-text-tertiary);
+  font-weight: 500;
+  flex-shrink: 0;
+}
+@media (max-width: 1400px) {
+  .dashboard-kpi-cell-main-value {
+    font-size: 24px;
+  }
+}
+@media (max-width: 1199px) {
+  .dashboard-kpi-cell-main-value {
+    font-size: 22px;
+  }
 }
 .dashboard-kpi-cell-footer {
   display: flex;
   align-items: stretch;
   gap: 12px;
-  flex-shrink: 0;
-  margin-top: 4px;
+  flex: 0 0 auto;
+  margin-top: auto;
   padding: 10px 12px;
   border-top: none;
   border-radius: 6px;

@@ -116,6 +116,11 @@ import { inboundReceiptNoticeEntryPath } from '../../warehouse-management/inboun
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { buildUniPushMenuItems, buildUniPushToolbarDisabledReason, UniPushToolbarButton } from '../../../../../components/uni-push';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import {
+  DocumentAttachmentsReadonly,
+  documentAttachmentsFromRecord,
+  hasDocumentAttachments,
+} from '../../../components/DocumentAttachmentsReadonly';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { formatBusinessDateOnly, formatDateTime, formatQuantity } from '../../../../../utils/format';
 import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
@@ -1587,6 +1592,10 @@ const ReceiptNoticesPage: React.FC = () => {
     'receipt_notice',
   );
 
+  const receiptNoticeAttachments = documentAttachmentsFromRecord(noticeDetail);
+  const showReceiptNoticeAttachments =
+    Boolean(noticeDetail) && hasDocumentAttachments(receiptNoticeAttachments);
+
   return (
     <>
       <ListPageTemplate statCards={statCards}>
@@ -1936,6 +1945,15 @@ const ReceiptNoticesPage: React.FC = () => {
             />
           ) : null
         }
+        supplementary={
+          showReceiptNoticeAttachments ? (
+            <DocumentAttachmentsReadonly attachments={receiptNoticeAttachments} />
+          ) : undefined
+        }
+        supplementaryTitle={
+          showReceiptNoticeAttachments ? t('app.uniDetail.sectionAttachments') : undefined
+        }
+        supplementaryVisible={showReceiptNoticeAttachments}
         lines={
           noticeDetail ? (
             noticeDetail.items && noticeDetail.items.length > 0 ? (

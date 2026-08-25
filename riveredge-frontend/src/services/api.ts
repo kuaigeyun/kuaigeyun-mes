@@ -12,6 +12,7 @@ import { navigateTo } from '../utils/navigation';
 import { redirectAfterLogout } from '../utils/loginEntry';
 import { isKuaireportSharedApiPath, isKuaireportSharedBrowsePath } from '../utils/kuaireportSharedPath';
 import { webClientChannelHeaders } from '../utils/clientChannel';
+import { isRequestCancellation } from '../utils/requestCancellation';
 
 /**
  * API 基础 URL
@@ -123,6 +124,11 @@ export async function apiRequest<T = any>(
     body?: any;
     params?: Record<string, any>; // 查询参数
     headers?: Record<string, string>;
+    /** 请求超时（毫秒）。启动壳层接口建议 12–15s，避免后端 reload 时长时间转圈 */
+    timeoutMs?: number;
+    /** 覆盖默认网络重试次数（默认 2）；启动壳层建议 1 */
+    maxRetries?: number;
+    signal?: AbortSignal;
     [key: string]: any;
   }
 ): Promise<T> {
@@ -294,13 +300,21 @@ export async function apiRequest<T = any>(
     }
   }
 
-  // 合并其他选项（但排除 data、body 和 headers，因为已经处理过了）
-  const { data: _optionsData, body: _optionsBody, headers: userHeaders, ...otherOptions } = options || {};
-  
+  // 合并其他选项（排除已单独处理的字段，避免 timeoutMs 等污染 RequestInit）
+  const {
+    data: _optionsData,
+    body: _optionsBody,
+    headers: userHeaders,
+    timeoutMs,
+    maxRetries,
+    signal: userSignal,
+    ...otherOptions
+  } = options || {};
+
   // ⚠️ 关键修复：确保 headers 不被覆盖
   // Object.assign 会覆盖 headers，所以我们需要在最后再次设置 headers
   Object.assign(fetchOptions, otherOptions);
-  
+
   // 确保 headers 始终使用我们构建的 headers（包含 X-Tenant-ID）
   fetchOptions.headers = headers;
 
@@ -316,14 +330,56 @@ export async function apiRequest<T = any>(
 
   try {
     // 连接重置/不稳定时自动重试，减少「多刷新几次才能出来」的现象
+    // 每次 attempt 新建 AbortController：超时 abort 后信号不可复用
     const result = await withRetry(
       async () => {
-        const res = await fetch(requestUrl, fetchOptions);
-        const text = await res.text();
-        const parsed = text ? (() => { try { return JSON.parse(text); } catch { return null; } })() : null;
-        return { res, data: parsed };
+        const attemptController = new AbortController();
+        const onUserAbort = () => attemptController.abort(userSignal?.reason);
+        if (userSignal) {
+          if (userSignal.aborted) {
+            attemptController.abort(userSignal.reason);
+          } else {
+            userSignal.addEventListener('abort', onUserAbort, { once: true });
+          }
+        }
+        let attemptTimeoutId: ReturnType<typeof setTimeout> | undefined;
+        if (typeof timeoutMs === 'number' && timeoutMs > 0) {
+          attemptTimeoutId = setTimeout(() => {
+            attemptController.abort(
+              new DOMException(`请求超时（${timeoutMs}ms）`, 'TimeoutError'),
+            );
+          }, timeoutMs);
+        }
+        try {
+          const res = await fetch(requestUrl, {
+            ...fetchOptions,
+            signal: attemptController.signal,
+          });
+          const text = await res.text();
+          const parsed = text ? (() => { try { return JSON.parse(text); } catch { return null; } })() : null;
+          return { res, data: parsed };
+        } finally {
+          if (attemptTimeoutId) clearTimeout(attemptTimeoutId);
+          if (userSignal) userSignal.removeEventListener('abort', onUserAbort);
+        }
       },
-      { maxRetries: 2, retryDelay: 800 }
+      {
+        maxRetries: typeof maxRetries === 'number' ? maxRetries : 2,
+        retryDelay: 800,
+        shouldRetry: (error: any, attempt: number) => {
+          const msg = String(error?.message || error?.name || '').toLowerCase();
+          if (msg.includes('timeout') || error?.name === 'TimeoutError') return false;
+          if ([401, 400].includes(error?.response?.status)) return false;
+          if ([502, 503, 504].includes(error?.response?.status)) return attempt < 2;
+          return (
+            msg.includes('fetch') ||
+            msg.includes('network') ||
+            msg.includes('failed to fetch') ||
+            msg.includes('connection reset') ||
+            msg.includes('econnreset')
+          );
+        },
+      }
     );
     response = result.res;
     data = result.data;
@@ -332,6 +388,9 @@ export async function apiRequest<T = any>(
       // 请求已结束（失败）：仍视为一次交互，避免长耗时/失败后仅沿用「发起时刻」被判无操作
       updateLastActivity(true);
       decrementPendingRequests();
+    }
+    if (isRequestCancellation(fetchError) || isRequestCancellation(fetchError?.originalError)) {
+      throw fetchError;
     }
     handleNetworkError(fetchError?.originalError || fetchError);
     const err = new Error(fetchError?.message || '网络连接失败') as any;

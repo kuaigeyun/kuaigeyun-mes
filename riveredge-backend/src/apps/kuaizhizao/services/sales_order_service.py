@@ -1819,6 +1819,7 @@ class SalesOrderService:
         pullable_only: Optional[bool] = None,
         pull_target: Optional[str] = None,
         view: Optional[str] = None,
+        column_filters: Optional[str] = None,
         current_user: Optional["User"] = None,
     ) -> SalesOrderListResponse:
         """获取销售订单列表。order_by 如 order_code、-created_at（前缀-表示降序）
@@ -1860,6 +1861,27 @@ class SalesOrderService:
                 | Q(customer_name__icontains=kw)
                 | Q(salesman_name__icontains=kw)
                 | Q(contract_code__icontains=kw)
+            )
+        if column_filters:
+            from apps.kuaizhizao.utils.column_filters import (
+                apply_column_filters_to_queryset,
+                parse_column_filters_param,
+            )
+
+            query = apply_column_filters_to_queryset(
+                query,
+                parse_column_filters_param(column_filters),
+                allowed_fields={
+                    "status",
+                    "review_status",
+                    "order_code",
+                    "customer_name",
+                    "salesman_name",
+                    "contract_code",
+                    "order_date",
+                    "delivery_date",
+                    "total_amount",
+                },
             )
         # 加载建销售变更：与 is_source_order_locked_for_direct_edit / 前端 isSourceOrderEligibleForChange 对齐
         pull_target_norm = (pull_target or "").strip().lower()
@@ -3158,49 +3180,185 @@ class SalesOrderService:
         if not demand_items:
             raise BusinessLogicError("所选明细有效数量为空，无法下推需求计算")
 
-        demand = await Demand.create(
+        demand_code = str(order.order_code or "").strip()
+        if not demand_code:
+            raise BusinessLogicError("销售订单编号为空，无法下推需求计算")
+        if not order.order_date:
+            raise BusinessLogicError("销售订单日期为空，无法下推需求计算")
+
+        # 同单软删需求：复活并重建明细（_get_linked_demand 只查未删，会漏掉）
+        soft_same_source = await Demand.filter(
             tenant_id=tenant_id,
-            demand_code=order.order_code,
-            demand_type="sales_order",
-            business_mode="MTO",
-            priority=5,
-            demand_name=order.order_code,
-            start_date=order.order_date,
-            end_date=order.delivery_date,
-            order_date=order.order_date,
-            delivery_date=order.delivery_date,
-            customer_id=order.customer_id,
-            customer_name=order.customer_name,
-            customer_contact=order.customer_contact,
-            customer_phone=order.customer_phone,
-            total_quantity=total_qty,
-            total_amount=total_amt,
-            status=DemandStatus.AUDITED,
-            review_status=ReviewStatus.APPROVED,
-            reviewer_id=order.reviewer_id,
-            reviewer_name=order.reviewer_name,
-            review_time=order.review_time,
-            salesman_id=order.salesman_id,
-            salesman_name=order.salesman_name,
-            shipping_address=order.shipping_address,
-            shipping_method=order.shipping_method,
-            payment_terms=order.payment_terms,
-            notes=order.notes,
             source_type="sales_order",
             source_id=sales_order_id,
-            source_code=order.order_code,
-            created_by=created_by,
-            updated_by=created_by,
+            deleted_at__isnull=False,
+        ).order_by("-id").first()
+        if soft_same_source:
+            demand = await self._revive_demand_from_sales_order(
+                soft_same_source,
+                order=order,
+                sales_order_id=sales_order_id,
+                created_by=created_by,
+                demand_items=demand_items,
+                total_qty=total_qty,
+                total_amt=total_amt,
+            )
+            await self._apply_forecast_consumption_after_demand_create(
+                tenant_id, sales_order_id, order.order_code, items
+            )
+            return demand
+
+        # 其它软删行占用同一 demand_code：改码腾位（全局 unique 含软删时必须）
+        soft_occupiers = await Demand.filter(
+            tenant_id=tenant_id,
+            demand_code=demand_code,
+            deleted_at__isnull=False,
+        ).all()
+        for occ in soft_occupiers:
+            occ.demand_code = f"{demand_code}#DEL{occ.id}"[:50]
+            await occ.save(update_fields=["demand_code", "updated_at"])
+
+        active_same_code = await Demand.get_or_none(
+            tenant_id=tenant_id,
+            demand_code=demand_code,
+            deleted_at__isnull=True,
         )
+        if active_same_code:
+            if (
+                str(getattr(active_same_code, "source_type", "") or "") == "sales_order"
+                and int(getattr(active_same_code, "source_id", 0) or 0) == int(sales_order_id)
+            ):
+                return active_same_code
+            raise BusinessLogicError(
+                f"需求编码 {demand_code} 已被其他需求占用，无法从本销售订单下推需求计算"
+            )
+
+        try:
+            demand = await Demand.create(
+                tenant_id=tenant_id,
+                demand_code=demand_code,
+                demand_type="sales_order",
+                business_mode="MTO",
+                priority=5,
+                demand_name=demand_code,
+                start_date=order.order_date,
+                end_date=order.delivery_date,
+                order_date=order.order_date,
+                delivery_date=order.delivery_date,
+                customer_id=order.customer_id,
+                customer_name=order.customer_name,
+                customer_contact=order.customer_contact,
+                customer_phone=order.customer_phone,
+                total_quantity=total_qty,
+                total_amount=total_amt,
+                status=DemandStatus.AUDITED,
+                review_status=ReviewStatus.APPROVED,
+                reviewer_id=order.reviewer_id,
+                reviewer_name=order.reviewer_name,
+                review_time=order.review_time,
+                salesman_id=order.salesman_id,
+                salesman_name=order.salesman_name,
+                shipping_address=order.shipping_address,
+                shipping_method=order.shipping_method,
+                payment_terms=order.payment_terms,
+                notes=order.notes,
+                source_type="sales_order",
+                source_id=sales_order_id,
+                source_code=demand_code,
+                created_by=created_by,
+                updated_by=created_by,
+            )
+        except IntegrityError as e:
+            raise BusinessLogicError(
+                f"需求编码 {demand_code} 已存在，无法从销售订单下推需求计算"
+            ) from e
         for d in demand_items:
             await DemandItem.create(
                 tenant_id=tenant_id,
                 demand_id=demand.id,
-                **d,
+                material_unit=str(d.get("material_unit") or "")[:20],
+                material_code=str(d.get("material_code") or "")[:50],
+                material_name=str(d.get("material_name") or "")[:200],
+                **{k: v for k, v in d.items() if k not in ("material_unit", "material_code", "material_name")},
             )
         logger.info("从销售订单 %s 生成需求 %s", order.order_code, demand.demand_code)
 
-        # 预测冲销：按交期窗口匹配未消耗预测并累加 consumed_quantity
+        await self._apply_forecast_consumption_after_demand_create(
+            tenant_id, sales_order_id, order.order_code, items
+        )
+
+        # 不再写入 DocumentRelation(sales_order→demand)：全链路追溯以订单→需求计算为主，
+        # Demand 仍存表供计算与明细；关联路径见推导逻辑 _get_sales_order_downstream。
+
+        return demand
+
+    async def _revive_demand_from_sales_order(
+        self,
+        demand: Demand,
+        *,
+        order: SalesOrder,
+        sales_order_id: int,
+        created_by: int,
+        demand_items: List[Dict[str, Any]],
+        total_qty: Decimal,
+        total_amt: Decimal,
+    ) -> Demand:
+        """复活本销售订单下已软删的 Demand，并按本次下推明细重建行。"""
+        demand_code = str(order.order_code or "").strip()
+        demand.deleted_at = None
+        demand.demand_code = demand_code
+        demand.demand_type = "sales_order"
+        demand.business_mode = "MTO"
+        demand.demand_name = demand_code
+        demand.start_date = order.order_date
+        demand.end_date = order.delivery_date
+        demand.order_date = order.order_date
+        demand.delivery_date = order.delivery_date
+        demand.customer_id = order.customer_id
+        demand.customer_name = order.customer_name
+        demand.customer_contact = order.customer_contact
+        demand.customer_phone = order.customer_phone
+        demand.total_quantity = total_qty
+        demand.total_amount = total_amt
+        demand.status = DemandStatus.AUDITED
+        demand.review_status = ReviewStatus.APPROVED
+        demand.reviewer_id = order.reviewer_id
+        demand.reviewer_name = order.reviewer_name
+        demand.review_time = order.review_time
+        demand.salesman_id = order.salesman_id
+        demand.salesman_name = order.salesman_name
+        demand.shipping_address = order.shipping_address
+        demand.shipping_method = order.shipping_method
+        demand.payment_terms = order.payment_terms
+        demand.notes = order.notes
+        demand.source_type = "sales_order"
+        demand.source_id = sales_order_id
+        demand.source_code = demand_code
+        demand.pushed_to_computation = False
+        demand.computation_id = None
+        demand.computation_code = None
+        demand.updated_by = created_by
+        await demand.save()
+        await DemandItem.filter(tenant_id=demand.tenant_id, demand_id=demand.id).delete()
+        for d in demand_items:
+            await DemandItem.create(
+                tenant_id=demand.tenant_id,
+                demand_id=demand.id,
+                material_unit=str(d.get("material_unit") or "")[:20],
+                material_code=str(d.get("material_code") or "")[:50],
+                material_name=str(d.get("material_name") or "")[:200],
+                **{k: v for k, v in d.items() if k not in ("material_unit", "material_code", "material_name")},
+            )
+        logger.info("复活销售订单 %s 关联需求 %s", order.order_code, demand.demand_code)
+        return demand
+
+    async def _apply_forecast_consumption_after_demand_create(
+        self,
+        tenant_id: int,
+        sales_order_id: int,
+        order_code: str,
+        items: List[SalesOrderItem],
+    ) -> None:
         from apps.kuaizhizao.utils.forecast_consumption import (
             apply_forecast_consumption_for_sales_order,
         )
@@ -3213,14 +3371,9 @@ class SalesOrderService:
         if consume_result.get("consumed_total"):
             logger.info(
                 "销售订单 %s 预测冲销合计 %s",
-                order.order_code,
+                order_code,
                 consume_result.get("consumed_total"),
             )
-
-        # 不再写入 DocumentRelation(sales_order→demand)：全链路追溯以订单→需求计算为主，
-        # Demand 仍存表供计算与明细；关联路径见推导逻辑 _get_sales_order_downstream。
-
-        return demand
 
     async def push_sales_order_to_work_order(
         self,

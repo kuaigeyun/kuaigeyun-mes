@@ -240,6 +240,10 @@ class OutsourceMaterialReturnService(AppBaseService[OutsourceMaterialReturn]):
                 source_type="outsource_material_return",
                 source_doc_id=material_return.id,
                 source_doc_code=code,
+                movement_type="other_inbound",
+                to_warehouse_id=return_data.warehouse_id,
+                operator_id=created_by,
+                operator_name=user_info["name"],
             )
 
             logger.info(f"创建委外退料单成功: {code}")

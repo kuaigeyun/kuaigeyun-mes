@@ -8,7 +8,7 @@ from core.models.base import BaseModel
 
 
 class FinanceNote(BaseModel):
-    """银承/商承票据台账。"""
+    """应收/应付票据台账（银承、商承、汇票、本票、支票等）。"""
 
     class Meta:
         table = "apps_kuaicaiwu_notes"
@@ -22,7 +22,10 @@ class FinanceNote(BaseModel):
     id = fields.IntField(pk=True, description="主键ID")
     tenant_id = fields.IntField(description="租户ID")
     direction = fields.CharField(max_length=20, description="方向 receivable/payable")
-    bill_type = fields.CharField(max_length=30, description="bank_acceptance/commercial_acceptance")
+    bill_type = fields.CharField(
+        max_length=30,
+        description="bank_acceptance/commercial_acceptance/bank_draft/bank_promissory_note/cheque",
+    )
     note_code = fields.CharField(max_length=50, description="系统单号")
     bill_no = fields.CharField(max_length=100, description="票号")
     amount = fields.DecimalField(max_digits=16, decimal_places=4, description="票面金额")

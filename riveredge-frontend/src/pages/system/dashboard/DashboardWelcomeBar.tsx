@@ -1,8 +1,9 @@
 /**
- * 工作台欢迎条 — 单行文案（👋 问候，姓名）+ 右侧上线向导 / 便捷工具
+ * 工作台欢迎条 — 单行文案（问候图标 + 姓名）+ 右侧上线向导 / 便捷工具
  */
 
 import React from 'react';
+import { SystemEmoji, WAVING_HAND_EMOJI } from '../../../components/decorative/systemEmoji';
 import { useConfigStore } from '../../../stores/configStore';
 import { OnboardingWizardEntry } from '../../../components/onboarding-guide/OnboardingWizardEntry';
 import WorkplaceToolkit from './WorkplaceToolkit';
@@ -31,7 +32,7 @@ export function DashboardWelcomeBar({
     <div className="dashboard-welcome-line">
       <div className="dashboard-welcome-line__main">
         <span className="dashboard-welcome-line__emoji" aria-hidden="true">
-          👋
+          <SystemEmoji emoji={WAVING_HAND_EMOJI} size={24} />
         </span>
         <p className="dashboard-welcome-line__text">
           {greeting}，<span className="dashboard-welcome-line__name">{userName}</span>

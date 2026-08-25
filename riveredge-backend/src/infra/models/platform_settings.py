@@ -171,6 +171,12 @@ class PlatformSettings(Model):
         description="是否显示顶栏用户菜单中的版权声明入口"
     )
 
+    # 应用中心「定制应用」空态商务咨询二维码
+    custom_apps_contact_qr_enabled = fields.BooleanField(
+        default=False,
+        description="是否显示应用中心定制应用空态的商务咨询二维码",
+    )
+
     login_guest_enabled = fields.BooleanField(
         default=True,
         description="登录页是否显示免注册体验登录"

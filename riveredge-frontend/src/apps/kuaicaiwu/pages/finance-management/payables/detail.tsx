@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 
 import { ProDescriptions } from '@ant-design/pro-components';
 
@@ -43,6 +43,7 @@ import {
 } from '../../../../../components/document-tracking-panel';
 
 import { getPayableLifecycle } from '../../../utils/payableLifecycle';
+import { FinanceArApInvoiceStatusDetail } from '../../../utils/financeInvoiceStatusUi';
 
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 
@@ -144,6 +145,14 @@ const PayableDetail: React.FC = () => {
 
     data?.id
 
+  );
+
+  const linkedPurchaseInvoices = useMemo(
+    () =>
+      documentTracking.data?.relations?.downstream?.filter(
+        (rel) => rel.type === 'purchase_invoice' && !rel.is_deleted,
+      ) ?? [],
+    [documentTracking.data],
   );
 
 
@@ -308,17 +317,17 @@ const PayableDetail: React.FC = () => {
 
             </ProDescriptions.Item>
 
-            <ProDescriptions.Item label={t('app.kuaicaiwu.common.invoiceDate')}>
+            <ProDescriptions.Item label={t(`${P}.col.invoiceStatus`)}>
 
-              {data.invoice_received ? (
-
-                <span style={{ color: 'green' }}>{t(`${P}.invoiceStatus.received`, { number: data.invoice_number })}</span>
-
-              ) : (
-
-                <span style={{ color: 'orange' }}>{t(`${P}.invoiceStatus.notReceived`)}</span>
-
-              )}
+              <FinanceArApInvoiceStatusDetail
+                kind="payable"
+                invoiceStatus={data.invoice_status}
+                invoicedAmount={data.invoiced_amount}
+                remainingInvoiceAmount={data.remaining_invoice_amount}
+                linkedInvoices={linkedPurchaseInvoices}
+                onInvoiceClick={linked.openLinkedDocumentDetail}
+                t={t}
+              />
 
             </ProDescriptions.Item>
 
@@ -351,6 +360,33 @@ const PayableDetail: React.FC = () => {
             <Col xs={24} sm={8}>
 
               <Statistic title={t(`${P}.col.remainingAmount`)} value={data.remaining_amount} precision={2} prefix="¥" styles={{ content: {color: '#cf1322' } }} />
+
+            </Col>
+
+          </Row>
+
+          <Row gutter={24} style={{ marginTop: 16 }}>
+
+            <Col xs={24} sm={8}>
+
+              <Statistic title={t(`${P}.col.invoicedAmount`)} value={data.invoiced_amount ?? 0} precision={2} prefix="¥" />
+
+            </Col>
+
+            <Col xs={24} sm={8}>
+
+              <Statistic
+                title={t(`${P}.col.remainingInvoiceAmount`)}
+                value={data.remaining_invoice_amount ?? 0}
+                precision={2}
+                prefix="¥"
+                styles={{
+                  content: {
+                    color: Number(data.remaining_invoice_amount ?? 0) > 0 ? '#1677ff' : 'inherit',
+                    fontWeight: Number(data.remaining_invoice_amount ?? 0) > 0 ? 'bold' : 'normal',
+                  },
+                }}
+              />
 
             </Col>
 

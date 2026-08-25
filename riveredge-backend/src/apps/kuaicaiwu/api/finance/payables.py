@@ -314,7 +314,11 @@ async def get_payable(
 ):
     try:
         payable = await payable_service.get_payable_by_id(tenant_id, id)
-        return payable
+        enriched = await payable_pull_service.enrich_push_purchase_invoice_capabilities(
+            tenant_id,
+            [payable.model_dump()],
+        )
+        return PayableResponse.model_validate(enriched[0])
     except NotFoundError as e:
         raise _http_exception_with_trace(404, str(e), "/payables/{id}", tenant_id)
 

@@ -12,6 +12,8 @@ from .finance.payables import router as payables_router
 from .finance.purchase_invoices import router as purchase_invoices_router
 from .finance.payments import router as payments_router
 from .finance.receipts import router as receipts_router
+from .finance.receipt_refunds import router as receipt_refunds_router
+from .finance.payment_refunds import router as payment_refunds_router
 from .finance.sales_invoices import router as sales_invoices_router
 
 # 导入成本核算路由
@@ -47,6 +49,8 @@ router.include_router(payables_router)
 router.include_router(purchase_invoices_router)
 router.include_router(payments_router)
 router.include_router(receipts_router)
+router.include_router(receipt_refunds_router)
+router.include_router(payment_refunds_router)
 router.include_router(sales_invoices_router)
 
 # 注册成本核算路由

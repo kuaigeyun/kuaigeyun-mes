@@ -166,6 +166,8 @@ class DynamicDatabaseConfigService:
             "apps.kuaiplm.models.gate_template",
             "apps.kuaiplm.models.knowledge_base",
             "apps.kuaiplm.models.phase2",
+            # 辐条轮毂 (spoke_wheel) — 行业免费版，显式注册到默认连接
+            "apps.spoke_wheel.models",
         ]
 
         # 验证模型模块是否存在，只包含存在的模块

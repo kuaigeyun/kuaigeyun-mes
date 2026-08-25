@@ -35,6 +35,8 @@ export interface PaymentVoucher {
   bank_account_id?: number;
   status: string;
   settlement_type?: string;
+  refunded_amount?: number;
+  refund_execution_status?: string;
   notes?: string;
   created_at: string;
   updated_at?: string;

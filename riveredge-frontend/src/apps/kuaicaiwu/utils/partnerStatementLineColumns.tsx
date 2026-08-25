@@ -1,10 +1,11 @@
 import React, { useMemo } from 'react';
-import { InputNumber } from 'antd';
+import { InputNumber, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import type { TFunction } from 'i18next';
 import type { PartnerStatementLine } from '../services/finance/partnerStatement';
 import { renderFinanceHierarchyDocType } from './partnerStatementLineDisplay';
 import { partnerStatementMoney } from './partnerStatementAmountUtils';
+import { isPartnerStatementFinanceVoucherLine } from './financeVoucherDocType';
 
 const PS = 'app.kuaicaiwu.partnerStatement';
 
@@ -14,12 +15,13 @@ export type PartnerStatementLineColumnOptions = {
   editable?: boolean;
   onStatementAmountChange?: (lineKey: string, amount: number) => void;
   lineKey?: (line: PartnerStatementLine, index: number) => string;
+  onDocCodeClick?: (line: PartnerStatementLine) => void;
 };
 
 export function usePartnerStatementLineColumns(
   options: PartnerStatementLineColumnOptions,
 ): ColumnsType<PartnerStatementLine> {
-  const { t, balanceLabel, editable, onStatementAmountChange, lineKey } = options;
+  const { t, balanceLabel, editable, onStatementAmountChange, lineKey, onDocCodeClick } = options;
 
   return useMemo(
     () => [
@@ -30,7 +32,18 @@ export function usePartnerStatementLineColumns(
         width: 120,
         render: (v: string, record: PartnerStatementLine) => renderFinanceHierarchyDocType(v, record),
       },
-      { title: t(`${PS}.col.docCode`), dataIndex: 'doc_code', width: 140, ellipsis: true },
+      { title: t(`${PS}.col.docCode`), dataIndex: 'doc_code', width: 140, ellipsis: true,
+        render: (value: string, record: PartnerStatementLine) => {
+          if (onDocCodeClick && isPartnerStatementFinanceVoucherLine(record)) {
+            return (
+              <Typography.Link onClick={() => onDocCodeClick(record)}>
+                {value || '—'}
+              </Typography.Link>
+            );
+          }
+          return value || '—';
+        },
+      },
       { title: t(`${PS}.col.summary`), dataIndex: 'summary', ellipsis: true },
       {
         title: t(`${PS}.col.docAmount`),
@@ -104,6 +117,6 @@ export function usePartnerStatementLineColumns(
         render: (v: unknown) => partnerStatementMoney(v as number),
       },
     ],
-    [balanceLabel, editable, lineKey, onStatementAmountChange, t],
+    [balanceLabel, editable, lineKey, onDocCodeClick, onStatementAmountChange, t],
   );
 }

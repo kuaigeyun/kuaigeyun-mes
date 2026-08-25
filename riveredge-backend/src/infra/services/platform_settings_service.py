@@ -142,6 +142,11 @@ class PlatformSettingsService:
                 default_tenant_id=data.default_tenant_id,
                 float_button_enabled=data.float_button_enabled if data.float_button_enabled is not None else True,
                 copyright_menu_enabled=data.copyright_menu_enabled if data.copyright_menu_enabled is not None else True,
+                custom_apps_contact_qr_enabled=(
+                    data.custom_apps_contact_qr_enabled
+                    if data.custom_apps_contact_qr_enabled is not None
+                    else False
+                ),
                 login_guest_enabled=data.login_guest_enabled if data.login_guest_enabled is not None else True,
                 login_client_win_enabled=data.login_client_win_enabled if data.login_client_win_enabled is not None else True,
                 login_client_android_enabled=data.login_client_android_enabled if data.login_client_android_enabled is not None else True,

@@ -141,6 +141,11 @@ import {
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import {
+  DocumentAttachmentsReadonly,
+  documentAttachmentsFromRecord,
+  hasDocumentAttachments,
+} from '../../../components/DocumentAttachmentsReadonly';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { formatBusinessDateOnly, formatDateTime, formatNumber, formatQuantity } from '../../../../../utils/format';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
@@ -1808,6 +1813,10 @@ const PurchaseReturnsPage: React.FC = () => {
     'purchase_return',
   );
 
+  const purchaseReturnAttachments = documentAttachmentsFromRecord(returnDetail);
+  const showPurchaseReturnAttachments =
+    Boolean(returnDetail) && hasDocumentAttachments(purchaseReturnAttachments);
+
   return (
     <>
       <ListPageTemplate statCards={statCards}>
@@ -2451,6 +2460,15 @@ const PurchaseReturnsPage: React.FC = () => {
             />
           ) : null
         }
+        supplementary={
+          showPurchaseReturnAttachments ? (
+            <DocumentAttachmentsReadonly attachments={purchaseReturnAttachments} />
+          ) : undefined
+        }
+        supplementaryTitle={
+          showPurchaseReturnAttachments ? t('app.uniDetail.sectionAttachments') : undefined
+        }
+        supplementaryVisible={showPurchaseReturnAttachments}
         lines={
           returnDetail ? (
             returnDetail.items && returnDetail.items.length > 0 ? (

@@ -42,6 +42,9 @@ class PlatformSettingsBase(BaseSchema):
     )
     float_button_enabled: Optional[bool] = Field(True, description="是否显示右下角悬浮按钮")
     copyright_menu_enabled: Optional[bool] = Field(True, description="是否显示顶栏用户菜单中的版权声明入口")
+    custom_apps_contact_qr_enabled: Optional[bool] = Field(
+        False, description="是否显示应用中心定制应用空态的商务咨询二维码"
+    )
     login_guest_enabled: Optional[bool] = Field(True, description="登录页是否显示免注册体验登录")
     login_client_win_enabled: Optional[bool] = Field(True, description="登录页是否显示 Windows 工位机安装包下载")
     login_client_android_enabled: Optional[bool] = Field(True, description="登录页是否显示 Android PDA 安装包下载")
@@ -82,6 +85,9 @@ class PlatformSettingsUpdate(BaseSchema):
     )
     float_button_enabled: Optional[bool] = Field(None, description="是否显示右下角悬浮按钮")
     copyright_menu_enabled: Optional[bool] = Field(None, description="是否显示顶栏用户菜单中的版权声明入口")
+    custom_apps_contact_qr_enabled: Optional[bool] = Field(
+        None, description="是否显示应用中心定制应用空态的商务咨询二维码"
+    )
     login_guest_enabled: Optional[bool] = Field(None, description="登录页是否显示免注册体验登录")
     login_client_win_enabled: Optional[bool] = Field(None, description="登录页是否显示 Windows 工位机安装包下载")
     login_client_android_enabled: Optional[bool] = Field(None, description="登录页是否显示 Android PDA 安装包下载")

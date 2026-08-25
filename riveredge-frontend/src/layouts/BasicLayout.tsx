@@ -141,6 +141,7 @@ import { triggerNew, hasNewHandler } from '../utils/globalNewShortcut';
 import { triggerSubmit, hasSubmitHandler } from '../utils/globalSubmitShortcut';
 import { CODE_FONT_FAMILY } from '../constants/fonts';
 import { clearSessionScopedQueries } from '../utils/clearSessionQueries';
+import { swallowRequestCancellation } from '../utils/requestCancellation';
 import { getInstalledApplicationList } from '../services/application';
 import { getChatIntegrationStatus } from '../services/deepseekChat';
 import { buildChatIntegrationStatusQueryKey } from '../hooks/useChatIntegrationStatus';
@@ -151,6 +152,7 @@ import { OnboardingWizardEntry } from '../components/onboarding-guide/Onboarding
 import { HeaderQuickEntryPopover } from '../components/quick-entry';
 import { useConfigStore, resolveEffectiveHomePath, getDefaultTenantHomePath } from '../stores/configStore';
 import { getMenuBadgeCounts, type MenuBadgeEntry } from '../services/dashboard';
+import { MENU_BADGE_COUNTS_QUERY_KEY } from '../hooks/useInvalidateMenuBadgeCounts';
 import { verifyCopyright } from '../utils/copyrightIntegrity';
 import { getBuildProvenance, getPlatformSettingsPublic, registerInstallInstance } from '../services/platformSettings';
 import { useTouchScreen } from '../hooks/useTouchScreen';
@@ -561,6 +563,8 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
       '/apps/kuaireport/reports': ManufacturingIcons.fileBarChart, // 报表中心
       '/apps/kuaireport/dashboards': ManufacturingIcons.layoutDashboard, // 大屏中心
       '/apps/kuaiai': ManufacturingIcons.sparkles, // KU-AI - 顶栏 AI 助手（无侧栏菜单）
+      '/apps/industry-pack': ManufacturingIcons.layers, // 行业包
+      '/apps/spoke-wheel': ManufacturingIcons.wheel, // 辐条轮毂
       '/apps/haoligo/workspace': ManufacturingIcons.layoutDashboard, // 好力 GO 工作台（仪表板分组下）
       '/apps/haoligo/equipment': ManufacturingIcons.wrench, // 好力 GO 设备管理
       '/apps/haoligo/molds': ManufacturingIcons.package, // 好力 GO 模具管理
@@ -1209,6 +1213,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     }
 
     if (!iconElement && menu.icon) {
+      // manifest / 数据库 icon 字段 → Lucide（见 manufacturingIcons 预置表）
       // 首先尝试从预定义的 ManufacturingIcons 中获取
       const iconKey = menu.icon as keyof typeof ManufacturingIcons;
       const IconComponent = ManufacturingIcons[iconKey];
@@ -1591,7 +1596,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       queryKey: buildChatIntegrationStatusQueryKey(currentUser.tenant_id),
       queryFn: getChatIntegrationStatus,
       staleTime: 5 * 60 * 1000,
-    });
+    }).catch(swallowRequestCancellation);
   }, [hasAiAssistantEntry, currentUser?.tenant_id, queryClient]);
 
   useEffect(() => {
@@ -1624,7 +1629,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   }, [systemSettingsPanelMounted, closeSystemSettingsPanelAnimated]);
 
   const { data: menuBadgeCounts = {} } = useQuery({
-    queryKey: ['menuBadgeCounts'],
+    queryKey: [...MENU_BADGE_COUNTS_QUERY_KEY, currentUser?.tenant_id],
     queryFn: getMenuBadgeCounts,
     enabled: !!currentUser?.id && documentVisible,
     ...layoutShellQueryOptions,
@@ -1851,8 +1856,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         panelItemColor: 'rgba(255, 255, 255, 0.88)',
         panelItemBg: 'rgba(255, 255, 255, 0.04)',
         panelItemBorder: 'rgba(255, 255, 255, 0.08)',
-        panelItemHoverBg: 'rgba(255, 255, 255, 0.11)',
-        panelItemHoverBorder: 'rgba(255, 255, 255, 0.14)',
+        panelItemHoverBg: `color-mix(in srgb, ${primary} 30%, rgba(255, 255, 255, 0.10))`,
+        panelItemHoverBorder: `color-mix(in srgb, ${primary} 45%, rgba(255, 255, 255, 0.18))`,
       };
     }
     // 浅色侧栏：不用 antd colorPrimaryBg。深品牌色（如海军蓝）时 primaryBg 会偏脏灰，
@@ -1887,8 +1892,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       panelItemColor: String(token.colorText),
       panelItemBg: 'rgba(255, 255, 255, 0.22)',
       panelItemBorder: 'rgba(255, 255, 255, 0.40)',
-      panelItemHoverBg: 'rgba(255, 255, 255, 0.48)',
-      panelItemHoverBorder: 'rgba(255, 255, 255, 0.62)',
+      panelItemHoverBg: `color-mix(in srgb, ${primary} 18%, #ffffff)`,
+      panelItemHoverBorder: `color-mix(in srgb, ${primary} 36%, #ffffff)`,
     };
   }, [isDarkSiderFooter, token, siderFooterToken]);
 

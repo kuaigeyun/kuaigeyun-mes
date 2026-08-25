@@ -92,6 +92,7 @@ import {
   Layout,
   LayoutDashboard,
   LayoutGrid,
+  LifeBuoy,
   List,
   Lock,
   LogIn,
@@ -247,6 +248,7 @@ const LUCIDE_BY_NAME: Record<string, React.ComponentType<any>> = {
   Layout,
   LayoutDashboard,
   LayoutGrid,
+  LifeBuoy,
   List,
   Lock,
   LogIn,
@@ -383,7 +385,9 @@ export const ManufacturingIcons = {
   radar: getLucideIcon('Radar'), // KU-AI 智能运营
   'triangle-alert': getLucideIcon('AlertTriangle'), // KU-AI 异常感知
   'alert-triangle': getLucideIcon('AlertTriangle'),
-  layers: getLucideIcon('Layers'), // 快研发/产品生命周期
+  layers: getLucideIcon('Layers'), // 快研发/产品生命周期 / 行业包
+  wheel: getLucideIcon('LifeBuoy'), // 辐条轮毂（manifest icon 别名）
+  aim: getLucideIcon('Target'), // 瞄准/同心度调试（manifest icon 别名）
   
   // 仓储和物流
   warehouse: getLucideIcon('Warehouse'),

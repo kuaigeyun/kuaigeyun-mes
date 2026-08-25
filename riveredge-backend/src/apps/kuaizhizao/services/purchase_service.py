@@ -474,6 +474,28 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                     | Q(id__in=list(material_order_ids))
                 )
 
+        if getattr(params, "column_filters", None):
+            from apps.kuaizhizao.utils.column_filters import (
+                apply_column_filters_to_queryset,
+                parse_column_filters_param,
+            )
+
+            query = apply_column_filters_to_queryset(
+                query,
+                parse_column_filters_param(params.column_filters),
+                allowed_fields={
+                    "status",
+                    "review_status",
+                    "order_code",
+                    "supplier_name",
+                    "buyer_name",
+                    "notes",
+                    "order_date",
+                    "delivery_date",
+                    "total_amount",
+                },
+            )
+
         # 加载建采购变更：与 is_source_order_locked_for_direct_edit / create_change_order 粗过滤对齐
         if params.pullable_only and (params.pull_target or "").strip().lower() == "purchase_order_change":
             change_eligible_statuses = (

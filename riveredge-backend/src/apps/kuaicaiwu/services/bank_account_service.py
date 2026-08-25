@@ -383,10 +383,11 @@ class BankAccountService:
             if existing:
                 await self._fill_transaction_summary_if_blank(existing, summary)
                 return None
+            is_refund = str(getattr(row, "settlement_type", "") or "") == "refund"
             return await self.record_transaction(
                 tenant_id,
                 bank_account_id=int(row.bank_account_id),
-                direction="in",
+                direction="out" if is_refund else "in",
                 amount=row.total_amount,
                 transaction_date=row.receipt_date,
                 source_doc_type="receipt",
@@ -409,10 +410,11 @@ class BankAccountService:
         if existing:
             await self._fill_transaction_summary_if_blank(existing, summary)
             return None
+        is_refund = str(getattr(row, "settlement_type", "") or "") == "refund"
         return await self.record_transaction(
             tenant_id,
             bank_account_id=int(row.bank_account_id),
-            direction="out",
+            direction="in" if is_refund else "out",
             amount=row.total_amount,
             transaction_date=row.payment_date,
             source_doc_type="payment",

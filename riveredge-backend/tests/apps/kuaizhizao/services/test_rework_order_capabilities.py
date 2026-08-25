@@ -104,6 +104,20 @@ def test_close_from_quality_released():
     assert caps.close.allowed is True
 
 
+def test_recoverable_report_unqualified_take():
+    from decimal import Decimal
+
+    from apps.kuaizhizao.services.rework_order_workflow import (
+        recoverable_report_unqualified_take,
+    )
+
+    assert recoverable_report_unqualified_take(Decimal("5"), Decimal("5")) == Decimal("5")
+    assert recoverable_report_unqualified_take(Decimal("5"), Decimal("3")) == Decimal("3")
+    assert recoverable_report_unqualified_take(Decimal("2"), Decimal("5")) == Decimal("2")
+    assert recoverable_report_unqualified_take(Decimal("5"), Decimal("0")) == Decimal("0")
+    assert recoverable_report_unqualified_take(Decimal("0"), Decimal("5")) == Decimal("0")
+
+
 def test_request_complete_requires_completed_operation():
     caps = derive_rework_order_capabilities(
         _record(status="in_progress", routing_mode=ROUTING_MODE_DYNAMIC),

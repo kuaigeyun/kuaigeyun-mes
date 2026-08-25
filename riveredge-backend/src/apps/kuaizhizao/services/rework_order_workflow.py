@@ -49,6 +49,21 @@ def _dec(value: Any) -> Decimal:
         return Decimal("0")
 
 
+def recoverable_report_unqualified_take(
+    rework_qty: Decimal,
+    operation_unqualified: Decimal,
+) -> Decimal:
+    """
+    报工不合格挽回量：不超过返工完修数与工序当前不合格数。
+    二次回写时不合格已为 0，take=0，保证幂等。
+    """
+    qty = _dec(rework_qty)
+    op_u = _dec(operation_unqualified)
+    if qty <= 0 or op_u <= 0:
+        return Decimal("0")
+    return min(qty, op_u)
+
+
 async def load_operation_links(tenant_id: int, rework_order_id: int) -> List[ReworkOrderOperation]:
     return await ReworkOrderOperation.filter(
         tenant_id=tenant_id,
@@ -717,9 +732,11 @@ async def _writeback_start_operation_after_quality_release(
     actor_id: int,
 ) -> None:
     """
-    工序返工质量放行后：把完修数量从起始工序原过程检验的不合格转入合格，
-    使后道可报数量 = 前道转序合格（含返工挽回）。
-    成品检验来源返工不改工序转序。
+    工序返工质量放行/关闭后回写起始工序：
+    - 方案质检（plan）：原过程检验不合格→合格，再 reconcile 工序质量口径
+    - 报工不合格（none/simple）：工序 unqualified→qualified（completed 不变）
+    使后道可报 = 前道转序合格（含返工挽回）。成品检验来源返工不改工序转序。
+    可重复调用：已挽回部分不再扣减。
     """
     if rework_order.source_inspection_id:
         return
@@ -730,6 +747,7 @@ async def _writeback_start_operation_after_quality_release(
         return
 
     from apps.kuaizhizao.models.process_inspection import ProcessInspection
+    from apps.kuaizhizao.services.inspection_policy_service import resolve_inspection_policy
     from apps.kuaizhizao.services.operation_transfer_service import (
         is_rework_verification_process_inspection,
     )
@@ -783,12 +801,51 @@ async def _writeback_start_operation_after_quality_release(
             v_insp.deleted_at = resolve_business_datetime()
             await v_insp.save(update_fields=["deleted_at"])
 
+    ipqc_mode, _, _ = await resolve_inspection_policy(
+        tenant_id, "ipqc", operation_id=master_op_id
+    )
+
     try:
         await ProcessInspectionService()._reconcile_operation_quality_after_inspection(
             tenant_id=tenant_id,
             work_order_id=work_order_id,
             operation_id=master_op_id,
         )
+    except Exception as exc:
+        logger.warning(
+            "返工放行后过程检验回写工序失败: rework={} wo={} err={}",
+            rework_order.code,
+            work_order_id,
+            exc,
+        )
+
+    # none/simple：报工不合格挂在工序上，检验 reconcile 不会改；此处转入合格
+    if ipqc_mode != "plan":
+        woo = await WorkOrderOperation.get_or_none(
+            tenant_id=tenant_id, id=woo.id, deleted_at__isnull=True
+        )
+        if woo is not None:
+            take_op = recoverable_report_unqualified_take(qty, woo.unqualified_quantity)
+            if take_op > 0:
+                woo.unqualified_quantity = _dec(woo.unqualified_quantity) - take_op
+                woo.qualified_quantity = _dec(woo.qualified_quantity) + take_op
+                await woo.save(
+                    update_fields=[
+                        "unqualified_quantity",
+                        "qualified_quantity",
+                        "updated_at",
+                    ]
+                )
+                remaining = max(Decimal("0"), remaining - take_op)
+                logger.info(
+                    "返工已挽回报工不合格: rework={} wo={} op={} take={}",
+                    rework_order.code,
+                    work_order_id,
+                    master_op_id,
+                    take_op,
+                )
+
+    try:
         await WorkOrderService().refresh_work_order_operation_transfer_state(
             tenant_id=tenant_id,
             work_order_id=work_order_id,
@@ -819,9 +876,10 @@ async def _writeback_source_on_close(
     if not rework_order.original_work_order_id:
         return
     # 若尚未质量放行就关闭（极少路径），补做工序回写
+    close_qty = _dec(rework_order.completed_quantity or rework_order.quantity)
     if (
         not rework_order.source_inspection_id
-        and rework_order.completed_quantity
+        and close_qty > 0
         and str(rework_order.status or "") == "closed"
     ):
         await _writeback_start_operation_after_quality_release(

@@ -15,6 +15,11 @@ import { DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../../component
 import type { SalesOrder } from '../../../../services/sales-order';
 import type { CustomField } from '../../../../../../services/customField';
 import {
+  DocumentAttachmentsReadonly,
+  documentAttachmentsFromRecord,
+  hasDocumentAttachments,
+} from '../../../../components/DocumentAttachmentsReadonly';
+import {
   SalesOrderDetailProvider,
   SalesOrderDetailBasicPane,
   SalesOrderDetailCollaborationPane,
@@ -78,6 +83,8 @@ export const SalesOrderDetailDrawer: React.FC<SalesOrderDetailDrawerProps> = ({
   const contentReady = Boolean(order);
   const showError = Boolean(error) && !contentReady && !loading;
   const showLoading = loading || (!contentReady && !showError);
+  const attachments = documentAttachmentsFromRecord(order);
+  const showAttachments = contentReady && hasDocumentAttachments(attachments);
 
   const title = (
     <Space size={4}>
@@ -166,6 +173,13 @@ export const SalesOrderDetailDrawer: React.FC<SalesOrderDetailDrawerProps> = ({
         }
         basic={contentReady ? <SalesOrderDetailBasicPane /> : showError ? null : <div style={{ minHeight: 80 }} />}
         collaboration={contentReady ? <SalesOrderDetailCollaborationPane /> : null}
+        supplementary={
+          showAttachments ? <DocumentAttachmentsReadonly attachments={attachments} /> : undefined
+        }
+        supplementaryTitle={
+          showAttachments ? t('app.uniDetail.sectionAttachments') : undefined
+        }
+        supplementaryVisible={showAttachments}
         lines={contentReady ? <SalesOrderDetailLinesPane /> : null}
         timeline={contentReady ? <SalesOrderDetailTimelinePane /> : null}
         traceDocument={

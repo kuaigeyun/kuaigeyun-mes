@@ -14,6 +14,7 @@ import { App, Badge, Button, Card, Form, Modal, Popconfirm, Space, Tag, Tooltip,
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { renderSystemActiveTag, renderSystemTypeMarker } from '../../utils/systemListPresentation';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PrinterOutlined, CheckCircleOutlined, PrinterFilled } from '@ant-design/icons';
+import { CheckCircle2, XCircle } from 'lucide-react';
 import { UniTable } from '../../../../components/uni-table';
 import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../utils/errorHandler';
@@ -917,10 +918,16 @@ const PrintDeviceListPage: React.FC = () => {
         ) : testResult ? (
           <div style={{ padding: 16 }}>
             {testResult.success ? (
-              <div style={{ color: '#52c41a' }}>✓ {testResult.message || t('pages.system.printDevices.testSuccess')}</div>
+              <div style={{ color: '#52c41a', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <CheckCircle2 size={16} strokeWidth={1.75} aria-hidden />
+                {testResult.message || t('pages.system.printDevices.testSuccess')}
+              </div>
             ) : (
               <div>
-                <div style={{ color: '#ff4d4f' }}>✗ {t('pages.system.printDevices.testFailed')}</div>
+                <div style={{ color: '#ff4d4f', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <XCircle size={16} strokeWidth={1.75} aria-hidden />
+                  {t('pages.system.printDevices.testFailed')}
+                </div>
                 {testResult.error && (
                   <div style={{ marginTop: 8, color: '#ff4d4f' }}>{testResult.error}</div>
                 )}
@@ -989,10 +996,16 @@ const PrintDeviceListPage: React.FC = () => {
           <div style={{ marginTop: 24, padding: 16, background: '#f5f5f5', borderRadius: 4 }}>
             <div style={{ marginBottom: 8, fontWeight: 'bold' }}>{t('pages.system.printDevices.printResultTitle')}</div>
             {printResult.success ? (
-              <div style={{ color: '#52c41a' }}>✓ {printResult.message || t('pages.system.printDevices.printSuccess')}</div>
+              <div style={{ color: '#52c41a', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <CheckCircle2 size={16} strokeWidth={1.75} aria-hidden />
+                {printResult.message || t('pages.system.printDevices.printSuccess')}
+              </div>
             ) : (
               <div>
-                <div style={{ color: '#ff4d4f' }}>✗ {t('pages.system.printDevices.printFailed')}</div>
+                <div style={{ color: '#ff4d4f', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <XCircle size={16} strokeWidth={1.75} aria-hidden />
+                  {t('pages.system.printDevices.printFailed')}
+                </div>
                 {printResult.error && (
                   <div style={{ marginTop: 8, color: '#ff4d4f' }}>{printResult.error}</div>
                 )}

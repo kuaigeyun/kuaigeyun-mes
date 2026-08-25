@@ -175,11 +175,11 @@ export function UniTableStackedPrimaryCell({
   const rowGap = 6;
   const copyIconStyle: React.CSSProperties = { color: DOC_FOLDER_COPY_ICON_COLOR, fontSize: 11 };
   const primaryLineStyle: React.CSSProperties = uniformText
-    ? { fontSize: token.fontSize, fontWeight: 500, lineHeight: 1.25, maxWidth: '100%' }
-    : { fontSize: token.fontSize, fontWeight: primaryBold ? 600 : 500, lineHeight: 1.25, maxWidth: '100%' };
+    ? { fontSize: token.fontSize, fontWeight: 400, lineHeight: 1.25, maxWidth: '100%' }
+    : { fontSize: token.fontSize, fontWeight: primaryBold ? 500 : 400, lineHeight: 1.25, maxWidth: '100%' };
   const primaryRowHeight = Math.round(token.fontSize * 1.25);
   const secondaryLineStyle: React.CSSProperties = uniformText
-    ? { fontSize: token.fontSize, fontWeight: 500, lineHeight: 1.25, whiteSpace: 'nowrap' }
+    ? { fontSize: token.fontSize, fontWeight: 400, lineHeight: 1.25, whiteSpace: 'nowrap' }
     : { fontSize: token.fontSizeSM, lineHeight: 1.2, whiteSpace: 'nowrap' };
 
   const primaryTextStyle: React.CSSProperties = {

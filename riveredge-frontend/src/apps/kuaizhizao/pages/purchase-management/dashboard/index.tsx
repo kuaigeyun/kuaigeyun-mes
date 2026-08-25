@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useMemo, useState } from 'react';
+import React, { Suspense, lazy, useCallback, useMemo, useState } from 'react';
 import { Table, Tag, Typography } from 'antd';
 import {
   ShoppingCartOutlined,
@@ -13,10 +13,13 @@ import {
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import dayjs from 'dayjs';
 import { mesDashboardService } from '../../../services/dashboard';
-import { listPurchaseOrders } from '../../../services/purchase';
+import { listPurchaseOrders, type PurchaseOrder } from '../../../services/purchase';
 import { listPurchaseRequisitions } from '../../../services/purchase-requisition';
+import {
+  listPurchaseArrivalWarnings,
+  type PurchaseArrivalWarningRow,
+} from '../../../services/purchase-arrival';
 import { getPurchaseTop10 } from '../../../../../services/dashboard';
 import { AmountDisplay } from '../../../../../components/permission';
 import { KUAIZHIZAO_PURCHASE_ORDER_FIELD_RESOURCE as PO } from '../../../constants/fieldPermissionResources';
@@ -36,20 +39,44 @@ import type { ModuleKpiDef, ModuleShortcutDef } from '../../../components/module
 
 const { Text } = Typography;
 
-const PENDING_RECEIPT_STATUS = new Set([
-  'approved', 'partial_received', '已审核', '部分收货',
-  'APPROVED', 'AUDITED', 'CONFIRMED', 'RELEASED', 'IN_PROGRESS',
-]);
-
 const PurchaseTopColumn = lazy(async () => {
   const { Column } = await import('@ant-design/charts');
   return { default: (props: React.ComponentProps<typeof Column>) => <Column {...props} /> };
 });
 
+/** 到货预警行按采购订单去重（取最早要求到货日） */
+function dedupeWarningsByPurchaseOrder(
+  rows: PurchaseArrivalWarningRow[],
+): PurchaseArrivalWarningRow[] {
+  const byPo = new Map<number, PurchaseArrivalWarningRow>();
+  for (const row of rows) {
+    const poId = Number(row.purchase_order_id);
+    if (!Number.isFinite(poId) || poId <= 0) continue;
+    const prev = byPo.get(poId);
+    if (!prev) {
+      byPo.set(poId, row);
+      continue;
+    }
+    const prevDate = prev.required_date ? String(prev.required_date) : '';
+    const nextDate = row.required_date ? String(row.required_date) : '';
+    if (nextDate && (!prevDate || nextDate < prevDate)) {
+      byPo.set(poId, row);
+    }
+  }
+  return Array.from(byPo.values());
+}
+
 const PurchaseDashboard: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [trendType, setTrendType] = useState<'amount' | 'quantity'>('amount');
+
+  const openPurchaseOrder = useCallback((orderId: number) => {
+    if (!Number.isFinite(orderId) || orderId <= 0) return;
+    navigate('/apps/kuaizhizao/purchase-management/purchase-orders', {
+      state: { openPurchaseOrderId: orderId },
+    });
+  }, [navigate]);
 
   const { data: summary, loading: summaryLoading } = useDashboardRequest(
     mesDashboardService.getPurchaseSummary,
@@ -60,8 +87,12 @@ const PurchaseDashboard: React.FC = () => {
     'kz:purchase-dashboard:todos',
   );
   const { data: recentOrdersData, loading: ordersLoading } = useDashboardRequest(
-    () => listPurchaseOrders({ limit: 30 }),
+    () => listPurchaseOrders({ limit: 50, order_by: 'delivery_date' }),
     'kz:purchase-dashboard:recent-orders',
+  );
+  const { data: overdueWarningsData, loading: overdueLoading } = useDashboardRequest(
+    () => listPurchaseArrivalWarnings({ warning_level: 'overdue', limit: 50 }),
+    'kz:purchase-dashboard:overdue-warnings',
   );
   const { data: recentRequisitionsData, loading: requisitionsLoading } = useDashboardRequest(
     () => listPurchaseRequisitions({ limit: 8 }),
@@ -81,21 +112,19 @@ const PurchaseDashboard: React.FC = () => {
   const recentRequisitions = recentRequisitionsData?.data || [];
   const todos = todosData?.items || [];
 
+  // 待到货：仍有未到货数量（与采购中心 KPI / 到货预警口径一致），禁止仅凭头状态猜测
   const pendingReceiptOrders = useMemo(
     () =>
-      recentOrders.filter((r: { status?: string }) =>
-        PENDING_RECEIPT_STATUS.has(String(r.status ?? '')),
+      (recentOrders as PurchaseOrder[]).filter(
+        (r) => Number(r.outstanding_total ?? 0) > 0,
       ),
     [recentOrders],
   );
 
+  // 逾期未到货：到货预警真源（行级未关闭且逾期），按订单去重
   const overdueReceiptOrders = useMemo(
-    () =>
-      pendingReceiptOrders.filter(
-        (r: { delivery_date?: string | null }) =>
-          r.delivery_date && dayjs(r.delivery_date).isBefore(dayjs(), 'day'),
-      ),
-    [pendingReceiptOrders],
+    () => dedupeWarningsByPurchaseOrder(overdueWarningsData?.data || []).slice(0, 6),
+    [overdueWarningsData],
   );
 
   const kpis: ModuleKpiDef[] = useMemo(
@@ -163,8 +192,8 @@ const PurchaseDashboard: React.FC = () => {
       {
         title: t('app.kuaizhizao.purchaseDashboard.colRequisitionCode'),
         dataIndex: 'requisition_code',
-        render: (text: string, record: { id: number }) => (
-          <a onClick={() => navigate(`/apps/kuaizhizao/purchase-management/purchase-requisitions/${record.id}`)}>{text}</a>
+        render: (text: string) => (
+          <a onClick={() => navigate('/apps/kuaizhizao/purchase-management/purchase-requisitions')}>{text}</a>
         ),
       },
       {
@@ -182,14 +211,22 @@ const PurchaseDashboard: React.FC = () => {
       {
         title: t('app.kuaizhizao.purchaseDashboard.colOrderCode'),
         dataIndex: 'order_code',
-        render: (text: string, record: { id: number }) => (
-          <a onClick={() => navigate(`/apps/kuaizhizao/purchase-management/purchase-orders/${record.id}`)}>{text}</a>
+        ellipsis: true,
+        render: (text: string, record: PurchaseOrder) => (
+          <a onClick={() => openPurchaseOrder(Number(record.id))}>{text}</a>
         ),
+      },
+      {
+        title: t('app.kuaizhizao.purchaseDashboard.colSupplier'),
+        dataIndex: 'supplier_name',
+        ellipsis: true,
+        render: (name: string | null | undefined) => name || '-',
       },
       {
         title: t('app.kuaizhizao.purchaseDashboard.colAmount'),
         dataIndex: 'total_amount',
         align: 'right' as const,
+        width: 96,
         render: (val: number | null) => (
           <Text strong>
             <AmountDisplay resource={PO} fieldName="total_amount" value={val != null ? Number(val) : null} />
@@ -197,7 +234,7 @@ const PurchaseDashboard: React.FC = () => {
         ),
       },
     ],
-    [navigate, t],
+    [openPurchaseOrder, t],
   );
 
   const overdueColumns = useMemo(
@@ -205,18 +242,25 @@ const PurchaseDashboard: React.FC = () => {
       {
         title: t('app.kuaizhizao.purchaseDashboard.colOrderCode'),
         dataIndex: 'order_code',
-        render: (text: string, record: { id: number }) => (
-          <a onClick={() => navigate(`/apps/kuaizhizao/purchase-management/purchase-orders/${record.id}`)}>{text}</a>
+        ellipsis: true,
+        render: (text: string, record: PurchaseArrivalWarningRow) => (
+          <a onClick={() => openPurchaseOrder(Number(record.purchase_order_id))}>{text}</a>
         ),
       },
       {
+        title: t('app.kuaizhizao.purchaseDashboard.colSupplier'),
+        dataIndex: 'supplier_name',
+        ellipsis: true,
+        render: (name: string | null | undefined) => name || '-',
+      },
+      {
         title: t('app.kuaizhizao.purchaseDashboard.colDeliveryDate'),
-        dataIndex: 'delivery_date',
-        width: 96,
-        render: (date: string) => formatDateTime(date, 'MM-DD'),
+        dataIndex: 'required_date',
+        width: 72,
+        render: (date: string) => (date ? formatDateTime(date, 'MM-DD') : '-'),
       },
     ],
-    [navigate, t],
+    [openPurchaseOrder, t],
   );
 
   const trendChartData = useMemo(() => {
@@ -263,6 +307,7 @@ const PurchaseDashboard: React.FC = () => {
           >
             <Table
               size="small"
+              tableLayout="fixed"
               dataSource={recentRequisitions.filter((r: { status?: string }) =>
                 ['待审核', '审批中', 'draft', 'pending'].includes(String(r.status)),
               ).slice(0, 6)}
@@ -280,6 +325,7 @@ const PurchaseDashboard: React.FC = () => {
           >
             <Table
               size="small"
+              tableLayout="fixed"
               dataSource={pendingReceiptOrders.slice(0, 6)}
               pagination={false}
               rowKey="id"
@@ -290,14 +336,15 @@ const PurchaseDashboard: React.FC = () => {
           <ModuleActionPanel
             layout="masonry"
             title={t('app.kuaizhizao.purchaseDashboard.overdueReceiptsTitle')}
-            loading={ordersLoading}
-            extra={<a onClick={() => navigate('/apps/kuaizhizao/purchase-management/purchase-orders?status=approved')}>{t('app.kuaizhizao.purchaseDashboard.all')}</a>}
+            loading={overdueLoading}
+            extra={<a onClick={() => navigate('/apps/kuaizhizao/purchase-management/arrival-warnings')}>{t('app.kuaizhizao.purchaseDashboard.all')}</a>}
           >
             <Table
               size="small"
-              dataSource={overdueReceiptOrders.slice(0, 6)}
+              tableLayout="fixed"
+              dataSource={overdueReceiptOrders}
               pagination={false}
-              rowKey="id"
+              rowKey={(r) => String(r.purchase_order_id)}
               columns={overdueColumns}
               locale={{ emptyText: t('app.kuaizhizao.purchaseDashboard.noOverdueReceipts') }}
             />

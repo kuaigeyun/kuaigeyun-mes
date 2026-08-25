@@ -1,10 +1,11 @@
 /**
- * 承兑汇票：关联票据台账 + 参考号（票号）。
+ * 收/付款方式「票据」：关联应收/应付票据台账 + 参考号（票号）。
  */
 import React, { useEffect, useMemo, useState } from 'react';
 import { ProForm, ProFormDependency, ProFormSelect, ProFormText } from '@ant-design/pro-components';
-import { Typography } from 'antd';
+import { App, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { getApiErrorMessage } from '../../../utils/errorHandler';
 import {
   financeNoteService,
   type FinanceNote,
@@ -25,6 +26,7 @@ export const AcceptanceBillLinkFields: React.FC<Props> = ({
   colProps = { span: 12 },
 }) => {
   const { t } = useTranslation();
+  const { message: messageApi } = App.useApp();
   const form = ProForm.useFormInstance();
   const partnerId = ProForm.useWatch(partnerFieldName, form);
   const noteId = ProForm.useWatch('note_id', form);
@@ -48,8 +50,11 @@ export const AcceptanceBillLinkFields: React.FC<Props> = ({
           limit: 200,
         });
         if (!cancelled) setNotes(res.data || []);
-      } catch {
-        if (!cancelled) setNotes([]);
+      } catch (error) {
+        if (!cancelled) {
+          setNotes([]);
+          messageApi.error(getApiErrorMessage(error, t('app.kuaicaiwu.notes.linkFailed')));
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -57,7 +62,7 @@ export const AcceptanceBillLinkFields: React.FC<Props> = ({
     return () => {
       cancelled = true;
     };
-  }, [direction, partnerId]);
+  }, [direction, partnerId, messageApi, t]);
 
   const noteOptions = useMemo(
     () =>
@@ -90,6 +95,8 @@ export const AcceptanceBillLinkFields: React.FC<Props> = ({
     return null;
   }, [noteId, notes, totalAmount, t]);
 
+  const hasPartner = partnerId != null && partnerId !== '';
+
   return (
     <>
       <ProFormSelect
@@ -99,10 +106,15 @@ export const AcceptanceBillLinkFields: React.FC<Props> = ({
         options={noteOptions}
         showSearch
         allowClear
-        placeholder={t('app.kuaicaiwu.notes.linkPlaceholder')}
+        placeholder={
+          hasPartner
+            ? t('app.kuaicaiwu.notes.linkPlaceholder')
+            : t('app.kuaicaiwu.notes.linkNeedPartner')
+        }
         fieldProps={{
           loading,
           optionFilterProp: 'label',
+          disabled: !hasPartner,
         }}
         extra={t('app.kuaicaiwu.notes.linkHint')}
       />

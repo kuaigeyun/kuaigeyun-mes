@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
 import { App, Button, Tag, Alert, theme, Space, Collapse, Spin } from 'antd';
 import { DatabaseOutlined } from '@ant-design/icons';
+import { Lightbulb } from 'lucide-react';
 import { TwoColumnLayout } from '../../../../components/layout-templates';
 import { FEATURE_PAGE_LIST_ITEM_CLASS, FEATURE_PAGE_RIGHT_PANEL_HEADER_STYLE, FEATURE_PAGE_RIGHT_PANEL_NAME_STYLE, FEATURE_PAGE_RIGHT_PANEL_PATH_STYLE, FEATURE_PAGE_RIGHT_PANEL_TITLE_ROW_STYLE } from '../../../../components/layout-templates/constants';
 import {
@@ -721,7 +722,10 @@ const CodeRuleListPage: React.FC = () => {
                                   <li>{t('pages.system.codeRules.tipCheck2')} <code>code_rule_pages.py</code></li>
                                   <li>{t('pages.system.codeRules.tipCheck3')} <code>codeRulePages.ts</code></li>
                                 </ul>
-                                <p style={{ margin: '6px 0 0 0', color: token.colorTextSecondary }}>💡 {t('pages.system.codeRules.tipSuggestion')}</p>
+                                <p style={{ margin: '6px 0 0 0', color: token.colorTextSecondary, display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+                                  <Lightbulb size={14} strokeWidth={1.75} style={{ flexShrink: 0, marginTop: 2 }} aria-hidden />
+                                  <span>{t('pages.system.codeRules.tipSuggestion')}</span>
+                                </p>
                               </>
                             ),
                           },

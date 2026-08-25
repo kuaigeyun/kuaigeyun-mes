@@ -94,30 +94,6 @@ async def get_standard_chain(
     )
 
 
-@router.get("/prepayment-balances", summary="Prepayment balance summary")
-async def get_prepayment_balances(
-    partner_type: Optional[str] = Query(None, description="customer 或 supplier；传入时分页返回 items"),
-    keyword: Optional[str] = Query(None),
-    partner_name: Optional[str] = Query(None),
-    skip: int = Query(0, ge=0),
-    limit: int = Query(20, ge=1, le=200),
-    sort_field: Optional[str] = Query(None),
-    sort_order: Optional[str] = Query(None),
-    current_user: Any = Depends(get_current_user),
-):
-    return await service.get_prepayment_balances(
-        current_user.tenant_id,
-        partner_type=partner_type,
-        keyword=keyword,
-        partner_name=partner_name,
-        skip=skip,
-        limit=limit,
-        sort_field=sort_field,
-        sort_order=sort_order,
-        operator_id=getattr(current_user, "id", None),
-    )
-
-
 @router.get("/{document_type}/{document_id}", summary="Reconcile single document chain")
 async def reconcile_document(
     document_type: str,

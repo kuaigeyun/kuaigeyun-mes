@@ -11,6 +11,21 @@ import React, { useState, useEffect } from 'react';
 import { Card, Tabs, Descriptions, Tag, Space, List, Typography, Empty } from 'antd';
 import { EyeOutlined, DashboardOutlined } from '@ant-design/icons';
 import { App } from 'antd';
+import type { LucideIcon } from 'lucide-react';
+import {
+  BadgeCheck,
+  Briefcase,
+  ClipboardList,
+  Cog,
+  HardHat,
+  Package,
+  Rocket,
+  Shirt,
+  ShoppingCart,
+  User,
+  Wallet,
+  Wrench,
+} from 'lucide-react';
 import { getRoleScenarios, getRoleDashboard, RoleScenarioData } from '../../../services/roleScenario';
 
 const { Title, Paragraph, Text } = Typography;
@@ -18,19 +33,19 @@ const { Title, Paragraph, Text } = Typography;
 /**
  * 角色列表（13个角色）
  */
-const ROLE_LIST = [
-  { code: 'sales', name: '销售', icon: '💼' },
-  { code: 'purchase', name: '采购', icon: '🛒' },
-  { code: 'warehouse', name: '仓库', icon: '📦' },
-  { code: 'technician', name: '技术研发人员', icon: '🔧' },
-  { code: 'planner', name: '生产计划人员', icon: '📋' },
-  { code: 'supervisor', name: '班组长', icon: '👔' },
-  { code: 'operator', name: '生产人员', icon: '👷' },
-  { code: 'quality', name: '质量组', icon: '✅' },
-  { code: 'equipment', name: '设备组', icon: '⚙️' },
-  { code: 'finance', name: '财务', icon: '💰' },
-  { code: 'manager', name: '管理者', icon: '👤' },
-  { code: 'implementer', name: '系统实施人员', icon: '🚀' },
+const ROLE_LIST: { code: string; name: string; icon: LucideIcon }[] = [
+  { code: 'sales', name: '销售', icon: Briefcase },
+  { code: 'purchase', name: '采购', icon: ShoppingCart },
+  { code: 'warehouse', name: '仓库', icon: Package },
+  { code: 'technician', name: '技术研发人员', icon: Wrench },
+  { code: 'planner', name: '生产计划人员', icon: ClipboardList },
+  { code: 'supervisor', name: '班组长', icon: Shirt },
+  { code: 'operator', name: '生产人员', icon: HardHat },
+  { code: 'quality', name: '质量组', icon: BadgeCheck },
+  { code: 'equipment', name: '设备组', icon: Cog },
+  { code: 'finance', name: '财务', icon: Wallet },
+  { code: 'manager', name: '管理者', icon: User },
+  { code: 'implementer', name: '系统实施人员', icon: Rocket },
 ];
 
 /**
@@ -115,15 +130,18 @@ const RoleScenariosPage: React.FC = () => {
         activeKey={activeRole}
         onChange={handleRoleChange}
         type="card"
-        items={ROLE_LIST.map(role => ({
+        items={ROLE_LIST.map((role) => {
+          const RoleIcon = role.icon;
+          return {
           key: role.code,
           label: (
             <Space>
-              <span>{role.icon}</span>
+              <RoleIcon size={16} strokeWidth={1.75} aria-hidden />
               <span>{role.name}</span>
             </Space>
           ),
-        }))}
+        };
+        })}
       />
 
       {loading ? (

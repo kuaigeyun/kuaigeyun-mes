@@ -261,6 +261,11 @@ import { testGenerateCode, getCodeRulePageConfig, generateCode } from '../../../
 import SalesContractTermsManageModal from './SalesContractTermsManageModal';
 import { ContractTermPreviewContent } from './ContractTermPreviewContent';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import {
+  appendDocumentAttachmentsToSupplementary,
+  documentAttachmentsFromRecord,
+  hasDocumentAttachments,
+} from '../../../components/DocumentAttachmentsReadonly';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 import {
@@ -3287,6 +3292,18 @@ const SalesContractsPage: React.FC = () => {
     'sales_contract',
   );
 
+  const salesContractAttachments = documentAttachmentsFromRecord(detail);
+  const salesContractAttLabel = t('app.uniDetail.sectionAttachments');
+  const salesContractPaymentSupplementary = paymentSummary ? (
+    <Descriptions column={3} size="small" bordered>
+      <Descriptions.Item label={t('app.kuaizhizao.salesContract.totalContractAmount')}>¥{Number(paymentSummary.total_amount ?? 0).toFixed(2)}</Descriptions.Item>
+      <Descriptions.Item label={t('app.kuaizhizao.salesContract.plannedMilestones')}>¥{Number(paymentSummary.planned_milestone_amount ?? 0).toFixed(2)}</Descriptions.Item>
+      <Descriptions.Item label={t('app.kuaizhizao.salesContract.invoiced')}>¥{Number(paymentSummary.invoiced_amount ?? 0).toFixed(2)}</Descriptions.Item>
+      <Descriptions.Item label={t('app.kuaizhizao.salesContract.collected')}>¥{Number(paymentSummary.collected_amount ?? 0).toFixed(2)}</Descriptions.Item>
+      <Descriptions.Item label={t('app.kuaizhizao.salesContract.pendingInvoice')}>¥{Number(paymentSummary.pending_amount ?? 0).toFixed(2)}</Descriptions.Item>
+    </Descriptions>
+  ) : undefined;
+
   return (
 
     <ListPageTemplate>
@@ -3632,19 +3649,19 @@ const SalesContractsPage: React.FC = () => {
           ) : undefined
         }
 
-        supplementaryTitle={t('app.kuaizhizao.salesContract.paymentSummary')}
-
-        supplementary={
-          paymentSummary ? (
-            <Descriptions column={3} size="small" bordered>
-              <Descriptions.Item label={t('app.kuaizhizao.salesContract.totalContractAmount')}>¥{Number(paymentSummary.total_amount ?? 0).toFixed(2)}</Descriptions.Item>
-              <Descriptions.Item label={t('app.kuaizhizao.salesContract.plannedMilestones')}>¥{Number(paymentSummary.planned_milestone_amount ?? 0).toFixed(2)}</Descriptions.Item>
-              <Descriptions.Item label={t('app.kuaizhizao.salesContract.invoiced')}>¥{Number(paymentSummary.invoiced_amount ?? 0).toFixed(2)}</Descriptions.Item>
-              <Descriptions.Item label={t('app.kuaizhizao.salesContract.collected')}>¥{Number(paymentSummary.collected_amount ?? 0).toFixed(2)}</Descriptions.Item>
-              <Descriptions.Item label={t('app.kuaizhizao.salesContract.pendingInvoice')}>¥{Number(paymentSummary.pending_amount ?? 0).toFixed(2)}</Descriptions.Item>
-            </Descriptions>
-          ) : undefined
+        supplementaryTitle={
+          paymentSummary
+            ? t('app.kuaizhizao.salesContract.paymentSummary')
+            : hasDocumentAttachments(salesContractAttachments)
+              ? salesContractAttLabel
+              : undefined
         }
+
+        supplementary={appendDocumentAttachmentsToSupplementary(
+          salesContractPaymentSupplementary,
+          salesContractAttachments,
+          salesContractAttLabel,
+        )}
 
         lines={
 

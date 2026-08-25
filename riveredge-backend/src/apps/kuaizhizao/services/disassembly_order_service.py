@@ -327,6 +327,9 @@ class DisassemblyOrderService(AppBaseService[DisassemblyOrder]):
             # 调用统一库存服务：消耗成品、增加组件
             from apps.kuaizhizao.services.inventory_service import InventoryService
 
+            user_info = await self.get_user_info(executed_by)
+            operator_name = user_info["name"]
+
             await InventoryService.decrease_stock(
                 tenant_id=tenant_id,
                 material_id=order.product_material_id,
@@ -335,6 +338,10 @@ class DisassemblyOrderService(AppBaseService[DisassemblyOrder]):
                 source_type="disassembly_order",
                 source_doc_id=order_id,
                 source_doc_code=order.code,
+                movement_type="disassembly_consume",
+                from_warehouse_id=order.warehouse_id,
+                operator_id=executed_by,
+                operator_name=operator_name,
             )
             for item in items:
                 await InventoryService.increase_stock(
@@ -345,17 +352,20 @@ class DisassemblyOrderService(AppBaseService[DisassemblyOrder]):
                     source_type="disassembly_order",
                     source_doc_id=order_id,
                     source_doc_code=order.code,
+                    movement_type="disassembly_receipt",
+                    to_warehouse_id=order.warehouse_id,
+                    operator_id=executed_by,
+                    operator_name=operator_name,
                 )
                 item.status = "produced"
                 await item.save()
 
-            user_info = await self.get_user_info(executed_by)
             order.status = "completed"
             order.executed_by = executed_by
-            order.executed_by_name = user_info["name"]
+            order.executed_by_name = operator_name
             order.executed_at = resolve_business_datetime()
             order.updated_by = executed_by
-            order.updated_by_name = user_info["name"]
+            order.updated_by_name = operator_name
             await order.save()
 
             return DisassemblyOrderResponse.model_validate(order)

@@ -11,6 +11,7 @@ import React, { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import PageSkeleton from '../../components/page-skeleton';
 import { LinkedDocumentDetailProvider } from '../../components/linked-document-detail';
+import { FinanceVoucherDetailProvider } from './components/FinanceVoucherDetailProvider';
 
 const withPageSuspense = (LazyComponent: React.LazyExoticComponent<React.ComponentType<any>>) => (
   <Suspense fallback={<PageSkeleton />}><LazyComponent /></Suspense>
@@ -26,7 +27,9 @@ const PurchaseInvoiceDetailPage = lazy(() => import('./pages/finance-management/
 const SalesInvoicesPage = lazy(() => import('./pages/finance-management/sales-invoices'));
 const SalesInvoiceDetailPage = lazy(() => import('./pages/finance-management/sales-invoices/detail'));
 const ReceiptsPage = lazy(() => import('./pages/finance-management/receipts'));
+const ReceiptRefundsPage = lazy(() => import('./pages/finance-management/receipt-refunds'));
 const PaymentsPage = lazy(() => import('./pages/finance-management/payments'));
+const PaymentRefundsPage = lazy(() => import('./pages/finance-management/payment-refunds'));
 
 // 成本管理页面
 const CostRulesPage = lazy(() => import('./pages/cost-management/cost-rules'));
@@ -68,6 +71,7 @@ const InputCertificationPage = lazy(() => import('./pages/tax-management/input-c
 const KuaicaiwuApp: React.FC = () => {
   return (
     <LinkedDocumentDetailProvider>
+      <FinanceVoucherDetailProvider>
       <Routes>
       {/* 财务管理路由 */}
       <Route path="finance-management/dashboard" element={withPageSuspense(FinanceCenterDashboard)} />
@@ -80,7 +84,9 @@ const KuaicaiwuApp: React.FC = () => {
       <Route path="finance-management/sales-invoices" element={withPageSuspense(SalesInvoicesPage)} />
       <Route path="finance-management/sales-invoices/:id" element={withPageSuspense(SalesInvoiceDetailPage)} />
       <Route path="finance-management/receipts" element={withPageSuspense(ReceiptsPage)} />
+      <Route path="finance-management/receipt-refunds" element={withPageSuspense(ReceiptRefundsPage)} />
       <Route path="finance-management/payments" element={withPageSuspense(PaymentsPage)} />
+      <Route path="finance-management/payment-refunds" element={withPageSuspense(PaymentRefundsPage)} />
       <Route path="finance-management/settlement" element={withPageSuspense(SettlementPage)} />
       <Route path="finance-management/partner-statements" element={withPageSuspense(PartnerStatementsPage)} />
       <Route path="finance-management/partner-statements/:id" element={withPageSuspense(PartnerStatementDetailPage)} />
@@ -164,6 +170,7 @@ const KuaicaiwuApp: React.FC = () => {
         </div>
       } />
       </Routes>
+      </FinanceVoucherDetailProvider>
     </LinkedDocumentDetailProvider>
   );
 };
