@@ -143,9 +143,9 @@ const LoginLogsPage: React.FC = () => {
       render: (_: unknown, record: LoginLog) => record.login_browser || '-',
     },
     {
-      title: t('pages.system.loginLogs.loginStatus'),
-      dataIndex: 'login_status',
-      render: (_: unknown, record: LoginLog) => renderLoginStatusTag(record.login_status),
+      title: t('pages.system.loginLogs.loginTime'),
+      dataIndex: 'created_at',
+      valueType: 'dateTime' as const,
     },
     {
       title: t('pages.system.loginLogs.failureReason'),
@@ -153,9 +153,9 @@ const LoginLogsPage: React.FC = () => {
       render: (_: unknown, record: LoginLog) => record.failure_reason || '-',
     },
     {
-      title: t('pages.system.loginLogs.loginTime'),
-      dataIndex: 'created_at',
-      valueType: 'dateTime' as const,
+      title: t('pages.system.loginLogs.loginStatus'),
+      dataIndex: 'login_status',
+      render: (_: unknown, record: LoginLog) => renderLoginStatusTag(record.login_status),
     },
   ];
 
@@ -251,15 +251,6 @@ const LoginLogsPage: React.FC = () => {
       width: 150,
     },
     {
-      title: t('pages.system.loginLogs.failureReason'),
-      dataIndex: 'failure_reason',
-      key: 'failure_reason',
-      ellipsis: true,
-      search: false,
-      width: 200,
-      render: (_: unknown, record: LoginLog) => record.failure_reason || '-',
-    },
-    {
       title: t('pages.system.loginLogs.loginTime'),
       dataIndex: 'created_at',
       key: 'created_at',
@@ -270,6 +261,15 @@ const LoginLogsPage: React.FC = () => {
       minWidth: 180,
       uniTableKeepWidth: true,
       resizable: false,
+    },
+    {
+      title: t('pages.system.loginLogs.failureReason'),
+      dataIndex: 'failure_reason',
+      key: 'failure_reason',
+      ellipsis: true,
+      search: false,
+      width: 200,
+      render: (_: unknown, record: LoginLog) => record.failure_reason || '-',
     },
     {
       title: t('pages.system.loginLogs.loginStatus'),
@@ -296,7 +296,7 @@ const LoginLogsPage: React.FC = () => {
         <UniTable<LoginLog>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('system.loginLogs')}
-          columnPersistenceId="pages.system.login-logs.list-v1"
+          columnPersistenceId="pages.system.login-logs.list-v2"
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {

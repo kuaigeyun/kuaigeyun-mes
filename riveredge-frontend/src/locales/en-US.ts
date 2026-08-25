@@ -2496,6 +2496,7 @@ export default {
   'app.kuaioa.name': 'Light Office',
   'app.spoke-wheel.name': 'Spoke Wheel',
   'app.industry-pack.name': 'Industry Pack',
+  'app.industry-pack.short': 'Industry',
   'app.industry-pack.homeHint': 'Choose an enabled industry app from the left menu',
   'app.spoke-wheel.desc': 'Aluminum spoke wheel 5-part assembly and debug module (concentricity ≤ 0.8mm)',
   'app.spoke-wheel.menu.assembly-debug': 'Assembly debug',

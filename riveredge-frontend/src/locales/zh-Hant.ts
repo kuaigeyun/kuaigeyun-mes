@@ -2497,6 +2497,7 @@ export default {
   'app.kuaioa.name': '輕辦公',
   'app.spoke-wheel.name': '輻條輪毂',
   'app.industry-pack.name': '行業包',
+  'app.industry-pack.short': '行業',
   'app.industry-pack.homeHint': '請從左側選單選擇已啟用的行業應用',
   'app.spoke-wheel.desc': '鋁合金輻條輪毂 5 部件 + 總裝調試業務模組(同心度 ≤ 0.8mm)',
   'app.spoke-wheel.menu.assembly-debug': '總裝調試',

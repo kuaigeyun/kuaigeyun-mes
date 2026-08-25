@@ -162,6 +162,34 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 f"{Decimal(str(fluctuation_limit_percent)):.2f}%（基准价={benchmark_price}，当前={current_price}）"
             )
 
+    @staticmethod
+    def _apply_purchase_item_price_settlement(
+        item_dict: Dict[str, Any],
+        *,
+        unit_price: Decimal,
+        partner_settlement_method: Optional[str] = None,
+        explicit_status: Optional[str] = None,
+        explicit_provisional_price: Optional[Decimal] = None,
+    ) -> None:
+        """明细落库前推导定价状态，避免 schema 默认 None 覆盖模型非空字段。"""
+        from apps.kuaicaiwu.utils.price_settlement_helpers import (
+            derive_price_settlement_status,
+            derive_provisional_unit_price,
+        )
+
+        settlement_status = derive_price_settlement_status(
+            unit_price=unit_price,
+            partner_settlement_method=partner_settlement_method,
+            explicit_status=explicit_status,
+        )
+        provisional_price = derive_provisional_unit_price(
+            unit_price=unit_price,
+            reference_price=explicit_provisional_price,
+            settlement_status=settlement_status,
+        )
+        item_dict["price_settlement_status"] = settlement_status
+        item_dict["provisional_unit_price"] = provisional_price
+
     async def _ensure_prepayment_payment_after_confirm(
         self,
         *,
@@ -299,20 +327,12 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                     item_dict["material_code"] = str(
                         material.main_code or getattr(material, "code", None) or ""
                     )[:50]
-                from apps.kuaicaiwu.utils.price_settlement_helpers import (
-                    derive_price_settlement_status,
-                    derive_provisional_unit_price,
-                )
-
-                settlement_status = derive_price_settlement_status(
+                self._apply_purchase_item_price_settlement(
+                    item_dict,
                     unit_price=item_data.unit_price,
                     partner_settlement_method=partner_settlement_method,
                     explicit_status=getattr(item_data, "price_settlement_status", None),
-                )
-                provisional_price = derive_provisional_unit_price(
-                    unit_price=item_data.unit_price,
-                    reference_price=getattr(item_data, "provisional_unit_price", None),
-                    settlement_status=settlement_status,
+                    explicit_provisional_price=getattr(item_data, "provisional_unit_price", None),
                 )
 
                 item_dict.update({
@@ -320,8 +340,6 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                     'order_id': order.id,
                     'total_price': total_price,
                     'outstanding_quantity': outstanding_quantity,
-                    'price_settlement_status': settlement_status,
-                    'provisional_unit_price': provisional_price,
                     'created_by': created_by,
                     'updated_by': created_by
                 })
@@ -1040,6 +1058,16 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 purchase_price_fluctuation_limit = await BusinessConfigService().get_purchase_price_fluctuation_limit_percent(
                     tenant_id
                 )
+                partner_settlement_method = None
+                supplier_id_for_items = int(update_dict.get("supplier_id", order.supplier_id) or 0)
+                if supplier_id_for_items > 0:
+                    supplier_for_items = await Supplier.get_or_none(
+                        tenant_id=tenant_id,
+                        id=supplier_id_for_items,
+                    )
+                    if supplier_for_items:
+                        partner_settlement_method = supplier_for_items.settlement_method_code
+
                 # 删除原有明细
                 await PurchaseOrderItem.filter(tenant_id=tenant_id, order_id=order_id).delete()
 
@@ -1067,6 +1095,13 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                         item_dict["material_code"] = str(
                             material.main_code or getattr(material, "code", None) or ""
                         )[:50]
+                    self._apply_purchase_item_price_settlement(
+                        item_dict,
+                        unit_price=item_data.unit_price,
+                        partner_settlement_method=partner_settlement_method,
+                        explicit_status=getattr(item_data, "price_settlement_status", None),
+                        explicit_provisional_price=getattr(item_data, "provisional_unit_price", None),
+                    )
                     item_dict.update({
                         'tenant_id': tenant_id,
                         'order_id': order.id,

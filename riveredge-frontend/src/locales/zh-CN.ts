@@ -2577,6 +2577,7 @@ export default {
   'app.kuaioa.name': '轻办公',
   'app.spoke-wheel.name': '辐条轮毂',
   'app.industry-pack.name': '行业包',
+  'app.industry-pack.short': '行业',
   'app.industry-pack.homeHint': '请从左侧菜单选择已启用的行业应用',
   'app.spoke-wheel.desc': '铝合金辐条轮毂 5 部件 + 总装调试业务模块(同心度 ≤ 0.8mm)',
   'app.spoke-wheel.menu.assembly-debug': '总装调试',

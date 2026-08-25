@@ -2497,6 +2497,7 @@ export default {
   'app.kuaioa.name': 'ຫ້ອງການແສງສະຫວ່າງ',
   'app.spoke-wheel.name': 'ລໍ້ສປົກ',
   'app.industry-pack.name': 'ແພັກອຸດສາຫະກຳ',
+  'app.industry-pack.short': 'ອຸດສາຫະກຳ',
   'app.spoke-wheel.desc': 'ໂມດູນປະກອບແລະດັດແກ້ລໍ້ສປົກແອລູມິນຽມ 5 ຊິ້ນ (ສູນກາງ ≤ 0.8mm)',
   'app.spoke-wheel.menu.assembly-debug': 'ດັດແກ້ການປະກອບ',
   'app.kuaioa.menu.group.approval': 'ການອະນຸມັດ',

@@ -2496,6 +2496,7 @@ export default {
   'app.kuaioa.name': '軽オフィス',
   'app.spoke-wheel.name': 'スポークホイール',
   'app.industry-pack.name': '業界パック',
+  'app.industry-pack.short': '業界',
   'app.spoke-wheel.desc': 'アルミスポークホイール 5 部品 + 総組調整モジュール（同心度 ≤ 0.8mm）',
   'app.spoke-wheel.menu.assembly-debug': '総組調整',
   'app.kuaioa.menu.group.approval': '承認協同',

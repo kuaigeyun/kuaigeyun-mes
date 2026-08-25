@@ -2496,6 +2496,7 @@ export default {
   'app.kuaioa.name': 'Văn phòng tinh gọn',
   'app.spoke-wheel.name': 'Bánh nan hoa',
   'app.industry-pack.name': 'Gói ngành',
+  'app.industry-pack.short': 'Ngành',
   'app.spoke-wheel.desc': 'Mô-đun lắp ráp và hiệu chỉnh bánh nan hoa nhôm 5 bộ phận (đồng tâm ≤ 0.8mm)',
   'app.spoke-wheel.menu.assembly-debug': 'Hiệu chỉnh lắp ráp',
   'app.kuaioa.menu.group.approval': 'Phê duyệt',

@@ -558,7 +558,8 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   source_order_code: 81.2,
   sales_delivery_code: 81.3,
   change_reason: 82,
-  failure_reason: 82.1,
+  /** 失败原因：紧挨业务时间之后、状态列之前（登录日志、重算任务等） */
+  failure_reason: 93.5,
 
   // —— 88 审核 / 生命周期 / 系统 ——
   audit_phase: 89,
