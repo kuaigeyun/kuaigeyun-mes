@@ -331,7 +331,7 @@ async def get_receivable(
         receivable = await receivable_service.get_receivable_by_id(tenant_id, id)
         enriched = await receivable_pull_service.enrich_push_sales_invoice_capabilities(
             tenant_id,
-            [receivable.model_dump()],
+            [receivable],
         )
         return ReceivableResponse.model_validate(enriched[0])
     except NotFoundError as e:
