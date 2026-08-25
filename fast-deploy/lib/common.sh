@@ -40,6 +40,11 @@ fi
 # Vite 冷启动 / optimizeDeps 偏慢；仅开发前端就绪探测使用
 FRONTEND_START_TIMEOUT="${FRONTEND_START_TIMEOUT:-90}"
 
+# 私有配套仓默认地址（须在任何 sync 函数之前赋值；与 Gitee 仓库名一致）
+DEFAULT_PRO_REPO_URL='https://gitee.com/kuaigeyun/kuaigeyun-pro.git'
+DEFAULT_CUSTOM_REPO_URL='https://gitee.com/kuaigeyun/kuaigeyun-custom.git'
+DEFAULT_CLIENT_REPO_URL='https://gitee.com/kuaigeyun/kuaigeyun-client.git'
+
 log_info()  { printf '\033[0;34m[%s] INFO: %s\033[0m\n' "$(date +'%H:%M:%S')" "$*"; }
 log_warn()  { printf '\033[1;33m[%s] WARN: %s\033[0m\n' "$(date +'%H:%M:%S')" "$*"; }
 log_ok()    { printf '\033[0;32m[%s] OK: %s\033[0m\n' "$(date +'%H:%M:%S')" "$*"; }
@@ -1196,11 +1201,18 @@ read_deploy_env_value() {
     printf '%s\n' "$val"
 }
 
+_is_git_repo_url() {
+    case "$1" in
+        https://*/*|http://*/*|git@*:*|ssh://*) return 0 ;;
+    esac
+    return 1
+}
+
 _read_repo_url_or_default() {
     local key="$1" default="$2" val
     val="$(read_deploy_env_value "$key" || true)"
     val="$(_env_read_trim "$val")"
-    if [ -n "$val" ]; then
+    if _is_git_repo_url "$val"; then
         printf '%s\n' "$val"
     else
         printf '%s\n' "$default"
@@ -4700,6 +4712,7 @@ sync_extension_git_repos_if_enabled() {
         [ -n "$pro_path" ] || pro_path="$(_pro_default_repo_path)"
         pro_branch="$(read_deploy_env_value PRO_GIT_BRANCH || echo develop)"
         pro_token="$(read_deploy_env_value PRO_GIT_TOKEN || true)"
+        log_info "专业仓 ${pro_url}"
         _warn_missing_https_token "专业仓" "$pro_url" "$pro_token" "PRO_GIT_TOKEN"
         sync_sibling_git_repo "kuaigeyun-pro" "$pro_url" "$pro_path" "$pro_branch" "$pro_token" || return 1
     fi
@@ -4797,11 +4810,6 @@ sync_git_from_origin() {
 
 # ---------- 专业 / 定制应用（私有仓 + workspace compose）----------
 
-# 私有配套仓默认地址（与 Gitee 仓库名一致）
-DEFAULT_PRO_REPO_URL='https://gitee.com/kuaigeyun/kuaigeyun-pro.git'
-DEFAULT_CUSTOM_REPO_URL='https://gitee.com/kuaigeyun/kuaigeyun-custom.git'
-DEFAULT_CLIENT_REPO_URL='https://gitee.com/kuaigeyun/kuaigeyun-client.git'
-
 _pro_default_repo_path() {
     echo "$(cd "$PROJECT_ROOT/.." && pwd)/kuaigeyun-pro"
 }
@@ -4833,9 +4841,10 @@ _git_userinfo_encode() {
 }
 
 _git_strip_auth_url() {
-    local url="$1"
+    local url="$1" out
     url="$(_env_read_trim "$url")"
-    printf '%s\n' "$url" | sed -E 's#(https?://)[^/@]+@#\1#'
+    out="$(printf '%s\n' "$url" | sed -E 's#(https?://)[^/@]+@#\1#' || true)"
+    printf '%s\n' "$(_env_read_trim "$out")"
 }
 
 _git_auth_url() {
@@ -4868,16 +4877,11 @@ _git_auth_url() {
 
 _git_validate_repo_url() {
     local name="$1" url="$2"
-    case "$url" in
-        https://*/*|http://*/*|git@*:*|ssh://*)
-            return 0
-            ;;
-    esac
-    if [ -z "$url" ] || [ "$url" = "?" ]; then
-        log_error "${name}: 未配置仓库 URL。请在菜单 [4] 填写 https://gitee.com/kuaigeyun/${name}.git"
-    else
-        log_error "${name}: 仓库 URL 无效（须 https://host/org/repo.git 或 git@host:org/repo.git）: ${url}"
+    if _is_git_repo_url "$url"; then
+        return 0
     fi
+    log_error "${name}: 仓库 URL 无效: $(printf '%q' "$url")"
+    log_error "${name}: 须为 https://gitee.com/kuaigeyun/${name}.git 或 git@gitee.com:kuaigeyun/${name}.git"
     return 1
 }
 
