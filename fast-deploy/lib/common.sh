@@ -40,10 +40,10 @@ fi
 # Vite 冷启动 / optimizeDeps 偏慢；仅开发前端就绪探测使用
 FRONTEND_START_TIMEOUT="${FRONTEND_START_TIMEOUT:-90}"
 
-log_info()  { echo -e "\033[0;34m[$(date +'%H:%M:%S')] INFO: $*\033[0m"; }
-log_warn()  { echo -e "\033[1;33m[$(date +'%H:%M:%S')] WARN: $*\033[0m"; }
-log_ok()    { echo -e "\033[0;32m[$(date +'%H:%M:%S')] OK: $*\033[0m"; }
-log_error() { echo -e "\033[0;31m[$(date +'%H:%M:%S')] ERROR: $*\033[0m" >&2; }
+log_info()  { printf '\033[0;34m[%s] INFO: %s\033[0m\n' "$(date +'%H:%M:%S')" "$*"; }
+log_warn()  { printf '\033[1;33m[%s] WARN: %s\033[0m\n' "$(date +'%H:%M:%S')" "$*"; }
+log_ok()    { printf '\033[0;32m[%s] OK: %s\033[0m\n' "$(date +'%H:%M:%S')" "$*"; }
+log_error() { printf '\033[0;31m[%s] ERROR: %s\033[0m\n' "$(date +'%H:%M:%S')" "$*" >&2; }
 
 print_support_contact() {
     echo "  联系反馈: WeChat lu_dingjie"
@@ -1178,9 +1178,10 @@ env_value_nonempty() {
 }
 
 _env_read_trim() {
-    # Windows/VMware 共享盘上的 deploy.env 常带 CRLF；空白只当未配置
+    # Windows/VMware 共享盘上的 deploy.env 常带 CRLF / NBSP；空白只当未配置
     local val="$1"
     val="${val//$'\r'/}"
+    val="${val//$'\xc2\xa0'/}"
     val="${val#"${val%%[![:space:]]*}"}"
     val="${val%"${val##*[![:space:]]}"}"
     printf '%s' "$val"
@@ -1189,10 +1190,21 @@ _env_read_trim() {
 read_deploy_env_value() {
     local key=$1 val
     [ -f "$DEPLOY_ENV_FILE" ] || return 1
-    val="$(grep -E "^${key}=" "$DEPLOY_ENV_FILE" 2>/dev/null | tail -1 | cut -d= -f2- | sed 's/^["'\'']//;s/["'\'']$//')"
+    val="$(grep -E "^${key}=" "$DEPLOY_ENV_FILE" 2>/dev/null | tail -1 | cut -d= -f2- | sed 's/^["'\'']//;s/["'\'']$//' || true)"
     val="$(_env_read_trim "$val")"
     [ -n "$val" ] || return 1
     printf '%s\n' "$val"
+}
+
+_read_repo_url_or_default() {
+    local key="$1" default="$2" val
+    val="$(read_deploy_env_value "$key" || true)"
+    val="$(_env_read_trim "$val")"
+    if [ -n "$val" ]; then
+        printf '%s\n' "$val"
+    else
+        printf '%s\n' "$default"
+    fi
 }
 
 set_deploy_env_value() {
@@ -4683,7 +4695,7 @@ sync_extension_git_repos_if_enabled() {
     local custom_url custom_path custom_branch custom_token
 
     if [ "$pro_en" = "1" ]; then
-        pro_url="$(read_deploy_env_value PRO_REPO_URL || echo "$DEFAULT_PRO_REPO_URL")"
+        pro_url="$(_read_repo_url_or_default PRO_REPO_URL "$DEFAULT_PRO_REPO_URL")"
         pro_path="$(read_deploy_env_value PRO_REPO_PATH || true)"
         [ -n "$pro_path" ] || pro_path="$(_pro_default_repo_path)"
         pro_branch="$(read_deploy_env_value PRO_GIT_BRANCH || echo develop)"
@@ -4693,7 +4705,7 @@ sync_extension_git_repos_if_enabled() {
     fi
 
     if [ "$custom_en" = "1" ]; then
-        custom_url="$(read_deploy_env_value CUSTOM_REPO_URL || echo "$DEFAULT_CUSTOM_REPO_URL")"
+        custom_url="$(_read_repo_url_or_default CUSTOM_REPO_URL "$DEFAULT_CUSTOM_REPO_URL")"
         custom_path="$(read_deploy_env_value CUSTOM_REPO_PATH || true)"
         [ -n "$custom_path" ] || custom_path="$(_custom_default_repo_path)"
         custom_branch="$(read_deploy_env_value CUSTOM_GIT_BRANCH || echo develop)"
@@ -4857,18 +4869,16 @@ _git_auth_url() {
 _git_validate_repo_url() {
     local name="$1" url="$2"
     case "$url" in
-        https://?*/*|http://?*/*|git@*:*|ssh://?*)
+        https://*/*|http://*/*|git@*:*|ssh://*)
             return 0
             ;;
-        '?'|'')
-            log_error "${name}: 仓库 URL 无效（当前为「${url:-空}」）。请在菜单 [4] 填写 https://gitee.com/kuaigeyun/${name}.git，勿填 ?"
-            return 1
-            ;;
-        *)
-            log_error "${name}: 仓库 URL 无效（须 https:// 或 git@）: ${url}"
-            return 1
-            ;;
     esac
+    if [ -z "$url" ] || [ "$url" = "?" ]; then
+        log_error "${name}: 未配置仓库 URL。请在菜单 [4] 填写 https://gitee.com/kuaigeyun/${name}.git"
+    else
+        log_error "${name}: 仓库 URL 无效（须 https://host/org/repo.git 或 git@host:org/repo.git）: ${url}"
+    fi
+    return 1
 }
 
 sync_sibling_git_repo() {
@@ -4880,12 +4890,14 @@ sync_sibling_git_repo() {
     branch="$(_env_read_trim "$branch")"
     token="$(_env_read_trim "$token")"
     [ -n "$branch" ] || branch="develop"
-    [ -n "$url" ] || { log_error "${name}: 未配置仓库 URL"; return 1; }
     [ -n "$path" ] || { log_error "${name}: 未配置本地路径"; return 1; }
-    _git_validate_repo_url "$name" "$url" || return 1
-    auth_url="$(_git_auth_url "$url" "$token")"
+    if [ -z "$url" ]; then
+        log_error "${name}: 未配置仓库 URL"
+        return 1
+    fi
     clean_url="$(_git_strip_auth_url "$url")"
     _git_validate_repo_url "$name" "$clean_url" || return 1
+    auth_url="$(_git_auth_url "$clean_url" "$token")"
 
     if [ ! -d "$path/.git" ]; then
         log_info "克隆 ${name}: ${clean_url} → ${path}（分支 ${branch}）"
@@ -5077,12 +5089,12 @@ cmd_install_extension_apps() {
             ;;
     esac
 
-    pro_url="$(read_deploy_env_value PRO_REPO_URL || echo "$DEFAULT_PRO_REPO_URL")"
+    pro_url="$(_read_repo_url_or_default PRO_REPO_URL "$DEFAULT_PRO_REPO_URL")"
     pro_path="$(read_deploy_env_value PRO_REPO_PATH || true)"
     [ -n "$pro_path" ] || pro_path="$(_pro_default_repo_path)"
     pro_branch="$(read_deploy_env_value PRO_GIT_BRANCH || echo develop)"
     pro_token="$(read_deploy_env_value PRO_GIT_TOKEN || true)"
-    custom_url="$(read_deploy_env_value CUSTOM_REPO_URL || echo "$DEFAULT_CUSTOM_REPO_URL")"
+    custom_url="$(_read_repo_url_or_default CUSTOM_REPO_URL "$DEFAULT_CUSTOM_REPO_URL")"
     custom_path="$(read_deploy_env_value CUSTOM_REPO_PATH || true)"
     [ -n "$custom_path" ] || custom_path="$(_custom_default_repo_path)"
     custom_branch="$(read_deploy_env_value CUSTOM_GIT_BRANCH || echo develop)"
@@ -5163,7 +5175,7 @@ install_mobile_h5_from_client_repo() {
 cmd_install_client_repo() {
     load_deploy_env
     local url path branch token
-    url="$(read_deploy_env_value CLIENT_REPO_URL || echo "$DEFAULT_CLIENT_REPO_URL")"
+    url="$(_read_repo_url_or_default CLIENT_REPO_URL "$DEFAULT_CLIENT_REPO_URL")"
     path="$(read_deploy_env_value CLIENT_REPO_PATH || true)"
     [ -n "$path" ] || path="$(_client_default_repo_path)"
     branch="$(read_deploy_env_value CLIENT_GIT_BRANCH || echo develop)"
