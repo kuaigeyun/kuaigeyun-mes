@@ -1177,10 +1177,22 @@ env_value_nonempty() {
     [ -n "$(read_env_value "$key" 2>/dev/null || true)" ]
 }
 
+_env_read_trim() {
+    # Windows/VMware 共享盘上的 deploy.env 常带 CRLF；空白只当未配置
+    local val="$1"
+    val="${val//$'\r'/}"
+    val="${val#"${val%%[![:space:]]*}"}"
+    val="${val%"${val##*[![:space:]]}"}"
+    printf '%s' "$val"
+}
+
 read_deploy_env_value() {
-    local key=$1
+    local key=$1 val
     [ -f "$DEPLOY_ENV_FILE" ] || return 1
-    grep -E "^${key}=" "$DEPLOY_ENV_FILE" 2>/dev/null | tail -1 | cut -d= -f2- | sed 's/^["'\'']//;s/["'\'']$//'
+    val="$(grep -E "^${key}=" "$DEPLOY_ENV_FILE" 2>/dev/null | tail -1 | cut -d= -f2- | sed 's/^["'\'']//;s/["'\'']$//')"
+    val="$(_env_read_trim "$val")"
+    [ -n "$val" ] || return 1
+    printf '%s\n' "$val"
 }
 
 set_deploy_env_value() {
@@ -4790,78 +4802,126 @@ _client_default_repo_path() {
     echo "$(cd "$PROJECT_ROOT/.." && pwd)/kuaigeyun-client"
 }
 
-_git_auth_url() {
-    # 将 https URL 注入 oauth2:token（Gitee/GitHub 常见写法）；SSH 原样返回
-    local url="$1" token="$2"
-    if [ -z "$token" ]; then
-        echo "$url"
-        return 0
-    fi
-    case "$url" in
-        git@*|ssh://*)
-            echo "$url"
-            ;;
-        https://*)
-            echo "$url" | sed -E "s#https://([^/]+)/#https://oauth2:${token}@\1/#"
-            ;;
-        http://*)
-            echo "$url" | sed -E "s#http://([^/]+)/#http://oauth2:${token}@\1/#"
-            ;;
-        *)
-            echo "$url"
-            ;;
-    esac
+_git_cmd() {
+    # argv 里的 https://oauth2:token@host 在 Git Bash/MSYS 会被当成 Windows 路径，收成 "?"
+    MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' GIT_TERMINAL_PROMPT=0 git "$@"
+}
+
+_git_userinfo_encode() {
+    # 只编码 userinfo；未编码的 ? # @ 会截断 URL，git 报 '?' 不是仓库
+    local s="$1" i c
+    local LC_ALL=C
+    for ((i = 0; i < ${#s}; i++)); do
+        c="${s:i:1}"
+        case "$c" in
+            [a-zA-Z0-9._~-]) printf '%s' "$c" ;;
+            *) printf '%%%02X' "'$c" ;;
+        esac
+    done
 }
 
 _git_strip_auth_url() {
     local url="$1"
-    echo "$url" | sed -E 's#(https?://)[^/@]+@#\1#'
+    url="$(_env_read_trim "$url")"
+    printf '%s\n' "$url" | sed -E 's#(https?://)[^/@]+@#\1#'
+}
+
+_git_auth_url() {
+    # HTTPS 注入 oauth2:token（避免 insteadOf 把 https://gitee.com/ 改成 SSH）；SSH 原样
+    local url="$1" token="$2" stripped encoded
+    url="$(_env_read_trim "$url")"
+    token="$(_env_read_trim "$token")"
+    if [ -z "$token" ]; then
+        printf '%s\n' "$url"
+        return 0
+    fi
+    case "$url" in
+        git@*|ssh://*)
+            printf '%s\n' "$url"
+            ;;
+        https://*|http://*)
+            stripped="$(_git_strip_auth_url "$url")"
+            encoded="$(_git_userinfo_encode "$token")"
+            case "$stripped" in
+                https://*) printf 'https://oauth2:%s@%s\n' "$encoded" "${stripped#https://}" ;;
+                http://*) printf 'http://oauth2:%s@%s\n' "$encoded" "${stripped#http://}" ;;
+                *) printf '%s\n' "$url" ;;
+            esac
+            ;;
+        *)
+            printf '%s\n' "$url"
+            ;;
+    esac
+}
+
+_git_validate_repo_url() {
+    local name="$1" url="$2"
+    case "$url" in
+        https://?*/*|http://?*/*|git@*:*|ssh://?*)
+            return 0
+            ;;
+        '?'|'')
+            log_error "${name}: 仓库 URL 无效（当前为「${url:-空}」）。请在菜单 [4] 填写 https://gitee.com/kuaigeyun/${name}.git，勿填 ?"
+            return 1
+            ;;
+        *)
+            log_error "${name}: 仓库 URL 无效（须 https:// 或 git@）: ${url}"
+            return 1
+            ;;
+    esac
 }
 
 sync_sibling_git_repo() {
     # 参数: name url path branch token
     local name="$1" url="$2" path="$3" branch="${4:-develop}" token="${5:-}"
     local auth_url clean_url
+    url="$(_env_read_trim "$url")"
+    path="$(_env_read_trim "$path")"
+    branch="$(_env_read_trim "$branch")"
+    token="$(_env_read_trim "$token")"
+    [ -n "$branch" ] || branch="develop"
     [ -n "$url" ] || { log_error "${name}: 未配置仓库 URL"; return 1; }
     [ -n "$path" ] || { log_error "${name}: 未配置本地路径"; return 1; }
+    _git_validate_repo_url "$name" "$url" || return 1
     auth_url="$(_git_auth_url "$url" "$token")"
     clean_url="$(_git_strip_auth_url "$url")"
+    _git_validate_repo_url "$name" "$clean_url" || return 1
 
     if [ ! -d "$path/.git" ]; then
         log_info "克隆 ${name}: ${clean_url} → ${path}（分支 ${branch}）"
         mkdir -p "$(dirname "$path")"
         # 主仓 / 专业包 / 定制包 / 终端仓统一默认 develop；禁止回落到 main
-        if ! git clone --branch "$branch" --single-branch "$auth_url" "$path"; then
+        # 鉴权 URL 只用于本次 clone，禁止 set-url 进 origin（否则 ? / CR 会写进 .git/config）
+        if ! _git_cmd clone --branch "$branch" --single-branch "$auth_url" "$path"; then
             log_error "克隆 ${name} 失败：请确认私仓存在分支 ${branch}，以及 Token/SSH 权限"
             rm -rf "$path"
             return 1
         fi
-        git -C "$path" remote set-url origin "$clean_url"
+        _git_cmd -C "$path" remote set-url origin "$clean_url"
     else
         log_info "同步 ${name}: ${path}（分支 ${branch}）"
-        (
-            cd "$path"
-            # 临时注入鉴权 URL，同步后立刻还原，避免 Token 落在 .git/config
-            git remote set-url origin "$auth_url"
-            git fetch origin --prune --tags
-            git fetch origin "$branch" || {
-                git remote set-url origin "$clean_url"
-                log_error "${name}: 拉取分支 ${branch} 失败"
-                exit 1
-            }
-            git remote set-url origin "$clean_url"
-            if ! git rev-parse --verify "origin/${branch}" >/dev/null 2>&1; then
-                log_error "${name}: 远程无分支 ${branch}（已统一使用 develop，勿再配置 main）"
-                exit 1
-            fi
-            git checkout -B "$branch" "origin/${branch}"
-        ) || {
-            git -C "$path" remote set-url origin "$clean_url" 2>/dev/null || true
+        if _git_cmd -C "$path" remote get-url origin >/dev/null 2>&1; then
+            _git_cmd -C "$path" remote set-url origin "$clean_url"
+        else
+            _git_cmd -C "$path" remote add origin "$clean_url"
+        fi
+        if ! _git_cmd -C "$path" fetch --prune --tags "$auth_url" "+refs/heads/${branch}:refs/remotes/origin/${branch}"; then
+            log_error "${name}: 拉取分支 ${branch} 失败"
+            log_error "请检查 ${name} 的 origin（当前: $(_git_cmd -C "$path" remote get-url origin 2>/dev/null || echo 无)）与 PRO_GIT_TOKEN"
+            log_error "同步 ${name} 失败"
+            return 1
+        fi
+        if ! _git_cmd -C "$path" rev-parse --verify "origin/${branch}" >/dev/null 2>&1; then
+            log_error "${name}: 远程无分支 ${branch}（已统一使用 develop，勿再配置 main）"
+            log_error "同步 ${name} 失败"
+            return 1
+        fi
+        _git_cmd -C "$path" checkout -B "$branch" "origin/${branch}" || {
             log_error "同步 ${name} 失败"
             return 1
         }
     fi
-    log_ok "${name} @ $(git -C "$path" rev-parse --short HEAD 2>/dev/null || echo '?') [${branch}]"
+    log_ok "${name} @ $(_git_cmd -C "$path" rev-parse --short HEAD 2>/dev/null || echo '?') [${branch}]"
 }
 
 write_workspace_yaml_from_deploy_env() {
