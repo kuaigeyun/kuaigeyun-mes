@@ -4885,72 +4885,11 @@ _git_validate_repo_url() {
     return 1
 }
 
-_git_unix_path() {
-    local dir="$1"
-    if command -v cygpath >/dev/null 2>&1; then
-        cygpath -u "$dir" 2>/dev/null || printf '%s\n' "$dir"
-    else
-        printf '%s\n' "$dir"
-    fi
-}
-
-_git_is_work_tree() {
-    # .git 可能是目录，也可能是 worktree 的文件指针；禁止只看 [ -d path/.git ]
-    local dir="$1" win=""
-    [ -n "$dir" ] && [ -e "$dir" ] || return 1
-    if [ -d "$dir/.git" ] || [ -f "$dir/.git" ]; then
-        return 0
-    fi
-    if _git_cmd -C "$dir" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-        return 0
-    fi
-    if command -v cygpath >/dev/null 2>&1; then
-        win="$(cygpath -w "$dir" 2>/dev/null || true)"
-        if [ -n "$win" ] && _git_cmd -C "$win" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-            return 0
-        fi
-    fi
-    return 1
-}
-
-_dir_is_empty() {
-    local dir="$1"
-    [ -d "$dir" ] || return 1
-    [ -z "$(ls -A "$dir" 2>/dev/null)" ]
-}
-
-_sync_sibling_git_repo_fetch() {
-    local name="$1" path="$2" branch="$3" auth_url="$4" clean_url="$5"
-    log_info "同步 ${name}: ${path}（分支 ${branch}）"
-    if _git_cmd -C "$path" remote get-url origin >/dev/null 2>&1; then
-        _git_cmd -C "$path" remote set-url origin "$clean_url"
-    else
-        _git_cmd -C "$path" remote add origin "$clean_url"
-    fi
-    if ! _git_cmd -C "$path" fetch --prune --tags "$auth_url" "+refs/heads/${branch}:refs/remotes/origin/${branch}"; then
-        log_error "${name}: 拉取分支 ${branch} 失败"
-        log_error "请检查 ${name} 的 origin（当前: $(_git_cmd -C "$path" remote get-url origin 2>/dev/null || echo 无)）与 Token（PRO_GIT_TOKEN / CLIENT_GIT_TOKEN）"
-        log_error "同步 ${name} 失败"
-        return 1
-    fi
-    if ! _git_cmd -C "$path" rev-parse --verify "origin/${branch}" >/dev/null 2>&1; then
-        log_error "${name}: 远程无分支 ${branch}（已统一使用 develop，勿再配置 main）"
-        log_error "同步 ${name} 失败"
-        return 1
-    fi
-    _git_cmd -C "$path" checkout -B "$branch" "origin/${branch}" || {
-        log_error "同步 ${name} 失败"
-        return 1
-    }
-}
-
 sync_sibling_git_repo() {
     # 参数: name url path branch token
     local name="$1" url="$2" path="$3" branch="${4:-develop}" token="${5:-}"
-    local auth_url clean_url created_path=0
+    local auth_url clean_url
     url="$(_env_read_trim "$url")"
-    path="$(_env_read_trim "$path")"
-    path="$(_git_unix_path "$path")"
     path="$(_env_read_trim "$path")"
     branch="$(_env_read_trim "$branch")"
     token="$(_env_read_trim "$token")"
@@ -4964,37 +4903,39 @@ sync_sibling_git_repo() {
     _git_validate_repo_url "$name" "$clean_url" || return 1
     auth_url="$(_git_auth_url "$clean_url" "$token")"
 
-    if _git_is_work_tree "$path"; then
-        _sync_sibling_git_repo_fetch "$name" "$path" "$branch" "$auth_url" "$clean_url" || return 1
-    else
-        if [ -e "$path" ]; then
-            if _dir_is_empty "$path"; then
-                :
-            else
-                log_error "${name}: 路径已存在且不是 Git 仓库: ${path}"
-                if [ -e "$path/.git" ]; then
-                    log_error "存在 ${path}/.git，但未能识别为工作区。请在该目录执行: git status"
-                else
-                    log_error "该目录没有 .git，git clone 不能写入非空目录。若确认是上次失败残留且无需保留，请自行删除后再试。"
-                fi
-                log_error "或把含 .git 的仓库路径写入对应 *_REPO_PATH。已有文件不会被删除。"
-                return 1
-            fi
-        else
-            mkdir -p "$(dirname "$path")"
-            created_path=1
-        fi
+    if [ ! -d "$path/.git" ]; then
         log_info "克隆 ${name}: ${clean_url} → ${path}（分支 ${branch}）"
+        mkdir -p "$(dirname "$path")"
         # 主仓 / 专业包 / 定制包 / 终端仓统一默认 develop；禁止回落到 main
         # 鉴权 URL 只用于本次 clone，禁止 set-url 进 origin（否则 ? / CR 会写进 .git/config）
         if ! _git_cmd clone --branch "$branch" --single-branch "$auth_url" "$path"; then
             log_error "克隆 ${name} 失败：请确认私仓存在分支 ${branch}，以及 Token/SSH 权限"
-            if [ "$created_path" = "1" ] && [ -e "$path" ] && ! _git_is_work_tree "$path"; then
-                rm -rf "$path"
-            fi
+            rm -rf "$path"
             return 1
         fi
         _git_cmd -C "$path" remote set-url origin "$clean_url"
+    else
+        log_info "同步 ${name}: ${path}（分支 ${branch}）"
+        if _git_cmd -C "$path" remote get-url origin >/dev/null 2>&1; then
+            _git_cmd -C "$path" remote set-url origin "$clean_url"
+        else
+            _git_cmd -C "$path" remote add origin "$clean_url"
+        fi
+        if ! _git_cmd -C "$path" fetch --prune --tags "$auth_url" "+refs/heads/${branch}:refs/remotes/origin/${branch}"; then
+            log_error "${name}: 拉取分支 ${branch} 失败"
+            log_error "请检查 ${name} 的 origin（当前: $(_git_cmd -C "$path" remote get-url origin 2>/dev/null || echo 无)）与 PRO_GIT_TOKEN"
+            log_error "同步 ${name} 失败"
+            return 1
+        fi
+        if ! _git_cmd -C "$path" rev-parse --verify "origin/${branch}" >/dev/null 2>&1; then
+            log_error "${name}: 远程无分支 ${branch}（已统一使用 develop，勿再配置 main）"
+            log_error "同步 ${name} 失败"
+            return 1
+        fi
+        _git_cmd -C "$path" checkout -B "$branch" "origin/${branch}" || {
+            log_error "同步 ${name} 失败"
+            return 1
+        }
     fi
     log_ok "${name} @ $(_git_cmd -C "$path" rev-parse --short HEAD 2>/dev/null || echo '?') [${branch}]"
 }
@@ -5214,23 +5155,9 @@ _resolve_client_web_dist_dir() {
 # 将私仓 web-dist 安装到主仓 Caddy 路径 riveredge-app/mobile/web-dist
 install_mobile_h5_from_client_repo() {
     local client_root="$1"
-    local src_dist dest_dist rel
-    client_root="$(_env_read_trim "$client_root")"
-    # checkout -B 不会恢复「同提交上已删的工作区文件」。失败的 expo export 会掏空 web-dist，
-    # 导致 HEAD 里有 index.html、工作区却找不到。安装前从 HEAD 强制还原已跟踪产物。
-    if [ -d "$client_root/.git" ]; then
-        for rel in \
-            "riveredge-app-mobile/web-dist" \
-            "mobile/web-dist" \
-            "riveredge-app/mobile/web-dist"
-        do
-            if git -C "$client_root" cat-file -e "HEAD:${rel}/index.html" 2>/dev/null; then
-                git -C "$client_root" checkout -f HEAD -- "$rel" || true
-            fi
-        done
-    fi
+    local src_dist dest_dist
     src_dist="$(_resolve_client_web_dist_dir "$client_root")" || {
-        log_error "私仓中未找到 web-dist/index.html（期望 ${client_root}/riveredge-app-mobile/web-dist）"
+        log_error "私仓中未找到 web-dist/index.html（期望 riveredge-app-mobile/web-dist）"
         log_error "请先在有 Node 的环境执行 ./fast-deploy/build.mobile.web.sh 并推送到 kuaigeyun-client"
         return 1
     }
