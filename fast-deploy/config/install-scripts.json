@@ -60,7 +60,7 @@
   "scripts_cn": {
     "node": "sudo apt update && sudo apt install -y nodejs npm",
     "python": "sudo apt update && sudo apt install -y python3 python3-venv python3-pip",
-    "uv": "pip3 install -i https://pypi.tuna.tsinghua.edu.cn/simple uv 2>/dev/null || python3 -m pip install -i https://pypi.tuna.tsinghua.edu.cn/simple uv",
+    "uv": "pip3 install -i https://mirrors.aliyun.com/pypi/simple/ uv 2>/dev/null || python3 -m pip install -i https://mirrors.aliyun.com/pypi/simple/ uv",
     "zbar": "sudo apt-get update && sudo apt-get install -y libzbar0 libgomp1 libgl1",
     "invoice-runtime": "sudo apt-get update && sudo apt-get install -y libzbar0 libgomp1 libgl1"
   }

@@ -97,12 +97,15 @@ function Load-DeployEnv {
 
 function Apply-CN-Mirrors {
     if (-not $script:UseMirror) { return }
-    $env:UV_INDEX_URL = if ($env:UV_INDEX_URL) { $env:UV_INDEX_URL } else { 'https://pypi.tuna.tsinghua.edu.cn/simple' }
+    if (-not $env:UV_INDEX_URL) {
+        # 与 PGDG 国内源一致用阿里云。清华 tuna 在部分 Windows 网络上 Connect 超时。
+        $env:UV_INDEX_URL = 'https://mirrors.aliyun.com/pypi/simple/'
+    }
     $env:npm_config_registry = 'https://registry.npmmirror.com'
     if (Get-Command npm -ErrorAction SilentlyContinue) {
         npm config set registry https://registry.npmmirror.com 2>$null
     }
-    Write-LogInfo '已启用国内镜像 (uv/npm)'
+    Write-LogInfo "已启用国内镜像 (uv=$($env:UV_INDEX_URL)；npm=npmmirror)"
 }
 
 function Detect-ServerIp {

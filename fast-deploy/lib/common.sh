@@ -277,12 +277,13 @@ run_windows_boot_task_action() {
 
 apply_cn_mirrors() {
     [ "${USE_MIRROR}" = "0" ] && return 0
-    export UV_INDEX_URL="${UV_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}"
+    # 与 PGDG 国内源一致用阿里云。清华 tuna 在部分 Windows 网络上 Connect 超时。
+    export UV_INDEX_URL="${UV_INDEX_URL:-https://mirrors.aliyun.com/pypi/simple/}"
     export npm_config_registry="${npm_config_registry:-https://registry.npmmirror.com}"
     if command -v npm >/dev/null 2>&1; then
         npm config set registry https://registry.npmmirror.com 2>/dev/null || true
     fi
-    log_info "已启用国内镜像 (uv/npm)；Node 仍使用官方源以保证 22+ 版本"
+    log_info "已启用国内镜像 (uv=${UV_INDEX_URL}；npm=npmmirror)；Node 仍使用官方源以保证 22+ 版本"
 }
 
 detect_server_ip() {
