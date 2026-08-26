@@ -3,13 +3,14 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { App } from 'antd';
 import { useTranslation } from 'react-i18next';
 import {
   WorkOrderDetailDrawer,
   type WorkOrderDetailRecord,
 } from '../../../apps/kuaizhizao/pages/production-execution/work-orders/components/WorkOrderDetailDrawer';
 import { workOrderApi } from '../../../apps/kuaizhizao/services/work-order';
+import { useResourcePermissions } from '../../../hooks/useResourcePermissions';
+import { resolveLinkedDocumentLoadError } from '../../../utils/errorHandler';
 
 export type WorkOrderLinkedDetailDrawerProps = {
   open: boolean;
@@ -33,11 +34,17 @@ export function WorkOrderLinkedDetailDrawer({
   zIndex,
 }: WorkOrderLinkedDetailDrawerProps) {
   const { t } = useTranslation();
-  const { message } = App.useApp();
+  const workOrderPerms = useResourcePermissions('kuaizhizao:work-order');
+  const showReadonlyActions =
+    workOrderPerms.canPrint ||
+    workOrderPerms.canUpdate ||
+    workOrderPerms.canAction?.('submit') ||
+    workOrderPerms.canAction?.('audit');
   const [detail, setDetail] = useState<WorkOrderDetailRecord | null>(null);
   const [operations, setOperations] = useState<unknown[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadErrorStatus, setLoadErrorStatus] = useState<'403' | 'error'>('error');
   const [refreshKey, setRefreshKey] = useState(0);
 
   const load = useCallback(async () => {
@@ -45,11 +52,13 @@ export function WorkOrderLinkedDetailDrawer({
       setDetail(null);
       setOperations([]);
       setLoadError(null);
+      setLoadErrorStatus('error');
       setLoading(false);
       return;
     }
     setLoading(true);
     setLoadError(null);
+    setLoadErrorStatus('error');
     setDetail((prev) => (prev?.id === documentId ? prev : null));
     try {
       const wo = (await workOrderApi.get(String(documentId))) as WorkOrderDetailRecord;
@@ -57,16 +66,20 @@ export function WorkOrderLinkedDetailDrawer({
       setDetail(wo);
       setOperations(ops);
     } catch (e: unknown) {
-      const err = e as { message?: string; detail?: string };
-      const msg = err?.message || err?.detail || t('common.loadFailed');
+      const resolved = resolveLinkedDocumentLoadError(e, {
+        fallback: t('common.loadFailed'),
+        permissionMessage: t('components.linkedDocumentDetail.noPermission', {
+          resource: t('components.linkedDocumentDetail.resource.workOrder'),
+        }),
+      });
       setDetail(null);
       setOperations([]);
-      setLoadError(msg);
-      message.error(msg);
+      setLoadError(resolved.message);
+      setLoadErrorStatus(resolved.status);
     } finally {
       setLoading(false);
     }
-  }, [open, documentId, message, t]);
+  }, [open, documentId, t]);
 
   useEffect(() => {
     void load();
@@ -81,6 +94,8 @@ export function WorkOrderLinkedDetailDrawer({
       operationsReadOnly
       loading={loading}
       error={loadError}
+      errorStatus={loadErrorStatus}
+      showReadonlyActions={Boolean(showReadonlyActions)}
       onRetry={() => setRefreshKey((k) => k + 1)}
       zIndex={zIndex}
       trackingRefreshKey={refreshKey}

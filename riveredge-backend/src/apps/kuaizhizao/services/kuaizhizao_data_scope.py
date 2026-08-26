@@ -104,22 +104,119 @@ async def apply_sales_order_child_list_scope(
     return query.filter(combined)
 
 
+def _quality_inspection_read_codes_for_sales_order_link() -> list[str]:
+    from core.config.permission_contract import build_permission_code
+
+    return [
+        build_permission_code("kuaizhizao", "quality-management-finished-goods-inspection", "read"),
+        build_permission_code("kuaizhizao", "quality-management-oqc-inspection", "read"),
+    ]
+
+
+def _quality_inspection_read_codes_for_work_order_link() -> list[str]:
+    from core.config.permission_contract import build_permission_code
+
+    return [
+        build_permission_code("kuaizhizao", "quality-management-finished-goods-inspection", "read"),
+        build_permission_code("kuaizhizao", "quality-management-process-inspection", "read"),
+        build_permission_code("kuaizhizao", "quality-management-oqc-inspection", "read"),
+    ]
+
+
 async def _sales_order_linked_from_quality_inspection(
     tenant_id: int,
     sales_order_id: int,
 ) -> bool:
-    """是否存在引用该销售订单的质检单（成品 / 出货检验）。"""
+    """是否存在引用该销售订单的质检单（成品 / 出货检验，含经工单间接关联）。"""
     from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection
     from apps.kuaizhizao.models.oqc_inspection import OqcInspection
+    from apps.kuaizhizao.models.work_order import WorkOrder
+
+    so_id = int(sales_order_id)
+    direct_filters = dict(
+        tenant_id=tenant_id,
+        sales_order_id=so_id,
+        deleted_at__isnull=True,
+    )
+    if await FinishedGoodsInspection.filter(**direct_filters).exists():
+        return True
+    if await OqcInspection.filter(**direct_filters).exists():
+        return True
+
+    work_order_ids = await WorkOrder.filter(
+        tenant_id=tenant_id,
+        sales_order_id=so_id,
+        deleted_at__isnull=True,
+    ).values_list("id", flat=True)
+    if not work_order_ids:
+        return False
+    wo_filters = dict(
+        tenant_id=tenant_id,
+        work_order_id__in=list(work_order_ids),
+        deleted_at__isnull=True,
+    )
+    if await FinishedGoodsInspection.filter(**wo_filters).exists():
+        return True
+    return await OqcInspection.filter(**wo_filters).exists()
+
+
+async def _work_order_linked_from_quality_inspection(
+    tenant_id: int,
+    work_order_id: int,
+) -> bool:
+    """是否存在引用该工单的质检单（来料 / 过程 / 成品 / 出货检验）。"""
+    from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection
+    from apps.kuaizhizao.models.oqc_inspection import OqcInspection
+    from apps.kuaizhizao.models.process_inspection import ProcessInspection
 
     filters = dict(
         tenant_id=tenant_id,
-        sales_order_id=int(sales_order_id),
+        work_order_id=int(work_order_id),
         deleted_at__isnull=True,
     )
     if await FinishedGoodsInspection.filter(**filters).exists():
         return True
+    if await ProcessInspection.filter(**filters).exists():
+        return True
     return await OqcInspection.filter(**filters).exists()
+
+
+async def allow_sales_order_detail_quality_linked_read(
+    tenant_id: int,
+    user_id: int,
+    sales_order_id: int,
+) -> bool:
+    """质检关联只读：无销售订单 read 时，仍允许打开被 FQC/OQC 引用的销售订单详情。"""
+    if int(sales_order_id) <= 0:
+        return False
+    if not await _sales_order_linked_from_quality_inspection(tenant_id, sales_order_id):
+        return False
+    from core.services.authorization.user_permission_service import UserPermissionService
+
+    return await UserPermissionService.has_any_permission(
+        user_id,
+        tenant_id,
+        _quality_inspection_read_codes_for_sales_order_link(),
+    )
+
+
+async def allow_work_order_detail_quality_linked_read(
+    tenant_id: int,
+    user_id: int,
+    work_order_id: int,
+) -> bool:
+    """质检关联只读：无工单 read 时，仍允许打开被质检单引用的工单详情。"""
+    if int(work_order_id) <= 0:
+        return False
+    if not await _work_order_linked_from_quality_inspection(tenant_id, work_order_id):
+        return False
+    from core.services.authorization.user_permission_service import UserPermissionService
+
+    return await UserPermissionService.has_any_permission(
+        user_id,
+        tenant_id,
+        _quality_inspection_read_codes_for_work_order_link(),
+    )
 
 
 async def assert_sales_order_row_visible_or_quality_linked(
@@ -159,17 +256,12 @@ async def assert_sales_order_row_visible_or_quality_linked(
         )
         return
 
-    from core.config.permission_contract import build_permission_code
     from core.services.authorization.user_permission_service import UserPermissionService
 
-    quality_read_codes = [
-        build_permission_code("kuaizhizao", "quality-management-finished-goods-inspection", "read"),
-        build_permission_code("kuaizhizao", "quality-management-oqc-inspection", "read"),
-    ]
     if await UserPermissionService.has_any_permission(
         user.id,
         tenant_id,
-        quality_read_codes,
+        _quality_inspection_read_codes_for_sales_order_link(),
     ):
         return
 

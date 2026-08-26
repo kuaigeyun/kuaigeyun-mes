@@ -125,6 +125,7 @@ export type WorkOrderDetailDrawerProps = {
   onEditOperation?: (operation: unknown) => void;
   loading?: boolean;
   error?: string | null;
+  errorStatus?: '403' | 'error';
   onRetry?: () => void;
   zIndex?: number;
   trackingRefreshKey?: number;
@@ -185,6 +186,7 @@ export const WorkOrderDetailDrawer: React.FC<WorkOrderDetailDrawerProps> = ({
   onEditOperation,
   loading = false,
   error = null,
+  errorStatus = 'error',
   onRetry,
   zIndex,
   trackingRefreshKey = 0,
@@ -402,7 +404,7 @@ export const WorkOrderDetailDrawer: React.FC<WorkOrderDetailDrawerProps> = ({
       plainBody={
         showError ? (
           <Result
-            status="error"
+            status={errorStatus}
             title={error}
             extra={
               onRetry ? (

@@ -25805,6 +25805,10 @@ export default {
   'components.documentTrackingPanel.relationsFullChainTitle': '关联全链路',
   'components.documentTrackingPanel.openFullChainLink': '全链路',
   'components.linkedDocumentDetail.title': '{{type}}详情',
+  'components.linkedDocumentDetail.noPermission':
+    '您没有「{{resource}}」查看权限，无法打开关联详情。如需访问请联系管理员开通权限。',
+  'components.linkedDocumentDetail.resource.salesOrder': '销售订单',
+  'components.linkedDocumentDetail.resource.workOrder': '生产工单',
   'components.documentTrackingPanel.traceBriefTitle': '关联单据简览',
   'components.documentTrackingPanel.traceNodeCreatedAt': '创建时间: {{time}}',
   'components.documentTrackingPanel.traceNodeCreatedAtShort': '创建: {{time}}',

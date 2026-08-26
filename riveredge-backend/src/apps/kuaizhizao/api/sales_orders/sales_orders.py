@@ -19,7 +19,7 @@ from tortoise.exceptions import FieldError
 from core.api.deps import get_current_user, get_current_tenant
 from core.api.deps.access import require_permission_codes
 from core.ai.deps import AiAuth, get_ai_auth
-from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_module_access
+from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_sales_order_access
 from core.services.authorization.permission_policy_service import PermissionPolicyService
 from infra.models.user import User
 from infra.exceptions.exceptions import ValidationError, NotFoundError, BusinessLogicError
@@ -51,7 +51,7 @@ document_relation_service = DocumentRelationNewService()
 router = APIRouter(
     prefix="/sales-orders",
     tags=["App - Kuaige Zhizao - Sales Order Management"],
-    dependencies=[Depends(require_kuaizhizao_module_access("sales-order"))],
+    dependencies=[Depends(require_kuaizhizao_sales_order_access())],
 )
 
 

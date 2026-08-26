@@ -61,6 +61,44 @@ export function getApiErrorMessage(error: any, fallback = '操作失败'): strin
   return fromDetail || fallback;
 }
 
+/** API 403/401 或后端 ACCESS_DENIED 文案 */
+export function isApiAccessDenied(error: unknown): boolean {
+  const status = (error as { response?: { status?: number } })?.response?.status;
+  if (status === 401 || status === 403) return true;
+  const detail = (error as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+  if (detail && typeof detail === 'object' && !Array.isArray(detail)) {
+    const code = (detail as { code?: string }).code;
+    if (code === 'ACCESS_DENIED' || code === 'UNAUTHORIZED') return true;
+  }
+  const msg = getApiErrorMessage(error, '');
+  return /权限不足|无权限访问|permission denied/i.test(msg);
+}
+
+export type LinkedDocumentLoadErrorResult = {
+  message: string;
+  status: '403' | 'error';
+};
+
+/** 关联单据抽屉取数失败：权限问题用 403 Result，其它保持 error */
+export function resolveLinkedDocumentLoadError(
+  error: unknown,
+  options: {
+    fallback: string;
+    permissionMessage: string;
+  },
+): LinkedDocumentLoadErrorResult {
+  if (isApiAccessDenied(error)) {
+    return {
+      message: options.permissionMessage,
+      status: '403',
+    };
+  }
+  return {
+    message: getApiErrorMessage(error, options.fallback),
+    status: 'error',
+  };
+}
+
 /**
  * 错误响应接口
  */

@@ -37,6 +37,8 @@ export type SalesOrderDetailDrawerProps = {
   loading?: boolean;
   /** 取数失败文案；与 order 互斥展示 */
   error?: string | null;
+  /** Result 状态；关联抽屉权限不足时为 403 */
+  errorStatus?: '403' | 'error';
   onRetry?: () => void;
   zIndex?: number;
   auditRequired: boolean;
@@ -62,6 +64,7 @@ export const SalesOrderDetailDrawer: React.FC<SalesOrderDetailDrawerProps> = ({
   order,
   loading = false,
   error = null,
+  errorStatus = 'error',
   onRetry,
   zIndex,
   auditRequired,
@@ -149,7 +152,7 @@ export const SalesOrderDetailDrawer: React.FC<SalesOrderDetailDrawerProps> = ({
         plainBody={
           showError ? (
             <Result
-              status="error"
+              status={errorStatus}
               title={error}
               extra={
                 onRetry ? (

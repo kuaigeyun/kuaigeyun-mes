@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from fastapi import Depends, Request
 
 from core.api.deps.access import (
@@ -11,6 +13,11 @@ from core.api.deps.access import (
 )
 from core.api.deps.deps import get_current_tenant
 from core.config.permission_contract import build_permission_code
+
+_SALES_ORDER_DETAIL_GET_RE = re.compile(r"/sales-orders/(\d+)(?:/)?$")
+_SALES_ORDER_TRACKING_GET_RE = re.compile(r"/sales-orders/(\d+)/tracking(?:/)?$")
+_WORK_ORDER_DETAIL_GET_RE = re.compile(r"/work-orders/(\d+)(?:/)?$")
+_WORK_ORDER_OPERATIONS_GET_RE = re.compile(r"/work-orders/(\d+)/operations(?:/)?$")
 
 # 审核走 audit 而非 approve 的模块（与 manifest 一致）
 _AUDIT_APPROVE_MODULES = frozenset({
@@ -134,6 +141,55 @@ def resolve_kuaizhizao_module_action(
     raise ValueError(f"Kuaizhizao: unsupported HTTP method {method!r} for path {path!r}")
 
 
+def _extract_detail_resource_id(path: str, pattern: re.Pattern[str]) -> int | None:
+    match = pattern.search((path or "").lower())
+    if not match:
+        return None
+    try:
+        return int(match.group(1))
+    except (TypeError, ValueError):
+        return None
+
+
+def _is_single_resource_detail_get(request: Request, pattern: re.Pattern[str]) -> bool:
+    if (request.method or "").upper() != "GET":
+        return False
+    path = (request.url.path or "").lower()
+    blocked_suffixes = (
+        "/print",
+        "/tracking",
+        "/operations",
+        "/push-to-",
+        "/demand-source-chain",
+        "/print-variables",
+    )
+    if any(token in path for token in blocked_suffixes):
+        return False
+    return pattern.search(path) is not None
+
+
+def _extract_sales_order_quality_linked_id(request: Request) -> int | None:
+    if (request.method or "").upper() != "GET":
+        return None
+    path = request.url.path or ""
+    for pattern in (_SALES_ORDER_DETAIL_GET_RE, _SALES_ORDER_TRACKING_GET_RE):
+        resource_id = _extract_detail_resource_id(path, pattern)
+        if resource_id is not None:
+            return resource_id
+    return None
+
+
+def _extract_work_order_quality_linked_id(request: Request) -> int | None:
+    if (request.method or "").upper() != "GET":
+        return None
+    path = request.url.path or ""
+    for pattern in (_WORK_ORDER_DETAIL_GET_RE, _WORK_ORDER_OPERATIONS_GET_RE):
+        resource_id = _extract_detail_resource_id(path, pattern)
+        if resource_id is not None:
+            return resource_id
+    return None
+
+
 def require_kuaizhizao_module_access(
     module_code: str,
     *,
@@ -160,6 +216,61 @@ def require_kuaizhizao_module_access(
             required = list(collection_create_permissions)
         else:
             required = [build_permission_code("kuaizhizao", module_code, action)]
+        await ensure_permission_codes(
+            auth,
+            tenant_id,
+            request,
+            required,
+            require_all=False,
+            check_abac=check_abac,
+        )
+        auth.tenant_id = tenant_id
+        return auth
+
+    return dependency
+
+
+def require_kuaizhizao_sales_order_access(
+    *,
+    check_abac: bool = True,
+    collection_create_permissions: list[str] | None = None,
+    resolve_print: bool = True,
+):
+    """销售订单路由鉴权；GET 单条详情对质检关联只读放行。"""
+
+    async def dependency(
+        request: Request,
+        auth: AuthContext = Depends(get_auth_context),
+        tenant_id: int = Depends(get_current_tenant),
+    ) -> AuthContext:
+        sales_order_id = _extract_sales_order_quality_linked_id(request)
+        if sales_order_id is not None:
+            from apps.kuaizhizao.services.kuaizhizao_data_scope import (
+                allow_sales_order_detail_quality_linked_read,
+            )
+
+            if await allow_sales_order_detail_quality_linked_read(
+                tenant_id,
+                auth.user_id,
+                sales_order_id,
+            ):
+                auth.tenant_id = tenant_id
+                return auth
+
+        action = resolve_kuaizhizao_module_action(
+            request.method,
+            request.url.path,
+            module_code="sales-order",
+            resolve_print=resolve_print,
+        )
+        if (
+            collection_create_permissions
+            and (request.method or "").upper() == "POST"
+            and action == "create"
+        ):
+            required = list(collection_create_permissions)
+        else:
+            required = [build_permission_code("kuaizhizao", "sales-order", action)]
         await ensure_permission_codes(
             auth,
             tenant_id,
@@ -350,6 +461,20 @@ def require_kuaizhizao_work_order_access(
         auth: AuthContext = Depends(get_auth_context),
         tenant_id: int = Depends(get_current_tenant),
     ) -> AuthContext:
+        work_order_id = _extract_work_order_quality_linked_id(request)
+        if work_order_id is not None:
+            from apps.kuaizhizao.services.kuaizhizao_data_scope import (
+                allow_work_order_detail_quality_linked_read,
+            )
+
+            if await allow_work_order_detail_quality_linked_read(
+                tenant_id,
+                auth.user_id,
+                work_order_id,
+            ):
+                auth.tenant_id = tenant_id
+                return auth
+
         module_code = resolve_kuaizhizao_work_order_module(request.url.path)
         action = resolve_kuaizhizao_module_action(
             request.method,
