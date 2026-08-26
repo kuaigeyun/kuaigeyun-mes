@@ -580,6 +580,35 @@ async def _soft_delete_work_order_operation_row(
     await op.save()
 
 
+async def _soft_delete_draft_reportings_for_work_order(
+    tenant_id: int,
+    work_order_id: int,
+    *,
+    master_operation_ids: Optional[Set[int]] = None,
+) -> None:
+    """草稿工单调整工序时，清理未审核报工，避免旧工序残留影响跳转校验。"""
+    query = ReportingRecord.filter(
+        tenant_id=tenant_id,
+        work_order_id=work_order_id,
+        status__in=["pending", "rejected"],
+        deleted_at__isnull=True,
+    )
+    if master_operation_ids is not None:
+        if not master_operation_ids:
+            return
+        query = query.filter(operation_id__in=list(master_operation_ids))
+    await query.update(deleted_at=now_utc())
+
+
+def _payload_master_operation_ids(operations: Iterable[Any]) -> Set[int]:
+    ids: Set[int] = set()
+    for op_data in operations:
+        op_id = getattr(op_data, "operation_id", None)
+        if op_id is not None:
+            ids.add(int(op_id))
+    return ids
+
+
 def _reported_work_order_operation_content_changed(
     existing_op: WorkOrderOperation,
     op_data: Any,
@@ -2850,9 +2879,11 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     rc = await ReportingRecord.filter(
                         tenant_id=tenant_id,
                         work_order_id=work_order_id,
+                        status="approved",
+                        deleted_at__isnull=True,
                     ).count()
                     if rc > 0:
-                        raise BusinessLogicError("已有报工记录，不能更换来源工艺路线")
+                        raise BusinessLogicError("已有已审核报工记录，不能更换来源工艺路线")
                     existing_ops = await WorkOrderOperation.filter(
                         tenant_id=tenant_id,
                         work_order_id=work_order_id,
@@ -2871,23 +2902,36 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                         )
                         if not pr:
                             raise NotFoundError(f"工艺路线不存在: id={new_pr_id}")
-                        seq_data, _jump = (
-                            await MaterialProductProcessService.resolve_sequence_for_material(
-                                tenant_id,
-                                work_order.product_id,
-                                pr,
+                        if not pr.operation_sequence:
+                            raise ValidationError(
+                                f"工艺路线 {pr.code} 未维护工序序列，无法指派到工单"
                             )
-                        )
+                        removed_master_ids = {
+                            int(o.operation_id)
+                            for o in existing_ops
+                            if o.operation_id is not None
+                        }
                         now = now_utc()
+                        await _soft_delete_draft_reportings_for_work_order(
+                            tenant_id,
+                            work_order_id,
+                            master_operation_ids=removed_master_ids,
+                        )
                         for op in existing_ops:
                             op.deleted_at = now
-                            await op.save()
+                            op.sequence = -int(op.id)
+                            await op.save(
+                                update_fields=["deleted_at", "sequence", "updated_at"]
+                            )
                         await self._generate_work_order_operations_from_route(
                             tenant_id=tenant_id,
                             work_order=work_order,
                             process_route=pr,
                             created_by=updated_by,
-                            operation_sequence=seq_data,
+                            operation_sequence=pr.operation_sequence,
+                        )
+                        update_data["allow_operation_jump"] = bool(
+                            getattr(pr, "allow_operation_jump", False)
                         )
                     update_data["process_route_id"] = new_pr_id
                 else:
@@ -5482,6 +5526,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             existing_by_id = {op.id: op for op in existing_operations}
             matched_existing_ids: set[int] = set()
             matched_rows: list[tuple[Any, Optional[WorkOrderOperation], int]] = []
+            payload_master_ids = _payload_master_operation_ids(operations_data.operations)
             for idx, op_data in enumerate(operations_data.operations, 1):
                 existing_op = _match_existing_work_order_operation(
                     op_data,
@@ -5498,12 +5543,39 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                         f"工序 {op.operation_name} 已有报工记录，不能删除"
                     )
 
-            # 先软删未匹配的未报工工序，避免新建/重排时 sequence 冲突
-            for op_id in _work_order_operation_ids_to_remove(
+            # 草稿工单：清单未包含的工序一律移除（避免换路线后旧工序仍参与报工跳转校验）
+            to_remove_ids = _work_order_operation_ids_to_remove(
                 existing_operations,
                 reported_operation_ids,
                 matched_existing_ids,
-            ):
+            )
+            if work_order.status == "draft":
+                for op in existing_operations:
+                    if op.deleted_at is not None:
+                        continue
+                    if op.id in reported_operation_ids:
+                        continue
+                    if op.id in matched_existing_ids:
+                        continue
+                    master_id = int(op.operation_id) if op.operation_id is not None else None
+                    if master_id is not None and master_id not in payload_master_ids:
+                        to_remove_ids.append(op.id)
+                to_remove_ids = list(dict.fromkeys(to_remove_ids))
+
+            removed_master_ids: Set[int] = set()
+            for op_id in to_remove_ids:
+                op_row = existing_by_id.get(op_id)
+                if op_row and op_row.operation_id is not None:
+                    removed_master_ids.add(int(op_row.operation_id))
+
+            # 先软删未匹配的未报工工序，避免新建/重排时 sequence 冲突
+            if to_remove_ids and work_order.status == "draft" and removed_master_ids:
+                await _soft_delete_draft_reportings_for_work_order(
+                    tenant_id,
+                    work_order_id,
+                    master_operation_ids=removed_master_ids,
+                )
+            for op_id in to_remove_ids:
                 await _soft_delete_work_order_operation_row(
                     existing_by_id[op_id],
                     updated_by,

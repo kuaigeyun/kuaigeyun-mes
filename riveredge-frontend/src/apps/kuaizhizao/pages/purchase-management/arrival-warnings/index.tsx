@@ -259,10 +259,15 @@ const PurchaseArrivalWarningsPage: React.FC = () => {
               estimated_arrival_date: dayjs(values.estimated_arrival_date).format('YYYY-MM-DD'),
               impact_description: values.impact_description,
             });
+            let submitted = created;
             if (delayPerms.canAction?.('submit')) {
-              await submitPurchaseArrivalDelayReport(created.id);
+              submitted = await submitPurchaseArrivalDelayReport(created.id);
             }
-            messageApi.success(t('app.kuaizhizao.purchaseArrival.delaySubmitted'));
+            if (submitted.purchase_order_change_id) {
+              messageApi.success(t('app.kuaizhizao.purchaseArrival.delayChangeGenerated'));
+            } else {
+              messageApi.success(t('app.kuaizhizao.purchaseArrival.delaySubmitted'));
+            }
             setDelayOpen(false);
             actionRef.current?.reload();
             return true;

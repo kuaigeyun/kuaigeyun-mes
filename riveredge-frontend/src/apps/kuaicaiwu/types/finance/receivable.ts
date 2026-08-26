@@ -13,6 +13,8 @@ export interface Receivable {
     due_date: string;
     payment_terms?: string;
     status: '未收款' | '部分收款' | '已结清';
+    refunded_amount?: number;
+    refund_execution_status?: string;
     business_date: string;
     invoice_issued: boolean;
     invoice_number?: string;

@@ -704,6 +704,26 @@ def _collect_material_structure_gaps(
                     "process_route_id",
                     blocking=False,
                 )
+        else:
+            # 未识别制造模式：与 scope 校验一致，工艺路线与 BOM 均须补齐
+            if not bom_ok:
+                add_gap(
+                    "_bom",
+                    "BOM配置",
+                    None,
+                    None,
+                    "info",
+                    blocking=True,
+                )
+            if not has_process_route:
+                add_gap(
+                    "process_route_id",
+                    "工艺路线",
+                    None,
+                    None,
+                    "process_route_id",
+                    blocking=True,
+                )
     elif st == SOURCE_TYPE_PHANTOM:
         if not bom_ok:
             add_gap("_bom", "BOM配置", None, None, "info", blocking=True)
@@ -1588,6 +1608,10 @@ class DemandComputationService(AppBaseService):
                 for p in patches:
                     field = p["field"]
                     value = p["value"]
+                    if field.startswith("_"):
+                        raise ValidationError(
+                            f"字段 {field} 须在物料主数据中维护，不能通过需求计算补齐弹窗回写"
+                        )
                     if field == "source_type":
                         if value is None or value == "":
                             raise ValidationError(f"物料 {material.main_code} 的来源类型不能为空")

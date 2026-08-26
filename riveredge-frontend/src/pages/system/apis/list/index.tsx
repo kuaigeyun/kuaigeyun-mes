@@ -5,7 +5,7 @@
  * 支持接口的 CRUD 操作和接口测试功能。
  */
 
-import React, { useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   ActionType,
@@ -16,6 +16,7 @@ import {
   ProFormList,
   ProFormGroup,
   ProDescriptionsItemProps,
+  ProFormDependency,
 } from '@ant-design/pro-components'
 import SafeProFormSelect from '../../../../components/safe-pro-form-select'
 import {
@@ -63,6 +64,11 @@ import { rowActionKind } from '../../../../components/uni-action'
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 import { todaySiteDateString } from '../../../../utils/format';
 import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
+import { useResourcePermissions } from '../../../../hooks/useResourcePermissions';
+import {
+  getBusinessSystemConnectionsForApi,
+  type DataConnectionGroupOption,
+} from '../../../../services/integrationConfig';
 
 const { TextArea } = Input
 const { Text, Paragraph } = Typography
@@ -116,6 +122,7 @@ const keyValueListToObject = (
 const APIListPage: React.FC = () => {
   const { t } = useTranslation()
   const { message: messageApi } = App.useApp()
+  const connectionPerms = useResourcePermissions('system:application-connection')
   const actionRef = useRef<ActionType>(null)
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
 
@@ -141,6 +148,16 @@ const APIListPage: React.FC = () => {
   const [testResult, setTestResult] = useState<APITestResponse | null>(null)
   const [testLoading, setTestLoading] = useState(false)
   const [testRequestJson, setTestRequestJson] = useState<string>('{}')
+  const [connectionGroups, setConnectionGroups] = useState<DataConnectionGroupOption[]>([])
+
+  useEffect(() => {
+    if (!connectionPerms.canRead) return
+    void getBusinessSystemConnectionsForApi()
+      .then(({ groups }) => setConnectionGroups(groups))
+      .catch(() => {
+        // 无连接器读权限或列表为空时不阻断接口管理
+      })
+  }, [connectionPerms.canRead])
 
   /**
    * 处理新建接口
@@ -175,6 +192,7 @@ const APIListPage: React.FC = () => {
         name: detail.name,
         code: detail.code,
         description: detail.description,
+        connection_uuid: detail.connection_uuid || undefined,
         path: detail.path,
         method: detail.method,
         is_active: detail.is_active,
@@ -227,6 +245,14 @@ const APIListPage: React.FC = () => {
         render: (_dom, entity: API) => <Tag color="blue">{entity.method}</Tag>,
       },
       { title: t('pages.system.apis.detailColumnPath'), dataIndex: 'path' },
+      {
+        title: t('pages.system.apis.detailColumnConnection'),
+        dataIndex: 'connection_name',
+        render: (_dom, entity: API) =>
+          entity.connection_name
+            ? `${entity.connection_name}${entity.connection_type ? ` (${entity.connection_type})` : ''}`
+            : '-',
+      },
       {
         title: t('pages.system.apis.detailColumnRequestHeaders'),
         dataIndex: 'request_headers',
@@ -449,6 +475,7 @@ const APIListPage: React.FC = () => {
           name: values.name,
           code: values.code,
           description: values.description,
+          connection_uuid: values.connection_uuid ?? null,
           path: values.path,
           method: values.method,
           request_headers: requestHeaders,
@@ -464,6 +491,7 @@ const APIListPage: React.FC = () => {
           name: values.name,
           code: values.code,
           description: values.description,
+          connection_uuid: values.connection_uuid || undefined,
           path: values.path,
           method: values.method,
           request_headers: requestHeaders,
@@ -537,6 +565,17 @@ const APIListPage: React.FC = () => {
       dataIndex: 'path',
       ellipsis: true,
       width: 300,
+    },
+    {
+      title: t('pages.system.apis.columnConnection'),
+      dataIndex: 'connection_name',
+      ellipsis: true,
+      hideInSearch: true,
+      width: 180,
+      render: (_, record) =>
+        record.connection_name
+          ? `${record.connection_name}${record.connection_type ? ` (${record.connection_type})` : ''}`
+          : '-',
     },
     {
       title: t('common.remark'),
@@ -622,7 +661,7 @@ const APIListPage: React.FC = () => {
         <UniTable<API>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('system.apis')}
-          columnPersistenceId="pages.system.apis.list-v1"
+          columnPersistenceId="pages.system.apis.list-v2"
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {
@@ -834,13 +873,31 @@ const APIListPage: React.FC = () => {
           placeholder={t('pages.system.apis.namePlaceholder')}
           colProps={{ span: 12 }}
         />
-        <ProFormText
-          name="path"
-          label={t('pages.system.apis.labelPath')}
-          rules={[{ required: true, message: t('pages.system.apis.pathRequired') }]}
-          placeholder={t('pages.system.apis.pathPlaceholder')}
-          colProps={{ span: 12 }}
-        />
+        {connectionPerms.canRead ? (
+          <SafeProFormSelect
+            name="connection_uuid"
+            label={t('pages.system.apis.labelConnection')}
+            options={connectionGroups}
+            allowClear
+            placeholder={t('pages.system.apis.connectionPlaceholder')}
+            colProps={{ span: 24 }}
+          />
+        ) : null}
+        <ProFormDependency name={['connection_uuid']}>
+          {({ connection_uuid }) => (
+            <ProFormText
+              name="path"
+              label={t('pages.system.apis.labelPath')}
+              rules={[{ required: true, message: t('pages.system.apis.pathRequired') }]}
+              placeholder={
+                connection_uuid
+                  ? t('pages.system.apis.pathPlaceholderRelative')
+                  : t('pages.system.apis.pathPlaceholder')
+              }
+              colProps={{ span: 12 }}
+            />
+          )}
+        </ProFormDependency>
         <SafeProFormSelect
           name="method"
           label={t('pages.system.apis.labelMethod')}

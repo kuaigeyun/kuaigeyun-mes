@@ -52,11 +52,12 @@ SYSTEM_MENU_CONFIG: Dict[str, Any] = {
             "icon": "database",
             "sort_order": 30,
             "children": [
-                {"title": "menu.system.files", "path": "/system/files", "permission": "system:file:read", "sort_order": 1},
-                {"title": "menu.system.apis", "path": "/system/apis", "permission": "system:api:read", "sort_order": 2},
-                {"title": "menu.system.data-sources", "path": "/system/data-sources", "permission": "system:data-source:read", "sort_order": 3},
-                {"title": "menu.system.application-connections", "path": "/system/application-connections", "permission": "system:application-connection:read", "sort_order": 4},
-                {"title": "menu.system.datasets", "path": "/system/datasets", "permission": "system:dataset:read", "sort_order": 5},
+                {"title": "menu.system.initial-data", "path": "/system/initial-data", "permission": "kuaizhizao:warehouse-management-initial-data:read", "sort_order": 1},
+                {"title": "menu.system.files", "path": "/system/files", "permission": "system:file:read", "sort_order": 2},
+                {"title": "menu.system.application-connections", "path": "/system/application-connections", "permission": "system:application-connection:read", "sort_order": 3},
+                {"title": "menu.system.apis", "path": "/system/apis", "permission": "system:api:read", "sort_order": 4},
+                {"title": "menu.system.data-sources", "path": "/system/data-sources", "permission": "system:data-source:read", "sort_order": 5},
+                {"title": "menu.system.datasets", "path": "/system/datasets", "permission": "system:dataset:read", "sort_order": 6},
             ],
         },
         {

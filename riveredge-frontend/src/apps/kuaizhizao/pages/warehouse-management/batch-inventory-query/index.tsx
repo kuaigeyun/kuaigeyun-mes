@@ -19,6 +19,7 @@ import { resolveInventoryBatchLineListParams } from '../../../utils/warehouseLis
 import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
+import { fetchAllCurrentPageItems } from '../../../../../utils/fetchAllListPages';
 
 interface InTransitBreakdown {
   purchase_quantity: number;
@@ -488,14 +489,15 @@ const BatchInventoryQuery: React.FC = () => {
       } else if (type === 'currentPage') {
         items = currentPageData || [];
       } else {
-        const response = await apiRequest<{ items?: BatchInventoryItem[] }>(
-          '/apps/kuaizhizao/reports/inventory/batch-lines',
-          {
-            method: 'GET',
-            params: { ...lastQueryRef.current, current: 1, page_size: 100000 },
-          }
+        items = await fetchAllCurrentPageItems<BatchInventoryItem>((page) =>
+          apiRequest<{ items?: BatchInventoryItem[]; total?: number }>(
+            '/apps/kuaizhizao/reports/inventory/batch-lines',
+            {
+              method: 'GET',
+              params: { ...lastQueryRef.current, ...page },
+            },
+          ),
         );
-        items = response.items ?? (Array.isArray(response) ? response : []);
       }
       if (items.length === 0) {
         messageApi.warning(t('common.exportNoData'));

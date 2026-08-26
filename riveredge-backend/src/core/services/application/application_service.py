@@ -621,6 +621,7 @@ class ApplicationService:
                         application_uuid=uuid,
                         deleted_at__isnull=True
                     ).update(is_active=updated_app.get('is_active', True))
+                    await MenuService._clear_menu_cache(tenant_id)
 
             # 返回更新后的应用信息
             return await ApplicationService.get_application_by_uuid(tenant_id, uuid)
@@ -907,6 +908,10 @@ class ApplicationService:
                         e,
                     )
 
+        # 导航树缓存命中直出；无 menu_config 的启用路径不会走 sync，须在此失效
+        from core.services.system.menu_service import MenuService
+        await MenuService._clear_menu_cache(tenant_id)
+
         return application
     
     @staticmethod
@@ -943,24 +948,40 @@ class ApplicationService:
         
         # 更新本地字典
         application['is_active'] = False
-        
-        # 自动更新关联菜单的状态
-        conn = await get_db_connection()
-        try:
-            menu_update_query = """
-                UPDATE core_menus
-                SET is_active = FALSE, updated_at = NOW()
-                WHERE tenant_id = $1 AND application_uuid = $2 AND deleted_at IS NULL
-            """
-            await conn.execute(menu_update_query, tenant_id, str(uuid))
-        finally:
-            await conn.close()
 
+        app_code = str(application.get("code") or "")
+        from core.services.system.menu_service import MenuService
         from core.services.system.menu_takeover_service import MenuTakeoverService
+
+        if is_industry_module_app_code(app_code):
+            from core.services.application.industry_pack_menu_service import IndustryPackMenuService
+
+            await IndustryPackMenuService.sync_after_industry_module_lifecycle(
+                tenant_id, activate_shell=False
+            )
+        elif is_industry_pack_shell_code(app_code):
+            from core.services.application.industry_pack_menu_service import IndustryPackMenuService
+
+            await IndustryPackMenuService.rebuild_pack_menus(tenant_id)
+        else:
+            conn = await get_db_connection()
+            try:
+                menu_update_query = """
+                    UPDATE core_menus
+                    SET is_active = FALSE, updated_at = NOW()
+                    WHERE tenant_id = $1 AND application_uuid = $2 AND deleted_at IS NULL
+                """
+                await conn.execute(menu_update_query, tenant_id, str(uuid))
+            finally:
+                await conn.close()
+
         await MenuTakeoverService.sync_for_application_lifecycle(
-            tenant_id, str(application.get("code") or ""), enabled=False
+            tenant_id, app_code, enabled=False
         )
-        
+        # 导航树缓存命中直出；禁用后必须失效，否则侧栏仍展示已禁用应用菜单。
+        # 接管同步仅对 MENU_TAKEOVER_RULES 内应用清缓存，快报表/快数采/KU-AI 等不会走到。
+        await MenuService._clear_menu_cache(tenant_id)
+
         return application
     
     @staticmethod

@@ -137,7 +137,6 @@ import {
   resolvePermissionLabel,
 } from '../../../utils/permissionContract';
 import { TWO_COLUMN_LEFT_PANEL_BACKGROUND } from '../../../components/layout-templates/constants';
-import { ThemedSegmented } from '../../../components/themed-segmented';
 import RichListPageHelpView from '../../../components/page-help-wiki/RichListPageHelpView';
 
 const ROLE_FUNCTIONAL_DOMAIN_I18N: Record<string, string> = {

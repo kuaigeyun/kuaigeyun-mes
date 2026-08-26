@@ -20,6 +20,8 @@ class PaymentPullService(AppBaseService[Payment]):
     """付款单加载门控服务"""
 
     _EXCLUDED_PAYMENT_STATUSES = frozenset({"Cancelled"})
+    # 仅已确认付款单占用应付可加载额度；草稿未过账不占额度
+    _RESERVED_PAYMENT_STATUSES = frozenset({"Confirmed"})
 
     _PAYABLE_ELIGIBLE_REVIEW = frozenset({"已审核"})
 
@@ -69,7 +71,8 @@ class PaymentPullService(AppBaseService[Payment]):
                 tenant_id=tenant_id,
                 id__in=list(all_payment_ids),
                 deleted_at__isnull=True,
-            ).exclude(status__in=list(self._EXCLUDED_PAYMENT_STATUSES))
+                status__in=list(self._RESERVED_PAYMENT_STATUSES),
+            ).all()
             payment_map = {int(p.id): p for p in rows}
 
         for payable_id, payment_ids in payment_by_payable.items():

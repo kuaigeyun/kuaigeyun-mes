@@ -1466,9 +1466,14 @@ const DemandComputationPage: React.FC = () => {
       const key = readinessRowKey(gap)
       const value = readinessValues[key]
       if (gap.value_type === 'info') {
+        const hint =
+          (gap.current && String(gap.current).trim()) ||
+          (gap.field === '_bom'
+            ? t('app.kuaizhizao.demandComputation.readinessInfoBom')
+            : t('app.kuaizhizao.demandComputation.readinessInfoSourceValidation'))
         return (
           <Typography.Text type="secondary">
-            {t('app.kuaizhizao.demandComputation.readinessInfoBom')}
+            {hint}
           </Typography.Text>
         )
       }

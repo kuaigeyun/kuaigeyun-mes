@@ -30,6 +30,7 @@ import { useUniReportExport } from './useUniReportExport';
 import { useUniReportPrint } from './useUniReportPrint';
 import type { UniReportProps } from './types';
 import { stableJsonForQueryKey } from '../../utils/tableQueryKey';
+import { pickListPageToolbarSearchParams } from '../../utils/listLifecycleStage';
 
 /** 专业包 kuaireport：未 compose 时不可用，避免壳层静态依赖导致主仓白屏 */
 const KUAIREPORT_SERVICE = import.meta.glob('../../apps/kuaireport/services/kuaireport.ts');
@@ -295,9 +296,12 @@ export function UniReport<T extends Record<string, unknown> = Record<string, unk
       filter?: Record<string, unknown>,
       searchFormValues?: Record<string, unknown>,
     ) => {
+      const toolbarParams = pickListPageToolbarSearchParams(searchParamsRef.current);
       const mergedSearch: Record<string, unknown> = {
+        ...toolbarParams,
         ...(searchParamsRef.current || {}),
         ...(searchFormValues || {}),
+        ...toolbarParams,
       };
       // searchParamsRef 只保留高级搜索的 column_filters；表头筛选在请求时再合并，避免叠加重复
       const fromAdvanced = parseReportColumnFilters(searchParamsRef.current?.column_filters);

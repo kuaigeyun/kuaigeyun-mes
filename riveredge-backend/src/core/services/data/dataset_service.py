@@ -928,23 +928,22 @@ class DatasetService:
                     "columns": None,
                     "error": "应用连接器 query_config 需包含 endpoint",
                 }
-            cfg = integration_config.get_config()
-            base_url = (cfg.get("base_url") or cfg.get("url") or "").rstrip("/")
-            if not base_url:
+            from core.services.integration.connector_request import resolve_connector_request
+
+            try:
+                url, headers = resolve_connector_request(
+                    integration_config,
+                    endpoint=endpoint,
+                    headers=query_config.get("headers"),
+                )
+            except ValidationError as exc:
                 return {
                     "success": False,
                     "data": [],
                     "total": None,
                     "columns": None,
-                    "error": "应用连接器配置缺少 base_url 或 url",
+                    "error": str(exc),
                 }
-            url = f"{base_url}/{endpoint.lstrip('/')}" if endpoint else base_url
-
-            headers = dict(cfg.get("headers") or {})
-            if cfg.get("auth_type") == "bearer" and cfg.get("token"):
-                headers["Authorization"] = f"Bearer {cfg['token']}"
-            if query_config.get("headers"):
-                headers.update(query_config.get("headers", {}))
 
             params = dict(query_config.get("params") or {})
             if parameters:

@@ -48,6 +48,10 @@ export type MaterialProductProcessSave = {
   processRouteUuid?: string;
   allowOperationJump: boolean;
   lines: ProductProcessLine[];
+  /** 另存为新工艺路线主数据并同步物料默认路线 */
+  saveAsNewRoute?: boolean;
+  newRouteCode?: string;
+  newRouteName?: string;
 };
 
 export type ProcessRouteOperationTemplate = {

@@ -14,10 +14,13 @@ from uuid import UUID
 from tortoise.exceptions import IntegrityError
 
 from core.models.api import API
-from core.schemas.api import APICreate, APIUpdate, APITestRequest
+from core.models.integration_config import IntegrationConfig
+from core.schemas.api import APICreate, APIUpdate, APITestRequest, APIResponse
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.config.infra_config import infra_settings as settings
 from core.utils.timezone_utils import resolve_business_datetime
+from core.config.integration_type_spec import is_business_system_connector_type
+from core.services.integration.connector_request import resolve_connector_request
 
 
 class APIService:
@@ -27,6 +30,62 @@ class APIService:
     提供接口的 CRUD 操作和接口测试功能。
     """
     
+    async def _resolve_business_connector(
+        self,
+        tenant_id: int,
+        connection_uuid: UUID,
+    ) -> IntegrationConfig:
+        integration_config = await IntegrationConfig.filter(
+            tenant_id=tenant_id,
+            uuid=str(connection_uuid),
+            deleted_at__isnull=True,
+        ).first()
+        if not integration_config:
+            raise ValidationError(f"应用连接器不存在: {connection_uuid}")
+        if not is_business_system_connector_type(integration_config.type):
+            raise ValidationError("仅支持绑定业务系统类应用连接器（ERP/PLM/CRM/OA/WMS/IoT）")
+        return integration_config
+
+    @staticmethod
+    def build_api_response(api: API) -> APIResponse:
+        connection_uuid = None
+        connection_name = None
+        connection_type = None
+        integration_config = getattr(api, "integration_config", None)
+        if integration_config is not None:
+            connection_uuid = UUID(str(integration_config.uuid))
+            connection_name = integration_config.name
+            connection_type = integration_config.type
+        elif api.integration_config_id:
+            # 未 prefetch 时仅回显 uuid 不可用，调用方应 fetch_related
+            pass
+
+        payload = {
+            key: getattr(api, key)
+            for key in (
+                "uuid",
+                "tenant_id",
+                "name",
+                "code",
+                "description",
+                "path",
+                "method",
+                "request_headers",
+                "request_params",
+                "request_body",
+                "response_format",
+                "response_example",
+                "is_active",
+                "is_system",
+                "created_at",
+                "updated_at",
+            )
+        }
+        payload["connection_uuid"] = connection_uuid
+        payload["connection_name"] = connection_name
+        payload["connection_type"] = connection_type
+        return APIResponse(**payload)
+
     async def create_api(
         self,
         tenant_id: int,
@@ -55,12 +114,24 @@ class APIService:
         if existing_api:
             raise ValidationError(f"接口代码 '{api_data.code}' 已存在")
         
+        create_data = api_data.model_dump(exclude={"connection_uuid"})
+        integration_config_id = None
+        if api_data.connection_uuid:
+            integration_config = await self._resolve_business_connector(
+                tenant_id,
+                api_data.connection_uuid,
+            )
+            integration_config_id = integration_config.id
+
         # 创建接口
         api = await API.create(
             tenant_id=tenant_id,
-            **api_data.model_dump(),
+            integration_config_id=integration_config_id,
+            **create_data,
         )
         
+        if integration_config_id:
+            await api.fetch_related("integration_config")
         return api
     
     async def get_api_by_uuid(
@@ -163,7 +234,9 @@ class APIService:
             order_clause: tuple[str, ...] = (primary, "id")
         else:
             order_clause = ("-created_at", "id")
-        apis = await query.order_by(*order_clause).offset(offset).limit(page_size).all()
+        apis = await query.order_by(*order_clause).offset(offset).limit(page_size).prefetch_related(
+            "integration_config",
+        ).all()
 
         return apis, total
     
@@ -209,11 +282,23 @@ class APIService:
         old_is_active = api.is_active
         
         # 更新接口
-        update_data = api_data.model_dump(exclude_unset=True)
+        update_data = api_data.model_dump(exclude_unset=True, exclude={"connection_uuid"})
         for key, value in update_data.items():
             setattr(api, key, value)
+
+        if "connection_uuid" in api_data.model_fields_set:
+            if api_data.connection_uuid is None:
+                api.integration_config_id = None
+            else:
+                integration_config = await self._resolve_business_connector(
+                    tenant_id,
+                    api_data.connection_uuid,
+                )
+                api.integration_config_id = integration_config.id
         
         await api.save()
+        
+        await api.fetch_related("integration_config")
         
         # 如果接口代码、路径、方法或状态变更，通知数据集管理（异步，不阻塞主流程）
         code_changed = old_code != api.code
@@ -342,11 +427,10 @@ class APIService:
         """
         # 获取接口
         api = await self.get_api_by_uuid(tenant_id, api_uuid)
+        await api.fetch_related("integration_config")
         
         # 1. 合并请求头（测试请求头优先）
-        request_headers = api.request_headers or {}
-        if test_request.headers:
-            request_headers.update(test_request.headers)
+        request_headers = dict(api.request_headers or {})
         
         # 2. 合并请求参数（测试参数优先）
         request_params = api.request_params or {}
@@ -359,16 +443,35 @@ class APIService:
             request_body.update(test_request.body)
         
         # 4. 构建完整URL
-        url = api.path
-        if not url.startswith("http://") and not url.startswith("https://"):
-            # 相对路径，需要添加基础URL
-            base_url = (getattr(settings, "BASE_URL", None) or "").strip().rstrip("/")
-            if not base_url:
-                host = getattr(settings, "HOST", "127.0.0.1")
-                port = getattr(settings, "PORT", 8200)
-                bind = "127.0.0.1" if host in ("0.0.0.0", "::") else host
-                base_url = f"http://{bind}:{port}"
-            url = f"{base_url}{url}"
+        try:
+            if api.integration_config_id and api.integration_config:
+                url, connector_headers = resolve_connector_request(
+                    api.integration_config,
+                    endpoint=api.path,
+                    headers=request_headers,
+                )
+                request_headers = connector_headers
+                if test_request.headers:
+                    request_headers.update(test_request.headers)
+            else:
+                url = api.path
+                if not url.startswith("http://") and not url.startswith("https://"):
+                    base_url = (getattr(settings, "BASE_URL", None) or "").strip().rstrip("/")
+                    if not base_url:
+                        host = getattr(settings, "HOST", "127.0.0.1")
+                        port = getattr(settings, "PORT", 8200)
+                        bind = "127.0.0.1" if host in ("0.0.0.0", "::") else host
+                        base_url = f"http://{bind}:{port}"
+                    url = f"{base_url}{url}"
+                if test_request.headers:
+                    request_headers.update(test_request.headers)
+        except ValidationError as exc:
+            return {
+                "status_code": 0,
+                "headers": {},
+                "body": {"error": str(exc)},
+                "elapsed_time": 0,
+            }
         
         # 5. 发送请求
         start_time = time.time()

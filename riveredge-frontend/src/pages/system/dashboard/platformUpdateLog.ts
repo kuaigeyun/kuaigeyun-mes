@@ -1,7 +1,7 @@
 /**
  * 平台更新日志（工作台版本卡展示）
  *
- * 完成一项修复/优化后，在此追加一条记录，并同步补充各语言 i18n 文案。
+ * 完成一项修复/优化后，在此追加一条记录，并补充 zh-CN i18n 文案（默认仅简体中文，见 i18n-zh-cn-only 规则）。
  *
  * 不计入：定制应用 HaoliGO（好力 GO）相关变动，仅在该应用内交付，不写本日志。
  */
@@ -32,6 +32,102 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  * titleKey / descriptionKey 对应 pages.dashboard.updateLog.entries.{id}.*
  */
 export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
+  {
+    id: 'mrp-readiness-source-validation-fix',
+    date: '2026-08-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.mrp-readiness-source-validation-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mrp-readiness-source-validation-fix.description',
+  },
+  {
+    id: 'quotation-toolbar-push-capabilities-fix',
+    date: '2026-08-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.quotation-toolbar-push-capabilities-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.quotation-toolbar-push-capabilities-fix.description',
+  },
+  {
+    id: 'work-order-draft-route-change-fix',
+    date: '2026-08-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.work-order-draft-route-change-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.work-order-draft-route-change-fix.description',
+  },
+  {
+    id: 'product-process-route-improvements',
+    date: '2026-08-26',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.product-process-route-improvements.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.product-process-route-improvements.description',
+  },
+  {
+    id: 'work-order-readiness-rework-ui-fix',
+    date: '2026-08-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.work-order-readiness-rework-ui-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.work-order-readiness-rework-ui-fix.description',
+  },
+  {
+    id: 'purchase-arrival-delay-change-flow-fix',
+    date: '2026-08-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-arrival-delay-change-flow-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-arrival-delay-change-flow-fix.description',
+  },
+  {
+    id: 'report-advanced-search-period-filter-fix',
+    date: '2026-08-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.report-advanced-search-period-filter-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.report-advanced-search-period-filter-fix.description',
+  },
+  {
+    id: 'payment-refund-prepayment-reverse-fix',
+    date: '2026-08-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.payment-refund-prepayment-reverse-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.payment-refund-prepayment-reverse-fix.description',
+  },
+  {
+    id: 'receivable-receipt-button-draft-occupy-fix',
+    date: '2026-08-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.receivable-receipt-button-draft-occupy-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.receivable-receipt-button-draft-occupy-fix.description',
+  },
+  {
+    id: 'partner-statement-generate-detail-crash-fix',
+    date: '2026-08-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.partner-statement-generate-detail-crash-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.partner-statement-generate-detail-crash-fix.description',
+  },
+  {
+    id: 'finance-ar-ap-refund-execution-status',
+    date: '2026-08-26',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.finance-ar-ap-refund-execution-status.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.finance-ar-ap-refund-execution-status.description',
+  },
+  {
+    id: 'finance-voucher-posting-unify',
+    date: '2026-08-26',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.finance-voucher-posting-unify.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.finance-voucher-posting-unify.description',
+  },
   {
     id: 'partner-statement-preview-hierarchy-import-fix',
     date: '2026-08-25',

@@ -28,10 +28,17 @@ const ReworkPredefinedRouteEditor: React.FC<ReworkPredefinedRouteEditorProps> = 
   operations,
 }) => {
   const { t } = useTranslation();
-  const selectedIds = value ?? [];
+  const selectedIds = useMemo(
+    () => (value ?? []).map((id) => Number(id)).filter((id) => Number.isFinite(id)),
+    [value],
+  );
 
   const sortedOperations = useMemo(
-    () => [...operations].sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0)),
+    () =>
+      [...operations]
+        .map((op) => ({ ...op, id: Number(op.id) }))
+        .filter((op) => Number.isFinite(op.id))
+        .sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0)),
     [operations],
   );
 
@@ -140,7 +147,7 @@ const ReworkPredefinedRouteEditor: React.FC<ReworkPredefinedRouteEditorProps> = 
   );
 
   return (
-    <div className="rework-predefined-route-editor">
+    <div className="rework-predefined-route-editor" style={{ width: '100%', minWidth: 0 }}>
       <Typography.Text type="secondary" className="rework-predefined-route-editor__hint">
         {t('app.kuaizhizao.reworkOrder.predefinedRouteHint')}
       </Typography.Text>

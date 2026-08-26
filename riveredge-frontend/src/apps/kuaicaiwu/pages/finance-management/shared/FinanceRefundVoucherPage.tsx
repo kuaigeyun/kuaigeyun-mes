@@ -577,8 +577,8 @@ const FinanceRefundVoucherPage: React.FC<Props> = ({ mode, columnPersistenceId }
             </Button>
           ) : null,
           record.status === 'Draft' && perms.canAction?.('revoke') ? (
-            <Button {...rowActionKind('danger')} key="ca" onClick={() => handleCancel(record)}>
-              {t('common.void')}
+            <Button {...rowActionKind('obsolete')} key="ca" onClick={() => handleCancel(record)}>
+              {t('app.kuaicaiwu.common.void')}
             </Button>
           ) : null,
         ],

@@ -2330,39 +2330,41 @@ const QuotationsPage: React.FC = () => {
     const id = Number(selectedRowKeys[0]);
     return Number.isFinite(id) && id > 0 ? id : null;
   }, [selectedRowKeys]);
-  const selectedQuotationForToolbar = useMemo(
-    () => (selectedQuotationIdForToolbar ? resolveQuotationByRowKey(selectedQuotationIdForToolbar) : null),
-    [selectedQuotationIdForToolbar, resolveQuotationByRowKey],
-  );
 
-  /** 工具栏下推：优先用带 capabilities 的详情，避免列表未 enrich 时整组下推被禁用 */
-  const [toolbarPushQuotation, setToolbarPushQuotation] = useState<Quotation | null>(null);
+  /**
+   * 工具栏单选：始终拉详情 capabilities（会同步解除无效下游关联）。
+   * 禁止仅用列表行 capabilities——客户确认/审核后列表未刷新或跨页缓存会导致下推误灰。
+   */
+  const [toolbarDetailQuotation, setToolbarDetailQuotation] = useState<Quotation | null>(null);
+  const [toolbarDetailQuotationLoading, setToolbarDetailQuotationLoading] = useState(false);
   useEffect(() => {
     let cancelled = false;
     if (!selectedQuotationIdForToolbar) {
-      setToolbarPushQuotation(null);
+      setToolbarDetailQuotation(null);
+      setToolbarDetailQuotationLoading(false);
       return;
     }
-    const cached = resolveQuotationByRowKey(selectedQuotationIdForToolbar);
-    if (cached?.capabilities?.convert_to_order != null) {
-      setToolbarPushQuotation(cached);
-      return;
-    }
+    setToolbarDetailQuotationLoading(true);
     void getQuotation(selectedQuotationIdForToolbar)
       .then((full) => {
-        if (!cancelled) setToolbarPushQuotation(full);
+        if (!cancelled) setToolbarDetailQuotation(full);
       })
       .catch(() => {
-        if (!cancelled) setToolbarPushQuotation(cached);
+        if (!cancelled) {
+          setToolbarDetailQuotation(resolveQuotationByRowKey(selectedQuotationIdForToolbar));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setToolbarDetailQuotationLoading(false);
       });
     return () => {
       cancelled = true;
     };
   }, [selectedQuotationIdForToolbar, resolveQuotationByRowKey, tableQuotationsFlat]);
 
-  const quotationForToolbarPush = toolbarPushQuotation ?? selectedQuotationForToolbar;
-  /** 工具栏单选能力判定统一使用「详情能力」优先，避免列表能力字段缺失导致整组按钮误灰。 */
-  const toolbarSingleSelectionQuotation = quotationForToolbarPush;
+  const quotationForToolbarPush = toolbarDetailQuotation;
+  /** 工具栏单选能力判定统一使用详情 capabilities，与下推菜单一致。 */
+  const toolbarSingleSelectionQuotation = toolbarDetailQuotationLoading ? null : toolbarDetailQuotation;
 
   const quotationRowSelectionGetCheckboxProps = useCallback(
     (record: Quotation) => ({
@@ -2572,13 +2574,18 @@ const QuotationsPage: React.FC = () => {
         defaultValue: '下推仅支持单条，请仅保留一条选中记录',
       });
     }
+    if (toolbarDetailQuotationLoading) {
+      return t('app.kuaizhizao.quotation.push.loadingCapabilities', {
+        defaultValue: '正在加载下推条件，请稍候',
+      });
+    }
     if (!quotationForToolbarPush) {
       return t('app.kuaizhizao.quotation.push.rowUnavailable', {
         defaultValue: '当前选中记录暂不可用，请刷新后重试',
       });
     }
     return undefined;
-  }, [quotationForToolbarPush, selectedRowKeys.length, t]);
+  }, [quotationForToolbarPush, selectedRowKeys.length, t, toolbarDetailQuotationLoading]);
 
   /**
    * 处理新建报价单
@@ -3942,7 +3949,11 @@ const QuotationsPage: React.FC = () => {
             <UniPushToolbarButton
               key={`quotation-push-${quotationForToolbarPush?.id ?? 'none'}`}
               menuItems={toolbarPushMenuItems}
-              disabled={selectedRowKeys.length !== 1 || !quotationForToolbarPush}
+              disabled={
+                selectedRowKeys.length !== 1 ||
+                toolbarDetailQuotationLoading ||
+                !quotationForToolbarPush
+              }
               disabledReason={quotationPushDisabledReason}
             />,
           ]}

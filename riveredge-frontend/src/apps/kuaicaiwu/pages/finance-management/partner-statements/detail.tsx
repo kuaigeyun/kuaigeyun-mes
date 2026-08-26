@@ -60,6 +60,7 @@ const PartnerStatementDetailPage: React.FC = () => {
   } | null>(null);
   const [linesDirty, setLinesDirty] = useState(false);
   const [savingLines, setSavingLines] = useState(false);
+  const [exporting, setExporting] = useState<'xlsx' | 'pdf' | null>(null);
   const { cache: lineDetailCache, loadLineDetail, clearCache: clearLineDetailCache } = usePartnerStatementInboundDetail();
 
   const statusEnum = useMemo(() => buildPartnerStatementStatusEnum(t), [t]);

@@ -97,6 +97,13 @@ class MaterialProductProcessSave(BaseModel):
     process_route_uuid: Optional[str] = Field(None, alias="processRouteUuid")
     allow_operation_jump: bool = Field(False, alias="allowOperationJump")
     lines: List[ProductProcessLineSchema] = Field(default_factory=list)
+    save_as_new_route: bool = Field(
+        False,
+        alias="saveAsNewRoute",
+        description="另存为新工艺路线主数据并同步物料默认路线（仅新建，不覆盖已有路线）",
+    )
+    new_route_code: Optional[str] = Field(None, alias="newRouteCode")
+    new_route_name: Optional[str] = Field(None, alias="newRouteName")
 
 
 class ProcessRouteOperationTemplateResponse(BaseModel):

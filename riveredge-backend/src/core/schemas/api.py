@@ -17,6 +17,7 @@ class APIBase(BaseModel):
     description: Optional[str] = Field(None, description="接口描述")
     path: str = Field(..., max_length=500, description="接口路径")
     method: str = Field(..., max_length=10, description="请求方法")
+    connection_uuid: Optional[UUID] = Field(None, description="关联应用连接器 UUID（可选）")
     request_headers: Optional[Dict[str, Any]] = Field(None, description="请求头")
     request_params: Optional[Dict[str, Any]] = Field(None, description="请求参数")
     request_body: Optional[Dict[str, Any]] = Field(None, description="请求体")
@@ -38,6 +39,7 @@ class APIUpdate(BaseModel):
     description: Optional[str] = Field(None, description="接口描述")
     path: Optional[str] = Field(None, max_length=500, description="接口路径")
     method: Optional[str] = Field(None, max_length=10, description="请求方法")
+    connection_uuid: Optional[UUID] = Field(None, description="关联应用连接器 UUID（可选，传 null 清除绑定）")
     request_headers: Optional[Dict[str, Any]] = Field(None, description="请求头")
     request_params: Optional[Dict[str, Any]] = Field(None, description="请求参数")
     request_body: Optional[Dict[str, Any]] = Field(None, description="请求体")
@@ -50,6 +52,8 @@ class APIResponse(APIBase):
     """接口响应 Schema"""
     uuid: UUID = Field(..., description="接口UUID")
     tenant_id: int = Field(..., description="组织ID")
+    connection_name: Optional[str] = Field(None, description="关联应用连接器名称")
+    connection_type: Optional[str] = Field(None, description="关联应用连接器类型")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
     

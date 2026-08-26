@@ -1085,7 +1085,7 @@ class DocumentPrintService:
             document = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=document_id)
             if not document:
                 raise NotFoundError(f"采购单不存在: {document_id}")
-            return await self._format_purchase_order_data(document)
+            return await self._format_purchase_order_data(document, loc)
         
         elif document_type == "purchase_receipt":
             document = await PurchaseReceipt.get_or_none(tenant_id=tenant_id, id=document_id)
@@ -1479,7 +1479,9 @@ class DocumentPrintService:
             "items": items_data,
         }
 
-    async def _format_purchase_order_data(self, order: PurchaseOrder) -> Dict[str, Any]:
+    async def _format_purchase_order_data(
+        self, order: PurchaseOrder, i18n: PrintLocalization
+    ) -> Dict[str, Any]:
         """格式化采购单数据"""
         items = await PurchaseOrderItem.filter(
             tenant_id=order.tenant_id, order_id=order.id
@@ -1508,7 +1510,8 @@ class DocumentPrintService:
             "order_date": to_api_isoformat(order.order_date) if order.order_date else None,
             "delivery_date": to_api_isoformat(order.delivery_date) if order.delivery_date else None,
             "total_amount": str(order.total_amount),
-            "status": order.status,
+            "status": i18n.document_status(order.status),
+            "status_code": order.status,
             "created_at": to_api_isoformat(order.created_at) if order.created_at else None,
             "items": items_data,
         }

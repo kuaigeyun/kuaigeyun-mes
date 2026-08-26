@@ -818,7 +818,7 @@ const PayableList: React.FC = () => {
                         />,
                         record.remaining_amount > 0 &&
                         record.capabilities?.push_payment?.allowed !== false &&
-                        payablePerms.canUpdate ? (
+                        paymentPerms.canCreate ? (
                             <Button {...rowActionKind('execute')}
                                 key="pay"
                                 type="link"
@@ -848,7 +848,7 @@ const PayableList: React.FC = () => {
                         ) : null,
                     ].filter(Boolean) as React.ReactNode[],
         },
-    ], [t, navigate, supplierOptions, payablePerms, purchaseInvoicePerms]);
+    ], [t, navigate, supplierOptions, payablePerms, paymentPerms, purchaseInvoicePerms]);
 
     return (
         <ListPageTemplate>

@@ -2,8 +2,11 @@
 export const ORDER_CHANGE_CATEGORY_LABELS: Record<string, string> = {
   QUANTITY: '数量',
   DELIVERY: '交期',
+  DELIVERY_DATE: '交期',
   PRICE: '价格',
+  UNIT_PRICE: '价格',
   CANCEL: '取消',
+  LINE_CANCEL: '取消',
   MIXED: '混合',
   OTHER: '其他',
 };

@@ -300,6 +300,35 @@ export function mergeProductProcessLinesWithRouteTemplate(
   return merged;
 }
 
+/**
+ * 按工艺路线模板重载工序列表：顺序与模板一致，模板内工序保留已配置字段，移除模板外手工添加的工序。
+ */
+export function reloadProductProcessLinesFromRouteTemplate(
+  currentLines: ProductProcessLine[],
+  routeLines: ProductProcessLine[],
+): ProductProcessLine[] {
+  const currentByUuid = new Map(
+    currentLines.filter((ln) => ln.operationUuid).map((ln) => [ln.operationUuid, ln]),
+  );
+  const reloaded: ProductProcessLine[] = [];
+
+  for (const routeLine of routeLines) {
+    const uid = routeLine.operationUuid;
+    if (!uid) continue;
+    reloaded.push(currentByUuid.get(uid) ?? routeLine);
+  }
+
+  return reloaded;
+}
+
+export function sameProductProcessLineSequence(
+  left: ProductProcessLine[],
+  right: ProductProcessLine[],
+): boolean {
+  if (left.length !== right.length) return false;
+  return left.every((ln, index) => ln.operationUuid === right[index]?.operationUuid);
+}
+
 export async function linesFromProcessRoute(
   operationSequence: unknown,
   allowOperationJump: boolean,

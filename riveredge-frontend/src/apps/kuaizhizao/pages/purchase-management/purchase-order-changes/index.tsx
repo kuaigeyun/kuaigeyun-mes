@@ -598,40 +598,96 @@ const PurchaseOrderChangesPage: React.FC = () => {
         title: t('common.actions'),
         valueType: 'option',
         fixed: 'right',
-        render: (_, record) => [
-          <Button {...rowActionKind('read')} key="view" onClick={() => openDetail(record)}>
-            {t('common.detail')}
-          </Button>,
-          record.capabilities?.update?.allowed && purchaseOrderChangePerms.canUpdate ? (
-            <Button {...rowActionKind('update')} key="edit" onClick={() => openEdit(record)}>
-              {t('common.edit')}
-            </Button>
-          ) : null,
-          record.capabilities?.delete?.allowed && purchaseOrderChangePerms.canDelete ? (
-            <Button {...rowActionKind('delete')}
-              key="del"
-              type="link"
-              size="small"
-              danger
-              icon={<DeleteOutlined />}
-              onClick={() => {
-                modal.confirm({
-                  title: t('app.kuaizhizao.purchaseOrderChange.confirmDelete'),
-                  onOk: async () => {
-                    await deletePurchaseOrderChange(record.id!);
-                    message.success(t('app.kuaizhizao.purchaseOrderChange.deleted'));
+        render: (_, record) => {
+          const canEdit = record.capabilities?.update?.allowed === true && purchaseOrderChangePerms.canUpdate;
+          const canDelete = record.capabilities?.delete?.allowed === true && purchaseOrderChangePerms.canDelete;
+          const canSubmit =
+            record.capabilities?.submit?.allowed === true &&
+            record.capabilities?.preview_impact?.allowed === true &&
+            (purchaseOrderChangePerms.canAction?.('submit') ?? false);
+          const canApply =
+            record.capabilities?.apply?.allowed === true &&
+            (purchaseOrderChangePerms.canAction?.('execute') ?? false);
+          const canRevoke =
+            record.capabilities?.withdraw_submit?.allowed === true &&
+            (purchaseOrderChangePerms.canAction?.('revoke') ?? false);
+          return [
+            <Button {...rowActionKind('read')} key="view" onClick={() => openDetail(record)}>
+              {t('common.detail')}
+            </Button>,
+            canEdit ? (
+              <Button {...rowActionKind('update')} key="edit" onClick={() => openEdit(record)}>
+                {t('common.edit')}
+              </Button>
+            ) : null,
+            canSubmit ? (
+              <Button {...rowActionKind('submit')} key="submit" onClick={() => runSubmitWithPreview(record.id!)}>
+                {t('components.uniAction.submit')}
+              </Button>
+            ) : null,
+            canApply ? (
+              <Button
+                {...rowActionKind('execute')}
+                key="apply"
+                type="link"
+                size="small"
+                onClick={async () => {
+                  try {
+                    await applyPurchaseOrderChange(record.id!);
+                    message.success(t('app.kuaizhizao.purchaseOrderChange.applySuccess'));
                     reloadTable();
-                  },
-                });
-              }}
-            >
-              {t('common.delete')}
-            </Button>
-          ) : null,
-        ],
+                  } catch (e: unknown) {
+                    message.error(getApiErrorMessage(e) || t('common.operationFailed'));
+                  }
+                }}
+              >
+                {t('app.kuaizhizao.purchaseOrderChange.applyConfirm')}
+              </Button>
+            ) : null,
+            canRevoke ? (
+              <Button
+                {...rowActionKind('revoke')}
+                key="revoke"
+                onClick={() => {
+                  modal.confirm({
+                    title: t('components.uniAction.revoke'),
+                    onOk: async () => {
+                      await withdrawPurchaseOrderChange(record.id!);
+                      message.success(t('common.updateSuccess'));
+                      reloadTable();
+                    },
+                  });
+                }}
+              >
+                {t('components.uniAction.revoke')}
+              </Button>
+            ) : null,
+            canDelete ? (
+              <Button {...rowActionKind('delete')}
+                key="del"
+                type="link"
+                size="small"
+                danger
+                icon={<DeleteOutlined />}
+                onClick={() => {
+                  modal.confirm({
+                    title: t('app.kuaizhizao.purchaseOrderChange.confirmDelete'),
+                    onOk: async () => {
+                      await deletePurchaseOrderChange(record.id!);
+                      message.success(t('app.kuaizhizao.purchaseOrderChange.deleted'));
+                      reloadTable();
+                    },
+                  });
+                }}
+              >
+                {t('common.delete')}
+              </Button>
+            ) : null,
+          ];
+        },
       },
     ], SALES_DOC_LIST_FIELD_RANK),
-    [message, modal, orderChangeLifecycleValueEnum, purchaseOrderChangeAuditColumn, purchaseOrderChangePerms.canDelete, purchaseOrderChangePerms.canUpdate, changeCategoryValueEnum, changeSupplierSearchOptions, suppliersLoading, t, renderDeltaAmount],
+    [message, modal, orderChangeLifecycleValueEnum, purchaseOrderChangeAuditColumn, purchaseOrderChangePerms.canDelete, purchaseOrderChangePerms.canUpdate, purchaseOrderChangePerms.canAction, changeCategoryValueEnum, changeSupplierSearchOptions, suppliersLoading, t, renderDeltaAmount, reloadTable, runSubmitWithPreview],
   );
 
   const request = useCallback(

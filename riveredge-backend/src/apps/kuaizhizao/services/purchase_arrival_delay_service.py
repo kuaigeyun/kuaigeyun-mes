@@ -10,7 +10,7 @@ from tortoise.transactions import in_transaction
 
 from apps.common.base_service import AppBaseService
 from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus
-from apps.kuaizhizao.constants.order_change import OrderChangeApplyStatus, OrderChangeLineType
+from apps.kuaizhizao.constants.order_change import OrderChangeApplyStatus, OrderChangeCategory, OrderChangeLineType
 from apps.kuaizhizao.models.purchase_arrival_delay_report import PurchaseArrivalDelayReport
 from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderItem
 from apps.kuaizhizao.models.purchase_order_change_order import PurchaseOrderChangeOrder, PurchaseOrderChangeItem
@@ -239,7 +239,7 @@ class PurchaseArrivalDelayService(AppBaseService[PurchaseArrivalDelayReport]):
 
         poc_doc = await PurchaseOrderChangeOrder.get_or_none(tenant_id=tenant_id, id=poc.id)
         if poc_doc:
-            poc_doc.change_category = "DELIVERY_DATE"
+            poc_doc.change_category = OrderChangeCategory.DELIVERY.value
             poc_doc.change_reason = change_reason
             await poc_doc.save()
 
@@ -249,7 +249,7 @@ class PurchaseArrivalDelayService(AppBaseService[PurchaseArrivalDelayReport]):
         await doc.save()
 
         if not await self._require_change_confirm(tenant_id):
-            await self.change_service.apply(tenant_id, poc.id, operator_id)
+            await self.change_service.submit(tenant_id, poc.id, operator_id)
             doc.status = OrderChangeApplyStatus.APPLIED.value
             await doc.save()
 

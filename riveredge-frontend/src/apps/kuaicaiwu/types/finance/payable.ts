@@ -13,6 +13,8 @@ export interface Payable {
     due_date: string;
     payment_terms?: string;
     status: '未付款' | '部分付款' | '已结清';
+    refunded_amount?: number;
+    refund_execution_status?: string;
     business_date: string;
     invoice_received: boolean;
     invoice_number?: string;

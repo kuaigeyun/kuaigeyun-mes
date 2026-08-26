@@ -44,6 +44,8 @@ import {
 
 import { getPayableLifecycle } from '../../../utils/payableLifecycle';
 import { FinanceArApInvoiceStatusDetail } from '../../../utils/financeInvoiceStatusUi';
+import { renderRefundExecutionMarker } from '../../../utils/financeUiLabels';
+import { MarkerTag } from '../../../../../constants/statusBadges';
 
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 
@@ -51,7 +53,7 @@ import { useResourcePermissions } from '../../../../../hooks/useResourcePermissi
 
 const P = 'app.kuaicaiwu.payable';
 
-const PAYABLE_RESOURCE = 'kuaicaiwu:payable';
+const PAYMENT_RESOURCE = 'kuaicaiwu:payment';
 
 
 
@@ -61,7 +63,7 @@ const PayableDetail: React.FC = () => {
 
   const linked = useLinkedDocumentDetail();
 
-  const payablePerms = useResourcePermissions(PAYABLE_RESOURCE);
+  const paymentPerms = useResourcePermissions(PAYMENT_RESOURCE);
 
   const purchaseInvoicePerms = useResourcePermissions('kuaicaiwu:purchase-invoice');
 
@@ -225,7 +227,7 @@ const PayableDetail: React.FC = () => {
 
       ) : null}
 
-      {data.status !== '已结清' && payablePerms.canUpdate ? (
+      {data.status !== '已结清' && paymentPerms.canCreate ? (
 
         <Button type="primary" onClick={openPaymentFromPayable}>
 
@@ -333,6 +335,13 @@ const PayableDetail: React.FC = () => {
 
             <ProDescriptions.Item label={t('app.kuaicaiwu.common.businessStatus')}>{data.status}</ProDescriptions.Item>
 
+            <ProDescriptions.Item label={t('app.kuaicaiwu.financeUi.refundExecution.label')}>
+              {(() => {
+                const { label, color } = renderRefundExecutionMarker(data.refund_execution_status, t);
+                return <MarkerTag color={color}>{label}</MarkerTag>;
+              })()}
+            </ProDescriptions.Item>
+
             <ProDescriptions.Item label={t('app.kuaicaiwu.common.reviewStatus')}>{data.review_status}</ProDescriptions.Item>
 
             <ProDescriptions.Item label={t('common.remark')} span={3}>
@@ -364,6 +373,20 @@ const PayableDetail: React.FC = () => {
             </Col>
 
           </Row>
+
+          {Number(data.refunded_amount ?? 0) > 0 ? (
+            <Row gutter={24} style={{ marginTop: 16 }}>
+              <Col xs={24} sm={8}>
+                <Statistic
+                  title={t(`${P}.col.refundedAmount`)}
+                  value={data.refunded_amount ?? 0}
+                  precision={2}
+                  prefix="¥"
+                  styles={{ content: { color: '#d48806' } }}
+                />
+              </Col>
+            </Row>
+          ) : null}
 
           <Row gutter={24} style={{ marginTop: 16 }}>
 

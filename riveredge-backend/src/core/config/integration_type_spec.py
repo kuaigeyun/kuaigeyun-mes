@@ -98,6 +98,39 @@ APPLICATION_CONNECTOR_TYPES: tuple[str, ...] = (
     "siliconflow",
 )
 
+_NON_BUSINESS_SYSTEM_CONNECTOR_TYPES: frozenset[str] = frozenset(
+    {
+        # 存储
+        "alicloud_oss",
+        "tencent_cos",
+        "huaweicloud_obs",
+        "aws_s3",
+        "minio",
+        "qiniu_kodo",
+        "nas_webdav",
+        "nas_smb",
+        # AI
+        "deepseek",
+        "openai",
+        "qwen",
+        "zhipu",
+        "moonshot",
+        "siliconflow",
+        # 地图 / 物流 / 云市场
+        "amap",
+        "kuaidi100",
+        "kdniao",
+        "aliyun_market",
+        "tencent_market",
+    }
+)
+
+BUSINESS_SYSTEM_CONNECTOR_TYPES: tuple[str, ...] = tuple(
+    connector_type
+    for connector_type in APPLICATION_CONNECTOR_TYPES
+    if connector_type not in _NON_BUSINESS_SYSTEM_CONNECTOR_TYPES
+)
+
 GENERIC_INTEGRATION_TYPES: tuple[str, ...] = (
     "OAuth",
     "API",
@@ -129,3 +162,18 @@ def assert_allowed_integration_type(raw: str) -> str:
             + ", ".join(ALLOWED_INTEGRATION_TYPES_ORDERED)
         )
     return normalized
+
+
+def assert_business_system_connector_type(raw: str) -> str:
+    """校验业务系统类连接器 type（ERP/PLM/CRM/OA/WMS/IoT）；返回归一后的 type。"""
+    normalized = normalize_integration_type(raw)
+    if normalized not in BUSINESS_SYSTEM_CONNECTOR_TYPES:
+        raise ValueError(
+            "应用连接器类型必须是业务系统类（ERP/PLM/CRM/OA/WMS/IoT）之一"
+        )
+    return normalized
+
+
+def is_business_system_connector_type(raw: str) -> bool:
+    normalized = normalize_integration_type(raw)
+    return normalized in BUSINESS_SYSTEM_CONNECTOR_TYPES

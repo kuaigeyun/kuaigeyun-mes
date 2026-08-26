@@ -4,8 +4,12 @@
  */
 
 export const LIST_API_MAX_LIMIT = 1000;
+/** 报表类接口 current/page_size 上限（与后端 REPORT_LIST_MAX_LIMIT 一致） */
+export const REPORT_API_MAX_PAGE_SIZE = 10_000;
 
 export type ListPageParams = { skip: number; limit: number };
+
+export type CurrentPageParams = { current: number; page_size: number };
 
 export type ListPageResult<T> =
   | T[]
@@ -50,6 +54,34 @@ export async function fetchAllListItems<T>(
     const total = extractTotal(res);
     if (typeof total === 'number' && all.length >= total) break;
     skip += pageSize;
+  }
+
+  return all;
+}
+
+/**
+ * 按 current/page_size 分页拉取直至取完（报表 material-balances、batch-lines 等）。
+ */
+export async function fetchAllCurrentPageItems<T>(
+  fetchPage: (params: CurrentPageParams) => Promise<ListPageResult<T>>,
+  options?: { pageSize?: number; maxPages?: number },
+): Promise<T[]> {
+  const pageSize = Math.min(
+    Math.max(1, options?.pageSize ?? REPORT_API_MAX_PAGE_SIZE),
+    REPORT_API_MAX_PAGE_SIZE,
+  );
+  const maxPages = options?.maxPages ?? 200;
+  const all: T[] = [];
+  let current = 1;
+
+  for (let page = 0; page < maxPages; page += 1) {
+    const res = await fetchPage({ current, page_size: pageSize });
+    const items = extractItems(res);
+    all.push(...items);
+    if (items.length < pageSize) break;
+    const total = extractTotal(res);
+    if (typeof total === 'number' && all.length >= total) break;
+    current += 1;
   }
 
   return all;

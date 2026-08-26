@@ -2546,6 +2546,8 @@ class MaterialService:
         
         if not material:
             raise NotFoundError(f"物料 {material_uuid} 不存在")
+
+        previous_process_route_id = material.process_route_id
         
         # 如果更新分组ID，检查分组是否存在
         if data.group_id is not None and data.group_id != material.group_id:
@@ -2701,6 +2703,18 @@ class MaterialService:
 
         apply_update_audit(material, current_user)
         await material.save()
+
+        from apps.master_data.services.material_product_process_service import (
+            MaterialProductProcessService,
+        )
+
+        await MaterialProductProcessService.sync_process_route_from_material(
+            tenant_id,
+            material.id,
+            previous_process_route_id=previous_process_route_id,
+            new_process_route_id=material.process_route_id,
+            current_user=current_user,
+        )
 
         if pending_main_code:
             from apps.master_data.services.material_main_code_editability import (
@@ -3039,11 +3053,24 @@ class MaterialService:
             )
 
         ids = [m.id for m in materials]
+        previous_route_by_id = {m.id: m.process_route_id for m in materials}
         now = timezone.now()
         await Material.filter(tenant_id=tenant_id, id__in=ids).update(
             process_route_id=data.process_route_id,
             updated_at=now,
         )
+
+        from apps.master_data.services.material_product_process_service import (
+            MaterialProductProcessService,
+        )
+
+        for mid in ids:
+            await MaterialProductProcessService.sync_process_route_from_material(
+                tenant_id,
+                mid,
+                previous_process_route_id=previous_route_by_id.get(mid),
+                new_process_route_id=data.process_route_id,
+            )
 
         return MaterialBatchFieldUpdateResponse(
             updated_count=len(ids),

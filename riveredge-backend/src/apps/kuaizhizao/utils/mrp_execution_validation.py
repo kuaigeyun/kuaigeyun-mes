@@ -191,6 +191,92 @@ def raise_if_mrp_scope_blocking(result: Dict[str, Any]) -> None:
     raise BusinessLogicError(format_mrp_scope_blocking_message(result))
 
 
+def _readiness_gap_base_from_material(
+    item: Dict[str, Any],
+    material: Optional[Material],
+    source_config: Dict[str, Any],
+) -> Dict[str, Any]:
+    mid = int(item.get("material_id") or 0)
+    return {
+        "material_id": mid,
+        "material_uuid": str(getattr(material, "uuid", "") or ""),
+        "material_code": item.get("material_code") or getattr(material, "main_code", "") or "",
+        "material_name": item.get("material_name") or getattr(material, "name", "") or "",
+        "material_spec": getattr(material, "specification", None),
+        "material_unit": getattr(material, "base_unit", None),
+        "source_type": getattr(material, "source_type", None),
+        "manufacturing_mode": source_config.get("manufacturing_mode"),
+    }
+
+
+def _scope_blocking_message_to_readiness_gap(
+    message: str,
+    *,
+    base: Dict[str, Any],
+) -> Dict[str, Any]:
+    """将 scope 校验文案映射为可补齐项；无法映射时仅展示说明（info）。"""
+    msg = (message or "").strip()
+    if "工艺路线" in msg:
+        return {
+            **base,
+            "field": "process_route_id",
+            "label": "工艺路线",
+            "current": msg or None,
+            "suggested": None,
+            "value_type": "process_route_id",
+            "blocking": True,
+        }
+    if "BOM" in msg:
+        return {
+            **base,
+            "field": "_bom",
+            "label": "BOM配置",
+            "current": msg or None,
+            "suggested": None,
+            "value_type": "info",
+            "blocking": True,
+        }
+    if "委外供应商" in msg:
+        return {
+            **base,
+            "field": "source_config.outsource_supplier_id",
+            "label": "委外供应商",
+            "current": msg or None,
+            "suggested": None,
+            "value_type": "supplier_id",
+            "blocking": True,
+        }
+    if "委外工序" in msg:
+        return {
+            **base,
+            "field": "source_config.outsource_operation",
+            "label": "委外工序",
+            "current": msg or None,
+            "suggested": None,
+            "value_type": "text",
+            "blocking": True,
+        }
+    if "属性配置" in msg or "BOM属性" in msg:
+        return {
+            **base,
+            "field": "_source_validation",
+            "label": "来源配置",
+            "current": msg or None,
+            "suggested": None,
+            "value_type": "info",
+            "blocking": True,
+        }
+    return {
+        **base,
+        "field": "_source_validation",
+        "label": "来源配置",
+        "current": msg or None,
+        "suggested": None,
+        "value_type": "info",
+        "blocking": True,
+    }
+
+
 def scope_blocking_to_readiness_gaps(
     result: Dict[str, Any],
     *,
@@ -203,25 +289,15 @@ def scope_blocking_to_readiness_gaps(
         mid = int(item.get("material_id") or 0)
         material = material_by_id.get(mid)
         source_config = (getattr(material, "source_config", None) or {}) if material else {}
-        messages = item.get("messages") or []
-        message_text = "；".join(messages)
-        is_bom = any("BOM" in m for m in messages)
-        gaps.append(
-            {
-                "material_id": mid,
-                "material_uuid": str(getattr(material, "uuid", "") or ""),
-                "material_code": item.get("material_code") or getattr(material, "main_code", "") or "",
-                "material_name": item.get("material_name") or getattr(material, "name", "") or "",
-                "material_spec": getattr(material, "specification", None),
-                "material_unit": getattr(material, "base_unit", None),
-                "source_type": getattr(material, "source_type", None),
-                "manufacturing_mode": source_config.get("manufacturing_mode"),
-                "field": "_bom" if is_bom else "_source_validation",
-                "label": "BOM配置" if is_bom else "来源配置",
-                "current": message_text or None,
-                "suggested": None,
-                "value_type": "info" if is_bom else "text",
-                "blocking": True,
-            }
-        )
+        if not isinstance(source_config, dict):
+            source_config = {}
+        base = _readiness_gap_base_from_material(item, material, source_config)
+        messages = [str(m).strip() for m in (item.get("messages") or []) if str(m).strip()]
+        if not messages:
+            gaps.append(
+                _scope_blocking_message_to_readiness_gap("", base=base),
+            )
+            continue
+        for message in messages:
+            gaps.append(_scope_blocking_message_to_readiness_gap(message, base=base))
     return gaps

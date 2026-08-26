@@ -20,6 +20,8 @@ class ReceiptPullService(AppBaseService[Receipt]):
     """收款单加载门控服务"""
 
     _EXCLUDED_RECEIPT_STATUSES = frozenset({"Cancelled"})
+    # 仅已确认收款单占用应收可加载额度；草稿未过账不占额度（与 finance_voucher_posting 一致）
+    _RESERVED_RECEIPT_STATUSES = frozenset({"Confirmed"})
 
     _RECEIVABLE_ELIGIBLE_REVIEW = frozenset({"已审核"})
 
@@ -69,7 +71,8 @@ class ReceiptPullService(AppBaseService[Receipt]):
                 tenant_id=tenant_id,
                 id__in=list(all_receipt_ids),
                 deleted_at__isnull=True,
-            ).exclude(status__in=list(self._EXCLUDED_RECEIPT_STATUSES))
+                status__in=list(self._RESERVED_RECEIPT_STATUSES),
+            ).all()
             receipt_map = {int(r.id): r for r in rows}
 
         for receivable_id, receipt_ids in receipt_by_receivable.items():

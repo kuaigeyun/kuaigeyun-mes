@@ -184,6 +184,47 @@ export function arePinnedSearchParamsActive(
   return stableSearchParamsKey(normalizedCurrent) === stableSearchParamsKey(normalizedSaved);
 }
 
+/**
+ * 工具栏独占的搜索键：不由高级搜索表单管理，提交高级搜索/钉住条件时须保留。
+ * - date_range：报表期间筛选（ReportPeriodFilter）
+ * - keyword：列表模糊搜索
+ */
+export const LIST_PAGE_TOOLBAR_SEARCH_PARAM_KEYS = ['date_range', 'keyword'] as const;
+
+export type ListPageToolbarSearchParamKey = (typeof LIST_PAGE_TOOLBAR_SEARCH_PARAM_KEYS)[number];
+
+/** 从 searchParamsRef 快照中取出工具栏条件（高级搜索不得覆盖） */
+export function pickListPageToolbarSearchParams(
+  params?: Record<string, unknown> | null,
+): Partial<Record<ListPageToolbarSearchParamKey, unknown>> {
+  if (!params) {
+    return {};
+  }
+  const picked: Partial<Record<ListPageToolbarSearchParamKey, unknown>> = {};
+  for (const key of LIST_PAGE_TOOLBAR_SEARCH_PARAM_KEYS) {
+    const value = params[key];
+    if (!isSearchParamEmpty(value)) {
+      picked[key] = value;
+    }
+  }
+  return picked;
+}
+
+/**
+ * 合并高级搜索参数时保留工具栏条件。
+ * incoming 为 undefined 表示仅清空高级搜索，仍保留 date_range / keyword。
+ */
+export function mergeListPageSearchParamsPreservingToolbar(
+  prior: Record<string, unknown> | undefined | null,
+  incoming: Record<string, unknown> | undefined | null,
+): Record<string, unknown> | undefined {
+  const toolbar = pickListPageToolbarSearchParams(prior);
+  if (!incoming) {
+    return Object.keys(toolbar).length > 0 ? toolbar : undefined;
+  }
+  return { ...toolbar, ...incoming };
+}
+
 /** 唯一入口：更新 searchParamsRef 并通知 UI 刷新钉住高亮 */
 export function commitListPageSearchParams(
   searchParamsRef: MutableRefObject<Record<string, unknown> | undefined> | undefined,
@@ -193,6 +234,7 @@ export function commitListPageSearchParams(
   if (!searchParamsRef) {
     return;
   }
-  searchParamsRef.current = normalizeListPageSearchParamsForApply(params) as Record<string, any> | undefined;
+  const merged = mergeListPageSearchParamsPreservingToolbar(searchParamsRef.current, params);
+  searchParamsRef.current = normalizeListPageSearchParamsForApply(merged) as Record<string, any> | undefined;
   onCommitted?.();
 }

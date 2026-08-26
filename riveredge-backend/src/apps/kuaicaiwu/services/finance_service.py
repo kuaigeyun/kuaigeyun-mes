@@ -1994,10 +1994,22 @@ class AccountSettlementService(AppBaseService[SettlementRecord]):
                 new_remaining = Decimal("0")
             else:
                 status = "部分收款"
+            from apps.kuaicaiwu.services.finance_refund_utils import (
+                compute_refund_execution_status,
+                quantize_money,
+            )
+
+            new_refunded = quantize_money(receivable.refunded_amount) + chunk
+            refund_status = compute_refund_execution_status(
+                receivable.total_amount,
+                new_refunded,
+            )
             await Receivable.filter(tenant_id=tenant_id, id=receivable.id).update(
                 received_amount=new_received,
                 remaining_amount=new_remaining,
                 status=status,
+                refunded_amount=new_refunded,
+                refund_execution_status=refund_status,
                 updated_by=operator_id,
                 updated_by_name=user_name,
             )
@@ -2022,8 +2034,23 @@ class AccountSettlementService(AppBaseService[SettlementRecord]):
             remaining_to_reverse -= chunk
             reversed_total += chunk
 
-        if reversed_total < Decimal(refund_amount).quantize(Decimal("0.01")):
-            raise ValidationError("可冲回核销金额不足，无法完成退款确认")
+        if remaining_to_reverse > Decimal("0"):
+            source_unsettled = Decimal(str(source_receipt.unsettled_amount or 0)).quantize(
+                Decimal("0.01")
+            )
+            if remaining_to_reverse > source_unsettled:
+                raise ValidationError("可冲回核销金额不足，无法完成退款确认")
+            new_unsettled = (source_unsettled - remaining_to_reverse).quantize(Decimal("0.01"))
+            new_settled = (
+                Decimal(str(source_receipt.total_amount or 0)) - new_unsettled
+            ).quantize(Decimal("0.01"))
+            await Receipt.filter(tenant_id=tenant_id, id=source_receipt_id).update(
+                settled_amount=new_settled,
+                unsettled_amount=new_unsettled,
+                updated_by=operator_id,
+                updated_by_name=user_name,
+            )
+            reversed_total += remaining_to_reverse
 
         return reversed_total
 
@@ -2120,10 +2147,22 @@ class AccountSettlementService(AppBaseService[SettlementRecord]):
                 new_remaining = Decimal("0")
             else:
                 status = "部分付款"
+            from apps.kuaicaiwu.services.finance_refund_utils import (
+                compute_refund_execution_status,
+                quantize_money,
+            )
+
+            new_refunded = quantize_money(payable.refunded_amount) + chunk
+            refund_status = compute_refund_execution_status(
+                payable.total_amount,
+                new_refunded,
+            )
             await Payable.filter(tenant_id=tenant_id, id=payable.id).update(
                 paid_amount=new_paid,
                 remaining_amount=new_remaining,
                 status=status,
+                refunded_amount=new_refunded,
+                refund_execution_status=refund_status,
                 updated_by=operator_id,
                 updated_by_name=user_name,
             )
@@ -2148,8 +2187,23 @@ class AccountSettlementService(AppBaseService[SettlementRecord]):
             remaining_to_reverse -= chunk
             reversed_total += chunk
 
-        if reversed_total < Decimal(refund_amount).quantize(Decimal("0.01")):
-            raise ValidationError("可冲回核销金额不足，无法完成退款确认")
+        if remaining_to_reverse > Decimal("0"):
+            source_unsettled = Decimal(str(source_payment.unsettled_amount or 0)).quantize(
+                Decimal("0.01")
+            )
+            if remaining_to_reverse > source_unsettled:
+                raise ValidationError("可冲回核销金额不足，无法完成退款确认")
+            new_unsettled = (source_unsettled - remaining_to_reverse).quantize(Decimal("0.01"))
+            new_settled = (
+                Decimal(str(source_payment.total_amount or 0)) - new_unsettled
+            ).quantize(Decimal("0.01"))
+            await Payment.filter(tenant_id=tenant_id, id=source_payment_id).update(
+                settled_amount=new_settled,
+                unsettled_amount=new_unsettled,
+                updated_by=operator_id,
+                updated_by_name=user_name,
+            )
+            reversed_total += remaining_to_reverse
 
         return reversed_total
 

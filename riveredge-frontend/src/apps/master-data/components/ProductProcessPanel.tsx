@@ -4,8 +4,9 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Alert, Button, Select, Space, Typography, App } from 'antd';
-import { EditOutlined, PlusOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons';
+import { Alert, Button, Dropdown, Select, Space, Typography, App } from 'antd';
+import { DownOutlined, EditOutlined, PlusOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons';
+import type { MenuProps } from 'antd';
 import type { Material } from '../types/material';
 import type { ProcessRoute } from '../types/process';
 import { processRouteApi, operationApi, unwrapProcessPagedList } from '../services/process';
@@ -13,11 +14,13 @@ import { productProcessApi } from '../services/productProcess';
 import { materialApi } from '../services/material';
 import { ProductProcessLinesTable } from './ProductProcessLinesTable';
 import { RouteFormModal } from './RouteFormModal';
-import type { ProductProcessLine } from '../types/productProcess';
+import { ProductProcessSaveAsRouteModal } from './ProductProcessSaveAsRouteModal';
+import type { MaterialProductProcessSave, ProductProcessLine } from '../types/productProcess';
 import {
   enrichLineFromOperation,
   linesFromProcessRoute,
-  mergeProductProcessLinesWithRouteTemplate,
+  reloadProductProcessLinesFromRouteTemplate,
+  sameProductProcessLineSequence,
   snapshotProductProcessState,
 } from '../utils/productProcessLineUtils';
 import { productProcessLineFromApi, productProcessLineToApi } from '../utils/manufacturingTimeUnits';
@@ -83,6 +86,7 @@ export const ProductProcessPanel: React.FC<ProductProcessPanelProps> = ({
   const [reloadingRoute, setReloadingRoute] = useState(false);
   const [routeFormOpen, setRouteFormOpen] = useState(false);
   const [routeFormEditUuid, setRouteFormEditUuid] = useState<string | null>(null);
+  const [saveAsRouteOpen, setSaveAsRouteOpen] = useState(false);
   const [auditHint, setAuditHint] = useState<{ operator: string; time: string } | null>(null);
 
   const baselineRef = useRef('');
@@ -251,21 +255,19 @@ export const ProductProcessPanel: React.FC<ProductProcessPanelProps> = ({
     if (!routeUuid || loading || reloadingRoute) return;
     setReloadingRoute(true);
     try {
-      const { lines: routeLines } = await fetchRouteTemplateLines(routeUuid);
+      const { allowOperationJump: jump, lines: routeLines } = await fetchRouteTemplateLines(routeUuid);
       if (routeLines.length === 0) {
         messageApi.warning(t('app.master-data.routes.operationRequired'));
         return;
       }
-      const merged = mergeProductProcessLinesWithRouteTemplate(lines, routeLines);
-      const addedCount = merged.length - lines.length;
-      if (addedCount <= 0) {
+      const reloaded = reloadProductProcessLinesFromRouteTemplate(lines, routeLines);
+      if (sameProductProcessLineSequence(reloaded, lines) && allowOperationJump === jump) {
         messageApi.info(t('app.master-data.productProcess.reloadRouteAlreadyComplete'));
         return;
       }
-      setLines(merged);
-      messageApi.success(
-        t('app.master-data.productProcess.reloadRouteAdded', { count: addedCount }),
-      );
+      setAllowOperationJump(jump);
+      setLines(reloaded);
+      messageApi.success(t('app.master-data.productProcess.reloadRouteSuccess'));
     } catch {
       messageApi.warning(t('app.master-data.productProcess.routeImportFailed'));
     } finally {
@@ -280,34 +282,80 @@ export const ProductProcessPanel: React.FC<ProductProcessPanelProps> = ({
     setAllowOperationJump(false);
   };
 
+  const canSaveAsNewRoute = canSave && Boolean(routeUuid) && lines.length > 0;
+
+  const persistConfig = useCallback(
+    async (extra?: Pick<MaterialProductProcessSave, 'saveAsNewRoute' | 'newRouteCode' | 'newRouteName'>) => {
+      if (!material.uuid) return;
+      if (routeUuid && lines.length === 0) {
+        messageApi.warning(t('app.master-data.routes.operationRequired'));
+        return;
+      }
+      setSaving(true);
+      try {
+        const saved = await productProcessApi.save(material.uuid, {
+          processRouteUuid: routeUuid,
+          allowOperationJump,
+          lines: lines.map(productProcessLineToApi),
+          ...extra,
+        });
+        applyConfig(
+          saved.processRouteUuid,
+          saved.allowOperationJump,
+          (saved.lines ?? []).map((ln) => productProcessLineFromApi(ln)),
+        );
+        setAuditHint(resolveProductProcessAudit(saved));
+        if (extra?.saveAsNewRoute) {
+          await onProcessRoutesRefresh?.();
+          const refreshed = await materialApi.get(material.uuid);
+          onMaterialUpdated?.(refreshed);
+          setSaveAsRouteOpen(false);
+          messageApi.success(t('app.master-data.productProcess.savedAsNewRoute'));
+        } else {
+          messageApi.success(t('app.master-data.productProcess.saved'));
+        }
+      } catch (e: unknown) {
+        messageApi.error((e as Error).message || t('common.saveFailed'));
+        throw e;
+      } finally {
+        setSaving(false);
+      }
+    },
+    [
+      allowOperationJump,
+      applyConfig,
+      lines,
+      material.uuid,
+      messageApi,
+      onMaterialUpdated,
+      onProcessRoutesRefresh,
+      routeUuid,
+      t,
+    ],
+  );
+
   const handleSave = async () => {
-    if (!material.uuid || !canSave) return;
-    if (routeUuid && lines.length === 0) {
-      messageApi.warning(t('app.master-data.routes.operationRequired'));
-      return;
-    }
-    setSaving(true);
-    try {
-      const saved = await productProcessApi.save(material.uuid, {
-        processRouteUuid: routeUuid,
-        allowOperationJump,
-        lines: lines.map(productProcessLineToApi),
-      });
-      applyConfig(
-        saved.processRouteUuid,
-        saved.allowOperationJump,
-        (saved.lines ?? []).map((ln) => productProcessLineFromApi(ln)),
-      );
-      setAuditHint(resolveProductProcessAudit(saved));
-      messageApi.success(t('app.master-data.productProcess.saved'));
-      const refreshed = await materialApi.get(material.uuid);
-      onMaterialUpdated?.(refreshed);
-    } catch (e: unknown) {
-      messageApi.error((e as Error).message || t('common.saveFailed'));
-    } finally {
-      setSaving(false);
-    }
+    if (!canSave) return;
+    await persistConfig();
   };
+
+  const handleSaveAsNewRoute = async (values: { newRouteCode: string; newRouteName: string }) => {
+    if (!canSaveAsNewRoute) return;
+    await persistConfig({
+      saveAsNewRoute: true,
+      newRouteCode: values.newRouteCode,
+      newRouteName: values.newRouteName,
+    });
+  };
+
+  const saveMenuItems: MenuProps['items'] = [
+    {
+      key: 'save-as-new-route',
+      label: t('app.master-data.productProcess.saveAsNewRoute'),
+      disabled: !canSaveAsNewRoute,
+      onClick: () => setSaveAsRouteOpen(true),
+    },
+  ];
 
   const openCreateRouteModal = () => {
     setRouteFormEditUuid(null);
@@ -400,15 +448,20 @@ export const ProductProcessPanel: React.FC<ProductProcessPanelProps> = ({
                 {auditHint.operator} - {auditHint.time}
               </Typography.Text>
             ) : null}
-            <Button
-              type="primary"
-              icon={<SaveOutlined />}
-              loading={saving}
-              disabled={!canSave}
-              onClick={() => void handleSave()}
-            >
-              {t('common.save')}
-            </Button>
+            <Space.Compact>
+              <Button
+                type="primary"
+                icon={<SaveOutlined />}
+                loading={saving}
+                disabled={!canSave}
+                onClick={() => void handleSave()}
+              >
+                {t('common.save')}
+              </Button>
+              <Dropdown menu={{ items: saveMenuItems }} disabled={!canSave}>
+                <Button type="primary" icon={<DownOutlined />} loading={saving} disabled={!canSave} />
+              </Dropdown>
+            </Space.Compact>
           </Space>
         </div>
       </Space>
@@ -436,6 +489,14 @@ export const ProductProcessPanel: React.FC<ProductProcessPanelProps> = ({
         }}
         editUuid={routeFormEditUuid}
         onSuccess={(route) => void handleRouteFormSuccess(route)}
+      />
+
+      <ProductProcessSaveAsRouteModal
+        open={saveAsRouteOpen}
+        material={material}
+        loading={saving}
+        onClose={() => setSaveAsRouteOpen(false)}
+        onSubmit={handleSaveAsNewRoute}
       />
     </>
   );

@@ -279,3 +279,30 @@ export async function getDataConnectionsForDataset(): Promise<DataConnectionsFor
   return { groups, items };
 }
 
+const BUSINESS_SYSTEM_TYPE_CATEGORIES = ['ERP', 'PLM', 'CRM', 'OA', 'WMS', 'IoT'] as const;
+
+/**
+ * 获取接口管理可绑定的业务系统类应用连接器（ERP/PLM/CRM/OA/WMS/IoT）
+ */
+export async function getBusinessSystemConnectionsForApi(): Promise<DataConnectionsForDatasetResult> {
+  const items = await getIntegrationConfigListAllMatching();
+  const byCategory: Record<string, { label: string; value: string }[]> = {};
+  for (const cat of BUSINESS_SYSTEM_TYPE_CATEGORIES) {
+    const types = TYPE_CATEGORIES[cat];
+    if (!types?.length) continue;
+    byCategory[cat] = [];
+    for (const ic of items) {
+      if (types.includes(ic.type)) {
+        byCategory[cat].push({
+          label: `${ic.name} (${ic.code}) - ${ic.type}`,
+          value: ic.uuid,
+        });
+      }
+    }
+  }
+  const groups = Object.entries(byCategory)
+    .filter(([, opts]) => opts.length > 0)
+    .map(([label, options]) => ({ label, options }));
+  return { groups, items };
+}
+

@@ -253,7 +253,10 @@ import {
   workOrderRowExpandQueryKey,
   type WorkOrderOperationsBundle,
 } from './workOrderRowExpandCache'
-import { reloadWorkOrderListPreservingScroll } from './workOrderListScrollPreserve'
+import {
+  captureWorkOrderListScrollSnapshot,
+  reloadWorkOrderListPreservingScroll,
+} from './workOrderListScrollPreserve'
 const LazyUniMaterialSelect = lazy(() => import('../../../../../components/uni-material-select'))
 import { getWorkOrderLifecycle, buildWorkOrderLifecycleValueEnum, translateWorkOrderLifecycleStatus, LIST_LIFECYCLE_STAGE_FIELD, isWorkOrderPlannedEndOverdue, isWorkOrderPlannedDatesLocked } from '../../../utils/workOrderLifecycle'
 import { commitListPageSearchParams } from '../../../../../utils/listLifecycleStage'
@@ -1579,6 +1582,7 @@ const WorkOrdersPage: React.FC = () => {
   }, [])
 
   const closeWorkOrderReadinessModal = useCallback(() => {
+    const snapshot = captureWorkOrderListScrollSnapshot()
     readinessModalOpenRef.current = false
     setReadinessModalTarget(null)
     // 关闭后再拉一次列表，刷新圆环（打开查看时后端可能已写回齐套率）
@@ -1587,7 +1591,12 @@ const WorkOrdersPage: React.FC = () => {
       queryKey: [...WORK_ORDER_LIST_UNITABLE_QUERY_KEY],
       exact: false,
     })
-    actionRef.current?.reload?.()
+    // 须在 Modal 关闭、滚动锁释放后再 reload，并用关闭前的滚动快照恢复（含 uni-tabs-content）
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        void reloadWorkOrderListPreservingScroll(actionRef, snapshot)
+      })
+    })
   }, [queryClient])
 
   const { data: statistics } = useQuery({
@@ -2049,6 +2058,8 @@ const WorkOrdersPage: React.FC = () => {
   const [isEdit, setIsEdit] = useState(false)
   const [currentWorkOrder, setCurrentWorkOrder] = useState<WorkOrder | null>(null)
   const formRef = useRef<any>(null)
+  /** 编辑工单打开时的工艺路线 ID，用于识别换路线后须全量替换工序行 */
+  const editInitialProcessRouteIdRef = useRef<number | null>(null)
   const workOrderPlannedDatesLocked = useMemo(
     () => isEdit && isWorkOrderPlannedDatesLocked(currentWorkOrder?.status),
     [isEdit, currentWorkOrder?.status],
@@ -2635,6 +2646,7 @@ const WorkOrdersPage: React.FC = () => {
   const handleCreate = () => {
     setIsEdit(false)
     setCurrentWorkOrder(null)
+    editInitialProcessRouteIdRef.current = null
     setCreateWorkOrderMode('normal')
     setProductionMode('MTS') // 重置为MTS模式
     setSelectedOperations([]) // 清空选中的工序
@@ -3114,6 +3126,11 @@ const WorkOrdersPage: React.FC = () => {
       setIsEdit(true)
       setCreateWorkOrderMode('normal')
       setCurrentWorkOrder(detail)
+      const initialRouteId = (detail as any).process_route_id ?? (detail as any).processRouteId
+      editInitialProcessRouteIdRef.current =
+        initialRouteId != null && initialRouteId !== ''
+          ? Number(initialRouteId)
+          : null
       setModalVisible(true)
       // 加载工单工序列表，用于编辑时展示
       try {
@@ -4954,9 +4971,18 @@ const WorkOrdersPage: React.FC = () => {
           }
         }
         await workOrderApi.update(currentWorkOrder.id.toString(), values)
-        // 编辑保存必须以当前清单为准同步工序（含删除）；失败则整单视为未成功
-        const opsPayload = selectedOperations.map((op: any, i: number) => ({
-          ...(op.id != null ? { id: Number(op.id) } : {}),
+        // 编辑保存必须以当前清单为准同步工序（含删除）；换路线后不得携带旧工单工序行 id，避免误匹配残留
+        const submittedRouteId =
+          values.process_route_id != null ? Number(values.process_route_id) : null
+        const routeChangedOnEdit =
+          editInitialProcessRouteIdRef.current != null &&
+          submittedRouteId != null &&
+          submittedRouteId !== Number(editInitialProcessRouteIdRef.current)
+        const opsSource = routeChangedOnEdit
+          ? selectedOperations.map(({ id: _woOpId, ...op }) => op)
+          : selectedOperations
+        const opsPayload = opsSource.map((op: any, i: number) => ({
+          ...(routeChangedOnEdit || op.id == null ? {} : { id: Number(op.id) }),
           operation_id: op.operation_id,
           operation_code: op.operation_code,
           operation_name: op.operation_name,
@@ -4987,6 +5013,9 @@ const WorkOrdersPage: React.FC = () => {
         await workOrderApi.updateOperations(currentWorkOrder.id.toString(), {
           operations: opsPayload,
         })
+        if (submittedRouteId != null) {
+          editInitialProcessRouteIdRef.current = submittedRouteId
+        }
         messageApi.success('工单更新成功')
         if (currentWorkOrder.id != null) {
           await saveWorkOrderCustomFieldValues(currentWorkOrder.id, customData)
@@ -9249,7 +9278,12 @@ const WorkOrdersPage: React.FC = () => {
                       operationList
                     )
                     if (operations.length > 0) {
-                      setSelectedOperations(operations)
+                      setSelectedOperations(
+                        operations.map((op: any) => {
+                          const { id: _woOpId, ...rest } = op
+                          return rest
+                        }),
+                      )
                       formRef.current?.setFieldsValue({
                         operations: operations.map((op: any) => op.operation_id),
                       })

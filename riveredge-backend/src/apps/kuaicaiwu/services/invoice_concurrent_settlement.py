@@ -11,6 +11,7 @@ from typing import Any, Optional
 from apps.kuaicaiwu.models.payment import Payment
 from apps.kuaicaiwu.models.receipt import Receipt
 from apps.kuaicaiwu.services.bank_account_service import BankAccountService
+from apps.kuaicaiwu.services.finance_voucher_posting_service import FinanceVoucherPostingService
 from apps.kuaicaiwu.services.payment_pull_service import PaymentPullService
 from apps.kuaicaiwu.services.receipt_pull_service import ReceiptPullService
 from core.utils.timezone_utils import today_site_str
@@ -88,20 +89,11 @@ async def create_concurrent_receipt_for_receivable(
         receipt_code=str(receipt.receipt_code),
         created_by=current_user.id,
     )
-    await pull_svc.settle_pull_created_receipt(
-        tenant_id=tenant_id,
-        receivable_id=int(receivable_id),
-        receipt_id=int(receipt.id),
-        amount=amount,
-        operator_id=current_user.id,
+    await FinanceVoucherPostingService().post_receipt(
+        tenant_id,
+        int(receipt.id),
+        operator=current_user,
     )
-    if bank_account_id:
-        await BankAccountService().sync_from_confirmed_voucher(
-            tenant_id,
-            voucher_type="receipt",
-            voucher_id=int(receipt.id),
-            operator_id=current_user.id,
-        )
     return int(receipt.id)
 
 
@@ -174,18 +166,9 @@ async def create_concurrent_payment_for_payable(
         payment_code=str(payment.payment_code),
         created_by=current_user.id,
     )
-    await pull_svc.settle_pull_created_payment(
-        tenant_id=tenant_id,
-        payable_id=int(payable_id),
-        payment_id=int(payment.id),
-        amount=amount,
-        operator_id=current_user.id,
+    await FinanceVoucherPostingService().post_payment(
+        tenant_id,
+        int(payment.id),
+        operator=current_user,
     )
-    if bank_account_id:
-        await BankAccountService().sync_from_confirmed_voucher(
-            tenant_id,
-            voucher_type="payment",
-            voucher_id=int(payment.id),
-            operator_id=current_user.id,
-        )
     return int(payment.id)

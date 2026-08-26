@@ -22,16 +22,18 @@ import {
 } from '../../../../../components/document-tracking-panel';
 import { getReceivableLifecycle } from '../../../utils/receivableLifecycle';
 import { FinanceArApInvoiceStatusDetail } from '../../../utils/financeInvoiceStatusUi';
+import { renderRefundExecutionMarker } from '../../../utils/financeUiLabels';
+import { MarkerTag } from '../../../../../constants/statusBadges';
 
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 
 const P = 'app.kuaicaiwu.receivable';
-const RECEIVABLE_RESOURCE = 'kuaicaiwu:receivable';
+const RECEIPT_RESOURCE = 'kuaicaiwu:receipt';
 
 const ReceivableDetail: React.FC = () => {
   const { t } = useTranslation();
   const linked = useLinkedDocumentDetail();
-  const receivablePerms = useResourcePermissions(RECEIVABLE_RESOURCE);
+  const receiptPerms = useResourcePermissions(RECEIPT_RESOURCE);
   const salesInvoicePerms = useResourcePermissions('kuaicaiwu:sales-invoice');
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -117,7 +119,7 @@ const ReceivableDetail: React.FC = () => {
       {salesInvoicePerms.canCreate ? (
         <Button onClick={openInvoiceFromReceivable}>{t(`${P}.createInvoice`)}</Button>
       ) : null}
-      {data.status !== '已结清' && receivablePerms.canUpdate ? (
+      {data.status !== '已结清' && receiptPerms.canCreate ? (
         <Button type="primary" onClick={openReceiptFromReceivable}>
           {t(`${P}.recordReceipt`)}
         </Button>
@@ -175,6 +177,12 @@ const ReceivableDetail: React.FC = () => {
                   />
                 </ProDescriptions.Item>
                 <ProDescriptions.Item label={t('app.kuaicaiwu.common.businessStatus')}>{data.status}</ProDescriptions.Item>
+                <ProDescriptions.Item label={t('app.kuaicaiwu.financeUi.refundExecution.label')}>
+                  {(() => {
+                    const { label, color } = renderRefundExecutionMarker(data.refund_execution_status, t);
+                    return <MarkerTag color={color}>{label}</MarkerTag>;
+                  })()}
+                </ProDescriptions.Item>
                 <ProDescriptions.Item label={t('app.kuaicaiwu.common.reviewStatus')}>{data.review_status}</ProDescriptions.Item>
                 <ProDescriptions.Item label={t('common.remark')} span={3}>
                   {data.notes || '-'}
@@ -191,6 +199,19 @@ const ReceivableDetail: React.FC = () => {
                   <Statistic title={t(`${P}.col.remainingAmount`)} value={data.remaining_amount} precision={2} prefix="¥" styles={{ content: {color: '#cf1322' } }} />
                 </Col>
               </Row>
+              {Number(data.refunded_amount ?? 0) > 0 ? (
+                <Row gutter={24} style={{ marginTop: 16 }}>
+                  <Col xs={24} sm={8}>
+                    <Statistic
+                      title={t(`${P}.col.refundedAmount`)}
+                      value={data.refunded_amount ?? 0}
+                      precision={2}
+                      prefix="¥"
+                      styles={{ content: { color: '#d48806' } }}
+                    />
+                  </Col>
+                </Row>
+              ) : null}
               <Row gutter={24} style={{ marginTop: 16 }}>
                 <Col xs={24} sm={8}>
                   <Statistic title={t(`${P}.col.invoicedAmount`)} value={data.invoiced_amount ?? 0} precision={2} prefix="¥" />

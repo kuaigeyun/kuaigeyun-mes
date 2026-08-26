@@ -15,6 +15,7 @@ import { apiRequest } from '../../../../../services/api';
 import { warehouseApi } from '../../../../master-data/services/warehouse';
 import { resolveInventoryMaterialBalanceListParams } from '../../../utils/warehouseListCore';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
+import { fetchAllCurrentPageItems } from '../../../../../utils/fetchAllListPages';
 
 interface InTransitBreakdown {
   purchase_quantity: number;
@@ -446,11 +447,12 @@ const InventoryPage: React.FC = () => {
       } else if (type === 'currentPage') {
         rows = currentPageData || [];
       } else {
-        const allRes = await apiRequest<{ items: InventoryItem[] }>(
-          '/apps/kuaizhizao/reports/inventory/material-balances',
-          { method: 'GET', params: { ...lastQueryRef.current, current: 1, page_size: 100000 } }
+        rows = await fetchAllCurrentPageItems<InventoryItem>((page) =>
+          apiRequest<{ items: InventoryItem[]; total: number }>(
+            '/apps/kuaizhizao/reports/inventory/material-balances',
+            { method: 'GET', params: { ...lastQueryRef.current, ...page } },
+          ),
         );
-        rows = allRes.items || [];
       }
       if (!rows.length) {
         messageApi.warning(t('common.exportNoData'));

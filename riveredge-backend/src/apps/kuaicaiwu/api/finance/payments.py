@@ -135,26 +135,6 @@ async def create_payment(
                 payment_code=str(payment.payment_code),
                 created_by=current_user.id,
             )
-            if (
-                str(data.source_type or "").strip() == "payable"
-                and str(data.settlement_type or "normal") != "prepayment"
-            ):
-                await payment_pull_service.settle_pull_created_payment(
-                    tenant_id=tenant_id,
-                    payable_id=int(data.source_id),
-                    payment_id=int(payment.id),
-                    amount=Decimal(data.total_amount),
-                    operator_id=current_user.id,
-                )
-                if data.bank_account_id:
-                    from apps.kuaicaiwu.services.bank_account_service import BankAccountService
-
-                    await BankAccountService().sync_from_confirmed_voucher(
-                        tenant_id,
-                        voucher_type="payment",
-                        voucher_id=int(payment.id),
-                        operator_id=current_user.id,
-                    )
         return _serialize(payment)
     except BusinessLogicError as e:
         raise _http_exception_with_trace(422, str(e), "/payments", tenant_id) from e
@@ -308,46 +288,23 @@ async def confirm_payment(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    """确认付款单"""
+    """确认付款单（过账：核销往来 + 记入资金流水）。"""
     payment = await _get_or_404(tenant_id, id)
     if payment.status != "Draft":
         raise _http_exception_with_trace(400, "只有草稿状态的付款单可以确认", "/payments/{id}/confirm", tenant_id)
-    from apps.kuaicaiwu.services.bank_account_service import BankAccountService
-    from infra.exceptions.exceptions import ValidationError
+    from apps.kuaicaiwu.services.finance_voucher_posting_service import FinanceVoucherPostingService
+    from infra.exceptions.exceptions import NotFoundError, ValidationError
 
     try:
-        await BankAccountService().validate_voucher_account(
+        payment = await FinanceVoucherPostingService().post_payment(
             tenant_id,
-            payment_method=payment.payment_method,
-            bank_account_id=payment.bank_account_id,
+            id,
+            operator=current_user,
         )
+    except NotFoundError as exc:
+        raise _http_exception_with_trace(404, str(exc), "/payments/{id}/confirm", tenant_id) from exc
     except ValidationError as exc:
-        raise HTTPException(status_code=400, detail={"message": str(exc)}) from exc
-
-    try:
-        settled = await payment_pull_service.settle_draft_payment_if_linked(
-            tenant_id=tenant_id,
-            payment_id=id,
-            operator_id=current_user.id,
-        )
-    except ValidationError as exc:
-        raise HTTPException(status_code=400, detail={"message": str(exc)})
-
-    if not settled:
-        from apps.common.audit_actor import apply_update_audit
-
-        confirm_payload: dict = {"status": "Confirmed"}
-        apply_update_audit(confirm_payload, current_user)
-        await Payment.filter(id=id).update(**confirm_payload)
-
-    payment = await _get_or_404(tenant_id, id)
-    if payment.bank_account_id:
-        try:
-            await BankAccountService().sync_from_confirmed_voucher(
-                tenant_id, voucher_type="payment", voucher_id=id, operator_id=current_user.id
-            )
-        except ValidationError as exc:
-            raise HTTPException(status_code=400, detail={"message": str(exc)})
+        raise _http_exception_with_trace(400, str(exc), "/payments/{id}/confirm", tenant_id) from exc
     return _serialize(payment)
 
 

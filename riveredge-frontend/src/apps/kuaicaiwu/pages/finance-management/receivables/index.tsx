@@ -818,7 +818,7 @@ const ReceivableList: React.FC = () => {
                         />,
                         record.remaining_amount > 0 &&
                         record.capabilities?.push_receipt?.allowed !== false &&
-                        receivablePerms.canUpdate ? (
+                        receiptPerms.canCreate ? (
                             <Button {...rowActionKind('execute')}
                                 key="pay"
                                 type="link"
@@ -848,7 +848,7 @@ const ReceivableList: React.FC = () => {
                         ) : null,
                     ].filter(Boolean) as React.ReactNode[],
         },
-    ], [t, navigate, customerOptions, receivablePerms, salesInvoicePerms]);
+    ], [t, navigate, customerOptions, receivablePerms, receiptPerms, salesInvoicePerms]);
 
     return (
         <ListPageTemplate>

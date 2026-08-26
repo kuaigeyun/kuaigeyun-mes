@@ -15,6 +15,8 @@ const STAGE_LABEL_KEYS: Record<string, string> = {
   approved: `${RL}.approved`,
   settled: `${RL}.settled`,
   rejected: `${RL}.rejected`,
+  refunded_partial: `${RL}.refundedPartial`,
+  refunded_full: `${RL}.refundedFull`,
 };
 
 const NEXT_STEP_KEYS: Record<string, string[]> = {
@@ -29,6 +31,36 @@ function norm(s: string | undefined): string {
 function buildFallbackLifecycle(record: Record<string, unknown>): BackendLifecycle {
   const status = norm(record?.status as string);
   const reviewStatus = norm(record?.review_status as string);
+  const refundStatus = norm(record?.refund_execution_status as string);
+
+  if (refundStatus === '全部退款') {
+    return {
+      current_stage_key: 'refunded_full',
+      current_stage_name: '全部退款',
+      status: 'warning',
+      main_stages: [
+        { key: 'pending_review', label: '待审核', status: 'done' },
+        { key: 'approved', label: '已审核', status: 'done' },
+        { key: 'settled', label: '已结清', status: 'done' },
+        { key: 'refunded_full', label: '全部退款', status: 'active' },
+      ],
+      next_step_suggestions: [],
+    };
+  }
+  if (refundStatus === '部分退款') {
+    return {
+      current_stage_key: 'refunded_partial',
+      current_stage_name: '部分退款',
+      status: 'warning',
+      main_stages: [
+        { key: 'pending_review', label: '待审核', status: 'done' },
+        { key: 'approved', label: '已审核', status: 'done' },
+        { key: 'settled', label: '已结清', status: 'done' },
+        { key: 'refunded_partial', label: '部分退款', status: 'active' },
+      ],
+      next_step_suggestions: [],
+    };
+  }
 
   if (reviewStatus === '已驳回' || reviewStatus === '驳回') {
     return {

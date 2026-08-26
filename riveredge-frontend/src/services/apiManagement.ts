@@ -15,6 +15,9 @@ export interface API {
   description?: string;
   path: string;
   method: string;
+  connection_uuid?: string | null;
+  connection_name?: string | null;
+  connection_type?: string | null;
   request_headers?: Record<string, any>;
   request_params?: Record<string, any>;
   request_body?: Record<string, any>;
@@ -49,6 +52,7 @@ export interface CreateAPIData {
   description?: string;
   path: string;
   method: string;
+  connection_uuid?: string | null;
   request_headers?: Record<string, any>;
   request_params?: Record<string, any>;
   request_body?: Record<string, any>;
@@ -64,6 +68,7 @@ export interface UpdateAPIData {
   description?: string;
   path?: string;
   method?: string;
+  connection_uuid?: string | null;
   request_headers?: Record<string, any>;
   request_params?: Record<string, any>;
   request_body?: Record<string, any>;

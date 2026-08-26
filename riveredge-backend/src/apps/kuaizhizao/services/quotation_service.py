@@ -1607,7 +1607,6 @@ class QuotationService:
                 stale_review_q_ids.append(qid)
                 q.sales_review_id = None
                 q.sales_review_code = None
-                review_missing_by_id[qid] = False
         if stale_review_q_ids:
             await Quotation.filter(
                 tenant_id=tenant_id, id__in=stale_review_q_ids

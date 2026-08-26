@@ -41,6 +41,13 @@ class Receivable(BaseModel):
     # 状态
     status = fields.CharField(max_length=20, default="未收款", description="收款状态")
 
+    refunded_amount = fields.DecimalField(
+        max_digits=14, decimal_places=4, default=0, description="已确认退款冲回合计"
+    )
+    refund_execution_status = fields.CharField(
+        max_length=20, default="未退款", description="退款执行状态 未退款/部分退款/全部退款"
+    )
+
     # 业务信息
     business_date = fields.DateField(description="业务日期")
     invoice_issued = fields.BooleanField(default=False, description="是否开具发票")

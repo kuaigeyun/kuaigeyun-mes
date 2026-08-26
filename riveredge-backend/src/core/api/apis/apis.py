@@ -79,7 +79,7 @@ async def create_api(
             api_data=data,
         )
         
-        return APIResponse.model_validate(api)
+        return APIService.build_api_response(api)
     except ValidationError as e:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -140,7 +140,7 @@ async def list_apis(
         )
         
         return {
-            "items": [APIResponse.model_validate(api) for api in apis],
+            "items": [APIService.build_api_response(api) for api in apis],
             "total": total,
             "page": page,
             "page_size": page_size,
@@ -179,8 +179,9 @@ async def get_api(
             tenant_id=tenant_id,
             api_uuid=api_uuid,
         )
+        await api.fetch_related("integration_config")
         
-        return APIResponse.model_validate(api)
+        return APIService.build_api_response(api)
     except NotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -224,7 +225,7 @@ async def update_api(
             api_data=data,
         )
         
-        return APIResponse.model_validate(api)
+        return APIService.build_api_response(api)
     except NotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

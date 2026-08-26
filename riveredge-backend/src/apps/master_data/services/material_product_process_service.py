@@ -606,6 +606,76 @@ class MaterialProductProcessService:
         )
 
     @staticmethod
+    async def sync_process_route_from_material(
+        tenant_id: int,
+        material_id: int,
+        *,
+        previous_process_route_id: Optional[int],
+        new_process_route_id: Optional[int],
+        current_user: Optional[User] = None,
+    ) -> bool:
+        """
+        物料默认工艺路线变更后，将已有产品工艺记录的路线与工序模板对齐。
+
+        与 save_for_material 互为补充：产品工艺「另存为新路线」会回写物料 FK；物料保存须同步产品工艺表，
+        否则工单仍按产品工艺表旧路线解析（优先级高于物料 FK）。
+
+        无产品工艺记录时不新建（生效路线可继续走物料 FK）。
+        """
+        if previous_process_route_id == new_process_route_id:
+            return False
+
+        material = await Material.filter(
+            id=material_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).first()
+        if not material or getattr(material, "source_type", None) != "Make":
+            return False
+
+        record = await MaterialProductProcess.filter(
+            tenant_id=tenant_id,
+            material_id=material_id,
+            deleted_at__isnull=True,
+        ).first()
+        if not record:
+            return False
+
+        process_route: Optional[ProcessRoute] = None
+        if new_process_route_id is not None:
+            process_route = await ProcessRoute.filter(
+                id=int(new_process_route_id),
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            ).first()
+
+        allow_jump = bool(getattr(process_route, "allow_operation_jump", False)) if process_route else False
+        lines_schemas = await _compose_lines(tenant_id, material_id, process_route, None)
+        lines_json = [ln.model_dump(mode="json", by_alias=True) for ln in lines_schemas]
+
+        record.process_route_id = int(new_process_route_id) if new_process_route_id else None
+        record.allow_operation_jump = allow_jump
+        record.lines = lines_json
+        apply_update_audit(record, current_user)
+        await record.save(
+            update_fields=[
+                "process_route_id",
+                "allow_operation_jump",
+                "lines",
+                "updated_at",
+                "updated_by",
+                "updated_by_name",
+            ]
+        )
+
+        await MaterialProductProcessService._sync_piece_rates(
+            tenant_id,
+            material,
+            lines_schemas,
+        )
+        return True
+
+    @staticmethod
     async def resolve_process_route_for_material(
         tenant_id: int,
         material_id: int,
@@ -774,14 +844,24 @@ class MaterialProductProcessService:
         current_user: Optional[User] = None,
     ) -> MaterialProductProcessResponse:
         material = await MaterialProductProcessService._get_material(tenant_id, material_uuid)
-        process_route = await MaterialProductProcessService._resolve_route(
-            tenant_id, data.process_route_uuid, material
-        )
 
-        if data.process_route_uuid and not process_route:
-            raise ValidationError("所选工艺路线不存在或已删除")
-        if process_route and not data.lines:
-            raise ValidationError("已指派工艺路线时至少保留一道工序")
+        if data.save_as_new_route:
+            code = (data.new_route_code or "").strip()
+            name = (data.new_route_name or "").strip()
+            if not code:
+                raise ValidationError("另存为新工艺路线须填写路线编码")
+            if not name:
+                raise ValidationError("另存为新工艺路线须填写路线名称")
+            if not data.lines:
+                raise ValidationError("至少保留一道工序后再另存为新工艺路线")
+        else:
+            process_route_probe = await MaterialProductProcessService._resolve_route(
+                tenant_id, data.process_route_uuid, material
+            )
+            if data.process_route_uuid and not process_route_probe:
+                raise ValidationError("所选工艺路线不存在或已删除")
+            if process_route_probe and not data.lines:
+                raise ValidationError("已指派工艺路线时至少保留一道工序")
 
         # 补齐 operation_id
         uuids = [ln.operation_uuid for ln in data.lines if ln.operation_uuid]
@@ -799,6 +879,35 @@ class MaterialProductProcessService:
                         "name": ln.name or op.name,
                     }
                 )
+            )
+
+        process_route: Optional[ProcessRoute] = None
+        if data.save_as_new_route:
+            from apps.master_data.schemas.process_schemas import ProcessRouteCreate
+            from apps.master_data.services.process_service import ProcessService
+
+            op_sequence = lines_to_operation_sequence(normalized, data.allow_operation_jump)
+            created_route = await ProcessService.create_process_route(
+                tenant_id,
+                ProcessRouteCreate(
+                    code=(data.new_route_code or "").strip(),
+                    name=(data.new_route_name or "").strip(),
+                    operation_sequence=op_sequence,
+                    allow_operation_jump=data.allow_operation_jump,
+                    is_active=True,
+                ),
+                current_user=current_user,
+            )
+            process_route = await ProcessRoute.filter(
+                tenant_id=tenant_id,
+                uuid=created_route.uuid,
+                deleted_at__isnull=True,
+            ).first()
+            if not process_route:
+                raise ValidationError("新建工艺路线失败，请重试")
+        else:
+            process_route = await MaterialProductProcessService._resolve_route(
+                tenant_id, data.process_route_uuid, material
             )
 
         pr_id = process_route.id if process_route else None
@@ -836,17 +945,18 @@ class MaterialProductProcessService:
             apply_create_audit(create_payload, current_user)
             record = await MaterialProductProcess.create(**create_payload)
 
-        # 同步物料指派（须 .save()，否则列表仍读到未指派）
-        defaults = material.defaults if isinstance(material.defaults, dict) else {}
-        defaults = dict(defaults or {})
-        defaults["defaultProcessRouteUuid"] = process_route.uuid if process_route else None
-        defaults["defaultProcessRoute"] = pr_id
-        await material.update_from_dict(
-            {
-                "process_route_id": pr_id,
-                "defaults": defaults,
-            }
-        ).save()
+        # 仅「另存为新工艺路线」时回写物料默认路线；普通保存只写产品工艺表
+        if data.save_as_new_route and process_route:
+            defaults = material.defaults if isinstance(material.defaults, dict) else {}
+            defaults = dict(defaults or {})
+            defaults["defaultProcessRouteUuid"] = process_route.uuid
+            defaults["defaultProcessRoute"] = pr_id
+            await material.update_from_dict(
+                {
+                    "process_route_id": pr_id,
+                    "defaults": defaults,
+                }
+            ).save()
 
         await MaterialProductProcessService._sync_piece_rates(
             tenant_id,

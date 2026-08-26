@@ -179,11 +179,14 @@ class MergeSettlementService:
                 )
 
             if data.bank_account_id:
-                await BankAccountService().sync_from_confirmed_voucher(
+                from apps.kuaicaiwu.services.finance_voucher_posting_service import (
+                    FinanceVoucherPostingService,
+                )
+
+                await FinanceVoucherPostingService().post_receipt(
                     tenant_id,
-                    voucher_type="receipt",
-                    voucher_id=int(receipt.id),
-                    operator_id=current_user.id,
+                    int(receipt.id),
+                    operator=current_user,
                 )
 
         return {
@@ -304,11 +307,14 @@ class MergeSettlementService:
                 )
 
             if data.bank_account_id:
-                await BankAccountService().sync_from_confirmed_voucher(
+                from apps.kuaicaiwu.services.finance_voucher_posting_service import (
+                    FinanceVoucherPostingService,
+                )
+
+                await FinanceVoucherPostingService().post_payment(
                     tenant_id,
-                    voucher_type="payment",
-                    voucher_id=int(payment.id),
-                    operator_id=current_user.id,
+                    int(payment.id),
+                    operator=current_user,
                 )
 
         return {

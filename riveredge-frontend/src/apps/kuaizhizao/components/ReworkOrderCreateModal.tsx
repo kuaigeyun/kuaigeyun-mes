@@ -246,9 +246,7 @@ const ReworkOrderCreateModal: React.FC<ReworkOrderCreateModalProps> = ({
             },
           ]}
         >
-          <div style={{ width: '100%', minWidth: 0 }}>
-            <ReworkPredefinedRouteEditor operations={operations} />
-          </div>
+          <ReworkPredefinedRouteEditor operations={operations} />
         </ProForm.Item>
       ) : (
         <ProFormSelect

@@ -5,8 +5,11 @@
 """
 
 from tortoise import fields
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, TYPE_CHECKING
 from .base import BaseModel
+
+if TYPE_CHECKING:
+    from .integration_config import IntegrationConfig
 
 
 class API(BaseModel):
@@ -37,7 +40,14 @@ class API(BaseModel):
     
     is_active = fields.BooleanField(default=True, description="是否启用")
     is_system = fields.BooleanField(default=False, description="是否系统接口（系统接口不可删除）")
-    
+
+    integration_config: fields.ForeignKeyNullableRelation["IntegrationConfig"] = fields.ForeignKeyField(
+        "models.IntegrationConfig",
+        related_name="apis",
+        null=True,
+        description="关联应用连接器（可选；绑定后 path 为连接器下相对路径）",
+    )
+
     # 软删除字段
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")
     
