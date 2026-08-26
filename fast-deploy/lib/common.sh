@@ -4890,6 +4890,38 @@ _git_validate_repo_url() {
     return 1
 }
 
+_git_is_work_tree() {
+    local dir="$1"
+    [ -n "$dir" ] && [ -e "$dir" ] || return 1
+    [ -d "$dir/.git" ] || [ -f "$dir/.git" ] && return 0
+    _git_cmd -C "$dir" rev-parse --is-inside-work-tree >/dev/null 2>&1
+}
+
+_sync_sibling_git_repo_fetch() {
+    local name="$1" path="$2" branch="$3" auth_url="$4" clean_url="$5"
+    log_info "同步 ${name}: ${path}（分支 ${branch}）"
+    if _git_cmd -C "$path" remote get-url origin >/dev/null 2>&1; then
+        _git_cmd -C "$path" remote set-url origin "$clean_url"
+    else
+        _git_cmd -C "$path" remote add origin "$clean_url"
+    fi
+    if ! _git_cmd -C "$path" fetch --prune --tags "$auth_url" "+refs/heads/${branch}:refs/remotes/origin/${branch}"; then
+        log_error "${name}: 拉取分支 ${branch} 失败"
+        log_error "请检查 ${name} 的 origin（当前: $(_git_cmd -C "$path" remote get-url origin 2>/dev/null || echo 无)）与 Token（PRO_GIT_TOKEN / CLIENT_GIT_TOKEN）"
+        log_error "同步 ${name} 失败"
+        return 1
+    fi
+    if ! _git_cmd -C "$path" rev-parse --verify "origin/${branch}" >/dev/null 2>&1; then
+        log_error "${name}: 远程无分支 ${branch}（已统一使用 develop，勿再配置 main）"
+        log_error "同步 ${name} 失败"
+        return 1
+    fi
+    _git_cmd -C "$path" checkout -B "$branch" "origin/${branch}" || {
+        log_error "同步 ${name} 失败"
+        return 1
+    }
+}
+
 sync_sibling_git_repo() {
     # 参数: name url path branch token
     local name="$1" url="$2" path="$3" branch="${4:-develop}" token="${5:-}"
@@ -4908,39 +4940,26 @@ sync_sibling_git_repo() {
     _git_validate_repo_url "$name" "$clean_url" || return 1
     auth_url="$(_git_auth_url "$clean_url" "$token")"
 
-    if [ ! -d "$path/.git" ]; then
+    if _git_is_work_tree "$path"; then
+        _sync_sibling_git_repo_fetch "$name" "$path" "$branch" "$auth_url" "$clean_url" || return 1
+    else
+        if [ -e "$path" ] && [ -n "$(ls -A "$path" 2>/dev/null)" ]; then
+            log_warn "${name}: ${path} 已存在且不是 Git 仓库，清理后重新克隆..."
+            rm -rf "$path" || {
+                log_error "无法清理 ${path}，请关闭占用该目录的进程或手动删除后重试"
+                return 1
+            }
+        fi
         log_info "克隆 ${name}: ${clean_url} → ${path}（分支 ${branch}）"
         mkdir -p "$(dirname "$path")"
         # 主仓 / 专业包 / 定制包 / 终端仓统一默认 develop；禁止回落到 main
         # 鉴权 URL 只用于本次 clone，禁止 set-url 进 origin（否则 ? / CR 会写进 .git/config）
         if ! _git_cmd clone --branch "$branch" --single-branch "$auth_url" "$path"; then
             log_error "克隆 ${name} 失败：请确认私仓存在分支 ${branch}，以及 Token/SSH 权限"
-            rm -rf "$path"
+            rm -rf "$path" 2>/dev/null || true
             return 1
         fi
         _git_cmd -C "$path" remote set-url origin "$clean_url"
-    else
-        log_info "同步 ${name}: ${path}（分支 ${branch}）"
-        if _git_cmd -C "$path" remote get-url origin >/dev/null 2>&1; then
-            _git_cmd -C "$path" remote set-url origin "$clean_url"
-        else
-            _git_cmd -C "$path" remote add origin "$clean_url"
-        fi
-        if ! _git_cmd -C "$path" fetch --prune --tags "$auth_url" "+refs/heads/${branch}:refs/remotes/origin/${branch}"; then
-            log_error "${name}: 拉取分支 ${branch} 失败"
-            log_error "请检查 ${name} 的 origin（当前: $(_git_cmd -C "$path" remote get-url origin 2>/dev/null || echo 无)）与 PRO_GIT_TOKEN"
-            log_error "同步 ${name} 失败"
-            return 1
-        fi
-        if ! _git_cmd -C "$path" rev-parse --verify "origin/${branch}" >/dev/null 2>&1; then
-            log_error "${name}: 远程无分支 ${branch}（已统一使用 develop，勿再配置 main）"
-            log_error "同步 ${name} 失败"
-            return 1
-        fi
-        _git_cmd -C "$path" checkout -B "$branch" "origin/${branch}" || {
-            log_error "同步 ${name} 失败"
-            return 1
-        }
     fi
     log_ok "${name} @ $(_git_cmd -C "$path" rev-parse --short HEAD 2>/dev/null || echo '?') [${branch}]"
 }
