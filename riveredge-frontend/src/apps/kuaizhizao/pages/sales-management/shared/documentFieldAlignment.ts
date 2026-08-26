@@ -506,6 +506,7 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   reported_at: 67.1,
   next_follow_up_at: 68,
   last_follow_up_at: 68.1,
+  follow_up_count: 68.2,
   closed_at: 68.5,
   crossesMidnight: 69,
 
@@ -515,6 +516,8 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   salesman_id: 75.1,
   salesmanName: 75,
   salesmanId: 75.1,
+  /** 客户跟进：跟进人员（created_by_name 业务展示名） */
+  follow_up_person: 75.05,
   buyer_name: 75.5,
   buyer_id: 75.55,
   buyerName: 75.5,
@@ -795,6 +798,7 @@ export const GLOBAL_DOC_DETAIL_BASIC_FIELD_RANK = {
   actual_start_date: 14.1,
   actual_end_date: 14.2,
   next_follow_up_at: 14.2,
+  follow_up_count: 14.25,
   computation_start_time: 14.3,
   computation_end_time: 14.4,
   version_no: 14.5,

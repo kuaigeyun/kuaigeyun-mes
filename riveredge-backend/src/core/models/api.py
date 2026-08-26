@@ -10,6 +10,7 @@ from .base import BaseModel
 
 if TYPE_CHECKING:
     from .integration_config import IntegrationConfig
+    from .resource_category import ResourceCategory
 
 
 class API(BaseModel):
@@ -48,6 +49,13 @@ class API(BaseModel):
         description="关联应用连接器（可选；绑定后 path 为连接器下相对路径）",
     )
 
+    category: fields.ForeignKeyNullableRelation["ResourceCategory"] = fields.ForeignKeyField(
+        "models.ResourceCategory",
+        related_name="apis",
+        null=True,
+        description="所属分类（可选）",
+    )
+
     # 软删除字段
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")
     
@@ -62,6 +70,7 @@ class API(BaseModel):
             ("uuid",),
             ("code",),
             ("created_at",),
+            ("category_id",),
         ]
         unique_together = [("tenant_id", "code")]
     

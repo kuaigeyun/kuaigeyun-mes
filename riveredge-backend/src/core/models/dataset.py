@@ -11,6 +11,7 @@ from .base import BaseModel
 
 if TYPE_CHECKING:
     from .integration_config import IntegrationConfig
+    from .resource_category import ResourceCategory
 
 
 class Dataset(BaseModel):
@@ -31,6 +32,13 @@ class Dataset(BaseModel):
         description="关联集成配置/数据连接（统一数据源与数据连接）",
     )
     # integration_config_id 由 ForeignKeyField 自动创建
+
+    category: fields.ForeignKeyNullableRelation["ResourceCategory"] = fields.ForeignKeyField(
+        "models.ResourceCategory",
+        related_name="datasets",
+        null=True,
+        description="所属分类（可选）",
+    )
 
     name = fields.CharField(max_length=100, description="数据集名称")
     code = fields.CharField(max_length=50, description="数据集代码（唯一，用于程序识别）")
@@ -68,6 +76,7 @@ class Dataset(BaseModel):
             ("uuid",),
             ("code",),
             ("created_at",),
+            ("category_id",),
         ]
         unique_together = [("tenant_id", "code")]
     

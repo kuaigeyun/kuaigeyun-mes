@@ -28,7 +28,7 @@ import {
   Row,
   Col,
   Modal,
-  Dropdown,
+  Select,
   theme as AntdTheme,
   Alert,
   Empty,
@@ -39,13 +39,14 @@ import {
 } from 'antd';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { getDataDictionaryList, getDictionaryItemList } from '../../../../../services/dataDictionary';
-import { CheckCircleOutlined, CloseCircleOutlined, DeleteOutlined, EyeOutlined, RollbackOutlined } from '@ant-design/icons';
+import { CheckCircleOutlined, CloseCircleOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, RollbackOutlined } from '@ant-design/icons';
 import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
 import {
   UniPullQueryModal,
   isPullableScope,
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query';
+import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import {
   MaterialStackedCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -81,7 +82,8 @@ import { getIncomingInspectionLifecycle } from '../../../utils/incomingInspectio
 import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '../../../../../services/api';
-import { qualityApi } from '../../../services/production';
+import { qualityApi, inspectionPlanApi, unwrapInspectionPlanList } from '../../../services/production';
+import InspectionPlanFormModal from '../../../components/InspectionPlanFormModal';
 import InspectionTemplateConductFields from '../components/InspectionTemplateConductFields';
 import { QualityInspectionDetailDrawer } from '../components/QualityInspectionDetailDrawer';
 import {
@@ -149,7 +151,6 @@ import {
   filterDeletableQualityInspectionRecords,
   filterRevokeConductQualityInspectionRecords,
 } from '../components/qualityRevokeConduct';
-import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { importExcelMatrixInChunks } from '../../../../../utils/chunkedBulkImport';
@@ -158,6 +159,7 @@ import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 const INCOMING_RESOURCE = 'kuaizhizao:quality-management-incoming-inspection';
 const INCOMING_INSPECTION_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_incoming_inspections';
+const INSPECTION_PLAN_RESOURCE = 'kuaizhizao:quality-management-inspection-plans';
 const NC_RESOURCE = 'kuaizhizao:quality-management-nonconforming-ledger';
 
 // 来料检验接口定义
@@ -260,13 +262,10 @@ const IncomingInspectionPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   const tableRowsRef = useRef<IncomingInspection[]>([]);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  const createButtonLabel = useMemo(
-    () => withSingleNewShortcutHint(pullFromPurchaseReceiptAction.label),
-    [pullFromPurchaseReceiptAction.label],
-  );
 
   const invalidateStats = () => queryClient.invalidateQueries({ queryKey: ['incoming-inspection-statistics'] });
   const incomingPerms = useResourcePermissions(INCOMING_RESOURCE);
+  const inspectionPlanPerms = useResourcePermissions(INSPECTION_PLAN_RESOURCE);
   const incomingAuditEnabled = useAuditRequired('incoming_inspection');
   const incomingAuditColumn = useMemo(
     () => createListAuditPhaseColumn<IncomingInspection>({ t, auditEnabled: incomingAuditEnabled }),
@@ -378,6 +377,20 @@ const IncomingInspectionPage: React.FC = () => {
   const [pushReturnPreviewSourceId, setPushReturnPreviewSourceId] = useState<number | null>(null);
   const [pushReturnPreviewData, setPushReturnPreviewData] = useState<PushPreviewResponse | null>(null);
   const [pushReturnPreviewQuantity, setPushReturnPreviewQuantity] = useState(0);
+
+  /** 已入库补检：未配置 IQC 物料须临时选择检验方案 */
+  const [postedRecheckPlanModalOpen, setPostedRecheckPlanModalOpen] = useState(false);
+  const [postedRecheckReceiptIds, setPostedRecheckReceiptIds] = useState<number[]>([]);
+  const [postedRecheckPlanId, setPostedRecheckPlanId] = useState<number | null>(null);
+  const [postedRecheckPlanOptions, setPostedRecheckPlanOptions] = useState<
+    Array<{ label: string; value: number }>
+  >([]);
+  const [postedRecheckPlanLoading, setPostedRecheckPlanLoading] = useState(false);
+  const [postedRecheckCreating, setPostedRecheckCreating] = useState(false);
+  const [quickInspectionPlanModalOpen, setQuickInspectionPlanModalOpen] = useState(false);
+  const postedRecheckPlanModalZIndex = token.zIndexPopupBase + 50;
+  const quickInspectionPlanModalZIndex = token.zIndexPopupBase + 100;
+
   const resetPushReturnPreview = () => {
     setPushReturnPreviewOpen(false);
     setPushReturnPreviewSourceId(null);
@@ -645,6 +658,7 @@ const IncomingInspectionPage: React.FC = () => {
     work_order_code?: string;
     registration_date?: string | null;
     total_quantity?: number | null;
+    needs_temporary_plan?: boolean;
     capabilities?: {
       pull_incoming_inspection?: { allowed?: boolean; reason?: string };
     };
@@ -725,6 +739,164 @@ const IncomingInspectionPage: React.FC = () => {
     },
   });
 
+  /** 已入库采购入库单补检：仅列出已入库单据；含未配置 IQC 物料，创建时可临时选方案 */
+  const createFromPostedReceipts = useCallback(
+    async (receiptIds: number[], inspectionPlanId?: number | null) => {
+      let count = 0;
+      for (const receiptId of receiptIds) {
+        const created = await qualityApi.incomingInspection.createFromPurchaseReceipt(String(receiptId), {
+          includeUnsetIqc: true,
+          inspectionPlanId: inspectionPlanId ?? undefined,
+        });
+        count += Array.isArray(created) ? created.length : 0;
+      }
+      if (!count) {
+        messageApi.warning(t('app.kuaizhizao.quality.incoming.messages.createFailed'));
+        return false;
+      }
+      messageApi.success(t('app.kuaizhizao.quality.incoming.messages.createFromPostedReceiptSuccess'));
+      return true;
+    },
+    [messageApi, t],
+  );
+
+  const reloadPostedRecheckPlanOptions = useCallback(async (): Promise<
+    Array<{ label: string; value: number }>
+  > => {
+    const res = await inspectionPlanApi.list({
+      plan_type: 'incoming',
+      is_active: true,
+      skip: 0,
+      limit: 100,
+    });
+    const items = unwrapInspectionPlanList(res) as Array<{
+      id?: number;
+      plan_code?: string;
+      plan_name?: string;
+    }>;
+    const options = items
+      .filter((p) => p.id != null && Number(p.id) > 0)
+      .map((p) => ({
+        value: Number(p.id),
+        label: `${p.plan_name || p.plan_code || p.id}${p.plan_code ? ` (${p.plan_code})` : ''}`,
+      }));
+    setPostedRecheckPlanOptions(options);
+    return options;
+  }, []);
+
+  const openPostedRecheckPlanModal = useCallback(
+    async (receiptIds: number[]) => {
+      setPostedRecheckReceiptIds(receiptIds);
+      setPostedRecheckPlanId(null);
+      setPostedRecheckPlanModalOpen(true);
+      setPostedRecheckPlanLoading(true);
+      try {
+        await reloadPostedRecheckPlanOptions();
+      } catch {
+        setPostedRecheckPlanOptions([]);
+        messageApi.error(t('app.kuaizhizao.quality.incoming.messages.loadInspectionPlanFailed'));
+      } finally {
+        setPostedRecheckPlanLoading(false);
+      }
+    },
+    [messageApi, reloadPostedRecheckPlanOptions, t],
+  );
+
+  const handleQuickInspectionPlanSuccess = useCallback(
+    (plan: { id?: number; plan_code?: string; plan_name?: string }) => {
+      const newId = Number(plan?.id);
+      if (!(newId > 0)) return;
+      const label = `${plan.plan_name || plan.plan_code || newId}${
+        plan.plan_code ? ` (${plan.plan_code})` : ''
+      }`;
+      setPostedRecheckPlanOptions((prev) => {
+        if (prev.some((o) => o.value === newId)) return prev;
+        return [{ value: newId, label }, ...prev];
+      });
+      setPostedRecheckPlanId(newId);
+      setQuickInspectionPlanModalOpen(false);
+      void reloadPostedRecheckPlanOptions().catch(() => undefined);
+    },
+    [reloadPostedRecheckPlanOptions],
+  );
+
+  const pullFromPostedPurchaseReceiptQuery = useUniPullQuery<PullSourceCandidate>({
+    rowKey: 'id',
+    selectionType: 'checkbox',
+    scopeOptions: pullQueryScopeOptions,
+    defaultScope: 'pullable',
+    loadData: async ({ keyword, page, pageSize, scope }) => {
+      try {
+        const trimmed = keyword.trim();
+        const res = await qualityApi.incomingInspection.listPurchaseReceiptPullCandidates({
+          skip: (page - 1) * pageSize,
+          limit: pageSize,
+          receipt_code: trimmed || undefined,
+          status: '已入库',
+          include_unset_iqc: true,
+        });
+        const rows = (res.data || []) as PullSourceCandidate[];
+        const filtered = isPullableScope(scope)
+          ? rows.filter((row) => isPullIncomingInspectionSelectable(row))
+          : rows;
+        return { data: filtered, total: Number(res.total ?? filtered.length) };
+      } catch {
+        messageApi.error(t('app.kuaizhizao.quality.incoming.messages.loadReceiptFailed'));
+        return { data: [], total: 0 };
+      }
+    },
+    isRowDisabled: (row) => !isPullIncomingInspectionSelectable(row),
+    onConfirm: async (_keys, rows) => {
+      const selected = rows.filter((row) => isPullIncomingInspectionSelectable(row));
+      const selectedIds = selected.map((row) => Number(row.id)).filter((id) => id > 0);
+      if (!selectedIds.length) {
+        messageApi.warning(t('app.kuaizhizao.quality.incoming.form.selectReceipt'));
+        return;
+      }
+      const needsPlan = selected.some((row) => Boolean(row.needs_temporary_plan));
+      if (needsPlan) {
+        pullFromPostedPurchaseReceiptQuery.closeModal();
+        await openPostedRecheckPlanModal(selectedIds);
+        return;
+      }
+      try {
+        const ok = await createFromPostedReceipts(selectedIds);
+        if (ok) {
+          pullFromPostedPurchaseReceiptQuery.closeModal();
+          invalidateStats();
+          actionRef.current?.reload();
+        }
+      } catch (error: unknown) {
+        messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.quality.incoming.messages.createFailed')));
+      }
+    },
+  });
+
+  const handlePostedRecheckPlanConfirm = async () => {
+    if (!postedRecheckPlanId) {
+      messageApi.warning(t('app.kuaizhizao.quality.incoming.form.selectInspectionPlan'));
+      return;
+    }
+    if (!postedRecheckReceiptIds.length) {
+      messageApi.warning(t('app.kuaizhizao.quality.incoming.form.selectReceipt'));
+      return;
+    }
+    setPostedRecheckCreating(true);
+    try {
+      const ok = await createFromPostedReceipts(postedRecheckReceiptIds, postedRecheckPlanId);
+      if (ok) {
+        setPostedRecheckPlanModalOpen(false);
+        setPostedRecheckReceiptIds([]);
+        setPostedRecheckPlanId(null);
+        invalidateStats();
+        actionRef.current?.reload();
+      }
+    } catch (error: unknown) {
+      messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.quality.incoming.messages.createFailed')));
+    } finally {
+      setPostedRecheckCreating(false);
+    }
+  };
   const pullFromCustomerMaterialQuery = useUniPullQuery<PullSourceCandidate>({
     rowKey: 'id',
     selectionType: 'checkbox',
@@ -778,6 +950,27 @@ const IncomingInspectionPage: React.FC = () => {
     },
   });
   useNewShortcut(pullFromPurchaseReceiptQuery.openModal);
+
+  const createMenuItems = useMemo(
+    () => [
+      {
+        key: 'from-purchase-receipt',
+        label: pullFromPurchaseReceiptAction.label,
+        onClick: () => pullFromPurchaseReceiptQuery.openModal(),
+      },
+      {
+        key: 'from-customer-material',
+        label: pullFromCustomerMaterialAction.label,
+        onClick: () => pullFromCustomerMaterialQuery.openModal(),
+      },
+    ],
+    [
+      pullFromPurchaseReceiptAction.label,
+      pullFromCustomerMaterialAction.label,
+      pullFromPurchaseReceiptQuery.openModal,
+      pullFromCustomerMaterialQuery.openModal,
+    ],
+  );
 
   // 处理创建不合格品记录
   const handleCreateDefect = (record: IncomingInspection) => {
@@ -1276,13 +1469,25 @@ const IncomingInspectionPage: React.FC = () => {
         onTableDataChange={(rows) => {
           tableRowsRef.current = rows;
         }}
-        showCreateButton={true}
-        createButtonText={createButtonLabel}
-        onCreate={pullFromPurchaseReceiptQuery.openModal}
-        toolBarRender={() => [
-          <Button key="from-cm" onClick={pullFromCustomerMaterialQuery.openModal}>
-            {pullFromCustomerMaterialAction.label}
+        showCreateButton={false}
+        toolBarActionsBeforeCreate={[
+          <UniPullCreateToolbar
+            key="create-incoming"
+            compactKey="create-incoming"
+            createIcon={<PlusOutlined />}
+            createLabel={t('app.kuaizhizao.quality.incoming.createButton')}
+            onCreate={pullFromPurchaseReceiptQuery.openModal}
+            menuItems={createMenuItems}
+          />,
+          <Button
+            key="posted-receipt-recheck"
+            type="primary"
+            onClick={pullFromPostedPurchaseReceiptQuery.openModal}
+          >
+            {t('app.kuaizhizao.quality.incoming.createFromPostedReceiptButton')}
           </Button>,
+        ]}
+        toolBarRender={() => [
           <UniPushToolbarButton
             key={`incoming-inspection-push-${selectedIncomingForToolbar?.id ?? 'none'}`}
             menuItems={toolbarPushMenuItems}
@@ -1560,6 +1765,103 @@ const IncomingInspectionPage: React.FC = () => {
         scopeOptions={pullFromPurchaseReceiptQuery.scopeOptions}
         scope={pullFromPurchaseReceiptQuery.scope}
         onScopeChange={pullFromPurchaseReceiptQuery.handleScopeChange}
+      />
+
+      <UniPullQueryModal<PullSourceCandidate>
+        open={pullFromPostedPurchaseReceiptQuery.open}
+        title={t('app.kuaizhizao.quality.incoming.createFromPostedReceipt')}
+        onCancel={pullFromPostedPurchaseReceiptQuery.closeModal}
+        onOk={pullFromPostedPurchaseReceiptQuery.handleConfirm}
+        rowKey="id"
+        columns={purchaseReceiptPullColumns}
+        dataSource={pullFromPostedPurchaseReceiptQuery.dataSource}
+        loading={pullFromPostedPurchaseReceiptQuery.loading}
+        confirmLoading={pullFromPostedPurchaseReceiptQuery.confirmLoading}
+        selectionType={pullFromPostedPurchaseReceiptQuery.selectionType}
+        selectedRowKeys={pullFromPostedPurchaseReceiptQuery.selectedRowKeys}
+        selectedRows={pullFromPostedPurchaseReceiptQuery.selectedRows}
+        onSelectedRowKeysChange={pullFromPostedPurchaseReceiptQuery.handleSelectedRowKeysChange}
+        isRowDisabled={pullFromPostedPurchaseReceiptQuery.isRowDisabled}
+        searchDraft={pullFromPostedPurchaseReceiptQuery.searchDraft}
+        onSearchDraftChange={pullFromPostedPurchaseReceiptQuery.setSearchDraft}
+        onSearchApply={pullFromPostedPurchaseReceiptQuery.handleSearchApply}
+        onSearchClear={pullFromPostedPurchaseReceiptQuery.handleSearchClear}
+        appliedKeyword={pullFromPostedPurchaseReceiptQuery.appliedKeyword}
+        searchPlaceholder={t('app.kuaizhizao.quality.incoming.form.receiptCode')}
+        getRowLabel={(row) => row.receipt_code || String(row.id)}
+        okText={t('app.kuaizhizao.quality.incoming.pull.ok')}
+        page={pullFromPostedPurchaseReceiptQuery.page}
+        pageSize={pullFromPostedPurchaseReceiptQuery.pageSize}
+        total={pullFromPostedPurchaseReceiptQuery.total}
+        onPageChange={pullFromPostedPurchaseReceiptQuery.handlePageChange}
+        scopeOptions={pullFromPostedPurchaseReceiptQuery.scopeOptions}
+        scope={pullFromPostedPurchaseReceiptQuery.scope}
+        onScopeChange={pullFromPostedPurchaseReceiptQuery.handleScopeChange}
+      />
+
+      <Modal
+        title={t('app.kuaizhizao.quality.incoming.modal.selectInspectionPlanTitle')}
+        open={postedRecheckPlanModalOpen}
+        destroyOnHidden
+        zIndex={postedRecheckPlanModalZIndex}
+        confirmLoading={postedRecheckCreating}
+        okText={t('app.kuaizhizao.quality.incoming.pull.ok')}
+        cancelText={t('common.cancel')}
+        onCancel={() => {
+          setPostedRecheckPlanModalOpen(false);
+          setPostedRecheckReceiptIds([]);
+          setPostedRecheckPlanId(null);
+          setQuickInspectionPlanModalOpen(false);
+        }}
+        onOk={() => void handlePostedRecheckPlanConfirm()}
+        okButtonProps={{ disabled: postedRecheckPlanLoading || !postedRecheckPlanId }}
+      >
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+          title={t('app.kuaizhizao.quality.incoming.modal.selectInspectionPlanHint')}
+        />
+        <div style={{ marginBottom: 8 }}>{t('app.kuaizhizao.quality.incoming.form.inspectionPlan')}</div>
+        <Select
+          style={{ width: '100%' }}
+          showSearch
+          optionFilterProp="label"
+          loading={postedRecheckPlanLoading}
+          placeholder={t('app.kuaizhizao.quality.incoming.form.selectInspectionPlan')}
+          options={postedRecheckPlanOptions}
+          value={postedRecheckPlanId ?? undefined}
+          onChange={(v) => setPostedRecheckPlanId(v == null ? null : Number(v))}
+          notFoundContent={
+            postedRecheckPlanLoading
+              ? undefined
+              : t('app.kuaizhizao.quality.incoming.messages.noInspectionPlan')
+          }
+        />
+        {inspectionPlanPerms.canCreate ? (
+          <div style={{ marginTop: 8 }}>
+            <Button
+              type="link"
+              size="small"
+              icon={<PlusOutlined />}
+              style={{ paddingInline: 0 }}
+              onClick={() => setQuickInspectionPlanModalOpen(true)}
+            >
+              {t('app.kuaizhizao.quality.incoming.quickPlan.create')}
+            </Button>
+          </div>
+        ) : null}
+      </Modal>
+
+      <InspectionPlanFormModal
+        open={quickInspectionPlanModalOpen}
+        zIndex={quickInspectionPlanModalZIndex}
+        title={t('app.kuaizhizao.quality.incoming.quickPlan.modalTitle')}
+        defaultPlanType="incoming"
+        lockPlanType
+        requireSteps
+        onClose={() => setQuickInspectionPlanModalOpen(false)}
+        onSuccess={handleQuickInspectionPlanSuccess}
       />
 
       <Modal

@@ -68,15 +68,15 @@ class CustomerFollowUpResponse(CustomerFollowUpBase):
     updated_at: datetime = Field(..., description="更新时间")
     created_by: Optional[int] = Field(None, description="创建人ID")
     updated_by: Optional[int] = Field(None, description="更新人ID")
-    created_by_name: Optional[str] = Field(None, description="创建人显示名")
+    created_by_name: Optional[str] = Field(None, description="跟进人员显示名")
     updated_by_name: Optional[str] = Field(None, description="更新人显示名")
+    follow_up_count: int = Field(0, description="该客户已跟进次数（未删除记录合计）")
 
 
 class CustomerFollowUpListResponse(CustomerFollowUpResponse):
     """列表项"""
 
     pass
-
 
 class CustomerFollowUpListEnvelope(BaseSchema):
     """分页列表"""

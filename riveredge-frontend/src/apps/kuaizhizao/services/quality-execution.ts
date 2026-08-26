@@ -165,6 +165,10 @@ export const qualityApi = {
       limit?: number;
       keyword?: string;
       receipt_code?: string;
+      /** 采购入库单状态，如「已入库」用于补检入口 */
+      status?: string;
+      /** 已入库补检：纳入未配置来料检验的物料 */
+      include_unset_iqc?: boolean;
     }) =>
       apiRequest<{ data: Array<Record<string, unknown>>; total: number; success: boolean }>(
         '/apps/kuaizhizao/incoming-inspections/pull-candidates/purchase-receipts',
@@ -188,11 +192,29 @@ export const qualityApi = {
       apiRequest(`/apps/kuaizhizao/incoming-inspections/from-customer-material/${registrationId}/pull-preview`, {
         method: 'GET',
       }),
-    createFromPurchaseReceipt: async (purchaseReceiptId: string, selectedItemIds?: number[]) =>
-      apiRequest(`/apps/kuaizhizao/incoming-inspections/from-purchase-receipt/${purchaseReceiptId}`, {
+    createFromPurchaseReceipt: async (
+      purchaseReceiptId: string,
+      options?: {
+        selectedItemIds?: number[];
+        includeUnsetIqc?: boolean;
+        inspectionPlanId?: number;
+      },
+    ) => {
+      const payload: Record<string, unknown> = {};
+      if (options?.selectedItemIds?.length) {
+        payload.selected_item_ids = options.selectedItemIds;
+      }
+      if (options?.includeUnsetIqc) {
+        payload.include_unset_iqc = true;
+      }
+      if (options?.inspectionPlanId != null && options.inspectionPlanId > 0) {
+        payload.inspection_plan_id = options.inspectionPlanId;
+      }
+      return apiRequest(`/apps/kuaizhizao/incoming-inspections/from-purchase-receipt/${purchaseReceiptId}`, {
         method: 'POST',
-        data: selectedItemIds?.length ? { selected_item_ids: selectedItemIds } : undefined,
-      }),
+        data: Object.keys(payload).length ? payload : undefined,
+      });
+    },
     ensureForPurchaseReceipt: async (purchaseReceiptId: string) =>
       apiRequest<EnsureIqcForPurchaseReceiptResult>(
         `/apps/kuaizhizao/incoming-inspections/ensure-for-purchase-receipt/${purchaseReceiptId}`,

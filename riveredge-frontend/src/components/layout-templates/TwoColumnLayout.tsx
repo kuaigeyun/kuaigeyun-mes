@@ -403,7 +403,8 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
           borderTop: `1px solid ${token.colorBorder}`,
           borderBottom: `1px solid ${token.colorBorder}`,
           borderLeft: `1px solid ${token.colorBorder}`,
-          borderRight: collapsed ? 'none' : `1px solid ${token.colorBorder}`,
+          borderRight:
+            collapsed || resizable ? 'none' : `1px solid ${token.colorBorder}`,
           backgroundColor: TWO_COLUMN_LEFT_PANEL_BACKGROUND,
           display: 'flex',
           flexDirection: 'column',

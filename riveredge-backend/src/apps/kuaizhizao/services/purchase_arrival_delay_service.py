@@ -78,6 +78,7 @@ class PurchaseArrivalDelayService(AppBaseService[PurchaseArrivalDelayReport]):
                 DocumentStatus.DRAFT.value,
                 DocumentStatus.PENDING_REVIEW.value,
                 DocumentStatus.AUDITED.value,
+                "change_generated",
                 OrderChangeApplyStatus.APPLIED.value,
             ],
         ).order_by("-id").first()
@@ -170,18 +171,19 @@ class PurchaseArrivalDelayService(AppBaseService[PurchaseArrivalDelayReport]):
             tenant_id, "purchase_arrival_delay"
         )
         user_info = await self.get_user_info(operator_id)
-        if audit_required:
-            doc.status = DocumentStatus.PENDING_REVIEW.value
-            doc.review_status = ReviewStatus.PENDING.value
-        else:
-            doc.status = DocumentStatus.AUDITED.value
-            doc.review_status = ReviewStatus.APPROVED.value
-        doc.updated_by = operator_id
-        doc.updated_by_name = user_info["name"]
-        await doc.save()
+        async with in_transaction():
+            if audit_required:
+                doc.status = DocumentStatus.PENDING_REVIEW.value
+                doc.review_status = ReviewStatus.PENDING.value
+            else:
+                doc.status = DocumentStatus.AUDITED.value
+                doc.review_status = ReviewStatus.APPROVED.value
+            doc.updated_by = operator_id
+            doc.updated_by_name = user_info["name"]
+            await doc.save()
 
-        if not audit_required:
-            await self._on_approved(tenant_id, doc, operator_id)
+            if not audit_required:
+                await self._on_approved(tenant_id, doc, operator_id)
         return PurchaseArrivalDelayReportResponse.model_validate(await self._get_or_raise(tenant_id, report_id))
 
     async def approve(
@@ -196,22 +198,23 @@ class PurchaseArrivalDelayService(AppBaseService[PurchaseArrivalDelayReport]):
             raise BusinessLogicError("仅待审核可审批")
 
         user_info = await self.get_user_info(operator_id)
-        doc.reviewer_id = operator_id
-        doc.reviewer_name = user_info["name"]
-        doc.review_time = resolve_business_datetime()
-        doc.review_remarks = body.review_remarks
-        if body.approved:
-            doc.status = DocumentStatus.AUDITED.value
-            doc.review_status = ReviewStatus.APPROVED.value
-        else:
-            doc.status = DocumentStatus.REJECTED.value
-            doc.review_status = ReviewStatus.REJECTED.value
-        doc.updated_by = operator_id
-        doc.updated_by_name = user_info["name"]
-        await doc.save()
+        async with in_transaction():
+            doc.reviewer_id = operator_id
+            doc.reviewer_name = user_info["name"]
+            doc.review_time = resolve_business_datetime()
+            doc.review_remarks = body.review_remarks
+            if body.approved:
+                doc.status = DocumentStatus.AUDITED.value
+                doc.review_status = ReviewStatus.APPROVED.value
+            else:
+                doc.status = DocumentStatus.REJECTED.value
+                doc.review_status = ReviewStatus.REJECTED.value
+            doc.updated_by = operator_id
+            doc.updated_by_name = user_info["name"]
+            await doc.save()
 
-        if body.approved:
-            await self._on_approved(tenant_id, doc, operator_id)
+            if body.approved:
+                await self._on_approved(tenant_id, doc, operator_id)
         return PurchaseArrivalDelayReportResponse.model_validate(await self._get_or_raise(tenant_id, report_id))
 
     async def _on_approved(

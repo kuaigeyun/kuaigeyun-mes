@@ -77,6 +77,12 @@ from apps.kuaizhizao.utils.inventory_helper import (
     batch_get_material_inventory,
     batch_list_open_supply_receipts_by_date,
 )
+from apps.kuaizhizao.utils.mrp_quantity import (
+    mrp_net_requirement,
+    mrp_qty,
+    mrp_qty_float,
+    mrp_suggested_integer,
+)
 from core.services.business.code_generation_service import CodeGenerationService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from infra.services.business_config_service import BusinessConfigService
@@ -404,7 +410,7 @@ def _apply_suggested_lot_rules(
             q = units * mult
     if max_q is not None and q > max_q:
         q = max_q
-    return q
+    return mrp_suggested_integer(q)
 
 
 def _apply_production_waste_to_qty(raw: Decimal, waste_rate: Any) -> Decimal:
@@ -781,21 +787,21 @@ def _compute_supply_and_net(
     on_hand = _safe_float(inventory_info.get("on_hand"))
     avail_col = _safe_float(inventory_info.get("available_quantity"))
 
-    supply = available
+    supply = mrp_qty_float(available)
     if include_in_transit:
-        supply += in_transit
+        supply = mrp_qty_float(mrp_qty(supply) + mrp_qty(in_transit))
     if include_safety:
-        supply -= safety_stock
+        supply = mrp_qty_float(mrp_qty(supply) - mrp_qty(safety_stock))
 
-    net_base = max(0.0, gross_requirement - supply)
-    if include_reorder and reorder_point > 0 and supply < reorder_point:
-        net_reorder = max(0.0, reorder_point - supply)
+    net_base = mrp_net_requirement(gross_requirement, supply)
+    if include_reorder and reorder_point > 0 and mrp_qty(supply) < mrp_qty(reorder_point):
+        net_reorder = mrp_net_requirement(reorder_point, supply)
         net_requirement = max(net_base, net_reorder)
     else:
         net_requirement = net_base
 
-    def _fmt(n: float) -> str:
-        s = f"{float(n):.4f}".rstrip("0").rstrip(".")
+    def _fmt(n: Any) -> str:
+        s = f"{mrp_qty_float(n):.2f}".rstrip("0").rstrip(".")
         return s if s else "0"
 
     lines_zh: List[str] = []
@@ -831,12 +837,12 @@ def _compute_supply_and_net(
         "in_transit_quantity": in_transit,
         "safety_stock": float(safety_stock),
         "reorder_point": float(reorder_point),
-        "supply": supply,
-        "gross_requirement": float(gross_requirement),
-        "net_requirement": float(net_requirement),
+        "supply": mrp_qty_float(supply),
+        "gross_requirement": mrp_qty_float(gross_requirement),
+        "net_requirement": mrp_qty_float(net_requirement),
         "lines_zh": lines_zh,
     }
-    return supply, net_requirement, calc_detail
+    return mrp_qty_float(supply), mrp_qty_float(net_requirement), calc_detail
 
 
 DEMAND_COMPUTATION_SORTABLE_FIELDS = frozenset({
@@ -2231,11 +2237,11 @@ class DemandComputationService(AppBaseService):
                         "material_unit": item.material_unit or "",
                         "delivery_date": _preview_date_iso(item.delivery_date),
                         "planned_date": _preview_planned_date_iso(item),
-                        "required_quantity": float(item.required_quantity or 0),
-                        "available_inventory": float(item.available_inventory or 0),
-                        "net_requirement": float(item.net_requirement or 0),
-                        "suggested_work_order_quantity": float(item.suggested_work_order_quantity or 0),
-                        "suggested_purchase_order_quantity": float(item.suggested_purchase_order_quantity or 0),
+                        "required_quantity": mrp_qty_float(item.required_quantity or 0),
+                        "available_inventory": mrp_qty_float(item.available_inventory or 0),
+                        "net_requirement": mrp_qty_float(item.net_requirement or 0),
+                        "suggested_work_order_quantity": mrp_qty_float(item.suggested_work_order_quantity or 0),
+                        "suggested_purchase_order_quantity": mrp_qty_float(item.suggested_purchase_order_quantity or 0),
                         "material_source_type": item.material_source_type,
                         "detail_results": item.detail_results,
                     })
@@ -2781,7 +2787,7 @@ class DemandComputationService(AppBaseService):
         def _add_gross(mid: int, due: date, qty: float, **meta_kw: Any) -> None:
             if qty <= 0:
                 return
-            gross_by_material[mid][due] += float(qty)
+            gross_by_material[mid][due] += mrp_qty_float(qty)
             merge_demand_meta(_meta(mid), **meta_kw)
 
         # 1) 顶层需求 → 分日毛需求（SO / 预测分开累计）
@@ -3012,9 +3018,9 @@ class DemandComputationService(AppBaseService):
                     "total_quantity": _safe_float(inv_row.get("on_hand")),
                 }
                 if netting_params_for_supply.get("include_reserved", True):
-                    beginning = _safe_float(inventory_info.get("available_quantity"))
+                    beginning = mrp_qty_float(inventory_info.get("available_quantity"))
                 else:
-                    beginning = _safe_float(
+                    beginning = mrp_qty_float(
                         inventory_info.get("on_hand", inventory_info.get("available_quantity"))
                     )
 
@@ -3081,11 +3087,11 @@ class DemandComputationService(AppBaseService):
                     open_supplies=open_supplies_for_compare,
                 )
 
-                planned_qty = float(tp["planned_order_qty"] or 0)
-                gross_requirement = float(tp["gross_requirement"] or 0)
-                net_requirement = float(tp["net_requirement"] or 0)
-                in_transit_qty = sum(float(r.get("qty") or 0) for r in receipt_rows)
-                reserved_qty = _safe_float(inventory_info.get("reserved_quantity"))
+                planned_qty = mrp_qty_float(tp["planned_order_qty"] or 0)
+                gross_requirement = mrp_qty_float(tp["gross_requirement"] or 0)
+                net_requirement = mrp_qty_float(tp["net_requirement"] or 0)
+                in_transit_qty = mrp_qty_float(sum(float(r.get("qty") or 0) for r in receipt_rows))
+                reserved_qty = mrp_qty_float(inventory_info.get("reserved_quantity"))
                 available_inventory = beginning
 
                 delivery_date = tp.get("earliest_demand_date")
@@ -3292,10 +3298,10 @@ class DemandComputationService(AppBaseService):
                 material_name=pending["material_name"],
                 material_spec=pending["material_spec"],
                 material_unit=pending["material_unit"],
-                required_quantity=Decimal(str(pending["gross_requirement"])),
-                available_inventory=Decimal(str(pending["available_inventory"])),
-                net_requirement=Decimal(str(pending["net_requirement"])),
-                gross_requirement=Decimal(str(pending["gross_requirement"])),
+                required_quantity=mrp_qty(pending["gross_requirement"]),
+                available_inventory=mrp_qty(pending["available_inventory"]),
+                net_requirement=mrp_qty(pending["net_requirement"]),
+                gross_requirement=mrp_qty(pending["gross_requirement"]),
                 safety_stock=Decimal(str(pending["safety_stock"]))
                 if netting_params_for_supply.get("include_safety_stock", True)
                 else None,

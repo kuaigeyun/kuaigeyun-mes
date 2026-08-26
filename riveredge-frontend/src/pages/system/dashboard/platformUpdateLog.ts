@@ -33,6 +33,30 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
   {
+    id: 'demand-computation-decimal-precision-fix',
+    date: '2026-08-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.demand-computation-decimal-precision-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.demand-computation-decimal-precision-fix.description',
+  },
+  {
+    id: 'purchase-order-change-arrival-warning-fixes',
+    date: '2026-08-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-order-change-arrival-warning-fixes.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-order-change-arrival-warning-fixes.description',
+  },
+  {
+    id: 'incoming-inspection-posted-receipt-recheck',
+    date: '2026-08-26',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.incoming-inspection-posted-receipt-recheck.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.incoming-inspection-posted-receipt-recheck.description',
+  },
+  {
     id: 'mrp-readiness-source-validation-fix',
     date: '2026-08-26',
     type: 'fix',

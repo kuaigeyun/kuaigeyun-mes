@@ -15,7 +15,9 @@ from tortoise.exceptions import IntegrityError
 
 from core.models.api import API
 from core.models.integration_config import IntegrationConfig
+from core.models.resource_category import RESOURCE_TYPE_API
 from core.schemas.api import APICreate, APIUpdate, APITestRequest, APIResponse
+from core.services.resource.resource_category_service import ResourceCategoryService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.config.infra_config import infra_settings as settings
 from core.utils.timezone_utils import resolve_business_datetime
@@ -60,6 +62,15 @@ class APIService:
             # 未 prefetch 时仅回显 uuid 不可用，调用方应 fetch_related
             pass
 
+        category_uuid = None
+        category_name = None
+        category = getattr(api, "category", None)
+        if category is not None:
+            category_uuid = UUID(str(category.uuid))
+            category_name = category.name
+        elif api.category_id:
+            pass
+
         payload = {
             key: getattr(api, key)
             for key in (
@@ -84,6 +95,8 @@ class APIService:
         payload["connection_uuid"] = connection_uuid
         payload["connection_name"] = connection_name
         payload["connection_type"] = connection_type
+        payload["category_uuid"] = category_uuid
+        payload["category_name"] = category_name
         return APIResponse(**payload)
 
     async def create_api(
@@ -114,7 +127,7 @@ class APIService:
         if existing_api:
             raise ValidationError(f"接口代码 '{api_data.code}' 已存在")
         
-        create_data = api_data.model_dump(exclude={"connection_uuid"})
+        create_data = api_data.model_dump(exclude={"connection_uuid", "category_uuid"})
         integration_config_id = None
         if api_data.connection_uuid:
             integration_config = await self._resolve_business_connector(
@@ -123,16 +136,165 @@ class APIService:
             )
             integration_config_id = integration_config.id
 
+        category_id = None
+        if api_data.category_uuid:
+            category_id = await ResourceCategoryService().resolve_category_id(
+                tenant_id,
+                RESOURCE_TYPE_API,
+                api_data.category_uuid,
+            )
+
         # 创建接口
         api = await API.create(
             tenant_id=tenant_id,
             integration_config_id=integration_config_id,
+            category_id=category_id,
             **create_data,
         )
         
-        if integration_config_id:
-            await api.fetch_related("integration_config")
+        if integration_config_id or category_id:
+            await api.fetch_related("integration_config", "category")
         return api
+
+    async def ensure_connector_api_presets(
+        self,
+        tenant_id: int,
+        connection_uuid: UUID,
+        *,
+        category_id: Optional[int] = None,
+        preset_code_suffixes: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """
+        按连接器类型加载常用接口预设（已存在 code 则跳过）。
+
+        当前支持：kingdee_galaxy
+        """
+        integration = await self._resolve_business_connector(tenant_id, connection_uuid)
+        conn_type = str(integration.type or "").strip()
+        if conn_type != "kingdee_galaxy":
+            raise ValidationError("当前仅支持金蝶云星空连接器加载常用接口")
+
+        from core.services.integration.kingdee_galaxy_api_presets import (
+            list_kingdee_galaxy_api_presets,
+            resolve_preset_api_code,
+        )
+
+        allowed_suffixes: Optional[set[str]] = None
+        if preset_code_suffixes is not None:
+            allowed_suffixes = {str(suffix).strip() for suffix in preset_code_suffixes if str(suffix).strip()}
+            if not allowed_suffixes:
+                raise ValidationError("请至少选择一个接口")
+
+        created: List[str] = []
+        skipped: List[str] = []
+        categorized: List[str] = []
+        for preset in list_kingdee_galaxy_api_presets():
+            code_suffix = str(preset["code_suffix"] or "").strip()
+            if allowed_suffixes is not None and code_suffix not in allowed_suffixes:
+                continue
+            code = resolve_preset_api_code(integration.code, preset["code_suffix"])
+            existing = await API.filter(
+                tenant_id=tenant_id,
+                code=code,
+                deleted_at__isnull=True,
+            ).first()
+            if existing:
+                if category_id is not None and existing.category_id is None:
+                    existing.category_id = category_id
+                    await existing.save(update_fields=["category_id", "updated_at"])
+                    categorized.append(code)
+                skipped.append(code)
+                continue
+            api = await API.create(
+                tenant_id=tenant_id,
+                name=preset["name"],
+                code=code,
+                description=preset["description"],
+                path=preset["path"],
+                method=preset["method"],
+                request_headers={"Content-Type": "application/json"},
+                request_params=None,
+                request_body=preset["request_body"],
+                response_format=None,
+                response_example=None,
+                is_active=True,
+                is_system=False,
+                integration_config_id=integration.id,
+                category_id=category_id,
+            )
+            created.append(api.code)
+
+        return {
+            "connection_uuid": str(integration.uuid),
+            "connection_code": integration.code,
+            "connection_type": conn_type,
+            "created_count": len(created),
+            "skipped_count": len(skipped),
+            "categorized_count": len(categorized),
+            "created_codes": created,
+            "skipped_codes": skipped,
+            "categorized_codes": categorized,
+        }
+
+    async def list_api_library(self) -> Dict[str, Any]:
+        """获取系统接口库目录。"""
+        from core.services.application.api_library_catalog import list_api_library_catalog
+
+        return {"items": list_api_library_catalog()}
+
+    async def install_api_library_pack(
+        self,
+        tenant_id: int,
+        pack_id: str,
+        connection_uuid: UUID,
+        item_keys: List[str],
+    ) -> Dict[str, Any]:
+        """将接口库包安装到当前租户。"""
+        from core.services.application.api_library_catalog import (
+            get_api_library_pack,
+            list_api_library_pack_item_keys,
+        )
+
+        pack = get_api_library_pack(pack_id)
+        if not pack:
+            raise ValidationError(f"接口库包不存在: {pack_id}")
+
+        normalized_keys = [str(key).strip() for key in item_keys if str(key).strip()]
+        if not normalized_keys:
+            raise ValidationError("请至少选择一个接口")
+
+        valid_keys = set(list_api_library_pack_item_keys(pack))
+        invalid_keys = sorted(set(normalized_keys) - valid_keys)
+        if invalid_keys:
+            raise ValidationError(f"接口条目不存在: {', '.join(invalid_keys)}")
+
+        integration = await self._resolve_business_connector(tenant_id, connection_uuid)
+        conn_type = str(integration.type or "").strip()
+        if conn_type != pack["connector_type"]:
+            raise ValidationError(
+                f"接口包「{pack['name']}」需要 {pack['connector_type']} 类型连接器"
+            )
+
+        category = await ResourceCategoryService().ensure_category_by_code(
+            tenant_id,
+            RESOURCE_TYPE_API,
+            code=pack["category_code"],
+            name=pack["category_name"],
+            description=pack["category_description"],
+        )
+
+        preset_result = await self.ensure_connector_api_presets(
+            tenant_id,
+            connection_uuid,
+            category_id=category.id,
+            preset_code_suffixes=normalized_keys,
+        )
+
+        return {
+            "pack_id": pack["pack_id"],
+            "category_uuid": str(category.uuid),
+            **preset_result,
+        }
     
     async def get_api_by_uuid(
         self,
@@ -173,6 +335,8 @@ class APIService:
         is_active: Optional[bool] = None,
         sort_by: Optional[str] = None,
         sort_order: Optional[str] = None,
+        category_uuid: Optional[UUID] = None,
+        no_category: bool = False,
     ) -> tuple[List[API], int]:
         """
         获取接口列表
@@ -209,6 +373,16 @@ class APIService:
         # 启用状态筛选
         if is_active is not None:
             query = query.filter(is_active=is_active)
+
+        if no_category:
+            query = query.filter(category_id__isnull=True)
+        elif category_uuid:
+            category_id = await ResourceCategoryService().resolve_category_id(
+                tenant_id,
+                RESOURCE_TYPE_API,
+                category_uuid,
+            )
+            query = query.filter(category_id=category_id)
         
         # 优化分页查询：先查询总数，再查询数据
         total = await query.count()
@@ -236,6 +410,7 @@ class APIService:
             order_clause = ("-created_at", "id")
         apis = await query.order_by(*order_clause).offset(offset).limit(page_size).prefetch_related(
             "integration_config",
+            "category",
         ).all()
 
         return apis, total
@@ -282,7 +457,7 @@ class APIService:
         old_is_active = api.is_active
         
         # 更新接口
-        update_data = api_data.model_dump(exclude_unset=True, exclude={"connection_uuid"})
+        update_data = api_data.model_dump(exclude_unset=True, exclude={"connection_uuid", "category_uuid"})
         for key, value in update_data.items():
             setattr(api, key, value)
 
@@ -295,10 +470,20 @@ class APIService:
                     api_data.connection_uuid,
                 )
                 api.integration_config_id = integration_config.id
+
+        if "category_uuid" in api_data.model_fields_set:
+            if api_data.category_uuid is None:
+                api.category_id = None
+            else:
+                api.category_id = await ResourceCategoryService().resolve_category_id(
+                    tenant_id,
+                    RESOURCE_TYPE_API,
+                    api_data.category_uuid,
+                )
         
         await api.save()
         
-        await api.fetch_related("integration_config")
+        await api.fetch_related("integration_config", "category")
         
         # 如果接口代码、路径、方法或状态变更，通知数据集管理（异步，不阻塞主流程）
         code_changed = old_code != api.code
@@ -453,6 +638,27 @@ class APIService:
                 request_headers = connector_headers
                 if test_request.headers:
                     request_headers.update(test_request.headers)
+                if str(api.integration_config.type or "").strip() == "kingdee_galaxy":
+                    from core.services.integration.kingdee_galaxy_service import (
+                        apply_kingdee_galaxy_session_headers,
+                        login_kingdee_galaxy_session,
+                    )
+
+                    try:
+                        session = await login_kingdee_galaxy_session(
+                            api.integration_config.get_config()
+                        )
+                        request_headers = apply_kingdee_galaxy_session_headers(
+                            request_headers,
+                            session_id=str(session["session_id"]),
+                        )
+                    except ValueError as exc:
+                        return {
+                            "status_code": 0,
+                            "headers": {},
+                            "body": {"error": str(exc)},
+                            "elapsed_time": 0,
+                        }
             else:
                 url = api.path
                 if not url.startswith("http://") and not url.startswith("https://"):

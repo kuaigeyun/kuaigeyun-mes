@@ -5,7 +5,7 @@
  * 支持接口的 CRUD 操作和接口测试功能。
  */
 
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   ActionType,
@@ -25,9 +25,7 @@ import {
   Button,
   Tag,
   Space,
-  Drawer,
   Input,
-  Typography,
 } from 'antd'
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment'
 import { renderSystemActiveTag, renderSystemTypeMarker } from '../../utils/systemListPresentation'
@@ -35,13 +33,17 @@ import {
   EditOutlined,
   DeleteOutlined,
   EyeOutlined,
-  ThunderboltOutlined,
+  DatabaseOutlined,
 } from '@ant-design/icons'
 import { UniTable } from '../../../../components/uni-table'
 import {
-  ListPageTemplate,
+  UniTableStackedPrimaryCell,
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+} from '../../../../components/uni-table/stackedPrimaryColumn'
+import {
   FormModalTemplate,
   MODAL_CONFIG,
+  TwoColumnLayout,
 } from '../../../../components/layout-templates'
 import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer'
 import { getApiErrorMessage } from '../../../../utils/errorHandler'
@@ -51,12 +53,9 @@ import {
   createAPI,
   updateAPI,
   deleteAPI,
-  testAPI,
   API,
   CreateAPIData,
   UpdateAPIData,
-  APITestRequest,
-  APITestResponse,
 } from '../../../../services/apiManagement'
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts'
 import { extractProTableSort, mergeListKeyword, mapApiListSortField } from '../../../../utils/tableQueryKey'
@@ -69,9 +68,10 @@ import {
   getBusinessSystemConnectionsForApi,
   type DataConnectionGroupOption,
 } from '../../../../services/integrationConfig';
-
-const { TextArea } = Input
-const { Text, Paragraph } = Typography
+import { useResourceCategoryPanel } from '../../shared/useResourceCategoryPanel';
+import { RESOURCE_CATEGORY_UNCATEGORIZED_KEY, type ResourceCategoryListFilter } from '../../../../services/resourceCategory';
+import { ApiLibraryModal } from '../ApiLibraryModal';
+import { ApiTestDrawer } from '../ApiTestDrawer';
 
 /** 将对象转为键值对数组，用于表单 */
 const objectToKeyValueList = (
@@ -123,10 +123,40 @@ const APIListPage: React.FC = () => {
   const { t } = useTranslation()
   const { message: messageApi } = App.useApp()
   const connectionPerms = useResourcePermissions('system:application-connection')
+  const apiPerms = useResourcePermissions('system:api')
   const actionRef = useRef<ActionType>(null)
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
 
+  const reloadList = useCallback(() => {
+    actionRef.current?.reload()
+  }, [])
+
+  const categoryListFilterRef = useRef<ResourceCategoryListFilter>({})
+
+  const handleCategorySelectionChange = useCallback(
+    (nextFilter: ResourceCategoryListFilter) => {
+      categoryListFilterRef.current = nextFilter
+      reloadList()
+    },
+    [reloadList],
+  )
+
+  const {
+    leftPanel: categoryLeftPanel,
+    listFilter: categoryListFilter,
+    selectedCategoryKey,
+    categorySelectOptions,
+    reloadCategories,
+    categoryFormModal,
+  } = useResourceCategoryPanel({
+    resourceType: 'api',
+    onSelectionChange: handleCategorySelectionChange,
+  })
+
+  categoryListFilterRef.current = categoryListFilter
+
   // Modal 相关状态（创建/编辑接口）
+  const [libraryModalOpen, setLibraryModalOpen] = useState(false)
   const [modalVisible, setModalVisible] = useState(false)
   const [isEdit, setIsEdit] = useState(false)
   const [currentApiUuid, setCurrentApiUuid] = useState<string | null>(null)
@@ -145,9 +175,6 @@ const APIListPage: React.FC = () => {
   // 测试接口状态
   const [testDrawerVisible, setTestDrawerVisible] = useState(false)
   const [testingApiUuid, setTestingApiUuid] = useState<string | null>(null)
-  const [testResult, setTestResult] = useState<APITestResponse | null>(null)
-  const [testLoading, setTestLoading] = useState(false)
-  const [testRequestJson, setTestRequestJson] = useState<string>('{}')
   const [connectionGroups, setConnectionGroups] = useState<DataConnectionGroupOption[]>([])
 
   useEffect(() => {
@@ -165,10 +192,15 @@ const APIListPage: React.FC = () => {
   const handleCreate = () => {
     setIsEdit(false)
     setCurrentApiUuid(null)
+    const presetCategoryUuid =
+      selectedCategoryKey !== 'all' && selectedCategoryKey !== RESOURCE_CATEGORY_UNCATEGORIZED_KEY
+        ? selectedCategoryKey
+        : undefined
     setFormInitialValues({
       method: 'GET',
       is_active: true,
       is_system: false,
+      category_uuid: presetCategoryUuid,
       request_headers: [],
       request_params: [],
       request_body: [],
@@ -193,6 +225,7 @@ const APIListPage: React.FC = () => {
         code: detail.code,
         description: detail.description,
         connection_uuid: detail.connection_uuid || undefined,
+        category_uuid: detail.category_uuid || undefined,
         path: detail.path,
         method: detail.method,
         is_active: detail.is_active,
@@ -377,6 +410,7 @@ const APIListPage: React.FC = () => {
       await deleteAPI(record.uuid)
       messageApi.success(t('common.deleteSuccess'))
       actionRef.current?.reload()
+      void reloadCategories()
     } catch (error: any) {
       messageApi.error(error.message || t('common.deleteFailed'))
     }
@@ -404,6 +438,7 @@ const APIListPage: React.FC = () => {
       }
       setSelectedRowKeys([])
       actionRef.current?.reload()
+      void reloadCategories()
     } catch (error: any) {
       messageApi.error(error.message || t('pages.system.apis.batchDeleteFailed'))
     }
@@ -412,48 +447,9 @@ const APIListPage: React.FC = () => {
   /**
    * 处理测试接口
    */
-  const handleTest = async (record: API) => {
-    try {
-      setTestingApiUuid(record.uuid)
-      setTestDrawerVisible(true)
-      setTestRequestJson('{}')
-      setTestResult(null)
-    } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.apis.openTestFailed'))
-    }
-  }
-
-  /**
-   * 执行接口测试
-   */
-  const handleExecuteTest = async () => {
-    if (!testingApiUuid) return
-
-    try {
-      setTestLoading(true)
-
-      // 解析测试请求 JSON
-      let testRequest: APITestRequest = {}
-      try {
-        testRequest = JSON.parse(testRequestJson)
-      } catch (e) {
-        messageApi.error(t('pages.system.apis.testRequestJsonInvalid'))
-        return
-      }
-
-      const result = await testAPI(testingApiUuid, testRequest)
-      setTestResult(result)
-
-      if (result.status_code >= 200 && result.status_code < 300) {
-        messageApi.success(t('pages.system.apis.testSuccess'))
-      } else {
-        messageApi.warning(t('pages.system.apis.testCompleteStatus', { code: result.status_code }))
-      }
-    } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.apis.testFailed'))
-    } finally {
-      setTestLoading(false)
-    }
+  const handleTest = (record: API) => {
+    setTestingApiUuid(record.uuid)
+    setTestDrawerVisible(true)
   }
 
   /**
@@ -476,6 +472,7 @@ const APIListPage: React.FC = () => {
           code: values.code,
           description: values.description,
           connection_uuid: values.connection_uuid ?? null,
+          category_uuid: values.category_uuid ?? null,
           path: values.path,
           method: values.method,
           request_headers: requestHeaders,
@@ -492,6 +489,7 @@ const APIListPage: React.FC = () => {
           code: values.code,
           description: values.description,
           connection_uuid: values.connection_uuid || undefined,
+          category_uuid: values.category_uuid || undefined,
           path: values.path,
           method: values.method,
           request_headers: requestHeaders,
@@ -508,6 +506,7 @@ const APIListPage: React.FC = () => {
       setModalVisible(false)
       setFormInitialValues(undefined)
       actionRef.current?.reload()
+      void reloadCategories()
     } catch (error: any) {
       messageApi.error(error.message || t('common.operationFailed'))
       throw error
@@ -522,17 +521,15 @@ const APIListPage: React.FC = () => {
   const columns = useMemo<ProColumns<API>[]>(() => alignProColumns([
     {
       title: t('pages.system.apis.columnName'),
+      key: 'name_code_stacked',
       dataIndex: 'name',
-      width: 200,
       fixed: 'left',
-    },
-    {
-      title: t('pages.system.apis.columnCode'),
-      dataIndex: 'code',
-      width: 150,
-      minWidth: 150,
-      uniTableKeepWidth: true,
-      resizable: false,
+      hideInSearch: true,
+      sorter: true,
+      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+      render: (_, record) => (
+        <UniTableStackedPrimaryCell primary={record.name} secondary={record.code} />
+      ),
     },
     {
       title: t('pages.system.apis.columnMethod'),
@@ -559,12 +556,6 @@ const APIListPage: React.FC = () => {
         }
         return renderSystemTypeMarker(record.method, methodColors[record.method] || 'default')
       },
-    },
-    {
-      title: t('pages.system.apis.columnPath'),
-      dataIndex: 'path',
-      ellipsis: true,
-      width: 300,
     },
     {
       title: t('pages.system.apis.columnConnection'),
@@ -657,21 +648,28 @@ const APIListPage: React.FC = () => {
 
   return (
     <>
-      <ListPageTemplate>
-        <UniTable<API>
+      <TwoColumnLayout
+        style={{ height: '100%' }}
+        leftPanel={categoryLeftPanel}
+        rightPanel={{
+          content: (
+            <UniTable<API>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('system.apis')}
-          columnPersistenceId="pages.system.apis.list-v2"
+          columnPersistenceId="pages.system.apis.list-v4"
+          tanstackQuery={{ queryKeyPrefix: ['pages.system.apis.list', selectedCategoryKey] }}
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {
             const { sortBy, sortOrder } = extractProTableSort(sort)
+            const categoryFilter = categoryListFilterRef.current
             // 处理搜索参数
             const apiParams: any = {
               page: params.current || 1,
               page_size: params.pageSize || 20,
               sort_by: mapApiListSortField(sortBy),
               sort_order: sortOrder,
+              ...categoryFilter,
             }
 
             const kw = mergeListKeyword(searchFormValues, 'search')
@@ -720,6 +718,19 @@ const APIListPage: React.FC = () => {
           deleteButtonText={t('common.batchDelete')}
           deleteConfirmTitle={t('pages.system.apis.batchDeleteTitle')}
           deleteConfirmDescription={(c) => t('pages.system.apis.batchDeleteDescription', { count: c })}
+          toolBarActionsAfterDelete={
+            apiPerms.canCreate
+              ? [
+                  <Button
+                    key="api-library"
+                    icon={<DatabaseOutlined />}
+                    onClick={() => setLibraryModalOpen(true)}
+                  >
+                    {t('pages.system.apis.libraryButton')}
+                  </Button>,
+                ]
+              : undefined
+          }
           showCreateButton
           onCreate={handleCreate}
           createButtonText={t('pages.system.apis.createButton')}
@@ -838,7 +849,20 @@ const APIListPage: React.FC = () => {
             showSizeChanger: true,
           }}
         />
-      </ListPageTemplate>
+          ),
+        }}
+      />
+
+      {categoryFormModal}
+
+      <ApiLibraryModal
+        open={libraryModalOpen}
+        onClose={() => setLibraryModalOpen(false)}
+        onInstalled={() => {
+          reloadList()
+          void reloadCategories()
+        }}
+      />
 
       {/* 创建/编辑接口 Modal */}
       <FormModalTemplate
@@ -883,6 +907,14 @@ const APIListPage: React.FC = () => {
             colProps={{ span: 24 }}
           />
         ) : null}
+        <SafeProFormSelect
+          name="category_uuid"
+          label={t('pages.system.resourceCategory.fieldCategory')}
+          options={categorySelectOptions}
+          allowClear
+          placeholder={t('pages.system.resourceCategory.categoryPlaceholder')}
+          colProps={{ span: 24 }}
+        />
         <ProFormDependency name={['connection_uuid']}>
           {({ connection_uuid }) => (
             <ProFormText
@@ -1003,6 +1035,7 @@ const APIListPage: React.FC = () => {
       <SystemMasterDetailDrawer
         title={t('pages.system.apis.detailTitle')}
         open={drawerVisible}
+        basicColumn={1}
         onClose={() => {
           setDrawerVisible(false)
           setDetailData(null)
@@ -1018,103 +1051,14 @@ const APIListPage: React.FC = () => {
         }}
       />
 
-      {/* 接口测试 Drawer */}
-      <Drawer
-        title={t('pages.system.apis.testDrawerTitle')}
+      <ApiTestDrawer
         open={testDrawerVisible}
+        apiUuid={testingApiUuid}
         onClose={() => {
           setTestDrawerVisible(false)
           setTestingApiUuid(null)
-          setTestResult(null)
-          setTestRequestJson('{}')
         }}
-        size={800}
-        extra={
-          <Button
-            type="primary"
-            icon={<ThunderboltOutlined />}
-            loading={testLoading}
-            onClick={handleExecuteTest}
-          >
-            {t('pages.system.apis.executeTest')}
-          </Button>
-        }
-      >
-        {testingApiUuid && (
-          <>
-            <div style={{ marginBottom: 16 }}>
-              <Paragraph>
-                <Text strong>{t('pages.system.apis.testRequestLabel')}</Text>
-              </Paragraph>
-              <TextArea
-                value={testRequestJson}
-                onChange={e => setTestRequestJson(e.target.value)}
-                rows={8}
-                placeholder={t('pages.system.apis.testRequestPlaceholder')}
-                style={{ fontFamily: CODE_FONT_FAMILY, fontSize: 12 }}
-              />
-            </div>
-
-            {testResult && (
-              <div>
-                <Paragraph>
-                  <Text strong>{t('pages.system.apis.testResultLabel')}</Text>
-                </Paragraph>
-                <div style={{ marginBottom: 16 }}>
-                  <Space>
-                    <Text>{t('pages.system.apis.statusCodeLabel')}</Text>
-                    <Tag
-                      color={
-                        testResult.status_code >= 200 && testResult.status_code < 300
-                          ? 'success'
-                          : 'error'
-                      }
-                    >
-                      {testResult.status_code}
-                    </Tag>
-                    <Text>{t('pages.system.apis.elapsedLabel')}</Text>
-                    <Tag>{testResult.elapsed_time}s</Tag>
-                  </Space>
-                </div>
-                <div style={{ marginBottom: 16 }}>
-                  <Text strong>{t('pages.system.apis.responseHeadersLabel')}</Text>
-                  <pre
-                    style={{
-                      margin: '8px 0',
-                      padding: '8px',
-                      backgroundColor: '#f5f5f5',
-                      borderRadius: '4px',
-                      overflow: 'auto',
-                      maxHeight: '200px',
-                      fontSize: 12,
-                    }}
-                  >
-                    {JSON.stringify(testResult.headers, null, 2)}
-                  </pre>
-                </div>
-                <div>
-                  <Text strong>{t('pages.system.apis.responseBodyLabel')}</Text>
-                  <pre
-                    style={{
-                      margin: '8px 0',
-                      padding: '8px',
-                      backgroundColor: '#f5f5f5',
-                      borderRadius: '4px',
-                      overflow: 'auto',
-                      maxHeight: '400px',
-                      fontSize: 12,
-                    }}
-                  >
-                    {typeof testResult.body === 'string'
-                      ? testResult.body
-                      : JSON.stringify(testResult.body, null, 2)}
-                  </pre>
-                </div>
-              </div>
-            )}
-          </>
-        )}
-      </Drawer>
+      />
     </>
   )
 }

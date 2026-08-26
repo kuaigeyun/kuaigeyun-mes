@@ -4,8 +4,9 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from datetime import datetime, timedelta
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from tortoise.models import Q
 from tortoise.transactions import in_transaction
@@ -246,7 +247,11 @@ class CustomerFollowUpService:
             row = await CustomerFollowUp.create(**row_data)
             await cls._touch_customer_follow_up_time(tenant_id, customer, data.occurred_at)
 
-        return CustomerFollowUpResponse.model_validate(row)
+        count_map = await cls._customer_follow_up_counts(tenant_id, [customer.id])
+        return await cls._to_list_item(
+            row,
+            follow_up_count=count_map.get(int(customer.id), 0),
+        )
 
     @classmethod
     async def update(
@@ -341,7 +346,11 @@ class CustomerFollowUpService:
             await cls._touch_customer_follow_up_time(tenant_id, customer, occurred_at)
 
         row = await CustomerFollowUp.get(id=follow_id, tenant_id=tenant_id)
-        return CustomerFollowUpResponse.model_validate(row)
+        count_map = await cls._customer_follow_up_counts(tenant_id, [row.customer_id])
+        return await cls._to_list_item(
+            row,
+            follow_up_count=count_map.get(int(row.customer_id), 0),
+        )
 
     @classmethod
     async def delete(cls, tenant_id: int, follow_id: int, current_user: User) -> bool:
@@ -383,7 +392,11 @@ class CustomerFollowUpService:
         ):
             raise NotFoundError(f"跟进记录不存在: {follow_id}")
         await cls._load_customer(tenant_id, row.customer_id, current_user)
-        return CustomerFollowUpResponse.model_validate(row)
+        count_map = await cls._customer_follow_up_counts(tenant_id, [row.customer_id])
+        return await cls._to_list_item(
+            row,
+            follow_up_count=count_map.get(int(row.customer_id), 0),
+        )
 
     @classmethod
     def _filter_query(
@@ -443,6 +456,33 @@ class CustomerFollowUpService:
             return "next_follow_up_at", "id"
         return "-occurred_at", "-id"
 
+    @staticmethod
+    async def _customer_follow_up_counts(
+        tenant_id: int,
+        customer_ids: List[int],
+    ) -> Dict[int, int]:
+        """按客户汇总未删除跟进次数（列表展示用，禁止读侧再 join 用户表）。"""
+        unique_ids = sorted({int(cid) for cid in customer_ids if cid is not None})
+        if not unique_ids:
+            return {}
+        id_rows = await CustomerFollowUp.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            customer_id__in=unique_ids,
+        ).values_list("customer_id", flat=True)
+        return {int(cid): int(cnt) for cid, cnt in Counter(id_rows).items()}
+
+    @classmethod
+    async def _to_list_item(
+        cls,
+        row: CustomerFollowUp,
+        *,
+        follow_up_count: int,
+    ) -> CustomerFollowUpListResponse:
+        item = CustomerFollowUpListResponse.model_validate(row)
+        item.follow_up_count = int(follow_up_count)
+        return item
+
     @classmethod
     async def list_follow_ups(
         cls,
@@ -475,7 +515,15 @@ class CustomerFollowUpService:
         total = await query.count()
         primary_order, secondary_order = cls._resolve_list_order_by(order_by, pending_only)
         rows = await query.offset(skip).limit(limit).order_by(primary_order, secondary_order)
+        count_map = await cls._customer_follow_up_counts(
+            tenant_id,
+            [row.customer_id for row in rows],
+        )
         out: List[CustomerFollowUpListResponse] = [
-            CustomerFollowUpListResponse.model_validate(row) for row in rows
+            await cls._to_list_item(
+                row,
+                follow_up_count=count_map.get(int(row.customer_id), 0),
+            )
+            for row in rows
         ]
         return CustomerFollowUpListEnvelope(items=out, total=total)

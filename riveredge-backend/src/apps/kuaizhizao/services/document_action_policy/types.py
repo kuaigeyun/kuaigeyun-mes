@@ -186,6 +186,7 @@ class PurchaseOrderChangeCapabilities(BaseModel):
     submit: ActionCapability
     withdraw_submit: ActionCapability
     approve: ActionCapability
+    revoke_approval: ActionCapability
     apply: ActionCapability
     preview_impact: ActionCapability
     print: ActionCapability
@@ -543,6 +544,8 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "purchase_order_change.submit.no_changes": "变更单无任何变更内容，无法提交",
     "purchase_order_change.withdraw_submit.not_pending": "仅待审核状态可撤回",
     "purchase_order_change.approve.not_pending": "仅待审核状态可审批",
+    "purchase_order_change.revoke_approval.not_allowed": "当前状态不可撤销审核",
+    "purchase_order_change.revoke_approval.applied": "已生效的采购变更单不可撤销审核",
     "purchase_order_change.apply.not_audited": "变更单未审核通过，无法生效",
     "purchase_order_change.reopen.not_supported": "采购变更单不支持重新编辑",
     "receipt_notice.update.not_pending": "只能更新待收货状态的通知单",

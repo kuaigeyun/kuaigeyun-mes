@@ -57,7 +57,7 @@ import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer'
 import { getApiErrorMessage } from '../../../../utils/errorHandler';
 import AppConnectorMarket from '../AppConnectorMarket';
 import type { AppConnectorDefinition } from '../connectors';
-import { isLlmConnectionType } from '../connectors';
+import { isLlmConnectionType, resolveAppConnectorTypeLabel } from '../connectors';
 import {
   getApplicationConnectionList,
   getApplicationConnectionListAll,
@@ -68,6 +68,7 @@ import {
   testApplicationConnection,
   testApplicationConnectionConfig,
   syncApplicationConnectionContacts,
+  loadApplicationConnectionApiPresets,
   ApplicationConnection,
 } from '../../../../services/applicationConnection';
 import {
@@ -190,10 +191,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
   };
 
   const getTypeInfo = (type: string): { color: string; text: string; icon: React.ReactNode } => {
-    const tc = type ? `type${type.charAt(0).toUpperCase()}${type.slice(1)}` : '';
-    const key = tc ? `pages.system.applicationConnections.${tc}` : '';
-    let text = key ? t(key) : type;
-    if (key && text === key) text = type;
+    const text = resolveAppConnectorTypeLabel(type, t);
     const info = TYPE_COLORS[type] || { color: 'default', icon: <AppstoreOutlined /> };
     return { ...info, text: text || type };
   };
@@ -212,11 +210,14 @@ const ApplicationConnectionsListPage: React.FC = () => {
   const detailRetryUuidRef = useRef<string | null>(null);
   const [testingConnection, setTestingConnection] = useState(false);
   const [syncingContactsUuid, setSyncingContactsUuid] = useState<string | null>(null);
+  const [loadingApiPresetsUuid, setLoadingApiPresetsUuid] = useState<string | null>(null);
   const [allConnections, setAllConnections] = useState<ApplicationConnection[]>([]);
   const [connectorMarketVisible, setConnectorMarketVisible] = useState(false);
   const [connectorMarketInitialCategory, setConnectorMarketInitialCategory] = useState('all');
   const connectionPerms = useResourcePermissions('system:application-connection');
+  const apiPerms = useResourcePermissions('system:api');
   const canSyncContacts = !connectionPerms.enabled || !!connectionPerms.canAction?.('execute');
+  const canLoadApiPresets = !apiPerms.enabled || !!apiPerms.canCreate;
   const formRef = useRef<ProFormInstance>(null);
 
   const applicationConnectionImportTemplate = useMemo(
@@ -478,6 +479,24 @@ const ApplicationConnectionsListPage: React.FC = () => {
     }
   };
 
+  const handleLoadApiPresets = async (record: ApplicationConnection) => {
+    if (record.type !== 'kingdee_galaxy') return;
+    try {
+      setLoadingApiPresetsUuid(record.uuid);
+      const result = await loadApplicationConnectionApiPresets(record.uuid);
+      messageApi.success(
+        t('pages.system.applicationConnections.loadApiPresetsSuccess', {
+          created: result.created_count,
+          skipped: result.skipped_count,
+        }),
+      );
+    } catch (error: any) {
+      messageApi.error(error?.message || t('pages.system.applicationConnections.loadApiPresetsFailed'));
+    } finally {
+      setLoadingApiPresetsUuid(null);
+    }
+  };
+
   const handleSubmit = async (values: any): Promise<void> => {
     try {
       setFormLoading(true);
@@ -602,6 +621,41 @@ const ApplicationConnectionsListPage: React.FC = () => {
           </>
         );
       case 'kingdee_galaxy':
+        return (
+          <>
+            <FormModalGridBlock>
+              <Alert
+                title={t('pages.system.applicationConnections.kingdeeGalaxyHint')}
+                type="info"
+              />
+            </FormModalGridBlock>
+            <ProFormText
+              name="base_url"
+              label="Base URL"
+              placeholder="https://您的域名/K3Cloud/"
+              rules={[{ required: true }]}
+              extra={t('pages.system.applicationConnections.kingdeeGalaxyBaseUrlExtra')}
+              colProps={{ span: 24 }}
+            />
+            <ProFormText
+              name="acct_id"
+              label="Acct ID"
+              rules={[{ required: true }]}
+              extra={t('pages.system.applicationConnections.kingdeeGalaxyAcctIdExtra')}
+              colProps={{ span: 12 }}
+            />
+            <ProFormText
+              name="username"
+              label={t('pages.system.applicationConnections.kingdeeGalaxyUsername')}
+              rules={[{ required: true }]}
+              extra={t('pages.system.applicationConnections.kingdeeGalaxyUsernameExtra')}
+              colProps={{ span: 12 }}
+            />
+            <ProFormText name="app_id" label="App ID" rules={[{ required: true }]} colProps={{ span: 12 }} />
+            <ProFormText.Password name="app_secret" label="App Secret" rules={[{ required: true }]} colProps={{ span: 12 }} />
+            <ProFormText name="lcid" label="LCID" initialValue="2052" colProps={{ span: 12 }} />
+          </>
+        );
       case 'kingdee_xingchen':
       case 'kingdee_kis_cloud':
         return (
@@ -1267,6 +1321,19 @@ const ApplicationConnectionsListPage: React.FC = () => {
                 </Button>
               </Popconfirm>
             ) : null,
+            record.type === 'kingdee_galaxy' && canLoadApiPresets ? (
+              <Button
+                {...rowActionKind('create')}
+                key="load-api-presets"
+                type="link"
+                size="small"
+                icon={<ApiOutlined />}
+                loading={loadingApiPresetsUuid === record.uuid}
+                onClick={() => void handleLoadApiPresets(record)}
+              >
+                {t('pages.system.applicationConnections.loadApiPresets')}
+              </Button>
+            ) : null,
             <Popconfirm {...rowActionKind('delete')}
               key="delete"
               title={t('pages.system.applicationConnections.deleteConfirmTitle')}
@@ -1280,7 +1347,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
             </Popconfirm>,
           ].filter(Boolean),
     },
-  ], GLOBAL_DOC_LIST_FIELD_RANK), [t, canSyncContacts, syncingContactsUuid, handleView, handleEdit, handleTestConnection, handleSyncContacts, handleDelete]);
+  ], GLOBAL_DOC_LIST_FIELD_RANK), [t, canSyncContacts, canLoadApiPresets, syncingContactsUuid, loadingApiPresetsUuid, handleView, handleEdit, handleTestConnection, handleSyncContacts, handleLoadApiPresets, handleDelete]);
 
   const detailColumns = [
     { title: t('pages.system.applicationConnections.columnName'), dataIndex: 'name' },
@@ -1618,6 +1685,19 @@ const ApplicationConnectionsListPage: React.FC = () => {
                         {t('pages.system.applicationConnections.syncContacts')}
                       </Button>
                     </Popconfirm>
+                  ),
+                },
+                {
+                  key: 'load-api-presets',
+                  visible: detailData.type === 'kingdee_galaxy' && canLoadApiPresets,
+                  render: (
+                    <Button
+                      icon={<ApiOutlined />}
+                      loading={loadingApiPresetsUuid === detailData.uuid}
+                      onClick={() => void handleLoadApiPresets(detailData)}
+                    >
+                      {t('pages.system.applicationConnections.loadApiPresets')}
+                    </Button>
                   ),
                 },
                 {

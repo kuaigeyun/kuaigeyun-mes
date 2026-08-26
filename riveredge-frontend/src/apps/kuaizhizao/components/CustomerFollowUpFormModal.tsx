@@ -652,6 +652,12 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
                             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                               {formatDateTime(item.occurred_at, 'YYYY-MM-DD HH:mm')}
                             </Typography.Text>
+                            {String(item.created_by_name ?? '').trim() ? (
+                              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                                {t('app.kuaizhizao.customerFollowUp.followUpPersonLabel')}
+                                {String(item.created_by_name).trim()}
+                              </Typography.Text>
+                            ) : null}
                           </Space>
                           <div style={{ marginTop: 6, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                             {item.content || '-'}

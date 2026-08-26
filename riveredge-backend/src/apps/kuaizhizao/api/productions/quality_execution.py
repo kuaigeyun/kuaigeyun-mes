@@ -605,6 +605,14 @@ async def list_incoming_inspection_purchase_receipt_pull_candidates(
     limit: int = Query(20, ge=1, le=100),
     keyword: Optional[str] = Query(None),
     receipt_code: Optional[str] = Query(None, description="采购入库单号（模糊）"),
+    status: Optional[str] = Query(
+        None,
+        description="采购入库单状态过滤（如 已入库，用于已入库补检）",
+    ),
+    include_unset_iqc: bool = Query(
+        False,
+        description="是否纳入未配置来料检验（IQC=none）的物料明细（已入库补检）",
+    ),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> Dict[str, Any]:
@@ -614,6 +622,8 @@ async def list_incoming_inspection_purchase_receipt_pull_candidates(
         limit=limit,
         keyword=keyword,
         receipt_code=receipt_code,
+        status=status,
+        include_unset_iqc=include_unset_iqc,
     )
 
 
@@ -692,6 +702,8 @@ async def create_inspection_from_purchase_receipt(
 
     - **purchase_receipt_id**: 采购入库单ID
     - **selected_item_ids**: 可选，仅创建所选入库明细对应的来料检验单
+    - **include_unset_iqc**: 已入库补检时为 true，允许未配置 IQC 的物料建单
+    - **inspection_plan_id**: 临时检验方案（未配置 IQC 的物料必填）
     """
     await _assert_purchase_receipt_visible_by_id(
         tenant_id=tenant_id,
@@ -699,13 +711,22 @@ async def create_inspection_from_purchase_receipt(
         purchase_receipt_id=purchase_receipt_id,
     )
     selected_item_ids = None
-    if body and body.get("selected_item_ids") is not None:
-        selected_item_ids = [int(i) for i in (body.get("selected_item_ids") or []) if i is not None]
+    include_unset_iqc = False
+    inspection_plan_id = None
+    if body:
+        if body.get("selected_item_ids") is not None:
+            selected_item_ids = [int(i) for i in (body.get("selected_item_ids") or []) if i is not None]
+        include_unset_iqc = bool(body.get("include_unset_iqc"))
+        raw_plan = body.get("inspection_plan_id")
+        if raw_plan is not None and raw_plan != "":
+            inspection_plan_id = int(raw_plan)
     return await IncomingInspectionService().create_inspection_from_purchase_receipt(
         tenant_id=tenant_id,
         purchase_receipt_id=purchase_receipt_id,
         created_by=current_user.id,
         selected_item_ids=selected_item_ids,
+        include_unset_iqc=include_unset_iqc,
+        inspection_plan_id=inspection_plan_id,
     )
 
 

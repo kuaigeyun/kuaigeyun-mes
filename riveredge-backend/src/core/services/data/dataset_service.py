@@ -20,6 +20,7 @@ from core.models.dataset import Dataset
 from core.models.integration_config import IntegrationConfig
 from core.models.page_metric_config import PageMetricConfig
 from core.models.api import API
+from core.models.resource_category import RESOURCE_TYPE_DATASET
 from core.schemas.dataset import (
     DatasetCreate,
     DatasetUpdate,
@@ -32,6 +33,7 @@ from core.schemas.dataset import (
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from core.config.integration_type_spec import APPLICATION_CONNECTOR_TYPES
 from core.utils.timezone_utils import resolve_business_datetime
+from core.services.resource.resource_category_service import ResourceCategoryService
 
 
 class DatasetService:
@@ -107,12 +109,23 @@ class DatasetService:
                         raise ValidationError(f"接口不存在或未启用: {api_code}")
         
         # 创建数据集
+        category_id = None
+        if dataset_data.category_uuid:
+            category_id = await ResourceCategoryService().resolve_category_id(
+                tenant_id,
+                RESOURCE_TYPE_DATASET,
+                dataset_data.category_uuid,
+            )
+
         dataset = await Dataset.create(
             tenant_id=tenant_id,
             integration_config_id=integration_config.id,
-            **dataset_data.model_dump(exclude={'data_source_uuid'}),
+            category_id=category_id,
+            **dataset_data.model_dump(exclude={'data_source_uuid', 'category_uuid'}),
         )
         
+        if category_id:
+            await dataset.fetch_related('category')
         return dataset
     
     async def get_dataset_by_uuid(
@@ -137,7 +150,7 @@ class DatasetService:
             tenant_id=tenant_id,
             uuid=dataset_uuid,
             deleted_at__isnull=True,
-        ).prefetch_related('integration_config').first()
+        ).prefetch_related('integration_config', 'category').first()
         
         if not dataset:
             raise NotFoundError(f"数据集不存在: {dataset_uuid}")
@@ -154,6 +167,8 @@ class DatasetService:
         output_type: Optional[str] = None,
         data_source_uuid: Optional[UUID] = None,
         is_active: Optional[bool] = None,
+        category_uuid: Optional[UUID] = None,
+        no_category: bool = False,
     ) -> tuple[List[Dataset], int]:
         """
         获取数据集列表
@@ -204,6 +219,16 @@ class DatasetService:
         # 启用状态筛选
         if is_active is not None:
             query = query.filter(is_active=is_active)
+
+        if no_category:
+            query = query.filter(category_id__isnull=True)
+        elif category_uuid:
+            category_id = await ResourceCategoryService().resolve_category_id(
+                tenant_id,
+                RESOURCE_TYPE_DATASET,
+                category_uuid,
+            )
+            query = query.filter(category_id=category_id)
         
         # 优化分页查询：先查询总数，再查询数据
         total = await query.count()
@@ -214,7 +239,7 @@ class DatasetService:
         
         # 分页查询（使用索引字段排序，预加载关联数据）
         offset = (page - 1) * page_size
-        datasets = await query.prefetch_related('integration_config').order_by("-created_at").offset(offset).limit(page_size).all()
+        datasets = await query.prefetch_related('integration_config', 'category').order_by("-created_at").offset(offset).limit(page_size).all()
         
         return datasets, total
     
@@ -286,11 +311,22 @@ class DatasetService:
         old_code = dataset.code
 
         # 更新数据集
-        update_data = dataset_data.model_dump(exclude_unset=True)
+        update_data = dataset_data.model_dump(exclude_unset=True, exclude={'category_uuid'})
         for key, value in update_data.items():
             setattr(dataset, key, value)
 
+        if 'category_uuid' in dataset_data.model_fields_set:
+            if dataset_data.category_uuid is None:
+                dataset.category_id = None
+            else:
+                dataset.category_id = await ResourceCategoryService().resolve_category_id(
+                    tenant_id,
+                    RESOURCE_TYPE_DATASET,
+                    dataset_data.category_uuid,
+                )
+
         await dataset.save()
+        await dataset.fetch_related('integration_config', 'category')
 
         code_changed = old_code != dataset.code
 

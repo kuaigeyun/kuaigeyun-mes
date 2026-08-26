@@ -486,6 +486,10 @@ def _summarize_pull_preview_items(preview_items: List[Dict[str, Any]]) -> Dict[s
     pushable_count = sum(
         1 for row in preview_items if float(row.get("max_push_quantity") or 0) > 0
     )
+    needs_temporary_plan = any(
+        float(row.get("max_push_quantity") or 0) > 0 and bool(row.get("needs_temporary_plan"))
+        for row in preview_items
+    )
     material_labels: List[str] = []
     seen: set[str] = set()
     for row in preview_items:
@@ -501,6 +505,7 @@ def _summarize_pull_preview_items(preview_items: List[Dict[str, Any]]) -> Dict[s
         "line_count": len(preview_items),
         "pushable_line_count": pushable_count,
         "material_summary": summary or None,
+        "needs_temporary_plan": needs_temporary_plan,
     }
 
 
@@ -605,8 +610,11 @@ async def _resolve_inspection_template_fields(
         material_id=material_id,
         operation_id=operation_id,
     )
+    # 临时指定方案（如已入库补检）：物料未配置 IQC 时仍可按所选方案生成检验项
     if mode == "none":
-        return {}
+        if not explicit_plan_id:
+            return {}
+        mode = "plan"
 
     def _items_field(items_payload: dict) -> Dict[str, Any]:
         if use_quality_characteristics:
@@ -1574,8 +1582,13 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
         created_by: int,
         *,
         selected_item_ids: Optional[List[int]] = None,
+        include_unset_iqc: bool = False,
+        inspection_plan_id: Optional[int] = None,
     ) -> List[IncomingInspectionResponse]:
-        """为采购入库单明细补齐缺失的来料检验单（已有则跳过，不拆单）。"""
+        """为采购入库单明细补齐缺失的来料检验单（已有则跳过，不拆单）。
+
+        include_unset_iqc：已入库补检等场景允许为物料 IQC=none 的明细建单，须同时传 inspection_plan_id。
+        """
         receipt_items = _filter_items_by_selected_item_ids(
             receipt_items,
             selected_item_ids,
@@ -1585,6 +1598,7 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
         initial_review_fields = await _quality_inspection_initial_review_fields(
             tenant_id, "incoming_inspection"
         )
+        explicit_plan_id = int(inspection_plan_id) if inspection_plan_id else None
         inspections: List[IncomingInspectionResponse] = []
         for item in receipt_items:
             existing = await IncomingInspection.filter(
@@ -1602,13 +1616,26 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                 material_id=item.material_id,
             )
             if eff == "none":
-                continue
-
-            template = await _resolve_inspection_template_fields(
-                tenant_id,
-                item.material_id,
-                "iqc",
-            )
+                if not include_unset_iqc:
+                    continue
+                if not explicit_plan_id:
+                    raise BusinessLogicError(
+                        "所选入库单含未配置来料检验的物料，请临时选择检验方案后再创建"
+                    )
+                template = await _resolve_inspection_template_fields(
+                    tenant_id,
+                    item.material_id,
+                    "iqc",
+                    explicit_plan_id=explicit_plan_id,
+                )
+                if not template:
+                    raise BusinessLogicError("所选检验方案无效或无可复制检验项，请另选方案")
+            else:
+                template = await _resolve_inspection_template_fields(
+                    tenant_id,
+                    item.material_id,
+                    "iqc",
+                )
 
             today = today_site_str()
             code = await self.generate_code(tenant_id, "INCOMING_INSPECTION_CODE", prefix=f"IQ{today}")
@@ -2140,6 +2167,7 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
         *,
         existing_by_material: Optional[Dict[int, Any]] = None,
         policy_cache: Optional[Dict[int, str]] = None,
+        include_unset_iqc: bool = False,
     ) -> List[Dict[str, Any]]:
         purchase_receipt_id = int(receipt.id)
         if existing_by_material is None:
@@ -2163,7 +2191,8 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             qty = float(getattr(item, "receipt_quantity", 0) or 0)
             if qty <= 0:
                 continue
-            if await self._resolve_iqc_policy_eff(tenant_id, int(mid), cache) == "none":
+            eff = await self._resolve_iqc_policy_eff(tenant_id, int(mid), cache)
+            if eff == "none" and not include_unset_iqc:
                 continue
             existing = existing_by_material.get(int(mid))
             pushed = float(existing.inspection_quantity or 0) if existing else 0.0
@@ -2177,6 +2206,8 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                     "quantity": qty,
                     "pushed_quantity": pushed,
                     "max_push_quantity": max_push,
+                    "iqc_mode": eff,
+                    "needs_temporary_plan": eff == "none",
                 }
             )
         return preview_items
@@ -2339,8 +2370,14 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
         limit: int = 20,
         keyword: Optional[str] = None,
         receipt_code: Optional[str] = None,
+        status: Optional[str] = None,
+        include_unset_iqc: bool = False,
     ) -> Dict[str, Any]:
-        """来料检验加载：采购入库单候选列表（含 capabilities）。"""
+        """来料检验加载：采购入库单候选列表（含 capabilities）。
+
+        status 可收窄为单一状态（须落在可创建 IQC 的状态集合内），用于「已入库补检」等入口。
+        include_unset_iqc：已入库补检时纳入物料 IQC=none 的明细（创建时须临时选方案）。
+        """
         from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
         from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
 
@@ -2349,9 +2386,19 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
         if not incoming_enabled:
             return {"data": [], "total": 0, "success": True}
 
+        status_filter = str(status or "").strip()
+        if status_filter:
+            if status_filter not in _PURCHASE_RECEIPT_IQC_ELIGIBLE_STATUSES:
+                raise BusinessLogicError(
+                    f"采购入库单状态不可用于来料检验取单: {status_filter}"
+                )
+            status_values = [status_filter]
+        else:
+            status_values = list(_PURCHASE_RECEIPT_IQC_ELIGIBLE_STATUSES)
+
         query = PurchaseReceipt.filter(
             tenant_id=tenant_id,
-            status__in=list(_PURCHASE_RECEIPT_IQC_ELIGIBLE_STATUSES),
+            status__in=status_values,
         )
         kw = str(keyword or "").strip()
         rc = str(receipt_code or "").strip()
@@ -2396,6 +2443,7 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                 receipt_items,
                 existing_by_material=existing_by_material,
                 policy_cache=policy_cache,
+                include_unset_iqc=include_unset_iqc,
             )
             allowed, reason = self._derive_iqc_pull_capability(
                 source_allowed=_purchase_receipt_allows_iqc_creation(receipt) and bool(receipt_items),
@@ -2550,11 +2598,15 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
         created_by: int,
         *,
         selected_item_ids: Optional[List[int]] = None,
+        include_unset_iqc: bool = False,
+        inspection_plan_id: Optional[int] = None,
     ) -> List[IncomingInspectionResponse]:
         """
         从采购入库单创建来料检验单
         
         为采购入库单的每个明细项创建一个来料检验单
+
+        include_unset_iqc + inspection_plan_id：已入库补检，允许未配置 IQC 的物料临时用所选方案建单。
         """
         await _require_iqc_stage_enabled(tenant_id)
         incoming_enabled, _ = await _get_quality_policy_flags(tenant_id)
@@ -2585,6 +2637,8 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                 receipt_items=receipt_items,
                 created_by=created_by,
                 selected_item_ids=selected_item_ids,
+                include_unset_iqc=include_unset_iqc,
+                inspection_plan_id=inspection_plan_id,
             )
 
             if not inspections:

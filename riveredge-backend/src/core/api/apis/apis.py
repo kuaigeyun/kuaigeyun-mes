@@ -14,9 +14,21 @@ from core.schemas.api import (
     APIResponse,
     APITestRequest,
     APITestResponse,
+    ApiLibraryListResponse,
+    InstallApiLibraryPackRequest,
+    InstallApiLibraryPackResponse,
+)
+from core.schemas.resource_category import (
+    ResourceCategoryCreate,
+    ResourceCategoryUpdate,
+    ResourceCategoryResponse,
+    ResourceCategoryListResponse,
 )
 from core.services.application.api_service import APIService
+from core.services.resource.resource_category_service import ResourceCategoryService
+from core.models.resource_category import RESOURCE_TYPE_API
 from core.api.deps.deps import get_current_tenant
+from core.api.deps.access import require_permission_codes
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError
@@ -101,6 +113,8 @@ async def list_apis(
     is_active: Optional[bool] = Query(None, description="是否启用筛选"),
     sort_by: Optional[str] = Query(None, description="排序字段：name/code/path/method/created_at/updated_at/is_active"),
     sort_order: Optional[str] = Query(None, description="排序方向：asc 或 desc"),
+    category_uuid: Optional[UUID] = Query(None, description="分类 UUID 筛选"),
+    no_category: bool = Query(False, description="仅未分类"),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -128,6 +142,11 @@ async def list_apis(
         }
     """
     try:
+        if category_uuid and no_category:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="category_uuid 与 no_category 不能同时使用",
+            )
         apis, total = await APIService().list_apis(
             tenant_id=tenant_id,
             page=page,
@@ -137,6 +156,8 @@ async def list_apis(
             is_active=is_active,
             sort_by=sort_by,
             sort_order=sort_order,
+            category_uuid=category_uuid,
+            no_category=no_category,
         )
         
         return {
@@ -149,6 +170,163 @@ async def list_apis(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"获取接口列表失败: {str(e)}"
+        )
+
+
+@router.get("/categories", response_model=ResourceCategoryListResponse)
+async def list_api_categories(
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """获取接口分类列表"""
+    try:
+        result = await ResourceCategoryService().list_categories(tenant_id, RESOURCE_TYPE_API)
+        return ResourceCategoryListResponse(**result)
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取接口分类失败: {str(e)}",
+        )
+
+
+@router.post("/categories", response_model=ResourceCategoryResponse, status_code=status.HTTP_201_CREATED)
+async def create_api_category(
+    data: ResourceCategoryCreate,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """创建接口分类"""
+    try:
+        category = await ResourceCategoryService().create_category(
+            tenant_id, RESOURCE_TYPE_API, data
+        )
+        return ResourceCategoryService()._build_response(category, 0)
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"创建接口分类失败: {str(e)}",
+        )
+
+
+@router.get("/categories/{category_uuid}", response_model=ResourceCategoryResponse)
+async def get_api_category(
+    category_uuid: UUID,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """获取接口分类详情"""
+    try:
+        category = await ResourceCategoryService().get_category_by_uuid(
+            tenant_id, RESOURCE_TYPE_API, category_uuid
+        )
+        count = await ResourceCategoryService()._count_items(
+            tenant_id, RESOURCE_TYPE_API, category.id
+        )
+        return ResourceCategoryService()._build_response(category, count)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取接口分类失败: {str(e)}",
+        )
+
+
+@router.put("/categories/{category_uuid}", response_model=ResourceCategoryResponse)
+async def update_api_category(
+    category_uuid: UUID,
+    data: ResourceCategoryUpdate,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """更新接口分类"""
+    try:
+        category = await ResourceCategoryService().update_category(
+            tenant_id, RESOURCE_TYPE_API, category_uuid, data
+        )
+        count = await ResourceCategoryService()._count_items(
+            tenant_id, RESOURCE_TYPE_API, category.id
+        )
+        return ResourceCategoryService()._build_response(category, count)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"更新接口分类失败: {str(e)}",
+        )
+
+
+@router.delete("/categories/{category_uuid}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_api_category(
+    category_uuid: UUID,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """删除接口分类（分类下接口变为未分类）"""
+    try:
+        await ResourceCategoryService().delete_category(
+            tenant_id, RESOURCE_TYPE_API, category_uuid
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"删除接口分类失败: {str(e)}",
+        )
+
+
+@router.get("/library", response_model=ApiLibraryListResponse)
+async def list_api_library(
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """获取系统接口库目录。"""
+    try:
+        result = await APIService().list_api_library()
+        return ApiLibraryListResponse(**result)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取接口库失败: {str(e)}",
+        )
+
+
+@router.post(
+    "/library/{pack_id}/install",
+    response_model=InstallApiLibraryPackResponse,
+    dependencies=[Depends(require_permission_codes("system:api:create"))],
+)
+async def install_api_library_pack(
+    pack_id: str,
+    data: InstallApiLibraryPackRequest,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """将接口库包加载到当前组织。"""
+    try:
+        result = await APIService().install_api_library_pack(
+            tenant_id=tenant_id,
+            pack_id=pack_id,
+            connection_uuid=data.connection_uuid,
+            item_keys=data.item_keys,
+        )
+        return InstallApiLibraryPackResponse(**result)
+    except NotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="应用连接不存在")
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"加载接口库失败: {str(e)}",
         )
 
 
@@ -179,7 +357,7 @@ async def get_api(
             tenant_id=tenant_id,
             api_uuid=api_uuid,
         )
-        await api.fetch_related("integration_config")
+        await api.fetch_related("integration_config", "category")
         
         return APIService.build_api_response(api)
     except NotFoundError as e:

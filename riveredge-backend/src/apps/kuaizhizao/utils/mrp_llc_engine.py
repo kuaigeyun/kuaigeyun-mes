@@ -13,6 +13,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+from apps.kuaizhizao.utils.mrp_quantity import mrp_qty, mrp_qty_float
 from apps.kuaizhizao.utils.mrp_scheduling_helper import normalize_schedule_direction
 from apps.kuaizhizao.utils.work_calendar import add_workdays, subtract_workdays, workdays_between
 
@@ -21,10 +22,7 @@ MAX_MRP_BUCKET_DAYS = 366
 
 
 def _f(v: Any) -> float:
-    try:
-        return float(v or 0)
-    except (TypeError, ValueError):
-        return 0.0
+    return mrp_qty_float(v)
 
 
 def aggregate_qty_by_date(rows: List[Dict[str, Any]], *, qty_key: str = "qty") -> Dict[date, float]:
@@ -426,13 +424,15 @@ def time_phased_net_material(
     if end < start:
         end = start
 
-    projected = _f(beginning_inventory)
+    projected = mrp_qty(beginning_inventory)
     planned_orders: List[Dict[str, Any]] = list(firm_out)
     buckets: List[Dict[str, Any]] = []
     exceptions: List[Dict[str, Any]] = []
-    total_gross = 0.0
-    total_net = 0.0
-    total_planned = sum(_f(p.get("qty")) for p in firm_out)
+    total_gross = Decimal("0")
+    total_net = Decimal("0")
+    total_planned = Decimal("0")
+    for p in firm_out:
+        total_planned += mrp_qty(p.get("qty"))
 
     span_days = (end - start).days
     if span_days > MAX_MRP_BUCKET_DAYS:
@@ -471,15 +471,15 @@ def time_phased_net_material(
 
     day = start
     while day <= end:
-        gross = _f(gross_by_date.get(day))
-        receipt = _f(receipts.get(day))
+        gross = mrp_qty(gross_by_date.get(day))
+        receipt = mrp_qty(receipts.get(day))
         total_gross += gross
 
         if suggestion_basis == "gross":
-            projected_before = projected + receipt - gross
-            planned_qty = 0.0
+            projected_before = mrp_qty(projected + receipt - gross)
+            planned_qty = Decimal("0")
             if gross > 0 and not frozen:
-                lot = float(apply_lot_fn(Decimal(str(gross))))
+                lot = mrp_qty(apply_lot_fn(gross))
                 planned_qty = lot
                 total_planned += lot
                 total_net += gross
@@ -492,41 +492,41 @@ def time_phased_net_material(
                     schedule_direction=direction,
                 )
                 for ex in date_exc:
-                    ex = {**ex, "qty": lot}
+                    ex = {**ex, "qty": mrp_qty_float(lot)}
                     exceptions.append(_normalize_exception(ex))
                 in_fence = _in_planning_fence(release, today, fence_days)
                 planned_orders.append({
-                    "qty": lot,
+                    "qty": mrp_qty_float(lot),
                     "receipt_date": receipt_sched,
                     "release_date": release,
                     "firm": bool(in_fence),
                 })
-            projected = projected_before + planned_qty
+            projected = mrp_qty(projected_before + planned_qty)
             buckets.append({
                 "date": day.isoformat(),
-                "gross": gross,
-                "scheduled_receipts": receipt,
-                "planned_order_receipt": planned_qty,
-                "projected_on_hand": projected,
+                "gross": mrp_qty_float(gross),
+                "scheduled_receipts": mrp_qty_float(receipt),
+                "planned_order_receipt": mrp_qty_float(planned_qty),
+                "projected_on_hand": mrp_qty_float(projected),
             })
             day += timedelta(days=1)
             continue
 
-        projected = projected + receipt - gross
-        target = safety
-        net = 0.0
+        projected = mrp_qty(projected + receipt - gross)
+        target = mrp_qty(safety)
+        net = Decimal("0")
         if projected < target:
-            net = target - projected
-        if include_reorder_point and rop > 0 and projected < rop:
-            net = max(net, rop - projected)
+            net = mrp_qty(target - projected)
+        if include_reorder_point and rop > 0 and projected < mrp_qty(rop):
+            net = max(net, mrp_qty(mrp_qty(rop) - projected))
 
-        planned_qty = 0.0
+        planned_qty = Decimal("0")
         if net > 0 and not frozen:
-            lot = float(apply_lot_fn(Decimal(str(net))))
+            lot = mrp_qty(apply_lot_fn(net))
             planned_qty = lot
             total_net += net
             total_planned += lot
-            projected += lot
+            projected = mrp_qty(projected + lot)
             release, receipt_sched, date_exc = _plan_order_dates(
                 day,
                 lead,
@@ -536,11 +536,11 @@ def time_phased_net_material(
                 schedule_direction=direction,
             )
             for ex in date_exc:
-                ex = {**ex, "qty": lot}
+                ex = {**ex, "qty": mrp_qty_float(lot)}
                 exceptions.append(_normalize_exception(ex))
             in_fence = _in_planning_fence(release, today, fence_days)
             planned_orders.append({
-                "qty": lot,
+                "qty": mrp_qty_float(lot),
                 "receipt_date": receipt_sched,
                 "release_date": release,
                 "firm": bool(in_fence),
@@ -549,25 +549,25 @@ def time_phased_net_material(
             total_net += net
             exceptions.append(_normalize_exception({
                 "code": "FIRM_FROZEN_SHORTAGE",
-                "message": f"{day.isoformat()} 计划已冻结，仍短缺 {net:g}，未生成新计划订单",
+                "message": f"{day.isoformat()} 计划已冻结，仍短缺 {mrp_qty_float(net)}，未生成新计划订单",
                 "bucket_date": day.isoformat(),
-                "qty": net,
+                "qty": mrp_qty_float(net),
             }))
 
         buckets.append({
             "date": day.isoformat(),
-            "gross": gross,
-            "scheduled_receipts": receipt,
-            "planned_order_receipt": planned_qty,
-            "projected_on_hand": projected,
+            "gross": mrp_qty_float(gross),
+            "scheduled_receipts": mrp_qty_float(receipt),
+            "planned_order_receipt": mrp_qty_float(planned_qty),
+            "projected_on_hand": mrp_qty_float(projected),
         })
         day += timedelta(days=1)
 
-    if total_gross <= 0 and projected > safety + 1e-6 and sum(receipts.values()) > 0:
+    if total_gross <= 0 and projected > mrp_qty(safety) and sum(mrp_qty(q) for q in receipts.values()) > 0:
         exceptions.append(_normalize_exception({
             "code": "EXCESS_SUPPLY",
-            "message": f"无毛需求但存在在途/在制，期末预计库存 {projected:g}",
-            "qty": projected,
+            "message": f"无毛需求但存在在途/在制，期末预计库存 {mrp_qty_float(projected)}",
+            "qty": mrp_qty_float(projected),
         }))
 
     if open_supplies:
@@ -599,9 +599,9 @@ def time_phased_net_material(
         uniq_exc.append(normalized)
 
     return {
-        "gross_requirement": total_gross,
-        "net_requirement": total_net if suggestion_basis != "gross" else total_gross,
-        "planned_order_qty": total_planned,
+        "gross_requirement": mrp_qty_float(total_gross),
+        "net_requirement": mrp_qty_float(total_net if suggestion_basis != "gross" else total_gross),
+        "planned_order_qty": mrp_qty_float(total_planned),
         "planned_orders": planned_orders,
         "time_buckets": buckets,
         "exceptions": uniq_exc,

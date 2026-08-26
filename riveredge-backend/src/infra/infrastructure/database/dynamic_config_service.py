@@ -119,6 +119,7 @@ class DynamicDatabaseConfigService:
             "core.models.file",
             # 预览批注（须与静态 TORTOISE_ORM 一致；缺注册会 default_connection=None → preview-markup 500）
             "core.models.file_preview_markup",
+            "core.models.resource_category",
             "core.models.api",
             "core.models.dataset",
             "core.models.page_metric_config",

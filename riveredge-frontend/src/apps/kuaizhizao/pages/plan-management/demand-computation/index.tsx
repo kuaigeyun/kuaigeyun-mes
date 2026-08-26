@@ -3845,27 +3845,27 @@ const DemandComputationPage: React.FC = () => {
                   title: t('app.kuaizhizao.demandComputation.colNetRequirement'),
                   dataIndex: 'net_requirement',
                   width: 90,
-                  render: (v: number) => (v ? Number(v).toLocaleString() : '-'),
+                  render: (v: number) => formatQuantity(v),
                 },
                 {
                   title: t('app.kuaizhizao.demandComputation.colSuggestedWorkOrder'),
                   dataIndex: 'suggested_work_order_quantity',
                   width: 90,
                   render: (v: number, r: any) =>
-                    r.material_source_type === 'Outsource' ? '-' : (v ? Number(v).toLocaleString() : '-'),
+                    r.material_source_type === 'Outsource' ? '—' : formatQuantity(v),
                 },
                 {
                   title: t('app.kuaizhizao.demandComputation.colSuggestedOutsource'),
                   dataIndex: 'suggested_work_order_quantity',
                   width: 90,
                   render: (v: number, r: any) =>
-                    r.material_source_type === 'Outsource' ? (v ? Number(v).toLocaleString() : '-') : '-',
+                    r.material_source_type === 'Outsource' ? formatQuantity(v) : '—',
                 },
                 {
                   title: t('app.kuaizhizao.demandComputation.colSuggestedPurchase'),
                   dataIndex: 'suggested_purchase_order_quantity',
                   width: 90,
-                  render: (v: number) => (v ? Number(v).toLocaleString() : '-'),
+                  render: (v: number) => formatQuantity(v),
                 },
                 {
                   title: t('app.kuaizhizao.demandComputation.colSource'),

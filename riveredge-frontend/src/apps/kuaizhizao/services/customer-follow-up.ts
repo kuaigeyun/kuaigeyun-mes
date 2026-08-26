@@ -27,6 +27,8 @@ export interface CustomerFollowUp {
   updated_by?: number | null;
   created_by_name?: string | null;
   updated_by_name?: string | null;
+  /** 该客户已跟进次数（未删除记录合计） */
+  follow_up_count?: number;
 }
 
 export interface CustomerFollowUpListResult {

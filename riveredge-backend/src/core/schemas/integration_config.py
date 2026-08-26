@@ -5,7 +5,7 @@
 """
 
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 from core.config.integration_type_spec import assert_allowed_integration_type
@@ -108,3 +108,16 @@ class SyncContactsResponse(BaseModel):
     users: Optional[Dict[str, int]] = Field(None, description="成员同步统计")
     synced_at: Optional[str] = Field(None, description="同步完成时间（ISO8601）")
     error: Optional[str] = Field(None, description="错误信息")
+
+
+class LoadConnectorApiPresetsResponse(BaseModel):
+    """应用连接器加载常用接口预设结果。"""
+    connection_uuid: str = Field(..., description="连接器 UUID")
+    connection_code: str = Field(..., description="连接器代码")
+    connection_type: str = Field(..., description="连接器类型")
+    created_count: int = Field(..., description="新建接口数")
+    skipped_count: int = Field(..., description="已存在跳过数")
+    categorized_count: int = Field(0, description="已存在接口补充分类数")
+    created_codes: List[str] = Field(default_factory=list, description="新建接口 code")
+    skipped_codes: List[str] = Field(default_factory=list, description="跳过接口 code")
+    categorized_codes: List[str] = Field(default_factory=list, description="补充分类接口 code")

@@ -98,18 +98,27 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
     async def _generate_code(self, tenant_id: int) -> str:
         return await self.generate_code(tenant_id, "PURCHASE_ORDER_CHANGE_CODE", prefix="POC")
 
+    @staticmethod
+    def _item_has_change_content(item: PurchaseOrderChangeItem) -> bool:
+        if item.change_type in (OrderChangeLineType.LINE_ADD.value, OrderChangeLineType.LINE_CANCEL.value):
+            return True
+        if Decimal(str(item.delta_amount or 0)) != 0:
+            return True
+        if item.after_quantity != item.before_quantity:
+            return True
+        if item.after_unit_price != item.before_unit_price:
+            return True
+        if item.after_delivery_date != item.before_delivery_date:
+            return True
+        return False
+
     async def _has_change_content(self, tenant_id: int, doc: PurchaseOrderChangeOrder) -> bool:
         items = await PurchaseOrderChangeItem.filter(tenant_id=tenant_id, change_order_id=doc.id).all()
         if Decimal(str(doc.delta_amount or 0)) != 0:
             return True
         if doc.header_changes:
             return True
-        for i in items:
-            if i.change_type in (OrderChangeLineType.LINE_ADD.value, OrderChangeLineType.LINE_CANCEL.value):
-                return True
-            if Decimal(str(i.delta_amount or 0)) != 0:
-                return True
-        return False
+        return any(self._item_has_change_content(i) for i in items)
 
     async def _next_version(self, tenant_id: int, source_order_id: int) -> int:
         count = await PurchaseOrderChangeOrder.filter(
@@ -666,13 +675,30 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
         rows, _total = await self.list_change_orders(tenant_id, skip=0, limit=100, source_order_id=order_id)
         return rows
 
+    async def _reset_linked_delay_reports(self, tenant_id: int, change_id: int) -> None:
+        from apps.kuaizhizao.models.purchase_arrival_delay_report import PurchaseArrivalDelayReport
+
+        reports = await PurchaseArrivalDelayReport.filter(
+            tenant_id=tenant_id,
+            purchase_order_change_id=change_id,
+            deleted_at__isnull=True,
+        ).all()
+        deleted_at = resolve_business_datetime()
+        for report in reports:
+            report.purchase_order_change_id = None
+            report.purchase_order_change_code = None
+            report.deleted_at = deleted_at
+            await report.save()
+
     async def delete_change_order(self, tenant_id: int, change_id: int) -> None:
         doc = await PurchaseOrderChangeOrder.get_or_none(tenant_id=tenant_id, id=change_id, deleted_at__isnull=True)
         if not doc:
             raise NotFoundError(f"采购变更单不存在: {change_id}")
         assert_purchase_order_change_capability(doc, "delete")
-        doc.deleted_at = resolve_business_datetime()
-        await doc.save()
+        async with in_transaction():
+            doc.deleted_at = resolve_business_datetime()
+            await doc.save()
+            await self._reset_linked_delay_reports(tenant_id, change_id)
 
     async def submit(self, tenant_id: int, change_id: int, operator_id: int) -> PurchaseOrderChangeWithItemsResponse:
         doc = await PurchaseOrderChangeOrder.get_or_none(tenant_id=tenant_id, id=change_id, deleted_at__isnull=True)
@@ -736,6 +762,54 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
         doc.updated_by_name = user_info["name"]
         await doc.save()
         return await self._to_detail(doc)
+
+    async def revoke_purchase_order_change_approval(
+        self,
+        tenant_id: int,
+        change_id: int,
+        operator_id: int,
+    ) -> PurchaseOrderChangeWithItemsResponse:
+        """撤销审核：人工审→待审核，自动审→草稿。已生效变更单不可撤销。"""
+        from core.services.approval.audit_transition import resolve_revoke_landing_phase
+        from core.services.approval.uni_audit_service import UniAuditService
+
+        doc = await PurchaseOrderChangeOrder.get_or_none(
+            tenant_id=tenant_id, id=change_id, deleted_at__isnull=True
+        )
+        if not doc:
+            raise NotFoundError(f"采购变更单不存在: {change_id}")
+        assert_purchase_order_change_capability(doc, "revoke_approval")
+
+        audit_required = await self.business_config_service.check_audit_required(
+            tenant_id, "purchase_order_change"
+        )
+        landing = resolve_revoke_landing_phase(manual_audit_enabled=audit_required)
+        target_status = (
+            DocumentStatus.PENDING_REVIEW.value
+            if landing == "pending"
+            else DocumentStatus.DRAFT.value
+        )
+
+        async def _do_revoke() -> PurchaseOrderChangeWithItemsResponse:
+            user_info = await self.get_user_info(operator_id)
+            doc.status = target_status
+            doc.review_status = ReviewStatus.PENDING.value
+            doc.reviewer_id = None
+            doc.reviewer_name = None
+            doc.review_time = None
+            doc.review_remarks = None
+            doc.updated_by = operator_id
+            doc.updated_by_name = user_info["name"]
+            await doc.save()
+            return await self._to_detail(doc)
+
+        return await UniAuditService.revoke_with_flow_fallback(
+            tenant_id=tenant_id,
+            entity_type="purchase_order_change",
+            entity_id=change_id,
+            operator_id=operator_id,
+            flow_revoke=_do_revoke,
+        )
 
     async def preview_impact(self, tenant_id: int, change_id: int) -> ChangeImpactPreviewResponse:
         doc = await self.get_by_id(tenant_id, change_id)

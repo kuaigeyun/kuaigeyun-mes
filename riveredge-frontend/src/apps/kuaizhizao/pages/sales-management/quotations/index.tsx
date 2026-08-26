@@ -2283,7 +2283,10 @@ const QuotationsPage: React.FC = () => {
 
   const handleToolbarPrint = useCallback(
     async (keys: React.Key[]) => {
-      if (!keys || keys.length !== 1) return;
+      if (!keys || keys.length !== 1) {
+        messageApi.warning(t('app.kuaizhizao.quotation.selectOneValid'));
+        return;
+      }
       const numericId = Number(keys[0]);
       if (!Number.isFinite(numericId) || numericId <= 0) {
         messageApi.warning(t('app.kuaizhizao.quotation.selectOneValid'));
@@ -2424,12 +2427,6 @@ const QuotationsPage: React.FC = () => {
     const q = toolbarSingleSelectionQuotation;
     return q?.capabilities?.create_revision?.allowed === true && quotationPerms.canCreate;
   }, [selectedRowKeys.length, toolbarSingleSelectionQuotation, quotationPerms.canCreate]);
-
-  const canToolbarPrint = useMemo(() => {
-    if (selectedRowKeys.length !== 1) return false;
-    const q = toolbarSingleSelectionQuotation;
-    return q?.capabilities?.print_formal?.allowed === true && quotationPerms.canPrint;
-  }, [selectedRowKeys.length, toolbarSingleSelectionQuotation, quotationPerms.canPrint]);
 
   const handleTableDataChange = useCallback((data: QuotationTableRow[]) => {
     const flat = flattenQuotationTableRows(data);
@@ -4041,7 +4038,7 @@ const QuotationsPage: React.FC = () => {
             <Button
               key="toolbar-print-direct"
               icon={<PrinterOutlined />}
-              disabled={!canToolbarPrint}
+              disabled={!quotationPerms.canPrint}
               onClick={() => void handleToolbarPrint(selectedRowKeys)}
             >
               {t('app.kuaizhizao.quotation.formalPrint')}

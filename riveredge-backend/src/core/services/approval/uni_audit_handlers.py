@@ -426,7 +426,7 @@ async def _dispatch_purchase_order_change(
     if action == "withdraw":
         return await svc.withdraw(tenant_id, entity_id, user_id)
     if action == "revoke":
-        _unsupported("purchase_order_change", action)
+        return await svc.revoke_purchase_order_change_approval(tenant_id, entity_id, user_id)
     _unsupported("purchase_order_change", action)
 
 

@@ -18,6 +18,8 @@ export interface API {
   connection_uuid?: string | null;
   connection_name?: string | null;
   connection_type?: string | null;
+  category_uuid?: string | null;
+  category_name?: string | null;
   request_headers?: Record<string, any>;
   request_params?: Record<string, any>;
   request_body?: Record<string, any>;
@@ -37,6 +39,8 @@ export interface APIListParams {
   is_active?: boolean;
   sort_by?: string;
   sort_order?: 'asc' | 'desc';
+  category_uuid?: string;
+  no_category?: boolean;
 }
 
 export interface APIListResponse {
@@ -53,6 +57,7 @@ export interface CreateAPIData {
   path: string;
   method: string;
   connection_uuid?: string | null;
+  category_uuid?: string | null;
   request_headers?: Record<string, any>;
   request_params?: Record<string, any>;
   request_body?: Record<string, any>;
@@ -69,6 +74,7 @@ export interface UpdateAPIData {
   path?: string;
   method?: string;
   connection_uuid?: string | null;
+  category_uuid?: string | null;
   request_headers?: Record<string, any>;
   request_params?: Record<string, any>;
   request_body?: Record<string, any>;
@@ -88,6 +94,40 @@ export interface APITestResponse {
   headers: Record<string, any>;
   body: any;
   elapsed_time: number;
+}
+
+export interface ApiLibraryItemPreview {
+  item_key: string;
+  name: string;
+  description: string;
+}
+
+export interface ApiLibraryPack {
+  pack_id: string;
+  name: string;
+  description: string;
+  connector_type: string;
+  category_name: string;
+  api_count: number;
+  items: ApiLibraryItemPreview[];
+}
+
+export interface ApiLibraryListResponse {
+  items: ApiLibraryPack[];
+}
+
+export interface InstallApiLibraryPackResult {
+  pack_id: string;
+  connection_uuid: string;
+  connection_code: string;
+  connection_type: string;
+  category_uuid: string;
+  created_count: number;
+  skipped_count: number;
+  categorized_count: number;
+  created_codes: string[];
+  skipped_codes: string[];
+  categorized_codes: string[];
 }
 
 /**
@@ -180,6 +220,27 @@ export async function testAPI(
     method: 'POST',
     data: testRequest,
     params: timeout ? { timeout } : undefined,
+  });
+}
+
+/**
+ * 获取系统接口库目录
+ */
+export async function listApiLibrary(): Promise<ApiLibraryListResponse> {
+  return apiRequest<ApiLibraryListResponse>('/core/apis/library');
+}
+
+/**
+ * 将接口库包加载到当前组织
+ */
+export async function installApiLibraryPack(
+  packId: string,
+  connectionUuid: string,
+  itemKeys: string[],
+): Promise<InstallApiLibraryPackResult> {
+  return apiRequest<InstallApiLibraryPackResult>(`/core/apis/library/${packId}/install`, {
+    method: 'POST',
+    data: { connection_uuid: connectionUuid, item_keys: itemKeys },
   });
 }
 

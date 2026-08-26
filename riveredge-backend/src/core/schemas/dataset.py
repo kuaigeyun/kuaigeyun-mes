@@ -48,6 +48,7 @@ class DatasetBase(BaseModel):
 class DatasetCreate(DatasetBase):
     """创建数据集 Schema"""
     data_source_uuid: UUID = Field(..., description="数据源UUID")
+    category_uuid: Optional[UUID] = Field(None, description="所属分类 UUID（可选）")
 
 
 class DatasetUpdate(BaseModel):
@@ -60,6 +61,7 @@ class DatasetUpdate(BaseModel):
     output_type: Optional[str] = Field(None, max_length=20, description="输出类型")
     display_config: Optional[Dict[str, Any]] = Field(None, description="指标展示配置")
     is_active: Optional[bool] = Field(None, description="是否启用")
+    category_uuid: Optional[UUID] = Field(None, description="所属分类 UUID（可选，传 null 清除分类）")
 
 
 class DatasetResponse(DatasetBase):
@@ -67,6 +69,8 @@ class DatasetResponse(DatasetBase):
     uuid: UUID = Field(..., description="数据集UUID")
     tenant_id: int = Field(..., description="组织ID")
     data_source_uuid: UUID = Field(..., description="数据源UUID")
+    category_uuid: Optional[UUID] = Field(None, description="所属分类 UUID")
+    category_name: Optional[str] = Field(None, description="所属分类名称")
     last_executed_at: Optional[datetime] = Field(None, description="最后执行时间")
     last_error: Optional[str] = Field(None, description="最后执行错误信息")
     created_at: datetime = Field(..., description="创建时间")

@@ -13,6 +13,7 @@ export interface PurchaseOrderChangeCapabilities {
   submit?: ActionCapability;
   withdraw_submit?: ActionCapability;
   approve?: ActionCapability;
+  revoke_approval?: ActionCapability;
   apply?: ActionCapability;
   preview_impact?: ActionCapability;
   print?: ActionCapability;

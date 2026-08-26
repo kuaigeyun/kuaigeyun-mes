@@ -14,7 +14,7 @@ import {
   ProFormSwitch,
   ProFormDependency,
 } from '@ant-design/pro-components';
-import { App, Modal, Row, Col } from 'antd';
+import { App, Row, Col } from 'antd';
 import { FormModalTemplate } from '../../../components/layout-templates';
 import { MODAL_CONFIG } from '../../../components/layout-templates/constants';
 import CodeField from '../../../components/code-field';
@@ -44,6 +44,14 @@ export interface InspectionPlanFormModalProps {
   editId?: number | string | null;
   /** 新建过程检验方案时预填工序 ID */
   operationId?: number | null;
+  /** 新建时预填方案类型（incoming / process / finished / outbound） */
+  defaultPlanType?: string;
+  /** 锁定方案类型（不可改），用于来料补检等固定环节的快速创建 */
+  lockPlanType?: boolean;
+  /** 新建时至少一条检验步骤；默认 true */
+  requireSteps?: boolean;
+  /** 覆盖默认标题 */
+  title?: React.ReactNode;
   zIndex?: number;
 }
 
@@ -53,6 +61,10 @@ export const InspectionPlanFormModal: React.FC<InspectionPlanFormModalProps> = (
   editId = null,
   onSuccess,
   operationId,
+  defaultPlanType,
+  lockPlanType = false,
+  requireSteps = true,
+  title,
   zIndex,
 }) => {
   const { t } = useTranslation();
@@ -64,6 +76,11 @@ export const InspectionPlanFormModal: React.FC<InspectionPlanFormModalProps> = (
   const [currentPlan, setCurrentPlan] = useState<InspectionPlanRecord | null>(null);
   const planTypeOptions = useMemo(() => getQualityPlanTypeFallback(t), [t]);
   const isEdit = editId != null && editId !== '';
+  const resolvedDefaultPlanType = useMemo(() => {
+    if (defaultPlanType) return defaultPlanType;
+    if (operationId != null) return 'process';
+    return undefined;
+  }, [defaultPlanType, operationId]);
 
   useEffect(() => {
     if (!open) return;
@@ -73,7 +90,7 @@ export const InspectionPlanFormModal: React.FC<InspectionPlanFormModalProps> = (
       setStepsBaseline('');
       setCurrentPlan(null);
       const initial: Record<string, unknown> = {
-        plan_type: operationId != null ? 'process' : undefined,
+        plan_type: resolvedDefaultPlanType,
         version: '1.0',
         is_active: true,
       };
@@ -117,13 +134,14 @@ export const InspectionPlanFormModal: React.FC<InspectionPlanFormModalProps> = (
         setFormLoading(false);
       }
     })();
-  }, [open, isEdit, editId, operationId, messageApi, t]);
+  }, [open, isEdit, editId, operationId, resolvedDefaultPlanType, messageApi, t]);
 
   const submitPlan = async (values: any) => {
     const planCode = typeof values.plan_code === 'string' ? values.plan_code.trim() : values.plan_code;
     const submitData = {
       ...values,
       plan_code: planCode,
+      plan_type: lockPlanType && resolvedDefaultPlanType ? resolvedDefaultPlanType : values.plan_type,
       material_id: null,
       material_code: null,
       material_name: null,
@@ -153,6 +171,10 @@ export const InspectionPlanFormModal: React.FC<InspectionPlanFormModalProps> = (
 
   const handleSubmit = async (values: any): Promise<void> => {
     try {
+      if (requireSteps && steps.length === 0) {
+        messageApi.warning(t('app.kuaizhizao.quality.plans.validation.requiredSteps'));
+        throw new Error('steps_required');
+      }
       setFormLoading(true);
       const stepsChanged = isEdit && stepsFingerprint(steps) !== stepsBaseline;
       if (stepsChanged) {
@@ -173,7 +195,9 @@ export const InspectionPlanFormModal: React.FC<InspectionPlanFormModalProps> = (
       }
       await submitPlan(values);
     } catch (error: any) {
-      messageApi.error(error.message || t('common.operationFailed'));
+      if (error?.message !== 'steps_required') {
+        messageApi.error(error.message || t('common.operationFailed'));
+      }
       throw error;
     } finally {
       setFormLoading(false);
@@ -183,9 +207,10 @@ export const InspectionPlanFormModal: React.FC<InspectionPlanFormModalProps> = (
   return (
     <FormModalTemplate
       title={
-        isEdit
+        title ??
+        (isEdit
           ? t('app.kuaizhizao.quality.plans.modal.editTitle')
-          : t('app.kuaizhizao.quality.plans.modal.createTitle')
+          : t('app.kuaizhizao.quality.plans.modal.createTitle'))
       }
       open={open}
       onClose={handleClose}
@@ -214,7 +239,7 @@ export const InspectionPlanFormModal: React.FC<InspectionPlanFormModalProps> = (
                 showGenerateButton={false}
                 disabled={isEdit}
                 context={{
-                  plan_type: plan_type || '',
+                  plan_type: plan_type || resolvedDefaultPlanType || '',
                 }}
               />
             </Col>
@@ -234,13 +259,18 @@ export const InspectionPlanFormModal: React.FC<InspectionPlanFormModalProps> = (
           <ProFormItem
             name="plan_type"
             label={t('app.kuaizhizao.quality.plans.form.planType')}
-            extra={t('app.kuaizhizao.quality.plans.form.planTypeHint')}
+            extra={
+              lockPlanType
+                ? t('app.kuaizhizao.quality.plans.form.planTypeLockedHint')
+                : t('app.kuaizhizao.quality.plans.form.planTypeHint')
+            }
             rules={[{ required: true, message: t('app.kuaizhizao.quality.plans.validation.requiredPlanType') }]}
           >
             <UniDropdown
               placeholder={t('app.kuaizhizao.quality.plans.placeholder.selectPlanType')}
               showSearch
-              allowClear
+              allowClear={!lockPlanType}
+              disabled={lockPlanType}
               options={planTypeOptions}
               style={{ width: '100%' }}
             />
@@ -256,7 +286,7 @@ export const InspectionPlanFormModal: React.FC<InspectionPlanFormModalProps> = (
         </Col>
       </Row>
 
-      <ProFormItem label={t('app.kuaizhizao.quality.plans.form.steps')} style={{ width: '100%' }}>
+      <ProFormItem label={t('app.kuaizhizao.quality.plans.form.steps')} style={{ width: '100%' }} required={requireSteps}>
         <InspectionPlanStepEditor value={steps} onChange={setSteps} disabled={false} />
       </ProFormItem>
 

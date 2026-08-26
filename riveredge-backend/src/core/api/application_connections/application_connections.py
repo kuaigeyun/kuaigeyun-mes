@@ -15,12 +15,14 @@ from core.schemas.integration_config import (
     TestConfigRequest,
     TestConnectionResponse,
     SyncContactsResponse,
+    LoadConnectorApiPresetsResponse,
 )
 from core.services.integration.integration_config_service import (
     IntegrationConfigService,
     build_integration_response,
 )
 from core.services.integration.wecom_contact_sync_service import WeComContactSyncService
+from core.services.application.api_service import APIService
 from core.config.integration_type_spec import APPLICATION_CONNECTOR_TYPES
 from core.api.deps.deps import get_current_tenant
 from core.api.deps.access import require_permission_codes
@@ -213,6 +215,39 @@ async def test_application_connection_config(
         data=result.get("data"),
         error=result.get("error"),
     )
+
+
+@router.post(
+    "/{uuid}/load-api-presets",
+    response_model=LoadConnectorApiPresetsResponse,
+    dependencies=[Depends(require_permission_codes("system:api:create"))],
+)
+async def load_application_connection_api_presets(
+    uuid: UUID,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """为业务系统连接器加载常用接口预设（金蝶云星空等）。"""
+    try:
+        ic = await IntegrationConfigService.get_integration_by_uuid(
+            tenant_id=tenant_id, uuid=str(uuid)
+        )
+        if ic.type not in APPLICATION_TYPES:
+            raise NotFoundError("应用连接不存在")
+        result = await APIService().ensure_connector_api_presets(
+            tenant_id=tenant_id,
+            connection_uuid=uuid,
+        )
+        return LoadConnectorApiPresetsResponse(**result)
+    except NotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="应用连接不存在")
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"加载常用接口失败: {str(e)}",
+        )
 
 
 @router.post(

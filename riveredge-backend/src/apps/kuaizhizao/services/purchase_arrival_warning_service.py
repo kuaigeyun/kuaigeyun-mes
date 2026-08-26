@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 from tortoise.expressions import Q
 
 from apps.common.base_service import AppBaseService
+from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus
 from apps.kuaizhizao.models.purchase_order import (
     PurchaseOrder,
     PurchaseOrderItem,
@@ -72,11 +73,36 @@ class PurchaseArrivalWarningService(AppBaseService[PurchaseOrder]):
             .order_by("-updated_at", "-id")
             .all()
         )
+        stale_change_ids = [
+            int(row.purchase_order_change_id)
+            for row in rows
+            if row.purchase_order_change_id
+        ]
+        active_change_ids: set[int] = set()
+        if stale_change_ids:
+            from apps.kuaizhizao.models.purchase_order_change_order import PurchaseOrderChangeOrder
+
+            active_change_ids = set(
+                await PurchaseOrderChangeOrder.filter(
+                    tenant_id=tenant_id,
+                    id__in=stale_change_ids,
+                    deleted_at__isnull=True,
+                ).values_list("id", flat=True)
+            )
+
         out: Dict[int, PurchaseArrivalDelayReport] = {}
         for row in rows:
             key = int(row.purchase_order_item_id)
-            if key not in out:
-                out[key] = row
+            if key in out:
+                continue
+            if row.purchase_order_change_id and int(row.purchase_order_change_id) not in active_change_ids:
+                row.purchase_order_change_id = None
+                row.purchase_order_change_code = None
+                if str(row.status or "").lower() == "change_generated":
+                    row.deleted_at = resolve_business_datetime()
+                    await row.save()
+                    continue
+            out[key] = row
         return out
 
     def _resolve_processing_status(self, delay: Optional[PurchaseArrivalDelayReport]) -> str:
@@ -84,15 +110,17 @@ class PurchaseArrivalWarningService(AppBaseService[PurchaseOrder]):
             return "unprocessed"
         st = str(delay.status or "").upper()
         rs = str(delay.review_status or "").upper()
-        if st in ("APPLIED",) or delay.purchase_order_change_id:
-            if delay.purchase_order_change_id and st not in ("APPLIED",):
-                return "change_pending"
+        if st in ("APPLIED",):
             return "changed"
+        if st in ("CHANGE_GENERATED",):
+            return "change_pending" if delay.purchase_order_change_id else "approved"
+        if delay.purchase_order_change_id:
+            return "change_pending"
         if st in ("PENDING_REVIEW",) or rs in ("PENDING", "PENDING_REVIEW"):
             return "pending_review"
         if st in ("REJECTED",) or rs in ("REJECTED",):
             return "rejected"
-        if st in ("APPROVED", "AUDITED") or rs in ("APPROVED",):
+        if st in ("APPROVED", "AUDITED") and rs in ("APPROVED",):
             return "approved"
         if st in ("DRAFT",):
             return "reported"

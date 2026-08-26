@@ -48,6 +48,7 @@ import { useCurrentUserQuery } from './hooks/useCurrentUserQuery';
 import { useCurrentUser } from './hooks/useCurrentUser';
 import { useSiteSettingQuery } from './hooks/useSiteSettingQuery';
 import { useUserPreferenceQuery } from './hooks/useUserPreferenceQuery';
+import { NAVIGATION_MENU_TREE_QUERY_KEY } from './hooks/useNavigationMenuTreeQuery';
 import { getDefaultTenantHomePath, useConfigStore } from './stores/configStore';
 import { useUserPreferenceStore } from './stores/userPreferenceStore';
 import { getPlatformSettingsPublic } from './services/platformSettings';

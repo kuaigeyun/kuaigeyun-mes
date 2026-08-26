@@ -5,7 +5,7 @@
  * 支持数据集的 CRUD 操作和查询执行功能。
  */
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActionType,
@@ -23,7 +23,7 @@ import { renderSystemActiveTag, renderSystemTypeMarker } from '../../utils/syste
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlayCircleOutlined, CopyOutlined, HighlightOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { UniTable } from '../../../../components/uni-table';
-import { DetailDrawerActions, ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
+import { DetailDrawerActions, FormModalTemplate, MODAL_CONFIG, TwoColumnLayout } from '../../../../components/layout-templates';
 import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer';
 import { getApiErrorMessage } from '../../../../utils/errorHandler';
 import {
@@ -52,6 +52,8 @@ import { rowActionKind } from '../../../../components/uni-action';
 import { getAntdModal } from '../../../../utils/antdAppApis';
 import { todaySiteDateString } from '../../../../utils/format';
 import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
+import { useResourceCategoryPanel } from '../../shared/useResourceCategoryPanel';
+import { RESOURCE_CATEGORY_UNCATEGORIZED_KEY, type ResourceCategoryListFilter } from '../../../../services/resourceCategory';
 /**
  * 数据集管理列表页面组件
  */
@@ -61,6 +63,34 @@ const DatasetListPage: React.FC = () => {
   const navigate = useNavigate();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+
+  const reloadList = useCallback(() => {
+    actionRef.current?.reload();
+  }, []);
+
+  const categoryListFilterRef = useRef<ResourceCategoryListFilter>({});
+
+  const handleCategorySelectionChange = useCallback(
+    (nextFilter: ResourceCategoryListFilter) => {
+      categoryListFilterRef.current = nextFilter;
+      reloadList();
+    },
+    [reloadList],
+  );
+
+  const {
+    leftPanel: categoryLeftPanel,
+    listFilter: categoryListFilter,
+    selectedCategoryKey,
+    categorySelectOptions,
+    reloadCategories,
+    categoryFormModal,
+  } = useResourceCategoryPanel({
+    resourceType: 'dataset',
+    onSelectionChange: handleCategorySelectionChange,
+  });
+
+  categoryListFilterRef.current = categoryListFilter;
   
   // Modal 相关状态（创建/编辑数据集）
   const [modalVisible, setModalVisible] = useState(false);
@@ -144,8 +174,13 @@ const DatasetListPage: React.FC = () => {
   const handleCreate = () => {
     setIsEdit(false);
     setCurrentDatasetUuid(null);
+    const presetCategoryUuid =
+      selectedCategoryKey !== 'all' && selectedCategoryKey !== RESOURCE_CATEGORY_UNCATEGORIZED_KEY
+        ? selectedCategoryKey
+        : undefined;
     setFormInitialValues({
       is_active: true,
+      category_uuid: presetCategoryUuid,
     });
     setModalVisible(true);
   };
@@ -162,6 +197,7 @@ const DatasetListPage: React.FC = () => {
         name: detail.name,
         code: detail.code,
         description: detail.description,
+        category_uuid: detail.category_uuid || undefined,
         output_type: detail.output_type ?? 'list',
         display_config: detail.display_config ? JSON.stringify(detail.display_config, null, 2) : '',
         is_active: detail.is_active,
@@ -318,6 +354,7 @@ const DatasetListPage: React.FC = () => {
       await deleteDataset(record.uuid);
       messageApi.success(t('common.deleteSuccess'));
       actionRef.current?.reload();
+      void reloadCategories();
     } catch (error: any) {
       messageApi.error(error.message || t('common.deleteFailed'));
     }
@@ -355,6 +392,7 @@ const DatasetListPage: React.FC = () => {
           }
           setSelectedRowKeys([]);
           actionRef.current?.reload();
+          void reloadCategories();
         } catch (error: any) {
           messageApi.error(error?.message || t('pages.system.datasets.batchDeleteFailed'));
         }
@@ -436,6 +474,7 @@ const DatasetListPage: React.FC = () => {
           name: values.name,
           code: String(values.code ?? '').trim(),
           description: values.description,
+          category_uuid: values.category_uuid ?? null,
           is_active: values.is_active,
         };
         if (values.output_type) updateData.output_type = values.output_type;
@@ -451,6 +490,7 @@ const DatasetListPage: React.FC = () => {
         setModalVisible(false);
         setFormInitialValues(undefined);
         actionRef.current?.reload();
+        void reloadCategories();
       } else {
         const createData: CreateDatasetData = {
           name: values.name,
@@ -459,6 +499,7 @@ const DatasetListPage: React.FC = () => {
           query_config: {},
           description: values.description,
           data_source_uuid: values.data_source_uuid,
+          category_uuid: values.category_uuid || undefined,
           is_active: values.is_active,
         };
         if (values.output_type) createData.output_type = values.output_type;
@@ -474,6 +515,7 @@ const DatasetListPage: React.FC = () => {
         setModalVisible(false);
         setFormInitialValues(undefined);
         actionRef.current?.reload();
+        void reloadCategories();
         navigate(`/system/datasets/designer?uuid=${created.uuid}`);
       }
     } catch (error: any) {
@@ -644,18 +686,25 @@ const DatasetListPage: React.FC = () => {
 
   return (
     <>
-      <ListPageTemplate>
-        <UniTable<Dataset>
+      <TwoColumnLayout
+        style={{ height: '100%' }}
+        leftPanel={categoryLeftPanel}
+        rightPanel={{
+          content: (
+            <UniTable<Dataset>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('system.datasets')}
-          columnPersistenceId="pages.system.datasets.list-v1"
+          columnPersistenceId="pages.system.datasets.list-v2"
+          tanstackQuery={{ queryKeyPrefix: ['pages.system.datasets.list', selectedCategoryKey] }}
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {
+            const categoryFilter = categoryListFilterRef.current;
             // 处理搜索参数
             const apiParams: any = {
               page: params.current || 1,
               page_size: params.pageSize || 20,
+              ...categoryFilter,
             };
             
             const kw = mergeListKeyword(searchFormValues, 'search');
@@ -815,7 +864,11 @@ const DatasetListPage: React.FC = () => {
             messageApi.success(t('pages.system.datasets.exportSuccess'));
           }}
         />
-      </ListPageTemplate>
+          ),
+        }}
+      />
+
+      {categoryFormModal}
 
       {/* 创建/编辑数据集 Modal */}
       <FormModalTemplate
@@ -857,6 +910,14 @@ const DatasetListPage: React.FC = () => {
             colProps={{ span: 12 }}
           />
         )}
+        <SafeProFormSelect
+          name="category_uuid"
+          label={t('pages.system.resourceCategory.fieldCategory')}
+          options={categorySelectOptions}
+          allowClear
+          placeholder={t('pages.system.resourceCategory.categoryPlaceholder')}
+          colProps={{ span: 12 }}
+        />
         <ProFormSelect
           name="output_type"
           label={t('pages.system.datasets.labelOutputType')}

@@ -151,6 +151,13 @@ const CustomerFollowUpsPage: React.FC = () => {
         render: (_, r) => (r.occurred_at ? formatDateTime(r.occurred_at, 'YYYY-MM-DD HH:mm') : '—'),
       },
       {
+        title: t('app.kuaizhizao.customerFollowUp.colFollowUpPerson'),
+        dataIndex: 'created_by_name',
+        width: 100,
+        ellipsis: true,
+        render: (_, r) => (String(r.created_by_name ?? '').trim() || '—'),
+      },
+      {
         title: t('app.kuaizhizao.customerFollowUp.colActivityType'),
         dataIndex: 'activity_type_code',
         width: 100,
@@ -169,7 +176,7 @@ const CustomerFollowUpsPage: React.FC = () => {
         ),
       },
     ],
-    [t, activityLabelMap],
+    [t, renderActivityTypeTag],
   );
 
   const detailBasicColumns: ProDescriptionsItemProps<CustomerFollowUp>[] = useMemo(
@@ -199,7 +206,19 @@ const CustomerFollowUpsPage: React.FC = () => {
         title: t('app.kuaizhizao.customerFollowUp.colSalesOrder'),
         dataIndex: 'sales_order_code',
       },
-      { title: t('app.kuaizhizao.customerFollowUp.colCreator'), dataIndex: 'created_by_name' },
+      {
+        title: t('app.kuaizhizao.customerFollowUp.colFollowUpPerson'),
+        dataIndex: 'created_by_name',
+        render: (_, row) => (String(row.created_by_name ?? '').trim() || '—'),
+      },
+      {
+        title: t('app.kuaizhizao.customerFollowUp.colFollowUpCount'),
+        dataIndex: 'follow_up_count',
+        render: (_, row) =>
+          row.follow_up_count != null && Number.isFinite(Number(row.follow_up_count))
+            ? Number(row.follow_up_count)
+            : '—',
+      },
       { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
     ] as ProDescriptionsItemProps<CustomerFollowUp>[]),
     [t, renderActivityTypeTag],
@@ -546,6 +565,31 @@ const CustomerFollowUpsPage: React.FC = () => {
         );
       },
     },
+    {
+      title: t('app.kuaizhizao.customerFollowUp.colFollowUpCount'),
+      dataIndex: 'follow_up_count',
+      width: 96,
+      minWidth: 96,
+      uniTableKeepWidth: true,
+      resizable: false,
+      hideInSearch: true,
+      render: (_, row) =>
+        row.follow_up_count != null && Number.isFinite(Number(row.follow_up_count))
+          ? Number(row.follow_up_count)
+          : '—',
+    },
+    {
+      title: t('app.kuaizhizao.customerFollowUp.colFollowUpPerson'),
+      key: 'follow_up_person',
+      dataIndex: 'created_by_name',
+      width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
+      hideInSearch: true,
+      render: (_, row) => (String(row.created_by_name ?? '').trim() || '—'),
+    },
     ...buildDocumentAuditColumns<CustomerFollowUp>(t),
     {
       title: t('common.actions'),
@@ -578,7 +622,7 @@ const CustomerFollowUpsPage: React.FC = () => {
       `}</style>
       <ListPageTemplate style={{ padding: 0 }}>
         <UniTable<CustomerFollowUp>
-          columnPersistenceId="apps.kuaizhizao.pages.sales-management.customer-follow-ups"
+          columnPersistenceId="apps.kuaizhizao.pages.sales-management.customer-follow-ups-person-count-v1"
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.customerFollowUps')}
           selectedRowKeys={selectedRowKeys}

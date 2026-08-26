@@ -21,7 +21,15 @@ from core.schemas.dataset import (
 )
 from core.schemas.api import APITestResponse
 from core.schemas.data_source import TestConnectionResponse
+from core.schemas.resource_category import (
+    ResourceCategoryCreate,
+    ResourceCategoryUpdate,
+    ResourceCategoryResponse,
+    ResourceCategoryListResponse,
+)
 from core.services.data.dataset_service import DatasetService
+from core.services.resource.resource_category_service import ResourceCategoryService
+from core.models.resource_category import RESOURCE_TYPE_DATASET
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
@@ -44,6 +52,12 @@ def model_to_response(dataset, data_source_uuid: UUID) -> DatasetResponse:
     # 兼容历史错误数据：query_type 仅支持 sql/api，其他值（如 visual）归一为 sql
     query_type = dataset.query_type if dataset.query_type in ('sql', 'api') else 'sql'
     output_type = getattr(dataset, 'output_type', 'list') or 'list'
+    category_uuid = None
+    category_name = None
+    category = getattr(dataset, 'category', None)
+    if category is not None:
+        category_uuid = UUID(str(category.uuid))
+        category_name = category.name
     return DatasetResponse(
         uuid=dataset.uuid,
         tenant_id=dataset.tenant_id,
@@ -56,6 +70,8 @@ def model_to_response(dataset, data_source_uuid: UUID) -> DatasetResponse:
         display_config=getattr(dataset, 'display_config', None),
         is_active=dataset.is_active,
         data_source_uuid=data_source_uuid,
+        category_uuid=category_uuid,
+        category_name=category_name,
         last_executed_at=dataset.last_executed_at,
         last_error=dataset.last_error,
         created_at=dataset.created_at,
@@ -115,6 +131,8 @@ async def list_datasets(
     output_type: Optional[str] = Query(None, description="输出类型筛选：list/metric/multi_metric"),
     data_source_uuid: Optional[UUID] = Query(None, description="数据源UUID筛选"),
     is_active: Optional[bool] = Query(None, description="是否启用筛选"),
+    category_uuid: Optional[UUID] = Query(None, description="分类 UUID 筛选"),
+    no_category: bool = Query(False, description="仅未分类"),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -143,6 +161,11 @@ async def list_datasets(
         }
     """
     try:
+        if category_uuid and no_category:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="category_uuid 与 no_category 不能同时使用",
+            )
         datasets, total = await DatasetService().list_datasets(
             tenant_id=tenant_id,
             page=page,
@@ -152,6 +175,8 @@ async def list_datasets(
             output_type=output_type,
             data_source_uuid=data_source_uuid,
             is_active=is_active,
+            category_uuid=category_uuid,
+            no_category=no_category,
         )
         
         # 转换为响应对象
@@ -301,6 +326,116 @@ async def sync_page_metrics(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"同步指标失败: {str(e)}"
+        )
+
+
+@router.get("/categories", response_model=ResourceCategoryListResponse)
+async def list_dataset_categories(
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """获取数据集分类列表"""
+    try:
+        result = await ResourceCategoryService().list_categories(tenant_id, RESOURCE_TYPE_DATASET)
+        return ResourceCategoryListResponse(**result)
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取数据集分类失败: {str(e)}",
+        )
+
+
+@router.post("/categories", response_model=ResourceCategoryResponse, status_code=status.HTTP_201_CREATED)
+async def create_dataset_category(
+    data: ResourceCategoryCreate,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """创建数据集分类"""
+    try:
+        category = await ResourceCategoryService().create_category(
+            tenant_id, RESOURCE_TYPE_DATASET, data
+        )
+        return ResourceCategoryService()._build_response(category, 0)
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"创建数据集分类失败: {str(e)}",
+        )
+
+
+@router.get("/categories/{category_uuid}", response_model=ResourceCategoryResponse)
+async def get_dataset_category(
+    category_uuid: UUID,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """获取数据集分类详情"""
+    try:
+        category = await ResourceCategoryService().get_category_by_uuid(
+            tenant_id, RESOURCE_TYPE_DATASET, category_uuid
+        )
+        count = await ResourceCategoryService()._count_items(
+            tenant_id, RESOURCE_TYPE_DATASET, category.id
+        )
+        return ResourceCategoryService()._build_response(category, count)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取数据集分类失败: {str(e)}",
+        )
+
+
+@router.put("/categories/{category_uuid}", response_model=ResourceCategoryResponse)
+async def update_dataset_category(
+    category_uuid: UUID,
+    data: ResourceCategoryUpdate,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """更新数据集分类"""
+    try:
+        category = await ResourceCategoryService().update_category(
+            tenant_id, RESOURCE_TYPE_DATASET, category_uuid, data
+        )
+        count = await ResourceCategoryService()._count_items(
+            tenant_id, RESOURCE_TYPE_DATASET, category.id
+        )
+        return ResourceCategoryService()._build_response(category, count)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"更新数据集分类失败: {str(e)}",
+        )
+
+
+@router.delete("/categories/{category_uuid}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_dataset_category(
+    category_uuid: UUID,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """删除数据集分类（分类下数据集变为未分类）"""
+    try:
+        await ResourceCategoryService().delete_category(
+            tenant_id, RESOURCE_TYPE_DATASET, category_uuid
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"删除数据集分类失败: {str(e)}",
         )
 
 

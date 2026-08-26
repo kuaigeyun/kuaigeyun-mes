@@ -471,8 +471,14 @@ class IntegrationConfigService:
                 result = await IntegrationConfigService._test_dingtalk_connection(integration)
             elif integration.type == "wecom":
                 result = await IntegrationConfigService._test_wecom_connection(integration)
+            elif integration.type == "kingdee_galaxy":
+                from core.services.integration.kingdee_galaxy_service import (
+                    test_kingdee_galaxy_connection_config,
+                )
+
+                result = await test_kingdee_galaxy_connection_config(integration.config or {})
             elif integration.type in (
-                "kingdee_galaxy", "kingdee_xingchen", "kingdee_kis_cloud", "kingdee_kis",
+                "kingdee_xingchen", "kingdee_kis_cloud", "kingdee_kis",
                 "yonyou_yonbip", "yonyou_u8", "yonyou_u9", "yonyou_nc",
                 "sap_s4hana", "sap_b1", "oracle_netsuite", "odoo",
                 "inspur_gs", "inspur_ps",
@@ -709,8 +715,14 @@ class IntegrationConfigService:
                 result = await IntegrationConfigService._test_dingtalk_connection(temp)
             elif temp.type == "wecom":
                 result = await IntegrationConfigService._test_wecom_connection(temp)
+            elif temp.type == "kingdee_galaxy":
+                from core.services.integration.kingdee_galaxy_service import (
+                    test_kingdee_galaxy_connection_config,
+                )
+
+                result = await test_kingdee_galaxy_connection_config(temp.config or {})
             elif temp.type in (
-                "kingdee_galaxy", "kingdee_xingchen", "kingdee_kis_cloud", "kingdee_kis",
+                "kingdee_xingchen", "kingdee_kis_cloud", "kingdee_kis",
                 "yonyou_yonbip", "yonyou_u8", "yonyou_u9", "yonyou_nc",
                 "sap_s4hana", "sap_b1", "oracle_netsuite", "odoo",
                 "inspur_gs", "inspur_ps",

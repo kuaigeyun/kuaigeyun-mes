@@ -206,6 +206,7 @@ TORTOISE_ORM = {
                 "core.models.integration_config",
                 "core.models.file",
                 "core.models.file_preview_markup",
+                "core.models.resource_category",
                 "core.models.api",
                 "core.models.dataset",
                 "core.models.page_metric_config",

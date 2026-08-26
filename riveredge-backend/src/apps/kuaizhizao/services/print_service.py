@@ -23,6 +23,7 @@ from urllib.parse import urlsplit, parse_qs
 from core.services.print.print_template_service import PrintTemplateService
 from core.schemas.print_template import PrintTemplateRenderRequest
 from core.services.i18n.print_localization import PrintLocalization
+from core.services.data.data_dictionary_service import DataDictionaryService
 from apps.kuaizhizao.constants.price_type import DEFAULT_SALES_PRICE_TYPE
 from apps.kuaizhizao.print.document_qrcode import attach_document_qrcode_fields
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
@@ -73,6 +74,10 @@ from core.utils.timezone_utils import resolve_business_datetime, to_api_isoforma
 _FILE_DOWNLOAD_PATH_RE = re.compile(
     r"^/?api/v\d+/core/files/(?P<uuid>[0-9a-fA-F-]{32,36})/download/?$"
 )
+
+
+async def _resolve_print_dictionary_label(tenant_id: int, dictionary_code: str, value: Any) -> str:
+    return await DataDictionaryService.resolve_dictionary_label(tenant_id, dictionary_code, value)
 
 
 def _parse_local_file_download_src(src: str) -> Tuple[str, Optional[int]]:
@@ -1471,7 +1476,9 @@ class DocumentPrintService:
             "delivery_time": delivery_time,
             # 预设模板字段名为 delivery_date，与 delivery_time 同源
             "delivery_date": delivery_time,
-            "shipping_method": getattr(delivery, "shipping_method", None) or "",
+            "shipping_method": await _resolve_print_dictionary_label(
+                delivery.tenant_id, "SHIPPING_METHOD", getattr(delivery, "shipping_method", None)
+            ),
             "tracking_number": getattr(delivery, "tracking_number", None) or "",
             "shipping_address": getattr(delivery, "shipping_address", None) or "",
             "notes": getattr(delivery, "notes", None) or "",
@@ -1816,7 +1823,9 @@ class DocumentPrintService:
             "status": sales_return.status,
             "total_quantity": str(sales_return.total_quantity or 0),
             "total_amount": str(sales_return.total_amount or 0),
-            "shipping_method": sales_return.shipping_method,
+            "shipping_method": await _resolve_print_dictionary_label(
+                sales_return.tenant_id, "SHIPPING_METHOD", sales_return.shipping_method
+            ),
             "tracking_number": sales_return.tracking_number,
             "shipping_address": sales_return.shipping_address,
             "notes": sales_return.notes,
@@ -1959,6 +1968,12 @@ class DocumentPrintService:
             )
         vn = int(getattr(quotation, "version_no", None) or 1)
         series = getattr(quotation, "quotation_series_code", None) or quotation.quotation_code
+        shipping_method_label = await _resolve_print_dictionary_label(
+            quotation.tenant_id, "SHIPPING_METHOD", quotation.shipping_method
+        )
+        payment_terms_label = await _resolve_print_dictionary_label(
+            quotation.tenant_id, "PAYMENT_TERMS", quotation.payment_terms
+        )
         return {
             "document_type": "quotation",
             "code": quotation.quotation_code,
@@ -1986,8 +2001,8 @@ class DocumentPrintService:
             "status": quotation.status,
             "salesman_name": quotation.salesman_name,
             "shipping_address": quotation.shipping_address,
-            "shipping_method": quotation.shipping_method,
-            "payment_terms": quotation.payment_terms,
+            "shipping_method": shipping_method_label,
+            "payment_terms": payment_terms_label,
             "notes": quotation.notes,
             "created_at": to_api_isoformat(quotation.created_at) if quotation.created_at else None,
             "items": items_data,
@@ -2043,6 +2058,12 @@ class DocumentPrintService:
             0,
             float(contract.total_amount or 0) - float(contract.released_amount or 0),
         )
+        shipping_method_label = await _resolve_print_dictionary_label(
+            contract.tenant_id, "SHIPPING_METHOD", contract.shipping_method
+        )
+        payment_terms_label = await _resolve_print_dictionary_label(
+            contract.tenant_id, "PAYMENT_TERMS", contract.payment_terms
+        )
         return {
             "document_type": "sales_contract",
             "code": contract.contract_code,
@@ -2067,8 +2088,8 @@ class DocumentPrintService:
             "status": contract.status,
             "salesman_name": contract.salesman_name,
             "shipping_address": contract.shipping_address,
-            "shipping_method": contract.shipping_method,
-            "payment_terms": contract.payment_terms,
+            "shipping_method": shipping_method_label,
+            "payment_terms": payment_terms_label,
             "quotation_code": contract.quotation_code,
             "term_group_name": contract.term_group_name,
             "contract_terms": _format_sales_contract_terms_for_print(contract.contract_terms),

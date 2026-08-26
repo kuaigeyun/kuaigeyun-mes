@@ -58,6 +58,12 @@ async function loadPurchaseOrder(
   const { getPurchaseOrder } = await import('../../apps/kuaizhizao/services/purchase');
   return getPurchaseOrder(...args);
 }
+async function loadPurchaseOrderChange(
+  ...args: Parameters<typeof import('../../apps/kuaizhizao/services/purchase-order-change').getPurchaseOrderChange>
+) {
+  const { getPurchaseOrderChange } = await import('../../apps/kuaizhizao/services/purchase-order-change');
+  return getPurchaseOrderChange(...args);
+}
 async function loadPurchaseRequisition(
   ...args: Parameters<typeof import('../../apps/kuaizhizao/services/purchase-requisition').getPurchaseRequisition>
 ) {
@@ -423,6 +429,74 @@ async function loadBrief(documentType: string, documentId: number, t: TFunction)
           render: (v: number) => briefAmount(PO, 'amount', v),
         },
         { title: '要求到货', dataIndex: 'required_date', width: 108, render: (v: string) => dash(v) },
+      ];
+      return { basics, columns, rows };
+    }
+    case 'purchase_order_change': {
+      const c = await loadPurchaseOrderChange(documentId);
+      const basics: BriefModel['basics'] = [
+        { key: 'code', label: '变更单号', value: dash(c.change_code) },
+        { key: 'source', label: '原采购订单', value: dash(c.source_order_code) },
+        { key: 'supplier', label: '供应商', value: dash(c.supplier_name) },
+        { key: 'status', label: '状态', value: briefDocStatus(c.status) },
+        { key: 'reason', label: '变更原因', value: dash(c.change_reason) },
+        {
+          key: 'delta',
+          label: '金额差异',
+          value: briefAmount(PO, 'total_amount', c.delta_amount),
+        },
+      ];
+      const changedRows = (c.items ?? []).filter((it) => {
+        const qtyChanged = it.before_quantity !== it.after_quantity;
+        const priceChanged = it.before_unit_price !== it.after_unit_price;
+        const dateChanged = it.before_delivery_date !== it.after_delivery_date;
+        const typeChanged = it.change_type && !['QUANTITY', 'PRICE', 'DELIVERY_DATE'].includes(it.change_type)
+          ? true
+          : false;
+        return qtyChanged || priceChanged || dateChanged || typeChanged || Number(it.delta_amount || 0) !== 0;
+      });
+      const rows = (changedRows.length ? changedRows : c.items ?? []).map((it, i) => ({
+        key: String(it.id ?? i),
+        material_code: it.material_code,
+        material_name: it.material_name,
+        before_qty: it.before_quantity,
+        after_qty: it.after_quantity,
+        before_price: it.before_unit_price,
+        after_price: it.after_unit_price,
+        before_date: it.before_delivery_date,
+        after_date: it.after_delivery_date,
+        delta_amount: it.delta_amount,
+      }));
+      const columns: BriefModel['columns'] = [
+        { title: '物料编码', dataIndex: 'material_code', ellipsis: true },
+        { title: '物料名称', dataIndex: 'material_name', ellipsis: true },
+        {
+          title: '数量',
+          dataIndex: 'before_qty',
+          width: 120,
+          render: (_: unknown, row: Record<string, unknown>) =>
+            `${formatQuantity(row.before_qty as number)} → ${formatQuantity(row.after_qty as number)}`,
+        },
+        {
+          title: '单价',
+          dataIndex: 'before_price',
+          width: 120,
+          render: (_: unknown, row: Record<string, unknown>) =>
+            `${briefAmount(PO, 'unit_price', row.before_price as number)} → ${briefAmount(PO, 'unit_price', row.after_price as number)}`,
+        },
+        {
+          title: '到货日',
+          dataIndex: 'before_date',
+          width: 180,
+          render: (_: unknown, row: Record<string, unknown>) =>
+            `${dash(row.before_date)} → ${dash(row.after_date)}`,
+        },
+        {
+          title: '差异金额',
+          dataIndex: 'delta_amount',
+          width: 104,
+          render: (v: number) => briefAmount(PO, 'amount', v),
+        },
       ];
       return { basics, columns, rows };
     }

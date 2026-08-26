@@ -892,3 +892,51 @@ class DataDictionaryService:
             "items_updated_count": updated_items_count,
         }
 
+    @staticmethod
+    def system_dictionary_label_map(code: str) -> Dict[str, str]:
+        """SYSTEM_DICTIONARIES 预置 value -> label（租户字典缺失时的打印/展示兜底）。"""
+        from core.config.system_dictionaries import SYSTEM_DICTIONARIES
+
+        dict_config = next((d for d in SYSTEM_DICTIONARIES if d.get("code") == code), None)
+        if not dict_config:
+            return {}
+        out: Dict[str, str] = {}
+        for item in dict_config.get("items") or []:
+            value = normalize_dictionary_item_token(item.get("value"))
+            label = normalize_dictionary_item_token(item.get("label"))
+            if value:
+                out[value] = label or value
+        return out
+
+    @staticmethod
+    async def get_dictionary_label_map(tenant_id: int, code: str) -> Dict[str, str]:
+        """租户数据字典 value -> label；无租户项时回退 SYSTEM_DICTIONARIES。"""
+        dictionary = await DataDictionaryService.get_dictionary_by_code(tenant_id, code)
+        if not dictionary:
+            dictionary = await DataDictionaryService.ensure_system_dictionary_exists(tenant_id, code)
+        if dictionary:
+            items = await DataDictionaryService.get_items_by_dictionary(
+                tenant_id,
+                str(dictionary.uuid),
+                is_active=True,
+            )
+            if items:
+                return {
+                    normalize_dictionary_item_token(i.value): (
+                        normalize_dictionary_item_token(i.label)
+                        or normalize_dictionary_item_token(i.value)
+                    )
+                    for i in items
+                    if normalize_dictionary_item_token(i.value)
+                }
+        return DataDictionaryService.system_dictionary_label_map(code)
+
+    @staticmethod
+    async def resolve_dictionary_label(tenant_id: int, code: str, value: Any) -> str:
+        """将字典项 value 解析为展示 label；未知 value 原样返回。"""
+        raw = normalize_dictionary_item_token(value)
+        if not raw:
+            return ""
+        label_map = await DataDictionaryService.get_dictionary_label_map(tenant_id, code)
+        return label_map.get(raw, raw)
+

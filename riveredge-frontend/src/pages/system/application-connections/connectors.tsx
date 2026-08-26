@@ -52,6 +52,30 @@ export function isLlmConnectionType(type: string): type is LlmConnectionType {
   return (LLM_CONNECTION_TYPES as readonly string[]).includes(type);
 }
 
+export function appConnectorTypeI18nKey(type: string): string {
+  if (!type) return '';
+  const tc = `type${type.charAt(0).toUpperCase()}${type.slice(1)}`;
+  return `pages.system.applicationConnections.${tc}`;
+}
+
+export function getAppConnectorDefinitionByType(type: string): AppConnectorDefinition | undefined {
+  return APP_CONNECTOR_DEFINITIONS.find((c) => c.type === type);
+}
+
+/** 列表/详情展示连接器类型：优先 i18n，缺失时回退 connectors 定义 name */
+export function resolveAppConnectorTypeLabel(
+  type: string,
+  t: (key: string, options?: { defaultValue?: string }) => string,
+): string {
+  if (!type) return '';
+  const definition = getAppConnectorDefinitionByType(type);
+  const defaultValue = definition?.name ?? type;
+  const key = appConnectorTypeI18nKey(type);
+  if (!key) return defaultValue;
+  const text = t(key, { defaultValue });
+  return text === key ? defaultValue : text;
+}
+
 /** @deprecated 使用 isLlmConnectionType */
 export function isSiteIntegrationConnector(type: string): type is LlmConnectionType {
   return isLlmConnectionType(type);
@@ -104,7 +128,7 @@ export const APP_CONNECTOR_DEFINITIONS: AppConnectorDefinition[] = [
     category: 'erp',
     description: '金蝶云星空 WebAPI',
     icon: <CloudOutlined />,
-    defaultConfig: { base_url: '', app_id: '', app_secret: '', acct_id: '', lcid: '2052' },
+    defaultConfig: { base_url: '', app_id: '', app_secret: '', acct_id: '', username: '', lcid: '2052' },
   },
   {
     id: 'kingdee_xingchen',

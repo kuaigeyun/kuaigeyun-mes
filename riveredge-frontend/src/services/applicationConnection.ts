@@ -183,6 +183,26 @@ export async function syncApplicationConnectionContacts(
   });
 }
 
+export interface LoadConnectorApiPresetsResponse {
+  connection_uuid: string;
+  connection_code: string;
+  connection_type: string;
+  created_count: number;
+  skipped_count: number;
+  created_codes: string[];
+  skipped_codes: string[];
+}
+
+/** 为业务系统连接器加载常用接口预设（如金蝶云星空） */
+export async function loadApplicationConnectionApiPresets(
+  uuid: string,
+): Promise<LoadConnectorApiPresetsResponse> {
+  return apiRequest<LoadConnectorApiPresetsResponse>(
+    `/core/application-connections/${uuid}/load-api-presets`,
+    { method: 'POST' },
+  );
+}
+
 export interface ConnectorDefinition {
   id: string;
   name: string;

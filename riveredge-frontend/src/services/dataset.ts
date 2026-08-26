@@ -22,6 +22,8 @@ export interface Dataset {
   display_config?: Record<string, any>;
   is_active: boolean;
   data_source_uuid: string;
+  category_uuid?: string | null;
+  category_name?: string | null;
   last_executed_at?: string;
   last_error?: string;
   created_at: string;
@@ -36,6 +38,8 @@ export interface DatasetListParams {
   output_type?: OutputType;
   data_source_uuid?: string;
   is_active?: boolean;
+  category_uuid?: string;
+  no_category?: boolean;
 }
 
 export interface DatasetListResponse {
@@ -55,6 +59,7 @@ export interface CreateDatasetData {
   display_config?: Record<string, any>;
   data_source_uuid: string;
   is_active?: boolean;
+  category_uuid?: string | null;
 }
 
 export interface UpdateDatasetData {
@@ -66,6 +71,7 @@ export interface UpdateDatasetData {
   output_type?: OutputType;
   display_config?: Record<string, any>;
   is_active?: boolean;
+  category_uuid?: string | null;
 }
 
 export interface ExecuteQueryRequest {

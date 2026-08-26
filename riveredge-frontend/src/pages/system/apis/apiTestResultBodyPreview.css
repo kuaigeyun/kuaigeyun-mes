@@ -1,0 +1,13 @@
+/**
+ * 接口测试响应表格：DetailDrawerLinesScroll 默认会把表体 overflow 设为 visible，
+ * 与 Ant Table 分页布局冲突，需在本容器内恢复常规表体滚动与分页间距。
+ */
+.uni-detail-lines-scroll .api-test-result-body-table .ant-table-wrapper .ant-table-body,
+.uni-detail-lines-scroll .api-test-result-body-table .ant-table-wrapper .ant-table-content {
+  overflow: auto !important;
+}
+
+.api-test-result-body-table .ant-table-wrapper .ant-table-pagination {
+  position: relative;
+  margin-top: 12px;
+}
