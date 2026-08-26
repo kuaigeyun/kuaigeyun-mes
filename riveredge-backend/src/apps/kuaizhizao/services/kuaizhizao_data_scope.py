@@ -129,7 +129,7 @@ async def _sales_order_linked_from_quality_inspection(
 ) -> bool:
     """是否存在引用该销售订单的质检单（成品 / 出货检验，含经工单间接关联）。"""
     from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection
-    from apps.kuaizhizao.models.oqc_inspection import OqcInspection
+    from apps.kuaizhizao.models.oqc_inspection import OQCInspection
     from apps.kuaizhizao.models.work_order import WorkOrder
 
     so_id = int(sales_order_id)
@@ -140,7 +140,7 @@ async def _sales_order_linked_from_quality_inspection(
     )
     if await FinishedGoodsInspection.filter(**direct_filters).exists():
         return True
-    if await OqcInspection.filter(**direct_filters).exists():
+    if await OQCInspection.filter(**direct_filters).exists():
         return True
 
     work_order_ids = await WorkOrder.filter(
@@ -155,18 +155,15 @@ async def _sales_order_linked_from_quality_inspection(
         work_order_id__in=list(work_order_ids),
         deleted_at__isnull=True,
     )
-    if await FinishedGoodsInspection.filter(**wo_filters).exists():
-        return True
-    return await OqcInspection.filter(**wo_filters).exists()
+    return await FinishedGoodsInspection.filter(**wo_filters).exists()
 
 
 async def _work_order_linked_from_quality_inspection(
     tenant_id: int,
     work_order_id: int,
 ) -> bool:
-    """是否存在引用该工单的质检单（来料 / 过程 / 成品 / 出货检验）。"""
+    """是否存在引用该工单的质检单（成品 / 过程检验）。"""
     from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection
-    from apps.kuaizhizao.models.oqc_inspection import OqcInspection
     from apps.kuaizhizao.models.process_inspection import ProcessInspection
 
     filters = dict(
@@ -176,9 +173,7 @@ async def _work_order_linked_from_quality_inspection(
     )
     if await FinishedGoodsInspection.filter(**filters).exists():
         return True
-    if await ProcessInspection.filter(**filters).exists():
-        return True
-    return await OqcInspection.filter(**filters).exists()
+    return await ProcessInspection.filter(**filters).exists()
 
 
 async def allow_sales_order_detail_quality_linked_read(
