@@ -5155,9 +5155,23 @@ _resolve_client_web_dist_dir() {
 # 将私仓 web-dist 安装到主仓 Caddy 路径 riveredge-app/mobile/web-dist
 install_mobile_h5_from_client_repo() {
     local client_root="$1"
-    local src_dist dest_dist
+    local src_dist dest_dist rel
+    client_root="$(_env_read_trim "$client_root")"
+    # checkout -B 不会恢复「同提交上已删的工作区文件」。失败的 expo export 会掏空 web-dist，
+    # 导致 HEAD 里有 index.html、工作区却找不到。安装前从 HEAD 强制还原已跟踪产物。
+    if [ -d "$client_root/.git" ]; then
+        for rel in \
+            "riveredge-app-mobile/web-dist" \
+            "mobile/web-dist" \
+            "riveredge-app/mobile/web-dist"
+        do
+            if git -C "$client_root" cat-file -e "HEAD:${rel}/index.html" 2>/dev/null; then
+                git -C "$client_root" checkout -f HEAD -- "$rel" || true
+            fi
+        done
+    fi
     src_dist="$(_resolve_client_web_dist_dir "$client_root")" || {
-        log_error "私仓中未找到 web-dist/index.html（期望 riveredge-app-mobile/web-dist）"
+        log_error "私仓中未找到 web-dist/index.html（期望 ${client_root}/riveredge-app-mobile/web-dist）"
         log_error "请先在有 Node 的环境执行 ./fast-deploy/build.mobile.web.sh 并推送到 kuaigeyun-client"
         return 1
     }
