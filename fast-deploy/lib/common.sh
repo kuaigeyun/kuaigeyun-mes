@@ -5223,6 +5223,7 @@ run_update_dev() {
     ensure_backend_restarted_for_release
     cmd_start_dev || return 1
     unset FORCE_BACKEND_RESTART
+    log_ok "开发环境更新已完成"
 }
 
 run_update_prod() {
@@ -5245,6 +5246,7 @@ run_update_prod() {
     ensure_backend_restarted_for_release
     cmd_start_prod || return 1
     unset FORCE_BACKEND_RESTART
+    log_ok "生产环境更新已完成"
 }
 
 cmd_update_dev() {

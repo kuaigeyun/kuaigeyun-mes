@@ -1691,6 +1691,7 @@ wizard_update_app() {
     fi
 
     wizard_run_deploy_step release_meta_final "确认发版信息与运行 commit 一致" "$log" record_deploy_release_metadata || return 1
+    wizard_say_ok "系统更新已全部完成（Playwright 补装若在后台运行，不影响访问）"
 }
 
 wizard_show_summary() {
@@ -1839,12 +1840,20 @@ cmd_wizard() {
         unset WIZARD_INTENT
         wizard_banner
         wizard_show_system_status
-        local rc=0
+        local rc=0 intent
         wizard_ask_intent || rc=$?
         if [ "$rc" = "2" ]; then
             continue
         fi
+        intent="${WIZARD_INTENT:-fresh}"
         wizard_dispatch_intent
-        break
+        case "$intent" in
+            update|configure)
+                wizard_pause_return_menu
+                ;;
+            *)
+                break
+                ;;
+        esac
     done
 }
