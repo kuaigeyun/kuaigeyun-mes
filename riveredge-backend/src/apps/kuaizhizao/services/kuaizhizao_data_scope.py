@@ -74,8 +74,13 @@ async def apply_sales_order_child_list_scope(
         user=current_user,
         resource=SALES_ORDER_SCOPE_RESOURCE,
     )
-    linked = Q(**{f"{order_id_field}__in": scoped_orders.values_list("id", flat=True)})
+    order_ids = [int(x) for x in await scoped_orders.values_list("id", flat=True)]
+    linked: Q | None = None
+    if order_ids:
+        linked = Q(**{f"{order_id_field}__in": order_ids})
     if not orphan_resource:
+        if linked is None:
+            return query.filter(id=-1)
         return query.filter(linked)
 
     orphan_qs = query.filter(**{f"{order_id_field}__isnull": True})
@@ -85,10 +90,18 @@ async def apply_sales_order_child_list_scope(
         user=current_user,
         resource=orphan_resource,
     )
-    orphan_ids = await orphan_scoped.values_list("id", flat=True)
+    orphan_ids = [int(x) for x in await orphan_scoped.values_list("id", flat=True)]
+    clauses: list[Q] = []
+    if linked is not None:
+        clauses.append(linked)
     if orphan_ids:
-        return query.filter(linked | Q(id__in=list(orphan_ids)))
-    return query.filter(linked)
+        clauses.append(Q(id__in=orphan_ids))
+    if not clauses:
+        return query.filter(id=-1)
+    combined = clauses[0]
+    for part in clauses[1:]:
+        combined |= part
+    return query.filter(combined)
 
 
 async def assert_sales_order_child_row_visible(
