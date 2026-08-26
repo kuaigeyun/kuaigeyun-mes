@@ -80,14 +80,28 @@ function Test-VectorControlInstalled([string]$PgConfig) {
     return Test-Path (Join-Path $sharedir 'extension\vector.control')
 }
 
+function Get-PgvectorZipName([int]$Major, [string]$Version) {
+    return "vector.v$Version-pg$Major.zip"
+}
+
+function Get-BundledPgvectorZip([int]$Major, [string]$Version) {
+    $path = Join-Path $FastDeployDir ("vendor\pgvector\" + (Get-PgvectorZipName $Major $Version))
+    if (Test-Path $path) { return $path }
+    return $null
+}
+
 function Get-PgvectorZipUrls([int]$Major, [string]$Version) {
     $tag = "${Version}_$Major"
-    $file = "vector.$Version-pg$Major.zip"
+    $file = Get-PgvectorZipName $Major $Version
     $official = "https://github.com/andreiramani/pgvector_pgsql_windows/releases/download/$tag/$file"
     if ($UseMirror -eq '1') {
+        # China GitHub release proxies first; official GitHub last.
         return Get-UniqueUrls @(
+            "https://gh-proxy.com/$official",
+            "https://ghfast.top/$official",
             "https://ghproxy.net/$official",
-            "https://mirror.ghproxy.com/$official",
+            "https://gh.llkk.cc/$official",
+            "https://hub.gitmirror.com/$official",
             $official
         )
     }
@@ -167,18 +181,18 @@ $major = [int]$Matches[1]
 
 Write-Info "installing pgvector (PostgreSQL $major, PGROOT=$pgRoot)..."
 
-$tmpdir = Get-InstallTempDir
-$zip = Join-Path $tmpdir "vector-pg$major.zip"
-$downloaded = $false
-foreach ($ver in @('0.8.6', '0.8.5')) {
-    if (Invoke-DownloadWithFallback (Get-PgvectorZipUrls $major $ver) $zip) {
-        $downloaded = $true
-        Write-Info "using pgvector release $ver for PostgreSQL $major"
-        break
+$version = '0.8.6'
+$zip = Get-BundledPgvectorZip $major $version
+if ($zip) {
+    Write-Info "using bundled pgvector $version (Gitee/git tree, no download)"
+} else {
+    $tmpdir = Get-InstallTempDir
+    $zip = Join-Path $tmpdir "vector-pg$major.zip"
+    if (Invoke-DownloadWithFallback (Get-PgvectorZipUrls $major $version) $zip) {
+        Write-Info "using pgvector release $version for PostgreSQL $major"
+    } else {
+        Write-Err "pgvector download failed (PostgreSQL $major). Pull fast-deploy/vendor/pgvector or install from https://github.com/andreiramani/pgvector_pgsql_windows/releases"
     }
-}
-if (-not $downloaded) {
-    Write-Err "pgvector download failed (PostgreSQL $major). Check network or install manually from https://github.com/andreiramani/pgvector_pgsql_windows/releases"
 }
 
 try {
