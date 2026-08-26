@@ -35,7 +35,7 @@ USE_MIRROR="${USE_MIRROR:-1}"
 if [ "$DEPLOY_MODE" = "prod" ]; then
     BACKEND_START_TIMEOUT="${BACKEND_START_TIMEOUT:-90}"
 else
-    BACKEND_START_TIMEOUT="${BACKEND_START_TIMEOUT:-30}"
+    BACKEND_START_TIMEOUT="${BACKEND_START_TIMEOUT:-120}"
 fi
 # Vite 冷启动 / optimizeDeps 偏慢；仅开发前端就绪探测使用
 FRONTEND_START_TIMEOUT="${FRONTEND_START_TIMEOUT:-90}"
@@ -2033,6 +2033,11 @@ backend_uv_extra_args() {
     printf '%s' "${extras[*]}"
 }
 
+# 开发 API：reload exclude 在 Python 侧（server/dev_reload.py），避免 Windows Bash 通配展开
+backend_dev_server_entry() {
+    printf '%s' "python scripts/run_dev_server.py"
+}
+
 sync_backend_deps() {
     if [ "${_BACKEND_DEPS_SYNCED:-0}" = "1" ]; then
         return 0
@@ -2853,8 +2858,7 @@ start_backend_dev() {
         cd "$BACKEND_DIR"
         export PYTHONPATH="$BACKEND_DIR/src"
         export SETUPTOOLS_EGG_INFO_DIR="$LOGS_DIR"
-        nohup "$(resolve_uv)" run $(backend_uv_extra_args) uvicorn server.main:app \
-            --host 0.0.0.0 --port "$BACKEND_PORT" --reload --reload-dir src \
+        nohup "$(resolve_uv)" run $(backend_uv_extra_args) $(backend_dev_server_entry) \
             > "$LOGS_DIR/backend.log" 2>&1 &
         echo $! > "$LOGS_DIR/backend.pid"
     )

@@ -209,8 +209,11 @@ function Start-BgBackendSlot([string]$Slot, [string]$Mode) {
     if ($Mode -eq 'prod') { Sync-BackendDeps }
     Write-LogInfo "启动 backend-$Slot ($Mode, :$port)..."
     $hostAddr = if ($Mode -eq 'dev') { '0.0.0.0' } else { '127.0.0.1' }
-    $args = @('run','--extra','pdf','uvicorn','server.main:app','--host',$hostAddr,'--port',"$port")
-    if ($Mode -eq 'dev') { $args += @('--reload','--reload-dir','src') } else { $args += @('--workers','1') }
+    if ($Mode -eq 'dev') {
+        $args = @('run','--extra','pdf','python','scripts/run_dev_server.py')
+    } else {
+        $args = @('run','--extra','pdf','uvicorn','server.main:app','--host',$hostAddr,'--port',"$port",'--workers','1')
+    }
     $envVars = @{
         PORT = "$port"; HOST = $hostAddr; PYTHONPATH = (Join-Path $script:BackendDir 'src')
         SETUPTOOLS_EGG_INFO_DIR = $script:LogsDir; WORKDIR = $script:BackendDir

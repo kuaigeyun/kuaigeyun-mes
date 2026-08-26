@@ -295,12 +295,12 @@ bg_start_backend_slot() {
     kill_port "$port"
     if [ "$mode" = "dev" ]; then
         host="0.0.0.0"
-        reload_args=(--reload --reload-dir src)
+        server_entry=(python scripts/run_dev_server.py)
         log_info "启动 backend-${slot} (dev, :${port})..."
     else
         sync_backend_deps
         host="127.0.0.1"
-        reload_args=(--workers 1)
+        server_entry=(uvicorn server.main:app --host "$host" --port "$port" --workers 1)
         log_info "启动 backend-${slot} (prod, :${port})..."
     fi
     (
@@ -314,8 +314,7 @@ bg_start_backend_slot() {
             export DEBUG=false
             playwright_export_env
         fi
-        nohup "$(resolve_uv)" run $(backend_uv_extra_args) uvicorn server.main:app \
-            --host "$host" --port "$port" "${reload_args[@]}" \
+        nohup "$(resolve_uv)" run $(backend_uv_extra_args) "${server_entry[@]}" \
             > "$(bg_backend_log_file "$slot")" 2>&1 &
         echo $! >"$pidf"
     )

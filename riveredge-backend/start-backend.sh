@@ -89,16 +89,9 @@ if [ $? -ne 0 ]; then
 fi
 echo ""
 
-# 启动服务（启用热重载，监控 src 目录）
-# 使用 UV 运行，自动使用 .venv 虚拟环境
-# 主机和端口从环境变量读取（HOST 和 PORT），未设置时使用配置文件默认值
-# Windows Git Bash + uv run 会把未妥善保护的 ** 通配展开成海量路径塞进 uvicorn，
-# 导致 "Got unexpected extra arguments (...__pycache__...)"。此处仅监控 src，不再堆 exclude 通配。
-PYTHONPATH="${PYTHONPATH}:$(pwd)/src" uv run uvicorn server.main:app \
-  --host "${BACKEND_HOST}" \
-  --port "${BACKEND_PORT}" \
-  --reload \
-  --reload-dir src \
-  --reload-delay 1.0
+# 开发热重载：走 scripts/run_dev_server.py（reload exclude 在 Python 侧配置，避免 Windows Bash 通配展开）
+export HOST="${BACKEND_HOST}"
+export PORT="${BACKEND_PORT}"
+PYTHONPATH="${PYTHONPATH}:$(pwd)/src" uv run python scripts/run_dev_server.py
 
 

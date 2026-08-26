@@ -105,6 +105,7 @@ scripts/
 !riveredge-backend/scripts/
 riveredge-backend/scripts/*
 !riveredge-backend/scripts/pack_sensitive_words.py
+!riveredge-backend/scripts/run_dev_server.py
 
 # 部署面板脚本（勿被根目录 scripts/ 规则误伤）
 riveredge-panel/

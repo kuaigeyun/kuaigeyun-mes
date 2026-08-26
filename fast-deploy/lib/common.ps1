@@ -30,7 +30,7 @@ $script:BootEnvFile = Join-Path $script:ConfigDir 'boot-service.env'
 if (-not $env:DEPLOY_MODE) { $env:DEPLOY_MODE = 'prod' }
 $script:DeployMode = $env:DEPLOY_MODE
 $script:UseMirror = ($env:USE_MIRROR -ne '0')
-$script:BackendStartTimeout = 30
+$script:BackendStartTimeout = if ($script:DeployMode -eq 'prod') { 90 } else { 120 }
 $script:BackendDepsSynced = $false
 
 # Windows 默认 GBK，aerich 读 pyproject.toml（UTF-8）会 UnicodeDecodeError
@@ -1473,8 +1473,10 @@ function Start-BackendDev {
     try {
         $env:PYTHONPATH = Join-Path $script:BackendDir 'src'
         $env:SETUPTOOLS_EGG_INFO_DIR = $script:LogsDir
-        $args = @('run','--extra','pdf','uvicorn','server.main:app','--host','0.0.0.0',"--port",$script:BACKEND_PORT,'--reload','--reload-dir','src')
-        $pid = Start-ProcessBackground 'backend' $uv $args @{ PYTHONPATH = $env:PYTHONPATH; SETUPTOOLS_EGG_INFO_DIR = $script:LogsDir; WORKDIR = $script:BackendDir }
+        $env:HOST = '0.0.0.0'
+        $env:PORT = "$($script:BACKEND_PORT)"
+        $args = @('run','--extra','pdf','python','scripts/run_dev_server.py')
+        $pid = Start-ProcessBackground 'backend' $uv $args @{ PYTHONPATH = $env:PYTHONPATH; SETUPTOOLS_EGG_INFO_DIR = $script:LogsDir; HOST = $env:HOST; PORT = $env:PORT; WORKDIR = $script:BackendDir }
     } finally { Pop-Location }
     $retries = 0
     while ($retries -lt $script:BackendStartTimeout) {
