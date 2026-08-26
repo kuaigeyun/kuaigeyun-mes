@@ -27,6 +27,7 @@ import {
   type PurchaseArrivalWarningRow,
 } from '../../../services/purchase-arrival';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import {
   buildPurchaseArrivalProcessingStatusValueEnum,
   purchaseArrivalProcessingStatusLabel,
@@ -272,8 +273,8 @@ const PurchaseArrivalWarningsPage: React.FC = () => {
             setDelayOpen(false);
             actionRef.current?.reload();
             return true;
-          } catch (e: any) {
-            messageApi.error(e?.message || t('common.operationFailed'));
+          } catch (e: unknown) {
+            messageApi.error(getApiErrorMessage(e, t('common.operationFailed')));
             return false;
           }
         }}

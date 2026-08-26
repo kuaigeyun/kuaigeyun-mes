@@ -5181,6 +5181,7 @@ export default {
   'app.kuaizhizao.purchaseOrderChange.capability.purchase_order_change.delete.not_draft': '仅草稿状态可删除',
   'app.kuaizhizao.purchaseOrderChange.capability.purchase_order_change.submit.not_draft': '仅草稿可提交',
   'app.kuaizhizao.purchaseOrderChange.capability.purchase_order_change.submit.no_changes': '变更单无任何变更内容，无法提交',
+  'app.kuaizhizao.purchaseOrderChange.submitNoChangesHint': '请在下方明细中修改至少一行的交期、数量或单价后再提交；仅填写变更原因无法提交。',
   'app.kuaizhizao.purchaseOrderChange.capability.purchase_order_change.withdraw_submit.not_pending': '仅待审核状态可撤回',
   'app.kuaizhizao.purchaseOrderChange.capability.purchase_order_change.approve.not_pending': '仅待审核状态可审批',
   'app.kuaizhizao.purchaseOrderChange.capability.purchase_order_change.revoke_approval.not_allowed': '当前状态不可撤销审核',

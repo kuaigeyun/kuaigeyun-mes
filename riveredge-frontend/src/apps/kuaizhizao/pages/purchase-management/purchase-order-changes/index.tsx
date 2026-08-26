@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useSearchParams } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Descriptions, Form, Input, Space, Tag, Typography } from 'antd';
+import { App, Alert, Button, Descriptions, Form, Input, Space, Tag, Typography } from 'antd';
 import { DeleteOutlined, EditOutlined, PlusOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { LinkedDocumentCode } from '../../../../../components/linked-document-code';
@@ -23,7 +23,7 @@ import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
-import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG,   useDetailDrawerDescriptionItems } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, FormModalGridBlock, DRAWER_CONFIG, MODAL_CONFIG,   useDetailDrawerDescriptionItems } from '../../../../../components/layout-templates';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
@@ -81,6 +81,21 @@ type PullPurchaseOrderCandidate = PurchaseOrder & {
   order_code: string;
 };
 
+type OrderChangeLineItem = NonNullable<PurchaseOrderChange['items']>[number];
+
+function orderChangeItemsHaveContent(items: OrderChangeLineItem[] | undefined): boolean {
+  return (items ?? []).some((item) => {
+    const changeType = String(item.change_type ?? '').toUpperCase();
+    if (changeType === 'LINE_ADD' || changeType === 'LINE_CANCEL') return true;
+    const delta = Number(item.delta_amount ?? 0);
+    if (Number.isFinite(delta) && delta !== 0) return true;
+    if (item.after_quantity !== item.before_quantity) return true;
+    if (item.after_unit_price !== item.before_unit_price) return true;
+    if (item.after_delivery_date !== item.before_delivery_date) return true;
+    return false;
+  });
+}
+
 const PurchaseOrderChangesPage: React.FC = () => {
   const { t } = useTranslation();
   const { message, modal } = App.useApp();
@@ -111,6 +126,11 @@ const PurchaseOrderChangesPage: React.FC = () => {
   const [impactData, setImpactData] = useState<Awaited<ReturnType<typeof previewPurchaseOrderChangeImpact>> | null>(null);
   const [pendingSubmitId, setPendingSubmitId] = useState<number | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+
+  const editItemsHaveChangeContent = useMemo(
+    () => orderChangeItemsHaveContent(editItems),
+    [editItems],
+  );
 
   const selectedChangesForBatch = useMemo(
     () =>
@@ -899,6 +919,14 @@ const PurchaseOrderChangesPage: React.FC = () => {
         form={editForm}
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
       >
+        {!editItemsHaveChangeContent ? (
+          <FormModalGridBlock>
+            <Alert
+              type="info"
+              title={t('app.kuaizhizao.purchaseOrderChange.submitNoChangesHint')}
+            />
+          </FormModalGridBlock>
+        ) : null}
         <ProFormTextArea name="change_reason" label={t('app.kuaizhizao.purchaseOrderChange.colChangeReason')} rules={[{ required: true }]} />
         <ProFormTextArea name="notes" label={t('common.remark')} />
         <DocumentAttachmentsField category="purchase_order_change_attachments" />
@@ -993,7 +1021,22 @@ const PurchaseOrderChangesPage: React.FC = () => {
           showPurchaseOrderChangeAttachments ? t('app.uniDetail.sectionAttachments') : undefined
         }
         supplementaryVisible={showPurchaseOrderChangeAttachments}
-        lines={detail ? <OrderChangeItemsTable items={detail.items ?? []} /> : undefined}
+        lines={
+          detail ? (
+            <>
+              {!orderChangeItemsHaveContent(detail.items) &&
+              detail.capabilities?.update?.allowed &&
+              !detail.capabilities?.submit?.allowed ? (
+                <Alert
+                  type="info"
+                  title={t('app.kuaizhizao.purchaseOrderChange.submitNoChangesHint')}
+                  style={{ marginBottom: 12 }}
+                />
+              ) : null}
+              <OrderChangeItemsTable items={detail.items ?? []} />
+            </>
+          ) : undefined
+        }
         timeline={
           detail ? (
             changeTracking.data && !changeTracking.loading ? (
