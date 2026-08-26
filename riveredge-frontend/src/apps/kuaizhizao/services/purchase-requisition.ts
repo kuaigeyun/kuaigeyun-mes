@@ -17,6 +17,7 @@ export interface PurchaseRequisitionCapabilities {
   revoke_approval?: ActionCapability;
   push_purchase_order?: ActionCapability;
   push_inquiry?: ActionCapability;
+  print?: ActionCapability;
 }
 
 export interface PurchaseRequisitionLifecycle {

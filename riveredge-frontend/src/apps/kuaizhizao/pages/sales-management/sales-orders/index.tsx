@@ -236,6 +236,7 @@ import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../s
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useLeaveFormTab } from '../../../../../components/uni-tabs/navigateClosingTab';
 import { useTranslation } from 'react-i18next';
+import { useNumericPrecision } from '../../../../../hooks/useNumericPrecision';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDeferAfterPaint } from '../../../../../hooks/useDeferAfterPaint';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
@@ -492,6 +493,7 @@ const SalesOrderSalesmanField: React.FC<{ userList: User[]; loading: boolean }> 
 
 const SalesOrdersPage: React.FC = () => {
   const { t } = useTranslation();
+  const { quantity: quantityDecimals, price: priceDecimals, amount: amountDecimals } = useNumericPrecision();
   const { message: messageApi, modal: modalApi } = App.useApp();
   const kuaiaiAvailable = useKuaiaiEntryAvailable();
   const salesCommonFormLabels = useMemo(() => getSalesCommonFormLabels(t), [t]);
@@ -2321,7 +2323,7 @@ const SalesOrdersPage: React.FC = () => {
         align: 'right' as const,
         render: (v: number | undefined) =>
           v != null
-            ? Number(v).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+            ? formatAmount(v)
             : '-',
       },
       {
@@ -2396,7 +2398,7 @@ const SalesOrdersPage: React.FC = () => {
         align: 'right' as const,
         render: (v: number | undefined) =>
           v != null
-            ? Number(v).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+            ? formatAmount(v)
             : '-',
       },
       {
@@ -2462,7 +2464,7 @@ const SalesOrdersPage: React.FC = () => {
         align: 'right' as const,
         render: (v: number | undefined) =>
           v != null
-            ? Number(v).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+            ? formatAmount(v)
             : '-',
       },
       {
@@ -3845,7 +3847,7 @@ const SalesOrdersPage: React.FC = () => {
             name="prepayment_amount"
             label={t('app.kuaizhizao.salesOrder.prepaymentAmount')}
           >
-            <InputNumber min={0} precision={2} style={{ width: '100%' }} placeholder={t('app.kuaizhizao.salesOrder.prepaymentAmountPlaceholder')} />
+            <InputNumber min={0} precision={amountDecimals} style={{ width: '100%' }} placeholder={t('app.kuaizhizao.salesOrder.prepaymentAmountPlaceholder')} />
           </ProForm.Item>
         </Col>
         <Col span={6}>
@@ -4079,7 +4081,7 @@ const SalesOrdersPage: React.FC = () => {
                       ...DOCUMENT_DETAIL_NUM_COL,
                       render: (_: any, __: any, index: number) => (
                         <AntForm.Item name={[index, 'required_quantity']} rules={[{ required: true, message: t('common.required') }, { type: 'number', min: 0.01, message: t('app.kuaizhizao.salesOrder.quantityMinHint') }]} style={{ margin: 0 }}>
-                          <InputNumber placeholder={t('common.quantity')} min={0} precision={2} style={{ width: '100%' }} size={DOCUMENT_DETAIL_CONTROL_SIZE} />
+                          <InputNumber placeholder={t('common.quantity')} min={0} precision={quantityDecimals} style={{ width: '100%' }} size={DOCUMENT_DETAIL_CONTROL_SIZE} />
                         </AntForm.Item>
                       ),
                     },
@@ -4148,7 +4150,7 @@ const SalesOrdersPage: React.FC = () => {
                                       : t('app.kuaizhizao.salesOrder.unitPricePlaceholder')
                                   }
                                   min={0}
-                                  precision={2}
+                                  precision={priceDecimals}
                                   prefix="¥"
                                   size={DOCUMENT_DETAIL_CONTROL_SIZE}
                                   disabled={isGift}
@@ -4278,7 +4280,7 @@ const SalesOrdersPage: React.FC = () => {
                               <InputNumber
                                 placeholder={t('app.kuaizhizao.salesOrder.inclAmountPlaceholder')}
                                 min={0}
-                                precision={2}
+                                precision={amountDecimals}
                                 prefix="¥"
                                 style={{ width: '100%' }}
                                 size={DOCUMENT_DETAIL_CONTROL_SIZE}
@@ -5476,7 +5478,7 @@ const SalesOrdersPage: React.FC = () => {
                         <InputNumber
                           min={0}
                           max={Number.isFinite(maxQty) && maxQty > 0 ? maxQty : undefined}
-                          precision={2}
+                          precision={quantityDecimals}
                           style={{ width: '100%' }}
                           value={workOrderPushQuantities[itemId]}
                           onChange={(val) => {
@@ -5587,7 +5589,7 @@ const SalesOrdersPage: React.FC = () => {
                         <InputNumber
                           min={0}
                           max={Number.isFinite(maxQty) && maxQty > 0 ? maxQty : undefined}
-                          precision={2}
+                          precision={quantityDecimals}
                           style={{ width: '100%' }}
                           value={workOrderPushQuantities[itemId]}
                           onChange={(val) => {
@@ -5676,7 +5678,7 @@ const SalesOrdersPage: React.FC = () => {
                         <InputNumber
                           min={0}
                           max={Number.isFinite(maxQty) && maxQty > 0 ? maxQty : undefined}
-                          precision={2}
+                          precision={quantityDecimals}
                           style={{ width: '100%' }}
                           value={workOrderPushQuantities[itemId]}
                           onChange={(val) => {
@@ -5769,7 +5771,7 @@ const SalesOrdersPage: React.FC = () => {
                         <InputNumber
                           min={0}
                           max={Number.isFinite(maxQty) && maxQty > 0 ? maxQty : undefined}
-                          precision={2}
+                          precision={quantityDecimals}
                           style={{ width: '100%' }}
                           value={workOrderPushQuantities[itemId]}
                           onChange={(val) => {
@@ -5906,7 +5908,7 @@ const SalesOrdersPage: React.FC = () => {
                         <InputNumber
                           min={0}
                           max={Number.isFinite(maxQty) && maxQty > 0 ? maxQty : undefined}
-                          precision={2}
+                          precision={quantityDecimals}
                           style={{ width: '100%' }}
                           value={workOrderPushQuantities[itemId]}
                           onChange={(val) => {

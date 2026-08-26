@@ -298,12 +298,17 @@ export function renderQualityDocStatusTag(t: TFunction, status?: string | null):
   return React.createElement(StatusTag, { color }, text);
 }
 
-export function renderQualityQualityStatusTag(t: TFunction, status?: string | null): React.ReactNode {
-  if (!status) {
-    return React.createElement(Tag, { variant: 'solid' }, t('app.kuaizhizao.quality.common.qualityStatus.pending'));
-  }
+export function getQualityQualityStatusText(t: TFunction, status?: string | null): string {
+  if (!status) return t('app.kuaizhizao.quality.common.qualityStatus.pending');
   const key = QUALITY_QUALITY_STATUS_I18N[status];
-  const text = key ? t(key) : status;
+  return key ? t(key) : status;
+}
+
+export function renderQualityQualityStatusTag(t: TFunction, status?: string | null): React.ReactNode {
+  const text = getQualityQualityStatusText(t, status);
+  if (!status) {
+    return React.createElement(Tag, { variant: 'solid' }, text);
+  }
   const color = status === '合格' ? 'success' : 'error';
   return React.createElement(Tag, { color, variant: 'solid' }, text);
 }

@@ -59,7 +59,7 @@ import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
-import { formatDateTime } from '../../../../../utils/format';
+import { formatDateTime, formatAmount } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { customerApi, unwrapSupplyPagedList } from '../../../../master-data/services/supply-chain';
@@ -695,13 +695,7 @@ const AfterSalesTicketsPage: React.FC = () => {
         dataIndex: 'total_amount',
         width: 120,
         align: 'right',
-        render: (_, row) =>
-          row.total_amount != null
-            ? Number(row.total_amount).toLocaleString('zh-CN', {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })
-            : '—',
+        render: (_, row) => (row.total_amount != null ? formatAmount(row.total_amount) : '—'),
       },
       {
         title: t('app.kuaizhizao.salesOrder.salesman'),

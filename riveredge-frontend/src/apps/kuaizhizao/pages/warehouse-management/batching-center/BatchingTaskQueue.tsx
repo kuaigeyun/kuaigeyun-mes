@@ -3,7 +3,8 @@
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
+import { useNumericPrecisionPlaces } from '../../../../../hooks/useNumericPrecision';
+import { Link, useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import {
   App,
@@ -38,6 +39,7 @@ import { warehouseApi } from '../../../services/warehouse-execution';
 import { batchingOrderApi } from '../../../services/batching-order';
 import { getBatchingOrderStageName } from '../../../utils/batchingOrderLifecycle';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { getBatchingTaskTypeLabel, type BatchingTaskTabKey } from './materialCenterTabs';
 import type { MaterialCenterDetailRequest } from './materialCenterDetail';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
@@ -47,6 +49,12 @@ import {
   resolveBatchingTaskProductMaterialCell,
 } from '../../../utils/warehouseListCore';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { outboundWorkOrderEntryPath } from '../outbound/outboundPaths';
+import {
+  buildDocumentCreateDraftKey,
+  setDocumentFormDraft,
+} from '../../../../../utils/documentFormDraftCache';
+import { workOrderCapabilityReasonMessage } from '../../../../../hooks/useDocumentCapabilities';
 import { useBatchingPullFromWorkOrder } from './useBatchingPullFromWorkOrder';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { formatDateTime, formatQuantity } from '../../../../../utils/format';
@@ -188,8 +196,11 @@ const BatchingTaskQueue: React.FC<Props> = ({
   workOrderCodeFilter,
 }) => {
   const { t } = useTranslation();
+  const quantityDecimals = useNumericPrecisionPlaces('quantity');
   const pullFromWorkOrderAction = resolveKuaizhizaoDocumentAction(t, 'batching_order.pull_from_work_order');
   const { message: messageApi } = App.useApp();
+  const navigate = useNavigate();
+  const outboundPerms = useResourcePermissions('kuaizhizao:outbound');
   const taskTypeLabel = useMemo(() => getBatchingTaskTypeLabel(t), [t]);
   const taskTypeMap = useMemo(
     () => ({
@@ -250,6 +261,51 @@ const BatchingTaskQueue: React.FC<Props> = ({
     };
     messageApi.success(statusMap[status] || t('app.kuaizhizao.warehouseCommon.operationSuccess'));
     reload();
+  };
+
+  const handlePushMaterialCallToPicking = (record: BatchingTaskRow) => {
+    const callId = Number(record.task_id);
+    const woId = Number(record.work_order_id);
+    if (!(callId > 0) || !(woId > 0)) return;
+    if (!outboundPerms.canCreate) {
+      messageApi.warning(t('app.kuaizhizao.workOrder.readinessConfirmPickingNoPerm'));
+      return;
+    }
+    void (async () => {
+      try {
+        const res = (await warehouseApi.materialCall.previewPushProductionPicking(callId)) as {
+          has_blocking_issues?: boolean;
+          blocking_reason?: string;
+          items?: Array<{ item_id?: number; max_push_quantity?: number }>;
+        };
+        if (
+          res.has_blocking_issues ||
+          !(res.items || []).some((row) => Number(row.max_push_quantity ?? 0) > 0)
+        ) {
+          messageApi.warning(
+            workOrderCapabilityReasonMessage(res.blocking_reason, t) ||
+              res.blocking_reason ||
+              t('app.kuaizhizao.workOrder.pushMaterialCallToPickingBlocked'),
+          );
+          return;
+        }
+        const issueQuantities: Record<number, number> = {};
+        const maxQuantities: Record<number, number> = {};
+        ;(res.items || []).forEach((row) => {
+          const materialId = Number(row.item_id);
+          maxQuantities[materialId] = Number(row.max_push_quantity ?? 0);
+          issueQuantities[materialId] = 0;
+        });
+        const entryPath = outboundWorkOrderEntryPath(woId, callId);
+        const draftKey = buildDocumentCreateDraftKey('kuaizhizao:outbound-work-order-pull', entryPath, '');
+        setDocumentFormDraft(draftKey, { issueQuantities, maxQuantities });
+        navigate(entryPath);
+      } catch (e: unknown) {
+        messageApi.error(
+          getApiErrorMessage(e) || t('app.kuaizhizao.workOrder.pushMaterialCallToPickingFailed'),
+        );
+      }
+    })();
   };
 
   const openMaterialCallComplete = (record: BatchingTaskRow) => {
@@ -709,6 +765,16 @@ const BatchingTaskQueue: React.FC<Props> = ({
           if (st === 'pending') {
             actions.push(
               <Button
+                key="push-picking"
+                {...rowActionKind('execute')}
+                size="small"
+                onClick={() => handlePushMaterialCallToPicking(record)}
+              >
+                {t('app.kuaizhizao.workOrder.actionPushMaterialCallToPicking')}
+              </Button>,
+            );
+            actions.push(
+              <Button
                 key="start-picking"
                 {...rowActionKind('execute')}
                 size="small"
@@ -720,6 +786,16 @@ const BatchingTaskQueue: React.FC<Props> = ({
             );
           }
           if (st === 'processing' || st === 'partial') {
+            actions.push(
+              <Button
+                key="push-picking-processing"
+                {...rowActionKind('execute')}
+                size="small"
+                onClick={() => handlePushMaterialCallToPicking(record)}
+              >
+                {t('app.kuaizhizao.workOrder.actionPushMaterialCallToPicking')}
+              </Button>,
+            );
             actions.push(
               <Button
                 key="complete-call"
@@ -865,7 +941,7 @@ const BatchingTaskQueue: React.FC<Props> = ({
                           size="small"
                           min={0}
                           max={maxQty > 0 ? maxQty : undefined}
-                          precision={2}
+                          precision={quantityDecimals}
                           disabled={!enabled}
                           style={{ width: '100%' }}
                         />

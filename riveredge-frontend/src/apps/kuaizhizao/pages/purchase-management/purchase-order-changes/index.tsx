@@ -282,7 +282,7 @@ const PurchaseOrderChangesPage: React.FC = () => {
         align: 'right',
         render: (value: number | undefined) =>
           value != null
-            ? Number(value).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+            ? formatAmount(value)
             : '-',
       },
       {

@@ -46,7 +46,7 @@ import { payableCapabilityReasonMessage } from '../../../utils/payableCapability
 import dayjs from 'dayjs';
 import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
-import { formatDateTime, todaySiteDateString } from '../../../../../utils/format';
+import { formatDateTime, todaySiteDateString, formatCurrencyAmount } from '../../../../../utils/format';
 import {
   FINANCE_DOC_PINNED_STATUS_FIELD,
   financeDocCodePartnerSearchColumns,
@@ -84,7 +84,7 @@ const PURCHASE_INVOICE_RESOURCE = 'kuaicaiwu:purchase-invoice';
 type PullPreviewKind = 'purchase_order' | 'purchase_receipt';
 
 const formatPullMoney = (value: number) =>
-  `¥${Number(value || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  formatCurrencyAmount(value || 0);
 
 const PayableList: React.FC = () => {
     const actionRef = useRef<ActionType>();
@@ -631,7 +631,7 @@ const PayableList: React.FC = () => {
                     }}
                 >
                     {record.remaining_invoice_amount != null
-                        ? `¥${Number(record.remaining_invoice_amount).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`
+                        ? formatCurrencyAmount(record.remaining_invoice_amount)
                         : '-'}
                 </span>
             ),
@@ -674,7 +674,7 @@ const PayableList: React.FC = () => {
             render: (_, record) => (
                 <span style={{ color: record.remaining_amount > 0 ? 'red' : 'inherit', fontWeight: 'bold' }}>
                     {record.remaining_amount != null
-                        ? `¥${Number(record.remaining_amount).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`
+                        ? formatCurrencyAmount(record.remaining_amount)
                         : '-'}
                 </span>
             ),

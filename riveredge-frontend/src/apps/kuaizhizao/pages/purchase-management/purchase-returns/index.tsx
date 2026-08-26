@@ -147,7 +147,7 @@ import {
   hasDocumentAttachments,
 } from '../../../components/DocumentAttachmentsReadonly';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
-import { formatBusinessDateOnly, formatDateTime, formatNumber, formatQuantity } from '../../../../../utils/format';
+import { formatBusinessDateOnly, formatDateTime, formatNumber, formatQuantity, formatCurrencyAmount } from '../../../../../utils/format';;
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
@@ -1137,7 +1137,7 @@ const PurchaseReturnsPage: React.FC = () => {
         {
           title: t('app.kuaizhizao.purchaseReturn.totalAmount'),
           dataIndex: 'total_amount',
-          render: (text: unknown) => (text != null && text !== '' ? `¥${formatNumber(text, 2)}` : '-'),
+          render: (text: unknown) => (text != null && text !== '' ? formatCurrencyAmount(text) : '-'),
         },
         { title: t('app.kuaizhizao.purchaseReturn.returnTime'), dataIndex: 'return_time', valueType: 'dateTime' },
         { title: t('app.kuaizhizao.purchaseReturn.returner'), dataIndex: 'returner_name' },
@@ -1319,7 +1319,7 @@ const PurchaseReturnsPage: React.FC = () => {
         align: 'right',
         sorter: true,
         hideInSearch: true,
-        render: (text: any) => (text != null && text !== '' ? `¥${formatNumber(text, 2)}` : '-'),
+        render: (text: any) => (text != null && text !== '' ? formatCurrencyAmount(text) : '-'),
       },
       {
         title: t('app.kuaizhizao.purchaseReturn.returnTime'),
@@ -1738,7 +1738,7 @@ const PurchaseReturnsPage: React.FC = () => {
         align: 'right',
         hideInSearch: true,
         render: (text: unknown) =>
-          text != null && text !== '' ? `¥${formatNumber(text, 2)}` : '-',
+          text != null && text !== '' ? formatCurrencyAmount(text) : '-',
       },
       {
         title: t('app.kuaizhizao.purchaseReturn.amount'),
@@ -1747,7 +1747,7 @@ const PurchaseReturnsPage: React.FC = () => {
         align: 'right',
         hideInSearch: true,
         render: (text: unknown) =>
-          text != null && text !== '' ? `¥${formatNumber(text, 2)}` : '-',
+          text != null && text !== '' ? formatCurrencyAmount(text) : '-',
       },
       {
         title: t('app.kuaizhizao.purchaseReturn.import.batchNumber'),

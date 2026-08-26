@@ -277,6 +277,56 @@ def _event_time_utc(event_time: Any) -> Optional[datetime]:
     return None
 
 
+def _format_movement_batch_number_for_report(batch_no: Optional[str]) -> str:
+    """入库/出库明细批号：隐藏空值与过账占位 DEFAULT。"""
+    from apps.kuaizhizao.services.inventory_service import InventoryService
+
+    displayed = InventoryService.format_batch_no_for_display(batch_no)
+    return displayed or ""
+
+
+async def _enrich_inventory_movement_material_fields(
+    tenant_id: int,
+    events: List[dict],
+) -> None:
+    """补齐流水行物料名称/规格/单位（库存流水表仅存编码与名称快照）。"""
+    need_ids: set[int] = set()
+    for ev in events:
+        mid = ev.get("material_id")
+        if mid is None:
+            continue
+        if (
+            not str(ev.get("material_name") or "").strip()
+            or not str(ev.get("material_spec") or "").strip()
+            or not str(ev.get("material_unit") or "").strip()
+        ):
+            need_ids.add(int(mid))
+    if not need_ids:
+        return
+
+    from apps.master_data.models.material import Material
+
+    rows = await Material.filter(
+        tenant_id=tenant_id,
+        id__in=list(need_ids),
+        deleted_at__isnull=True,
+    ).values("id", "name", "specification", "base_unit")
+    by_id = {int(row["id"]): row for row in rows}
+    for ev in events:
+        mid = ev.get("material_id")
+        if mid is None:
+            continue
+        info = by_id.get(int(mid))
+        if not info:
+            continue
+        if not str(ev.get("material_name") or "").strip():
+            ev["material_name"] = info.get("name") or ""
+        if not str(ev.get("material_spec") or "").strip():
+            ev["material_spec"] = info.get("specification") or ""
+        if not str(ev.get("material_unit") or "").strip():
+            ev["material_unit"] = info.get("base_unit") or ""
+
+
 async def collect_inventory_movement_events(
     tenant_id: int,
     *,
@@ -462,6 +512,7 @@ async def collect_inventory_movement_events(
     await _append_outbound_delivery()
     await _append_inbound_receipt()
     await _append_production_movements()
+    await _enrich_inventory_movement_material_fields(tenant_id, events)
     return events
 
 
@@ -702,7 +753,7 @@ async def build_warehouse_movement_detail(
             "material_name": ev.get("material_name") or "",
             "material_spec": ev.get("material_spec") or "",
             "material_unit": ev.get("material_unit") or "",
-            "batch_number": ev.get("batch_number") or "",
+            "batch_number": _format_movement_batch_number_for_report(ev.get("batch_number")),
             "warehouse_name": ev.get("warehouse_name") or "",
             "quantity": round(qty, 4),
             "operator": ev.get("operator") or "",

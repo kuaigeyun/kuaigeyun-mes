@@ -290,7 +290,13 @@ detect_server_ip() {
     local ip=""
     case "$(uname -s)" in
         MINGW*|MSYS*|CYGWIN*)
-            ip="$(ipconfig 2>/dev/null | grep -iE 'IPv4|IP Address' | head -1 | sed 's/.*: *//' | tr -d '\r' | awk '{print $NF}')"
+            # ipconfig 的中文输出会被 grep 判为二进制并只打印 "Binary file ... matches"，
+            # 按行取 $NF 会拿到 matches；必须 -a 按文本处理并按 IPv4 字面量提取
+            ip="$(ipconfig 2>/dev/null | tr -d '\r' \
+                | grep -aiE 'IPv4' \
+                | grep -aoE '([0-9]{1,3}\.){3}[0-9]{1,3}' \
+                | grep -vE '^(127\.|169\.254\.)' \
+                | head -1)"
             ;;
         Darwin*)
             ip="$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || true)"
@@ -2497,23 +2503,25 @@ ensure_playwright_chromium_postinstall() {
     playwright_export_env
 
     log_info "补装 Playwright Chromium 运行时（后台执行，不阻塞启动）..."
+    # 整个子 shell 必须自带重定向：只给内部命令重定向会让子 shell 继承调用方的 stdout，
+    # 向导的 `cmd | tee` 因此收不到 EOF，收尾的完成面板永远打不出来
     (
         cd "$BACKEND_DIR" || exit 1
         export PYTHONPATH="$BACKEND_DIR/src"
         export PLAYWRIGHT_BROWSERS_PATH
-        if ! "$uv_bin" run --extra pdf python -m playwright --version >>"$logf" 2>&1; then
-            echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] skip: Playwright 模块不可用" >>"$logf"
+        if ! "$uv_bin" run --extra pdf python -m playwright --version; then
+            echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] skip: Playwright 模块不可用"
             exit 0
         fi
-        echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] start: playwright install chromium" >>"$logf"
-        if "$uv_bin" run --extra pdf python -m playwright install chromium >>"$logf" 2>&1; then
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] start: playwright install chromium"
+        if "$uv_bin" run --extra pdf python -m playwright install chromium; then
             playwright_write_chromium_marker
-            echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] ok: Playwright Chromium 补装完成" >>"$logf"
+            echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] ok: Playwright Chromium 补装完成"
         else
-            echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] fail: Playwright Chromium 补装失败" >>"$logf"
+            echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] fail: Playwright Chromium 补装失败"
         fi
         rm -f "$pidf"
-    ) &
+    ) >>"$logf" 2>&1 </dev/null &
     echo $! > "$pidf"
     log_info "Playwright 补装已在后台运行（PID $(cat "$pidf")），详见 $logf"
     return 0

@@ -10,8 +10,11 @@ Date: 2025-01-01
 import base64
 import html as html_lib
 import os
-import platform
+import subprocess
+import sys
+import tempfile
 from io import BytesIO
+from pathlib import Path
 from typing import Optional, Dict, Any, Tuple
 from datetime import datetime
 from loguru import logger
@@ -42,6 +45,7 @@ from apps.kuaizhizao.models.semi_finished_goods_receipt_item import SemiFinished
 from apps.kuaizhizao.models.sales_delivery import SalesDelivery
 from apps.kuaizhizao.models.sales_delivery_item import SalesDeliveryItem
 from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderItem
+from apps.kuaizhizao.models.purchase_requisition import PurchaseRequisition, PurchaseRequisitionItem
 from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
 from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
 from apps.kuaizhizao.models.sales_forecast import SalesForecast
@@ -70,6 +74,8 @@ from apps.kuaizhizao.models.material_borrow_item import MaterialBorrowItem
 from apps.kuaizhizao.models.material_return import MaterialReturn
 from apps.kuaizhizao.models.material_return_item import MaterialReturnItem
 from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
+from core.i18n.bundled_translations import BUNDLED_TRANSLATIONS, DEFAULT_LANGUAGE_CODE
+from core.i18n.status_keys import document_status_i18n_key
 
 _FILE_DOWNLOAD_PATH_RE = re.compile(
     r"^/?api/v\d+/core/files/(?P<uuid>[0-9a-fA-F-]{32,36})/download/?$"
@@ -78,6 +84,11 @@ _FILE_DOWNLOAD_PATH_RE = re.compile(
 SALES_CONTRACT_TYPE_PRINT_LABELS = {
     "single": "单次合同",
     "framework": "框架合同",
+}
+
+PURCHASE_REQUISITION_SOURCE_TYPE_PRINT_LABELS = {
+    "DemandComputation": "需求计算",
+    "demand_computation": "需求计算",
 }
 
 
@@ -149,21 +160,19 @@ async def _build_image_data_url_for_local_file(
     """
     将本地文件 UUID 转换为可直接嵌入 <img src> 的 base64 data URL。
     透明处理 RGBA / RGB / 调色板等图像模式，按 size 缩略以控制 PDF 体积。
-    解析失败返回空串，让上层保留原 src（兜底，不影响其他内容渲染）。
+    定位、读取或缩略失败必须暴露，禁止塞原图或留空 src 继续打印。
     """
     try:
         file = await FileService.get_file_by_uuid(tenant_id, file_uuid)
     except Exception as e:
-        logger.debug("打印内联图片：未能定位文件记录 uuid={} err={}", file_uuid, e)
-        return ""
+        raise ValidationError(f"打印图片不存在：{file_uuid}") from e
     file_type = (getattr(file, "file_type", "") or "").lower()
     if not file_type.startswith("image/"):
-        return ""
+        raise ValidationError(f"打印引用不是图片：{file_uuid}")
     try:
         raw = await FileService.get_file_content(tenant_id, file_uuid)
     except Exception as e:
-        logger.warning("打印内联图片：文件内容读取失败 uuid={}: {}", file_uuid, e)
-        return ""
+        raise ValidationError(f"打印图片读取失败：{file_uuid}") from e
 
     target = size if isinstance(size, int) and size > 0 else 512
     target = max(64, min(target, 1024))
@@ -201,9 +210,7 @@ async def _build_image_data_url_for_local_file(
             mime = "image/jpeg"
         data = buf.getvalue()
     except Exception as e:
-        logger.warning("打印内联图片：缩略失败，回退原图 uuid={}: {}", file_uuid, e)
-        data = raw
-        mime = file_type.split(";")[0].strip() or "image/jpeg"
+        raise ValidationError(f"打印图片缩略失败：{file_uuid}") from e
 
     return f"data:{mime};base64,{base64.standard_b64encode(data).decode('ascii')}"
 
@@ -212,6 +219,11 @@ _HTML_IMG_TAG_RE = re.compile(
     r"(<img\b[^>]*?\bsrc\s*=\s*)(['\"])(?P<src>.*?)\2",
     flags=re.IGNORECASE | re.DOTALL,
 )
+
+_MAX_PRINT_INLINE_IMAGES = 48
+_MAX_PRINT_HTML_BYTES = 12 * 1024 * 1024
+_PRINT_PDF_TIMEOUT_SEC = 90
+_PRINT_CHILD_AS_LIMIT = 2 * 1024 * 1024 * 1024
 
 
 async def _inline_local_file_images_in_html(tenant_id: int, html_string: str) -> str:
@@ -230,6 +242,16 @@ async def _inline_local_file_images_in_html(tenant_id: int, html_string: str) ->
     if not matches:
         return html_string
 
+    local_keys: list[str] = []
+    for m in matches:
+        file_uuid, size = _parse_local_file_download_src(m.group("src"))
+        if file_uuid:
+            local_keys.append(f"{file_uuid}:{size or 0}")
+    if len(set(local_keys)) > _MAX_PRINT_INLINE_IMAGES:
+        raise ValidationError(
+            f"打印图片超过 {_MAX_PRINT_INLINE_IMAGES} 张，请减少单据照片后重试"
+        )
+
     cache: Dict[str, str] = {}
     pieces: list[str] = []
     cursor = 0
@@ -243,8 +265,6 @@ async def _inline_local_file_images_in_html(tenant_id: int, html_string: str) ->
         if data_url is None:
             data_url = await _build_image_data_url_for_local_file(tenant_id, file_uuid, size)
             cache[cache_key] = data_url
-        if not data_url:
-            continue
         pieces.append(html_string[cursor:m.start("src")])
         pieces.append(data_url)
         cursor = m.end("src")
@@ -254,225 +274,82 @@ async def _inline_local_file_images_in_html(tenant_id: int, html_string: str) ->
     return "".join(pieces)
 
 
-def _inject_base_href_for_playwright(html_string: str, base_url: str) -> str:
-    """
-    Playwright 的 set_content 默认页面地址为 about:blank，相对 /api/... 资源无法解析。
-    通过注入 <base href="..."> 让相对 URL（尤其 /api/...）可被正确请求。
-    """
-    if not base_url:
-        return html_string
-    base = base_url.rstrip("/") + "/"
-    if re.search(r"<base\b", html_string, flags=re.IGNORECASE):
-        return html_string
-    if re.search(r"<head[^>]*>", html_string, flags=re.IGNORECASE):
-        return re.sub(
-            r"(<head[^>]*>)",
-            lambda m: m.group(1) + f'<base href="{base}"/>',
-            html_string,
-            count=1,
-            flags=re.IGNORECASE,
+def _print_src_root() -> Path:
+    return Path(__file__).resolve().parents[3]
+
+
+def _limit_html_to_pdf_child() -> None:
+    if os.name != "posix":
+        return
+    import resource
+
+    resource.setrlimit(resource.RLIMIT_AS, (_PRINT_CHILD_AS_LIMIT, _PRINT_CHILD_AS_LIMIT))
+
+
+def _run_html_to_pdf_subprocess(html_string: str) -> bytes:
+    encoded = html_string.encode("utf-8")
+    if len(encoded) > _MAX_PRINT_HTML_BYTES:
+        raise ValidationError(
+            f"打印内容过大（{len(encoded)} 字节），请减少单据照片后重试"
         )
-    if re.search(r"<html[^>]*>", html_string, flags=re.IGNORECASE):
-        return re.sub(
-            r"(<html[^>]*>)",
-            lambda m: m.group(1) + f'<head><base href="{base}"/></head>',
-            html_string,
-            count=1,
-            flags=re.IGNORECASE,
-        )
-    return f'<!DOCTYPE html><html><head><base href="{base}"/></head><body>{html_string}</body></html>'
-
-
-def _html_to_pdf_engine_pref() -> str:
-    """环境变量保留兼容；当前仅支持 playwright。"""
-    return os.environ.get("RIVEREDGE_HTML_TO_PDF_ENGINE", "auto").strip().lower()
-
-
-_CSS_PAGE_SIZE_RE = re.compile(
-    r"@page\s*\{[^}]*?\bsize\s*:\s*"
-    r"(?P<w>\d+(?:\.\d+)?(?:mm|cm|in|px))"
-    r"\s+"
-    r"(?P<h>\d+(?:\.\d+)?(?:mm|cm|in|px))"
-    r"(?:\s+(?:portrait|landscape))?\s*;",
-    re.IGNORECASE | re.DOTALL,
-)
-
-_CSS_PAGE_NAMED_SIZE_RE = re.compile(
-    r"@page\s*\{[^}]*?\bsize\s*:\s*"
-    r"(?P<name>A3|A4|A5|Letter|Legal)"
-    r"(?:\s+(?P<orient>portrait|landscape))?\s*;",
-    re.IGNORECASE | re.DOTALL,
-)
-
-# 命名纸张物理尺寸（mm），landscape 时宽高对调
-_NAMED_PAPER_SIZE_MM: dict[str, tuple[float, float]] = {
-    "A3": (297.0, 420.0),
-    "A4": (210.0, 297.0),
-    "A5": (148.0, 210.0),
-    "Letter": (215.9, 279.4),
-    "Legal": (215.9, 355.6),
-}
-
-
-def _parse_css_page_size(html_string: str) -> Optional[Tuple[str, str]]:
-    """从 HTML 的 @page size 解析宽高，供 Playwright 显式传 width/height。
-
-    Chromium 对自定义 @page（如 100mm 70mm）+ prefer_css_page_size 时常回退 Letter/A4，
-    因此导出 PDF 时优先把尺寸直接传给 page.pdf。
-    """
-    if not html_string:
-        return None
-    m = _CSS_PAGE_SIZE_RE.search(html_string)
-    if m:
-        return m.group("w"), m.group("h")
-    named = _CSS_PAGE_NAMED_SIZE_RE.search(html_string)
-    if not named:
-        return None
-    name = named.group("name").upper()
-    dims = _NAMED_PAPER_SIZE_MM.get(name)
-    if not dims:
-        return None
-    w_mm, h_mm = dims
-    orient = (named.group("orient") or "portrait").strip().lower()
-    if orient == "landscape":
-        w_mm, h_mm = h_mm, w_mm
-    return f"{w_mm}mm", f"{h_mm}mm"
-
-
-async def _html_to_pdf_bytes_playwright_async(html_string: str) -> bytes:
-    """
-    使用 Playwright(Chromium) 将 HTML 转为 PDF。
-    优点：对现代 CSS（含 flex）支持更好，接近浏览器预览效果。
-    """
-    try:
-        from playwright.async_api import async_playwright
-    except Exception as e:
-        raise RuntimeError(
-            "Playwright 不可用，请先安装依赖：pip install playwright "
-            "并执行：playwright install chromium。"
-        ) from e
-
-    launch_args: list[str] = []
-    # Linux 容器常见需求；Windows 下可保持空参数
-    if platform.system() == "Linux":
-        launch_args.extend(["--no-sandbox", "--disable-dev-shm-usage"])
-
-    from infra.config.infra_config import infra_settings as settings
-    base_url = settings.BASE_URL
-    if not base_url:
-        host = "localhost" if settings.HOST == "0.0.0.0" else settings.HOST
-        base_url = f"http://{host}:{settings.PORT}"
-    html_for_playwright = _inject_base_href_for_playwright(html_string, base_url)
-    page_size = _parse_css_page_size(html_for_playwright)
-
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True, args=launch_args)
+    src_root = str(_print_src_root())
+    env = os.environ.copy()
+    env["PYTHONPATH"] = os.pathsep.join(
+        [src_root, *(p for p in env.get("PYTHONPATH", "").split(os.pathsep) if p)]
+    )
+    with tempfile.TemporaryDirectory(prefix="riveredge-print-") as td:
+        html_path = Path(td) / "in.html"
+        pdf_path = Path(td) / "out.pdf"
+        html_path.write_bytes(encoded)
+        cmd = [
+            sys.executable,
+            "-m",
+            "apps.kuaizhizao.services.html_to_pdf_engine",
+            str(html_path),
+            str(pdf_path),
+        ]
+        run_kwargs: Dict[str, Any] = {
+            "capture_output": True,
+            "timeout": _PRINT_PDF_TIMEOUT_SEC,
+            "env": env,
+            "cwd": src_root,
+        }
+        if os.name == "posix":
+            run_kwargs["preexec_fn"] = _limit_html_to_pdf_child
         try:
-            page = await browser.new_page()
-
-            # 仅在调试模式下落盘最终 HTML，避免常态污染后端工作目录。
-            if os.environ.get("RIVEREDGE_PRINT_DEBUG", "").strip().lower() in ("1", "true", "yes"):
-                try:
-                    debug_path = os.path.join(os.getcwd(), "debug_last_print.html")
-                    with open(debug_path, "w", encoding="utf-8") as f:
-                        f.write(html_for_playwright)
-                    logger.info(f"DEBUG: Final HTML captured to {debug_path}")
-                except Exception as e:
-                    logger.warning(f"DEBUG: Failed to capture HTML: {e}")
-
-            await page.set_content(html_for_playwright, wait_until="networkidle")
-
-            # 强制使用 print 媒体仿真，确保 @page、@media print、page-break-* 等生效，
-            # 避免 Chromium 默认按 screen 媒体渲染导致 PDF 与设计器/预览不一致。
-            try:
-                await page.emulate_media(media="print")
-            except Exception:
-                # 部分老版本 Playwright 没有 emulate_media，忽略即可
-                pass
-
-            # 等待自定义字体就绪（如 PingFang/微软雅黑等），避免 PDF 出现回退字体差异
-            try:
-                await page.evaluate(
-                    "() => (document.fonts && document.fonts.ready) ? document.fonts.ready : null"
-                )
-            except Exception:
-                pass
-
-            pdf_kwargs: Dict[str, Any] = {
-                "print_background": True,
-                "prefer_css_page_size": True,
-                "display_header_footer": False,
-                # 外边距交给 CSS @page；避免 Playwright 再叠一层默认边距
-                "margin": {"top": "0", "right": "0", "bottom": "0", "left": "0"},
-            }
-            if page_size:
-                pdf_kwargs["width"] = page_size[0]
-                pdf_kwargs["height"] = page_size[1]
-                logger.info("PDF 按模板尺寸导出: {} x {}", page_size[0], page_size[1])
-            else:
-                logger.warning("未解析到 @page size，PDF 将依赖 Chromium 默认纸张")
-
-            return await page.pdf(**pdf_kwargs)
-        finally:
-            await browser.close()
-
-
-def _run_playwright_with_dedicated_loop(html_string: str) -> bytes:
-    """
-    在线程中创建独立事件循环执行 async_playwright。
-    Windows 强制使用 ProactorEventLoop，确保支持 subprocess（Playwright driver）。
-    """
-    if platform.system() == "Windows":
-        loop = asyncio.ProactorEventLoop()
-    else:
-        loop = asyncio.new_event_loop()
-    try:
-        asyncio.set_event_loop(loop)
-        return loop.run_until_complete(_html_to_pdf_bytes_playwright_async(html_string))
-    finally:
-        try:
-            loop.run_until_complete(loop.shutdown_asyncgens())
-        except Exception:
-            pass
-        asyncio.set_event_loop(None)
-        loop.close()
-
-
-async def _html_to_pdf_bytes_playwright(html_string: str) -> bytes:
-    # 单一路径：仅使用 async_playwright + dedicated loop，不做兜底分支。
-    return await asyncio.to_thread(_run_playwright_with_dedicated_loop, html_string)
+            proc = subprocess.run(cmd, **run_kwargs)
+        except subprocess.TimeoutExpired as e:
+            raise BusinessLogicError(
+                f"打印 PDF 超时（{_PRINT_PDF_TIMEOUT_SEC} 秒），请减少单据照片后重试"
+            ) from e
+        if proc.returncode != 0:
+            err = (proc.stderr or b"").decode("utf-8", errors="replace").strip()
+            out = (proc.stdout or b"").decode("utf-8", errors="replace").strip()
+            detail = err or out or f"exit {proc.returncode}"
+            raise BusinessLogicError(f"打印 PDF 失败：{detail[:2000]}")
+        if not pdf_path.is_file() or pdf_path.stat().st_size <= 0:
+            raise BusinessLogicError("打印 PDF 未生成文件")
+        return pdf_path.read_bytes()
 
 
 async def _html_to_pdf_bytes(html_string: str, *, tenant_id: Optional[int] = None) -> Tuple[bytes, str]:
-    """
-    将完整 HTML 转为 PDF。
-    当前仅支持 Playwright（需安装 Chromium）。
-
-    若提供 tenant_id，会先把 HTML 中指向后端 /api/v{n}/core/files/{uuid}/download 的
-    <img> 资源内联为 base64 data URL，避免 Playwright 浏览器跨进程访问后端时
-    出现 token 过期 / 网络拒绝 / CORS 等导致的"图片裂掉"。
-    """
+    """将完整 HTML 转为 PDF。Chromium 只在独立子进程里启动。"""
     prepared_html = html_string
     if tenant_id is not None:
-        try:
-            prepared_html = await _inline_local_file_images_in_html(tenant_id, html_string)
-        except Exception as e:
-            logger.warning("打印 HTML 图片内联失败，回退使用原始 HTML: {}", e)
-            prepared_html = html_string
+        prepared_html = await _inline_local_file_images_in_html(tenant_id, html_string)
     try:
-        return await _html_to_pdf_bytes_playwright(prepared_html), "playwright"
+        pdf = await asyncio.to_thread(_run_html_to_pdf_subprocess, prepared_html)
+    except (ValidationError, BusinessLogicError):
+        raise
     except Exception as e:
-        pref = _html_to_pdf_engine_pref()
-        if pref and pref not in ("", "playwright", "auto"):
-            logger.warning("检测到已废弃 PDF 引擎配置 {}，当前仅支持 playwright", pref)
-        logger.exception("Playwright 生成 PDF 失败")
-        err_detail = f"{type(e).__name__}: {e!r}"
+        logger.exception("打印 PDF 子进程失败")
         raise BusinessLogicError(
-            "无法使用 Playwright 生成 PDF。请确认已安装 playwright 并执行 "
-            "`playwright install chromium`，并在后端进程环境设置 "
-            "RIVEREDGE_HTML_TO_PDF_ENGINE=playwright。"
-            f" 详情: {err_detail}"
+            f"无法生成 PDF：{type(e).__name__}: {e}"
         ) from e
+    return pdf, "playwright"
+
+
+html_to_pdf_bytes = _html_to_pdf_bytes
 
 
 def _quotation_formal_print_allowed(quotation: Quotation, *, audit_required: bool = True) -> bool:
@@ -691,6 +568,7 @@ class DocumentPrintService:
         "semi_finished_goods_receipt": "SEMI_FINISHED_GOODS_RECEIPT_PRINT",
         "sales_delivery": "SALES_DELIVERY_PRINT",
         "purchase_order": "PURCHASE_ORDER_PRINT",
+        "purchase_requisition": "PURCHASE_REQUISITION_PRINT",
         "purchase_receipt": "PURCHASE_RECEIPT_PRINT",
         "sales_forecast": "SALES_FORECAST_PRINT",
         "sales_order": "SALES_ORDER_PRINT",
@@ -1118,6 +996,14 @@ class DocumentPrintService:
             if not document:
                 raise NotFoundError(f"采购单不存在: {document_id}")
             return await self._format_purchase_order_data(document, loc)
+
+        elif document_type == "purchase_requisition":
+            document = await PurchaseRequisition.get_or_none(
+                tenant_id=tenant_id, id=document_id, deleted_at__isnull=True
+            )
+            if not document:
+                raise NotFoundError(f"采购申请不存在: {document_id}")
+            return await self._format_purchase_requisition_data(document, loc)
         
         elif document_type == "purchase_receipt":
             document = await PurchaseReceipt.get_or_none(tenant_id=tenant_id, id=document_id)
@@ -1536,17 +1422,118 @@ class DocumentPrintService:
             }
             for i in items
         ]
+        header_required_date = (
+            to_api_isoformat(order.delivery_date) if order.delivery_date else None
+        )
+        purchaser_name = str(getattr(order, "buyer_name", None) or "").strip()
+        buyer_id = getattr(order, "buyer_id", None)
+        if not purchaser_name and buyer_id and int(buyer_id) > 0:
+            from infra.models.user import User as UserModel
+
+            buyer = await UserModel.filter(
+                tenant_id=order.tenant_id,
+                id=int(buyer_id),
+                deleted_at__isnull=True,
+            ).first()
+            if buyer:
+                purchaser_name = str(
+                    getattr(buyer, "full_name", None)
+                    or getattr(buyer, "username", None)
+                    or buyer.id
+                ).strip()
+        status_label = self._resolve_print_document_status(i18n, order.status)
         return {
             "document_type": "purchase_order",
             "code": order.order_code,
             "order_name": getattr(order, "order_name", None) or order.order_code,
             "supplier_name": order.supplier_name,
+            "purchaser_name": purchaser_name,
+            "buyer_name": purchaser_name,
             "order_date": to_api_isoformat(order.order_date) if order.order_date else None,
-            "delivery_date": to_api_isoformat(order.delivery_date) if order.delivery_date else None,
+            "delivery_date": header_required_date,
+            "required_date": header_required_date,
             "total_amount": str(order.total_amount),
-            "status": i18n.document_status(order.status),
+            "status": status_label,
             "status_code": order.status,
             "created_at": to_api_isoformat(order.created_at) if order.created_at else None,
+            "items": items_data,
+        }
+
+    @staticmethod
+    def _resolve_print_document_status(i18n: PrintLocalization, raw: Any) -> str:
+        text = str(raw or "").strip()
+        if not text:
+            return ""
+        label = i18n.document_status(text)
+        if label and label != text:
+            return label
+        zh_bundle = BUNDLED_TRANSLATIONS.get(DEFAULT_LANGUAGE_CODE, {})
+        fallback = zh_bundle.get(document_status_i18n_key(text))
+        return fallback or label or text
+
+    @staticmethod
+    def _resolve_purchase_requisition_source_type_label(source_type: Any) -> str:
+        raw = str(source_type or "").strip()
+        if not raw:
+            return ""
+        return PURCHASE_REQUISITION_SOURCE_TYPE_PRINT_LABELS.get(raw, raw)
+
+    async def _format_purchase_requisition_data(
+        self, requisition: PurchaseRequisition, i18n: PrintLocalization
+    ) -> Dict[str, Any]:
+        """格式化采购申请打印数据"""
+        items = await PurchaseRequisitionItem.filter(
+            tenant_id=requisition.tenant_id, requisition_id=requisition.id
+        ).all()
+        supplier_ids = {int(i.supplier_id) for i in items if i.supplier_id}
+        supplier_by_id: Dict[int, str] = {}
+        if supplier_ids:
+            from apps.master_data.models.supplier import Supplier
+
+            supplier_rows = await Supplier.filter(
+                tenant_id=requisition.tenant_id, id__in=list(supplier_ids)
+            ).all()
+            supplier_by_id = {int(s.id): str(s.name or "") for s in supplier_rows}
+
+        items_data = [
+            {
+                "material_code": i.material_code,
+                "material_name": i.material_name,
+                "material_spec": i.material_spec or "",
+                "material_unit": i.unit,
+                "quantity": str(i.quantity),
+                "suggested_unit_price": str(i.suggested_unit_price),
+                "required_date": to_api_isoformat(i.required_date) if i.required_date else None,
+                "supplier_name": supplier_by_id.get(int(i.supplier_id), "") if i.supplier_id else "",
+                "notes": i.notes or "",
+            }
+            for i in items
+        ]
+        return {
+            "document_type": "purchase_requisition",
+            "code": requisition.requisition_code,
+            "requisition_name": requisition.requisition_name or requisition.requisition_code,
+            "applicant_name": requisition.applicant_name or "",
+            "requisition_date": to_api_isoformat(requisition.requisition_date)
+            if requisition.requisition_date
+            else None,
+            "required_date": to_api_isoformat(requisition.required_date)
+            if requisition.required_date
+            else None,
+            "status": i18n.document_status(requisition.status),
+            "status_code": requisition.status,
+            "source_type": self._resolve_purchase_requisition_source_type_label(
+                requisition.source_type
+            ),
+            "source_code": requisition.source_code or "",
+            "reviewer_name": requisition.reviewer_name or "",
+            "review_time": to_api_isoformat(requisition.review_time)
+            if requisition.review_time
+            else None,
+            "notes": requisition.notes or "",
+            "created_at": to_api_isoformat(requisition.created_at)
+            if requisition.created_at
+            else None,
             "items": items_data,
         }
 

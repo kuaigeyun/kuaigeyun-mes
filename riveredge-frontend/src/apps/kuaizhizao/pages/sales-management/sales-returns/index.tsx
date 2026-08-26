@@ -97,7 +97,7 @@ import {
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
-import { formatBusinessDateOnly, formatDateTime, formatQuantity } from '../../../../../utils/format';
+import { formatBusinessDateOnly, formatDateTime, formatQuantity, formatCurrencyAmount } from '../../../../../utils/format';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import type { SalesReturnDeliveryPullLine, SalesReturnOrderPullLine } from '../../../services/warehouse-execution';
 import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
@@ -672,7 +672,7 @@ const SalesReturnsPage: React.FC = () => {
       align: 'right',
       sorter: true,
       hideInSearch: true,
-      render: (text: any) => `¥${Number(text || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      render: (text: any) => formatCurrencyAmount(text || 0),
     },
     {
       title: t('app.kuaizhizao.salesReturn.returnTime'),
@@ -1578,7 +1578,7 @@ const SalesReturnsPage: React.FC = () => {
         align: 'right',
         hideInSearch: true,
         render: (text: unknown) =>
-          `¥${Number(text || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+          formatCurrencyAmount(text || 0),
       },
       {
         title: t('app.kuaizhizao.salesReturn.totalAmount'),
@@ -1587,7 +1587,7 @@ const SalesReturnsPage: React.FC = () => {
         align: 'right',
         hideInSearch: true,
         render: (text: unknown) =>
-          `¥${Number(text || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+          formatCurrencyAmount(text || 0),
       },
       {
         title: t('app.kuaizhizao.salesReturn.batchNumber'),

@@ -87,3 +87,43 @@ def enrich_line_warning_fields(
     row["overdue_days"] = abs(offset) if offset < 0 else 0
     row["is_overdue"] = level == WARNING_LEVEL_OVERDUE
     return row
+
+
+def resolve_arrival_processing_status(
+    *,
+    delay_status: Optional[str] = None,
+    delay_review_status: Optional[str] = None,
+    change_order_id: Optional[int] = None,
+    change_order_status: Optional[str] = None,
+) -> str:
+    """采购到货预警行处理状态（变更单真状态优先）。"""
+    from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus
+    from apps.kuaizhizao.constants.order_change import OrderChangeApplyStatus
+
+    if delay_status is None and delay_review_status is None and not change_order_id:
+        return "unprocessed"
+
+    st = str(delay_status or "").upper()
+    rs = str(delay_review_status or "").upper()
+    ch = str(change_order_status or "").upper()
+
+    if ch == OrderChangeApplyStatus.APPLIED.value:
+        return "changed"
+    if change_order_id or st == "CHANGE_GENERATED":
+        if ch in (DocumentStatus.REJECTED.value, ReviewStatus.REJECTED.value, "已驳回"):
+            return "rejected"
+        return "change_pending"
+    if st == OrderChangeApplyStatus.APPLIED.value:
+        return "changed"
+    if st in (DocumentStatus.PENDING_REVIEW.value,) or rs in (
+        ReviewStatus.PENDING.value,
+        "PENDING_REVIEW",
+    ):
+        return "pending_review"
+    if st in (DocumentStatus.REJECTED.value,) or rs in (ReviewStatus.REJECTED.value,):
+        return "rejected"
+    if st in (DocumentStatus.AUDITED.value, "APPROVED") and rs in (ReviewStatus.APPROVED.value,):
+        return "approved"
+    if st in (DocumentStatus.DRAFT.value,):
+        return "reported"
+    return "reported"

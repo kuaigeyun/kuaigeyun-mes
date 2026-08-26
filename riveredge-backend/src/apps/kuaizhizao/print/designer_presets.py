@@ -255,6 +255,17 @@ _TABLE_COLUMNS: dict[str, list[dict[str, str]]] = {
         ("金额", "total_amount"),
         ("备注", "notes"),
     ),
+    "purchase_requisition": _col(
+        ("物料编号", "material_code"),
+        ("物料名称", "material_name"),
+        ("规格", "material_spec"),
+        ("单位", "material_unit"),
+        ("申请数量", "quantity"),
+        ("建议单价", "suggested_unit_price"),
+        ("行到货日", "required_date"),
+        ("建议供应商", "supplier_name"),
+        ("备注", "notes"),
+    ),
     "purchase_receipt": _col(
         ("物料编号", "material_code"),
         ("物料名称", "material_name"),
@@ -439,6 +450,20 @@ DOCUMENT_LAYOUTS: dict[str, DocumentLayout] = {
         ],
         sign_labels=("采购员", "审核人", "供应商确认"),
         show_totals=True,
+    ),
+    "purchase_requisition": DocumentLayout(
+        "purchase_requisition",
+        "采购申请",
+        [
+            ("申请名称", "requisition_name"),
+            ("申请人", "applicant_name"),
+            ("申请日期", "requisition_date"),
+            ("要求到货", "required_date"),
+            ("来源类型", "source_type"),
+            ("来源单号", "source_code"),
+            ("状态", "status"),
+        ],
+        sign_labels=("申请人", "审核人", "采购确认"),
     ),
     "purchase_receipt": DocumentLayout(
         "purchase_receipt",

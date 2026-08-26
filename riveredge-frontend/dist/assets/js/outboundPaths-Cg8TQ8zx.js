@@ -1,0 +1,1 @@
+const t="/apps/kuaizhizao/warehouse-management/outbound",e=(o,r)=>{const n=`${t}/entry/work-order/${o}`;return r!=null&&r>0?`${n}?materialCallId=${r}`:n},s=o=>`${t}/entry/sales-order/${o}`,u=o=>`${t}/entry/outsource-work-order/${o}`;export{t as O,s as a,e as b,u as o};

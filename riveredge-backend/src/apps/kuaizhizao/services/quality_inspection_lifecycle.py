@@ -107,6 +107,7 @@ async def assert_revoke_conduct_no_downstream(
     source_id: int,
     pushed_purchase_return_quantity: float = 0.0,
     pushed_rework_quantity: float = 0.0,
+    pushed_inbound_quantity: float = 0.0,
     certificate_issued: bool = False,
 ) -> None:
     """撤回检验前校验：存在有效下推或放行则禁止。"""
@@ -117,6 +118,10 @@ async def assert_revoke_conduct_no_downstream(
     if float(pushed_rework_quantity or 0) > 0:
         raise BusinessLogicError(
             "该检验单已下推返工单，请先处理或删除下游单据后再撤回检验"
+        )
+    if float(pushed_inbound_quantity or 0) > 0:
+        raise BusinessLogicError(
+            "该检验单已下推入库单，请先处理或删除下游单据后再撤回检验"
         )
     if certificate_issued:
         raise BusinessLogicError(

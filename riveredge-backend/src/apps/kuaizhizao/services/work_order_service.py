@@ -6477,6 +6477,22 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         齐套面板委外关联：按工单组内全部委外子单匹配物料，而非仅 bom_parent=当前工单。
         嵌套 BOM 下委外件的 bom_parent 往往指向中间层自制工单，根工单齐套会漏关联单号。
         """
+        result: Dict[int, OutsourceWorkOrder] = {}
+        root_id = int(wo.id) if wo.id else 0
+        if root_id:
+            direct_rows = await OutsourceWorkOrder.filter(
+                tenant_id=tenant_id,
+                bom_parent_work_order_id=root_id,
+                deleted_at__isnull=True,
+            ).order_by("-id").all()
+            for row in direct_rows:
+                if not row.product_id:
+                    continue
+                pid = int(row.product_id)
+                if pid not in result:
+                    result[pid] = row
+
+        rows: List[OutsourceWorkOrder] = []
         if wo.work_order_group_id:
             rows = await OutsourceWorkOrder.filter(
                 tenant_id=tenant_id,
@@ -6492,15 +6508,13 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 ).order_by("-id").all()
         else:
             subtree_ids = await self._collect_work_order_subtree_ids(tenant_id, wo)
-            if not subtree_ids:
-                return {}
-            rows = await OutsourceWorkOrder.filter(
-                tenant_id=tenant_id,
-                bom_parent_work_order_id__in=list(subtree_ids),
-                deleted_at__isnull=True,
-            ).order_by("-id").all()
+            if subtree_ids:
+                rows = await OutsourceWorkOrder.filter(
+                    tenant_id=tenant_id,
+                    bom_parent_work_order_id__in=list(subtree_ids),
+                    deleted_at__isnull=True,
+                ).order_by("-id").all()
 
-        result: Dict[int, OutsourceWorkOrder] = {}
         for row in rows:
             if not row.product_id:
                 continue
@@ -6508,6 +6522,94 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             if pid not in result:
                 result[pid] = row
         return result
+
+    _KITTING_OWO_TERMINAL_STATUSES = frozenset(
+        {
+            DocumentStatus.CANCELLED.value,
+            DocumentStatus.COMPLETED.value,
+            "已取消",
+            "已完成",
+            "cancelled",
+            "completed",
+        }
+    )
+
+    @classmethod
+    def _is_kitting_outsource_work_order_terminal(cls, status: Optional[str]) -> bool:
+        from apps.kuaizhizao.constants import normalize_status
+
+        st = str(status or "").strip()
+        if not st:
+            return False
+        return st in cls._KITTING_OWO_TERMINAL_STATUSES or normalize_status(st) in {
+            DocumentStatus.CANCELLED.value,
+            DocumentStatus.COMPLETED.value,
+        }
+
+    @classmethod
+    def _pick_kitting_outsource_work_order(
+        cls,
+        rows: List[OutsourceWorkOrder],
+        wo: WorkOrder,
+        subtree_ids: Set[int],
+    ) -> Optional[OutsourceWorkOrder]:
+        if not rows:
+            return None
+
+        def rank(row: OutsourceWorkOrder) -> tuple[int, int]:
+            score = 0
+            parent_id = int(row.bom_parent_work_order_id or 0)
+            if parent_id and parent_id == int(wo.id or 0):
+                score += 1000
+            elif parent_id and parent_id in subtree_ids:
+                score += 500
+            if wo.work_order_group_id and row.work_order_group_id == wo.work_order_group_id:
+                score += 300
+            if wo.demand_item_id and row.demand_item_id == wo.demand_item_id:
+                score += 200
+            return (score, int(row.id or 0))
+
+        return max(rows, key=rank)
+
+    async def _supplement_kitting_component_outsource_map(
+        self,
+        tenant_id: int,
+        wo: WorkOrder,
+        component_owos: Dict[int, OutsourceWorkOrder],
+        outsource_product_ids: List[int],
+    ) -> None:
+        """
+        BOM 委外子件：组内/父子链未命中时，按 product_id 匹配未完结委外工单（手工建单未写 bom_parent 的场景）。
+        """
+        missing_ids = [
+            int(pid)
+            for pid in outsource_product_ids
+            if pid and int(pid) not in component_owos
+        ]
+        if not missing_ids:
+            return
+
+        subtree_ids = await self._collect_work_order_subtree_ids(tenant_id, wo)
+        rows = await OutsourceWorkOrder.filter(
+            tenant_id=tenant_id,
+            product_id__in=missing_ids,
+            deleted_at__isnull=True,
+        ).order_by("-id").all()
+
+        by_product: Dict[int, List[OutsourceWorkOrder]] = {}
+        for row in rows:
+            if self._is_kitting_outsource_work_order_terminal(row.status):
+                continue
+            if not row.product_id:
+                continue
+            by_product.setdefault(int(row.product_id), []).append(row)
+
+        for pid, candidates in by_product.items():
+            if pid in component_owos:
+                continue
+            picked = self._pick_kitting_outsource_work_order(candidates, wo, subtree_ids)
+            if picked:
+                component_owos[pid] = picked
 
     _KITTING_PO_TERMINAL_STATUSES = frozenset(
         {
@@ -6547,7 +6649,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
     ) -> Dict[int, Dict[str, Any]]:
         """
         按物料聚合未结采购订单 / 未转单采购申请（供齐套面板展示供给进度）。
-        返回 material_id -> {po?: {...}, pr?: {...}}
+        返回 material_id -> {po?: {...}, reference_po?: {...}, pr?: {...}}
         """
         from apps.kuaizhizao.models.purchase_order import (
             PurchaseOrderItem,
@@ -6583,20 +6685,14 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 DocumentStatus.REJECTED.value,
             }:
                 continue
-            outstanding = effective_po_item_outstanding(item)
-            if outstanding <= 0:
-                continue
             mid = int(item.material_id)
             ordered = Decimal(str(item.ordered_quantity or 0))
             received = Decimal(str(item.received_quantity or 0))
-            bucket = result.setdefault(mid, {})
-            prev = bucket.get("po")
-            # 优先展示未到货量更大的行；同等则取较新订单
-            if prev and Decimal(str(prev["outstanding_quantity"])) >= outstanding:
-                continue
+            outstanding = effective_po_item_outstanding(item)
             item_due = getattr(item, "required_date", None)
             order_due = getattr(order, "delivery_date", None)
-            bucket["po"] = {
+            bucket = result.setdefault(mid, {})
+            doc_entry = {
                 "document_id": int(order.id),
                 "document_code": str(order.order_code or order.id),
                 "ordered_quantity": ordered,
@@ -6604,6 +6700,16 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 "outstanding_quantity": outstanding,
                 "expected_date": item_due or order_due,
             }
+            prev_ref = bucket.get("reference_po")
+            if not prev_ref or int(doc_entry["document_id"]) >= int(prev_ref["document_id"]):
+                bucket["reference_po"] = doc_entry
+            if outstanding <= 0:
+                continue
+            prev = bucket.get("po")
+            # 优先展示未到货量更大的行；同等则取较新订单
+            if prev and Decimal(str(prev["outstanding_quantity"])) >= outstanding:
+                continue
+            bucket["po"] = doc_entry
 
         pr_items = await PurchaseRequisitionItem.filter(
             tenant_id=tenant_id,
@@ -6662,6 +6768,51 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         return None
 
     @classmethod
+    def _kitting_supply_progress_from_po_doc(
+        cls,
+        po: Dict[str, Any],
+        *,
+        status: str,
+    ) -> KittingSupplyProgress:
+        ordered = Decimal(str(po["ordered_quantity"]))
+        received = Decimal(str(po["received_quantity"]))
+        outstanding = Decimal(str(po["outstanding_quantity"]))
+        pct = 0.0
+        if ordered > 0:
+            pct = round(float(received / ordered) * 100, 2)
+        return KittingSupplyProgress(
+            status=status,
+            ordered_quantity=ordered,
+            received_quantity=received,
+            outstanding_quantity=outstanding,
+            progress_percent=pct,
+            document_type="purchase_order",
+            document_id=int(po["document_id"]),
+            document_code=str(po["document_code"]),
+            expected_date=cls._coerce_kitting_expected_datetime(po.get("expected_date")),
+        )
+
+    @classmethod
+    def _kitting_supply_progress_from_pr_doc(
+        cls,
+        pr: Dict[str, Any],
+        *,
+        status: str,
+    ) -> KittingSupplyProgress:
+        qty = Decimal(str(pr["ordered_quantity"]))
+        return KittingSupplyProgress(
+            status=status,
+            ordered_quantity=qty,
+            received_quantity=Decimal("0"),
+            outstanding_quantity=Decimal(str(pr["outstanding_quantity"])),
+            progress_percent=0.0,
+            document_type="purchase_requisition",
+            document_id=int(pr["document_id"]),
+            document_code=str(pr["document_code"]),
+            expected_date=cls._coerce_kitting_expected_datetime(pr.get("expected_date")),
+        )
+
+    @classmethod
     def _resolve_kitting_supply_progress(
         cls,
         *,
@@ -6675,45 +6826,26 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         if has_related_production:
             return None
 
-        if total_available >= required_qty and required_qty > 0:
-            return KittingSupplyProgress(status="stock_covered")
-
         open_purchase = open_purchase or {}
         po = open_purchase.get("po")
-        if po:
-            ordered = Decimal(str(po["ordered_quantity"]))
-            received = Decimal(str(po["received_quantity"]))
-            outstanding = Decimal(str(po["outstanding_quantity"]))
-            pct = 0.0
-            if ordered > 0:
-                pct = round(float(received / ordered) * 100, 2)
-            status = "receiving" if received > 0 else "purchasing"
-            return KittingSupplyProgress(
-                status=status,
-                ordered_quantity=ordered,
-                received_quantity=received,
-                outstanding_quantity=outstanding,
-                progress_percent=pct,
-                document_type="purchase_order",
-                document_id=int(po["document_id"]),
-                document_code=str(po["document_code"]),
-                expected_date=cls._coerce_kitting_expected_datetime(po.get("expected_date")),
-            )
-
+        reference_po = open_purchase.get("reference_po")
         pr = open_purchase.get("pr")
+        stock_covered = total_available >= required_qty and required_qty > 0
+
+        if stock_covered:
+            doc_po = po or reference_po
+            if doc_po:
+                return cls._kitting_supply_progress_from_po_doc(doc_po, status="stock_covered")
+            if pr:
+                return cls._kitting_supply_progress_from_pr_doc(pr, status="stock_covered")
+            return KittingSupplyProgress(status="stock_covered")
+
+        if po:
+            po_status = "receiving" if Decimal(str(po["received_quantity"])) > 0 else "purchasing"
+            return cls._kitting_supply_progress_from_po_doc(po, status=po_status)
+
         if pr:
-            qty = Decimal(str(pr["ordered_quantity"]))
-            return KittingSupplyProgress(
-                status="purchase_requisition",
-                ordered_quantity=qty,
-                received_quantity=Decimal("0"),
-                outstanding_quantity=Decimal(str(pr["outstanding_quantity"])),
-                progress_percent=0.0,
-                document_type="purchase_requisition",
-                document_id=int(pr["document_id"]),
-                document_code=str(pr["document_code"]),
-                expected_date=cls._coerce_kitting_expected_datetime(pr.get("expected_date")),
-            )
+            return cls._kitting_supply_progress_from_pr_doc(pr, status="purchase_requisition")
 
         if source_type == SOURCE_TYPE_BUY and required_qty > total_available:
             return KittingSupplyProgress(status="awaiting_purchase")
@@ -6928,6 +7060,19 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             ).all()
             component_wos = {int(r.product_id): r for r in child_rows if r.product_id}
         component_owos = await self._load_kitting_component_outsource_map(tenant_id, wo)
+
+        outsource_product_ids = [
+            int(req.component_id)
+            for req in requirements
+            if req.component_id and getattr(req, "component_type", None) == SOURCE_TYPE_OUTSOURCE
+        ]
+        if outsource_product_ids:
+            await self._supplement_kitting_component_outsource_map(
+                tenant_id,
+                wo,
+                component_owos,
+                outsource_product_ids,
+            )
 
         # 半成品供给：按末道检验放行量预计算（未检完不得计入上游齐套）
         component_wo_effective: Dict[int, Decimal] = {}

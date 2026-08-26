@@ -17,6 +17,7 @@ import {
 } from './outboundItemTracking';
 import { loadInStockSerialOptions } from './outboundConfirmInventoryOptions';
 import { formatQuantity } from '../../../../../utils/format';
+import { useNumericPrecisionPlaces } from '../../../../../hooks/useNumericPrecision';
 import { appendWarehouseLineAmountColumns } from '../shared/warehouseAmountDisplay';
 import {
   isOutboundEditable,
@@ -73,6 +74,7 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
   onSuccess,
 }) => {
   const { t } = useTranslation();
+  const quantityDecimals = useNumericPrecisionPlaces('quantity');
   const { message: messageApi } = App.useApp();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -461,7 +463,7 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
           return (
             <InputNumber
               min={0.01}
-              precision={2}
+              precision={quantityDecimals}
               value={editablePickingQuantities[rid] ?? Number(row.required_quantity ?? 0)}
               onChange={(v) =>
                 setEditablePickingQuantities((prev) => ({ ...prev, [rid]: Number(v) || 0 }))
@@ -534,6 +536,7 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
     ],
     [
       t,
+      quantityDecimals,
       editablePickingQuantities,
       editablePickingWarehouses,
       editablePickingBatches,
@@ -558,7 +561,7 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
               return (
                 <InputNumber
                   min={0.01}
-                  precision={2}
+                  precision={quantityDecimals}
                   value={editableDeliveryQuantities[rid] ?? Number(row.delivery_quantity ?? 0)}
                   onChange={(v) =>
                     setEditableDeliveryQuantities((prev) => ({ ...prev, [rid]: Number(v) || 0 }))
@@ -629,6 +632,7 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
       ),
     [
       t,
+      quantityDecimals,
       editableDeliveryQuantities,
       editableDeliveryBatches,
       editableDeliverySerials,

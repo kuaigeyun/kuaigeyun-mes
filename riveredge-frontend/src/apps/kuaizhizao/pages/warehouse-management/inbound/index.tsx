@@ -8,6 +8,7 @@ import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react'
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
+import { useNumericPrecisionPlaces } from '../../../../../hooks/useNumericPrecision';
 import { ActionType, ProColumns, ProForm, ProFormItem, type ProFormInstance } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, InputNumber, Input, Typography, Select, Spin, Descriptions, Empty, Upload, theme as AntdTheme } from 'antd';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
@@ -165,6 +166,8 @@ interface InboundOrderItem {
   total_amount?: number;
   qualified_quantity?: number;
   unqualified_quantity?: number;
+  process_waste_qty?: number;
+  material_waste_qty?: number;
   batch_number?: string;
   serial_numbers?: string[];
   return_quantity?: number;
@@ -456,6 +459,7 @@ const InboundPage: React.FC = () => {
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const { t } = useTranslation();
+  const quantityDecimals = useNumericPrecisionPlaces('quantity');
   const { token } = AntdTheme.useToken();
   const inboundDetailDrawerZIndex = token.zIndexPopupBase;
   const actionRef = useRef<ActionType>(null);
@@ -2018,6 +2022,59 @@ const InboundPage: React.FC = () => {
         -3,
       );
     }
+    if (currentOrder.receipt_type === 'outsource_receipt') {
+      return appendWarehouseLineAmountColumns(
+        [
+          { title: t('app.kuaizhizao.warehouseInbound.col.materialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
+          { title: t('app.kuaizhizao.warehouseInbound.col.materialName'), dataIndex: 'material_name', width: 150, ellipsis: true },
+          {
+            title: t('app.kuaizhizao.warehouseInbound.col.thisReceiptOutsource'),
+            dataIndex: 'receipt_quantity',
+            width: 100,
+            align: 'right' as const,
+            render: (_: unknown, row: InboundOrderItem) => formatQuantity(row.receipt_quantity),
+          },
+          {
+            title: t('app.kuaizhizao.warehouseInbound.col.qualified'),
+            dataIndex: 'qualified_quantity',
+            width: 88,
+            align: 'right' as const,
+            render: (v: unknown) => formatQuantity(v),
+          },
+          {
+            title: t('app.kuaizhizao.warehouseInbound.col.unqualified'),
+            dataIndex: 'unqualified_quantity',
+            width: 88,
+            align: 'right' as const,
+            render: (v: unknown) => formatQuantity(v),
+          },
+          {
+            title: t('app.kuaizhizao.warehouseInbound.col.processWaste'),
+            dataIndex: 'process_waste_qty',
+            width: 72,
+            align: 'right' as const,
+            render: (v: unknown) => formatQuantity(v),
+          },
+          {
+            title: t('app.kuaizhizao.warehouseInbound.col.materialWaste'),
+            dataIndex: 'material_waste_qty',
+            width: 72,
+            align: 'right' as const,
+            render: (v: unknown) => formatQuantity(v),
+          },
+          {
+            title: t('common.unit'),
+            dataIndex: 'material_unit',
+            width: 72,
+            render: (_: unknown, row: InboundOrderItem) => renderInboundDetailUnitCell(row),
+          },
+          { title: t('app.kuaizhizao.warehouseInbound.col.locationCode'), dataIndex: 'location_code', width: 100, ellipsis: true, render: (v: unknown) => (v ? String(v) : '—') },
+          { title: t('app.kuaizhizao.warehouseInbound.col.batchNumber'), dataIndex: 'batch_number', width: 100, ellipsis: true, render: (v: unknown) => (v ? String(v) : '—') },
+        ],
+        t,
+        true,
+      );
+    }
     return appendWarehouseLineAmountColumns(
       [
         { title: t('app.kuaizhizao.warehouseInbound.col.materialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
@@ -2315,7 +2372,7 @@ const InboundPage: React.FC = () => {
                   return (
                     <InputNumber
                       min={0.01}
-                      precision={2}
+                      precision={quantityDecimals}
                       value={purchaseConfirmPreviewQty[rid]}
                       onChange={(v) =>
                         setPurchaseConfirmPreviewQty((prev) => ({ ...prev, [rid]: Number(v) || 0 }))

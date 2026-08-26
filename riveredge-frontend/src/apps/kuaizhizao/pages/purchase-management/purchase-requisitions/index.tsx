@@ -22,6 +22,7 @@ import {
   AppstoreAddOutlined,
   ArrowLeftOutlined,
   ImportOutlined,
+  PrinterOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable, readPersistedUniTableViewType } from '../../../../../components/uni-table';
@@ -31,7 +32,7 @@ import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
   MaterialStackedCell,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
-import { UniAuditBatchMenuButton } from '../../../../../components/uni-batch';
+import { UniAuditBatchMenuButton, UniCapabilityBatchButton } from '../../../../../components/uni-batch';
 import { buildUniPushMenuItems, buildUniPushToolbarDisabledReason, UniPushToolbarButton } from '../../../../../components/uni-push';
 import {
   UniPullQueryModal,
@@ -69,6 +70,7 @@ import { useImportMaterialUnitOptions } from '../../../../master-data/hooks/useI
 const LazyUniImport = lazy(() =>
   import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport })),
 );
+import { isAuditedStatus } from '../../../constants/documentStatus';
 import {
   listPurchaseRequisitions,
   getPurchaseRequisition,
@@ -121,10 +123,11 @@ import { useGlobalStore } from '../../../../../stores';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { useNumericPrecision } from '../../../../../hooks/useNumericPrecision';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
-import { formatBusinessDateOnly, formatDateTime, formatNumber, formatQuantity, todaySiteDateString } from '../../../../../utils/format';
+import { formatBusinessDateOnly, formatDateTime, formatNumber, formatQuantity, todaySiteDateString, formatCurrencyAmount } from '../../../../../utils/format';;
 import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
@@ -194,6 +197,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
   const currentUser = useCurrentUser();
   const purchaseRequestAuditEnabled = useAuditRequired('purchase_request', false);
   const purchaseRequisitionPerms = useResourcePermissions(PURCHASE_REQUISITION_RESOURCE);
+  const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -260,6 +264,8 @@ const PurchaseRequisitionsPage: React.FC = () => {
   const [currentReq, setCurrentReq] = useState<PurchaseRequisition | null>(null);
   const [supplierList, setSupplierList] = useState<Array<{ id: number; code?: string; name: string }>>([]);
   const createFormRef = useRef<any>(null);
+  const submitAfterSaveRef = useRef(false);
+  const [formSubmitting, setFormSubmitting] = useState(false);
   /** 程序化回填（服务端/草稿）期间禁止 onValuesChange 写草稿，避免空价覆盖手填 */
   const prFormHydratingRef = useRef(false);
   const [previewCode, setPreviewCode] = useState<string | null>(null);
@@ -910,8 +916,12 @@ const PurchaseRequisitionsPage: React.FC = () => {
       messageApi.error(t('app.kuaizhizao.purchaseRequisition.atLeastOneItem'));
       return;
     }
-    if (editingId != null) {
-      try {
+    const shouldSubmit = submitAfterSaveRef.current;
+    setFormSubmitting(true);
+    try {
+      let requisitionId: number | undefined;
+
+      if (editingId != null) {
         await updatePurchaseRequisition(editingId, {
           requisition_name: values.requisition_name,
           requisition_date: requisitionDate,
@@ -922,47 +932,66 @@ const PurchaseRequisitionsPage: React.FC = () => {
           attachments: normalizeDocumentAttachments(values.attachments),
           items: mapItemsForApi(validItems),
         });
-        messageApi.success(t('common.save'));
-        if (prFormDraftKey) clearDocumentFormDraft(prFormDraftKey);
-        setEffectiveRuleCode(null);
-        setEffectiveAutoGen(null);
-        createFormRef.current?.resetFields();
-        invalidateMenuBadgeCounts();
-        if (isFormPage) {
-          leavePurchaseRequisitionFormPage();
+        requisitionId = editingId;
+        if (!shouldSubmit) {
+          messageApi.success(t('common.save'));
         }
-        actionRef.current?.reload();
-      } catch (e: any) {
-        const d = e?.response?.data?.detail;
-        messageApi.error(typeof d === 'string' ? d : d?.message || t('common.saveFailed'));
-        throw e;
+      } else {
+        let requisitionCode = values.requisition_code;
+        const ruleCode = effectiveRuleCode || getPageRuleCode('kuaizhizao-purchase-requisition');
+        const autoGen = effectiveAutoGen ?? isAutoGenerateEnabled('kuaizhizao-purchase-requisition');
+        if (autoGen && ruleCode && (requisitionCode === previewCode || !requisitionCode)) {
+          try {
+            const res = await generateCode({ rule_code: ruleCode });
+            requisitionCode = res.code;
+          } catch (e) {
+            console.warn('采购申请编号正式生成失败，使用当前值:', e);
+          }
+        }
+        const created = await createPurchaseRequisition({
+          requisition_code: requisitionCode || undefined,
+          requisition_name: values.requisition_name,
+          requisition_date: requisitionDate,
+          required_date: requiredDate,
+          applicant_id: values.applicant_id,
+          applicant_name: values.applicant_name,
+          notes: values.notes,
+          attachments: normalizeDocumentAttachments(values.attachments),
+          items: mapItemsForApi(validItems),
+        });
+        requisitionId = created.id;
+        if (!shouldSubmit) {
+          messageApi.success(t('common.createSuccess'));
+        }
       }
-      return;
-    }
-    let requisitionCode = values.requisition_code;
-    const ruleCode = effectiveRuleCode || getPageRuleCode('kuaizhizao-purchase-requisition');
-    const autoGen = effectiveAutoGen ?? isAutoGenerateEnabled('kuaizhizao-purchase-requisition');
-    if (autoGen && ruleCode && (requisitionCode === previewCode || !requisitionCode)) {
-      try {
-        const res = await generateCode({ rule_code: ruleCode });
-        requisitionCode = res.code;
-      } catch (e) {
-        console.warn('采购申请编号正式生成失败，使用当前值:', e);
+
+      if (shouldSubmit && requisitionId) {
+        try {
+          const afterSubmit = await submitPurchaseRequisition(requisitionId);
+          const st = afterSubmit.status;
+          if (isAuditedStatus(st)) {
+            messageApi.success(
+              editingId != null
+                ? t('app.kuaizhizao.purchaseRequisition.saveSubmitAutoApproved')
+                : t('app.kuaizhizao.purchaseRequisition.createSubmitAutoApproved'),
+            );
+          } else {
+            messageApi.success(
+              editingId != null
+                ? t('app.kuaizhizao.purchaseRequisition.saveSubmitPending')
+                : t('app.kuaizhizao.purchaseRequisition.createSubmitPending'),
+            );
+          }
+        } catch (submitErr: any) {
+          messageApi.warning(
+            t('app.kuaizhizao.purchaseRequisition.saveSubmitFailed', {
+              message: submitErr?.message || t('common.operationFailed'),
+            }),
+          );
+        }
+        submitAfterSaveRef.current = false;
       }
-    }
-    try {
-      await createPurchaseRequisition({
-        requisition_code: requisitionCode || undefined,
-        requisition_name: values.requisition_name,
-        requisition_date: requisitionDate,
-        required_date: requiredDate,
-        applicant_id: values.applicant_id,
-        applicant_name: values.applicant_name,
-        notes: values.notes,
-        attachments: normalizeDocumentAttachments(values.attachments),
-        items: mapItemsForApi(validItems),
-      });
-      messageApi.success(t('common.createSuccess'));
+
       if (prFormDraftKey) clearDocumentFormDraft(prFormDraftKey);
       setEffectiveRuleCode(null);
       setEffectiveAutoGen(null);
@@ -973,11 +1002,30 @@ const PurchaseRequisitionsPage: React.FC = () => {
       }
       actionRef.current?.reload();
     } catch (e: any) {
+      submitAfterSaveRef.current = false;
       const d = e?.response?.data?.detail;
-      messageApi.error(typeof d === 'string' ? d : d?.message || t('common.createFailed'));
+      messageApi.error(
+        typeof d === 'string'
+          ? d
+          : d?.message || (editingId != null ? t('common.saveFailed') : t('common.createFailed')),
+      );
       throw e;
+    } finally {
+      setFormSubmitting(false);
     }
   };
+
+  const triggerPurchaseRequisitionPrimarySubmit = useCallback(async () => {
+    try {
+      await createFormRef.current?.validateFields();
+      submitAfterSaveRef.current = true;
+      createFormRef.current?.submit?.();
+    } catch (err: any) {
+      if (err?.errorFields?.length) {
+        messageApi.warning(t('components.layoutTemplates.formModal.checkFormHint'));
+      }
+    }
+  }, [messageApi, t]);
 
   const handleDetail = async (record: PurchaseRequisition) => {
     try {
@@ -1520,7 +1568,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
       align: 'right',
       hideInSearch: true,
       render: (_, record) =>
-        record.total_amount != null ? `¥${formatNumber(record.total_amount, 2)}` : '-',
+        record.total_amount != null ? formatCurrencyAmount(record.total_amount) : '-',
     },
     ...buildDocumentAuditColumns<PurchaseRequisition>(t),
     {
@@ -2050,7 +2098,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
     </>
   );
 
-  const triggerPurchaseRequisitionFormSubmit = () => createFormRef.current?.submit?.();
+  const triggerPurchaseRequisitionFormSubmit = () => void triggerPurchaseRequisitionPrimarySubmit();
 
   useSubmitShortcut(() => triggerPurchaseRequisitionFormSubmit(), isFormPage);
 
@@ -2076,9 +2124,10 @@ const PurchaseRequisitionsPage: React.FC = () => {
             <DocumentFormPageHeaderActions
               onCancel={leavePurchaseRequisitionFormPage}
               onSaveDraft={triggerPurchaseRequisitionFormSubmit}
-              onPrimarySubmit={triggerPurchaseRequisitionFormSubmit}
+              onPrimarySubmit={() => void triggerPurchaseRequisitionPrimarySubmit()}
               isCreatePage={isCreatePage}
               showSaveDraft={false}
+              primaryLoading={formSubmitting}
             />
             </>
           }
@@ -2280,6 +2329,26 @@ const PurchaseRequisitionsPage: React.FC = () => {
               handlers={purchaseRequisitionAuditBatchHandlers}
               onSuccess={handlePurchaseRequisitionAuditBatchSuccess}
               toolBarButtonSize="middle"
+            />,
+            <UniCapabilityBatchButton
+              key="purchase-requisition-print"
+              selectedRowKeys={selectedRowKeys}
+              selectedRecords={selectedRequisitionsForBatch}
+              capabilityKey="print"
+              permAllowed={purchaseRequisitionPerms.canPrint}
+              batchAllowed={(records, perm) =>
+                Boolean(perm) && records.some((record) => record.capabilities?.print?.allowed === true)
+              }
+              singleOnly
+              onRun={async (id) => {
+                openPrint({ documentType: 'purchase_requisition', documentId: id });
+              }}
+              labels={{
+                single: t('components.uniAction.print'),
+                batch: t('components.uniAction.print'),
+              }}
+              icon={<PrinterOutlined />}
+              size="middle"
             />,
           ]}
           showExportButton
@@ -2658,6 +2727,20 @@ const PurchaseRequisitionsPage: React.FC = () => {
                   ),
                 },
                 {
+                  key: 'print',
+                  visible: currentReq.id != null && purchaseRequisitionPerms.canPrint,
+                  render: () => (
+                    <Button
+                      icon={<PrinterOutlined />}
+                      onClick={() =>
+                        openPrint({ documentType: 'purchase_requisition', documentId: currentReq.id! })
+                      }
+                    >
+                      {t('components.uniAction.print')}
+                    </Button>
+                  ),
+                },
+                {
                   key: 'workflow',
                   render: () => (
                     <UniWorkflowActions
@@ -2693,6 +2776,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
         onCancel={() => setMaterialPickerOpen(false)}
         onConfirm={appendRequisitionItemsFromMaterials}
       />
+      {PrintModal}
     </>
   );
 };

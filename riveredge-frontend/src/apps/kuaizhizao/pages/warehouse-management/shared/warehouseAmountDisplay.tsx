@@ -7,19 +7,17 @@ import type { ColumnsType } from 'antd/es/table';
 import { Space, Switch } from 'antd';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
+import { formatAmount, formatCurrencyAmount, formatCurrencyPrice, formatPrice } from '../../../../../utils/format';
 
 const STORAGE_KEY = 'kuaizhizao.warehouse-hub.showAmount';
 
-export function formatWarehouseAmount(val: unknown): string {
-  if (val == null || val === '') return '-';
-  const n = Number(val);
-  if (!Number.isFinite(n)) return '-';
-  return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+export function formatWarehouseAmount(val: unknown, kind: 'price' | 'amount' = 'amount'): string {
+  return kind === 'price' ? formatPrice(val) : formatAmount(val);
 }
 
-export function renderWarehouseAmountCell(val: unknown): string {
-  const formatted = formatWarehouseAmount(val);
-  return formatted === '-' ? formatted : `¥${formatted}`;
+export function renderWarehouseAmountCell(val: unknown, kind: 'price' | 'amount' = 'amount'): string {
+  const formatted = kind === 'price' ? formatCurrencyPrice(val) : formatCurrencyAmount(val);
+  return formatted === '—' ? '-' : formatted;
 }
 
 export function useWarehouseShowAmount(): [boolean, (next: boolean) => void] {
@@ -71,7 +69,7 @@ export function buildWarehouseTotalAmountListColumn<T extends Record<string, unk
       width: 110,
       align: 'right',
       sorter: true,
-      render: (_dom, record) => renderWarehouseAmountCell(record.total_amount),
+      render: (_dom, record) => renderWarehouseAmountCell(record.total_amount, 'amount'),
     },
   ];
 }
@@ -86,7 +84,7 @@ export function buildWarehouseLineUnitPriceColumn(t: TFunction, showAmount: bool
       dataIndex: 'unit_price',
       width: 90,
       align: 'right' as const,
-      render: (val: unknown) => renderWarehouseAmountCell(val),
+      render: (val: unknown) => renderWarehouseAmountCell(val, 'price'),
     },
   ];
 }
@@ -99,7 +97,7 @@ export function buildWarehouseLineAmountColumn(t: TFunction, showAmount: boolean
       dataIndex: 'total_amount',
       width: 100,
       align: 'right' as const,
-      render: (val: unknown) => renderWarehouseAmountCell(val),
+      render: (val: unknown) => renderWarehouseAmountCell(val, 'amount'),
     },
   ];
 }

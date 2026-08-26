@@ -37,6 +37,7 @@ import { UniTableDetailHeader } from '../../../../../components/uni-table-detail
 import { deliveryNoticeApi, type DeliveryNoticePullLine } from '../../../services/delivery-notice';
 import { getDeliveryNoticeLifecycle } from '../../../utils/deliveryNoticeLifecycle';
 import { useTranslation } from 'react-i18next';
+import { useNumericPrecision } from '../../../../../hooks/useNumericPrecision';
 import { useNavigate } from 'react-router-dom';
 import { FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
 import { warehouseApi } from '../../../services/production';
@@ -114,6 +115,7 @@ const deliveryNoticeStatusValueEnum = buildDeliveryNoticeStatusValueEnum();
 
 const DeliveryNotesPage: React.FC = () => {
   const { t } = useTranslation();
+  const { quantity: quantityDecimals, price: priceDecimals } = useNumericPrecision();
   const navigate = useNavigate();
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const pullFromSalesDeliveryAction = resolveKuaizhizaoDocumentAction(t, 'delivery_note.pull_from_sales_delivery');
@@ -1071,7 +1073,7 @@ const DeliveryNotesPage: React.FC = () => {
                   align: 'right' as const,
                   render: (_: any, __: any, index: number) => (
                     <AntForm.Item name={[index, 'notice_quantity']} rules={[{ required: true, message: t('app.kuaizhizao.warehouseOutbound.field.required') }, { type: 'number', min: 0.01, message: '>0' }]} style={{ margin: 0 }}>
-                      <InputNumber placeholder={t('common.quantity')} min={0} precision={2} style={{ width: '100%' }} size="small" />
+                      <InputNumber placeholder={t('common.quantity')} min={0} precision={quantityDecimals} style={{ width: '100%' }} size="small" />
                     </AntForm.Item>
                   ),
                 },
@@ -1082,7 +1084,7 @@ const DeliveryNotesPage: React.FC = () => {
                   align: 'right' as const,
                   render: (_: any, __: any, index: number) => (
                     <AntForm.Item name={[index, 'unit_price']} style={{ margin: 0 }}>
-                      <InputNumber placeholder="0" min={0} precision={2} style={{ width: '100%' }} size="small" />
+                      <InputNumber placeholder="0" min={0} precision={priceDecimals} style={{ width: '100%' }} size="small" />
                     </AntForm.Item>
                   ),
                 },

@@ -7267,6 +7267,12 @@ export default {
   'app.kuaizhizao.purchaseRequisition.convert.invalidUnitPrice': '请为所选行填写有效单价',
   'app.kuaizhizao.purchaseRequisition.submitSuccess': '提交成功',
   'app.kuaizhizao.purchaseRequisition.submitFailed': '提交失败',
+  'app.kuaizhizao.purchaseRequisition.saveSubmitAutoApproved': '采购申请已保存并提交，已自动审核通过',
+  'app.kuaizhizao.purchaseRequisition.saveSubmitPending': '采购申请已保存并提交审核',
+  'app.kuaizhizao.purchaseRequisition.createSubmitAutoApproved': '采购申请已创建并提交，已自动审核通过',
+  'app.kuaizhizao.purchaseRequisition.createSubmitPending': '采购申请已创建并提交审核',
+  'app.kuaizhizao.purchaseRequisition.saveSubmitFailed':
+    '保存成功，但提交失败：{{message}}。您可在列表中点击「提交审核」重试。',
   'app.kuaizhizao.purchaseRequisition.loadDetailFailed': '加载详情失败',
   'app.kuaizhizao.purchaseOrder.entityName': '采购订单',
   'app.kuaizhizao.purchaseOrder.col.supplierAndOrder': '供应商 / 订单',
@@ -8920,7 +8926,11 @@ export default {
   'app.kuaizhizao.workOrder.priorityUrgent': '紧急',
   'app.kuaizhizao.workOrder.productionModeMTO': '按订单生产',
   'app.kuaizhizao.workOrder.productionModeMTS': '按库存生产',
-  'app.kuaizhizao.workOrder.readinessCallsHint': '现场发起补料申请后，仓库在物料中心备料到线边（非正式发料）。也可跳过补料，直接做生产领料。',
+  'app.kuaizhizao.workOrder.readinessCallsHint':
+    '现场发起补料申请后，仓库可在物料中心备料到线边（非正式发料），或下推生产领料单（正式发料，按申请明细带入物料）。也可跳过补料，直接做生产领料。',
+  'app.kuaizhizao.workOrder.actionPushMaterialCallToPicking': '下推生产领料',
+  'app.kuaizhizao.workOrder.pushMaterialCallToPickingBlocked': '当前补料申请不可下推生产领料',
+  'app.kuaizhizao.workOrder.pushMaterialCallToPickingFailed': '下推生产领料预览失败',
   'app.kuaizhizao.workOrder.readinessCustomCallHint': '可添加多行，自选物料与数量。',
   'app.kuaizhizao.workOrder.readinessFullOrderHint': '将按工单齐套分析，对缺料数量大于 0 的物料生成一张补料单，每行一种缺料物料（整单补料）。',
   'app.kuaizhizao.workOrder.readinessLineSidePrefix': '线边',
@@ -10459,6 +10469,9 @@ export default {
   'app.kuaizhizao.documentAction.inbound.pull_from_work_order.label': '从工单创建成品入库单',
   'app.kuaizhizao.documentAction.inbound.pull_from_work_order.source': '工单',
   'app.kuaizhizao.documentAction.inbound.pull_from_work_order.target': '成品入库单',
+  'app.kuaizhizao.documentAction.inbound.pull_from_finished_goods_inspection.label': '从成品检验创建入库单',
+  'app.kuaizhizao.documentAction.inbound.pull_from_finished_goods_inspection.source': '成品检验',
+  'app.kuaizhizao.documentAction.inbound.pull_from_finished_goods_inspection.target': '成品入库单',
   'app.kuaizhizao.documentAction.inbound.pull_from_sales_order.label': '从销售订单创建销售退货单',
   'app.kuaizhizao.documentAction.inbound.pull_from_sales_order.source': '销售订单',
   'app.kuaizhizao.documentAction.inbound.pull_from_sales_order.target': '销售退货单',
@@ -10582,6 +10595,7 @@ export default {
   'app.kuaizhizao.warehouseInbound.field.nonconformanceReason': '不合格原因',
   'app.kuaizhizao.warehouseInbound.field.nonconformanceReasonPlaceholder': '请填写不合格原因（含工废/料废说明）',
   'app.kuaizhizao.warehouseInbound.entry.outsource.wasteExceedsUnqualified': '工废与料废合计不能大于不合格数量',
+  'app.kuaizhizao.warehouseInbound.entry.outsource.qualifiedExceedsPending': '合格数量不能大于待收数量',
   'app.kuaizhizao.warehouseInbound.col.receiptDoc': '收货单',
   'app.kuaizhizao.warehouseInbound.col.orderStatus': '订单状态',
   'app.kuaizhizao.warehouseInbound.col.deliveryDate': '交期',
@@ -19497,6 +19511,8 @@ export default {
   'pages.system.configCenter.notification.document.sales_review': '订单评审',
   'pages.system.configCenter.notification.document.quotation': '报价单',
   'pages.system.configCenter.notification.document.purchase_order': '采购订单',
+  'pages.system.configCenter.notification.document.purchase_order_change': '采购变更单',
+  'pages.system.configCenter.notification.action.purchase_order_change.approved': '审核通过',
   'pages.system.configCenter.notification.document.work_order': '工单',
   'pages.system.configCenter.notification.document.quality_inspection': '质检单',
   'pages.system.configCenter.notification.document.quality_exception': '质量异常单',
@@ -19961,6 +19977,7 @@ export default {
   'app.kuaizhizao.quality.common.columns.inspectionDate': '检验日期',
   'app.kuaizhizao.quality.common.columns.sampleQty': '抽检数量',
   'app.kuaizhizao.quality.common.columns.inspectionQty': '检验数量',
+  'app.kuaizhizao.quality.common.columns.hasCertificate': '合格证',
   'app.kuaizhizao.quality.common.columns.qualifiedQty': '合格数量',
   'app.kuaizhizao.quality.common.columns.unqualifiedQty': '不合格数量',
   'app.kuaizhizao.quality.common.columns.passRate': '合格率(%)',
@@ -20073,6 +20090,9 @@ export default {
   'app.kuaizhizao.quality.common.messages.pushPurchaseReturnFailed': '下推采购退货单失败',
   'app.kuaizhizao.quality.common.messages.pushReworkSuccess': '下推返工单成功：{{code}}',
   'app.kuaizhizao.quality.common.messages.pushReworkFailed': '下推返工单失败',
+  'app.kuaizhizao.quality.common.messages.pushInboundSuccess': '下推入库单成功：{{code}}',
+  'app.kuaizhizao.quality.common.messages.pushInboundFailed': '下推入库单失败',
+  'app.kuaizhizao.quality.finished.push.inboundNoPermission': '无入库单创建权限，无法下推入库',
   'app.kuaizhizao.quality.common.modal.inspectTitle': '来料检验 - {{code}}',
   'app.kuaizhizao.quality.common.modal.detailTitle': '检验详情 - {{code}}',
   'app.kuaizhizao.quality.common.modal.createDefectTitle': '创建不合格品记录',
@@ -23871,6 +23891,90 @@ export default {
   'pages.dashboard.updateLogTypeSection.improvement': '优化',
   'pages.dashboard.updateLogTypeSection.fix': '修复',
   'pages.dashboard.updateLogTypeSection.security': '安全',
+  'pages.dashboard.updateLog.entries.fqc-linked-sales-order-detail-fix.title':
+    '成品检验关联销售订单详情修复',
+  'pages.dashboard.updateLog.entries.fqc-linked-sales-order-detail-fix.description':
+    '修复质量管理成品检验详情/列表点击销售订单号报「获取销售订单详情失败」：质检关联只读放行，并修正权限不足被误报为 500 的问题。',
+  'pages.dashboard.updateLog.entries.fqc-detail-customer-name-fix.title':
+    '成品检验详情客户名称修复',
+  'pages.dashboard.updateLog.entries.fqc-detail-customer-name-fix.description':
+    '修复成品检验（FQC）详情中客户名称不显示：下推/创建时从关联销售订单写入客户快照，并对历史检验单回填客户名称。',
+  'pages.dashboard.updateLog.entries.production-picking-decimal-overpick-fix.title':
+    '生产领料小数防超发误拦修复',
+  'pages.dashboard.updateLog.entries.production-picking-decimal-overpick-fix.description':
+    '修复生产领料确认出库时带小数数量（如 0.29 吨）被防超发误拦：领用量与 BOM 上限相等或仅在显示精度内超出时不再报错，比较全程改用 Decimal 避免浮点误差。',
+  'pages.dashboard.updateLog.entries.purchase-arrival-warning-and-change-display-fixes.title':
+    '采购到货预警与变更单展示修复',
+  'pages.dashboard.updateLog.entries.purchase-arrival-warning-and-change-display-fixes.description':
+    '修复填报延期后变更单仍待审核但预警行误显示已变更；全链路变更单概览状态改中文、单价不再显示 object Object；未关闭条数排除已变更行且随筛选联动；高级搜索与处理状态筛选生效；采购变更单提交启动审批流并支持消息提醒规则配置。',
+  'pages.dashboard.updateLog.entries.inbound-detail-report-material-fields-fix.title':
+    '入库明细表规格单位批号展示修复',
+  'pages.dashboard.updateLog.entries.inbound-detail-report-material-fields-fix.description':
+    '修复入库明细表（及出库明细表）中成品入库等库存流水行规格型号、单位为空、批号误显示 DEFAULT 的问题：报表按物料主数据补齐名称/规格/单位，批号仅展示真实值，无批号显示为 —。',
+  'pages.dashboard.updateLog.entries.batch-inventory-query-batch-no-display-fix.title':
+    '批次库存查询批号展示修复',
+  'pages.dashboard.updateLog.entries.batch-inventory-query-batch-no-display-fix.description':
+    '修复批次库存查询将无批号库存误展示为 DEFAULT：列表与导出仅展示按规则生成的真实批号，无批号显示为 —；已启用批号管理的物料入库时若未填写批号，将按默认批号规则自动生成后再过账。',
+  'pages.dashboard.updateLog.entries.fqc-push-inbound-receipt.title':
+    '成品检验可直接下推入库单',
+  'pages.dashboard.updateLog.entries.fqc-push-inbound-receipt.description':
+    '成品检验（FQC）列表下推菜单新增「从成品检验创建入库单」：检验合格且通过审核后，可按合格数量下推待入库单（与工单下推入库共用 FQC 可入余量）；列表下推进度同步展示合格品入库下推占比。',
+  'pages.dashboard.updateLog.entries.last-operation-auto-inbound-fqc-fix.title':
+    '末道工序报工自动入库失败修复',
+  'pages.dashboard.updateLog.entries.last-operation-auto-inbound-fqc-fix.description':
+    '修复启用成品检验时末道报工已选入库仓库仍提示自动入库失败：FQC 合格余量不再阻塞待入库单创建，仅约束确认入库；直接入库模式下检验未合格时改为提示已生成待入库单并引导先完成 FQC，不再误报默认仓库配置问题。',
+  'pages.dashboard.updateLog.entries.numeric-price-amount-precision-config-fix.title':
+    '单价与金额小数位配置全局生效修复',
+  'pages.dashboard.updateLog.entries.numeric-price-amount-precision-config-fix.description':
+    '单价/金额录入与展示统一读取配置中心 common.price_decimal_places、amount_decimal_places：新增 formatPrice/formatAmount，AmountDisplay 按字段名自动区分单价与金额精度，仓储金额列、单据合计、财务应收应付/对账/总账/成本报表等不再硬编码 2 位；保存参数后刷新精度缓存。',
+  'pages.dashboard.updateLog.entries.numeric-quantity-precision-config-fix.title':
+    '数量小数位配置全局生效修复',
+  'pages.dashboard.updateLog.entries.numeric-quantity-precision-config-fix.description':
+    '委外入库/仓储出入库等数量 InputNumber 与 formatQuantity 改为读取 common.quantity_decimal_places；登录后预取精度配置，保存参数时刷新缓存，配置 4 位小数时录入与列表展示一致。',
+  'pages.dashboard.updateLog.entries.material-call-push-production-picking-fix.title':
+    '补料申请下推生产领料明细带入修复',
+  'pages.dashboard.updateLog.entries.material-call-push-production-picking-fix.description':
+    '新增补料申请下推生产领料流程：预览与创建按申请明细带入物料与可领数量（不受 BOM 发料方式限制）；工单齐套率补料 Tab 与物料中心产线补料任务均可一键进入领料录入页；补料状态无 lifecycle 时按 pending/processing 等展示，不再显示生命周期缺失。',
+  'pages.dashboard.updateLog.entries.outsource-work-order-received-qualified-only-fix.title':
+    '委外已收数量仅计合格品修复',
+  'pages.dashboard.updateLog.entries.outsource-work-order-received-qualified-only-fix.description':
+    '委外工单「已收/待收」改为仅累计合格品收货数量，不合格/工废/料废不再计入；创建收货时校验合格数量不超过待收；历史工单 received_quantity 按已完成收货单合格数量减退货回填。',
+  'pages.dashboard.updateLog.entries.inbound-outsource-receipt-detail-fix.title':
+    '委外入库单详情字段对齐修复',
+  'pages.dashboard.updateLog.entries.inbound-outsource-receipt-detail-fix.description':
+    '委外收货详情补齐委外工单号、供应商与产品信息；明细展示本次收货、合格/不合格、工废/料废数量及单价金额（不受「显示金额」开关影响）；详情接口 enrich 委外工单上下文，与委外工单字段一致。',
+  'pages.dashboard.updateLog.entries.work-order-kitting-related-doc-no-fix.title':
+    '生产工单齐套率关联单号展示修复',
+  'pages.dashboard.updateLog.entries.work-order-kitting-related-doc-no-fix.description':
+    '齐套「库位与补料」面板：库存已齐时仍保留采购订单/申请单号供关联单号列展示；委外子件在未写 bom_parent 时按 BOM 物料匹配未完结委外工单；组内与直接父子链关联逻辑一并加强。',
+  'pages.dashboard.updateLog.entries.inbound-outsource-receipt-amount-fix.title':
+    '入库管理委外收货金额显示修复',
+  'pages.dashboard.updateLog.entries.inbound-outsource-receipt-amount-fix.description':
+    '委外收货单创建时写入单价与金额快照（合格数量优先，否则收货数量，乘以委外工单单价），入库 Hub 列表与详情直接读取该字段；历史收货单通过迁移按关联委外工单回填，与应付单金额来源一致。',
+  'pages.dashboard.updateLog.entries.purchase-order-print-fields-fix.title':
+    '采购订单打印字段与状态中文修复',
+  'pages.dashboard.updateLog.entries.purchase-order-print-fields-fix.description':
+    '打印模板绑定要求到货、采购员等字段与后端输出对齐：头表输出 required_date 与 purchaser_name（buyer_name 为空时按 buyer_id 补全姓名）；状态 i18n 未命中时回退简体中文，不再显示 CONFIRMED 等英文枚举。',
+  'pages.dashboard.updateLog.entries.purchase-requisition-print.title':
+    '采购申请支持打印与内置可视模板',
+  'pages.dashboard.updateLog.entries.purchase-requisition-print.description':
+    '采购申请列表与详情抽屉新增打印入口；内置 PURCHASE_REQUISITION_PRINT 预置模板（设计器 schema），可在系统打印模板中可视调整版式，含头信息、明细表与签章区。',
+  'pages.dashboard.updateLog.entries.purchase-requisition-save-submit-fix.title':
+    '采购申请保存并提交修复',
+  'pages.dashboard.updateLog.entries.purchase-requisition-save-submit-fix.description':
+    '编辑采购申请点击「保存并提交」时，保存成功后按预期调用提交接口，不再仅保存为草稿。',
+  'pages.dashboard.updateLog.entries.product-sales-ranking-report-fix.title':
+    '存货销售排行报表数据与命名修复',
+  'pages.dashboard.updateLog.entries.product-sales-ranking-report-fix.description':
+    '存货销售排行改为基于销售出库明细统计，产品类别取自物料分组名称；菜单与报表名称统一为「存货销售排行」。',
+  'pages.dashboard.updateLog.entries.sales-contract-print-chinese-labels.title':
+    '销售合同打印字典字段中文展示',
+  'pages.dashboard.updateLog.entries.sales-contract-print-chinese-labels.description':
+    '销售合同打印时合同类型、付款条件、发货方式等字典字段输出中文标签；租户字典未命中时回退系统字典，单次合同与框架合同等类型不再显示英文码。',
+  'pages.dashboard.updateLog.entries.sales-contract-salesman-select.title':
+    '销售合同销售人员改为下拉选人',
+  'pages.dashboard.updateLog.entries.sales-contract-salesman-select.description':
+    '新建与编辑销售合同时，销售人员改为从用户列表下拉选择并提交 salesman_id 与 salesman_name，不再手工输入姓名。',
   'pages.dashboard.updateLog.entries.quotation-export-localized-columns.title':
     '报价单导出中文表头与数据',
   'pages.dashboard.updateLog.entries.quotation-export-localized-columns.description':

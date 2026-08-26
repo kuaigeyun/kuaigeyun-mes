@@ -104,6 +104,83 @@ async def apply_sales_order_child_list_scope(
     return query.filter(combined)
 
 
+async def _sales_order_linked_from_quality_inspection(
+    tenant_id: int,
+    sales_order_id: int,
+) -> bool:
+    """是否存在引用该销售订单的质检单（成品 / 出货检验）。"""
+    from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection
+    from apps.kuaizhizao.models.oqc_inspection import OqcInspection
+
+    filters = dict(
+        tenant_id=tenant_id,
+        sales_order_id=int(sales_order_id),
+        deleted_at__isnull=True,
+    )
+    if await FinishedGoodsInspection.filter(**filters).exists():
+        return True
+    return await OqcInspection.filter(**filters).exists()
+
+
+async def assert_sales_order_row_visible_or_quality_linked(
+    order: Any,
+    *,
+    tenant_id: int,
+    user: User,
+) -> None:
+    """
+    销售订单详情可见性：常规数据范围通过，或用户已具备质检读权限且
+    存在引用该销售订单的成品/出货检验单（关联抽屉只读场景）。
+    """
+    if await DataScopeService.row_visible(
+        order,
+        tenant_id=tenant_id,
+        user=user,
+        resource=SALES_ORDER_SCOPE_RESOURCE,
+    ):
+        return
+
+    sales_order_id = int(getattr(order, "id", 0) or 0)
+    if sales_order_id <= 0:
+        await DataScopeService.assert_row_visible(
+            order,
+            tenant_id=tenant_id,
+            user=user,
+            resource=SALES_ORDER_SCOPE_RESOURCE,
+        )
+        return
+
+    if not await _sales_order_linked_from_quality_inspection(tenant_id, sales_order_id):
+        await DataScopeService.assert_row_visible(
+            order,
+            tenant_id=tenant_id,
+            user=user,
+            resource=SALES_ORDER_SCOPE_RESOURCE,
+        )
+        return
+
+    from core.config.permission_contract import build_permission_code
+    from core.services.authorization.user_permission_service import UserPermissionService
+
+    quality_read_codes = [
+        build_permission_code("kuaizhizao", "quality-management-finished-goods-inspection", "read"),
+        build_permission_code("kuaizhizao", "quality-management-oqc-inspection", "read"),
+    ]
+    if await UserPermissionService.has_any_permission(
+        user.id,
+        tenant_id,
+        quality_read_codes,
+    ):
+        return
+
+    await DataScopeService.assert_row_visible(
+        order,
+        tenant_id=tenant_id,
+        user=user,
+        resource=SALES_ORDER_SCOPE_RESOURCE,
+    )
+
+
 async def assert_sales_order_child_row_visible(
     row: Any,
     *,

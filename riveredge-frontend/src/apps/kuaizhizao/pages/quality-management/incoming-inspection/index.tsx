@@ -152,6 +152,10 @@ import {
   filterRevokeConductQualityInspectionRecords,
 } from '../components/qualityRevokeConduct';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
+import {
+  buildIncomingInspectionExportColumns,
+  mapIncomingInspectionExportRows,
+} from '../components/qualityInspectionExport';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { importExcelMatrixInChunks } from '../../../../../utils/chunkedBulkImport';
 import { todaySiteDateString } from '../../../../../utils/format';
@@ -637,8 +641,9 @@ const IncomingInspectionPage: React.FC = () => {
           return;
         }
         await downloadRecordsAsXlsx(
-          toExport as Array<Record<string, unknown>>,
+          mapIncomingInspectionExportRows(t, toExport as Array<Record<string, unknown>>),
           `${t('app.kuaizhizao.quality.common.entity.incomingInspection')}_${todaySiteDateString()}.xlsx`,
+          { columns: buildIncomingInspectionExportColumns(t) },
         );
         messageApi.success(t('common.exportCountSuccess', { count: toExport.length }));
       }

@@ -40,6 +40,7 @@ import { getOtherInboundLifecycle } from '../../../utils/otherInboundLifecycle';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
+import { useNumericPrecision } from '../../../../../hooks/useNumericPrecision';
 import { warehouseApi as masterDataWarehouseApi } from '../../../../master-data/services/warehouse';
 import { materialApi, materialBatchApi, materialSerialApi } from '../../../../master-data/services/material';
 import { SerialNumbersImportTrigger } from '../../../../../components/serial-numbers-import';
@@ -160,6 +161,7 @@ const OTHER_INBOUND_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_other_inbounds';
 
 const OtherInboundPage: React.FC = () => {
   const { t } = useTranslation();
+  const { quantity: quantityDecimals, price: priceDecimals } = useNumericPrecision();
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
@@ -1105,7 +1107,7 @@ const OtherInboundPage: React.FC = () => {
                     align: 'right' as const,
                     render: (_: any, __: any, index: number) => (
                       <AntForm.Item name={[index, 'inbound_quantity']} rules={[{ required: true, message: t('app.kuaizhizao.warehouseOtherInbound.field.required') }, { type: 'number', min: 0.01, message: t('app.kuaizhizao.warehouseOtherInbound.field.quantityMin') }]} style={{ margin: 0 }}>
-                        <InputNumber placeholder={t('common.quantity')} min={0} precision={2} style={{ width: '100%' }} size="small" />
+                        <InputNumber placeholder={t('common.quantity')} min={0} precision={quantityDecimals} style={{ width: '100%' }} size="small" />
                       </AntForm.Item>
                     ),
                   },
@@ -1196,7 +1198,7 @@ const OtherInboundPage: React.FC = () => {
                     align: 'right' as const,
                     render: (_: any, __: any, index: number) => (
                       <AntForm.Item name={[index, 'unit_price']} style={{ margin: 0 }}>
-                        <InputNumber placeholder="0" min={0} precision={2} style={{ width: '100%' }} size="small" />
+                        <InputNumber placeholder="0" min={0} precision={priceDecimals} style={{ width: '100%' }} size="small" />
                       </AntForm.Item>
                     ),
                   },

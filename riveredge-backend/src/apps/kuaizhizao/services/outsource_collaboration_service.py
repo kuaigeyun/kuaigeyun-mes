@@ -203,8 +203,8 @@ class OutsourceCollaborationService(BaseService):
             if completed_quantity != qualified_quantity + unqualified_quantity:
                 raise ValidationError("完成数量必须等于合格数量加不合格数量")
             
-            # 更新委外工单（等待验收）
-            outsource_work_order.received_quantity = completed_quantity
+            # 更新委外工单（等待验收）：已收仅累计合格品
+            outsource_work_order.received_quantity = qualified_quantity
             outsource_work_order.qualified_quantity = qualified_quantity
             outsource_work_order.unqualified_quantity = unqualified_quantity
             

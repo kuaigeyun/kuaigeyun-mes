@@ -6,6 +6,7 @@
 
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNumericPrecisionPlaces } from '../../../../../hooks/useNumericPrecision';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import {
   ActionType,
@@ -120,6 +121,7 @@ interface CustomerMaterialRegistration {
 
 const CustomerMaterialRegistrationPage: React.FC = () => {
   const { t } = useTranslation();
+  const quantityDecimals = useNumericPrecisionPlaces('quantity');
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
@@ -913,7 +915,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
           rules={[{ required: true, message: t('app.kuaizhizao.warehouseCommon.required') }]}
           style={{ margin: 0 }}
         >
-          <InputNumber min={0} precision={2} style={{ width: '100%' }} size="small" />
+          <InputNumber min={0} precision={quantityDecimals} style={{ width: '100%' }} size="small" />
         </AntForm.Item>
       ),
     },

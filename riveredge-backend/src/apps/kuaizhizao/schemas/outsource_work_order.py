@@ -248,6 +248,8 @@ class OutsourceMaterialReceiptBase(BaseModel):
     material_waste_qty: Optional[Decimal] = Field(None, description="料废数量")
     nonconformance_reason: Optional[str] = Field(None, description="不合格原因")
     unit: str = Field(..., description="单位")
+    unit_price: Decimal = Field(Decimal("0"), description="委外单价快照（来自委外工单）")
+    total_amount: Decimal = Field(Decimal("0"), description="收货金额（合格数量×单价）")
     warehouse_id: Optional[int] = Field(None, description="仓库ID")
     warehouse_name: Optional[str] = Field(None, description="仓库名称")
     location_id: Optional[int] = Field(None, description="库位ID（可选）")
@@ -323,6 +325,8 @@ class OutsourceMaterialReceiptResponse(OutsourceMaterialReceiptBase):
     supplier_id: Optional[int] = Field(None, description="委外供应商ID（由委外工单解析）")
     supplier_code: Optional[str] = Field(None, description="委外供应商编码（由委外工单解析）")
     supplier_name: Optional[str] = Field(None, description="委外供应商名称（由委外工单解析）")
+    product_code: Optional[str] = Field(None, description="委外产品编码（来自委外工单）")
+    product_name: Optional[str] = Field(None, description="委外产品名称（来自委外工单）")
     capabilities: Optional[InboundHubCapabilities] = Field(
         None, description="入库 Hub capabilities（document_action_policy）",
     )

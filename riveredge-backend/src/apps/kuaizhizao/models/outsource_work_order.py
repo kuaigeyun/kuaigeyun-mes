@@ -271,6 +271,8 @@ class OutsourceMaterialReceipt(BaseModel):
         qualified_quantity: 合格数量
         unqualified_quantity: 不合格数量
         unit: 单位
+        unit_price: 委外单价快照（来自委外工单）
+        total_amount: 收货金额（合格数量×单价）
         warehouse_id: 仓库ID
         warehouse_name: 仓库名称
         location_id: 库位ID（可选）
@@ -323,6 +325,12 @@ class OutsourceMaterialReceipt(BaseModel):
     material_waste_qty = fields.DecimalField(max_digits=14, decimal_places=4, null=True, description="料废数量")
     nonconformance_reason = fields.TextField(null=True, description="不合格原因")
     unit = fields.CharField(max_length=20, description="单位")
+    unit_price = fields.DecimalField(
+        max_digits=14, decimal_places=4, default=0, description="委外单价快照（来自委外工单）"
+    )
+    total_amount = fields.DecimalField(
+        max_digits=14, decimal_places=4, default=0, description="收货金额（合格数量×单价）"
+    )
 
     # 仓库信息
     warehouse_id = fields.IntField(null=True, description="仓库ID")

@@ -499,7 +499,7 @@ class KittingSupplyProgress(BaseModel):
     齐套分析：采购件供给进度（按物料聚合未结采购申请/采购订单）。
 
     status:
-      - stock_covered: 库存/线边已覆盖需求
+      - stock_covered: 库存/线边已覆盖需求（仍可带关联采购单号）
       - receiving: 采购部分到货、仍有未到货
       - purchasing: 采购中（有未结采购订单）
       - purchase_requisition: 采购申请中（有未转单申请）

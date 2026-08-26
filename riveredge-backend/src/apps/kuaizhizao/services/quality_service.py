@@ -527,6 +527,32 @@ def _apply_material_snapshots_to_preview_items(
     return enriched
 
 
+async def _resolve_fqc_customer_snapshot(
+    tenant_id: int,
+    *,
+    sales_order_id: Optional[int],
+    customer_id: Optional[int] = None,
+    customer_name: Optional[str] = None,
+) -> Tuple[Optional[int], Optional[str]]:
+    """成品检验客户快照：工单无客户字段，须从关联销售订单写入。"""
+    name = str(customer_name or "").strip()
+    if name:
+        return customer_id, name
+    if not sales_order_id:
+        return customer_id, None
+    from apps.kuaizhizao.models.sales_order import SalesOrder
+
+    so = await SalesOrder.get_or_none(
+        id=int(sales_order_id),
+        tenant_id=tenant_id,
+        deleted_at__isnull=True,
+    )
+    if not so:
+        return customer_id, None
+    resolved_name = str(so.customer_name or "").strip()
+    return (int(so.customer_id), resolved_name or None) if resolved_name else (so.customer_id, None)
+
+
 async def _resolve_customer_material_pull_customer_name_map(
     tenant_id: int,
     registrations: List[Any],
@@ -4162,6 +4188,149 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
         )
         return float(pushed_map.get(int(inspection_id), 0))
 
+    async def _pushed_inbound_qty_by_inspection_ids(
+        self,
+        tenant_id: int,
+        inspection_ids: List[int],
+    ) -> Dict[int, "Decimal"]:
+        from decimal import Decimal
+        from apps.kuaizhizao.models.finished_goods_receipt import FinishedGoodsReceipt
+        from apps.kuaizhizao.models.finished_goods_receipt_item import FinishedGoodsReceiptItem
+        from apps.kuaizhizao.models.semi_finished_goods_receipt import SemiFinishedGoodsReceipt
+        from apps.kuaizhizao.models.semi_finished_goods_receipt_item import SemiFinishedGoodsReceiptItem
+
+        ids = [int(v) for v in inspection_ids if v is not None]
+        if not ids:
+            return {}
+
+        void_statuses = frozenset(
+            {
+                "已作废",
+                "作废",
+                "void",
+                "VOID",
+                "cancelled",
+                "CANCELLED",
+                "已取消",
+                "cancel",
+                "CANCEL",
+            }
+        )
+        pushed: Dict[int, Decimal] = {}
+
+        async def _accumulate_items(items: List[Any], receipt_model: Any) -> None:
+            if not items:
+                return
+            receipt_ids = list({int(i.receipt_id) for i in items if getattr(i, "receipt_id", None)})
+            if not receipt_ids:
+                return
+            active_ids = set(
+                await receipt_model.filter(
+                    tenant_id=tenant_id,
+                    id__in=receipt_ids,
+                    deleted_at__isnull=True,
+                )
+                .exclude(status__in=list(void_statuses))
+                .values_list("id", flat=True)
+            )
+            for item in items:
+                receipt_id = getattr(item, "receipt_id", None)
+                if receipt_id is None or int(receipt_id) not in active_ids:
+                    continue
+                insp_id = getattr(item, "quality_inspection_id", None)
+                if insp_id is None:
+                    continue
+                qty = getattr(item, "receipt_quantity", None) or getattr(item, "qualified_quantity", None) or 0
+                try:
+                    qty_dec = Decimal(str(qty))
+                except Exception:
+                    continue
+                if qty_dec <= 0:
+                    continue
+                sid = int(insp_id)
+                pushed[sid] = pushed.get(sid, Decimal("0")) + qty_dec
+
+        fg_items = await FinishedGoodsReceiptItem.filter(
+            tenant_id=tenant_id,
+            quality_inspection_id__in=ids,
+        ).all()
+        await _accumulate_items(fg_items, FinishedGoodsReceipt)
+
+        sf_items = await SemiFinishedGoodsReceiptItem.filter(
+            tenant_id=tenant_id,
+            quality_inspection_id__in=ids,
+        ).all()
+        await _accumulate_items(sf_items, SemiFinishedGoodsReceipt)
+        return pushed
+
+    async def _pushed_inbound_quantity_for_inspection(
+        self,
+        tenant_id: int,
+        inspection_id: int,
+    ) -> float:
+        pushed_map = await self._pushed_inbound_qty_by_inspection_ids(
+            tenant_id, [inspection_id]
+        )
+        return float(pushed_map.get(int(inspection_id), 0))
+
+    async def _resolve_fqc_push_inbound_max_quantity(
+        self,
+        tenant_id: int,
+        inspection: Any,
+        *,
+        pushed_inbound: float,
+    ) -> float:
+        from decimal import Decimal
+        from apps.kuaizhizao.services.inspection_policy_service import (
+            _fqc_transferable_qualified_quantity,
+            get_fqc_inbound_remaining_quantity,
+        )
+        from apps.kuaizhizao.services.warehouse_service import FinishedGoodsReceiptService
+
+        qualified = float(_fqc_transferable_qualified_quantity(inspection))
+        inspection_remaining = max(0.0, qualified - float(pushed_inbound or 0))
+        if inspection_remaining <= 0:
+            return 0.0
+
+        work_order_id = getattr(inspection, "work_order_id", None)
+        material_id = getattr(inspection, "material_id", None)
+        if not work_order_id or not material_id:
+            return 0.0
+
+        wo_remaining = float(
+            await get_fqc_inbound_remaining_quantity(
+                tenant_id,
+                int(work_order_id),
+                int(material_id),
+            )
+        )
+        max_push = min(inspection_remaining, wo_remaining)
+        if max_push <= 0:
+            return 0.0
+
+        quota = await FinishedGoodsReceiptService()._get_work_order_inbound_quota(
+            tenant_id,
+            int(work_order_id),
+        )
+        wo_pending = float(quota.get("pending") or 0)
+        return max(0.0, min(max_push, wo_pending))
+
+    async def _fqc_enrich_context(
+        self,
+        tenant_id: int,
+        inspection_id: int,
+    ) -> Dict[str, Any]:
+        pushed_rework = await self._pushed_rework_quantity_for_inspection(tenant_id, inspection_id)
+        pushed_inbound = await self._pushed_inbound_quantity_for_inspection(tenant_id, inspection_id)
+        audit_required = await _is_quality_audit_required(tenant_id, "finished_goods_inspection")
+        return {
+            "supports_push_rework": True,
+            "supports_push_inbound": True,
+            "pushed_rework_quantity": pushed_rework,
+            "pushed_inbound_quantity": pushed_inbound,
+            "fqc_audit_required": audit_required,
+        }
+
     async def preview_push_to_rework(
         self,
         tenant_id: int,
@@ -4246,6 +4415,14 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                 await _quality_inspection_initial_review_fields(tenant_id, "finished_goods_inspection")
             )
             await _ensure_inspection_material_unit(tenant_id, create_data)
+            customer_id, customer_name = await _resolve_fqc_customer_snapshot(
+                tenant_id,
+                sales_order_id=create_data.get("sales_order_id"),
+                customer_id=create_data.get("customer_id"),
+                customer_name=create_data.get("customer_name"),
+            )
+            create_data["customer_id"] = customer_id
+            create_data["customer_name"] = customer_name
 
             inspection = await FinishedGoodsInspection.create(
                 tenant_id=tenant_id,
@@ -4277,14 +4454,12 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
         )
         from core.services.approval.audit_record_enricher import enrich_record
 
+        ctx = await self._fqc_enrich_context(tenant_id, inspection_id)
         resp = enrich_quality_inspection_capabilities_on_response(
             inspection,
             resp,
-            supports_push_rework=True,
-            pushed_rework_quantity=await self._pushed_rework_quantity_for_inspection(
-                tenant_id, inspection_id
-            ),
             certificate_issued=bool(getattr(inspection, "certificate_issued", False)),
+            **ctx,
         )
         return await enrich_record(tenant_id, "finished_goods_inspection", resp)
 
@@ -4326,17 +4501,27 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
         from core.services.approval.audit_record_enricher import enrich_data_payload
 
         inspection_models = list(inspections)
-        pushed_map = await self._pushed_rework_qty_by_inspection_ids(
+        pushed_rework_map = await self._pushed_rework_qty_by_inspection_ids(
             tenant_id,
             [int(i.id) for i in inspection_models if i.id is not None],
         )
+        pushed_inbound_map = await self._pushed_inbound_qty_by_inspection_ids(
+            tenant_id,
+            [int(i.id) for i in inspection_models if i.id is not None],
+        )
+        fqc_audit_required = await _is_quality_audit_required(tenant_id, "finished_goods_inspection")
         rows = enrich_quality_inspection_list_capabilities(
             inspection_models,
             [FinishedGoodsInspectionListResponse.model_validate(i) for i in inspection_models],
             supports_push_rework=True,
+            supports_push_inbound=True,
             pushed_rework_qty_by_inspection_id={
-                int(k): float(v) for k, v in pushed_map.items()
+                int(k): float(v) for k, v in pushed_rework_map.items()
             },
+            pushed_inbound_qty_by_inspection_id={
+                int(k): float(v) for k, v in pushed_inbound_map.items()
+            },
+            fqc_audit_required=fqc_audit_required,
         )
         return await enrich_data_payload(tenant_id, "finished_goods_inspection", {
             "data": [r.model_dump() for r in rows],
@@ -4536,18 +4721,22 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
             pushed_rework_qty = await self._pushed_rework_quantity_for_inspection(
                 tenant_id, inspection_id
             )
+            pushed_inbound_qty = await self._pushed_inbound_quantity_for_inspection(
+                tenant_id, inspection_id
+            )
+            fqc_ctx = await self._fqc_enrich_context(tenant_id, inspection_id)
             assert_quality_inspection_capability(
                 inspection,
                 "revoke_conduct",
-                supports_push_rework=True,
-                pushed_rework_quantity=pushed_rework_qty,
                 certificate_issued=bool(getattr(inspection, "certificate_issued", False)),
+                **fqc_ctx,
             )
             await assert_revoke_conduct_no_downstream(
                 tenant_id,
                 entity_type="finished_goods_inspection",
                 source_id=inspection_id,
                 pushed_rework_quantity=pushed_rework_qty,
+                pushed_inbound_quantity=pushed_inbound_qty,
                 certificate_issued=bool(getattr(inspection, "certificate_issued", False)),
             )
             updater_name = await self.get_user_name(user_id)
@@ -4800,6 +4989,301 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
             )
 
             return {"rework_order_id": rework_order.id, "rework_order_code": rework_order.code}
+
+    async def preview_push_to_inbound(
+        self,
+        tenant_id: int,
+        inspection_id: int,
+    ) -> dict:
+        """成品检验合格下推入库单预览（不实际创建）。"""
+        from apps.kuaizhizao.services.document_action_policy.quality_inspection_record import (
+            derive_quality_inspection_capabilities,
+        )
+        from apps.kuaizhizao.services.inspection_policy_service import (
+            _fqc_transferable_qualified_quantity,
+        )
+        from apps.kuaizhizao.models.work_order import WorkOrder
+        from apps.kuaizhizao.services.warehouse_service import FinishedGoodsReceiptService
+
+        inspection = await FinishedGoodsInspection.get_or_none(
+            tenant_id=tenant_id, id=inspection_id, deleted_at__isnull=True
+        )
+        if not inspection:
+            raise NotFoundError(f"成品检验单不存在: {inspection_id}")
+
+        ctx = await self._fqc_enrich_context(tenant_id, inspection_id)
+        pushed_inbound = float(ctx["pushed_inbound_quantity"])
+        caps = derive_quality_inspection_capabilities(
+            inspection,
+            supports_push_inbound=True,
+            pushed_inbound_quantity=pushed_inbound,
+            fqc_audit_required=bool(ctx["fqc_audit_required"]),
+        )
+        push_cap = caps.push_inbound
+        qualified = float(_fqc_transferable_qualified_quantity(inspection))
+        max_push = await self._resolve_fqc_push_inbound_max_quantity(
+            tenant_id,
+            inspection,
+            pushed_inbound=pushed_inbound,
+        )
+
+        warehouse_id: Optional[int] = None
+        warehouse_name: str = ""
+        if inspection.work_order_id:
+            wo = await WorkOrder.get_or_none(
+                tenant_id=tenant_id,
+                id=int(inspection.work_order_id),
+                deleted_at__isnull=True,
+            )
+            if wo:
+                resolved = await FinishedGoodsReceiptService().resolve_default_inbound_warehouse_for_work_order(
+                    tenant_id=tenant_id,
+                    work_order=wo,
+                )
+                if resolved:
+                    warehouse_id, warehouse_name = resolved[0], resolved[1]
+
+        preview_items: List[Dict[str, Any]] = []
+        if max_push > 0:
+            preview_items.append(
+                {
+                    "item_id": int(inspection.id),
+                    "material_id": inspection.material_id,
+                    "material_code": inspection.material_code,
+                    "material_name": inspection.material_name,
+                    "material_spec": getattr(inspection, "material_spec", None),
+                    "quantity": qualified,
+                    "pushed_quantity": pushed_inbound,
+                    "max_push_quantity": max_push,
+                    "warehouse_id": warehouse_id,
+                    "warehouse_name": warehouse_name or None,
+                }
+            )
+
+        has_blocking = not push_cap.allowed or not preview_items or not warehouse_id
+        blocking_reason = push_cap.reason if not push_cap.allowed else (
+            "finished_goods_inspection.push_inbound.no_remaining"
+            if not preview_items
+            else (
+                "warehouse.inbound.no_default_warehouse"
+                if not warehouse_id
+                else None
+            )
+        )
+        return {
+            "target_type": "finished_goods_receipt",
+            "order_id": inspection.id,
+            "order_code": inspection.inspection_code,
+            "summary": (
+                f"请确认将从合格数量下推入库单（可下推 {max_push}/{qualified}）"
+                if not has_blocking
+                else "当前成品检验单不可下推入库单"
+            ),
+            "items": preview_items,
+            "has_blocking_issues": has_blocking,
+            "blocking_reason": blocking_reason,
+            "tip": "确认后将按所选数量生成待入库单；删除未确认的入库单后，可下推数量自动回退。",
+            "warehouse_id": warehouse_id,
+            "warehouse_name": warehouse_name or None,
+        }
+
+    async def push_to_inbound(
+        self,
+        tenant_id: int,
+        inspection_id: int,
+        created_by: int,
+        *,
+        quantity: Optional[float] = None,
+        warehouse_id: Optional[int] = None,
+        warehouse_name: Optional[str] = None,
+    ) -> dict:
+        """成品检验合格 -> 按可下推数量生成成品/半成品入库单"""
+        from apps.kuaizhizao.services.document_action_policy.quality_inspection_record import (
+            assert_quality_inspection_capability,
+        )
+        from decimal import Decimal
+        from apps.kuaizhizao.models.work_order import WorkOrder
+        from apps.kuaizhizao.services.warehouse_service import FinishedGoodsReceiptService
+        from apps.kuaizhizao.services.semi_finished_goods_receipt_service import (
+            SemiFinishedGoodsReceiptService,
+        )
+        from apps.kuaizhizao.schemas.warehouse import (
+            FinishedGoodsReceiptCreate,
+            FinishedGoodsReceiptItemCreate,
+            SemiFinishedGoodsReceiptCreate,
+            SemiFinishedGoodsReceiptItemCreate,
+        )
+        from apps.kuaizhizao.services.work_order_inbound_bom_role import (
+            is_semi_finished_product_by_bom_role,
+        )
+        from apps.master_data.models.material import Material as _Mat
+
+        async with in_transaction():
+            inspection_model = await FinishedGoodsInspection.get_or_none(
+                tenant_id=tenant_id, id=inspection_id, deleted_at__isnull=True
+            )
+            if not inspection_model:
+                raise NotFoundError(f"成品检验单不存在: {inspection_id}")
+
+            ctx = await self._fqc_enrich_context(tenant_id, inspection_id)
+            pushed_inbound = float(ctx["pushed_inbound_quantity"])
+            assert_quality_inspection_capability(
+                inspection_model,
+                "push_inbound",
+                **ctx,
+            )
+
+            max_push = await self._resolve_fqc_push_inbound_max_quantity(
+                tenant_id,
+                inspection_model,
+                pushed_inbound=pushed_inbound,
+            )
+            if max_push <= 0:
+                raise BusinessLogicError("合格数量已全部下推入库，或工单可入余量已用尽")
+
+            if quantity is None:
+                push_qty = Decimal(str(max_push))
+            else:
+                push_qty = Decimal(str(quantity))
+            if push_qty <= 0:
+                raise BusinessLogicError("下推入库数量必须大于 0")
+            if push_qty > Decimal(str(max_push)):
+                raise BusinessLogicError(
+                    f"下推入库数量 {push_qty} 超过可下推数量 {max_push}"
+                )
+
+            inspection = inspection_model
+            if not inspection.work_order_id:
+                raise BusinessLogicError("成品检验单未关联工单，无法下推入库")
+
+            wo = await WorkOrder.get_or_none(
+                tenant_id=tenant_id,
+                id=int(inspection.work_order_id),
+                deleted_at__isnull=True,
+            )
+            if not wo:
+                raise NotFoundError(f"工单不存在: {inspection.work_order_id}")
+
+            wh_id = warehouse_id
+            wh_name = (warehouse_name or "").strip()
+            if not wh_id:
+                resolved = await FinishedGoodsReceiptService().resolve_default_inbound_warehouse_for_work_order(
+                    tenant_id=tenant_id,
+                    work_order=wo,
+                )
+                if not resolved:
+                    raise BusinessLogicError(
+                        "请指定入库仓库，或在主数据中维护与工单工作中心/车间关联的启用仓库"
+                    )
+                wh_id, wh_name = resolved[0], resolved[1]
+            elif not wh_name:
+                from apps.kuaizhizao.services.warehouse_service import _resolve_warehouse_name_by_id
+
+                wh_name = await _resolve_warehouse_name_by_id(tenant_id, int(wh_id)) or ""
+
+            mat = await _Mat.get_or_none(
+                tenant_id=tenant_id, id=inspection.material_id, deleted_at__isnull=True
+            )
+            material_unit = (getattr(mat, "base_unit", None) or "个") if mat else "个"
+            use_semi = await is_semi_finished_product_by_bom_role(tenant_id, inspection.material_id)
+            notes = f"由成品检验单 {inspection.inspection_code} 下推创建"
+
+            if use_semi:
+                sf_svc = SemiFinishedGoodsReceiptService()
+                receipt_data = SemiFinishedGoodsReceiptCreate(
+                    work_order_id=inspection.work_order_id,
+                    work_order_code=inspection.work_order_code,
+                    sales_order_id=inspection.sales_order_id,
+                    sales_order_code=inspection.sales_order_code,
+                    warehouse_id=int(wh_id),
+                    warehouse_name=wh_name,
+                    receipt_time=resolve_business_datetime(),
+                    status="待入库",
+                    notes=notes + "（半成品入库）",
+                )
+                item_data = SemiFinishedGoodsReceiptItemCreate(
+                    material_id=inspection.material_id,
+                    material_code=inspection.material_code,
+                    material_name=inspection.material_name,
+                    material_unit=material_unit,
+                    receipt_quantity=push_qty,
+                    qualified_quantity=push_qty,
+                    unqualified_quantity=0,
+                    batch_number=inspection.batch_number,
+                    quality_inspection_id=inspection.id,
+                    quality_status="合格",
+                )
+                receipt = await sf_svc.create_semi_finished_goods_receipt(
+                    tenant_id=tenant_id,
+                    receipt_data=receipt_data,
+                    created_by=created_by,
+                    items=[item_data],
+                )
+                target_type = "semi_finished_goods_receipt"
+                receipt_id = receipt.id
+                receipt_code = receipt.receipt_code
+            else:
+                wh_svc = FinishedGoodsReceiptService()
+                receipt_data = FinishedGoodsReceiptCreate(
+                    work_order_id=inspection.work_order_id,
+                    work_order_code=inspection.work_order_code,
+                    sales_order_id=inspection.sales_order_id,
+                    sales_order_code=inspection.sales_order_code,
+                    warehouse_id=int(wh_id),
+                    warehouse_name=wh_name,
+                    receipt_time=resolve_business_datetime(),
+                    status="待入库",
+                    notes=notes,
+                )
+                item_data = FinishedGoodsReceiptItemCreate(
+                    material_id=inspection.material_id,
+                    material_code=inspection.material_code,
+                    material_name=inspection.material_name,
+                    material_unit=material_unit,
+                    receipt_quantity=push_qty,
+                    qualified_quantity=push_qty,
+                    unqualified_quantity=0,
+                    batch_number=inspection.batch_number,
+                    quality_inspection_id=inspection.id,
+                    quality_status="合格",
+                )
+                receipt = await wh_svc.create_finished_goods_receipt(
+                    tenant_id=tenant_id,
+                    receipt_data=receipt_data,
+                    created_by=created_by,
+                    items=[item_data],
+                )
+                target_type = "finished_goods_receipt"
+                receipt_id = receipt.id
+                receipt_code = receipt.receipt_code
+
+            from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+            from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+
+            rel_svc = DocumentRelationNewService()
+            await rel_svc.create_relation(
+                tenant_id=tenant_id,
+                relation_data=DocumentRelationCreate(
+                    source_type="finished_goods_inspection",
+                    source_id=inspection_id,
+                    source_code=inspection.inspection_code,
+                    source_name=None,
+                    target_type=target_type,
+                    target_id=receipt_id,
+                    target_code=receipt_code,
+                    target_name=None,
+                    relation_type="source",
+                    relation_mode="push",
+                    relation_desc="成品检验合格下推入库单",
+                ),
+                created_by=created_by,
+            )
+
+            return {
+                "receipt_id": receipt_id,
+                "receipt_code": receipt_code,
+                "inbound_doc_kind": "semi_finished_goods" if use_semi else "finished_goods",
+            }
 
     async def _ensure_fqc_for_work_order_inbound_items(
         self,
@@ -5348,7 +5832,11 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                 tenant_id, "finished_goods_inspection"
             )
             material_unit = await _resolve_material_base_unit(tenant_id, wf["material_id"])
-            
+            customer_id, customer_name = await _resolve_fqc_customer_snapshot(
+                tenant_id,
+                sales_order_id=work_order.sales_order_id,
+            )
+
             inspection = await FinishedGoodsInspection.create(
                 tenant_id=tenant_id,
                 inspection_code=code,
@@ -5360,8 +5848,8 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                 work_order_code=work_order.code,
                 sales_order_id=work_order.sales_order_id,
                 sales_order_code=work_order.sales_order_code,
-                customer_id=getattr(work_order, "customer_id", None),
-                customer_name=getattr(work_order, "customer_name", None),
+                customer_id=customer_id,
+                customer_name=customer_name,
                 material_id=wf["material_id"],
                 material_code=wf["material_code"],
                 material_name=wf["material_name"],
@@ -5493,6 +5981,10 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                 qualified_quantity = float(row[header_index_map.get('qualified_quantity', -1)]) if header_index_map.get('qualified_quantity', -1) >= 0 and row[header_index_map.get('qualified_quantity', -1)] else 0
                 unqualified_quantity = float(row[header_index_map.get('unqualified_quantity', -1)]) if header_index_map.get('unqualified_quantity', -1) >= 0 and row[header_index_map.get('unqualified_quantity', -1)] else 0
                 notes = str(row[header_index_map.get('notes', -1)]) if header_index_map.get('notes', -1) >= 0 and row[header_index_map.get('notes', -1)] else None
+                customer_id, customer_name = await _resolve_fqc_customer_snapshot(
+                    tenant_id,
+                    sales_order_id=work_order.sales_order_id,
+                )
 
                 await FinishedGoodsInspection.create(
                     tenant_id=tenant_id,
@@ -5504,8 +5996,8 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                     work_order_code=work_order.code,
                     sales_order_id=work_order.sales_order_id,
                     sales_order_code=work_order.sales_order_code,
-                    customer_id=getattr(work_order, "customer_id", None),
-                    customer_name=getattr(work_order, "customer_name", None),
+                    customer_id=customer_id,
+                    customer_name=customer_name,
                     material_id=wf["material_id"],
                     material_code=wf["material_code"],
                     material_name=wf["material_name"],

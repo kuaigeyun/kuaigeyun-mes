@@ -28,6 +28,12 @@ import { WorkOrderMaterialMovementsPanel } from './WorkOrderMaterialMovementsPan
 import { MODAL_ISOLATE_POINTER_PROPS } from '../../../../../../utils/modalEventIsolation'
 import { getAntdModal } from '../../../../../../utils/antdAppApis';
 import { ROUTES } from '../../../../constants/routes';
+import { outboundWorkOrderEntryPath } from '../../../warehouse-management/outbound/outboundPaths';
+import {
+  buildDocumentCreateDraftKey,
+  setDocumentFormDraft,
+} from '../../../../../../utils/documentFormDraftCache';
+import { workOrderCapabilityReasonMessage } from '../../../../../../hooks/useDocumentCapabilities';
 /** 与后端 issue_method_resolver.resolve_issue_method / is_pick_list_material 一致 */
 function resolveIssueMethod(issueMethod: unknown, sourceType: unknown): string {
   const im = String(issueMethod ?? '')
@@ -158,6 +164,15 @@ function canWithdrawMaterialCall(r: Record<string, unknown>): boolean {
   if (st !== 'pending') return false
   const d = Number(r.delivered_quantity ?? 0)
   return Number.isFinite(d) && d <= 0
+}
+
+/** 待处理/备料中且未关联生产领料单，可下推正式领料 */
+function canPushMaterialCallToPicking(r: Record<string, unknown>): boolean {
+  const st = String((r.status as string) ?? '').trim()
+  if (['completed', 'cancelled'].includes(st)) return false
+  const pickingId = Number(r.production_picking_id ?? r.productionPickingId ?? 0)
+  if (Number.isFinite(pickingId) && pickingId > 0) return false
+  return ['pending', 'processing', 'partial'].includes(st)
 }
 
 const CALL_TABLE_CELL_NOWRAP: React.HTMLAttributes<HTMLTableCellElement> = {
@@ -1058,6 +1073,47 @@ const WorkOrderReadinessPopoverContent: React.FC<{
     })
   }
 
+  const handlePushMaterialCallToPicking = (callId: number) => {
+    if (!outboundPerms.canCreate) {
+      messageApi.warning(t('app.kuaizhizao.workOrder.readinessConfirmPickingNoPerm'))
+      return
+    }
+    void (async () => {
+      try {
+        const res = (await warehouseApi.materialCall.previewPushProductionPicking(callId)) as {
+          has_blocking_issues?: boolean
+          blocking_reason?: string
+          items?: Array<{ item_id?: number; max_push_quantity?: number }>
+        }
+        if (
+          res.has_blocking_issues ||
+          !(res.items || []).some((row) => Number(row.max_push_quantity ?? 0) > 0)
+        ) {
+          messageApi.warning(
+            workOrderCapabilityReasonMessage(res.blocking_reason, t) ||
+              res.blocking_reason ||
+              t('app.kuaizhizao.workOrder.pushMaterialCallToPickingBlocked'),
+          )
+          return
+        }
+        const issueQuantities: Record<number, number> = {}
+        const maxQuantities: Record<number, number> = {}
+        ;(res.items || []).forEach((row) => {
+          const materialId = Number(row.item_id)
+          maxQuantities[materialId] = Number(row.max_push_quantity ?? 0)
+          issueQuantities[materialId] = 0
+        })
+        const entryPath = outboundWorkOrderEntryPath(workOrderId, callId)
+        const draftKey = buildDocumentCreateDraftKey('kuaizhizao:outbound-work-order-pull', entryPath, '')
+        setDocumentFormDraft(draftKey, { issueQuantities, maxQuantities })
+        navigate(entryPath)
+        onCloseMain?.()
+      } catch (e: unknown) {
+        messageApi.error((e as Error)?.message ?? t('app.kuaizhizao.workOrder.pushMaterialCallToPickingFailed'))
+      }
+    })()
+  }
+
   const handleRemindBatchingSubmit = async () => {
     try {
       const values = await remindForm.validateFields()
@@ -1510,48 +1566,68 @@ const WorkOrderReadinessPopoverContent: React.FC<{
                 {
                   title: '操作',
                   key: 'actions',
-                  width: 72,
+                  width: 128,
                   align: 'center',
                   render: (_: unknown, r: Record<string, unknown>) => {
                     const id = r.id as number | undefined
-                    if (id == null || !canWithdrawMaterialCall(r)) return null
-                    return (
-                      <Button
-                        type="link"
-                        size="small"
-                        danger
-                        onClick={(e) => {
-                          stopRowToggle(e)
-                          getAntdModal().confirm({
-                            title: t('app.kuaizhizao.workOrder.modalConfirmWithdrawCall'),
-                            content: t('app.kuaizhizao.workOrder.modalWithdrawCallContent'),
-                            okText: t('app.kuaizhizao.workOrder.actionRevoke'),
-                            okButtonProps: { danger: true },
-                            cancelText: '取消',
-                            onOk: async () => {
-                              try {
-                                await warehouseApi.materialCall.cancel(id)
-                                messageApi.success(t('app.kuaizhizao.workOrder.msgConfirmWithdrawCallSuccess'))
-                                await queryClient.invalidateQueries({
-                                  queryKey: ['materialCallsByWorkOrder', workOrderId],
-                                })
-                                invalidateMenuBadgeCounts()
-                              } catch (err: unknown) {
-                                const msg =
-                                  (err as { response?: { data?: { detail?: string } }; message?: string })?.response
-                                    ?.data?.detail ??
-                                  (err as Error)?.message ??
-                                  '撤回失败'
-                                messageApi.error(String(msg))
-                                throw err
-                              }
-                            },
-                          })
-                        }}
-                      >
-                        撤回
-                      </Button>
-                    )
+                    if (id == null) return null
+                    const actions: React.ReactNode[] = []
+                    if (canPushMaterialCallToPicking(r) && outboundPerms.canCreate) {
+                      actions.push(
+                        <Button
+                          type="link"
+                          size="small"
+                          key="push-picking"
+                          onClick={(e) => {
+                            stopRowToggle(e)
+                            handlePushMaterialCallToPicking(id)
+                          }}
+                        >
+                          {t('app.kuaizhizao.workOrder.actionPushMaterialCallToPicking')}
+                        </Button>,
+                      )
+                    }
+                    if (canWithdrawMaterialCall(r)) {
+                      actions.push(
+                        <Button
+                          type="link"
+                          size="small"
+                          danger
+                          key="withdraw"
+                          onClick={(e) => {
+                            stopRowToggle(e)
+                            getAntdModal().confirm({
+                              title: t('app.kuaizhizao.workOrder.modalConfirmWithdrawCall'),
+                              content: t('app.kuaizhizao.workOrder.modalWithdrawCallContent'),
+                              okText: t('app.kuaizhizao.workOrder.actionRevoke'),
+                              okButtonProps: { danger: true },
+                              cancelText: '取消',
+                              onOk: async () => {
+                                try {
+                                  await warehouseApi.materialCall.cancel(id)
+                                  messageApi.success(t('app.kuaizhizao.workOrder.msgConfirmWithdrawCallSuccess'))
+                                  await queryClient.invalidateQueries({
+                                    queryKey: ['materialCallsByWorkOrder', workOrderId],
+                                  })
+                                  invalidateMenuBadgeCounts()
+                                } catch (err: unknown) {
+                                  const msg =
+                                    (err as { response?: { data?: { detail?: string } }; message?: string })
+                                      ?.response?.data?.detail ??
+                                    (err as Error)?.message ??
+                                    '撤回失败'
+                                  messageApi.error(String(msg))
+                                  throw err
+                                }
+                              },
+                            })
+                          }}
+                        >
+                          撤回
+                        </Button>,
+                      )
+                    }
+                    return actions.length ? <Space size={0} wrap>{actions}</Space> : null
                   },
                 },
               ]}

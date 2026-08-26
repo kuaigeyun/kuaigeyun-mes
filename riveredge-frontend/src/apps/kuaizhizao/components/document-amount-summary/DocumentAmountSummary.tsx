@@ -1,6 +1,8 @@
 import React, { useMemo } from 'react';
 import { Divider, Form, InputNumber, theme as antdTheme } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { useNumericPrecisionPlaces } from '../../../../hooks/useNumericPrecision';
+import { formatQuantity } from '../../../../utils/format';
 import { normalizeFormListItems } from '../../../../utils/formListItems';
 import {
   computeDocumentGoodsTotals,
@@ -345,9 +347,7 @@ const SummaryRow: React.FC<{
 }> = ({ row, token }) => {
   if (row.hidden) return null;
   const isQuantity = row.key === 'quantity';
-  const displayValue = isQuantity
-    ? row.value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    : formatDocumentMoneyYuan(row.value);
+  const displayValue = isQuantity ? formatQuantity(row.value) : formatDocumentMoneyYuan(row.value);
 
   return (
     <div
@@ -403,6 +403,7 @@ const DocumentDiscountInput: React.FC<{
   token: ReturnType<typeof antdTheme.useToken>['token'];
 }> = ({ goodsIncl, token }) => {
   const { t } = useTranslation();
+  const amountDecimals = useNumericPrecisionPlaces('amount');
   return (
     <div
       style={{
@@ -425,7 +426,7 @@ const DocumentDiscountInput: React.FC<{
         <InputNumber
           min={0}
           max={goodsIncl > 0 ? goodsIncl : undefined}
-          precision={2}
+          precision={amountDecimals}
           prefix="¥"
           style={{ width: 140 }}
         />

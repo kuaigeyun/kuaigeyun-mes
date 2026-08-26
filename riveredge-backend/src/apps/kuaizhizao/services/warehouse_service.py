@@ -2162,9 +2162,12 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
             try:
                 from apps.kuaizhizao.services.inventory_service import InventoryService
                 from apps.kuaizhizao.utils.picking_posting import (
+                    exceeds_work_order_pick_limit,
                     filter_gi_picking_ids,
+                    format_pick_limit_qty,
                     is_staging_transfer_picking_notes,
                 )
+                from apps.kuaizhizao.utils.mrp_quantity import mrp_qty
                 from apps.master_data.models.material import Material
 
                 picking_items = await ProductionPickingItem.filter(
@@ -2199,7 +2202,9 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                                 required_quantity=float(wo.quantity),
                                 only_approved=True
                             )
-                            limit_map = {r.component_id: r.gross_requirement for r in reqs}
+                            limit_map = {
+                                r.component_id: mrp_qty(r.gross_requirement) for r in reqs
+                            }
 
                             past_pickings = await ProductionPicking.filter(
                                 tenant_id=tenant_id,
@@ -2222,26 +2227,26 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                                     total_picked=Sum("picked_quantity")
                                 ).values("material_id", "total_picked")
                             past_map = {
-                                item["material_id"]: item["total_picked"] or 0
+                                item["material_id"]: mrp_qty(item["total_picked"] or 0)
                                 for item in past_items
                             }
 
-                            current_map = {}
+                            current_map: dict[int, Decimal] = {}
                             for item in picking_items:
                                 qty = issue_qty_by_item_id.get(item.id) or Decimal(0)
                                 current_map[item.material_id] = (
-                                    current_map.get(item.material_id, 0) + float(qty)
+                                    current_map.get(item.material_id, Decimal(0)) + mrp_qty(qty)
                                 )
 
                             for mat_id, current_qty in current_map.items():
-                                past_qty = float(past_map.get(mat_id, 0))
+                                past_qty = past_map.get(mat_id, Decimal(0))
                                 total_attempt = past_qty + current_qty
                                 allowed = limit_map.get(mat_id)
                                 if allowed is not None:
-                                    if total_attempt > float(allowed) * 1.01:
+                                    if exceeds_work_order_pick_limit(total_attempt, allowed):
                                         raise BusinessLogicError(
-                                            f"防超发拦截生效：物料[ID:{mat_id}]试图总领用量({total_attempt:.2f}) "
-                                            f"超出了当前工单配方上限额度({float(allowed):.2f})，禁止强行出库！"
+                                            f"防超发拦截生效：物料[ID:{mat_id}]试图总领用量({format_pick_limit_qty(total_attempt)}) "
+                                            f"超出了当前工单配方上限额度({format_pick_limit_qty(allowed)})，禁止强行出库！"
                                         )
                         except BusinessLogicError:
                             raise
@@ -2948,6 +2953,353 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                 )
             except Exception as e:
                 logger.warning("建立工单→生产领料 单据关联失败: %s", e)
+
+            return await self.get_production_picking_by_id(tenant_id, int(picking.id))
+
+    async def _resolve_material_call_picking_push_context(
+        self,
+        tenant_id: int,
+        material_call_id: int,
+    ) -> tuple[Any, Any, list[Any], dict[int, Decimal], dict[int, dict[str, str]]]:
+        """加载补料申请下推生产领料上下文：单头、工单、明细、可领上限、物料快照。"""
+        from apps.kuaizhizao.models.material_call_request import MaterialCallRequest
+        from apps.kuaizhizao.models.material_call_request_item import MaterialCallRequestItem
+        from apps.kuaizhizao.models.work_order import WorkOrder
+        from apps.kuaizhizao.services.document_action_policy.work_order import (
+            assert_work_order_capability,
+        )
+
+        call = await MaterialCallRequest.filter(
+            tenant_id=tenant_id,
+            id=material_call_id,
+            deleted_at__isnull=True,
+        ).first()
+        if not call:
+            raise NotFoundError(f"补料申请不存在: {material_call_id}")
+
+        if call.status in ("completed", "cancelled"):
+            raise BusinessLogicError(f"补料申请状态为 {call.status}，不能下推生产领料")
+
+        if getattr(call, "production_picking_id", None):
+            raise BusinessLogicError("该补料申请已关联生产领料单，请勿重复下推")
+
+        items = await MaterialCallRequestItem.filter(
+            tenant_id=tenant_id,
+            request_id=call.id,
+        ).order_by("line_no", "id").all()
+        if not items:
+            raise ValidationError("补料申请无明细，无法下推生产领料")
+
+        work_order = await WorkOrder.get_or_none(
+            tenant_id=tenant_id,
+            id=call.work_order_id,
+            deleted_at__isnull=True,
+        )
+        if not work_order:
+            raise BusinessLogicError(f"关联工单不存在: {call.work_order_id}")
+        assert_work_order_capability(work_order, "push_production_picking")
+
+        max_by_material: dict[int, Decimal] = {}
+        meta_by_material: dict[int, dict[str, str]] = {}
+        for line in items:
+            material_id = int(line.material_id or 0)
+            if material_id <= 0:
+                continue
+            requested = Decimal(str(line.requested_quantity or 0))
+            delivered = Decimal(str(line.delivered_quantity or 0))
+            remaining = requested - delivered
+            if remaining < 0:
+                remaining = Decimal("0")
+            max_by_material[material_id] = remaining
+            meta_by_material[material_id] = {
+                "material_code": str(line.material_code or ""),
+                "material_name": str(line.material_name or ""),
+                "material_unit": str(line.material_unit or "个"),
+            }
+
+        return call, work_order, items, max_by_material, meta_by_material
+
+    async def preview_push_material_call_to_production_picking(
+        self,
+        tenant_id: int,
+        material_call_id: int,
+    ) -> dict[str, Any]:
+        """补料申请下推生产领料预览：按申请明细带出物料与可领数量。"""
+        from apps.kuaizhizao.services.document_action_policy.types import CAPABILITY_REASON_MESSAGES
+
+        try:
+            call, work_order, items, max_by_material, meta_by_material = (
+                await self._resolve_material_call_picking_push_context(tenant_id, material_call_id)
+            )
+        except BusinessLogicError as exc:
+            return {
+                "material_call_id": material_call_id,
+                "material_call_code": "",
+                "work_order_id": 0,
+                "work_order_code": "",
+                "items": [],
+                "summary": "补料申请不可下推生产领料",
+                "tip": "请确认补料申请状态与关联工单。",
+                "has_blocking_issues": True,
+                "blocking_reason": str(exc),
+            }
+        except NotFoundError as exc:
+            raise exc
+        except ValidationError as exc:
+            return {
+                "material_call_id": material_call_id,
+                "material_call_code": "",
+                "work_order_id": 0,
+                "work_order_code": "",
+                "items": [],
+                "summary": "补料申请不可下推生产领料",
+                "tip": None,
+                "has_blocking_issues": True,
+                "blocking_reason": str(exc),
+            }
+
+        pending_picking = await ProductionPicking.filter(
+            tenant_id=tenant_id,
+            work_order_id=call.work_order_id,
+            deleted_at__isnull=True,
+            status__in=list(_PRODUCTION_PICKING_OPEN_STATUSES),
+        ).first()
+
+        preview_items: list[dict[str, Any]] = []
+        for line in items:
+            material_id = int(line.material_id or 0)
+            if material_id <= 0:
+                continue
+            requested = Decimal(str(line.requested_quantity or 0))
+            delivered = Decimal(str(line.delivered_quantity or 0))
+            max_push = max_by_material.get(material_id, Decimal("0"))
+            if max_push <= 0:
+                continue
+            meta = meta_by_material.get(material_id, {})
+            preview_items.append(
+                {
+                    "item_id": material_id,
+                    "material_code": meta.get("material_code") or str(line.material_code or ""),
+                    "material_name": meta.get("material_name") or str(line.material_name or ""),
+                    "material_unit": meta.get("material_unit") or str(line.material_unit or "个"),
+                    "quantity": float(requested),
+                    "pushed_quantity": float(delivered),
+                    "max_push_quantity": float(max_push),
+                }
+            )
+
+        blocking_reason: Optional[str] = None
+        if pending_picking:
+            blocking_reason = CAPABILITY_REASON_MESSAGES.get(
+                "work_order.push_production_picking.pending_picking",
+                "已存在待领料单，请先处理后再下推",
+            )
+        elif not preview_items:
+            blocking_reason = "补料申请明细均已处理完毕，无可领数量"
+
+        pushable_count = len(preview_items)
+        return {
+            "material_call_id": int(call.id),
+            "material_call_code": str(call.code or ""),
+            "work_order_id": int(call.work_order_id),
+            "work_order_code": str(call.work_order_code or work_order.code or ""),
+            "items": preview_items,
+            "summary": f"补料 {call.code}：{pushable_count} 行可下推生产领料",
+            "tip": "确认后将进入生产领料录入页，按补料申请明细生成领料单（正式发料）。",
+            "has_blocking_issues": bool(blocking_reason),
+            "blocking_reason": blocking_reason,
+        }
+
+    async def create_production_picking_from_material_call_pull(
+        self,
+        tenant_id: int,
+        created_by: int,
+        *,
+        material_call_id: int,
+        warehouse_id: Optional[int] = None,
+        warehouse_name: Optional[str] = None,
+        picker_name: Optional[str] = None,
+        notes: Optional[str] = None,
+        lines: list[Any],
+    ) -> ProductionPickingWithItemsResponse:
+        """从补料申请下推创建生产领料单（按申请明细，不受 BOM 发料方式限制）。"""
+        from apps.kuaizhizao.models.material_call_request import MaterialCallRequest
+        from apps.kuaizhizao.services.document_action_policy.types import CAPABILITY_REASON_MESSAGES
+
+        if not lines:
+            raise ValidationError("请至少填写一条领料明细")
+
+        call, work_order, _items, max_by_material, meta_by_material = (
+            await self._resolve_material_call_picking_push_context(tenant_id, material_call_id)
+        )
+
+        pending_picking = await ProductionPicking.filter(
+            tenant_id=tenant_id,
+            work_order_id=call.work_order_id,
+            deleted_at__isnull=True,
+            status__in=list(_PRODUCTION_PICKING_OPEN_STATUSES),
+        ).first()
+        if pending_picking:
+            raise BusinessLogicError(
+                CAPABILITY_REASON_MESSAGES.get(
+                    "work_order.push_production_picking.pending_picking",
+                    "已存在待领料单，请先处理后再下推",
+                )
+            )
+
+        work_order_id = int(call.work_order_id)
+
+        async with in_transaction():
+            today = today_site_str()
+            picking_code = await self.generate_code(tenant_id, "PRODUCTION_PICKING_CODE", prefix=f"PP{today}")
+            user_info = await self.get_user_info(created_by)
+            initial_status, initial_review = await self._resolve_picking_create_status(tenant_id)
+            picking = await ProductionPicking.create(
+                tenant_id=tenant_id,
+                picking_code=picking_code,
+                work_order_id=work_order_id,
+                work_order_code=work_order.code,
+                workshop_id=work_order.workshop_id,
+                workshop_name=work_order.workshop_name,
+                status=initial_status,
+                review_status=initial_review,
+                picker_name=picker_name,
+                notes=notes,
+                created_by=created_by,
+                created_by_name=user_info["name"],
+                updated_by=created_by,
+                updated_by_name=user_info["name"],
+            )
+
+            issued_by_material: dict[int, Decimal] = {}
+            for line in lines:
+                material_id = int(getattr(line, "material_id", 0) or line.get("material_id", 0))
+                issue_qty = Decimal(str(getattr(line, "issue_quantity", 0) or line.get("issue_quantity", 0)))
+                if material_id <= 0 or issue_qty <= 0:
+                    raise ValidationError("领料明细物料或数量无效")
+                max_qty = max_by_material.get(material_id)
+                if max_qty is None:
+                    code = str(
+                        getattr(line, "material_code", "")
+                        or (line.get("material_code") if isinstance(line, dict) else "")
+                        or material_id
+                    )
+                    raise BusinessLogicError(f"物料 {code} 不在本补料申请明细内")
+                issued_so_far = issued_by_material.get(material_id, Decimal("0"))
+                if issued_so_far + issue_qty > max_qty:
+                    code = str(getattr(line, "material_code", "") or line.get("material_code", "") or material_id)
+                    raise BusinessLogicError(
+                        f"领料数量超过补料可领数量：{code}（可领 {float(max_qty)}，"
+                        f"本单已计 {float(issued_so_far)}，本行 {float(issue_qty)}）"
+                    )
+                issued_by_material[material_id] = issued_so_far + issue_qty
+
+                line_wh_id = getattr(line, "warehouse_id", None)
+                if line_wh_id is None and isinstance(line, dict):
+                    line_wh_id = line.get("warehouse_id")
+                if line_wh_id is None or str(line_wh_id).strip() == "":
+                    line_wh_id = warehouse_id
+                if line_wh_id is None or str(line_wh_id).strip() == "":
+                    code = str(getattr(line, "material_code", "") or line.get("material_code", "") or material_id)
+                    raise ValidationError(f"领料明细须指定出库仓库：{code}")
+
+                line_wh_name = getattr(line, "warehouse_name", None)
+                if line_wh_name is None and isinstance(line, dict):
+                    line_wh_name = line.get("warehouse_name")
+                resolved_wh_id, resolved_wh_name = await _resolve_warehouse_identity(
+                    tenant_id,
+                    warehouse_id=line_wh_id,
+                    warehouse_name=line_wh_name or warehouse_name,
+                )
+
+                batch_number = getattr(line, "batch_number", None)
+                if batch_number is None and isinstance(line, dict):
+                    batch_number = line.get("batch_number")
+                batch_number = str(batch_number or "").strip() or None
+
+                serial_raw = getattr(line, "serial_numbers", None)
+                if serial_raw is None and isinstance(line, dict):
+                    serial_raw = line.get("serial_numbers")
+                serial_numbers = _parse_serial_numbers(serial_raw)
+                serial_numbers_json = json.dumps(serial_numbers) if serial_numbers else None
+
+                meta = meta_by_material.get(material_id, {})
+                await ProductionPickingItem.create(
+                    tenant_id=tenant_id,
+                    picking_id=picking.id,
+                    material_id=material_id,
+                    material_code=str(
+                        getattr(line, "material_code", "")
+                        or line.get("material_code", "")
+                        or meta.get("material_code", "")
+                    ),
+                    material_name=str(
+                        getattr(line, "material_name", "")
+                        or line.get("material_name", "")
+                        or meta.get("material_name", "")
+                    ),
+                    material_unit=str(
+                        getattr(line, "material_unit", "")
+                        or line.get("material_unit", "")
+                        or meta.get("material_unit", "个")
+                    ),
+                    required_quantity=issue_qty,
+                    picked_quantity=Decimal("0"),
+                    remaining_quantity=issue_qty,
+                    warehouse_id=resolved_wh_id,
+                    warehouse_name=resolved_wh_name,
+                    batch_number=batch_number,
+                    serial_numbers=serial_numbers_json,
+                    status="待领料",
+                )
+
+            call_row = await MaterialCallRequest.get(id=call.id, tenant_id=tenant_id)
+            call_row.production_picking_id = int(picking.id)
+            if call_row.status == "pending":
+                call_row.status = "processing"
+            await call_row.save()
+
+            try:
+                from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+                from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+
+                rel_svc = DocumentRelationNewService()
+                await rel_svc.create_relation(
+                    tenant_id=tenant_id,
+                    relation_data=DocumentRelationCreate(
+                        source_type="work_order",
+                        source_id=work_order_id,
+                        source_code=work_order.code,
+                        source_name=work_order.name,
+                        target_type="production_picking",
+                        target_id=picking.id,
+                        target_code=picking.picking_code,
+                        target_name=None,
+                        relation_type="source",
+                        relation_mode="push",
+                        relation_desc="补料申请下推创建生产领料单",
+                    ),
+                    created_by=created_by,
+                )
+                await rel_svc.create_relation(
+                    tenant_id=tenant_id,
+                    relation_data=DocumentRelationCreate(
+                        source_type="material_call_request",
+                        source_id=int(call.id),
+                        source_code=str(call.code or ""),
+                        source_name=str(call.work_order_code or ""),
+                        target_type="production_picking",
+                        target_id=picking.id,
+                        target_code=picking.picking_code,
+                        target_name=None,
+                        relation_type="source",
+                        relation_mode="push",
+                        relation_desc="补料申请下推生产领料",
+                    ),
+                    created_by=created_by,
+                )
+            except Exception as e:
+                logger.warning("建立补料→生产领料 单据关联失败: %s", e)
 
             return await self.get_production_picking_by_id(tenant_id, int(picking.id))
     
@@ -4378,7 +4730,8 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
                 exclude_receipt_id=exclude_finished_receipt_id,
             )
             fqc_qualified_remaining = float(fqc_remaining)
-            pending = min(pending, fqc_qualified_remaining)
+            # FQC 合格余量仅用于确认入库与预览提示；创建待入库单不受 FQC 阻塞，
+            # 否则末道报工自动入库会在 quick_receipt 阶段失败且误提示「默认仓库」。
 
         return {
             "planned": planned,
@@ -4548,16 +4901,16 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
         )
         receipt_qty = min(suggested, pending) if pending > 0 else 0.0
         hint = None
+        fqc_rem = quota.get("fqc_qualified_remaining")
         if pending <= 0:
-            if quota.get("fqc_qualified_remaining") is not None and float(quota["fqc_qualified_remaining"]) <= 0:
-                hint = "成品检验合格可入数量已用尽，无法再取单入库"
-            else:
-                hint = "工单可入库数量已用尽，无法再取单入库"
+            hint = "工单可入库数量已用尽，无法再取单入库"
         elif suggested <= 0:
             hint = "暂无质检合格或末道已审报工数量，请手工填写入库数量"
-        elif quota.get("fqc_qualified_remaining") is not None:
-            fqc_rem = quota["fqc_qualified_remaining"]
-            hint = f"本次最多可入 {pending}（FQC 合格剩余 {fqc_rem}）"
+        elif fqc_rem is not None and float(fqc_rem) <= 0:
+            hint = f"可创建待入库单（最多 {pending}）；须先完成成品检验后才能确认入库"
+        elif fqc_rem is not None:
+            confirmable = min(pending, float(fqc_rem))
+            hint = f"可创建待入库单（最多 {pending}）；确认入库须 FQC 合格剩余 {confirmable}"
 
         material = await Material.get_or_none(
             tenant_id=tenant_id,

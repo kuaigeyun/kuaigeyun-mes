@@ -29,17 +29,11 @@ def test_parse_einvoice_qr_text_accepts_csv():
 
 @pytest.mark.skipif(not SAMPLE_PDF.is_file(), reason="customer sample PDF not available")
 def test_parse_einvoice_pdf_bytes_from_sample():
-    from apps.haoligo.services.finance_einvoice_ocr import ocr_available
-
     parsed = parse_einvoice_pdf_bytes(SAMPLE_PDF.read_bytes())
     assert parsed["invoice_no"] == "26442000004359167806"
-    if ocr_available():
-        assert parsed["parse_source"] == "pdf_qr_ocr"
-        assert len(parsed["lines"]) >= 10
-        first = parsed["lines"][0]
-        assert first.get("material_name")
-        assert first.get("material_code")
-        assert parsed["needs_lines"] is False
-    else:
-        assert parsed["parse_source"] == "pdf_qr"
-        assert parsed["needs_lines"] is True
+    assert parsed["parse_source"] in ("pdf_qr_text", "pdf_qr_ocr")
+    assert parsed["needs_lines"] is False
+    assert len(parsed["lines"]) >= 10
+    first = parsed["lines"][0]
+    assert first.get("material_name")
+    assert first.get("material_code")

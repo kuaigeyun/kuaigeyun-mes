@@ -120,6 +120,8 @@ def derive_purchase_requisition_capabilities(
         else None,
     )
 
+    print_cap = _cap(True)
+
     return PurchaseRequisitionCapabilities(
         update=update_cap,
         delete=delete_cap,
@@ -128,6 +130,7 @@ def derive_purchase_requisition_capabilities(
         revoke_approval=revoke_cap,
         push_purchase_order=push_po_cap,
         push_inquiry=push_inquiry_cap,
+        print=print_cap,
     )
 
 

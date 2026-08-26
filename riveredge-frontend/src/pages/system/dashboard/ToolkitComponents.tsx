@@ -1,7 +1,9 @@
+import { formatAmount } from '../../../utils/format';
 import { useState, useEffect } from 'react';
 import { Typography, Space, InputNumber, Select, Row, Col, Divider, Input, Button, message, Image, Segmented, Checkbox } from 'antd';
 import { ArrowDown, Copy } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { useNumericPrecisionPlaces } from '../../../hooks/useNumericPrecision';
 
 const { Text } = Typography;
 const { TextArea } = Input;
@@ -11,6 +13,7 @@ const { TextArea } = Input;
  */
 export const TaxCalculator = () => {
   const { t } = useTranslation();
+  const amountDecimals = useNumericPrecisionPlaces('amount');
   const [mode, setMode] = useState<'forward' | 'reverse'>('forward');
   const [amountExcl, setAmountExcl] = useState<number>(100);
   const [amountIncl, setAmountIncl] = useState<number>(113);
@@ -49,12 +52,12 @@ export const TaxCalculator = () => {
         {mode === 'forward' ? (
           <div>
             <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.dashboard.toolkit.amountExclTax')}</Text>
-            <InputNumber style={{ width: '100%', marginTop: 4 }} value={amountExcl} onChange={(v) => setAmountExcl(v ?? 0)} size="small" min={0} precision={2} />
+            <InputNumber style={{ width: '100%', marginTop: 4 }} value={amountExcl} onChange={(v) => setAmountExcl(v ?? 0)} size="small" min={0} precision={amountDecimals} />
           </div>
         ) : (
           <div>
             <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.dashboard.toolkit.amountInclTax')}</Text>
-            <InputNumber style={{ width: '100%', marginTop: 4 }} value={amountIncl} onChange={(v) => setAmountIncl(v ?? 0)} size="small" min={0} precision={2} />
+            <InputNumber style={{ width: '100%', marginTop: 4 }} value={amountIncl} onChange={(v) => setAmountIncl(v ?? 0)} size="small" min={0} precision={amountDecimals} />
           </div>
         )}
         <Row gutter={8}>
@@ -275,7 +278,7 @@ export const ExchangeCalculator = () => {
           <Row gutter={8} align="middle">
             <Col span={14}>
               <Text type="secondary" style={{ fontSize: 11, display: 'block' }}>{t('pages.dashboard.toolkit.cnyAmount')}</Text>
-              <InputNumber style={{ width: '100%', marginTop: 4 }} prefix="￥" value={amount} onChange={(v) => setAmount(v ?? 0)} size="small" min={0} precision={2} />
+              <InputNumber style={{ width: '100%', marginTop: 4 }} prefix="￥" value={amount} onChange={(v) => setAmount(v ?? 0)} size="small" min={0} precision={amountDecimals} />
             </Col>
             <Col span={10} style={{ textAlign: 'center', paddingTop: 18 }}>
               <ArrowDown size={16} style={{ color: '#bfbfbf' }} />
@@ -419,7 +422,7 @@ export const RmbCapitalizer = () => {
   const isChinese = i18n.language.startsWith('zh');
 
   const formatNum = (n: number) =>
-    Number.isFinite(n) ? n.toLocaleString(isChinese ? 'zh-CN' : 'en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+    Number.isFinite(n) ? formatAmount(n) : "—";
     
   const convertToChinese = (n: number) => {
     const fraction = ['角', '分'];
@@ -447,7 +450,7 @@ export const RmbCapitalizer = () => {
   return (
     <div style={{ padding: '8px 4px', width: 280 }}>
       <Text strong style={{ display: 'block', marginBottom: 10, fontSize: 13 }}>{t('pages.dashboard.toolkit.uppercaseTitle')}</Text>
-      <InputNumber style={{ width: '100%' }} placeholder={t('pages.dashboard.toolkit.inputAmountPlaceholder')} value={num} onChange={(v) => setNum(v ?? 0)} precision={2} size="small" min={0} />
+      <InputNumber style={{ width: '100%' }} placeholder={t('pages.dashboard.toolkit.inputAmountPlaceholder')} value={num} onChange={(v) => setNum(v ?? 0)} precision={amountDecimals} size="small" min={0} />
       <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 6 }}>{t('pages.dashboard.toolkit.thousandsSeparator')}{formatNum(num)}</Text>
       {isChinese && (
         <div style={{ marginTop: 10, padding: '10px', background: '#fff7e6', borderRadius: 4, border: '1px solid #ffe7ba', wordBreak: 'break-all', minHeight: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#d46b08', fontWeight: 'bold', fontSize: 14 }}>{result}</div>

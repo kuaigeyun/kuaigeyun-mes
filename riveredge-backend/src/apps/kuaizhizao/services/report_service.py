@@ -214,9 +214,11 @@ class ReportService:
 
     @staticmethod
     def _normalize_batch_no_for_report(batch_no: Optional[str]) -> str:
-        """空批号与库存过账口径一致，展示/拣选用 DEFAULT。"""
-        bn = str(batch_no or "").strip()
-        return bn if bn else "DEFAULT"
+        """报表/列表展示用批号（不暴露过账占位 DEFAULT）。"""
+        from apps.kuaizhizao.services.inventory_service import InventoryService
+
+        displayed = InventoryService.format_batch_no_for_display(batch_no)
+        return displayed if displayed is not None else ""
 
     @staticmethod
     def _material_batch_matches_warehouse_filter(

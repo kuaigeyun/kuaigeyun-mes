@@ -51,7 +51,7 @@ import {
   resolveFinanceVoucherReferenceNote,
 } from '../../../components/LedgerAccountFormFields';
 import { formatSettlementType } from '../../../utils/financeUiLabels';
-import { formatDateTime } from '../../../../../utils/format';
+import { formatDateTime, formatCurrencyAmount } from '../../../../../utils/format';
 import { normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
 import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
 import {
@@ -401,7 +401,7 @@ const FinanceRefundVoucherPage: React.FC<Props> = ({ mode, columnPersistenceId }
 
   const pullPreviewMaxPush = Number(pullPreviewData?.items?.[0]?.max_push_quantity ?? 0);
   const formatPullMoney = (v: number) =>
-    `¥${Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`;
+    formatCurrencyAmount(v || 0);
 
   const pullTableColumns = useMemo(
     () => [

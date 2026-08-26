@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Modal, Form, Input, Button, Space, Select, InputNumber, Divider, message } from 'antd';
 import { PlusOutlined, MinusCircleOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import { useNumericPrecisionPlaces } from '../../../../../hooks/useNumericPrecision';
 import { allocatePurchaseCosts } from '../../../services/purchase';
 
 interface LandingCostAllocationModalProps {
@@ -24,6 +25,7 @@ const LandingCostAllocationModal: React.FC<LandingCostAllocationModalProps> = ({
   orderCode,
 }) => {
   const { t } = useTranslation();
+  const amountDecimals = useNumericPrecisionPlaces('amount');
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
 
@@ -101,7 +103,7 @@ const LandingCostAllocationModal: React.FC<LandingCostAllocationModalProps> = ({
                     <InputNumber
                       placeholder={t('app.kuaizhizao.purchaseOrder.landingCost.feeAmount')}
                       min={0}
-                      precision={2}
+                      precision={amountDecimals}
                       style={{ width: 140 }}
                       addonAfter="￥"
                     />

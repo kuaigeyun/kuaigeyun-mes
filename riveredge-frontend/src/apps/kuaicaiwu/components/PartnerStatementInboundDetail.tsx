@@ -5,7 +5,7 @@ import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { Spin, Table } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useTranslation } from 'react-i18next';
-import { formatDateTime } from '../../../utils/format';
+import { formatDateTime, formatCurrencyAmount } from '../../../utils/format';
 import {
   partnerStatementService,
   type PartnerStatementLine,
@@ -15,7 +15,7 @@ import { App } from 'antd';
 const PS = 'app.kuaicaiwu.partnerStatement';
 
 const money = (v: number | string | undefined) =>
-  `¥${Number(v ?? 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  formatCurrencyAmount(v ?? 0);
 
 export function partnerStatementLineDetailKey(line: PartnerStatementLine): string {
   return line.inbound_detail_doc_type && line.inbound_detail_doc_id

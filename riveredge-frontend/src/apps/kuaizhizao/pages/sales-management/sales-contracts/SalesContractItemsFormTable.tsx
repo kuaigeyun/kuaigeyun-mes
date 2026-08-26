@@ -7,6 +7,7 @@ import { ProForm } from '@ant-design/pro-components';
 import { AppstoreAddOutlined, ImportOutlined, PlusOutlined } from '@ant-design/icons';
 import { Button, DatePicker, Form, Input, InputNumber, Space } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { useNumericPrecision } from '../../../../../hooks/useNumericPrecision';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import PriceTypeSwitch from '../../../../../components/price-type-switch/PriceTypeSwitch';
 import { DEFAULT_SALES_PRICE_TYPE, salesFormPriceType } from '../shared/salesPriceType';
@@ -64,6 +65,7 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
   editingInclValueRef,
 }) => {
   const { t } = useTranslation();
+  const { quantity: quantityDecimals, price: priceDecimals, amount: amountDecimals } = useNumericPrecision();
   const [productScope, setProductScope] = React.useState<'make' | 'all'>('make');
   const materialSourceType = productScope === 'make' ? 'Make' : undefined;
   const productColumnTitle = (
@@ -164,7 +166,7 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                           <InputNumber
                             placeholder={t('common.quantity')}
                             min={0.01}
-                            precision={2}
+                            precision={quantityDecimals}
                             style={{ width: '100%' }}
                             size={DOCUMENT_DETAIL_CONTROL_SIZE}
                           />
@@ -204,7 +206,7 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                                 : t('app.kuaizhizao.salesOrder.unitPricePlaceholder')
                             }
                             min={0}
-                            precision={2}
+                            precision={priceDecimals}
                             prefix="¥"
                             style={{ width: '100%' }}
                             size={DOCUMENT_DETAIL_CONTROL_SIZE}
@@ -324,7 +326,7 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                                 <InputNumber
                                   placeholder={t('app.kuaizhizao.salesOrder.inclAmountPlaceholder')}
                                   min={0}
-                                  precision={2}
+                                  precision={amountDecimals}
                                   prefix="¥"
                                   style={{ width: '100%' }}
                                   size={DOCUMENT_DETAIL_CONTROL_SIZE}

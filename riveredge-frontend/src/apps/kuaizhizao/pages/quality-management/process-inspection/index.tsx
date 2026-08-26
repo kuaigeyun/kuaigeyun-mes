@@ -145,6 +145,10 @@ import {
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
+import {
+  buildProcessInspectionExportColumns,
+  mapProcessInspectionExportRows,
+} from '../components/qualityInspectionExport';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { importExcelMatrixInChunks } from '../../../../../utils/chunkedBulkImport';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
@@ -542,8 +546,9 @@ const ProcessInspectionPage: React.FC = () => {
           return;
         }
         await downloadRecordsAsXlsx(
-          toExport as Array<Record<string, unknown>>,
+          mapProcessInspectionExportRows(t, toExport as Array<Record<string, unknown>>),
           `${t('app.kuaizhizao.quality.common.entity.processInspection')}_${todaySiteDateString()}.xlsx`,
+          { columns: buildProcessInspectionExportColumns(t) },
         );
         messageApi.success(t('common.exportCountSuccess', { count: toExport.length }));
       }

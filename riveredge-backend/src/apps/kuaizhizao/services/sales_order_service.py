@@ -1569,11 +1569,14 @@ class SalesOrderService:
         if not order:
             raise NotFoundError(f"销售订单不存在: {sales_order_id}")
         if current_user:
-            await DataScopeService.assert_row_visible(
+            from apps.kuaizhizao.services.kuaizhizao_data_scope import (
+                assert_sales_order_row_visible_or_quality_linked,
+            )
+
+            await assert_sales_order_row_visible_or_quality_linked(
                 order,
                 tenant_id=tenant_id,
                 user=current_user,
-                resource="kuaizhizao:sales-order",
             )
 
         if (view or "").strip().lower() == "options":

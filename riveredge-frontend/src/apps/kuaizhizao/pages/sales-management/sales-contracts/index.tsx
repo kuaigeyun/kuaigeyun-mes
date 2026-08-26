@@ -13,6 +13,7 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useLeaveFormTab } from '../../../../../components/uni-tabs/navigateClosingTab';
 
 import { useTranslation } from 'react-i18next';
+import { useNumericPrecisionPlaces } from '../../../../../hooks/useNumericPrecision';
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
 import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
@@ -128,7 +129,7 @@ import {
 } from '@ant-design/icons';
 
 import dayjs from 'dayjs';
-import { formatDateTime, formatQuantity, todaySiteDateString } from '../../../../../utils/format';
+import { formatDateTime, formatQuantity, formatAmount, formatCurrencyAmount, formatCurrencyPrice, todaySiteDateString } from '../../../../../utils/format';
 import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
 
 import {
@@ -391,6 +392,7 @@ const SalesContractsPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
 
   const { t, i18n } = useTranslation();
+  const amountDecimals = useNumericPrecisionPlaces('amount');
   const pullFromQuotationAction = resolveKuaizhizaoDocumentAction(t, 'sales_contract.pull_from_quotation');
   const pushToSalesOrderAction = resolveKuaizhizaoDocumentAction(t, 'sales_order.pull_from_sales_contract');
   const pushToWorkOrderAction = resolveKuaizhizaoDocumentAction(t, 'work_order.pull_from_sales_contract');
@@ -1479,7 +1481,7 @@ const SalesContractsPage: React.FC = () => {
         align: 'right' as const,
         render: (v: number | undefined) =>
           v != null
-            ? Number(v).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+            ? formatAmount(v)
             : '-',
       },
       {
@@ -2779,11 +2781,7 @@ const SalesContractsPage: React.FC = () => {
         align: 'right',
         sorter: true,
         hideInSearch: true,
-        render: (_, r) =>
-          `¥${Number(r.total_amount).toLocaleString('zh-CN', {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          })}`,
+        render: (_, r) => formatCurrencyAmount(r.total_amount),
       },
 
       {
@@ -2802,11 +2800,7 @@ const SalesContractsPage: React.FC = () => {
 
         hideInSearch: true,
 
-        render: (_, r) =>
-          `¥${Number(r.released_amount).toLocaleString('zh-CN', {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          })}`,
+        render: (_, r) => formatCurrencyAmount(r.released_amount),
 
       },
 
@@ -2991,22 +2985,14 @@ const SalesContractsPage: React.FC = () => {
         dataIndex: 'unit_price',
         width: 100,
         align: 'right',
-        render: (_, r) =>
-          `¥${Number(r.unit_price ?? 0).toLocaleString('zh-CN', {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          })}`,
+        render: (_, r) => formatCurrencyPrice(r.unit_price ?? 0),
       },
       {
         title: t('app.kuaizhizao.salesContract.contractAmount'),
         dataIndex: 'total_amount',
         width: 110,
         align: 'right',
-        render: (_, r) =>
-          `¥${Number(r.total_amount ?? 0).toLocaleString('zh-CN', {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          })}`,
+        render: (_, r) => formatCurrencyAmount(r.total_amount ?? 0),
       },
       {
         title: t('app.kuaizhizao.salesOrder.deliveryDate'),
@@ -3911,7 +3897,7 @@ const SalesContractsPage: React.FC = () => {
           />
 
           <ProForm.Item name="delta_amount" label={t('app.kuaizhizao.salesContract.deltaAmount')} initialValue={0}>
-            <InputNumber style={{ width: '100%' }} precision={2} />
+            <InputNumber style={{ width: '100%' }} precision={amountDecimals} />
           </ProForm.Item>
 
           <ProFormDatePicker name="new_valid_to" label={t('app.kuaizhizao.salesContract.newValidTo')} fieldProps={buildFutureDateShortcutFieldProps({ getForm: () => formRef.current, fieldName: 'new_valid_to', baseFieldName: 'contract_date', t })} />

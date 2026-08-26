@@ -100,7 +100,7 @@ import { downloadFile } from '../../../services/common';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
-import { finishedGoodsReworkPushPercent } from '../../sales-management/shared/pushProgress';
+import { finishedGoodsInboundPushPercent, finishedGoodsReworkPushPercent } from '../../sales-management/shared/pushProgress';
 import {
   buildQualityInspectionDocStatusValueEnum,
   buildQualityInspectionQualityStatusValueEnum,
@@ -150,6 +150,10 @@ import {
 } from '../components/qualityRevokeConduct';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
+import {
+  buildFinishedGoodsInspectionExportColumns,
+  mapFinishedGoodsInspectionExportRows,
+} from '../components/qualityInspectionExport';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { importExcelMatrixInChunks } from '../../../../../utils/chunkedBulkImport';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
@@ -177,6 +181,7 @@ interface FinishedGoodsInspection {
   qualified_quantity?: number;
   unqualified_quantity?: number;
   pushed_rework_quantity?: number;
+  pushed_inbound_quantity?: number;
   inspection_result?: string;
   quality_status?: string;
   inspector_id?: number;
@@ -199,6 +204,7 @@ interface FinishedGoodsInspection {
     conduct?: { allowed?: boolean; reason?: string };
     create_defect?: { allowed?: boolean; reason?: string };
     push_rework?: { allowed?: boolean; reason?: string };
+    push_inbound?: { allowed?: boolean; reason?: string };
   };
 }
 
@@ -208,6 +214,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const { t, i18n } = useTranslation();
   const pushToReworkAction = resolveKuaizhizaoDocumentAction(t, 'rework_order.pull_from_finished_goods_inspection');
+  const pushToInboundAction = resolveKuaizhizaoDocumentAction(t, 'inbound.pull_from_finished_goods_inspection');
   const pullFromWorkOrderAction = resolveKuaizhizaoDocumentAction(t, 'finished_goods_inspection.pull_from_work_order');
 
   const importDictOptions = useImportDictionaryOptions(['DISPOSAL_METHOD']);
@@ -269,6 +276,12 @@ const FinishedGoodsInspectionPage: React.FC = () => {
   const [pushReworkPreviewData, setPushReworkPreviewData] = useState<PushPreviewResponse | null>(null);
   const [pushReworkPreviewSourceId, setPushReworkPreviewSourceId] = useState<number | null>(null);
   const [pushReworkPreviewQuantity, setPushReworkPreviewQuantity] = useState<number>(0);
+  const [pushInboundPreviewOpen, setPushInboundPreviewOpen] = useState(false);
+  const [pushInboundPreviewLoading, setPushInboundPreviewLoading] = useState(false);
+  const [pushInboundPreviewConfirming, setPushInboundPreviewConfirming] = useState(false);
+  const [pushInboundPreviewData, setPushInboundPreviewData] = useState<PushPreviewResponse | null>(null);
+  const [pushInboundPreviewSourceId, setPushInboundPreviewSourceId] = useState<number | null>(null);
+  const [pushInboundPreviewQuantity, setPushInboundPreviewQuantity] = useState<number>(0);
   const pullFromWorkOrderCloseRef = useRef<(() => void) | null>(null);
   const createButtonLabel = useMemo(
     () => withSingleNewShortcutHint(pullFromWorkOrderAction.label),
@@ -310,6 +323,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
     load();
   }, [disposalFallback]);
   const finishedPerms = useResourcePermissions(FINISHED_RESOURCE);
+  const inboundPerms = useResourcePermissions('kuaizhizao:inbound');
   const finishedAuditEnabled = useAuditRequired('finished_goods_inspection');
   const finishedAuditColumn = useMemo(
     () => createListAuditPhaseColumn<FinishedGoodsInspection>({ t, auditEnabled: finishedAuditEnabled }),
@@ -543,8 +557,12 @@ const FinishedGoodsInspectionPage: React.FC = () => {
           return;
         }
         await downloadRecordsAsXlsx(
-          toExport as Array<Record<string, unknown>>,
+          mapFinishedGoodsInspectionExportRows(
+            t,
+            toExport as Array<Record<string, unknown>>,
+          ),
           `${t('app.kuaizhizao.quality.common.entity.finishedInspection')}_${todaySiteDateString()}.xlsx`,
+          { columns: buildFinishedGoodsInspectionExportColumns(t) },
         );
         messageApi.success(t('common.exportCountSuccess', { count: toExport.length }));
       }
@@ -749,6 +767,74 @@ const FinishedGoodsInspectionPage: React.FC = () => {
     }
   };
 
+  const resetPushInboundPreview = () => {
+    setPushInboundPreviewOpen(false);
+    setPushInboundPreviewSourceId(null);
+    setPushInboundPreviewData(null);
+    setPushInboundPreviewQuantity(0);
+  };
+
+  const openPushInboundPreview = async (record: FinishedGoodsInspection) => {
+    if (!record.id) return;
+    setPushInboundPreviewOpen(true);
+    setPushInboundPreviewLoading(true);
+    setPushInboundPreviewConfirming(false);
+    setPushInboundPreviewSourceId(record.id);
+    setPushInboundPreviewData(null);
+    setPushInboundPreviewQuantity(0);
+    try {
+      const data = await qualityApi.finishedGoodsInspection.previewPushToInbound(String(record.id));
+      setPushInboundPreviewData(data);
+      const line = data.items?.[0];
+      const defaultQty = Number(line?.max_push_quantity ?? 0);
+      setPushInboundPreviewQuantity(Number.isFinite(defaultQty) && defaultQty > 0 ? defaultQty : 0);
+    } catch (error: any) {
+      messageApi.error(error?.message || t('app.kuaizhizao.quality.common.messages.pushInboundFailed'));
+      resetPushInboundPreview();
+    } finally {
+      setPushInboundPreviewLoading(false);
+    }
+  };
+
+  const handlePushInboundPreviewConfirm = async () => {
+    if (!pushInboundPreviewSourceId || !pushInboundPreviewData || pushInboundPreviewData.has_blocking_issues) return;
+    const maxQty = Number(pushInboundPreviewData.items?.[0]?.max_push_quantity ?? 0);
+    const qty = Number(pushInboundPreviewQuantity);
+    if (!Number.isFinite(qty) || qty <= 0) {
+      messageApi.warning(t('app.kuaizhizao.salesOrder.pushQtyInvalid', { code: pushInboundPreviewData.items?.[0]?.material_code || pushInboundPreviewSourceId }));
+      return;
+    }
+    if (qty > maxQty) {
+      messageApi.warning(t('app.kuaizhizao.salesOrder.pushQtyExceedsRemaining', { code: pushInboundPreviewData.items?.[0]?.material_code || pushInboundPreviewSourceId }));
+      return;
+    }
+    setPushInboundPreviewConfirming(true);
+    try {
+      const warehouseId = pushInboundPreviewData.warehouse_id ?? pushInboundPreviewData.items?.[0]?.warehouse_id;
+      const result = await qualityApi.finishedGoodsInspection.pushToInbound(String(pushInboundPreviewSourceId), {
+        quantity: qty,
+        warehouse_id: warehouseId != null ? Number(warehouseId) : undefined,
+      });
+      const receiptCode = (result as { receipt_code?: string })?.receipt_code;
+      messageApi.success(
+        receiptCode
+          ? t('app.kuaizhizao.quality.common.messages.pushInboundSuccess', { code: receiptCode })
+          : t('app.kuaizhizao.quality.common.messages.pushInboundSuccess', { code: '-' }),
+      );
+      resetPushInboundPreview();
+      invalidateStats();
+      actionRef.current?.reload();
+      if (inspectionDetail?.id === pushInboundPreviewSourceId) {
+        const detail = await qualityApi.finishedGoodsInspection.get(String(pushInboundPreviewSourceId));
+        setInspectionDetail(detail as FinishedGoodsInspection);
+      }
+    } catch (error: any) {
+      messageApi.error(error?.message || t('app.kuaizhizao.quality.common.messages.pushInboundFailed'));
+    } finally {
+      setPushInboundPreviewConfirming(false);
+    }
+  };
+
   const selectedFinishedForToolbar = useMemo(() => {
     if (selectedRowKeys.length !== 1) return null;
     const id = Number(selectedRowKeys[0]);
@@ -757,6 +843,10 @@ const FinishedGoodsInspectionPage: React.FC = () => {
   }, [selectedRowKeys]);
 
   const canPushReworkToolbar = selectedFinishedForToolbar?.capabilities?.push_rework?.allowed === true;
+  const canPushInboundToolbar =
+    inboundPerms.canCreate &&
+    selectedFinishedForToolbar?.capabilities?.push_inbound?.allowed === true;
+  const canPushToolbar = canPushReworkToolbar || canPushInboundToolbar;
 
   const toolbarPushDisabledReason = useMemo(() => {
     const base = buildUniPushToolbarDisabledReason(t, {
@@ -764,20 +854,44 @@ const FinishedGoodsInspectionPage: React.FC = () => {
       hasSelectedRecord: !!selectedFinishedForToolbar,
     });
     if (base) return base;
-    if (selectedFinishedForToolbar && !canPushReworkToolbar) {
+    if (selectedFinishedForToolbar && !canPushToolbar) {
+      const qualified = Number(selectedFinishedForToolbar.qualified_quantity ?? 0);
+      const preferInbound = qualified > 0;
+      const reason = preferInbound
+        ? selectedFinishedForToolbar.capabilities?.push_inbound?.reason
+        : selectedFinishedForToolbar.capabilities?.push_rework?.reason;
       return (
-        qualityInspectionCapabilityReasonMessage(
-          selectedFinishedForToolbar.capabilities?.push_rework?.reason,
-          t,
-        ) || t('components.uniPush.disabled.unavailable')
+        qualityInspectionCapabilityReasonMessage(reason, t) ||
+        t('components.uniPush.disabled.unavailable')
       );
     }
+    if (selectedFinishedForToolbar && !inboundPerms.canCreate && selectedFinishedForToolbar.capabilities?.push_inbound?.allowed) {
+      return t('app.kuaizhizao.quality.finished.push.inboundNoPermission');
+    }
     return undefined;
-  }, [canPushReworkToolbar, selectedFinishedForToolbar, selectedRowKeys.length, t]);
+  }, [canPushToolbar, inboundPerms.canCreate, selectedFinishedForToolbar, selectedRowKeys.length, t]);
 
   const toolbarPushMenuItems = useMemo(
     () =>
       buildUniPushMenuItems([
+        {
+          key: 'push-inbound',
+          label: pushToInboundAction.label,
+          disabled: !selectedFinishedForToolbar || !canPushInboundToolbar,
+          title: selectedFinishedForToolbar && !canPushInboundToolbar
+            ? !inboundPerms.canCreate
+              ? t('app.kuaizhizao.quality.finished.push.inboundNoPermission')
+              : qualityInspectionCapabilityReasonMessage(
+                  selectedFinishedForToolbar.capabilities?.push_inbound?.reason,
+                  t,
+                )
+            : undefined,
+          onClick: () => {
+            if (selectedFinishedForToolbar && canPushInboundToolbar) {
+              void openPushInboundPreview(selectedFinishedForToolbar);
+            }
+          },
+        },
         {
           key: 'push-rework',
           label: pushToReworkAction.label,
@@ -795,7 +909,15 @@ const FinishedGoodsInspectionPage: React.FC = () => {
           },
         },
       ]),
-    [canPushReworkToolbar, pushToReworkAction.label, selectedFinishedForToolbar, t],
+    [
+      canPushInboundToolbar,
+      canPushReworkToolbar,
+      inboundPerms.canCreate,
+      pushToInboundAction.label,
+      pushToReworkAction.label,
+      selectedFinishedForToolbar,
+      t,
+    ],
   );
 
   const detailBaseColumns: ProDescriptionsItemProps<FinishedGoodsInspection>[] = useMemo(
@@ -1053,9 +1175,14 @@ const FinishedGoodsInspectionPage: React.FC = () => {
     buildInspectorNameColumn<FinishedGoodsInspection>(t('app.kuaizhizao.quality.common.columns.inspector')),
     ...buildQualityInspectionListQuantityResultColumns<FinishedGoodsInspection>(t, [
       buildQualityInspectionListPushProgressColumn<FinishedGoodsInspection>(t, {
-        dataIndex: 'pushed_rework_quantity',
-        getPercent: (record) =>
-          finishedGoodsReworkPushPercent(record.pushed_rework_quantity, record.unqualified_quantity),
+        dataIndex: 'pushed_inbound_quantity',
+        getPercent: (record) => {
+          const qualified = Number(record.qualified_quantity ?? 0);
+          if (qualified > 0) {
+            return finishedGoodsInboundPushPercent(record.pushed_inbound_quantity, qualified);
+          }
+          return finishedGoodsReworkPushPercent(record.pushed_rework_quantity, record.unqualified_quantity);
+        },
       }),
     ]),
     ...buildDocumentAuditColumns<FinishedGoodsInspection>(t),
@@ -1598,6 +1725,94 @@ const FinishedGoodsInspectionPage: React.FC = () => {
             {pushReworkPreviewData.tip ? (
               <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
                 {pushReworkPreviewData.tip}
+              </Typography.Paragraph>
+            ) : null}
+          </div>
+        ) : null}
+      </Modal>
+
+      <Modal
+        title={pushToInboundAction.label}
+        open={pushInboundPreviewOpen}
+        destroyOnHidden
+        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+        onCancel={resetPushInboundPreview}
+        okText={t('app.kuaizhizao.salesOrder.confirmPush')}
+        cancelText={t('common.cancel')}
+        confirmLoading={pushInboundPreviewConfirming}
+        onOk={() => void handlePushInboundPreviewConfirm()}
+        okButtonProps={{
+          disabled:
+            pushInboundPreviewLoading ||
+            !pushInboundPreviewData ||
+            !!pushInboundPreviewData?.has_blocking_issues ||
+            !(pushInboundPreviewData?.items || []).some((row) => Number(row.max_push_quantity ?? 0) > 0) ||
+            !(Number(pushInboundPreviewQuantity) > 0),
+        }}
+      >
+        {pushInboundPreviewLoading ? (
+          <div style={{ minHeight: 120, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+            <Spin />
+            <div style={{ color: 'var(--ant-color-primary)' }}>{t('app.kuaizhizao.salesOrder.loadingPreview')}</div>
+          </div>
+        ) : pushInboundPreviewData ? (
+          <div>
+            <p style={{ marginBottom: 12, fontWeight: 500 }}>{pushInboundPreviewData.summary}</p>
+            {pushInboundPreviewData.warehouse_name ? (
+              <p style={{ marginBottom: 12 }}>
+                {t('app.kuaizhizao.workOrder.colWarehouse')}: {pushInboundPreviewData.warehouse_name}
+              </p>
+            ) : null}
+            {pushInboundPreviewData.has_blocking_issues && pushInboundPreviewData.blocking_reason ? (
+              <Alert
+                type="warning"
+                showIcon
+                style={{ marginBottom: 12 }}
+                title={qualityInspectionCapabilityReasonMessage(
+                  pushInboundPreviewData.blocking_reason,
+                  t,
+                )}
+              />
+            ) : null}
+            {pushInboundPreviewData.items?.length > 0 ? (
+              <Table
+                size="small"
+                dataSource={pushInboundPreviewData.items}
+                rowKey={(row) => String(row.item_id)}
+                pagination={false}
+                scroll={{ x: 920 }}
+                columns={[
+                  { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
+                  { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
+                  { title: t('common.quantity'), dataIndex: 'quantity', width: 90, align: 'right', render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right', render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right', render: formatQuantity },
+                  {
+                    title: t('app.kuaizhizao.salesOrder.colPushQty'),
+                    width: 130,
+                    render: (_: unknown, row: PushPreviewResponse['items'][number]) => {
+                      const maxQty = Number(row.max_push_quantity ?? 0);
+                      return (
+                        <InputNumber
+                          min={0}
+                          max={Number.isFinite(maxQty) && maxQty > 0 ? maxQty : undefined}
+                          precision={2}
+                          style={{ width: '100%' }}
+                          disabled={!(maxQty > 0)}
+                          value={pushInboundPreviewQuantity}
+                          onChange={(val) => setPushInboundPreviewQuantity(Number(val ?? 0))}
+                        />
+                      );
+                    },
+                  },
+                ]}
+              />
+            ) : (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.workOrder.soPullPreviewNoLines')} />
+            )}
+            {pushInboundPreviewData.tip ? (
+              <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
+                {pushInboundPreviewData.tip}
               </Typography.Paragraph>
             ) : null}
           </div>

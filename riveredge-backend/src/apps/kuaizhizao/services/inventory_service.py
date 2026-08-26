@@ -61,6 +61,14 @@ class InventoryService:
         return bn if bn else "DEFAULT"
 
     @staticmethod
+    def format_batch_no_for_display(batch_no: Optional[str]) -> Optional[str]:
+        """用户可见批号：空值与过账占位 DEFAULT 不展示。"""
+        bn = str(batch_no or "").strip()
+        if not bn or bn.upper() == "DEFAULT":
+            return None
+        return bn
+
+    @staticmethod
     async def _resolve_warehouse_name(warehouse_id: Optional[int]) -> Optional[str]:
         if warehouse_id is None:
             return None
@@ -605,6 +613,16 @@ class InventoryService:
             except Exception as _flag_exc:
                 logger.warning(f"获取仓库管理标志失败（跳过批号/序列号强制校验）: {_flag_exc}")
             material = await Material.get_or_none(tenant_id=tenant_id, id=material_id, deleted_at__isnull=True)
+
+            if (
+                material
+                and getattr(material, "batch_managed", False)
+                and not (batch_no and str(batch_no).strip())
+            ):
+                batch_no = await MaterialBatchService.generate_batch_no(
+                    tenant_id=tenant_id,
+                    material_uuid=str(material.uuid),
+                )
 
             if ledger_production_date is None and batch_no:
                 ledger_production_date = await InventoryService._resolve_ledger_production_date(

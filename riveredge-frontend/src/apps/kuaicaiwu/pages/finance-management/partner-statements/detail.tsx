@@ -26,7 +26,7 @@ import {
   formatSentChannel,
   getSentChannelOptions,
 } from '../../../utils/financeSharedOptions';
-import { formatDateTime } from '../../../../../utils/format';
+import { formatDateTime, formatCurrencyAmount } from '../../../../../utils/format';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import {
   buildLineAmountPayload,
@@ -41,7 +41,7 @@ const PS = 'app.kuaicaiwu.partnerStatement';
 const PARTNER_STATEMENT_RESOURCE = 'kuaicaiwu:partner-statement';
 
 const money = (v: number | string | undefined) =>
-  `¥${Number(v ?? 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  formatCurrencyAmount(v ?? 0);
 
 const PartnerStatementDetailPage: React.FC = () => {
   const { t } = useTranslation();

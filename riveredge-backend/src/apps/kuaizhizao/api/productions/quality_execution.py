@@ -1768,6 +1768,54 @@ async def push_finished_goods_inspection_to_rework(
     )
 
 
+@router.get(
+    "/finished-goods-inspections/{inspection_id}/push-to-inbound/preview",
+    summary="Preview push finished goods inspection to inbound receipt",
+)
+async def preview_push_finished_goods_inspection_to_inbound(
+    inspection_id: int = Path(..., description="成品检验单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    """成品检验合格下推入库单预览。"""
+    await _assert_finished_goods_inspection_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        inspection_id=inspection_id,
+    )
+    return await FinishedGoodsInspectionService().preview_push_to_inbound(
+        tenant_id=tenant_id,
+        inspection_id=inspection_id,
+    )
+
+
+@router.post(
+    "/finished-goods-inspections/{inspection_id}/push-to-inbound",
+    response_model=Dict[str, Any],
+    summary="Push finished goods inspection to inbound receipt",
+)
+async def push_finished_goods_inspection_to_inbound(
+    inspection_id: int = Path(..., description="成品检验单ID"),
+    quantity: Optional[float] = Body(None, embed=True, description="本次下推入库数量，缺省为可下推全额"),
+    warehouse_id: Optional[int] = Body(None, embed=True, description="入库仓库ID，缺省解析工单/物料默认仓库"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    """成品检验合格下推入库单。"""
+    await _assert_finished_goods_inspection_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        inspection_id=inspection_id,
+    )
+    return await FinishedGoodsInspectionService().push_to_inbound(
+        tenant_id=tenant_id,
+        inspection_id=inspection_id,
+        created_by=current_user.id,
+        quantity=quantity,
+        warehouse_id=warehouse_id,
+    )
+
+
 @router.post("/finished-goods-inspections/import", summary="Batch import finished goods inspections")
 async def import_finished_goods_inspections(
     request: Dict[str, Any],

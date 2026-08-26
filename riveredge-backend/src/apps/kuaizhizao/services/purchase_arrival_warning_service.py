@@ -9,7 +9,6 @@ from typing import Any, Dict, List, Optional
 from tortoise.expressions import Q
 
 from apps.common.base_service import AppBaseService
-from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus
 from apps.kuaizhizao.models.purchase_order import (
     PurchaseOrder,
     PurchaseOrderItem,
@@ -23,6 +22,7 @@ from apps.kuaizhizao.utils.purchase_arrival_warning import (
     compute_warning_level,
     enrich_line_warning_fields,
     line_has_open_receipt,
+    resolve_arrival_processing_status,
 )
 from core.services.authorization.data_scope_service import DataScopeService
 from core.utils.timezone_utils import resolve_business_datetime, to_site_date
@@ -105,26 +105,33 @@ class PurchaseArrivalWarningService(AppBaseService[PurchaseOrder]):
             out[key] = row
         return out
 
-    def _resolve_processing_status(self, delay: Optional[PurchaseArrivalDelayReport]) -> str:
+    async def _change_status_by_id(
+        self, tenant_id: int, change_ids: List[int]
+    ) -> Dict[int, str]:
+        if not change_ids:
+            return {}
+        from apps.kuaizhizao.models.purchase_order_change_order import PurchaseOrderChangeOrder
+
+        rows = await PurchaseOrderChangeOrder.filter(
+            tenant_id=tenant_id,
+            id__in=change_ids,
+            deleted_at__isnull=True,
+        ).values("id", "status")
+        return {int(row["id"]): str(row.get("status") or "") for row in rows}
+
+    def _resolve_processing_status(
+        self,
+        delay: Optional[PurchaseArrivalDelayReport],
+        change_status: Optional[str] = None,
+    ) -> str:
         if delay is None:
-            return "unprocessed"
-        st = str(delay.status or "").upper()
-        rs = str(delay.review_status or "").upper()
-        if st in ("APPLIED",):
-            return "changed"
-        if st in ("CHANGE_GENERATED",):
-            return "change_pending" if delay.purchase_order_change_id else "approved"
-        if delay.purchase_order_change_id:
-            return "change_pending"
-        if st in ("PENDING_REVIEW",) or rs in ("PENDING", "PENDING_REVIEW"):
-            return "pending_review"
-        if st in ("REJECTED",) or rs in ("REJECTED",):
-            return "rejected"
-        if st in ("APPROVED", "AUDITED") and rs in ("APPROVED",):
-            return "approved"
-        if st in ("DRAFT",):
-            return "reported"
-        return "reported"
+            return resolve_arrival_processing_status()
+        return resolve_arrival_processing_status(
+            delay_status=delay.status,
+            delay_review_status=delay.review_status,
+            change_order_id=delay.purchase_order_change_id,
+            change_order_status=change_status,
+        )
 
     async def list_warnings(
         self,
@@ -149,7 +156,11 @@ class PurchaseArrivalWarningService(AppBaseService[PurchaseOrder]):
         if supplier_keyword:
             po_q = po_q.filter(supplier_name__icontains=supplier_keyword.strip())
         if order_code:
-            po_q = po_q.filter(order_code__icontains=order_code.strip())
+            kw = order_code.strip()
+            if supplier_keyword:
+                po_q = po_q.filter(order_code__icontains=kw)
+            else:
+                po_q = po_q.filter(Q(order_code__icontains=kw) | Q(supplier_name__icontains=kw))
 
         po_ids = list(await po_q.values_list("id", flat=True))
         if not po_ids:
@@ -183,6 +194,14 @@ class PurchaseArrivalWarningService(AppBaseService[PurchaseOrder]):
         delay_map = await self._latest_delay_by_item(
             tenant_id, [int(i.id) for i in items if i.id]
         )
+        change_ids = sorted(
+            {
+                int(delay.purchase_order_change_id)
+                for delay in delay_map.values()
+                if delay.purchase_order_change_id
+            }
+        )
+        change_status_map = await self._change_status_by_id(tenant_id, change_ids)
 
         from apps.kuaizhizao.services.purchase_po_line_impact_service import (
             PurchasePoLineImpactService,
@@ -192,7 +211,6 @@ class PurchaseArrivalWarningService(AppBaseService[PurchaseOrder]):
         impact_map = await impact_svc.batch_resolve_impact_summaries(tenant_id, items)
 
         rows: List[dict] = []
-        summary = {"normal": 0, "imminent": 0, "overdue": 0, "total_open_lines": 0}
 
         for item in items:
             if not line_has_open_receipt(item):
@@ -224,7 +242,12 @@ class PurchaseArrivalWarningService(AppBaseService[PurchaseOrder]):
                 continue
 
             delay = delay_map.get(int(item.id))
-            row["processing_status"] = self._resolve_processing_status(delay)
+            change_status = (
+                change_status_map.get(int(delay.purchase_order_change_id))
+                if delay and delay.purchase_order_change_id
+                else None
+            )
+            row["processing_status"] = self._resolve_processing_status(delay, change_status)
             row["delay_report_id"] = delay.id if delay else None
             row["delay_report_code"] = delay.report_code if delay else None
             row["purchase_order_change_id"] = delay.purchase_order_change_id if delay else None
@@ -232,16 +255,20 @@ class PurchaseArrivalWarningService(AppBaseService[PurchaseOrder]):
                 delay.impacted_assembly_summary if delay else None
             ) or ""
 
-            summary["total_open_lines"] += 1
-            wl = row["warning_level"]
-            if wl in summary:
-                summary[wl] += 1
-
             if warning_level and row["warning_level"] != warning_level:
                 continue
             if processing_status and row["processing_status"] != processing_status:
                 continue
             rows.append(row)
+
+        summary = {"normal": 0, "imminent": 0, "overdue": 0, "total_open_lines": 0}
+        for row in rows:
+            if row.get("processing_status") == "changed":
+                continue
+            summary["total_open_lines"] += 1
+            wl = row.get("warning_level")
+            if wl in summary:
+                summary[wl] += 1
 
         total = len(rows)
         page = rows[skip : skip + limit]

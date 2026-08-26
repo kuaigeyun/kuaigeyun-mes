@@ -640,6 +640,25 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 outcome=inbound_outcome,
                 receipt_code=receipt_code,
             )
+        except BusinessLogicError as e:
+            msg = str(e)
+            if "成品检验" in msg or "FQC" in msg.upper():
+                logger.info(
+                    "末道工序自动入库：成品检验未满足，保留待入库或跳过确认"
+                    f" reporting_record_id={reporting_record_id} err={msg}"
+                )
+                return LastOperationInboundResult(outcome="confirm_blocked_fqc")
+            logger.warning(
+                f"末道工序自动入库失败：tenant_id={tenant_id}"
+                f" reporting_record_id={reporting_record_id} err={msg}"
+            )
+            return LastOperationInboundResult(outcome="failed")
+        except ValidationError as e:
+            logger.warning(
+                f"末道工序自动入库失败：tenant_id={tenant_id}"
+                f" reporting_record_id={reporting_record_id} err={e}"
+            )
+            return LastOperationInboundResult(outcome="failed")
         except Exception as e:
             logger.warning(
                 f"末道工序自动入库失败：tenant_id={tenant_id}"

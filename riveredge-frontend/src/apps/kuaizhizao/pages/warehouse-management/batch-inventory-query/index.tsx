@@ -115,6 +115,13 @@ function renderInTransitCell(record: BatchInventoryItem, t: (key: string) => str
   );
 }
 
+/** 与后端 format_batch_no_for_display 一致：不展示过账占位 DEFAULT */
+function formatBatchNoForDisplay(batchNo?: string | null): string {
+  const bn = String(batchNo ?? '').trim();
+  if (!bn || bn.toUpperCase() === 'DEFAULT') return '';
+  return bn;
+}
+
 function renderAlertCell(record: BatchInventoryItem, t: (key: string) => string) {
   const status = record.alert_status || 'normal';
   const label = record.alert_label || t('app.kuaizhizao.warehouseInventory.alertNormal');
@@ -334,8 +341,16 @@ const BatchInventoryQuery: React.FC = () => {
         title: t('app.kuaizhizao.batchInventoryQuery.colBatchNo'),
         dataIndex: 'batch_no',
         width: 120,
-        copyable: true,
         sorter: true,
+        render: (_, record) => {
+          const display = formatBatchNoForDisplay(record.batch_no);
+          if (!display) return '—';
+          return display;
+        },
+        copyable: (_, record) => {
+          const display = formatBatchNoForDisplay(record.batch_no);
+          return display ? { text: display } : false;
+        },
       },
       {
         title: t('app.kuaizhizao.batchInventoryQuery.colProductionDate'),
@@ -530,7 +545,7 @@ const BatchInventoryQuery: React.FC = () => {
           r.brand,
           r.texture,
           r.material_unit,
-          r.batch_no,
+          formatBatchNoForDisplay(r.batch_no) || '—',
           r.production_date,
           r.expiry_date,
           r.quantity,

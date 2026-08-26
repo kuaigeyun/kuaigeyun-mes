@@ -3,7 +3,29 @@
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from apps.kuaizhizao.services.inventory_service import InventoryService
+from apps.kuaizhizao.services.report_enhancements import _format_movement_batch_number_for_report
 from apps.kuaizhizao.services.report_service import ReportService
+
+
+def test_format_movement_batch_number_for_report_hides_default_sentinel():
+    assert _format_movement_batch_number_for_report(None) == ""
+    assert _format_movement_batch_number_for_report("") == ""
+    assert _format_movement_batch_number_for_report("DEFAULT") == ""
+    assert _format_movement_batch_number_for_report("20260721-001") == "20260721-001"
+
+
+def test_format_batch_no_for_display_hides_default_sentinel():
+    assert InventoryService.format_batch_no_for_display(None) is None
+    assert InventoryService.format_batch_no_for_display("") is None
+    assert InventoryService.format_batch_no_for_display("DEFAULT") is None
+    assert InventoryService.format_batch_no_for_display("20260721-001") == "20260721-001"
+
+
+def test_normalize_batch_no_for_report_hides_default_sentinel():
+    assert ReportService._normalize_batch_no_for_report(None) == ""
+    assert ReportService._normalize_batch_no_for_report("DEFAULT") == ""
+    assert ReportService._normalize_batch_no_for_report("20260721-001") == "20260721-001"
 
 
 def test_summary_only_filters_qualified_batches():

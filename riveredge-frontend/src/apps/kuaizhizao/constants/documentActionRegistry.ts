@@ -51,6 +51,7 @@ export type KuaizhizaoDocumentActionKey =
   | 'outbound.pull_from_outsource_work_order'
   | 'inbound.pull_from_purchase_order'
   | 'inbound.pull_from_work_order'
+  | 'inbound.pull_from_finished_goods_inspection'
   | 'inbound.pull_from_sales_order'
   | 'inbound.pull_from_outsource_work_order'
   | 'inbound.pull_from_work_order_for_production_return';
@@ -497,6 +498,14 @@ export const KUAIZHIZAO_DOCUMENT_ACTION_REGISTRY: Record<KuaizhizaoDocumentActio
     labelKey: documentActionI18n('inbound.pull_from_work_order', 'label'),
     sourceLabelKey: documentActionI18n('inbound.pull_from_work_order', 'source'),
     targetLabelKey: documentActionI18n('inbound.pull_from_work_order', 'target'),
+  },
+  'inbound.pull_from_finished_goods_inspection': {
+    key: 'inbound.pull_from_finished_goods_inspection',
+    module: 'kuaizhizao',
+    kind: 'pull_create',
+    labelKey: documentActionI18n('inbound.pull_from_finished_goods_inspection', 'label'),
+    sourceLabelKey: documentActionI18n('inbound.pull_from_finished_goods_inspection', 'source'),
+    targetLabelKey: documentActionI18n('inbound.pull_from_finished_goods_inspection', 'target'),
   },
   'inbound.pull_from_sales_order': {
     key: 'inbound.pull_from_sales_order',

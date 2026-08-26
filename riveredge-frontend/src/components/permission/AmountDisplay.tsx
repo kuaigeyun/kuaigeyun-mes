@@ -12,7 +12,7 @@ import { LockOutlined } from '@ant-design/icons'
 import { canViewKuaizhizaoPricing } from '../../utils/kuaizhizaoPricingPermission'
 import { resolveAmountFieldVisibility } from '../../utils/fieldMaskPermission'
 import { useUserFieldMasks } from '../../hooks/useUserFieldMasks'
-import { formatNumber } from '../../utils/format'
+import { formatNumber, resolveAmountDisplayDecimals } from '../../utils/format'
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 
 export interface AmountDisplayProps {
@@ -22,7 +22,7 @@ export interface AmountDisplayProps {
   fieldName?: string
   /** 金额数值 */
   value: number | null | undefined
-  /** 小数位数（默认 2） */
+  /** 小数位数（默认按 fieldName 读配置：unit_price→单价精度，其余→金额精度） */
   decimals?: number
   /** 前缀（如：¥） */
   prefix?: string
@@ -42,7 +42,7 @@ export const AmountDisplay: React.FC<AmountDisplayProps> = ({
   resource,
   fieldName,
   value,
-  decimals = 2,
+  decimals,
   prefix = '¥',
   suffix = '',
   maskText = '***',
@@ -79,7 +79,7 @@ export const AmountDisplay: React.FC<AmountDisplayProps> = ({
     )
   }
 
-  const formattedValue = formatNumber(value, decimals)
+  const formattedValue = formatNumber(value, resolveAmountDisplayDecimals(fieldName, decimals))
 
   return (
     <span className={className} style={style}>

@@ -23,6 +23,8 @@ import {
   outsourceProductReturnApi,
 } from '../../../services/production';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
+import { useNumericPrecisionPlaces } from '../../../../../hooks/useNumericPrecision';
+import { formatQuantity } from '../../../../../utils/format';
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
 import { translateWorkOrderLifecycleStatus } from '../../../utils/workOrderLifecycle';
 import type { OutsourceReceiptLine } from '../../../components/OutsourceReceiptFormContent';
@@ -78,6 +80,7 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
   const location = useLocation();
   const { message: messageApi } = App.useApp();
   const { t } = useTranslation();
+  const quantityDecimals = useNumericPrecisionPlaces('quantity');
   const pullFromOutsourceWorkOrderAction = resolveKuaizhizaoDocumentAction(t, 'inbound.pull_from_outsource_work_order');
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const receiverHook = useInboundReceiverSelect();
@@ -317,9 +320,9 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
       { title: t('app.kuaizhizao.warehouseInbound.col.productCode'), dataIndex: 'productCode', width: 120, ellipsis: true },
       { title: t('app.kuaizhizao.warehouseInbound.col.productName'), dataIndex: 'productName', width: 160, ellipsis: true },
       { title: t('common.unit'), dataIndex: 'unit', width: 70, align: 'center' as const },
-      { title: t('app.kuaizhizao.warehouseInbound.col.outsourceQty'), dataIndex: 'orderedQuantity', width: 100, align: 'right' as const },
-      { title: t('app.kuaizhizao.warehouseInbound.col.receivedOutsource'), dataIndex: 'receivedQuantity', width: 90, align: 'right' as const },
-      { title: t('app.kuaizhizao.warehouseInbound.col.pendingReceipt'), dataIndex: 'pendingQuantity', width: 90, align: 'right' as const },
+      { title: t('app.kuaizhizao.warehouseInbound.col.outsourceQty'), dataIndex: 'orderedQuantity', width: 100, align: 'right' as const, render: (v: number) => formatQuantity(v) },
+      { title: t('app.kuaizhizao.warehouseInbound.col.receivedOutsource'), dataIndex: 'receivedQuantity', width: 90, align: 'right' as const, render: (v: number) => formatQuantity(v) },
+      { title: t('app.kuaizhizao.warehouseInbound.col.pendingReceipt'), dataIndex: 'pendingQuantity', width: 90, align: 'right' as const, render: (v: number) => formatQuantity(v) },
       {
         title: t('app.kuaizhizao.warehouseInbound.col.thisReceiptOutsource'),
         width: 120,
@@ -328,7 +331,7 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
           <InputNumber
             min={0}
             max={record.pendingQuantity > 0 ? record.pendingQuantity : undefined}
-            precision={2}
+            precision={quantityDecimals}
             value={record.receiptQuantity}
             disabled={record.pendingQuantity <= 0}
             style={{ width: '100%' }}
@@ -355,7 +358,7 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
           <InputNumber
             min={0}
             max={record.receiptQuantity}
-            precision={2}
+            precision={quantityDecimals}
             value={record.qualifiedQuantity}
             style={{ width: '100%' }}
             onChange={(v) => {
@@ -381,7 +384,7 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
           <InputNumber
             min={0}
             max={record.receiptQuantity}
-            precision={2}
+            precision={quantityDecimals}
             value={record.unqualifiedQuantity}
             style={{ width: '100%' }}
             onChange={(v) => {
@@ -409,7 +412,7 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
           <InputNumber
             min={0}
             max={record.unqualifiedQuantity}
-            precision={2}
+            precision={quantityDecimals}
             value={record.processWasteQty ?? 0}
             disabled={!(record.unqualifiedQuantity > 0)}
             style={{ width: '100%' }}
@@ -427,7 +430,7 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
           <InputNumber
             min={0}
             max={record.unqualifiedQuantity}
-            precision={2}
+            precision={quantityDecimals}
             value={record.materialWasteQty ?? 0}
             disabled={!(record.unqualifiedQuantity > 0)}
             style={{ width: '100%' }}
@@ -438,7 +441,7 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
         ),
       },
     ],
-    [t],
+    [t, quantityDecimals],
   );
 
   const materialReturnColumns = useMemo(
@@ -455,7 +458,7 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
           <InputNumber
             min={0}
             max={record.returnable_quantity}
-            precision={4}
+            precision={quantityDecimals}
             value={record.return_quantity}
             onChange={(v) => {
               const qty = Number(v) || 0;
@@ -470,7 +473,7 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
         ),
       },
     ],
-    [t],
+    [t, quantityDecimals],
   );
 
   const productReturnColumns = useMemo(
@@ -486,7 +489,7 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
           <InputNumber
             min={0}
             max={record.returnable_quantity}
-            precision={4}
+            precision={quantityDecimals}
             value={record.return_quantity}
             onChange={(v) => {
               const qty = Number(v) || 0;
@@ -501,7 +504,7 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
         ),
       },
     ],
-    [t],
+    [t, quantityDecimals],
   );
 
   const submit = async (mode: 'draft' | 'confirm') => {
@@ -542,6 +545,10 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
         const unqualified = Number(receiptLine.unqualifiedQuantity || 0);
         if (unqualified > 0 && processWaste + materialWaste > unqualified + 1e-9) {
           messageApi.warning(t('app.kuaizhizao.warehouseInbound.entry.outsource.wasteExceedsUnqualified'));
+          return;
+        }
+        if (receiptLine.qualifiedQuantity > receiptLine.pendingQuantity + 1e-9) {
+          messageApi.warning(t('app.kuaizhizao.warehouseInbound.entry.outsource.qualifiedExceedsPending'));
           return;
         }
         const created = (await outsourceMaterialReceiptApi.create({
@@ -739,7 +746,7 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
                   <Col xs={24} sm={12} lg={6}>
                     <Form.Item label={t('app.kuaizhizao.warehouseInbound.field.plannedQty')}>
                       <ReadOnlyFormValue
-                        value={workOrder.quantity != null ? String(workOrder.quantity) : undefined}
+                        value={workOrder.quantity != null ? formatQuantity(workOrder.quantity) : undefined}
                       />
                     </Form.Item>
                   </Col>

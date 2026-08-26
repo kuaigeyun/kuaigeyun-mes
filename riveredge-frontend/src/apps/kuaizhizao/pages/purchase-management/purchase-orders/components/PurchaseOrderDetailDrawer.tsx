@@ -77,6 +77,12 @@ function formatAmount(val: unknown): string {
   return (Number.isNaN(num) ? 0 : num).toLocaleString();
 }
 
+function purchaseOrderTaxRateToPercent(raw: unknown): number {
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return n <= 1 ? n * 100 : n;
+}
+
 export type PurchaseOrderDetailDrawerProps = {
   open: boolean;
   onClose: () => void;
@@ -263,7 +269,10 @@ export const PurchaseOrderDetailDrawer: React.FC<PurchaseOrderDetailDrawerProps>
         {
           title: t('app.kuaizhizao.purchaseOrder.col.taxRate'),
           dataIndex: 'tax_rate',
-          render: (text) => (text ? `${text}%` : '-'),
+          render: (text) => {
+            const pct = purchaseOrderTaxRateToPercent(text);
+            return pct > 0 ? `${pct.toFixed(2)}%` : '-';
+          },
         },
         {
           title: t('app.kuaizhizao.purchaseOrder.col.taxAmount'),

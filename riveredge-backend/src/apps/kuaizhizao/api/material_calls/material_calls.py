@@ -8,11 +8,17 @@ from core.api.deps import get_current_user, get_current_tenant
 from infra.models.user import User
 
 from apps.kuaizhizao.services.material_call_service import MaterialCallService
+from apps.kuaizhizao.services.warehouse_service import ProductionPickingService
 from apps.kuaizhizao.schemas.material_call import (
     MaterialCallRequestCreate,
     MaterialCallRequestUpdate,
     MaterialCallRequestResponse,
     MaterialCallBatchFromWorkOrderRequest,
+    MaterialCallPushPickingPreviewResponse,
+)
+from apps.kuaizhizao.schemas.warehouse import (
+    ProductionPickingPullFromMaterialCallRequest,
+    ProductionPickingWithItemsResponse,
 )
 
 router = APIRouter(prefix="/material-calls", tags=["App - Kuaige Zhizao - Material Call"])
@@ -72,6 +78,52 @@ async def get_material_call(
 ) -> MaterialCallRequestResponse:
     """查询叫料单详情（含明细）"""
     return await MaterialCallService().get_call_request(tenant_id, call_id)
+
+
+@router.get(
+    "/{call_id}/push-production-picking/preview",
+    response_model=MaterialCallPushPickingPreviewResponse,
+    summary="Preview push material call to production picking",
+)
+async def preview_push_material_call_to_production_picking(
+    call_id: int = Path(..., description="补料申请ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> MaterialCallPushPickingPreviewResponse:
+    """补料申请下推生产领料预览：按申请明细返回可领物料与数量。"""
+    data = await ProductionPickingService().preview_push_material_call_to_production_picking(
+        tenant_id=tenant_id,
+        material_call_id=call_id,
+    )
+    return MaterialCallPushPickingPreviewResponse.model_validate(data)
+
+
+@router.post(
+    "/{call_id}/push-production-picking",
+    response_model=ProductionPickingWithItemsResponse,
+    summary="Create production picking from material call",
+)
+async def push_material_call_to_production_picking(
+    call_id: int = Path(..., description="补料申请ID"),
+    body: ProductionPickingPullFromMaterialCallRequest = ...,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ProductionPickingWithItemsResponse:
+    """从补料申请下推创建生产领料单（正式发料，明细来自补料申请）。"""
+    if int(body.material_call_id) != int(call_id):
+        from infra.exceptions.exceptions import ValidationError
+
+        raise ValidationError("路径与请求体中的补料申请ID不一致")
+    return await ProductionPickingService().create_production_picking_from_material_call_pull(
+        tenant_id=tenant_id,
+        created_by=current_user.id,
+        material_call_id=call_id,
+        warehouse_id=body.warehouse_id,
+        warehouse_name=body.warehouse_name,
+        picker_name=body.picker_name,
+        notes=body.notes,
+        lines=body.lines,
+    )
 
 
 @router.patch("/{call_id}", response_model=MaterialCallRequestResponse, summary="Update material call request")

@@ -22,6 +22,7 @@ import {
 } from 'antd';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
+import { useNumericPrecisionPlaces } from '../../../../../hooks/useNumericPrecision';
 import {
   FormModalTemplate,
   ListPageTemplate,
@@ -43,6 +44,7 @@ type Row = Record<string, unknown>;
 
 const GlCashierPage: React.FC = () => {
   const { t } = useTranslation();
+  const amountDecimals = useNumericPrecisionPlaces('amount');
   const { message: messageApi } = App.useApp();
   const now = new Date();
   const [activeTab, setActiveTab] = useState('journal');
@@ -443,7 +445,7 @@ const GlCashierPage: React.FC = () => {
               {periodControls}
               <InputNumber
                 size="medium"
-                precision={2}
+                precision={amountDecimals}
                 value={bankBalance}
                 onChange={(v) => setBankBalance(Number(v || 0))}
                 addonBefore={t(`${NS}.bankBalance`, { defaultValue: '银行余额' })}

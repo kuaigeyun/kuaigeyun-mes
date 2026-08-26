@@ -96,7 +96,7 @@ import {
   type DocumentPushPreview,
 } from '../../../services/purchase-requisition';
 import { supplierApi } from '../../../../master-data/services/supply-chain';
-import { formatBusinessDateOnly, formatDateTime, formatDateBySiteSetting, formatNumber, formatQuantity } from '../../../../../utils/format';
+import { formatBusinessDateOnly, formatDateTime, formatDateBySiteSetting, formatNumber, formatQuantity, formatCurrencyAmount } from '../../../../../utils/format';;
 import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
@@ -733,7 +733,7 @@ const PurchaseInquiriesPage: React.FC = () => {
       width: 120,
       align: 'right' as const,
       hideInSearch: true,
-      render: (_, r) => (r.total_amount != null ? `¥${formatNumber(r.total_amount, 2)}` : '-'),
+      render: (_, r) => (r.total_amount != null ? formatCurrencyAmount(r.total_amount) : '-'),
     },
     ...buildDocumentAuditColumns<PurchaseInquiry>(t),
     {

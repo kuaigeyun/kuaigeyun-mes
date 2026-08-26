@@ -1,3 +1,4 @@
+import { formatCurrencyAmount } from '../../../../../utils/format';
 import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import type { ActionType } from '@ant-design/pro-components';
@@ -6,6 +7,7 @@ import { Modal, message, Space, InputNumber, Divider, Typography, Row, Col, Aler
 import { QuestionCircleOutlined } from '@ant-design/icons';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { useNumericPrecisionPlaces } from '../../../../../hooks/useNumericPrecision';
 import { UniTable } from '../../../../../components/uni-table';
 import {
   UniTableStackedPrimaryCell,
@@ -46,7 +48,7 @@ const SETTLEMENT_RESOURCE = 'kuaicaiwu:settlement';
 const C = 'app.kuaicaiwu.common';
 
 const formatSettleMoney = (value: number) =>
-  `¥${Number(value || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  formatCurrencyAmount(value || 0);
 
 const parsePositiveInt = (raw: string | null): number | null => {
   if (!raw) return null;
@@ -56,6 +58,7 @@ const parsePositiveInt = (raw: string | null): number | null => {
 
 const SettlementPage: React.FC = () => {
   const { t } = useTranslation();
+  const amountDecimals = useNumericPrecisionPlaces('amount');
   const [searchParams, setSearchParams] = useSearchParams();
   const settlementPerms = useResourcePermissions(SETTLEMENT_RESOURCE);
   const receivableActionRef = useRef<ActionType>();
@@ -483,7 +486,7 @@ const SettlementPage: React.FC = () => {
               value={settleAmount}
               min={0.01}
               max={Number(preview.max_settle_quantity)}
-              precision={2}
+              precision={amountDecimals}
               onChange={(val) => setSettleAmount(val || 0)}
             />
           </>

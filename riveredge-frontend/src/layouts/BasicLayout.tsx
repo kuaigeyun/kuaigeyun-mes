@@ -142,6 +142,7 @@ import { triggerSubmit, hasSubmitHandler } from '../utils/globalSubmitShortcut';
 import { CODE_FONT_FAMILY } from '../constants/fonts';
 import { clearSessionScopedQueries } from '../utils/clearSessionQueries';
 import { swallowRequestCancellation } from '../utils/requestCancellation';
+import { prefetchNumericPrecision } from '../hooks/useNumericPrecision';
 import { getInstalledApplicationList } from '../services/application';
 import { getChatIntegrationStatus } from '../services/deepseekChat';
 import { buildChatIntegrationStatusQueryKey } from '../hooks/useChatIntegrationStatus';
@@ -1589,6 +1590,11 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     return hasPermission(user, 'kuaiai:entry:read');
   }, [installedApps, currentUser]);
 
+
+  useEffect(() => {
+    if (currentUser?.tenant_id == null) return;
+    void prefetchNumericPrecision(queryClient).catch(swallowRequestCancellation);
+  }, [currentUser?.tenant_id, queryClient]);
 
   useEffect(() => {
     if (!hasAiAssistantEntry || currentUser?.tenant_id == null) return;

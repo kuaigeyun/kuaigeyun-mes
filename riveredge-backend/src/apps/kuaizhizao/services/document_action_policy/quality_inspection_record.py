@@ -68,14 +68,30 @@ def can_conduct_quality_inspection(
     return False
 
 
+def _fqc_inbound_push_ready(inspection: Any, *, audit_required: bool) -> bool:
+    """与 fqc_inspection_passed_for_inbound 同步口径（capabilities 推导用）。"""
+    st = _norm(getattr(inspection, "status", None))
+    if st not in ("已检验", "已审核"):
+        return False
+    qualified = float(getattr(inspection, "qualified_quantity", 0) or 0)
+    if qualified <= 0:
+        return False
+    if audit_required:
+        return _is_approved_review(getattr(inspection, "review_status", None))
+    return True
+
+
 def derive_quality_inspection_capabilities(
     inspection: Any,
     *,
     supports_purchase_return: bool = False,
     supports_push_rework: bool = False,
+    supports_push_inbound: bool = False,
     pushed_purchase_return_quantity: float = 0.0,
     pushed_rework_quantity: float = 0.0,
+    pushed_inbound_quantity: float = 0.0,
     certificate_issued: bool = False,
+    fqc_audit_required: bool = False,
 ) -> QualityInspectionCapabilities:
     status = _norm(getattr(inspection, "status", None))
     review_status = _norm(getattr(inspection, "review_status", None))
@@ -107,6 +123,9 @@ def derive_quality_inspection_capabilities(
             revoke_conduct_allowed = False
             revoke_conduct_reason = "quality_inspection.revoke_conduct.has_downstream"
         elif supports_push_rework and float(pushed_rework_quantity or 0) > 0:
+            revoke_conduct_allowed = False
+            revoke_conduct_reason = "quality_inspection.revoke_conduct.has_downstream"
+        elif supports_push_inbound and float(pushed_inbound_quantity or 0) > 0:
             revoke_conduct_allowed = False
             revoke_conduct_reason = "quality_inspection.revoke_conduct.has_downstream"
         elif certificate_issued:
@@ -174,6 +193,26 @@ def derive_quality_inspection_capabilities(
         else:
             push_rework_cap = _cap(False, "finished_goods_inspection.push_rework.not_allowed")
 
+    push_inbound_cap = _cap(False, "finished_goods_inspection.push_inbound.not_allowed")
+    if supports_push_inbound:
+        qualified_qty = max(0.0, float(getattr(inspection, "qualified_quantity", 0) or 0))
+        pushed_inbound_qty = max(0.0, float(pushed_inbound_quantity or 0))
+        max_push_inbound = max(0.0, qualified_qty - pushed_inbound_qty)
+        inbound_ready = _fqc_inbound_push_ready(inspection, audit_required=fqc_audit_required)
+        has_work_order = bool(getattr(inspection, "work_order_id", None))
+        if inbound_ready and has_work_order and max_push_inbound > 0:
+            push_inbound_cap = _cap(True)
+        elif inbound_ready and has_work_order and max_push_inbound <= 0:
+            push_inbound_cap = _cap(False, "finished_goods_inspection.push_inbound.already_pushed")
+        elif not has_work_order:
+            push_inbound_cap = _cap(False, "finished_goods_inspection.push_inbound.no_work_order")
+        elif qualified_qty <= 0:
+            push_inbound_cap = _cap(False, "finished_goods_inspection.push_inbound.no_qualified")
+        elif not inbound_ready:
+            push_inbound_cap = _cap(False, "finished_goods_inspection.push_inbound.not_passed")
+        else:
+            push_inbound_cap = _cap(False, "finished_goods_inspection.push_inbound.not_allowed")
+
     return QualityInspectionCapabilities(
         conduct=conduct_cap,
         approve=approve_cap,
@@ -183,6 +222,7 @@ def derive_quality_inspection_capabilities(
         create_defect=create_defect_cap,
         push_purchase_return=push_return_cap,
         push_rework=push_rework_cap,
+        push_inbound=push_inbound_cap,
         update=update_cap,
         delete=delete_cap,
         print=print_cap,
@@ -195,17 +235,23 @@ def assert_quality_inspection_capability(
     *,
     supports_purchase_return: bool = False,
     supports_push_rework: bool = False,
+    supports_push_inbound: bool = False,
     pushed_purchase_return_quantity: float = 0.0,
     pushed_rework_quantity: float = 0.0,
+    pushed_inbound_quantity: float = 0.0,
     certificate_issued: bool = False,
+    fqc_audit_required: bool = False,
 ) -> None:
     caps = derive_quality_inspection_capabilities(
         inspection,
         supports_purchase_return=supports_purchase_return,
         supports_push_rework=supports_push_rework,
+        supports_push_inbound=supports_push_inbound,
         pushed_purchase_return_quantity=pushed_purchase_return_quantity,
         pushed_rework_quantity=pushed_rework_quantity,
+        pushed_inbound_quantity=pushed_inbound_quantity,
         certificate_issued=certificate_issued,
+        fqc_audit_required=fqc_audit_required,
     )
     cap_map = {
         "conduct": caps.conduct,
@@ -216,6 +262,7 @@ def assert_quality_inspection_capability(
         "create_defect": caps.create_defect,
         "push_purchase_return": caps.push_purchase_return,
         "push_rework": caps.push_rework,
+        "push_inbound": caps.push_inbound,
         "update": caps.update,
         "delete": caps.delete,
         "print": caps.print,

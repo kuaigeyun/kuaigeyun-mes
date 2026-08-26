@@ -28,6 +28,7 @@ import { getDemandBusinessModeLabel } from '../../apps/kuaizhizao/utils/business
 import { getDemandTypeLabel } from '../../apps/kuaizhizao/utils/demandType';
 import type { TFunction } from 'i18next';
 import { getDemandComputationLifecycle } from '../../apps/kuaizhizao/utils/demandComputationLifecycle';
+import { getOrderChangeLifecycle } from '../../apps/kuaizhizao/utils/orderChangeLifecycle';
 
 /** 各单据详情 API 按需动态加载，避免列表页误伤该模块时顺带拉起全量 services */
 async function loadQuotation(...args: Parameters<typeof import('../../apps/kuaizhizao/services/quotation').getQuotation>) {
@@ -130,6 +131,13 @@ function briefDocStatus(raw: unknown): string {
   if (raw === null || raw === undefined || raw === '') return '—';
   const label = getStatusLabel(String(raw).trim());
   return label === '-' ? '—' : label;
+}
+
+function briefOrderChangeStatus(record: Record<string, unknown>, t: TFunction): string {
+  const lc = getOrderChangeLifecycle(record, t);
+  const name = (lc.stageName ?? '').trim();
+  if (name && name !== '-') return name;
+  return briefDocStatus(record.status);
 }
 
 function briefComputationStatus(
@@ -438,7 +446,7 @@ async function loadBrief(documentType: string, documentId: number, t: TFunction)
         { key: 'code', label: '变更单号', value: dash(c.change_code) },
         { key: 'source', label: '原采购订单', value: dash(c.source_order_code) },
         { key: 'supplier', label: '供应商', value: dash(c.supplier_name) },
-        { key: 'status', label: '状态', value: briefDocStatus(c.status) },
+        { key: 'status', label: '状态', value: briefOrderChangeStatus(c as Record<string, unknown>, t) },
         { key: 'reason', label: '变更原因', value: dash(c.change_reason) },
         {
           key: 'delta',
@@ -481,8 +489,13 @@ async function loadBrief(documentType: string, documentId: number, t: TFunction)
           title: '单价',
           dataIndex: 'before_price',
           width: 120,
-          render: (_: unknown, row: Record<string, unknown>) =>
-            `${briefAmount(PO, 'unit_price', row.before_price as number)} → ${briefAmount(PO, 'unit_price', row.after_price as number)}`,
+          render: (_: unknown, row: Record<string, unknown>) => (
+            <span>
+              {briefAmount(PO, 'unit_price', row.before_price)}
+              {' → '}
+              {briefAmount(PO, 'unit_price', row.after_price)}
+            </span>
+          ),
         },
         {
           title: '到货日',

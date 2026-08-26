@@ -297,6 +297,22 @@ export const qualityApi = {
         `/apps/kuaizhizao/finished-goods-inspections/${id}/push-to-rework/preview`,
         { method: 'GET' },
       ),
+    pushToInbound: async (
+      id: string,
+      data?: { quantity?: number; warehouse_id?: number },
+    ) =>
+      apiRequest(`/apps/kuaizhizao/finished-goods-inspections/${id}/push-to-inbound`, {
+        method: 'POST',
+        data:
+          data?.quantity != null || data?.warehouse_id != null
+            ? { quantity: data?.quantity, warehouse_id: data?.warehouse_id }
+            : undefined,
+      }),
+    previewPushToInbound: async (id: string) =>
+      apiRequest<PushPreviewResponse>(
+        `/apps/kuaizhizao/finished-goods-inspections/${id}/push-to-inbound/preview`,
+        { method: 'GET' },
+      ),
     listWorkOrderPullCandidates: async (params?: { skip?: number; limit?: number; keyword?: string; code?: string }) =>
       apiRequest<{ data: Array<Record<string, unknown>>; total: number; success: boolean }>(
         '/apps/kuaizhizao/finished-goods-inspections/pull-candidates/work-orders',

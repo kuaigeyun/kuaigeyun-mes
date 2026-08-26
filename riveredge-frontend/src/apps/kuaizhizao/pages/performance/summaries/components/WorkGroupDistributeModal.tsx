@@ -5,6 +5,7 @@
 import React, { useEffect, useState } from 'react';
 import { App, Form, InputNumber, Modal, Select } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { useNumericPrecisionPlaces } from '../../../../../../hooks/useNumericPrecision';
 import { workGroupApi } from '../../../../../master-data/services/factory';
 import type { WorkGroup } from '../../../../../master-data/types/factory';
 import { employeePerformanceApi } from '../../../../services/performance';
@@ -24,6 +25,7 @@ export const WorkGroupDistributeModal: React.FC<WorkGroupDistributeModalProps> =
   onSuccess,
 }) => {
   const { t } = useTranslation();
+  const amountDecimals = useNumericPrecisionPlaces('amount');
   const { message } = App.useApp();
   const [form] = Form.useForm<{ workGroupUuid: string; totalAmount: number }>();
   const [groups, setGroups] = useState<WorkGroup[]>([]);
@@ -103,7 +105,7 @@ export const WorkGroupDistributeModal: React.FC<WorkGroupDistributeModalProps> =
           label={t('app.kuaizhizao.performance.summaries.distributeModal.totalAmount')}
           rules={[{ required: true, message: t('app.kuaizhizao.performance.summaries.distributeModal.totalAmountRequired') }]}
         >
-          <InputNumber min={0.01} precision={2} style={{ width: '100%' }} />
+          <InputNumber min={0.01} precision={amountDecimals} style={{ width: '100%' }} />
         </Form.Item>
         <Form.Item label={t('app.kuaizhizao.performance.summaries.distributeModal.period')}>
           <span>{period || '-'}</span>

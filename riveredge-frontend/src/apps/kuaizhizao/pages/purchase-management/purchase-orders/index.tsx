@@ -335,6 +335,46 @@ function formatAmount(val: unknown): string {
   return (isNaN(num) ? 0 : num).toLocaleString();
 }
 
+/** 采购订单头表 tax_rate 存小数（0.13），表单与详情展示用百分比 */
+function purchaseOrderTaxRateToPercent(raw: unknown): number {
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return n <= 1 ? n * 100 : n;
+}
+
+function purchaseOrderTaxRateToDecimal(percent: unknown): number {
+  const n = Number(percent);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return n / 100;
+}
+
+function computePurchaseOrderHeaderTaxPreview(
+  items: any[],
+  headerTaxRatePercent: number,
+  priceType: string,
+): { goodsExcl: number; taxAmount: number; netAmount: number } {
+  const isInclusive = priceType === 'tax_inclusive';
+  let goodsExcl = 0;
+  let taxAmount = 0;
+  for (const row of items) {
+    const qty = Number(row?.ordered_quantity) || 0;
+    const price = Number(row?.unit_price) || 0;
+    const lineTaxRate = Number(row?.tax_rate ?? headerTaxRatePercent) || 0;
+    const rate = lineTaxRate / 100;
+    if (isInclusive && price > 0 && rate >= 0) {
+      const excl = (qty * price) / (1 + rate);
+      goodsExcl += excl;
+      taxAmount += excl * rate;
+    } else {
+      goodsExcl += qty * price;
+    }
+  }
+  if (!isInclusive) {
+    taxAmount = goodsExcl * ((Number(headerTaxRatePercent) || 0) / 100);
+  }
+  return { goodsExcl, taxAmount, netAmount: goodsExcl + taxAmount };
+}
+
 const ORDER_TYPE_FALLBACK_ITEMS: Pick<DictionaryItem, 'value' | 'label' | 'is_system_managed' | 'sort_order'>[] = [
   { value: '标准采购', label: '标准采购', is_system_managed: true, sort_order: 0 },
   { value: '框架协议', label: '框架协议', is_system_managed: true, sort_order: 1 },
@@ -2026,6 +2066,8 @@ const PurchaseOrdersPage: React.FC = () => {
       const detail = await getPurchaseOrder(orderId);
       setIsEdit(true);
       setCurrentOrder(detail);
+      const headerTaxRatePercent = purchaseOrderTaxRateToPercent(detail.tax_rate);
+      const priceType: PriceTypeValue = headerTaxRatePercent > 0 ? 'tax_inclusive' : 'tax_exclusive';
       const items = (detail.items || []).map((it: any) => ({
         material_id: it.material_id ?? it.materialId,
         material_code: it.material_code || it.materialCode || '',
@@ -2034,7 +2076,7 @@ const PurchaseOrdersPage: React.FC = () => {
         unit: it.unit || '件',
         ordered_quantity: Number(it.ordered_quantity ?? it.orderedQuantity) || 0,
         unit_price: Number(it.unit_price ?? it.unitPrice) || 0,
-        tax_rate: 0,
+        tax_rate: headerTaxRatePercent,
         required_date: it.required_date || it.requiredDate ? dayjs(it.required_date || it.requiredDate) : undefined,
       }));
       window.setTimeout(() => {
@@ -2050,7 +2092,8 @@ const PurchaseOrdersPage: React.FC = () => {
           prepayment_amount: detail.prepayment_amount,
           prepayment_bank_account_id: detail.prepayment_bank_account_id,
           order_type: detail.order_type || '标准采购',
-          price_type: 'tax_exclusive',
+          price_type: priceType,
+          header_tax_rate: headerTaxRatePercent,
           buyer_id: detail.buyer_id,
           buyer_name: detail.buyer_name,
           notes: detail.notes,
@@ -2076,7 +2119,7 @@ const PurchaseOrdersPage: React.FC = () => {
     resetPurchaseOrderFormFieldValues();
     formRef.current?.resetFields();
     window.setTimeout(() => {
-      formRef.current?.setFieldsValue({ items: [defaultOrderItem], price_type: 'tax_exclusive' });
+      formRef.current?.setFieldsValue({ items: [defaultOrderItem], price_type: 'tax_exclusive', header_tax_rate: 0 });
     }, 0);
   }
 
@@ -2520,10 +2563,16 @@ const PurchaseOrdersPage: React.FC = () => {
       });
 
       const totalAmount = itemsPayload.reduce((s: number, it: any) => s + Number(it.total_price), 0);
-      const firstTaxRate = validItems[0] ? Number(validItems[0].tax_rate) || 0 : 0;
-      data.tax_rate = priceType === 'tax_inclusive' ? (firstTaxRate > 1 ? firstTaxRate / 100 : firstTaxRate) : 0;
-      data.tax_amount = totalAmount * data.tax_rate;
+      const headerTaxPercent = Number(data.header_tax_rate) || 0;
+      const lineTaxPercent = validItems[0] ? Number(validItems[0].tax_rate) || headerTaxPercent : headerTaxPercent;
+      const taxRateDecimal =
+        priceType === 'tax_inclusive'
+          ? purchaseOrderTaxRateToDecimal(lineTaxPercent)
+          : purchaseOrderTaxRateToDecimal(headerTaxPercent);
+      data.tax_rate = taxRateDecimal;
+      data.tax_amount = totalAmount * taxRateDecimal;
       data.net_amount = totalAmount + data.tax_amount;
+      delete data.header_tax_rate;
 
       // 计算费用总额
       const feeDetails = normalizeFormListItems<any>(values.fee_details);
@@ -2837,7 +2886,7 @@ const PurchaseOrdersPage: React.FC = () => {
                 >
                   <InputNumber
                     min={0}
-                    precision={2}
+                    precision={amountDecimals}
                     style={{ width: '100%' }}
                     placeholder={t('app.kuaizhizao.purchaseOrder.form.prepaymentAmountPlaceholder')}
                   />
@@ -2888,6 +2937,73 @@ const PurchaseOrdersPage: React.FC = () => {
                     loading={currencyLoading}
                   />
                 </ProForm.Item>
+              </Col>
+            </Row>
+          </div>
+          <div className="document-form-untitled-group">
+            <Row gutter={16}>
+              <Col span={6}>
+                <ProForm.Item
+                  name="header_tax_rate"
+                  label={t('app.kuaizhizao.purchaseOrder.form.taxRatePercent')}
+                  initialValue={0}
+                >
+                  <InputNumber
+                    min={0}
+                    max={100}
+                    precision={2}
+                    style={{ width: '100%' }}
+                    addonAfter="%"
+                    placeholder={t('app.kuaizhizao.purchaseOrder.form.taxRatePercent')}
+                    onChange={(val) => {
+                      const num = Number(val) || 0;
+                      const items = normalizeFormListItems<any>(formRef.current?.getFieldValue('items'));
+                      if (items.length === 0) return;
+                      formRef.current?.setFieldsValue({
+                        items: items.map((it: any) => ({ ...it, tax_rate: num })),
+                        ...(num > 0 ? { price_type: 'tax_inclusive' as PriceTypeValue } : {}),
+                      });
+                    }}
+                  />
+                </ProForm.Item>
+              </Col>
+              <Col span={6}>
+                <AntForm.Item
+                  label={t('app.kuaizhizao.purchaseOrder.col.taxAmount')}
+                  shouldUpdate={(prev: any, curr: any) =>
+                    prev?.items !== curr?.items ||
+                    prev?.header_tax_rate !== curr?.header_tax_rate ||
+                    prev?.price_type !== curr?.price_type
+                  }
+                >
+                  {({ getFieldValue }: any) => {
+                    const preview = computePurchaseOrderHeaderTaxPreview(
+                      normalizeFormListItems<any>(getFieldValue('items')),
+                      Number(getFieldValue('header_tax_rate')) || 0,
+                      getFieldValue('price_type') ?? 'tax_exclusive',
+                    );
+                    return <Typography.Text>¥{formatAmount(preview.taxAmount)}</Typography.Text>;
+                  }}
+                </AntForm.Item>
+              </Col>
+              <Col span={6}>
+                <AntForm.Item
+                  label={t('app.kuaizhizao.purchaseOrder.col.inclAmount')}
+                  shouldUpdate={(prev: any, curr: any) =>
+                    prev?.items !== curr?.items ||
+                    prev?.header_tax_rate !== curr?.header_tax_rate ||
+                    prev?.price_type !== curr?.price_type
+                  }
+                >
+                  {({ getFieldValue }: any) => {
+                    const preview = computePurchaseOrderHeaderTaxPreview(
+                      normalizeFormListItems<any>(getFieldValue('items')),
+                      Number(getFieldValue('header_tax_rate')) || 0,
+                      getFieldValue('price_type') ?? 'tax_exclusive',
+                    );
+                    return <Typography.Text>¥{formatAmount(preview.netAmount)}</Typography.Text>;
+                  }}
+                </AntForm.Item>
               </Col>
             </Row>
           </div>
@@ -3326,7 +3442,11 @@ const PurchaseOrdersPage: React.FC = () => {
                   const errText = first?.errors?.filter(Boolean)[0];
                   messageApi.error(errText || t('components.layoutTemplates.formModal.checkFormHint'));
                 }}
-                initialValues={isCreatePage ? { items: [defaultOrderItem], price_type: 'tax_exclusive' } : undefined}
+                initialValues={
+                  isCreatePage
+                    ? { items: [defaultOrderItem], price_type: 'tax_exclusive', header_tax_rate: 0 }
+                    : undefined
+                }
               >
                 {purchaseOrderFormItemContent}
               </ProForm>

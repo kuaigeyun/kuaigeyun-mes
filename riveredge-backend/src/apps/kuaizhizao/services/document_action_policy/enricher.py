@@ -1421,17 +1421,23 @@ def enrich_quality_inspection_capabilities_on_response(
     *,
     supports_purchase_return: bool = False,
     supports_push_rework: bool = False,
+    supports_push_inbound: bool = False,
     pushed_purchase_return_quantity: float = 0.0,
     pushed_rework_quantity: float = 0.0,
+    pushed_inbound_quantity: float = 0.0,
     certificate_issued: bool = False,
+    fqc_audit_required: bool = False,
 ) -> T:
     caps = derive_quality_inspection_capabilities(
         inspection,
         supports_purchase_return=supports_purchase_return,
         supports_push_rework=supports_push_rework,
+        supports_push_inbound=supports_push_inbound,
         pushed_purchase_return_quantity=pushed_purchase_return_quantity,
         pushed_rework_quantity=pushed_rework_quantity,
+        pushed_inbound_quantity=pushed_inbound_quantity,
         certificate_issued=certificate_issued,
+        fqc_audit_required=fqc_audit_required,
     )
     if hasattr(response, "model_copy"):
         attached = _attach_capabilities_to_response(response, caps)
@@ -1442,6 +1448,8 @@ def enrich_quality_inspection_capabilities_on_response(
             )
         if supports_push_rework:
             qty_updates["pushed_rework_quantity"] = float(pushed_rework_quantity or 0.0)
+        if supports_push_inbound:
+            qty_updates["pushed_inbound_quantity"] = float(pushed_inbound_quantity or 0.0)
         if qty_updates:
             return attached.model_copy(update=qty_updates)
         return attached
@@ -1454,26 +1462,35 @@ def enrich_quality_inspection_list_capabilities(
     *,
     supports_purchase_return: bool = False,
     supports_push_rework: bool = False,
+    supports_push_inbound: bool = False,
     pushed_purchase_return_qty_by_inspection_id: Optional[Dict[int, float]] = None,
     pushed_rework_qty_by_inspection_id: Optional[Dict[int, float]] = None,
+    pushed_inbound_qty_by_inspection_id: Optional[Dict[int, float]] = None,
+    fqc_audit_required: bool = False,
 ) -> List[T]:
     pushed_return_map = pushed_purchase_return_qty_by_inspection_id or {}
     pushed_map = pushed_rework_qty_by_inspection_id or {}
+    pushed_inbound_map = pushed_inbound_qty_by_inspection_id or {}
     out: List[T] = []
     for inspection, resp in zip(inspections, responses):
         pushed_return_qty = 0.0
         pushed_qty = 0.0
+        pushed_inbound_qty = 0.0
         inspection_id = getattr(inspection, "id", None)
         if inspection_id is not None:
             pushed_return_qty = float(pushed_return_map.get(int(inspection_id), 0.0))
             pushed_qty = float(pushed_map.get(int(inspection_id), 0.0))
+            pushed_inbound_qty = float(pushed_inbound_map.get(int(inspection_id), 0.0))
         caps = derive_quality_inspection_capabilities(
             inspection,
             supports_purchase_return=supports_purchase_return,
             supports_push_rework=supports_push_rework,
+            supports_push_inbound=supports_push_inbound,
             pushed_purchase_return_quantity=pushed_return_qty,
             pushed_rework_quantity=pushed_qty,
+            pushed_inbound_quantity=pushed_inbound_qty,
             certificate_issued=bool(getattr(inspection, "certificate_issued", False)),
+            fqc_audit_required=fqc_audit_required,
         )
         if hasattr(resp, "model_copy"):
             attached = _attach_capabilities_to_response(resp, caps)
@@ -1482,6 +1499,8 @@ def enrich_quality_inspection_list_capabilities(
                 qty_updates["pushed_purchase_return_quantity"] = pushed_return_qty
             if supports_push_rework:
                 qty_updates["pushed_rework_quantity"] = pushed_qty
+            if supports_push_inbound:
+                qty_updates["pushed_inbound_quantity"] = pushed_inbound_qty
             if qty_updates:
                 attached = attached.model_copy(update=qty_updates)
             out.append(attached)

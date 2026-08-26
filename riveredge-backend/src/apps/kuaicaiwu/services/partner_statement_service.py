@@ -1305,9 +1305,7 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
 
     async def export_pdf(self, obj: PartnerStatement) -> Tuple[bytes, str]:
         html = await self.render_html(obj)
-        try:
-            from apps.kuaizhizao.services.print_service import _html_to_pdf_bytes_playwright_async
-            pdf_bytes = await _html_to_pdf_bytes_playwright_async(html)
-            return pdf_bytes, "application/pdf"
-        except Exception:
-            return html.encode("utf-8"), "text/html; charset=utf-8"
+        from apps.kuaizhizao.services.print_service import html_to_pdf_bytes
+
+        pdf_bytes, _ = await html_to_pdf_bytes(html)
+        return pdf_bytes, "application/pdf"

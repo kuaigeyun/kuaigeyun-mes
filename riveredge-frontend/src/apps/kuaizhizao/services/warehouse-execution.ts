@@ -336,6 +336,29 @@ export const warehouseApi = {
     update: async (id: number, data: any) => apiRequest(`/apps/kuaizhizao/material-calls/${id}`, { method: 'PATCH', data }),
     get: async (id: number) => apiRequest(`/apps/kuaizhizao/material-calls/${id}`, { method: 'GET' }),
     cancel: async (id: number) => apiRequest(`/apps/kuaizhizao/material-calls/${id}/cancel`, { method: 'POST' }),
+    previewPushProductionPicking: async (id: number) =>
+      apiRequest(`/apps/kuaizhizao/material-calls/${id}/push-production-picking/preview`, { method: 'GET' }),
+    pushProductionPicking: async (
+      id: number,
+      data: {
+        material_call_id: number;
+        warehouse_id?: number;
+        warehouse_name?: string;
+        picker_name?: string;
+        notes?: string;
+        lines: Array<{
+          material_id: number;
+          material_code: string;
+          material_name: string;
+          material_unit: string;
+          issue_quantity: number;
+          warehouse_id?: number;
+          warehouse_name?: string;
+          batch_number?: string;
+          serial_numbers?: string[];
+        }>;
+      },
+    ) => apiRequest(`/apps/kuaizhizao/material-calls/${id}/push-production-picking`, { method: 'POST', data }),
   },
   otherInbound: {
     list: async (params?: any) => apiRequest('/apps/kuaizhizao/other-inbounds', { method: 'GET', params }),

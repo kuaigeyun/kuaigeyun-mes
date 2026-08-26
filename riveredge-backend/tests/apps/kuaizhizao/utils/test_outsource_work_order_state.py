@@ -11,6 +11,7 @@ from apps.kuaizhizao.utils.outsource_work_order_state import (
     apply_outsource_work_order_receipt_completion,
     outsource_work_order_has_execution_activity,
     resolve_outsource_work_order_product_unit,
+    resolve_outsource_work_order_received_delta,
 )
 
 
@@ -26,6 +27,12 @@ def test_execution_start_from_released():
     assert changed is True
     assert owo.status == "in_progress"
     assert owo.actual_start_date == datetime(2026, 7, 10, 9, 0, 0)
+
+
+def test_resolve_received_delta_qualified_only():
+    assert resolve_outsource_work_order_received_delta(Decimal("2.2")) == Decimal("2.2")
+    assert resolve_outsource_work_order_received_delta(0) == Decimal("0")
+    assert resolve_outsource_work_order_received_delta(None) == Decimal("0")
 
 
 def test_receipt_completion_when_fully_received():

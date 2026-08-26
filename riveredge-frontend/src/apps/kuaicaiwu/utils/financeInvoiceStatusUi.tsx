@@ -1,3 +1,4 @@
+import { formatCurrencyAmount } from '../../../utils/format';
 import React from 'react';
 import { Space, Typography } from 'antd';
 import type { TFunction } from 'i18next';
@@ -59,7 +60,7 @@ export function renderPayableInvoiceStatusTag(
 }
 
 function formatMoney(value: number | undefined): string {
-  return `¥${Number(value ?? 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`;
+  return formatCurrencyAmount(value ?? 0);
 }
 
 export type FinanceArApInvoiceStatusDetailProps = {

@@ -10,6 +10,7 @@
 
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNumericPrecisionPlaces } from '../../../../../hooks/useNumericPrecision';
 import { useSearchParams } from 'react-router-dom';
 import {
   ActionType,
@@ -243,6 +244,7 @@ interface MaterialCostComparisonResult {
 
 const CostCalculationPage: React.FC = () => {
   const { t } = useTranslation();
+  const amountDecimals = useNumericPrecisionPlaces('amount');
   const { message: messageApi } = App.useApp();
   const [searchParams, setSearchParams] = useSearchParams();
   const { cat: rawCat, sub: rawSub } = parseLocation(searchParams);
@@ -1104,10 +1106,10 @@ const CostCalculationPage: React.FC = () => {
                   <Card title={t('app.kuaicaiwu.costCalculation.productCompareResult')} style={{ marginTop: 16 }}>
                     <Row gutter={16}>
                       <Col span={12}>
-                        <Statistic title={t('app.kuaicaiwu.costCommon.standardCost')} value={compareData.standard_cost} prefix="¥" precision={2} />
+                        <Statistic title={t('app.kuaicaiwu.costCommon.standardCost')} value={compareData.standard_cost} prefix="¥" precision={amountDecimals} />
                       </Col>
                       <Col span={12}>
-                        <Statistic title={t('app.kuaicaiwu.costCommon.actualCost')} value={compareData.actual_cost} prefix="¥" precision={2} />
+                        <Statistic title={t('app.kuaicaiwu.costCommon.actualCost')} value={compareData.actual_cost} prefix="¥" precision={amountDecimals} />
                       </Col>
                     </Row>
                     <Row gutter={16} style={{ marginTop: 16 }}>
@@ -1116,7 +1118,7 @@ const CostCalculationPage: React.FC = () => {
                           title={t('app.kuaicaiwu.costCalculation.costDifference')}
                           value={compareData.cost_difference}
                           prefix="¥"
-                          precision={2}
+                          precision={amountDecimals}
                           styles={{ content: {color: compareData.cost_difference > 0 ? '#cf1322' : '#3f8600' } }}
                         />
                       </Col>
@@ -1125,7 +1127,7 @@ const CostCalculationPage: React.FC = () => {
                           title={t('app.kuaicaiwu.costCalculation.costDifferenceRate')}
                           value={compareData.cost_difference_rate}
                           suffix="%"
-                          precision={2}
+                          precision={amountDecimals}
                           styles={{ content: {color: compareData.cost_difference_rate > 0 ? '#cf1322' : '#3f8600' } }}
                         />
                       </Col>
@@ -1287,9 +1289,9 @@ const CostCalculationPage: React.FC = () => {
                     <Row gutter={16} style={{ marginBottom: 24 }}>
                       <Col span={12}>
                         <Card title={t('app.kuaicaiwu.costCommon.standardCost')} size="small">
-                          <Statistic title={t('app.kuaicaiwu.costCommon.col.totalCost')} value={materialCompareResult.standard_cost.total_cost} prefix="¥" precision={2} />
+                          <Statistic title={t('app.kuaicaiwu.costCommon.col.totalCost')} value={materialCompareResult.standard_cost.total_cost} prefix="¥" precision={amountDecimals} />
                           <Divider style={{ margin: '12px 0' }} />
-                          <Statistic title={t('app.kuaicaiwu.costCommon.col.unitCost')} value={materialCompareResult.standard_cost.unit_cost} prefix="¥" precision={2} />
+                          <Statistic title={t('app.kuaicaiwu.costCommon.col.unitCost')} value={materialCompareResult.standard_cost.unit_cost} prefix="¥" precision={amountDecimals} />
                           <div style={{ marginTop: 12, fontSize: '12px', color: '#666' }}>
                             {t('app.kuaicaiwu.costCommon.calculationTypeLabel', {
                               type: formatCalculationType(materialCompareResult.standard_cost.calculation_type, t),
@@ -1299,9 +1301,9 @@ const CostCalculationPage: React.FC = () => {
                       </Col>
                       <Col span={12}>
                         <Card title={t('app.kuaicaiwu.costCommon.actualCost')} size="small">
-                          <Statistic title={t('app.kuaicaiwu.costCommon.col.totalCost')} value={materialCompareResult.actual_cost.total_cost} prefix="¥" precision={2} />
+                          <Statistic title={t('app.kuaicaiwu.costCommon.col.totalCost')} value={materialCompareResult.actual_cost.total_cost} prefix="¥" precision={amountDecimals} />
                           <Divider style={{ margin: '12px 0' }} />
-                          <Statistic title={t('app.kuaicaiwu.costCommon.col.unitCost')} value={materialCompareResult.actual_cost.unit_cost} prefix="¥" precision={2} />
+                          <Statistic title={t('app.kuaicaiwu.costCommon.col.unitCost')} value={materialCompareResult.actual_cost.unit_cost} prefix="¥" precision={amountDecimals} />
                           <div style={{ marginTop: 12, fontSize: '12px', color: '#666' }}>
                             {t('app.kuaicaiwu.costCommon.calculationTypeLabel', {
                               type: formatCalculationType(materialCompareResult.actual_cost.calculation_type, t),
@@ -1409,17 +1411,17 @@ const CostCalculationPage: React.FC = () => {
                 <Row gutter={16}>
                   <Col span={8}>
                     <Card>
-                      <Statistic title={t('app.kuaicaiwu.costCommon.col.materialCost')} value={analyzeData!.cost_composition?.材料成本 || 0} prefix="¥" precision={2} />
+                      <Statistic title={t('app.kuaicaiwu.costCommon.col.materialCost')} value={analyzeData!.cost_composition?.材料成本 || 0} prefix="¥" precision={amountDecimals} />
                     </Card>
                   </Col>
                   <Col span={8}>
                     <Card>
-                      <Statistic title={t('app.kuaicaiwu.costCommon.col.laborCost')} value={analyzeData!.cost_composition?.人工成本 || 0} prefix="¥" precision={2} />
+                      <Statistic title={t('app.kuaicaiwu.costCommon.col.laborCost')} value={analyzeData!.cost_composition?.人工成本 || 0} prefix="¥" precision={amountDecimals} />
                     </Card>
                   </Col>
                   <Col span={8}>
                     <Card>
-                      <Statistic title={t('app.kuaicaiwu.costCommon.col.manufacturingCost')} value={analyzeData!.cost_composition?.制造费用 || 0} prefix="¥" precision={2} />
+                      <Statistic title={t('app.kuaicaiwu.costCommon.col.manufacturingCost')} value={analyzeData!.cost_composition?.制造费用 || 0} prefix="¥" precision={amountDecimals} />
                     </Card>
                   </Col>
                 </Row>

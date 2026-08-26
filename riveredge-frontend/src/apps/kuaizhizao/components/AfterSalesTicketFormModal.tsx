@@ -20,6 +20,7 @@ import {
 } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import { useNumericPrecision } from '../../../hooks/useNumericPrecision';
 import dayjs from 'dayjs';
 import { FormModalTemplate, MODAL_CONFIG } from '../../../components/layout-templates';
 import { UniDropdown } from '../../../components/uni-dropdown';
@@ -139,6 +140,7 @@ export const AfterSalesTicketFormModal: React.FC<AfterSalesTicketFormModalProps>
   preset = null,
 }) => {
   const { t } = useTranslation();
+  const { price: priceDecimals, amount: amountDecimals } = useNumericPrecision();
   const { message } = App.useApp();
   const [form] = Form.useForm();
   const modalCustomerId = Form.useWatch('customer_id', form);
@@ -417,7 +419,7 @@ export const AfterSalesTicketFormModal: React.FC<AfterSalesTicketFormModalProps>
               size={DOCUMENT_DETAIL_CONTROL_SIZE}
               style={{ width: '100%' }}
               min={0}
-              precision={2}
+              precision={priceDecimals}
               prefix="¥"
             />
           </Form.Item>

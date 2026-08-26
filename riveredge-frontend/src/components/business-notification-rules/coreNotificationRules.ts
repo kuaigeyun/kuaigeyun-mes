@@ -9,6 +9,11 @@ export const CORE_NOTIFICATION_DOCUMENT_OPTIONS = [
   },
   { value: 'quotation', labelKey: 'pages.system.configCenter.notification.document.quotation', fallback: '报价单' },
   { value: 'purchase_order', labelKey: 'pages.system.configCenter.notification.document.purchase_order', fallback: '采购订单' },
+  {
+    value: 'purchase_order_change',
+    labelKey: 'pages.system.configCenter.notification.document.purchase_order_change',
+    fallback: '采购变更单',
+  },
   { value: 'work_order', labelKey: 'pages.system.configCenter.notification.document.work_order', fallback: '工单' },
   {
     value: 'quality_inspection',
@@ -110,6 +115,14 @@ export const CORE_NOTIFICATION_ACTION_OPTIONS: Record<
       value: 'arrival_overdue',
       labelKey: 'pages.system.configCenter.notification.action.purchase_order.arrival_overdue',
       fallback: '到货逾期',
+    },
+  ],
+  purchase_order_change: [
+    { value: 'submitted', labelKey: 'common.submit', fallback: '提交' },
+    {
+      value: 'approved',
+      labelKey: 'pages.system.configCenter.notification.action.purchase_order_change.approved',
+      fallback: '审核通过',
     },
   ],
   work_order: [

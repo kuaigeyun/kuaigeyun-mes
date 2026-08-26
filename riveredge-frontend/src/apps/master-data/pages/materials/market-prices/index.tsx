@@ -4,6 +4,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNumericPrecision } from '../../../../../hooks/useNumericPrecision';
 import { ActionType, ProColumns, ProFormDatePicker, ProFormDigit, ProFormSelect, ProFormText } from '@ant-design/pro-components';
 import { App, Button, InputNumber, Modal, Popconfirm, Space, Table } from 'antd';
 import { DeleteOutlined, EditOutlined } from '@ant-design/icons';
@@ -64,7 +65,7 @@ const TodayPriceInput: React.FC<{
   return (
     <InputNumber
       min={0}
-      precision={2}
+      precision={priceDecimals}
       value={value}
       disabled={disabled}
       placeholder={placeholder}
@@ -78,6 +79,7 @@ const TodayPriceInput: React.FC<{
 
 const MarketPricesPage: React.FC = () => {
   const { t } = useTranslation();
+  const { price: priceDecimals, amount: amountDecimals } = useNumericPrecision();
   const { message: messageApi } = App.useApp();
   const perms = useResourcePermissions('master-data:material');
   const actionRef = useRef<ActionType>(null);

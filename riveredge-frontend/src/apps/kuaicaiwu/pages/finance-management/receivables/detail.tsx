@@ -3,6 +3,7 @@ import { ProDescriptions } from '@ant-design/pro-components';
 import { Button, Statistic, Row, Col, Spin, Empty, Typography, Space } from 'antd';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { useNumericPrecisionPlaces } from '../../../../../hooks/useNumericPrecision';
 import { useLinkedDocumentDetail } from '../../../../../components/linked-document-detail';
 import { receivableService } from '../../../services/finance/receivable';
 import { Receivable } from '../../../types/finance/receivable';
@@ -32,6 +33,7 @@ const RECEIPT_RESOURCE = 'kuaicaiwu:receipt';
 
 const ReceivableDetail: React.FC = () => {
   const { t } = useTranslation();
+  const amountDecimals = useNumericPrecisionPlaces('amount');
   const linked = useLinkedDocumentDetail();
   const receiptPerms = useResourcePermissions(RECEIPT_RESOURCE);
   const salesInvoicePerms = useResourcePermissions('kuaicaiwu:sales-invoice');
@@ -190,13 +192,13 @@ const ReceivableDetail: React.FC = () => {
               </ProDescriptions>
               <Row gutter={24} style={{ marginTop: 16 }}>
                 <Col xs={24} sm={8}>
-                  <Statistic title={t(`${P}.col.totalAmount`)} value={data.total_amount} precision={2} prefix="¥" />
+                  <Statistic title={t(`${P}.col.totalAmount`)} value={data.total_amount} precision={amountDecimals} prefix="¥" />
                 </Col>
                 <Col xs={24} sm={8}>
-                  <Statistic title={t(`${P}.col.receivedAmount`)} value={data.received_amount} precision={2} prefix="¥" styles={{ content: {color: '#3f8600' } }} />
+                  <Statistic title={t(`${P}.col.receivedAmount`)} value={data.received_amount} precision={amountDecimals} prefix="¥" styles={{ content: {color: '#3f8600' } }} />
                 </Col>
                 <Col xs={24} sm={8}>
-                  <Statistic title={t(`${P}.col.remainingAmount`)} value={data.remaining_amount} precision={2} prefix="¥" styles={{ content: {color: '#cf1322' } }} />
+                  <Statistic title={t(`${P}.col.remainingAmount`)} value={data.remaining_amount} precision={amountDecimals} prefix="¥" styles={{ content: {color: '#cf1322' } }} />
                 </Col>
               </Row>
               {Number(data.refunded_amount ?? 0) > 0 ? (
@@ -205,7 +207,7 @@ const ReceivableDetail: React.FC = () => {
                     <Statistic
                       title={t(`${P}.col.refundedAmount`)}
                       value={data.refunded_amount ?? 0}
-                      precision={2}
+                      precision={amountDecimals}
                       prefix="¥"
                       styles={{ content: { color: '#d48806' } }}
                     />
@@ -214,13 +216,13 @@ const ReceivableDetail: React.FC = () => {
               ) : null}
               <Row gutter={24} style={{ marginTop: 16 }}>
                 <Col xs={24} sm={8}>
-                  <Statistic title={t(`${P}.col.invoicedAmount`)} value={data.invoiced_amount ?? 0} precision={2} prefix="¥" />
+                  <Statistic title={t(`${P}.col.invoicedAmount`)} value={data.invoiced_amount ?? 0} precision={amountDecimals} prefix="¥" />
                 </Col>
                 <Col xs={24} sm={8}>
                   <Statistic
                     title={t(`${P}.col.remainingInvoiceAmount`)}
                     value={data.remaining_invoice_amount ?? 0}
-                    precision={2}
+                    precision={amountDecimals}
                     prefix="¥"
                     styles={{
                       content: {

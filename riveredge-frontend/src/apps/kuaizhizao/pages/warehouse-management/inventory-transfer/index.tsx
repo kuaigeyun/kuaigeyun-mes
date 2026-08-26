@@ -9,6 +9,7 @@
 
 import React, { useRef, useState, useMemo, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNumericPrecisionPlaces } from '../../../../../hooks/useNumericPrecision';
 import { useSearchParams } from 'react-router-dom';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormDigit } from '@ant-design/pro-components';
@@ -112,6 +113,7 @@ const defaultTransferItem = {
 
 const InventoryTransferPage: React.FC = () => {
   const { t } = useTranslation();
+  const quantityDecimals = useNumericPrecisionPlaces('quantity');
   const [searchParams] = useSearchParams();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
@@ -970,7 +972,7 @@ const InventoryTransferPage: React.FC = () => {
                         rules={[{ required: true, message: t('app.kuaizhizao.warehouseCommon.required') }, { type: 'number', min: 0.01, message: t('app.kuaizhizao.batchingCenter.qtyGtZero') }]}
                         style={{ margin: 0 }}
                       >
-                        <InputNumber placeholder={t('common.quantity')} min={0} precision={2} style={{ width: '100%' }} size="small" />
+                        <InputNumber placeholder={t('common.quantity')} min={0} precision={quantityDecimals} style={{ width: '100%' }} size="small" />
                       </AntForm.Item>
                     ),
                   },

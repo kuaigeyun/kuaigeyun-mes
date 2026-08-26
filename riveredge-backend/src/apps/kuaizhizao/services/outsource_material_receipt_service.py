@@ -38,7 +38,21 @@ from apps.kuaizhizao.utils.outsource_work_order_state import (
     apply_outsource_work_order_execution_start,
     apply_outsource_work_order_receipt_completion,
     resolve_outsource_work_order_product_unit,
+    resolve_outsource_work_order_received_delta,
 )
+
+
+def resolve_outsource_material_receipt_amount(
+    *,
+    unit_price: Optional[Decimal],
+    qualified_quantity: Decimal,
+    quantity: Decimal,
+) -> tuple[Decimal, Decimal]:
+    """委外收货金额真源：合格数量优先，否则收货数量 × 委外工单单价。"""
+    unit_price_dec = Decimal(str(unit_price or 0))
+    receipt_qty = qualified_quantity if qualified_quantity > 0 else quantity
+    total_amount = (receipt_qty * unit_price_dec).quantize(Decimal("0.01"))
+    return unit_price_dec, total_amount
 
 
 async def enrich_outsource_docs_with_supplier(
@@ -46,7 +60,7 @@ async def enrich_outsource_docs_with_supplier(
     docs: List[Any],
     responses: List[Any],
 ) -> List[Any]:
-    """为委外收货/退料/退货列表补齐委外供应商（来自关联委外工单）。"""
+    """为委外收货/退料/退货补齐委外工单上下文（供应商、委外产品编码/名称）。"""
     if not docs or not responses:
         return responses
 
@@ -64,26 +78,32 @@ async def enrich_outsource_docs_with_supplier(
         id__in=list(owo_ids),
         deleted_at__isnull=True,
     ).all()
-    supplier_by_owo: Dict[int, Dict[str, Any]] = {}
+    context_by_owo: Dict[int, Dict[str, Any]] = {}
     for owo in work_orders:
-        name = str(getattr(owo, "supplier_name", None) or "").strip()
-        if not name:
-            continue
-        supplier_by_owo[int(owo.id)] = {
-            "supplier_id": getattr(owo, "supplier_id", None),
-            "supplier_code": getattr(owo, "supplier_code", None),
-            "supplier_name": name,
-        }
+        ctx: Dict[str, Any] = {}
+        product_code = str(getattr(owo, "product_code", None) or "").strip()
+        product_name = str(getattr(owo, "product_name", None) or "").strip()
+        if product_code:
+            ctx["product_code"] = product_code
+        if product_name:
+            ctx["product_name"] = product_name
+        supplier_name = str(getattr(owo, "supplier_name", None) or "").strip()
+        if supplier_name:
+            ctx["supplier_id"] = getattr(owo, "supplier_id", None)
+            ctx["supplier_code"] = getattr(owo, "supplier_code", None)
+            ctx["supplier_name"] = supplier_name
+        if ctx:
+            context_by_owo[int(owo.id)] = ctx
 
     enriched: List[Any] = []
     for doc, resp in zip(docs, responses):
         owo_id = int(getattr(doc, "outsource_work_order_id", 0) or 0)
-        supplier = supplier_by_owo.get(owo_id)
-        if not supplier:
+        ctx = context_by_owo.get(owo_id)
+        if not ctx:
             enriched.append(resp)
             continue
         if hasattr(resp, "model_copy"):
-            enriched.append(resp.model_copy(update=supplier))
+            enriched.append(resp.model_copy(update=ctx))
         else:
             enriched.append(resp)
     return enriched
@@ -107,7 +127,7 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
         tenant_id: int,
         outsource_work_order_id: int,
     ) -> OutsourceMaterialReceiptPreviewResponse:
-        """委外收货预览：委外数量 / 已收 / 待收。"""
+        """委外收货预览：委外数量 / 已收（合格）/ 待收。"""
         owo = await OutsourceWorkOrder.filter(
             tenant_id=tenant_id,
             id=outsource_work_order_id,
@@ -281,13 +301,21 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
                 ordered_qty = Decimal(str(locked_work_order.quantity or 0))
                 received_qty = Decimal(str(locked_work_order.received_quantity or 0))
                 pending_qty = max(Decimal("0"), ordered_qty - received_qty)
-                if receipt_data.quantity > pending_qty:
+                qualified_delta = resolve_outsource_work_order_received_delta(
+                    receipt_data.qualified_quantity,
+                )
+                if qualified_delta > pending_qty:
                     raise ValidationError(
-                        f"收货数量 {receipt_data.quantity} 不能超过待收数量 {pending_qty}"
+                        f"合格数量 {qualified_delta} 不能超过待收数量 {pending_qty}"
                     )
 
                 code = receipt_data.code or await self._generate_outsource_receipt_code(tenant_id)
                 now = resolve_business_datetime()
+                unit_price, total_amount = resolve_outsource_material_receipt_amount(
+                    unit_price=locked_work_order.unit_price,
+                    qualified_quantity=receipt_data.qualified_quantity,
+                    quantity=receipt_data.quantity,
+                )
                 material_receipt = await OutsourceMaterialReceipt.create(
                     tenant_id=tenant_id,
                     uuid=str(uuid.uuid4()),
@@ -301,6 +329,8 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
                     material_waste_qty=receipt_data.material_waste_qty,
                     nonconformance_reason=receipt_data.nonconformance_reason,
                     unit=receipt_data.unit,
+                    unit_price=unit_price,
+                    total_amount=total_amount,
                     warehouse_id=receipt_data.warehouse_id,
                     warehouse_name=receipt_data.warehouse_name,
                     location_id=receipt_data.location_id,
@@ -316,7 +346,7 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
                 )
 
                 locked_work_order.received_quantity = (
-                    (locked_work_order.received_quantity or Decimal("0")) + receipt_data.quantity
+                    (locked_work_order.received_quantity or Decimal("0")) + qualified_delta
                 )
                 locked_work_order.qualified_quantity = (
                     (locked_work_order.qualified_quantity or Decimal("0")) + receipt_data.qualified_quantity
@@ -488,9 +518,7 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
         ):
             return
 
-        receipt_qty = Decimal(str(receipt_data.qualified_quantity or receipt_data.quantity or 0))
-        unit_price = Decimal(str(outsource_work_order.unit_price or 0))
-        total_amount = (receipt_qty * unit_price).quantize(Decimal("0.01"))
+        total_amount = Decimal(str(material_receipt.total_amount or 0))
         if total_amount <= 0:
             return
 
@@ -639,7 +667,9 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
 
         await self._normalize_legacy_draft_receipts([receipt])
 
-        return OutsourceMaterialReceiptResponse.model_validate(receipt)
+        resp = OutsourceMaterialReceiptResponse.model_validate(receipt)
+        enriched = await enrich_outsource_docs_with_supplier(tenant_id, [receipt], [resp])
+        return enriched[0]
 
     async def complete_material_receipt(
         self,

@@ -55,14 +55,14 @@ function renderScalarCostField(key: string, val: unknown): React.ReactNode {
   if (typeof val === 'boolean') return val ? '是' : '否';
   if (typeof val === 'number' && Number.isFinite(val)) {
     if (isMoneyLikeKey(key)) {
-      return `¥${val.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`;
+      return formatCurrencyAmount(val);
     }
     return val.toLocaleString('zh-CN', { maximumFractionDigits: 6 });
   }
   if (typeof val === 'string') {
     const n = Number(val);
     if (val.trim() !== '' && !Number.isNaN(n) && isMoneyLikeKey(key)) {
-      return `¥${n.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`;
+      return formatCurrencyAmount(n);
     }
     return val;
   }

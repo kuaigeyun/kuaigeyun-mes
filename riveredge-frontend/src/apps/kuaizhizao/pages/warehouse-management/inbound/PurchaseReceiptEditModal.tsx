@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { FormModalTemplate, MODAL_CONFIG, WAREHOUSE_FORM_DETAIL_TABLE_FRAME_STYLES } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
 import { formatQuantity } from '../../../../../utils/format';
+import { useNumericPrecisionPlaces } from '../../../../../hooks/useNumericPrecision';
 import { appendWarehouseLineAmountColumns } from '../shared/warehouseAmountDisplay';
 import {
   isInboundEditable,
@@ -56,6 +57,7 @@ export const PurchaseReceiptEditModal: React.FC<PurchaseReceiptEditModalProps> =
   onSuccess,
 }) => {
   const { t } = useTranslation();
+  const quantityDecimals = useNumericPrecisionPlaces('quantity');
   const { message: messageApi } = App.useApp();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -228,7 +230,7 @@ export const PurchaseReceiptEditModal: React.FC<PurchaseReceiptEditModalProps> =
               return (
                 <InputNumber
                   min={0.01}
-                  precision={2}
+                  precision={quantityDecimals}
                   value={editableReceiptQuantities[rid] ?? Number(row.receipt_quantity ?? 0)}
                   onChange={(v) =>
                     setEditableReceiptQuantities((prev) => ({ ...prev, [rid]: Number(v) || 0 }))
@@ -250,7 +252,7 @@ export const PurchaseReceiptEditModal: React.FC<PurchaseReceiptEditModalProps> =
         true,
         -3,
       ),
-    [editableReceiptQuantities, t],
+    [editableReceiptQuantities, quantityDecimals, t],
   );
 
   return (

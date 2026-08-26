@@ -128,6 +128,7 @@ import { coerceFormDate, formDateFormItemProps, formDateRangeFormItemProps } fro
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
 import { useTranslation } from 'react-i18next';
+import { useNumericPrecision } from '../../../../../hooks/useNumericPrecision';
 import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
@@ -620,6 +621,7 @@ const salesContractEditPath = (id: number) => `${SALES_CONTRACT_LIST_PATH}/${id}
 
 const QuotationsPage: React.FC = () => {
   const { t, i18n } = useTranslation();
+  const { quantity: quantityDecimals, price: priceDecimals, amount: amountDecimals } = useNumericPrecision();
   const pushToSalesOrderAction = resolveKuaizhizaoDocumentAction(t, 'sales_order.pull_from_quotation');
   const pushToSalesContractAction = resolveKuaizhizaoDocumentAction(t, 'sales_contract.pull_from_quotation');
   const pushToSalesReviewAction = resolveKuaizhizaoDocumentAction(t, 'sales_review.pull_from_quotation');
@@ -3402,7 +3404,7 @@ const QuotationsPage: React.FC = () => {
                             <InputNumber
                               placeholder={t('common.quantity')}
                               min={0.01}
-                              precision={2}
+                              precision={quantityDecimals}
                               style={{ width: '100%' }}
                               size={DOCUMENT_DETAIL_CONTROL_SIZE}
                             />
@@ -3491,7 +3493,7 @@ const QuotationsPage: React.FC = () => {
                                         : t('app.kuaizhizao.salesOrder.unitPricePlaceholder')
                                     }
                                     min={0}
-                                    precision={2}
+                                    precision={priceDecimals}
                                     prefix="¥"
                                     style={{ width: '100%' }}
                                     size={DOCUMENT_DETAIL_CONTROL_SIZE}
@@ -3613,7 +3615,7 @@ const QuotationsPage: React.FC = () => {
                                   <InputNumber
                                     placeholder={t('app.kuaizhizao.salesOrder.inclAmountPlaceholder')}
                                     min={0}
-                                    precision={2}
+                                    precision={amountDecimals}
                                     prefix="¥"
                                     style={{ width: '100%' }}
                                     size={DOCUMENT_DETAIL_CONTROL_SIZE}

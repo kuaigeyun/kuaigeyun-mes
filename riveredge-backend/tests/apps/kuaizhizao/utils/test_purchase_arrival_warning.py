@@ -9,6 +9,7 @@ from apps.kuaizhizao.utils.purchase_arrival_warning import (
     compute_day_offset,
     compute_warning_level,
     enrich_line_warning_fields,
+    resolve_arrival_processing_status,
 )
 
 
@@ -37,6 +38,36 @@ def test_compute_day_offset():
     today = date(2026, 8, 23)
     assert compute_day_offset(date(2026, 8, 26), today) == 3
     assert compute_day_offset(date(2026, 8, 20), today) == -3
+
+
+def test_resolve_arrival_processing_status_change_pending_when_po_change_pending():
+    assert (
+        resolve_arrival_processing_status(
+            delay_status="change_generated",
+            change_order_id=10,
+            change_order_status="PENDING_REVIEW",
+        )
+        == "change_pending"
+    )
+
+
+def test_resolve_arrival_processing_status_changed_only_when_applied():
+    assert (
+        resolve_arrival_processing_status(
+            delay_status="APPLIED",
+            change_order_id=10,
+            change_order_status="PENDING_REVIEW",
+        )
+        == "change_pending"
+    )
+    assert (
+        resolve_arrival_processing_status(
+            delay_status="change_generated",
+            change_order_id=10,
+            change_order_status="APPLIED",
+        )
+        == "changed"
+    )
 
 
 def test_enrich_line_warning_fields():

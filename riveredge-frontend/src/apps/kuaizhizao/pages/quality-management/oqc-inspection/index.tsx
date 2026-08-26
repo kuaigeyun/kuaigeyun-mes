@@ -92,6 +92,10 @@ import {
   type QualityPullCandidateBase,
 } from '../components/qualityPullQueryColumns';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
+import {
+  buildOqcInspectionExportColumns,
+  mapOqcInspectionExportRows,
+} from '../components/qualityInspectionExport';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 const OQC_RESOURCE = 'kuaizhizao:quality-management-oqc-inspection';
@@ -626,8 +630,9 @@ const OQCInspectionPage: React.FC = () => {
                 return;
               }
               await downloadRecordsAsXlsx(
-                items as Array<Record<string, unknown>>,
+                mapOqcInspectionExportRows(t, items as Array<Record<string, unknown>>),
                 `${t('app.kuaizhizao.quality.common.entity.oqcInspection')}_${todaySiteDateString()}.xlsx`,
+                { columns: buildOqcInspectionExportColumns(t) },
               );
               messageApi.success(t('common.exportCountSuccess', { count: items.length }));
             } catch (e: any) {

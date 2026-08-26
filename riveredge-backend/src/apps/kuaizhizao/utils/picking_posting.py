@@ -7,7 +7,13 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Iterable, List, Optional, Sequence
+
+from apps.kuaizhizao.utils.mrp_quantity import MRP_QTY_STEP, mrp_qty
+
+# 防超发容差：允许在 BOM 上限基础上略超 1%（与历史口径一致，但用 Decimal 计算）
+OVERPICK_TOLERANCE_RATIO = Decimal("1.01")
 
 # 历史叫料完成自动生成领料单的备注特征（主仓→线边转移，非正式发料）
 _STAGING_PICKING_NOTE_MARKERS = (
@@ -44,3 +50,31 @@ def exclude_staging_picking_ids(
 ) -> List[int]:
     staging = {int(x) for x in staging_ids}
     return [int(x) for x in picking_ids if int(x) not in staging]
+
+
+def exceeds_work_order_pick_limit(total_attempt: Decimal, allowed: Decimal) -> bool:
+    """
+    工单领料是否超出 BOM 配方上限（含 1% 容差）。
+
+    全程 Decimal + mrp_qty，避免 float(0.29) * 1.01 与 0.29 比较误拦。
+    """
+    total = mrp_qty(total_attempt)
+    limit = mrp_qty(allowed)
+    if limit <= 0:
+        return total > 0
+    cap = mrp_qty(limit * OVERPICK_TOLERANCE_RATIO)
+    if total <= cap:
+        return False
+    # 超出容差但在 1 个数量步长内：视为显示精度内相等，不拦截
+    if total - cap <= MRP_QTY_STEP:
+        return False
+    return True
+
+
+def format_pick_limit_qty(value: Decimal) -> str:
+    """防超发提示数量：去尾零，最多四位小数。"""
+    q = mrp_qty(value)
+    text = format(q, "f")
+    if "." in text:
+        text = text.rstrip("0").rstrip(".")
+    return text or "0"

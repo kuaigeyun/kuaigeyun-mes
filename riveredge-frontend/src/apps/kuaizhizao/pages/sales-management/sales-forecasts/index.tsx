@@ -15,6 +15,7 @@ import { PlusOutlined, DeleteOutlined, EditOutlined, AppstoreAddOutlined, Import
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useLeaveFormTab } from '../../../../../components/uni-tabs/navigateClosingTab'
 import { useTranslation } from 'react-i18next'
+import { useNumericPrecisionPlaces } from '../../../../../hooks/useNumericPrecision'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts'
 import { useDeferAfterPaint } from '../../../../../hooks/useDeferAfterPaint'
@@ -127,6 +128,7 @@ import { importExcelMatrixInChunks } from '../../../../../utils/chunkedBulkImpor
 
 export default function SalesForecastsPage() {
   const { t, i18n } = useTranslation();
+  const quantityDecimals = useNumericPrecisionPlaces('quantity');
   const pushToComputationAction = resolveKuaizhizaoDocumentAction(t, 'demand_computation.pull_from_sales_forecast');
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const { message: messageApi, modal: modalApi } = App.useApp()
@@ -1772,7 +1774,7 @@ export default function SalesForecastsPage() {
                         rules={[{ required: true, message: t('common.required') }]}
                         style={{ margin: 0 }}
                       >
-                        <InputNumber min={0.01} precision={2} style={{ width: '100%' }} size={DOCUMENT_DETAIL_CONTROL_SIZE} />
+                        <InputNumber min={0.01} precision={quantityDecimals} style={{ width: '100%' }} size={DOCUMENT_DETAIL_CONTROL_SIZE} />
                       </AntForm.Item>
                     ),
                   },
@@ -1870,7 +1872,7 @@ export default function SalesForecastsPage() {
                 render: (_: any, row: any, rowIndex: number) => (
                   <InputNumber
                     min={0}
-                    precision={2}
+                    precision={quantityDecimals}
                     style={{ width: '100%' }}
                     value={Number(row?.values?.[key]) || 0}
                     onChange={(val) => {

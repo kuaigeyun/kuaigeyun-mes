@@ -29,6 +29,11 @@ def apply_outsource_work_order_execution_start(record: Any, *, now: datetime | N
     return True
 
 
+def resolve_outsource_work_order_received_delta(qualified_quantity: Any) -> Decimal:
+    """委外工单已收累计增量：仅合格品计入，不合格/工废/料废不计入待收。"""
+    return _dec(qualified_quantity)
+
+
 def apply_outsource_work_order_receipt_completion(record: Any, *, now: datetime | None = None) -> bool:
     """
     收货累计达到计划数量时：→ completed，写入 actual_end_date。

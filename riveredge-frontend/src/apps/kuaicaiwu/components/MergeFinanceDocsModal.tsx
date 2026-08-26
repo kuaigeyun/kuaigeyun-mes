@@ -23,6 +23,8 @@ import {
 } from '@ant-design/pro-components';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
+import { useNumericPrecisionPlaces } from '../../../hooks/useNumericPrecision';
+import { formatAmount, formatCurrencyAmount } from '../../../utils/format';
 import { useNavigate } from 'react-router-dom';
 import {
   FormModalTemplate,
@@ -104,6 +106,7 @@ export const MergeFinanceDocsModal: React.FC<Props> = ({
   onSuccess,
 }) => {
   const { t } = useTranslation();
+  const amountDecimals = useNumericPrecisionPlaces('amount');
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
   const [form] = Form.useForm();
@@ -291,11 +294,7 @@ export const MergeFinanceDocsModal: React.FC<Props> = ({
             title: t('app.kuaicaiwu.mergeFinance.col.available'),
             dataIndex: 'availableAmount',
             width: 140,
-            render: (v: number) =>
-              `¥${Number(v || 0).toLocaleString('zh-CN', {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })}`,
+            render: (v: number) => formatCurrencyAmount(v || 0),
           },
           {
             title: t('app.kuaicaiwu.mergeFinance.col.thisAmount'),
@@ -305,7 +304,7 @@ export const MergeFinanceDocsModal: React.FC<Props> = ({
               <InputNumber
                 min={0.01}
                 max={Number(row.availableAmount || 0)}
-                precision={2}
+                precision={amountDecimals}
                 style={{ width: '100%' }}
                 value={amounts[id]}
                 onChange={(v) =>
@@ -321,10 +320,7 @@ export const MergeFinanceDocsModal: React.FC<Props> = ({
         footer={() => (
           <Typography.Text strong>
             {t('app.kuaicaiwu.mergeFinance.totalLabel', {
-              amount: totalAmount.toLocaleString('zh-CN', {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              }),
+              amount: formatAmount(totalAmount),
             })}
           </Typography.Text>
         )}

@@ -1,3 +1,4 @@
+import { formatAmount } from '../../../../../utils/format';
 /**
  * 三大报表法定打印版式（对标小企业准则简表）
  */
@@ -13,7 +14,7 @@ const NS = 'app.kuaicaiwu.gl.statements';
 export function formatStatementMoney(value: unknown): string {
   const n = Number(value || 0);
   if (!Number.isFinite(n) || n === 0) return '—';
-  return n.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return formatAmount(n);
 }
 
 function isHeader(row: StatementRow): boolean {

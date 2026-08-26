@@ -1,9 +1,11 @@
 /**
  * 委外收货表单内容：自动带出委外产品待收明细（与委外发料样式对应）
  */
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Divider, InputNumber, Table, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
+import { useNumericPrecisionPlaces } from '../../../hooks/useNumericPrecision';
+import { formatQuantity } from '../../../utils/format';
 
 export type OutsourceReceiptLine = {
   key: number;
@@ -43,11 +45,6 @@ interface OutsourceReceiptFormContentProps {
   onLineChange: (line: OutsourceReceiptLine) => void;
 }
 
-function num(v: unknown, digits = 2): string {
-  const n = Number(v);
-  return Number.isFinite(n) ? n.toFixed(digits) : '-';
-}
-
 export function buildReceiptLineFromWorkOrder(wo: OutsourceReceiptWorkOrderBrief): OutsourceReceiptLine {
   const ordered = Number(wo.quantity || 0);
   const received = Number(wo.receivedQuantity ?? wo.received_quantity ?? 0);
@@ -73,6 +70,8 @@ const OutsourceReceiptFormContent: React.FC<OutsourceReceiptFormContentProps> = 
   line,
   onLineChange,
 }) => {
+  const quantityDecimals = useNumericPrecisionPlaces('quantity');
+
   const updateLine = (patch: Partial<OutsourceReceiptLine>) => {
     if (!line) return;
     const next = { ...line, ...patch };
@@ -86,137 +85,140 @@ const OutsourceReceiptFormContent: React.FC<OutsourceReceiptFormContentProps> = 
     onLineChange(next);
   };
 
-  const columns: ColumnsType<OutsourceReceiptLine> = [
-    {
-      title: '产品编码',
-      dataIndex: 'productCode',
-      width: 120,
-      ellipsis: true,
-    },
-    {
-      title: '产品名称',
-      dataIndex: 'productName',
-      width: 160,
-      ellipsis: true,
-    },
-    {
-      title: '单位',
-      dataIndex: 'unit',
-      width: 56,
-      align: 'center',
-    },
-    {
-      title: '委外数量',
-      dataIndex: 'orderedQuantity',
-      width: 96,
-      align: 'right',
-      render: (_, r) => num(r.orderedQuantity),
-    },
-    {
-      title: '已收',
-      dataIndex: 'receivedQuantity',
-      width: 80,
-      align: 'right',
-      render: (_, r) => num(r.receivedQuantity),
-    },
-    {
-      title: '待收',
-      dataIndex: 'pendingQuantity',
-      width: 80,
-      align: 'right',
-      render: (_, r) => (
-        <Typography.Text type={r.pendingQuantity > 0 ? 'warning' : undefined}>
-          {num(r.pendingQuantity)}
-        </Typography.Text>
-      ),
-    },
-    {
-      title: '本次收货',
-      dataIndex: 'receiptQuantity',
-      width: 110,
-      align: 'right',
-      render: (_, r) => (
-        <InputNumber
-          min={0}
-          max={r.pendingQuantity > 0 ? r.pendingQuantity : undefined}
-          precision={2}
-          value={r.receiptQuantity}
-          disabled={r.pendingQuantity <= 0}
-          style={{ width: '100%' }}
-          onChange={(v) => updateLine({ receiptQuantity: Number(v ?? 0) })}
-        />
-      ),
-    },
-    {
-      title: '合格',
-      dataIndex: 'qualifiedQuantity',
-      width: 100,
-      align: 'right',
-      render: (_, r) => (
-        <InputNumber
-          min={0}
-          max={r.receiptQuantity}
-          precision={2}
-          value={r.qualifiedQuantity}
-          disabled={r.pendingQuantity <= 0}
-          style={{ width: '100%' }}
-          onChange={(v) => updateLine({ qualifiedQuantity: Number(v ?? 0) })}
-        />
-      ),
-    },
-    {
-      title: '不合格',
-      dataIndex: 'unqualifiedQuantity',
-      width: 100,
-      align: 'right',
-      render: (_, r) => (
-        <InputNumber
-          min={0}
-          max={r.receiptQuantity}
-          precision={2}
-          value={r.unqualifiedQuantity}
-          disabled={r.pendingQuantity <= 0}
-          style={{ width: '100%' }}
-          onChange={(v) => updateLine({ unqualifiedQuantity: Number(v ?? 0) })}
-        />
-      ),
-    },
-    {
-      title: '工废',
-      dataIndex: 'processWasteQty',
-      width: 90,
-      align: 'right',
-      render: (_, r) => (
-        <InputNumber
-          min={0}
-          max={r.unqualifiedQuantity}
-          precision={2}
-          value={r.processWasteQty ?? 0}
-          disabled={r.pendingQuantity <= 0 || !(r.unqualifiedQuantity > 0)}
-          style={{ width: '100%' }}
-          onChange={(v) => updateLine({ processWasteQty: Number(v ?? 0) })}
-        />
-      ),
-    },
-    {
-      title: '料废',
-      dataIndex: 'materialWasteQty',
-      width: 90,
-      align: 'right',
-      fixed: 'right',
-      render: (_, r) => (
-        <InputNumber
-          min={0}
-          max={r.unqualifiedQuantity}
-          precision={2}
-          value={r.materialWasteQty ?? 0}
-          disabled={r.pendingQuantity <= 0 || !(r.unqualifiedQuantity > 0)}
-          style={{ width: '100%' }}
-          onChange={(v) => updateLine({ materialWasteQty: Number(v ?? 0) })}
-        />
-      ),
-    },
-  ];
+  const columns: ColumnsType<OutsourceReceiptLine> = useMemo(
+    () => [
+      {
+        title: '产品编码',
+        dataIndex: 'productCode',
+        width: 120,
+        ellipsis: true,
+      },
+      {
+        title: '产品名称',
+        dataIndex: 'productName',
+        width: 160,
+        ellipsis: true,
+      },
+      {
+        title: '单位',
+        dataIndex: 'unit',
+        width: 56,
+        align: 'center',
+      },
+      {
+        title: '委外数量',
+        dataIndex: 'orderedQuantity',
+        width: 96,
+        align: 'right',
+        render: (_, r) => formatQuantity(r.orderedQuantity),
+      },
+      {
+        title: '已收',
+        dataIndex: 'receivedQuantity',
+        width: 80,
+        align: 'right',
+        render: (_, r) => formatQuantity(r.receivedQuantity),
+      },
+      {
+        title: '待收',
+        dataIndex: 'pendingQuantity',
+        width: 80,
+        align: 'right',
+        render: (_, r) => (
+          <Typography.Text type={r.pendingQuantity > 0 ? 'warning' : undefined}>
+            {formatQuantity(r.pendingQuantity)}
+          </Typography.Text>
+        ),
+      },
+      {
+        title: '本次收货',
+        dataIndex: 'receiptQuantity',
+        width: 110,
+        align: 'right',
+        render: (_, r) => (
+          <InputNumber
+            min={0}
+            max={r.pendingQuantity > 0 ? r.pendingQuantity : undefined}
+            precision={quantityDecimals}
+            value={r.receiptQuantity}
+            disabled={r.pendingQuantity <= 0}
+            style={{ width: '100%' }}
+            onChange={(v) => updateLine({ receiptQuantity: Number(v ?? 0) })}
+          />
+        ),
+      },
+      {
+        title: '合格',
+        dataIndex: 'qualifiedQuantity',
+        width: 100,
+        align: 'right',
+        render: (_, r) => (
+          <InputNumber
+            min={0}
+            max={r.receiptQuantity}
+            precision={quantityDecimals}
+            value={r.qualifiedQuantity}
+            disabled={r.pendingQuantity <= 0}
+            style={{ width: '100%' }}
+            onChange={(v) => updateLine({ qualifiedQuantity: Number(v ?? 0) })}
+          />
+        ),
+      },
+      {
+        title: '不合格',
+        dataIndex: 'unqualifiedQuantity',
+        width: 100,
+        align: 'right',
+        render: (_, r) => (
+          <InputNumber
+            min={0}
+            max={r.receiptQuantity}
+            precision={quantityDecimals}
+            value={r.unqualifiedQuantity}
+            disabled={r.pendingQuantity <= 0}
+            style={{ width: '100%' }}
+            onChange={(v) => updateLine({ unqualifiedQuantity: Number(v ?? 0) })}
+          />
+        ),
+      },
+      {
+        title: '工废',
+        dataIndex: 'processWasteQty',
+        width: 90,
+        align: 'right',
+        render: (_, r) => (
+          <InputNumber
+            min={0}
+            max={r.unqualifiedQuantity}
+            precision={quantityDecimals}
+            value={r.processWasteQty ?? 0}
+            disabled={r.pendingQuantity <= 0 || !(r.unqualifiedQuantity > 0)}
+            style={{ width: '100%' }}
+            onChange={(v) => updateLine({ processWasteQty: Number(v ?? 0) })}
+          />
+        ),
+      },
+      {
+        title: '料废',
+        dataIndex: 'materialWasteQty',
+        width: 90,
+        align: 'right',
+        fixed: 'right',
+        render: (_, r) => (
+          <InputNumber
+            min={0}
+            max={r.unqualifiedQuantity}
+            precision={quantityDecimals}
+            value={r.materialWasteQty ?? 0}
+            disabled={r.pendingQuantity <= 0 || !(r.unqualifiedQuantity > 0)}
+            style={{ width: '100%' }}
+            onChange={(v) => updateLine({ materialWasteQty: Number(v ?? 0) })}
+          />
+        ),
+      },
+    ],
+    [quantityDecimals, line],
+  );
 
   const ordered = Number(workOrder.quantity || 0);
   const received = Number(workOrder.receivedQuantity ?? workOrder.received_quantity ?? 0);
@@ -228,9 +230,9 @@ const OutsourceReceiptFormContent: React.FC<OutsourceReceiptFormContentProps> = 
       <div style={{ marginBottom: 12, padding: 12, background: '#f5f5f5', borderRadius: 4 }}>
         <div><strong>工单委外编号：</strong>{workOrder.code ?? '-'}</div>
         <div><strong>产品名称：</strong>{workOrder.productName || workOrder.product_name || '-'}</div>
-        <div><strong>委外数量：</strong>{num(ordered)}</div>
-        <div><strong>已收货数量：</strong>{num(received)}</div>
-        <div><strong>待收数量：</strong>{num(pending)}</div>
+        <div><strong>委外数量：</strong>{formatQuantity(ordered)}</div>
+        <div><strong>已收货数量：</strong>{formatQuantity(received)}</div>
+        <div><strong>待收数量：</strong>{formatQuantity(pending)}</div>
       </div>
 
       <Divider style={{ margin: '12px 0' }}>待收产品明细</Divider>

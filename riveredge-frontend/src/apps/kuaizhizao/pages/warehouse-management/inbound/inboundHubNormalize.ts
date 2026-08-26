@@ -16,8 +16,12 @@ type InboundDetailItem = {
   warehouse_name?: string;
   location_code?: string;
   batch_number?: string;
+  unit_price?: number;
+  total_amount?: number;
   qualified_quantity?: number;
   unqualified_quantity?: number;
+  process_waste_qty?: number;
+  material_waste_qty?: number;
 };
 
 /** Hub 明细行数量：采购/成品用 receipt_quantity，其他入库用 inbound_quantity 等 */
@@ -44,6 +48,16 @@ function pickString(row: Record<string, unknown>, ...keys: string[]): string | u
   for (const key of keys) {
     const value = row[key];
     if (value != null && String(value).trim() !== '') return String(value).trim();
+  }
+  return undefined;
+}
+
+function pickNumber(row: Record<string, unknown>, ...keys: string[]): number | undefined {
+  for (const key of keys) {
+    const value = row[key];
+    if (value == null || value === '') continue;
+    const n = Number(value);
+    if (Number.isFinite(n)) return n;
   }
   return undefined;
 }
@@ -119,6 +133,23 @@ export function normalizeInboundHubDetail(
       row.outsource_work_order_code =
         pickString(row, 'outsource_work_order_code', 'outsourceWorkOrderCode') ??
         listRow?.outsource_work_order_code;
+      row.product_code =
+        pickString(row, 'product_code', 'productCode') ??
+        (typeof listRow?.product_code === 'string' ? listRow.product_code : undefined);
+      row.product_name =
+        pickString(row, 'product_name', 'productName') ??
+        (typeof listRow?.product_name === 'string' ? listRow.product_name : undefined);
+      row.material_code = row.product_code ?? pickString(row, 'material_code', 'materialCode');
+      row.material_name = row.product_name ?? pickString(row, 'material_name', 'materialName');
+      row.supplier_name =
+        pickString(row, 'supplier_name', 'supplierName') ??
+        (typeof listRow?.supplier_name === 'string' ? listRow.supplier_name : undefined);
+      row.unit_price =
+        pickNumber(row, 'unit_price', 'unitPrice') ??
+        (listRow?.unit_price != null ? Number(listRow.unit_price) : undefined);
+      row.total_amount =
+        pickNumber(row, 'total_amount', 'totalAmount') ??
+        (listRow?.total_amount != null ? Number(listRow.total_amount) : undefined);
       row.total_quantity = row.total_quantity ?? row.quantity ?? listRow?.total_quantity;
       row.received_at = receivedAt;
       row.receipt_date = receivedAt ?? row.receipt_date ?? listRow?.receipt_date;
@@ -251,21 +282,33 @@ export function resolveInboundHubDetailItems(order: InboundHubOrder): InboundDet
   ) {
     const qty = Number(row.quantity ?? row.total_quantity ?? 0);
     if (!(qty > 0) && !row.outsource_work_order_code) return [];
+    const unitPrice =
+      pickNumber(row, 'unit_price', 'unitPrice') ??
+      (order.unit_price != null ? Number(order.unit_price) : undefined);
+    const totalAmount =
+      pickNumber(row, 'total_amount', 'totalAmount') ??
+      (order.total_amount != null ? Number(order.total_amount) : undefined);
     return [
       {
         id: order.id,
-        material_code: pickString(row, 'material_code', 'product_code') ?? order.outsource_work_order_code,
+        material_code:
+          pickString(row, 'material_code', 'product_code', 'productCode') ??
+          order.outsource_work_order_code,
         material_name:
-          pickString(row, 'material_name', 'product_name') ??
+          pickString(row, 'material_name', 'product_name', 'productName') ??
           order.outsource_work_order_code ??
           '-',
         material_unit: pickString(row, 'unit', 'material_unit'),
         receipt_quantity: qty,
-        qualified_quantity: Number(row.qualified_quantity ?? 0) || undefined,
-        unqualified_quantity: Number(row.unqualified_quantity ?? 0) || undefined,
+        unit_price: unitPrice,
+        total_amount: totalAmount,
+        qualified_quantity: pickNumber(row, 'qualified_quantity', 'qualifiedQuantity'),
+        unqualified_quantity: pickNumber(row, 'unqualified_quantity', 'unqualifiedQuantity'),
+        process_waste_qty: pickNumber(row, 'process_waste_qty', 'processWasteQty'),
+        material_waste_qty: pickNumber(row, 'material_waste_qty', 'materialWasteQty'),
         warehouse_name: order.warehouse_name,
-        location_code: pickString(row, 'location_name', 'location_code'),
-        batch_number: pickString(row, 'batch_number'),
+        location_code: pickString(row, 'location_name', 'location_code', 'locationName'),
+        batch_number: pickString(row, 'batch_number', 'batchNumber'),
       },
     ];
   }

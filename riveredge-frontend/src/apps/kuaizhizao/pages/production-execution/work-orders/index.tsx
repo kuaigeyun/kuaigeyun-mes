@@ -15,6 +15,7 @@ import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 const { RangePicker } = DatePicker
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { useNumericPrecisionPlaces } from '../../../../../hooks/useNumericPrecision'
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry'
 import {
   ActionType,
@@ -1360,6 +1361,7 @@ const WorkOrderPlannedRangeCell = React.memo(function WorkOrderPlannedRangeCell(
 
 const WorkOrdersPage: React.FC = () => {
   const { t, i18n } = useTranslation()
+  const quantityDecimals = useNumericPrecisionPlaces('quantity')
   const { message: messageApi } = App.useApp()
   const workOrderPerms = useResourcePermissions(WORK_ORDER_RESOURCE)
   const workOrderAuditEnabled = useAuditRequired('work_order', false)
@@ -8491,7 +8493,7 @@ const WorkOrdersPage: React.FC = () => {
                         <InputNumber
                           min={0}
                           max={Number.isFinite(maxQty) && maxQty > 0 ? maxQty : undefined}
-                          precision={2}
+                          precision={quantityDecimals}
                           style={{ width: '100%' }}
                           disabled={!selected}
                           value={soPullQuantities[itemId]}
@@ -9152,7 +9154,7 @@ const WorkOrdersPage: React.FC = () => {
           }
           placeholder={t('app.kuaizhizao.workOrder.formEnter')}
           min={0}
-          precision={2}
+          precision={quantityDecimals}
           fieldProps={{
             formatter: (value) => {
               if (value === undefined || value === null || value === '') return '';
@@ -10461,7 +10463,7 @@ const WorkOrdersPage: React.FC = () => {
                         onChange={value => handleUpdateSplitQuantity(index, value)}
                         style={{ flex: 1 }}
                         placeholder={`工单${index + 1}数量`}
-                        precision={2}
+                        precision={quantityDecimals}
                       />
                       <Button
                         type="link"

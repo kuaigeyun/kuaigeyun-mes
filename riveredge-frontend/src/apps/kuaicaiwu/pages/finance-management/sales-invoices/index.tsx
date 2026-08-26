@@ -77,7 +77,7 @@ import {
 import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
 import { getStatusDisplay } from '../../../../kuaizhizao/constants/documentStatus';
-import { formatDateTime } from '../../../../../utils/format';
+import { formatDateTime, formatCurrencyAmount } from '../../../../../utils/format';
 import {
   FINANCE_INVOICE_PINNED_REVIEW_FIELD,
   financeDocCodePartnerSearchColumns,
@@ -699,7 +699,7 @@ const SalesInvoicesPage: React.FC = () => {
         sorter: true,
         render: (_, record) => (
           <span style={{ fontWeight: 'bold', color: '#1677ff' }}>
-            ¥{Number(record.total_amount).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
+            {formatCurrencyAmount(record.total_amount)}
           </span>
         ),
       },
@@ -817,7 +817,7 @@ const SalesInvoicesPage: React.FC = () => {
         dataIndex: 'amount',
         width: 140,
         align: 'right' as const,
-        render: (v: number) => `¥${Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`,
+        render: (v: number) => formatCurrencyAmount(v || 0),
       },
     ],
     [t],
@@ -825,7 +825,7 @@ const SalesInvoicesPage: React.FC = () => {
 
   const pullPreviewMaxPush = Number(pullPreviewData?.items?.[0]?.max_push_quantity ?? 0);
   const formatPullMoney = (v: number) =>
-    `¥${Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`;
+    formatCurrencyAmount(v || 0);
   const pullPreviewTargetLabel =
     pullPreviewKind === 'sales_delivery'
       ? pullFromSalesDeliveryAction.targetLabel

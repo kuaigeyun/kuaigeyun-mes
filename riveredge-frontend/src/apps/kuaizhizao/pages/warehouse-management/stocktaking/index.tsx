@@ -9,6 +9,7 @@
 
 import React, { useRef, useState, useCallback, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNumericPrecisionPlaces } from '../../../../../hooks/useNumericPrecision';
 import { useSearchParams } from 'react-router-dom';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
@@ -102,6 +103,7 @@ const granularityLabel = (value: string | undefined, t: (key: string) => string)
 
 const StocktakingPage: React.FC = () => {
   const { t } = useTranslation();
+  const quantityDecimals = useNumericPrecisionPlaces('quantity');
   const [searchParams] = useSearchParams();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
@@ -758,7 +760,7 @@ const StocktakingPage: React.FC = () => {
           <InputNumber
             size="small"
             min={0}
-            precision={2}
+            precision={quantityDecimals}
             style={{ width: '100%' }}
             value={editingActualQty[itemId] ?? item.actual_quantity ?? item.book_quantity ?? 0}
             onChange={(val) => {

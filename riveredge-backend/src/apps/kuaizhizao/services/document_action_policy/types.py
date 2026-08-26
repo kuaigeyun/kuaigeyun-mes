@@ -153,6 +153,7 @@ class PurchaseRequisitionCapabilities(BaseModel):
     revoke_approval: ActionCapability
     push_purchase_order: ActionCapability
     push_inquiry: ActionCapability
+    print: ActionCapability
 
 
 class PurchaseInquiryCapabilities(BaseModel):
@@ -319,6 +320,7 @@ class QualityInspectionCapabilities(BaseModel):
     create_defect: ActionCapability
     push_purchase_return: ActionCapability
     push_rework: ActionCapability
+    push_inbound: ActionCapability
     update: ActionCapability
     delete: ActionCapability
     print: ActionCapability
@@ -693,6 +695,13 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "finished_goods_inspection.push_rework.not_allowed": "只有不合格的成品检验单才能下推返工单",
     "finished_goods_inspection.push_rework.already_pushed": "不合格数量已全部下推返工单",
     "finished_goods_inspection.push_rework.no_unqualified": "不合格数量为 0，无需下推返工单",
+    "finished_goods_inspection.push_inbound.not_allowed": "当前成品检验单不可下推入库",
+    "finished_goods_inspection.push_inbound.not_passed": "成品检验尚未合格或未通过审核，无法下推入库",
+    "finished_goods_inspection.push_inbound.already_pushed": "合格数量已全部下推入库",
+    "finished_goods_inspection.push_inbound.no_qualified": "合格数量为 0，无需下推入库",
+    "finished_goods_inspection.push_inbound.no_work_order": "成品检验单未关联工单，无法下推入库",
+    "finished_goods_inspection.push_inbound.no_remaining": "工单成品检验合格可入余量已用尽",
+    "warehouse.inbound.no_default_warehouse": "未解析到默认入库仓库，请指定仓库或维护物料/工单关联仓库",
     "finished_goods_inspection.pull_from_work_order.not_allowed": "当前状态的工单不可加载成品检验",
     "finished_goods_inspection.pull_from_work_order.no_product": "工单未关联产品物料，无法加载成品检验",
     "finished_goods_inspection.pull_from_work_order.no_inspection_required": "成品物料未配置成品检验，无需加载",

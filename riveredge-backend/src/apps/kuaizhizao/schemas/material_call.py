@@ -102,7 +102,7 @@ class MaterialCallRequestResponse(BaseModel):
     source_warehouse_id: Optional[int] = None
     target_warehouse_id: Optional[int] = None
     production_picking_id: Optional[int] = Field(
-        default=None, description="历史关联生产领料单ID（现叫料完成仅备料到线边，不再生成领料单）"
+        default=None, description="关联生产领料单ID（下推正式发料后写入；完成后不再线边备料转移）"
     )
     priority: str = "normal"
     needed_at: Optional[datetime] = None
@@ -143,3 +143,29 @@ class MaterialCallBatchFromWorkOrderRequest(BaseModel):
     """按工单整单发起叫料（齐套缺料生成一张单、多行明细）"""
 
     work_order_id: int = Field(..., description="工单ID")
+
+
+class MaterialCallPushPickingPreviewItem(BaseModel):
+    """补料申请下推生产领料预览行"""
+
+    item_id: int = Field(..., description="物料ID")
+    material_code: str = Field(default="")
+    material_name: str = Field(default="")
+    material_unit: str = Field(default="个")
+    quantity: Decimal = Field(..., description="补料需求数量")
+    pushed_quantity: Decimal = Field(..., description="已送达/已处理数量")
+    max_push_quantity: Decimal = Field(..., description="本次可领数量（需求−已送达）")
+
+
+class MaterialCallPushPickingPreviewResponse(BaseModel):
+    """补料申请下推生产领料预览"""
+
+    material_call_id: int
+    material_call_code: str
+    work_order_id: int
+    work_order_code: str
+    items: List[MaterialCallPushPickingPreviewItem] = Field(default_factory=list)
+    summary: Optional[str] = None
+    tip: Optional[str] = None
+    has_blocking_issues: bool = False
+    blocking_reason: Optional[str] = None

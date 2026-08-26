@@ -79,6 +79,7 @@ import dayjs from 'dayjs';
 import { AmountDisplay } from '../../../../../components/permission';
 import { KUAIZHIZAO_OUTSOURCE_ORDER_FIELD_RESOURCE as OO } from '../../../constants/fieldPermissionResources';
 import { useTranslation } from 'react-i18next';
+import { useNumericPrecision } from '../../../../../hooks/useNumericPrecision';
 import { useCustomFields } from '../../../../../hooks/useCustomFields';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
@@ -248,6 +249,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
   const [searchParams] = useSearchParams();
   const highlightOpenedRef = useRef(false);
   const { t } = useTranslation();
+  const { quantity: quantityDecimals, price: priceDecimals } = useNumericPrecision();
   const pushToInboundAction = resolveKuaizhizaoDocumentAction(t, 'inbound.pull_from_outsource_work_order');
   const pushToOutboundAction = resolveKuaizhizaoDocumentAction(t, 'outbound.pull_from_outsource_work_order');
   const { message: messageApi, modal } = App.useApp();
@@ -2006,7 +2008,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
           label={t('app.kuaizhizao.outsourceWorkOrder.fieldQuantity')}
           placeholder={t('app.kuaizhizao.outsourceWorkOrder.placeholderQuantity')}
           min={0}
-          precision={2}
+          precision={quantityDecimals}
           rules={[{ required: true, message: t('app.kuaizhizao.outsourceWorkOrder.ruleEnterQuantity') }]}
           fieldProps={{
             style: { width: '100%' },
@@ -2018,7 +2020,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
           label={t('app.kuaizhizao.outsourceWorkOrder.fieldUnitPrice')}
           placeholder={t('app.kuaizhizao.outsourceWorkOrder.placeholderUnitPrice')}
           min={0}
-          precision={2}
+          precision={priceDecimals}
           fieldProps={{
             style: { width: '100%' },
           }}

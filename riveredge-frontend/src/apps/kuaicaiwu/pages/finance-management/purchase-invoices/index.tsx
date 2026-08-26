@@ -70,7 +70,7 @@ import {
 } from '../../../components/LedgerAccountFormFields';
 import { bankAccountService, type BankAccount } from '../../../services/finance/bank-account';
 import { purchaseInvoiceCapabilityReasonMessage } from '../../../utils/purchaseInvoiceCapabilityMessages';
-import { formatDateTime } from '../../../../../utils/format';
+import { formatDateTime, formatCurrencyAmount } from '../../../../../utils/format';
 import {
   FINANCE_INVOICE_PINNED_REVIEW_FIELD,
   financeDocCodePartnerSearchColumns,
@@ -680,7 +680,7 @@ const PurchaseInvoiceList: React.FC = () => {
         dataIndex: 'amount',
         width: 140,
         align: 'right' as const,
-        render: (v: unknown) => `¥${Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`,
+        render: (v: unknown) => formatCurrencyAmount(v || 0),
       },
     ],
     [t],
@@ -688,7 +688,7 @@ const PurchaseInvoiceList: React.FC = () => {
 
   const pullPreviewMaxPush = Number(pullPreviewData?.items?.[0]?.max_push_quantity ?? 0);
   const formatPullMoney = (v: number) =>
-    `¥${Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`;
+    formatCurrencyAmount(v || 0);
   const pullPreviewTargetLabel =
     pullPreviewKind === 'purchase_receipt'
       ? pullFromPurchaseReceiptAction.targetLabel

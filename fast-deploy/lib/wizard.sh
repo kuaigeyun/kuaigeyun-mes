@@ -33,6 +33,8 @@ wizard_supports_truecolor() {
         *256color*|*direct*) return 0 ;;
     esac
     [ -n "${WT_SESSION:-}" ] && return 0
+    # Git Bash 的 mintty 与 Win10+ 控制台均支持 24-bit，但默认 TERM=xterm 且不设 COLORTERM
+    is_windows_gitbash && return 0
     return 1
 }
 
@@ -93,9 +95,33 @@ wizard_panel_begin() {
     WIZARD_PANEL_MARGIN="$(wizard_panel_margin)"
 }
 
+# 终端实际列数：从 /dev/tty 读，避免向导输出被 tee 管道时误判为 80
+wizard_term_cols() {
+    local cols=''
+    cols="$( { stty size < /dev/tty; } 2>/dev/null | awk '{print $2}')"
+    if [ -z "$cols" ] && command -v tput >/dev/null 2>&1; then
+        cols="$(tput cols 2>/dev/null)"
+    fi
+    case "$cols" in
+        ''|*[!0-9]*) cols=0 ;;
+    esac
+    echo "$cols"
+}
+
+# 分隔线不得超过终端宽度，否则会折行成「一长一短两条」（Git Bash 默认 80 列）
+wizard_panel_rule_width() {
+    local cols
+    cols="$(wizard_term_cols)"
+    if [ "$cols" -gt 0 ] && [ "$cols" -lt "$WIZARD_PANEL_W" ]; then
+        echo "$cols"
+    else
+        echo "$WIZARD_PANEL_W"
+    fi
+}
+
 wizard_panel_top() {
     wizard_panel_prefix
-    echo -e "${WIZARD_PANEL_BORDER}$(wizard_panel_repeat "$WIZARD_P_H" "$WIZARD_PANEL_W")${WIZARD_RESET}"
+    echo -e "${WIZARD_PANEL_BORDER}$(wizard_panel_repeat "$WIZARD_P_H" "$(wizard_panel_rule_width)")${WIZARD_RESET}"
 }
 
 wizard_panel_mid() {

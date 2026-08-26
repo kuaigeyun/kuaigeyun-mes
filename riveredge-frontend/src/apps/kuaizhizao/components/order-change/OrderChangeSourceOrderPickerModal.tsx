@@ -7,7 +7,7 @@ import {
   isSourceOrderEligibleForChange,
   type OrderChangeSourceOrderOption,
 } from '../../utils/orderChangeSourceOrder';
-import { formatDateTime } from '../../../../utils/format';
+import { formatDateTime, formatAmount } from '../../../../utils/format';
 import { MODAL_ISOLATE_POINTER_PROPS } from '../../../../utils/modalEventIsolation';
 
 export type OrderChangeSourceDocType = 'sales' | 'purchase';
@@ -170,7 +170,7 @@ export const OrderChangeSourceOrderPickerModal: React.FC<OrderChangeSourceOrderP
               width: 120,
               align: 'right',
               render: (v: number | undefined) =>
-                v != null ? Number(v).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-',
+                v != null ? formatAmount(v) : '-',
             },
             {
               title: t('common.status'),

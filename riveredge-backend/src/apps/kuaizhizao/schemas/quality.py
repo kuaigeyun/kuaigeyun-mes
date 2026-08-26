@@ -336,6 +336,9 @@ class FinishedGoodsInspectionResponse(FinishedGoodsInspectionBase):
     pushed_rework_quantity: float = Field(
         0, ge=0, description="已下推返工数量（列表/详情）"
     )
+    pushed_inbound_quantity: float = Field(
+        0, ge=0, description="已下推入库数量（列表/详情）"
+    )
     lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycleStepper 展示）")
     capabilities: Optional[QualityInspectionCapabilities] = Field(
         None, description="业务态 capabilities（不含 RBAC）"

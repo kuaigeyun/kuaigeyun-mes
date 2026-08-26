@@ -10,6 +10,7 @@ from datetime import datetime
 
 from tortoise.exceptions import IntegrityError
 from tortoise.transactions import in_transaction
+from tortoise import connections
 
 from core.models.print_template import PrintTemplate
 from core.utils.search_utils import apply_keyword_icontains
@@ -163,11 +164,25 @@ class PrintTemplateService:
         canonical = (canonical_code or "").strip().upper()
         if not canonical:
             return False
-        codes = await PrintTemplate.filter(
-            tenant_id=tenant_id,
-            deleted_at__isnull=True,
-        ).values_list("code", flat=True)
-        return any(PrintTemplateService.code_in_preset_family(c, canonical) for c in codes)
+        family = PrintTemplateService._normalize_base_code(canonical)
+        like_family = PrintTemplateService._sql_like_escape(family) + r"\_%"
+        conn = connections.get("default")
+        rows = await conn.execute_query_dict(
+            """
+            SELECT 1 AS ok
+            FROM core_print_templates
+            WHERE tenant_id = $1
+              AND deleted_at IS NULL
+              AND (
+                UPPER(code) = $2
+                OR UPPER(code) = $3
+                OR UPPER(code) LIKE $4 ESCAPE '\\'
+              )
+            LIMIT 1
+            """,
+            [tenant_id, canonical, family, like_family],
+        )
+        return bool(rows)
 
     @staticmethod
     async def _generate_template_code(tenant_id: int, raw_code: str, conn: Any) -> str:

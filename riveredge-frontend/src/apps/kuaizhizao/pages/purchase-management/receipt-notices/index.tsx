@@ -111,6 +111,7 @@ import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/cod
 import { buildFutureDateShortcutFieldProps } from '../../../../../utils/futureDatePickerShortcuts';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { useTranslation } from 'react-i18next';
+import { useNumericPrecision } from '../../../../../hooks/useNumericPrecision';
 import { ROUTES } from '../../../constants/routes';
 import { inboundReceiptNoticeEntryPath } from '../../warehouse-management/inbound/inboundPaths';
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
@@ -167,6 +168,7 @@ const RECEIPT_NOTICE_RESOURCE = 'kuaizhizao:receipt-notice';
 
 const ReceiptNoticesPage: React.FC = () => {
   const { t, i18n } = useTranslation();
+  const { quantity: quantityDecimals, price: priceDecimals } = useNumericPrecision();
   const navigate = useNavigate();
   const { token } = theme.useToken();
   const receiptNoticeDetailDrawerZIndex = token.zIndexPopupBase;
@@ -1086,7 +1088,7 @@ const ReceiptNoticesPage: React.FC = () => {
             ]}
             style={{ margin: 0 }}
           >
-            <InputNumber placeholder={t('common.quantity')} min={0} precision={2} style={{ width: '100%' }} size="small" />
+            <InputNumber placeholder={t('common.quantity')} min={0} precision={quantityDecimals} style={{ width: '100%' }} size="small" />
           </AntForm.Item>
         ),
       },
@@ -1097,7 +1099,7 @@ const ReceiptNoticesPage: React.FC = () => {
         align: 'right' as const,
         render: (_: any, __: any, index: number) => (
           <AntForm.Item name={[index, 'unit_price']} style={{ margin: 0 }}>
-            <InputNumber placeholder="0" min={0} precision={2} style={{ width: '100%' }} size="small" />
+            <InputNumber placeholder="0" min={0} precision={priceDecimals} style={{ width: '100%' }} size="small" />
           </AntForm.Item>
         ),
       },

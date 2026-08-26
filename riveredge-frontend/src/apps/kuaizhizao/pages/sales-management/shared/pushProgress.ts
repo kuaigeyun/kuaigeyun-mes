@@ -228,6 +228,16 @@ export function finishedGoodsReworkPushPercent(
   return incomingInspectionReturnPushPercent(pushedQty, unqualifiedQty);
 }
 
+/** 成品检验 → 入库单（合格品） */
+export function finishedGoodsInboundPushPercent(
+  pushedQty?: number | string | null,
+  qualifiedQty?: number | string | null,
+): number {
+  const total = Number(qualifiedQty ?? 0);
+  if (!Number.isFinite(total) || total <= 0) return 0;
+  return ratioToPushProgressPercent(Number(pushedQty ?? 0), total);
+}
+
 /**
  * 委外工单下推：发料进度与收货进度各占一半（与采购订单下游进度类似）。
  */

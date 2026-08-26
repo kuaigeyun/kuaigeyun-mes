@@ -40,6 +40,7 @@ import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni
 import dayjs from 'dayjs';
 import { warehouseApi as masterDataWarehouseApi } from '../../../../master-data/services/warehouse';
 import { useTranslation } from 'react-i18next';
+import { useNumericPrecision } from '../../../../../hooks/useNumericPrecision';
 import { useWarehouseLocationOptions } from '../../../hooks/useWarehouseLocationOptions';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
@@ -150,6 +151,7 @@ const OTHER_OUTBOUND_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_other_outbounds';
 
 const OtherOutboundPage: React.FC = () => {
   const { t } = useTranslation();
+  const { quantity: quantityDecimals, price: priceDecimals } = useNumericPrecision();
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
@@ -1051,7 +1053,7 @@ const OtherOutboundPage: React.FC = () => {
                     align: 'right' as const,
                     render: (_: any, __: any, index: number) => (
                       <AntForm.Item name={[index, 'outbound_quantity']} rules={[{ required: true, message: t('app.kuaizhizao.warehouseOutbound.field.required') }, { type: 'number', min: 0.01, message: '>0' }]} style={{ margin: 0 }}>
-                        <InputNumber placeholder={t('common.quantity')} min={0} precision={2} style={{ width: '100%' }} size="small" />
+                        <InputNumber placeholder={t('common.quantity')} min={0} precision={quantityDecimals} style={{ width: '100%' }} size="small" />
                       </AntForm.Item>
                     ),
                   },
@@ -1081,7 +1083,7 @@ const OtherOutboundPage: React.FC = () => {
                     align: 'right' as const,
                     render: (_: any, __: any, index: number) => (
                       <AntForm.Item name={[index, 'unit_price']} style={{ margin: 0 }}>
-                        <InputNumber placeholder="0" min={0} precision={2} style={{ width: '100%' }} size="small" />
+                        <InputNumber placeholder="0" min={0} precision={priceDecimals} style={{ width: '100%' }} size="small" />
                       </AntForm.Item>
                     ),
                   },

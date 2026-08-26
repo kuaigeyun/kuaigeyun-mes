@@ -4,6 +4,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { App, Alert, Button, InputNumber, Select, Space, Table, Tabs, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { useNumericPrecisionPlaces } from '../../../../../hooks/useNumericPrecision';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { glService, type GlAccount } from '../../../services/gl';
@@ -44,6 +45,7 @@ type TrialInfo = {
 
 const OpeningBalancesPage: React.FC = () => {
   const { t } = useTranslation();
+  const amountDecimals = useNumericPrecisionPlaces('amount');
   const { message: messageApi } = App.useApp();
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
@@ -273,7 +275,7 @@ const OpeningBalancesPage: React.FC = () => {
           <InputNumber
             size="medium"
             min={0}
-            precision={2}
+            precision={amountDecimals}
             style={{ width: '100%' }}
             value={record.opening_debit}
             onChange={(v) => updateAccountCell(record.account_id, 'opening_debit', v)}
@@ -289,7 +291,7 @@ const OpeningBalancesPage: React.FC = () => {
           <InputNumber
             size="medium"
             min={0}
-            precision={2}
+            precision={amountDecimals}
             style={{ width: '100%' }}
             value={record.opening_credit}
             onChange={(v) => updateAccountCell(record.account_id, 'opening_credit', v)}
@@ -372,7 +374,7 @@ const OpeningBalancesPage: React.FC = () => {
           <InputNumber
             size="medium"
             min={0}
-            precision={2}
+            precision={amountDecimals}
             style={{ width: '100%' }}
             value={record.opening_debit}
             onChange={(v) => updateAuxCell(record.key, 'opening_debit', v)}
@@ -388,7 +390,7 @@ const OpeningBalancesPage: React.FC = () => {
           <InputNumber
             size="medium"
             min={0}
-            precision={2}
+            precision={amountDecimals}
             style={{ width: '100%' }}
             value={record.opening_credit}
             onChange={(v) => updateAuxCell(record.key, 'opening_credit', v)}

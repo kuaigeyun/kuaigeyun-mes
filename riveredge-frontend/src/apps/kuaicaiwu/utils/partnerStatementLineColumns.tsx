@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { InputNumber, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import type { TFunction } from 'i18next';
+import { useNumericPrecisionPlaces } from '../../../hooks/useNumericPrecision';
 import type { PartnerStatementLine } from '../services/finance/partnerStatement';
 import { renderFinanceHierarchyDocType } from './partnerStatementLineDisplay';
 import { partnerStatementMoney } from './partnerStatementAmountUtils';
@@ -22,6 +23,7 @@ export function usePartnerStatementLineColumns(
   options: PartnerStatementLineColumnOptions,
 ): ColumnsType<PartnerStatementLine> {
   const { t, balanceLabel, editable, onStatementAmountChange, lineKey, onDocCodeClick } = options;
+  const amountDecimals = useNumericPrecisionPlaces('amount');
 
   return useMemo(
     () => [
@@ -84,7 +86,7 @@ export function usePartnerStatementLineColumns(
               size="small"
               min={0.01}
               max={max > 0 ? max : undefined}
-              precision={2}
+              precision={amountDecimals}
               value={value}
               style={{ width: '100%' }}
               onChange={(next) => {
@@ -117,6 +119,6 @@ export function usePartnerStatementLineColumns(
         render: (v: unknown) => partnerStatementMoney(v as number),
       },
     ],
-    [balanceLabel, editable, lineKey, onDocCodeClick, onStatementAmountChange, t],
+    [balanceLabel, amountDecimals, editable, lineKey, onDocCodeClick, onStatementAmountChange, t],
   );
 }

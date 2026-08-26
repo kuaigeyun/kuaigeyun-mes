@@ -22,6 +22,7 @@ import {
 import { ThunderboltOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
+import { useNumericPrecisionPlaces } from '../../../../../hooks/useNumericPrecision';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { UniTable } from '../../../../../components/uni-table';
 import {
@@ -73,6 +74,7 @@ const emptyLine = (): DraftLine => ({
 
 const GlVouchersPage: React.FC = () => {
   const { t } = useTranslation();
+  const amountDecimals = useNumericPrecisionPlaces('amount');
   const { message: messageApi } = App.useApp();
   const linked = useLinkedDocumentDetail();
   const actionRef = useRef<ActionType>();
@@ -735,7 +737,7 @@ const GlVouchersPage: React.FC = () => {
         <InputNumber
           size="medium"
           min={0}
-          precision={2}
+          precision={amountDecimals}
           style={{ width: '100%' }}
           value={record.debit_amount}
           onChange={(v) => {
@@ -756,7 +758,7 @@ const GlVouchersPage: React.FC = () => {
         <InputNumber
           size="medium"
           min={0}
-          precision={2}
+          precision={amountDecimals}
           style={{ width: '100%' }}
           value={record.credit_amount}
           onChange={(v) => {

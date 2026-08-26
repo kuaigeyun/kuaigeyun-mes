@@ -83,6 +83,7 @@ const PurchaseArrivalWarningsPage: React.FC = () => {
         title: t('app.kuaizhizao.purchaseOrder.col.supplierAndOrder'),
         key: 'order_code',
         dataIndex: 'order_code',
+        hideInSearch: true,
         ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
         fixed: 'left',
         render: (_, r) => (
@@ -164,7 +165,6 @@ const PurchaseArrivalWarningsPage: React.FC = () => {
       },
       {
         title: t('app.kuaizhizao.purchaseArrival.col.processingStatus'),
-        key: 'lifecycle',
         dataIndex: 'processing_status',
         width: UNI_TABLE_STATUS_BADGE_COLUMN_WIDTH,
         uniTableKeepWidth: true,
@@ -216,7 +216,7 @@ const PurchaseArrivalWarningsPage: React.FC = () => {
       <UniTable<PurchaseArrivalWarningRow>
         actionRef={actionRef}
         rowKey="id"
-        columnPersistenceId="apps.kuaizhizao.pages.purchase-management.arrival-warnings-v3"
+        columnPersistenceId="apps.kuaizhizao.pages.purchase-management.arrival-warnings-v4"
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.purchaseArrivalWarnings')}
         headerTitle={t('app.kuaizhizao.menu.purchase-management.arrival-warnings')}
@@ -228,15 +228,16 @@ const PurchaseArrivalWarningsPage: React.FC = () => {
           </Space>,
         ]}
         columns={columns}
-        request={async (params) => {
+        request={async (params, _sort, _filter, searchFormValues) => {
+          const sf = { ...(searchFormValues ?? {}), ...(params ?? {}) } as Record<string, unknown>;
           const res = await listPurchaseArrivalWarnings({
             skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
             limit: params.pageSize ?? 20,
-            warning_level: params.warning_level as any,
-            order_code: params.order_code as string,
-            supplier_keyword: params.supplier_name as string,
-            material_keyword: params.material_name as string,
-            processing_status: params.processing_status as any,
+            warning_level: sf.warning_level as PurchaseArrivalWarningRow['warning_level'],
+            order_code: String(sf.order_code ?? '').trim() || undefined,
+            supplier_keyword: String(sf.supplier_name ?? '').trim() || undefined,
+            material_keyword: String(sf.material_name ?? '').trim() || undefined,
+            processing_status: sf.processing_status as PurchaseArrivalWarningRow['processing_status'],
           });
           setSummary(res.summary ?? summary);
           return { data: res.data ?? [], total: res.total ?? 0, success: true };

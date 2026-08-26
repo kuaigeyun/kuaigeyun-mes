@@ -707,16 +707,75 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
         has_content = await self._has_change_content(tenant_id, doc)
         assert_purchase_order_change_capability(doc, "submit", has_change_content=has_content)
         audit_required = await self.business_config_service.check_audit_required(tenant_id, "purchase_order_change")
+        user_info = await self.get_user_info(operator_id)
         if audit_required:
             doc.status = DocumentStatus.PENDING_REVIEW.value
             doc.review_status = ReviewStatus.PENDING.value
+            try:
+                from core.services.approval.approval_instance_service import ApprovalInstanceService
+
+                await ApprovalInstanceService.start_approval_for_node(
+                    tenant_id=tenant_id,
+                    user_id=operator_id,
+                    node_key="purchase_order_change",
+                    entity_type="purchase_order_change",
+                    entity_id=change_id,
+                    entity_uuid=str(doc.uuid),
+                    title=f"采购变更单审批: {doc.change_code}",
+                    content=(
+                        f"原采购订单: {doc.source_order_code or '—'}, "
+                        f"供应商: {doc.supplier_name or '—'}"
+                    ),
+                )
+            except Exception as exc:
+                from loguru import logger
+
+                logger.warning(
+                    "启动采购变更单审批流程失败 tenant={} change={}: {}",
+                    tenant_id,
+                    change_id,
+                    exc,
+                )
         else:
             doc.status = DocumentStatus.AUDITED.value
             doc.review_status = ReviewStatus.APPROVED.value
-        user_info = await self.get_user_info(operator_id)
         doc.updated_by = operator_id
         doc.updated_by_name = user_info["name"]
         await doc.save()
+        if audit_required:
+            from apps.kuaizhizao.services.kuaizhizao_business_notification import (
+                ACTION_SUBMITTED,
+                DOC_PURCHASE_ORDER_CHANGE,
+                dispatch_kuaizhizao_notification,
+            )
+
+            try:
+                await dispatch_kuaizhizao_notification(
+                    tenant_id,
+                    trigger_document=DOC_PURCHASE_ORDER_CHANGE,
+                    trigger_action=ACTION_SUBMITTED,
+                    variables={
+                        "change_code": doc.change_code or str(change_id),
+                        "source_order_code": doc.source_order_code or "—",
+                        "supplier_name": doc.supplier_name or "—",
+                        "change_reason": doc.change_reason or "—",
+                        "detail_path": (
+                            "/apps/kuaizhizao/purchase-management/purchase-order-changes"
+                            f"?highlight={change_id}"
+                        ),
+                        "purchase_order_change_id": str(change_id),
+                    },
+                    context={"creator_user_id": doc.created_by},
+                )
+            except Exception as exc:
+                from loguru import logger
+
+                logger.warning(
+                    "采购变更单提交消息提醒失败 tenant={} change={}: {}",
+                    tenant_id,
+                    change_id,
+                    exc,
+                )
         if not audit_required:
             if await self._require_change_confirm(tenant_id):
                 return await self._to_detail(doc)
@@ -745,6 +804,39 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
         doc.updated_by_name = user_info["name"]
         await doc.save()
         if body.approved:
+            from apps.kuaizhizao.services.kuaizhizao_business_notification import (
+                ACTION_APPROVED,
+                DOC_PURCHASE_ORDER_CHANGE,
+                dispatch_kuaizhizao_notification,
+            )
+
+            try:
+                await dispatch_kuaizhizao_notification(
+                    tenant_id,
+                    trigger_document=DOC_PURCHASE_ORDER_CHANGE,
+                    trigger_action=ACTION_APPROVED,
+                    variables={
+                        "change_code": doc.change_code or str(change_id),
+                        "source_order_code": doc.source_order_code or "—",
+                        "supplier_name": doc.supplier_name or "—",
+                        "detail_path": (
+                            "/apps/kuaizhizao/purchase-management/purchase-order-changes"
+                            f"?highlight={change_id}"
+                        ),
+                        "purchase_order_change_id": str(change_id),
+                    },
+                    context={"creator_user_id": doc.created_by},
+                )
+            except Exception as exc:
+                from loguru import logger
+
+                logger.warning(
+                    "采购变更单审核消息提醒失败 tenant={} change={}: {}",
+                    tenant_id,
+                    change_id,
+                    exc,
+                )
+        if body.approved:
             if await self._require_change_confirm(tenant_id):
                 return await self._to_detail(doc)
             return await self.apply(tenant_id, change_id, operator_id)
@@ -755,6 +847,24 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
         if not doc:
             raise NotFoundError(f"采购变更单不存在: {change_id}")
         assert_purchase_order_change_capability(doc, "withdraw_submit")
+        try:
+            from core.services.approval.approval_instance_service import ApprovalInstanceService
+
+            await ApprovalInstanceService.cancel_approval(
+                tenant_id=tenant_id,
+                entity_type="purchase_order_change",
+                entity_id=change_id,
+                operator_id=operator_id,
+            )
+        except Exception as exc:
+            from loguru import logger
+
+            logger.warning(
+                "取消采购变更单审批流程失败 tenant={} change={}: {}",
+                tenant_id,
+                change_id,
+                exc,
+            )
         doc.status = DocumentStatus.DRAFT.value
         doc.review_status = ReviewStatus.PENDING.value
         user_info = await self.get_user_info(operator_id)

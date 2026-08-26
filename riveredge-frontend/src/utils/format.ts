@@ -7,6 +7,7 @@
 
 import type { Dayjs } from 'dayjs';
 import dayjs from '../config/dayjs';
+import { getCachedNumericPrecisionPlaces } from '../hooks/useNumericPrecision';
 import { useConfigStore } from '../stores/configStore';
 
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -186,11 +187,65 @@ export function formatNumber(
   });
 }
 
+/** 单价字段名 → 使用 price 精度，其余金额字段 → amount 精度 */
+export function resolveAmountFieldPrecisionKind(fieldName?: string): 'price' | 'amount' {
+  if (!fieldName) return 'amount';
+  const normalized = fieldName.toLowerCase();
+  if (normalized === 'unit_price' || normalized.endsWith('_unit_price')) {
+    return 'price';
+  }
+  return 'amount';
+}
+
+/** AmountDisplay / 列 render：按字段名解析展示小数位（可被 explicitDecimals 覆盖） */
+export function resolveAmountDisplayDecimals(fieldName?: string, explicitDecimals?: number): number {
+  if (explicitDecimals != null) return explicitDecimals;
+  return getCachedNumericPrecisionPlaces(resolveAmountFieldPrecisionKind(fieldName));
+}
+
+/** 格式化单价（固定位小数，跟随 common.price_decimal_places） */
+export function formatPrice(num: unknown, fallback = '-'): string {
+  if (num === null || num === undefined || num === '') return fallback;
+  const n = Number(num);
+  if (!Number.isFinite(n)) return fallback;
+  return formatNumber(n, getCachedNumericPrecisionPlaces('price'));
+}
+
+/** 格式化金额（固定位小数，跟随 common.amount_decimal_places） */
+export function formatAmount(num: unknown, fallback = '-'): string {
+  if (num === null || num === undefined || num === '') return fallback;
+  const n = Number(num);
+  if (!Number.isFinite(n)) return fallback;
+  return formatNumber(n, getCachedNumericPrecisionPlaces('amount'));
+}
+
+/** ¥ + formatAmount */
+export function formatCurrencyAmount(num: unknown, fallback = '—'): string {
+  const body = formatAmount(num, '-');
+  if (body === '-') return fallback;
+  return `¥${body}`;
+}
+
+/** ¥ + formatPrice */
+export function formatCurrencyPrice(num: unknown, fallback = '—'): string {
+  const body = formatPrice(num, '-');
+  if (body === '-') return fallback;
+  return `¥${body}`;
+}
+
+export function renderPrice(value: unknown): string {
+  return formatPrice(value);
+}
+
+export function renderAmount(value: unknown): string {
+  return formatAmount(value);
+}
+
 /**
  * 格式化数量（唯一展示入口）
  *
- * 与后端主流 Decimal(decimal_places=2) 对齐：最多 2 位小数，去掉无意义尾零。
- * 空值 / 非法值统一为「—」。金额请用 formatNumber / AmountDisplay，勿混用本函数。
+ * 小数位跟随业务配置 common.quantity_decimal_places（默认 2，范围 0–4），去掉无意义尾零。
+ * 空值 / 非法值统一为「—」。单价用 formatPrice，金额用 formatAmount / AmountDisplay，数量用 formatQuantity。
  */
 export function formatQuantity(num: unknown): string {
   if (num === null || num === undefined || num === '') {
@@ -200,9 +255,10 @@ export function formatQuantity(num: unknown): string {
   if (!Number.isFinite(n)) {
     return '—';
   }
+  const decimals = getCachedNumericPrecisionPlaces('quantity');
   return n.toLocaleString('zh-CN', {
     minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
+    maximumFractionDigits: decimals,
   });
 }
 

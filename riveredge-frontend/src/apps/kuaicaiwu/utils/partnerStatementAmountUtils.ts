@@ -1,8 +1,8 @@
 import type { PartnerStatementLine } from '../services/finance/partnerStatement';
 import type { Key } from 'react';
+import { formatCurrencyAmount } from '../../../utils/format';
 
-export const partnerStatementMoney = (v: number | string | undefined) =>
-  `¥${Number(v ?? 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+export const partnerStatementMoney = (v: number | string | undefined) => formatCurrencyAmount(v ?? 0, '¥0.00');
 
 export function lineUsesDebitSide(line: PartnerStatementLine): boolean {
   if (Number(line.debit ?? 0) > 0) return true;

@@ -42,7 +42,7 @@ import {
   quotationCapabilityReasonMessage,
 } from '../../../../../hooks/useDocumentCapabilities';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
-import { formatDateTime, formatBusinessDateOnly, todaySiteDateString } from '../../../../../utils/format';
+import { formatDateTime, formatBusinessDateOnly, todaySiteDateString, formatAmount } from '../../../../../utils/format';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
@@ -677,7 +677,7 @@ const SalesReviewsPage: React.FC = () => {
         align: 'right' as const,
         render: (v: number | undefined) =>
           v != null
-            ? Number(v).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+            ? formatAmount(v)
             : '-',
       },
       {

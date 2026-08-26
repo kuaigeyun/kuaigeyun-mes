@@ -6,7 +6,7 @@ import {
   downloadRecordsAsXlsx,
   type ExportXlsxColumn,
 } from '../../../../../utils/exportRecordsXlsx';
-import { formatDateTime, formatNumber, formatQuantity } from '../../../../../utils/format';
+import { formatDateTime, formatNumber, formatQuantity, formatAmount } from '../../../../../utils/format';
 import { translateLifecycleResult } from '../../../../../utils/globalLifecycleI18n';
 import type { Quotation } from '../../../services/quotation';
 import { getQuotationLifecycle } from '../../../utils/quotationLifecycle';
@@ -158,8 +158,8 @@ export function mapQuotationToExportRow(
     valid_until: formatDateOnly(pickField(record, 'valid_until', 'validUntil')),
     delivery_date: formatDateOnly(pickField(record, 'delivery_date', 'deliveryDate')),
     total_quantity: formatQuantity(pickField(record, 'total_quantity', 'totalQuantity')),
-    total_amount: formatNumber(pickField(record, 'total_amount', 'totalAmount'), 2),
-    discount_amount: formatNumber(pickField(record, 'discount_amount', 'discountAmount'), 2),
+    total_amount: formatAmount(pickField(record, 'total_amount', 'totalAmount')),
+    discount_amount: formatAmount(pickField(record, 'discount_amount', 'discountAmount')),
     price_type: formatPriceType(pickField(record, 'price_type', 'priceType'), t),
     currency_code: dictLabel(
       dictionaryLabels.CURRENCY,

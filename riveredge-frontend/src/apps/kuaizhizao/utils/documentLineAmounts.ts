@@ -1,4 +1,5 @@
 import { normalizeFormListItems } from '../../../utils/formListItems';
+import { formatCurrencyAmount } from '../../../utils/format';
 
 const toSafeNumber = (value: unknown): number => {
   const n = Number(value);
@@ -195,5 +196,5 @@ export function computePurchaseDocumentTotals(
 }
 
 export function formatDocumentMoneyYuan(n: number): string {
-  return `¥${(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return formatCurrencyAmount(n ?? 0, '¥0.00');
 }

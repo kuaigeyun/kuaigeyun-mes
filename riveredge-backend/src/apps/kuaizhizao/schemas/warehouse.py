@@ -127,6 +127,17 @@ class ProductionPickingPullFromWorkOrderRequest(BaseSchema):
     lines: List[ProductionPickingPullLineCreate] = Field(..., min_length=1, description="领料明细")
 
 
+class ProductionPickingPullFromMaterialCallRequest(BaseSchema):
+    """生产领料 — 从补料申请下推创建（带明细）"""
+
+    material_call_id: int = Field(..., description="补料申请ID")
+    warehouse_id: Optional[int] = Field(None, description="出库仓库ID（表头默认，明细未指定时使用）")
+    warehouse_name: Optional[str] = Field(None, max_length=100, description="出库仓库名称（表头默认）")
+    picker_name: Optional[str] = Field(None, max_length=100, description="领料人姓名")
+    notes: Optional[str] = Field(None, description="备注")
+    lines: List[ProductionPickingPullLineCreate] = Field(..., min_length=1, description="领料明细")
+
+
 # === 生产领料单明细 ===
 
 class ProductionPickingItemBase(BaseSchema):

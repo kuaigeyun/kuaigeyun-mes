@@ -1,3 +1,4 @@
+import { formatCurrencyAmount } from '../../../../../utils/format';
 /**
  * 月结定价工作台
  *
@@ -40,7 +41,7 @@ type PriceSettlementRow = PriceSettlementCandidate & {
 };
 
 const money = (v: number | undefined) =>
-  `¥${Number(v ?? 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  formatCurrencyAmount(v ?? 0);
 
 const dashText = (v?: string | null) => {
   const text = (v ?? '').trim();

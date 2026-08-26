@@ -15,6 +15,7 @@ import type { TabsProps } from 'antd';
 import { App, Tag, Divider, Row, Col, Statistic, Space, Tabs, Empty, Descriptions, Typography, Timeline, theme } from 'antd';
 import { BarChartOutlined, LineChartOutlined, FileTextOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import { useNumericPrecisionPlaces } from '../../../../../hooks/useNumericPrecision';
 import { MultiTabListPageTemplate, DetailDrawerSection } from '../../../../../components/layout-templates';
 import { costReportApi } from '../../../services/cost';
 import { materialApi } from '../../../../master-data/services/material';
@@ -81,6 +82,7 @@ const defaultFormValues = {
 
 const CostReportPage: React.FC = () => {
   const { t } = useTranslation();
+  const amountDecimals = useNumericPrecisionPlaces('amount');
   const { token } = theme.useToken();
   const { message: messageApi } = App.useApp();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -172,10 +174,10 @@ const CostReportPage: React.FC = () => {
                 <Statistic title={t('app.kuaicaiwu.costReport.col.totalPeriods')} value={result.trend_analysis!.summary.total_periods} />
               </Col>
               <Col xs={24} sm={8}>
-                <Statistic title={t('app.kuaicaiwu.costCommon.col.totalCost')} value={result.trend_analysis!.summary.total_cost} prefix="¥" precision={2} />
+                <Statistic title={t('app.kuaicaiwu.costCommon.col.totalCost')} value={result.trend_analysis!.summary.total_cost} prefix="¥" precision={amountDecimals} />
               </Col>
               <Col xs={24} sm={8}>
-                <Statistic title={t('app.kuaicaiwu.costReport.col.avgCostPerPeriod')} value={result.trend_analysis!.summary.avg_cost_per_period} prefix="¥" precision={2} />
+                <Statistic title={t('app.kuaicaiwu.costReport.col.avgCostPerPeriod')} value={result.trend_analysis!.summary.avg_cost_per_period} prefix="¥" precision={amountDecimals} />
               </Col>
             </Row>
             <Typography.Text type="secondary">{t('app.kuaicaiwu.costReport.trendDataJson')}</Typography.Text>
@@ -198,25 +200,25 @@ const CostReportPage: React.FC = () => {
             <Statistic
               value={result.structure_analysis.total_cost}
               prefix="¥"
-              precision={2}
+              precision={amountDecimals}
               styles={{ content: { fontSize: 22, fontWeight: 600, color: token.colorPrimary } }}
             />
             <Divider style={{ margin: '16px 0' }} />
             <Row gutter={[16, 16]}>
               <Col xs={24} md={8}>
-                <Statistic title={t('app.kuaicaiwu.costCommon.col.materialCost')} value={result.structure_analysis.cost_composition.material_cost} prefix="¥" precision={2} />
+                <Statistic title={t('app.kuaicaiwu.costCommon.col.materialCost')} value={result.structure_analysis.cost_composition.material_cost} prefix="¥" precision={amountDecimals} />
                 <div style={{ marginTop: 8, fontSize: 12, color: token.colorTextSecondary }}>
                   {t('app.kuaicaiwu.costReport.shareRate', { rate: result.structure_analysis.cost_rates.material_cost_rate.toFixed(2) })}
                 </div>
               </Col>
               <Col xs={24} md={8}>
-                <Statistic title={t('app.kuaicaiwu.costCommon.col.laborCost')} value={result.structure_analysis.cost_composition.labor_cost} prefix="¥" precision={2} />
+                <Statistic title={t('app.kuaicaiwu.costCommon.col.laborCost')} value={result.structure_analysis.cost_composition.labor_cost} prefix="¥" precision={amountDecimals} />
                 <div style={{ marginTop: 8, fontSize: 12, color: token.colorTextSecondary }}>
                   {t('app.kuaicaiwu.costReport.shareRate', { rate: result.structure_analysis.cost_rates.labor_cost_rate.toFixed(2) })}
                 </div>
               </Col>
               <Col xs={24} md={8}>
-                <Statistic title={t('app.kuaicaiwu.costCommon.col.manufacturingCost')} value={result.structure_analysis.cost_composition.manufacturing_cost} prefix="¥" precision={2} />
+                <Statistic title={t('app.kuaicaiwu.costCommon.col.manufacturingCost')} value={result.structure_analysis.cost_composition.manufacturing_cost} prefix="¥" precision={amountDecimals} />
                 <div style={{ marginTop: 8, fontSize: 12, color: token.colorTextSecondary }}>
                   {t('app.kuaicaiwu.costReport.shareRate', { rate: result.structure_analysis.cost_rates.manufacturing_cost_rate.toFixed(2) })}
                 </div>

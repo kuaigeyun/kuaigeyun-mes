@@ -33,6 +33,173 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
   {
+    id: 'fqc-linked-sales-order-detail-fix',
+    date: '2026-08-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.fqc-linked-sales-order-detail-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.fqc-linked-sales-order-detail-fix.description',
+  },
+  {
+    id: 'fqc-detail-customer-name-fix',
+    date: '2026-08-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.fqc-detail-customer-name-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.fqc-detail-customer-name-fix.description',
+  },
+  {
+    id: 'production-picking-decimal-overpick-fix',
+    date: '2026-08-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.production-picking-decimal-overpick-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.production-picking-decimal-overpick-fix.description',
+  },
+  {
+    id: 'purchase-arrival-warning-and-change-display-fixes',
+    date: '2026-08-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-arrival-warning-and-change-display-fixes.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-arrival-warning-and-change-display-fixes.description',
+  },
+  {
+    id: 'inbound-detail-report-material-fields-fix',
+    date: '2026-08-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.inbound-detail-report-material-fields-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.inbound-detail-report-material-fields-fix.description',
+  },
+  {
+    id: 'batch-inventory-query-batch-no-display-fix',
+    date: '2026-08-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.batch-inventory-query-batch-no-display-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.batch-inventory-query-batch-no-display-fix.description',
+  },
+  {
+    id: 'fqc-push-inbound-receipt',
+    date: '2026-08-26',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.fqc-push-inbound-receipt.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.fqc-push-inbound-receipt.description',
+  },
+  {
+    id: 'last-operation-auto-inbound-fqc-fix',
+    date: '2026-08-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.last-operation-auto-inbound-fqc-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.last-operation-auto-inbound-fqc-fix.description',
+  },
+  {
+    id: 'numeric-price-amount-precision-config-fix',
+    date: '2026-08-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.numeric-price-amount-precision-config-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.numeric-price-amount-precision-config-fix.description',
+  },
+  {
+    id: 'numeric-quantity-precision-config-fix',
+    date: '2026-08-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.numeric-quantity-precision-config-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.numeric-quantity-precision-config-fix.description',
+  },
+  {
+    id: 'material-call-push-production-picking-fix',
+    date: '2026-08-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.material-call-push-production-picking-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.material-call-push-production-picking-fix.description',
+  },
+  {
+    id: 'outsource-work-order-received-qualified-only-fix',
+    date: '2026-08-26',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.outsource-work-order-received-qualified-only-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.outsource-work-order-received-qualified-only-fix.description',
+  },
+  {
+    id: 'inbound-outsource-receipt-detail-fix',
+    date: '2026-08-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.inbound-outsource-receipt-detail-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.inbound-outsource-receipt-detail-fix.description',
+  },
+  {
+    id: 'work-order-kitting-related-doc-no-fix',
+    date: '2026-08-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.work-order-kitting-related-doc-no-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.work-order-kitting-related-doc-no-fix.description',
+  },
+  {
+    id: 'inbound-outsource-receipt-amount-fix',
+    date: '2026-08-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.inbound-outsource-receipt-amount-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.inbound-outsource-receipt-amount-fix.description',
+  },
+  {
+    id: 'purchase-order-print-fields-fix',
+    date: '2026-08-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-order-print-fields-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-order-print-fields-fix.description',
+  },
+  {
+    id: 'purchase-requisition-print',
+    date: '2026-08-26',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-requisition-print.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.purchase-requisition-print.description',
+  },
+  {
+    id: 'purchase-requisition-save-submit-fix',
+    date: '2026-08-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-requisition-save-submit-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-requisition-save-submit-fix.description',
+  },
+  {
+    id: 'product-sales-ranking-report-fix',
+    date: '2026-08-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.product-sales-ranking-report-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.product-sales-ranking-report-fix.description',
+  },
+  {
+    id: 'sales-contract-print-chinese-labels',
+    date: '2026-08-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-contract-print-chinese-labels.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-contract-print-chinese-labels.description',
+  },
+  {
+    id: 'sales-contract-salesman-select',
+    date: '2026-08-26',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-contract-salesman-select.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-contract-salesman-select.description',
+  },
+  {
     id: 'quotation-export-localized-columns',
     date: '2026-08-26',
     type: 'fix',

@@ -139,8 +139,19 @@ export const InboundDetailDrawer: React.FC<InboundDetailDrawerProps> = ({
         ...(effective.supplier_name
           ? [
               {
-                title: t('app.kuaizhizao.warehouseInbound.field.supplier'),
+                title:
+                  effective.receipt_type === 'outsource_receipt'
+                    ? t('app.kuaizhizao.warehouseInbound.field.outsourceSupplier')
+                    : t('app.kuaizhizao.warehouseInbound.field.supplier'),
                 dataIndex: 'supplier_name' as const,
+              },
+            ]
+          : []),
+        ...(effective.outsource_work_order_code
+          ? [
+              {
+                title: t('app.kuaizhizao.warehouseInbound.field.outsourceWoCode'),
+                dataIndex: 'outsource_work_order_code' as const,
               },
             ]
           : []),
@@ -202,7 +213,7 @@ export const InboundDetailDrawer: React.FC<InboundDetailDrawerProps> = ({
             ]
           : []),
       ] as ProDescriptionsItemProps<InboundDetailRecord>[]),
-    [effective.customer_name, effective.notes, effective.picking_code, effective.purchase_order_code, effective.supplier_name, effective.work_order_code, effective.workshop_name, t],
+    [effective.customer_name, effective.notes, effective.outsource_work_order_code, effective.picking_code, effective.purchase_order_code, effective.receipt_type, effective.supplier_name, effective.work_order_code, effective.workshop_name, t],
   );
 
   const defaultLinesTitle =

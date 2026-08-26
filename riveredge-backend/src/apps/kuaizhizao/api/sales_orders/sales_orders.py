@@ -758,8 +758,10 @@ async def get_sales_order(
         return SalesOrderResponse(**masked_payload)
     except NotFoundError as e:
         raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/sales-orders/{sales_order_id}", tenant_id)
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"获取销售订单详情失败: {e}")
+        logger.exception("获取销售订单详情失败: {}", e)
         raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "获取销售订单详情失败", "/sales-orders/{sales_order_id}", tenant_id)
 
 

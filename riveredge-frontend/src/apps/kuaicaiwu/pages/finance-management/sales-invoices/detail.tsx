@@ -32,7 +32,7 @@ import {
 } from '../../../utils/financeSharedOptions';
 import { canDeleteSalesInvoice } from '../../../utils/salesInvoiceUi';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
-import { formatDateTime } from '../../../../../utils/format';
+import { formatDateTime, formatAmount } from '../../../../../utils/format';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 const P = 'app.kuaicaiwu.salesInvoice';
 const SALES_INVOICE_RESOURCE = 'kuaicaiwu:sales-invoice';
@@ -87,7 +87,7 @@ const TAX_RATE_OPTIONS = [
 
 function moneyCell(v: string | number | undefined | null) {
   const n = Number(v ?? 0);
-  const abs = Math.abs(n).toLocaleString('zh-CN', { minimumFractionDigits: 2 });
+  const abs = formatAmount(Math.abs(n));
   return n < 0 ? `-${abs}` : abs;
 }
 

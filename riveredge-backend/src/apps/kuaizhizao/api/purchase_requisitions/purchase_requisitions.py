@@ -419,6 +419,55 @@ async def fix_requisition_status(
     )
 
 
+@router.get("/purchase-requisitions/{requisition_id}/print", summary="Print purchase requisition")
+async def print_purchase_requisition(
+    requisition_id: int = Path(..., description="采购申请ID"),
+    template_code: Optional[str] = Query(None, description="打印模板代码"),
+    template_uuid: Optional[str] = Query(None, description="打印模板UUID"),
+    output_format: str = Query("html", description="输出格式"),
+    response_format: str = Query("json", description="响应格式"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """打印采购申请"""
+    import base64
+
+    from apps.kuaizhizao.services.print_service import DocumentPrintService
+    from fastapi.responses import HTMLResponse, JSONResponse, Response
+    from infra.exceptions.exceptions import NotFoundError, ValidationError
+
+    try:
+        result = await DocumentPrintService().print_document(
+            tenant_id=tenant_id,
+            document_type="purchase_requisition",
+            document_id=requisition_id,
+            template_code=template_code,
+            template_uuid=template_uuid,
+            output_format=output_format,
+        )
+    except NotFoundError as e:
+        raise FastAPIHTTPException(status_code=404, detail=str(e)) from e
+    except ValidationError as e:
+        raise FastAPIHTTPException(status_code=400, detail=str(e)) from e
+
+    if (
+        (output_format or "html").lower() == "pdf"
+        and (response_format or "json").lower() in {"pdf", "binary", "raw"}
+        and result.get("mime_type") == "application/pdf"
+    ):
+        raw = base64.b64decode(result.get("content") or "")
+        return Response(
+            content=raw,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'inline; filename="purchase-requisition-{requisition_id}.pdf"'
+            },
+        )
+    if response_format == "html":
+        return HTMLResponse(content=result.get("content", ""), status_code=200)
+    return JSONResponse(content=result, status_code=200)
+
+
 @router.delete("/purchase-requisitions/{requisition_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete purchase requisition")
 async def delete_requisition(
     requisition_id: int = Path(...),

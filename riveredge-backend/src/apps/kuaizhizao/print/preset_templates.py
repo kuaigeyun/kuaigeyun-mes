@@ -13,6 +13,7 @@ KUAIZHIZAO_PRESET_PRINT_TEMPLATES = [
     make_preset(name="送货单", code="DELIVERY_NOTICE_PRINT", document_type="delivery_notice"),
     make_preset(name="销售出库单", code="SALES_DELIVERY_PRINT", document_type="sales_delivery"),
     make_preset(name="采购订单", code="PURCHASE_ORDER_PRINT", document_type="purchase_order"),
+    make_preset(name="采购申请", code="PURCHASE_REQUISITION_PRINT", document_type="purchase_requisition"),
     make_preset(name="采购入库单", code="PURCHASE_RECEIPT_PRINT", document_type="purchase_receipt"),
     make_preset(name="工单", code="WORK_ORDER_PRINT", document_type="work_order"),
     make_preset(name="生产领料单", code="PRODUCTION_PICKING_PRINT", document_type="production_picking"),

@@ -35,6 +35,7 @@ import { normalizeDocumentAttachments } from '../../../utils/documentAttachments
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import { useTranslation } from 'react-i18next';
+import { useNumericPrecisionPlaces } from '../../../../../hooks/useNumericPrecision';
 import { useWarehouseLocationOptions } from '../../../hooks/useWarehouseLocationOptions';
 import { getDepartmentTree } from '../../../../../services/department';
 import { FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
@@ -105,6 +106,7 @@ function translateMaterialBorrowStatus(t: (key: string) => string, status?: stri
 
 const MaterialBorrowsPage: React.FC = () => {
   const { t } = useTranslation();
+  const quantityDecimals = useNumericPrecisionPlaces('quantity');
   const [searchParams] = useSearchParams();
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const { message: messageApi } = App.useApp();
@@ -927,7 +929,7 @@ const MaterialBorrowsPage: React.FC = () => {
                     align: 'right' as const,
                     render: (_: any, __: any, index: number) => (
                       <AntForm.Item name={[index, 'borrow_quantity']} rules={[{ required: true, message: t('app.kuaizhizao.warehouseOutbound.field.required') }, { type: 'number', min: 0.01, message: '>0' }]} style={{ margin: 0 }}>
-                        <InputNumber placeholder={t('common.quantity')} min={0} precision={2} style={{ width: '100%' }} size="small" />
+                        <InputNumber placeholder={t('common.quantity')} min={0} precision={quantityDecimals} style={{ width: '100%' }} size="small" />
                       </AntForm.Item>
                     ),
                   },

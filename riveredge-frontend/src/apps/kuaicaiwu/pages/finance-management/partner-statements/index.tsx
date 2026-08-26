@@ -54,7 +54,7 @@ import { resolvePartnerStatementVoucherTarget } from '../../../utils/financeVouc
 import { apiRequest } from '../../../../../services/api';
 import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
-import { formatDateTime } from '../../../../../utils/format';
+import { formatDateTime, formatCurrencyAmount } from '../../../../../utils/format';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import {
   FINANCE_DOC_PINNED_STATUS_FIELD,
@@ -72,7 +72,7 @@ import { buildReportHelpViewConfig } from '../../../../../components/page-help-w
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 const money = (v: number | string | undefined) =>
-  `¥${Number(v ?? 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  formatCurrencyAmount(v ?? 0);
 
 const PS = 'app.kuaicaiwu.partnerStatement';
 const PARTNER_STATEMENT_RESOURCE = 'kuaicaiwu:partner-statement';

@@ -253,8 +253,7 @@ class PurchaseArrivalDelayService(AppBaseService[PurchaseArrivalDelayReport]):
 
         if not await self._require_change_confirm(tenant_id):
             await self.change_service.submit(tenant_id, poc.id, operator_id)
-            doc.status = OrderChangeApplyStatus.APPLIED.value
-            await doc.save()
+            # 延期填报状态保持 change_generated；预警行按关联变更单真状态展示，生效后由 mark_applied_for_change 置 APPLIED
 
     async def get_by_id(self, tenant_id: int, report_id: int) -> PurchaseArrivalDelayReportResponse:
         doc = await self._get_or_raise(tenant_id, report_id)

@@ -1,6 +1,7 @@
 import React, { Suspense, lazy, useMemo } from 'react';
 import { Button, Col, Empty, Row, Statistic } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { useNumericPrecisionPlaces } from '../../../hooks/useNumericPrecision';
 import {
   agingChartData,
   orderedAgingRows,
@@ -21,6 +22,7 @@ type FinanceAgingPanelProps = {
 
 const FinanceAgingPanel: React.FC<FinanceAgingPanelProps> = ({ data, detailPath, onOpenDetail }) => {
   const { t } = useTranslation();
+  const amountDecimals = useNumericPrecisionPlaces('amount');
   const rows = useMemo(() => orderedAgingRows(data, t), [data, t]);
   const chartData = useMemo(() => agingChartData(data, t), [data, t]);
   const totalAmount = useMemo(
@@ -78,7 +80,7 @@ const FinanceAgingPanel: React.FC<FinanceAgingPanelProps> = ({ data, detailPath,
               <Statistic
                 title={row.label}
                 value={row.amount}
-                precision={2}
+                precision={amountDecimals}
                 prefix="¥"
                 styles={{ content: { fontSize: 16 } }}
               />

@@ -7,6 +7,7 @@ import { ProFormSelect, ProFormDatePicker, PageContainer, ProDescriptions } from
 import { App, Button, Card, Divider, Row, Col, Statistic } from 'antd';
 import { CalculatorOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import { useNumericPrecisionPlaces } from '../../../../../hooks/useNumericPrecision';
 import { FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { StructuredCostDataView } from '../../../../../components/structured-cost-data-view';
 import { qualityCostApi } from '../../../services/cost';
@@ -36,6 +37,7 @@ export interface QualityCostPageProps {
 
 const QualityCostPage: React.FC<QualityCostPageProps> = ({ embedded = false }) => {
   const { t } = useTranslation();
+  const amountDecimals = useNumericPrecisionPlaces('amount');
   const { message: messageApi } = App.useApp();
   const formRef = useRef<any>(null);
 
@@ -129,22 +131,22 @@ const QualityCostPage: React.FC<QualityCostPageProps> = ({ embedded = false }) =
           <Row gutter={16} style={{ marginBottom: 24 }}>
             <Col span={6}>
               <Card>
-                <Statistic title={t('app.kuaicaiwu.qualityCost.col.preventionCost')} value={result.prevention_cost} prefix="¥" precision={2} />
+                <Statistic title={t('app.kuaicaiwu.qualityCost.col.preventionCost')} value={result.prevention_cost} prefix="¥" precision={amountDecimals} />
               </Card>
             </Col>
             <Col span={6}>
               <Card>
-                <Statistic title={t('app.kuaicaiwu.qualityCost.col.appraisalCost')} value={result.appraisal_cost} prefix="¥" precision={2} />
+                <Statistic title={t('app.kuaicaiwu.qualityCost.col.appraisalCost')} value={result.appraisal_cost} prefix="¥" precision={amountDecimals} />
               </Card>
             </Col>
             <Col span={6}>
               <Card>
-                <Statistic title={t('app.kuaicaiwu.qualityCost.col.internalFailureCost')} value={result.internal_failure_cost} prefix="¥" precision={2} />
+                <Statistic title={t('app.kuaicaiwu.qualityCost.col.internalFailureCost')} value={result.internal_failure_cost} prefix="¥" precision={amountDecimals} />
               </Card>
             </Col>
             <Col span={6}>
               <Card>
-                <Statistic title={t('app.kuaicaiwu.qualityCost.col.externalFailureCost')} value={result.external_failure_cost} prefix="¥" precision={2} />
+                <Statistic title={t('app.kuaicaiwu.qualityCost.col.externalFailureCost')} value={result.external_failure_cost} prefix="¥" precision={amountDecimals} />
               </Card>
             </Col>
           </Row>

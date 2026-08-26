@@ -4,7 +4,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   App,
   Button,
@@ -105,6 +105,9 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
   const pullFromWorkOrderAction = resolveKuaizhizaoDocumentAction(t, 'outbound.pull_from_work_order');
   const { woId: woIdParam } = useParams<{ woId: string }>();
   const woId = Number(woIdParam);
+  const [searchParams] = useSearchParams();
+  const materialCallId = Number(searchParams.get('materialCallId') ?? 0);
+  const fromMaterialCall = Number.isFinite(materialCallId) && materialCallId > 0;
   const navigate = useNavigate();
   const location = useLocation();
   const { message: messageApi } = App.useApp();
@@ -590,7 +593,9 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
         const [woRaw, whRes, previewRaw] = await Promise.all([
           workOrderApi.get(String(woId)),
           masterWarehouseApi.list({ is_active: true, limit: 500 }),
-          workOrderApi.previewPushProductionPicking(woId) as Promise<PushPreviewResponse>,
+          fromMaterialCall
+            ? warehouseApi.materialCall.previewPushProductionPicking(materialCallId)
+            : (workOrderApi.previewPushProductionPicking(woId) as Promise<PushPreviewResponse>),
         ]);
         if (previewRaw?.has_blocking_issues) {
           messageApi.warning(previewRaw.blocking_reason || t('app.kuaizhizao.warehouseOutbound.pull.woPreviewNoLines'));
@@ -681,7 +686,7 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
         setLoading(false);
       }
     })();
-  }, [woId, leavePage, messageApi, t, applyDraftOnce, operatorHook.restoreReceiver]);
+  }, [woId, materialCallId, fromMaterialCall, leavePage, messageApi, t, applyDraftOnce, operatorHook.restoreReceiver]);
 
   const submit = async (mode: 'draft' | 'confirm') => {
     const activeLines = pickLines.filter((line) => line.issueQuantity > 0);
@@ -786,12 +791,19 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
           },
         ];
       });
-      const created = await warehouseApi.productionPicking.pullFromWorkOrder({
-        work_order_id: woId,
-        picker_name: operatorHook.receiverName.trim() || undefined,
-        notes: notes.trim() || undefined,
-        lines: submitLines,
-      });
+      const created = fromMaterialCall
+        ? await warehouseApi.materialCall.pushProductionPicking(materialCallId, {
+            material_call_id: materialCallId,
+            picker_name: operatorHook.receiverName.trim() || undefined,
+            notes: notes.trim() || undefined,
+            lines: submitLines,
+          })
+        : await warehouseApi.productionPicking.pullFromWorkOrder({
+            work_order_id: woId,
+            picker_name: operatorHook.receiverName.trim() || undefined,
+            notes: notes.trim() || undefined,
+            lines: submitLines,
+          });
       if (created?.id == null) {
         messageApi.error(t('app.kuaizhizao.warehouseOutbound.entry.noPickingId'));
         return;

@@ -64,7 +64,7 @@ import { normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/docum
 import { bankAccountService, type BankAccount } from '../../../services/finance/bank-account';
 import { getStatusDisplay } from '../../../../kuaizhizao/constants/documentStatus';
 import { paymentCapabilityReasonMessage } from '../../../utils/paymentCapabilityMessages';
-import { formatDateTime } from '../../../../../utils/format';
+import { formatDateTime, formatCurrencyAmount } from '../../../../../utils/format';
 import {
   FINANCE_DOC_PINNED_STATUS_FIELD,
   financeDocCodePartnerSearchColumns,
@@ -497,7 +497,7 @@ const PaymentsPage: React.FC = () => {
         dataIndex: 'remaining_amount',
         width: 140,
         align: 'right' as const,
-        render: (v: unknown) => `¥${Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`,
+        render: (v: unknown) => formatCurrencyAmount(v || 0),
       },
     ],
     [t],
@@ -505,7 +505,7 @@ const PaymentsPage: React.FC = () => {
 
   const pullPreviewMaxPush = Number(pullPreviewData?.items?.[0]?.max_push_quantity ?? 0);
   const formatPullMoney = (v: number) =>
-    `¥${Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`;
+    formatCurrencyAmount(v || 0);
 
   const batchMenuItems = useMemo(() => [
     {
@@ -592,7 +592,7 @@ const PaymentsPage: React.FC = () => {
       sorter: true,
       render: (_, record) => (
         <span style={{ color: record.unsettled_amount > 0 ? '#1677ff' : 'inherit', fontWeight: 'bold' }}>
-          ¥{Number(record.unsettled_amount).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
+          {formatCurrencyAmount(record.unsettled_amount)}
         </span>
       ),
     },
