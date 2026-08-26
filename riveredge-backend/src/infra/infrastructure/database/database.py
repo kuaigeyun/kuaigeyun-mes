@@ -68,13 +68,14 @@ else:
 # 使用 127.0.0.1 而不是 localhost，避免 DNS 解析问题
 db_host = "127.0.0.1" if settings.DB_HOST == "localhost" else settings.DB_HOST
 
-# 动态生成 Tortoise ORM 配置
-# 不再使用硬编码的模型列表，通过数据库查询动态决定加载哪些应用模型
+# 运行时 Tortoise 配置：静态 TORTOISE_ORM（随代码部署 / aerich 真源）并入动态发现的可选应用。
+# 禁止仅按 core_applications.is_installed 加载，否则首次安装或应用表未写入时
+# DemandComputation 等模型 default_connection=None，lifespan 对账会把整个 API 拉垮。
 async def get_dynamic_tortoise_config() -> dict:
-    """
-    动态生成 Tortoise ORM 配置
+    """生成运行时 Tortoise ORM 配置。
 
-    通过查询数据库中活跃的应用来动态决定需要加载的模型模块。
+    以静态 TORTOISE_ORM 的模型清单为真源（磁盘上存在的模块），再并入
+    动态配置里按已安装应用 / 插件声明发现的模块。
     """
     logger.info("🔧 生成动态 Tortoise ORM 配置...")
 
@@ -83,6 +84,25 @@ async def get_dynamic_tortoise_config() -> dict:
 
     # 获取动态配置
     dynamic_config = await DynamicDatabaseConfigService.generate_tortoise_config()
+
+    static_models = list(TORTOISE_ORM["apps"]["models"]["models"])
+    dyn_models = list(dynamic_config["apps"]["models"]["models"])
+    merged: list = []
+    seen: set = set()
+    skipped_missing = 0
+    for path in static_models + dyn_models:
+        if path in seen:
+            continue
+        if not DynamicDatabaseConfigService._module_exists(path):
+            skipped_missing += 1
+            continue
+        seen.add(path)
+        merged.append(path)
+    dynamic_config["apps"]["models"]["models"] = merged
+    logger.info(
+        f"📋 运行时 ORM 模型 {len(merged)} 个"
+        f"（静态 {len(static_models)} + 动态 {len(dyn_models)}，缺模块跳过 {skipped_missing}）"
+    )
 
     # 合并连接配置
     config = {
@@ -527,13 +547,9 @@ async def init_tortoise_for_worker_process() -> None:
 
 
 async def register_db(app) -> None:
-    """
-    注册数据库组件到 FastAPI 应用
+    """注册数据库组件到 FastAPI 应用。
 
-    使用动态配置生成Tortoise ORM配置，只加载活跃应用的模型
-
-    Args:
-        app: FastAPI 应用实例
+    以静态 TORTOISE_ORM 为真源并入动态发现的可选应用模型；初始化失败必须抛出。
     """
     logger.info("🔧 注册动态 Tortoise ORM 到 FastAPI 应用")
 
@@ -547,8 +563,7 @@ async def register_db(app) -> None:
         import traceback
 
         logger.error(f"详细错误信息: {traceback.format_exc()}")
-        # 失败时不抛出异常，继续运行
-        pass
+        raise
 
 
 class _PooledConnectionProxy:

@@ -173,6 +173,8 @@ from .demand import Demand
 from .demand_item import DemandItem
 from .demand_snapshot import DemandSnapshot
 from .demand_recalc_history import DemandRecalcHistory
+from .demand_computation import DemandComputation
+from .demand_computation_item import DemandComputationItem
 from .demand_computation_snapshot import DemandComputationSnapshot
 from .demand_computation_recalc_history import DemandComputationRecalcHistory
 from .demand_change_event import DemandChangeEvent
@@ -406,6 +408,8 @@ __all__ = [
     'DemandItem',
     'DemandSnapshot',
     'DemandRecalcHistory',
+    'DemandComputation',
+    'DemandComputationItem',
     'DemandComputationSnapshot',
     'DemandComputationRecalcHistory',
     'DemandChangeEvent',
