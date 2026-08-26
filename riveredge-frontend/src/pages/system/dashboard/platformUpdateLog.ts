@@ -33,6 +33,22 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
   {
+    id: 'quotation-export-localized-columns',
+    date: '2026-08-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.quotation-export-localized-columns.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.quotation-export-localized-columns.description',
+  },
+  {
+    id: 'sales-dashboard-follow-up-kpi-fix',
+    date: '2026-08-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-dashboard-follow-up-kpi-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-dashboard-follow-up-kpi-fix.description',
+  },
+  {
     id: 'demand-computation-decimal-precision-fix',
     date: '2026-08-26',
     type: 'fix',

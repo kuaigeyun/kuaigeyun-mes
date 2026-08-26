@@ -1,1 +1,0 @@
-import{j as t}from"./vendor-BORuDE6z.js";import{R as o}from"./RichDocumentHelpView-DI0qGZUN.js";import{i as e}from"./richDocumentHelpRegistry-DKFZwHVm.js";function s(i){if(e(i))return{content:t.jsx(o,{docKey:i})}}export{s as b};

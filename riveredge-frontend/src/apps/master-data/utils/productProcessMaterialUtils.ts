@@ -1,21 +1,35 @@
 import type { Material } from '../types/material';
 import type { ProcessRoute } from '../types/process';
 
+export type ProductProcessRouteByMaterialUuid = Record<string, string | undefined>;
+
 /** 物料是否已有效指派工艺路线（路线存在且仍在主数据列表中） */
 export function materialHasEffectiveProcessRoute(
   material: Material,
   processRoutes: ProcessRoute[],
+  productProcessRouteByMaterialUuid?: ProductProcessRouteByMaterialUuid,
 ): boolean {
-  return resolveEffectiveProcessRouteUuid(material, processRoutes) != null;
+  return (
+    resolveEffectiveProcessRouteUuid(material, processRoutes, productProcessRouteByMaterialUuid)
+    != null
+  );
 }
 
 /** 物料仍存有 process_route 引用，但对应路线已不存在（待保存清空） */
 export function materialHasStaleProcessRouteReference(
   material: Material,
   processRoutes: ProcessRoute[],
+  productProcessRouteByMaterialUuid?: ProductProcessRouteByMaterialUuid,
 ): boolean {
   if (!processRoutes.length) return false;
-  if (resolveEffectiveProcessRouteUuid(material, processRoutes)) return false;
+  if (
+    resolveEffectiveProcessRouteUuid(material, processRoutes, productProcessRouteByMaterialUuid)
+  ) {
+    return false;
+  }
+
+  const ppUuid = productProcessRouteByMaterialUuid?.[material.uuid];
+  if (ppUuid) return true;
 
   const prId = material.processRouteId ?? (material as { process_route_id?: number }).process_route_id;
   if (prId != null) return true;
@@ -26,14 +40,23 @@ export function materialHasStaleProcessRouteReference(
 }
 
 /**
- * 解析物料当前有效的工艺路线 UUID。
- * 仅当 FK/defaults 能对应到 processRoutes 中的记录时返回；已删除或无效的引用视为未指派。
+ * 解析物料当前有效的工艺路线 UUID（产品工艺页左栏用）。
+ * 优先产品工艺表指派，其次物料 FK/defaults；已删除或无效的引用视为未指派。
  */
 export function resolveEffectiveProcessRouteUuid(
   material: Material,
   processRoutes: ProcessRoute[],
+  productProcessRouteByMaterialUuid?: ProductProcessRouteByMaterialUuid,
 ): string | undefined {
   if (!processRoutes.length) return undefined;
+
+  const productProcessUuid = productProcessRouteByMaterialUuid?.[material.uuid];
+  if (
+    productProcessUuid &&
+    processRoutes.some((route) => route.uuid === productProcessUuid)
+  ) {
+    return productProcessUuid;
+  }
 
   const prId = material.processRouteId ?? (material as { process_route_id?: number }).process_route_id;
   if (prId != null) {
@@ -53,8 +76,13 @@ export function effectiveProcessRouteLabel(
   material: Material,
   processRoutes: ProcessRoute[],
   notSetText: string,
+  productProcessRouteByMaterialUuid?: ProductProcessRouteByMaterialUuid,
 ): string {
-  const uuid = resolveEffectiveProcessRouteUuid(material, processRoutes);
+  const uuid = resolveEffectiveProcessRouteUuid(
+    material,
+    processRoutes,
+    productProcessRouteByMaterialUuid,
+  );
   if (!uuid) return notSetText;
   const route = processRoutes.find((r) => r.uuid === uuid);
   if (route) return `${route.code} - ${route.name}`;

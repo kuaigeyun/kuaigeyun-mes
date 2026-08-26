@@ -130,6 +130,8 @@ export interface SalesContract {
 
   shipping_method?: string;
 
+  salesman_id?: number;
+
   salesman_name?: string;
 
   notes?: string;

@@ -9,6 +9,7 @@ import { Alert, App, Empty, Select, Spin, Tag, Typography } from 'antd';
 import { ListPageTemplate, TwoColumnLayout } from '../../../../../components/layout-templates';
 import { materialApi } from '../../../services/material';
 import { processRouteApi } from '../../../services/process';
+import { productProcessApi } from '../../../services/productProcess';
 import type { Material } from '../../../types/material';
 import type { ProcessRoute } from '../../../types/process';
 import { ProductProcessPanel } from '../../../components/ProductProcessPanel';
@@ -16,6 +17,7 @@ import {
   effectiveProcessRouteLabel,
   materialHasEffectiveProcessRoute,
   resolveEffectiveProcessRouteUuid,
+  type ProductProcessRouteByMaterialUuid,
 } from '../../../utils/productProcessMaterialUtils';
 
 type AssignFilter = 'all' | 'assigned' | 'unassigned';
@@ -40,6 +42,8 @@ const ProductProcessPage: React.FC = () => {
 
   const [processRoutes, setProcessRoutes] = useState<ProcessRoute[]>([]);
   const [processRoutesLoading, setProcessRoutesLoading] = useState(false);
+  const [productProcessRouteByMaterialUuid, setProductProcessRouteByMaterialUuid] =
+    useState<ProductProcessRouteByMaterialUuid>({});
 
   const filterRoute = useMemo(
     () => (routeUuidFromUrl ? processRoutes.find((r) => r.uuid === routeUuidFromUrl) : undefined),
@@ -59,6 +63,25 @@ const ProductProcessPage: React.FC = () => {
       setProcessRoutes([]);
     } finally {
       setProcessRoutesLoading(false);
+    }
+  }, [messageApi, t]);
+
+  const loadProductProcessRouteAssignments = useCallback(async () => {
+    try {
+      const items = await productProcessApi.listRouteAssignments();
+      const next: ProductProcessRouteByMaterialUuid = {};
+      items.forEach((item) => {
+        const materialUuid = item.materialUuid ?? (item as { material_uuid?: string }).material_uuid;
+        const routeUuid =
+          item.processRouteUuid ?? (item as { process_route_uuid?: string }).process_route_uuid;
+        if (materialUuid && routeUuid) {
+          next[materialUuid] = routeUuid;
+        }
+      });
+      setProductProcessRouteByMaterialUuid(next);
+    } catch (e: unknown) {
+      messageApi.error((e as Error).message || t('common.loadFailed'));
+      setProductProcessRouteByMaterialUuid({});
     }
   }, [messageApi, t]);
 
@@ -90,7 +113,8 @@ const ProductProcessPage: React.FC = () => {
 
   useEffect(() => {
     void loadProcessRoutes();
-  }, [loadProcessRoutes]);
+    void loadProductProcessRouteAssignments();
+  }, [loadProcessRoutes, loadProductProcessRouteAssignments]);
 
   useEffect(() => {
     void loadMaterials();
@@ -137,16 +161,22 @@ const ProductProcessPage: React.FC = () => {
     let rows = materials;
     if (filterRoute) {
       rows = rows.filter(
-        (m) => resolveEffectiveProcessRouteUuid(m, processRoutes) === filterRoute.uuid,
+        (m) =>
+          resolveEffectiveProcessRouteUuid(m, processRoutes, productProcessRouteByMaterialUuid)
+          === filterRoute.uuid,
       );
     }
     if (assignFilter === 'assigned') {
-      rows = rows.filter((m) => materialHasEffectiveProcessRoute(m, processRoutes));
+      rows = rows.filter((m) =>
+        materialHasEffectiveProcessRoute(m, processRoutes, productProcessRouteByMaterialUuid),
+      );
     } else if (assignFilter === 'unassigned') {
-      rows = rows.filter((m) => !materialHasEffectiveProcessRoute(m, processRoutes));
+      rows = rows.filter(
+        (m) => !materialHasEffectiveProcessRoute(m, processRoutes, productProcessRouteByMaterialUuid),
+      );
     }
     return rows;
-  }, [materials, assignFilter, filterRoute, processRoutes]);
+  }, [materials, assignFilter, filterRoute, processRoutes, productProcessRouteByMaterialUuid]);
 
   const clearRouteFilter = () => {
     const next = new URLSearchParams(searchParams);
@@ -164,8 +194,17 @@ const ProductProcessPage: React.FC = () => {
         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.master-data.productProcess.noMaterials')} />
       ) : (
         displayedMaterials.map((m) => {
-          const hasRoute = materialHasEffectiveProcessRoute(m, processRoutes);
-          const routeLabel = effectiveProcessRouteLabel(m, processRoutes, notSetText);
+          const hasRoute = materialHasEffectiveProcessRoute(
+            m,
+            processRoutes,
+            productProcessRouteByMaterialUuid,
+          );
+          const routeLabel = effectiveProcessRouteLabel(
+            m,
+            processRoutes,
+            notSetText,
+            productProcessRouteByMaterialUuid,
+          );
           const active = selectedMaterial?.uuid === m.uuid;
           return (
             <button
@@ -263,6 +302,17 @@ const ProductProcessPage: React.FC = () => {
                   onMaterialUpdated={(m) => {
                     setSelectedMaterial(m);
                     setMaterials((prev) => prev.map((row) => (row.uuid === m.uuid ? { ...row, ...m } : row)));
+                  }}
+                  onProductProcessRouteSaved={(materialUuid, processRouteUuid) => {
+                    setProductProcessRouteByMaterialUuid((prev) => {
+                      const next = { ...prev };
+                      if (processRouteUuid) {
+                        next[materialUuid] = processRouteUuid;
+                      } else {
+                        delete next[materialUuid];
+                      }
+                      return next;
+                    });
                   }}
                   onProcessRoutesRefresh={loadProcessRoutes}
                 />

@@ -1,4 +1,6 @@
-# Install pgvector extension files for local PostgreSQL on Windows (prebuilt binaries).
+﻿# Install pgvector extension files for local PostgreSQL on Windows (prebuilt binaries).
+# Keep this file ASCII (or UTF-8 with BOM). Windows PowerShell 5.1 (powershell.exe -File)
+# misparses UTF-8 without BOM and treats Chinese bytes as string terminators.
 param(
     [string]$FastDeployDir = '',
     [string]$UseMirror = '1'
@@ -82,7 +84,7 @@ function Get-PgvectorZipUrls([int]$Major, [string]$Version) {
     $tag = "${Version}_$Major"
     $file = "vector.$Version-pg$Major.zip"
     $official = "https://github.com/andreiramani/pgvector_pgsql_windows/releases/download/$tag/$file"
-  if ($UseMirror -eq '1') {
+    if ($UseMirror -eq '1') {
         return Get-UniqueUrls @(
             "https://ghproxy.net/$official",
             "https://mirror.ghproxy.com/$official",
@@ -141,29 +143,29 @@ function Restart-PostgresqlServices {
 
 $pgConfig = Resolve-PgConfigPath
 if (-not $pgConfig) {
-    Write-Err '未找到 pg_config，请先安装 PostgreSQL'
+    Write-Err 'pg_config not found. Install PostgreSQL first.'
 }
 
 $pgRoot = (Get-Item $pgConfig).Directory.Parent.FullName
 if (Test-VectorControlInstalled $pgConfig) {
-    Write-Ok "pgvector 已安装 ($pgRoot)"
+    Write-Ok "pgvector already installed ($pgRoot)"
     exit 0
 }
 
 if (-not (Test-IsAdministrator)) {
-    Write-Err @(
-        '安装 pgvector 需要管理员权限（写入 Program Files\PostgreSQL）。',
-        '请以管理员身份重新打开 Git Bash / PowerShell 后执行迁移，或手动安装 pgvector。'
-    ) -join [Environment]::NewLine
+    Write-Err (@(
+        'Administrator rights required to install pgvector into Program Files\PostgreSQL.',
+        'Re-open Git Bash / PowerShell as Administrator and retry, or install pgvector manually.'
+    ) -join [Environment]::NewLine)
 }
 
 $versionText = & $pgConfig --version 2>$null
 if ($versionText -notmatch '(\d+)') {
-    Write-Err "无法识别 PostgreSQL 版本: $versionText"
+    Write-Err "Unable to parse PostgreSQL version: $versionText"
 }
 $major = [int]$Matches[1]
 
-Write-Info "安装 pgvector（PostgreSQL $major, PGROOT=$pgRoot）..."
+Write-Info "installing pgvector (PostgreSQL $major, PGROOT=$pgRoot)..."
 
 $tmpdir = Get-InstallTempDir
 $zip = Join-Path $tmpdir "vector-pg$major.zip"
@@ -176,20 +178,20 @@ foreach ($ver in @('0.8.6', '0.8.5')) {
     }
 }
 if (-not $downloaded) {
-    Write-Err "pgvector 下载失败（PostgreSQL $major）。请检查网络或从 https://github.com/andreiramani/pgvector_pgsql_windows/releases 手动安装"
+    Write-Err "pgvector download failed (PostgreSQL $major). Check network or install manually from https://github.com/andreiramani/pgvector_pgsql_windows/releases"
 }
 
 try {
     Install-PgvectorFromZip $zip $pgRoot
 } catch {
-    Write-Err "pgvector 文件复制失败: $($_.Exception.Message)"
+    Write-Err "pgvector copy failed: $($_.Exception.Message)"
 }
 
 Restart-PostgresqlServices
 
 if (-not (Test-VectorControlInstalled $pgConfig)) {
-    Write-Err 'pgvector 安装后仍未找到 vector.control，请重启 PostgreSQL 后重试'
+    Write-Err 'vector.control still missing after install. Restart PostgreSQL and retry.'
 }
 
-Write-Ok "pgvector 已安装（PostgreSQL $major）"
+Write-Ok "pgvector installed (PostgreSQL $major)"
 exit 0

@@ -570,6 +570,55 @@ class MaterialProductProcessService:
         return None
 
     @staticmethod
+    async def list_product_process_route_assignments(tenant_id: int):
+        """批量返回产品工艺表中的路线指派（materialUuid → processRouteUuid）。"""
+        from apps.master_data.schemas.material_product_process_schemas import (
+            ProductProcessRouteAssignmentItem,
+            ProductProcessRouteAssignmentListResponse,
+        )
+
+        records = await MaterialProductProcess.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            process_route_id__isnull=False,
+        ).values("material_id", "process_route_id")
+        if not records:
+            return ProductProcessRouteAssignmentListResponse(items=[])
+
+        material_ids = sorted({int(row["material_id"]) for row in records})
+        route_ids = sorted({int(row["process_route_id"]) for row in records})
+
+        material_rows = await Material.filter(
+            id__in=material_ids,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).values("id", "uuid")
+        material_uuid_by_id = {int(row["id"]): str(row["uuid"]) for row in material_rows}
+
+        route_rows = await ProcessRoute.filter(
+            id__in=route_ids,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).values("id", "uuid")
+        route_uuid_by_id = {int(row["id"]): str(row["uuid"]) for row in route_rows}
+
+        items: list[ProductProcessRouteAssignmentItem] = []
+        seen: set[str] = set()
+        for row in records:
+            material_uuid = material_uuid_by_id.get(int(row["material_id"]))
+            route_uuid = route_uuid_by_id.get(int(row["process_route_id"]))
+            if not material_uuid or not route_uuid or material_uuid in seen:
+                continue
+            seen.add(material_uuid)
+            items.append(
+                ProductProcessRouteAssignmentItem(
+                    material_uuid=material_uuid,
+                    process_route_uuid=route_uuid,
+                )
+            )
+        return ProductProcessRouteAssignmentListResponse(items=items)
+
+    @staticmethod
     async def get_for_material(tenant_id: int, material_uuid: str) -> MaterialProductProcessResponse:
         material = await MaterialProductProcessService._get_material(tenant_id, material_uuid)
         record = await MaterialProductProcess.filter(

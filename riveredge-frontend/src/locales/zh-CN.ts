@@ -1716,6 +1716,7 @@ export default {
   'common.assignSuccess': '分配成功',
   'common.createdAt': '创建时间',
   'common.updatedAt': '更新时间',
+  'common.updatedBy': '更新人',
   'common.actions': '操作',
   'common.action': '操作',
   'common.more': '更多',
@@ -6392,7 +6393,7 @@ export default {
   'app.kuaizhizao.menu.reports.order-execution-tracking': '未交数量表',
   'app.kuaizhizao.menu.reports.customer-sales-summary': '客户销售汇总',
   'app.kuaizhizao.menu.reports.customer-sales-reconciliation': '客户销售对账',
-  'app.kuaizhizao.menu.reports.product-sales-ranking': '存货销排行',
+  'app.kuaizhizao.menu.reports.product-sales-ranking': '存货销售排行',
   'app.kuaizhizao.menu.reports.quotation-query': '报价单查询',
   'app.kuaizhizao.menu.reports.contract-execution': '合同执行表',
   'app.kuaizhizao.menu.reports.sales-trend-analysis': '销售趋势表',
@@ -23870,6 +23871,14 @@ export default {
   'pages.dashboard.updateLogTypeSection.improvement': '优化',
   'pages.dashboard.updateLogTypeSection.fix': '修复',
   'pages.dashboard.updateLogTypeSection.security': '安全',
+  'pages.dashboard.updateLog.entries.quotation-export-localized-columns.title':
+    '报价单导出中文表头与数据',
+  'pages.dashboard.updateLog.entries.quotation-export-localized-columns.description':
+    '报价单列表导出改为中文列名，并将执行状态、审核状态、价类、币种、付款条件、发货方式、下推进度等字段输出为与页面一致的中文展示值，不再导出原始英文字段名与技术码。',
+  'pages.dashboard.updateLog.entries.sales-dashboard-follow-up-kpi-fix.title':
+    '销售中心待跟进客户统计修复',
+  'pages.dashboard.updateLog.entries.sales-dashboard-follow-up-kpi-fix.description':
+    '销售中心「待跟进客户 / 已逾期」改为按客户最新跟进计划在服务端统计（含数据范围）；待跟进按计划跟进日、已逾期与跟进列表「逾期」徽章同一套时刻判断，不再出现列表已逾期但中心显示 0。',
   'pages.dashboard.updateLog.entries.demand-computation-decimal-precision-fix.title':
     '需求计算小数精度与建议量取整',
   'pages.dashboard.updateLog.entries.demand-computation-decimal-precision-fix.description':

@@ -75,9 +75,36 @@ _FILE_DOWNLOAD_PATH_RE = re.compile(
     r"^/?api/v\d+/core/files/(?P<uuid>[0-9a-fA-F-]{32,36})/download/?$"
 )
 
+SALES_CONTRACT_TYPE_PRINT_LABELS = {
+    "single": "单次合同",
+    "framework": "框架合同",
+}
+
+
+def _resolve_sales_contract_type_label(value: Any) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    return SALES_CONTRACT_TYPE_PRINT_LABELS.get(raw.lower(), raw)
+
 
 async def _resolve_print_dictionary_label(tenant_id: int, dictionary_code: str, value: Any) -> str:
-    return await DataDictionaryService.resolve_dictionary_label(tenant_id, dictionary_code, value)
+    from core.services.data.data_dictionary_service import normalize_dictionary_item_token
+
+    raw = normalize_dictionary_item_token(value)
+    if not raw:
+        return ""
+    label = await DataDictionaryService.resolve_dictionary_label(tenant_id, dictionary_code, value)
+    if label and label != raw:
+        return label
+    system_map = DataDictionaryService.system_dictionary_label_map(dictionary_code)
+    if raw in system_map:
+        return system_map[raw]
+    raw_upper = raw.upper()
+    for code, system_label in system_map.items():
+        if str(code).upper() == raw_upper:
+            return system_label
+    return label or raw
 
 
 def _parse_local_file_download_src(src: str) -> Tuple[str, Optional[int]]:
@@ -2064,11 +2091,12 @@ class DocumentPrintService:
         payment_terms_label = await _resolve_print_dictionary_label(
             contract.tenant_id, "PAYMENT_TERMS", contract.payment_terms
         )
+        contract_type_label = _resolve_sales_contract_type_label(contract.contract_type)
         return {
             "document_type": "sales_contract",
             "code": contract.contract_code,
             "contract_code": contract.contract_code,
-            "contract_type": contract.contract_type,
+            "contract_type": contract_type_label,
             "version_no": int(getattr(contract, "version_no", None) or 1),
             "review_status": contract.review_status,
             "currency_code": contract.currency_code or "CNY",

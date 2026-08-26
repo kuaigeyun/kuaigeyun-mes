@@ -49,6 +49,8 @@ const ProductSalesRanking: React.FC = () => {
         dataIndex: 'category',
         width: 100,
         hideInSearch: true,
+        ellipsis: true,
+        render: (value: string) => (value && String(value).trim() ? value : '—'),
       },
       {
         title: t('app.kuaizhizao.reports.salesTotalQuantity'),
@@ -96,7 +98,7 @@ const ProductSalesRanking: React.FC = () => {
 
   return (
     <KuaizhizaoReport
-      columnPersistenceId="apps.kuaizhizao.pages.sales-management.reports.ProductSalesRanking-v2"
+      columnPersistenceId="apps.kuaizhizao.pages.sales-management.reports.ProductSalesRanking-v3"
       title={t('app.kuaizhizao.menu.reports.product-sales-ranking')}
       reportType="product_ranking"
       rowKey="product_id"

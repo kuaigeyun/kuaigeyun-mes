@@ -1608,6 +1608,37 @@ class ReportService:
             limit=limit,
         )
 
+    async def _material_category_by_id(
+        self, tenant_id: int, material_ids: List[int]
+    ) -> Dict[int, str]:
+        """物料 ID → 物料分组名称（报表「产品类别」）。"""
+        if not material_ids:
+            return {}
+        from apps.master_data.models.material import Material, MaterialGroup
+
+        mat_rows = await Material.filter(
+            tenant_id=tenant_id,
+            id__in=list(set(material_ids)),
+            deleted_at__isnull=True,
+        ).values("id", "group_id")
+        group_ids = [int(r["group_id"]) for r in mat_rows if r.get("group_id")]
+        group_name_by_id: Dict[int, str] = {}
+        if group_ids:
+            for g in await MaterialGroup.filter(
+                tenant_id=tenant_id,
+                id__in=list(set(group_ids)),
+                deleted_at__isnull=True,
+            ).values("id", "name"):
+                name = str(g.get("name") or "").strip()
+                if name:
+                    group_name_by_id[int(g["id"])] = name
+        out: Dict[int, str] = {}
+        for row in mat_rows:
+            mid = int(row["id"])
+            gid = row.get("group_id")
+            out[mid] = group_name_by_id.get(int(gid), "") if gid else ""
+        return out
+
     async def _get_product_sales_ranking(
         self,
         tenant_id: int,
@@ -1617,58 +1648,85 @@ class ReportService:
         skip: int = 0,
         limit: int = 100,
     ) -> Dict[str, Any]:
-        """产品销售排行榜"""
-        from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
+        """产品销售排行（按已出库数量与金额汇总，与存货销售汇总同源）。"""
+        from apps.kuaizhizao.models.sales_delivery import SalesDelivery
+        from apps.kuaizhizao.models.sales_delivery_item import SalesDeliveryItem
         from tortoise.functions import Sum
-        query = SalesOrderItem.filter(tenant_id=tenant_id)
+
+        dq = SalesDelivery.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        dq = dq.exclude(status__in=["待出库", "CANCELLED", "已取消"])
         if date_start:
-            query = query.filter(delivery_date__gte=date_start.date())
+            dq = dq.filter(delivery_time__gte=date_start)
         if date_end:
-            query = query.filter(delivery_date__lte=date_end.date())
-        grouped = query.annotate(total_qty=Sum("order_quantity"), total_rev=Sum("total_amount")).group_by(
-            "material_id", "material_code", "material_name", "material_spec", "material_unit"
+            dq = dq.filter(delivery_time__lte=date_end)
+
+        delivery_ids = await dq.values_list("id", flat=True)
+        if not delivery_ids:
+            return {
+                "summary": {"top_product": None, "total_revenue": 0.0},
+                "data": [],
+                "success": True,
+                "total": 0,
+            }
+
+        item_q = SalesDeliveryItem.filter(tenant_id=tenant_id, delivery_id__in=list(delivery_ids))
+        grouped = item_q.annotate(
+            total_qty=Sum("delivery_quantity"),
+            total_rev=Sum("total_amount"),
+        ).group_by("material_id", "material_code", "material_name", "material_spec", "material_unit")
+
+        rows_raw = await grouped.values(
+            "material_id",
+            "material_code",
+            "material_name",
+            "material_spec",
+            "material_unit",
+            "total_qty",
+            "total_rev",
         )
-        # 分组总数：仅拉分组键，避免对大结果集做全量 values
-        group_keys = await grouped.values("material_id")
-        total_groups = len(group_keys)
+        total_groups = len(rows_raw)
         lim = max(1, min(int(limit or 100), 500))
         sk = max(0, int(skip or 0))
-        ranking = (
-            await grouped.order_by("-total_rev")
-            .values(
-                "material_id",
-                "material_code",
-                "material_name",
-                "material_spec",
-                "material_unit",
-                "total_qty",
-                "total_rev",
-            )
+        ranking = sorted(
+            rows_raw,
+            key=lambda r: float(r.get("total_rev") or 0),
+            reverse=True,
         )
-        material_ids = [int(r["material_id"]) for r in ranking if r.get("material_id")]
+        page_rows = ranking[sk : sk + lim]
+
+        material_ids = [int(r["material_id"]) for r in page_rows if r.get("material_id")]
         from apps.kuaizhizao.services.report_enhancements import product_profit_map
+
         profit_map = await product_profit_map(
             tenant_id, material_ids, date_start=date_start, date_end=date_end,
         )
-        grand = await self._aggregate_sums(query, {"grand_amt": "total_amount"})
-        grand_amt = float(grand.get("grand_amt") or 0)
-        items = [
-            {
-                "rank": sk + idx + 1,
-                "product_id": r["material_id"],
-                "product_code": r["material_code"],
-                "product_name": r["material_name"],
-                "product_spec": r["material_spec"],
-                "unit": r["material_unit"],
-                "total_quantity": float(r["total_qty"] or 0),
-                "total_revenue": float(r["total_rev"] or 0),
-                "profit": float(profit_map.get(int(r["material_id"]), 0.0)),
-                "category": r.get("category") or "",
-                "amount_share": self._amount_share(float(r["total_rev"] or 0), grand_amt),
-                "avg_price": float(r["total_rev"] or 0) / float(r["total_qty"]) if r["total_qty"] else 0,
-            }
-            for idx, r in enumerate(ranking)
-        ]
+        category_map = await self._material_category_by_id(tenant_id, material_ids)
+        all_agg = await self._aggregate_sums(
+            item_q,
+            {"grand_qty": "delivery_quantity", "grand_amt": "total_amount"},
+        )
+        grand_amt = float(all_agg.get("grand_amt") or 0)
+        items = []
+        for idx, r in enumerate(page_rows):
+            mid = int(r["material_id"])
+            qty = float(r.get("total_qty") or 0)
+            rev = float(r.get("total_rev") or 0)
+            items.append(
+                {
+                    "rank": sk + idx + 1,
+                    "product_id": mid,
+                    "product_code": r["material_code"],
+                    "product_name": r["material_name"],
+                    "product_spec": r["material_spec"],
+                    "unit": r["material_unit"],
+                    "total_quantity": qty,
+                    "total_revenue": rev,
+                    "profit": float(profit_map.get(mid, 0.0)),
+                    "category": category_map.get(mid, ""),
+                    "amount_share": self._amount_share(rev, grand_amt),
+                    "avg_price": rev / qty if qty else 0,
+                }
+            )
         return {
             "summary": {
                 "top_product": items[0]["product_name"] if items else None,

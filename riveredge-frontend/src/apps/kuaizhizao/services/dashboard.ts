@@ -65,6 +65,14 @@ export const mesDashboardService = {
     });
   },
 
+  /** 销售中心待跟进 KPI（按客户最新跟进计划，含数据范围） */
+  getSalesFollowUpStats: async (limit = 5) => {
+    return apiRequest('/apps/kuaizhizao/dashboard/sales-follow-up-stats', {
+      method: 'GET',
+      params: { limit },
+    });
+  },
+
   // 获取采购中心汇总
   getPurchaseSummary: async () => {
     return apiRequest('/apps/kuaizhizao/dashboard/purchase-summary', {

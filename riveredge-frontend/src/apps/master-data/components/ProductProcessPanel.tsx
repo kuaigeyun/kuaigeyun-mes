@@ -58,6 +58,8 @@ export type ProductProcessPanelProps = {
   processRoutes: ProcessRoute[];
   processRoutesLoading: boolean;
   onMaterialUpdated?: (material: Material) => void;
+  /** 普通保存后同步产品工艺页左栏路线标签（不回写物料默认路线） */
+  onProductProcessRouteSaved?: (materialUuid: string, processRouteUuid?: string | null) => void;
   /** 路线模板保存后刷新下拉列表（编号/名称等） */
   onProcessRoutesRefresh?: () => void | Promise<void>;
   /** 两栏布局页不展示物料标题 */
@@ -71,6 +73,7 @@ export const ProductProcessPanel: React.FC<ProductProcessPanelProps> = ({
   processRoutes,
   processRoutesLoading,
   onMaterialUpdated,
+  onProductProcessRouteSaved,
   onProcessRoutesRefresh,
   hideMaterialHeading = false,
   hidePanelHint = false,
@@ -305,6 +308,7 @@ export const ProductProcessPanel: React.FC<ProductProcessPanelProps> = ({
           (saved.lines ?? []).map((ln) => productProcessLineFromApi(ln)),
         );
         setAuditHint(resolveProductProcessAudit(saved));
+        onProductProcessRouteSaved?.(material.uuid, saved.processRouteUuid ?? null);
         if (extra?.saveAsNewRoute) {
           await onProcessRoutesRefresh?.();
           const refreshed = await materialApi.get(material.uuid);
@@ -328,6 +332,7 @@ export const ProductProcessPanel: React.FC<ProductProcessPanelProps> = ({
       material.uuid,
       messageApi,
       onMaterialUpdated,
+      onProductProcessRouteSaved,
       onProcessRoutesRefresh,
       routeUuid,
       t,

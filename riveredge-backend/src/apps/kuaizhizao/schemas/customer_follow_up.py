@@ -83,3 +83,14 @@ class CustomerFollowUpListEnvelope(BaseSchema):
 
     items: List[CustomerFollowUpListResponse] = Field(default_factory=list, description="当前页数据")
     total: int = Field(0, description="总条数")
+
+
+class CustomerFollowUpDashboardSnapshot(BaseSchema):
+    """销售中心待跟进 KPI（按客户最新一条跟进计划统计）"""
+
+    pending_customers: int = Field(0, description="待跟进客户数（计划跟进日已到或逾期）")
+    overdue_customers: int = Field(0, description="已逾期客户数（计划跟进时刻已过）")
+    items: List[CustomerFollowUpListResponse] = Field(
+        default_factory=list,
+        description="待跟进预览（按下次跟进时间升序）",
+    )

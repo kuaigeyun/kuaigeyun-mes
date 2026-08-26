@@ -113,3 +113,18 @@ class ProcessRouteOperationTemplateResponse(BaseModel):
 
     allow_operation_jump: bool = Field(False, alias="allowOperationJump")
     lines: List[ProductProcessLineSchema] = Field(default_factory=list)
+
+
+class ProductProcessRouteAssignmentItem(BaseModel):
+    """产品工艺页左栏：物料在产品工艺表中的路线指派"""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    material_uuid: str = Field(..., alias="materialUuid")
+    process_route_uuid: str = Field(..., alias="processRouteUuid")
+
+
+class ProductProcessRouteAssignmentListResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    items: List[ProductProcessRouteAssignmentItem] = Field(default_factory=list)

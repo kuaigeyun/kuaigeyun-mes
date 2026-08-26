@@ -42,6 +42,7 @@ from apps.master_data.schemas.material_product_process_schemas import (
     MaterialProductProcessResponse,
     MaterialProductProcessSave,
     ProcessRouteOperationTemplateResponse,
+    ProductProcessRouteAssignmentListResponse,
 )
 from apps.master_data.services.material_product_process_service import MaterialProductProcessService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
@@ -1002,6 +1003,19 @@ async def get_bound_materials(
         return await ProcessService.get_bound_materials(tenant_id, str(process_route_uuid))
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.get(
+    "/product-process/route-assignments",
+    response_model=ProductProcessRouteAssignmentListResponse,
+    summary="List product-process route assignments for sidebar",
+)
+async def list_product_process_route_assignments(
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    """产品工艺页左栏：返回各物料在产品工艺表中的路线指派（优先于物料默认路线展示）。"""
+    return await MaterialProductProcessService.list_product_process_route_assignments(tenant_id)
 
 
 @router.get(

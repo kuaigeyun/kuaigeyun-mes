@@ -2129,6 +2129,22 @@ async def _compute_purchase_arrival_rate(
     return round(received_orders / len(order_id_list) * 100, 2) if order_id_list else 0.0
 
 
+@router.get("/sales-follow-up-stats", summary="Sales center follow-up KPI snapshot")
+async def get_sales_follow_up_stats(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    limit: int = Query(5, ge=1, le=20, description="待跟进预览条数"),
+):
+    """销售中心「待跟进客户 / 已逾期」统计（按客户最新跟进计划，含数据范围）。"""
+    from apps.kuaizhizao.services.customer_follow_up_service import CustomerFollowUpService
+
+    return await CustomerFollowUpService.dashboard_follow_up_snapshot(
+        tenant_id,
+        current_user,
+        limit=limit,
+    )
+
+
 @router.get("/sales-summary", summary="Sales center summary")
 @cache_by_kwargs(namespace="dashboard:sales_summary", ttl=45)
 async def get_sales_summary(

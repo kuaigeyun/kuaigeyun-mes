@@ -1,1 +1,0 @@
-import{R as t,aD as p,j as i,aE as P}from"./vendor-BORuDE6z.js";import{a as d}from"./index-DDElGMYe.js";var l=["fieldProps","proFieldProps"],m=function(r,o){var e=r.fieldProps,a=r.proFieldProps,s=p(r,l);return i.jsx(d,P({ref:o,valueType:"textarea",fieldProps:e,proFieldProps:a},s))};const c=t.forwardRef(m);export{c as P};

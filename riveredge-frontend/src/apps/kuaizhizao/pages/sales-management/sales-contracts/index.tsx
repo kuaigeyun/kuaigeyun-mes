@@ -254,6 +254,10 @@ import {
   salesContractOrderPushPercent,
 } from '../shared/pushProgress';
 import { applyCustomerFormFields } from '../shared/applyCustomerFormFields';
+import { SalesDocumentSalesmanField } from '../shared/SalesDocumentSalesmanField';
+import { searchUserDisplay, type User } from '../../../../../services/user';
+import { displayItemsToUsers } from '../../../../../utils/userDisplay';
+import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { flattenDocumentDetailRows, resolveDetailTableViewMode } from '../../shared/detailTableFlatRows';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
@@ -523,6 +527,9 @@ const SalesContractsPage: React.FC = () => {
   const [importModalVisible, setImportModalVisible] = useState(false);
 
   const [customerList, setCustomerList] = useState<any[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const currentUser = useCurrentUser();
   const contractCustomerSearchOptions = useMemo(
     () =>
       customerList.map((c: { id?: number; customer_id?: number; name?: string; customer_name?: string; code?: string }) => ({
@@ -652,6 +659,28 @@ const SalesContractsPage: React.FC = () => {
       .catch((e) => console.error('加载产品失败', e));
 
   }, []);
+
+  useEffect(() => {
+    if (!isFormPage) return;
+    let cancelled = false;
+    const loadUsers = async () => {
+      try {
+        setUsersLoading(true);
+        const result = await searchUserDisplay({ page: 1, page_size: 100, is_active: true });
+        if (!cancelled) {
+          setUsers(displayItemsToUsers(result.items || []));
+        }
+      } catch {
+        if (!cancelled) setUsers([]);
+      } finally {
+        if (!cancelled) setUsersLoading(false);
+      }
+    };
+    void loadUsers();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser, isFormPage]);
 
   const loadTermGroupOptions = useCallback(async () => {
     try {
@@ -1157,6 +1186,11 @@ const SalesContractsPage: React.FC = () => {
 
       currency_code: values.currency_code || 'CNY',
 
+      salesman_id:
+        values.salesman_id != null && values.salesman_id !== '' && Number.isFinite(Number(values.salesman_id))
+          ? Number(values.salesman_id)
+          : undefined,
+
       salesman_name: values.salesman_name,
 
       shipping_address: values.shipping_address,
@@ -1295,6 +1329,7 @@ const SalesContractsPage: React.FC = () => {
           price_type: normalizeSalesPriceType(data.price_type),
           currency_code: data.currency_code || 'CNY',
           discount_amount: Number(data.discount_amount ?? 0) || 0,
+          salesman_id: data.salesman_id,
           salesman_name: data.salesman_name,
           shipping_address: data.shipping_address,
           shipping_method: data.shipping_method,
@@ -1718,17 +1753,17 @@ const SalesContractsPage: React.FC = () => {
                     onCustomerPick={(cust) => {
                       applyCustomerFormFields(formRef, cust as Record<string, unknown> | null, {
                         customerList,
+                        users,
                       });
                     }}
                   />
                 </ProForm.Item>
               </Col>
               <Col span={8}>
-                <ProFormText
-                  name="salesman_name"
+                <SalesDocumentSalesmanField
+                  userList={users}
+                  loading={usersLoading}
                   label={salesCommonLabels.salesman}
-                  placeholder={t('app.kuaizhizao.salesContract.salesmanPlaceholder')}
-                  fieldProps={{ style: { width: '100%' } }}
                 />
               </Col>
             </Row>

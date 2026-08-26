@@ -22,6 +22,7 @@ import { mesDashboardService } from '../../../services/dashboard';
 import { listSalesOrders } from '../../../services/sales-order';
 import { listQuotations } from '../../../services/quotation';
 import { customerFollowUpApi } from '../../../services/customer-follow-up';
+import { isCustomerFollowUpRevisitOverdue } from '../../../utils/customerFollowUpLifecycle';
 import { getSalesTop10 } from '../../../../../services/dashboard';
 import { getSalesReport } from '../../../services/reports';
 import salesContractApi from '../../../services/sales-contract';
@@ -103,9 +104,9 @@ const SalesDashboard: React.FC = () => {
     'kz:sales-dashboard:todos',
   );
 
-  const { data: pendingFollowUpsData, loading: pendingFollowUpsLoading } = useDashboardRequest(
-    () => customerFollowUpApi.list({ pending_only: true, limit: 5 }),
-    'kz:sales-dashboard:pending-follow-ups',
+  const { data: followUpStats, loading: pendingFollowUpsLoading } = useDashboardRequest(
+    () => mesDashboardService.getSalesFollowUpStats(5),
+    'kz:sales-dashboard:follow-up-stats',
   );
 
   const { data: recentOrdersData, loading: ordersLoading } = useDashboardRequest(
@@ -145,8 +146,9 @@ const SalesDashboard: React.FC = () => {
 
   const s = summary as Record<string, number> | undefined;
   const todos = todosData?.items || [];
-  const pendingFollowUps = pendingFollowUpsData?.items || [];
-  const pendingFollowUpTotal = pendingFollowUpsData?.total ?? pendingFollowUps.length;
+  const pendingFollowUps = followUpStats?.items || [];
+  const pendingFollowUpTotal = followUpStats?.pending_customers ?? 0;
+  const overdueFollowUpCount = followUpStats?.overdue_customers ?? 0;
   const recentOrders = recentOrdersData?.data || [];
   const recentFollowUps = followUpsData?.items || [];
 
@@ -218,14 +220,6 @@ const SalesDashboard: React.FC = () => {
       .sort((a, b) => b.amount - a.amount)
       .slice(0, 5);
   }, [recentOrders]);
-
-  const overdueFollowUpCount = useMemo(
-    () =>
-      pendingFollowUps.filter((item) =>
-        item.next_follow_up_at ? dayjs(item.next_follow_up_at).isBefore(dayjs(), 'day') : false,
-      ).length,
-    [pendingFollowUps],
-  );
 
   const kpis: ModuleKpiDef[] = useMemo(
     () => [
@@ -476,10 +470,7 @@ const SalesDashboard: React.FC = () => {
         subtitle: item.content || t('app.kuaizhizao.salesDashboard.noFollowUpContent'),
         tag: {
           label: t('app.kuaizhizao.salesDashboard.pendingFollowUp'),
-          color:
-            item.next_follow_up_at && dayjs(item.next_follow_up_at).isBefore(dayjs(), 'day')
-              ? 'error'
-              : 'warning',
+          color: isCustomerFollowUpRevisitOverdue(item) ? 'error' : 'warning',
         },
         action: (
           <Text type="secondary" style={{ fontSize: 10 }}>

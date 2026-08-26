@@ -21,6 +21,7 @@ from apps.kuaizhizao.schemas.customer_follow_up import (
     CustomerFollowUpResponse,
     CustomerFollowUpListResponse,
     CustomerFollowUpListEnvelope,
+    CustomerFollowUpDashboardSnapshot,
 )
 from apps.kuaizhizao.schemas.sales_opportunity import SalesOpportunityEnsure
 from apps.kuaizhizao.services.sales_opportunity_service import SalesOpportunityService
@@ -29,7 +30,8 @@ from apps.master_data.models.customer import Customer
 from core.services.authorization.data_scope_service import DataScopeService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
-from core.utils.timezone_utils import resolve_business_datetime
+from apps.kuaizhizao.utils.customer_follow_up_plan import follow_up_plan_flags
+from core.utils.timezone_utils import resolve_business_datetime, to_site_date
 
 CUSTOMER_FOLLOW_UP_SORTABLE_FIELDS = frozenset({
     "customer_name",
@@ -527,3 +529,70 @@ class CustomerFollowUpService:
             for row in rows
         ]
         return CustomerFollowUpListEnvelope(items=out, total=total)
+
+    @classmethod
+    async def dashboard_follow_up_snapshot(
+        cls,
+        tenant_id: int,
+        current_user: Optional[User],
+        *,
+        limit: int = 5,
+    ) -> CustomerFollowUpDashboardSnapshot:
+        """
+        销售中心待跟进 KPI：按客户「最新一条跟进」的计划下次跟进时间统计。
+
+        - 待跟进：计划跟进站点日历日 <= 今日
+        - 已逾期：计划跟进时刻 <= 当前业务时刻（与列表「逾期」徽章一致）
+        """
+        now = resolve_business_datetime()
+        now_date = to_site_date(now)
+
+        query = CustomerFollowUp.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        query = await cls._apply_list_scope(query, tenant_id, current_user)
+        rows = await query.order_by("customer_id", "-occurred_at", "-id")
+
+        latest_by_customer: Dict[int, CustomerFollowUp] = {}
+        for row in rows:
+            customer_id = int(row.customer_id)
+            if customer_id not in latest_by_customer:
+                latest_by_customer[customer_id] = row
+
+        pending_rows: List[CustomerFollowUp] = []
+        pending_customers = 0
+        overdue_customers = 0
+        for row in latest_by_customer.values():
+            next_at = row.next_follow_up_at
+            is_pending, is_overdue = follow_up_plan_flags(
+                next_at,
+                now=now,
+                now_date=now_date,
+            )
+            if is_pending:
+                pending_customers += 1
+                pending_rows.append(row)
+            if is_overdue:
+                overdue_customers += 1
+
+        pending_rows.sort(
+            key=lambda row: (
+                row.next_follow_up_at or now,
+                int(row.id),
+            ),
+        )
+        preview_rows = pending_rows[: max(int(limit), 0)]
+        count_map = await cls._customer_follow_up_counts(
+            tenant_id,
+            [row.customer_id for row in preview_rows],
+        )
+        items = [
+            await cls._to_list_item(
+                row,
+                follow_up_count=count_map.get(int(row.customer_id), 0),
+            )
+            for row in preview_rows
+        ]
+        return CustomerFollowUpDashboardSnapshot(
+            pending_customers=pending_customers,
+            overdue_customers=overdue_customers,
+            items=items,
+        )
