@@ -4885,11 +4885,32 @@ _git_validate_repo_url() {
     return 1
 }
 
+_git_unix_path() {
+    local dir="$1"
+    if command -v cygpath >/dev/null 2>&1; then
+        cygpath -u "$dir" 2>/dev/null || printf '%s\n' "$dir"
+    else
+        printf '%s\n' "$dir"
+    fi
+}
+
 _git_is_work_tree() {
     # .git 可能是目录，也可能是 worktree 的文件指针；禁止只看 [ -d path/.git ]
-    local dir="$1"
+    local dir="$1" win=""
     [ -n "$dir" ] && [ -e "$dir" ] || return 1
-    _git_cmd -C "$dir" rev-parse --is-inside-work-tree >/dev/null 2>&1
+    if [ -d "$dir/.git" ] || [ -f "$dir/.git" ]; then
+        return 0
+    fi
+    if _git_cmd -C "$dir" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        return 0
+    fi
+    if command -v cygpath >/dev/null 2>&1; then
+        win="$(cygpath -w "$dir" 2>/dev/null || true)"
+        if [ -n "$win" ] && _git_cmd -C "$win" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+            return 0
+        fi
+    fi
+    return 1
 }
 
 _dir_is_empty() {
@@ -4929,6 +4950,8 @@ sync_sibling_git_repo() {
     local auth_url clean_url created_path=0
     url="$(_env_read_trim "$url")"
     path="$(_env_read_trim "$path")"
+    path="$(_git_unix_path "$path")"
+    path="$(_env_read_trim "$path")"
     branch="$(_env_read_trim "$branch")"
     token="$(_env_read_trim "$token")"
     [ -n "$branch" ] || branch="develop"
@@ -4949,7 +4972,12 @@ sync_sibling_git_repo() {
                 :
             else
                 log_error "${name}: 路径已存在且不是 Git 仓库: ${path}"
-                log_error "git clone 不能写入非空目录。请改对应 *_REPO_PATH，或确认该目录含 .git 后再重试。已有文件不会被删除。"
+                if [ -e "$path/.git" ]; then
+                    log_error "存在 ${path}/.git，但未能识别为工作区。请在该目录执行: git status"
+                else
+                    log_error "该目录没有 .git，git clone 不能写入非空目录。若确认是上次失败残留且无需保留，请自行删除后再试。"
+                fi
+                log_error "或把含 .git 的仓库路径写入对应 *_REPO_PATH。已有文件不会被删除。"
                 return 1
             fi
         else

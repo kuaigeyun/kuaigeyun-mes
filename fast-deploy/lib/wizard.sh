@@ -721,8 +721,16 @@ wizard_ask_restart_choice() {
     done
 }
 
+wizard_reload_deploy_libs() {
+    # 扩展/H5 常在「更新系统」或另开终端 pull 之后执行；必须读磁盘脚本，禁止用向导启动时的旧函数
+    # shellcheck source=/dev/null
+    source "$PROJECT_ROOT/fast-deploy/lib/common.sh"
+    load_deploy_env
+}
+
 wizard_run_ext_pro() {
     echo ""
+    wizard_reload_deploy_libs
     if cmd_install_extension_apps pro; then
         wizard_say_ok "专业包已同步并组装。应用中心仍需 License Key；请重启服务后同步菜单。"
         return 0
@@ -733,6 +741,7 @@ wizard_run_ext_pro() {
 
 wizard_run_ext_custom() {
     echo ""
+    wizard_reload_deploy_libs
     if cmd_install_extension_apps custom; then
         wizard_say_ok "定制包已同步并组装。请重启服务后同步菜单；租户侧按需启用应用。"
         return 0
@@ -743,6 +752,7 @@ wizard_run_ext_custom() {
 
 wizard_run_ext_h5() {
     echo ""
+    wizard_reload_deploy_libs
     if cmd_install_client_repo; then
         wizard_say_ok "移动端 H5 已同步并部署到 riveredge-app/mobile/web-dist（Caddy /mobile）。生产环境请再执行 start/update 以刷新网关。"
         return 0
