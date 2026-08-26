@@ -4944,11 +4944,15 @@ sync_sibling_git_repo() {
         _sync_sibling_git_repo_fetch "$name" "$path" "$branch" "$auth_url" "$clean_url" || return 1
     else
         if [ -e "$path" ] && [ -n "$(ls -A "$path" 2>/dev/null)" ]; then
-            log_warn "${name}: ${path} 已存在且不是 Git 仓库，清理后重新克隆..."
-            rm -rf "$path" || {
-                log_error "无法清理 ${path}，请关闭占用该目录的进程或手动删除后重试"
+            log_warn "${name}: ${path} 已存在且无 .git（上次克隆失败残留），清理后重新克隆..."
+            rm -rf "$path" 2>/dev/null || true
+            # Windows 下只读属性 / 被占用会让 rm 静默留下文件，clone 随后必然报 not empty
+            if [ -e "$path" ]; then
+                log_error "无法清理 ${path}（Windows 常见原因：文件只读、被编辑器或杀毒占用）"
+                log_error "残留内容: $(ls -A "$path" 2>/dev/null | head -5 | tr '\n' ' ')"
+                log_error "请手动删除该目录后重试，或改 ${name} 的 *_REPO_PATH 指向其它路径"
                 return 1
-            }
+            fi
         fi
         log_info "克隆 ${name}: ${clean_url} → ${path}（分支 ${branch}）"
         mkdir -p "$(dirname "$path")"
