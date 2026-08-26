@@ -3345,7 +3345,6 @@ const BOMPage: React.FC = () => {
               includeObsolete
             );
             // 3) 将摘要 + 明细组装成 BOMGroupRow[]（与 groupBomsByCode 产出结构一致）
-            const keyToUuids = new Map<string, string[]>();
             const buildGroupRow = (
               g: (typeof groups)[0],
               items: BOM[]
@@ -3372,7 +3371,6 @@ const BOMPage: React.FC = () => {
                 isObsolete: g.is_obsolete,
               } as BOM);
               const groupKey = `group:${g.bom_code ?? '-'}|${g.material_id}|${g.version}`;
-              keyToUuids.set(groupKey, items.map((i) => i.uuid));
               const children = items.map((item, idx) => ({ ...item, key: `${item.uuid}-child-${idx}` }));
               return {
                 groupKey,
@@ -4467,6 +4465,7 @@ const BOMPage: React.FC = () => {
           setApprovalModalVisible(false);
           setApprovalComment('');
           setApprovalGroupKey(null);
+          approvalUuidsRef.current = [];
         }}
         footer={[
           <Button {...rowActionKind('reject')}
