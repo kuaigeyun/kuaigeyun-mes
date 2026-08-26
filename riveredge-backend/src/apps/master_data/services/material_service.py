@@ -4797,13 +4797,24 @@ class MaterialService:
         if target_ids:
             all_targets = await BOM.filter(id__in=list(target_ids)).all()
             if is_reverse:
-                invalid = [
-                    b for b in all_targets
-                    if str(b.approval_status or "").strip() not in _BOM_REVOKE_ALLOWED_FROM
-                ]
-                if invalid:
-                    raise ValidationError("仅已审核/已拒绝状态可撤销为草稿")
-                version_pairs = {(b.material_id, b.version) for b in all_targets}
+                if recursive:
+                    revocable = [
+                        b for b in all_targets
+                        if str(b.approval_status or "").strip() in _BOM_REVOKE_ALLOWED_FROM
+                    ]
+                    if not revocable:
+                        raise ValidationError("仅已审核/已拒绝状态可撤销为草稿")
+                    effective_targets = revocable
+                    target_ids = {b.id for b in revocable}
+                else:
+                    invalid = [
+                        b for b in all_targets
+                        if str(b.approval_status or "").strip() not in _BOM_REVOKE_ALLOWED_FROM
+                    ]
+                    if invalid:
+                        raise ValidationError("仅已审核/已拒绝状态可撤销为草稿")
+                    effective_targets = all_targets
+                version_pairs = {(b.material_id, b.version) for b in effective_targets}
                 for material_id, version in version_pairs:
                     await MaterialService._assert_bom_version_not_referenced(
                         tenant_id,
@@ -4812,14 +4823,26 @@ class MaterialService:
                         action_label="撤销审核",
                     )
             else:
-                invalid = [
-                    b for b in all_targets
-                    if str(b.approval_status or "").strip() not in _BOM_APPROVE_ALLOWED_FROM
-                ]
-                if invalid:
-                    raise ValidationError("仅草稿/待审核状态可审核")
+                if recursive:
+                    # 递归审核：子 BOM 已审核则跳过，仅处理草稿/待审核行
+                    approvable = [
+                        b for b in all_targets
+                        if str(b.approval_status or "").strip() in _BOM_APPROVE_ALLOWED_FROM
+                    ]
+                    if not approvable:
+                        raise ValidationError("仅草稿/待审核状态可审核")
+                    effective_targets = approvable
+                    target_ids = {b.id for b in approvable}
+                else:
+                    invalid = [
+                        b for b in all_targets
+                        if str(b.approval_status or "").strip() not in _BOM_APPROVE_ALLOWED_FROM
+                    ]
+                    if invalid:
+                        raise ValidationError("仅草稿/待审核状态可审核")
+                    effective_targets = all_targets
                 if approved:
-                    version_pairs = {(b.material_id, b.version) for b in all_targets}
+                    version_pairs = {(b.material_id, b.version) for b in effective_targets}
                     for material_id, version in version_pairs:
                         await MaterialService._assert_bom_version_components_have_source_type(
                             tenant_id,
