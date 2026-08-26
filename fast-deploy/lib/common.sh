@@ -4832,6 +4832,18 @@ _git_cmd() {
     MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' GIT_TERMINAL_PROMPT=0 git "$@"
 }
 
+# _git_cmd 关闭了 argv 路径转换（保护鉴权 URL），因此传给它的本地路径必须自行转 Windows 形式：
+# 原生 git.exe 会把 /d/foo 当成「当前盘根下的 \d\foo」，与 bash 的 /d/foo 是两个目录，
+# 曾导致 clone 撞上 D:\d\kuaigeyun-pro 残留而 -e / rm 检查的却是 D:\kuaigeyun-pro。
+_git_native_path() {
+    local p="$1"
+    if [ -n "$p" ] && is_windows_gitbash && command -v cygpath >/dev/null 2>&1; then
+        cygpath -w "$p" 2>/dev/null || printf '%s\n' "$p"
+    else
+        printf '%s\n' "$p"
+    fi
+}
+
 _git_userinfo_encode() {
     # 只编码 userinfo；未编码的 ? # @ 会截断 URL，git 报 '?' 不是仓库
     local s="$1" i c
@@ -4894,29 +4906,30 @@ _git_is_work_tree() {
     local dir="$1"
     [ -n "$dir" ] && [ -e "$dir" ] || return 1
     [ -d "$dir/.git" ] || [ -f "$dir/.git" ] && return 0
-    _git_cmd -C "$dir" rev-parse --is-inside-work-tree >/dev/null 2>&1
+    _git_cmd -C "$(_git_native_path "$dir")" rev-parse --is-inside-work-tree >/dev/null 2>&1
 }
 
 _sync_sibling_git_repo_fetch() {
-    local name="$1" path="$2" branch="$3" auth_url="$4" clean_url="$5"
+    local name="$1" path="$2" branch="$3" auth_url="$4" clean_url="$5" git_path
+    git_path="$(_git_native_path "$path")"
     log_info "同步 ${name}: ${path}（分支 ${branch}）"
-    if _git_cmd -C "$path" remote get-url origin >/dev/null 2>&1; then
-        _git_cmd -C "$path" remote set-url origin "$clean_url"
+    if _git_cmd -C "$git_path" remote get-url origin >/dev/null 2>&1; then
+        _git_cmd -C "$git_path" remote set-url origin "$clean_url"
     else
-        _git_cmd -C "$path" remote add origin "$clean_url"
+        _git_cmd -C "$git_path" remote add origin "$clean_url"
     fi
-    if ! _git_cmd -C "$path" fetch --prune --tags "$auth_url" "+refs/heads/${branch}:refs/remotes/origin/${branch}"; then
+    if ! _git_cmd -C "$git_path" fetch --prune --tags "$auth_url" "+refs/heads/${branch}:refs/remotes/origin/${branch}"; then
         log_error "${name}: 拉取分支 ${branch} 失败"
-        log_error "请检查 ${name} 的 origin（当前: $(_git_cmd -C "$path" remote get-url origin 2>/dev/null || echo 无)）与 Token（PRO_GIT_TOKEN / CLIENT_GIT_TOKEN）"
+        log_error "请检查 ${name} 的 origin（当前: $(_git_cmd -C "$git_path" remote get-url origin 2>/dev/null || echo 无)）与 Token（PRO_GIT_TOKEN / CLIENT_GIT_TOKEN）"
         log_error "同步 ${name} 失败"
         return 1
     fi
-    if ! _git_cmd -C "$path" rev-parse --verify "origin/${branch}" >/dev/null 2>&1; then
+    if ! _git_cmd -C "$git_path" rev-parse --verify "origin/${branch}" >/dev/null 2>&1; then
         log_error "${name}: 远程无分支 ${branch}（已统一使用 develop，勿再配置 main）"
         log_error "同步 ${name} 失败"
         return 1
     fi
-    _git_cmd -C "$path" checkout -B "$branch" "origin/${branch}" || {
+    _git_cmd -C "$git_path" checkout -B "$branch" "origin/${branch}" || {
         log_error "同步 ${name} 失败"
         return 1
     }
@@ -4925,7 +4938,7 @@ _sync_sibling_git_repo_fetch() {
 sync_sibling_git_repo() {
     # 参数: name url path branch token
     local name="$1" url="$2" path="$3" branch="${4:-develop}" token="${5:-}"
-    local auth_url clean_url
+    local auth_url clean_url git_path
     url="$(_env_read_trim "$url")"
     path="$(_env_read_trim "$path")"
     branch="$(_env_read_trim "$branch")"
@@ -4939,6 +4952,7 @@ sync_sibling_git_repo() {
     clean_url="$(_git_strip_auth_url "$url")"
     _git_validate_repo_url "$name" "$clean_url" || return 1
     auth_url="$(_git_auth_url "$clean_url" "$token")"
+    git_path="$(_git_native_path "$path")"
 
     if _git_is_work_tree "$path"; then
         _sync_sibling_git_repo_fetch "$name" "$path" "$branch" "$auth_url" "$clean_url" || return 1
@@ -4954,18 +4968,22 @@ sync_sibling_git_repo() {
                 return 1
             fi
         fi
-        log_info "克隆 ${name}: ${clean_url} → ${path}（分支 ${branch}）"
+        if [ "$git_path" = "$path" ]; then
+            log_info "克隆 ${name}: ${clean_url} → ${path}（分支 ${branch}）"
+        else
+            log_info "克隆 ${name}: ${clean_url} → ${path} [git: ${git_path}]（分支 ${branch}）"
+        fi
         mkdir -p "$(dirname "$path")"
         # 主仓 / 专业包 / 定制包 / 终端仓统一默认 develop；禁止回落到 main
         # 鉴权 URL 只用于本次 clone，禁止 set-url 进 origin（否则 ? / CR 会写进 .git/config）
-        if ! _git_cmd clone --branch "$branch" --single-branch "$auth_url" "$path"; then
+        if ! _git_cmd clone --branch "$branch" --single-branch "$auth_url" "$git_path"; then
             log_error "克隆 ${name} 失败：请确认私仓存在分支 ${branch}，以及 Token/SSH 权限"
             rm -rf "$path" 2>/dev/null || true
             return 1
         fi
-        _git_cmd -C "$path" remote set-url origin "$clean_url"
+        _git_cmd -C "$git_path" remote set-url origin "$clean_url"
     fi
-    log_ok "${name} @ $(_git_cmd -C "$path" rev-parse --short HEAD 2>/dev/null || echo '?') [${branch}]"
+    log_ok "${name} @ $(_git_cmd -C "$git_path" rev-parse --short HEAD 2>/dev/null || echo '?') [${branch}]"
 }
 
 write_workspace_yaml_from_deploy_env() {
