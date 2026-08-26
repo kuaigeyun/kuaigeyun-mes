@@ -5211,11 +5211,11 @@ cmd_install_client_repo() {
     [ -n "$token" ] || token="$(read_deploy_env_value PRO_GIT_TOKEN || true)"
 
     _warn_missing_https_token "移动端 H5 仓" "$url" "$token" "CLIENT_GIT_TOKEN"
-    set_deploy_env_value CLIENT_ENABLED "1"
     set_deploy_env_value CLIENT_REPO_URL "$url"
     set_deploy_env_value CLIENT_REPO_PATH "$path"
     set_deploy_env_value CLIENT_GIT_BRANCH "$branch"
     sync_sibling_git_repo "kuaigeyun-client" "$url" "$path" "$branch" "$token" || return 1
+    set_deploy_env_value CLIENT_ENABLED "1"
     install_mobile_h5_from_client_repo "$path" || return 1
     log_ok "移动端 H5 源仓已同步: ${path}"
 }

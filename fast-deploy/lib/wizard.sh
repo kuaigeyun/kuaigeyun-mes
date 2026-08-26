@@ -441,7 +441,7 @@ wizard_show_restart_menu() {
 
 wizard_ext_repo_git_label() {
     local path="$1"
-    if [ -d "$path/.git" ]; then
+    if _git_is_work_tree "$path"; then
         git -C "$path" rev-parse --short HEAD 2>/dev/null || echo present
     else
         echo "未克隆"
@@ -480,7 +480,7 @@ wizard_ext_require_cloned() {
     local kind="$1" label="$2" path
     load_deploy_env
     path="$(wizard_ext_default_path "$kind")" || return 1
-    if [ ! -d "$path/.git" ]; then
+    if ! _git_is_work_tree "$path"; then
         wizard_say_warn "${label}尚未安装（源仓未克隆）。请先到「安装」完成首次部署。"
         return 1
     fi
