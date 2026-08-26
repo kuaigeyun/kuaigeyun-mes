@@ -1939,6 +1939,61 @@
             ],
             "data_scope_key": "kuaizhizao:sales-order"
         },
+        "sales-contract": {
+            "permission_prefix": "kuaizhizao:sales-contract",
+            "display_fields": [
+                "id",
+                "uuid",
+                "code",
+                "name",
+                "label"
+            ],
+            "data_scope_key": "kuaizhizao:sales-contract"
+        },
+        "quotation": {
+            "permission_prefix": "kuaizhizao:quotation",
+            "display_fields": [
+                "id",
+                "uuid",
+                "code",
+                "name",
+                "label"
+            ],
+            "data_scope_key": "kuaizhizao:quotation"
+        },
+        "sales-review": {
+            "permission_prefix": "kuaizhizao:sales-review",
+            "display_fields": [
+                "id",
+                "uuid",
+                "code",
+                "name",
+                "label"
+            ],
+            "data_scope_key": "kuaizhizao:sales-review"
+        },
+        "sales-order-change": {
+            "permission_prefix": "kuaizhizao:sales-order-change",
+            "display_fields": [
+                "id",
+                "uuid",
+                "code",
+                "name",
+                "label"
+            ],
+            "data_scope_key": "kuaizhizao:sales-order-change"
+        },
+        "shipment-notice": {
+            "permission_prefix": "kuaizhizao:shipment-notice",
+            "display_fields": [
+                "id",
+                "uuid",
+                "code",
+                "name",
+                "label"
+            ],
+            "data_scope_key": "kuaizhizao:shipment-notice"
+        },
         "purchase-order": {
             "permission_prefix": "kuaizhizao:purchase-order",
             "display_fields": [

@@ -36,6 +36,11 @@ from apps.kuaizhizao.schemas.sales_review import (
     SalesReviewUpdate,
 )
 from core.utils.timezone_utils import resolve_business_datetime, to_site_date
+from apps.kuaizhizao.services.kuaizhizao_data_scope import (
+    SALES_REVIEW_SCOPE_RESOURCE,
+    apply_kuaizhizao_list_scope,
+    assert_kuaizhizao_row_visible,
+)
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
 from infra.models.user import User
 
@@ -228,12 +233,24 @@ class SalesReviewService(AppBaseService):
             updated_by_name=row.updated_by_name,
         )
 
-    async def get(self, tenant_id: int, review_id: int) -> SalesReviewResponse:
+    async def get(
+        self,
+        tenant_id: int,
+        review_id: int,
+        current_user: Optional[User] = None,
+    ) -> SalesReviewResponse:
         row = await SalesReview.get_or_none(
             tenant_id=tenant_id, id=review_id, deleted_at__isnull=True
         )
         if not row:
             raise NotFoundError(f"订单评审单不存在: {review_id}")
+        if current_user:
+            await assert_kuaizhizao_row_visible(
+                row,
+                tenant_id=tenant_id,
+                user=current_user,
+                resource=SALES_REVIEW_SCOPE_RESOURCE,
+            )
         items = await self._load_items(tenant_id, review_id)
         opinions = await self._load_dept_opinions(tenant_id, review_id, int(row.review_round or 0))
         return self._to_response(row, items, opinions)
@@ -249,8 +266,15 @@ class SalesReviewService(AppBaseService):
         keyword: Optional[str] = None,
         order_by: Optional[str] = None,
         pullable_only: Optional[bool] = None,
+        current_user: Optional[User] = None,
     ) -> SalesReviewListEnvelope:
         qs = SalesReview.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        qs = await apply_kuaizhizao_list_scope(
+            qs,
+            tenant_id=tenant_id,
+            current_user=current_user,
+            resource=SALES_REVIEW_SCOPE_RESOURCE,
+        )
         if status:
             qs = qs.filter(status=status)
         if customer_id:
@@ -371,6 +395,12 @@ class SalesReviewService(AppBaseService):
         )
         if not row:
             raise NotFoundError(f"订单评审单不存在: {review_id}")
+        await assert_kuaizhizao_row_visible(
+            row,
+            tenant_id=tenant_id,
+            user=current_user,
+            resource=SALES_REVIEW_SCOPE_RESOURCE,
+        )
         if (row.status or "") not in EDITABLE_STATUSES:
             raise BusinessLogicError("仅草稿或已驳回状态可编辑业务资料与明细")
 
@@ -390,7 +420,7 @@ class SalesReviewService(AppBaseService):
                 row.total_quantity = total_qty
                 row.total_amount = total_amt
             await row.save()
-        return await self.get(tenant_id, review_id)
+        return await self.get(tenant_id, review_id, current_user=current_user)
 
     async def delete(self, tenant_id: int, review_id: int, current_user: User) -> None:
         row = await SalesReview.get_or_none(
@@ -398,6 +428,12 @@ class SalesReviewService(AppBaseService):
         )
         if not row:
             raise NotFoundError(f"订单评审单不存在: {review_id}")
+        await assert_kuaizhizao_row_visible(
+            row,
+            tenant_id=tenant_id,
+            user=current_user,
+            resource=SALES_REVIEW_SCOPE_RESOURCE,
+        )
         if (row.status or "") not in {"draft", "cancelled", "rejected"}:
             raise BusinessLogicError("仅草稿、已驳回或已作废状态可删除")
         now = resolve_business_datetime()

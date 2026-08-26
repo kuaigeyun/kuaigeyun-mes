@@ -38,7 +38,12 @@ from apps.kuaizhizao.services.order_change.helpers import (
     resolve_sales_line_change,
 )
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
+from infra.models.user import User
 from infra.services.business_config_service import BusinessConfigService
+from apps.kuaizhizao.services.kuaizhizao_data_scope import (
+    apply_sales_order_child_list_scope,
+    assert_sales_order_child_row_visible,
+)
 from loguru import logger
 from core.utils.timezone_utils import resolve_business_datetime
 
@@ -61,6 +66,22 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
     def __init__(self):
         super().__init__(SalesOrderChangeOrder)
         self.business_config_service = BusinessConfigService()
+
+    @staticmethod
+    async def _assert_change_visible_if_user(
+        doc: SalesOrderChangeOrder,
+        *,
+        tenant_id: int,
+        current_user: Optional[User],
+    ) -> None:
+        if not current_user:
+            return
+        await assert_sales_order_child_row_visible(
+            doc,
+            tenant_id=tenant_id,
+            user=current_user,
+            order_id_field="source_order_id",
+        )
 
     async def _generate_code(self, tenant_id: int) -> str:
         return await self.generate_code(tenant_id, "SALES_ORDER_CHANGE_CODE", prefix="SOC")
@@ -373,10 +394,12 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
         updated_by: int,
         approval_edit_context: Optional[Dict[str, Any]] = None,
         approval_edit_comment: Optional[str] = None,
+        current_user: Optional[User] = None,
     ) -> SalesOrderChangeWithItemsResponse:
         doc = await SalesOrderChangeOrder.get_or_none(tenant_id=tenant_id, id=change_id, deleted_at__isnull=True)
         if not doc:
             raise NotFoundError(f"销售变更单不存在: {change_id}")
+        await self._assert_change_visible_if_user(doc, tenant_id=tenant_id, current_user=current_user)
         assert_sales_order_change_capability(doc, "update")
         is_draft = is_draft_status(doc.status)
         is_pending = normalize_status(doc.status) == DocumentStatus.PENDING_REVIEW.value
@@ -528,8 +551,15 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
         order_by: Optional[str] = None,
+        current_user: Optional[User] = None,
     ) -> Tuple[List[SalesOrderChangeListResponse], int]:
         qs = SalesOrderChangeOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        qs = await apply_sales_order_child_list_scope(
+            qs,
+            tenant_id=tenant_id,
+            current_user=current_user,
+            order_id_field="source_order_id",
+        )
         if source_order_id:
             qs = qs.filter(source_order_id=source_order_id)
         if status:
@@ -569,31 +599,63 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
         rows = await self._build_change_list_rows(tenant_id, docs)
         return rows, total
 
-    async def get_by_id(self, tenant_id: int, change_id: int) -> SalesOrderChangeWithItemsResponse:
+    async def get_by_id(
+        self,
+        tenant_id: int,
+        change_id: int,
+        current_user: Optional[User] = None,
+    ) -> SalesOrderChangeWithItemsResponse:
         doc = await SalesOrderChangeOrder.get_or_none(tenant_id=tenant_id, id=change_id, deleted_at__isnull=True)
         if not doc:
             raise NotFoundError(f"销售变更单不存在: {change_id}")
+        if current_user:
+            await self._assert_change_visible_if_user(doc, tenant_id=tenant_id, current_user=current_user)
         resp = await self._to_detail(doc)
         from core.services.approval.audit_record_enricher import enrich_record
 
         return await enrich_record(tenant_id, "sales_order_change", resp)
 
-    async def list_by_order(self, tenant_id: int, order_id: int) -> List[SalesOrderChangeListResponse]:
-        rows, _total = await self.list_change_orders(tenant_id, skip=0, limit=100, source_order_id=order_id)
+    async def list_by_order(
+        self,
+        tenant_id: int,
+        order_id: int,
+        current_user: Optional[User] = None,
+    ) -> List[SalesOrderChangeListResponse]:
+        rows, _total = await self.list_change_orders(
+            tenant_id,
+            skip=0,
+            limit=100,
+            source_order_id=order_id,
+            current_user=current_user,
+        )
         return rows
 
-    async def delete_change_order(self, tenant_id: int, change_id: int) -> None:
+    async def delete_change_order(
+        self,
+        tenant_id: int,
+        change_id: int,
+        current_user: Optional[User] = None,
+    ) -> None:
         doc = await SalesOrderChangeOrder.get_or_none(tenant_id=tenant_id, id=change_id, deleted_at__isnull=True)
         if not doc:
             raise NotFoundError(f"销售变更单不存在: {change_id}")
+        if current_user:
+            await self._assert_change_visible_if_user(doc, tenant_id=tenant_id, current_user=current_user)
         assert_sales_order_change_capability(doc, "delete")
         doc.deleted_at = resolve_business_datetime()
         await doc.save()
 
-    async def submit(self, tenant_id: int, change_id: int, operator_id: int) -> SalesOrderChangeWithItemsResponse:
+    async def submit(
+        self,
+        tenant_id: int,
+        change_id: int,
+        operator_id: int,
+        current_user: Optional[User] = None,
+    ) -> SalesOrderChangeWithItemsResponse:
         doc = await SalesOrderChangeOrder.get_or_none(tenant_id=tenant_id, id=change_id, deleted_at__isnull=True)
         if not doc:
             raise NotFoundError(f"销售变更单不存在: {change_id}")
+        await self._assert_change_visible_if_user(doc, tenant_id=tenant_id, current_user=current_user)
         has_content = await self._has_change_content(tenant_id, doc)
         assert_sales_order_change_capability(doc, "submit", has_change_content=has_content)
         audit_required = await self.business_config_service.check_audit_required(tenant_id, "sales_order_change")
@@ -636,10 +698,17 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
             return await self.apply(tenant_id, change_id, operator_id)
         return await self._to_detail(doc)
 
-    async def withdraw(self, tenant_id: int, change_id: int, operator_id: int) -> SalesOrderChangeWithItemsResponse:
+    async def withdraw(
+        self,
+        tenant_id: int,
+        change_id: int,
+        operator_id: int,
+        current_user: Optional[User] = None,
+    ) -> SalesOrderChangeWithItemsResponse:
         doc = await SalesOrderChangeOrder.get_or_none(tenant_id=tenant_id, id=change_id, deleted_at__isnull=True)
         if not doc:
             raise NotFoundError(f"销售变更单不存在: {change_id}")
+        await self._assert_change_visible_if_user(doc, tenant_id=tenant_id, current_user=current_user)
         assert_sales_order_change_capability(doc, "withdraw_submit")
         doc.status = DocumentStatus.DRAFT.value
         doc.review_status = ReviewStatus.PENDING.value

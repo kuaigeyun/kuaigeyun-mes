@@ -69,6 +69,7 @@ async def list_change_orders(
     end_date: Optional[date] = Query(None, description="创建日期止"),
     order_by: Optional[str] = Query(None, description="排序字段，如 created_at、-applied_at（前缀-表示降序）"),
     tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
     _: None = Depends(require_kuaizhizao_module_access("sales-order-change")),
 ):
     safe_order_by = None
@@ -91,6 +92,7 @@ async def list_change_orders(
         start_date=start_date,
         end_date=end_date,
         order_by=safe_order_by,
+        current_user=current_user,
     )
     return SalesOrderChangePagedListResponse(items=items, total=total)
 
@@ -99,18 +101,20 @@ async def list_change_orders(
 async def list_by_order(
     order_id: int = Path(...),
     tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
     _: None = Depends(require_kuaizhizao_module_access("sales-order-change")),
 ):
-    return await service.list_by_order(tenant_id, order_id)
+    return await service.list_by_order(tenant_id, order_id, current_user=current_user)
 
 
 @router.get("/{change_id}", response_model=SalesOrderChangeWithItemsResponse)
 async def get_change_order(
     change_id: int = Path(...),
     tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
     _: None = Depends(require_kuaizhizao_module_access("sales-order-change")),
 ):
-    return await service.get_by_id(tenant_id, change_id)
+    return await service.get_by_id(tenant_id, change_id, current_user=current_user)
 
 
 @router.put("/{change_id}", response_model=SalesOrderChangeWithItemsResponse)
@@ -121,16 +125,19 @@ async def update_change_order(
     tenant_id: int = Depends(get_current_tenant),
     _: None = Depends(require_kuaizhizao_module_access("sales-order-change")),
 ):
-    return await service.update_change_order(tenant_id, change_id, data, current_user.id)
+    return await service.update_change_order(
+        tenant_id, change_id, data, current_user.id, current_user=current_user
+    )
 
 
 @router.delete("/{change_id}", status_code=http_status.HTTP_204_NO_CONTENT)
 async def delete_change_order(
     change_id: int,
     tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
     _: None = Depends(require_kuaizhizao_module_access("sales-order-change")),
 ):
-    await service.delete_change_order(tenant_id, change_id)
+    await service.delete_change_order(tenant_id, change_id, current_user=current_user)
 
 
 @router.post("/{change_id}/submit", response_model=SalesOrderChangeWithItemsResponse)
@@ -140,7 +147,9 @@ async def submit_change_order(
     tenant_id: int = Depends(get_current_tenant),
     _: None = Depends(require_kuaizhizao_module_access("sales-order-change")),
 ):
-    return await service.submit(tenant_id, change_id, current_user.id)
+    return await service.submit(
+        tenant_id, change_id, current_user.id, current_user=current_user
+    )
 
 
 @router.post("/{change_id}/approve", response_model=SalesOrderChangeWithItemsResponse)
@@ -161,7 +170,9 @@ async def withdraw_change_order(
     tenant_id: int = Depends(get_current_tenant),
     _: None = Depends(require_kuaizhizao_module_access("sales-order-change")),
 ):
-    return await service.withdraw(tenant_id, change_id, current_user.id)
+    return await service.withdraw(
+        tenant_id, change_id, current_user.id, current_user=current_user
+    )
 
 
 @router.post("/{change_id}/apply", response_model=SalesOrderChangeWithItemsResponse)
@@ -178,6 +189,7 @@ async def apply_change_order(
 async def preview_impact(
     change_id: int,
     tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
     _: None = Depends(require_kuaizhizao_module_access("sales-order-change")),
 ):
     return await service.preview_impact(tenant_id, change_id)
@@ -200,6 +212,7 @@ async def print_sales_order_change(
 ):
     from apps.kuaizhizao.services.print_service import DocumentPrintService
 
+    await service.get_by_id(tenant_id, change_id, current_user=current_user)
     try:
         result = await DocumentPrintService().print_document(
             tenant_id=tenant_id,

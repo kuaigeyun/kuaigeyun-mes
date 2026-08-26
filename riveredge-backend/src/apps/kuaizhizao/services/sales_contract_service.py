@@ -67,8 +67,12 @@ SALES_CONTRACT_SORTABLE_FIELDS = frozenset({
     "created_at",
     "updated_at",
 })
+from core.services.authorization.data_scope_service import DataScopeService
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
+from infra.models.user import User
 from infra.services.business_config_service import BusinessConfigService
+
+SALES_CONTRACT_DATA_SCOPE_RESOURCE = "kuaizhizao:sales-contract"
 
 
 class SalesContractService(AppBaseService[SalesContract]):
@@ -79,6 +83,43 @@ class SalesContractService(AppBaseService[SalesContract]):
         super().__init__(SalesContract)
         self.business_config_service = BusinessConfigService()
         self.term_service = SalesContractTermService()
+
+    @staticmethod
+    async def _apply_sales_contract_list_scope(
+        query,
+        tenant_id: int,
+        current_user: Optional[User],
+    ):
+        """统一按角色数据策略过滤销售合同列表。"""
+        if not current_user:
+            return query
+        return await DataScopeService.apply(
+            query,
+            tenant_id=tenant_id,
+            user=current_user,
+            resource=SALES_CONTRACT_DATA_SCOPE_RESOURCE,
+        )
+
+    async def _get_contract_checked(
+        self,
+        tenant_id: int,
+        contract_id: int,
+        *,
+        current_user: Optional[User] = None,
+    ) -> SalesContract:
+        contract = await SalesContract.get_or_none(
+            tenant_id=tenant_id, id=contract_id, deleted_at__isnull=True
+        )
+        if not contract:
+            raise NotFoundError("销售合同不存在")
+        if current_user:
+            await DataScopeService.assert_row_visible(
+                contract,
+                tenant_id=tenant_id,
+                user=current_user,
+                resource=SALES_CONTRACT_DATA_SCOPE_RESOURCE,
+            )
+        return contract
 
     async def _resolve_contract_terms(
         self,
@@ -533,8 +574,10 @@ class SalesContractService(AppBaseService[SalesContract]):
         order_by: Optional[str] = None,
         pullable_only: Optional[bool] = None,
         include_items: bool = False,
+        current_user: Optional[User] = None,
     ) -> SalesContractListResponse:
         qs = SalesContract.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        qs = await self._apply_sales_contract_list_scope(qs, tenant_id, current_user)
         if status:
             qs = qs.filter(status=status)
         if contract_type:
@@ -667,10 +710,11 @@ class SalesContractService(AppBaseService[SalesContract]):
         tenant_id: int,
         contract_id: int,
         include_items: bool = True,
+        current_user: Optional[User] = None,
     ) -> SalesContractResponse:
-        contract = await SalesContract.get_or_none(tenant_id=tenant_id, id=contract_id, deleted_at__isnull=True)
-        if not contract:
-            raise NotFoundError("销售合同不存在")
+        contract = await self._get_contract_checked(
+            tenant_id, contract_id, current_user=current_user
+        )
         await self._normalize_contract_release_after_downstream_removed(contract)
         contract = await SalesContract.get(tenant_id=tenant_id, id=contract_id)
         items = None
@@ -691,10 +735,11 @@ class SalesContractService(AppBaseService[SalesContract]):
         updated_by: int,
         approval_edit_context: Optional[Dict[str, Any]] = None,
         approval_edit_comment: Optional[str] = None,
+        current_user: Optional[User] = None,
     ) -> SalesContractResponse:
-        contract = await SalesContract.get_or_none(tenant_id=tenant_id, id=contract_id, deleted_at__isnull=True)
-        if not contract:
-            raise NotFoundError("销售合同不存在")
+        contract = await self._get_contract_checked(
+            tenant_id, contract_id, current_user=current_user
+        )
         assert_sales_contract_capability(contract, "update")
         is_draft = (contract.status or "") in ("草稿",)
         is_pending = (contract.status or "") in ("待审核",)
@@ -800,12 +845,18 @@ class SalesContractService(AppBaseService[SalesContract]):
                         notes=ms.notes,
                     )
             await contract.save()
-        return await self.get_contract_by_id(tenant_id, contract_id)
+        return await self.get_contract_by_id(tenant_id, contract_id, current_user=current_user)
 
-    async def delete_contract(self, tenant_id: int, contract_id: int, deleted_by: int) -> None:
-        contract = await SalesContract.get_or_none(tenant_id=tenant_id, id=contract_id, deleted_at__isnull=True)
-        if not contract:
-            raise NotFoundError("销售合同不存在")
+    async def delete_contract(
+        self,
+        tenant_id: int,
+        contract_id: int,
+        deleted_by: int,
+        current_user: Optional[User] = None,
+    ) -> None:
+        contract = await self._get_contract_checked(
+            tenant_id, contract_id, current_user=current_user
+        )
         assert_sales_contract_capability(contract, "delete")
         from apps.kuaizhizao.models.sales_opportunity import SalesOpportunity
         from apps.kuaizhizao.models.document_relation import DocumentRelation
@@ -834,10 +885,16 @@ class SalesContractService(AppBaseService[SalesContract]):
                 source_id=contract_id,
             ).delete()
 
-    async def submit_contract(self, tenant_id: int, contract_id: int, submitted_by: int) -> SalesContractResponse:
-        contract = await SalesContract.get_or_none(tenant_id=tenant_id, id=contract_id, deleted_at__isnull=True)
-        if not contract:
-            raise NotFoundError("销售合同不存在")
+    async def submit_contract(
+        self,
+        tenant_id: int,
+        contract_id: int,
+        submitted_by: int,
+        current_user: Optional[User] = None,
+    ) -> SalesContractResponse:
+        contract = await self._get_contract_checked(
+            tenant_id, contract_id, current_user=current_user
+        )
         assert_sales_contract_capability(contract, "submit")
 
         audit_required = await self.business_config_service.check_audit_required(
@@ -853,7 +910,9 @@ class SalesContractService(AppBaseService[SalesContract]):
             contract.review_time = resolve_business_datetime()
             contract.updated_by = submitted_by
             await contract.save()
-            return await self.get_contract_by_id(tenant_id, contract_id)
+            return await self.get_contract_by_id(
+                tenant_id, contract_id, current_user=current_user
+            )
 
         from core.services.approval.approval_instance_service import ApprovalInstanceService
 
@@ -884,7 +943,9 @@ class SalesContractService(AppBaseService[SalesContract]):
         contract.review_status = ReviewStatus.PENDING
         contract.updated_by = submitted_by
         await contract.save()
-        return await self.get_contract_by_id(tenant_id, contract_id)
+        return await self.get_contract_by_id(
+            tenant_id, contract_id, current_user=current_user
+        )
 
     async def approve_contract(
         self,
@@ -935,13 +996,12 @@ class SalesContractService(AppBaseService[SalesContract]):
         tenant_id: int,
         contract_id: int,
         operator_id: int,
+        current_user: Optional[User] = None,
     ) -> SalesContractResponse:
         """撤回提交：待审核 → 草稿。"""
-        contract = await SalesContract.get_or_none(
-            tenant_id=tenant_id, id=contract_id, deleted_at__isnull=True
+        contract = await self._get_contract_checked(
+            tenant_id, contract_id, current_user=current_user
         )
-        if not contract:
-            raise NotFoundError("销售合同不存在")
         assert_sales_contract_capability(contract, "withdraw_submit")
         contract.status = "草稿"
         contract.review_status = ReviewStatus.PENDING.value
@@ -959,7 +1019,9 @@ class SalesContractService(AppBaseService[SalesContract]):
             entity_id=contract_id,
             operator_id=operator_id,
         )
-        return await self.get_contract_by_id(tenant_id, contract_id)
+        return await self.get_contract_by_id(
+            tenant_id, contract_id, current_user=current_user
+        )
 
     async def revoke_contract_approval(
         self,
@@ -1253,18 +1315,25 @@ class SalesContractService(AppBaseService[SalesContract]):
         )
 
     async def close_contract(
-        self, tenant_id: int, contract_id: int, operator_id: int, reason: Optional[str] = None
+        self,
+        tenant_id: int,
+        contract_id: int,
+        operator_id: int,
+        reason: Optional[str] = None,
+        current_user: Optional[User] = None,
     ) -> SalesContractResponse:
-        contract = await SalesContract.get_or_none(tenant_id=tenant_id, id=contract_id, deleted_at__isnull=True)
-        if not contract:
-            raise NotFoundError("销售合同不存在")
+        contract = await self._get_contract_checked(
+            tenant_id, contract_id, current_user=current_user
+        )
         assert_sales_contract_capability(contract, "close")
         contract.status = "已关闭"
         contract.updated_by = operator_id
         if reason:
             contract.notes = ((contract.notes or "") + f"\n关闭原因: {reason}").strip()
         await contract.save(update_fields=["status", "notes", "updated_by", "updated_at"])
-        return await self.get_contract_by_id(tenant_id, contract_id)
+        return await self.get_contract_by_id(
+            tenant_id, contract_id, current_user=current_user
+        )
 
     async def expire_contract(self, tenant_id: int, contract_id: int, operator_id: int) -> SalesContractResponse:
         contract = await SalesContract.get_or_none(tenant_id=tenant_id, id=contract_id, deleted_at__isnull=True)
@@ -1678,10 +1747,11 @@ class SalesContractService(AppBaseService[SalesContract]):
         created_by: int,
         selected_item_ids: Optional[List[int]] = None,
         release_lines: Optional[List[SalesContractReleaseLine]] = None,
+        current_user: Optional[User] = None,
     ):
-        contract = await SalesContract.get_or_none(tenant_id=tenant_id, id=contract_id, deleted_at__isnull=True)
-        if not contract:
-            raise NotFoundError("销售合同不存在")
+        contract = await self._get_contract_checked(
+            tenant_id, contract_id, current_user=current_user
+        )
         all_items = await SalesContractItem.filter(tenant_id=tenant_id, contract_id=contract_id).order_by("id")
         ctx = self._contract_capability_context(contract, all_items)
         assert_sales_contract_capability(
@@ -1780,16 +1850,20 @@ class SalesContractService(AppBaseService[SalesContract]):
             ),
             created_by=created_by,
         )
-        return sales_order, await self.get_contract_by_id(tenant_id, contract_id)
+        return sales_order, await self.get_contract_by_id(
+            tenant_id, contract_id, current_user=current_user
+        )
 
     async def _load_contract_push_preview_context(
-        self, tenant_id: int, contract_id: int
+        self,
+        tenant_id: int,
+        contract_id: int,
+        *,
+        current_user: Optional[User] = None,
     ) -> tuple[SalesContract, List[SalesContractItem], dict[str, Any], Any]:
-        contract = await SalesContract.get_or_none(
-            tenant_id=tenant_id, id=contract_id, deleted_at__isnull=True
+        contract = await self._get_contract_checked(
+            tenant_id, contract_id, current_user=current_user
         )
-        if not contract:
-            raise NotFoundError("销售合同不存在")
         items = await SalesContractItem.filter(
             tenant_id=tenant_id, contract_id=contract_id
         ).order_by("id")
@@ -1839,11 +1913,14 @@ class SalesContractService(AppBaseService[SalesContract]):
         return preview_items
 
     async def preview_push_sales_contract_to_sales_order(
-        self, tenant_id: int, contract_id: int
+        self,
+        tenant_id: int,
+        contract_id: int,
+        current_user: Optional[User] = None,
     ) -> Dict[str, Any]:
         """下推销售订单预览：返回合同明细数量、已释放、可释放。"""
         contract, items, _ctx, caps = await self._load_contract_push_preview_context(
-            tenant_id, contract_id
+            tenant_id, contract_id, current_user=current_user
         )
         if not items:
             raise BusinessLogicError("合同无明细，无法下推销售订单")
@@ -1874,11 +1951,14 @@ class SalesContractService(AppBaseService[SalesContract]):
         }
 
     async def preview_push_sales_contract_to_work_order(
-        self, tenant_id: int, contract_id: int
+        self,
+        tenant_id: int,
+        contract_id: int,
+        current_user: Optional[User] = None,
     ) -> Dict[str, Any]:
         """销售合同直推工单预览：返回可选择的合同明细，不实际创建。"""
         contract, all_items, _ctx, caps = await self._load_contract_push_preview_context(
-            tenant_id, contract_id
+            tenant_id, contract_id, current_user=current_user
         )
         if not all_items:
             raise BusinessLogicError("合同无明细，无法直推工单")
@@ -1958,13 +2038,12 @@ class SalesContractService(AppBaseService[SalesContract]):
         release_lines: Optional[List[SalesContractReleaseLine]] = None,
         work_order_granularity: Optional[str] = None,
         push_mode: Optional[str] = None,
+        current_user: Optional[User] = None,
     ) -> Dict[str, Any]:
         """销售合同直推工单（跳过先转销售订单）。"""
-        contract = await SalesContract.get_or_none(
-            tenant_id=tenant_id, id=contract_id, deleted_at__isnull=True
+        contract = await self._get_contract_checked(
+            tenant_id, contract_id, current_user=current_user
         )
-        if not contract:
-            raise NotFoundError("销售合同不存在")
         all_items = await SalesContractItem.filter(
             tenant_id=tenant_id, contract_id=contract_id
         ).order_by("id")
@@ -2198,13 +2277,19 @@ class SalesContractService(AppBaseService[SalesContract]):
             ],
         }
 
-    async def get_execution_summaries(self, tenant_id: int) -> List[SalesContractExecutionSummary]:
-        rows = await SalesContract.filter(
+    async def get_execution_summaries(
+        self,
+        tenant_id: int,
+        current_user: Optional[User] = None,
+    ) -> List[SalesContractExecutionSummary]:
+        qs = SalesContract.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True,
             contract_type=self.CONTRACT_TYPE_FRAMEWORK,
             status__in=["已生效", "执行中"],
-        ).order_by("-contract_date")
+        )
+        qs = await self._apply_sales_contract_list_scope(qs, tenant_id, current_user)
+        rows = await qs.order_by("-contract_date")
         result = []
         for c in rows:
             _, rem_amt = self._remaining(c)
@@ -2223,7 +2308,11 @@ class SalesContractService(AppBaseService[SalesContract]):
             )
         return result
 
-    async def list_alerts(self, tenant_id: int) -> List[SalesContractAlertItem]:
+    async def list_alerts(
+        self,
+        tenant_id: int,
+        current_user: Optional[User] = None,
+    ) -> List[SalesContractAlertItem]:
         alert_days_raw = (await self.business_config_service.get_business_config(tenant_id))[
             "parameters"
         ].get("sales", {}).get("contract_expiry_alert_days", 30)
@@ -2234,11 +2323,15 @@ class SalesContractService(AppBaseService[SalesContract]):
         today = date.today()
         threshold = today + timedelta(days=alert_days)
         alerts: List[SalesContractAlertItem] = []
-        contracts = await SalesContract.filter(
+        contract_qs = SalesContract.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True,
             status__in=["已生效", "执行中"],
         )
+        contract_qs = await self._apply_sales_contract_list_scope(
+            contract_qs, tenant_id, current_user
+        )
+        contracts = await contract_qs
         for c in contracts:
             if c.valid_to and c.valid_to <= threshold:
                 alerts.append(
@@ -2294,10 +2387,11 @@ class SalesContractService(AppBaseService[SalesContract]):
         contract_id: int,
         data: SalesContractChangeCreate,
         created_by: int,
+        current_user: Optional[User] = None,
     ) -> SalesContractChangeResponse:
-        contract = await SalesContract.get_or_none(tenant_id=tenant_id, id=contract_id, deleted_at__isnull=True)
-        if not contract:
-            raise NotFoundError("销售合同不存在")
+        contract = await self._get_contract_checked(
+            tenant_id, contract_id, current_user=current_user
+        )
         assert_sales_contract_capability(contract, "create_change")
         change_code = await self._generate_change_code(tenant_id)
         row = await SalesContractChange.create(
@@ -2371,8 +2465,17 @@ class SalesContractService(AppBaseService[SalesContract]):
         return await self._change_to_response(change)
 
     async def list_contract_changes(
-        self, tenant_id: int, contract_id: Optional[int] = None, skip: int = 0, limit: int = 100
+        self,
+        tenant_id: int,
+        contract_id: Optional[int] = None,
+        skip: int = 0,
+        limit: int = 100,
+        current_user: Optional[User] = None,
     ) -> List[SalesContractChangeResponse]:
+        if contract_id:
+            await self._get_contract_checked(
+                tenant_id, contract_id, current_user=current_user
+            )
         q = SalesContractChange.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if contract_id:
             q = q.filter(contract_id=contract_id)
@@ -2430,10 +2533,15 @@ class SalesContractService(AppBaseService[SalesContract]):
             updated_at=row.updated_at,
         )
 
-    async def get_payment_summary(self, tenant_id: int, contract_id: int) -> dict:
-        contract = await SalesContract.get_or_none(tenant_id=tenant_id, id=contract_id, deleted_at__isnull=True)
-        if not contract:
-            raise NotFoundError("销售合同不存在")
+    async def get_payment_summary(
+        self,
+        tenant_id: int,
+        contract_id: int,
+        current_user: Optional[User] = None,
+    ) -> dict:
+        contract = await self._get_contract_checked(
+            tenant_id, contract_id, current_user=current_user
+        )
         milestones = await SalesContractMilestone.filter(tenant_id=tenant_id, contract_id=contract_id).order_by("id")
         planned = sum(Decimal(str(m.planned_amount or 0)) for m in milestones)
         collected = sum(

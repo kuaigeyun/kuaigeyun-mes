@@ -300,7 +300,10 @@ async def _assert_sales_delivery_visible(
     delivery_id: int,
 ) -> None:
     from apps.kuaizhizao.models.sales_delivery import SalesDelivery
-    from apps.kuaizhizao.models.sales_order import SalesOrder
+    from apps.kuaizhizao.services.kuaizhizao_data_scope import (
+        SALES_OUTBOUND_SCOPE_RESOURCE,
+        assert_sales_order_child_row_visible,
+    )
 
     delivery = await SalesDelivery.get_or_none(
         tenant_id=tenant_id,
@@ -309,21 +312,12 @@ async def _assert_sales_delivery_visible(
     )
     if not delivery:
         return
-    sales_order_id = getattr(delivery, "sales_order_id", None)
-    if not sales_order_id:
-        return
-    sales_order = await SalesOrder.get_or_none(
-        tenant_id=tenant_id,
-        id=sales_order_id,
-        deleted_at__isnull=True,
-    )
-    if not sales_order:
-        return
-    await DataScopeService.assert_row_visible(
-        sales_order,
+    await assert_sales_order_child_row_visible(
+        delivery,
         tenant_id=tenant_id,
         user=current_user,
-        resource="kuaizhizao:sales-order",
+        order_id_field="sales_order_id",
+        orphan_resource=SALES_OUTBOUND_SCOPE_RESOURCE,
     )
 
 
@@ -478,6 +472,10 @@ async def _assert_sales_return_visible(
     return_id: int,
 ) -> None:
     from apps.kuaizhizao.models.sales_return import SalesReturn
+    from apps.kuaizhizao.services.kuaizhizao_data_scope import (
+        SALES_RETURN_SCOPE_RESOURCE,
+        assert_sales_order_child_row_visible,
+    )
 
     sales_return = await SalesReturn.get_or_none(
         tenant_id=tenant_id,
@@ -486,13 +484,12 @@ async def _assert_sales_return_visible(
     )
     if not sales_return:
         return
-    sales_order_id = getattr(sales_return, "sales_order_id", None)
-    if not sales_order_id:
-        return
-    await _assert_sales_order_visible_by_id(
+    await assert_sales_order_child_row_visible(
+        sales_return,
         tenant_id=tenant_id,
-        current_user=current_user,
-        sales_order_id=sales_order_id,
+        user=current_user,
+        order_id_field="sales_order_id",
+        orphan_resource=SALES_RETURN_SCOPE_RESOURCE,
     )
 
 
@@ -3577,6 +3574,7 @@ async def list_sales_deliveries(
         tenant_id=tenant_id,
         skip=skip,
         limit=limit,
+        current_user=current_user,
         status=status,
         sales_order_id=sales_order_id,
         customer_id=customer_id,
@@ -4514,6 +4512,7 @@ async def list_sales_returns(
         tenant_id=tenant_id,
         skip=skip,
         limit=limit,
+        current_user=current_user,
         **{k: v for k, v in filters.items() if v is not None},
     )
     return SalesReturnListPaginatedResponse(**result)

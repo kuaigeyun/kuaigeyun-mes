@@ -77,6 +77,7 @@ async def list_contracts(
         description="仅可加载建销售订单：生效中、已审核且在有效期内",
     ),
     tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
 ):
     safe_order_by = None
     if order_by:
@@ -97,17 +98,24 @@ async def list_contracts(
         order_by=safe_order_by,
         pullable_only=pullable_only,
         include_items=include_items,
+        current_user=current_user,
     )
 
 
 @router.get("/alerts", response_model=List[SalesContractAlertItem], summary="Contract alerts")
-async def list_alerts(tenant_id: int = Depends(get_current_tenant)):
-    return await service.list_alerts(tenant_id)
+async def list_alerts(
+    tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
+):
+    return await service.list_alerts(tenant_id, current_user=current_user)
 
 
 @router.get("/execution-summary", response_model=List[SalesContractExecutionSummary], summary="Framework execution summary")
-async def execution_summary(tenant_id: int = Depends(get_current_tenant)):
-    return await service.get_execution_summaries(tenant_id)
+async def execution_summary(
+    tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
+):
+    return await service.get_execution_summaries(tenant_id, current_user=current_user)
 
 
 @router.get("/{contract_id}", response_model=SalesContractResponse, summary="Get sales contract")
@@ -115,9 +123,12 @@ async def get_contract(
     contract_id: int = Path(...),
     include_items: bool = Query(True),
     tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
 ):
     try:
-        return await service.get_contract_by_id(tenant_id, contract_id, include_items=include_items)
+        return await service.get_contract_by_id(
+            tenant_id, contract_id, include_items=include_items, current_user=current_user
+        )
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -130,7 +141,9 @@ async def update_contract(
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        return await service.update_contract(tenant_id, contract_id, data, current_user.id)
+        return await service.update_contract(
+            tenant_id, contract_id, data, current_user.id, current_user=current_user
+        )
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except (BusinessLogicError, ValidationError) as e:
@@ -144,7 +157,9 @@ async def delete_contract(
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        await service.delete_contract(tenant_id, contract_id, current_user.id)
+        await service.delete_contract(
+            tenant_id, contract_id, current_user.id, current_user=current_user
+        )
         return {"success": True}
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -159,7 +174,9 @@ async def submit_contract(
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        return await service.submit_contract(tenant_id, contract_id, current_user.id)
+        return await service.submit_contract(
+            tenant_id, contract_id, current_user.id, current_user=current_user
+        )
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except BusinessLogicError as e:
@@ -210,7 +227,9 @@ async def withdraw_contract(
 ):
     """待审核合同撤回到草稿。"""
     try:
-        return await service.withdraw_contract(tenant_id, contract_id, current_user.id)
+        return await service.withdraw_contract(
+            tenant_id, contract_id, current_user.id, current_user=current_user
+        )
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except BusinessLogicError as e:
@@ -345,11 +364,15 @@ async def convert_to_order(
             current_user.id,
             selected_item_ids=body.selected_item_ids,
             release_lines=body.release_lines,
+            current_user=current_user,
         )
         from apps.kuaizhizao.services.sales_order_service import SalesOrderService
 
         so_resp = await SalesOrderService().get_sales_order_by_id(
-            tenant_id=tenant_id, sales_order_id=int(sales_order.id), include_items=False
+            tenant_id=tenant_id,
+            sales_order_id=int(sales_order.id),
+            include_items=False,
+            current_user=current_user,
         )
         return {"sales_order": so_resp, "contract": contract}
     except NotFoundError as e:
@@ -365,10 +388,11 @@ async def convert_to_order(
 async def preview_push_to_sales_order(
     contract_id: int,
     tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
 ):
     try:
         return await service.preview_push_sales_contract_to_sales_order(
-            tenant_id, contract_id
+            tenant_id, contract_id, current_user=current_user
         )
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -383,9 +407,12 @@ async def preview_push_to_sales_order(
 async def preview_push_to_work_order(
     contract_id: int,
     tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
 ):
     try:
-        return await service.preview_push_sales_contract_to_work_order(tenant_id, contract_id)
+        return await service.preview_push_sales_contract_to_work_order(
+            tenant_id, contract_id, current_user=current_user
+        )
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except BusinessLogicError as e:
@@ -413,6 +440,7 @@ async def push_to_work_order(
             release_lines=body.release_lines,
             work_order_granularity=body.work_order_granularity,
             push_mode=body.push_mode,
+            current_user=current_user,
         )
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -428,7 +456,9 @@ async def create_change(
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        return await service.create_contract_change(tenant_id, contract_id, data, current_user.id)
+        return await service.create_contract_change(
+            tenant_id, contract_id, data, current_user.id, current_user=current_user
+        )
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except BusinessLogicError as e:
@@ -457,7 +487,9 @@ async def close_contract(
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        return await service.close_contract(tenant_id, contract_id, current_user.id, reason)
+        return await service.close_contract(
+            tenant_id, contract_id, current_user.id, reason, current_user=current_user
+        )
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except BusinessLogicError as e:
@@ -465,9 +497,15 @@ async def close_contract(
 
 
 @router.get("/{contract_id}/payment-summary", summary="Contract payment summary")
-async def payment_summary(contract_id: int, tenant_id: int = Depends(get_current_tenant)):
+async def payment_summary(
+    contract_id: int,
+    tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
+):
     try:
-        return await service.get_payment_summary(tenant_id, contract_id)
+        return await service.get_payment_summary(
+            tenant_id, contract_id, current_user=current_user
+        )
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -478,8 +516,11 @@ async def list_changes(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
 ):
-    return await service.list_contract_changes(tenant_id, contract_id=contract_id, skip=skip, limit=limit)
+    return await service.list_contract_changes(
+        tenant_id, contract_id=contract_id, skip=skip, limit=limit, current_user=current_user
+    )
 
 
 @router.post("/{contract_id}/milestones/{milestone_id}/generate-receivable", summary="Generate receivable from milestone")

@@ -115,6 +115,7 @@ async def list_shipment_notices(
         tenant_id=tenant_id,
         skip=skip,
         limit=limit,
+        current_user=current_user,
         status=status,
         sales_order_id=sales_order_id,
         customer_id=customer_id,
@@ -180,6 +181,7 @@ async def get_shipment_notice(
         return await shipment_notice_service.get_shipment_notice_by_id(
             tenant_id=tenant_id,
             notice_id=notice_id,
+            current_user=current_user,
         )
     except NotFoundError as e:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))

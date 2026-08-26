@@ -47,9 +47,21 @@ _CUSTOMER_POOL_PROFILE = DataScopeResourceProfile(
     no_policy_default_resolver=RESOLVER_CUSTOMER_SALESMAN_POOL,
 )
 
+_KUAIZHIZAO_SALES_CHILD_VIA_ORDER_RESOURCES = (
+    "kuaizhizao:sales-order-change",
+    "kuaizhizao:shipment-notice",
+)
+
+_KUAIZHIZAO_OUTBOUND_DOC_PROFILE = DataScopeResourceProfile(
+    applicant_user_id_field="created_by",
+    created_by_user_id_field=None,
+    department_uuid_field=None,
+)
+
 _KUAIZHIZAO_RESOURCES = (
     "kuaizhizao:sales-order",
     "kuaizhizao:quotation",
+    "kuaizhizao:sales-review",
 )
 
 _registered = False
@@ -60,6 +72,8 @@ def register_kuaizhizao_data_scope_profiles() -> None:
     if _registered:
         return
     for resource in _KUAIZHIZAO_RESOURCES:
+        register_resource_profile(resource, _KUAIZHIZAO_SALES_DOC_PROFILE)
+    for resource in _KUAIZHIZAO_SALES_CHILD_VIA_ORDER_RESOURCES:
         register_resource_profile(resource, _KUAIZHIZAO_SALES_DOC_PROFILE)
     register_resource_profile("kuaizhizao:customer-pool", _CUSTOMER_POOL_PROFILE)
     register_resource_profile("kuaizhizao:customer-follow-up", _CUSTOMER_CHILD_DOC_PROFILE)
@@ -77,8 +91,8 @@ def register_kuaizhizao_data_scope_profiles() -> None:
     register_resource_profile("kuaizhizao:material-borrow", _KUAIZHIZAO_WORK_ORDER_PROFILE)
     register_resource_profile("kuaizhizao:material-return", _KUAIZHIZAO_WORK_ORDER_PROFILE)
     register_resource_profile("kuaizhizao:inbound", _KUAIZHIZAO_WORK_ORDER_PROFILE)
-    register_resource_profile("kuaizhizao:outbound", _KUAIZHIZAO_SALES_DOC_PROFILE)
-    register_resource_profile("kuaizhizao:sales-return", _KUAIZHIZAO_SALES_DOC_PROFILE)
+    register_resource_profile("kuaizhizao:outbound", _KUAIZHIZAO_OUTBOUND_DOC_PROFILE)
+    register_resource_profile("kuaizhizao:sales-return", _KUAIZHIZAO_OUTBOUND_DOC_PROFILE)
     register_resource_profile("kuaizhizao:purchase-return", _KUAIZHIZAO_PURCHASE_DOC_PROFILE)
     register_resource_profile("kuaizhizao:plan-management-scheduling", _KUAIZHIZAO_WORK_ORDER_PROFILE)
     _registered = True

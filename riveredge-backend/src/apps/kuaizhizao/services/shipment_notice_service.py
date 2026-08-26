@@ -43,8 +43,13 @@ from apps.kuaizhizao.services.document_action_policy.enricher import (
 )
 from infra.services.business_config_service import BusinessConfigService
 from apps.kuaizhizao.utils.inventory_helper import get_material_available_quantity
+from apps.kuaizhizao.services.kuaizhizao_data_scope import (
+    apply_sales_order_child_list_scope,
+    assert_sales_order_child_row_visible,
+)
 from core.services.approval.audit_record_enricher import enrich_items
 from core.utils.timezone_utils import resolve_business_datetime, today_site_str
+from infra.models.user import User
 
 SHIPMENT_NOTICE_SORTABLE_FIELDS = frozenset({
     "notice_code",
@@ -448,12 +453,20 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
     async def get_shipment_notice_by_id(
         self,
         tenant_id: int,
-        notice_id: int
+        notice_id: int,
+        current_user: Optional[User] = None,
     ) -> ShipmentNoticeWithItemsResponse:
         """根据ID获取发货通知单（含明细）"""
         notice = await ShipmentNotice.get_or_none(tenant_id=tenant_id, id=notice_id, deleted_at__isnull=True)
         if not notice:
             raise NotFoundError(f"发货通知单不存在: {notice_id}")
+        if current_user:
+            await assert_sales_order_child_row_visible(
+                notice,
+                tenant_id=tenant_id,
+                user=current_user,
+                order_id_field="sales_order_id",
+            )
 
         items = await ShipmentNoticeItem.filter(tenant_id=tenant_id, notice_id=notice_id).all()
         response = ShipmentNoticeWithItemsResponse.model_validate(notice)
@@ -468,10 +481,17 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
         tenant_id: int,
         skip: int = 0,
         limit: int = 20,
+        current_user: Optional[User] = None,
         **filters
     ) -> Dict[str, Any]:
         """获取发货通知单列表（含 capabilities 与分页 total）。"""
         query = ShipmentNotice.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        query = await apply_sales_order_child_list_scope(
+            query,
+            tenant_id=tenant_id,
+            current_user=current_user,
+            order_id_field="sales_order_id",
+        )
         if filters.get("status"):
             query = query.filter(status=filters["status"])
         if filters.get("sales_order_id"):

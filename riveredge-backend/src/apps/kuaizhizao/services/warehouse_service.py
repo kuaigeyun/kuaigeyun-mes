@@ -5142,8 +5142,12 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             tenant_id, "sales_delivery", resp, audit_enabled=audit_required
         )
 
-    async def list_sales_deliveries(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters):
+    async def list_sales_deliveries(self, tenant_id: int, skip: int = 0, limit: int = 20, current_user=None, **filters):
         """获取销售出库单列表"""
+        from apps.kuaizhizao.services.kuaizhizao_data_scope import (
+            SALES_OUTBOUND_SCOPE_RESOURCE,
+            apply_sales_order_child_list_scope,
+        )
         from apps.kuaizhizao.services.warehouse_list_core import (
             SALES_DELIVERY_KEYWORD_FIELDS,
             SALES_DELIVERY_SORTABLE_FIELDS,
@@ -5151,6 +5155,13 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         )
 
         query = SalesDelivery.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        query = await apply_sales_order_child_list_scope(
+            query,
+            tenant_id=tenant_id,
+            current_user=current_user,
+            order_id_field="sales_order_id",
+            orphan_resource=SALES_OUTBOUND_SCOPE_RESOURCE,
+        )
 
         # 应用过滤条件
         if filters.get('status'):
@@ -10718,11 +10729,22 @@ class SalesReturnService(AppBaseService[SalesReturn]):
             tenant_id, return_obj, response, audit_required=audit_required
         )
 
-    async def list_sales_returns(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> Dict[str, Any]:
+    async def list_sales_returns(self, tenant_id: int, skip: int = 0, limit: int = 20, current_user=None, **filters) -> Dict[str, Any]:
         """获取销售退货单列表"""
         from datetime import time as dt_time
+        from apps.kuaizhizao.services.kuaizhizao_data_scope import (
+            SALES_RETURN_SCOPE_RESOURCE,
+            apply_sales_order_child_list_scope,
+        )
 
         query = SalesReturn.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        query = await apply_sales_order_child_list_scope(
+            query,
+            tenant_id=tenant_id,
+            current_user=current_user,
+            order_id_field="sales_order_id",
+            orphan_resource=SALES_RETURN_SCOPE_RESOURCE,
+        )
 
         if filters.get('status'):
             query = query.filter(status=filters['status'])

@@ -116,6 +116,7 @@ async def list_sales_reviews(
         keyword=keyword,
         order_by=safe_order_by,
         pullable_only=pullable_only,
+        current_user=current_user,
     )
 
 
@@ -126,7 +127,7 @@ async def get_sales_review(
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        return await _service.get(tenant_id, review_id)
+        return await _service.get(tenant_id, review_id, current_user=current_user)
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
