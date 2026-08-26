@@ -20,6 +20,7 @@ import { extractAppCodeFromPath, resolveAppMenuGroupDisplayName } from '../utils
 import { useGlobalStore } from '../stores';
 import { useConfigStore } from '../stores/configStore';
 import { filterMenuItemsByPermission, resolveUserForMenuPermission, isAppGroupTitleItem } from '../utils/permission';
+import { isEmptyIndustryPackRoot } from '../layouts/basicLayout/sidebarMenuLayout';
 import { isInfraSuperAdminUser, hasPlatformAdministrativeAuthority } from '../utils/auth';
 import { refetchSessionCurrentUser } from '../utils/sessionCurrentUser';
 import { NAVIGATION_MENU_TREE_QUERY_KEY, useNavigationMenuTreeQuery } from './useNavigationMenuTreeQuery';
@@ -438,7 +439,7 @@ export function useUnifiedMenuData(
           key: `breadcrumb-app-${appMenu.uuid}`,
           isAppRoot: true, // 标记为 APP 根节点，供面包屑直接使用已翻译名称
         } as MenuDataItem;
-      });
+      }).filter((item) => !isEmptyIndustryPackRoot(item));
       items.splice(1, 0, ...appItems);
     }
     let result = filterMenuItemsByPermission(items, menuPermissionUser);

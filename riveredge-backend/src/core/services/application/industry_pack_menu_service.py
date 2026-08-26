@@ -13,6 +13,7 @@ from core.config.industry_pack import (
     is_industry_module_app_code,
     is_industry_pack_shell_code,
     manifest_to_industry_pack_menu_item,
+    resolve_industry_pack_navigation_visible,
 )
 from core.services.application.application_service import ApplicationService
 from core.utils.timezone_utils import now_utc
@@ -89,14 +90,41 @@ class IndustryPackMenuService:
         )
 
     @staticmethod
+    def resolve_shell_navigation_visible(*, is_installed: bool, active_module_count: int) -> bool:
+        return resolve_industry_pack_navigation_visible(
+            is_installed=is_installed,
+            active_module_count=active_module_count,
+        )
+
+    @staticmethod
+    async def _sync_shell_active_flag(
+        tenant_id: int,
+        shell_uuid: str,
+        *,
+        is_active: bool,
+    ) -> None:
+        conn = await get_db_connection()
+        try:
+            await conn.execute(
+                """
+                UPDATE core_applications
+                SET is_active = $3, updated_at = NOW()
+                WHERE tenant_id = $1 AND uuid = $2 AND deleted_at IS NULL
+                """,
+                tenant_id,
+                shell_uuid,
+                is_active,
+            )
+        finally:
+            await conn.close()
+
+    @staticmethod
     async def reconcile_for_tenant(tenant_id: int) -> int:
         """按已安装/已启用的行业模块对齐 industry-pack 容器与侧栏菜单。"""
-        if not await IndustryPackMenuService._has_installed_industry_module(tenant_id):
+        shell = await IndustryPackMenuService.get_shell_application(tenant_id)
+        if not shell or not shell.get("is_installed"):
             return 0
-        if await IndustryPackMenuService._has_active_industry_module(tenant_id):
-            await IndustryPackMenuService.ensure_shell_active(tenant_id)
-        else:
-            await IndustryPackMenuService.ensure_shell_installed(tenant_id)
+        await IndustryPackMenuService.ensure_shell_installed(tenant_id)
         return await IndustryPackMenuService.rebuild_pack_menus(tenant_id)
 
     @staticmethod
@@ -182,7 +210,17 @@ class IndustryPackMenuService:
         children = await IndustryPackMenuService._collect_module_menu_items(tenant_id)
         menu_config = IndustryPackMenuService._build_pack_menu_config(children)
         shell_uuid = str(shell["uuid"])
-        shell_active = bool(shell.get("is_active")) and bool(shell.get("is_installed"))
+        should_show = IndustryPackMenuService.resolve_shell_navigation_visible(
+            is_installed=bool(shell.get("is_installed")),
+            active_module_count=len(children),
+        )
+
+        await IndustryPackMenuService._sync_shell_active_flag(
+            tenant_id,
+            shell_uuid,
+            is_active=should_show,
+        )
+        shell["is_active"] = should_show
 
         await IndustryPackMenuService._purge_module_owned_menus(tenant_id)
 
@@ -190,7 +228,7 @@ class IndustryPackMenuService:
             tenant_id=tenant_id,
             application_uuid=shell_uuid,
             menu_config=menu_config,
-            is_active=shell_active,
+            is_active=should_show,
             preserve_existing_is_active=False,
             skip_permission_sync=False,
         )

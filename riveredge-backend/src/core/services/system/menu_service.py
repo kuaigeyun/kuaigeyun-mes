@@ -1087,8 +1087,10 @@ class MenuService:
         # 按应用的 sort_order 排序根菜单（如果有关联应用）
         # 没有关联应用的菜单保持原顺序（按菜单的 sort_order）
         root_menus.sort(key=lambda m: (
-            app_sort_order_map.get(m.application_uuid, 999999) if m.application_uuid else 999999,
-            m.sort_order
+            app_sort_order_map.get(str(m.application_uuid), 999999)
+            if m.application_uuid
+            else 999999,
+            m.sort_order or 0,
         ))
 
         if overlay_manifest_sort and cache_key_suffix == "nav_v1":
@@ -1592,6 +1594,7 @@ class MenuService:
                 existing_menu.icon = menu_icon
                 existing_menu.component = menu_component
                 existing_menu.permission_code = menu_permission_code
+                existing_menu.application_uuid = application_uuid
                 _resolved = resolve_sync_is_active_for_existing_row(
                     is_active, preserve_existing_is_active
                 )

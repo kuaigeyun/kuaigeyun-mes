@@ -167,10 +167,24 @@ function treeHasInfraPath(item: MenuDataItem): boolean {
   return item.children?.some(treeHasInfraPath) ?? false;
 }
 
+const INDUSTRY_PACK_ROOT_PATH = '/apps/industry-pack';
+
+function countVisibleMenuChildren(item: MenuDataItem): number {
+  return (item.children ?? []).filter((child) => child.hideInMenu !== true).length;
+}
+
+/** 行业包容器无已启用子应用时不占双列左栏磁贴（与后端 navigation-tree 一致） */
+export function isEmptyIndustryPackRoot(item: MenuDataItem): boolean {
+  const path = typeof item.path === 'string' ? item.path : '';
+  if (path !== INDUSTRY_PACK_ROOT_PATH) return false;
+  return countVisibleMenuChildren(item) === 0;
+}
+
 /** 双列左列不展示：系统配置（走底栏）、平台基础设施等硬编码平台根 */
 export function isSplitSidebarExcludedRoot(item: MenuDataItem): boolean {
   if (item.hideInMenu === true) return true;
   if (item.path === '/system') return true;
+  if (isEmptyIndustryPackRoot(item)) return true;
   return treeHasInfraPath(item);
 }
 

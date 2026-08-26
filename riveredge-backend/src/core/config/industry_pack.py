@@ -11,6 +11,12 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 INDUSTRY_PACK_APP_CODE = "industry-pack"
+INDUSTRY_PACK_SORT_ORDER = 290
+
+
+def resolve_industry_pack_navigation_visible(*, is_installed: bool, active_module_count: int) -> bool:
+    """侧栏是否展示行业包容器：已安装且至少有一个已启用的行业模块。"""
+    return bool(is_installed) and active_module_count > 0
 
 
 def is_industry_pack_shell_code(app_code: str | None) -> bool:
