@@ -4729,7 +4729,8 @@ sync_extension_git_repos_if_enabled() {
     fi
 }
 
-# 主仓 update 后或扩展开关已开时，同步私仓并按 deploy.env 重新 compose
+# 主仓 update 后若扩展开关已开，尝试同步私仓并 compose。
+# 失败只告警：专业/定制仓不得阻断主仓拉取、迁移与重启（扩展请用菜单 [4]）。
 recompose_extension_apps_if_enabled() {
     load_deploy_env
     local pro_en custom_en
@@ -4738,11 +4739,14 @@ recompose_extension_apps_if_enabled() {
     if [ "$pro_en" != "1" ] && [ "$custom_en" != "1" ]; then
         return 0
     fi
-    log_info "扩展应用已启用，同步私仓并重新组装（workspace compose）..."
-    sync_extension_git_repos_if_enabled || return 1
+    log_info "扩展应用已启用，同步私仓并重新组装（失败不阻断主仓更新）..."
+    if ! sync_extension_git_repos_if_enabled; then
+        log_warn "扩展仓同步失败，主仓更新继续。请用菜单 [4] 单独安装/更新专业包或定制包。"
+        return 0
+    fi
     run_workspace_compose || {
-        log_error "扩展应用组装失败。请检查私仓路径与 PyYAML，或执行: ./fast-deploy/deploy.sh pro-apps all"
-        return 1
+        log_warn "扩展应用组装失败，主仓更新继续。请检查私仓路径与 PyYAML，或菜单 [4] 重试。"
+        return 0
     }
 }
 
@@ -5110,20 +5114,20 @@ cmd_install_extension_apps() {
 
     if [ "$do_pro" = "1" ]; then
         _warn_missing_https_token "专业仓" "$pro_url" "$pro_token" "PRO_GIT_TOKEN"
-        set_deploy_env_value PRO_ENABLED "1"
         set_deploy_env_value PRO_REPO_URL "$pro_url"
         set_deploy_env_value PRO_REPO_PATH "$pro_path"
         set_deploy_env_value PRO_GIT_BRANCH "$pro_branch"
         sync_sibling_git_repo "kuaigeyun-pro" "$pro_url" "$pro_path" "$pro_branch" "$pro_token" || return 1
+        set_deploy_env_value PRO_ENABLED "1"
     fi
 
     if [ "$do_custom" = "1" ]; then
         _warn_missing_https_token "定制仓" "$custom_url" "$custom_token" "CUSTOM_GIT_TOKEN"
-        set_deploy_env_value CUSTOM_ENABLED "1"
         set_deploy_env_value CUSTOM_REPO_URL "$custom_url"
         set_deploy_env_value CUSTOM_REPO_PATH "$custom_path"
         set_deploy_env_value CUSTOM_GIT_BRANCH "$custom_branch"
         sync_sibling_git_repo "kuaigeyun-custom" "$custom_url" "$custom_path" "$custom_branch" "$custom_token" || return 1
+        set_deploy_env_value CUSTOM_ENABLED "1"
     fi
 
     # compose 时保留「先前已启用、本次未改」的另一侧
