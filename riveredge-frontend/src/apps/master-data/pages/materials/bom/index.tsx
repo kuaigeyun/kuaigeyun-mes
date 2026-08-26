@@ -430,6 +430,8 @@ const BOMPage: React.FC = () => {
   const [approvalComment, setApprovalComment] = useState<string>('');
   const [approvalLoading, setApprovalLoading] = useState(false);
   const [approvalRecursive, setApprovalRecursive] = useState(false);
+  /** 打开审核弹窗时锁定的子件 uuid，避免 request 预取覆盖当前页映射 */
+  const approvalUuidsRef = useRef<string[]>([]);
   
   // 批量导入加载状态
   const [batchImportLoading, setBatchImportLoading] = useState(false);
@@ -650,8 +652,39 @@ const BOMPage: React.FC = () => {
     keyword?: string;
   }>({ includeObsolete: false });
 
-  /** 分组行 groupKey -> 该组内所有 BOM 的 uuid，用于批量删除时解析 */
+  /** 当前展示页 groupKey -> uuid。真源：onTableDataChange，禁止在 request 内写入（prefetch 会冲掉当前页） */
   const groupKeyToUuidsRef = useRef<Map<string, string[]>>(new Map());
+
+  const collectUuidsFromGroupRow = (row: BOMGroupRow | MaterialBOMRow): string[] => {
+    const from = (items?: BOM[]) =>
+      (items ?? []).map((item) => item.uuid).filter((uuid): uuid is string => Boolean(uuid));
+    const selected = (row as MaterialBOMRow).selectedVersion ?? row;
+    const fromSelected = from(selected.items);
+    if (fromSelected.length) return fromSelected;
+    return from(row.items);
+  };
+
+  const syncGroupKeyToUuidsFromTableRows = (
+    rows: Array<MaterialBOMRow | BOMGroupRow | BOM | Record<string, unknown>>,
+  ) => {
+    const next = new Map<string, string[]>();
+    const put = (row: BOMGroupRow | undefined) => {
+      if (!row?.groupKey) return;
+      const uuids = collectUuidsFromGroupRow(row);
+      if (uuids.length) next.set(row.groupKey, uuids);
+    };
+    for (const raw of rows) {
+      const r = raw as MaterialBOMRow;
+      if (Array.isArray(r.versions)) {
+        put(r);
+        r.versions.forEach(put);
+        put(r.selectedVersion);
+      } else if (typeof r.groupKey === 'string') {
+        put(r as BOMGroupRow);
+      }
+    }
+    groupKeyToUuidsRef.current = next;
+  };
 
   /** 物料选中的版本 materialId -> groupKey，切换版本时更新并 reload */
   const [selectedVersionByMaterial, setSelectedVersionByMaterial] = useState<Record<number, string>>({});
@@ -931,7 +964,8 @@ const BOMPage: React.FC = () => {
    * 处理单条撤销审核（按组：该 BOM 版本下所有子件行一并撤销审核，支持可选递归子BOM）
    */
   const handleUnapproveGroup = (record: BOMGroupRow) => {
-    const uuids = groupKeyToUuidsRef.current.get(record.groupKey);
+    const fromRow = collectUuidsFromGroupRow(record);
+    const uuids = fromRow.length > 0 ? fromRow : groupKeyToUuidsRef.current.get(record.groupKey);
     if (!uuids?.length) {
       messageApi.error(t('app.master-data.bom.getRecordFailed'));
       return;
@@ -970,6 +1004,9 @@ const BOMPage: React.FC = () => {
    */
   const handleOpenApproval = (record: BOMGroupRow) => {
     setApprovalGroupKey(record.groupKey);
+    const fromRow = collectUuidsFromGroupRow(record);
+    approvalUuidsRef.current =
+      fromRow.length > 0 ? fromRow : (groupKeyToUuidsRef.current.get(record.groupKey) ?? []);
     setApprovalComment('');
     setApprovalRecursive(false);
     setApprovalModalVisible(true);
@@ -980,7 +1017,10 @@ const BOMPage: React.FC = () => {
    */
   const handleApprove = async (approved: boolean) => {
     if (!approvalGroupKey) return;
-    const uuids = groupKeyToUuidsRef.current.get(approvalGroupKey);
+    const uuids =
+      approvalUuidsRef.current.length > 0
+        ? approvalUuidsRef.current
+        : groupKeyToUuidsRef.current.get(approvalGroupKey);
     if (!uuids?.length) {
       messageApi.error(t('app.master-data.bom.getRecordFailed'));
       return;
@@ -993,6 +1033,7 @@ const BOMPage: React.FC = () => {
       setApprovalModalVisible(false);
       setApprovalComment('');
       setApprovalGroupKey(null);
+      approvalUuidsRef.current = [];
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || t('app.master-data.bom.approveFailed'));
@@ -3297,7 +3338,6 @@ const BOMPage: React.FC = () => {
               keyword: keyword || undefined,
             });
             if (groups.length === 0) {
-              groupKeyToUuidsRef.current = new Map();
               return { data: [], success: true, total: total ?? 0 };
             }
             const batchItems = await bomApi.getBatchItems(
@@ -3402,7 +3442,6 @@ const BOMPage: React.FC = () => {
                 }
               }
             }
-            groupKeyToUuidsRef.current = keyToUuids;
             const resolvedMaterials = await ensureMaterialsByIds(
               collectBomMaterialIds([...displayGroupRows, ...allGroupRowsForNesting]),
             );
@@ -3422,6 +3461,9 @@ const BOMPage: React.FC = () => {
         rowKey={(record: any) =>
           record.groupKey ?? record.key ?? record.uuid ?? `row-${record.materialId ?? 'x'}-${record.version ?? 'v'}`
         }
+        onTableDataChange={(rows) => {
+          syncGroupKeyToUuidsFromTableRows(rows);
+        }}
         defaultExpandAllRows={true}
         showAdvancedSearch={true}
         pagination={{

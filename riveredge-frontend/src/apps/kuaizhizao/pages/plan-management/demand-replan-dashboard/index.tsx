@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { App, Button, Empty, Modal, Space, Spin, Table, Typography } from 'antd';
+import { App, Button, Empty, Modal, Space, Spin, Table, Typography, theme } from 'antd';
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import { ReloadOutlined } from '@ant-design/icons';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
@@ -58,6 +58,7 @@ function formatReplanTaskError(
 }
 
 const DemandReplanDashboardPage: React.FC = () => {
+  const { token } = theme.useToken();
   const { t } = useTranslation();
   const { message, modal } = App.useApp();
   const [stats, setStats] = useState<StatCard[]>([]);
@@ -606,9 +607,11 @@ const DemandReplanDashboardPage: React.FC = () => {
               style={{
                 width: '100%',
                 textAlign: 'left',
-                border: active ? '1px solid #1677ff' : '1px solid rgba(5,5,5,0.1)',
-                background: active ? 'rgba(22,119,255,0.08)' : '#fff',
-                borderRadius: 8,
+                border: active
+                  ? `1px solid ${token.colorPrimary}`
+                  : `1px solid ${token.colorBorderSecondary}`,
+                background: active ? token.colorPrimaryBg : token.colorBgContainer,
+                borderRadius: token.borderRadiusLG,
                 padding: 10,
                 marginBottom: 8,
                 cursor: 'pointer',

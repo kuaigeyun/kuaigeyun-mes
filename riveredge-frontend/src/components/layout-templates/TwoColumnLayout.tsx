@@ -54,10 +54,21 @@ const { useToken } = theme;
 function parsePanelWidthPx(value: number | string | undefined, fallback: number): number {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
   if (typeof value === 'string') {
-    const parsed = parseInt(value, 10);
+    const trimmed = value.trim();
+    if (trimmed.endsWith('%')) return fallback;
+    const parsed = parseInt(trimmed, 10);
     if (Number.isFinite(parsed)) return parsed;
   }
   return fallback;
+}
+
+function resolvePercentPanelWidth(value: number | string | undefined): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed.endsWith('%')) return null;
+  const parsed = parseFloat(trimmed.slice(0, -1));
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return `${parsed}%`;
 }
 
 function clampPanelWidth(width: number, min: number, max: number): number {
@@ -269,6 +280,9 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
     collapsed = false,
   } = leftPanel;
 
+  const percentWidth = resolvePercentPanelWidth(width);
+  const usePercentWidth = percentWidth != null;
+
   const initialWidth = parsePanelWidthPx(width, TWO_COLUMN_LAYOUT.LEFT_PANEL_WIDTH);
   const minWidthPx = parsePanelWidthPx(minWidth, TWO_COLUMN_LAYOUT.LEFT_PANEL_MIN_WIDTH);
   const maxWidthPx = parsePanelWidthPx(maxWidth, TWO_COLUMN_LAYOUT.LEFT_PANEL_MAX_WIDTH);
@@ -279,13 +293,14 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
   panelWidthRef.current = panelWidth;
 
   useEffect(() => {
+    if (usePercentWidth) return;
     const next = clampPanelWidth(
       readStoredPanelWidth(widthStorageKey, parsePanelWidthPx(width, TWO_COLUMN_LAYOUT.LEFT_PANEL_WIDTH)),
       minWidthPx,
       maxWidthPx,
     );
     setPanelWidth(next);
-  }, [width, minWidthPx, maxWidthPx, widthStorageKey]);
+  }, [width, minWidthPx, maxWidthPx, widthStorageKey, usePercentWidth]);
 
   const persistPanelWidth = useCallback(
     (nextWidth: number) => {
@@ -301,7 +316,7 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
 
   const handleResizeStart = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
-      if (collapsed || !resizable) return;
+      if (collapsed || !resizable || usePercentWidth) return;
       event.preventDefault();
       const startX = event.clientX;
       const startWidth = panelWidthRef.current;
@@ -325,10 +340,10 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
       document.addEventListener('mousemove', handleMove);
       document.addEventListener('mouseup', handleUp);
     },
-    [collapsed, maxWidthPx, minWidthPx, persistPanelWidth, resizable],
+    [collapsed, maxWidthPx, minWidthPx, persistPanelWidth, resizable, usePercentWidth],
   );
 
-  const resolvedLeftWidth = collapsed ? 0 : panelWidth;
+  const resolvedLeftWidth = collapsed ? 0 : usePercentWidth ? percentWidth : panelWidth;
 
   const {
     header,
@@ -396,7 +411,7 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
       <div
         className="two-column-layout-left"
         style={{
-          width: collapsed ? 0 : `${resolvedLeftWidth}px`,
+          width: collapsed ? 0 : usePercentWidth ? resolvedLeftWidth : `${resolvedLeftWidth}px`,
           minWidth: collapsed ? 0 : `${minWidthPx}px`,
           maxWidth: collapsed ? 0 : `${maxWidthPx}px`,
           flexShrink: 0,

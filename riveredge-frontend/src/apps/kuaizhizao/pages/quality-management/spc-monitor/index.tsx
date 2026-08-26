@@ -151,6 +151,8 @@ const SPCMonitorPage: React.FC = () => {
           style={{ flex: 1, minHeight: 0 }}
           leftPanel={{
             width: '40%',
+            minWidth: 480,
+            maxWidth: 720,
             leftContent: (
               <div
                 style={{
