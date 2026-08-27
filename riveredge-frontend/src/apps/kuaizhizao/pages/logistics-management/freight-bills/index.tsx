@@ -231,9 +231,9 @@ const FreightBillsPage: React.FC = () => {
         {
           title: t('app.kuaizhizao.logistics.field.carrierName'),
           dataIndex: 'carrier_name',
-          width: 140,
           minWidth: 140,
-          uniTableKeepWidth: true,
+          uniTableRemainderFlex: true,
+          uniTablePrimaryFlex: true,
           resizable: false,
           ellipsis: true,
         },
@@ -271,65 +271,55 @@ const FreightBillsPage: React.FC = () => {
         },
         {
           title: t('common.action'),
-          key: 'action',
-          valueType: 'option',
+          key: 'option',
           fixed: 'right',
           hideInSearch: true,
-          render: (_, row) => [
-            <Button
-              key="read"
-              {...rowActionKind('read')}
-              type="link"
-              size="small"
-              onClick={() => openDetail(row)}
-            />,
-            perms.canUpdate && canEditFreightBill(row.review_status) ? (
-              <Button
-                key="edit"
-                {...rowActionKind('update')}
-                type="link"
-                size="small"
-                onClick={() => void openEdit(row)}
-              />
-            ) : null,
-            perms.canAction?.('submit') && canEditFreightBill(row.review_status) ? (
-              <Button
-                key="submit"
-                type="link"
-                size="small"
-                icon={<SendOutlined />}
-                onClick={async () => {
-                  try {
-                    await submitFreightBill(row.id);
-                    messageApi.success(t('app.kuaizhizao.logistics.message.submitBillSuccess'));
-                    billsActionRef.current?.reload();
-                  } catch (error) {
-                    messageApi.error(getApiErrorMessage(error, t('common.saveFailed')));
-                  }
-                }}
-              >
-                {t('components.uniAction.submit')}
-              </Button>
-            ) : null,
-            perms.canDelete && canEditFreightBill(row.review_status) ? (
-              <Button
-                key="delete"
-                {...rowActionKind('delete')}
-                type="link"
-                size="small"
-                onClick={() => {
-                  Modal.confirm({
-                    title: t('common.confirmDelete'),
-                    onOk: async () => {
-                      await deleteFreightBill(row.id);
-                      messageApi.success(t('common.deleteSuccess'));
+          render: (_, row) => {
+            const nodes: React.ReactNode[] = [
+              <Button key="read" {...rowActionKind('read')} onClick={() => openDetail(row)} />,
+            ];
+            if (perms.canUpdate && canEditFreightBill(row.review_status)) {
+              nodes.push(
+                <Button key="edit" {...rowActionKind('update')} onClick={() => void openEdit(row)} />,
+              );
+            }
+            if (perms.canAction?.('submit') && canEditFreightBill(row.review_status)) {
+              nodes.push(
+                <Button
+                  key="submit"
+                  {...rowActionKind('submit')}
+                  onClick={async () => {
+                    try {
+                      await submitFreightBill(row.id);
+                      messageApi.success(t('app.kuaizhizao.logistics.message.submitBillSuccess'));
                       billsActionRef.current?.reload();
-                    },
-                  });
-                }}
-              />
-            ) : null,
-          ],
+                    } catch (error) {
+                      messageApi.error(getApiErrorMessage(error, t('common.saveFailed')));
+                    }
+                  }}
+                />,
+              );
+            }
+            if (perms.canDelete && canEditFreightBill(row.review_status)) {
+              nodes.push(
+                <Button
+                  key="delete"
+                  {...rowActionKind('delete')}
+                  onClick={() => {
+                    Modal.confirm({
+                      title: t('common.confirmDelete'),
+                      onOk: async () => {
+                        await deleteFreightBill(row.id);
+                        messageApi.success(t('common.deleteSuccess'));
+                        billsActionRef.current?.reload();
+                      },
+                    });
+                  }}
+                />,
+              );
+            }
+            return nodes;
+          },
         },
       ]),
     [messageApi, perms, t],
@@ -361,9 +351,9 @@ const FreightBillsPage: React.FC = () => {
         {
           title: t('app.kuaizhizao.logistics.field.carrierName'),
           dataIndex: 'carrier_name',
-          width: 140,
           minWidth: 140,
-          uniTableKeepWidth: true,
+          uniTableRemainderFlex: true,
+          uniTablePrimaryFlex: true,
           resizable: false,
           ellipsis: true,
         },
@@ -469,7 +459,7 @@ const FreightBillsPage: React.FC = () => {
               <UniTable<FreightBill>
                 actionRef={billsActionRef}
                 columns={billColumns}
-                columnPersistenceId="apps.kuaizhizao.pages.logistics-management.freight-bills.v3"
+                columnPersistenceId="apps.kuaizhizao.pages.logistics-management.freight-bills.v4"
                 rowKey="id"
                 request={async (params) => {
                   const res = await listFreightBills({
@@ -500,7 +490,7 @@ const FreightBillsPage: React.FC = () => {
                 actionRef={pendingActionRef}
                 search={false}
                 columns={pendingColumns}
-                columnPersistenceId="apps.kuaizhizao.pages.logistics-management.freight-bills.pending.v3"
+                columnPersistenceId="apps.kuaizhizao.pages.logistics-management.freight-bills.pending.v4"
                 rowKey="id"
                 request={async () => {
                   const res = await listPendingFreightOrdersForBill({ limit: 100 });

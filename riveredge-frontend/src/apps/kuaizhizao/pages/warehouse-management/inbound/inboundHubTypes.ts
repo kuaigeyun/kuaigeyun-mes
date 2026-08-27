@@ -54,6 +54,8 @@ export interface InboundHubOrder {
   unit_price?: number;
   total_amount?: number;
   total_items?: number;
+  /** 列表「明细」列预览（仅 material_name） */
+  items?: { material_name?: string | null }[];
   /** 采购等：操作员姓名；委外收货：用户 ID（勿当姓名展示） */
   received_by?: string | number;
   received_by_name?: string;

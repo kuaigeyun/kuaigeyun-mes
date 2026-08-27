@@ -14,9 +14,13 @@ import { formatApiErrorDetail } from '../../../../../services/api';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { buildDetailDrawerEditExtra } from '../../equipment-management/shared/equipmentMasterDataDetail';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { CustomerSelectDropdown } from '../../../../master-data/components/CustomerSelectDropdown';
 import type { Customer } from '../../../../master-data/types/supply-chain';
-import { renderAfterSalesTypeMarker } from '../shared/afterSalesListPresentation';
+import {
+  AFTER_SALES_CUSTOMER_NAME_COLUMN_DEFAULTS,
+  renderAfterSalesTypeMarker,
+} from '../shared/afterSalesListPresentation';
 import { AfterSalesSourceDocumentSelect } from '../shared/AfterSalesSourceDocumentSelect';
 import {
   customerReturnVisitApi,
@@ -142,8 +146,8 @@ const ReturnVisitsPage: React.FC = () => {
           {
             title: t('app.kuaizhizao.afterSalesService.returnVisit.field.visitCode'),
             dataIndex: 'visit_code',
-            width: 148,
-            minWidth: 148,
+            width: 188,
+            minWidth: 188,
             uniTableKeepWidth: true,
             resizable: false,
             fixed: 'left',
@@ -152,17 +156,13 @@ const ReturnVisitsPage: React.FC = () => {
           {
             title: t('app.kuaizhizao.afterSalesService.returnVisit.field.customerName'),
             dataIndex: 'customer_name',
-            width: 148,
-            minWidth: 148,
-            uniTableKeepWidth: true,
-            resizable: false,
-            ellipsis: true,
+            ...AFTER_SALES_CUSTOMER_NAME_COLUMN_DEFAULTS,
           },
           {
             title: t('app.kuaizhizao.afterSalesService.returnVisit.field.sourceCode'),
             dataIndex: 'source_code',
-            width: 148,
-            minWidth: 148,
+            width: 188,
+            minWidth: 188,
             uniTableKeepWidth: true,
             resizable: false,
             render: (_, row) => (
@@ -176,10 +176,7 @@ const ReturnVisitsPage: React.FC = () => {
           {
             title: t('app.kuaizhizao.afterSalesService.returnVisit.field.visitMethod'),
             dataIndex: 'visit_method',
-            width: 88,
-            minWidth: 88,
-            uniTableKeepWidth: true,
-            resizable: false,
+            ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
             render: (_, row) => renderAfterSalesTypeMarker(row.visit_method),
           },
           {
@@ -198,18 +195,32 @@ const ReturnVisitsPage: React.FC = () => {
               ),
           },
           {
+            // 无行项目：客户反馈吃余量（对齐工单「问题描述」）；单号统一 188
+            title: t('app.kuaizhizao.afterSalesService.returnVisit.field.feedback'),
+            dataIndex: 'feedback',
+            minWidth: 160,
+            uniTableRemainderFlex: true,
+            uniTablePrimaryFlex: true,
+            resizable: false,
+            ellipsis: true,
+            hideInSearch: true,
+            render: (_, row) => {
+              const text = String(row.feedback ?? '').trim();
+              return text || '—';
+            },
+          },
+          {
             title: t('app.kuaizhizao.afterSalesService.returnVisit.field.visitedAt'),
             dataIndex: 'visited_at',
-            width: 148,
-            minWidth: 148,
+            width: 168,
+            minWidth: 168,
             uniTableKeepWidth: true,
             resizable: false,
             render: (_, row) => (row.visited_at ? formatDateTime(row.visited_at) : '-'),
           },
           {
-            title: t('common.action'),
+            title: t('common.actions'),
             key: 'action',
-            valueType: 'option',
             fixed: 'right',
             hideInSearch: true,
             render: (_, row) => [
@@ -239,7 +250,7 @@ const ReturnVisitsPage: React.FC = () => {
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.afterSalesReturnVisit)}
         actionRef={actionRef}
         columns={columns}
-        columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.return-visits.v4"
+        columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.return-visits.v7"
         rowKey="id"
         headerTitle={t('app.kuaizhizao.menu.after-sales-service.return-visits')}
         request={async (params) => {

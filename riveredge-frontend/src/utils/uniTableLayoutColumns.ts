@@ -28,6 +28,20 @@ export const UNI_TABLE_STATUS_BADGE_COLUMN_WIDTH = 80;
 export const UNI_TABLE_PROGRESS_COLUMN_WIDTH = UNI_TABLE_STATUS_BADGE_COLUMN_WIDTH;
 
 /**
+ * 非流程 MarkerTag 窄列（启用/是否/类型等 filled 徽章）：与状态徽章列同宽，禁止页面写 88 等魔法数。
+ */
+export const UNI_TABLE_MARKER_BADGE_COLUMN_WIDTH = UNI_TABLE_STATUS_BADGE_COLUMN_WIDTH;
+
+export const UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS = {
+  width: UNI_TABLE_MARKER_BADGE_COLUMN_WIDTH,
+  minWidth: UNI_TABLE_MARKER_BADGE_COLUMN_WIDTH,
+  uniTableKeepWidth: true,
+  uniTableMarkerBadgeColumn: true,
+  resizable: false,
+  align: 'center' as const,
+} as const;
+
+/**
  * 操作列宽度布局令牌（1280 视口 / small 表格 / type="link" + 图标，Playwright 实测）：
  * 单槽按**最宽单动作**预算——四字标签 92px（双字实测 64px），
  * 「更多」按钮 70px、Space 间距 4px、单元格左右内边距 8+8=16px。
@@ -90,6 +104,33 @@ export const UNI_TABLE_SELECTION_COL_WIDTH = 48;
 
 /** 展开列宽度（与 antd/rc-table expand 列一致；须计入 scroll.x，否则表头/表体错位叠字） */
 export const UNI_TABLE_EXPAND_COL_WIDTH = 48;
+
+/**
+ * 余量吸收列：table-layout:fixed + min-width:100% 时 rc-table 把多余像素摊给各列；
+ * 本列不声明 width（`<col>` auto），只吸收拉伸，不进 scroll.x / 列设置。
+ */
+export const UNI_TABLE_FILLER_COLUMN_KEY = '__uni_table_filler__';
+
+export function isUniTableFillerColumn(col: unknown): boolean {
+  if (!col || typeof col !== 'object') return false;
+  const c = col as { key?: unknown; uniTableFillerColumn?: unknown };
+  return c.uniTableFillerColumn === true || c.key === UNI_TABLE_FILLER_COLUMN_KEY;
+}
+
+export function buildUniTableFillerColumn(): Record<string, unknown> {
+  return {
+    key: UNI_TABLE_FILLER_COLUMN_KEY,
+    uniTableFillerColumn: true,
+    title: '',
+    fixed: 'right',
+    hideInSearch: true,
+    hideInSetting: true,
+    disable: true,
+    resizable: false,
+    onCell: () => ({ className: 'uni-table-filler-cell' }),
+    onHeaderCell: () => ({ className: 'uni-table-filler-cell' }),
+  };
+}
 
 /** 无 width/minWidth 时的回退列宽（空表 scroll.x 求和） */
 export const UNI_TABLE_EMPTY_FALLBACK_COL_WIDTH = 120;
@@ -204,9 +245,45 @@ export function isUniTableAuditPhaseColumn(col: unknown): boolean {
   return AUDIT_PHASE_COLUMN_KEYS.has(key) || dataIndex === 'audit.phase';
 }
 
+/**
+ * 更新时间堆叠列（更新人+时间）统一宽度：与 stackedPrimaryColumn 120px 一致。
+ */
+export const UNI_TABLE_AUDIT_STACKED_COLUMN_WIDTH = 120;
+
+const AUDIT_STACKED_COLUMN_KEYS = new Set(['updated_at', 'updatedAt']);
+
+/** 列表「更新时间」堆叠列：更新人+时间，SystemFixed 120px */
+export function isUniTableAuditStackedColumn(col: unknown): boolean {
+  if (!col || typeof col !== 'object') return false;
+  const c = col as { key?: unknown; dataIndex?: unknown; uniTableAuditStackedColumn?: unknown };
+  if (c.uniTableAuditStackedColumn === true) return true;
+  const key = String(c.key ?? '');
+  const dataIndex = Array.isArray(c.dataIndex)
+    ? c.dataIndex.join('.')
+    : String(c.dataIndex ?? '');
+  return (
+    AUDIT_STACKED_COLUMN_KEYS.has(key) ||
+    AUDIT_STACKED_COLUMN_KEYS.has(dataIndex)
+  );
+}
+
+export function resolveUniTableAuditStackedColumnWidth(): number {
+  return UNI_TABLE_AUDIT_STACKED_COLUMN_WIDTH;
+}
+
 /** 审核状态 + 生命周期：单徽章状态列（等宽、居中、不排序） */
 export function isUniTableStatusBadgeColumn(col: unknown): boolean {
-  return isUniTableLifecycleColumn(col) || isUniTableAuditPhaseColumn(col);
+  return isUniTableLifecycleColumn(col) || isUniTableAuditPhaseColumn(col) || isUniTableMarkerBadgeColumn(col);
+}
+
+/** 非流程 MarkerTag 窄列（启用/类型等）：与状态徽章列同宽 80px */
+export function isUniTableMarkerBadgeColumn(col: unknown): boolean {
+  if (!col || typeof col !== 'object') return false;
+  return (col as { uniTableMarkerBadgeColumn?: unknown }).uniTableMarkerBadgeColumn === true;
+}
+
+export function resolveUniTableMarkerBadgeColumnWidth(): number {
+  return UNI_TABLE_MARKER_BADGE_COLUMN_WIDTH;
 }
 
 /** 生命周期（执行状态）列宽：与审核状态列同宽，无论是否右固定 */
@@ -261,11 +338,21 @@ export function getUniTableColumnScrollContribution(col: unknown): number {
   const c = col as { hideInTable?: boolean; width?: unknown; minWidth?: unknown; fixed?: unknown };
   if (c.hideInTable) return 0;
 
+  if (isUniTableFillerColumn(col)) {
+    return 0;
+  }
+
   if (isUniTableLifecycleColumn(col)) {
     return resolveUniTableLifecycleColumnWidth();
   }
+  if (isUniTableMarkerBadgeColumn(col)) {
+    return resolveUniTableMarkerBadgeColumnWidth();
+  }
   if (isUniTableProgressColumn(col) || isUniTableDetailProgressColumn(col)) {
     return resolveUniTableProgressColumnWidth();
+  }
+  if (isUniTableAuditStackedColumn(col)) {
+    return resolveUniTableAuditStackedColumnWidth();
   }
   if (isUniTableOperationColumn(col)) {
     const resolved = parseUniTableColumnWidth(c.width);

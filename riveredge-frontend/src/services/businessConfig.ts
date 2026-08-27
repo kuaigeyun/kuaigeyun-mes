@@ -146,6 +146,14 @@ export function resolveNumericPrecisionFromConfig(
   return clampDecimalPlaces(common?.[key], 2, NUMERIC_PRECISION_STORAGE_CEILING[kind]);
 }
 
+/** 按配置小数位量化数字（录入/提交与 formatQuantity 展示对齐） */
+export function quantizeNumericByPlaces(value: number, places: number): number {
+  if (!Number.isFinite(value)) return 0;
+  const safePlaces = Math.max(0, Math.min(6, Math.trunc(places)));
+  const factor = 10 ** safePlaces;
+  return Math.round(value * factor) / factor;
+}
+
 /** 按配置小数位格式化数字（固定位，含尾零） */
 export function formatByNumericPrecision(
   value: number | string | null | undefined,

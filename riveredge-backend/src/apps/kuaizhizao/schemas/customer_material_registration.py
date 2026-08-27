@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field, ConfigDict, field_validator
 from decimal import Decimal
 
 from apps.kuaizhizao.services.document_action_policy.types import CustomerMaterialRegistrationCapabilities
+from apps.kuaizhizao.schemas.warehouse import DocumentLineMaterialPreview
 
 
 def _coerce_uuid_str(value: Any) -> str:
@@ -186,7 +187,10 @@ class CustomerMaterialRegistrationResponse(CustomerMaterialRegistrationBase):
 
 
 class CustomerMaterialRegistrationListResponse(CustomerMaterialRegistrationResponse):
-    pass
+    """列表响应：items 仅为物料名预览（详情仍用完整明细行）"""
+    items: Optional[List[DocumentLineMaterialPreview]] = Field(
+        None, description="明细物料名预览（列表「明细」列）",
+    )
 
 
 class CustomerMaterialRegistrationBatchActionRequest(BaseModel):

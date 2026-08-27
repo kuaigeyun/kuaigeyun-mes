@@ -10,6 +10,8 @@ from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field, ConfigDict
 from decimal import Decimal
 
+from apps.kuaizhizao.schemas.warehouse import DocumentLineMaterialPreview
+
 
 class DisassemblyOrderBase(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -59,6 +61,9 @@ class DisassemblyOrderResponse(DisassemblyOrderBase):
     updated_by: Optional[int] = Field(None, description="更新人ID")
     updated_by_name: Optional[str] = Field(None, description="更新人姓名")
     lifecycle: Optional[Dict[str, Any]] = Field(None, description="通用生命周期")
+    items: Optional[List[DocumentLineMaterialPreview]] = Field(
+        None, description="组件物料名预览（列表「明细」列）",
+    )
 
 
 class DisassemblyOrderListResponse(BaseModel):

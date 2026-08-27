@@ -52,6 +52,8 @@ function sortByRank<T>(
 export const GLOBAL_DOC_LIST_FIELD_RANK = {
   // —— 10 单据名称 / 编号 ——
   code: 10,
+  /** 备件编号（台账名/码叠列身份） */
+  part_no: 10,
   name_code: 10,
   calculation_no: 10,
   order_code: 10,
@@ -86,6 +88,8 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   return_code: 10,
   change_code: 10,
   project_code: 10,
+  /** 快研发项目：类型紧跟编号（编码 → 类型 → 名称） */
+  project_type: 10.2,
   requirement_code: 10,
   review_code: 10,
   fmea_code: 10,
@@ -115,6 +119,9 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   workOrderStacked: 10,
   /** 返工工单：产品名称/返工单编号叠列 */
   product_name_code_stacked: 10,
+  /** 装箱绑定：箱号 → 产品名码叠列 */
+  box_no: 10,
+  product_stacked: 11,
   /** 报工等：工序紧跟主标识，固定为第二业务列 */
   operation_name: 11,
   outsource_operation: 11.1,
@@ -127,7 +134,15 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   /**
    * 发货/收货通知、销退/采退：仓库与关联单号紧跟主标识（列上须设同名 key）。
    * 销售：出库仓库 + 销售订单/关联单据；采购：入库仓库 + 采购订单/关联单据。
+   * 发货通知：明细预览插在主标识后、出库仓库前。
    */
+  shipment_line_materials: 11.5,
+  /** 销售退货：明细预览插在主标识后、仓库前 */
+  sales_return_line_materials: 11.5,
+  /** 收货通知：明细预览插在主标识后、入库仓库前 */
+  receipt_line_materials: 11.5,
+  /** 采购退货：明细预览插在主标识后、仓库前 */
+  purchase_return_line_materials: 11.5,
   outbound_warehouse: 12,
   inbound_warehouse: 12,
   sales_return_warehouse: 12,
@@ -148,6 +163,10 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   partnerMaterialName: 15.7,
   /** 订单评审等：项目名称紧跟客户，勿落 75+ 偶发段 */
   project_name: 16,
+  /** 快研发项目列表：物料 / 负责人 / 阶段门（勿用全局 material_name 79 / owner_name 76） */
+  plm_rd_material_name: 16.5,
+  plm_rd_owner_name: 17,
+  current_gate_name: 17.5,
 
   /**
    * 异常单据（缺料/延期/质量）：工单编号 → 第二业务列（物料叠列 / 计划结束）→ 类型/级别 → …
@@ -212,12 +231,49 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   fault_type: 20,
   repair_type: 20,
   plan_type: 20,
+  /** 质检方案：检验步骤预览列（flex 吃余量） */
+  inspection_plan_steps: 20.15,
   folderName: 19.5,
   folder_name: 19.5,
   drawingType: 20,
   drawing_type: 20,
   securityLevel: 20.05,
   security_level: 20.05,
+  /** 图纸列表：签出人 / 关联 BOM / 主文件 */
+  checkedOutByName: 20.1,
+  drawing_linked_bom: 20.2,
+  drawing_file_name: 20.3,
+  revision: 12.6,
+  releasedAt: 61.2,
+  /** 图纸反查（反向）：对象类型 / 编码 / 名称 / 附加 */
+  drawing_where_used_kind: 20.05,
+  drawing_where_used_code: 20.06,
+  drawing_where_used_name: 20.07,
+  drawing_where_used_extra: 20.08,
+  /** 工程 BOM 列表：物料叠列 → 版本 → BOM 叠列 → 工艺路线 → 损耗 */
+  bom_material_stacked: 10,
+  bom_name_stacked: 11,
+  processRoute: 20.25,
+  wasteRate: 33.4,
+  /** SOP 列表：关联工序 / 绑定 / 载体 / 受控份 */
+  sop_operation: 20.3,
+  sop_binding: 20.4,
+  sop_carrier: 20.45,
+  sop_issued_copy: 33.5,
+  /** 总账科目表（稀疏分列；account_code 已在 10） */
+  account_name: 11,
+  account_type: 20,
+  balance_direction: 20.5,
+  account_level: 21,
+  aux: 24,
+  flags: 25,
+  /** 总账凭证 */
+  voucher_code: 10,
+  voucher_date: 15,
+  summary: 25,
+  gl_voucher_source: 40,
+  total_debit: 62,
+  total_credit: 62.1,
   dueAt: 65,
   due_at: 65,
   returnedAt: 65.5,
@@ -250,7 +306,7 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   executor_name: 76.6,
   applicant_name: 76.7,
   /**
-   * 物流：货运单/运费单 → 主单号 → 方向/类型 → 承运商 → 运单号 → 金额/应付 → lifecycle
+   * 物流：发货单 → 主单号 → 客商/方向/方式 → 承运商/车/人 → 运单号 → 线路(余量) → 计划时段 → lifecycle
    * 主数据：车牌/承运商名码/驾驶员名码 → 类型/归属 → 联系人 → 启用/状态 → action
    */
   bill_code: 10,
@@ -264,14 +320,18 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   service_hotline: 20.5,
   ownership: 21,
   carrier_name: 22,
+  vehicle_plate: 22.2,
+  driver_name: 22.4,
   logistics_vehicle_driver_stacked: 22.5,
   tracking_number: 23,
   freight_route_stacked: 24,
   planned_depart_at: 60,
   planned_arrive_at: 60.1,
-  payable_code: 24,
+  payable_code: 35,
+  load_capacity: 50.2,
+  volume_capacity: 50.3,
   contact_name: 77,
-  is_enabled: 91.6,
+  is_enabled: 88,
   review_status: 90,
   lifecycle: 91,
   /**
@@ -286,6 +346,8 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   after_sales_ticket_stacked: 10,
   after_sales_install_stacked: 10,
   after_sales_asset_stacked: 10,
+  /** 装机档案列表序对齐表单：客户 → 产品 → 序列号 → 安装地址 → 保修月数 → 保修策略 */
+  service_asset_material_name: 20.2,
   repair_mode: 20.4,
   supply_source: 20.4,
   visit_method: 20.4,
@@ -296,13 +358,21 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   visited_at: 71,
   site_address: 77.6,
   serial_number: 28,
+  install_address: 28.5,
+  warranty_months: 29,
+  warranty_policy: 29.5,
   /**
    * 绩效：主数据名码/员工叠列 → 类型 → 数量金额 → 日期/时段 → 启用/汇总状态 → action
    */
   performance_name_code_stacked: 10,
   performance_employee_stacked: 10,
+  /** 员工绩效配置：员工姓名分列（稀疏不叠） */
+  performance_employee_name: 10,
   performance_dept_pos_stacked: 10,
   performance_holiday_stacked: 10,
+  /** 工时单价列表：部门 → 岗位 → 单价（勿用全局 department_name 78 段把单价挤到部门前） */
+  performance_hourly_department: 20.1,
+  performance_hourly_position: 20.2,
   calc_mode: 20.4,
   description: 82,
   hourly_rate: 34.05,
@@ -338,6 +408,8 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   protocol: 20.05,
   rule_type: 20.1,
   value_type: 20.15,
+  /** 点检方案：周期类型 */
+  cycle_type: 20.2,
   map_target: 20.2,
   health_status: 22.1,
   agent_status: 22.15,
@@ -355,7 +427,13 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   version_no: 20.5,
   version: 20.5,
   change_version: 20.55,
+  /** 报价单列表：明细物料名预览（版本后、总数量前） */
+  quotation_line_materials: 30.5,
+  /** 单据列表明细物料预览（报价/评审/合同/订单等共用 key） */
+  line_materials: 30.5,
   holidayType: 21,
+  /** 假期列表：名称 → 日期 → 类型（与表单一致；勿落 60 日期段把类型挤到日期前） */
+  holidayDate: 20.5,
   category: 21,
   review_type: 21,
   fmea_type: 21,
@@ -363,7 +441,6 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   calculation_type: 21,
   /** 成本核算台账：工单单号紧跟核算类型（列上须设 key=cost_calculation_work_order_code） */
   cost_calculation_work_order_code: 21.05,
-  calc_type: 21.1,
   target_type: 21.2,
   cost_item_type: 21.3,
   /** 工单委外：产品名称/编码叠列（列上须设 key=owo_product_stacked），优先级紧随其后 */
@@ -382,13 +459,22 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   risk_level: 22.5,
   requirement_source_type: 23,
   change_category: 23,
+  /** 快研发变更：类型紧跟分类；对象/原因用页面 key 避免全局 80 段 */
+  change_type: 23.1,
+  plm_change_target: 24,
+  plm_change_reason: 25,
   calculation_status: 23.5,
   /** 轻财务：开票/收票状态（MarkerTag） */
   invoice_status: 23.6,
+  /** 轻财务往来：付款条件（列表 RemainderFlex） */
+  payment_terms: 24,
   batch_no: 25,
 
   // —— 30 品种数 / 数量 / 金额 ——
   items_count: 30,
+  /** 点检/保养方案：方案行数；巡检路线：步数 */
+  line_count: 30.05,
+  step_count: 30.06,
   total_quantity: 31,
   quantity: 31,
   required_quantity: 31,
@@ -396,6 +482,7 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   shortage_quantity: 31.2,
   delay_days: 31,
   outsource_quantity: 31.1,
+  packing_quantity: 31.05,
   received_quantity: 31.2,
   inspection_quantity: 31.3,
   sample_qty: 31.3,
@@ -407,9 +494,13 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   quality_inspection_extra: 32,
   reported_quantity: 31.6,
   total_hours: 32,
+  /** 班次/加班时间段：紧挨标准工时前（表单：时段 → 工时） */
+  timeRange: 31.5,
   standardHours: 32,
   /** 报工工时；生产人员紧随其后 */
   work_hours: 32,
+  /** 保养项：标准工时 */
+  standard_hours: 32.05,
   worker_name: 32.5,
   total_pieces: 32.1,
   unit_price: 33,
@@ -418,6 +509,11 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   standard_value: 33.2,
   unit: 33.3,
   total_amount: 34,
+  /** 轻财务应收/应付金额簇（紧接总额） */
+  received_amount: 34.05,
+  remaining_amount: 34.1,
+  invoiced_amount: 34.15,
+  remaining_invoice_amount: 34.2,
   /** 工单委外：已发料数量（紧接金额；下推进度 50 须排在其后） */
   issued_quantity: 34.5,
   issuedQuantity: 34.5,
@@ -425,7 +521,9 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   piece_amount: 34.2,
   released_amount: 34.3,
   delta_amount: 34.4,
+  /** KPI：权重 → 计算类型（表单 code → name → weight → calc_type） */
   weight: 35,
+  calc_type: 35.05,
   rate: 35.1,
   kpi_score: 35.2,
   kpi_coefficient: 35.3,
@@ -437,10 +535,11 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   effective_date: 37,
   price_date: 37.05,
   priceDate: 37.05,
-  /** 异常单据：延期原因 / 问题描述 */
+  /** 异常单据：延期原因 / 问题描述；点检/保养项：要求 */
   delay_reason: 40,
   problem_description: 40,
   defect_reason: 40,
+  requirement: 40,
   /** 异常单据：建议动作 */
   suggested_action: 50,
 
@@ -454,6 +553,9 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   receipt_inbound_conversion: 13,
   outbound_push_progress: 50,
   inbound_push_progress: 50,
+  /** 轻财务应收：收款下推 / 开票下推 */
+  receipt_push_progress: 50.05,
+  invoice_push_progress: 50.1,
   delivery_progress: 51,
   receipt_progress: 51,
 
@@ -462,7 +564,9 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   quotation_date: 60,
   contract_date: 60,
   calculation_date: 60,
-  holidayDate: 60,
+  /** 轻财务往来业务日 / 到期日（禁用裸 due_date，避免撞详情段位） */
+  finance_business_date: 60.2,
+  finance_due_date: 60.3,
   start_date: 60.5,
   end_date: 60.6,
   planned_start_date: 61,
@@ -488,6 +592,8 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   applied_at: 64.4,
   issued_at: 64.5,
   issuedAt: 64.5,
+  /** 图纸发放：发放人紧跟发放时间 */
+  drawing_dist_issued_by: 64.6,
   recalled_at: 64.6,
   recalledAt: 64.6,
   scheduled_at: 65,
@@ -498,12 +604,13 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   finished_at: 65.2,
   /** 需求变更：创建时间（非固定列末位，列用 key 避开全局 created_at=93） */
   task_created_at: 88,
-  timeRange: 66,
   occurred_at: 67,
   registered_at: 67,
   /** 报工：工序开始/完成时间叠列（须在 reported_at / 更新时间之前） */
   work_start_end_stacked: 67.05,
   reported_at: 67.1,
+  /** 装箱绑定：绑定人/时间叠列 */
+  bound_stacked: 67.2,
   next_follow_up_at: 68,
   last_follow_up_at: 68.1,
   follow_up_count: 68.2,
@@ -1131,6 +1238,8 @@ export const MASTER_DATA_DETAIL_BASIC_FIELD_RANK = {
   warehouseType: 20,
   warehouse_type: 20,
   plan_type: 20,
+  /** 质检方案：检验步骤预览列（flex 吃余量） */
+  inspection_plan_steps: 20.15,
   folderName: 19.5,
   folder_name: 19.5,
   drawingType: 20,

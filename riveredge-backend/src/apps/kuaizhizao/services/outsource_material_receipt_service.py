@@ -60,7 +60,13 @@ async def enrich_outsource_docs_with_supplier(
     docs: List[Any],
     responses: List[Any],
 ) -> List[Any]:
-    """为委外收货/退料/退货补齐委外工单上下文（供应商、委外产品编码/名称）。"""
+    """
+    为委外收货/退料/退货补齐委外工单上下文（供应商、委外产品编码/名称、列表明细预览）。
+
+    列表「明细」真源：
+    - 退料：单据自身 material_name（行快照）
+    - 收货/退货：无行表，产品名在委外工单 product_name（勿读单据上不存在的 material_name）
+    """
     if not docs or not responses:
         return responses
 
@@ -98,12 +104,19 @@ async def enrich_outsource_docs_with_supplier(
     enriched: List[Any] = []
     for doc, resp in zip(docs, responses):
         owo_id = int(getattr(doc, "outsource_work_order_id", 0) or 0)
-        ctx = context_by_owo.get(owo_id)
-        if not ctx:
+        update: Dict[str, Any] = dict(context_by_owo.get(owo_id) or {})
+        existing_items = getattr(resp, "items", None)
+        if not existing_items:
+            doc_material_name = str(getattr(doc, "material_name", None) or "").strip()
+            wo_product_name = str(update.get("product_name") or "").strip()
+            preview_name = doc_material_name or wo_product_name
+            if preview_name:
+                update["items"] = [{"material_name": preview_name}]
+        if not update:
             enriched.append(resp)
             continue
         if hasattr(resp, "model_copy"):
-            enriched.append(resp.model_copy(update=ctx))
+            enriched.append(resp.model_copy(update=update))
         else:
             enriched.append(resp)
     return enriched
@@ -632,9 +645,13 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
 
         from apps.kuaizhizao.services.document_action_policy.enricher import enrich_inbound_hub_list_capabilities
         responses = [OutsourceMaterialReceiptResponse.model_validate(receipt) for receipt in receipts]
-        item_counts = {int(r.id): 1 for r in receipts}
+        # 收货单无 material_name 字段；明细预览由 enrich_outsource_docs_with_supplier
+        # 从委外工单 product_name 写入 items（勿对 ORM 读不存在的字段再塞空列表）。
         responses = enrich_inbound_hub_list_capabilities(
-            receipts, responses, "outsource_receipt", item_counts=item_counts
+            receipts,
+            responses,
+            "outsource_receipt",
+            item_counts={int(r.id): 1 for r in receipts},
         )
         return await enrich_outsource_docs_with_supplier(tenant_id, receipts, responses)
 

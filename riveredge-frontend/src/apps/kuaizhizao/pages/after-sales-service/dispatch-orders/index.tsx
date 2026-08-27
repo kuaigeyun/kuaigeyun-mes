@@ -11,6 +11,7 @@ import { useResourcePermissions } from '../../../../../hooks/useResourcePermissi
 import { formatDateTime } from '../../../../../utils/format';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import {
+  AFTER_SALES_CUSTOMER_NAME_COLUMN_DEFAULTS,
   AFTER_SALES_DISPATCH_STATUS_COLOR,
   renderAfterSalesStatusTag,
 } from '../shared/afterSalesListPresentation';
@@ -82,8 +83,8 @@ const DispatchOrdersPage: React.FC = () => {
           {
             title: t('app.kuaizhizao.afterSalesService.dispatchOrder.field.dispatchCode'),
             dataIndex: 'dispatch_code',
-            width: 148,
-            minWidth: 148,
+            width: 188,
+            minWidth: 188,
             uniTableKeepWidth: true,
             resizable: false,
             fixed: 'left',
@@ -92,17 +93,13 @@ const DispatchOrdersPage: React.FC = () => {
           {
             title: t('app.kuaizhizao.afterSalesService.dispatchOrder.field.customerName'),
             dataIndex: 'customer_name',
-            width: 148,
-            minWidth: 148,
-            uniTableKeepWidth: true,
-            resizable: false,
-            ellipsis: true,
+            ...AFTER_SALES_CUSTOMER_NAME_COLUMN_DEFAULTS,
           },
           {
             title: t('app.kuaizhizao.afterSalesService.dispatchOrder.field.sourceCode'),
             dataIndex: 'source_code',
-            width: 148,
-            minWidth: 148,
+            width: 188,
+            minWidth: 188,
             uniTableKeepWidth: true,
             resizable: false,
             render: (_, row) => (
@@ -123,6 +120,17 @@ const DispatchOrdersPage: React.FC = () => {
             render: (_, row) => row.engineer_name || '-',
           },
           {
+            // 服务地址长短不一：唯一 RemainderFlex（客户列统一 KeepWidth）
+            title: t('app.kuaizhizao.afterSalesService.dispatchOrder.field.siteAddress'),
+            dataIndex: 'site_address',
+            minWidth: 160,
+            uniTableRemainderFlex: true,
+            uniTablePrimaryFlex: true,
+            resizable: false,
+            ellipsis: true,
+            hideInSearch: true,
+          },
+          {
             title: t('app.kuaizhizao.afterSalesService.dispatchOrder.field.plannedStartAt'),
             dataIndex: 'planned_start_at',
             width: 148,
@@ -141,9 +149,8 @@ const DispatchOrdersPage: React.FC = () => {
               renderAfterSalesStatusTag(row.status, AFTER_SALES_DISPATCH_STATUS_COLOR),
           },
           {
-            title: t('common.action'),
+            title: t('common.actions'),
             key: 'action',
-            valueType: 'option',
             fixed: 'right',
             hideInSearch: true,
             render: (_, row) => [
@@ -167,7 +174,7 @@ const DispatchOrdersPage: React.FC = () => {
         ],
         SALES_DOC_LIST_FIELD_RANK,
       ),
-    [messageApi, modal, perms.canDelete, perms.canUpdate, t],
+    [perms.canDelete, perms.canUpdate, t],
   );
 
   return (
@@ -177,7 +184,7 @@ const DispatchOrdersPage: React.FC = () => {
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.afterSalesDispatch)}
         actionRef={actionRef}
         columns={columns}
-        columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.dispatch-orders.v3"
+        columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.dispatch-orders.v6"
         rowKey="id"
         headerTitle={t('app.kuaizhizao.menu.after-sales-service.dispatch-orders')}
         request={async (params) => {

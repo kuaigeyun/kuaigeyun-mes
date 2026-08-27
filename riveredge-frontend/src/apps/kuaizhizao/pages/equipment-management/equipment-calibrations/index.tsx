@@ -33,6 +33,8 @@ import {
   normalizeEquipmentListResponse,
   resolveAssetWorkflowListParams,
 } from '../../../utils/equipmentListCore';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
+import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
 
 const RESOURCE = 'kuaizhizao:equipment-calibration';
 const P = 'app.kuaizhizao.equipmentCalibration';
@@ -173,21 +175,32 @@ const EquipmentCalibrationsPage: React.FC = () => {
       {
         title: t(`${P}.colEquipmentCode`),
         dataIndex: 'equipment_code',
-        width: 120,
-        sorter: true,
+        hideInTable: true,
         search: { order: 30 } as ProColumns['search'],
+      },
+      {
+        title: t(`${P}.colEquipmentName`),
+        dataIndex: 'equipment_name',
+        minWidth: 200,
+        uniTablePrimaryFlex: true,
+        uniTableRemainderFlex: true,
+        resizable: false,
+        ellipsis: false,
+        hideInSearch: true,
         render: (_, r) => (
-          <Typography.Text copyable={{ text: String(r.equipment_code ?? '') }} ellipsis>
-            {r.equipment_code ?? '-'}
-          </Typography.Text>
+          <UniTableStackedPrimaryCell
+            primary={String(r.equipment_name ?? '') || '-'}
+            secondary={String(r.equipment_code ?? '') || '-'}
+          />
         ),
       },
-      { title: t(`${P}.colEquipmentName`), dataIndex: 'equipment_name', width: 180, ellipsis: true, sorter: true, hideInSearch: true },
       {
         title: t(`${P}.colCalibrationDate`),
         dataIndex: 'calibration_date',
         width: 132,
+        minWidth: 132,
         uniTableKeepWidth: true,
+        resizable: false,
         sorter: true,
         hideInSearch: true,
         render: (_, r) => (r.calibration_date ? formatDateTime(r.calibration_date, 'YYYY-MM-DD') : '-'),
@@ -196,7 +209,7 @@ const EquipmentCalibrationsPage: React.FC = () => {
         title: t(`${P}.colResult`),
         key: 'equipment_calibration_result',
         dataIndex: 'result',
-        width: 100,
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         sorter: true,
         hideInSearch: true,
         render: (_, r) => {
@@ -209,6 +222,10 @@ const EquipmentCalibrationsPage: React.FC = () => {
         title: t(`${P}.colCertificateNo`),
         dataIndex: 'certificate_no',
         width: 140,
+        minWidth: 140,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
         sorter: true,
         hideInSearch: true,
         render: (_, r) => (
@@ -221,16 +238,28 @@ const EquipmentCalibrationsPage: React.FC = () => {
         title: t(`${P}.colExpiryDate`),
         dataIndex: 'expiry_date',
         width: 132,
+        minWidth: 132,
         uniTableKeepWidth: true,
+        resizable: false,
         sorter: true,
         hideInSearch: true,
         render: (_, r) => (r.expiry_date ? formatDateTime(r.expiry_date, 'YYYY-MM-DD') : '-'),
       },
-      { title: t('common.remark'), dataIndex: 'remark', ellipsis: true, hideInSearch: true },
+      {
+        title: t('common.remark'),
+        dataIndex: 'remark',
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
+        hideInSearch: true,
+        render: (_, r) => (r.remark != null && r.remark !== '' ? String(r.remark) : '-'),
+      },
       ...buildDocumentAuditColumns<EquipmentCalibration>(t),
       {
         title: t('common.actions'),
-        valueType: 'option',
+        key: 'option',
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) =>
@@ -261,7 +290,7 @@ const EquipmentCalibrationsPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.equipmentCalibrations)}
         headerTitle={t(`${P}.title`)}
-        columnPersistenceId="apps.kuaizhizao.pages.equipment-management.equipment-calibrations-equip-rank-v1"
+        columnPersistenceId="apps.kuaizhizao.pages.equipment-management.equipment-calibrations-width-v2"
         actionRef={actionRef}
         enableRowSelection
         selectedRowKeys={selectedRowKeys}

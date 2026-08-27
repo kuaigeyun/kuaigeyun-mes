@@ -1,7 +1,6 @@
 import { defineConfig, normalizePath, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import { resolve } from 'path'
-import { platform } from 'os'
 import fs from 'node:fs'
 import path from 'node:path'
 import type { ProxyOptions } from 'vite'
@@ -142,7 +141,10 @@ export default defineConfig({
       timeout: 30000, // 增加超时时间到 30 秒
     },
     watch: {
-      // 优化文件监听，确保 HMR 正常工作，避免频繁重启
+      // Windows 默认用原生 ReadDirectoryChangesW，禁止轮询：chokidar polling
+      // 会把杀毒/索引扫过的 mtime 误判成「源码变了」，整页 reload（日志里反复
+      // `[vite] page reload stores/userPreferenceStore.ts`）。仅在 WSL/网络盘/Docker
+      // 等原生监听失效时显式打开：VITE_USE_POLLING=1 或 CHOKIDAR_USEPOLLING=1
       ignored: [
         '**/node_modules/**',
         '**/.git/**',
@@ -209,13 +211,7 @@ export default defineConfig({
         '**/*.min.js',
         '**/*.min.css',
       ],
-      // Windows 环境下使用轮询模式以确保文件变化能被检测到
-      usePolling: platform() === 'win32',
-      // ⚠️ 优化：增加文件变化检测间隔，减少 CPU 占用和重启频率
-      interval: platform() === 'win32' ? 5000 : 500, // Windows 轮询间隔加大，降低 dev CPU
-      // 优化文件监听性能
-      binaryInterval: platform() === 'win32' ? 8000 : 1000,
-      // 使用原子写入检测，减少不必要的重载
+      usePolling: process.env.VITE_USE_POLLING === '1' || process.env.CHOKIDAR_USEPOLLING === '1',
       atomic: true,
     },
   },

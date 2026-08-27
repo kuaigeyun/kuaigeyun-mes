@@ -111,7 +111,10 @@ const BackflushRecordsPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.backflushRecords.colWorkOrderCode'),
         dataIndex: 'work_order_code',
-        width: 130,
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
         fixed: 'left',
         copyable: true,
         sorter: true,
@@ -131,32 +134,51 @@ const BackflushRecordsPage: React.FC = () => {
         title: t('app.kuaizhizao.batchInventoryQuery.colBatchNo'),
         dataIndex: 'batch_no',
         width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
         render: (_, record) => record.batch_no || '-',
+      },
+      {
+        title: t('app.kuaizhizao.backflushRecords.colOutboundWarehouse'),
+        dataIndex: 'warehouse_name',
+        width: 140,
+        minWidth: 140,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
+        render: (_, record) => record.warehouse_name || '-',
       },
       {
         title: t('app.kuaizhizao.backflushRecords.colReportQty'),
         dataIndex: 'report_quantity',
         width: 90,
+        minWidth: 90,
+        uniTableKeepWidth: true,
+        resizable: false,
         valueType: 'digit',
+        render: (_, r) => formatQuantity(r.report_quantity),
       },
       {
         title: t('app.kuaizhizao.backflushRecords.colBomQty'),
         dataIndex: 'bom_quantity',
         width: 90,
+        minWidth: 90,
+        uniTableKeepWidth: true,
+        resizable: false,
         valueType: 'digit',
+        render: (_, r) => formatQuantity(r.bom_quantity),
       },
       {
         title: t('app.kuaizhizao.backflushRecords.colBackflushQty'),
         dataIndex: 'backflush_quantity',
-        width: 100,
+        width: 110,
+        minWidth: 110,
+        uniTableKeepWidth: true,
+        resizable: false,
         valueType: 'digit',
-        render: (_, record) => `${record.backflush_quantity} ${record.material_unit || ''}`,
-      },
-      {
-        title: t('app.kuaizhizao.backflushRecords.colOutboundWarehouse'),
-        dataIndex: 'warehouse_name',
-        width: 120,
-        render: (_, record) => record.warehouse_name || '-',
+        render: (_, record) =>
+          `${formatQuantity(record.backflush_quantity)} ${record.material_unit || ''}`.trim(),
       },
       {
         title: t('common.status'),
@@ -167,15 +189,19 @@ const BackflushRecordsPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.backflushRecords.colErrorMessage'),
         dataIndex: 'error_message',
-        width: 180,
+        minWidth: 200,
+        uniTableRemainderFlex: true,
+        uniTablePrimaryFlex: true,
+        resizable: false,
         ellipsis: true,
         render: (_, record) => record.error_message || '-',
       },
       ...buildDocumentAuditColumns<BackflushRecordItem>(t),
       {
         title: t('common.actions'),
-        valueType: 'option',
+        key: 'option',
         fixed: 'right',
+        hideInSearch: true,
         render: (_, record) => {
           const actions = [
             <Button key="detail" {...rowActionKind('read')} onClick={() => handleDetail(record)} />,
@@ -255,7 +281,7 @@ const BackflushRecordsPage: React.FC = () => {
         headerTitle={t('app.kuaizhizao.backflushRecords.headerTitle')}
         actionRef={actionRef}
         columns={alignProColumns(columns, WAREHOUSE_DOC_LIST_FIELD_RANK)}
-        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.backflush-records"
+        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.backflush-records-width-v3"
         request={fetchRecords}
         showAdvancedSearch
         pinnedTabsField={WAREHOUSE_DOC_PINNED_STATUS_FIELD}

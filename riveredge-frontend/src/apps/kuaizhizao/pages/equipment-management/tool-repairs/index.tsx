@@ -13,17 +13,7 @@ import { EquipmentPersonSelect, resolveUserUuidById } from '../../../components/
 import { EQUIPMENT_DATE_FIELD_PROPS } from '../../../utils/equipmentFormFieldProps';
 import { App, Button, Modal, Row, Col, Table, Input, Switch, Select } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import {
-  EditOutlined,
-  DeleteOutlined,
-  EyeOutlined,
-  SendOutlined,
-  CheckOutlined,
-  CloseOutlined,
-  CheckCircleOutlined,
-} from '@ant-design/icons';
 import dayjs from 'dayjs';
-import { StatusTag } from '../../../../../constants/statusBadges';
 import { renderDocumentStatusTag } from '../../../../../utils/documentLifecycleStatusTag';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
@@ -376,42 +366,79 @@ const ToolRepairsPage: React.FC = () => {
       {
         title: t(`${P}.col.documentNo`),
         dataIndex: 'document_no',
-        width: 140,
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
         fixed: 'left',
         sorter: true,
         search: { order: 30 } as ProColumns['search'],
+        render: (_, r) =>
+          r.document_no != null && r.document_no !== '' ? String(r.document_no) : '-',
       },
-      { title: t(`${P}.col.tool`), dataIndex: 'tool_name', width: 160, ellipsis: true, sorter: true, hideInSearch: true },
+      {
+        title: t(`${P}.col.tool`),
+        dataIndex: 'tool_name',
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
+        sorter: true,
+        hideInSearch: true,
+        render: (_, r) => (r.tool_name != null && r.tool_name !== '' ? String(r.tool_name) : '-'),
+      },
       {
         title: t(`${P}.col.repairDate`),
         dataIndex: 'repair_date',
         width: 132,
+        minWidth: 132,
         uniTableKeepWidth: true,
-        valueType: 'date',
+        resizable: false,
         sorter: true,
         hideInSearch: true,
+        valueType: 'date',
       },
-      { title: t(`${P}.col.faultDescription`), dataIndex: 'fault_description', ellipsis: true, sorter: true, hideInSearch: true },
-      { title: t(`${P}.col.urgency`), dataIndex: 'urgency', width: 90, sorter: true, hideInSearch: true },
       {
-        title: t('common.updatedAt'),
-        dataIndex: 'updated_at',
-        hideInTable: true,
+        title: t(`${P}.col.faultDescription`),
+        dataIndex: 'fault_description',
+        minWidth: 160,
+        uniTablePrimaryFlex: true,
+        uniTableRemainderFlex: true,
+        resizable: false,
+        ellipsis: true,
+        sorter: true,
         hideInSearch: true,
+        render: (_, r) =>
+          r.fault_description != null && r.fault_description !== ''
+            ? String(r.fault_description)
+            : '-',
+      },
+      {
+        title: t(`${P}.col.urgency`),
+        dataIndex: 'urgency',
+        width: 90,
+        minWidth: 90,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
+        sorter: true,
+        hideInSearch: true,
+        render: (_, r) => (r.urgency != null && r.urgency !== '' ? String(r.urgency) : '-'),
       },
       ...buildDocumentAuditColumns<ToolRepair>(t),
       {
         title: t('common.status'),
         key: 'lifecycle',
         dataIndex: 'status',
-        width: 90,
         hideInSearch: true,
         fixed: 'right',
         render: (_, r) => renderDocumentStatusTag(r.status ?? '-', r.status ?? '-'),
       },
       {
         title: t('common.actions'),
-        key: 'action',
+        key: 'option',
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) => (
@@ -420,7 +447,6 @@ const ToolRepairsPage: React.FC = () => {
               {...rowActionKind('read')}
               type="link"
               size="small"
-              icon={<EyeOutlined />}
               onClick={(e) => {
                 e.stopPropagation();
                 handleDetail(record);
@@ -433,7 +459,6 @@ const ToolRepairsPage: React.FC = () => {
                 {...rowActionKind('update')}
                 type="link"
                 size="small"
-                icon={<EditOutlined />}
                 onClick={(e) => {
                   e.stopPropagation();
                   void handleEdit(record);
@@ -447,7 +472,6 @@ const ToolRepairsPage: React.FC = () => {
                 {...rowActionKind('submit')}
                 type="link"
                 size="small"
-                icon={<SendOutlined />}
                 onClick={(e) => {
                   e.stopPropagation();
                   void handleSubmitDoc(record);
@@ -461,7 +485,6 @@ const ToolRepairsPage: React.FC = () => {
                 {...rowActionKind('approve')}
                 type="link"
                 size="small"
-                icon={<CheckOutlined />}
                 onClick={(e) => {
                   e.stopPropagation();
                   void handleApprove(record);
@@ -476,7 +499,6 @@ const ToolRepairsPage: React.FC = () => {
                 type="link"
                 size="small"
                 danger
-                icon={<CloseOutlined />}
                 onClick={(e) => {
                   e.stopPropagation();
                   setRejectTarget(record);
@@ -492,7 +514,6 @@ const ToolRepairsPage: React.FC = () => {
                 {...rowActionKind('complete')}
                 type="link"
                 size="small"
-                icon={<CheckCircleOutlined />}
                 onClick={(e) => {
                   e.stopPropagation();
                   setCompleteTarget(record);
@@ -509,7 +530,6 @@ const ToolRepairsPage: React.FC = () => {
                 type="link"
                 size="small"
                 danger
-                icon={<DeleteOutlined />}
                 onClick={(e) => {
                   e.stopPropagation();
                   getAntdModal().confirm({
@@ -535,7 +555,7 @@ const ToolRepairsPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.toolRepairs)}
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-repairs-equip-rank-v1"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-repairs-width-v2"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}

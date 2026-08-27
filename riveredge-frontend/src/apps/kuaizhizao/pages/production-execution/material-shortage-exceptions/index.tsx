@@ -16,7 +16,6 @@ import { UniTable } from '../../../../../components/uni-table';
 import { rowActionKind } from '../../../../../components/uni-action';
 import {
   MaterialStackedCell,
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
@@ -43,7 +42,6 @@ import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { StatusTag } from '../../../../../constants/statusBadges';
-import { UNI_TABLE_STATUS_BADGE_COLUMN_WIDTH } from '../../../../../utils/uniTableLayoutColumns';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import {
   buildProductionExceptionAlertLevelValueEnum,
@@ -221,8 +219,11 @@ const MaterialShortageExceptionsPage: React.FC = () => {
       title: t(`${P}.col.workOrderCode`),
       key: 'exception_doc_work_order_code',
       dataIndex: 'work_order_code',
-      width: 180,
+      width: 240,
+      minWidth: 240,
       uniTableKeepWidth: true,
+      uniTablePrimaryFlex: false,
+      resizable: false,
       fixed: 'left',
       ellipsis: false,
       sorter: true,
@@ -232,7 +233,12 @@ const MaterialShortageExceptionsPage: React.FC = () => {
       title: t(`${P}.col.material`),
       key: 'exception_material_stacked',
       dataIndex: 'material_name',
-      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+      // 无行项目明细：物料叠列吃掉视口剩余（RemainderFlex）
+      minWidth: 200,
+      uniTablePrimaryFlex: true,
+      uniTableRemainderFlex: true,
+      resizable: false,
+      ellipsis: false,
       render: (_, record) => (
         <MaterialStackedCell
           material_name={record.material_name}
@@ -246,6 +252,9 @@ const MaterialShortageExceptionsPage: React.FC = () => {
       title: t(`${P}.col.requiredQty`),
       dataIndex: 'required_quantity',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       align: 'right',
       sorter: true,
       hideInSearch: true,
@@ -254,6 +263,9 @@ const MaterialShortageExceptionsPage: React.FC = () => {
       title: t(`${P}.col.availableQty`),
       dataIndex: 'available_quantity',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       align: 'right',
       sorter: true,
       hideInSearch: true,
@@ -262,6 +274,9 @@ const MaterialShortageExceptionsPage: React.FC = () => {
       title: t(`${P}.col.shortageQty`),
       dataIndex: 'shortage_quantity',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       align: 'right',
       sorter: true,
       hideInSearch: true,
@@ -275,6 +290,9 @@ const MaterialShortageExceptionsPage: React.FC = () => {
       title: t(`${P}.col.alertLevel`),
       dataIndex: 'alert_level',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: false,
       valueType: 'select',
       valueEnum: alertLevelValueEnum,
@@ -282,7 +300,10 @@ const MaterialShortageExceptionsPage: React.FC = () => {
     {
       title: t(`${P}.col.suggestedAction`),
       dataIndex: 'suggested_action',
-      width: 100,
+      width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueEnum: {
         purchase: { text: t(`${P}.suggestedAction.purchase`), status: 'processing' },
         substitute: { text: t(`${P}.suggestedAction.substitute`), status: 'warning' },
@@ -295,8 +316,6 @@ const MaterialShortageExceptionsPage: React.FC = () => {
       // 搜索仍绑 status；key 声明列身份，UniTable 右固定于操作列之前
       key: 'lifecycle',
       dataIndex: 'status',
-      width: UNI_TABLE_STATUS_BADGE_COLUMN_WIDTH,
-      uniTableKeepWidth: true,
       fixed: 'right',
       hideInSearch: false,
       valueType: 'select',
@@ -311,6 +330,7 @@ const MaterialShortageExceptionsPage: React.FC = () => {
       title: t('common.actions'),
       key: 'option',
       fixed: 'right',
+      hideInSearch: true,
       render: (_, record) => [
         <Button key="view" {...rowActionKind('read')} onClick={() => handleDetail(record)}>
           {t('common.detail')}
@@ -328,7 +348,7 @@ const MaterialShortageExceptionsPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable
-        columnPersistenceId="apps.kuaizhizao.pages.production-execution.material-shortage-exceptions.v3"
+        columnPersistenceId="apps.kuaizhizao.pages.production-execution.material-shortage-exceptions-width-v2"
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.materialShortageException)}
         headerTitle={t(`${P}.materialShortage.pageTitle`)}

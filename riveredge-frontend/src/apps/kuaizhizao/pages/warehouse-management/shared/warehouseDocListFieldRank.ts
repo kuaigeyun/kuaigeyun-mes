@@ -17,6 +17,8 @@ export const WAREHOUSE_DOC_LIST_FIELD_RANK: Record<string, number> = {
   notice_code: 10,
   doc_code: 10,
   subjectDocNo: 10,
+  /** 出库 Hub 主叠列 key（与 subjectDocNo 同段） */
+  subject_doc: 10,
   registration_code: 10,
 
   // 类型 / 来源（picking_code 在入库列表作来源展示时走 source 段，勿与主单号抢 10）
@@ -37,16 +39,20 @@ export const WAREHOUSE_DOC_LIST_FIELD_RANK: Record<string, number> = {
   reserved_work_order_code: 40,
   outsource_work_order_code: 21,
   customer_name: 22,
+  supplier_name: 22,
   mapped_material_name: 23,
 
   // 数量 / 种类数 / 金额
+  /** 明细物料名预览（替代入库品种数，余量列） */
+  line_materials: 29.5,
   total_quantity: 30,
   quantity: 30,
   requested_quantity: 30,
   delivered_quantity: 31,
   batch_no: 28,
+  /** 可用 → 库存 → 预留（线边仓等拆列后同序） */
+  available_quantity: 29.7,
   reserved_quantity: 31,
-  available_quantity: 32,
   total_items: 32,
   items_count: 32,
   counted_items: 33,
@@ -64,8 +70,20 @@ export const WAREHOUSE_DOC_LIST_FIELD_RANK: Record<string, number> = {
   // 状态（表内流程状态用 key=lifecycle→91；此处 status 仅兜底）
   status: 50,
   alert_label: 51,
+  alert_level: 52,
+  is_enabled: 53,
   // 优先级紧挨进度/齐套等徽章段，勿落到仓库段之后
   priority: 42,
+
+  // 库存预警（规则 / 记录）
+  alert_type: 20,
+  rule_name: 11,
+  material_group_name: 23,
+  current_quantity: 30,
+  threshold_value: 33,
+  threshold_type: 34,
+  inherit_material_threshold: 35,
+  triggered_at: 70,
 
   // 仓库
   warehouse_name: 60,
@@ -73,6 +91,12 @@ export const WAREHOUSE_DOC_LIST_FIELD_RANK: Record<string, number> = {
   to_warehouse_name: 61,
   suggested_warehouse_name: 60,
   target_warehouse_name: 60,
+
+  // 倒冲：出库仓 → 报工/BOM/倒冲量 → 错误信息（余量列）
+  report_quantity: 62,
+  bom_quantity: 63,
+  backflush_quantity: 64,
+  error_message: 65,
 
   // 业务时间（与操作员堆叠列）/ 责任人
   biz_time_operator: 70,
@@ -102,12 +126,12 @@ export const WAREHOUSE_DOC_LIST_FIELD_RANK: Record<string, number> = {
   carrier: 77,
   tracking_number: 78,
 
-  // 物料信息（库存/配料）
+  // 物料信息（库存/配料）；编码 → 名称 → 规格（拆列同序）
   /** 物料中心任务队列：产品/物料叠列（列上须设 key=material） */
   material: 22,
+  material_code: 21,
   material_name: 22,
-  material_code: 22,
-  material_spec: 23,
+  material_spec: 22.5,
   model: 24,
   brand: 25,
   texture: 26,
@@ -116,7 +140,7 @@ export const WAREHOUSE_DOC_LIST_FIELD_RANK: Record<string, number> = {
   in_transit_quantity: 31,
 
   /**
-   * 线边仓库存：物料 → 线边仓 → 批号/效期 → 可用/库存/预留叠列 → 预留工单 → 状态
+   * 线边仓库存：编码/名称/规格 → 线边仓 → 批号 → 可用/库存/预留 → 预留工单 → 状态
    * （列上须设同名 key；勿用 warehouse_name 以免与其它仓储单据仓库段位冲突）
    */
   line_side_warehouse: 23,

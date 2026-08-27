@@ -24,7 +24,7 @@ import { App, Button, Space, Modal, Timeline, Descriptions, Typography } from 'a
 import { EyeOutlined, UserOutlined, ArrowRightOutlined, CheckCircleOutlined, CloseCircleOutlined, RollbackOutlined } from '@ant-design/icons';
 import { UniUserSelect } from '../../../../../components/uni-user-select';
 import { UniTable } from '../../../../../components/uni-table';
-import { UNI_TABLE_OPERATION_STEPS_COLUMN_DEFAULTS } from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { UNI_TABLE_OPERATION_STEPS_COLUMN_MIN_WIDTH } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { MarkerTag, StatusTag } from '../../../../../constants/statusBadges';
 import { resolveUserDisplay } from '../../../../../services/user';
 import { UniCapabilityBatchButton } from '../../../../../components/uni-batch';
@@ -408,7 +408,10 @@ const ExceptionProcessPage: React.FC = () => {
       key: 'exception_doc_work_order_code',
       dataIndex: 'work_order_code',
       width: 180,
+      minWidth: 180,
       uniTableKeepWidth: true,
+      uniTablePrimaryFlex: false,
+      resizable: false,
       fixed: 'left',
       ellipsis: false,
       sorter: true,
@@ -419,6 +422,9 @@ const ExceptionProcessPage: React.FC = () => {
       key: 'exception_process_type',
       dataIndex: 'exception_type',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: false,
       valueType: 'select',
       valueEnum: exceptionTypeValueEnum,
@@ -428,10 +434,19 @@ const ExceptionProcessPage: React.FC = () => {
       title: t(`${P}.col.currentStep`),
       key: 'exception_process_steps',
       dataIndex: 'current_step',
-      ...UNI_TABLE_OPERATION_STEPS_COLUMN_DEFAULTS,
-      className: 'uni-table-operation-steps-cell',
-      onHeaderCell: () => ({ className: 'uni-table-operation-steps-cell' }),
-      onCell: () => ({ className: 'uni-table-operation-steps-cell' }),
+      // RemainderFlex：步骤轴吃掉视口剩余（对齐工单工序列）
+      minWidth: UNI_TABLE_OPERATION_STEPS_COLUMN_MIN_WIDTH,
+      uniTablePrimaryFlex: true,
+      uniTableRemainderFlex: true,
+      resizable: false,
+      ellipsis: false,
+      className: 'uni-table-operation-steps-cell uni-table-operation-steps-cell-start',
+      onHeaderCell: () => ({
+        className: 'uni-table-operation-steps-cell uni-table-operation-steps-cell-start',
+      }),
+      onCell: () => ({
+        className: 'uni-table-operation-steps-cell uni-table-operation-steps-cell-start',
+      }),
       hideInSearch: true,
       render: (_, record) => (
         <WorkOrderOperationStepsStrip
@@ -443,12 +458,17 @@ const ExceptionProcessPage: React.FC = () => {
       title: t(`${P}.col.assignedTo`),
       dataIndex: 'assigned_to_name',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
     },
     {
       title: t(`${P}.col.startTime`),
       dataIndex: 'started_at',
-      width: 132,
+      width: 148,
+      minWidth: 148,
       uniTableKeepWidth: true,
+      resizable: false,
       sorter: true,
       hideInSearch: true,
       render: (_, record) =>
@@ -457,8 +477,10 @@ const ExceptionProcessPage: React.FC = () => {
     {
       title: t(`${P}.col.endTime`),
       dataIndex: 'completed_at',
-      width: 132,
+      width: 148,
+      minWidth: 148,
       uniTableKeepWidth: true,
+      resizable: false,
       sorter: true,
       hideInSearch: true,
       render: (_, record) =>
@@ -478,6 +500,7 @@ const ExceptionProcessPage: React.FC = () => {
       title: t('common.actions'),
       key: 'option',
       fixed: 'right',
+      hideInSearch: true,
       render: (_, record) => {
         const status = record.process_status || '';
         const canAssign = status === 'pending' || status === 'processing';
@@ -554,7 +577,7 @@ const ExceptionProcessPage: React.FC = () => {
         <UniTable<ExceptionProcessRecord>
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.exceptionProcess)}
-          columnPersistenceId="apps.kuaizhizao.pages.production-execution.exception-process.v3"
+          columnPersistenceId="apps.kuaizhizao.pages.production-execution.exception-process-width-v1"
           actionRef={actionRef}
           columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
           request={async (params, sort, _filter, searchFormValues) => {

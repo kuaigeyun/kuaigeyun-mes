@@ -431,9 +431,13 @@ const ReworkOrdersPage: React.FC = () => {
       title: `${t('app.kuaizhizao.reworkOrder.colProductName')} / ${t('app.kuaizhizao.reworkOrder.colCode')}`,
       key: 'product_name_code_stacked',
       dataIndex: 'code',
-      width: 220,
+      // 无行项目明细：产品/单号叠列吃掉视口剩余（RemainderFlex）
+      minWidth: 200,
+      uniTablePrimaryFlex: true,
+      uniTableRemainderFlex: true,
+      resizable: false,
+      ellipsis: false,
       fixed: 'left',
-      ellipsis: true,
       sorter: true,
       hideInSearch: true,
       render: (_, record) => (
@@ -471,7 +475,9 @@ const ReworkOrdersPage: React.FC = () => {
       title: t('app.kuaizhizao.reworkOrder.colOriginalWorkOrderId'),
       dataIndex: 'original_work_order_code',
       width: 180,
+      minWidth: 180,
       uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: false,
       hideInSearch: false,
     },
@@ -485,6 +491,9 @@ const ReworkOrdersPage: React.FC = () => {
       title: t('app.kuaizhizao.reworkOrder.colQuantity'),
       dataIndex: 'quantity',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       align: 'right',
       sorter: true,
       hideInSearch: true,
@@ -493,7 +502,10 @@ const ReworkOrdersPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.reworkOrder.colReworkType'),
       dataIndex: 'rework_type',
-      width: 100,
+      width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: false,
       valueType: 'select',
       valueEnum: reworkTypeValueEnum,
@@ -532,8 +544,9 @@ const ReworkOrdersPage: React.FC = () => {
     ...customFieldColumns,
     {
       title: t('common.actions'),
-      valueType: 'option',
+      key: 'option',
       fixed: 'right',
+      hideInSearch: true,
       render: (_text, record) => [
         <Button key="view" {...rowActionKind('read')} onClick={() => handleDetail(record)}>
           {t('common.detail')}
@@ -1375,7 +1388,7 @@ const ReworkOrdersPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<ReworkOrder>
-        columnPersistenceId="apps.kuaizhizao.pages.production-execution.rework-orders.v2"
+        columnPersistenceId="apps.kuaizhizao.pages.production-execution.rework-orders-width-v1"
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.reworkOrder)}
         headerTitle={t('app.kuaizhizao.reworkOrder.title')}

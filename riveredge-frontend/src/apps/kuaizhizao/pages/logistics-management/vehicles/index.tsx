@@ -1,3 +1,8 @@
+/**
+ * 车辆管理（物流主数据）。
+ * 与驾驶员/承运商同构：一列 RemainderFlex 吃余量，禁止全 KeepWidth（否则 filler 在右固定前留巨空白）。
+ */
+
 import React, { useMemo, useRef, useState } from 'react';
 import type { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { Button, message } from 'antd';
@@ -5,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { UniTable } from '../../../../../components/uni-table';
+import { MarkerTag } from '../../../../../constants/statusBadges';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { buildDetailDrawerEditExtra } from '../../equipment-management/shared/equipmentMasterDataDetail';
 import {
@@ -12,6 +18,8 @@ import {
   alignProColumns,
   MASTER_DATA_DETAIL_BASIC_FIELD_RANK,
 } from '../../sales-management/shared/documentFieldAlignment';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
+import { formatQuantity } from '../../../../../utils/format';
 import { LogisticsMasterDetailDrawer } from '../shared/LogisticsMasterDetailDrawer';
 import {
   logisticsVehicleTypeLabel,
@@ -94,30 +102,41 @@ const VehiclesPage: React.FC = () => {
           fixed: 'left',
         },
         {
+          // 余量列：车型长短不一；禁止全表 KeepWidth（右固定前会留巨空白）
           title: t('app.kuaizhizao.logistics.field.vehicleType'),
           dataIndex: 'vehicle_type',
-          width: 96,
-          minWidth: 96,
-          uniTableKeepWidth: true,
+          minWidth: 120,
+          uniTableRemainderFlex: true,
+          uniTablePrimaryFlex: true,
           resizable: false,
-          render: (_, row) => logisticsVehicleTypeLabel(t, row.vehicle_type),
+          ellipsis: true,
+          render: (_, row) => {
+            const label = logisticsVehicleTypeLabel(t, row.vehicle_type);
+            return label === '-' ? '-' : <MarkerTag color="processing">{label}</MarkerTag>;
+          },
         },
         {
           title: t('app.kuaizhizao.logistics.field.ownership'),
           dataIndex: 'ownership',
-          width: 96,
-          minWidth: 96,
+          ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+          render: (_, row) => renderLogisticsOwnershipTag(t, row.ownership),
+        },
+        {
+          title: t('app.kuaizhizao.logistics.field.loadCapacity'),
+          dataIndex: 'load_capacity',
+          width: 100,
+          minWidth: 100,
           uniTableKeepWidth: true,
           resizable: false,
-          render: (_, row) => renderLogisticsOwnershipTag(t, row.ownership),
+          align: 'right',
+          hideInSearch: true,
+          render: (_, row) =>
+            row.load_capacity != null ? formatQuantity(row.load_capacity) : '-',
         },
         {
           title: t('common.enabled'),
           dataIndex: 'is_enabled',
-          width: 88,
-          minWidth: 88,
-          uniTableKeepWidth: true,
-          resizable: false,
+          ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
           hideInSearch: true,
           render: (_, row) => renderLogisticsEnabledTag(t, row.is_enabled),
         },
@@ -132,23 +151,18 @@ const VehiclesPage: React.FC = () => {
         {
           title: t('common.action'),
           key: 'action',
-          valueType: 'option',
           fixed: 'right',
           hideInSearch: true,
           render: (_, row) => {
             const nodes: React.ReactNode[] = [];
             if (perms.canRead) {
               nodes.push(
-                <Button key="detail" {...rowActionKind('read')} type="link" size="small" onClick={() => openDetail(row)}>
-                  {t('common.detail')}
-                </Button>,
+                <Button key="detail" {...rowActionKind('read')} onClick={() => openDetail(row)} />,
               );
             }
             if (perms.canUpdate) {
               nodes.push(
-                <Button key="edit" {...rowActionKind('update')} type="link" size="small" onClick={() => openEdit(row)}>
-                  {t('common.edit')}
-                </Button>,
+                <Button key="edit" {...rowActionKind('update')} onClick={() => openEdit(row)} />,
               );
             }
             if (perms.canDelete) {
@@ -156,16 +170,12 @@ const VehiclesPage: React.FC = () => {
                 <Button
                   key="delete"
                   {...rowActionKind('delete')}
-                  type="link"
-                  size="small"
                   onClick={async () => {
                     await deleteVehicle(row.id);
                     message.success(t('common.deleteSuccess'));
                     actionRef.current?.reload();
                   }}
-                >
-                  {t('common.delete')}
-                </Button>,
+                />,
               );
             }
             return nodes;
@@ -179,10 +189,10 @@ const VehiclesPage: React.FC = () => {
     <ListPageTemplate>
       <UniTable<Vehicle>
         viewTypes={['table', 'help']}
-          helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.vehicles')}
+        helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.vehicles')}
         actionRef={actionRef}
         columns={columns}
-        columnPersistenceId="apps.kuaizhizao.pages.logistics-management.vehicles.v2"
+        columnPersistenceId="apps.kuaizhizao.pages.logistics-management.vehicles.v7"
         rowKey="id"
         request={async (params) => {
           const res = await listVehicles({
@@ -202,6 +212,7 @@ const VehiclesPage: React.FC = () => {
           message.success(t('common.batchDeleteSuccess', { count: keys.length }));
           actionRef.current?.reload();
         }}
+        fuzzySearchPlaceholder={t('app.kuaizhizao.logistics.placeholder.searchVehicle')}
       />
       <LogisticsMasterDetailDrawer
         open={detailOpen}

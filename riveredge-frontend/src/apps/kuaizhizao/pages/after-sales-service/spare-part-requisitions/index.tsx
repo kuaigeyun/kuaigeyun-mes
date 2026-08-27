@@ -13,6 +13,10 @@ import { hasReviewPermission } from '../../../../../utils/permissionContract';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import {
+  DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+  renderDocumentLineMaterialsPreview,
+} from '../../sales-management/shared/documentLineMaterialsPreview';
+import {
   AFTER_SALES_REVIEW_STATUS_COLOR,
   renderAfterSalesStatusTag,
 } from '../shared/afterSalesListPresentation';
@@ -98,8 +102,8 @@ const AfterSalesSparePartRequisitionsPage: React.FC = () => {
           {
             title: t('app.kuaizhizao.afterSalesService.sparePartRequisition.field.requisitionCode'),
             dataIndex: 'requisition_code',
-            width: 160,
-            minWidth: 160,
+            width: 188,
+            minWidth: 188,
             uniTableKeepWidth: true,
             resizable: false,
             fixed: 'left',
@@ -117,8 +121,8 @@ const AfterSalesSparePartRequisitionsPage: React.FC = () => {
           {
             title: t('app.kuaizhizao.afterSalesService.sparePartRequisition.field.sourceCode'),
             dataIndex: 'source_code',
-            width: 148,
-            minWidth: 148,
+            width: 188,
+            minWidth: 188,
             uniTableKeepWidth: true,
             resizable: false,
             render: (_, row) => (
@@ -130,6 +134,12 @@ const AfterSalesSparePartRequisitionsPage: React.FC = () => {
             ),
           },
           {
+            // 明细预览吃余量（采购/仓储同款）；短仓库列勿当 RemainderFlex
+            title: t('app.kuaizhizao.common.colLineMaterials'),
+            ...DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+            render: (_, row) => renderDocumentLineMaterialsPreview(row.items, t),
+          },
+          {
             title: t('common.status'),
             key: 'lifecycle',
             dataIndex: 'status',
@@ -139,9 +149,8 @@ const AfterSalesSparePartRequisitionsPage: React.FC = () => {
               renderAfterSalesStatusTag(row.status, AFTER_SALES_REVIEW_STATUS_COLOR),
           },
           {
-            title: t('common.action'),
+            title: t('common.actions'),
             key: 'action',
-            valueType: 'option',
             fixed: 'right',
             hideInSearch: true,
             render: (_, row) => [
@@ -156,8 +165,7 @@ const AfterSalesSparePartRequisitionsPage: React.FC = () => {
               perms.canAction?.('submit') && row.status === '草稿' ? (
                 <Button
                   key="submit"
-                  type="link"
-                  icon={<SendOutlined />}
+                  {...rowActionKind('submit')}
                   onClick={async () => {
                     await afterSalesSparePartRequisitionApi.submit(row.id);
                     messageApi.success(
@@ -165,9 +173,7 @@ const AfterSalesSparePartRequisitionsPage: React.FC = () => {
                     );
                     actionRef.current?.reload();
                   }}
-                >
-                  {t('components.uniAction.submit')}
-                </Button>
+                />
               ) : null,
               perms.canDelete && canEditRow(row.status) ? (
                 <Button
@@ -181,7 +187,7 @@ const AfterSalesSparePartRequisitionsPage: React.FC = () => {
         ],
         SALES_DOC_LIST_FIELD_RANK,
       ),
-    [messageApi, modal, perms, t],
+    [messageApi, perms, t],
   );
 
   return (
@@ -191,7 +197,7 @@ const AfterSalesSparePartRequisitionsPage: React.FC = () => {
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.afterSalesSpareRequisition)}
         actionRef={actionRef}
         columns={columns}
-        columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.spare-part-requisitions.v3"
+        columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.spare-part-requisitions.v6"
         rowKey="id"
         headerTitle={t('app.kuaizhizao.menu.after-sales-service.spare-part-requisitions')}
         request={async (params) => {

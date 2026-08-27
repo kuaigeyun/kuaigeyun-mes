@@ -8,12 +8,6 @@ import { useNumericPrecisionPlaces } from '../../../../../hooks/useNumericPrecis
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { glService, type GlAccount } from '../../../services/gl';
-import {
-  DOCUMENT_LIST_HELP_KEYS,
-  ListPageHelpToggle,
-  RichDocumentHelpView,
-} from '../../../../../components/page-help-wiki';
-
 const NS = 'app.kuaicaiwu.gl.openingBalances';
 
 const asList = <T,>(res: unknown): T[] => {
@@ -418,9 +412,6 @@ const OpeningBalancesPage: React.FC = () => {
 
   return (
     <ListPageTemplate>
-      <ListPageHelpToggle
-        helpContent={<RichDocumentHelpView docKey={DOCUMENT_LIST_HELP_KEYS.openingBalance} />}
-      >
       <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
         <Space wrap>
           <Space.Compact>
@@ -510,7 +501,6 @@ const OpeningBalancesPage: React.FC = () => {
           />
         )}
       </Space>
-      </ListPageHelpToggle>
     </ListPageTemplate>
   );
 };

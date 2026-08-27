@@ -15,8 +15,12 @@ import { UniTable, type UniTableRequestMeta } from '../../../../../components/un
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import {
   UniTableStackedPrimaryCell,
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
+import {
+  DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+  renderDocumentLineMaterialsPreview,
+} from '../../sales-management/shared/documentLineMaterialsPreview';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
@@ -759,7 +763,11 @@ const OutboundPage: React.FC = () => {
       title: t('app.kuaizhizao.warehouseOutbound.col.subjectDocNo'),
       key: 'subject_doc',
       dataIndex: ['delivery_code', 'picking_code'],
-      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+      width: 200,
+      minWidth: 200,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: false,
       fixed: 'left',
       hideInSearch: true,
       render: (_, record) => (
@@ -783,7 +791,7 @@ const OutboundPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.warehouseOutbound.col.outboundType'),
       dataIndex: 'outbound_type',
-      width: 100,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       sorter: true,
       hideInSearch: true,
       valueEnum: outboundIssueTypeMarkerValueEnum(t),
@@ -808,26 +816,35 @@ const OutboundPage: React.FC = () => {
       key: 'sourceDocNo',
       dataIndex: 'source_doc_no',
       width: 160,
+      minWidth: 160,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       hideInSearch: true,
       render: (_, record) => outboundSourceDocNo(record) || '-',
     },
     {
+      title: t('app.kuaizhizao.common.colLineMaterials'),
+      ...DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+      render: (_, record) => renderDocumentLineMaterialsPreview(record.items, t),
+    },
+    {
       title: t('app.kuaizhizao.warehouseOutbound.col.totalQuantity'),
       dataIndex: 'total_quantity',
       width: 100,
-      align: 'right',
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       sorter: true,
-      render: formatQuantity,
+      render: (_, record) => formatQuantity(record.total_quantity),
     },
-    ...buildWarehouseTotalAmountListColumn<OutboundOrder>(t, showAmount),
-    {
-      title: t('app.kuaizhizao.warehouseOutbound.col.totalItems'),
-      dataIndex: 'total_items',
-      width: 100,
-      align: 'right',
-      sorter: true,
-    },
+    ...buildWarehouseTotalAmountListColumn<OutboundOrder>(t, showAmount).map((col) => ({
+      ...col,
+      width: 110,
+      minWidth: 110,
+      uniTableKeepWidth: true,
+      resizable: false,
+    })),
     {
       title: t('app.kuaizhizao.warehouseOutbound.col.outboundProgress'),
       dataIndex: 'fulfillment_progress',
@@ -866,15 +883,22 @@ const OutboundPage: React.FC = () => {
       title: t('app.kuaizhizao.warehouseOutbound.col.warehouse'),
       dataIndex: 'warehouse_name',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       sorter: true,
+      render: (_, r) =>
+        r.warehouse_name != null && r.warehouse_name !== '' ? String(r.warehouse_name) : '-',
     },
     {
       title: t('app.kuaizhizao.warehouseOutbound.col.operatorPerson'),
       key: 'biz_time_operator',
       dataIndex: 'biz_time_operator',
       width: 148,
+      minWidth: 148,
       uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       sorter: true,
       render: (_, record) => {
@@ -915,7 +939,7 @@ const OutboundPage: React.FC = () => {
     ...productionPickingCustomFieldColumns,
     {
       title: t('common.actions'),
-      width: 300,
+      key: 'option',
       fixed: 'right',
       hideInSearch: true,
       search: false,
@@ -1146,7 +1170,7 @@ const OutboundPage: React.FC = () => {
         headerTitle={t('app.kuaizhizao.warehouseOutbound.title')}
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.salesDelivery)}
-        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.outbound.v4"
+        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.outbound-width-v4"
         actionRef={actionRef}
         formRef={searchFormRef}
         rowKey={outboundRowKey}

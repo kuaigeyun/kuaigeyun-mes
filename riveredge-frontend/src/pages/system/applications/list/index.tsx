@@ -1337,6 +1337,13 @@ const ApplicationListPage: React.FC = () => {
 
                       const typeBadges = (
                         <>
+                          {application.version &&
+                            renderBadge(
+                              `V${application.version}`,
+                              { bg: '#d48806', color: '#fff' },
+                              undefined,
+                              { bg: '#d4b106', color: '#1f1f1f' },
+                            )}
                           {application.code === 'master-data' &&
                             renderBadge(
                               'BASE',
@@ -1489,11 +1496,6 @@ const ApplicationListPage: React.FC = () => {
             {isPlaceholderApplication(application) && (
               <Tag color="warning" style={{ margin: 0, fontSize: 11 }}>
                 {t('pages.system.applications.proLockedTag', { defaultValue: '需升级专业版' })}
-              </Tag>
-            )}
-            {application.version && (
-              <Tag color="blue" style={{ margin: 0, fontSize: 11 }}>
-                v{application.version}
               </Tag>
             )}
           </div>

@@ -63,7 +63,6 @@ import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { buildWorkOrderLifecycleValueEnum, translateWorkOrderLifecycleStatus } from '../../../utils/workOrderLifecycle';
-import { ListPageHelpToggle, RichListPageHelpView } from '../../../../../components/page-help-wiki';
 
 const MATERIAL_CENTER_RESOURCE = 'kuaizhizao:warehouse-management-batching-center';
 
@@ -324,13 +323,11 @@ const BatchingCenterPage: React.FC = () => {
 
   return (
     <>
-      <ListPageHelpToggle helpContent={<RichListPageHelpView pageKey="kuaizhizao.batchingCenter" />}>
       <MultiTabListPageTemplate
         activeTabKey={activeTabKey}
         onTabChange={(key) => setActiveTabKey(key as MaterialCenterTabKey)}
         tabs={taskTabs}
       />
-      </ListPageHelpToggle>
 
       {/* 新建线边备料单 Modal */}
       <FormModalTemplate

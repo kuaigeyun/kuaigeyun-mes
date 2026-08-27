@@ -74,6 +74,7 @@ export const UNI_TABLE_STACKED_AUDIT_COLUMN_WIDTH = 120;
 export const UNI_TABLE_STACKED_AUDIT_COLUMN_DEFAULTS = {
   width: UNI_TABLE_STACKED_AUDIT_COLUMN_WIDTH,
   uniTableKeepWidth: true,
+  uniTableAuditStackedColumn: true,
   hideInSearch: true,
 } as const;
 

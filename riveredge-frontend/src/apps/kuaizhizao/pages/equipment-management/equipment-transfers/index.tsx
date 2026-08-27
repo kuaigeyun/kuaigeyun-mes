@@ -12,7 +12,7 @@ import {
 import { App, Button, Modal, Row, Col, Input } from 'antd';
 import { StatusTag } from '../../../../../constants/statusBadges';
 import { renderDocumentStatusTag } from '../../../../../utils/documentLifecycleStatusTag';
-import { SendOutlined, CheckOutlined, CloseOutlined, DeleteOutlined } from '@ant-design/icons';
+import { DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { EQUIPMENT_DATE_FIELD_PROPS } from '../../../utils/equipmentFormFieldProps';
 import { UniTable } from '../../../../../components/uni-table';
@@ -221,55 +221,80 @@ const EquipmentTransfersPage: React.FC = () => {
       {
         title: t(`${P}.col.applicationNo`),
         dataIndex: 'application_no',
-        width: 140,
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
         fixed: 'left',
         sorter: true,
         search: { order: 30 } as ProColumns['search'],
+        render: (_, r) =>
+          r.application_no != null && r.application_no !== '' ? String(r.application_no) : '-',
       },
       {
         title: t(`${P}.col.equipment`),
         dataIndex: 'equipment_name',
-        width: 160,
+        minWidth: 160,
+        uniTablePrimaryFlex: true,
+        uniTableRemainderFlex: true,
+        resizable: false,
         ellipsis: true,
-        sorter: true,
         hideInSearch: true,
+        render: (_, r) =>
+          r.equipment_name != null && r.equipment_name !== '' ? String(r.equipment_name) : '-',
       },
       {
         title: t(`${P}.col.fromWorkshop`),
         dataIndex: 'from_workshop_name',
         width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
         ellipsis: true,
         sorter: true,
         hideInSearch: true,
+        render: (_, r) =>
+          r.from_workshop_name != null && r.from_workshop_name !== ''
+            ? String(r.from_workshop_name)
+            : '-',
       },
       {
         title: t(`${P}.col.toWorkshop`),
         dataIndex: 'to_workshop_name',
         width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
         ellipsis: true,
         sorter: true,
         hideInSearch: true,
+        render: (_, r) =>
+          r.to_workshop_name != null && r.to_workshop_name !== '' ? String(r.to_workshop_name) : '-',
       },
       {
         title: t(`${P}.col.toLocation`),
         dataIndex: 'to_workstation_name',
         width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
         ellipsis: true,
         hideInSearch: true,
+        render: (_, r) =>
+          r.to_workstation_name != null && r.to_workstation_name !== ''
+            ? String(r.to_workstation_name)
+            : '-',
       },
       {
         title: t(`${P}.col.transferDate`),
         dataIndex: 'transfer_date',
         width: 132,
+        minWidth: 132,
         uniTableKeepWidth: true,
+        resizable: false,
         valueType: 'date',
         sorter: true,
-        hideInSearch: true,
-      },
-      {
-        title: t('common.updatedAt'),
-        dataIndex: 'updated_at',
-        hideInTable: true,
         hideInSearch: true,
       },
       ...buildDocumentAuditColumns<TransferApplication>(t),
@@ -283,7 +308,7 @@ const EquipmentTransfersPage: React.FC = () => {
       },
       {
         title: t('common.actions'),
-        key: 'action',
+        key: 'option',
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) => [
@@ -301,7 +326,6 @@ const EquipmentTransfersPage: React.FC = () => {
             <Button
               key="submit"
               {...rowActionKind('submit')}
-              icon={<SendOutlined />}
               onClick={async () => {
                 if (!record.id) return;
                 await transferApplicationsApi.submit(record.id);
@@ -316,7 +340,6 @@ const EquipmentTransfersPage: React.FC = () => {
             <Button
               key="approve"
               {...rowActionKind('approve')}
-              icon={<CheckOutlined />}
               onClick={async () => {
                 if (!record.id) return;
                 await transferApplicationsApi.approve(record.id);
@@ -332,7 +355,6 @@ const EquipmentTransfersPage: React.FC = () => {
               key="reject"
               {...rowActionKind('reject')}
               danger
-              icon={<CloseOutlined />}
               onClick={() => {
                 setRejectTarget(record);
                 setRejectReason('');
@@ -355,7 +377,7 @@ const EquipmentTransfersPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.equipmentTransfers)}
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.equipment-transfers-equip-rank-v1"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.equipment-transfers-width-v2"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}

@@ -14,7 +14,7 @@ import {
   ProDescriptionsItemProps,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, Badge, Button, Modal, Row, Col, Typography } from 'antd';
+import { App, Badge, Button, Modal, Row, Col } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
 import { FormModalTemplate, MODAL_CONFIG, MultiTabListPageTemplate } from '../../../../../components/layout-templates';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
@@ -41,6 +41,8 @@ import {
 } from '../shared/equipmentMasterDataDetail';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
+import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
 
 const P = 'app.kuaizhizao.sparePart';
 const RESOURCE = 'kuaizhizao:spare-part';
@@ -208,60 +210,82 @@ const SparePartsPage: React.FC = () => {
         search: { order: 20 } as ProColumns['search'],
       },
       {
-        title: t(`${P}.col.partNo`),
+        title: t(`${P}.col.partNameCode`),
         dataIndex: 'part_no',
-        width: 120,
+        minWidth: 200,
+        uniTablePrimaryFlex: true,
+        uniTableRemainderFlex: true,
+        resizable: false,
+        ellipsis: false,
         fixed: 'left',
         sorter: true,
         search: { order: 30 } as ProColumns['search'],
         render: (_, r) => (
-          <Typography.Text copyable={{ text: String(r.part_no ?? '') }} ellipsis>
-            {r.part_no ?? '-'}
-          </Typography.Text>
+          <UniTableStackedPrimaryCell
+            primary={String(r.part_name ?? '') || '-'}
+            secondary={String(r.part_no ?? '') || '-'}
+          />
         ),
       },
       {
-        title: t(`${P}.col.partName`),
-        dataIndex: 'part_name',
-        width: 160,
+        title: t(`${P}.col.spec`),
+        dataIndex: 'spec',
+        width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
         ellipsis: true,
-        sorter: true,
         hideInSearch: true,
+        render: (_, r) => (r.spec != null && r.spec !== '' ? String(r.spec) : '-'),
       },
-      { title: t(`${P}.col.spec`), dataIndex: 'spec', width: 120, ellipsis: true, hideInSearch: true },
       {
         title: t(`${P}.col.category`),
         dataIndex: 'category',
         width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
         sorter: true,
         hideInSearch: true,
+        render: (_, r) => (r.category != null && r.category !== '' ? String(r.category) : '-'),
       },
-      { title: t('common.unit'), dataIndex: 'unit', width: 60, hideInSearch: true },
+      {
+        title: t('common.unit'),
+        dataIndex: 'unit',
+        width: 60,
+        minWidth: 60,
+        uniTableKeepWidth: true,
+        resizable: false,
+        hideInSearch: true,
+        render: (_, r) => {
+          const unit = r.unit;
+          if (unit == null || unit === '') return '-';
+          return typeof unit === 'string' || typeof unit === 'number' ? String(unit) : '-';
+        },
+      },
       {
         title: t(`${P}.col.safetyStock`),
         dataIndex: 'safety_stock',
         width: 90,
-        align: 'right',
+        minWidth: 90,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
+        render: (_, r) => (r.safety_stock != null ? String(r.safety_stock) : '-'),
       },
       {
         title: t('common.enabled'),
         dataIndex: 'is_active',
-        width: 80,
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         sorter: true,
         hideInSearch: true,
         render: (_, r) => renderIsActiveTag(t, r.is_active),
       },
-      {
-        title: t('common.updatedAt'),
-        dataIndex: 'updated_at',
-        hideInTable: true,
-        hideInSearch: true,
-      },
       ...buildDocumentAuditColumns<SparePart>(t),
       {
         title: t('common.actions'),
-        key: 'action',
+        key: 'option',
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) => [
@@ -317,14 +341,56 @@ const SparePartsPage: React.FC = () => {
   );
 
   const inventoryColumns: ProColumns<SpareInventoryRow>[] = useMemo(
-    () => [
-      { title: t(`${P}.col.partNo`), dataIndex: 'part_no', width: 120, fixed: 'left' },
-      { title: t(`${P}.col.partName`), dataIndex: 'part_name', width: 180, ellipsis: true },
-      { title: t(`${P}.col.stockQuantity`), dataIndex: 'stock_quantity', width: 100, align: 'right' },
-      { title: t(`${P}.col.warehouseLocation`), dataIndex: 'warehouse_location', width: 140 },
+    () => alignProColumns<SpareInventoryRow>([
+      {
+        title: t(`${P}.col.partNo`),
+        dataIndex: 'part_no',
+        width: 140,
+        minWidth: 140,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
+        fixed: 'left',
+        render: (_, r) => (r.part_no != null && r.part_no !== '' ? String(r.part_no) : '-'),
+      },
+      {
+        title: t(`${P}.col.partName`),
+        dataIndex: 'part_name',
+        minWidth: 160,
+        uniTablePrimaryFlex: true,
+        uniTableRemainderFlex: true,
+        resizable: false,
+        ellipsis: true,
+        render: (_, r) => (r.part_name != null && r.part_name !== '' ? String(r.part_name) : '-'),
+      },
+      {
+        title: t(`${P}.col.stockQuantity`),
+        dataIndex: 'stock_quantity',
+        width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
+        align: 'right',
+        render: (_, r) => (r.stock_quantity != null ? String(r.stock_quantity) : '-'),
+      },
+      {
+        title: t(`${P}.col.warehouseLocation`),
+        dataIndex: 'warehouse_location',
+        width: 140,
+        minWidth: 140,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
+        render: (_, r) =>
+          r.warehouse_location != null && r.warehouse_location !== '' ? String(r.warehouse_location) : '-',
+      },
       {
         title: t(`${P}.col.stockSnapshot`),
+        key: 'stock_snapshot',
         width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         render: (_, record) =>
           (record.stock_quantity ?? 0) < (record.safety_stock ?? 5) ? (
@@ -335,6 +401,7 @@ const SparePartsPage: React.FC = () => {
       },
       {
         title: t(`${P}.col.lifecycle`),
+        key: 'lifecycle',
         dataIndex: 'lifecycle_stage',
         fixed: 'right',
         hideInSearch: true,
@@ -342,18 +409,64 @@ const SparePartsPage: React.FC = () => {
           <ListUniLifecycleCell lifecycle={getSparePartInventoryLifecycle(record as Record<string, unknown>, t)} />
         ),
       },
-    ],
+    ], SALES_DOC_LIST_FIELD_RANK),
     [t],
   );
 
   const alertColumns: ProColumns<SpareAlertRow>[] = useMemo(
-    () => [
-      { title: t(`${P}.col.partNo`), dataIndex: 'part_no', width: 120 },
-      { title: t(`${P}.col.partName`), dataIndex: 'part_name', width: 180, ellipsis: true },
-      { title: t(`${P}.col.stockQuantity`), dataIndex: 'stock_quantity', width: 100, align: 'right' },
-      { title: t(`${P}.col.safetyStock`), dataIndex: 'safety_stock', width: 100, align: 'right' },
-      { title: t(`${P}.col.warehouseLocation`), dataIndex: 'warehouse_location', width: 140 },
-    ],
+    () => alignProColumns<SpareAlertRow>([
+      {
+        title: t(`${P}.col.partNo`),
+        dataIndex: 'part_no',
+        width: 140,
+        minWidth: 140,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
+        render: (_, r) => (r.part_no != null && r.part_no !== '' ? String(r.part_no) : '-'),
+      },
+      {
+        title: t(`${P}.col.partName`),
+        dataIndex: 'part_name',
+        minWidth: 160,
+        uniTablePrimaryFlex: true,
+        uniTableRemainderFlex: true,
+        resizable: false,
+        ellipsis: true,
+        render: (_, r) => (r.part_name != null && r.part_name !== '' ? String(r.part_name) : '-'),
+      },
+      {
+        title: t(`${P}.col.stockQuantity`),
+        dataIndex: 'stock_quantity',
+        width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
+        align: 'right',
+        render: (_, r) => (r.stock_quantity != null ? String(r.stock_quantity) : '-'),
+      },
+      {
+        title: t(`${P}.col.safetyStock`),
+        dataIndex: 'safety_stock',
+        width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
+        align: 'right',
+        render: (_, r) => (r.safety_stock != null ? String(r.safety_stock) : '-'),
+      },
+      {
+        title: t(`${P}.col.warehouseLocation`),
+        dataIndex: 'warehouse_location',
+        width: 140,
+        minWidth: 140,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
+        render: (_, r) =>
+          r.warehouse_location != null && r.warehouse_location !== '' ? String(r.warehouse_location) : '-',
+      },
+    ], SALES_DOC_LIST_FIELD_RANK),
     [t],
   );
 
@@ -371,7 +484,7 @@ const SparePartsPage: React.FC = () => {
               <UniTable<SparePart>
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.spareParts)}
-                columnPersistenceId="apps.kuaizhizao.pages.equipment-management.spare-parts.master"
+                columnPersistenceId="apps.kuaizhizao.pages.equipment-management.spare-parts.master-width-v2"
                 actionRef={masterActionRef}
                 rowKey="id"
                 columns={masterColumns}
@@ -407,7 +520,7 @@ const SparePartsPage: React.FC = () => {
             label: t(`${P}.tab.inventory`),
             children: (
               <UniTable<SpareInventoryRow>
-                columnPersistenceId="apps.kuaizhizao.pages.equipment-management.spare-parts.inventory"
+                columnPersistenceId="apps.kuaizhizao.pages.equipment-management.spare-parts.inventory-width-v2"
                 actionRef={inventoryActionRef}
                 rowKey={(r) => String(r.id ?? r.part_no)}
                 columns={inventoryColumns}
@@ -430,7 +543,7 @@ const SparePartsPage: React.FC = () => {
             label: t(`${P}.tab.alerts`),
             children: (
               <UniTable<SpareAlertRow>
-                columnPersistenceId="apps.kuaizhizao.pages.equipment-management.spare-parts.alerts"
+                columnPersistenceId="apps.kuaizhizao.pages.equipment-management.spare-parts.alerts-width-v2"
                 rowKey={(r) => String(r.part_no)}
                 columns={alertColumns}
                 search={false}

@@ -10,12 +10,12 @@ import React from 'react';
 import { Typography } from 'antd';
 import type { ProColumns } from '@ant-design/pro-components';
 import type { TFunction } from 'i18next';
+import type { InspectionPlanStepItem } from '../../../components/InspectionPlanStepEditor';
 import type { DefectLedgerItem } from '../../../services/quality-improvement';
 import {
   MaterialStackedCell,
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_IDENTITY_CLASS,
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_DEFAULTS } from '../../sales-management/shared/DocumentPushProgressBar';
 import { MarkerTag } from '../../../../../constants/statusBadges';
@@ -34,7 +34,12 @@ export const NC_SOURCE_INSPECTION_KEY = 'nc_source_inspection';
 
 const NC_SOURCE_INSPECTION_COLUMN_WIDTH = 150;
 
-/** 检验类型列统一 key → rank 10.5（单号后、第二业务叠列前） */
+/** 质检方案列表：检验步骤预览列 key → rank 20.15（类型后、版本前） */
+export const INSPECTION_PLAN_STEPS_KEY = 'inspection_plan_steps';
+
+/** 方案类型列宽：容纳「过程检验 (IPQC)」等最长文案，禁止 ellipsis 截断 */
+const INSPECTION_PLAN_TYPE_COLUMN_WIDTH = 144;
+
 export const QUALITY_INSPECTION_KIND_KEY = 'quality_inspection_kind';
 
 /** 第二业务列（伙伴/来源叠列）统一 key → rank 11 */
@@ -91,19 +96,120 @@ export function buildNcSourceInspectionStackedColumn<T extends object>(
   };
 }
 
+function sortInspectionPlanStepLabels(steps: InspectionPlanStepItem[] | undefined): string[] {
+  return (steps || [])
+    .slice()
+    .sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0))
+    .map((step) => String(step.inspection_item ?? '').trim())
+    .filter((text) => text.length > 0);
+}
+
+export function renderInspectionPlanStepsPreview(
+  steps: InspectionPlanStepItem[] | undefined,
+  t: TFunction,
+): React.ReactNode {
+  const labels = sortInspectionPlanStepLabels(steps);
+  if (labels.length === 0) return '-';
+  const preview = labels.slice(0, 2);
+  const restCount = labels.length - preview.length;
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        gap: 4,
+        minWidth: 0,
+        maxWidth: '100%',
+      }}
+    >
+      {preview.map((text, index) => (
+        <MarkerTag key={`${index}-${text}`}>{text}</MarkerTag>
+      ))}
+      {restCount > 0 ? (
+        <MarkerTag color="default">
+          {t('app.kuaizhizao.quality.plans.stepsAndMore', { count: restCount })}
+        </MarkerTag>
+      ) : null}
+    </div>
+  );
+}
+
+/** 质检方案列表：检验步骤列（余量列，吃掉视口剩余宽度；禁止 filler / max 上限） */
+export function buildInspectionPlanStepsColumn<T extends object>(t: TFunction): ProColumns<T> {
+  return {
+    title: t('app.kuaizhizao.quality.plans.columns.inspectionSteps'),
+    key: INSPECTION_PLAN_STEPS_KEY,
+    dataIndex: INSPECTION_PLAN_STEPS_KEY,
+    minWidth: 160,
+    uniTablePrimaryFlex: true,
+    uniTableRemainderFlex: true,
+    resizable: false,
+    ellipsis: false,
+    hideInSearch: true,
+    onCell: () => ({ style: { whiteSpace: 'normal' } }),
+    render: (_, record) =>
+      renderInspectionPlanStepsPreview(
+        (record as { steps?: InspectionPlanStepItem[] }).steps,
+        t,
+      ),
+  };
+}
+
+/** 质检方案列表：方案类型列（定宽完整展示 IQC/IPQC/FQC 文案） */
+export function buildInspectionPlanTypeColumn<T extends object>(
+  t: TFunction,
+  render: ProColumns<T>['render'],
+  options?: { sorter?: boolean },
+): ProColumns<T> {
+  return {
+    title: t('app.kuaizhizao.quality.plans.columns.planType'),
+    dataIndex: 'plan_type',
+    width: INSPECTION_PLAN_TYPE_COLUMN_WIDTH,
+    minWidth: INSPECTION_PLAN_TYPE_COLUMN_WIDTH,
+    uniTableKeepWidth: true,
+    resizable: false,
+    ellipsis: false,
+    sorter: options?.sorter ?? false,
+    hideInSearch: true,
+    render,
+  };
+}
+
 export function stackedPrimarySecondaryColumn<T extends object>(
   title: string,
   key: string,
   primaryKeys: string[],
   secondaryKeys: string[],
-  options?: { dataIndex?: string; fixed?: 'left' | 'right' },
+  options?: {
+    dataIndex?: string;
+    fixed?: 'left' | 'right';
+    minWidth?: number;
+    /** keep=ContentKeepWidth（默认）；remainder=唯一余量列 */
+    widthMode?: 'keep' | 'remainder';
+  },
 ): ProColumns<T> {
+  const minWidth = options?.minWidth ?? 200;
+  const remainder = options?.widthMode === 'remainder';
   return {
     title,
     key,
     dataIndex: options?.dataIndex ?? primaryKeys[0],
     fixed: options?.fixed,
-    ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+    ...(remainder
+      ? {
+          minWidth,
+          uniTablePrimaryFlex: true,
+          uniTableRemainderFlex: true,
+        }
+      : {
+          width: minWidth,
+          minWidth,
+          uniTableKeepWidth: true,
+          uniTablePrimaryFlex: false,
+        }),
+    resizable: false,
+    ellipsis: false,
     render: (_, record) => (
       <UniTableStackedPrimaryCell
         record={record as Record<string, unknown>}
@@ -187,6 +293,9 @@ export function buildQualityInspectionListPushProgressColumn<T extends object>(
 export const qualifiedQuantityColumnProps = {
   align: 'right' as const,
   width: 100,
+  minWidth: 100,
+  uniTableKeepWidth: true,
+  resizable: false,
   render: (_: unknown, record: Record<string, unknown>) =>
     renderQualifiedQuantity(record.qualified_quantity ?? record.qualifiedQuantity, record),
 };
@@ -194,6 +303,9 @@ export const qualifiedQuantityColumnProps = {
 export const unqualifiedQuantityColumnProps = {
   align: 'right' as const,
   width: 100,
+  minWidth: 100,
+  uniTableKeepWidth: true,
+  resizable: false,
   render: (_: unknown, record: Record<string, unknown>) =>
     renderUnqualifiedQuantity(record.unqualified_quantity ?? record.unqualifiedQuantity, record),
 };
@@ -312,7 +424,12 @@ export function buildQualityInspectionListMaterialColumn<T extends object>(t: TF
     // 与 GLOBAL_DOC_LIST_FIELD_RANK.quality_inspection_material 对齐（勿用 material_name）
     key: 'quality_inspection_material',
     dataIndex: 'material_name',
-    ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+    // 检验单据无行项目明细：物料叠列吃掉视口剩余（RemainderFlex）
+    minWidth: 200,
+    uniTablePrimaryFlex: true,
+    uniTableRemainderFlex: true,
+    resizable: false,
+    ellipsis: false,
     render: (_, r) => {
       const row = r as Record<string, unknown>;
       return (
@@ -348,6 +465,9 @@ export function buildQualityInspectionListQuantityResultColumns<T extends object
       title: t('app.kuaizhizao.quality.common.columns.inspectionQty'),
       dataIndex: 'inspection_quantity',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       align: 'right',
       sorter: true,
       hideInSearch: true,

@@ -8,13 +8,9 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import React, { useRef, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Space, theme as AntdTheme } from 'antd';
-import { DeleteOutlined, CalendarOutlined } from '@ant-design/icons';
+import { App, Popconfirm, Button, theme as AntdTheme } from 'antd';
+import { CalendarOutlined } from '@ant-design/icons';
 import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
-import {
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-  UniTableStackedPrimaryCell,
-} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { buildDetailDrawerEditExtra } from '../../equipment-management/shared/equipmentMasterDataDetail';
@@ -26,6 +22,7 @@ import type { Holiday } from '../../../types/performance';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import {
   getPerformanceActiveValueEnum,
   renderActiveTag,
@@ -163,19 +160,16 @@ const HolidaysPage: React.FC = () => {
     const customFieldColumns = generateCustomFieldColumns();
     return alignProColumns<Holiday>([
     {
+      // 列稀疏：业务列不堆叠；审计叠列仍走 buildDocumentAuditColumns
       title: t('app.kuaizhizao.performance.holidays.columns.holidayName'),
-      key: 'performance_holiday_stacked',
       dataIndex: 'name',
-      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+      width: 160,
+      minWidth: 160,
+      uniTableKeepWidth: true,
+      resizable: false,
       fixed: 'left',
       sorter: true,
-      render: (_, r) => (
-        <UniTableStackedPrimaryCell
-          primary={String(r.name ?? '').trim() || '-'}
-          secondary={r.holidayDate ? String(r.holidayDate) : '-'}
-          secondaryCopyable={false}
-        />
-      ),
+      ellipsis: true,
     },
     {
       title: t('app.kuaizhizao.performance.holidays.columns.holidayDate'),
@@ -186,25 +180,21 @@ const HolidaysPage: React.FC = () => {
       resizable: false,
       valueType: 'date',
       sorter: true,
-      hideInTable: true,
     },
     {
-        title: t('app.kuaizhizao.performance.holidays.columns.holidayType'),
-        dataIndex: 'holidayType',
-        render: (_, record) => renderPerformanceTypeMarker(record?.holidayType),
-      width: 110,
-      minWidth: 110,
-      uniTableKeepWidth: true,
-      resizable: false,
+      title: t('app.kuaizhizao.performance.holidays.columns.holidayType'),
+      dataIndex: 'holidayType',
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       sorter: true,
       render: (_, r) => renderPerformanceTypeMarker(r.holidayType),
     },
     {
+      // 备注长短不一：唯一 RemainderFlex
       title: t('common.remark'),
       dataIndex: 'description',
-      width: 200,
-      minWidth: 200,
-      uniTableKeepWidth: true,
+      minWidth: 160,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
       resizable: false,
       ellipsis: true,
       hideInSearch: true,
@@ -219,42 +209,42 @@ const HolidaysPage: React.FC = () => {
     },
     ...buildDocumentAuditColumns<Holiday>(t),
     {
-      title: t('common.status'),
+      title: t('common.enabled'),
       dataIndex: 'isActive',
-      width: 88,
-      minWidth: 88,
-      uniTableKeepWidth: true,
-      resizable: false,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       hideInSearch: true,
       render: (_, r) => renderActiveTag(t, r.isActive),
     },
     {
       title: t('common.actions'),
       key: 'action',
-      valueType: 'option',
       fixed: 'right',
       hideInSearch: true,
-      render: (_, record) => (
-        <Space>
-          {holidayPerms.canRead ? (
-            <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)}>
-              {t('common.detail')}
-            </Button>
-          ) : null}
-          {holidayPerms.canUpdate ? (
-            <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)}>
-              {t('common.edit')}
-            </Button>
-          ) : null}
-          {holidayPerms.canDelete ? (
-            <Popconfirm key="delete" {...rowActionKind('delete')} title={t('app.kuaizhizao.performance.holidays.messages.deleteConfirm')} onConfirm={() => handleDelete(record)}>
-              <Button type="link" danger size="small" icon={<DeleteOutlined />}>
-                {t('common.delete')}
-              </Button>
-            </Popconfirm>
-          ) : null}
-        </Space>
-      ),
+      render: (_, record) => {
+        const parts: React.ReactNode[] = [];
+        if (holidayPerms.canRead) {
+          parts.push(
+            <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)} />,
+          );
+        }
+        if (holidayPerms.canUpdate) {
+          parts.push(
+            <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)} />,
+          );
+        }
+        if (holidayPerms.canDelete) {
+          parts.push(
+            <Popconfirm
+              key="delete"
+              title={t('app.kuaizhizao.performance.holidays.messages.deleteConfirm')}
+              onConfirm={() => handleDelete(record)}
+            >
+              <Button {...rowActionKind('delete')} />
+            </Popconfirm>,
+          );
+        }
+        return parts;
+      },
     },
     ], SALES_DOC_LIST_FIELD_RANK);
   }, [t, customFields, holidayPerms]);
@@ -266,7 +256,7 @@ const HolidaysPage: React.FC = () => {
           headerTitle={t('app.kuaizhizao.performance.holidays.pageTitle')}
           actionRef={actionRef}
           columns={columns}
-          columnPersistenceId="apps.kuaizhizao.pages.performance.holidays.v1"
+          columnPersistenceId="apps.kuaizhizao.pages.performance.holidays.v3"
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.holidays')}
           request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {

@@ -40,6 +40,8 @@ import {
   normalizeEquipmentListResponse,
   resolveAssetWorkflowListParams,
 } from '../../../utils/equipmentListCore';
+import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 
 const RESOURCE = 'kuaizhizao:tool-calibration';
 const P = 'app.kuaizhizao.toolCalibration';
@@ -180,21 +182,33 @@ const ToolCalibrationsPage: React.FC = () => {
       {
         title: t(`${P}.colToolCode`),
         dataIndex: 'tool_code',
-        width: 120,
-        sorter: true,
+        hideInTable: true,
         search: { order: 30 } as ProColumns['search'],
+      },
+      {
+        title: t(`${P}.colToolName`),
+        dataIndex: 'tool_name',
+        minWidth: 200,
+        uniTablePrimaryFlex: true,
+        uniTableRemainderFlex: true,
+        resizable: false,
+        ellipsis: false,
+        sorter: true,
+        hideInSearch: true,
         render: (_, r) => (
-          <Typography.Text copyable={{ text: String(r.tool_code ?? '') }} ellipsis>
-            {r.tool_code ?? '-'}
-          </Typography.Text>
+          <UniTableStackedPrimaryCell
+            primary={String(r.tool_name ?? '') || '-'}
+            secondary={String(r.tool_code ?? '') || '-'}
+          />
         ),
       },
-      { title: t(`${P}.colToolName`), dataIndex: 'tool_name', width: 180, ellipsis: true, sorter: true, hideInSearch: true },
       {
         title: t(`${P}.colCalibrationDate`),
         dataIndex: 'calibration_date',
         width: 132,
+        minWidth: 132,
         uniTableKeepWidth: true,
+        resizable: false,
         sorter: true,
         hideInSearch: true,
         render: (_, r) => (r.calibration_date ? formatDateTime(r.calibration_date, 'YYYY-MM-DD') : '-'),
@@ -203,7 +217,7 @@ const ToolCalibrationsPage: React.FC = () => {
         title: t(`${P}.colResult`),
         key: 'equipment_calibration_result',
         dataIndex: 'result',
-        width: 100,
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         sorter: true,
         hideInSearch: true,
         render: (_, r) => {
@@ -216,6 +230,10 @@ const ToolCalibrationsPage: React.FC = () => {
         title: t(`${P}.colCertificateNo`),
         dataIndex: 'certificate_no',
         width: 140,
+        minWidth: 140,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
         sorter: true,
         hideInSearch: true,
         render: (_, r) => (
@@ -228,17 +246,41 @@ const ToolCalibrationsPage: React.FC = () => {
         title: t(`${P}.colExpiryDate`),
         dataIndex: 'expiry_date',
         width: 132,
+        minWidth: 132,
         uniTableKeepWidth: true,
+        resizable: false,
         sorter: true,
         hideInSearch: true,
         render: (_, r) => (r.expiry_date ? formatDateTime(r.expiry_date, 'YYYY-MM-DD') : '-'),
       },
-      { title: t(`${P}.colCalibrationOrg`), dataIndex: 'calibration_org', width: 140, sorter: true, hideInSearch: true },
-      { title: t('common.remark'), dataIndex: 'remark', ellipsis: true, hideInSearch: true },
+      {
+        title: t(`${P}.colCalibrationOrg`),
+        dataIndex: 'calibration_org',
+        width: 140,
+        minWidth: 140,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
+        sorter: true,
+        hideInSearch: true,
+        render: (_, r) =>
+          r.calibration_org != null && r.calibration_org !== '' ? String(r.calibration_org) : '-',
+      },
+      {
+        title: t('common.remark'),
+        dataIndex: 'remark',
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
+        hideInSearch: true,
+        render: (_, r) => (r.remark != null && r.remark !== '' ? String(r.remark) : '-'),
+      },
       ...buildDocumentAuditColumns<ToolCalibration>(t),
       {
         title: t('common.actions'),
-        valueType: 'option',
+        key: 'option',
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) =>
@@ -269,7 +311,7 @@ const ToolCalibrationsPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.toolCalibrations)}
         headerTitle={t(`${P}.title`)}
-        columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-calibrations-equip-rank-v1"
+        columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-calibrations-width-v2"
         actionRef={actionRef}
         enableRowSelection
         selectedRowKeys={selectedRowKeys}

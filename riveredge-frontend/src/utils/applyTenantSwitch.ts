@@ -20,6 +20,9 @@ export function getTenantSwitchGeneration(): number {
   return tenantSwitchGeneration;
 }
 
+/** 组织选择器列表与当前租户无关（超管=平台列表，普通用户=账号可切换列表），清业务缓存后必须立刻回填 */
+const TENANT_SELECTOR_OPTIONS_QUERY_ROOT = 'tenant-selector-options';
+
 /** 切换租户后使侧栏/业务 Query 与主题语言按新租户重新拉取 */
 export async function applyTenantSwitchSideEffects(
   queryClient: QueryClient,
@@ -27,11 +30,20 @@ export async function applyTenantSwitchSideEffects(
 ): Promise<void> {
   const generation = ++tenantSwitchGeneration;
 
+  const preservedTenantSelectorOptions = queryClient
+    .getQueriesData<unknown>({ queryKey: [TENANT_SELECTOR_OPTIONS_QUERY_ROOT] })
+    .filter(([, data]) => data != null);
+
   await queryClient.cancelQueries();
   if (generation !== tenantSwitchGeneration) return;
 
   abandonAppShellRefreshInFlight();
   queryClient.clear();
+
+  for (const [queryKey, data] of preservedTenantSelectorOptions) {
+    queryClient.setQueryData(queryKey, data);
+  }
+
   useGlobalStore.getState().incrementApplicationMenuVersion();
 
   useUserPreferenceStore.getState().rehydrateFromStorage();

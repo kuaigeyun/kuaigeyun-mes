@@ -1643,7 +1643,10 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
         total = await query.count()
         pickings = await query.offset(skip).limit(limit).order_by(order_clause)
         from tortoise.functions import Count, Sum
-        from apps.kuaizhizao.services.document_action_policy.enricher import enrich_outbound_hub_list_capabilities
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            batch_document_item_material_previews,
+            enrich_outbound_hub_list_capabilities,
+        )
         from apps.kuaizhizao.services.document_lifecycle_service import get_production_picking_lifecycle
 
         picking_ids = [int(p.id) for p in pickings]
@@ -1695,11 +1698,15 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
         picking_audit_required = await BusinessConfigService().check_audit_required(
             tenant_id, "production_picking"
         )
+        item_previews = await batch_document_item_material_previews(
+            tenant_id, ProductionPickingItem, "picking_id", picking_ids
+        )
         rows = enrich_outbound_hub_list_capabilities(
             pickings,
             list_rows,
             "production_picking",
             item_counts={pid: v["total_items"] for pid, v in qty_by_id.items()},
+            item_previews=item_previews,
             audit_required=picking_audit_required,
         )
         enriched_qty: List[ProductionPickingListResponse] = []
@@ -3661,6 +3668,7 @@ class ProductionReturnService(AppBaseService[ProductionReturn]):
         rets = await query.offset(skip).limit(limit).order_by("-created_at")
         from apps.kuaizhizao.services.document_action_policy.enricher import (
             batch_document_item_counts,
+            batch_document_item_material_previews,
             batch_document_item_quantity_sums,
             enrich_inbound_hub_list_capabilities,
         )
@@ -3672,12 +3680,16 @@ class ProductionReturnService(AppBaseService[ProductionReturn]):
         quantity_sums = await batch_document_item_quantity_sums(
             tenant_id, ProductionReturnItem, "return_id", "return_quantity", return_ids
         )
+        item_previews = await batch_document_item_material_previews(
+            tenant_id, ProductionReturnItem, "return_id", return_ids
+        )
         return enrich_inbound_hub_list_capabilities(
             rets,
             responses,
             "production_return",
             item_counts=item_counts,
             quantity_sums=quantity_sums,
+            item_previews=item_previews,
         )
 
     async def update_production_return(
@@ -4211,16 +4223,25 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
         receipts = await query.offset(skip).limit(limit).order_by('-created_at')
         from apps.kuaizhizao.services.document_action_policy.enricher import (
             batch_document_item_counts,
+            batch_document_item_material_previews,
             enrich_inbound_hub_list_capabilities,
         )
         from apps.kuaizhizao.models.finished_goods_receipt_item import FinishedGoodsReceiptItem
 
         responses = [FinishedGoodsReceiptResponse.model_validate(receipt) for receipt in receipts]
+        receipt_ids = [r.id for r in receipts]
         item_counts = await batch_document_item_counts(
-            tenant_id, FinishedGoodsReceiptItem, "receipt_id", [r.id for r in receipts]
+            tenant_id, FinishedGoodsReceiptItem, "receipt_id", receipt_ids
+        )
+        item_previews = await batch_document_item_material_previews(
+            tenant_id, FinishedGoodsReceiptItem, "receipt_id", receipt_ids
         )
         responses = enrich_inbound_hub_list_capabilities(
-            receipts, responses, "finished_goods", item_counts=item_counts
+            receipts,
+            responses,
+            "finished_goods",
+            item_counts=item_counts,
+            item_previews=item_previews,
         )
         return await enrich_production_receipts_with_customer(tenant_id, receipts, responses)
 
@@ -5559,6 +5580,7 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         deliveries = await query.offset(skip).limit(limit).order_by(order_clause)
         from apps.kuaizhizao.services.document_action_policy.enricher import (
             batch_document_item_counts,
+            batch_document_item_material_previews,
             enrich_outbound_hub_list_capabilities,
         )
         from apps.kuaizhizao.services.document_lifecycle_service import get_sales_delivery_lifecycle
@@ -5569,8 +5591,12 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             # 列表与详情共用生命周期计算，避免出库 Hub 列表显示「生命周期缺失」
             resp.lifecycle = get_sales_delivery_lifecycle(delivery, milestones=[])
             out.append(resp)
+        delivery_ids = [int(d.id) for d in deliveries]
         item_counts = await batch_document_item_counts(
-            tenant_id, SalesDeliveryItem, "delivery_id", [int(d.id) for d in deliveries]
+            tenant_id, SalesDeliveryItem, "delivery_id", delivery_ids
+        )
+        item_previews = await batch_document_item_material_previews(
+            tenant_id, SalesDeliveryItem, "delivery_id", delivery_ids
         )
         from core.services.approval.audit_record_enricher import enrich_items
 
@@ -5582,6 +5608,7 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             out,
             "sales_delivery",
             item_counts=item_counts,
+            item_previews=item_previews,
             audit_required=delivery_audit_required,
         ))
         return rows, total
@@ -8721,12 +8748,19 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
             out.append(resp)
         from apps.kuaizhizao.services.document_action_policy.enricher import (
             batch_document_item_counts,
+            batch_document_item_material_previews,
             enrich_inbound_hub_list_capabilities,
         )
+        receipt_ids = [r.id for r in receipts]
         item_counts = await batch_document_item_counts(
-            tenant_id, PurchaseReceiptItem, "receipt_id", [r.id for r in receipts]
+            tenant_id, PurchaseReceiptItem, "receipt_id", receipt_ids
         )
-        return enrich_inbound_hub_list_capabilities(receipts, out, "purchase", item_counts=item_counts)
+        item_previews = await batch_document_item_material_previews(
+            tenant_id, PurchaseReceiptItem, "receipt_id", receipt_ids
+        )
+        return enrich_inbound_hub_list_capabilities(
+            receipts, out, "purchase", item_counts=item_counts, item_previews=item_previews
+        )
 
     async def confirm_receipt(
         self,
@@ -13199,18 +13233,27 @@ class OtherInboundService(AppBaseService[OtherInbound]):
         inbounds = await query.offset(skip).limit(limit).order_by(order_clause)
         from apps.kuaizhizao.services.document_action_policy.enricher import (
             batch_document_item_counts,
+            batch_document_item_material_previews,
             enrich_inbound_hub_list_capabilities,
         )
         responses = [OtherInboundListResponse.model_validate(r) for r in inbounds]
+        inbound_ids = [r.id for r in inbounds]
         item_counts = await batch_document_item_counts(
-            tenant_id, OtherInboundItem, "inbound_id", [r.id for r in inbounds]
+            tenant_id, OtherInboundItem, "inbound_id", inbound_ids
+        )
+        item_previews = await batch_document_item_material_previews(
+            tenant_id, OtherInboundItem, "inbound_id", inbound_ids
         )
         from apps.kuaizhizao.services.document_lifecycle_service import get_other_inbound_lifecycle
 
         for inbound, resp in zip(inbounds, responses):
             resp.lifecycle = get_other_inbound_lifecycle(inbound, milestones=[])
         enriched = enrich_inbound_hub_list_capabilities(
-            inbounds, responses, "other_inbound", item_counts=item_counts
+            inbounds,
+            responses,
+            "other_inbound",
+            item_counts=item_counts,
+            item_previews=item_previews,
         )
         return enriched, total
 
@@ -13742,6 +13785,7 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
         outbounds = await query.offset(skip).limit(limit).order_by(order_clause)
         from apps.kuaizhizao.services.document_action_policy.enricher import (
             batch_document_item_counts,
+            batch_document_item_material_previews,
             enrich_outbound_hub_list_capabilities,
         )
         from apps.kuaizhizao.services.document_lifecycle_service import get_other_outbound_lifecycle
@@ -13751,8 +13795,12 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
             resp = OtherOutboundListResponse.model_validate(outbound)
             resp.lifecycle = get_other_outbound_lifecycle(outbound, milestones=[])
             out.append(resp)
+        outbound_ids = [int(o.id) for o in outbounds]
         item_counts = await batch_document_item_counts(
-            tenant_id, OtherOutboundItem, "outbound_id", [int(o.id) for o in outbounds]
+            tenant_id, OtherOutboundItem, "outbound_id", outbound_ids
+        )
+        item_previews = await batch_document_item_material_previews(
+            tenant_id, OtherOutboundItem, "outbound_id", outbound_ids
         )
         other_audit_required = await self.business_config_service.check_audit_required(
             tenant_id, "other_outbound"
@@ -13762,6 +13810,7 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
             out,
             "other_outbound",
             item_counts=item_counts,
+            item_previews=item_previews,
             audit_required=other_audit_required,
         )
         return enriched, total
@@ -14168,6 +14217,7 @@ class MaterialBorrowService(AppBaseService[MaterialBorrow]):
         borrows = await query.offset(skip).limit(limit).order_by(order_clause)
         from apps.kuaizhizao.services.document_action_policy.enricher import (
             batch_document_item_counts,
+            batch_document_item_material_previews,
             enrich_outbound_hub_list_capabilities,
         )
         from apps.kuaizhizao.services.document_lifecycle_service import get_material_borrow_lifecycle
@@ -14177,8 +14227,12 @@ class MaterialBorrowService(AppBaseService[MaterialBorrow]):
             resp = MaterialBorrowListResponse.model_validate(borrow)
             resp.lifecycle = get_material_borrow_lifecycle(borrow, milestones=[])
             out.append(resp)
+        borrow_ids = [int(b.id) for b in borrows]
         item_counts = await batch_document_item_counts(
-            tenant_id, MaterialBorrowItem, "borrow_id", [int(b.id) for b in borrows]
+            tenant_id, MaterialBorrowItem, "borrow_id", borrow_ids
+        )
+        item_previews = await batch_document_item_material_previews(
+            tenant_id, MaterialBorrowItem, "borrow_id", borrow_ids
         )
         borrow_audit_required = await BusinessConfigService().check_audit_required(
             tenant_id, "material_borrow"
@@ -14188,6 +14242,7 @@ class MaterialBorrowService(AppBaseService[MaterialBorrow]):
             out,
             "material_borrow",
             item_counts=item_counts,
+            item_previews=item_previews,
             audit_required=borrow_audit_required,
         )
         return enriched, total
@@ -14550,6 +14605,7 @@ class MaterialReturnService(AppBaseService[MaterialReturn]):
         returns = await query.offset(skip).limit(limit).order_by(order_clause)
         from apps.kuaizhizao.services.document_action_policy.enricher import (
             batch_document_item_counts,
+            batch_document_item_material_previews,
             enrich_inbound_hub_list_capabilities,
         )
         from apps.kuaizhizao.models.material_return_item import MaterialReturnItem
@@ -14558,11 +14614,19 @@ class MaterialReturnService(AppBaseService[MaterialReturn]):
         responses = [MaterialReturnListResponse.model_validate(r) for r in returns]
         for return_obj, resp in zip(returns, responses):
             resp.lifecycle = get_material_return_lifecycle(return_obj, milestones=[])
+        return_ids = [r.id for r in returns]
         item_counts = await batch_document_item_counts(
-            tenant_id, MaterialReturnItem, "return_id", [r.id for r in returns]
+            tenant_id, MaterialReturnItem, "return_id", return_ids
+        )
+        item_previews = await batch_document_item_material_previews(
+            tenant_id, MaterialReturnItem, "return_id", return_ids
         )
         enriched = enrich_inbound_hub_list_capabilities(
-            returns, responses, "material_return", item_counts=item_counts
+            returns,
+            responses,
+            "material_return",
+            item_counts=item_counts,
+            item_previews=item_previews,
         )
         return enriched, total
 

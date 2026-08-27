@@ -1,0 +1,1 @@
+import{j as a}from"./vendor-CkcAb5Pv.js";import{aD as r,N as t}from"./clientRelease-DeVS-zlp.js";const p=()=>{const{id:e}=r();return e?a.jsx(t,{to:`/apps/kuaiplm/knowledge-base?articleId=${e}`,replace:!0}):a.jsx(t,{to:"/apps/kuaiplm/knowledge-base",replace:!0})};export{p as default};

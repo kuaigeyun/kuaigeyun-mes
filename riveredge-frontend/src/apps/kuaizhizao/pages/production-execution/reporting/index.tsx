@@ -48,10 +48,7 @@ import {
 import { UniTable, type UniTableRequestMeta } from '../../../../../components/uni-table';
 import { UniAuditBatchMenuButton } from '../../../../../components/uni-batch';
 import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
-import {
-  UniTableStackedPrimaryCell,
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-} from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import {
   ListPageTemplate,
@@ -1419,7 +1416,12 @@ const ReportingPage: React.FC = () => {
       title: t('app.kuaizhizao.workReporting.colWorkOrderStacked'),
       key: 'workOrderStacked',
       dataIndex: 'work_order_code',
-      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+      // 无行项目明细：工单叠列吃掉视口剩余（RemainderFlex）
+      minWidth: 200,
+      uniTablePrimaryFlex: true,
+      uniTableRemainderFlex: true,
+      resizable: false,
+      ellipsis: false,
       fixed: 'left',
       sorter: true,
       hideInSearch: false,
@@ -1447,6 +1449,9 @@ const ReportingPage: React.FC = () => {
       title: t('app.kuaizhizao.workReporting.colOperation'),
       dataIndex: 'operation_name',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       sorter: true,
       hideInSearch: false,
@@ -1455,6 +1460,9 @@ const ReportingPage: React.FC = () => {
       title: t('app.kuaizhizao.workReporting.colWorker'),
       dataIndex: 'worker_name',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       sorter: true,
       hideInSearch: false,
@@ -1465,6 +1473,9 @@ const ReportingPage: React.FC = () => {
       title: t('app.kuaizhizao.workReporting.colQualifiedQty'),
       dataIndex: 'qualified_quantity',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       align: 'right',
       sorter: true,
       hideInSearch: true,
@@ -1478,6 +1489,9 @@ const ReportingPage: React.FC = () => {
       title: t('app.kuaizhizao.workReporting.colUnqualifiedQty'),
       dataIndex: 'unqualified_quantity',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       align: 'right',
       sorter: true,
       hideInSearch: true,
@@ -1491,6 +1505,9 @@ const ReportingPage: React.FC = () => {
       title: t('app.kuaizhizao.workReporting.colReportedQty'),
       dataIndex: 'reported_quantity',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       align: 'right',
       sorter: true,
       hideInSearch: true,
@@ -1499,6 +1516,9 @@ const ReportingPage: React.FC = () => {
       title: t('app.kuaizhizao.workReporting.colWorkHours'),
       dataIndex: 'work_hours',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       align: 'right',
       sorter: true,
       hideInSearch: true,
@@ -1508,7 +1528,9 @@ const ReportingPage: React.FC = () => {
       key: 'work_start_end_stacked',
       dataIndex: 'work_start_time',
       width: 148,
+      minWidth: 148,
       uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       render: (_, record) => {
         const startRaw = record.work_start_time ?? record.workStartTime
@@ -1529,7 +1551,9 @@ const ReportingPage: React.FC = () => {
       title: t('app.kuaizhizao.workReporting.colReportedAt'),
       dataIndex: 'reported_at',
       width: 148,
+      minWidth: 148,
       uniTableKeepWidth: true,
+      resizable: false,
       sorter: true,
       hideInSearch: true,
       render: (_, record) => {
@@ -1562,6 +1586,7 @@ const ReportingPage: React.FC = () => {
     ...reportingCustomFieldColumns,
     {
       title: t('common.actions'),
+      key: 'option',
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) => renderReportingRowActionNodes(record),
@@ -1635,7 +1660,7 @@ const ReportingPage: React.FC = () => {
         headerTitle={t('app.kuaizhizao.menu.production-execution.reporting')}
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.reporting)}
-        columnPersistenceId="apps.kuaizhizao.pages.production-execution.reporting.work-start-end-v1"
+        columnPersistenceId="apps.kuaizhizao.pages.production-execution.reporting-width-v1"
         actionRef={actionRef}
         rowKey="id"
         columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}

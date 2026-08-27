@@ -30,6 +30,7 @@ import { supplierApi, getUserOptions, getDictionaryOptions } from '../../../serv
 import { getDictionaryLabelMapSync } from '../../../../../services/dataDictionaryCache';
 import {
   buildMasterCrudActiveValueEnum,
+  buildMasterCrudActiveStatusColumn,
   MASTER_CRUD_PINNED_ACTIVE_FIELD,
   masterCrudCodeNameSearchColumns,
   masterCrudCreatedUpdatedColumns,
@@ -772,27 +773,7 @@ const SuppliersPage: React.FC = () => {
         allowClear: true,
       },
     },
-    {
-      title: t('common.status'),
-      dataIndex: 'isActive',
-      hideInTable: true,
-      order: 20,
-      valueType: 'select',
-      valueEnum: supplierActiveValueEnum,
-      fieldProps: { allowClear: true },
-    },
-    {
-      title: t('common.status'),
-      dataIndex: 'isActive',
-      width: 88,
-      minWidth: 88,
-      uniTableKeepWidth: true,
-      resizable: false,
-      hideInSearch: true,
-      valueEnum: supplierActiveValueEnum,
-      render: (_, record) => renderMasterActiveTag(t, record?.isActive, 'common.enabled', 'common.disabled'),
-      sorter: true,
-    },
+    ...buildMasterCrudActiveStatusColumn<Supplier>(t, { activeValueEnum: supplierActiveValueEnum }),
     {
       title: t('field.supplier.qualificationStatus'),
       dataIndex: 'qualificationStatus',
@@ -1000,7 +981,7 @@ const SuppliersPage: React.FC = () => {
       <UniTable<Supplier>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('masterData.suppliers')}
-        columnPersistenceId="apps.master-data.pages.supply-chain.suppliers.list-v2"
+        columnPersistenceId="apps.master-data.pages.supply-chain.suppliers.list-v3"
         actionRef={actionRef}
         columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
         request={async (params, sort, __filter, searchFormValues, meta?: UniTableRequestMeta) => {

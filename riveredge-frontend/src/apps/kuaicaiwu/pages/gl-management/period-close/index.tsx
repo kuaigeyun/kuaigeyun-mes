@@ -22,11 +22,6 @@ import {
 } from '../../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { glService } from '../../../services/gl';
-import {
-  DOCUMENT_LIST_HELP_KEYS,
-  ListPageHelpToggle,
-  RichDocumentHelpView,
-} from '../../../../../components/page-help-wiki';
 
 const NS = 'app.kuaicaiwu.gl.periodClose';
 
@@ -289,9 +284,6 @@ const PeriodClosePage: React.FC = () => {
 
   return (
     <ListPageTemplate>
-      <ListPageHelpToggle
-        helpContent={<RichDocumentHelpView docKey={DOCUMENT_LIST_HELP_KEYS.periodClose} />}
-      >
       <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
         <Card
           loading={loading}
@@ -447,7 +439,6 @@ const PeriodClosePage: React.FC = () => {
           </Card>
         ) : null}
       </Space>
-      </ListPageHelpToggle>
 
       <FormModalTemplate
         title={t(`${NS}.newTemplate`, { defaultValue: '新建转账模板' })}

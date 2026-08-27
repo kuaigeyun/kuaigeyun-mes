@@ -33,6 +33,13 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
   {
+    id: 'inspection-plan-copy-create',
+    date: '2026-08-27',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.inspection-plan-copy-create.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.inspection-plan-copy-create.description',
+  },
+  {
     id: 'fqc-linked-sales-order-detail-fix',
     date: '2026-08-26',
     type: 'fix',

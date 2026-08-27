@@ -21,7 +21,6 @@ import {
 import { UniTable, type UniTableRequestMeta } from '../../../../../components/uni-table';
 import {
   UniTableStackedPrimaryCell,
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { MaterialUnitSelect, prefetchMaterialsForUnitSelect } from '../../../../../components/material-unit-select';
 import { useTranslation } from 'react-i18next';
@@ -62,6 +61,7 @@ import {
 import { buildKuaizhizaoPullCreateMenuItems } from '../../../constants/documentActionRegistry';
 import { customerMaterialRegistrationApi } from '../../../services/customer-material-registration';
 import {formatDateBySiteSetting, formatDateTimeBySiteSetting, formatQuantity} from '../../../../../utils/format';
+import { renderWarehouseLineQuantity } from '../shared/warehouseListQuantity';
 import { formatApiErrorDetail } from '../../../../../services/api';
 import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import {
@@ -77,6 +77,11 @@ import {
   useWarehouseShowAmount,
 } from '../shared/warehouseAmountDisplay';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
+import {
+  DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+  renderDocumentLineMaterialsPreview,
+} from '../../sales-management/shared/documentLineMaterialsPreview';
 import InboundQuickPullModals, {
   type InboundQuickPullModalsRef,
 } from './InboundQuickPullModals';
@@ -1572,7 +1577,11 @@ const InboundPage: React.FC = () => {
       title: t('app.kuaizhizao.warehouseInbound.col.subjectDocNo'),
       key: 'receipt_code',
       dataIndex: ['receipt_code', 'return_code'],
-      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+      width: 200,
+      minWidth: 200,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: false,
       fixed: 'left',
       render: (_, record) => (
         <UniTableStackedPrimaryCell
@@ -1590,7 +1599,7 @@ const InboundPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.warehouseInbound.col.receiptType'),
       dataIndex: 'receipt_type',
-      width: 100,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       hideInSearch: true,
       valueEnum: inboundReceiptTypeMarkerValueEnum(t),
       render: (_, record) => renderInboundReceiptTypeMarkerTag(t, record.receipt_type),
@@ -1608,6 +1617,9 @@ const InboundPage: React.FC = () => {
       key: 'sourceDocNo',
       dataIndex: 'source_doc_no',
       width: 160,
+      minWidth: 160,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       hideInSearch: true,
       render: (_, record) => inboundSourceDocNo(record) || '-',
@@ -1619,22 +1631,27 @@ const InboundPage: React.FC = () => {
       ellipsis: true,
     },
     {
+      title: t('app.kuaizhizao.common.colLineMaterials'),
+      ...DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+      render: (_, record) => renderDocumentLineMaterialsPreview(record.items, t),
+    },
+    {
       title: t('app.kuaizhizao.warehouseInbound.col.totalQuantity'),
       dataIndex: 'total_quantity',
       width: 100,
-      align: 'right',
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       sorter: true,
-      render: formatQuantity,
+      render: (_, record) => formatQuantity(record.total_quantity),
     },
-    ...buildWarehouseTotalAmountListColumn<InboundOrder>(t, showAmount),
-    {
-      title: t('app.kuaizhizao.warehouseInbound.col.totalItems'),
-      dataIndex: 'total_items',
-      width: 100,
-      align: 'right',
-      sorter: true,
-      render: (v: number | null | undefined) => (v != null ? v : '-'),
-    },
+    ...buildWarehouseTotalAmountListColumn<InboundOrder>(t, showAmount).map((col) => ({
+      ...col,
+      width: 110,
+      minWidth: 110,
+      uniTableKeepWidth: true,
+      resizable: false,
+    })),
     {
       title: t('app.kuaizhizao.warehouseInbound.col.receiptProgress'),
       dataIndex: 'receipt_progress',
@@ -1665,15 +1682,22 @@ const InboundPage: React.FC = () => {
       title: t('app.kuaizhizao.warehouseInbound.col.warehouse'),
       dataIndex: 'warehouse_name',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       sorter: true,
+      render: (_, r) =>
+        r.warehouse_name != null && r.warehouse_name !== '' ? String(r.warehouse_name) : '-',
     },
     {
       title: t('app.kuaizhizao.warehouseInbound.col.receiver'),
       key: 'biz_time_operator',
       dataIndex: 'biz_time_operator',
       width: 148,
+      minWidth: 148,
       uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       sorter: true,
       render: (_, record) => (
@@ -1711,8 +1735,9 @@ const InboundPage: React.FC = () => {
     ...finishedGoodsReceiptCustomFieldColumns,
     {
       title: t('common.actions'),
-      width: 200,
+      key: 'option',
       fixed: 'right',
+      hideInSearch: true,
       render: (_, record) => {
         const posted = isInboundStockPosted(record);
         const confirmable = isInboundConfirmable(record);
@@ -1978,9 +2003,10 @@ const InboundPage: React.FC = () => {
           {
             title: t('app.kuaizhizao.warehouseInbound.col.returnQty'),
             dataIndex: 'return_quantity',
-            width: 100,
+            width: 120,
             align: 'right' as const,
-            render: formatQuantity,
+            render: (_: unknown, row: InboundOrderItem) =>
+              renderWarehouseLineQuantity(row.return_quantity, row.material_unit ?? row.unit),
           },
           { title: t('app.kuaizhizao.warehouseInbound.col.warehouseName'), dataIndex: 'warehouse_name', width: 120, ellipsis: true },
           { title: t('app.kuaizhizao.warehouseInbound.col.locationCode'), dataIndex: 'location_code', width: 100, ellipsis: true, render: (v: unknown) => (v ? String(v) : '—') },
@@ -2111,7 +2137,7 @@ const InboundPage: React.FC = () => {
         headerTitle={t('app.kuaizhizao.warehouseInbound.title')}
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.purchaseReceipt)}
-        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.inbound.v4"
+        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.inbound-width-v3"
         actionRef={actionRef}
         formRef={searchFormRef}
         rowKey={inboundRowKey}

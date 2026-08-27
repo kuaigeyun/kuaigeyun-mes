@@ -19,6 +19,7 @@ import { MasterDataDetailDrawer } from '../../shared/masterDataDetailDrawer';
 import { storageLocationApi, storageAreaApi } from '../../../services/warehouse';
 import {
   buildMasterCrudActiveValueEnum,
+  buildMasterCrudActiveStatusColumn,
   MASTER_CRUD_PINNED_ACTIVE_FIELD,
   MASTER_DATA_LIST_FIELD_RANK,
   masterCrudCodeNameSearchColumns,
@@ -633,29 +634,9 @@ const StorageLocationsPage: React.FC = () => {
     },
     // 插入自定义字段列
     ...customFieldColumns,
-    {
-      title: t('common.status'),
-      dataIndex: 'isActive',
-      hideInTable: true,
-      order: 20,
-      valueType: 'select',
-      valueEnum: storageLocationActiveValueEnum,
-      fieldProps: { allowClear: true },
-    },
-    {
-      title: t('common.status'),
-      dataIndex: 'isActive',
-      width: 88,
-      minWidth: 88,
-      uniTableKeepWidth: true,
-      resizable: false,
-      hideInSearch: true,
-      sorter: true,
-      valueEnum: storageLocationActiveValueEnum,
-      render: (_, record) => {
-        return renderMasterActiveTag(t, record?.isActive, 'common.enabled', 'common.disabled');
-      },
-    },
+    ...buildMasterCrudActiveStatusColumn<StorageLocation>(t, {
+      activeValueEnum: storageLocationActiveValueEnum,
+    }),
     ...masterCrudCreatedUpdatedColumns<StorageLocation>(t),
     {
       title: t('common.actions'),
@@ -740,7 +721,7 @@ const StorageLocationsPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<StorageLocation>
-        columnPersistenceId="apps.master-data.pages.warehouse.storage-locations.list-v1"
+        columnPersistenceId="apps.master-data.pages.warehouse.storage-locations.list-v2"
         actionRef={actionRef}
         columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
         request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {

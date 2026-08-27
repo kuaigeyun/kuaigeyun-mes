@@ -10,16 +10,10 @@ import { App, Select, theme } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { warehouseApi } from '../../../services/production';
 import { UniTable } from '../../../../../components/uni-table';
-import {
-  MaterialStackedCell,
-  UniTableStackedPrimaryCell,
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { LinkedDocumentCode } from '../../../../../components/linked-document-code';
 import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { StatusTag } from '../../../../../constants/statusBadges';
-import { formatBusinessDateOnly } from '../../../../../utils/format';
 import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
@@ -106,59 +100,49 @@ const LineSideWarehousePage: React.FC = () => {
       alignProColumns<LineSideInventoryItem>(
         [
           {
-            title: t('app.kuaizhizao.warehouseCommon.colMaterial'),
-            key: 'material_name',
-            dataIndex: 'material_name',
-            ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-            fixed: 'left',
-            render: (_, record) => (
-              <MaterialStackedCell
-                material_name={record.material_name}
-                material_code={record.material_code}
-                material_spec={record.material_spec}
-              />
-            ),
-          },
-          {
-            title: t('app.kuaizhizao.warehouseReports.colMaterialCode'),
+            title: t('app.kuaizhizao.warehouseCommon.colMaterialCode'),
             dataIndex: 'material_code',
-            hideInTable: true,
+            width: 120,
+            minWidth: 120,
+            uniTableKeepWidth: true,
+            resizable: false,
+            ellipsis: true,
+            fixed: 'left',
             sorter: true,
           },
           {
-            title: t('app.kuaizhizao.warehouseReports.colMaterialName'),
-            key: 'material_name_search',
+            title: t('app.kuaizhizao.warehouseCommon.colMaterialName'),
             dataIndex: 'material_name',
-            hideInTable: true,
+            minWidth: 160,
+            uniTableRemainderFlex: true,
+            uniTablePrimaryFlex: true,
+            resizable: false,
+            ellipsis: true,
           },
           {
             title: t(`${P}.colSpec`),
             dataIndex: 'material_spec',
-            hideInTable: true,
+            width: 140,
+            minWidth: 140,
+            uniTableKeepWidth: true,
+            resizable: false,
+            ellipsis: true,
+            hideInSearch: true,
+            render: (_, record) => String(record.material_spec ?? '').trim() || '-',
           },
           {
             title: t(`${P}.colLineSideWarehouse`),
             key: 'line_side_warehouse',
             dataIndex: 'warehouse_name',
-            width: 176,
-            minWidth: 176,
+            width: 180,
+            minWidth: 180,
             uniTableKeepWidth: true,
             resizable: false,
-            ellipsis: false,
+            ellipsis: true,
             sorter: true,
             render: (_, record) => {
               const wh = warehouseById.get(record.warehouse_id);
-              const secondary =
-                [wh?.workshop_name, wh?.work_center_name].filter(Boolean).join(' / ') ||
-                wh?.code ||
-                '-';
-              return (
-                <UniTableStackedPrimaryCell
-                  primary={String(record.warehouse_name || wh?.name || '-')}
-                  secondary={secondary}
-                  secondaryCopyable={Boolean(wh?.code && secondary === wh.code)}
-                />
-              );
+              return String(record.warehouse_name || wh?.name || '-');
             },
           },
           {
@@ -169,74 +153,64 @@ const LineSideWarehousePage: React.FC = () => {
             minWidth: 120,
             uniTableKeepWidth: true,
             resizable: false,
-            ellipsis: false,
+            ellipsis: true,
             sorter: true,
             render: (_, record) => {
               const batch = String(record.batch_no ?? '').trim();
-              const expiryText = record.expiry_date
-                ? formatBusinessDateOnly(record.expiry_date, '')
-                : '';
-              if (!batch && !expiryText) return '-';
+              return batch || '-';
+            },
+          },
+          {
+            title: t(`${P}.colAvailableQty`),
+            key: 'available_quantity',
+            width: 110,
+            minWidth: 110,
+            uniTableKeepWidth: true,
+            resizable: false,
+            align: 'right',
+            hideInSearch: true,
+            render: (_, record) => {
+              const avail = Number(record.quantity) - Number(record.reserved_quantity);
               return (
-                <UniTableStackedPrimaryCell
-                  primary={batch || '-'}
-                  secondary={expiryText ? t(`${P}.expiryLabel`, { date: expiryText }) : '-'}
-                  secondaryCopyable={false}
-                />
+                <span style={{ color: avail <= 0 ? token.colorError : token.colorSuccess }}>
+                  <QuantityWithUnitDisplay quantity={avail} unit={record.material_unit} />
+                </span>
               );
             },
           },
           {
-            title: t(`${P}.colAvailableStock`),
-            key: 'line_side_qty',
+            title: t('app.kuaizhizao.warehouseReports.colStockQty'),
             dataIndex: 'quantity',
-            width: 168,
-            minWidth: 168,
+            width: 110,
+            minWidth: 110,
             uniTableKeepWidth: true,
             resizable: false,
             align: 'right',
             sorter: true,
             render: (_, record) => {
               const qty = Number(record.quantity);
-              const reserved = Number(record.reserved_quantity);
-              const avail = qty - reserved;
               return (
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'flex-end',
-                    gap: 1,
-                    minWidth: 0,
-                  }}
-                >
-                  <span
-                    style={{
-                      color: avail <= 0 ? token.colorError : token.colorSuccess,
-                      fontWeight: 600,
-                    }}
-                  >
-                    <QuantityWithUnitDisplay quantity={avail} unit={record.material_unit} />
-                  </span>
-                  <span
-                    style={{
-                      fontSize: token.fontSizeSM,
-                      color: token.colorTextSecondary,
-                      lineHeight: 1.2,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <span style={{ color: qty <= 0 ? token.colorError : undefined }}>
-                      {t(`${P}.stockPrefix`)}{' '}
-                      <QuantityWithUnitDisplay quantity={qty} unit={record.material_unit} />
-                    </span>
-                    <span style={{ margin: '0 4px', opacity: 0.45 }}>/</span>
-                    <span style={{ color: reserved > 0 ? token.colorWarning : undefined }}>
-                      {t(`${P}.reservedPrefix`)}{' '}
-                      <QuantityWithUnitDisplay quantity={reserved} unit={record.material_unit} />
-                    </span>
-                  </span>
-                </div>
+                <span style={{ color: qty <= 0 ? token.colorError : undefined }}>
+                  <QuantityWithUnitDisplay quantity={qty} unit={record.material_unit} />
+                </span>
+              );
+            },
+          },
+          {
+            title: t(`${P}.colReservedQty`),
+            dataIndex: 'reserved_quantity',
+            width: 110,
+            minWidth: 110,
+            uniTableKeepWidth: true,
+            resizable: false,
+            align: 'right',
+            hideInSearch: true,
+            render: (_, record) => {
+              const reserved = Number(record.reserved_quantity);
+              return (
+                <span style={{ color: reserved > 0 ? token.colorWarning : undefined }}>
+                  <QuantityWithUnitDisplay quantity={reserved} unit={record.material_unit} />
+                </span>
               );
             },
           },
@@ -244,11 +218,11 @@ const LineSideWarehousePage: React.FC = () => {
             title: t(`${P}.colReservedWorkOrder`),
             key: 'reserved_work_order_code',
             dataIndex: 'work_order_code',
-            width: 160,
-            minWidth: 160,
+            width: 140,
+            minWidth: 140,
             uniTableKeepWidth: true,
             resizable: false,
-            ellipsis: false,
+            ellipsis: true,
             sorter: true,
             render: (_, record) => {
               const code = String(record.work_order_code ?? '').trim();
@@ -260,7 +234,7 @@ const LineSideWarehousePage: React.FC = () => {
                     documentType="work_order"
                     documentId={id}
                     code={code}
-                    ellipsis={false}
+                    ellipsis
                   />
                 );
               }
@@ -273,10 +247,6 @@ const LineSideWarehousePage: React.FC = () => {
             dataIndex: 'status',
             fixed: 'right',
             hideInSearch: true,
-            width: 88,
-            minWidth: 88,
-            uniTableKeepWidth: true,
-            resizable: false,
             render: (_, record) => {
               const { label, color } = resolveLineSideStatusDisplay(t, record.status);
               if (label === '-') return '-';
@@ -317,9 +287,9 @@ const LineSideWarehousePage: React.FC = () => {
         headerTitle={t(`${P}.headerTitle`)}
         actionRef={actionRef}
         columns={columns}
-        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.line-side-warehouse.rich-v5"
+        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.line-side-warehouse-width-v5"
         viewTypes={['table', 'help']}
-          helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.lineSideWarehouse')}
+        helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.lineSideWarehouse')}
         request={fetchInventory}
         showAdvancedSearch
         skipFuzzyPinyinClientFilter

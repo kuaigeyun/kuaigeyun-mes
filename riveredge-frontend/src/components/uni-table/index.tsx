@@ -148,13 +148,20 @@ import {
 } from './uniTableScrollPolicy'
 import { resolveUniReportTableBodyScrollY } from '../uni-report/uniReportScrollPolicy'
 import {
+  buildUniTableFillerColumn,
   getUniTableLifecycleCellClassName,
+  isUniTableAuditPhaseColumn,
+  isUniTableAuditStackedColumn,
   isUniTableDetailProgressColumn,
+  isUniTableFillerColumn,
   isUniTableLifecycleColumn,
+  isUniTableMarkerBadgeColumn,
   isUniTableProgressColumn,
   isUniTableStatusBadgeColumn,
+  resolveUniTableAuditStackedColumnWidth,
   resolveUniTableDetailProgressColumnWidth,
   resolveUniTableLifecycleColumnWidth,
+  resolveUniTableMarkerBadgeColumnWidth,
   resolveUniTableProgressColumnWidth,
   resolveUniTableOperationColumnWidth,
   resolveUniTableOperationWidthFromContent,
@@ -175,6 +182,7 @@ import {
   stripColumnsStateForPersistence,
   writePersistedColumnsState,
   clearPersistedColumnsState,
+  getProColumnStateKey,
 } from './uniTableLayoutEngine'
 import {
   readPersistedUniTableViewType,
@@ -247,16 +255,38 @@ function applyUniTableHeaderCellPolicy(columns: any[]): any[] {
     if (isUniTableOperationColumn(col)) {
       return mergeUniTableHeaderCell(col, 'uni-table-operation-cell')
     }
+    if (isUniTableFillerColumn(col)) {
+      return mergeUniTableHeaderCell(col, 'uni-table-filler-cell')
+    }
     if (isUniTableLifecycleColumn(col)) {
       return mergeUniTableHeaderCell(col, getUniTableLifecycleCellClassName(col))
+    }
+    if (isUniTableMarkerBadgeColumn(col)) {
+      return mergeUniTableHeaderCell(col, 'uni-table-marker-badge-cell')
     }
     return mergeUniTableHeaderCell(col)
   })
 }
 
+function attachUniTableFillerColumn(columns: any[]): any[] {
+  const hasRightFixed = columns.some(
+    (c) => !c.hideInTable && (c.fixed === 'right' || c.fixed === 'end'),
+  )
+  if (!hasRightFixed) return columns
+  if (columns.some((c) => isUniTableFillerColumn(c))) return columns
+  // 三桶契约：RemainderFlex 与 filler 互斥；有余量列时禁止 filler（否则状态/操作间挤出死列）
+  if (columns.some((c) => c?.uniTableRemainderFlex === true)) return columns
+  const opIdx = columns.findIndex((c) => !c.hideInTable && isUniTableOperationColumn(c))
+  const insertIdx = opIdx >= 0 ? opIdx : columns.length
+  const filler = buildUniTableFillerColumn()
+  return [...columns.slice(0, insertIdx), filler, ...columns.slice(insertIdx)]
+}
+
 function finalizeUniTableColumns(columns: any[]): any[] {
   return applyUniTableHeaderCellPolicy(
-    applyStatusBadgeColumnPolicy(normalizeFixedColumnOrder(columns)),
+    applyStatusBadgeColumnPolicy(
+      normalizeFixedColumnOrder(attachUniTableFillerColumn(columns)),
+    ),
   )
 }
 
@@ -1283,6 +1313,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const [tableData, setTableData] = useState<T[]>([])
   const [requestInFlight, setRequestInFlight] = useState(true)
   const [containerLayoutWidth, setContainerLayoutWidth] = useState(0)
+  /** containerLayoutWidth 是否已取自表体滚动口（clientWidth 已含纵向滚动条扣除） */
+  const [layoutWidthIsScrollHost, setLayoutWidthIsScrollHost] = useState(false)
   const [fillViewportMeasuredScrollY, setFillViewportMeasuredScrollY] = useState<number | undefined>()
   const [reportMeasuredScrollY, setReportMeasuredScrollY] = useState<number | undefined>()
   const reportMeasuredScrollYRef = React.useRef<number | undefined>(undefined)
@@ -1599,6 +1631,51 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           uniTableKeepWidth: true,
         }
       }
+      /** 审核状态列：与 lifecycle 同宽，屏蔽页面手写 width 漂移 */
+      if (isUniTableAuditPhaseColumn(col)) {
+        const { width: _w, minWidth: _mw, sorter: _sorter, defaultSortOrder: _dso, ...auditRest } = col
+        return {
+          ...auditRest,
+          width: resolveUniTableLifecycleColumnWidth(),
+          minWidth: resolveUniTableLifecycleColumnWidth(),
+          resizable: false,
+          align: 'center' as const,
+          uniTableKeepWidth: true,
+          sorter: false,
+        }
+      }
+      /** 更新时间堆叠列：SystemFixed 120px，禁止页面/持久化漂移 */
+      if (isUniTableAuditStackedColumn(col)) {
+        const { width: _w, minWidth: _mw, ...auditStackedRest } = col
+        return {
+          ...auditStackedRest,
+          width: resolveUniTableAuditStackedColumnWidth(),
+          minWidth: resolveUniTableAuditStackedColumnWidth(),
+          resizable: false,
+          uniTableKeepWidth: true,
+        }
+      }
+      /** 非流程 MarkerTag 窄列（启用/类型等）：与 lifecycle 同宽 80px */
+      if (isUniTableMarkerBadgeColumn(col)) {
+        const { width: _w, minWidth: _mw, ...markerRest } = col
+        const userOnCell = markerRest.onCell
+        return {
+          ...markerRest,
+          width: resolveUniTableMarkerBadgeColumnWidth(),
+          minWidth: resolveUniTableMarkerBadgeColumnWidth(),
+          resizable: false,
+          align: 'center' as const,
+          uniTableKeepWidth: true,
+          onCell: (record: any, rowIndex?: number) => {
+            const base =
+              typeof userOnCell === 'function' ? userOnCell(record, rowIndex) || {} : {}
+            return {
+              ...base,
+              className: `uni-table-marker-badge-cell ${base.className || ''}`.trim(),
+            }
+          },
+        }
+      }
       /** 生命周期列统一策略：固定收缩锚点 + 最小宽度，屏蔽历史固定宽度带来的留白；不排序。 */
       if (isUniTableLifecycleColumn(col)) {
         const { width: _w, minWidth: _mw, sorter: _sorter, defaultSortOrder: _dso, ...lifecycleRest } = col
@@ -1642,6 +1719,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           key: operationColumnKey,
           width: resolvedWidth,
           minWidth: resolvedWidth ?? UNI_TABLE_OPERATION_MIN_WIDTH,
+          uniTableKeepWidth: true,
           resizable: false,
           render: baseRender
             ? (...args: any[]) => {
@@ -2910,25 +2988,49 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       .expandable?.expandedRowRender,
   )
 
+  const columnsForLayoutPlan = React.useMemo(() => {
+    return effectiveTableColumns.filter((col: any, index: number) => {
+      if (col.hideInTable) return false
+      const stateKey = getProColumnStateKey(col, index)
+      return columnsStateValue[stateKey]?.show !== false
+    })
+  }, [effectiveTableColumns, columnsStateValue])
+
   const layoutPlan = React.useMemo(
     () =>
       resolveLayoutPlan({
-        columns: effectiveTableColumns,
+        columns: columnsForLayoutPlan,
         containerWidth: containerLayoutWidth,
         includeSelection: tableHasRowSelection,
         includeExpandable: tableHasExpandable,
         scrollYEnabled: proTableBodyScrollYEnabled,
+        layoutWidthIsScrollHost,
       }),
     [
-      effectiveTableColumns,
+      columnsForLayoutPlan,
       containerLayoutWidth,
       tableHasRowSelection,
       tableHasExpandable,
       proTableBodyScrollYEnabled,
+      layoutWidthIsScrollHost,
     ],
   )
 
-  const tableColumnsForRender = layoutPlan.columns
+  const tableColumnsForRender = React.useMemo(() => {
+    const widthByKey = new Map<string, { width?: unknown; minWidth?: unknown }>()
+    for (const col of layoutPlan.columns) {
+      const c = col as { key?: unknown; width?: unknown; minWidth?: unknown }
+      const key = String(c.key ?? '')
+      if (!key) continue
+      widthByKey.set(key, { width: c.width, minWidth: c.minWidth })
+    }
+    return effectiveTableColumns.map((col: any) => {
+      const key = String(col.key ?? '')
+      const patch = key ? widthByKey.get(key) : undefined
+      if (!patch) return col
+      return { ...col, width: patch.width, minWidth: patch.minWidth }
+    })
+  }, [effectiveTableColumns, layoutPlan.columns])
   const computedTableScrollX = layoutPlan.scrollX
 
   const rowClickSelectionEnabled =
@@ -3269,10 +3371,17 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     const TOOLBAR_CLUSTER_GAP = 16
 
     const syncContainerLayout = () => {
-      const width = root.clientWidth
+      // 列宽预算必须用横向滚动口 clientWidth，禁止用外层 container 宽：
+      // 外层常比 .ant-table-body/.ant-table-content 宽几～十几 px，会把 scroll.x 撑出假横滚。
+      const scrollHost = (root.querySelector('.ant-table-body') ||
+        root.querySelector('.ant-table-content')) as HTMLElement | null
+      const hostWidth = scrollHost?.clientWidth ?? 0
+      const fromScrollHost = hostWidth > 0
+      const width = fromScrollHost ? hostWidth : root.clientWidth
       if (width > 0) {
         setContainerLayoutWidth((prev) => (prev === width ? prev : width))
       }
+      setLayoutWidthIsScrollHost((prev) => (prev === fromScrollHost ? prev : fromScrollHost))
 
       const toolbar = root.querySelector(
         '.ant-pro-table-list-toolbar-container',
@@ -3299,6 +3408,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     const ro =
       typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => syncContainerLayout()) : null
     ro?.observe(root)
+    const scrollHost = root.querySelector('.ant-table-body') || root.querySelector('.ant-table-content')
+    if (ro && scrollHost) ro.observe(scrollHost)
     const toolbar = root.querySelector('.ant-pro-table-list-toolbar-container')
     if (ro && toolbar) ro.observe(toolbar)
     const left = root.querySelector('.ant-pro-table-list-toolbar-left')

@@ -41,6 +41,8 @@ export interface ReceiptNotice {
   updated_at?: string;
   lifecycle?: Record<string, unknown>;
   capabilities?: ReceiptNoticeCapabilities;
+  /** include_items=true 时附带 */
+  items?: Array<{ material_name?: string | null; material_code?: string | null }>;
 }
 
 export interface ReceiptNoticeNotifyPreviewResponse {

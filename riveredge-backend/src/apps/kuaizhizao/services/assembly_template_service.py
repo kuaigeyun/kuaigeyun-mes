@@ -16,6 +16,7 @@ from apps.kuaizhizao.schemas.assembly_template import (
     AssemblyTemplateCreate,
     AssemblyTemplateUpdate,
     AssemblyTemplateResponse,
+    AssemblyTemplateDetailResponse,
     AssemblyTemplateListResponse,
     AssemblyTemplateItemCreate,
     AssemblyTemplateItemCreateInput,
@@ -143,8 +144,8 @@ class AssemblyTemplateService(AppBaseService[AssemblyTemplate]):
 
     async def _build_response(
         self, template: AssemblyTemplate, include_items: bool = True
-    ) -> AssemblyTemplateResponse:
-        resp = AssemblyTemplateResponse.model_validate(template)
+    ) -> AssemblyTemplateDetailResponse:
+        resp = AssemblyTemplateDetailResponse.model_validate(template)
         if include_items:
             resp.items = await self._load_items(template.tenant_id, template.id)
         return resp
@@ -154,7 +155,7 @@ class AssemblyTemplateService(AppBaseService[AssemblyTemplate]):
         tenant_id: int,
         data: AssemblyTemplateCreate,
         created_by: int,
-    ) -> AssemblyTemplateResponse:
+    ) -> AssemblyTemplateDetailResponse:
         async with in_transaction():
             if data.template_code:
                 template_code = data.template_code.strip()
@@ -202,7 +203,7 @@ class AssemblyTemplateService(AppBaseService[AssemblyTemplate]):
 
     async def get_template_by_id(
         self, tenant_id: int, template_id: int
-    ) -> AssemblyTemplateResponse:
+    ) -> AssemblyTemplateDetailResponse:
         template = await AssemblyTemplate.get_or_none(
             id=template_id, tenant_id=tenant_id, deleted_at__isnull=True
         )
@@ -234,8 +235,21 @@ class AssemblyTemplateService(AppBaseService[AssemblyTemplate]):
 
         total = await query.count()
         rows = await query.order_by("-created_at", "-id").offset(skip).limit(limit)
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            batch_document_item_material_previews,
+        )
+
+        template_ids = [int(r.id) for r in rows]
+        item_previews = await batch_document_item_material_previews(
+            tenant_id, AssemblyTemplateItem, "template_id", template_ids
+        )
         return AssemblyTemplateListResponse(
-            items=[AssemblyTemplateResponse.model_validate(r) for r in rows],
+            items=[
+                AssemblyTemplateResponse.model_validate(r).model_copy(
+                    update={"items": item_previews.get(int(r.id), [])}
+                )
+                for r in rows
+            ],
             total=total,
         )
 
@@ -245,7 +259,7 @@ class AssemblyTemplateService(AppBaseService[AssemblyTemplate]):
         template_id: int,
         data: AssemblyTemplateUpdate,
         updated_by: int,
-    ) -> AssemblyTemplateResponse:
+    ) -> AssemblyTemplateDetailResponse:
         async with in_transaction():
             template = await AssemblyTemplate.get_or_none(
                 id=template_id, tenant_id=tenant_id, deleted_at__isnull=True
@@ -285,7 +299,7 @@ class AssemblyTemplateService(AppBaseService[AssemblyTemplate]):
         tenant_id: int,
         template_id: int,
         updated_by: int,
-    ) -> AssemblyTemplateResponse:
+    ) -> AssemblyTemplateDetailResponse:
         async with in_transaction():
             template = await AssemblyTemplate.get_or_none(
                 id=template_id, tenant_id=tenant_id, deleted_at__isnull=True

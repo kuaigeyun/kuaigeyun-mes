@@ -1,4 +1,3 @@
-import { rowActionKind } from '../../../../components/uni-action';
 /**
  * 研发项目列表
  */
@@ -6,12 +5,12 @@ import { rowActionKind } from '../../../../components/uni-action';
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { ActionType, ProColumns, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormSelect } from '@ant-design/pro-components';
 import { App, Button, Typography } from 'antd';
-import { EyeOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useResourcePermissions } from '../../../../hooks/useResourcePermissions';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { UniTable } from '../../../../components/uni-table';
+import { rowActionKind } from '../../../../components/uni-action';
 import { UniBatchMenuButton } from '../../../../components/uni-batch';
 import { UniUserSelect } from '../../../../components/uni-user-select';
 import { ListPageTemplate, FormModalTemplate } from '../../../../components/layout-templates';
@@ -47,6 +46,7 @@ import { useNewShortcut } from '../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../utils/globalNewShortcut';
 import { formatDateTime } from '../../../../utils/format';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../utils/uniTableLayoutColumns';
 import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
 
 const PAGE_CODE_RD = 'kuaiplm-rd-project';
@@ -194,10 +194,11 @@ const RdProjectsListPage: React.FC = () => {
         titleField: 'project_name',
       }),
       {
+        // 稀疏：业务列不叠（编码 → 类型 → 名称 → 物料 → 负责人 → 阶段门 → 计划完成）；审计叠列保留
         title: t('app.kuaiplm.common.columns.projectCode'),
         dataIndex: 'project_code',
-        width: 160,
-        minWidth: 160,
+        width: 168,
+        minWidth: 168,
         uniTableKeepWidth: true,
         resizable: false,
         fixed: 'left',
@@ -212,10 +213,7 @@ const RdProjectsListPage: React.FC = () => {
       {
         title: t('app.kuaiplm.common.columns.projectType'),
         dataIndex: 'project_type',
-        width: 100,
-        minWidth: 100,
-        uniTableKeepWidth: true,
-        resizable: false,
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         sorter: true,
         valueEnum: {
           RD: { text: getKuaiplmProjectTypeText(t, 'RD') },
@@ -224,37 +222,44 @@ const RdProjectsListPage: React.FC = () => {
         render: (_, row) => renderKuaiplmProjectTypeMarker(t, row.project_type ?? 'RD'),
       },
       {
+        // 项目名称长短不一：唯一 RemainderFlex
         title: t('app.kuaiplm.common.columns.projectName'),
         dataIndex: 'project_name',
-        width: 200,
+        minWidth: 160,
+        uniTableRemainderFlex: true,
+        uniTablePrimaryFlex: true,
+        resizable: false,
         sorter: true,
         ellipsis: true,
         hideInSearch: true,
       },
       {
         title: t('app.kuaiplm.common.columns.productMaterial'),
+        key: 'plm_rd_material_name',
         dataIndex: 'material_name',
         width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         ellipsis: true,
         render: (_, row) => row.material_name || row.material_code || '-',
       },
       {
         title: t('app.kuaiplm.common.columns.owner'),
+        key: 'plm_rd_owner_name',
         dataIndex: 'owner_name',
-        width: 100,
-        minWidth: 100,
+        width: 112,
+        minWidth: 112,
         uniTableKeepWidth: true,
         resizable: false,
         hideInSearch: true,
+        ellipsis: true,
       },
       {
         title: t('app.kuaiplm.common.columns.currentGate'),
         dataIndex: 'current_gate_name',
-        width: 120,
-        minWidth: 120,
-        uniTableKeepWidth: true,
-        resizable: false,
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         hideInSearch: true,
         render: (_, row) =>
           renderKuaiplmCurrentGateMarker(t, row.current_gate_key, row.current_gate_name),
@@ -299,16 +304,11 @@ const RdProjectsListPage: React.FC = () => {
       },
       plmListActionColumn<RdProject>(t, (_, record) => [
         <Button
-          {...rowActionKind('read')}
           key="detail"
-          type="link"
-          size="small"
-          icon={<EyeOutlined />}
+          {...rowActionKind('read')}
           onClick={() => navigate(`/apps/kuaiplm/rd-projects/detail/${record.id}`)}
-        >
-          {t('common.detail')}
-        </Button>,
-      ], 120),
+        />,
+      ]),
     ],
     [t, navigate, lifecycleValueEnum],
   );
@@ -325,7 +325,7 @@ const RdProjectsListPage: React.FC = () => {
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
         columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
-        columnPersistenceId="apps.kuaiplm.pages.rd-projects.list-v1"
+        columnPersistenceId="apps.kuaiplm.pages.rd-projects.list-v2"
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
         pinnedTabsField={LIST_LIFECYCLE_STAGE_FIELD}

@@ -15,7 +15,6 @@ import {
   ProFormDependency,
 } from '@ant-design/pro-components';
 import { App, Button, Alert } from 'antd';
-import { LinkOutlined } from '@ant-design/icons';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
@@ -34,6 +33,7 @@ import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { testGenerateCode } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import {
   plmCodeTitleSearchColumns,
   plmCreatedUpdatedColumns,
@@ -184,18 +184,25 @@ const RequirementsPage: React.FC = () => {
         titleField: 'title',
       }),
       {
+        // 稀疏：编号 → 标题 → 项目 → 优先级 → 来源；审计叠列保留；状态 StatusTag
         title: t('app.kuaiplm.phase2.requirements.columns.code'),
         dataIndex: 'requirement_code',
-        width: 140,
-        minWidth: 140,
+        width: 168,
+        minWidth: 168,
         uniTableKeepWidth: true,
         resizable: false,
         sorter: true,
         hideInSearch: true,
+        ellipsis: true,
       },
       {
+        // 标题长短不一：唯一 RemainderFlex
         title: t('app.kuaiplm.phase2.requirements.columns.title'),
         dataIndex: 'title',
+        minWidth: 160,
+        uniTableRemainderFlex: true,
+        uniTablePrimaryFlex: true,
+        resizable: false,
         sorter: true,
         ellipsis: true,
         hideInSearch: true,
@@ -203,17 +210,17 @@ const RequirementsPage: React.FC = () => {
       {
         title: t('app.kuaiplm.phase2.requirements.columns.project'),
         dataIndex: 'project_name',
-        width: 140,
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         ellipsis: true,
       },
       {
         title: t('app.kuaiplm.phase2.requirements.columns.priority'),
         dataIndex: 'priority',
-        width: 90,
-        minWidth: 90,
-        uniTableKeepWidth: true,
-        resizable: false,
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         sorter: true,
         valueEnum: priorityValueEnum,
         render: (_, row) => renderPhase2PriorityMarker(t, row.priority),
@@ -222,18 +229,18 @@ const RequirementsPage: React.FC = () => {
         title: t('app.kuaiplm.phase2.requirements.columns.source'),
         key: 'requirement_source_type',
         dataIndex: 'source_type',
-        width: 140,
-        minWidth: 140,
+        width: 160,
+        minWidth: 160,
         uniTableKeepWidth: true,
         resizable: false,
         hideInSearch: true,
+        ellipsis: true,
         render: (_, row) => {
           if (row.source_type === 'purchase_inquiry' && row.source_id) {
             return (
               <Button
                 type="link"
                 size="small"
-                icon={<LinkOutlined />}
                 onClick={() => window.open(buildPurchaseInquiryUrl(row.source_id!), '_blank')}
               >
                 {t('app.kuaiplm.phase2.common.source.purchaseInquiry')} #{row.source_id}
@@ -248,57 +255,40 @@ const RequirementsPage: React.FC = () => {
         title: t('common.status'),
         key: 'lifecycle',
         dataIndex: 'status',
-        width: 90,
-        minWidth: 90,
-        uniTableKeepWidth: true,
-        resizable: false,
         fixed: 'right',
         valueEnum: requirementStatusValueEnum,
         render: (_, row) => renderPhase2RequirementStatusTag(t, row.status),
       },
       plmListActionColumn<RdRequirement>(t, (_, row) => [
-          <Button
-            {...rowActionKind('read')}
-            key="detail"
-            type="link"
-            size="small"
-            onClick={() => {
-              setDetailRecord(row);
-            }}
-          >
-            {t('common.detail')}
-          </Button>,
-          <Button
-            {...rowActionKind('edit')}
-            key="edit"
-            type="link"
-            size="small"
-            onClick={() => {
-              setEditingRecord(row);
-            }}
-          >
-            {t('common.edit')}
-          </Button>,
-          <Button
-            {...rowActionKind('delete')}
-            key="del"
-            type="link"
-            size="small"
-            danger
-            onClick={() => {
-              modalApi.confirm({
-                title: t('app.kuaiplm.phase2.requirements.deleteOneTitle'),
-                onOk: async () => {
-                  await deleteRequirement(row.id!);
-                  messageApi.success(t('common.deleteSuccess'));
-                  actionRef.current?.reload();
-                },
-              });
-            }}
-          >
-            {t('common.delete')}
-          </Button>,
-        ]),
+        <Button
+          key="detail"
+          {...rowActionKind('read')}
+          onClick={() => {
+            setDetailRecord(row);
+          }}
+        />,
+        <Button
+          key="edit"
+          {...rowActionKind('update')}
+          onClick={() => {
+            setEditingRecord(row);
+          }}
+        />,
+        <Button
+          key="del"
+          {...rowActionKind('delete')}
+          onClick={() => {
+            modalApi.confirm({
+              title: t('app.kuaiplm.phase2.requirements.deleteOneTitle'),
+              onOk: async () => {
+                await deleteRequirement(row.id!);
+                messageApi.success(t('common.deleteSuccess'));
+                actionRef.current?.reload();
+              },
+            });
+          }}
+        />,
+      ]),
     ],
     [messageApi, modalApi, priorityValueEnum, requirementStatusValueEnum, sourceTypeLabelMap, t],
   );
@@ -310,7 +300,7 @@ const RequirementsPage: React.FC = () => {
           type="info"
           showIcon
           style={{ marginBottom: 16 }}
-          message={t('app.kuaiplm.phase2.common.projectFilterHint', { id: filterProjectId })}
+          title={t('app.kuaiplm.phase2.common.projectFilterHint', { id: filterProjectId })}
         />
       ) : null}
       <UniTable<RdRequirement>
@@ -323,7 +313,7 @@ const RequirementsPage: React.FC = () => {
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
         columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
-        columnPersistenceId="apps.kuaiplm.pages.phase2.requirements.list-v1"
+        columnPersistenceId="apps.kuaiplm.pages.phase2.requirements.list-v2"
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
         pinnedTabsField={PLM_PHASE2_PINNED_STATUS_FIELD}

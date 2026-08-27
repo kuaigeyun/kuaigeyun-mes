@@ -184,19 +184,29 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
     };
   }, [isPublicPath, shouldFetchUser, currentUser?.id, tenantId]);
 
-  // 处理用户信息加载成功（唯一数据源：/auth/me）
+  // 处理用户信息加载成功（普通用户：/auth/me；平台超管：infra /me + 组织名补全）
   useEffect(() => {
     if (!userData) return;
     const prev = useGlobalStore.getState().currentUser;
+    // 超管 /me 不含组织名；同 tenant_id 时保留已同步的 tenant_name，避免刷新冲掉顶栏名称
+    const nextUser =
+      prev &&
+      userData.tenant_id != null &&
+      prev.tenant_id != null &&
+      Number(prev.tenant_id) === Number(userData.tenant_id) &&
+      !(userData.tenant_name && String(userData.tenant_name).trim()) &&
+      prev.tenant_name?.trim()
+        ? { ...userData, tenant_name: prev.tenant_name.trim() }
+        : userData;
     const permissionVersionChanged =
       prev?.permission_version != null &&
-      userData.permission_version != null &&
-      prev.permission_version !== userData.permission_version;
-    if (!isEquivalentCurrentUser(prev, userData)) {
-      setCurrentUser(userData);
+      nextUser.permission_version != null &&
+      prev.permission_version !== nextUser.permission_version;
+    if (!isEquivalentCurrentUser(prev, nextUser)) {
+      setCurrentUser(nextUser);
     }
-    setUserInfo(userData);
-    if (userData.avatar) prefetchAvatarUrl(userData.avatar);
+    setUserInfo(nextUser);
+    if (nextUser.avatar) prefetchAvatarUrl(nextUser.avatar);
     if (permissionVersionChanged) {
       queryClient.invalidateQueries({ queryKey: [NAVIGATION_MENU_TREE_QUERY_KEY] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-menu-tree'] });

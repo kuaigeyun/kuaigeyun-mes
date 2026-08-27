@@ -1,10 +1,11 @@
 import { layoutShellQueryOptions } from './reactQuery';
 import { getCurrentUser } from '../services/auth';
 import { getCurrentInfraSuperAdmin } from '../services/infraAdmin';
+import { getTenantById } from '../services/tenant';
 import { getSiteSetting, type SiteSetting } from '../services/siteSetting';
 import { getUserPreference, type UserPreference } from '../services/userPreference';
 import { getLanguageList } from '../services/language';
-import { getTenantId } from '../utils/auth';
+import { getTenantId, getUserInfo } from '../utils/auth';
 import { isRequestCancellation } from '../utils/requestCancellation';
 import type { CurrentUser } from '../types/api';
 
@@ -34,6 +35,21 @@ export async function fetchCurrentUserRecord(isInfraSuperAdmin: boolean): Promis
   if (isInfraSuperAdmin) {
     const infraUser = await getCurrentInfraSuperAdmin();
     const tenantId = getTenantId();
+    let tenant_name: string | undefined;
+    if (tenantId != null) {
+      const saved = getUserInfo();
+      const savedMatches =
+        saved?.tenant_id != null &&
+        Number(saved.tenant_id) === Number(tenantId) &&
+        typeof saved.tenant_name === 'string' &&
+        saved.tenant_name.trim() !== '';
+      if (savedMatches) {
+        tenant_name = String(saved.tenant_name).trim();
+      } else {
+        const tenant = await getTenantById(Number(tenantId), true);
+        tenant_name = tenant.name;
+      }
+    }
     return {
       id: infraUser.id,
       uuid: infraUser.uuid,
@@ -44,6 +60,7 @@ export async function fetchCurrentUserRecord(isInfraSuperAdmin: boolean): Promis
       is_infra_admin: true,
       is_tenant_admin: false,
       tenant_id: tenantId ?? undefined,
+      tenant_name,
       user_type: 'infra_superadmin',
     };
   }

@@ -62,6 +62,8 @@ import {
   renderEquipmentMasterRowActions,
   renderIsActiveTag,
 } from '../shared/equipmentMasterDataDetail';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
+import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { buildMoldDetailPath } from './moldPaths';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { todaySiteDateString } from '../../../../../utils/format';
@@ -403,63 +405,85 @@ const MoldsPage: React.FC = () => {
       search: { order: 23 } as ProColumns['search'],
     },
     {
-      title: t('app.kuaizhizao.mold.colCode'),
+      title: t('app.kuaizhizao.mold.colNameCode'),
       dataIndex: 'code',
-      width: 140,
-      ellipsis: true,
+      minWidth: 200,
+      uniTablePrimaryFlex: true,
+      uniTableRemainderFlex: true,
+      resizable: false,
+      ellipsis: false,
       fixed: 'left',
       sorter: true,
       search: { order: 30 } as ProColumns['search'],
       render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.code ?? '') }} ellipsis>
-          {r.code ?? '-'}
-        </Typography.Text>
+        <UniTableStackedPrimaryCell
+          primary={String(r.name ?? '') || '-'}
+          secondary={String(r.code ?? '') || '-'}
+        />
       ),
-    },
-    {
-      title: t('app.kuaizhizao.mold.colName'),
-      dataIndex: 'name',
-      width: 200,
-      ellipsis: true,
-      sorter: true,
-      hideInSearch: true,
     },
     {
       title: t('app.kuaizhizao.mold.colType'),
       dataIndex: 'type',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
       sorter: true,
       hideInSearch: true,
+      render: (_, r) => (r.type != null && r.type !== '' ? String(r.type) : '-'),
     },
     {
       title: t('app.kuaizhizao.mold.colCategory'),
       dataIndex: 'category',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
       sorter: true,
       hideInSearch: true,
+      render: (_, r) => (r.category != null && r.category !== '' ? String(r.category) : '-'),
     },
     {
       title: t('app.kuaizhizao.mold.colBrand'),
       dataIndex: 'brand',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
       hideInSearch: true,
+      render: (_, r) => (r.brand != null && r.brand !== '' ? String(r.brand) : '-'),
     },
     {
       title: t('app.kuaizhizao.mold.colModel'),
       dataIndex: 'model',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
       hideInSearch: true,
+      render: (_, r) => (r.model != null && r.model !== '' ? String(r.model) : '-'),
     },
     {
       title: t('app.kuaizhizao.mold.colSerialNumber'),
       dataIndex: 'serial_number',
       width: 150,
+      minWidth: 150,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
       hideInSearch: true,
+      render: (_, r) =>
+        r.serial_number != null && r.serial_number !== '' ? String(r.serial_number) : '-',
     },
     {
       title: t('app.kuaizhizao.mold.colIsActive'),
       dataIndex: 'is_active',
-      width: 100,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       sorter: true,
       hideInSearch: true,
       render: (_, r) => renderIsActiveTag(t, r.is_active),
@@ -468,15 +492,23 @@ const MoldsPage: React.FC = () => {
       title: t('app.kuaizhizao.mold.colTotalUsageCount'),
       dataIndex: 'total_usage_count',
       width: 110,
+      minWidth: 110,
+      uniTableKeepWidth: true,
+      resizable: false,
       sorter: true,
       hideInSearch: true,
+      render: (_, r) => (r.total_usage_count != null ? String(r.total_usage_count) : '-'),
     },
     {
       title: t('app.kuaizhizao.mold.colLifeProgress'),
-      dataIndex: ['total_usage_count', 'design_lifetime'],
+      key: 'life_progress',
+      dataIndex: 'design_lifetime',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
-      render: (_: any, record: Mold) => {
+      render: (_: unknown, record: Mold) => {
         const total = record.total_usage_count ?? 0;
         const lifetime = record.design_lifetime;
         if (!lifetime || lifetime <= 0) return '-';
@@ -490,7 +522,9 @@ const MoldsPage: React.FC = () => {
     ...customFieldColumns,
     {
       title: t('common.actions'),
+      key: 'option',
       fixed: 'right',
+      hideInSearch: true,
       render: (_text, record) =>
         renderEquipmentMasterRowActions({
           record,
@@ -531,7 +565,7 @@ const MoldsPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.moldsLedger')}
           headerTitle={t('app.kuaizhizao.mold.title')}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.molds-equip-rank-v1"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.molds-width-v2"
           actionRef={actionRef}
           rowKey="uuid"
           columns={columns}

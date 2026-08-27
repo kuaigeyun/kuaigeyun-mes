@@ -45,6 +45,10 @@ import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
   MaterialStackedCell,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
+import {
+  DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+  renderDocumentLineMaterialsPreview,
+} from '../../sales-management/shared/documentLineMaterialsPreview';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import type { Material } from '../../../../master-data/types/material';
@@ -153,7 +157,7 @@ type ReceiptNoticeItemRow = {
 };
 
 const RECEIPT_NOTICE_LIST_PERSISTENCE_ID =
-  'apps.kuaizhizao.pages.purchase-management.receipt-notices.list-v3';
+  'apps.kuaizhizao.pages.purchase-management.receipt-notices-width-v1';
 
 type PullPurchaseOrderCandidate = PurchaseOrderReceiptPullLine;
 
@@ -595,7 +599,11 @@ const ReceiptNoticesPage: React.FC = () => {
         title: t('app.kuaizhizao.receiptNotice.colSupplierNotice'),
         key: 'notice_code',
         dataIndex: 'notice_code',
-        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        width: 240,
+        minWidth: 240,
+        uniTableKeepWidth: true,
+        uniTablePrimaryFlex: false,
+        resizable: false,
         fixed: 'left',
         sorter: true,
         render: (_, r) => (
@@ -620,12 +628,22 @@ const ReceiptNoticesPage: React.FC = () => {
       },
       { title: t('app.kuaizhizao.receiptNotice.supplier'), dataIndex: 'supplier_name', hideInTable: true, hideInSearch: true },
       {
+        title: t('app.kuaizhizao.common.colLineMaterials'),
+        ...DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+        // 收货通知专用段位：主标识后、入库仓库前
+        key: 'receipt_line_materials',
+        dataIndex: 'receipt_line_materials',
+        render: (_, r) => renderDocumentLineMaterialsPreview(r.items, t),
+      },
+      {
         title: t('app.kuaizhizao.receiptNotice.inboundWarehouse'),
         key: 'inbound_warehouse',
         dataIndex: 'warehouse_name',
         width: 140,
-        ellipsis: true,
+        minWidth: 140,
         uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
         sorter: true,
         hideInSearch: true,
       },
@@ -654,6 +672,9 @@ const ReceiptNoticesPage: React.FC = () => {
         key: 'receipt_inbound_conversion',
         dataIndex: 'purchase_receipt_code',
         width: 180,
+        minWidth: 180,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         render: (_, r) => {
           if (r.purchase_receipt_id) {
@@ -706,15 +727,19 @@ const ReceiptNoticesPage: React.FC = () => {
         dataIndex: 'planned_receipt_date',
         valueType: 'date',
         width: 132,
+        minWidth: 132,
         uniTableKeepWidth: true,
+        resizable: false,
         sorter: true,
         hideInSearch: true,
       },
       {
         title: t('app.kuaizhizao.shipmentNotice.notifiedAt'),
         dataIndex: 'notified_at',
-        width: 132,
+        width: 160,
+        minWidth: 160,
         uniTableKeepWidth: true,
+        resizable: false,
         sorter: true,
         hideInSearch: true,
         render: (_, r) => (r.notified_at ? formatDateTime(r.notified_at, 'YYYY-MM-DD HH:mm') : '-'),
@@ -732,6 +757,7 @@ const ReceiptNoticesPage: React.FC = () => {
       },
       {
         title: t('app.kuaizhizao.salesOrder.lifecycle'),
+        key: 'lifecycle',
         dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
         fixed: 'right',
         valueType: 'select',
@@ -742,6 +768,8 @@ const ReceiptNoticesPage: React.FC = () => {
       },
       {
         title: t('common.actions'),
+        key: 'option',
+        valueType: 'option',
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) => {
@@ -1722,7 +1750,7 @@ const ReceiptNoticesPage: React.FC = () => {
                 limit: params.pageSize || 20,
                 ...lifecycleParams,
                 order_by: orderBy,
-                include_items: dataViewModeRef.current === 'detail',
+                include_items: true,
               };
               if (fuzzyKeyword) {
                 apiParams.keyword = fuzzyKeyword;

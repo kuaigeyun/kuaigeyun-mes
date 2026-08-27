@@ -2,12 +2,12 @@
  * 应收单列表页
  */
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
-import { rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind, rowActionCollectReceipt, rowActionIssueInvoice } from '../../../../../components/uni-action';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Typography, Modal, Spin, Alert, Table, Empty, Form } from 'antd';
 import { ModalForm, ProForm, ProFormDatePicker, ProFormMoney, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import type { ProFormInstance } from '@ant-design/pro-components';
-import { EyeOutlined, DollarOutlined, PlusOutlined, FileTextOutlined } from '@ant-design/icons';
+import { PlusOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
 import {
   receivableService,
@@ -54,10 +54,8 @@ import {
 } from '../../../../kuaizhizao/pages/sales-management/shared/DocumentPushProgressBar';
 import { receivableReceiptPushPercent, receivableInvoicePushPercent } from '../../../../kuaizhizao/pages/sales-management/shared/pushProgress';
 import { renderReceivableInvoiceStatusTag } from '../../../utils/financeInvoiceStatusUi';
-import {
-  UniTableStackedPrimaryCell,
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-} from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import {
   FINANCE_DOC_PINNED_STATUS_FIELD,
   financeDocCodePartnerSearchColumns,
@@ -542,13 +540,19 @@ const ReceivableList: React.FC = () => {
             partnerOptions: customerOptions,
         }),
         {
+            // 有 RemainderFlex：主标识叠列 KeepWidth，禁止再抢 primaryFlex
             title: t('app.kuaicaiwu.common.code'),
             key: 'finance_doc_partner_stacked',
             dataIndex: 'receivable_code',
-            ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+            width: 240,
+            minWidth: 240,
+            uniTableKeepWidth: true,
+            uniTablePrimaryFlex: false,
+            resizable: false,
             fixed: 'left',
             hideInSearch: true,
             sorter: true,
+            ellipsis: false,
             render: (_, entity) => (
                 <UniTableStackedPrimaryCell
                     primary={String(entity.customer_name ?? '')}
@@ -581,11 +585,12 @@ const ReceivableList: React.FC = () => {
             ),
         },
         {
+            // 付款条件长短不一：唯一 RemainderFlex
             title: t(`${P}.col.paymentTerms`),
             dataIndex: 'payment_terms',
-            width: 120,
-            minWidth: 120,
-            uniTableKeepWidth: true,
+            minWidth: 140,
+            uniTableRemainderFlex: true,
+            uniTablePrimaryFlex: true,
             resizable: false,
             hideInSearch: true,
             ellipsis: true,
@@ -595,46 +600,9 @@ const ReceivableList: React.FC = () => {
             title: t(`${P}.col.invoiceStatus`),
             key: 'invoice_status',
             dataIndex: 'invoice_status',
-            width: 100,
-            minWidth: 100,
-            uniTableKeepWidth: true,
-            resizable: false,
+            ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
             hideInSearch: true,
             render: (_, record) => renderReceivableInvoiceStatusTag(record.invoice_status, t),
-        },
-        {
-            title: t(`${P}.col.invoicedAmount`),
-            dataIndex: 'invoiced_amount',
-            valueType: 'money',
-            align: 'right',
-            width: 120,
-            minWidth: 120,
-            uniTableKeepWidth: true,
-            resizable: false,
-            hideInSearch: true,
-        },
-        {
-            title: t(`${P}.col.remainingInvoiceAmount`),
-            dataIndex: 'remaining_invoice_amount',
-            valueType: 'money',
-            align: 'right',
-            width: 120,
-            minWidth: 120,
-            uniTableKeepWidth: true,
-            resizable: false,
-            hideInSearch: true,
-            render: (_, record) => (
-                <span
-                    style={{
-                        color: Number(record.remaining_invoice_amount ?? 0) > 0 ? '#1677ff' : 'inherit',
-                        fontWeight: Number(record.remaining_invoice_amount ?? 0) > 0 ? 'bold' : 'normal',
-                    }}
-                >
-                    {record.remaining_invoice_amount != null
-                        ? formatCurrencyAmount(record.remaining_invoice_amount)
-                        : '-'}
-                </span>
-            ),
         },
         {
             title: t(`${P}.col.totalAmount`),
@@ -680,7 +648,42 @@ const ReceivableList: React.FC = () => {
             ),
         },
         {
-            title: t('app.kuaicaiwu.common.businessDate', '业务日期'),
+            title: t(`${P}.col.invoicedAmount`),
+            dataIndex: 'invoiced_amount',
+            valueType: 'money',
+            align: 'right',
+            width: 120,
+            minWidth: 120,
+            uniTableKeepWidth: true,
+            resizable: false,
+            hideInSearch: true,
+        },
+        {
+            title: t(`${P}.col.remainingInvoiceAmount`),
+            dataIndex: 'remaining_invoice_amount',
+            valueType: 'money',
+            align: 'right',
+            width: 120,
+            minWidth: 120,
+            uniTableKeepWidth: true,
+            resizable: false,
+            hideInSearch: true,
+            render: (_, record) => (
+                <span
+                    style={{
+                        color: Number(record.remaining_invoice_amount ?? 0) > 0 ? '#1677ff' : 'inherit',
+                        fontWeight: Number(record.remaining_invoice_amount ?? 0) > 0 ? 'bold' : 'normal',
+                    }}
+                >
+                    {record.remaining_invoice_amount != null
+                        ? formatCurrencyAmount(record.remaining_invoice_amount)
+                        : '-'}
+                </span>
+            ),
+        },
+        {
+            title: t('app.kuaicaiwu.common.businessDate'),
+            key: 'finance_business_date',
             dataIndex: 'business_date',
             valueType: 'date',
             width: 120,
@@ -691,7 +694,7 @@ const ReceivableList: React.FC = () => {
             sorter: true,
         },
         {
-            title: t('app.kuaicaiwu.common.businessDate', '业务日期'),
+            title: t('app.kuaicaiwu.common.businessDate'),
             dataIndex: 'business_date_range',
             valueType: 'dateRange',
             hideInTable: true,
@@ -699,6 +702,7 @@ const ReceivableList: React.FC = () => {
         },
         {
             title: t('app.kuaicaiwu.common.dueDate'),
+            key: 'finance_due_date',
             dataIndex: 'due_date',
             valueType: 'date',
             width: 120,
@@ -786,69 +790,72 @@ const ReceivableList: React.FC = () => {
         {
             title: t('common.actions'),
             key: 'action',
-            valueType: 'option',
             fixed: 'right',
             hideInSearch: true,
-            uniActionRenderOptions: { directMax: 5 },
-            render: (_, record) => [
-                        <Button {...rowActionKind('read')}
-                            key="det"
-                            type="link"
-                            size="small"
-                            icon={<EyeOutlined />}
-                            onClick={() => navigate(`/apps/kuaicaiwu/finance-management/receivables/${record.id}`)}
-                        >
-                            {t('common.detail')}
-                        </Button>,
-                        <UniWorkflowActions {...rowActionKind('skip')}
-                            key="wf"
-                            record={record}
-                            apiPrefix="/apps/kuaicaiwu/receivables"
-                            entityType="receivable"
-                            entityName={t(`${P}.entityName`)}
-                            statusField="status"
-                            reviewStatusField="review_status"
-                            draftStatuses={['草稿', 'draft']}
-                            pendingStatuses={['待审核']}
-                            approvedStatuses={['已审核']}
-                            rejectedStatuses={['已驳回', '驳回']}
-                            theme="link"
-                            size="small"
-                            onSuccess={() => actionRef.current?.reload()}
+            render: (_, record) => {
+                const acts: React.ReactNode[] = [
+                    <Button
+                        key="det"
+                        {...rowActionKind('read')}
+                        onClick={() => navigate(`/apps/kuaicaiwu/finance-management/receivables/${record.id}`)}
+                    />,
+                    <UniWorkflowActions
+                        {...rowActionKind('skip')}
+                        key="wf"
+                        record={record}
+                        apiPrefix="/apps/kuaicaiwu/receivables"
+                        entityType="receivable"
+                        entityName={t(`${P}.entityName`)}
+                        statusField="status"
+                        reviewStatusField="review_status"
+                        draftStatuses={['草稿', 'draft']}
+                        pendingStatuses={['待审核']}
+                        approvedStatuses={['已审核']}
+                        rejectedStatuses={['已驳回', '驳回']}
+                        theme="link"
+                        size="small"
+                        onSuccess={() => actionRef.current?.reload()}
+                    />,
+                ];
+                if (
+                    record.remaining_amount > 0 &&
+                    record.capabilities?.push_receipt?.allowed !== false &&
+                    receiptPerms.canCreate
+                ) {
+                    acts.push(
+                        <Button
+                            key="pay"
+                            {...rowActionCollectReceipt('execute')}
+                            onClick={() =>
+                                navigate(`/apps/kuaicaiwu/finance-management/receipts`, {
+                                    state: { pullReceivableId: record.id },
+                                })
+                            }
                         />,
-                        record.remaining_amount > 0 &&
-                        record.capabilities?.push_receipt?.allowed !== false &&
-                        receiptPerms.canCreate ? (
-                            <Button {...rowActionKind('execute')}
-                                key="pay"
-                                type="link"
-                                size="small"
-                                icon={<DollarOutlined />}
-                                onClick={() => navigate(`/apps/kuaicaiwu/finance-management/receipts`, {
+                    );
+                }
+                if (
+                    record.capabilities?.push_sales_invoice?.allowed !== false &&
+                    Number(record.remaining_invoice_amount ?? record.total_amount ?? 0) > 0 &&
+                    salesInvoicePerms.canCreate
+                ) {
+                    acts.push(
+                        <Button
+                            key="invoice"
+                            {...rowActionIssueInvoice('create')}
+                            onClick={() =>
+                                navigate('/apps/kuaicaiwu/finance-management/sales-invoices', {
                                     state: { pullReceivableId: record.id },
-                                })}
-                            >
-                                {t('app.kuaicaiwu.common.collect')}
-                            </Button>
-                        ) : null,
-                        record.capabilities?.push_sales_invoice?.allowed !== false &&
-                        Number(record.remaining_invoice_amount ?? record.total_amount ?? 0) > 0 &&
-                        salesInvoicePerms.canCreate ? (
-                            <Button {...rowActionKind('create')}
-                                key="invoice"
-                                type="link"
-                                size="small"
-                                icon={<FileTextOutlined />}
-                                onClick={() => navigate('/apps/kuaicaiwu/finance-management/sales-invoices', {
-                                    state: { pullReceivableId: record.id },
-                                })}
-                            >
-                                {t('app.kuaicaiwu.receivable.createInvoice')}
-                            </Button>
-                        ) : null,
-                    ].filter(Boolean) as React.ReactNode[],
+                                })
+                            }
+                        />,
+                    );
+                }
+                return acts;
+            },
         },
-    ], [t, navigate, customerOptions, receivablePerms, receiptPerms, salesInvoicePerms]);
+    ], [t, navigate, customerOptions, receiptPerms, salesInvoicePerms]);
+
 
     return (
         <ListPageTemplate>
@@ -870,7 +877,7 @@ const ReceivableList: React.FC = () => {
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.receivable)}
                 actionRef={actionRef}
                 columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
-                columnPersistenceId="apps.kuaicaiwu.pages.finance-management.receivables.list-v2"
+                columnPersistenceId="apps.kuaicaiwu.pages.finance-management.receivables.list-v4"
                 request={async (params, sort, _filter, searchFormValues) => {
                     const { current, pageSize } = params;
                     const listParams = resolveReceivableListParams(searchFormValues, sort, urlAgingFilters);

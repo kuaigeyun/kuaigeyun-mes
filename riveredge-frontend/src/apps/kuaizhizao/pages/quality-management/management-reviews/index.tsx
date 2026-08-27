@@ -97,12 +97,19 @@ const ManagementReviewsPage: React.FC = () => {
             title: t('app.kuaizhizao.quality.qms.reviewCode'),
             dataIndex: 'review_code',
             width: 140,
+            minWidth: 140,
+            uniTableKeepWidth: true,
+            resizable: false,
             copyable: true,
             hideInSearch: true,
           },
           {
             title: t('app.kuaizhizao.quality.qms.title'),
             dataIndex: 'title',
+            minWidth: 200,
+            uniTablePrimaryFlex: true,
+            uniTableRemainderFlex: true,
+            resizable: false,
             ellipsis: true,
             hideInSearch: true,
           },
@@ -115,32 +122,39 @@ const ManagementReviewsPage: React.FC = () => {
             title: t('app.kuaizhizao.quality.qms.chairperson'),
             dataIndex: 'chairperson',
             width: 100,
+            minWidth: 100,
+            uniTableKeepWidth: true,
+            resizable: false,
             hideInSearch: true,
           },
           {
             title: t('app.kuaizhizao.quality.qms.reviewDate'),
             dataIndex: 'review_date',
             width: 140,
+            minWidth: 140,
+            uniTableKeepWidth: true,
+            resizable: false,
             hideInSearch: true,
             render: (_, row) => formatDateTimeBySiteSetting(row.review_date) || '-',
           },
           {
             title: t('common.status'),
+            key: 'lifecycle',
             dataIndex: 'status',
-            width: 110,
+            fixed: 'right',
             valueEnum: statusEnum,
             render: (_, row) => <Tag>{statusEnum[row.status]?.text || row.status}</Tag>,
           },
           {
             title: t('common.actions'),
-            valueType: 'option',
-            width: 140,
+            key: 'option',
             fixed: 'right',
+            hideInSearch: true,
             render: (_, row) => [
               canUpdate ? (
-                <a
+                <Button
                   key="edit"
-                  className={rowActionKind('edit')}
+                  {...rowActionKind('update')}
                   onClick={() => {
                     setEditing(row);
                     setOpen(true);
@@ -154,22 +168,18 @@ const ManagementReviewsPage: React.FC = () => {
                       });
                     }, 0);
                   }}
-                >
-                  {t('common.edit')}
-                </a>
+                />
               ) : null,
               canDelete ? (
-                <a
+                <Button
                   key="delete"
-                  className={rowActionKind('danger')}
+                  {...rowActionKind('delete')}
                   onClick={async () => {
                     await qualityQmsApi.managementReviews.delete(row.id);
                     messageApi.success(t('common.deleteSuccess'));
                     actionRef.current?.reload();
                   }}
-                >
-                  {t('common.delete')}
-                </a>
+                />
               ) : null,
             ],
           },
@@ -193,7 +203,7 @@ const ManagementReviewsPage: React.FC = () => {
           rowKey="id"
           columns={columns}
           showAdvancedSearch
-          columnPersistenceId="apps.kuaizhizao.pages.quality-management.management-reviews"
+          columnPersistenceId="apps.kuaizhizao.pages.quality-management.management-reviews-width-v2"
           toolBarRender={() =>
             canCreate
               ? [

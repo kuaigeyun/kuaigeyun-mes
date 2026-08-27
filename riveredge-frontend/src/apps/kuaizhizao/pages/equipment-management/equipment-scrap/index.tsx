@@ -11,7 +11,7 @@ import {
 import { App, Button, Modal, Row, Col, Input } from 'antd';
 import { StatusTag } from '../../../../../constants/statusBadges';
 import { renderDocumentStatusTag } from '../../../../../utils/documentLifecycleStatusTag';
-import { SendOutlined, CheckOutlined, CloseOutlined, DeleteOutlined } from '@ant-design/icons';
+import { DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { EQUIPMENT_DATE_FIELD_PROPS } from '../../../utils/equipmentFormFieldProps';
 import { UniTable } from '../../../../../components/uni-table';
@@ -240,31 +240,48 @@ const EquipmentScrapPage: React.FC = () => {
       {
         title: t(`${P}.col.applicationNo`),
         dataIndex: 'application_no',
-        width: 140,
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
         fixed: 'left',
         sorter: true,
         search: { order: 30 } as ProColumns['search'],
+        render: (_, r) =>
+          r.application_no != null && r.application_no !== '' ? String(r.application_no) : '-',
       },
       {
         title: t(`${P}.col.equipment`),
         dataIndex: 'equipment_name',
         width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
         ellipsis: true,
         sorter: true,
         hideInSearch: true,
+        render: (_, r) =>
+          r.equipment_name != null && r.equipment_name !== '' ? String(r.equipment_name) : '-',
       },
       {
         title: t(`${P}.col.reason`),
         dataIndex: 'reason',
+        minWidth: 160,
+        uniTablePrimaryFlex: true,
+        uniTableRemainderFlex: true,
+        resizable: false,
         ellipsis: true,
-        sorter: true,
         hideInSearch: true,
+        render: (_, r) => (r.reason != null && r.reason !== '' ? String(r.reason) : '-'),
       },
       {
         title: t(`${P}.col.scrapDate`),
         dataIndex: 'scrap_date',
         width: 132,
+        minWidth: 132,
         uniTableKeepWidth: true,
+        resizable: false,
         valueType: 'date',
         sorter: true,
         hideInSearch: true,
@@ -273,14 +290,14 @@ const EquipmentScrapPage: React.FC = () => {
         title: t(`${P}.col.applicant`),
         dataIndex: 'applicant_name',
         width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
         sorter: true,
         hideInSearch: true,
-      },
-      {
-        title: t('common.updatedAt'),
-        dataIndex: 'updated_at',
-        hideInTable: true,
-        hideInSearch: true,
+        render: (_, r) =>
+          r.applicant_name != null && r.applicant_name !== '' ? String(r.applicant_name) : '-',
       },
       ...buildDocumentAuditColumns<ScrapApplication>(t),
       {
@@ -293,7 +310,7 @@ const EquipmentScrapPage: React.FC = () => {
       },
       {
         title: t('common.actions'),
-        key: 'action',
+        key: 'option',
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) => [
@@ -311,7 +328,6 @@ const EquipmentScrapPage: React.FC = () => {
             <Button
               key="submit"
               {...rowActionKind('submit')}
-              icon={<SendOutlined />}
               onClick={(e) => {
                 e.stopPropagation();
                 void handleSubmitDoc(record);
@@ -324,7 +340,6 @@ const EquipmentScrapPage: React.FC = () => {
             <Button
               key="approve"
               {...rowActionKind('approve')}
-              icon={<CheckOutlined />}
               onClick={(e) => {
                 e.stopPropagation();
                 void handleApprove(record);
@@ -338,7 +353,6 @@ const EquipmentScrapPage: React.FC = () => {
               key="reject"
               {...rowActionKind('reject')}
               danger
-              icon={<CloseOutlined />}
               onClick={(e) => {
                 e.stopPropagation();
                 setRejectTarget(record);
@@ -379,7 +393,7 @@ const EquipmentScrapPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.equipmentScrap)}
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.equipment-scrap-equip-rank-v1"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.equipment-scrap-width-v2"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}

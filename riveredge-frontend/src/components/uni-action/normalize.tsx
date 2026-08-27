@@ -124,6 +124,9 @@ function defaultIconForRowActionWithKind(
   if (readActionVisualProfile(node) === 'balloon-annotate') {
     return <HighlightOutlined />
   }
+  if (readActionVisualProfile(node) === 'copy-create') {
+    return <CopyOutlined />
+  }
   const explicit = readExplicitActionKind(node) ?? inheritedExplicit ?? null
   if (explicit === 'read' || explicit === 'display') return <EyeOutlined />
   if (explicit === 'update') return <EditOutlined />

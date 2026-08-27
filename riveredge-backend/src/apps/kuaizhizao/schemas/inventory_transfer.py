@@ -12,6 +12,8 @@ from typing import Optional, List
 from pydantic import BaseModel, Field, ConfigDict
 from decimal import Decimal
 
+from apps.kuaizhizao.schemas.warehouse import DocumentLineMaterialPreview
+
 
 class InventoryTransferBase(BaseModel):
     """
@@ -112,6 +114,9 @@ class InventoryTransferResponse(InventoryTransferBase):
     updated_by_name: Optional[str] = Field(None, description="更新人姓名")
     transfer_mode: Optional[str] = Field(None, description="单据模式：transfer|bin_relocation")
     lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycleStepper 展示）")
+    items: Optional[List[DocumentLineMaterialPreview]] = Field(
+        None, description="明细物料名预览（列表「明细」列）",
+    )
 
 
 class InventoryTransferListResponse(BaseModel):

@@ -10,11 +10,7 @@ import { App, Button, DatePicker, Select, Space, theme as AntdTheme, Tooltip } f
 import { CalculatorOutlined, CheckOutlined, RollbackOutlined, DownloadOutlined, TeamOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
-import {
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-  UniTableStackedPrimaryCell,
-} from '../../../../../components/uni-table/stackedPrimaryColumn';
-import { rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { DetailDrawerActions, ListPageTemplate } from '../../../../../components/layout-templates';
 import { useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
@@ -194,35 +190,32 @@ const SummariesPage: React.FC = () => {
   const columns: ProColumns<PerformanceSummary>[] = useMemo(
     () => alignProColumns<PerformanceSummary>([
       {
+        // 列稀疏：业务列不堆叠（员工 → 周期 → 数量金额 → KPI → 状态）；审计叠列保留
         title: t('app.kuaizhizao.performance.common.columns.employee'),
-        key: 'performance_employee_stacked',
+        key: 'performance_employee_name',
         dataIndex: 'employee_name',
-        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        minWidth: 140,
+        uniTableRemainderFlex: true,
+        uniTablePrimaryFlex: true,
+        resizable: false,
+        ellipsis: true,
         fixed: 'left',
         sorter: true,
-        render: (_, r) => (
-          <UniTableStackedPrimaryCell
-            primary={String(r.employee_name ?? '').trim() || '-'}
-            secondary={String(r.period ?? '').trim() || '-'}
-            secondaryCopyable={false}
-          />
-        ),
       },
       {
         title: t('app.kuaizhizao.performance.common.columns.period'),
         dataIndex: 'period',
-        width: 100,
-        minWidth: 100,
+        width: 112,
+        minWidth: 112,
         uniTableKeepWidth: true,
         resizable: false,
         sorter: true,
-        hideInTable: true,
       },
       {
         title: t('app.kuaizhizao.performance.common.columns.totalHours'),
         dataIndex: 'total_hours',
-        width: 96,
-        minWidth: 96,
+        width: 120,
+        minWidth: 120,
         uniTableKeepWidth: true,
         resizable: false,
         align: 'right',
@@ -231,8 +224,8 @@ const SummariesPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.performance.common.columns.totalPieces'),
         dataIndex: 'total_pieces',
-        width: 96,
-        minWidth: 96,
+        width: 120,
+        minWidth: 120,
         uniTableKeepWidth: true,
         resizable: false,
         align: 'right',
@@ -241,8 +234,8 @@ const SummariesPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.performance.common.columns.timeAmount'),
         dataIndex: 'time_amount',
-        width: 110,
-        minWidth: 110,
+        width: 140,
+        minWidth: 140,
         uniTableKeepWidth: true,
         resizable: false,
         align: 'right',
@@ -251,8 +244,8 @@ const SummariesPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.performance.common.columns.pieceAmount'),
         dataIndex: 'piece_amount',
-        width: 110,
-        minWidth: 110,
+        width: 140,
+        minWidth: 140,
         uniTableKeepWidth: true,
         resizable: false,
         align: 'right',
@@ -261,8 +254,8 @@ const SummariesPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.performance.common.columns.totalAmount'),
         dataIndex: 'total_amount',
-        width: 110,
-        minWidth: 110,
+        width: 140,
+        minWidth: 140,
         uniTableKeepWidth: true,
         resizable: false,
         align: 'right',
@@ -271,8 +264,9 @@ const SummariesPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.performance.common.columns.kpiScore'),
         dataIndex: 'kpi_score',
-        width: 96,
-        minWidth: 96,
+        // 表头「KPI综合分」+ 排序钮
+        width: 148,
+        minWidth: 148,
         uniTableKeepWidth: true,
         resizable: false,
         align: 'right',
@@ -281,8 +275,8 @@ const SummariesPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.performance.common.columns.kpiCoefficient'),
         dataIndex: 'kpi_coefficient',
-        width: 96,
-        minWidth: 96,
+        width: 140,
+        minWidth: 140,
         uniTableKeepWidth: true,
         resizable: false,
         align: 'right',
@@ -308,25 +302,39 @@ const SummariesPage: React.FC = () => {
         key: 'action',
         fixed: 'right',
         hideInSearch: true,
-        render: (_, record) => (
-          <Space size={0}>
-            {summaryPerms.canRead ? (
-              <Button key="view" {...rowActionKind('read')} onClick={() => handleViewDetail(record)}>
-                {t('app.kuaizhizao.performance.summaries.actions.detail')}
-              </Button>
-            ) : null}
-            {record.status === 'calculated' && summaryPerms.canAction?.('approve') ? (
-              <Button type="link" size="small" icon={<CheckOutlined />} onClick={() => handleConfirm(record)}>
+        render: (_, record) => {
+          const parts: React.ReactNode[] = [];
+          if (summaryPerms.canRead) {
+            parts.push(
+              <Button key="view" {...rowActionKind('read')} onClick={() => handleViewDetail(record)} />,
+            );
+          }
+          if (record.status === 'calculated' && summaryPerms.canAction?.('approve')) {
+            parts.push(
+              <Button
+                key="confirm"
+                {...rowActionKind('approve')}
+                {...rowActionLabelKeep()}
+                onClick={() => handleConfirm(record)}
+              >
                 {t('app.kuaizhizao.performance.common.actions.confirm')}
-              </Button>
-            ) : null}
-            {record.status === 'confirmed' && summaryPerms.canAction?.('revoke') ? (
-              <Button type="link" size="small" icon={<RollbackOutlined />} onClick={() => handleReopen(record)}>
+              </Button>,
+            );
+          }
+          if (record.status === 'confirmed' && summaryPerms.canAction?.('revoke')) {
+            parts.push(
+              <Button
+                key="reopen"
+                {...rowActionKind('revoke')}
+                {...rowActionLabelKeep()}
+                onClick={() => handleReopen(record)}
+              >
                 {t('app.kuaizhizao.performance.common.actions.reopen')}
-              </Button>
-            ) : null}
-          </Space>
-        ),
+              </Button>,
+            );
+          }
+          return parts;
+        },
       },
     ], SALES_DOC_LIST_FIELD_RANK),
     [t, summaryPerms],
@@ -340,7 +348,7 @@ const SummariesPage: React.FC = () => {
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
-          columnPersistenceId="apps.kuaizhizao.pages.performance.summaries.v1"
+          columnPersistenceId="apps.kuaizhizao.pages.performance.summaries.v2"
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.performanceSummaries')}
           showAdvancedSearch

@@ -26,9 +26,12 @@ import { UniTable } from '../../../../../components/uni-table';
 import { LinkedDocumentCode } from '../../../../../components/linked-document-code';
 import {
   UniTableStackedPrimaryCell,
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
   MaterialStackedCell,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
+import {
+  DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+  renderDocumentLineMaterialsPreview,
+} from '../../sales-management/shared/documentLineMaterialsPreview';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES,   useDetailDrawerDescriptionItems, detailDrawerBasicColumn } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
@@ -99,6 +102,8 @@ interface DeliveryNotice {
   notes?: string;
   created_at?: string;
   updated_at?: string;
+  /** 列表明细物料名预览 */
+  items?: Array<{ material_name?: string | null }>;
 }
 
 interface DeliveryNoticeDetail extends DeliveryNotice {
@@ -223,7 +228,11 @@ const DeliveryNotesPage: React.FC = () => {
       title: t('app.kuaizhizao.deliveryNote.col.customerNotice'),
       key: 'notice_code',
       dataIndex: 'notice_code',
-      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+      width: 240,
+      minWidth: 240,
+      uniTableKeepWidth: true,
+      uniTablePrimaryFlex: false,
+      resizable: false,
       fixed: 'left',
       sorter: true,
       search: { order: 50 } as ProColumns['search'],
@@ -239,7 +248,10 @@ const DeliveryNotesPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.deliveryNote.col.salesDeliveryCode'),
       dataIndex: 'sales_delivery_code',
-      width: 140,
+      width: 160,
+      minWidth: 160,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       sorter: true,
       hideInSearch: true,
@@ -252,18 +264,28 @@ const DeliveryNotesPage: React.FC = () => {
       ),
     },
     {
+      title: t('app.kuaizhizao.common.colLineMaterials'),
+      ...DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+      render: (_, r) => renderDocumentLineMaterialsPreview(r.items, t),
+    },
+    {
       title: t('app.kuaizhizao.warehouseCommon.colTotalQuantity'),
       dataIndex: 'total_quantity',
       width: 100,
-      align: 'right',
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       sorter: true,
       hideInSearch: true,
-      render: formatQuantity,
+      render: (_, r) => formatQuantity(r.total_quantity),
     },
     {
       title: t('app.kuaizhizao.warehouseCommon.colAmount'),
       dataIndex: 'total_amount',
       width: 110,
+      minWidth: 110,
+      uniTableKeepWidth: true,
+      resizable: false,
       align: 'right',
       sorter: true,
       hideInSearch: true,
@@ -274,22 +296,34 @@ const DeliveryNotesPage: React.FC = () => {
       title: t('app.kuaizhizao.deliveryNote.col.carrier'),
       dataIndex: 'carrier',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
       sorter: true,
       hideInSearch: true,
+      render: (_, r) => (r.carrier != null && r.carrier !== '' ? String(r.carrier) : '-'),
     },
     {
       title: t('app.kuaizhizao.deliveryNote.col.trackingNumber'),
       dataIndex: 'tracking_number',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       sorter: true,
       hideInSearch: true,
+      render: (_, r) =>
+        r.tracking_number != null && r.tracking_number !== '' ? String(r.tracking_number) : '-',
     },
     {
       title: t('app.kuaizhizao.deliveryNote.col.plannedDelivery'),
       dataIndex: 'planned_delivery_date',
       width: 132,
+      minWidth: 132,
       uniTableKeepWidth: true,
+      resizable: false,
       sorter: true,
       hideInSearch: true,
       valueType: 'date',
@@ -298,7 +332,9 @@ const DeliveryNotesPage: React.FC = () => {
       title: t('app.kuaizhizao.deliveryNote.col.sentAt'),
       dataIndex: 'sent_at',
       width: 132,
+      minWidth: 132,
       uniTableKeepWidth: true,
+      resizable: false,
       sorter: true,
       hideInSearch: true,
       render: (_, r) => (r.sent_at ? formatDateTime(r.sent_at) : '-'),
@@ -326,8 +362,9 @@ const DeliveryNotesPage: React.FC = () => {
     },
     {
       title: t('common.actions'),
-      width: 200,
+      key: 'option',
       fixed: 'right',
+      hideInSearch: true,
       render: (_, record) => {
         const moreItems = [
           ...(record.status === '待发送'
@@ -1150,7 +1187,7 @@ const DeliveryNotesPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable
           headerTitle={t('app.kuaizhizao.deliveryNote.title')}
-          columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.delivery-notes.v2"
+          columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.delivery-notes-width-v3"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}

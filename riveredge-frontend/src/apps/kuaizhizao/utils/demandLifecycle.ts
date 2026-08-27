@@ -60,7 +60,7 @@ export function buildDemandPlanLifecycleValueEnum(
     草稿: 'Default',
     待审核: 'Processing',
     已驳回: 'Error',
-    已生效: 'Success',
+    已生效: 'Processing',
     已下推计算: 'Success',
   };
   return Object.fromEntries(

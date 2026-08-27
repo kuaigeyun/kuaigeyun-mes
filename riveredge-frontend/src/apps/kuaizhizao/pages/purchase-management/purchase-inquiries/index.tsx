@@ -17,6 +17,10 @@ import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
   MaterialStackedCell,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
+import {
+  DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+  renderDocumentLineMaterialsPreview,
+} from '../../sales-management/shared/documentLineMaterialsPreview';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, FORM_LAYOUT, MODAL_CONFIG,   useDetailDrawerDescriptionItems } from '../../../../../components/layout-templates';
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import { SourceDocumentCode } from '../../../../../components/linked-document-code/SourceDocumentCode';
@@ -122,7 +126,7 @@ type PurchaseInquiryItemRow = PurchaseInquiryItem & {
 };
 
 const PURCHASE_INQUIRY_LIST_PERSISTENCE_ID =
-  'apps.kuaizhizao.pages.purchase-management.purchase-inquiries.v3';
+  'apps.kuaizhizao.pages.purchase-management.purchase-inquiries-width-v1';
 
 const PurchaseInquiriesPage: React.FC = () => {
   const { t } = useTranslation();
@@ -675,7 +679,11 @@ const PurchaseInquiriesPage: React.FC = () => {
       title: t('app.kuaizhizao.purchaseInquiry.colNameInquiryCode'),
       key: 'inquiry_code',
       dataIndex: 'inquiry_code',
-      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+      width: 240,
+      minWidth: 240,
+      uniTableKeepWidth: true,
+      uniTablePrimaryFlex: false,
+      resizable: false,
       fixed: 'left',
       sorter: true,
       render: (_, r) => (
@@ -691,7 +699,9 @@ const PurchaseInquiriesPage: React.FC = () => {
       title: t('app.kuaizhizao.purchaseInquiry.colSourceCode'),
       dataIndex: 'source_code',
       width: 148,
+      minWidth: 148,
       uniTableKeepWidth: true,
+      resizable: false,
       sorter: true,
       hideInSearch: false,
       ellipsis: true,
@@ -703,12 +713,28 @@ const PurchaseInquiriesPage: React.FC = () => {
         />
       ),
     },
-    { title: t('app.kuaizhizao.purchaseInquiry.colBuyer'), dataIndex: 'buyer_name', width: 100, sorter: true, hideInSearch: true },
+    {
+      title: t('app.kuaizhizao.common.colLineMaterials'),
+      ...DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+      render: (_, r) => renderDocumentLineMaterialsPreview(r.items, t),
+    },
+    {
+      title: t('app.kuaizhizao.purchaseInquiry.colBuyer'),
+      dataIndex: 'buyer_name',
+      width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
+      sorter: true,
+      hideInSearch: true,
+    },
     {
       title: t('app.kuaizhizao.purchaseInquiry.colQuoteDeadline'),
       dataIndex: 'quote_deadline',
       width: 132,
+      minWidth: 132,
       uniTableKeepWidth: true,
+      resizable: false,
       sorter: true,
       hideInSearch: true,
       render: (_, r) => (r.quote_deadline ? formatDateTime(r.quote_deadline, 'YYYY-MM-DD') : '-'),
@@ -723,6 +749,9 @@ const PurchaseInquiriesPage: React.FC = () => {
       title: t('app.kuaizhizao.purchaseOrder.col.totalQuantity'),
       dataIndex: 'total_quantity',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       align: 'right' as const,
       hideInSearch: true,
       render: (_, r) => (formatQuantity(r.total_quantity)),
@@ -731,6 +760,9 @@ const PurchaseInquiriesPage: React.FC = () => {
       title: t('app.kuaizhizao.salesOrder.totalAmountLabel'),
       dataIndex: 'total_amount',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       align: 'right' as const,
       hideInSearch: true,
       render: (_, r) => (r.total_amount != null ? formatCurrencyAmount(r.total_amount) : '-'),
@@ -749,6 +781,7 @@ const PurchaseInquiriesPage: React.FC = () => {
     ...(purchaseInquiryAuditColumn ? [purchaseInquiryAuditColumn] : []),
     {
       title: t('app.kuaizhizao.purchaseInquiry.colLifecycle'),
+      key: 'lifecycle',
       dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
       fixed: 'right',
       valueType: 'select',
@@ -759,6 +792,7 @@ const PurchaseInquiriesPage: React.FC = () => {
     },
     {
       title: t('common.actions'),
+      key: 'option',
       valueType: 'option',
       fixed: 'right',
       render: (_, record) => {
@@ -1010,7 +1044,7 @@ const PurchaseInquiriesPage: React.FC = () => {
         limit: (params.pageSize as number) || 20,
         ...lifecycleParams,
         order_by: orderBy,
-        include_items: dataViewModeRef.current === 'detail',
+        include_items: true,
       };
       if (fuzzyKeyword) {
         apiParams.keyword = fuzzyKeyword;

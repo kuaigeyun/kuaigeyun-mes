@@ -1,4 +1,3 @@
-import { rowActionKind } from '../../../../../components/uni-action';
 /**
  * 工程图纸管理页面（两栏：左导航树 + 右表/预览）
  */
@@ -7,12 +6,9 @@ import React, { lazy, startTransition, Suspense, useCallback, useDeferredValue, 
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Dropdown, Grid, Input, Modal, Popconfirm, Segmented, Space, Spin, Tag, Timeline, Tooltip, theme } from 'antd';
+import { App, Button, Dropdown, Grid, Input, Modal, Popconfirm, Segmented, Space, Spin, Timeline, Tooltip, theme } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import {
-  DeleteOutlined,
-  EditOutlined,
-  EyeOutlined,
   ExpandOutlined,
   FilterOutlined,
   FolderOutlined,
@@ -20,9 +16,10 @@ import {
   MenuUnfoldOutlined,
   PartitionOutlined,
   PlusOutlined,
-  PrinterOutlined,
+  EyeOutlined,
 } from '@ant-design/icons';
 import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
+import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import {
   TwoColumnLayout,
@@ -32,7 +29,7 @@ import {
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { ProcessMasterDetailDrawer } from '../shared/processMasterDetailDrawer';
 import { DetailDrawerActions } from '../../../../../components/layout-templates/DetailDrawerActions';
-import { MarkerTag } from '../../../../../constants/statusBadges';
+import { MarkerTag, StatusTag } from '../../../../../constants/statusBadges';
 import { DrawingFormModal } from '../../../components/DrawingFormModal';
 import { StepBomImportWizard } from '../../../components/StepBomImportWizard';
 import FilePreviewModal from '../../../../../components/file-preview';
@@ -75,6 +72,7 @@ import {
 import { isStepFile } from '../../../../../utils/filePreviewKind';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { MASTER_DATA_LIST_FIELD_RANK } from '../../../utils/masterListCore';
 import { masterCrudCreatedUpdatedColumns } from '../../../utils/masterListCore';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
@@ -792,6 +790,7 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
           <Button
             key="moveFolder"
             {...rowActionKind('update')}
+            {...rowActionLabelKeep()}
             onClick={() =>
               setMoveFolder({
                 open: true,
@@ -806,31 +805,22 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
         {record.status === 'Draft' && (
           <>
             {canUpdate ? (
-              <Button key="checkout" {...rowActionKind('update')} onClick={() => handleCheckout(record)}>
+              <Button key="checkout" {...rowActionKind('update')} {...rowActionLabelKeep()} onClick={() => handleCheckout(record)}>
                 {t('app.master-data.drawings.checkout')}
               </Button>
             ) : null}
             {canSubmit ? (
-              <Button key="submit" {...rowActionKind('submit')} onClick={() => handleSubmit(record)}>
+              <Button key="submit" {...rowActionKind('submit')} {...rowActionLabelKeep()} onClick={() => handleSubmit(record)}>
                 {t('common.submit')}
               </Button>
             ) : null}
             {canDelete ? (
               <Popconfirm
                 key="delete"
-                {...rowActionKind('delete')}
                 title={t('common.confirmDelete')}
                 onConfirm={() => handleDeleteDrawing(record)}
               >
-                <Button
-                  type={compact ? 'default' : 'link'}
-                  size="small"
-                  danger
-                  icon={<DeleteOutlined />}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {t('common.delete')}
-                </Button>
+                <Button {...rowActionKind('delete')} onClick={(e) => e.stopPropagation()} />
               </Popconfirm>
             ) : null}
           </>
@@ -841,23 +831,19 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
               <Button
                 key="edit"
                 {...rowActionKind('update')}
-                size="small"
-                icon={<EditOutlined />}
                 onClick={() => {
                   setEditUuid(record.uuid);
                   setModalVisible(true);
                 }}
-              >
-                {t('common.edit')}
-              </Button>
+              />
             ) : null}
             {canUpdate ? (
-              <Button key="checkin" {...rowActionKind('update')} onClick={() => handleCheckin(record)}>
+              <Button key="checkin" {...rowActionKind('update')} {...rowActionLabelKeep()} onClick={() => handleCheckin(record)}>
                 {t('app.master-data.drawings.checkin')}
               </Button>
             ) : null}
             {canUpdate ? (
-              <Button key="undoCheckout" {...rowActionKind('update')} onClick={() => handleUndoCheckout(record)}>
+              <Button key="undoCheckout" {...rowActionKind('update')} {...rowActionLabelKeep()} onClick={() => handleUndoCheckout(record)}>
                 {t('app.master-data.drawings.undoCheckout')}
               </Button>
             ) : null}
@@ -866,17 +852,17 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
         {record.status === 'Pending' && (
           <>
             {canApprove ? (
-              <Button key="approve" {...rowActionKind('approve')} onClick={() => handleApprove(record)}>
+              <Button key="approve" {...rowActionKind('approve')} {...rowActionLabelKeep()} onClick={() => handleApprove(record)}>
                 {t('app.master-data.drawings.approve')}
               </Button>
             ) : null}
             {canReject ? (
-              <Button key="reject" {...rowActionKind('reject')} onClick={() => handleReject(record)}>
+              <Button key="reject" {...rowActionKind('reject')} {...rowActionLabelKeep()} onClick={() => handleReject(record)}>
                 {t('app.master-data.drawings.reject')}
               </Button>
             ) : null}
             {canRevoke ? (
-              <Button key="revoke" {...rowActionKind('revoke')} onClick={() => handleRevoke(record)}>
+              <Button key="revoke" {...rowActionKind('revoke')} {...rowActionLabelKeep()} onClick={() => handleRevoke(record)}>
                 {t('app.master-data.drawings.revoke')}
               </Button>
             ) : null}
@@ -888,18 +874,19 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
               <Button
                 key="engineeringChange"
                 {...rowActionKind('create')}
+                {...rowActionLabelKeep()}
                 onClick={() => navigate(buildDrawingChangeCreateUrl(record.uuid))}
               >
                 {t('app.master-data.drawings.engineeringChange')}
               </Button>
             ) : null}
             {canCreate ? (
-              <Button key="create" {...rowActionKind('create')} onClick={() => handleRevision(record)}>
+              <Button key="create" {...rowActionKind('create')} {...rowActionLabelKeep()} onClick={() => handleRevision(record)}>
                 {t('app.master-data.drawings.newRevision')}
               </Button>
             ) : null}
             {canObsolete ? (
-              <Button key="obsolete" {...rowActionKind('obsolete')} onClick={() => handleObsolete(record)}>
+              <Button key="obsolete" {...rowActionKind('obsolete')} {...rowActionLabelKeep()} onClick={() => handleObsolete(record)}>
                 {t('app.master-data.drawings.obsolete')}
               </Button>
             ) : null}
@@ -908,28 +895,17 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
         {record.status === 'Obsolete' && canDelete && (
           <Popconfirm
             key="delete"
-            {...rowActionKind('delete')}
             title={t('common.confirmDelete')}
             onConfirm={() => handleDeleteDrawing(record)}
           >
-            <Button
-              type="link"
-              size="small"
-              danger
-              icon={<DeleteOutlined />}
-              onClick={(e) => e.stopPropagation()}
-            >
-              {t('common.delete')}
-            </Button>
+            <Button {...rowActionKind('delete')} onClick={(e) => e.stopPropagation()} />
           </Popconfirm>
         )}
         {canPrint ? (
-          <Button key="print" {...rowActionKind('print')} icon={<PrinterOutlined />} onClick={() => void openDrawingPrint(record)}>
-            {t('common.print')}
-          </Button>
+          <Button key="print" {...rowActionKind('print')} onClick={() => void openDrawingPrint(record)} />
         ) : null}
         {!compact && record.file && !showInlinePreview && (
-          <Button key="preview" {...rowActionKind('read')} onClick={() => openPreview(record.file)}>
+          <Button key="preview" {...rowActionKind('read')} {...rowActionLabelKeep()} onClick={() => openPreview(record.file)}>
             {t('app.master-data.drawings.preview')}
           </Button>
         )}
@@ -1097,34 +1073,48 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
       const customFieldColumns = generateCustomFieldColumns();
       return [
       {
+        // 稀疏主数据：业务列不叠；名称 RemainderFlex；状态 StatusTag 右固
         title: t('app.master-data.drawings.code'),
         dataIndex: 'code',
-        width: 120,
+        width: 140,
+        minWidth: 140,
+        uniTableKeepWidth: true,
+        resizable: false,
         fixed: 'left' as const,
+        ellipsis: true,
       },
       {
         title: t('app.master-data.drawings.name'),
         dataIndex: 'name',
+        minWidth: 160,
+        uniTableRemainderFlex: true,
+        uniTablePrimaryFlex: true,
+        resizable: false,
         ellipsis: true,
-        width: 180,
       },
       {
         title: t('app.master-data.drawings.revision'),
         dataIndex: 'revision',
-        width: 64,
+        width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
       },
       {
         title: t('app.master-data.drawings.folder'),
         dataIndex: 'folderName',
         search: false,
-        width: 120,
+        width: 140,
+        minWidth: 140,
+        uniTableKeepWidth: true,
+        resizable: false,
         ellipsis: true,
         render: (_, record) => record.folderName || t('app.master-data.drawings.tree.unclassified'),
       },
       {
         title: t('app.master-data.drawings.type'),
         dataIndex: 'drawingType',
-        width: 88,
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         valueType: 'select',
         valueEnum: {
           part: { text: t('app.master-data.drawings.type.part') },
@@ -1132,11 +1122,17 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
           process: { text: t('app.master-data.drawings.type.process') },
           other: { text: t('app.master-data.drawings.type.other') },
         },
+        render: (_, r) =>
+          r.drawingType ? (
+            <MarkerTag color="processing">{t(`app.master-data.drawings.type.${r.drawingType}`)}</MarkerTag>
+          ) : (
+            '-'
+          ),
       },
       {
         title: t('app.master-data.drawings.securityLevel'),
         dataIndex: 'securityLevel',
-        width: 88,
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         valueType: 'select',
         valueEnum: {
           public: { text: t('app.master-data.drawings.securityLevel.public') },
@@ -1154,7 +1150,7 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
       {
         title: t('common.status'),
         dataIndex: 'status',
-        width: 88,
+        hideInTable: true,
         valueType: 'select',
         valueEnum: {
           Draft: { text: t('app.master-data.drawings.status.Draft') },
@@ -1163,20 +1159,28 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
           Released: { text: t('app.master-data.drawings.status.Released') },
           Obsolete: { text: t('app.master-data.drawings.status.Obsolete') },
         },
-        render: (_, r) => <Tag color={STATUS_COLOR[r.status]} variant="solid">{statusLabel(r.status)}</Tag>,
       },
       {
         title: t('app.master-data.drawings.checkedOutBy'),
         dataIndex: 'checkedOutByName',
         search: false,
-        width: 100,
+        width: 112,
+        minWidth: 112,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
         render: (_, r) => r.checkedOutByName || '-',
       },
       {
         title: t('app.master-data.drawings.linkedBom'),
+        key: 'drawing_linked_bom',
         dataIndex: 'linkedBom',
         search: false,
-        width: 120,
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
         render: (_, r) => {
           if (r.linkedBom) {
             return (
@@ -1211,37 +1215,49 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
       },
       {
         title: t('app.master-data.drawings.file'),
+        key: 'drawing_file_name',
         dataIndex: ['file', 'originalName'],
         ellipsis: true,
         search: false,
-        width: 160,
+        width: 180,
+        minWidth: 180,
+        uniTableKeepWidth: true,
+        resizable: false,
       },
       {
         title: t('app.master-data.drawings.releasedAt'),
         dataIndex: 'releasedAt',
         valueType: 'dateTime',
         search: false,
-        width: 170,
+        width: 180,
+        minWidth: 180,
+        uniTableKeepWidth: true,
+        resizable: false,
       },
       ...masterCrudCreatedUpdatedColumns<EngineeringDrawing>(t),
       ...customFieldColumns,
       {
-        title: t('common.actions'),
-        valueType: 'option',
+        title: t('common.status'),
+        key: 'lifecycle',
+        dataIndex: 'status',
         fixed: 'right' as const,
+        hideInSearch: true,
+        render: (_, r) => <StatusTag color={STATUS_COLOR[r.status]}>{statusLabel(r.status)}</StatusTag>,
+      },
+      {
+        title: t('common.actions'),
+        key: 'action',
+        fixed: 'right' as const,
+        hideInSearch: true,
         onCell: () => ({ style: { whiteSpace: 'nowrap' } }),
-        render: (_, record) => (
-          <Space size={0} style={{ whiteSpace: 'nowrap', flexWrap: 'nowrap' }}>
-            <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record.uuid)}>
-              {t('common.detail')}
-            </Button>
-            {renderLifecycleActions(record)}
-          </Space>
-        ),
+        render: (_, record) => [
+          <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record.uuid)} />,
+          renderLifecycleActions(record),
+        ],
       },
     ];
     },
-    [t, customFields, generateCustomFieldColumns, renderLifecycleActions, loadDetail],
+    [t, customFields, generateCustomFieldColumns, renderLifecycleActions, navigate, statusLabel],
   );
 
   const tableQueryKey = useMemo(
@@ -1287,7 +1303,7 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
           helpViewConfig={buildListPageHelpViewConfig('masterData.drawings')}
           actionRef={actionRef}
           rowKey="uuid"
-          columnPersistenceId="apps.master-data.pages.process.drawings.folder-v2"
+          columnPersistenceId="apps.master-data.pages.process.drawings.folder-v3"
           permissionResource={DRAWING_PERMISSION}
           tanstackQuery={{ queryKeyPrefix: tableQueryKey }}
           columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}

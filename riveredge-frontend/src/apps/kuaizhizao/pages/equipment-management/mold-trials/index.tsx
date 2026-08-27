@@ -11,7 +11,6 @@ import {
   ProFormTextArea,
 } from '@ant-design/pro-components';
 import { App, Button, Modal, Row, Col } from 'antd';
-import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { EQUIPMENT_DATE_FIELD_PROPS } from '../../../utils/equipmentFormFieldProps';
 import { MarkerTag } from '../../../../../constants/statusBadges';
@@ -39,6 +38,7 @@ import {
 } from '../shared/equipmentMasterDataDetail';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 
 const P = 'app.kuaizhizao.moldOps.trial';
 const RESOURCE = 'kuaizhizao:mold-trial';
@@ -224,28 +224,68 @@ const MoldTrialsPage: React.FC = () => {
       {
         title: t(`${P}.col.trialNo`),
         dataIndex: 'document_no',
-        width: 140,
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
         fixed: 'left',
         sorter: true,
         search: { order: 30 } as ProColumns['search'],
-        render: (_, r) => r.document_no ?? r.trial_no ?? '-',
+        render: (_, r) => {
+          const no = r.document_no ?? r.trial_no;
+          return no != null && no !== '' ? String(no) : '-';
+        },
       },
-      { title: t(`${P}.col.mold`), dataIndex: 'mold_name', width: 160, ellipsis: true, sorter: true, hideInSearch: true },
+      {
+        title: t(`${P}.col.mold`),
+        dataIndex: 'mold_name',
+        minWidth: 160,
+        uniTablePrimaryFlex: true,
+        uniTableRemainderFlex: true,
+        resizable: false,
+        ellipsis: true,
+        hideInSearch: true,
+        render: (_, r) => (r.mold_name != null && r.mold_name !== '' ? String(r.mold_name) : '-'),
+      },
       {
         title: t(`${P}.col.trialDate`),
         dataIndex: 'trial_date',
         width: 132,
+        minWidth: 132,
         uniTableKeepWidth: true,
-        valueType: 'date',
+        resizable: false,
         sorter: true,
         hideInSearch: true,
+        valueType: 'date',
       },
-      { title: t(`${P}.col.supplier`), dataIndex: 'supplier', width: 120, ellipsis: true, sorter: true, hideInSearch: true },
-      { title: t(`${P}.col.trialCount`), dataIndex: 'trial_count', width: 90, sorter: true, hideInSearch: true },
+      {
+        title: t(`${P}.col.supplier`),
+        dataIndex: 'supplier',
+        width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
+        sorter: true,
+        hideInSearch: true,
+        render: (_, r) => (r.supplier != null && r.supplier !== '' ? String(r.supplier) : '-'),
+      },
+      {
+        title: t(`${P}.col.trialCount`),
+        dataIndex: 'trial_count',
+        width: 90,
+        minWidth: 90,
+        uniTableKeepWidth: true,
+        resizable: false,
+        sorter: true,
+        hideInSearch: true,
+        render: (_, r) => (r.trial_count != null ? String(r.trial_count) : '-'),
+      },
       {
         title: t(`${P}.col.result`),
         dataIndex: 'trial_result',
-        width: 100,
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         sorter: true,
         hideInSearch: true,
         render: (_, r) => {
@@ -254,16 +294,10 @@ const MoldTrialsPage: React.FC = () => {
           return <MarkerTag color={color}>{r.trial_result ?? '-'}</MarkerTag>;
         },
       },
-      {
-        title: t('common.updatedAt'),
-        dataIndex: 'updated_at',
-        hideInTable: true,
-        hideInSearch: true,
-      },
       ...buildDocumentAuditColumns<Record<string, unknown>>(t),
       {
         title: t('common.actions'),
-        key: 'action',
+        key: 'option',
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) => (
@@ -284,7 +318,6 @@ const MoldTrialsPage: React.FC = () => {
                 {...rowActionKind('update')}
                 type="link"
                 size="small"
-                icon={<EditOutlined />}
                 onClick={(e) => {
                   e.stopPropagation();
                   void handleEdit(record);
@@ -299,7 +332,6 @@ const MoldTrialsPage: React.FC = () => {
                 type="link"
                 size="small"
                 danger
-                icon={<DeleteOutlined />}
                 onClick={(e) => {
                   e.stopPropagation();
                   getAntdModal().confirm({
@@ -325,7 +357,7 @@ const MoldTrialsPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.moldTrials)}
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.mold-trials-equip-rank-v1"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.mold-trials-width-v2"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}

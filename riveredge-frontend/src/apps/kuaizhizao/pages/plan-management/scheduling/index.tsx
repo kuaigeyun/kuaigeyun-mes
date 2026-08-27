@@ -82,8 +82,6 @@ import { displayItemsToUsers } from '../../../../../utils/userDisplay';
 import { getEquipmentList } from '../../../../../services/equipment';
 import { getMoldList } from '../../../../../services/mold';
 import { toApiDateTimeString } from '../../../../../utils/formDate';
-import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
-
 const GANTT_WORK_ORDER_LIMIT = 500;
 
 const GANTT_TASK_LEVEL = 'station' as const;
@@ -2079,8 +2077,7 @@ const SchedulingPage: React.FC = () => {
                   columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
                   showFuzzySearch={false}
                   showAdvancedSearch={false}
-                  viewTypes={['table', 'help']}
-          helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.scheduling')}
+                  viewTypes={['table']}
                   pagination={{ size: 'small' }}
                   headerActions={
                     <SchedulingPoolToolbar

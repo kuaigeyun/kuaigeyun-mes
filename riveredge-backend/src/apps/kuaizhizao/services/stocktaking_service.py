@@ -563,11 +563,19 @@ class StocktakingService(AppBaseService[Stocktaking]):
         await self._fill_missing_warehouse_names(tenant_id, list(stocktakings))
 
         from apps.kuaizhizao.services.document_lifecycle_service import get_stocktaking_lifecycle
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            batch_document_item_material_previews,
+        )
 
+        stocktaking_ids = [int(s.id) for s in stocktakings]
+        item_previews = await batch_document_item_material_previews(
+            tenant_id, StocktakingItem, "stocktaking_id", stocktaking_ids
+        )
         items: list[StocktakingResponse] = []
         for stocktaking in stocktakings:
             resp = StocktakingResponse.model_validate(stocktaking)
             resp.lifecycle = get_stocktaking_lifecycle(stocktaking, milestones=[])
+            resp = resp.model_copy(update={"items": item_previews.get(int(stocktaking.id), [])})
             items.append(resp)
         return StocktakingListResponse(items=items, total=total)
 

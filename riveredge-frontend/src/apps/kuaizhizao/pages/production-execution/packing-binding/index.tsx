@@ -74,7 +74,6 @@ import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
   MaterialStackedCell,
   UniTableStackedPrimaryCell,
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
@@ -873,6 +872,10 @@ const PackingBindingPage: React.FC = () => {
         title: t('app.kuaizhizao.packingBinding.colBoxNo'),
         dataIndex: 'box_no',
         width: 168,
+        minWidth: 168,
+        uniTableKeepWidth: true,
+        uniTablePrimaryFlex: false,
+        resizable: false,
         ellipsis: true,
         fixed: 'left',
         sorter: true,
@@ -887,7 +890,12 @@ const PackingBindingPage: React.FC = () => {
         title: `${t('app.kuaizhizao.packingBinding.colProductName')}/${t('app.kuaizhizao.packingBinding.colProductCode')}`,
         key: 'product_stacked',
         dataIndex: 'product_name',
-        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        // 无行项目明细：产品名码叠列吃掉视口剩余（RemainderFlex）
+        minWidth: 200,
+        uniTablePrimaryFlex: true,
+        uniTableRemainderFlex: true,
+        resizable: false,
+        ellipsis: false,
         sorter: true,
         hideInSearch: true,
         render: (_, r) => (
@@ -912,6 +920,9 @@ const PackingBindingPage: React.FC = () => {
         title: t('app.kuaizhizao.packingBinding.colProductSerialNo'),
         dataIndex: 'product_serial_no',
         width: 140,
+        minWidth: 140,
+        uniTableKeepWidth: true,
+        resizable: false,
         ellipsis: true,
         sorter: true,
         hideInSearch: false,
@@ -921,6 +932,9 @@ const PackingBindingPage: React.FC = () => {
         title: t('app.kuaizhizao.packingBinding.colPackingQty'),
         dataIndex: 'packing_quantity',
         width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
         align: 'right',
         sorter: true,
         hideInSearch: true,
@@ -929,6 +943,9 @@ const PackingBindingPage: React.FC = () => {
         title: t('app.kuaizhizao.packingBinding.colPackingMaterial'),
         dataIndex: 'packing_material_name',
         width: 140,
+        minWidth: 140,
+        uniTableKeepWidth: true,
+        resizable: false,
         ellipsis: true,
         hideInSearch: false,
         render: (_, r) => r.packing_material_name || '-',
@@ -937,6 +954,9 @@ const PackingBindingPage: React.FC = () => {
         title: t('app.kuaizhizao.packingBinding.colBindingMethod'),
         dataIndex: 'binding_method',
         width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: false,
         valueType: 'select',
         valueEnum: packingBindingMethodValueEnum,
@@ -946,6 +966,9 @@ const PackingBindingPage: React.FC = () => {
         title: t('app.kuaizhizao.packingBinding.colSource'),
         dataIndex: 'source_type',
         width: 110,
+        minWidth: 110,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: false,
         valueType: 'select',
         valueEnum: packingBindingSourceValueEnum,
@@ -956,7 +979,9 @@ const PackingBindingPage: React.FC = () => {
         key: 'bound_stacked',
         dataIndex: 'bound_at',
         width: 168,
+        minWidth: 168,
         uniTableKeepWidth: true,
+        resizable: false,
         sorter: true,
         hideInSearch: true,
         render: (_, r) => (
@@ -985,6 +1010,7 @@ const PackingBindingPage: React.FC = () => {
       ...buildDocumentAuditColumns<PackingBinding>(t),
       {
         title: t('app.kuaizhizao.packingBinding.colLifecycle'),
+        key: 'lifecycle',
         dataIndex: 'lifecycle_stage',
         fixed: 'right',
         hideInSearch: true,
@@ -1005,7 +1031,7 @@ const PackingBindingPage: React.FC = () => {
       },
       {
         title: t('common.actions'),
-        width: 200,
+        key: 'option',
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) =>
@@ -1170,7 +1196,7 @@ const PackingBindingPage: React.FC = () => {
           headerTitle={t('app.kuaizhizao.packingBinding.title')}
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.packingBinding)}
-          columnPersistenceId="apps.kuaizhizao.pages.production-execution.packing-binding"
+          columnPersistenceId="apps.kuaizhizao.pages.production-execution.packing-binding-width-v1"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}

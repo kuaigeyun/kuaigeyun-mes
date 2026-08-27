@@ -25,6 +25,7 @@ import {
 } from '../../../services/factory';
 import {
   buildMasterCrudActiveValueEnum,
+  buildMasterCrudActiveStatusColumn,
   MASTER_CRUD_PINNED_ACTIVE_FIELD,
   MASTER_DATA_LIST_FIELD_RANK,
   masterCrudCodeNameSearchColumns,
@@ -644,29 +645,10 @@ const WorkstationsPage: React.FC = () => {
       hideInSearch: true,
     },
     ...customFieldColumns,
-    {
-      title: t('app.master-data.workstations.statusLabel'),
-      dataIndex: 'isActive',
-      hideInTable: true,
-      order: 20,
-      valueType: 'select',
-      valueEnum: workstationActiveValueEnum,
-      fieldProps: { allowClear: true },
-    },
-    {
-      title: t('app.master-data.workstations.statusLabel'),
-      dataIndex: 'isActive',
-      width: 88,
-      minWidth: 88,
-      uniTableKeepWidth: true,
-      resizable: false,
-      hideInSearch: true,
-      sorter: true,
-      valueEnum: workstationActiveValueEnum,
-      render: (_, record) => {
-        return renderMasterActiveTag(t, record?.isActive, 'common.enabled', 'common.disabled');
-      },
-    },
+    ...buildMasterCrudActiveStatusColumn<Workstation>(t, {
+      activeValueEnum: workstationActiveValueEnum,
+      statusTitleKey: 'app.master-data.workstations.statusLabel',
+    }),
     ...masterCrudCreatedUpdatedColumns<Workstation>(t),
     {
       title: t('common.actions'),
@@ -751,7 +733,7 @@ const WorkstationsPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<Workstation>
-        columnPersistenceId="apps.master-data.pages.factory.workstations.list-v1"
+        columnPersistenceId="apps.master-data.pages.factory.workstations.list-v2"
         actionRef={actionRef}
         columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
         request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {

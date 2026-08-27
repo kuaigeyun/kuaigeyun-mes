@@ -242,7 +242,9 @@ const IsoClausesPage: React.FC = () => {
             title: t('app.kuaizhizao.quality.isoClauses.clauseCode'),
             dataIndex: 'clause_code',
             width: 120,
+            minWidth: 120,
             uniTableKeepWidth: true,
+            resizable: false,
             render: (_, record) => (
               <Button type="link" style={{ padding: 0 }} onClick={() => loadDrawerData(record)}>
                 {record.clause_code}
@@ -252,13 +254,19 @@ const IsoClausesPage: React.FC = () => {
           {
             title: t('app.kuaizhizao.quality.isoClauses.title'),
             dataIndex: 'title',
+            minWidth: 200,
+            uniTablePrimaryFlex: true,
+            uniTableRemainderFlex: true,
+            resizable: false,
             ellipsis: true,
           },
           {
             title: t('app.kuaizhizao.quality.isoClauses.standardCode'),
             dataIndex: 'standard_code',
             width: 130,
+            minWidth: 130,
             uniTableKeepWidth: true,
+            resizable: false,
             initialValue: DEFAULT_STANDARD,
             valueType: 'select',
             valueEnum: {
@@ -273,7 +281,9 @@ const IsoClausesPage: React.FC = () => {
             title: t('common.enabled'),
             dataIndex: 'is_active',
             width: 100,
+            minWidth: 100,
             uniTableKeepWidth: true,
+            resizable: false,
             valueType: 'select',
             valueEnum: {
               true: { text: t('common.enabled') },
@@ -290,9 +300,9 @@ const IsoClausesPage: React.FC = () => {
           ...buildDocumentAuditColumns<QmsIsoClause>(t),
           {
             title: t('common.actions'),
-            valueType: 'option',
-            width: 160,
+            key: 'option',
             fixed: 'right',
+            hideInSearch: true,
             render: (_, record) => [
               canUpdate ? (
                 <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)}>
@@ -339,7 +349,7 @@ const IsoClausesPage: React.FC = () => {
           actionRef={actionRef}
           permissionResource={RESOURCE}
           headerTitle={t('app.kuaizhizao.menu.quality-management.iso-clauses')}
-          columnPersistenceId="apps.kuaizhizao.pages.quality-management.iso-clauses"
+          columnPersistenceId="apps.kuaizhizao.pages.quality-management.iso-clauses-width-v2"
           rowKey="id"
           columns={columns}
           enableRowSelection

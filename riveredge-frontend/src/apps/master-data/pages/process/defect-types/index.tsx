@@ -8,9 +8,9 @@ import React, { useRef, useState, useMemo, useEffect } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography } from 'antd';
-import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
+import { App, Popconfirm, Button, Modal, List, Typography } from 'antd';
 import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
@@ -454,23 +454,38 @@ const DefectTypesPage: React.FC = () => {
       name: t('app.master-data.defectTypes.name'),
     }),
     {
+      // 稀疏：编号 → 名称 → 备注；启用 Marker；审计叠列保留
       title: t('app.master-data.defectTypes.code'),
       dataIndex: 'code',
-      copyable: true,width: 150,
+      copyable: true,
+      width: 168,
+      minWidth: 168,
+      uniTableKeepWidth: true,
+      resizable: false,
       fixed: 'left',
       sorter: true,
       hideInSearch: true,
+      ellipsis: true,
     },
     {
+      // 名称长短不一：唯一 RemainderFlex
       title: t('app.master-data.defectTypes.name'),
       dataIndex: 'name',
-      width: 200,
+      minWidth: 160,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
+      resizable: false,
       sorter: true,
       hideInSearch: true,
+      ellipsis: true,
     },
     {
       title: t('common.remark'),
       dataIndex: 'description',
+      width: 200,
+      minWidth: 200,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       hideInSearch: true,
     },
@@ -486,60 +501,33 @@ const DefectTypesPage: React.FC = () => {
     {
       title: t('app.master-data.defectTypes.status'),
       dataIndex: 'isActive',
-      width: 100,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       hideInSearch: true,
       valueEnum: defectTypeActiveValueEnum,
-      render: (_: any, record: DefectType) => {
-        const isActive = record?.isActive ?? false;
-        return (
-          <Tag color={isActive ? 'success' : 'default'} variant="solid">
-            {isActive ? t('common.enabled') : t('common.disabled')}
-          </Tag>
-        );
-      },
+      render: (_: any, record: DefectType) => renderMasterActiveTag(t, record?.isActive),
       sorter: true,
     },
     ...customFieldColumns,
     ...masterCrudCreatedUpdatedColumns<DefectType>(t),
     {
       title: t('common.actions'),
-      valueType: 'option',
+      key: 'action',
       fixed: 'right',
-      render: (_: any, record: DefectType) => (
-        <Space>
-          <Button key="view" {...rowActionKind('read')}
-            size="small"
-            onClick={() => handleOpenDetail(record)}
-          >
-            {t('common.view')}
-          </Button>
-          <Button key="edit" {...rowActionKind('update')}
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          >
-            {t('common.edit')}
-          </Button>
-          <Popconfirm
-            key="delete"
-            {...rowActionKind('delete')}
-            title={t('app.master-data.defectTypes.deleteConfirm')}
-            description={t('app.master-data.defectTypes.deleteDescription')}
-            onConfirm={() => handleDelete(record)}
-            okText={t('common.confirm')}
-            cancelText={t('common.cancel')}
-          >
-            <Button
-              type="link"
-              danger
-              size="small"
-              icon={<DeleteOutlined />}
-            >
-              {t('common.delete')}
-            </Button>
-          </Popconfirm>
-        </Space>
-      ),
+      hideInSearch: true,
+      render: (_: any, record: DefectType) => [
+        <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)} />,
+        <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)} />,
+        <Popconfirm
+          key="delete"
+          title={t('app.master-data.defectTypes.deleteConfirm')}
+          description={t('app.master-data.defectTypes.deleteDescription')}
+          onConfirm={() => handleDelete(record)}
+          okText={t('common.confirm')}
+          cancelText={t('common.cancel')}
+        >
+          <Button {...rowActionKind('delete')} />
+        </Popconfirm>,
+      ],
     },
     ];
   }, [customFields, generateCustomFieldColumns, t, defectTypeActiveValueEnum]);
@@ -549,7 +537,7 @@ const DefectTypesPage: React.FC = () => {
       <UniTable<DefectType>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('masterData.defectTypes')}
-        columnPersistenceId="apps.master-data.pages.process.defect-types.status-v2"
+        columnPersistenceId="apps.master-data.pages.process.defect-types.list-v3"
         actionRef={actionRef}
         columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
         request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {

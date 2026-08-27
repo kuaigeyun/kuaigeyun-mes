@@ -1,1 +1,0 @@
-import{d as r}from"./clientRelease-C_Y2oW1v.js";import{n as s,o as u}from"./main-BtwhP0Ou.js";const o=["businessConfigTrialRunMode"];function i(){return r({queryKey:o,queryFn:u,staleTime:5*60*1e3})}function d(n=!1){const{data:e}=i();return e===void 0?n:s(e)}export{o as T,d as u};

@@ -47,10 +47,6 @@ import {
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query';
 import {
-  MaterialStackedCell,
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-} from '../../../../../components/uni-table/stackedPrimaryColumn';
-import {
   buildInspectorNameColumn,
   buildQualityInspectionListCodeColumn,
   buildQualityInspectionListKindColumn,
@@ -1255,7 +1251,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.finishedGoodsInspection)}
         headerTitle={t('app.kuaizhizao.quality.finished.pageTitle')}
-        columnPersistenceId="apps.kuaizhizao.pages.quality-management.finished-goods-inspection.rank-v7"
+        columnPersistenceId="apps.kuaizhizao.pages.quality-management.finished-goods-inspection-width-v1"
         actionRef={actionRef}
         rowKey="id"
         columns={columns}

@@ -36,6 +36,7 @@ import {
   UNI_TABLE_STACKED_AUDIT_COLUMN_DEFAULTS,
   MaterialStackedCell,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { MarkerTag } from '../../../../../constants/statusBadges';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import { UniBatchButton, UniAuditBatchMenuButton } from '../../../../../components/uni-batch';
 import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
@@ -274,7 +275,7 @@ type QuotationItemRow = QuotationItem & {
 };
 
 const QUOTATION_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_quotations';
-const QUOTATION_LIST_PERSISTENCE_ID = 'apps.kuaizhizao.pages.sales-management.quotations.v3';
+const QUOTATION_LIST_PERSISTENCE_ID = 'apps.kuaizhizao.pages.sales-management.quotations-width-v2';
 
 function pickQuotationCustomFieldProps(record: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(Object.entries(record).filter(([key]) => key.startsWith('custom_')));
@@ -1114,7 +1115,11 @@ const QuotationsPage: React.FC = () => {
       title: t('app.kuaizhizao.quotation.colCustomerQuotation'),
       key: 'quotation_code',
       dataIndex: 'quotation_code',
-      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+      width: 240,
+      minWidth: 240,
+      uniTableKeepWidth: true,
+      uniTablePrimaryFlex: false,
+      resizable: false,
       fixed: 'left',
       order: 10,
       sorter: true,
@@ -1187,19 +1192,67 @@ const QuotationsPage: React.FC = () => {
       title: t('app.kuaizhizao.quotation.colVersion'),
       dataIndex: 'version_no',
       width: 88,
+      minWidth: 88,
+      uniTableKeepWidth: true,
+      resizable: false,
       sorter: true,
       hideInSearch: true,
       order: 11,
       render: (_, r) => (
-        <Tag color="blue" bordered={false} variant="filled">
+        <MarkerTag color="processing">
           {t('app.kuaizhizao.quotation.versionDisplay', { n: r.version_no ?? 1 })}
-        </Tag>
+        </MarkerTag>
       ),
+    },
+    {
+      title: t('app.kuaizhizao.quotation.colLineMaterials'),
+      key: 'quotation_line_materials',
+      dataIndex: 'quotation_line_materials',
+      // RemainderFlex：明细物料名预览；身份 key 进 rank，不改其它列 key
+      minWidth: 160,
+      uniTablePrimaryFlex: true,
+      uniTableRemainderFlex: true,
+      resizable: false,
+      ellipsis: false,
+      hideInSearch: true,
+      onCell: () => ({ style: { whiteSpace: 'normal' } }),
+      render: (_, r) => {
+        const names = (r.items || [])
+          .map((it) => String(it.material_name ?? '').trim())
+          .filter((text) => text.length > 0);
+        if (names.length === 0) return '-';
+        const preview = names.slice(0, 2);
+        const restCount = names.length - preview.length;
+        return (
+          <div
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              gap: 4,
+              minWidth: 0,
+              maxWidth: '100%',
+            }}
+          >
+            {preview.map((text, index) => (
+              <MarkerTag key={`${index}-${text}`}>{text}</MarkerTag>
+            ))}
+            {restCount > 0 ? (
+              <MarkerTag color="default">
+                {t('app.kuaizhizao.quotation.linesAndMore', { count: restCount })}
+              </MarkerTag>
+            ) : null}
+          </div>
+        );
+      },
     },
     {
       title: t('app.kuaizhizao.salesOrder.totalQuantity'),
       dataIndex: 'total_quantity',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       align: 'right',
       sorter: true,
       hideInSearch: true,
@@ -1209,6 +1262,9 @@ const QuotationsPage: React.FC = () => {
       title: t('app.kuaizhizao.quotation.colTotalAmount'),
       dataIndex: 'total_amount',
       width: 110,
+      minWidth: 110,
+      uniTableKeepWidth: true,
+      resizable: false,
       align: 'right',
       sorter: true,
       hideInSearch: true,
@@ -1284,7 +1340,7 @@ const QuotationsPage: React.FC = () => {
     ...quotationCustomFieldColumns,
     {
       title: t('common.actions'),
-      minWidth: 120,
+      key: 'action',
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) => {
@@ -4121,7 +4177,7 @@ const QuotationsPage: React.FC = () => {
                 end_date: endDate,
                 order_by: orderBy,
                 list_scope: listScopeFilterRef.current,
-                include_items: dataViewModeRef.current === 'detail',
+                include_items: true,
               });
               if (!isPrefetch) {
                 setListTotal(response.total ?? 0);

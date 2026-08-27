@@ -9,10 +9,8 @@ import {
   ProFormTextArea,
 } from '@ant-design/pro-components';
 import { App, Button, Modal, Row, Col, Input } from 'antd';
-import { EditOutlined, DeleteOutlined, SendOutlined, CheckOutlined, CloseOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { EQUIPMENT_DATE_FIELD_PROPS } from '../../../utils/equipmentFormFieldProps';
-import { StatusTag } from '../../../../../constants/statusBadges';
 import { renderDocumentStatusTag } from '../../../../../utils/documentLifecycleStatusTag';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
@@ -22,7 +20,6 @@ import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcu
 import { rowActionKind } from '../../../../../components/uni-action';
 import { moldApi } from '../../../services/equipment';
 import { scrapApplicationsApi } from '../../../services/moldOps';
-import { formatDateTime } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
@@ -219,42 +216,76 @@ const MoldScrapApplicationsPage: React.FC = () => {
       {
         title: t(`${P}.col.applicationNo`),
         dataIndex: 'application_no',
-        width: 140,
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
         fixed: 'left',
         sorter: true,
         search: { order: 30 } as ProColumns['search'],
+        render: (_, r) =>
+          r.application_no != null && r.application_no !== '' ? String(r.application_no) : '-',
       },
-      { title: t(`${P}.col.mold`), dataIndex: 'mold_name', width: 160, ellipsis: true, sorter: true, hideInSearch: true },
-      { title: t(`${P}.col.reason`), dataIndex: 'reason', ellipsis: true, sorter: true, hideInSearch: true },
+      {
+        title: t(`${P}.col.mold`),
+        dataIndex: 'mold_name',
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
+        sorter: true,
+        hideInSearch: true,
+        render: (_, r) => (r.mold_name != null && r.mold_name !== '' ? String(r.mold_name) : '-'),
+      },
+      {
+        title: t(`${P}.col.reason`),
+        dataIndex: 'reason',
+        minWidth: 160,
+        uniTablePrimaryFlex: true,
+        uniTableRemainderFlex: true,
+        resizable: false,
+        ellipsis: true,
+        hideInSearch: true,
+        render: (_, r) => (r.reason != null && r.reason !== '' ? String(r.reason) : '-'),
+      },
       {
         title: t(`${P}.col.scrapDate`),
         dataIndex: 'scrap_date',
         width: 132,
+        minWidth: 132,
         uniTableKeepWidth: true,
-        valueType: 'date',
+        resizable: false,
         sorter: true,
         hideInSearch: true,
+        valueType: 'date',
       },
-      { title: t(`${P}.col.applicant`), dataIndex: 'applicant_name', width: 100, sorter: true, hideInSearch: true },
       {
-        title: t('common.updatedAt'),
-        dataIndex: 'updated_at',
-        hideInTable: true,
+        title: t(`${P}.col.applicant`),
+        dataIndex: 'applicant_name',
+        width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
+        sorter: true,
         hideInSearch: true,
+        render: (_, r) =>
+          r.applicant_name != null && r.applicant_name !== '' ? String(r.applicant_name) : '-',
       },
       ...buildDocumentAuditColumns<Record<string, unknown>>(t),
       {
         title: t('common.status'),
         key: 'lifecycle',
         dataIndex: 'status',
-        width: 90,
         hideInSearch: true,
         fixed: 'right',
         render: (_, r) => renderDocumentStatusTag(r.status ?? '-', r.status ?? '-'),
       },
       {
         title: t('common.actions'),
-        key: 'action',
+        key: 'option',
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) => (
@@ -275,7 +306,6 @@ const MoldScrapApplicationsPage: React.FC = () => {
                 {...rowActionKind('update')}
                 type="link"
                 size="small"
-                icon={<EditOutlined />}
                 onClick={(e) => {
                   e.stopPropagation();
                   void handleEdit(record);
@@ -289,7 +319,6 @@ const MoldScrapApplicationsPage: React.FC = () => {
                 {...rowActionKind('submit')}
                 type="link"
                 size="small"
-                icon={<SendOutlined />}
                 onClick={(e) => {
                   e.stopPropagation();
                   void handleSubmitDoc(record);
@@ -303,7 +332,6 @@ const MoldScrapApplicationsPage: React.FC = () => {
                 {...rowActionKind('approve')}
                 type="link"
                 size="small"
-                icon={<CheckOutlined />}
                 onClick={(e) => {
                   e.stopPropagation();
                   void handleApprove(record);
@@ -318,7 +346,6 @@ const MoldScrapApplicationsPage: React.FC = () => {
                 type="link"
                 size="small"
                 danger
-                icon={<CloseOutlined />}
                 onClick={(e) => {
                   e.stopPropagation();
                   setRejectTarget(record);
@@ -335,7 +362,6 @@ const MoldScrapApplicationsPage: React.FC = () => {
                 type="link"
                 size="small"
                 danger
-                icon={<DeleteOutlined />}
                 onClick={(e) => {
                   e.stopPropagation();
                   getAntdModal().confirm({
@@ -361,7 +387,7 @@ const MoldScrapApplicationsPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.moldScrapApplications)}
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.mold-scrap-applications-equip-rank-v1"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.mold-scrap-applications-width-v2"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}

@@ -1027,6 +1027,7 @@ class AuthService:
         刷新 Token
         
         验证当前 Token 并生成新的 Token。
+        平台超管 Token（is_infra_superadmin）必须换发超管票，不得落到 User 表换普通用户票。
         
         Args:
             token: 当前 JWT Token
@@ -1038,6 +1039,11 @@ class AuthService:
             HTTPException: 当 Token 无效时抛出
         """
         from infra.domain.security.security import get_token_payload_for_refresh
+        from infra.domain.security.infra_superadmin_security import (
+            create_token_for_infra_superadmin,
+        )
+        from infra.models.infra_superadmin import InfraSuperAdmin
+        from infra.config.infra_config import infra_settings as settings
         
         # 验证 Token（允许短时过期后的静默续期，避免前端定时器与请求竞态导致误踢出）
         payload = get_token_payload_for_refresh(token)
@@ -1046,6 +1052,18 @@ class AuthService:
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="无效的 Token"
             )
+
+        # 平台超管：独立身份表 + 独立票结构，禁止按 User.id 续期
+        if payload.get("is_infra_superadmin") is True:
+            admin_id = int(payload.get("sub"))
+            admin = await InfraSuperAdmin.get_or_none(id=admin_id)
+            if not admin or not admin.is_active:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="平台超级管理员不存在或未激活",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+            return create_token_for_infra_superadmin(admin)
         
         # 获取用户信息（排除已软删除的用户）
         user_id = int(payload.get("sub"))
@@ -1065,8 +1083,7 @@ class AuthService:
         else:
             tenant_id = user.tenant_id
 
-        is_infra_superadmin = payload.get("is_infra_superadmin") is True
-        if tenant_id is not None and not is_infra_superadmin:
+        if tenant_id is not None:
             from infra.models.tenant import Tenant, TenantStatus
 
             tid = int(tenant_id)
@@ -1091,8 +1108,6 @@ class AuthService:
             is_tenant_admin=user.is_tenant_admin,
         )
         
-        # 计算过期时间（秒）
-        from infra.config.infra_config import infra_settings as settings
         expires_in = settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60
         
         return {

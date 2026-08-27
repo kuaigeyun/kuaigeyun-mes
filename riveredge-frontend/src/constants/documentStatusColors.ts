@@ -10,8 +10,8 @@
  * |------|-------|------|
  * | draft | RE_STATUS_BADGE_DRAFT | 草稿 / 计划中 / 初始 |
  * | pending | warning | 待审核 / 已提交 / 待决（等人） |
- * | active | processing | 进行中 / 执行中 / 评审中 |
- * | success | success | 通过 / 完成 / 生效 / 合格 |
+ * | active | processing | 进行中 / 执行中 / 评审中 / 已生效（业务进行中） |
+ * | success | success | 通过 / 已完成 / 终态结案 |
  * | danger | error | 驳回 / 取消 / 失败 / 不合格 |
  * | muted | default | 关闭 / 无 / 停用 |
  */
@@ -124,8 +124,9 @@ const STATUS_SEMANTIC_ALIASES: Record<string, DocumentStatusSemantic> = {
   已确认: 'success',
   CONFIRMED: 'success',
   confirmed: 'success',
-  已生效: 'success',
-  EFFECTIVE: 'success',
+  已生效: 'active',
+  EFFECTIVE: 'active',
+  effective: 'active',
   已完成: 'success',
   COMPLETED: 'success',
   completed: 'success',

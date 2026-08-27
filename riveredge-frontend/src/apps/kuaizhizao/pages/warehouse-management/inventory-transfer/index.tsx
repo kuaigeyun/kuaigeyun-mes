@@ -36,6 +36,11 @@ import { alignDescriptionColumns, alignProColumns } from '../../sales-management
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
 import { renderInventoryTransferModeMarkerTag } from '../shared/warehouseMarkerTags';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
+import {
+  DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+  renderDocumentLineMaterialsPreview,
+} from '../../sales-management/shared/documentLineMaterialsPreview';
 import {
   WAREHOUSE_DOC_PINNED_STATUS_FIELD,
   buildInventoryTransferModeValueEnum,
@@ -501,7 +506,10 @@ const InventoryTransferPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.warehouseReports.colTransferCode'),
       dataIndex: 'code',
-      width: 150,
+      width: 160,
+      minWidth: 160,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       fixed: 'left',
       sorter: true,
@@ -515,7 +523,7 @@ const InventoryTransferPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.inventoryTransfer.colTransferMode'),
       dataIndex: 'transfer_mode',
-      width: 110,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       sorter: true,
       hideInSearch: true,
       render: (_, record) => renderInventoryTransferModeMarkerTag(t, record.transfer_mode),
@@ -525,58 +533,70 @@ const InventoryTransferPage: React.FC = () => {
       title: t('app.kuaizhizao.warehouseReports.colFromWarehouse'),
       dataIndex: 'from_warehouse_name',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       sorter: true,
       hideInSearch: true,
+      render: (_, r) =>
+        r.from_warehouse_name != null && r.from_warehouse_name !== ''
+          ? String(r.from_warehouse_name)
+          : '-',
     },
     {
       title: t('app.kuaizhizao.warehouseReports.colToWarehouse'),
       dataIndex: 'to_warehouse_name',
-      width: 120,
+      width: 160,
+      minWidth: 160,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       sorter: true,
       hideInSearch: true,
+      render: (_, r) =>
+        r.to_warehouse_name != null && r.to_warehouse_name !== ''
+          ? String(r.to_warehouse_name)
+          : '-',
     },
     {
       title: t('app.kuaizhizao.inventoryTransfer.colTransferDate'),
       dataIndex: 'transfer_date',
       width: 132,
+      minWidth: 132,
       uniTableKeepWidth: true,
+      resizable: false,
       sorter: true,
       hideInSearch: true,
       valueType: 'date',
     },
     {
-      title: t('app.kuaizhizao.inventoryTransfer.colTotalItems'),
-      dataIndex: 'total_items',
-      width: 120,
-      align: 'right',
-      sorter: true,
-      hideInSearch: true,
+      title: t('app.kuaizhizao.common.colLineMaterials'),
+      ...DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+      render: (_, r) => renderDocumentLineMaterialsPreview(r.items, t),
     },
-    {
-      title: t('app.kuaizhizao.inventoryTransfer.colTotalQty'),
-      dataIndex: 'total_quantity',
-      width: 120,
-      align: 'right',
-      sorter: true,
-      hideInSearch: true,
-      render: formatQuantity,
-    },
+      {
+        title: t('app.kuaizhizao.inventoryTransfer.colTotalQty'),
+        dataIndex: 'total_quantity',
+        width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
+        sorter: true,
+        hideInSearch: true,
+        render: (_, r) => formatQuantity(r.total_quantity),
+      },
     {
       title: t('app.kuaizhizao.inventoryTransfer.colTotalAmount'),
       dataIndex: 'total_amount',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       align: 'right',
       sorter: true,
       hideInSearch: true,
       render: (_, record) => `¥${Number(record.total_amount ?? 0).toFixed(2)}`,
-    },
-    {
-      title: t('common.updatedAt'),
-      dataIndex: 'updated_at',
-      hideInTable: true,
-      hideInSearch: true,
     },
     ...buildDocumentAuditColumns<InventoryTransfer>(t),
     {
@@ -601,8 +621,9 @@ const InventoryTransferPage: React.FC = () => {
     },
     {
       title: t('common.actions'),
-      width: 200,
+      key: 'option',
       fixed: 'right',
+      hideInSearch: true,
       render: (_, record) => (
         <Space>
           <Button {...rowActionKind('read')} onClick={() => handleDetail(record)} />
@@ -757,7 +778,7 @@ const InventoryTransferPage: React.FC = () => {
         headerTitle={t('app.kuaizhizao.inventoryTransfer.headerTitle')}
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.inventoryTransfer)}
-        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.inventory-transfer.v2"
+        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.inventory-transfer-width-v3"
         actionRef={actionRef}
         rowKey="id"
         columns={columns}

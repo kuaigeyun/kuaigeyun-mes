@@ -24,6 +24,10 @@ import {
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { FreightOrderDetailDrawer } from './components/FreightOrderDetailDrawer';
 import { UniTable } from '../../../../../components/uni-table';
+import {
+  UniTableStackedPrimaryCell,
+  UNI_TABLE_STACKED_BADGE_DATETIME_COLUMN_DEFAULTS,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { SourceDocumentCode } from '../../../../../components/linked-document-code/SourceDocumentCode';
 import {
   UNI_PULL_QUERY_MAX_FETCH_LIMIT,
@@ -33,6 +37,7 @@ import {
 } from '../../../../../components/uni-pull-query';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { formatDateTimeBySiteSetting } from '../../../../../utils/format';
 import {
   renderFreightOrderStatusTag,
@@ -364,6 +369,8 @@ const FreightOrdersPage: React.FC = () => {
           dataIndex: 'source_code',
           width: 180,
           minWidth: 180,
+          uniTableKeepWidth: true,
+          resizable: false,
           ellipsis: true,
           render: (_, row) => {
             const sources = row.sources ?? [];
@@ -396,19 +403,13 @@ const FreightOrdersPage: React.FC = () => {
         {
           title: t('app.kuaizhizao.logistics.field.businessDirection'),
           dataIndex: 'business_direction',
-          width: 110,
-          minWidth: 110,
-          uniTableKeepWidth: true,
-          resizable: false,
+          ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
           render: (_, row) => renderLogisticsBusinessDirectionTag(t, row.business_direction),
         },
         {
           title: t('app.kuaizhizao.logistics.field.transportMode'),
           dataIndex: 'transport_mode',
-          width: 96,
-          minWidth: 96,
-          uniTableKeepWidth: true,
-          resizable: false,
+          ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
           render: (_, row) => renderLogisticsTransportModeTag(t, row.transport_mode),
         },
         {
@@ -440,36 +441,40 @@ const FreightOrdersPage: React.FC = () => {
           ellipsis: true,
         },
         {
-          title: t('app.kuaizhizao.logistics.field.originAddress'),
+          title: t('app.kuaizhizao.logistics.field.route'),
+          key: 'freight_route_stacked',
           dataIndex: 'origin_address',
-          width: 160,
-          minWidth: 160,
-          ellipsis: true,
+          minWidth: 200,
+          uniTablePrimaryFlex: true,
+          uniTableRemainderFlex: true,
+          resizable: false,
+          ellipsis: false,
+          hideInSearch: true,
+          render: (_, row) => (
+            <UniTableStackedPrimaryCell
+              primary={String(row.origin_address ?? '').trim() || '-'}
+              secondary={String(row.destination_address ?? '').trim() || '-'}
+              secondaryCopyable={false}
+              uniformText
+            />
+          ),
         },
         {
-          title: t('app.kuaizhizao.logistics.field.destinationAddress'),
-          dataIndex: 'destination_address',
-          width: 160,
-          minWidth: 160,
-          ellipsis: true,
-        },
-        {
-          title: t('app.kuaizhizao.logistics.field.plannedDepartAt'),
+          title: t('app.kuaizhizao.logistics.field.plannedSchedule'),
+          key: 'planned_depart_at',
           dataIndex: 'planned_depart_at',
-          width: 168,
-          minWidth: 168,
-          uniTableKeepWidth: true,
-          resizable: false,
-          render: (_, row) => formatDateTimeBySiteSetting(row.planned_depart_at),
-        },
-        {
-          title: t('app.kuaizhizao.logistics.field.plannedArriveAt'),
-          dataIndex: 'planned_arrive_at',
-          width: 168,
-          minWidth: 168,
-          uniTableKeepWidth: true,
-          resizable: false,
-          render: (_, row) => formatDateTimeBySiteSetting(row.planned_arrive_at),
+          ...UNI_TABLE_STACKED_BADGE_DATETIME_COLUMN_DEFAULTS,
+          hideInSearch: true,
+          render: (_, row) => (
+            <UniTableStackedPrimaryCell
+              primary={formatDateTimeBySiteSetting(row.planned_depart_at)}
+              secondary={formatDateTimeBySiteSetting(row.planned_arrive_at)}
+              secondaryCopyable={false}
+              uniformText
+              primaryBadge={t('common.start')}
+              secondaryBadge={t('common.end')}
+            />
+          ),
         },
         {
           title: t('common.status'),
@@ -481,17 +486,14 @@ const FreightOrdersPage: React.FC = () => {
         },
         {
           title: t('common.action'),
-          key: 'action',
-          valueType: 'option',
+          key: 'option',
           fixed: 'right',
           hideInSearch: true,
           render: (_, row) => {
             const nodes: React.ReactNode[] = [];
             if (perms.canRead) {
               nodes.push(
-                <Button key="detail" {...rowActionKind('read')} type="link" size="small" onClick={() => openDetail(row)}>
-                  {t('common.detail')}
-                </Button>,
+                <Button key="detail" {...rowActionKind('read')} onClick={() => openDetail(row)} />,
               );
             }
             if (perms.canUpdate && canEditFreightOrder(row.status)) {
@@ -499,12 +501,8 @@ const FreightOrdersPage: React.FC = () => {
                 <Button
                   key="edit"
                   {...rowActionKind('update')}
-                  type="link"
-                  size="small"
                   onClick={() => void openEdit(row)}
-                >
-                  {t('common.edit')}
-                </Button>,
+                />,
               );
             }
             return nodes;
@@ -521,7 +519,7 @@ const FreightOrdersPage: React.FC = () => {
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.freightOrder)}
         actionRef={actionRef}
         columns={columns}
-        columnPersistenceId="apps.kuaizhizao.pages.logistics-management.freight-orders.v4"
+        columnPersistenceId="apps.kuaizhizao.pages.logistics-management.freight-orders-width-v6"
         rowKey="id"
         request={async (params) => {
           const res = await listFreightOrders({

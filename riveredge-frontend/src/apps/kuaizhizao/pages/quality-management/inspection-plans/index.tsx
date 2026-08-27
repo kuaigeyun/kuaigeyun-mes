@@ -23,15 +23,17 @@ import {
 } from '@ant-design/pro-components';
 import CodeField from '../../../../../components/code-field';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
-import { App, Button, Space, Table, Modal, Row, Col, Descriptions, Typography, Empty, Result } from 'antd';
+import { App, Button, Popconfirm, Table, Modal, Row, Col, Descriptions, Typography, Empty, Result } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
-import { rowActionKind } from '../../../../../components/uni-action';
+import { rowActionCopyCreate, rowActionKind } from '../../../../../components/uni-action';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
-import { stackedPrimarySecondaryColumn } from '../components/qualityTableColumns';
+import { stackedPrimarySecondaryColumn, buildInspectionPlanStepsColumn, buildInspectionPlanTypeColumn } from '../components/qualityTableColumns';
 import {
   ListPageTemplate,
   FormModalTemplate,
   DetailDrawerTemplate,
+  DetailDrawerActions,
   useDetailDrawerDescriptionItems,
   MODAL_CONFIG,
   DRAWER_CONFIG,
@@ -60,8 +62,8 @@ import {
 } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { renderMasterActiveTag } from '../../../../master-data/utils/masterListPresentation';
-import { buildDetailDrawerEditExtra } from '../../equipment-management/shared/equipmentMasterDataDetail';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 interface InspectionPlan {
   id?: number;
@@ -82,10 +84,27 @@ interface InspectionPlan {
   steps?: InspectionPlanStepItem[];
 }
 
+const INSPECTION_PLAN_RESOURCE = 'kuaizhizao:quality-management-inspection-plans';
+
+const mapDetailSteps = (detail: InspectionPlan): InspectionPlanStepItem[] =>
+  (detail.steps || []).map((s) => ({
+    sequence: s.sequence ?? 0,
+    step_key: s.step_key,
+    inspection_item: s.inspection_item || '',
+    inspection_method: s.inspection_method,
+    acceptance_criteria: s.acceptance_criteria,
+    value_type: s.value_type,
+    value_spec: s.value_spec,
+    sampling_type: (s.sampling_type as 'full' | 'sampling') || 'full',
+    quality_standard_id: s.quality_standard_id,
+    remarks: s.remarks,
+  }));
+
 const InspectionPlansPage: React.FC = () => {
   const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const { message: messageApi } = App.useApp();
+  const { canCreate, canRead, canUpdate, canDelete } = useResourcePermissions(INSPECTION_PLAN_RESOURCE);
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const planTypeOptions = useMemo(() => getQualityPlanTypeFallback(t), [t]);
@@ -103,6 +122,7 @@ const InspectionPlansPage: React.FC = () => {
     if (operationId) {
       hasAutoOpenedRef.current = true;
       setIsEdit(false);
+      setIsCopyCreate(false);
       setCurrentPlan(null);
       setSteps([]);
       setModalVisible(true);
@@ -118,6 +138,7 @@ const InspectionPlansPage: React.FC = () => {
 
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
+  const [isCopyCreate, setIsCopyCreate] = useState(false);
   const [currentPlan, setCurrentPlan] = useState<InspectionPlan | null>(null);
   const [steps, setSteps] = useState<InspectionPlanStepItem[]>([]);
   const [stepsBaseline, setStepsBaseline] = useState('');
@@ -132,6 +153,7 @@ const InspectionPlansPage: React.FC = () => {
   /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编号。支持 URL 参数 operationId 预填过程检验 */
   const handleCreate = async () => {
     setIsEdit(false);
+    setIsCopyCreate(false);
     setCurrentPlan(null);
     setSteps([]);
     setModalVisible(true);
@@ -158,19 +180,9 @@ const InspectionPlansPage: React.FC = () => {
     try {
       const detail = await inspectionPlanApi.get(record.id!.toString());
       setIsEdit(true);
+      setIsCopyCreate(false);
       setCurrentPlan(detail);
-      const stepItems: InspectionPlanStepItem[] = (detail.steps || []).map((s: any) => ({
-        sequence: s.sequence ?? 0,
-        step_key: s.step_key,
-        inspection_item: s.inspection_item || '',
-        inspection_method: s.inspection_method,
-        acceptance_criteria: s.acceptance_criteria,
-        value_type: s.value_type,
-        value_spec: s.value_spec,
-        sampling_type: (s.sampling_type as 'full' | 'sampling') || 'full',
-        quality_standard_id: s.quality_standard_id,
-        remarks: s.remarks,
-      }));
+      const stepItems = mapDetailSteps(detail);
       setSteps(stepItems);
       setStepsBaseline(stepsFingerprint(stepItems));
       setModalVisible(true);
@@ -182,6 +194,36 @@ const InspectionPlansPage: React.FC = () => {
           version: detail.version,
           is_active: detail.is_active,
           remarks: detail.remarks,
+        });
+      }, 100);
+    } catch (error) {
+      messageApi.error(t('app.kuaizhizao.quality.plans.messages.loadDetailFailed'));
+    }
+  };
+
+  const handleCopyCreate = async (record: InspectionPlan) => {
+    if (record.id == null) return;
+    try {
+      const detail = await inspectionPlanApi.get(record.id.toString());
+      const stepItems = mapDetailSteps(detail);
+      setIsEdit(false);
+      setIsCopyCreate(true);
+      setCurrentPlan(null);
+      setSteps(stepItems);
+      setStepsBaseline('');
+      setModalVisible(true);
+      const copySuffix = t('app.kuaizhizao.quality.plans.copySuffix');
+      const baseName = (detail.plan_name || '').trim();
+      const copiedName = baseName.endsWith(copySuffix) ? baseName : `${baseName} ${copySuffix}`.trim();
+      setTimeout(() => {
+        formRef.current?.resetFields();
+        formRef.current?.setFieldsValue({
+          plan_name: copiedName,
+          plan_type: detail.plan_type,
+          version: '1.0',
+          is_active: detail.is_active,
+          remarks: detail.remarks,
+          operation_id: detail.operation_id,
         });
       }, 100);
     } catch (error) {
@@ -240,6 +282,7 @@ const InspectionPlansPage: React.FC = () => {
       messageApi.success(t('app.kuaizhizao.quality.plans.messages.createSuccess'));
     }
     setModalVisible(false);
+    setIsCopyCreate(false);
     setCurrentPlan(null);
     setSteps([]);
     setStepsBaseline('');
@@ -343,6 +386,11 @@ const InspectionPlansPage: React.FC = () => {
           { dataIndex: 'plan_name', fixed: 'left' },
         ),
         sorter: true,
+        width: 240,
+        minWidth: 240,
+        uniTableKeepWidth: true,
+        uniTablePrimaryFlex: false,
+        resizable: false,
       },
       {
         title: t('app.kuaizhizao.quality.plans.columns.planType'),
@@ -357,21 +405,22 @@ const InspectionPlansPage: React.FC = () => {
           options: planTypeOptions,
         },
       },
-      {
-        title: t('app.kuaizhizao.quality.plans.columns.planType'),
-        dataIndex: 'plan_type',
-        width: 100,
-        sorter: true,
-        hideInSearch: true,
-        render: (_, record) => {
+      buildInspectionPlanTypeColumn<InspectionPlan>(
+        t,
+        (_, record) => {
           if (!record) return '-';
           return planTypeLabel(record.plan_type);
         },
-      },
+        { sorter: true },
+      ),
+      buildInspectionPlanStepsColumn<InspectionPlan>(t),
       {
         title: t('app.kuaizhizao.quality.plans.columns.version'),
         dataIndex: 'version',
         width: 80,
+        minWidth: 80,
+        uniTableKeepWidth: true,
+        resizable: false,
         sorter: true,
         hideInSearch: true,
       },
@@ -404,10 +453,9 @@ const InspectionPlansPage: React.FC = () => {
       {
         title: t('common.status'),
         dataIndex: 'is_active',
-        width: 88,
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         sorter: true,
         fixed: 'right',
-        align: 'center',
         hideInSearch: true,
         valueEnum: planActiveValueEnum,
         render: (_, record) =>
@@ -423,40 +471,54 @@ const InspectionPlansPage: React.FC = () => {
         key: 'action',
         fixed: 'right',
         hideInSearch: true,
-        render: (_, record) => (
-          <Space size="small" wrap>
+        render: (_, record) => [
+          canRead ? (
             <Button
+              key="read"
               {...rowActionKind('read')}
               onClick={(e) => {
                 e.stopPropagation();
                 void handleDetail(record);
               }}
-            >
-              {t('common.detail')}
-            </Button>
+            />
+          ) : null,
+          canUpdate ? (
             <Button
+              key="update"
               {...rowActionKind('update')}
               onClick={(e) => {
                 e.stopPropagation();
                 void handleEdit(record);
               }}
-            >
-              {t('common.edit')}
-            </Button>
+            />
+          ) : null,
+          canCreate ? (
             <Button
-              {...rowActionKind('delete')}
+              key="copy-create"
+              {...rowActionCopyCreate()}
               onClick={(e) => {
                 e.stopPropagation();
-                void handleDelete(record);
+                void handleCopyCreate(record);
               }}
+            />
+          ) : null,
+          canDelete ? (
+            <Popconfirm
+              key="delete"
+              title={t('common.deleteTitle')}
+              onConfirm={() => void handleDelete(record)}
+              onPopupClick={(e) => e.stopPropagation()}
             >
-              {t('common.delete')}
-            </Button>
-          </Space>
-        ),
+              <Button
+                {...rowActionKind('delete')}
+                onClick={(e) => e.stopPropagation()}
+              />
+            </Popconfirm>
+          ) : null,
+        ],
       },
     ], SALES_DOC_LIST_FIELD_RANK),
-    [planActiveValueEnum, planTypeOptions, planTypeValueEnum, t],
+    [canCreate, canDelete, canRead, canUpdate, planActiveValueEnum, planTypeOptions, planTypeValueEnum, t],
   );
 
   const timeconfigBasicItems = useDetailDrawerDescriptionItems(
@@ -469,7 +531,7 @@ const InspectionPlansPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.inspectionPlans')}
         headerTitle={t('app.kuaizhizao.quality.plans.pageTitle')}
-        columnPersistenceId="apps.kuaizhizao.pages.quality-management.inspection-plans"
+        columnPersistenceId="apps.kuaizhizao.pages.quality-management.inspection-plans-width-v1"
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
         pinnedTabsField={INSPECTION_PLAN_PINNED_STATUS_FIELD}
@@ -484,6 +546,7 @@ const InspectionPlansPage: React.FC = () => {
             const response = await inspectionPlanApi.list({
               skip,
               limit: pageSize,
+              include_steps: true,
               ...listParams,
             });
             const { data, total } = normalizeQualityImprovementListResponse(response);
@@ -526,10 +589,17 @@ const InspectionPlansPage: React.FC = () => {
       />
 
       <FormModalTemplate
-        title={isEdit ? t('app.kuaizhizao.quality.plans.modal.editTitle') : t('app.kuaizhizao.quality.plans.modal.createTitle')}
+        title={
+          isEdit
+            ? t('app.kuaizhizao.quality.plans.modal.editTitle')
+            : isCopyCreate
+              ? t('app.kuaizhizao.quality.plans.modal.copyCreateTitle')
+              : t('app.kuaizhizao.quality.plans.modal.createTitle')
+        }
         open={modalVisible}
         onClose={() => {
           setModalVisible(false);
+          setIsCopyCreate(false);
           setCurrentPlan(null);
           setSteps([]);
           formRef.current?.resetFields();
@@ -632,10 +702,42 @@ const InspectionPlansPage: React.FC = () => {
         width={DRAWER_CONFIG.STANDARD_WIDTH}
         extra={
           planDetail
-            ? buildDetailDrawerEditExtra(t, true, () => {
-                setDrawerVisible(false);
-                void handleEdit(planDetail);
-              })
+            ? (
+                <DetailDrawerActions
+                  items={[
+                    {
+                      key: 'edit',
+                      visible: true,
+                      render: () => (
+                        <Button
+                          {...rowActionKind('update')}
+                          size="small"
+                          onClick={() => {
+                            setDrawerVisible(false);
+                            void handleEdit(planDetail);
+                          }}
+                        >
+                          {t('common.edit')}
+                        </Button>
+                      ),
+                    },
+                    {
+                      key: 'copy-create',
+                      visible: canCreate,
+                      render: () => (
+                        <Button
+                          {...rowActionCopyCreate()}
+                          size="small"
+                          onClick={() => {
+                            setDrawerVisible(false);
+                            void handleCopyCreate(planDetail);
+                          }}
+                        />
+                      ),
+                    },
+                  ]}
+                />
+              )
             : null
         }
         plainBody={

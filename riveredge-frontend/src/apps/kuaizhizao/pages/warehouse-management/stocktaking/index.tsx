@@ -22,8 +22,12 @@ import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcu
 import { UniTable } from '../../../../../components/uni-table';
 import {
   UniTableStackedPrimaryCell,
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
+import {
+  DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+  renderDocumentLineMaterialsPreview,
+} from '../../sales-management/shared/documentLineMaterialsPreview';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate,   useDetailDrawerDescriptionItems, detailDrawerBasicColumn, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
@@ -506,7 +510,11 @@ const StocktakingPage: React.FC = () => {
       title: t('app.kuaizhizao.stocktaking.colWarehouseAndCode'),
       key: 'code',
       dataIndex: 'code',
-      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+      width: 200,
+      minWidth: 200,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: false,
       fixed: 'left',
       sorter: true,
       search: { order: 50 } as ProColumns['search'],
@@ -528,7 +536,9 @@ const StocktakingPage: React.FC = () => {
       title: t('app.kuaizhizao.stocktaking.colStocktakingDate'),
       dataIndex: 'stocktaking_date',
       width: 132,
+      minWidth: 132,
       uniTableKeepWidth: true,
+      resizable: false,
       sorter: true,
       hideInSearch: true,
       valueType: 'date',
@@ -536,32 +546,36 @@ const StocktakingPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.stocktaking.colStocktakingType'),
       dataIndex: 'stocktaking_type',
-      width: 100,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       sorter: true,
       hideInSearch: true,
       valueEnum: stocktakingTypeValueEnum,
       render: (_, record) => renderStocktakingTypeMarkerTag(t, record.stocktaking_type),
     },
     {
-      title: t('app.kuaizhizao.stocktaking.colTotalItems'),
-      dataIndex: 'total_items',
-      width: 120,
-      align: 'right',
-      sorter: true,
-      hideInSearch: true,
+      title: t('app.kuaizhizao.common.colLineMaterials'),
+      ...DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+      render: (_, r) => renderDocumentLineMaterialsPreview(r.items, t),
     },
     {
       title: t('app.kuaizhizao.stocktaking.colCountedItems'),
       dataIndex: 'counted_items',
-      width: 120,
+      width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       align: 'right',
       sorter: true,
       hideInSearch: true,
+      render: (v: number | null | undefined) => (v != null ? v : '-'),
     },
     {
       title: t('app.kuaizhizao.stocktaking.colTotalDiff'),
       dataIndex: 'total_differences',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       align: 'right',
       sorter: true,
       hideInSearch: true,
@@ -575,6 +589,9 @@ const StocktakingPage: React.FC = () => {
       title: t('app.kuaizhizao.stocktaking.colTotalDiffAmount'),
       dataIndex: 'total_difference_amount',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       align: 'right',
       sorter: true,
       hideInSearch: true,
@@ -610,8 +627,9 @@ const StocktakingPage: React.FC = () => {
     },
     {
       title: t('common.actions'),
-      width: 300,
+      key: 'option',
       fixed: 'right',
+      hideInSearch: true,
       render: (_, record) => (
         <Space wrap>
           <Button {...rowActionKind('read')} onClick={() => handleDetail(record)} />
@@ -856,7 +874,7 @@ const StocktakingPage: React.FC = () => {
         headerTitle={t('app.kuaizhizao.stocktaking.headerTitle')}
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.stocktaking)}
-        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.stocktaking.v2"
+        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.stocktaking-width-v3"
         actionRef={actionRef}
         rowKey="id"
         columns={columns}

@@ -39,6 +39,7 @@ import {
 } from '../shared/equipmentMasterDataDetail';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 
 const P = 'app.kuaizhizao.toolOps.maintenanceScheme';
 
@@ -243,47 +244,82 @@ const ToolMaintenanceSchemesPage: React.FC = () => {
       {
         title: t('common.code'),
         dataIndex: 'code',
-        width: 120,
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
         fixed: 'left',
         sorter: true,
         search: { order: 30 } as ProColumns['search'],
+        render: (_, r) => (r.code != null && r.code !== '' ? String(r.code) : '-'),
       },
       {
         title: t('common.name'),
         dataIndex: 'name',
-        width: 180,
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
         ellipsis: true,
         sorter: true,
         hideInSearch: true,
+        render: (_, r) => (r.name != null && r.name !== '' ? String(r.name) : '-'),
       },
       {
         title: t(`${P}.col.triggerType`),
         dataIndex: 'trigger_type',
         width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         render: (_, r) => resolveMaintenanceTriggerTypeLabel(t, r.trigger_type),
       },
-      { title: t(`${P}.col.intervalValue`), dataIndex: 'interval_value', width: 90, hideInSearch: true },
-      { title: t(`${P}.col.lineCount`), dataIndex: 'line_count', width: 80, hideInSearch: true },
-      { title: t('common.remark'), dataIndex: 'description', ellipsis: true, hideInSearch: true },
+      {
+        title: t(`${P}.col.intervalValue`),
+        dataIndex: 'interval_value',
+        width: 90,
+        minWidth: 90,
+        uniTableKeepWidth: true,
+        resizable: false,
+        hideInSearch: true,
+        render: (_, r) => (r.interval_value != null ? String(r.interval_value) : '-'),
+      },
+      {
+        title: t(`${P}.col.lineCount`),
+        key: 'line_count',
+        dataIndex: 'line_count',
+        width: 80,
+        minWidth: 80,
+        uniTableKeepWidth: true,
+        resizable: false,
+        hideInSearch: true,
+        render: (_, r) => (r.line_count != null ? String(r.line_count) : (r.lines?.length ?? 0)),
+      },
+      {
+        title: t('common.remark'),
+        dataIndex: 'description',
+        minWidth: 160,
+        uniTablePrimaryFlex: true,
+        uniTableRemainderFlex: true,
+        resizable: false,
+        ellipsis: true,
+        hideInSearch: true,
+        render: (_, r) => (r.description != null && r.description !== '' ? String(r.description) : '-'),
+      },
       {
         title: t('common.enabled'),
         dataIndex: 'is_active',
-        width: 80,
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         sorter: true,
         hideInSearch: true,
         render: (_, r) => renderIsActiveTag(t, r.is_active),
       },
-      {
-        title: t('common.updatedAt'),
-        dataIndex: 'updated_at',
-        hideInTable: true,
-        hideInSearch: true,
-      },
       ...buildDocumentAuditColumns<MaintenanceScheme>(t),
       {
         title: t('common.actions'),
-        key: 'action',
+        key: 'option',
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) =>
@@ -317,7 +353,7 @@ const ToolMaintenanceSchemesPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.toolMaintenanceSchemes)}
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-maintenance-schemes-equip-rank-v1"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-maintenance-schemes-width-v2"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}

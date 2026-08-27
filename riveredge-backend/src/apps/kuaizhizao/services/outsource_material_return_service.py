@@ -274,8 +274,17 @@ class OutsourceMaterialReturnService(AppBaseService[OutsourceMaterialReturn]):
         )
         responses = [OutsourceMaterialReturnResponse.model_validate(row) for row in rows]
         item_counts = {int(r.id): 1 for r in rows}
+        item_previews = {
+            int(r.id): [{"material_name": getattr(r, "material_name", None)}]
+            for r in rows
+            if str(getattr(r, "material_name", "") or "").strip()
+        }
         responses = enrich_inbound_hub_list_capabilities(
-            rows, responses, "outsource_material_return", item_counts=item_counts
+            rows,
+            responses,
+            "outsource_material_return",
+            item_counts=item_counts,
+            item_previews=item_previews,
         )
         return await enrich_outsource_docs_with_supplier(tenant_id, rows, responses)
 

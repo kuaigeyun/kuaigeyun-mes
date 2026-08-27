@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import CodeField from '../../../../../components/code-field';
 import { UniTable } from '../../../../../components/uni-table';
-import { rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import PermissionGuard from '../../../../../components/permission/PermissionGuard';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
@@ -88,12 +88,19 @@ const SystemDocumentsPage: React.FC = () => {
             title: t('app.kuaizhizao.quality.qms.documentCode'),
             dataIndex: 'document_code',
             width: 140,
+            minWidth: 140,
+            uniTableKeepWidth: true,
+            resizable: false,
             copyable: true,
             hideInSearch: true,
           },
           {
             title: t('app.kuaizhizao.quality.qms.title'),
             dataIndex: 'title',
+            minWidth: 200,
+            uniTablePrimaryFlex: true,
+            uniTableRemainderFlex: true,
+            resizable: false,
             ellipsis: true,
             hideInSearch: true,
           },
@@ -106,24 +113,36 @@ const SystemDocumentsPage: React.FC = () => {
             title: t('app.kuaizhizao.quality.qms.docTypeLabel'),
             dataIndex: 'doc_type',
             width: 110,
+            minWidth: 110,
+            uniTableKeepWidth: true,
+            resizable: false,
             valueEnum: typeEnum,
           },
           {
             title: t('app.kuaizhizao.quality.qms.version'),
             dataIndex: 'version',
             width: 72,
+            minWidth: 72,
+            uniTableKeepWidth: true,
+            resizable: false,
             hideInSearch: true,
           },
           {
             title: t('app.kuaizhizao.quality.qms.isoClause'),
             dataIndex: 'iso_clause',
             width: 100,
+            minWidth: 100,
+            uniTableKeepWidth: true,
+            resizable: false,
             hideInSearch: true,
           },
           {
             title: t('app.kuaizhizao.quality.qms.nextReviewAt'),
             dataIndex: 'next_review_at',
             width: 140,
+            minWidth: 140,
+            uniTableKeepWidth: true,
+            resizable: false,
             hideInSearch: true,
             render: (_, row) => {
               const text = formatDateTimeBySiteSetting(row.next_review_at) || '-';
@@ -135,21 +154,22 @@ const SystemDocumentsPage: React.FC = () => {
           },
           {
             title: t('common.status'),
+            key: 'lifecycle',
             dataIndex: 'status',
-            width: 96,
+            fixed: 'right',
             valueEnum: statusEnum,
             render: (_, row) => <Tag>{statusEnum[row.status]?.text || row.status}</Tag>,
           },
           {
             title: t('common.actions'),
-            valueType: 'option',
-            width: 220,
+            key: 'option',
             fixed: 'right',
+            hideInSearch: true,
             render: (_, row) => [
               canUpdate ? (
-                <a
+                <Button
                   key="edit"
-                  className={rowActionKind('edit')}
+                  {...rowActionKind('update')}
                   onClick={() => {
                     setEditing(row);
                     setOpen(true);
@@ -162,14 +182,13 @@ const SystemDocumentsPage: React.FC = () => {
                       });
                     }, 0);
                   }}
-                >
-                  {t('common.edit')}
-                </a>
+                />
               ) : null,
               canPublish && row.status !== 'effective' && row.status !== 'obsolete' ? (
-                <a
+                <Button
                   key="publish"
-                  className={rowActionKind('execute')}
+                  {...rowActionKind('execute')}
+                  {...rowActionLabelKeep()}
                   onClick={async () => {
                     await qualityQmsApi.systemDocuments.publish(row.id);
                     messageApi.success(t('app.kuaizhizao.quality.qms.messages.publishSuccess'));
@@ -177,33 +196,29 @@ const SystemDocumentsPage: React.FC = () => {
                   }}
                 >
                   {t('app.kuaizhizao.quality.qms.actions.publish')}
-                </a>
+                </Button>
               ) : null,
               canObsolete && row.status === 'effective' ? (
-                <a
+                <Button
                   key="obsolete"
-                  className={rowActionKind('danger')}
+                  {...rowActionKind('obsolete')}
                   onClick={async () => {
                     await qualityQmsApi.systemDocuments.obsolete(row.id);
                     messageApi.success(t('app.kuaizhizao.quality.qms.messages.obsoleteSuccess'));
                     actionRef.current?.reload();
                   }}
-                >
-                  {t('app.kuaizhizao.quality.qms.actions.obsolete')}
-                </a>
+                />
               ) : null,
               canDelete && row.status !== 'effective' ? (
-                <a
+                <Button
                   key="delete"
-                  className={rowActionKind('danger')}
+                  {...rowActionKind('delete')}
                   onClick={async () => {
                     await qualityQmsApi.systemDocuments.delete(row.id);
                     messageApi.success(t('common.deleteSuccess'));
                     actionRef.current?.reload();
                   }}
-                >
-                  {t('common.delete')}
-                </a>
+                />
               ) : null,
             ],
           },
@@ -235,7 +250,7 @@ const SystemDocumentsPage: React.FC = () => {
           rowKey="id"
           columns={columns}
           showAdvancedSearch
-          columnPersistenceId="apps.kuaizhizao.pages.quality-management.system-documents"
+          columnPersistenceId="apps.kuaizhizao.pages.quality-management.system-documents-width-v2"
           toolBarRender={() =>
             canCreate
               ? [

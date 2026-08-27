@@ -20,6 +20,11 @@ from apps.kuaizhizao.services.document_action_policy.types import (
 )
 
 
+class DocumentLineMaterialPreview(BaseSchema):
+    """列表「明细」列物料名预览（仅名称，配合前端 MarkerTag）"""
+    material_name: Optional[str] = Field(None, description="物料名称")
+
+
 # === 生产领料单 ===
 
 class ProductionPickingBase(BaseSchema):
@@ -95,6 +100,9 @@ class ProductionPickingListResponse(ProductionPickingResponse):
     picking_score_breakdown: Optional[dict] = Field(None, description="备料打分明细")
     total_quantity: Optional[float] = Field(None, ge=0, description="总数量（明细应领合计）")
     total_items: Optional[int] = Field(None, description="出库品种数（明细行数）")
+    items: Optional[List[DocumentLineMaterialPreview]] = Field(
+        None, description="明细物料名预览（列表「明细」列）",
+    )
     required_quantity_total: Optional[float] = Field(None, ge=0, description="应领数量合计（明细 required_quantity 之和）")
     picked_quantity_total: Optional[float] = Field(None, ge=0, description="已领数量合计（明细 picked_quantity 之和）")
 
@@ -234,6 +242,9 @@ class ProductionReturnResponse(ProductionReturnBase):
     )
     total_items: Optional[int] = Field(None, description="入库品种数（明细行数）")
     total_quantity: Optional[float] = Field(None, ge=0, description="总退料数量")
+    items: Optional[List[DocumentLineMaterialPreview]] = Field(
+        None, description="明细物料名预览（列表「明细」列）",
+    )
 
     class Config:
         from_attributes = True
@@ -430,6 +441,9 @@ class FinishedGoodsReceiptResponse(FinishedGoodsReceiptBase):
         "finished_goods",
         description="生产入库单据形态（成品/半成品），与物理表一致时下推接口可能返回 semi 以兼容旧客户端",
     )
+    items: Optional[List[DocumentLineMaterialPreview]] = Field(
+        None, description="明细物料名预览（列表「明细」列）",
+    )
 
     class Config:
         from_attributes = True
@@ -538,6 +552,9 @@ class SemiFinishedGoodsReceiptResponse(SemiFinishedGoodsReceiptBase):
     inbound_doc_kind: Literal["finished_goods", "semi_finished_goods"] = Field(
         "semi_finished_goods",
         description="固定为半成品入库单",
+    )
+    items: Optional[List[DocumentLineMaterialPreview]] = Field(
+        None, description="明细物料名预览（列表「明细」列）",
     )
 
     class Config:
@@ -680,6 +697,9 @@ class SalesDeliveryResponse(SalesDeliveryBase):
         None, description="业务态 capabilities（出库 Hub，document_action_policy）",
     )
     total_items: Optional[int] = Field(None, description="出库品种数（明细行数）")
+    items: Optional[List[DocumentLineMaterialPreview]] = Field(
+        None, description="明细物料名预览（列表「明细」列）",
+    )
 
     class Config:
         from_attributes = True
@@ -887,6 +907,9 @@ class PurchaseReceiptResponse(PurchaseReceiptBase):
         None, description="业务态 capabilities（入库 Hub，document_action_policy）",
     )
     total_items: Optional[int] = Field(None, description="入库品种数（明细行数）")
+    items: Optional[List[DocumentLineMaterialPreview]] = Field(
+        None, description="明细物料名预览（列表「明细」列）",
+    )
 
     class Config:
         from_attributes = True
@@ -1240,6 +1263,9 @@ class OtherInboundResponse(OtherInboundBase):
         None, description="业务态 capabilities（入库 Hub，document_action_policy）",
     )
     total_items: Optional[int] = Field(None, description="入库品种数（明细行数）")
+    items: Optional[List[DocumentLineMaterialPreview]] = Field(
+        None, description="明细物料名预览（列表「明细」列）",
+    )
 
     class Config:
         from_attributes = True
@@ -1364,6 +1390,9 @@ class OtherOutboundResponse(OtherOutboundBase):
         None, description="业务态 capabilities（出库 Hub，document_action_policy）",
     )
     total_items: Optional[int] = Field(None, description="出库品种数（明细行数）")
+    items: Optional[List[DocumentLineMaterialPreview]] = Field(
+        None, description="明细物料名预览（列表「明细」列）",
+    )
 
     class Config:
         from_attributes = True
@@ -1473,6 +1502,9 @@ class MaterialBorrowResponse(MaterialBorrowBase):
         None, description="业务态 capabilities（出库 Hub，document_action_policy）",
     )
     total_items: Optional[int] = Field(None, description="出库品种数（明细行数）")
+    items: Optional[List[DocumentLineMaterialPreview]] = Field(
+        None, description="明细物料名预览（列表「明细」列）",
+    )
 
     class Config:
         from_attributes = True
@@ -1582,6 +1614,9 @@ class MaterialReturnResponse(MaterialReturnBase):
         None, description="业务态 capabilities（入库 Hub，document_action_policy）",
     )
     total_items: Optional[int] = Field(None, description="入库品种数（明细行数）")
+    items: Optional[List[DocumentLineMaterialPreview]] = Field(
+        None, description="明细物料名预览（列表「明细」列）",
+    )
 
     class Config:
         from_attributes = True

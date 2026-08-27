@@ -76,6 +76,10 @@ import { formatDateTime, todaySiteDateString } from '../../../../../utils/format
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
+  buildKeepWidthColumn,
+  buildLedgerNameCodeRemainderColumn,
+} from '../shared/equipmentTableColumns';
+import {
   formDateFormItemProps,
   formDateRangeFormItemProps,
   parseSpreadsheetDateToApiString,
@@ -744,40 +748,20 @@ const EquipmentPage: React.FC = () => {
       hideInTable: true,
       search: { order: 25 } as ProColumns['search'],
     },
-    {
-      title: t('app.kuaizhizao.equipment.colCode'),
-      dataIndex: 'code',
-      width: 140,
-      minWidth: 140,
-      uniTableKeepWidth: true,
-      resizable: false,
-      ellipsis: true,
-      fixed: 'left',
-      sorter: true,
-      search: { order: 30 } as ProColumns['search'],
-      render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.code ?? '') }} ellipsis>
-          {r.code ?? '-'}
-        </Typography.Text>
-      ),
-    },
-    {
-      title: t('app.kuaizhizao.equipment.colName'),
-      dataIndex: 'name',
-      width: 200,
-      ellipsis: true,
-      sorter: true,
-      hideInSearch: true,
-    },
+    buildLedgerNameCodeRemainderColumn<Equipment>(t('app.kuaizhizao.equipment.colNameCode'), {
+      searchOrder: 30,
+    }),
     {
       title: t('app.kuaizhizao.equipment.colPhoto'),
       dataIndex: 'photo_file_uuid',
       width: 72,
+      minWidth: 72,
       align: 'center',
       hideInSearch: true,
       search: false,
       sorter: false,
       uniTableKeepWidth: true,
+      resizable: false,
       render: (_, r) => {
         const uuid = (r.photo_file_uuid || '').trim();
         if (!uuid) {
@@ -801,84 +785,70 @@ const EquipmentPage: React.FC = () => {
         );
       },
     },
-    {
-      title: t('app.kuaizhizao.equipment.colType'),
-      dataIndex: 'type',
+    buildKeepWidthColumn<Equipment>(t('app.kuaizhizao.equipment.colType'), 'type', {
       width: 120,
       sorter: true,
       hideInSearch: true,
-    },
-    {
-      title: t('app.kuaizhizao.equipment.colCategory'),
-      dataIndex: 'category',
+    }),
+    buildKeepWidthColumn<Equipment>(t('app.kuaizhizao.equipment.colCategory'), 'category', {
       width: 120,
       sorter: true,
       hideInSearch: true,
-    },
+    }),
     {
-      title: t('app.kuaizhizao.equipment.colEquipmentNature'),
-      dataIndex: 'equipment_nature',
-      width: 110,
-      hideInSearch: true,
+      ...buildKeepWidthColumn<Equipment>(
+        t('app.kuaizhizao.equipment.colEquipmentNature'),
+        'equipment_nature',
+        { width: 110, hideInSearch: true },
+      ),
       render: (_, r) => r.equipment_nature ?? '-',
     },
     {
-      title: t('app.kuaizhizao.equipment.colResponsiblePerson'),
-      dataIndex: 'responsible_person_name',
-      width: 110,
-      ellipsis: true,
-      hideInSearch: true,
+      ...buildKeepWidthColumn<Equipment>(
+        t('app.kuaizhizao.equipment.colResponsiblePerson'),
+        'responsible_person_name',
+        { width: 110, hideInSearch: true },
+      ),
       render: (_, r) => r.responsible_person_name ?? '-',
     },
-    {
-      title: t('app.kuaizhizao.equipment.colBrand'),
-      dataIndex: 'brand',
+    buildKeepWidthColumn<Equipment>(t('app.kuaizhizao.equipment.colBrand'), 'brand', {
       width: 100,
       hideInSearch: true,
-    },
-    {
-      title: t('app.kuaizhizao.equipment.colModel'),
-      dataIndex: 'model',
+    }),
+    buildKeepWidthColumn<Equipment>(t('app.kuaizhizao.equipment.colModel'), 'model', {
       width: 120,
       hideInSearch: true,
-    },
+    }),
     {
-      title: t('app.kuaizhizao.equipment.colSerialNumber'),
-      dataIndex: 'serial_number',
-      width: 150,
-      hideInSearch: true,
+      ...buildKeepWidthColumn<Equipment>(
+        t('app.kuaizhizao.equipment.colSerialNumber'),
+        'serial_number',
+        { width: 150, hideInSearch: true },
+      ),
       render: (_, r) => (
         <Typography.Text copyable={{ text: String(r.serial_number ?? '') }} ellipsis>
           {r.serial_number ?? '-'}
         </Typography.Text>
       ),
     },
-    {
-      title: t('app.kuaizhizao.equipment.colWorkshop'),
-      dataIndex: 'workshop_name',
+    buildKeepWidthColumn<Equipment>(t('app.kuaizhizao.equipment.colWorkshop'), 'workshop_name', {
       width: 120,
-      ellipsis: true,
       hideInSearch: true,
-    },
-    {
-      title: t('app.kuaizhizao.equipment.colProductionLine'),
-      dataIndex: 'production_line_name',
-      width: 140,
-      ellipsis: true,
-      hideInSearch: true,
-    },
-    {
-      title: t('app.kuaizhizao.equipment.colWorkCenter'),
-      dataIndex: 'work_center_name',
+    }),
+    buildKeepWidthColumn<Equipment>(
+      t('app.kuaizhizao.equipment.colProductionLine'),
+      'production_line_name',
+      { width: 140, hideInSearch: true },
+    ),
+    buildKeepWidthColumn<Equipment>(t('app.kuaizhizao.equipment.colWorkCenter'), 'work_center_name', {
       width: 150,
-      ellipsis: true,
       hideInSearch: true,
-    },
+    }),
     ...buildDocumentAuditColumns<Record<string, unknown>>(t),
     ...customFieldColumns,
     {
       title: t('common.actions'),
-      key: 'action',
+      key: 'option',
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) => renderEquipmentRowNodes(record),
@@ -912,7 +882,7 @@ const EquipmentPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.equipmentLedger')}
           headerTitle={t('app.kuaizhizao.equipment.title')}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.equipment.v2"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.equipment-width-v3"
           actionRef={actionRef}
           formRef={searchFormRef}
           rowKey="uuid"

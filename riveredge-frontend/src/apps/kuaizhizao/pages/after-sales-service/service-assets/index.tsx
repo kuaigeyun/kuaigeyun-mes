@@ -11,6 +11,7 @@ import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-manageme
 import { buildDetailDrawerEditExtra } from '../../equipment-management/shared/equipmentMasterDataDetail';
 import {
   AFTER_SALES_ASSET_STATUS_COLOR,
+  AFTER_SALES_CUSTOMER_NAME_COLUMN_DEFAULTS,
   renderAfterSalesStatusTag,
 } from '../shared/afterSalesListPresentation';
 import { serviceAssetApi, type ServiceAsset } from '../../../services/after-sales-service';
@@ -87,8 +88,8 @@ const ServiceAssetsPage: React.FC = () => {
           {
             title: t('app.kuaizhizao.afterSalesService.serviceAsset.field.assetCode'),
             dataIndex: 'asset_code',
-            width: 148,
-            minWidth: 148,
+            width: 188,
+            minWidth: 188,
             uniTableKeepWidth: true,
             resizable: false,
             fixed: 'left',
@@ -97,18 +98,16 @@ const ServiceAssetsPage: React.FC = () => {
           {
             title: t('app.kuaizhizao.afterSalesService.serviceAsset.field.customerName'),
             dataIndex: 'customer_name',
-            width: 148,
-            minWidth: 148,
-            uniTableKeepWidth: true,
-            resizable: false,
-            ellipsis: true,
+            ...AFTER_SALES_CUSTOMER_NAME_COLUMN_DEFAULTS,
           },
           {
+            // 产品名称长短不一：唯一 RemainderFlex；key 专用段位，避免 material_name 全局 79.3 把保修列挤到产品前
             title: t('app.kuaizhizao.afterSalesService.serviceAsset.field.materialName'),
+            key: 'service_asset_material_name',
             dataIndex: 'material_name',
-            width: 168,
-            minWidth: 168,
-            uniTableKeepWidth: true,
+            minWidth: 160,
+            uniTableRemainderFlex: true,
+            uniTablePrimaryFlex: true,
             resizable: false,
             ellipsis: true,
           },
@@ -123,6 +122,45 @@ const ServiceAssetsPage: React.FC = () => {
             copyable: true,
           },
           {
+            title: t('app.kuaizhizao.afterSalesService.serviceAsset.field.installAddress'),
+            dataIndex: 'install_address',
+            width: 160,
+            minWidth: 160,
+            uniTableKeepWidth: true,
+            resizable: false,
+            ellipsis: true,
+            hideInSearch: true,
+            render: (_, row) => {
+              const text = String(row.install_address ?? '').trim();
+              return text || '—';
+            },
+          },
+          {
+            title: t('app.kuaizhizao.afterSalesService.serviceAsset.field.warrantyMonths'),
+            dataIndex: 'warranty_months',
+            width: 100,
+            minWidth: 100,
+            uniTableKeepWidth: true,
+            resizable: false,
+            align: 'right',
+            hideInSearch: true,
+            render: (_, row) => (row.warranty_months != null ? row.warranty_months : '—'),
+          },
+          {
+            title: t('app.kuaizhizao.afterSalesService.serviceAsset.field.warrantyPolicy'),
+            dataIndex: 'warranty_policy',
+            width: 140,
+            minWidth: 140,
+            uniTableKeepWidth: true,
+            resizable: false,
+            ellipsis: true,
+            hideInSearch: true,
+            render: (_, row) => {
+              const text = String(row.warranty_policy ?? '').trim();
+              return text || '—';
+            },
+          },
+          {
             title: t('common.status'),
             key: 'lifecycle',
             dataIndex: 'status',
@@ -132,9 +170,8 @@ const ServiceAssetsPage: React.FC = () => {
               renderAfterSalesStatusTag(row.status, AFTER_SALES_ASSET_STATUS_COLOR),
           },
           {
-            title: t('common.action'),
+            title: t('common.actions'),
             key: 'action',
-            valueType: 'option',
             fixed: 'right',
             hideInSearch: true,
             render: (_, row) => [
@@ -150,7 +187,7 @@ const ServiceAssetsPage: React.FC = () => {
         ],
         SALES_DOC_LIST_FIELD_RANK,
       ),
-    [messageApi, modal, perms.canDelete, perms.canUpdate, t],
+    [perms.canDelete, perms.canUpdate, t],
   );
 
   return (
@@ -160,7 +197,7 @@ const ServiceAssetsPage: React.FC = () => {
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.afterSalesServiceAsset)}
         actionRef={actionRef}
         columns={columns}
-        columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.service-assets.v3"
+        columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.service-assets.v8"
         rowKey="id"
         headerTitle={t('app.kuaizhizao.menu.after-sales-service.service-assets')}
         request={async (params) => {

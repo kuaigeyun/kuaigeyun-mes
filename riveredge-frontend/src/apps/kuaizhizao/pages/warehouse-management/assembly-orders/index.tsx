@@ -13,7 +13,7 @@ const AssemblyOrdersPage: React.FC = () => {
   const assemblyConfig = useMemo(
     () => ({
       headerTitle: t('app.kuaizhizao.assemblyOrder.headerTitle'),
-      persistenceId: 'apps.kuaizhizao.pages.warehouse-management.assembly-orders.v2',
+      persistenceId: 'apps.kuaizhizao.pages.warehouse-management.assembly-orders-width-v3',
       createButtonText: t('app.kuaizhizao.assemblyOrder.createButton'),
       createModalTitle: t('app.kuaizhizao.assemblyOrder.createModalTitle'),
       detailTitlePrefix: t('app.kuaizhizao.assemblyOrder.detailTitlePrefix'),

@@ -8,8 +8,7 @@ import { ActionType, ProColumns, ProFormInstance, ProFormText, ProFormTextArea }
 import { App, Button, Col, Descriptions, Form, Input, Row, Select, Space, Switch, Table } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
-import { UniTableStackedPrimaryCell, UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS } from '../../../../../components/uni-table/stackedPrimaryColumn';
-import { rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import {
   DetailDrawerSection,
   DetailDrawerTemplate,
@@ -141,31 +140,46 @@ const DrawingDistributionsPage: React.FC = () => {
   const columns: ProColumns<DrawingDistribution>[] = useMemo(
     () => [
       {
-        title: t('app.master-data.drawingDistributions.name'),
-        dataIndex: 'name',
-        key: 'name_code',
-        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-        render: (_, row) => (
-          <UniTableStackedPrimaryCell primary={row.name} secondary={row.code} />
-        ),
-      },
-      {
+        // 稀疏：业务列不叠（单号 → 名称 → 发放时间/人）；审计叠列保留
         title: t('app.master-data.drawingDistributions.code'),
         dataIndex: 'code',
-        hideInTable: true,
+        width: 168,
+        minWidth: 168,
+        uniTableKeepWidth: true,
+        resizable: false,
+        fixed: 'left',
+        ellipsis: true,
+        copyable: true,
+      },
+      {
+        // 发放单名称长短不一：唯一 RemainderFlex
+        title: t('app.master-data.drawingDistributions.name'),
+        dataIndex: 'name',
+        minWidth: 160,
+        uniTableRemainderFlex: true,
+        uniTablePrimaryFlex: true,
+        resizable: false,
+        ellipsis: true,
       },
       {
         title: t('app.master-data.drawingDistributions.issuedAt'),
         dataIndex: 'issuedAt',
         hideInSearch: true,
-        width: 160,
+        width: 180,
+        minWidth: 180,
+        uniTableKeepWidth: true,
+        resizable: false,
         render: (_, row) => (row.issuedAt ? formatDateTimeBySiteSetting(row.issuedAt) : '-'),
       },
       {
         title: t('app.master-data.drawingDistributions.issuedBy'),
+        key: 'drawing_dist_issued_by',
         dataIndex: 'issuedByName',
         hideInSearch: true,
-        width: 100,
+        width: 112,
+        minWidth: 112,
+        uniTableKeepWidth: true,
+        resizable: false,
         ellipsis: true,
       },
       ...buildDocumentAuditColumns<DrawingDistribution>(t),
@@ -173,11 +187,8 @@ const DrawingDistributionsPage: React.FC = () => {
         title: t('common.status'),
         key: 'lifecycle',
         dataIndex: 'status',
-        width: 100,
-        minWidth: 100,
-        uniTableKeepWidth: true,
-        resizable: false,
         fixed: 'right',
+        hideInSearch: true,
         valueEnum: {
           Draft: { text: t('app.master-data.drawingDistributions.status.Draft') },
           Pending: { text: t('app.master-data.drawingDistributions.status.Pending') },
@@ -192,56 +203,106 @@ const DrawingDistributionsPage: React.FC = () => {
       },
       {
         title: t('common.actions'),
-        valueType: 'option',
-        width: 220,
+        key: 'action',
         fixed: 'right',
         hideInSearch: true,
-        render: (_, row) => [
-          <Button key="detail" {...rowActionKind('read')} type="link" size="small" onClick={() => void openDetail(row)}>
-            {t('common.detail')}
-          </Button>,
-          row.status === 'Draft' && perms.canUpdate ? (
-            <Button
-              key="edit"
-              {...rowActionKind('update')}
-              type="link"
-              size="small"
-              onClick={() => {
-                void drawingDistributionApi.get(row.uuid).then((full) => {
-                  setEditing(full);
-                  setModalOpen(true);
-                });
-              }}
-            >
-              {t('common.edit')}
-            </Button>
-          ) : null,
-          row.status === 'Draft' && canSubmit ? (
-            <Button key="submit" {...rowActionKind('submit')} type="link" size="small" onClick={() => void runAction(() => drawingDistributionApi.submit(row.uuid), 'app.master-data.drawingDistributions.submitSuccess')}>
-              {t('common.submit')}
-            </Button>
-          ) : null,
-          row.status === 'Pending' && canApprove ? (
-            <Button key="approve" {...rowActionKind('approve')} type="link" size="small" onClick={() => void runAction(() => drawingDistributionApi.approve(row.uuid), 'app.master-data.drawingDistributions.approveSuccess')}>
-              {t('app.master-data.drawingDistributions.approve')}
-            </Button>
-          ) : null,
-          row.status === 'Pending' && canReject ? (
-            <Button key="reject" {...rowActionKind('reject')} type="link" size="small" onClick={() => void runAction(() => drawingDistributionApi.reject(row.uuid), 'app.master-data.drawingDistributions.rejectSuccess')}>
-              {t('app.master-data.drawingDistributions.reject')}
-            </Button>
-          ) : null,
-          row.status === 'Pending' && canRevoke ? (
-            <Button key="revoke" {...rowActionKind('revoke')} type="link" size="small" onClick={() => void runAction(() => drawingDistributionApi.revoke(row.uuid), 'app.master-data.drawingDistributions.revokeSuccess')}>
-              {t('app.master-data.drawingDistributions.revoke')}
-            </Button>
-          ) : null,
-          row.status === 'Issued' && canRecall ? (
-            <Button key="recall" {...rowActionKind('recall')} type="link" size="small" onClick={() => handleRecall(row)}>
-              {t('app.master-data.drawingDistributions.recall')}
-            </Button>
-          ) : null,
-        ].filter(Boolean),
+        render: (_, row) => {
+          const parts: React.ReactNode[] = [
+            <Button key="detail" {...rowActionKind('read')} onClick={() => void openDetail(row)} />,
+          ];
+          if (row.status === 'Draft' && perms.canUpdate) {
+            parts.push(
+              <Button
+                key="edit"
+                {...rowActionKind('update')}
+                onClick={() => {
+                  void drawingDistributionApi.get(row.uuid).then((full) => {
+                    setEditing(full);
+                    setModalOpen(true);
+                  });
+                }}
+              />,
+            );
+          }
+          if (row.status === 'Draft' && canSubmit) {
+            parts.push(
+              <Button
+                key="submit"
+                {...rowActionKind('submit')}
+                onClick={() =>
+                  void runAction(
+                    () => drawingDistributionApi.submit(row.uuid),
+                    'app.master-data.drawingDistributions.submitSuccess',
+                  )
+                }
+              />,
+            );
+          }
+          if (row.status === 'Pending' && canApprove) {
+            parts.push(
+              <Button
+                key="approve"
+                {...rowActionKind('approve')}
+                {...rowActionLabelKeep()}
+                onClick={() =>
+                  void runAction(
+                    () => drawingDistributionApi.approve(row.uuid),
+                    'app.master-data.drawingDistributions.approveSuccess',
+                  )
+                }
+              >
+                {t('app.master-data.drawingDistributions.approve')}
+              </Button>,
+            );
+          }
+          if (row.status === 'Pending' && canReject) {
+            parts.push(
+              <Button
+                key="reject"
+                {...rowActionKind('reject')}
+                {...rowActionLabelKeep()}
+                onClick={() =>
+                  void runAction(
+                    () => drawingDistributionApi.reject(row.uuid),
+                    'app.master-data.drawingDistributions.rejectSuccess',
+                  )
+                }
+              >
+                {t('app.master-data.drawingDistributions.reject')}
+              </Button>,
+            );
+          }
+          if (row.status === 'Pending' && canRevoke) {
+            parts.push(
+              <Button
+                key="revoke"
+                {...rowActionKind('revoke')}
+                {...rowActionLabelKeep()}
+                onClick={() =>
+                  void runAction(
+                    () => drawingDistributionApi.revoke(row.uuid),
+                    'app.master-data.drawingDistributions.revokeSuccess',
+                  )
+                }
+              >
+                {t('app.master-data.drawingDistributions.revoke')}
+              </Button>,
+            );
+          }
+          if (row.status === 'Issued' && canRecall) {
+            parts.push(
+              <Button
+                key="recall"
+                {...rowActionKind('recall')}
+                {...rowActionLabelKeep()}
+                onClick={() => handleRecall(row)}
+              >
+                {t('app.master-data.drawingDistributions.recall')}
+              </Button>,
+            );
+          }
+          return parts;
+        },
       },
     ],
     [canApprove, canRecall, canReject, canRevoke, canSubmit, handleRecall, openDetail, perms.canUpdate, runAction, t],
@@ -291,7 +352,7 @@ const DrawingDistributionsPage: React.FC = () => {
           tableRowsRef.current = rows;
         }}
         columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
-        columnPersistenceId="apps.master-data.pages.process.drawing-distributions.v1"
+        columnPersistenceId="apps.master-data.pages.process.drawing-distributions.v2"
         showCreateButton={perms.canCreate}
         onCreate={openCreate}
         showDeleteButton={perms.canDelete}

@@ -421,11 +421,21 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
         total = await query.count()
         transfers = await query.order_by(order_clause).offset(skip).limit(limit)
 
-        # 返回分页响应
-        return InventoryTransferListResponse(
-            items=[self._to_transfer_response(t) for t in transfers],
-            total=total
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            batch_document_item_material_previews,
         )
+
+        transfer_ids = [int(t.id) for t in transfers]
+        item_previews = await batch_document_item_material_previews(
+            tenant_id, InventoryTransferItem, "transfer_id", transfer_ids
+        )
+        rows = [
+            self._to_transfer_response(t).model_copy(
+                update={"items": item_previews.get(int(t.id), [])}
+            )
+            for t in transfers
+        ]
+        return InventoryTransferListResponse(items=rows, total=total)
 
     async def create_inventory_transfer_item(
         self,

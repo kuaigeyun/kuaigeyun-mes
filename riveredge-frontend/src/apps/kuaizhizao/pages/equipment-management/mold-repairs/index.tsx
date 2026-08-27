@@ -12,17 +12,8 @@ import {
 import { EquipmentPersonSelect, resolveUserUuidById } from '../../../components/EquipmentPersonSelect';
 import { EQUIPMENT_DATE_FIELD_PROPS } from '../../../utils/equipmentFormFieldProps';
 import { App, Button, Modal, Row, Col, Table, Input, Switch, Select } from 'antd';
-import {
-  EditOutlined,
-  DeleteOutlined,
-  SendOutlined,
-  CheckOutlined,
-  CloseOutlined,
-  CheckCircleOutlined,
-} from '@ant-design/icons';
 import dayjs from 'dayjs';
 import type { ColumnsType } from 'antd/es/table';
-import { StatusTag } from '../../../../../constants/statusBadges';
 import { renderDocumentStatusTag } from '../../../../../utils/documentLifecycleStatusTag';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
@@ -32,7 +23,6 @@ import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcu
 import { rowActionKind } from '../../../../../components/uni-action';
 import { moldApi } from '../../../services/equipment';
 import { repairSchemesApi, repairsApi } from '../../../services/moldOps';
-import { formatDateTime } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
@@ -369,42 +359,78 @@ const MoldRepairsPage: React.FC = () => {
       {
         title: t(`${P}.col.documentNo`),
         dataIndex: 'document_no',
-        width: 140,
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
         fixed: 'left',
         sorter: true,
         search: { order: 30 } as ProColumns['search'],
+        render: (_, r) =>
+          r.document_no != null && r.document_no !== '' ? String(r.document_no) : '-',
       },
-      { title: t(`${P}.col.mold`), dataIndex: 'mold_name', width: 160, ellipsis: true, sorter: true, hideInSearch: true },
+      {
+        title: t(`${P}.col.mold`),
+        dataIndex: 'mold_name',
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
+        sorter: true,
+        hideInSearch: true,
+        render: (_, r) => (r.mold_name != null && r.mold_name !== '' ? String(r.mold_name) : '-'),
+      },
       {
         title: t(`${P}.col.repairDate`),
         dataIndex: 'repair_date',
         width: 132,
+        minWidth: 132,
         uniTableKeepWidth: true,
-        valueType: 'date',
+        resizable: false,
         sorter: true,
         hideInSearch: true,
+        valueType: 'date',
       },
-      { title: t(`${P}.col.faultDescription`), dataIndex: 'fault_description', ellipsis: true, sorter: true, hideInSearch: true },
-      { title: t(`${P}.col.urgency`), dataIndex: 'urgency', width: 90, sorter: true, hideInSearch: true },
       {
-        title: t('common.updatedAt'),
-        dataIndex: 'updated_at',
-        hideInTable: true,
+        title: t(`${P}.col.faultDescription`),
+        dataIndex: 'fault_description',
+        minWidth: 160,
+        uniTablePrimaryFlex: true,
+        uniTableRemainderFlex: true,
+        resizable: false,
+        ellipsis: true,
         hideInSearch: true,
+        render: (_, r) =>
+          r.fault_description != null && r.fault_description !== ''
+            ? String(r.fault_description)
+            : '-',
+      },
+      {
+        title: t(`${P}.col.urgency`),
+        dataIndex: 'urgency',
+        width: 90,
+        minWidth: 90,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
+        sorter: true,
+        hideInSearch: true,
+        render: (_, r) => (r.urgency != null && r.urgency !== '' ? String(r.urgency) : '-'),
       },
       ...buildDocumentAuditColumns<Record<string, unknown>>(t),
       {
         title: t('common.status'),
         key: 'lifecycle',
         dataIndex: 'status',
-        width: 90,
         hideInSearch: true,
         fixed: 'right',
         render: (_, r) => renderDocumentStatusTag(r.status ?? '-', r.status ?? '-'),
       },
       {
         title: t('common.actions'),
-        key: 'action',
+        key: 'option',
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) => (
@@ -425,7 +451,6 @@ const MoldRepairsPage: React.FC = () => {
                 {...rowActionKind('update')}
                 type="link"
                 size="small"
-                icon={<EditOutlined />}
                 onClick={(e) => {
                   e.stopPropagation();
                   void handleEdit(record);
@@ -439,7 +464,6 @@ const MoldRepairsPage: React.FC = () => {
                 {...rowActionKind('submit')}
                 type="link"
                 size="small"
-                icon={<SendOutlined />}
                 onClick={(e) => {
                   e.stopPropagation();
                   void handleSubmitDoc(record);
@@ -453,7 +477,6 @@ const MoldRepairsPage: React.FC = () => {
                 {...rowActionKind('approve')}
                 type="link"
                 size="small"
-                icon={<CheckOutlined />}
                 onClick={(e) => {
                   e.stopPropagation();
                   void handleApprove(record);
@@ -468,7 +491,6 @@ const MoldRepairsPage: React.FC = () => {
                 type="link"
                 size="small"
                 danger
-                icon={<CloseOutlined />}
                 onClick={(e) => {
                   e.stopPropagation();
                   setRejectTarget(record);
@@ -484,7 +506,6 @@ const MoldRepairsPage: React.FC = () => {
                 {...rowActionKind('complete')}
                 type="link"
                 size="small"
-                icon={<CheckCircleOutlined />}
                 onClick={(e) => {
                   e.stopPropagation();
                   setCompleteTarget(record);
@@ -501,7 +522,6 @@ const MoldRepairsPage: React.FC = () => {
                 type="link"
                 size="small"
                 danger
-                icon={<DeleteOutlined />}
                 onClick={(e) => {
                   e.stopPropagation();
                   getAntdModal().confirm({
@@ -527,7 +547,7 @@ const MoldRepairsPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.moldRepairs)}
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.mold-repairs-equip-rank-v1"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.mold-repairs-width-v2"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}

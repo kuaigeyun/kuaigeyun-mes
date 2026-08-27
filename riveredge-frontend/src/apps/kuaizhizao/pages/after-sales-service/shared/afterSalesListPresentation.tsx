@@ -5,6 +5,15 @@ import React from 'react';
 import { renderDocumentStatusTag } from '../../../../../utils/documentLifecycleStatusTag';
 import { MarkerTag } from '../../../../../constants/statusBadges';
 
+/** 售后列表客户名 KeepWidth（约 13～14 字「××有限公司」完整可见） */
+export const AFTER_SALES_CUSTOMER_NAME_COLUMN_DEFAULTS = {
+  width: 220,
+  minWidth: 220,
+  uniTableKeepWidth: true,
+  resizable: false,
+  ellipsis: true,
+} as const;
+
 /** @deprecated 仅兼容旧调用；新代码请直接 `renderDocumentStatusTag(status, status)` */
 export const AFTER_SALES_TICKET_STATUS_COLOR: Record<string, string> = {};
 /** @deprecated */

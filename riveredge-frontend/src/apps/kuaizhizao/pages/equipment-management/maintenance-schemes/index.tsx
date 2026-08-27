@@ -38,6 +38,7 @@ import {
 } from '../shared/equipmentMasterDataDetail';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 
 const P = 'app.kuaizhizao.equipmentOps.maintenanceScheme';
 const RESOURCE = 'kuaizhizao:equipment-maintenance-scheme';
@@ -212,7 +213,11 @@ const MaintenanceSchemesPage: React.FC = () => {
       {
         title: t('common.code'),
         dataIndex: 'code',
-        width: 120,
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
         fixed: 'left',
         sorter: true,
         search: { order: 30 } as ProColumns['search'],
@@ -220,37 +225,48 @@ const MaintenanceSchemesPage: React.FC = () => {
       {
         title: t('common.name'),
         dataIndex: 'name',
-        width: 180,
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
         ellipsis: true,
         sorter: true,
         hideInSearch: true,
       },
       {
         title: t(`${P}.col.lineCount`),
+        key: 'line_count',
         dataIndex: 'lines',
         width: 90,
+        minWidth: 90,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         render: (_, r) => r.lines?.length ?? 0,
       },
-      { title: t('common.remark'), dataIndex: 'description', ellipsis: true, hideInSearch: true },
+      {
+        title: t('common.remark'),
+        dataIndex: 'description',
+        minWidth: 160,
+        uniTablePrimaryFlex: true,
+        uniTableRemainderFlex: true,
+        resizable: false,
+        ellipsis: true,
+        hideInSearch: true,
+        render: (_, r) => (r.description != null && r.description !== '' ? String(r.description) : '-'),
+      },
       {
         title: t('common.enabled'),
         dataIndex: 'is_active',
-        width: 80,
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         sorter: true,
         hideInSearch: true,
         render: (_, r) => renderIsActiveTag(t, r.is_active),
       },
-      {
-        title: t('common.updatedAt'),
-        dataIndex: 'updated_at',
-        hideInTable: true,
-        hideInSearch: true,
-      },
       ...buildDocumentAuditColumns<MaintenanceScheme>(t),
       {
         title: t('common.actions'),
-        key: 'action',
+        key: 'option',
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) =>
@@ -284,7 +300,7 @@ const MaintenanceSchemesPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.maintenanceSchemes)}
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.maintenance-schemes"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.maintenance-schemes-width-v2"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}

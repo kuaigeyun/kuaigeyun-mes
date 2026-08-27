@@ -23,11 +23,12 @@ import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-sele
 import {
   MaterialStackedCell,
   UniTableStackedPrimaryCell,
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { MarkerTag, StatusTag } from '../../../../../constants/statusBadges';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 import {
   outsourceMaterialIssueApi,
   outsourceMaterialReceiptApi,
@@ -169,7 +170,11 @@ const OutsourceMaterialPanel: React.FC<OutsourceMaterialPanelProps> = ({ mode, o
             title: t('app.kuaizhizao.warehouseCommon.colDocCode'),
             key: 'doc_code',
             dataIndex: 'code',
-            ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+            minWidth: 200,
+            uniTablePrimaryFlex: true,
+            uniTableRemainderFlex: true,
+            resizable: false,
+            ellipsis: false,
             fixed: 'left',
             hideInSearch: true,
             render: (_, r) => {
@@ -200,7 +205,11 @@ const OutsourceMaterialPanel: React.FC<OutsourceMaterialPanelProps> = ({ mode, o
                   title: t('app.kuaizhizao.warehouseCommon.colProductOrMaterial'),
                   key: 'material',
                   dataIndex: 'materialName',
-                  ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+                  width: 200,
+                  minWidth: 200,
+                  uniTableKeepWidth: true,
+                  resizable: false,
+                  ellipsis: false,
                   hideInSearch: true,
                   render: (_: unknown, r: OutsourceMaterialRow) => {
                     const name = String(r.materialName || r.material_name || '').trim();
@@ -217,11 +226,7 @@ const OutsourceMaterialPanel: React.FC<OutsourceMaterialPanelProps> = ({ mode, o
                   title: t('app.kuaizhizao.warehouseCommon.colReturnReason'),
                   key: 'return_reason',
                   dataIndex: ['returnReason', 'return_reason'],
-                  width: 140,
-                  minWidth: 140,
-                  uniTableKeepWidth: true,
-                  resizable: false,
-                  ellipsis: true,
+                  ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
                   hideInSearch: true,
                   render: (_: unknown, r: OutsourceMaterialRow) => {
                     const reason = String(r.returnReason || r.return_reason || '').trim();
@@ -280,8 +285,7 @@ const OutsourceMaterialPanel: React.FC<OutsourceMaterialPanelProps> = ({ mode, o
           ...buildDocumentAuditColumns<OutsourceMaterialRow>(t),
           {
             title: t('common.actions'),
-            key: 'action',
-            valueType: 'option',
+            key: 'option',
             fixed: 'right',
             hideInSearch: true,
             render: (_, record) => {
@@ -514,10 +518,12 @@ const OutsourceMaterialPanel: React.FC<OutsourceMaterialPanelProps> = ({ mode, o
   return (
     <>
       <UniTable<OutsourceMaterialRow>
+        viewTypes={['table', 'help']}
+        helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.batchingCenter')}
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
-        columnPersistenceId={`apps.kuaizhizao.pages.warehouse-management.material-center.${mode}.v1`}
+        columnPersistenceId={`apps.kuaizhizao.pages.warehouse-management.material-center.${mode}-width-v2`}
         headerTitle={panelTitle}
         showAdvancedSearch
         toolBarRender={() => [

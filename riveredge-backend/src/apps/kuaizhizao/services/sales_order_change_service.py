@@ -18,6 +18,7 @@ from apps.kuaizhizao.schemas.order_change import (
     ChangeImpactPreviewResponse,
     OrderChangeItemCreate,
     OrderChangeItemResponse,
+    OrderChangeListLinePreview,
     SalesOrderChangeCreate,
     SalesOrderChangeListResponse,
     SalesOrderChangeUpdate,
@@ -474,11 +475,12 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
         tenant_id: int,
         docs: List[SalesOrderChangeOrder],
         lifecycle_stage: Optional[str] = None,
+        include_items: bool = False,
     ) -> List[SalesOrderChangeListResponse]:
         change_ids = [d.id for d in docs]
         all_items = await SalesOrderChangeItem.filter(
             tenant_id=tenant_id, change_order_id__in=change_ids
-        ).all() if change_ids else []
+        ).order_by("change_order_id", "line_no", "id").all() if change_ids else []
         items_by_change: Dict[int, List[SalesOrderChangeItem]] = {}
         for it in all_items:
             items_by_change.setdefault(it.change_order_id, []).append(it)
@@ -525,6 +527,17 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
                 customer_id=doc.customer_id,
                 customer_name=doc.customer_name,
                 partner_name=doc.customer_name,
+                items=[
+                    OrderChangeListLinePreview(
+                        material_name=str(i.material_name or ""),
+                        material_code=i.material_code,
+                        line_no=i.line_no,
+                        change_type=i.change_type,
+                    )
+                    for i in doc_items
+                ]
+                if include_items
+                else None,
             )
             result.append(
                 enrich_sales_order_change_capabilities_on_response(
@@ -551,6 +564,7 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
         order_by: Optional[str] = None,
+        include_items: bool = False,
         current_user: Optional[User] = None,
     ) -> Tuple[List[SalesOrderChangeListResponse], int]:
         qs = SalesOrderChangeOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
@@ -590,13 +604,15 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
 
         if lifecycle_filter:
             docs = await qs.order_by(order_clause, "-id").all()
-            rows = await self._build_change_list_rows(tenant_id, docs, lifecycle_stage=lifecycle_filter)
+            rows = await self._build_change_list_rows(
+                tenant_id, docs, lifecycle_stage=lifecycle_filter, include_items=include_items
+            )
             total = len(rows)
             return rows[skip : skip + limit], total
 
         total = await qs.count()
         docs = await qs.order_by(order_clause, "-id").offset(skip).limit(limit)
-        rows = await self._build_change_list_rows(tenant_id, docs)
+        rows = await self._build_change_list_rows(tenant_id, docs, include_items=include_items)
         return rows, total
 
     async def get_by_id(

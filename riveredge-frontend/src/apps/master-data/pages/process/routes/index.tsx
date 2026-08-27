@@ -5,13 +5,12 @@
  */
 
 import React, { useRef, useState, useMemo, useEffect } from 'react';
-import { rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space } from 'antd';
-import { EditOutlined, DeleteOutlined, PlusOutlined, FileAddOutlined } from '@ant-design/icons';
-import { ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
 import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { downloadFile } from '../../../../../utils';
@@ -529,23 +528,38 @@ const ProcessRoutesPage: React.FC = () => {
       name: t('field.route.name'),
     }),
     {
+      // 稀疏：编号 → 名称 → 备注；启用 Marker；审计叠列保留
       title: t('field.route.code'),
       dataIndex: 'code',
-      copyable: true,width: 150,
+      copyable: true,
+      width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
       fixed: 'left',
       sorter: true,
       hideInSearch: true,
+      ellipsis: true,
     },
     {
+      // 名称长短不一：唯一 RemainderFlex
       title: t('field.route.name'),
       dataIndex: 'name',
-      width: 200,
+      minWidth: 160,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
+      resizable: false,
       sorter: true,
       hideInSearch: true,
+      ellipsis: true,
     },
     {
       title: t('common.remark'),
       dataIndex: 'description',
+      width: 160,
+      minWidth: 160,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       hideInSearch: true,
     },
@@ -553,64 +567,40 @@ const ProcessRoutesPage: React.FC = () => {
     {
       title: t('app.master-data.routes.status'),
       dataIndex: 'is_active',
-      width: 100,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       hideInSearch: true,
       valueEnum: routeActiveValueEnum,
-      render: (_: any, record: ProcessRoute) => {
-        const isActive = record?.is_active ?? (record as any)?.isActive;
-        return (
-          <Tag color={isActive ? 'success' : 'default'} variant="solid">
-            {isActive ? t('common.enabled') : t('common.disabled')}
-          </Tag>
-        );
-      },
+      render: (_: any, record: ProcessRoute) =>
+        renderMasterActiveTag(t, record?.is_active ?? (record as any)?.isActive),
       sorter: true,
     },
     ...customFieldColumns,
     ...masterCrudCreatedUpdatedSnakeColumns<ProcessRoute>(t),
     {
       title: t('common.actions'),
-      valueType: 'option',
+      key: 'action',
       fixed: 'right',
-      render: (_: any, record: ProcessRoute) => (
-        <Space>
-          <Button key="view" {...rowActionKind('read')}
-            size="small"
-            onClick={() => handleOpenDetail(record)}
-          >
-            {t('common.view')}
-          </Button>
-          <Button key="edit" {...rowActionKind('update')}
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          >
-            {t('common.edit')}
-          </Button>
-          <Button
-            key="change"
-            {...rowActionKind('skip')}
-            size="small"
-            icon={<FileAddOutlined />}
-            onClick={() => handleOpenRouteChange(record)}
-          >
-            {t('app.master-data.route.submitChange')}
-          </Button>
-          <Popconfirm key="delete" {...rowActionKind('delete')} title={t('app.master-data.routes.deleteConfirm')}
-            description={t('app.master-data.routes.deleteDescription')}
-            onConfirm={() => handleDelete(record)}
-          >
-            <Button
-              type="link"
-              danger
-              size="small"
-              icon={<DeleteOutlined />}
-            >
-              {t('common.delete')}
-            </Button>
-          </Popconfirm>
-        </Space>
-      ),
+      hideInSearch: true,
+      render: (_: any, record: ProcessRoute) => [
+        <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)} />,
+        <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)} />,
+        <Button
+          key="change"
+          {...rowActionKind('skip')}
+          {...rowActionLabelKeep()}
+          onClick={() => handleOpenRouteChange(record)}
+        >
+          {t('app.master-data.route.submitChange')}
+        </Button>,
+        <Popconfirm
+          key="delete"
+          title={t('app.master-data.routes.deleteConfirm')}
+          description={t('app.master-data.routes.deleteDescription')}
+          onConfirm={() => handleDelete(record)}
+        >
+          <Button {...rowActionKind('delete')} />
+        </Popconfirm>,
+      ],
     },
     ];
   }, [customFields, t, routeActiveValueEnum]);
@@ -620,7 +610,7 @@ const ProcessRoutesPage: React.FC = () => {
       <UniTable<ProcessRoute>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('masterData.routes')}
-        columnPersistenceId="apps.master-data.pages.process.routes.status-v2"
+        columnPersistenceId="apps.master-data.pages.process.routes.list-v3"
         actionRef={actionRef}
         columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
         request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {

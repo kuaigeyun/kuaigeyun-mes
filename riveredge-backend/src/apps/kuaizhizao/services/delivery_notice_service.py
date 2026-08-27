@@ -575,10 +575,18 @@ class DeliveryNoticeService(AppBaseService[DeliveryNotice]):
         total = await query.count()
         notices = await query.offset(skip).limit(limit).order_by(order_clause)
         from apps.kuaizhizao.services.document_lifecycle_service import get_delivery_notice_lifecycle
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            batch_document_item_material_previews,
+        )
 
+        notice_ids = [int(n.id) for n in notices]
+        item_previews = await batch_document_item_material_previews(
+            tenant_id, DeliveryNoticeItem, "notice_id", notice_ids
+        )
         responses = [DeliveryNoticeListResponse.model_validate(r) for r in notices]
         for notice, resp in zip(notices, responses):
             resp.lifecycle = get_delivery_notice_lifecycle(notice, milestones=[])
+            resp.items = item_previews.get(int(notice.id), [])
         return responses, total
 
     async def update_delivery_notice(

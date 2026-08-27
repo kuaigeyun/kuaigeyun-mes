@@ -9,7 +9,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { TFunction } from 'i18next';
 import { getProcessProgress } from '../../../services/dashboard';
 import { DashboardSectionCard } from './DashboardSectionCard';
-import { WipOperationCardView } from './WipOperationCardView';
+import { WipOperationCardSkeleton, WipOperationCardView } from './WipOperationCardView';
 
 export interface DashboardOperationCardsPanelProps {
   cardRadius: number | string;
@@ -26,13 +26,14 @@ export function DashboardOperationCardsPanel({
 }: DashboardOperationCardsPanelProps) {
   const { useBreakpoint } = Grid;
   const screens = useBreakpoint();
-  const { data: items, isLoading, isFetching } = useQuery({
+  const { data: items, isLoading } = useQuery({
     queryKey: ['dashboard-wip-operation-cards'],
     queryFn: () => getProcessProgress(false),
     staleTime: 30_000,
     refetchInterval: 60_000,
     retry: 1,
   });
+  const showSkeleton = isLoading && !items;
 
   const workOrdersPath = '/apps/kuaizhizao/production-execution/work-orders?status=in_progress';
   const columnCount = React.useMemo(() => {
@@ -59,7 +60,6 @@ export function DashboardOperationCardsPanel({
   return (
     <DashboardSectionCard
       className="dashboard-section--operation-cards"
-      loading={isLoading || (isFetching && !items)}
       title={t('pages.dashboard.operationCardsTitle')}
       extra={
         <Space size={8} align="center">
@@ -81,11 +81,17 @@ export function DashboardOperationCardsPanel({
         },
       }}
     >
-      {!items || items.length === 0 ? (
+      {!showSkeleton && (!items || items.length === 0) ? (
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
           description={t('pages.dashboard.operationCardsEmpty')}
         />
+      ) : showSkeleton ? (
+        <div className="dashboard-operation-cards-panel__track">
+          {Array.from({ length: initialVisibleCount }, (_, index) => (
+            <WipOperationCardSkeleton key={`skeleton-${index}`} colorIndex={index} />
+          ))}
+        </div>
       ) : (
         <>
           <div className="dashboard-operation-cards-panel__track">

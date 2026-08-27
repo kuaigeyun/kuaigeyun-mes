@@ -70,8 +70,7 @@ import {
 } from '../shared/equipmentMasterDataDetail';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
-
-
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 
 const P = 'app.kuaizhizao.moldOps.maintenanceItem';
 
@@ -342,78 +341,76 @@ const MoldMaintenanceItemsPage: React.FC = () => {
       },
 
       {
-
         title: t('common.code'),
-
         dataIndex: 'code',
-
-        width: 120,
-
-        fixed: 'left',
-
-        sorter: true,
-
-        search: { order: 30 } as ProColumns['search'],
-
-      },
-
-      {
-
-        title: t('common.name'),
-
-        dataIndex: 'name',
-
-        width: 180,
-
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
         ellipsis: true,
-
+        fixed: 'left',
         sorter: true,
-
-        hideInSearch: true,
-
+        search: { order: 30 } as ProColumns['search'],
+        render: (_, r) => (r.code != null && r.code !== '' ? String(r.code) : '-'),
       },
-
-      { title: t(`${P}.col.standardHours`), dataIndex: 'standard_hours', width: 100, hideInSearch: true },
-
-      { title: t(`${P}.col.valueType`), dataIndex: 'value_type', width: 90, hideInSearch: true },
-
-      { title: t(`${P}.col.requirement`), dataIndex: 'requirement', ellipsis: true, hideInSearch: true },
-
       {
-
+        title: t('common.name'),
+        dataIndex: 'name',
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
+        sorter: true,
+        hideInSearch: true,
+        render: (_, r) => (r.name != null && r.name !== '' ? String(r.name) : '-'),
+      },
+      {
+        title: t(`${P}.col.standardHours`),
+        dataIndex: 'standard_hours',
+        width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
+        hideInSearch: true,
+        render: (_, r) => (r.standard_hours != null ? String(r.standard_hours) : '-'),
+      },
+      {
+        title: t(`${P}.col.valueType`),
+        dataIndex: 'value_type',
+        width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
+        hideInSearch: true,
+        render: (_, r) => {
+          const vt = String(r.value_type || 'boolean');
+          return t(`${P}.valueType.${vt}`, vt);
+        },
+      },
+      {
+        title: t(`${P}.col.requirement`),
+        dataIndex: 'requirement',
+        minWidth: 160,
+        uniTablePrimaryFlex: true,
+        uniTableRemainderFlex: true,
+        resizable: false,
+        ellipsis: true,
+        hideInSearch: true,
+        render: (_, r) => (r.requirement != null && r.requirement !== '' ? String(r.requirement) : '-'),
+      },
+      {
         title: t('common.enabled'),
-
         dataIndex: 'is_active',
-
-        width: 80,
-
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         sorter: true,
-
         hideInSearch: true,
-
         render: (_, r) => renderIsActiveTag(t, r.is_active),
-
       },
-
-      {
-
-        title: t('common.updatedAt'),
-
-        dataIndex: 'updated_at',
-
-        hideInTable: true,
-
-        hideInSearch: true,
-
-      },
-
       ...buildDocumentAuditColumns<MaintenanceItem>(t),
-
       {
-
         title: t('common.actions'),
-
-        key: 'action',
+        key: 'option',
         fixed: 'right',
         hideInSearch: true,
 
@@ -477,7 +474,7 @@ const MoldMaintenanceItemsPage: React.FC = () => {
 
           headerTitle={t(`${P}.title`)}
 
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.mold-maintenance-items-equip-rank-v1"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.mold-maintenance-items-width-v2"
 
           actionRef={actionRef}
 

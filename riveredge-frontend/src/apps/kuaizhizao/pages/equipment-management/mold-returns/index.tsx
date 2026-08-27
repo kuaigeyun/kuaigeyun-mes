@@ -10,7 +10,6 @@ import {
   ProFormTextArea,
 } from '@ant-design/pro-components';
 import { App, Button, Modal, Row, Col } from 'antd';
-import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { EQUIPMENT_DATE_FIELD_PROPS } from '../../../utils/equipmentFormFieldProps';
 import { UniTable } from '../../../../../components/uni-table';
@@ -20,7 +19,6 @@ import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { borrowsApi, returnsApi } from '../../../services/moldOps';
-import { formatDateTime } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
@@ -186,41 +184,81 @@ const MoldReturnsPage: React.FC = () => {
       {
         title: t(`${P}.col.returnNo`),
         dataIndex: 'document_no',
-        width: 140,
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
         fixed: 'left',
         sorter: true,
         search: { order: 30 } as ProColumns['search'],
-        render: (_, r) => r.document_no ?? r.return_no ?? '-',
+        render: (_, r) => {
+          const no = r.document_no ?? r.return_no;
+          return no != null && no !== '' ? String(no) : '-';
+        },
       },
       {
         title: t(`${P}.col.borrowNo`),
         dataIndex: 'borrow_document_no',
         width: 130,
+        minWidth: 130,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
         hideInSearch: true,
-        render: (_, r) => r.borrow_document_no ?? r.borrow_no ?? '-',
+        render: (_, r) => {
+          const no = r.borrow_document_no ?? r.borrow_no;
+          return no != null && no !== '' ? String(no) : '-';
+        },
       },
-      { title: t(`${P}.col.mold`), dataIndex: 'mold_name', width: 160, ellipsis: true, sorter: true, hideInSearch: true },
+      {
+        title: t(`${P}.col.mold`),
+        dataIndex: 'mold_name',
+        minWidth: 160,
+        uniTablePrimaryFlex: true,
+        uniTableRemainderFlex: true,
+        resizable: false,
+        ellipsis: true,
+        hideInSearch: true,
+        render: (_, r) => (r.mold_name != null && r.mold_name !== '' ? String(r.mold_name) : '-'),
+      },
       {
         title: t(`${P}.col.returnDate`),
         dataIndex: 'return_date',
         width: 132,
+        minWidth: 132,
         uniTableKeepWidth: true,
-        valueType: 'date',
+        resizable: false,
         sorter: true,
         hideInSearch: true,
+        valueType: 'date',
       },
-      { title: t(`${P}.col.manufactureQty`), dataIndex: 'manufacture_qty', width: 100, sorter: true, hideInSearch: true },
-      { title: t(`${P}.col.usageCount`), dataIndex: 'usage_count', width: 90, sorter: true, hideInSearch: true },
       {
-        title: t('common.updatedAt'),
-        dataIndex: 'updated_at',
-        hideInTable: true,
+        title: t(`${P}.col.manufactureQty`),
+        dataIndex: 'manufacture_qty',
+        width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
+        sorter: true,
         hideInSearch: true,
+        render: (_, r) => (r.manufacture_qty != null ? String(r.manufacture_qty) : '-'),
+      },
+      {
+        title: t(`${P}.col.usageCount`),
+        dataIndex: 'usage_count',
+        width: 90,
+        minWidth: 90,
+        uniTableKeepWidth: true,
+        resizable: false,
+        sorter: true,
+        hideInSearch: true,
+        render: (_, r) => (r.usage_count != null ? String(r.usage_count) : '-'),
       },
       ...buildDocumentAuditColumns<Record<string, unknown>>(t),
       {
         title: t('common.actions'),
-        key: 'action',
+        key: 'option',
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) => (
@@ -241,7 +279,6 @@ const MoldReturnsPage: React.FC = () => {
                 {...rowActionKind('update')}
                 type="link"
                 size="small"
-                icon={<EditOutlined />}
                 onClick={(e) => {
                   e.stopPropagation();
                   void handleEdit(record);
@@ -256,7 +293,6 @@ const MoldReturnsPage: React.FC = () => {
                 type="link"
                 size="small"
                 danger
-                icon={<DeleteOutlined />}
                 onClick={(e) => {
                   e.stopPropagation();
                   getAntdModal().confirm({
@@ -282,7 +318,7 @@ const MoldReturnsPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.moldReturns)}
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.mold-returns-equip-rank-v1"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.mold-returns-width-v2"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}

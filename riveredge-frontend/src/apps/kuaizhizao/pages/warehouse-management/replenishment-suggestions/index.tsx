@@ -16,8 +16,8 @@ import { CheckOutlined, ReloadOutlined, ExclamationCircleOutlined, StopOutlined,
 import { UniTable } from '../../../../../components/uni-table';
 import {
   MaterialStackedCell,
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import {   useDetailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, ListPageTemplate } from '../../../../../components/layout-templates';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { UniBatchMenuButton, runCapabilityBatchLoop } from '../../../../../components/uni-batch';
@@ -33,7 +33,7 @@ import {
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { warehouseApi } from '../../../services/production';
 import { listDemandComputations } from '../../../services/demand-computation';
-import { formatDateTime } from '../../../../../utils/format';
+import { formatDateBySiteSetting } from '../../../../../utils/format';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
   WAREHOUSE_DOC_PINNED_STATUS_FIELD,
@@ -294,7 +294,11 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
       title: t('app.kuaizhizao.warehouseCommon.colMaterial'),
       key: 'material_name',
       dataIndex: 'material_name',
-      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+      minWidth: 200,
+      uniTablePrimaryFlex: true,
+      uniTableRemainderFlex: true,
+      resizable: false,
+      ellipsis: false,
       fixed: 'left',
       render: (_, r) => (
         <MaterialStackedCell material_name={r.material_name} material_code={r.material_code} />
@@ -306,12 +310,19 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
       title: t('app.kuaizhizao.warehouseReports.colWarehouse'),
       dataIndex: 'warehouse_name',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
+      render: (_, r) => r.warehouse_name || '-',
     },
     {
       title: t('app.kuaizhizao.replenishmentSuggestions.colCurrentStock'),
       dataIndex: 'current_quantity',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       align: 'right',
       sorter: true,
     },
@@ -319,12 +330,18 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
       title: t('app.kuaizhizao.replenishmentSuggestions.colSafetyStock'),
       dataIndex: 'safety_stock',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       align: 'right',
     },
     {
       title: t('app.kuaizhizao.replenishmentSuggestions.colSuggestedQty'),
       dataIndex: 'suggested_quantity',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       align: 'right',
       sorter: true,
       render: (_, record) => (
@@ -335,6 +352,9 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
       title: t('app.kuaizhizao.replenishmentSuggestions.colPriority'),
       dataIndex: 'priority',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       render: (priority) => {
         const config = priorityConfig(String(priority ?? ''));
         return <Tag color={config.color}>{config.text}</Tag>;
@@ -343,13 +363,16 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.replenishmentSuggestions.colSuggestionType'),
       dataIndex: 'suggestion_type',
-      width: 120,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       render: (type) => renderSuggestionTypeTag(String(type ?? '')),
     },
     {
       title: t('app.kuaizhizao.replenishmentSuggestions.colSupplier'),
       dataIndex: 'supplier_name',
       width: 140,
+      minWidth: 140,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       render: (_, r) => r.supplier_name || '-',
     },
@@ -357,6 +380,9 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
       title: t('app.kuaizhizao.replenishmentSuggestions.colEstimatedDeliveryDays'),
       dataIndex: 'estimated_delivery_days',
       width: 110,
+      minWidth: 110,
+      uniTableKeepWidth: true,
+      resizable: false,
       align: 'right',
       render: (_, r) => (r.estimated_delivery_days != null ? r.estimated_delivery_days : '-'),
     },
@@ -370,17 +396,20 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.replenishmentSuggestions.colSuggestedOrderDate'),
       dataIndex: 'suggested_order_date',
-      valueType: 'dateTime',
-      width: 132,
+      valueType: 'date',
+      width: 110,
+      minWidth: 110,
       uniTableKeepWidth: true,
+      resizable: false,
       sorter: true,
-      render: (_, record) => formatDateTime(record.suggested_order_date),
+      render: (_, record) => formatDateBySiteSetting(record.suggested_order_date),
     },
     ...buildDocumentAuditColumns<Record<string, unknown>>(t),
     {
       title: t('common.actions'),
-      width: 150,
+      key: 'option',
       fixed: 'right',
+      hideInSearch: true,
       render: (_, record) => (
         <Space>
           <Button {...rowActionKind('read')} onClick={() => handleDetail(record)} />
@@ -568,7 +597,8 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.replenishmentSuggestions.colSuggestedOrderDate'),
       dataIndex: 'suggested_order_date',
-      valueType: 'dateTime',
+      valueType: 'date',
+      render: (_, record) => formatDateBySiteSetting(record.suggested_order_date),
     },
     {
       title: t('app.kuaizhizao.replenishmentSuggestions.colSupplier'),
@@ -629,7 +659,7 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
           actionRef={actionRef}
           rowKey="id"
           columns={alignProColumns(columns, WAREHOUSE_DOC_LIST_FIELD_RANK)}
-          columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.replenishment-suggestions"
+          columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.replenishment-suggestions-width-v3"
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.replenishmentSuggestions')}
           showAdvancedSearch={true}

@@ -14,8 +14,13 @@ import { ServiceSettlementDetailDrawer } from './components/ServiceSettlementDet
 import ServiceSettlementFormModal from './ServiceSettlementFormModal';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import {
+  DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+  renderDocumentLineMaterialsPreview,
+} from '../../sales-management/shared/documentLineMaterialsPreview';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import {
+  AFTER_SALES_CUSTOMER_NAME_COLUMN_DEFAULTS,
   AFTER_SALES_REVIEW_STATUS_COLOR,
   renderAfterSalesStatusTag,
 } from '../shared/afterSalesListPresentation';
@@ -92,8 +97,8 @@ const ServiceSettlementsPage: React.FC = () => {
           {
             title: t('app.kuaizhizao.afterSalesService.serviceSettlement.field.settlementCode'),
             dataIndex: 'settlement_code',
-            width: 148,
-            minWidth: 148,
+            width: 188,
+            minWidth: 188,
             uniTableKeepWidth: true,
             resizable: false,
             fixed: 'left',
@@ -102,11 +107,17 @@ const ServiceSettlementsPage: React.FC = () => {
           {
             title: t('app.kuaizhizao.afterSalesService.serviceSettlement.field.customerName'),
             dataIndex: 'customer_name',
-            width: 148,
-            minWidth: 148,
-            uniTableKeepWidth: true,
-            resizable: false,
-            ellipsis: true,
+            ...AFTER_SALES_CUSTOMER_NAME_COLUMN_DEFAULTS,
+          },
+          {
+            // 明细预览吃余量（备件申领同款）；客户名勿当 RemainderFlex
+            title: t('app.kuaizhizao.common.colLineMaterials'),
+            ...DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+            render: (_, row) =>
+              renderDocumentLineMaterialsPreview(
+                (row.items || []).map((it) => ({ material_name: it.source_code })),
+                t,
+              ),
           },
           {
             title: t('app.kuaizhizao.afterSalesService.serviceSettlement.field.totalAmount'),
@@ -128,9 +139,8 @@ const ServiceSettlementsPage: React.FC = () => {
               renderAfterSalesStatusTag(row.status, AFTER_SALES_REVIEW_STATUS_COLOR),
           },
           {
-            title: t('common.action'),
+            title: t('common.actions'),
             key: 'action',
-            valueType: 'option',
             fixed: 'right',
             hideInSearch: true,
             render: (_, row) => [
@@ -145,16 +155,13 @@ const ServiceSettlementsPage: React.FC = () => {
               perms.canAction?.('submit') && row.status === '草稿' ? (
                 <Button
                   key="submit"
-                  type="link"
-                  icon={<SendOutlined />}
+                  {...rowActionKind('submit')}
                   onClick={async () => {
                     await serviceSettlementApi.submit(row.id);
                     messageApi.success(t('app.kuaizhizao.afterSalesService.serviceSettlement.submitSuccess'));
                     actionRef.current?.reload();
                   }}
-                >
-                  {t('components.uniAction.submit')}
-                </Button>
+                />
               ) : null,
               perms.canDelete && row.status === '草稿' ? (
                 <Button
@@ -168,7 +175,7 @@ const ServiceSettlementsPage: React.FC = () => {
         ],
         SALES_DOC_LIST_FIELD_RANK,
       ),
-    [messageApi, modal, perms, t],
+    [messageApi, perms, t],
   );
 
   return (
@@ -178,7 +185,7 @@ const ServiceSettlementsPage: React.FC = () => {
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.afterSalesSettlement)}
         actionRef={actionRef}
         columns={columns}
-        columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.service-settlements.v3"
+        columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.service-settlements.v6"
         rowKey="id"
         headerTitle={t('app.kuaizhizao.menu.after-sales-service.service-settlements')}
         request={async (params) => {

@@ -15,18 +15,16 @@ import { useTranslation } from 'react-i18next';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { UniTable } from '../../../../../components/uni-table';
 import {
-  UniTableStackedPrimaryCell,
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-} from '../../../../../components/uni-table/stackedPrimaryColumn';
-import {
   FormModalTemplate,
   ListPageTemplate,
   MODAL_CONFIG,
 } from '../../../../../components/layout-templates';
 import { MarkerTag } from '../../../../../constants/statusBadges';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { glService, type GlAccount, type GlCoaSeedTemplate } from '../../../services/gl';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
+import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 
 const NS = 'app.kuaicaiwu.gl.chartOfAccounts';
 
@@ -72,158 +70,163 @@ const ChartOfAccountsPage: React.FC = () => {
     accountTypeOptions.find((o) => o.value === type)?.label || type;
 
   const columns: ProColumns<GlAccount>[] = useMemo(
-    () => [
-      {
-        title: t(`${NS}.col.account`, { defaultValue: '科目' }),
-        key: 'account_stacked',
-        dataIndex: 'account_name',
-        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-        fixed: 'left',
-        hideInSearch: true,
-        render: (_, r) => (
-          <UniTableStackedPrimaryCell
-            primary={String(r.account_name ?? '')}
-            secondary={String(r.account_code ?? '')}
-          />
-        ),
-      },
-      {
-        title: t(`${NS}.col.accountCode`, { defaultValue: '科目编码' }),
-        dataIndex: 'account_code',
-        hideInTable: true,
-        fieldProps: { allowClear: true },
-      },
-      {
-        title: t(`${NS}.col.accountType`, { defaultValue: '科目类型' }),
-        dataIndex: 'account_type',
-        width: 100,
-        minWidth: 100,
-        uniTableKeepWidth: true,
-        resizable: false,
-        valueType: 'select',
-        fieldProps: { options: accountTypeOptions, allowClear: true },
-        render: (_, r) => <MarkerTag>{typeLabel(r.account_type)}</MarkerTag>,
-      },
-      {
-        title: t(`${NS}.col.balanceDirection`, { defaultValue: '余额方向' }),
-        dataIndex: 'balance_direction',
-        width: 90,
-        minWidth: 90,
-        uniTableKeepWidth: true,
-        resizable: false,
-        hideInSearch: true,
-        render: (_, r) =>
-          r.balance_direction === 'credit'
-            ? t(`${NS}.direction.credit`, { defaultValue: '贷' })
-            : t(`${NS}.direction.debit`, { defaultValue: '借' }),
-      },
-      {
-        title: t(`${NS}.col.level`, { defaultValue: '级次' }),
-        dataIndex: 'level',
-        width: 70,
-        minWidth: 70,
-        uniTableKeepWidth: true,
-        resizable: false,
-        hideInSearch: true,
-      },
-      {
-        title: t(`${NS}.col.aux`, { defaultValue: '辅助核算' }),
-        key: 'aux',
-        width: 160,
-        hideInSearch: true,
-        render: (_, r) => {
-          const tags: string[] = [];
-          if (r.aux_customer) tags.push(t(`${NS}.aux.customer`, { defaultValue: '客户' }));
-          if (r.aux_supplier) tags.push(t(`${NS}.aux.supplier`, { defaultValue: '供应商' }));
-          if (r.aux_department) tags.push(t(`${NS}.aux.department`, { defaultValue: '部门' }));
-          return tags.length ? tags.join(' ') : '—';
-        },
-      },
-      {
-        title: t(`${NS}.col.flags`, { defaultValue: '属性' }),
-        key: 'flags',
-        width: 180,
-        hideInSearch: true,
-        render: (_, r) => {
-          const tags: React.ReactNode[] = [];
-          if (r.is_cash_journal) {
-            tags.push(
-              <MarkerTag key="cash" color="warning">
-                {t(`${NS}.flag.cash`, { defaultValue: '现金' })}
-              </MarkerTag>,
-            );
-          }
-          if (r.is_bank_journal) {
-            tags.push(
-              <MarkerTag key="bank" color="processing">
-                {t(`${NS}.flag.bank`, { defaultValue: '银行' })}
-              </MarkerTag>,
-            );
-          }
-          if (r.is_controlled) {
-            tags.push(
-              <MarkerTag key="ctrl" color="error">
-                {t(`${NS}.flag.controlled`, { defaultValue: '受控' })}
-              </MarkerTag>,
-            );
-          }
-          return tags.length ? <Space size={4}>{tags}</Space> : '—';
-        },
-      },
-      {
-        title: t('common.enabled', { defaultValue: '启用' }),
-        dataIndex: 'is_active',
-        width: 80,
-        minWidth: 80,
-        uniTableKeepWidth: true,
-        resizable: false,
-        hideInSearch: true,
-        render: (_, r) =>
-          r.is_active ? (
-            <MarkerTag color="success">{t('common.enabled', { defaultValue: '启用' })}</MarkerTag>
-          ) : (
-            <MarkerTag>{t('common.disabled', { defaultValue: '停用' })}</MarkerTag>
-          ),
-      },
-      {
-        title: t('common.actions', { defaultValue: '操作' }),
-        key: 'action',
-        valueType: 'option',
-        fixed: 'right',
-        hideInSearch: true,
-        render: (_, record) => [
-          <a
-            key="edit"
-            onClick={() => {
-              setEditing(record);
-              setModalOpen(true);
-            }}
-          >
-            {t('common.edit', { defaultValue: '编辑' })}
-          </a>,
-          <Popconfirm
-            {...rowActionKind('delete')}
-            key="del"
-            title={t(`${NS}.confirmDelete`, { defaultValue: '确认删除该科目？' })}
-            onConfirm={async () => {
-              try {
-                await glService.deleteAccount(record.id);
-                messageApi.success(t('common.deleteSuccess', { defaultValue: '删除成功' }));
-                actionRef.current?.reload();
-              } catch (error) {
-                messageApi.error(
-                  getApiErrorMessage(error, t('common.deleteFailed', { defaultValue: '删除失败' })),
+    () =>
+      alignProColumns(
+        [
+          {
+            // 稀疏：编码 KeepWidth；名称唯一 RemainderFlex；不叠列
+            title: t(`${NS}.col.accountCode`),
+            dataIndex: 'account_code',
+            width: 140,
+            minWidth: 140,
+            uniTableKeepWidth: true,
+            resizable: false,
+            fixed: 'left',
+            fieldProps: { allowClear: true },
+            copyable: true,
+            ellipsis: true,
+          },
+          {
+            title: t(`${NS}.field.accountName`),
+            dataIndex: 'account_name',
+            minWidth: 160,
+            uniTableRemainderFlex: true,
+            uniTablePrimaryFlex: true,
+            resizable: false,
+            hideInSearch: true,
+            ellipsis: true,
+          },
+          {
+            title: t(`${NS}.col.accountType`),
+            dataIndex: 'account_type',
+            ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+            valueType: 'select',
+            fieldProps: { options: accountTypeOptions, allowClear: true },
+            render: (_, r) => <MarkerTag>{typeLabel(r.account_type)}</MarkerTag>,
+          },
+          {
+            title: t(`${NS}.col.balanceDirection`),
+            dataIndex: 'balance_direction',
+            width: 120,
+            minWidth: 120,
+            uniTableKeepWidth: true,
+            resizable: false,
+            hideInSearch: true,
+            render: (_, r) =>
+              r.balance_direction === 'credit'
+                ? t(`${NS}.direction.credit`)
+                : t(`${NS}.direction.debit`),
+          },
+          {
+            title: t(`${NS}.col.level`),
+            key: 'account_level',
+            dataIndex: 'level',
+            width: 88,
+            minWidth: 88,
+            uniTableKeepWidth: true,
+            resizable: false,
+            hideInSearch: true,
+          },
+          {
+            title: t(`${NS}.col.aux`),
+            key: 'aux',
+            width: 180,
+            minWidth: 180,
+            uniTableKeepWidth: true,
+            resizable: false,
+            hideInSearch: true,
+            ellipsis: true,
+            render: (_, r) => {
+              const tags: string[] = [];
+              if (r.aux_customer) tags.push(t(`${NS}.aux.customer`));
+              if (r.aux_supplier) tags.push(t(`${NS}.aux.supplier`));
+              if (r.aux_department) tags.push(t(`${NS}.aux.department`));
+              return tags.length ? tags.join(' ') : '-';
+            },
+          },
+          {
+            title: t(`${NS}.col.flags`),
+            key: 'flags',
+            width: 200,
+            minWidth: 200,
+            uniTableKeepWidth: true,
+            resizable: false,
+            hideInSearch: true,
+            render: (_, r) => {
+              const tags: React.ReactNode[] = [];
+              if (r.is_cash_journal) {
+                tags.push(
+                  <MarkerTag key="cash" color="warning">
+                    {t(`${NS}.flag.cash`)}
+                  </MarkerTag>,
                 );
               }
-            }}
-          >
-            <a>{t('common.delete', { defaultValue: '删除' })}</a>
-          </Popconfirm>,
+              if (r.is_bank_journal) {
+                tags.push(
+                  <MarkerTag key="bank" color="processing">
+                    {t(`${NS}.flag.bank`)}
+                  </MarkerTag>,
+                );
+              }
+              if (r.is_controlled) {
+                tags.push(
+                  <MarkerTag key="ctrl" color="error">
+                    {t(`${NS}.flag.controlled`)}
+                  </MarkerTag>,
+                );
+              }
+              return tags.length ? <Space size={4}>{tags}</Space> : '-';
+            },
+          },
+          {
+            title: t('common.enabled'),
+            dataIndex: 'is_active',
+            ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+            hideInSearch: true,
+            render: (_, r) =>
+              r.is_active ? (
+                <MarkerTag color="success">{t('common.enabled')}</MarkerTag>
+              ) : (
+                <MarkerTag color="default">{t('common.disabled')}</MarkerTag>
+              ),
+          },
+          {
+            title: t('common.actions'),
+            key: 'action',
+            fixed: 'right',
+            hideInSearch: true,
+            render: (_, record) => [
+              <Button
+                key="edit"
+                {...rowActionKind('update')}
+                onClick={() => {
+                  setEditing(record);
+                  setModalOpen(true);
+                }}
+              />,
+              <Popconfirm
+                key="del"
+                title={t(`${NS}.confirmDelete`)}
+                onConfirm={async () => {
+                  try {
+                    await glService.deleteAccount(record.id);
+                    messageApi.success(t('common.deleteSuccess'));
+                    actionRef.current?.reload();
+                  } catch (error) {
+                    messageApi.error(getApiErrorMessage(error, t('common.deleteFailed')));
+                  }
+                }}
+              >
+                <Button {...rowActionKind('delete')} />
+              </Popconfirm>,
+            ],
+          },
         ],
-      },
-    ],
-    [t, messageApi, accountTypeOptions],
+        GLOBAL_DOC_LIST_FIELD_RANK,
+      ),
+    [accountTypeOptions, messageApi, t],
   );
+
 
   const openSeedModal = async () => {
     setSeedModalOpen(true);
@@ -311,7 +314,7 @@ const ChartOfAccountsPage: React.FC = () => {
       <UniTable<GlAccount>
         actionRef={actionRef}
         rowKey="id"
-        columnPersistenceId="apps.kuaicaiwu.pages.gl-management.chart-of-accounts.list-v1"
+        columnPersistenceId="apps.kuaicaiwu.pages.gl-management.chart-of-accounts.list-v3"
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaicaiwu.chartOfAccounts')}
         columns={columns}

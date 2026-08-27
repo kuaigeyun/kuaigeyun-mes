@@ -29,6 +29,8 @@ import LineAttachmentsUpload from '../../../components/LineAttachmentsUpload';
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { moldApi } from '../../../services/equipment';
 import { useEquipmentDetailDrawer } from '../shared/equipmentMasterDataDetail';
+import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import dayjs from 'dayjs';
 import { formatDateTime } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
@@ -176,21 +178,32 @@ const MoldCalibrationsPage: React.FC = () => {
       {
         title: t(`${P}.colMoldCode`),
         dataIndex: 'mold_code',
-        width: 120,
-        sorter: true,
+        hideInTable: true,
         search: { order: 30 } as ProColumns['search'],
+      },
+      {
+        title: t(`${P}.colMoldName`),
+        dataIndex: 'mold_name',
+        minWidth: 200,
+        uniTablePrimaryFlex: true,
+        uniTableRemainderFlex: true,
+        resizable: false,
+        ellipsis: false,
+        hideInSearch: true,
         render: (_, r) => (
-          <Typography.Text copyable={{ text: String(r.mold_code ?? '') }} ellipsis>
-            {r.mold_code ?? '-'}
-          </Typography.Text>
+          <UniTableStackedPrimaryCell
+            primary={String(r.mold_name ?? '') || '-'}
+            secondary={String(r.mold_code ?? '') || '-'}
+          />
         ),
       },
-      { title: t(`${P}.colMoldName`), dataIndex: 'mold_name', width: 180, ellipsis: true, sorter: true, hideInSearch: true },
       {
         title: t(`${P}.colCalibrationDate`),
         dataIndex: 'calibration_date',
         width: 132,
+        minWidth: 132,
         uniTableKeepWidth: true,
+        resizable: false,
         sorter: true,
         hideInSearch: true,
         render: (_, r) => (r.calibration_date ? formatDateTime(r.calibration_date, 'YYYY-MM-DD') : '-'),
@@ -199,7 +212,7 @@ const MoldCalibrationsPage: React.FC = () => {
         title: t(`${P}.colResult`),
         key: 'equipment_calibration_result',
         dataIndex: 'result',
-        width: 100,
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         sorter: true,
         hideInSearch: true,
         render: (_, r) => {
@@ -212,6 +225,10 @@ const MoldCalibrationsPage: React.FC = () => {
         title: t(`${P}.colCertificateNo`),
         dataIndex: 'certificate_no',
         width: 140,
+        minWidth: 140,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
         sorter: true,
         hideInSearch: true,
         render: (_, r) => (
@@ -224,16 +241,28 @@ const MoldCalibrationsPage: React.FC = () => {
         title: t(`${P}.colExpiryDate`),
         dataIndex: 'expiry_date',
         width: 132,
+        minWidth: 132,
         uniTableKeepWidth: true,
+        resizable: false,
         sorter: true,
         hideInSearch: true,
         render: (_, r) => (r.expiry_date ? formatDateTime(r.expiry_date, 'YYYY-MM-DD') : '-'),
       },
-      { title: t('common.remark'), dataIndex: 'remark', ellipsis: true, hideInSearch: true },
+      {
+        title: t('common.remark'),
+        dataIndex: 'remark',
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
+        hideInSearch: true,
+        render: (_, r) => (r.remark != null && r.remark !== '' ? String(r.remark) : '-'),
+      },
       ...buildDocumentAuditColumns<MoldCalibration>(t),
       {
         title: t('common.actions'),
-        valueType: 'option',
+        key: 'option',
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) =>
@@ -264,7 +293,7 @@ const MoldCalibrationsPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.moldCalibrations)}
         headerTitle={t(`${P}.title`)}
-        columnPersistenceId="apps.kuaizhizao.pages.equipment-management.mold-calibrations-equip-rank-v1"
+        columnPersistenceId="apps.kuaizhizao.pages.equipment-management.mold-calibrations-width-v2"
         actionRef={actionRef}
         enableRowSelection
         selectedRowKeys={selectedRowKeys}

@@ -10,13 +10,11 @@ import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, Pr
 import SafeProFormSelect from '../../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Button, Tag, Space, Modal, Row, Col, List, Typography, Descriptions } from 'antd';
 import dayjs from 'dayjs';
-import { EditOutlined, DeleteOutlined, PlusOutlined, HighlightOutlined } from '@ant-design/icons';
 import SOPBatchCreateSteps from './SOPBatchCreateSteps';
 import {
   SopControlPanel,
   normalizeSopRecord,
   renderSopCarrierTag,
-  renderSopControlStatusTag,
   resolveSopControlStatus,
   sopControlDetailFields,
 } from './SopControlPanel';
@@ -27,7 +25,9 @@ import {
 import { DocumentAttachmentsField } from '../../../../kuaizhizao/components/DocumentAttachmentsField';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
-import { ROW_ACTIONS_INLINE_GAP, rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { StatusTag, RE_STATUS_BADGE_DRAFT } from '../../../../../constants/statusBadges';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { downloadFile } from '../../../../../utils';
@@ -1035,28 +1035,42 @@ const SOPPage: React.FC = () => {
    */
   const columns: ProColumns<SOP>[] = useMemo(() => {
     const customFieldColumns = generateSopCustomFieldColumns();
+    const controlStatusColor: Record<string, string> = {
+      draft: RE_STATUS_BADGE_DRAFT,
+      in_review: 'processing',
+      effective: 'success',
+      obsolete: 'error',
+    };
     return [
     ...masterCrudCodeNameSearchColumns({
       code: t('app.master-data.sop.codeLabel'),
       name: t('app.master-data.sop.nameLabel'),
     }),
     {
+      // 稀疏：编号 → 名称 → 工序 → 绑定 → 版本/载体/受控份 → 备注；启用 Marker；文控 StatusTag
       title: t('app.master-data.sop.codeLabel'),
       dataIndex: 'code',
-      // 与系统左固定单号列一致：168 + ellipsis，避免长编号溢出叠到名称列
       copyable: true,
       width: 168,
+      minWidth: 168,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       fixed: 'left',
       sorter: true,
       hideInSearch: true,
     },
     {
+      // 名称长短不一：唯一 RemainderFlex
       title: t('app.master-data.sop.nameLabel'),
       dataIndex: 'name',
-      width: 200,
+      minWidth: 160,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
+      resizable: false,
       sorter: true,
       hideInSearch: true,
+      ellipsis: true,
     },
     {
       key: 'sop-operation-filter',
@@ -1072,10 +1086,15 @@ const SOPPage: React.FC = () => {
     },
     {
       title: t('app.master-data.sop.operationLabel'),
+      key: 'sop_operation',
       dataIndex: 'operationId',
-      width: 200,
+      width: 168,
+      minWidth: 168,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       sorter: true,
+      ellipsis: true,
       render: (_, record) =>
         getOperationName(
           record.operationId ?? (record as { operation_id?: number }).operation_id,
@@ -1083,9 +1102,14 @@ const SOPPage: React.FC = () => {
     },
     {
       title: t('app.master-data.sop.bindingLoad'),
+      key: 'sop_binding',
       dataIndex: '_binding',
-      width: 140,
+      width: 160,
+      minWidth: 160,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
+      ellipsis: true,
       render: (_, record: any) => {
         const ma = record.material_uuids ?? record.materialUuids ?? [];
         const mg = record.material_group_uuids ?? record.materialGroupUuids ?? [];
@@ -1148,56 +1172,59 @@ const SOPPage: React.FC = () => {
       title: t('app.master-data.sop.versionLabel'),
       dataIndex: 'version',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       sorter: true,
       render: (_, record) => record.currentRevision ?? record.version ?? '-',
     },
     {
-      title: '载体',
+      title: t('app.master-data.sop.carrier'),
+      key: 'sop_carrier',
       dataIndex: 'carrier',
-      width: 88,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       hideInSearch: true,
       render: (_, record) => renderSopCarrierTag(record.carrier),
     },
     {
-      title: '文控状态',
-      dataIndex: 'controlStatus',
-      width: 96,
-      hideInSearch: true,
-      render: (_, record) => renderSopControlStatusTag(resolveSopControlStatus(record)),
-    },
-    {
-      title: '受控份',
+      title: t('app.master-data.sop.issuedCopyCount'),
+      key: 'sop_issued_copy',
       dataIndex: 'issuedCopyCount',
-      width: 88,
+      width: 140,
+      minWidth: 140,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       render: (_, record) => {
         const issued = record.issuedCopyCount ?? 0;
         const pending = record.pendingRetrieveCopyCount ?? 0;
-        return pending > 0 ? `${issued} 待回收${pending}` : String(issued);
+        return pending > 0
+          ? t('app.master-data.sop.issuedPendingRetrieve', { issued, pending })
+          : String(issued);
       },
     },
     {
-      title: '载体',
+      title: t('app.master-data.sop.carrier'),
       dataIndex: 'carrier',
       hideInTable: true,
       valueType: 'select',
       valueEnum: {
-        electronic: { text: '电子' },
-        paper: { text: '纸质' },
-        hybrid: { text: '混合' },
+        electronic: { text: t('app.master-data.sop.carrier.electronic') },
+        paper: { text: t('app.master-data.sop.carrier.paper') },
+        hybrid: { text: t('app.master-data.sop.carrier.hybrid') },
       },
     },
     {
-      title: '文控状态',
+      title: t('app.master-data.sop.controlStatus'),
       dataIndex: 'controlStatus',
       hideInTable: true,
       valueType: 'select',
       valueEnum: {
-        draft: { text: '草稿' },
-        in_review: { text: '审核中' },
-        effective: { text: '生效' },
-        obsolete: { text: '作废' },
+        draft: { text: t('app.master-data.sop.controlStatus.draft') },
+        in_review: { text: t('app.master-data.sop.controlStatus.in_review') },
+        effective: { text: t('app.master-data.sop.controlStatus.effective') },
+        obsolete: { text: t('app.master-data.sop.controlStatus.obsolete') },
       },
     },
     {
@@ -1205,8 +1232,11 @@ const SOPPage: React.FC = () => {
       dataIndex: 'content',
       ellipsis: true,
       width: 200,
+      minWidth: 200,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
-      render: (_, record) => (record.content ? `${record.content.substring(0, 50)}...` : '-'),
+      render: (_, record) => (record.content ? record.content : '-'),
     },
     {
       title: t('app.master-data.sop.status'),
@@ -1220,76 +1250,63 @@ const SOPPage: React.FC = () => {
     {
       title: t('app.master-data.sop.status'),
       dataIndex: 'isActive',
-      width: 100,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       hideInSearch: true,
       valueEnum: sopActiveValueEnum,
-      render: (_, record) => {
-        const isActive = record?.isActive ?? (record as any)?.is_active;
-        return (
-          <Tag color={isActive ? 'success' : 'default'} variant="solid">
-            {isActive ? t('common.enabled') : t('common.disabled')}
-          </Tag>
-        );
-      },
+      render: (_, record) =>
+        renderMasterActiveTag(t, record?.isActive ?? (record as any)?.is_active),
       sorter: true,
     },
     ...customFieldColumns,
     ...masterCrudCreatedUpdatedColumns<SOP>(t),
     {
+      title: t('app.master-data.sop.controlStatus'),
+      key: 'lifecycle',
+      dataIndex: 'controlStatus',
+      fixed: 'right',
+      hideInSearch: true,
+      render: (_, record) => {
+        const status = resolveSopControlStatus(record);
+        const labelKey = `app.master-data.sop.controlStatus.${status}`;
+        const label =
+          status === 'draft' || status === 'in_review' || status === 'effective' || status === 'obsolete'
+            ? t(labelKey)
+            : status;
+        return <StatusTag color={controlStatusColor[status] ?? 'default'}>{label}</StatusTag>;
+      },
+    },
+    {
       title: t('common.actions'),
       key: 'action',
-      valueType: 'option',
       fixed: 'right',
+      hideInSearch: true,
       render: (_, record) => {
         const carrier = record.carrier ?? 'electronic';
         const goDesigner = () => {
           navigate(`/apps/master-data/process/sop/designer?uuid=${record.uuid}&from=edit`);
         };
-        return (
-          <Space size={ROW_ACTIONS_INLINE_GAP} wrap={false} style={{ whiteSpace: 'nowrap' }}>
-            <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)}>
-              {t('common.view')}
-            </Button>
-            {carrier !== 'paper' ? (
-              <Button
-                key="design"
-                type="link"
-                size="small"
-                icon={<HighlightOutlined />}
-                {...rowActionKind('update')}
-                onClick={goDesigner}
-                title={t('app.master-data.sop.designFlowTitle')}
-              >
-                {t('app.master-data.sop.designBtn')}
-              </Button>
-            ) : null}
+        return [
+          <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)} />,
+          carrier !== 'paper' ? (
             <Button
-              key="edit"
-              type="link"
-              size="small"
-              icon={<EditOutlined />}
+              key="design"
               {...rowActionKind('update')}
-              onClick={() => handleEdit(record)}
+              {...rowActionLabelKeep()}
+              onClick={goDesigner}
+              title={t('app.master-data.sop.designFlowTitle')}
             >
-              {t('common.edit')}
+              {t('app.master-data.sop.designBtn')}
             </Button>
-            <Popconfirm
-              key="delete"
-              {...rowActionKind('delete')}
-              title={t('app.master-data.sop.deleteConfirm')}
-              onConfirm={() => handleDelete(record)}
-            >
-              <Button
-                type="link"
-                danger
-                size="small"
-                icon={<DeleteOutlined />}
-              >
-                {t('common.delete')}
-              </Button>
-            </Popconfirm>
-          </Space>
-        );
+          ) : null,
+          <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)} />,
+          <Popconfirm
+            key="delete"
+            title={t('app.master-data.sop.deleteConfirm')}
+            onConfirm={() => handleDelete(record)}
+          >
+            <Button {...rowActionKind('delete')} />
+          </Popconfirm>,
+        ].filter(Boolean);
       },
     },
   ];
@@ -1300,7 +1317,7 @@ const SOPPage: React.FC = () => {
       <UniTable<SOP>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('masterData.sop')}
-        columnPersistenceId="apps.master-data.pages.process.sop.content-before-active-v4"
+        columnPersistenceId="apps.master-data.pages.process.sop.list-v5"
         actionRef={actionRef}
         columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
         request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {

@@ -12,6 +12,7 @@ import {
   alignProColumns,
   MASTER_DATA_DETAIL_BASIC_FIELD_RANK,
 } from '../../sales-management/shared/documentFieldAlignment';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { LogisticsMasterDetailDrawer } from '../shared/LogisticsMasterDetailDrawer';
 import {
   renderLogisticsEnabledTag,
@@ -77,9 +78,9 @@ const DriversPage: React.FC = () => {
           title: t('app.kuaizhizao.logistics.field.driverName'),
           key: 'logistics_driver_stacked',
           dataIndex: 'name',
-          width: 120,
           minWidth: 120,
-          uniTableKeepWidth: true,
+          uniTableRemainderFlex: true,
+          uniTablePrimaryFlex: true,
           resizable: false,
           ellipsis: true,
           fixed: 'left',
@@ -104,42 +105,31 @@ const DriversPage: React.FC = () => {
         {
           title: t('app.kuaizhizao.logistics.field.ownership'),
           dataIndex: 'ownership',
-          width: 96,
-          minWidth: 96,
-          uniTableKeepWidth: true,
-          resizable: false,
+          ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
           render: (_, row) => renderLogisticsOwnershipTag(t, row.ownership),
         },
         {
           title: t('common.enabled'),
           dataIndex: 'is_enabled',
-          width: 88,
-          minWidth: 88,
-          uniTableKeepWidth: true,
-          resizable: false,
+          ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
           hideInSearch: true,
           render: (_, row) => renderLogisticsEnabledTag(t, row.is_enabled),
         },
         {
           title: t('common.action'),
-          key: 'action',
-          valueType: 'option',
+          key: 'option',
           fixed: 'right',
           hideInSearch: true,
           render: (_, row) => {
             const nodes: React.ReactNode[] = [];
             if (perms.canRead) {
               nodes.push(
-                <Button key="detail" {...rowActionKind('read')} type="link" size="small" onClick={() => openDetail(row)}>
-                  {t('common.detail')}
-                </Button>,
+                <Button key="detail" {...rowActionKind('read')} onClick={() => openDetail(row)} />,
               );
             }
             if (perms.canUpdate) {
               nodes.push(
-                <Button key="edit" {...rowActionKind('update')} type="link" size="small" onClick={() => openEdit(row)}>
-                  {t('common.edit')}
-                </Button>,
+                <Button key="edit" {...rowActionKind('update')} onClick={() => openEdit(row)} />,
               );
             }
             if (perms.canDelete) {
@@ -147,16 +137,12 @@ const DriversPage: React.FC = () => {
                 <Button
                   key="delete"
                   {...rowActionKind('delete')}
-                  type="link"
-                  size="small"
                   onClick={async () => {
                     await deleteDriver(row.id);
                     message.success(t('common.deleteSuccess'));
                     actionRef.current?.reload();
                   }}
-                >
-                  {t('common.delete')}
-                </Button>,
+                />,
               );
             }
             return nodes;
@@ -173,7 +159,7 @@ const DriversPage: React.FC = () => {
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.drivers')}
         actionRef={actionRef}
         columns={columns}
-        columnPersistenceId="apps.kuaizhizao.pages.logistics-management.drivers.v2"
+        columnPersistenceId="apps.kuaizhizao.pages.logistics-management.drivers.v3"
         rowKey="id"
         request={async (params) => {
           const res = await listDrivers({

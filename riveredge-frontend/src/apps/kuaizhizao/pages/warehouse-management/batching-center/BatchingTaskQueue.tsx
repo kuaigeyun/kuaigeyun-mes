@@ -19,20 +19,18 @@ import {
   InputNumber,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import {
-  CheckCircleOutlined,
-  CloseCircleOutlined,
-  ClockCircleOutlined,
-  ReloadOutlined,
-} from '@ant-design/icons';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { UniTable } from '../../../../../components/uni-table';
 import {
   MaterialStackedCell,
   UniTableStackedPrimaryCell,
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { MarkerTag, StatusTag } from '../../../../../constants/statusBadges';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
+import {
+  DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+  renderDocumentLineMaterialsPreview,
+} from '../../sales-management/shared/documentLineMaterialsPreview';
 import { apiRequest } from '../../../../../services/api';
 import { sumInventoryPickOptionQty } from '../outbound/outboundConfirmInventoryOptions';
 import { warehouseApi } from '../../../services/warehouse-execution';
@@ -66,6 +64,7 @@ import {
 import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 type BatchPickOption = { value: string; label: string; quantity?: number };
 
 export type BatchingTaskRow = {
@@ -516,8 +515,7 @@ const BatchingTaskQueue: React.FC<Props> = ({
     {
       title: t('app.kuaizhizao.warehouseCommon.colTaskType'),
       dataIndex: 'task_type',
-      width: 110,
-      uniTableKeepWidth: true,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       // 合并「线边备料」列表含建议+备料单，需展示行来源
       hideInTable: taskType !== 'line_side_prep',
       hideInSearch: true,
@@ -536,7 +534,11 @@ const BatchingTaskQueue: React.FC<Props> = ({
     {
       title: t('app.kuaizhizao.warehouseCommon.colDocCode'),
       dataIndex: 'doc_code',
-      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+      width: 160,
+      minWidth: 160,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: false,
       fixed: 'left',
       render: (_, r) => (
         <UniTableStackedPrimaryCell
@@ -554,7 +556,11 @@ const BatchingTaskQueue: React.FC<Props> = ({
       title: t('app.kuaizhizao.warehouseCommon.colProductOrMaterial'),
       key: 'material',
       dataIndex: 'shortage_summary',
-      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+      width: 200,
+      minWidth: 200,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: false,
       hideInSearch: true,
       render: (_, r) => {
         const { primary, secondary } = resolveBatchingTaskProductMaterialCell(r);
@@ -576,10 +582,18 @@ const BatchingTaskQueue: React.FC<Props> = ({
       },
     },
     {
+      title: t('app.kuaizhizao.common.colLineMaterials'),
+      ...DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+      render: (_, r) =>
+        renderDocumentLineMaterialsPreview(
+          (Array.isArray(r.items) ? r.items : []) as { material_name?: string }[],
+          t,
+        ),
+    },
+    {
       title: t('app.kuaizhizao.warehouseCommon.colKittingRate'),
       dataIndex: 'kitting_rate',
-      width: 90,
-      uniTableKeepWidth: true,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       hideInSearch: true,
       // 齐套率仅对线边备料（建议+执行）有意义；产线补料是局部需求，后端不计算齐套率
       hideInTable: taskType === 'material_call' || taskType === 'backflush_alert',
@@ -604,19 +618,6 @@ const BatchingTaskQueue: React.FC<Props> = ({
         r.requested_quantity != null
           ? `${r.requested_quantity}${r.material_unit ? ` ${r.material_unit}` : ''}`
           : '-',
-    },
-    {
-      title: t('app.kuaizhizao.warehouseCommon.colSkuCount'),
-      dataIndex: 'total_items',
-      width: 72,
-      minWidth: 72,
-      uniTableKeepWidth: true,
-      resizable: false,
-      hideInSearch: true,
-      align: 'right',
-      // 品种：线边备料（建议/备料单）与产线补料有意义；倒冲异常为单物料行
-      hideInTable: taskType === 'backflush_alert',
-      render: (_, r) => (r.total_items != null ? r.total_items : '-'),
     },
     {
       title: t('app.kuaizhizao.warehouseCommon.colDeliveryFulfillment'),
@@ -646,10 +647,7 @@ const BatchingTaskQueue: React.FC<Props> = ({
     {
       title: t('app.kuaizhizao.warehouseCommon.colPriority'),
       dataIndex: 'priority',
-      width: 88,
-      minWidth: 88,
-      uniTableKeepWidth: true,
-      resizable: false,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       valueType: 'select',
       valueEnum: {
         low: { text: t('app.kuaizhizao.warehouseCommon.priorityLow') },
@@ -728,7 +726,7 @@ const BatchingTaskQueue: React.FC<Props> = ({
     ...buildDocumentAuditColumns<BatchingTaskRow>(t),
     {
       title: t('common.actions'),
-      key: 'action',
+      key: 'option',
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) => {
@@ -778,7 +776,6 @@ const BatchingTaskQueue: React.FC<Props> = ({
                 key="start-picking"
                 {...rowActionKind('execute')}
                 size="small"
-                icon={<ClockCircleOutlined />}
                 onClick={() => handleMaterialCallUpdate(record.task_id, 'processing')}
               >
                 {t('app.kuaizhizao.batchingCenter.startPicking')}
@@ -801,7 +798,6 @@ const BatchingTaskQueue: React.FC<Props> = ({
                 key="complete-call"
                 {...rowActionKind('complete')}
                 size="small"
-                icon={<CheckCircleOutlined />}
                 onClick={() => openMaterialCallComplete(record)}
               >
                 {t('app.kuaizhizao.warehouseCommon.complete')}
@@ -814,7 +810,6 @@ const BatchingTaskQueue: React.FC<Props> = ({
                 key="cancel-call"
                 {...rowActionKind('revoke')}
                 size="small"
-                icon={<CloseCircleOutlined />}
                 onClick={() => {
                   getAntdModal().confirm({
                     title: t('app.kuaizhizao.batchingCenter.confirmCancelTitle'),
@@ -848,7 +843,6 @@ const BatchingTaskQueue: React.FC<Props> = ({
                 key="refresh-shortage"
                 {...rowActionKind('recycle')}
                 size="small"
-                icon={<ReloadOutlined />}
                 onClick={() => handleSyncBatchingDraft(record)}
               >
                 {t('app.kuaizhizao.batchingCenter.refreshShortage')}
@@ -885,7 +879,6 @@ const BatchingTaskQueue: React.FC<Props> = ({
               key="retry-backflush"
               {...rowActionKind('execute')}
               size="small"
-              icon={<ReloadOutlined />}
               onClick={() => handleBackflushRetry(record)}
             >
               {t('app.kuaizhizao.batchingCenter.retryBackflush')}
@@ -1112,10 +1105,12 @@ const BatchingTaskQueue: React.FC<Props> = ({
       </Modal>
 
       <UniTable<BatchingTaskRow>
+        viewTypes={['table', 'help']}
+        helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.batchingCenter')}
         actionRef={actionRef}
         rowKey={(r) => `${r.task_type}-${r.task_id}`}
         columns={columns}
-        columnPersistenceId={`apps.kuaizhizao.pages.warehouse-management.batching-center.tasks.${taskType}.v7`}
+        columnPersistenceId={`apps.kuaizhizao.pages.warehouse-management.batching-center.tasks.${taskType}-width-v4`}
         showAdvancedSearch
         polling={false}
         showCreateButton={Boolean(onCreate)}

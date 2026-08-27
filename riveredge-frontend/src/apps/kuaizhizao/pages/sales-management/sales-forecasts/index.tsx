@@ -10,7 +10,7 @@ import { rowActionKind } from '../../../../../components/uni-action';
 
 import React, { useRef, useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react'
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormInstance, ProFormSelect } from '@ant-design/pro-components'
-import { App, Button, Space, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Typography, Modal, Tooltip, Alert, Empty, Spin, Switch, Tag } from 'antd'
+import { App, Button, Space, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Typography, Modal, Tooltip, Alert, Empty, Spin, Switch } from 'antd'
 import { PlusOutlined, DeleteOutlined, EditOutlined, AppstoreAddOutlined, ImportOutlined, ArrowLeftOutlined, PrinterOutlined, ArrowDownOutlined } from '@ant-design/icons'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useLeaveFormTab } from '../../../../../components/uni-tabs/navigateClosingTab'
@@ -48,9 +48,11 @@ import { UniAuditBatchMenuButton, UniCapabilityBatchButton } from '../../../../.
 import { buildUniPushMenuItems, buildUniPushToolbarDisabledReason, UniPushToolbarButton } from '../../../../../components/uni-push';
 import {
   UniTableStackedPrimaryCell,
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+  UNI_TABLE_STACKED_BADGE_DATE_COLUMN_DEFAULTS,
   MaterialStackedCell,
 } from '../../../../../components/uni-table/stackedPrimaryColumn'
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns'
+import { MarkerTag } from '../../../../../constants/statusBadges'
 import { UniMaterialSelect } from '../../../../../components/uni-material-select'
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker'
 import { ThemedSegmented } from '../../../../../components/themed-segmented'
@@ -65,6 +67,10 @@ import {
   GLOBAL_DOC_DETAIL_TABLE_FIELD_RANK,
   SALES_DOC_LIST_FIELD_RANK,
 } from '../shared/documentFieldAlignment'
+import {
+  DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+  renderDocumentLineMaterialsPreview,
+} from '../shared/documentLineMaterialsPreview'
 import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_DEFAULTS } from '../shared/DocumentPushProgressBar'
 import {
   collectComputationPushDocuments,
@@ -79,7 +85,7 @@ const LazyUniImport = lazy(() =>
 const SALES_FORECAST_RESOURCE = 'kuaizhizao:sales-forecast'
 const SALES_FORECAST_LIST_PATH = '/apps/kuaizhizao/sales-management/sales-forecasts'
 const SALES_FORECAST_LIST_PERSISTENCE_ID =
-  'apps.kuaizhizao.pages.sales-management.sales-forecasts.v2'
+  'apps.kuaizhizao.pages.sales-management.sales-forecasts-width-v2'
 const SALES_FORECAST_CREATE_PATH = `${SALES_FORECAST_LIST_PATH}/new`
 const salesForecastEditPath = (id: number) => `${SALES_FORECAST_LIST_PATH}/${id}/edit`
 import type { Material } from '../../../../master-data/types/material'
@@ -1069,7 +1075,11 @@ export default function SalesForecastsPage() {
       title: t('app.kuaizhizao.salesForecast.colForecastPrimary'),
       key: 'forecast_code',
       dataIndex: 'forecast_code',
-      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+      width: 240,
+      minWidth: 240,
+      uniTableKeepWidth: true,
+      uniTablePrimaryFlex: false,
+      resizable: false,
       fixed: 'left',
       sorter: true,
       fieldProps: { placeholder: t('app.kuaizhizao.salesForecast.enterForecastCode') },
@@ -1091,7 +1101,7 @@ export default function SalesForecastsPage() {
       title: t('app.kuaizhizao.salesForecast.forecastPeriod'),
       dataIndex: 'forecast_period',
       valueType: 'select',
-      width: 120,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       sorter: true,
       valueEnum: {
         WEEKLY: { text: t('app.kuaizhizao.salesForecast.period.weekly') },
@@ -1099,18 +1109,16 @@ export default function SalesForecastsPage() {
         QUARTERLY: { text: t('app.kuaizhizao.salesForecast.period.quarterly') },
       },
       render: (_text, record) => (
-        <Tag color={getForecastPeriodTagColor(record.forecast_period)} bordered={false}>
+        <MarkerTag color={getForecastPeriodTagColor(record.forecast_period)}>
           {formatForecastPeriod(record.forecast_period)}
-        </Tag>
+        </MarkerTag>
       ),
     },
     {
       title: t('app.kuaizhizao.salesForecast.startDate'),
       dataIndex: 'start_date',
       key: 'start_end_date_stacked',
-      width: 132,
-      uniTableKeepWidth: true,
-      resizable: false,
+      ...UNI_TABLE_STACKED_BADGE_DATE_COLUMN_DEFAULTS,
       sorter: true,
       hideInSearch: true,
       render: (_text, record) => {
@@ -1133,6 +1141,7 @@ export default function SalesForecastsPage() {
       dataIndex: 'end_date',
       valueType: 'date',
       width: 132,
+      minWidth: 132,
       uniTableKeepWidth: true,
       hideInSearch: true,
       hideInTable: true,
@@ -1140,26 +1149,21 @@ export default function SalesForecastsPage() {
         record.end_date ? formatDateTime(record.end_date, 'YYYY-MM-DD') : '-',
     },
     {
-      title: t('app.kuaizhizao.salesForecast.colProductKinds'),
-      dataIndex: 'items_count',
-      width: 96,
-      align: 'right' as const,
-      hideInSearch: true,
-      render: (_text, record) => {
-        if (record.items_count != null && Number.isFinite(Number(record.items_count))) {
-          return String(record.items_count);
-        }
-        const items = record.items || record.forecast_items || [];
-        const kindCount = new Set(
-          items.map((it) => it.material_id).filter((id): id is number => id != null),
-        ).size;
-        return String(kindCount);
-      },
+      title: t('app.kuaizhizao.common.colLineMaterials'),
+      ...DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+      render: (_text, record) =>
+        renderDocumentLineMaterialsPreview(
+          record.items || record.forecast_items,
+          t,
+        ),
     },
     {
       title: t('app.kuaizhizao.salesForecast.totalQuantity'),
       dataIndex: 'total_quantity',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       align: 'right' as const,
       hideInSearch: true,
       render: (_text, record) => formatQuantity(calcForecastTotalQuantity(record)),
@@ -1208,6 +1212,7 @@ export default function SalesForecastsPage() {
       title: t('app.kuaizhizao.salesForecast.lifecycleColumn'),
       dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
       valueType: 'select',
+      key: 'lifecycle',
       fixed: 'right' as const,
       valueEnum: {
         草稿: { text: t('app.kuaizhizao.salesForecast.statusDraft') },
@@ -1291,7 +1296,11 @@ export default function SalesForecastsPage() {
         title: t('app.kuaizhizao.salesForecast.colForecastPrimary'),
         key: 'forecast_code',
         dataIndex: 'forecast_code',
-        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        width: 240,
+        minWidth: 240,
+        uniTableKeepWidth: true,
+        uniTablePrimaryFlex: false,
+        resizable: false,
         fixed: 'left',
         hideInSearch: false,
         fieldProps: { placeholder: t('app.kuaizhizao.salesForecast.enterForecastCode') },
@@ -1311,7 +1320,12 @@ export default function SalesForecastsPage() {
         title: t('app.kuaizhizao.salesForecast.material'),
         key: 'material_name',
         dataIndex: 'material_name',
-        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        // 明细视图：物料叠列为 RemainderFlex（无头表明细预览列）
+        minWidth: 160,
+        uniTablePrimaryFlex: true,
+        uniTableRemainderFlex: true,
+        resizable: false,
+        ellipsis: false,
         hideInSearch: true,
         render: (_, record) => (
           <MaterialStackedCell
@@ -1330,18 +1344,21 @@ export default function SalesForecastsPage() {
       {
         title: t('app.kuaizhizao.salesForecast.forecastPeriod'),
         dataIndex: 'forecast_period',
-        width: 120,
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         hideInSearch: true,
         render: (_, record) => (
-          <Tag color={getForecastPeriodTagColor(record.forecast_period)} bordered={false}>
+          <MarkerTag color={getForecastPeriodTagColor(record.forecast_period)}>
             {formatForecastPeriod(record.forecast_period)}
-          </Tag>
+          </MarkerTag>
         ),
       },
       {
         title: t('app.kuaizhizao.salesForecast.forecastQuantity'),
         dataIndex: 'forecast_quantity',
         width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
         align: 'right' as const,
         hideInSearch: true,
         render: (_, record) => formatQuantity(record.forecast_quantity),
@@ -1350,7 +1367,9 @@ export default function SalesForecastsPage() {
         title: t('app.kuaizhizao.salesForecast.forecastDate'),
         dataIndex: 'forecast_date',
         width: 132,
+        minWidth: 132,
         uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         render: (_, record) =>
           record.forecast_date ? formatDateTime(record.forecast_date, 'YYYY-MM-DD') : '-',
@@ -2014,11 +2033,11 @@ export default function SalesForecastsPage() {
             const { sortBy, sortOrder } = extractProTableSort(sort);
             const orderBy =
               sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
-            const needItems = dataViewModeRef.current === 'detail';
             const apiParams: SalesForecastListParams = {
               skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
               limit: params.pageSize ?? 20,
-              include_items: needItems,
+              // 订单视图明细预览列 + 明细视图展开行均需 items
+              include_items: true,
               order_by: orderBy,
             };
             if (sf.forecast_period) apiParams.forecast_period = sf.forecast_period as string;

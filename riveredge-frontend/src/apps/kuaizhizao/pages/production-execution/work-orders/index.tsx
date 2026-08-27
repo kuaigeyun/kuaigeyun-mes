@@ -94,9 +94,8 @@ import { UniBatchButton, UniBatchMenuButton, UniCapabilityBatchButton } from '..
 import {
   UniTableStackedPrimaryCell,
   UniTableStackedLineBadge,
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
   UNI_TABLE_STACKED_BADGE_DATETIME_COLUMN_DEFAULTS,
-  UNI_TABLE_OPERATION_STEPS_COLUMN_DEFAULTS,
+  UNI_TABLE_OPERATION_STEPS_COLUMN_MIN_WIDTH,
 } from '../../../../../components/uni-table/stackedPrimaryColumn'
 import { useUserPreferenceStore } from '../../../../../stores/userPreferenceStore'
 import { useConfigStore } from '../../../../../stores/configStore'
@@ -6937,8 +6936,12 @@ const WorkOrdersPage: React.FC = () => {
       title: t('app.kuaizhizao.workOrder.colProductWorkOrderCode'),
       key: 'code',
       dataIndex: 'code',
-      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-      minWidth: 168,
+      // 定宽：禁止 primaryFlex，否则会先吃掉视口余量，工序列 RemainderFlex 分不到宽
+      width: 280,
+      minWidth: 280,
+      uniTableKeepWidth: true,
+      uniTablePrimaryFlex: false,
+      resizable: false,
       fixed: 'left',
       sorter: true,
       hideInSearch: false,
@@ -6987,8 +6990,10 @@ const WorkOrdersPage: React.FC = () => {
       title: t('common.quantity'),
       dataIndex: 'quantity',
       width: 88,
-      align: 'right',
+      minWidth: 88,
       uniTableKeepWidth: true,
+      resizable: false,
+      align: 'right',
       sorter: true,
       render: (_, record) =>
         isWorkOrderGroupListRow(record) ? null : formatWorkOrderListQuantity(record),
@@ -6998,7 +7003,9 @@ const WorkOrdersPage: React.FC = () => {
         key: 'productionManufacturingMode',
         dataIndex: 'production_mode',
         width: 96,
+        minWidth: 96,
         uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         render: (_, record) => {
         if (isWorkOrderGroupListRow(record)) {
@@ -7037,8 +7044,10 @@ const WorkOrdersPage: React.FC = () => {
       title: t('app.kuaizhizao.workOrder.colReadiness'),
       dataIndex: 'readiness_rate',
       width: 72,
-      align: 'center',
+      minWidth: 72,
       uniTableKeepWidth: true,
+      resizable: false,
+      align: 'center',
       valueType: 'digit',
       className: 'wo-readiness-cell',
       onCell: () => ({ className: 'wo-readiness-cell' }),
@@ -7097,7 +7106,12 @@ const WorkOrdersPage: React.FC = () => {
       tooltip: t('app.kuaizhizao.workOrder.colOperationsHint'),
       key: 'operation_steps',
       dataIndex: 'operation_steps',
-      ...UNI_TABLE_OPERATION_STEPS_COLUMN_DEFAULTS,
+      // RemainderFlex：工序步骤轴吃掉视口剩余宽度（工单无行项目明细列）
+      minWidth: UNI_TABLE_OPERATION_STEPS_COLUMN_MIN_WIDTH,
+      uniTablePrimaryFlex: true,
+      uniTableRemainderFlex: true,
+      resizable: false,
+      ellipsis: false,
       className: 'uni-table-operation-steps-cell',
       onHeaderCell: () => ({ className: 'uni-table-operation-steps-cell' }),
       onCell: () => ({ className: 'uni-table-operation-steps-cell' }),
@@ -7251,6 +7265,7 @@ const WorkOrdersPage: React.FC = () => {
     },
     {
       title: t('app.kuaizhizao.workOrder.colLifecycle'),
+      key: 'lifecycle',
       dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
       fixed: 'right' as const,
       hideInSearch: false,
@@ -7269,6 +7284,7 @@ const WorkOrdersPage: React.FC = () => {
     ...workOrderCustomFieldColumns,
     {
       title: t('common.actions'),
+      key: 'option',
       valueType: 'option',
       fixed: 'right' as const,
       hideInSearch: true,
@@ -7821,7 +7837,7 @@ const WorkOrdersPage: React.FC = () => {
         <UniTable<WorkOrder>
           className="kuaizhizao-work-orders-table"
           scroll={{ scrollToFirstRowOnChange: false }}
-          columnPersistenceId="apps.kuaizhizao.pages.production-execution.work-orders.batch-in-product-v2"
+          columnPersistenceId="apps.kuaizhizao.pages.production-execution.work-orders-width-v2"
           headerTitle={t('app.kuaizhizao.workOrder.pageTitle')}
           formRef={tableSearchFormRef}
           searchParamsRef={tableSearchParamsRef}

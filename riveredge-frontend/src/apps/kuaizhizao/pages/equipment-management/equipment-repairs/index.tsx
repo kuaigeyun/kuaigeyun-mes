@@ -198,7 +198,11 @@ const EquipmentRepairsPage: React.FC = () => {
       {
         title: t(`${P}.col.repairNo`),
         dataIndex: 'repair_no',
-        width: 140,
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
         fixed: 'left',
         sorter: true,
         search: { order: 30 } as ProColumns['search'],
@@ -211,15 +215,23 @@ const EquipmentRepairsPage: React.FC = () => {
       {
         title: t(`${P}.col.equipmentName`),
         dataIndex: 'equipment_name',
-        width: 180,
+        minWidth: 160,
+        uniTablePrimaryFlex: true,
+        uniTableRemainderFlex: true,
+        resizable: false,
         ellipsis: true,
         sorter: true,
         hideInSearch: true,
+        render: (_, r) =>
+          r.equipment_name != null && r.equipment_name !== '' ? String(r.equipment_name) : '-',
       },
       {
         title: t(`${P}.col.linkedFault`),
         dataIndex: 'equipment_fault_uuid',
         width: 110,
+        minWidth: 110,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         render: (_, r) =>
           r.equipment_fault_uuid ? (
@@ -241,19 +253,50 @@ const EquipmentRepairsPage: React.FC = () => {
         title: t(`${P}.col.repairDate`),
         dataIndex: 'repair_date',
         width: 132,
+        minWidth: 132,
         uniTableKeepWidth: true,
+        resizable: false,
         sorter: true,
         hideInSearch: true,
         render: (_, r) => (r.repair_date ? formatDateTime(r.repair_date, 'YYYY-MM-DD HH:mm:ss') : '-'),
       },
-      { title: t(`${P}.col.repairType`), dataIndex: 'repair_type', width: 120, sorter: true, hideInSearch: true },
-      { title: t(`${P}.col.repairerName`), dataIndex: 'repairer_name', width: 120, sorter: true, hideInSearch: true },
+      {
+        title: t(`${P}.col.repairType`),
+        dataIndex: 'repair_type',
+        width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
+        sorter: true,
+        hideInSearch: true,
+        render: (_, r) => (r.repair_type != null && r.repair_type !== '' ? String(r.repair_type) : '-'),
+      },
+      {
+        title: t(`${P}.col.repairerName`),
+        dataIndex: 'repairer_name',
+        width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
+        sorter: true,
+        hideInSearch: true,
+        render: (_, r) =>
+          r.repairer_name != null && r.repairer_name !== '' ? String(r.repairer_name) : '-',
+      },
       {
         title: t(`${P}.col.repairResult`),
         dataIndex: 'repair_result',
         width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
         sorter: true,
         hideInSearch: true,
+        render: (_, r) =>
+          r.repair_result != null && r.repair_result !== '' ? String(r.repair_result) : '-',
       },
       ...buildDocumentAuditColumns<EquipmentRepair>(t),
       {
@@ -266,7 +309,7 @@ const EquipmentRepairsPage: React.FC = () => {
       },
       {
         title: t('common.actions'),
-        valueType: 'option',
+        key: 'option',
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) => {
@@ -278,7 +321,6 @@ const EquipmentRepairsPage: React.FC = () => {
               <Button
                 key="complete"
                 {...rowActionKind('execute')}
-                icon={<CheckOutlined />}
                 onClick={(e) => {
                   e.stopPropagation();
                   openComplete(record);
@@ -310,7 +352,7 @@ const EquipmentRepairsPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.equipmentRepairs)}
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.equipment-repairs-equip-rank-v1"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.equipment-repairs-width-v2"
           actionRef={actionRef}
           rowKey="uuid"
           enableRowSelection={perms.canDelete}

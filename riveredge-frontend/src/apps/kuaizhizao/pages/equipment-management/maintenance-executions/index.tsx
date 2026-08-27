@@ -30,6 +30,7 @@ import LineAttachmentsUpload from '../../../components/LineAttachmentsUpload';
 import { useEquipmentDetailDrawer } from '../shared/equipmentMasterDataDetail';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 const P = 'app.kuaizhizao.maintenanceExecution';
 const RESOURCE = 'kuaizhizao:maintenance-plan';
 
@@ -191,7 +192,11 @@ const MaintenanceExecutionsPage: React.FC = () => {
       {
         title: t(`${P}.col.executionNo`),
         dataIndex: 'execution_no',
-        width: 140,
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
         fixed: 'left',
         sorter: true,
         search: { order: 30 } as ProColumns['search'],
@@ -204,17 +209,23 @@ const MaintenanceExecutionsPage: React.FC = () => {
       {
         title: t(`${P}.col.equipmentName`),
         dataIndex: 'equipment_name',
-        width: 180,
+        minWidth: 160,
+        uniTablePrimaryFlex: true,
+        uniTableRemainderFlex: true,
+        resizable: false,
         ellipsis: true,
-        sorter: true,
         hideInSearch: true,
+        render: (_, r) =>
+          r.equipment_name != null && r.equipment_name !== '' ? String(r.equipment_name) : '-',
       },
       {
         title: t(`${P}.col.executionDate`),
         dataIndex: 'execution_date',
         valueType: 'dateTime',
         width: 132,
+        minWidth: 132,
         uniTableKeepWidth: true,
+        resizable: false,
         sorter: true,
         hideInSearch: true,
         render: (_, r) => (r.execution_date ? formatDateTime(r.execution_date) : '-'),
@@ -223,13 +234,19 @@ const MaintenanceExecutionsPage: React.FC = () => {
         title: t(`${P}.col.executorName`),
         dataIndex: 'executor_name',
         width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
         sorter: true,
         hideInSearch: true,
+        render: (_, r) =>
+          r.executor_name != null && r.executor_name !== '' ? String(r.executor_name) : '-',
       },
       {
         title: t(`${P}.col.executionResult`),
         dataIndex: 'execution_result',
-        width: 100,
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         sorter: true,
         hideInSearch: true,
         render: (_, r) => (
@@ -242,6 +259,9 @@ const MaintenanceExecutionsPage: React.FC = () => {
         title: t(`${P}.col.source`),
         dataIndex: 'source_type',
         width: 110,
+        minWidth: 110,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         render: (_, r) =>
           r.source_type === 'equipment_fault' && r.source_uuid ? (
@@ -270,7 +290,7 @@ const MaintenanceExecutionsPage: React.FC = () => {
       },
       {
         title: t('common.actions'),
-        valueType: 'option',
+        key: 'option',
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) =>
@@ -296,7 +316,7 @@ const MaintenanceExecutionsPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.maintenanceExecutions)}
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.maintenance-executions-equip-rank-v1"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.maintenance-executions-width-v2"
           actionRef={actionRef}
           rowKey="uuid"
           enableRowSelection={perms.canDelete}

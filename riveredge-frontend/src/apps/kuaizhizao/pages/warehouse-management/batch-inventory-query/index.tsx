@@ -11,7 +11,6 @@ import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import { UniTable } from '../../../../../components/uni-table';
 import {
   MaterialStackedCell,
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { apiRequest } from '../../../../../services/api';
 import { warehouseApi } from '../../../../master-data/services/warehouse';
@@ -290,7 +289,11 @@ const BatchInventoryQuery: React.FC = () => {
         title: t('app.kuaizhizao.warehouseCommon.colMaterial'),
         key: 'material_name',
         dataIndex: 'material_name',
-        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        minWidth: 200,
+        uniTablePrimaryFlex: true,
+        uniTableRemainderFlex: true,
+        resizable: false,
+        ellipsis: false,
         fixed: 'left',
         render: (_, r) => (
           <MaterialStackedCell material_name={r.material_name} material_code={r.material_code} />
@@ -302,6 +305,9 @@ const BatchInventoryQuery: React.FC = () => {
         title: t('app.master-data.materials.specification'),
         dataIndex: 'material_spec',
         width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
         ellipsis: true,
         hideInSearch: true,
         render: (_, r) => renderCell(r.material_spec),
@@ -310,6 +316,9 @@ const BatchInventoryQuery: React.FC = () => {
         title: t('app.master-data.materials.model'),
         dataIndex: 'model',
         width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
         ellipsis: true,
         hideInSearch: true,
         render: (_, r) => renderCell(r.model),
@@ -318,6 +327,9 @@ const BatchInventoryQuery: React.FC = () => {
         title: t('app.kuaizhizao.warehouseInventory.colBrand'),
         dataIndex: 'brand',
         width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
         ellipsis: true,
         hideInSearch: true,
         render: (_, r) => renderCell(r.brand),
@@ -326,6 +338,9 @@ const BatchInventoryQuery: React.FC = () => {
         title: t('app.kuaizhizao.warehouseInventory.colTexture'),
         dataIndex: 'texture',
         width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
         ellipsis: true,
         hideInSearch: true,
         render: (_, r) => renderCell(r.texture),
@@ -334,6 +349,9 @@ const BatchInventoryQuery: React.FC = () => {
         title: t('common.unit'),
         dataIndex: 'material_unit',
         width: 72,
+        minWidth: 72,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         render: (_, r) => renderCell(r.material_unit),
       },
@@ -341,6 +359,9 @@ const BatchInventoryQuery: React.FC = () => {
         title: t('app.kuaizhizao.batchInventoryQuery.colBatchNo'),
         dataIndex: 'batch_no',
         width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
         sorter: true,
         render: (_, record) => {
           const display = formatBatchNoForDisplay(record.batch_no);
@@ -356,7 +377,9 @@ const BatchInventoryQuery: React.FC = () => {
         title: t('app.kuaizhizao.batchInventoryQuery.colProductionDate'),
         dataIndex: 'production_date',
         width: 132,
+        minWidth: 132,
         uniTableKeepWidth: true,
+        resizable: false,
         valueType: 'date',
         sorter: true,
         render: (_, record) => record.production_date || '-',
@@ -365,7 +388,9 @@ const BatchInventoryQuery: React.FC = () => {
         title: t('app.kuaizhizao.batchInventoryQuery.colExpiryDate'),
         dataIndex: 'expiry_date',
         width: 132,
+        minWidth: 132,
         uniTableKeepWidth: true,
+        resizable: false,
         valueType: 'date',
         sorter: true,
         render: (_, record) => {
@@ -386,6 +411,9 @@ const BatchInventoryQuery: React.FC = () => {
         title: t('app.kuaizhizao.warehouseReports.colStockQty'),
         dataIndex: 'quantity',
         width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
         align: 'right',
         valueType: 'digit',
         sorter: true,
@@ -400,6 +428,9 @@ const BatchInventoryQuery: React.FC = () => {
         title: t('app.kuaizhizao.warehouseInventory.colInTransit'),
         dataIndex: 'in_transit_quantity',
         width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
         align: 'right',
         hideInSearch: true,
         render: (_, record) => renderInTransitCell(record, t),
@@ -408,6 +439,9 @@ const BatchInventoryQuery: React.FC = () => {
         title: t('app.kuaizhizao.warehouseInventory.colAlert'),
         dataIndex: 'alert_label',
         width: 96,
+        minWidth: 96,
+        uniTableKeepWidth: true,
+        resizable: false,
         align: 'center',
         hideInSearch: true,
         render: (_, record) => renderAlertCell(record, t),
@@ -416,12 +450,18 @@ const BatchInventoryQuery: React.FC = () => {
         title: t('app.kuaizhizao.batchInventoryQuery.colSupplierBatchNo'),
         dataIndex: 'supplier_batch_no',
         width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
         render: (_, record) => record.supplier_batch_no || '-',
       },
       {
         title: t('common.status'),
         dataIndex: 'status',
         width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
         render: (_, record) => {
           let color = 'default';
           if (record.status === '已过期') color = 'red';
@@ -435,6 +475,9 @@ const BatchInventoryQuery: React.FC = () => {
         title: t('app.kuaizhizao.warehouseReports.colWarehouse'),
         dataIndex: 'warehouse_name',
         width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
         render: (_, record) => record.warehouse_name || '-',
       },
     ],
@@ -599,7 +642,7 @@ const BatchInventoryQuery: React.FC = () => {
         headerActions={tableHeaderActions}
         actionRef={actionRef}
         columns={alignProColumns(columns, WAREHOUSE_DOC_LIST_FIELD_RANK)}
-        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.batch-inventory-query"
+        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.batch-inventory-query-width-v2"
         request={fetchBatchInventory}
         showAdvancedSearch
         skipFuzzyPinyinClientFilter

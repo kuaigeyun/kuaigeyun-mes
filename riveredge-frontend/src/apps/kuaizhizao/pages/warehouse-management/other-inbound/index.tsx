@@ -57,6 +57,11 @@ import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { alignDescriptionColumns, alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
+import {
+  DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+  renderDocumentLineMaterialsPreview,
+} from '../../sales-management/shared/documentLineMaterialsPreview';
 import {
   WAREHOUSE_DOC_PINNED_STATUS_FIELD,
   buildOtherInboundStatusValueEnum,
@@ -113,6 +118,8 @@ interface OtherInbound {
   total_quantity?: number;
   total_items?: number;
   total_amount?: number;
+  /** 列表「明细」列预览（仅 material_name） */
+  items?: { material_name?: string }[];
   notes?: string;
   created_at?: string;
   updated_at?: string;
@@ -308,7 +315,10 @@ const OtherInboundPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.warehouseOtherInbound.col.inboundCode'),
         dataIndex: 'inbound_code',
-        width: 140,
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
         ellipsis: true,
         fixed: 'left',
         sorter: true,
@@ -322,50 +332,61 @@ const OtherInboundPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.warehouseOtherInbound.col.warehouse'),
         dataIndex: 'warehouse_name',
-        width: 120,
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
         ellipsis: true,
         sorter: true,
         hideInSearch: true,
+        render: (_, r) =>
+          r.warehouse_name != null && r.warehouse_name !== '' ? String(r.warehouse_name) : '-',
       },
       {
         title: t('app.kuaizhizao.warehouseOtherInbound.col.reasonType'),
         dataIndex: 'reason_type',
-        width: 100,
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         sorter: true,
         hideInSearch: true,
         render: (v) =>
           renderWarehouseReasonTypeMarkerTag(translateReasonTypeLabel(t, String(v || '')), String(v || '')),
       },
       {
+        title: t('app.kuaizhizao.common.colLineMaterials'),
+        ...DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+        render: (_, r) => renderDocumentLineMaterialsPreview(r.items, t),
+      },
+      {
         title: t('app.kuaizhizao.warehouseCommon.colTotalQuantity'),
         dataIndex: 'total_quantity',
         width: 100,
-        align: 'right',
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
         sorter: true,
         hideInSearch: true,
-        render: formatQuantity,
-      },
-      {
-        title: t('app.kuaizhizao.warehouseCommon.colMaterialKindCount'),
-        dataIndex: 'total_items',
-        width: 90,
-        align: 'right',
-        sorter: true,
-        hideInSearch: true,
-        render: (v: number | null | undefined) => (v != null ? v : '-'),
+        render: (_, r) => formatQuantity(r.total_quantity),
       },
       {
         title: t('app.kuaizhizao.warehouseOtherInbound.col.receiver'),
         dataIndex: 'receiver_name',
         width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
         sorter: true,
         hideInSearch: true,
+        render: (_, r) =>
+          r.receiver_name != null && r.receiver_name !== '' ? String(r.receiver_name) : '-',
       },
       {
         title: t('app.kuaizhizao.warehouseOtherInbound.col.receiptTime'),
         dataIndex: 'receipt_time',
         width: 132,
+        minWidth: 132,
         uniTableKeepWidth: true,
+        resizable: false,
         sorter: true,
         hideInSearch: true,
         render: (_, r) => (r.receipt_time ? formatDateTime(r.receipt_time) : '-'),
@@ -394,8 +415,9 @@ const OtherInboundPage: React.FC = () => {
       ...otherInboundCustomFieldColumns,
       {
         title: t('common.actions'),
-        width: 180,
+        key: 'option',
         fixed: 'right',
+        hideInSearch: true,
         render: (_, record) => {
           const actions: React.ReactNode[] = [
             <Button key="detail" {...rowActionKind('read')} onClick={() => handleDetail(record)} />,
@@ -859,7 +881,7 @@ const OtherInboundPage: React.FC = () => {
           headerTitle={t('app.kuaizhizao.warehouseOtherInbound.title')}
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.otherInbound)}
-          columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.other-inbound.v2"
+          columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.other-inbound-width-v3"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}

@@ -294,7 +294,6 @@ export function plmListActionColumn<T extends object>(
   return {
     title: t('common.actions'),
     key: 'action',
-    valueType: 'option',
     fixed: 'right',
     hideInSearch: true,
     render,

@@ -15,8 +15,7 @@ import {
 import { App, Button, Col, Descriptions, Form, Row, Select, Space, Table } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
-import { UniTableStackedPrimaryCell, UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS } from '../../../../../components/uni-table/stackedPrimaryColumn';
-import { rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import {
   DetailDrawerSection,
   DetailDrawerTemplate,
@@ -171,31 +170,45 @@ const DrawingLoansPage: React.FC = () => {
   const columns: ProColumns<DrawingLoan>[] = useMemo(
     () => [
       {
-        title: t('app.master-data.drawingLoans.name'),
-        dataIndex: 'name',
-        key: 'name_code',
-        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-        render: (_, row) => (
-          <UniTableStackedPrimaryCell primary={row.name} secondary={row.code} />
-        ),
-      },
-      {
+        // 稀疏：业务列不叠（单号 → 名称 → 用途 → 应还日期）；审计叠列保留
         title: t('app.master-data.drawingLoans.code'),
         dataIndex: 'code',
-        hideInTable: true,
+        width: 168,
+        minWidth: 168,
+        uniTableKeepWidth: true,
+        resizable: false,
+        fixed: 'left',
+        ellipsis: true,
+        copyable: true,
+      },
+      {
+        // 借阅单名称长短不一：唯一 RemainderFlex
+        title: t('app.master-data.drawingLoans.name'),
+        dataIndex: 'name',
+        minWidth: 160,
+        uniTableRemainderFlex: true,
+        uniTablePrimaryFlex: true,
+        resizable: false,
+        ellipsis: true,
       },
       {
         title: t('app.master-data.drawingLoans.purpose'),
         dataIndex: 'purpose',
         hideInSearch: true,
-        ellipsis: true,
         width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
       },
       {
         title: t('app.master-data.drawingLoans.dueAt'),
         dataIndex: 'dueAt',
         hideInSearch: true,
-        width: 160,
+        width: 180,
+        minWidth: 180,
+        uniTableKeepWidth: true,
+        resizable: false,
         render: (_, row) => (row.dueAt ? formatDateTimeBySiteSetting(row.dueAt) : '-'),
       },
       ...buildDocumentAuditColumns<DrawingLoan>(t),
@@ -203,11 +216,8 @@ const DrawingLoansPage: React.FC = () => {
         title: t('common.status'),
         key: 'lifecycle',
         dataIndex: 'status',
-        width: 100,
-        minWidth: 100,
-        uniTableKeepWidth: true,
-        resizable: false,
         fixed: 'right',
+        hideInSearch: true,
         valueEnum: {
           Draft: { text: t('app.master-data.drawingLoans.status.Draft') },
           Pending: { text: t('app.master-data.drawingLoans.status.Pending') },
@@ -222,56 +232,106 @@ const DrawingLoansPage: React.FC = () => {
       },
       {
         title: t('common.actions'),
-        valueType: 'option',
-        width: 220,
+        key: 'action',
         fixed: 'right',
         hideInSearch: true,
-        render: (_, row) => [
-          <Button key="detail" {...rowActionKind('read')} type="link" size="small" onClick={() => void openDetail(row)}>
-            {t('common.detail')}
-          </Button>,
-          row.status === 'Draft' && perms.canUpdate ? (
-            <Button
-              key="edit"
-              {...rowActionKind('update')}
-              type="link"
-              size="small"
-              onClick={() => {
-                void drawingLoanApi.get(row.uuid).then((full) => {
-                  setEditing(full);
-                  setModalOpen(true);
-                });
-              }}
-            >
-              {t('common.edit')}
-            </Button>
-          ) : null,
-          row.status === 'Draft' && canSubmit ? (
-            <Button key="submit" {...rowActionKind('submit')} type="link" size="small" onClick={() => void runAction(() => drawingLoanApi.submit(row.uuid), 'app.master-data.drawingLoans.submitSuccess')}>
-              {t('common.submit')}
-            </Button>
-          ) : null,
-          row.status === 'Pending' && canApprove ? (
-            <Button key="approve" {...rowActionKind('approve')} type="link" size="small" onClick={() => void runAction(() => drawingLoanApi.approve(row.uuid), 'app.master-data.drawingLoans.approveSuccess')}>
-              {t('app.master-data.drawingLoans.approve')}
-            </Button>
-          ) : null,
-          row.status === 'Pending' && canReject ? (
-            <Button key="reject" {...rowActionKind('reject')} type="link" size="small" onClick={() => void runAction(() => drawingLoanApi.reject(row.uuid), 'app.master-data.drawingLoans.rejectSuccess')}>
-              {t('app.master-data.drawingLoans.reject')}
-            </Button>
-          ) : null,
-          row.status === 'Pending' && canRevoke ? (
-            <Button key="revoke" {...rowActionKind('revoke')} type="link" size="small" onClick={() => void runAction(() => drawingLoanApi.revoke(row.uuid), 'app.master-data.drawingLoans.revokeSuccess')}>
-              {t('app.master-data.drawingLoans.revoke')}
-            </Button>
-          ) : null,
-          row.status === 'Borrowed' && canComplete ? (
-            <Button key="complete" {...rowActionKind('complete')} type="link" size="small" onClick={() => handleComplete(row)}>
-              {t('app.master-data.drawingLoans.complete')}
-            </Button>
-          ) : null,
-        ].filter(Boolean),
+        render: (_, row) => {
+          const parts: React.ReactNode[] = [
+            <Button key="detail" {...rowActionKind('read')} onClick={() => void openDetail(row)} />,
+          ];
+          if (row.status === 'Draft' && perms.canUpdate) {
+            parts.push(
+              <Button
+                key="edit"
+                {...rowActionKind('update')}
+                onClick={() => {
+                  void drawingLoanApi.get(row.uuid).then((full) => {
+                    setEditing(full);
+                    setModalOpen(true);
+                  });
+                }}
+              />,
+            );
+          }
+          if (row.status === 'Draft' && canSubmit) {
+            parts.push(
+              <Button
+                key="submit"
+                {...rowActionKind('submit')}
+                onClick={() =>
+                  void runAction(
+                    () => drawingLoanApi.submit(row.uuid),
+                    'app.master-data.drawingLoans.submitSuccess',
+                  )
+                }
+              />,
+            );
+          }
+          if (row.status === 'Pending' && canApprove) {
+            parts.push(
+              <Button
+                key="approve"
+                {...rowActionKind('approve')}
+                {...rowActionLabelKeep()}
+                onClick={() =>
+                  void runAction(
+                    () => drawingLoanApi.approve(row.uuid),
+                    'app.master-data.drawingLoans.approveSuccess',
+                  )
+                }
+              >
+                {t('app.master-data.drawingLoans.approve')}
+              </Button>,
+            );
+          }
+          if (row.status === 'Pending' && canReject) {
+            parts.push(
+              <Button
+                key="reject"
+                {...rowActionKind('reject')}
+                {...rowActionLabelKeep()}
+                onClick={() =>
+                  void runAction(
+                    () => drawingLoanApi.reject(row.uuid),
+                    'app.master-data.drawingLoans.rejectSuccess',
+                  )
+                }
+              >
+                {t('app.master-data.drawingLoans.reject')}
+              </Button>,
+            );
+          }
+          if (row.status === 'Pending' && canRevoke) {
+            parts.push(
+              <Button
+                key="revoke"
+                {...rowActionKind('revoke')}
+                {...rowActionLabelKeep()}
+                onClick={() =>
+                  void runAction(
+                    () => drawingLoanApi.revoke(row.uuid),
+                    'app.master-data.drawingLoans.revokeSuccess',
+                  )
+                }
+              >
+                {t('app.master-data.drawingLoans.revoke')}
+              </Button>,
+            );
+          }
+          if (row.status === 'Borrowed' && canComplete) {
+            parts.push(
+              <Button
+                key="complete"
+                {...rowActionKind('complete')}
+                {...rowActionLabelKeep()}
+                onClick={() => handleComplete(row)}
+              >
+                {t('app.master-data.drawingLoans.complete')}
+              </Button>,
+            );
+          }
+          return parts;
+        },
       },
     ],
     [canApprove, canComplete, canReject, canRevoke, canSubmit, handleComplete, openDetail, perms.canUpdate, runAction, t],
@@ -319,7 +379,7 @@ const DrawingLoansPage: React.FC = () => {
           tableRowsRef.current = rows;
         }}
         columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
-        columnPersistenceId="apps.master-data.pages.process.drawing-loans.v1"
+        columnPersistenceId="apps.master-data.pages.process.drawing-loans.v2"
         showCreateButton={perms.canCreate}
         onCreate={openCreate}
         showDeleteButton={perms.canDelete}

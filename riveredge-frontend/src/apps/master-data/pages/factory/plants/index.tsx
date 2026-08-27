@@ -21,6 +21,7 @@ import { MasterDataDetailDrawer } from '../../shared/masterDataDetailDrawer';
 import { plantApi } from '../../../services/factory';
 import {
   buildMasterCrudActiveValueEnum,
+  buildMasterCrudActiveStatusColumn,
   masterCrudCreatedUpdatedColumns,
   MASTER_CRUD_PINNED_ACTIVE_FIELD,
   MASTER_DATA_LIST_FIELD_RANK,
@@ -561,33 +562,7 @@ const PlantsPage: React.FC = () => {
         ellipsis: true,
         hideInSearch: true,
       },
-      {
-        title: t('common.status'),
-        dataIndex: 'isActive',
-        hideInTable: true,
-        order: 20,
-        valueType: 'select',
-        valueEnum: plantActiveValueEnum,
-        fieldProps: { allowClear: true },
-      },
-      {
-        title: t('common.status'),
-        dataIndex: 'isActive',
-        width: 88,
-        minWidth: 88,
-        uniTableKeepWidth: true,
-        resizable: false,
-        sorter: true,
-        hideInSearch: true,
-        valueEnum: plantActiveValueEnum,
-        render: (_, record) =>
-          renderMasterActiveTag(
-            t,
-            record?.isActive,
-            'common.enabled',
-            'common.disabled',
-          ),
-      },
+      ...buildMasterCrudActiveStatusColumn<Plant>(t, { activeValueEnum: plantActiveValueEnum }),
       ...customFieldColumns,
       ...masterCrudCreatedUpdatedColumns<Plant>(t),
       {
@@ -652,7 +627,7 @@ const PlantsPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<Plant>
-          columnPersistenceId="apps.master-data.pages.factory.plants.list-v1"
+          columnPersistenceId="apps.master-data.pages.factory.plants.list-v2"
           actionRef={actionRef}
           columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
           viewTypes={['table', 'help']}

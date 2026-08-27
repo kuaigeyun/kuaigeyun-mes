@@ -7,7 +7,7 @@
 import React, { useRef, useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { Button, Typography } from 'antd';
+import { Button } from 'antd';
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
@@ -24,6 +24,8 @@ import {
   EquipmentMasterDetailDrawer,
   useEquipmentDetailDrawer,
 } from '../shared/equipmentMasterDataDetail';
+import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 
 interface MoldMaintenanceReminder {
   mold_uuid?: string;
@@ -111,52 +113,66 @@ const MoldMaintenanceRemindersPage: React.FC = () => {
       {
         title: t(`${P}.colMoldCode`),
         dataIndex: 'mold_code',
-        width: 120,
-        sorter: true,
+        hideInTable: true,
         search: { order: 30 } as ProColumns['search'],
-        render: (_, r) => (
-          <Typography.Text copyable={{ text: String(r.mold_code ?? '') }} ellipsis>
-            {r.mold_code ?? '-'}
-          </Typography.Text>
-        ),
       },
       {
         title: t(`${P}.colMoldName`),
         dataIndex: 'mold_name',
-        width: 180,
-        ellipsis: true,
-        sorter: true,
+        minWidth: 200,
+        uniTablePrimaryFlex: true,
+        uniTableRemainderFlex: true,
+        resizable: false,
+        ellipsis: false,
         hideInSearch: true,
+        render: (_, r) => (
+          <UniTableStackedPrimaryCell
+            primary={String(r.mold_name ?? '') || '-'}
+            secondary={String(r.mold_code ?? '') || '-'}
+          />
+        ),
       },
       {
         title: t(`${P}.colTotalUsageCount`),
         dataIndex: 'total_usage_count',
         width: 120,
-        align: 'right',
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
         sorter: true,
         hideInSearch: true,
+        render: (_, r) => (r.total_usage_count != null ? String(r.total_usage_count) : '-'),
       },
       {
         title: t(`${P}.colMaintenanceInterval`),
         dataIndex: 'maintenance_interval',
         width: 100,
-        align: 'right',
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
         sorter: true,
         hideInSearch: true,
+        render: (_, r) => (r.maintenance_interval != null ? String(r.maintenance_interval) : '-'),
       },
       {
         title: t(`${P}.colNextMaintenanceAtCount`),
         dataIndex: 'next_maintenance_at_count',
         width: 120,
-        align: 'right',
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
         sorter: true,
         hideInSearch: true,
+        render: (_, r) =>
+          r.next_maintenance_at_count != null ? String(r.next_maintenance_at_count) : '-',
       },
       {
         title: t(`${P}.colUsagesUntilDue`),
         dataIndex: 'usages_until_due',
         width: 100,
-        align: 'right',
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
         sorter: true,
         hideInSearch: true,
         render: (_, r) => {
@@ -168,14 +184,28 @@ const MoldMaintenanceRemindersPage: React.FC = () => {
         },
       },
       {
+        title: t(`${P}.colReminderStatus`),
+        dataIndex: 'reminder_type',
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+        sorter: true,
+        hideInSearch: true,
+        render: (_, r) => {
+          const color =
+            r.reminder_type === 'overdue' ? 'error' : r.reminder_type === 'due_soon' ? 'warning' : 'default';
+          return <MarkerTag color={color}>{reminderStatusLabel(r.reminder_type)}</MarkerTag>;
+        },
+      },
+      {
         title: t('common.actions'),
-        valueType: 'option',
+        key: 'option',
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) =>
           perms.canRead
             ? [
-                <Button key="detail" {...rowActionKind('read')} onClick={() => handleDetail(record)} />,
+                <Button key="detail" {...rowActionKind('read')} onClick={() => handleDetail(record)}>
+                  {t('common.detail')}
+                </Button>,
               ]
             : null,
       },
@@ -192,7 +222,7 @@ const MoldMaintenanceRemindersPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.moldMaintenanceReminders')}
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.mold-maintenance-reminders-equip-rank-v1"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.mold-maintenance-reminders-width-v2"
           actionRef={actionRef}
           enableRowSelection
           selectedRowKeys={selectedRowKeys}

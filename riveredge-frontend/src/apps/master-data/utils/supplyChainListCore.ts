@@ -3,6 +3,7 @@ import { extractProTableSort } from '../../../utils/tableQueryKey';
 import { parseSalesReportDateRange } from '../../kuaizhizao/services/reports';
 import {
   buildMasterCrudActiveValueEnum,
+  buildMasterCrudActiveStatusColumn,
   formatMasterDateTimeCell,
   MASTER_CRUD_PINNED_ACTIVE_FIELD,
   MASTER_DATA_LIST_FIELD_RANK,
@@ -14,6 +15,7 @@ import {
 
 export {
   buildMasterCrudActiveValueEnum,
+  buildMasterCrudActiveStatusColumn,
   formatMasterDateTimeCell,
   MASTER_CRUD_PINNED_ACTIVE_FIELD,
   MASTER_DATA_LIST_FIELD_RANK,

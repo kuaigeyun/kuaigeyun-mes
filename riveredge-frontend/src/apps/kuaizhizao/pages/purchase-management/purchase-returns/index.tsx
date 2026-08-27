@@ -59,6 +59,10 @@ import {
   MaterialStackedCell,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import {
+  DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+  renderDocumentLineMaterialsPreview,
+} from '../../sales-management/shared/documentLineMaterialsPreview';
+import {
   ListPageTemplate,
   DetailDrawerTemplate,
   FormModalTemplate,
@@ -154,7 +158,7 @@ import { getAntdModal } from '../../../../../utils/antdAppApis';
 const PURCHASE_RETURN_RESOURCE = 'kuaizhizao:purchase-return';
 
 const PURCHASE_RETURN_LIST_PERSISTENCE_ID =
-  'apps.kuaizhizao.pages.purchase-management.purchase-returns.v3';
+  'apps.kuaizhizao.pages.purchase-management.purchase-returns-width-v1';
 
 /** 与后端 review_status 对齐，供 UniWorkflowActions 识别 */
 const PR_WORKFLOW_DRAFT_STATUSES = ['草稿', 'draft'];
@@ -1224,7 +1228,11 @@ const PurchaseReturnsPage: React.FC = () => {
         title: t('app.kuaizhizao.purchaseReturn.colSupplierReturnCode'),
         key: 'return_code',
         dataIndex: 'return_code',
-        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        width: 240,
+        minWidth: 240,
+        uniTableKeepWidth: true,
+        uniTablePrimaryFlex: false,
+        resizable: false,
         fixed: 'left',
         sorter: true,
         render: (_, r) => (
@@ -1249,12 +1257,22 @@ const PurchaseReturnsPage: React.FC = () => {
       },
       { title: t('app.kuaizhizao.purchaseReturn.supplier'), dataIndex: 'supplier_name', hideInTable: true, hideInSearch: true },
       {
+        title: t('app.kuaizhizao.common.colLineMaterials'),
+        ...DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+        // 采退专用段位：主标识后、仓库前
+        key: 'purchase_return_line_materials',
+        dataIndex: 'purchase_return_line_materials',
+        render: (_, r) => renderDocumentLineMaterialsPreview(r.items, t),
+      },
+      {
         title: t('app.kuaizhizao.purchaseReturn.colWarehouse'),
         key: 'purchase_return_warehouse',
         dataIndex: 'warehouse_name',
         width: 140,
-        ellipsis: true,
+        minWidth: 140,
         uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
         sorter: true,
         hideInSearch: true,
       },
@@ -1262,9 +1280,11 @@ const PurchaseReturnsPage: React.FC = () => {
         title: t('app.kuaizhizao.purchaseReturn.colRelatedDocs'),
         key: 'purchase_return_related_docs',
         dataIndex: 'purchase_order_code',
-        width: 140,
+        width: 180,
+        minWidth: 180,
         uniTableKeepWidth: true,
-        ellipsis: true,
+        resizable: false,
+        ellipsis: false,
         hideInSearch: true,
         render: (_, r) => {
           // 与销售退货一致：来源一般为采购订单或采购入库单二选一
@@ -1307,6 +1327,9 @@ const PurchaseReturnsPage: React.FC = () => {
         title: t('app.kuaizhizao.purchaseReturn.totalQuantity'),
         dataIndex: 'total_quantity',
         width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
         align: 'right',
         sorter: true,
         hideInSearch: true,
@@ -1316,6 +1339,9 @@ const PurchaseReturnsPage: React.FC = () => {
         title: t('app.kuaizhizao.purchaseReturn.totalAmount'),
         dataIndex: 'total_amount',
         width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
         align: 'right',
         sorter: true,
         hideInSearch: true,
@@ -1324,8 +1350,10 @@ const PurchaseReturnsPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.purchaseReturn.returnTime'),
         dataIndex: 'return_time',
-        width: 132,
+        width: 160,
+        minWidth: 160,
         uniTableKeepWidth: true,
+        resizable: false,
         sorter: true,
         hideInSearch: true,
         render: (_, r) => (r.return_time ? formatDateTime(r.return_time, 'YYYY-MM-DD HH:mm') : '-'),
@@ -1344,6 +1372,7 @@ const PurchaseReturnsPage: React.FC = () => {
       ...(purchaseReturnAuditColumn ? [purchaseReturnAuditColumn] : []),
       {
         title: t('app.kuaizhizao.purchaseReturn.colLifecycle'),
+        key: 'lifecycle',
         dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
         fixed: 'right',
         valueType: 'select',
@@ -1355,6 +1384,8 @@ const PurchaseReturnsPage: React.FC = () => {
       ...purchaseReturnCustomFieldColumns,
       {
         title: t('common.actions'),
+        key: 'option',
+        valueType: 'option',
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) => {
@@ -1883,7 +1914,7 @@ const PurchaseReturnsPage: React.FC = () => {
                 limit: params.pageSize,
                 ...lifecycleParams,
                 order_by: orderBy,
-                include_items: dataViewModeRef.current === 'detail',
+                include_items: true,
               };
               if (fuzzyKeyword) {
                 apiParams.keyword = fuzzyKeyword;

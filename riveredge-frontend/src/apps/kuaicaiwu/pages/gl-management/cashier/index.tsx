@@ -30,8 +30,6 @@ import {
 } from '../../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { glService, type GlAccount } from '../../../services/gl';
-import { ListPageHelpToggle, RichListPageHelpView } from '../../../../../components/page-help-wiki';
-
 const NS = 'app.kuaicaiwu.gl.cashier';
 
 const asList = <T,>(res: unknown): T[] => {
@@ -346,7 +344,6 @@ const GlCashierPage: React.FC = () => {
 
   return (
     <ListPageTemplate>
-      <ListPageHelpToggle helpContent={<RichListPageHelpView pageKey="kuaicaiwu.cashier" />}>
       <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
         <Tabs
           activeKey={activeTab}
@@ -598,7 +595,6 @@ const GlCashierPage: React.FC = () => {
           </>
         ) : null}
       </Space>
-      </ListPageHelpToggle>
 
       <FormModalTemplate
         title={t(`${NS}.addBankItem`, { defaultValue: '添加银行对账单' })}

@@ -8,9 +8,6 @@ import { StatusTag } from '../../../../../constants/statusBadges';
 import { renderDocumentStatusTag } from '../../../../../utils/documentLifecycleStatusTag';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { maintenancePlanApi } from '../../../services/equipment';
-import { ThemedSegmented } from '../../../../../components/themed-segmented';
-import RichDocumentHelpView from '../../../../../components/page-help-wiki/RichDocumentHelpView';
-import { DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 const P = 'app.kuaizhizao.maintenancePlanCalendar';
 const RESOURCE = 'kuaizhizao:maintenance-plan';
@@ -32,7 +29,6 @@ const MaintenancePlanCalendarPage: React.FC = () => {
   const [plans, setPlans] = useState<MaintenancePlanItem[]>([]);
   const [selectedDate, setSelectedDate] = useState<Dayjs>(dayjs());
   const [loading, setLoading] = useState(false);
-  const [pageView, setPageView] = useState<'main' | 'help'>('main');
 
   const loadPlans = useCallback(async () => {
     setLoading(true);
@@ -88,21 +84,6 @@ const MaintenancePlanCalendarPage: React.FC = () => {
 
   return (
     <ListPageTemplate>
-      <div style={{ marginBottom: 16 }}>
-        <ThemedSegmented
-          value={pageView}
-          options={[
-            { label: t('help.moduleCenter.view.workbench'), value: 'main' },
-            { label: t('help.moduleCenter.view.help'), value: 'help' },
-          ]}
-          onChange={(val) => setPageView((val as 'main' | 'help') ?? 'main')}
-        />
-      </div>
-      {pageView === 'help' ? (
-        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <RichDocumentHelpView docKey={DOCUMENT_LIST_HELP_KEYS.maintenancePlanCalendar} />
-        </div>
-      ) : (
       <Card title={t(`${P}.title`)} loading={loading}>
         <div
           style={{
@@ -159,7 +140,6 @@ const MaintenancePlanCalendarPage: React.FC = () => {
           </div>
         </div>
       </Card>
-      )}
     </ListPageTemplate>
   );
 };

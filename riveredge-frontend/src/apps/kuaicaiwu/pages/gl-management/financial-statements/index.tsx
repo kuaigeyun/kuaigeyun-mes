@@ -13,7 +13,6 @@ import { useConfigStore } from '../../../../../stores';
 import { glService } from '../../../services/gl';
 import FinancialStatementPrintTemplate from './FinancialStatementPrintTemplate';
 import { printFinancialStatementNode } from './printFinancialStatement';
-import { ListPageHelpToggle, RichListPageHelpView } from '../../../../../components/page-help-wiki';
 
 const NS = 'app.kuaicaiwu.gl.statements';
 
@@ -169,7 +168,6 @@ const GlFinancialStatementsPage: React.FC = () => {
 
   return (
     <ListPageTemplate>
-      <ListPageHelpToggle helpContent={<RichListPageHelpView pageKey="kuaicaiwu.financialStatements" />}>
       <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
         <Typography.Title level={4} style={{ margin: 0 }}>
           {title}
@@ -272,7 +270,6 @@ const GlFinancialStatementsPage: React.FC = () => {
           scroll={{ x: 720 }}
         />
       </Space>
-      </ListPageHelpToggle>
 
       <Modal
         title={t(`${NS}.print.previewTitle`, { defaultValue: '标准打印预览' })}

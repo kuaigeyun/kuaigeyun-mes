@@ -10,7 +10,6 @@ import {
   ProFormTextArea,
 } from '@ant-design/pro-components';
 import { App, Button, Modal, Row, Col } from 'antd';
-import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { EQUIPMENT_DATE_FIELD_PROPS } from '../../../utils/equipmentFormFieldProps';
 import { UniTable } from '../../../../../components/uni-table';
@@ -178,34 +177,77 @@ const ToolReturnsPage: React.FC = () => {
       {
         title: t(`${P}.col.returnNo`),
         dataIndex: 'return_no',
-        width: 140,
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
         fixed: 'left',
         sorter: true,
         search: { order: 30 } as ProColumns['search'],
+        render: (_, r) => (r.return_no != null && r.return_no !== '' ? String(r.return_no) : '-'),
       },
-      { title: t(`${P}.col.borrowNo`), dataIndex: 'borrow_no', width: 130, sorter: true, hideInSearch: true },
-      { title: t(`${P}.col.tool`), dataIndex: 'tool_name', width: 160, ellipsis: true, sorter: true, hideInSearch: true },
+      {
+        title: t(`${P}.col.borrowNo`),
+        dataIndex: 'borrow_no',
+        width: 130,
+        minWidth: 130,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
+        sorter: true,
+        hideInSearch: true,
+        render: (_, r) => (r.borrow_no != null && r.borrow_no !== '' ? String(r.borrow_no) : '-'),
+      },
+      {
+        title: t(`${P}.col.tool`),
+        dataIndex: 'tool_name',
+        minWidth: 160,
+        uniTablePrimaryFlex: true,
+        uniTableRemainderFlex: true,
+        resizable: false,
+        ellipsis: true,
+        sorter: true,
+        hideInSearch: true,
+        render: (_, r) => (r.tool_name != null && r.tool_name !== '' ? String(r.tool_name) : '-'),
+      },
       {
         title: t(`${P}.col.returnDate`),
         dataIndex: 'return_date',
         width: 132,
+        minWidth: 132,
         uniTableKeepWidth: true,
-        valueType: 'date',
+        resizable: false,
         sorter: true,
         hideInSearch: true,
+        valueType: 'date',
       },
-      { title: t(`${P}.col.manufactureQty`), dataIndex: 'manufacture_qty', width: 100, sorter: true, hideInSearch: true },
-      { title: t(`${P}.col.usageCount`), dataIndex: 'usage_count', width: 90, sorter: true, hideInSearch: true },
       {
-        title: t('common.updatedAt'),
-        dataIndex: 'updated_at',
-        hideInTable: true,
+        title: t(`${P}.col.manufactureQty`),
+        dataIndex: 'manufacture_qty',
+        width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
+        sorter: true,
         hideInSearch: true,
+        render: (_, r) => (r.manufacture_qty != null ? String(r.manufacture_qty) : '-'),
+      },
+      {
+        title: t(`${P}.col.usageCount`),
+        dataIndex: 'usage_count',
+        width: 90,
+        minWidth: 90,
+        uniTableKeepWidth: true,
+        resizable: false,
+        sorter: true,
+        hideInSearch: true,
+        render: (_, r) => (r.usage_count != null ? String(r.usage_count) : '-'),
       },
       ...buildDocumentAuditColumns<ToolReturn>(t),
       {
         title: t('common.actions'),
-        key: 'action',
+        key: 'option',
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) => (
@@ -214,7 +256,6 @@ const ToolReturnsPage: React.FC = () => {
               {...rowActionKind('read')}
               type="link"
               size="small"
-              icon={<EyeOutlined />}
               onClick={(e) => {
                 e.stopPropagation();
                 handleDetail(record);
@@ -227,7 +268,6 @@ const ToolReturnsPage: React.FC = () => {
                 {...rowActionKind('update')}
                 type="link"
                 size="small"
-                icon={<EditOutlined />}
                 onClick={(e) => {
                   e.stopPropagation();
                   void handleEdit(record);
@@ -242,7 +282,6 @@ const ToolReturnsPage: React.FC = () => {
                 type="link"
                 size="small"
                 danger
-                icon={<DeleteOutlined />}
                 onClick={(e) => {
                   e.stopPropagation();
                   getAntdModal().confirm({
@@ -268,7 +307,7 @@ const ToolReturnsPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.toolReturns)}
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-returns-equip-rank-v1"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-returns-width-v2"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}

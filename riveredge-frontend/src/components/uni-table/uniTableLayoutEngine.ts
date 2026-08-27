@@ -2,6 +2,9 @@
  * UniTable 布局唯一真源：列宽策略、scroll.x、primary 分配、columnsState、固定列契约。
  * index.tsx 只消费 resolveLayoutPlan / columnsState 工具，禁止再散落布局计算。
  *
+ * 与列序各司其职：表体列序由 rank map + alignProColumns 负责；本引擎只物化宽度 / scroll.x，
+ * 禁止为改宽改写列 key（否则与 rank 竞争）。右固定组内相对序（进度→状态→操作）属固定列契约，非业务 rank。
+ *
  * 固定列（对齐 antd 原生 sticky 实现，禁止第二套 DOM/CSS 补丁）：
  * 1. 列上声明 `fixed: 'left'|'right'` + 引擎产出数值 `scroll.x`（及显式 width）
  * 2. 左固定连续置前、右固定连续垫后（下推进度 → 执行状态 → 操作），避免 hasGapFixed
@@ -15,8 +18,11 @@ import {
   computeUniTableMinScrollX,
   getUniTableColumnScrollContribution,
   getUniTableVerticalScrollbarWidth,
+  isUniTableAuditStackedColumn,
   isUniTableDetailProgressColumn,
+  isUniTableFillerColumn,
   isUniTableLifecycleColumn,
+  isUniTableMarkerBadgeColumn,
   isUniTableProgressColumn,
   resolveUniTableColumnLayoutWidth,
   UNI_TABLE_EMPTY_FALLBACK_COL_WIDTH,
@@ -83,16 +89,20 @@ const UNI_TABLE_PRIMARY_FLEX_DEFAULT_MAX_WIDTH = 280
 function isUniTableLayoutColumn(col: Record<string, unknown>): boolean {
   return (
     col.hideInTable === true ||
+    isUniTableFillerColumn(col) ||
     isUniTableOperationColumn(col) ||
+    isUniTableAuditStackedColumn(col) ||
     isUniTableLifecycleColumn(col) ||
+    isUniTableMarkerBadgeColumn(col) ||
     isUniTableProgressColumn(col) ||
     isUniTableDetailProgressColumn(col)
   )
 }
 
-/** 右固定组内顺序：其它 right → 下推进度 → 执行状态 → 操作 */
+/** 右固定组内顺序：其它 right → 下推进度 → 执行状态 → 余量吸收 → 操作 */
 function getUniTableRightFixedOrderRank(col: Record<string, unknown>): number {
   if (isUniTableOperationColumn(col)) return 3
+  if (isUniTableFillerColumn(col)) return 2.5
   if (isUniTableLifecycleColumn(col)) return 2
   if (isUniTableDetailProgressColumn(col)) return 1
   return 0
@@ -203,6 +213,11 @@ function isUniTablePrimaryFlexColumn(col: Record<string, unknown>): boolean {
   return col.uniTablePrimaryFlex === true
 }
 
+/** 列表余量列：primary flex 分配时吃掉 applyPrimaryFlexWidthPatch 的全部剩余宽度 */
+function isUniTableRemainderFlexColumn(col: Record<string, unknown>): boolean {
+  return col.uniTableRemainderFlex === true && col.uniTablePrimaryFlex === true
+}
+
 function resolveUniTablePrimaryFlexMaxWidth(col: Record<string, unknown>): number {
   const fromCol =
     parseUniTableColumnWidthValue(col.uniTablePrimaryFlexMaxWidth) ??
@@ -241,6 +256,20 @@ export function applyColumnWidthPolicy(
   })
 }
 
+function findUniTableRemainderFlexIndex(columns: Record<string, unknown>[]): number {
+  return columns.findIndex(
+    (col) => !col?.hideInTable && isUniTableRemainderFlexColumn(col as Record<string, unknown>),
+  )
+}
+
+/**
+ * 列宽三桶余量分配（唯一入口）：
+ * - SystemFixed：勾选/审计/状态/进度/操作 — 不参与本函数分配
+ * - ContentKeepWidth：页面 width+keepWidth — 不参与本函数分配
+ * - RemainderFlex：视口够用时吃满剩余使列宽合计 === layoutWidth（贴满、无横滚）；
+ *   仅当「其它列合计 + 余量 minWidth」> layoutWidth 时余量停在 minWidth，合计超出才横滚
+ * - 无余量列：primaryFlex 在 max 内分配，尾余由 filler 吸收（attachUniTableFillerColumn）
+ */
 function applyPrimaryFlexWidthPatch(
   columns: Record<string, unknown>[],
   containerWidth: number,
@@ -262,7 +291,31 @@ function applyPrimaryFlexWidthPatch(
     includeSelection: options.includeSelection,
     includeExpandable: options.includeExpandable === true,
   })
-  if (layoutWidth <= baseScrollX) return columns
+  if (layoutWidth === baseScrollX) return columns
+
+  const remainderIndex = findUniTableRemainderFlexIndex(columns)
+  const hasRemainderFlex = remainderIndex >= 0
+
+  if (layoutWidth < baseScrollX && !hasRemainderFlex) return columns
+
+  let remaining = layoutWidth - baseScrollX
+  const next = columns.map((col) => ({ ...col }))
+
+  // RemainderFlex：其它列定宽；余量列 = layoutWidth − 其它列（≥ minWidth）。
+  // 够用 → 合计贴视口、无横滚；不够 → 余量=minWidth、合计>视口才横滚。
+  if (hasRemainderFlex) {
+    const col = next[remainderIndex] as Record<string, unknown>
+    const remainderBase = getUniTableColumnScrollContribution(col)
+    const minW =
+      parseUniTableColumnWidthValue(col.minWidth) ?? UNI_TABLE_PRIMARY_FLEX_DEFAULT_WIDTH
+    const othersScrollX = Math.max(0, baseScrollX - remainderBase)
+    const nextWidth =
+      layoutWidth >= othersScrollX + minW
+        ? layoutWidth - othersScrollX
+        : minW
+    next[remainderIndex] = { ...col, width: nextWidth, minWidth: minW }
+    return next
+  }
 
   const flexTargets: { index: number; base: number; max: number }[] = []
   columns.forEach((col, index) => {
@@ -275,15 +328,12 @@ function applyPrimaryFlexWidthPatch(
   })
   if (flexTargets.length === 0) return columns
 
-  let remaining = layoutWidth - baseScrollX
-  if (remaining <= 0) return columns
-
-  const next = columns.map((col) => ({ ...col }))
   for (const { index, base, max } of flexTargets) {
+    const col = next[index] as Record<string, unknown>
     const expandable = Math.max(0, max - base)
     const add = Math.min(remaining, expandable)
     if (add > 0) {
-      next[index] = { ...next[index], width: base + add }
+      next[index] = { ...col, width: base + add }
       remaining -= add
     }
   }
@@ -299,6 +349,11 @@ export interface ResolveLayoutPlanInput {
   /** 存在 expandable 时须计入展开列，否则 scroll.x 偏短 → 表头/表体列错位 */
   includeExpandable?: boolean
   scrollYEnabled: boolean
+  /**
+   * containerWidth 已来自 `.ant-table-body/.ant-table-content` 的 clientWidth 时为 true：
+   * 纵向滚动条占位已从 clientWidth 扣除，禁止再减一遍（否则假横滚）。
+   */
+  layoutWidthIsScrollHost?: boolean
 }
 
 function isFixedLeft(fixed: unknown): boolean {
@@ -313,6 +368,7 @@ function isFixedRight(fixed: unknown): boolean {
 function ensureFixedColumnWidths(columns: Record<string, unknown>[]): Record<string, unknown>[] {
   return columns.map((col) => {
     if (col.hideInTable) return col
+    if (isUniTableFillerColumn(col)) return col
     if (!isFixedLeft(col.fixed) && !isFixedRight(col.fixed)) return col
     const width = parseUniTableColumnWidthValue(col.width)
     if (width != null && width > 0) {
@@ -327,21 +383,38 @@ function ensureFixedColumnWidths(columns: Record<string, unknown>[]): Record<str
 /** 唯一布局计划入口：列宽物化 + primary flex + scroll.x + 滚动条占位 */
 export function resolveLayoutPlan(input: ResolveLayoutPlanInput): UniTableLayoutPlan {
   const mode: UniTableLayoutMode = input.scrollYEnabled ? 'scrollY' : 'natural'
-  const scrollbarSlotPx = mode === 'scrollY' ? getUniTableVerticalScrollbarWidth() : 0
+  const reserveVerticalScrollbar =
+    input.scrollYEnabled && input.layoutWidthIsScrollHost !== true
+  const scrollbarSlotPx = reserveVerticalScrollbar ? getUniTableVerticalScrollbarWidth() : 0
 
   const ordered = normalizeFixedColumnOrder(input.columns)
   const prepared = applyColumnWidthPolicy(ordered)
   const withFixedWidths = ensureFixedColumnWidths(prepared)
+  const layoutWidth = resolveUniTableColumnLayoutWidth(
+    input.containerWidth,
+    reserveVerticalScrollbar,
+  )
   const columns = applyPrimaryFlexWidthPatch(withFixedWidths, input.containerWidth, {
     includeSelection: input.includeSelection,
     includeExpandable: input.includeExpandable === true,
-    reserveVerticalScrollbar: input.scrollYEnabled,
+    reserveVerticalScrollbar,
   })
 
-  const scrollX = computeUniTableMinScrollX(columns, {
+  let scrollX = computeUniTableMinScrollX(columns, {
     includeSelection: input.includeSelection,
     includeExpandable: input.includeExpandable === true,
   })
+  const hasRemainderFlex = findUniTableRemainderFlexIndex(columns) >= 0
+  // RemainderFlex：分配后合计已贴 layoutWidth（够用）或为真实超出（不够）——勿再人为抬高 scroll.x
+  // 无余量列 + filler：列宽合计 < 视口时 scroll.x 贴 layoutWidth，由 filler 吸收尾余
+  if (
+    !hasRemainderFlex &&
+    layoutWidth > 0 &&
+    scrollX < layoutWidth &&
+    columns.some((col) => isUniTableFillerColumn(col))
+  ) {
+    scrollX = layoutWidth
+  }
 
   return { columns, scrollX, mode, scrollbarSlotPx }
 }

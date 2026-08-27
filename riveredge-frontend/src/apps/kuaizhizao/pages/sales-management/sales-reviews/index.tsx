@@ -23,8 +23,12 @@ import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
 import {
   UniTableStackedPrimaryCell,
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
+import {
+  DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+  renderDocumentLineMaterialsPreview,
+} from '../shared/documentLineMaterialsPreview';
 import {
   ListPageTemplate,
   DetailDrawerTemplate,
@@ -109,7 +113,7 @@ function synthesizeSalesReviewBatchCapabilities(row: SalesReviewListItem): Sales
 }
 
 const SALES_REVIEW_RESOURCE = 'kuaizhizao:sales-review';
-const COLUMN_PERSISTENCE_ID = 'apps.kuaizhizao.pages.sales-management.sales-reviews-rank-v4';
+const COLUMN_PERSISTENCE_ID = 'apps.kuaizhizao.pages.sales-management.sales-reviews-width-v2';
 
 type PullQuotationCandidate = {
   id: number;
@@ -756,7 +760,11 @@ const SalesReviewsPage: React.FC = () => {
             title: t('app.kuaizhizao.salesReview.colReviewCode'),
             dataIndex: 'review_code',
             key: 'review_code',
-            ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+            width: 240,
+            minWidth: 240,
+            uniTableKeepWidth: true,
+            uniTablePrimaryFlex: false,
+            resizable: false,
             fixed: 'left',
             sorter: true,
             hideInSearch: true,
@@ -778,7 +786,9 @@ const SalesReviewsPage: React.FC = () => {
             dataIndex: 'project_name',
             hideInSearch: true,
             width: 200,
-            minWidth: 160,
+            minWidth: 200,
+            uniTableKeepWidth: true,
+            resizable: false,
             ellipsis: true,
             sorter: true,
           },
@@ -786,20 +796,14 @@ const SalesReviewsPage: React.FC = () => {
             title: t('app.kuaizhizao.salesReview.colUrgency'),
             dataIndex: 'urgency',
             hideInSearch: true,
-            width: 72,
-            minWidth: 72,
-            uniTableKeepWidth: true,
-            resizable: false,
+            ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
             render: (_, row) => renderSalesReviewUrgencyMarkerTag(t, row.urgency),
           },
           {
             title: t('app.kuaizhizao.salesReview.colRiskLevel'),
             dataIndex: 'risk_level',
             hideInSearch: true,
-            width: 80,
-            minWidth: 80,
-            uniTableKeepWidth: true,
-            resizable: false,
+            ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
             render: (_, row) => renderSalesReviewRiskMarkerTag(t, row.risk_level),
           },
           {
@@ -807,15 +811,25 @@ const SalesReviewsPage: React.FC = () => {
             dataIndex: 'delivery_date',
             hideInSearch: true,
             width: 120,
+            minWidth: 120,
             uniTableKeepWidth: true,
+            resizable: false,
             sorter: true,
             render: (_, row) => (row.delivery_date ? formatBusinessDateOnly(row.delivery_date) : '—'),
+          },
+          {
+            title: t('app.kuaizhizao.common.colLineMaterials'),
+            ...DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+            render: (_, row) => renderDocumentLineMaterialsPreview(row.items, t),
           },
           {
             title: t('app.kuaizhizao.salesReview.colTotalAmount'),
             dataIndex: 'total_amount',
             hideInSearch: true,
             width: 120,
+            minWidth: 120,
+            uniTableKeepWidth: true,
+            resizable: false,
             align: 'right',
             render: (_, row) => {
               const n = Number(row.total_amount);
@@ -828,8 +842,6 @@ const SalesReviewsPage: React.FC = () => {
             key: 'lifecycle',
             fixed: 'right',
             hideInSearch: true,
-            width: 110,
-            uniTableKeepWidth: true,
             render: (_, row) => renderSalesReviewStatusTag(t, row.status),
           },
           {
@@ -837,12 +849,15 @@ const SalesReviewsPage: React.FC = () => {
             dataIndex: 'salesman_name',
             hideInSearch: true,
             width: 100,
+            minWidth: 100,
+            uniTableKeepWidth: true,
+            resizable: false,
             ellipsis: true,
           },
           ...buildDocumentAuditColumns(t),
           {
             title: t('common.actions'),
-            valueType: 'option',
+            key: 'action',
             fixed: 'right',
             hideInSearch: true,
             render: (_: unknown, record: SalesReviewListItem) => {
@@ -1227,6 +1242,7 @@ const SalesReviewsPage: React.FC = () => {
                 keyword,
                 status: statusFilter === 'all' ? undefined : statusFilter,
                 order_by: orderBy,
+                include_items: true,
               });
               return {
                 data: res.items || [],

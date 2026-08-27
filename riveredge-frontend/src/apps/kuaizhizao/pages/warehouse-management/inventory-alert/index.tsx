@@ -11,14 +11,15 @@ import React, { useCallback, useRef, useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormText, ProFormDigit, ProFormTextArea, ProFormSelect, ProFormSwitch, ProFormDependency } from '@ant-design/pro-components';
-import { App, Button, Space, Popconfirm, Typography, Row, Col, Descriptions, Tag } from 'antd';
+import { App, Button, Space, Popconfirm, Typography, Row, Col, Descriptions } from 'antd';
 import { CheckOutlined, WarningOutlined, ReloadOutlined, StopOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import {
   MaterialStackedCell,
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
+import { MarkerTag } from '../../../../../constants/statusBadges';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import {
   inventoryAlertBatchIgnoreAllowed,
@@ -33,7 +34,8 @@ import { formatMaterialGroupLabel, type Material } from '../../../../master-data
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import { formatDateTime, formatQuantity } from '../../../../../utils/format';
-
+import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
+import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
 /** 从物料 defaults 读取最低/最高库存（与后端 InventoryThresholdResolver 对齐） */
 function readMaterialStockThresholds(material?: Material | null): {
   safetyStock: number | null;
@@ -469,22 +471,34 @@ const InventoryAlertPage: React.FC = () => {
   };
 
   const alertTypeEnum = useMemo(() => ({
-    low_stock: { text: t('app.kuaizhizao.inventoryAlert.alertTypeLowStock'), status: 'error' as const },
-    high_stock: { text: t('app.kuaizhizao.inventoryAlert.alertTypeHighStock'), status: 'warning' as const },
-    expired: { text: t('app.kuaizhizao.inventoryAlert.alertTypeExpired'), status: 'error' as const },
+    low_stock: { text: t('app.kuaizhizao.inventoryAlert.alertTypeLowStock') },
+    high_stock: { text: t('app.kuaizhizao.inventoryAlert.alertTypeHighStock') },
+    expired: { text: t('app.kuaizhizao.inventoryAlert.alertTypeExpired') },
   }), [t]);
+
+  const alertTypeMarkerColor: Record<string, string> = {
+    low_stock: 'error',
+    high_stock: 'warning',
+    expired: 'error',
+  };
 
   const alertLevelEnum = useMemo(() => ({
-    critical: { text: t('app.kuaizhizao.inventoryAlert.alertLevelCritical'), status: 'error' as const },
-    warning: { text: t('app.kuaizhizao.inventoryAlert.alertLevelWarning'), status: 'warning' as const },
-    info: { text: t('app.kuaizhizao.inventoryAlert.alertLevelInfo'), status: 'default' as const },
+    critical: { text: t('app.kuaizhizao.inventoryAlert.alertLevelCritical') },
+    warning: { text: t('app.kuaizhizao.inventoryAlert.alertLevelWarning') },
+    info: { text: t('app.kuaizhizao.inventoryAlert.alertLevelInfo') },
   }), [t]);
 
+  const alertLevelMarkerColor: Record<string, string> = {
+    critical: 'error',
+    warning: 'warning',
+    info: 'default',
+  };
+
   const alertStatusEnum = useMemo(() => ({
-    pending: { text: t('app.kuaizhizao.warehouseCommon.statusPending'), status: 'warning' as const },
-    processing: { text: t('app.kuaizhizao.warehouseCommon.statusProcessing'), status: 'processing' as const },
-    resolved: { text: t('app.kuaizhizao.warehouseCommon.statusResolved'), status: 'success' as const },
-    ignored: { text: t('app.kuaizhizao.warehouseCommon.statusIgnored'), status: 'default' as const },
+    pending: { text: t('app.kuaizhizao.warehouseCommon.statusPending') },
+    processing: { text: t('app.kuaizhizao.warehouseCommon.statusProcessing') },
+    resolved: { text: t('app.kuaizhizao.warehouseCommon.statusResolved') },
+    ignored: { text: t('app.kuaizhizao.warehouseCommon.statusIgnored') },
   }), [t]);
 
   const thresholdTypeEnum = useMemo(() => ({
@@ -494,189 +508,277 @@ const InventoryAlertPage: React.FC = () => {
   }), [t]);
 
   const enabledEnum = useMemo(() => ({
-    true: { text: t('common.enabled'), status: 'success' as const },
-    false: { text: t('common.disabled'), status: 'default' as const },
+    true: { text: t('common.enabled') },
+    false: { text: t('common.disabled') },
   }), [t]);
-
   /**
    * 预警记录表格列定义
    */
-  const alertColumns: ProColumns<InventoryAlert>[] = useMemo(() => [
-    {
-      title: t('app.kuaizhizao.inventoryAlert.colAlertType'),
-      dataIndex: 'alert_type',
-      width: 120,
-      valueEnum: alertTypeEnum,
-    },
-    {
-      title: t('app.kuaizhizao.warehouseCommon.colMaterial'),
-      key: 'material_name',
-      dataIndex: 'material_name',
-      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-      render: (_, r) => (
-        <MaterialStackedCell material_name={r.material_name} material_code={r.material_code} />
+  const alertColumns: ProColumns<InventoryAlert>[] = useMemo(
+    () =>
+      alignProColumns<InventoryAlert>(
+        [
+          {
+            title: t('app.kuaizhizao.inventoryAlert.colAlertType'),
+            dataIndex: 'alert_type',
+            width: 120,
+            minWidth: 120,
+            uniTableKeepWidth: true,
+            resizable: false,
+            valueEnum: alertTypeEnum,
+            render: (_, r) => {
+              const key = String(r.alert_type ?? '');
+              const text = (alertTypeEnum[key as keyof typeof alertTypeEnum]?.text ?? key) || '-';
+              return <MarkerTag color={alertTypeMarkerColor[key] ?? 'default'}>{text}</MarkerTag>;
+            },
+          },
+          {
+            title: t('app.kuaizhizao.warehouseCommon.colMaterial'),
+            key: 'material_name',
+            dataIndex: 'material_name',
+            minWidth: 200,
+            uniTablePrimaryFlex: true,
+            uniTableRemainderFlex: true,
+            resizable: false,
+            ellipsis: false,
+            render: (_, r) => (
+              <MaterialStackedCell material_name={r.material_name} material_code={r.material_code} />
+            ),
+          },
+          { title: t('app.kuaizhizao.warehouseReports.colMaterialCode'), dataIndex: 'material_code', hideInTable: true },
+          { title: t('app.kuaizhizao.warehouseReports.colMaterialName'), dataIndex: 'material_name', hideInTable: true },
+          {
+            title: t('app.kuaizhizao.warehouseReports.colWarehouse'),
+            dataIndex: 'warehouse_name',
+            width: 120,
+            minWidth: 120,
+            uniTableKeepWidth: true,
+            resizable: false,
+            ellipsis: true,
+            render: (_, r) => r.warehouse_name || '-',
+          },
+          {
+            title: t('app.kuaizhizao.inventoryAlert.colCurrentQty'),
+            dataIndex: 'current_quantity',
+            width: 100,
+            minWidth: 100,
+            uniTableKeepWidth: true,
+            resizable: false,
+            align: 'right',
+          },
+          {
+            title: t('app.kuaizhizao.inventoryAlert.colThreshold'),
+            dataIndex: 'threshold_value',
+            width: 100,
+            minWidth: 100,
+            uniTableKeepWidth: true,
+            resizable: false,
+            align: 'right',
+          },
+          {
+            title: t('app.kuaizhizao.inventoryAlert.colAlertLevel'),
+            dataIndex: 'alert_level',
+            width: 100,
+            minWidth: 100,
+            uniTableKeepWidth: true,
+            resizable: false,
+            valueEnum: alertLevelEnum,
+            render: (_, r) => {
+              const key = String(r.alert_level ?? '');
+              const text = (alertLevelEnum[key as keyof typeof alertLevelEnum]?.text ?? key) || '-';
+              return <MarkerTag color={alertLevelMarkerColor[key] ?? 'default'}>{text}</MarkerTag>;
+            },
+          },
+          {
+            title: t('common.status'),
+            dataIndex: 'status',
+            hideInTable: true,
+            valueEnum: alertStatusEnum,
+          },
+          {
+            title: t('app.kuaizhizao.inventoryAlert.colTriggeredAt'),
+            dataIndex: 'triggered_at',
+            valueType: 'dateTime',
+            width: 132,
+            minWidth: 132,
+            uniTableKeepWidth: true,
+            resizable: false,
+            sorter: true,
+            render: (_, r) => (r.triggered_at ? formatDateTime(r.triggered_at) : '-'),
+          },
+          ...buildDocumentAuditColumns<InventoryAlert>(t),
+          {
+            title: t('common.actions'),
+            key: 'option',
+            fixed: 'right',
+            hideInSearch: true,
+            render: (_, record) => (
+              <Space>
+                <Button {...rowActionKind('read')} onClick={() => handleDetail(record)} />
+                {record.capabilities?.resolve?.allowed && alertPerms.canUpdate && (
+                  <Button {...rowActionKind('execute')} {...rowActionLabelKeep()} onClick={() => handleAlert(record)}>
+                    {t('app.kuaizhizao.warehouseCommon.handle')}
+                  </Button>
+                )}
+              </Space>
+            ),
+          },
+        ],
+        WAREHOUSE_DOC_LIST_FIELD_RANK,
       ),
-    },
-    { title: t('app.kuaizhizao.warehouseReports.colMaterialCode'), dataIndex: 'material_code', hideInTable: true },
-    { title: t('app.kuaizhizao.warehouseReports.colMaterialName'), dataIndex: 'material_name', hideInTable: true },
-    {
-      title: t('app.kuaizhizao.warehouseReports.colWarehouse'),
-      dataIndex: 'warehouse_name',
-      width: 120,
-      ellipsis: true,
-    },
-    {
-      title: t('app.kuaizhizao.inventoryAlert.colCurrentQty'),
-      dataIndex: 'current_quantity',
-      width: 100,
-      align: 'right',
-    },
-    {
-      title: t('app.kuaizhizao.inventoryAlert.colThreshold'),
-      dataIndex: 'threshold_value',
-      width: 100,
-      align: 'right',
-    },
-    {
-      title: t('app.kuaizhizao.inventoryAlert.colAlertLevel'),
-      dataIndex: 'alert_level',
-      width: 100,
-      valueEnum: alertLevelEnum,
-    },
-    {
-      title: t('common.status'),
-      dataIndex: 'status',
-      hideInTable: true,
-      valueEnum: alertStatusEnum,
-    },
-    {
-      title: t('app.kuaizhizao.inventoryAlert.colTriggeredAt'),
-      dataIndex: 'triggered_at',
-      valueType: 'dateTime',
-      width: 132,
-      uniTableKeepWidth: true,
-      sorter: true,
-      render: (_, r) => (r.triggered_at ? formatDateTime(r.triggered_at) : '-'),
-    },
-    ...buildDocumentAuditColumns<InventoryAlert>(t),
-    {
-      title: t('common.actions'),
-      width: 200,
-      fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button {...rowActionKind('read')} onClick={() => handleDetail(record)} />
-          {record.capabilities?.resolve?.allowed && alertPerms.canUpdate && (
-            <Button {...rowActionKind('execute')} {...rowActionLabelKeep()} onClick={() => handleAlert(record)}>
-              {t('app.kuaizhizao.warehouseCommon.handle')}
-            </Button>
-          )}
-        </Space>
-      ),
-    },
-  ], [t, alertTypeEnum, alertLevelEnum, alertStatusEnum, alertPerms]);
-
+    [t, alertTypeEnum, alertLevelEnum, alertStatusEnum, alertPerms],
+  );
   /**
    * 预警规则表格列定义
    */
-  const ruleColumns: ProColumns<InventoryAlertRule>[] = useMemo(() => [
-    {
-      title: t('app.kuaizhizao.inventoryAlert.colRuleCode'),
-      dataIndex: 'code',
-      width: 150,
-      ellipsis: true,
-      fixed: 'left',
-      render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.code ?? '') }} ellipsis>
-          {r.code ?? '-'}
-        </Typography.Text>
+  const ruleColumns: ProColumns<InventoryAlertRule>[] = useMemo(
+    () =>
+      alignProColumns<InventoryAlertRule>(
+        [
+          {
+            title: t('app.kuaizhizao.inventoryAlert.colRuleCode'),
+            dataIndex: 'code',
+            width: 160,
+            minWidth: 160,
+            uniTableKeepWidth: true,
+            resizable: false,
+            ellipsis: true,
+            fixed: 'left',
+            render: (_, r) => (
+              <Typography.Text copyable={{ text: String(r.code ?? '') }} ellipsis>
+                {r.code ?? '-'}
+              </Typography.Text>
+            ),
+          },
+          {
+            title: t('app.kuaizhizao.inventoryAlert.colRuleName'),
+            key: 'rule_name',
+            dataIndex: 'name',
+            minWidth: 160,
+            uniTablePrimaryFlex: true,
+            uniTableRemainderFlex: true,
+            resizable: false,
+            ellipsis: true,
+            render: (_, r) => (r.name != null && r.name !== '' ? String(r.name) : '-'),
+          },
+          {
+            title: t('app.kuaizhizao.inventoryAlert.colAlertType'),
+            dataIndex: 'alert_type',
+            width: 120,
+            minWidth: 120,
+            uniTableKeepWidth: true,
+            resizable: false,
+            valueEnum: alertTypeEnum,
+            render: (_, r) => {
+              const key = String(r.alert_type ?? '');
+              const text = (alertTypeEnum[key as keyof typeof alertTypeEnum]?.text ?? key) || '-';
+              return <MarkerTag color={alertTypeMarkerColor[key] ?? 'default'}>{text}</MarkerTag>;
+            },
+          },
+          {
+            title: t('app.master-data.materialForm.materialGroup'),
+            dataIndex: 'material_group_name',
+            width: 140,
+            minWidth: 140,
+            uniTableKeepWidth: true,
+            resizable: false,
+            ellipsis: true,
+            render: (_, r) => r.material_group_name || '-',
+          },
+          {
+            title: t('app.kuaizhizao.warehouseCommon.colMaterial'),
+            dataIndex: 'material_name',
+            width: 150,
+            minWidth: 150,
+            uniTableKeepWidth: true,
+            resizable: false,
+            ellipsis: true,
+            render: (_, r) => r.material_name || '-',
+          },
+          {
+            title: t('app.kuaizhizao.warehouseReports.colWarehouse'),
+            dataIndex: 'warehouse_name',
+            width: 120,
+            minWidth: 120,
+            uniTableKeepWidth: true,
+            resizable: false,
+            ellipsis: true,
+            render: (_, r) => r.warehouse_name || '-',
+          },
+          {
+            title: t('app.kuaizhizao.inventoryAlert.colThresholdSource'),
+            dataIndex: 'inherit_material_threshold',
+            width: 120,
+            minWidth: 120,
+            uniTableKeepWidth: true,
+            resizable: false,
+            render: (_, r) =>
+              r.inherit_material_threshold
+                ? t('app.kuaizhizao.inventoryAlert.thresholdSourceInherit')
+                : t('app.kuaizhizao.inventoryAlert.thresholdSourceCustom'),
+          },
+          {
+            title: t('app.kuaizhizao.inventoryAlert.colThresholdType'),
+            dataIndex: 'threshold_type',
+            width: 100,
+            minWidth: 100,
+            uniTableKeepWidth: true,
+            resizable: false,
+            valueEnum: thresholdTypeEnum,
+          },
+          {
+            title: t('app.kuaizhizao.inventoryAlert.colThreshold'),
+            dataIndex: 'threshold_value',
+            width: 100,
+            minWidth: 100,
+            uniTableKeepWidth: true,
+            resizable: false,
+            align: 'right',
+            render: (_, r) =>
+              r.inherit_material_threshold
+                ? t('app.kuaizhizao.inventoryAlert.thresholdInheritLabel')
+                : (r.threshold_value ?? '-'),
+          },
+          {
+            title: t('app.kuaizhizao.inventoryAlert.colEnabled'),
+            dataIndex: 'is_enabled',
+            ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+            valueEnum: enabledEnum,
+            render: (_, r) => (
+              <MarkerTag color={r.is_enabled ? 'success' : 'default'}>
+                {r.is_enabled ? t('common.enabled') : t('common.disabled')}
+              </MarkerTag>
+            ),
+          },
+          ...buildDocumentAuditColumns<InventoryAlertRule>(t),
+          {
+            title: t('common.actions'),
+            key: 'option',
+            fixed: 'right',
+            hideInSearch: true,
+            render: (_, record) => (
+              <Space>
+                {alertPerms.canUpdate && (
+                  <Button {...rowActionKind('update')} onClick={() => handleEditRule(record)} />
+                )}
+                {alertPerms.canDelete && (
+                  <Popconfirm
+                    title={t('app.kuaizhizao.inventoryAlert.deleteRuleConfirm')}
+                    onConfirm={() => handleDeleteRule(record)}
+                    okText={t('common.confirm')}
+                    cancelText={t('common.cancel')}
+                  >
+                    <Button {...rowActionKind('delete')} />
+                  </Popconfirm>
+                )}
+              </Space>
+            ),
+          },
+        ],
+        WAREHOUSE_DOC_LIST_FIELD_RANK,
       ),
-    },
-    {
-      title: t('app.kuaizhizao.inventoryAlert.colRuleName'),
-      dataIndex: 'name',
-      width: 150,
-      ellipsis: true,
-    },
-    {
-      title: t('app.kuaizhizao.inventoryAlert.colAlertType'),
-      dataIndex: 'alert_type',
-      width: 120,
-      valueEnum: alertTypeEnum,
-    },
-    {
-      title: t('app.master-data.materialForm.materialGroup'),
-      dataIndex: 'material_group_name',
-      width: 140,
-      ellipsis: true,
-      render: (_, r) => r.material_group_name || '-',
-    },
-    {
-      title: t('app.kuaizhizao.warehouseCommon.colMaterial'),
-      dataIndex: 'material_name',
-      width: 150,
-      ellipsis: true,
-    },
-    {
-      title: t('app.kuaizhizao.warehouseReports.colWarehouse'),
-      dataIndex: 'warehouse_name',
-      width: 120,
-      ellipsis: true,
-    },
-    {
-      title: t('app.kuaizhizao.inventoryAlert.colThresholdSource'),
-      dataIndex: 'inherit_material_threshold',
-      width: 120,
-      render: (_, r) =>
-        r.inherit_material_threshold
-          ? t('app.kuaizhizao.inventoryAlert.thresholdSourceInherit')
-          : t('app.kuaizhizao.inventoryAlert.thresholdSourceCustom'),
-    },
-    {
-      title: t('app.kuaizhizao.inventoryAlert.colThresholdType'),
-      dataIndex: 'threshold_type',
-      width: 100,
-      valueEnum: thresholdTypeEnum,
-    },
-    {
-      title: t('app.kuaizhizao.inventoryAlert.colThreshold'),
-      dataIndex: 'threshold_value',
-      width: 100,
-      align: 'right',
-      render: (_, r) =>
-        r.inherit_material_threshold ? t('app.kuaizhizao.inventoryAlert.thresholdInheritLabel') : (r.threshold_value ?? '-'),
-    },
-    {
-      title: t('app.kuaizhizao.inventoryAlert.colEnabled'),
-      dataIndex: 'is_enabled',
-      width: 100,
-      valueEnum: enabledEnum,
-    },
-    ...buildDocumentAuditColumns<InventoryAlertRule>(t),
-    {
-      title: t('common.actions'),
-      width: 200,
-      fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          {alertPerms.canUpdate && (
-            <Button {...rowActionKind('update')} onClick={() => handleEditRule(record)} />
-          )}
-          {alertPerms.canDelete && (
-            <Popconfirm
-              title={t('app.kuaizhizao.inventoryAlert.deleteRuleConfirm')}
-              onConfirm={() => handleDeleteRule(record)}
-              okText={t('common.confirm')}
-              cancelText={t('common.cancel')}
-            >
-              <Button {...rowActionKind('delete')} />
-            </Popconfirm>
-          )}
-        </Space>
-      ),
-    },
-  ], [t, alertTypeEnum, thresholdTypeEnum, enabledEnum, alertPerms]);
-
+    [t, alertTypeEnum, thresholdTypeEnum, enabledEnum, alertPerms],
+  );
   const detailColumns: ProDescriptionsItemProps<InventoryAlert>[] = useMemo(() => [
     {
       title: t('app.kuaizhizao.inventoryAlert.colAlertType'),
@@ -764,7 +866,7 @@ const InventoryAlertPage: React.FC = () => {
                 actionRef={alertActionRef}
                 rowKey="id"
                 columns={alertColumns}
-                columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.inventory-alert"
+                columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.inventory-alert-width-v3"
                 showAdvancedSearch
                 pinnedTabsField={WAREHOUSE_DOC_PINNED_STATUS_FIELD}
                 skipFuzzyPinyinClientFilter
@@ -859,7 +961,7 @@ const InventoryAlertPage: React.FC = () => {
                 actionRef={ruleActionRef}
                 rowKey="id"
                 columns={ruleColumns}
-                columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.inventory-alert:2"
+                columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.inventory-alert-rules-width-v3"
                 showAdvancedSearch
                 skipFuzzyPinyinClientFilter
                 showCreateButton

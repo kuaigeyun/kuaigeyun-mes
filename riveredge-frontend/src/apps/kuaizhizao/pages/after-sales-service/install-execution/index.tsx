@@ -46,14 +46,12 @@ import InstallExecutionTaskFormModal from '../../../components/InstallExecutionT
 import InstallExecutionAdvanceStageModal from '../../../components/InstallExecutionAdvanceStageModal';
 import InstallExecutionCostFormModal from '../../../components/InstallExecutionCostFormModal';
 import { InstallExecutionDetailDrawer } from './components/InstallExecutionDetailDrawer';
-import {
-  UniTableStackedPrimaryCell,
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import {
+  AFTER_SALES_CUSTOMER_NAME_COLUMN_DEFAULTS,
   AFTER_SALES_INSTALL_STATUS_COLOR,
   renderAfterSalesStatusTag,
   renderAfterSalesTypeMarker,
@@ -392,7 +390,6 @@ const InstallExecutionPage: React.FC = () => {
           {...rowActionKind('execute')}
           {...rowActionLabelKeep()}
           key={`${keyPrefix}-advance`}
-          data-action-priority={15}
           onClick={(e) => {
             e.stopPropagation();
             void openAdvanceStage(row);
@@ -408,7 +405,6 @@ const InstallExecutionPage: React.FC = () => {
           {...rowActionKind('assign')}
           {...rowActionLabelKeep()}
           key={`${keyPrefix}-task`}
-          data-action-priority={16}
           onClick={(e) => {
             e.stopPropagation();
             void openTaskRegister(row);
@@ -424,7 +420,6 @@ const InstallExecutionPage: React.FC = () => {
           {...rowActionKind('update')}
           {...rowActionLabelKeep()}
           key={`${keyPrefix}-cost`}
-          data-action-priority={17}
           onClick={(e) => {
             e.stopPropagation();
             void openCostRegister(row);
@@ -493,25 +488,24 @@ const InstallExecutionPage: React.FC = () => {
       alignProColumns<InstallExecution>(
         [
           {
-            ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-            title: '安装执行单',
-            key: 'after_sales_install_stacked',
+            title: t('app.kuaizhizao.installExecution.field.jobCode'),
             dataIndex: 'job_code',
-            fixed: 'left',
-            render: (_, row) => (
-              <UniTableStackedPrimaryCell
-                primary={String(row.customer_name ?? '') || '-'}
-                secondary={String(row.job_code ?? '') || '-'}
-              />
-            ),
-          },
-          {
-            title: '供给来源',
-            dataIndex: 'supply_source',
-            width: 100,
-            minWidth: 100,
+            width: 188,
+            minWidth: 188,
             uniTableKeepWidth: true,
             resizable: false,
+            fixed: 'left',
+            copyable: true,
+          },
+          {
+            title: t('app.kuaizhizao.installExecution.field.customerName'),
+            dataIndex: 'customer_name',
+            ...AFTER_SALES_CUSTOMER_NAME_COLUMN_DEFAULTS,
+          },
+          {
+            title: t('app.kuaizhizao.installExecution.field.supplySource'),
+            dataIndex: 'supply_source',
+            ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
             valueType: 'select',
             valueEnum: Object.fromEntries(
               INSTALL_SUPPLY_SOURCES.map((s) => [s, { text: s }]),
@@ -522,10 +516,7 @@ const InstallExecutionPage: React.FC = () => {
           {
             title: t('components.uniLifecycle.listColumnTitle'),
             dataIndex: 'current_stage_key',
-            width: 120,
-            minWidth: 120,
-            uniTableKeepWidth: true,
-            resizable: false,
+            ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
             hideInSearch: true,
             render: (_, row) => {
               const stage = row.stages?.find((s) => s.stage_key === row.current_stage_key);
@@ -535,7 +526,7 @@ const InstallExecutionPage: React.FC = () => {
             },
           },
           {
-            title: '销售订单',
+            title: t('app.kuaizhizao.installExecution.field.salesOrder'),
             dataIndex: 'sales_order_code',
             width: 148,
             minWidth: 148,
@@ -551,17 +542,18 @@ const InstallExecutionPage: React.FC = () => {
             ),
           },
           {
-            title: '现场地址',
+            // 现场地址长短不一：唯一 RemainderFlex，避免全 KeepWidth 在右固定前留空白
+            title: t('app.kuaizhizao.installExecution.field.siteAddress'),
             dataIndex: 'site_address',
-            width: 168,
-            minWidth: 168,
-            uniTableKeepWidth: true,
+            minWidth: 160,
+            uniTableRemainderFlex: true,
+            uniTablePrimaryFlex: true,
             resizable: false,
             ellipsis: true,
             hideInSearch: true,
           },
           {
-            title: '状态',
+            title: t('common.status'),
             dataIndex: 'status',
             hideInTable: true,
             valueType: 'select',
@@ -571,7 +563,7 @@ const InstallExecutionPage: React.FC = () => {
           },
           ...buildDocumentAuditColumns<InstallExecution>(t),
           {
-            title: '状态',
+            title: t('common.status'),
             key: 'lifecycle',
             dataIndex: 'status',
             fixed: 'right',
@@ -582,10 +574,8 @@ const InstallExecutionPage: React.FC = () => {
           {
             title: t('common.actions'),
             key: 'action',
-            valueType: 'option',
             fixed: 'right',
             hideInSearch: true,
-            uniActionRenderOptions: { directMax: 6 },
             render: (_, row) => {
               const caps = row.capabilities;
               const parts: React.ReactNode[] = [
@@ -659,7 +649,7 @@ const InstallExecutionPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.afterSalesInstall)}
           permissionResource={RESOURCE}
-          columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.install-execution.v1"
+          columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.install-execution.v3"
           headerTitle={t('app.kuaizhizao.menu.after-sales-service.install-execution')}
           columns={columns}
           enableRowSelection={perms.canDelete || canBatchClose}

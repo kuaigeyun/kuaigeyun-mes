@@ -43,8 +43,13 @@ import {
   UniTableStackedPrimaryCell,
   UniTableStackedLineBadge,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+  UNI_TABLE_STACKED_BADGE_DATE_COLUMN_DEFAULTS,
   MaterialStackedCell,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
+import {
+  DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+  renderDocumentLineMaterialsPreview,
+} from '../../sales-management/shared/documentLineMaterialsPreview';
 import { UniAuditBatchMenuButton, UniCapabilityBatchButton } from '../../../../../components/uni-batch';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
 import {
@@ -99,6 +104,7 @@ import PriceTypeSwitch, { type PriceTypeValue } from '../../../../../components/
 import { setFormPriceType } from '../../../../../utils/priceTypeSwitch';
 import dayjs from 'dayjs';
 import { formatBusinessDateOnly, formatDateTime, formatQuantity, todaySiteDateString } from '../../../../../utils/format';
+import { quantizeNumericByPlaces } from '../../../../../services/businessConfig';
 import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { coerceFormDate, toApiDateString, formDateRangeFormItemProps } from '../../../../../utils/formDate';
@@ -417,7 +423,7 @@ const PurchaseOrdersPage: React.FC = () => {
   /** 列表当前页数据（唯一源：UniTable onTableDataChange，与表格展示一致） */
   const [tableOrders, setTableOrders] = useState<PurchaseOrder[]>([]);
   const purchaseOrderListPersistenceId =
-    'apps.kuaizhizao.pages.purchase-management.purchase-orders.v5';
+    'apps.kuaizhizao.pages.purchase-management.purchase-orders-width-v1';
   const [viewTypeState, setViewTypeState] = useState<'table' | 'detailTable' | 'help'>(() =>
     readPersistedUniTableViewType(purchaseOrderListPersistenceId, 'table', [
       'table',
@@ -873,7 +879,11 @@ const PurchaseOrdersPage: React.FC = () => {
       title: t('app.kuaizhizao.purchaseOrder.col.supplierAndOrder'),
       key: 'order_code',
       dataIndex: 'order_code',
-      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+      width: 240,
+      minWidth: 240,
+      uniTableKeepWidth: true,
+      uniTablePrimaryFlex: false,
+      resizable: false,
       fixed: 'left',
       sorter: true,
       render: (_, r) => (
@@ -944,17 +954,25 @@ const PurchaseOrdersPage: React.FC = () => {
       title: t('app.kuaizhizao.purchaseOrder.col.buyer'),
       dataIndex: 'buyer_name',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       sorter: true,
       ellipsis: true,
       hideInSearch: true,
       render: (_: unknown, record: PurchaseOrder) => normalizeUserDisplayName(record.buyer_name) || '-',
     },
     {
+      title: t('app.kuaizhizao.common.colLineMaterials'),
+      ...DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+      render: (_: unknown, record: PurchaseOrder) =>
+        renderDocumentLineMaterialsPreview(record.items, t),
+    },
+    {
       title: t('app.kuaizhizao.purchaseOrder.col.orderDate'),
       key: 'order_date_delivery_date_stacked',
       dataIndex: 'order_date',
-      width: 148,
-      uniTableKeepWidth: true,
+      ...UNI_TABLE_STACKED_BADGE_DATE_COLUMN_DEFAULTS,
       sorter: true,
       hideInSearch: true,
       render: (_: any, record: PurchaseOrder) => (
@@ -1011,6 +1029,9 @@ const PurchaseOrdersPage: React.FC = () => {
       title: t('app.kuaizhizao.purchaseOrder.col.orderAmount'),
       dataIndex: 'total_amount',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       align: 'right',
       sorter: true,
       hideInSearch: true,
@@ -1020,6 +1041,9 @@ const PurchaseOrdersPage: React.FC = () => {
       title: t('app.kuaizhizao.purchaseOrder.col.totalQuantity'),
       dataIndex: 'total_quantity',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       align: 'right',
       sorter: true,
       hideInSearch: true,
@@ -1039,6 +1063,7 @@ const PurchaseOrdersPage: React.FC = () => {
     ...(purchaseOrderAuditColumn ? [purchaseOrderAuditColumn] : []),
     {
       title: t('app.kuaizhizao.purchaseOrder.col.lifecycle'),
+      key: 'lifecycle',
       dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
       fixed: 'right',
       valueType: 'select',
@@ -2533,7 +2558,7 @@ const PurchaseOrdersPage: React.FC = () => {
       data.order_date = toApiDateString(data.order_date);
 
       const itemsPayload = validItems.map((it: any) => {
-        const qty = Number(it.ordered_quantity) || 0;
+        const qty = quantizeNumericByPlaces(Number(it.ordered_quantity) || 0, quantityDecimals);
         let price = Number(it.unit_price) || 0;
         const taxRate = Number(it.tax_rate) || 0;
         if (priceType === 'tax_inclusive' && price > 0 && taxRate >= 0) {
@@ -3644,7 +3669,7 @@ const PurchaseOrdersPage: React.FC = () => {
               let orders = await fetchAllListItems((p) =>
                 listPurchaseOrders({
                   ...p,
-                  include_items: dataViewModeRef.current === 'detail',
+                  include_items: true,
                 }),
               );
               let toExport: Array<Record<string, unknown>>;
@@ -3721,7 +3746,7 @@ const PurchaseOrdersPage: React.FC = () => {
                   ? formatDateTime(createdRange[1] as string | Date, 'YYYY-MM-DD')
                   : apiParams.created_start_date;
               }
-              apiParams.include_items = dataViewModeRef.current === 'detail';
+              apiParams.include_items = true;
               if (typeof sf.column_filters === 'string' && sf.column_filters.trim()) {
                 apiParams.column_filters = sf.column_filters.trim();
               }

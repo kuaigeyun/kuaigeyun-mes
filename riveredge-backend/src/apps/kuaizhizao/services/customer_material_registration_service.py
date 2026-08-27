@@ -712,8 +712,28 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
         )
 
         await self._enrich_list_display_fields(tenant_id, list(registrations), responses)
+        reg_ids = [int(r.id) for r in registrations]
+        item_previews: Dict[int, List[Dict[str, Any]]] = {}
+        if reg_ids:
+            active_rows = await CustomerMaterialRegistrationItem.filter(
+                tenant_id=tenant_id,
+                registration_id__in=reg_ids,
+                deleted_at__isnull=True,
+            ).order_by("registration_id", "id").values("registration_id", "material_name")
+            for row in active_rows:
+                rid = int(row["registration_id"])
+                name = str(row.get("material_name") or "").strip()
+                if not name:
+                    continue
+                item_previews.setdefault(rid, []).append({"material_name": name})
         for registration, resp in zip(registrations, responses):
             resp.lifecycle = get_customer_material_registration_lifecycle(registration, milestones=[])
+            preview = item_previews.get(int(registration.id), [])
+            if not preview:
+                name = str(resp.mapped_material_name or "").strip()
+                if name:
+                    preview = [{"material_name": name}]
+            resp.items = preview
         enriched = enrich_customer_material_registration_list_capabilities(registrations, responses)
         return enriched, total
 

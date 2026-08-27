@@ -160,6 +160,7 @@ import {
   UNI_TABLE_STACKED_BADGE_DATE_COLUMN_DEFAULTS,
   MaterialStackedCell,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { MarkerTag } from '../../../../../constants/statusBadges';
 import { UniAuditBatchMenuButton, UniCapabilityBatchButton } from '../../../../../components/uni-batch';
 import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
@@ -249,6 +250,10 @@ import {
   GLOBAL_DOC_DETAIL_TABLE_FIELD_RANK,
   SALES_DOC_LIST_FIELD_RANK,
 } from '../shared/documentFieldAlignment';
+import {
+  DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+  renderDocumentLineMaterialsPreview,
+} from '../shared/documentLineMaterialsPreview';
 import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_DEFAULTS, DETAIL_TABLE_PROGRESS_COLUMN_DEFAULTS, ratioToPushProgressPercent } from '../shared/DocumentPushProgressBar';
 import {
   collectSalesContractPushDocuments,
@@ -353,7 +358,7 @@ type SalesContractItemRow = SalesContractItem & {
 };
 
 const SALES_CONTRACT_LIST_PERSISTENCE_ID =
-  'apps.kuaizhizao.pages.sales-management.sales-contracts.v2';
+  'apps.kuaizhizao.pages.sales-management.sales-contracts-width-v2';
 
 type PullQuotationCandidate = {
   id: number;
@@ -2680,7 +2685,11 @@ const SalesContractsPage: React.FC = () => {
         title: `${t('app.kuaizhizao.salesContract.customer')} / ${t('app.kuaizhizao.salesContract.contractCode')}`,
         key: 'contract_code',
         dataIndex: 'contract_code',
-        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        width: 240,
+        minWidth: 240,
+        uniTableKeepWidth: true,
+        uniTablePrimaryFlex: false,
+        resizable: false,
         fixed: 'left',
         sorter: true,
         fieldProps: { placeholder: t('app.kuaizhizao.salesContract.contractCode') },
@@ -2693,30 +2702,23 @@ const SalesContractsPage: React.FC = () => {
       },
 
       {
-
         title: t('app.kuaizhizao.salesContract.contractType'),
-
         dataIndex: 'contract_type',
-
         width: 100,
-
+        minWidth: 100,
         uniTableKeepWidth: true,
-
+        resizable: false,
         sorter: true,
-
         valueType: 'select',
-
         valueEnum: {
           single: { text: contractTypeLabels.single },
           framework: { text: contractTypeLabels.framework },
         },
-
         render: (_, r) => (
-          <Tag color="blue" bordered={false}>
+          <MarkerTag color="processing">
             {contractTypeLabels[r.contract_type as keyof typeof contractTypeLabels] || r.contract_type}
-          </Tag>
+          </MarkerTag>
         ),
-
       },
 
       {
@@ -2763,10 +2765,18 @@ const SalesContractsPage: React.FC = () => {
       },
 
       {
+        title: t('app.kuaizhizao.common.colLineMaterials'),
+        ...DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+        render: (_, r) => renderDocumentLineMaterialsPreview(r.items, t),
+      },
+
+      {
         title: t('app.kuaizhizao.salesOrder.totalQuantity'),
         dataIndex: 'total_quantity',
         width: 100,
+        minWidth: 100,
         uniTableKeepWidth: true,
+        resizable: false,
         align: 'right',
         sorter: true,
         hideInSearch: true,
@@ -2777,7 +2787,9 @@ const SalesContractsPage: React.FC = () => {
         title: t('app.kuaizhizao.salesContract.contractAmount'),
         dataIndex: 'total_amount',
         width: 120,
+        minWidth: 120,
         uniTableKeepWidth: true,
+        resizable: false,
         align: 'right',
         sorter: true,
         hideInSearch: true,
@@ -2785,23 +2797,16 @@ const SalesContractsPage: React.FC = () => {
       },
 
       {
-
         title: t('app.kuaizhizao.salesContract.released'),
-
         dataIndex: 'released_amount',
-
         width: 120,
-
+        minWidth: 120,
         uniTableKeepWidth: true,
-
+        resizable: false,
         align: 'right',
-
         sorter: true,
-
         hideInSearch: true,
-
         render: (_, r) => formatCurrencyAmount(r.released_amount),
-
       },
 
       {
@@ -2837,29 +2842,17 @@ const SalesContractsPage: React.FC = () => {
       ...(contractAuditColumn ? [contractAuditColumn] : []),
 
       {
-
         title: t('app.kuaizhizao.salesOrder.lifecycle'),
-
         dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
-
         fixed: 'right',
-
         valueType: 'select',
-
         valueEnum: contractLifecycleValueEnum,
-
         render: (_, r) => renderLifecycleCell(r),
-
       },
 
       {
-
         title: t('common.actions'),
-
-        valueType: 'option',
-
-
-
+        key: 'action',
         fixed: 'right',
         hideInSearch: true,
 
@@ -3514,7 +3507,8 @@ const SalesContractsPage: React.FC = () => {
 
             order_by: orderBy,
 
-            include_items: dataViewModeRef.current === 'detail',
+            // 订单视图明细预览列 + 明细视图展开行均需 items
+            include_items: true,
 
           });
 

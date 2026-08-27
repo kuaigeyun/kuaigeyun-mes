@@ -33,6 +33,8 @@ export interface OutboundHubOrder {
   total_quantity?: number;
   total_amount?: number;
   total_items?: number;
+  /** 列表「明细」列预览（仅 material_name） */
+  items?: { material_name?: string | null }[];
   required_quantity_total?: number;
   picked_quantity_total?: number;
   delivered_by?: string;
@@ -237,6 +239,9 @@ export function mapOutsourceIssueToOutbound(item: Record<string, unknown>): Outb
   const statusRaw = String(item.status ?? '');
   const status =
     statusRaw === 'completed' ? '已完成' : statusRaw === 'draft' ? '已出库' : statusRaw || '已出库';
+  const previewItems = Array.isArray(item.items)
+    ? (item.items as { material_name?: string | null }[])
+    : [];
   return {
     id: item.id as number,
     outbound_type: 'outsource_issue',
@@ -247,6 +252,7 @@ export function mapOutsourceIssueToOutbound(item: Record<string, unknown>): Outb
     warehouse_name: String(item.warehouse_name ?? item.warehouseName ?? ''),
     total_quantity: Number(item.total_quantity ?? item.quantity ?? 0),
     total_items: Number(item.total_items ?? 1),
+    items: previewItems,
     delivered_by: String(
       item.issued_by_name ?? item.issuedByName ?? item.created_by_name ?? item.createdByName ?? '',
     ),

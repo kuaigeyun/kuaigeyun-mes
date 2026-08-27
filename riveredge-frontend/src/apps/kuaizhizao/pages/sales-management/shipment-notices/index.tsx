@@ -25,7 +25,6 @@ import { UniTable, readPersistedUniTableViewType } from '../../../../../componen
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import {
   UniTableStackedPrimaryCell,
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
   MaterialStackedCell,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UniCapabilityBatchButton, UniAuditBatchMenuButton, createUniAuditBatchHandlers } from '../../../../../components/uni-batch';
@@ -71,6 +70,10 @@ import {
   shipmentNoticeOutboundPushPercent,
 } from '../shared/pushProgress';
 import { alignProColumns, alignDescriptionColumns, SALES_DOC_LIST_FIELD_RANK } from '../shared/documentFieldAlignment';
+import {
+  DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+  renderDocumentLineMaterialsPreview,
+} from '../shared/documentLineMaterialsPreview';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { flattenDocumentDetailRows, resolveDetailTableViewMode } from '../../shared/detailTableFlatRows';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
@@ -127,7 +130,7 @@ type ShipmentNoticeItemRow = ShipmentNoticeItem & {
 };
 
 const SHIPMENT_NOTICE_LIST_PERSISTENCE_ID =
-  'apps.kuaizhizao.pages.sales-management.shipment-notices.list-v3';
+  'apps.kuaizhizao.pages.sales-management.shipment-notices-width-v2';
 
 type PullSalesOrderCandidate = SalesOrderShipmentPullLine;
 
@@ -356,7 +359,11 @@ const ShipmentNoticesPage: React.FC = () => {
       title: t('app.kuaizhizao.shipmentNotice.colCustomerNotice'),
       key: 'notice_code',
       dataIndex: 'notice_code',
-      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+      width: 240,
+      minWidth: 240,
+      uniTableKeepWidth: true,
+      uniTablePrimaryFlex: false,
+      resizable: false,
       fixed: 'left',
       sorter: true,
       fieldProps: { placeholder: t('app.kuaizhizao.shipmentNotice.colNoticeCode') },
@@ -388,40 +395,53 @@ const ShipmentNoticesPage: React.FC = () => {
         return referenceDisplayToIdOptions(res.items);
       },
     },
-    {
-      title: t('app.kuaizhizao.shipmentNotice.outboundWarehouse'),
-      key: 'outbound_warehouse',
-      dataIndex: 'warehouse_name',
-      width: 140,
-      ellipsis: true,
-      uniTableKeepWidth: true,
-      sorter: true,
-      hideInSearch: true,
-    },
-    {
-      title: t('app.kuaizhizao.shipmentNotice.salesOrderCode'),
-      key: 'shipment_sales_order_code',
-      dataIndex: 'sales_order_code',
+      {
+        title: t('app.kuaizhizao.common.colLineMaterials'),
+        ...DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+        // 发货通知专用段位：主标识后、出库仓库前（勿改全局 line_materials）
+        key: 'shipment_line_materials',
+        dataIndex: 'shipment_line_materials',
+        render: (_, record) => renderDocumentLineMaterialsPreview(record.items, t),
+      },
+      {
+        title: t('app.kuaizhizao.shipmentNotice.outboundWarehouse'),
+        key: 'outbound_warehouse',
+        dataIndex: 'warehouse_name',
+        width: 140,
+        minWidth: 140,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
+        sorter: true,
+        hideInSearch: true,
+      },
+      {
+        title: t('app.kuaizhizao.shipmentNotice.salesOrderCode'),
+        key: 'shipment_sales_order_code',
+        dataIndex: 'sales_order_code',
+        width: 180,
+        minWidth: 180,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: false,
+        sorter: true,
+        fieldProps: { placeholder: t('app.kuaizhizao.shipmentNotice.salesOrderCode') },
+        render: (_, record) => (
+          <LinkedDocumentCode
+            documentType="sales_order"
+            documentId={record.sales_order_id}
+            code={record.sales_order_code}
+          />
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.shipmentNotice.deliveryConversion'),
+      key: 'shipment_outbound_conversion',
+      dataIndex: 'sales_delivery_code',
       width: 180,
       minWidth: 180,
       uniTableKeepWidth: true,
       resizable: false,
-      ellipsis: false,
-      sorter: true,
-      fieldProps: { placeholder: t('app.kuaizhizao.shipmentNotice.salesOrderCode') },
-      render: (_, record) => (
-        <LinkedDocumentCode
-          documentType="sales_order"
-          documentId={record.sales_order_id}
-          code={record.sales_order_code}
-        />
-      ),
-    },
-    {
-      title: t('app.kuaizhizao.shipmentNotice.deliveryConversion'),
-      key: 'shipment_outbound_conversion',
-      dataIndex: 'sales_delivery_code',
-      width: 180,
       hideInSearch: true,
       render: (_, record) => {
         if (record.sales_delivery_id) {
@@ -447,7 +467,9 @@ const ShipmentNoticesPage: React.FC = () => {
       title: t('app.kuaizhizao.shipmentNotice.plannedShipDate'),
       dataIndex: 'planned_ship_date',
       width: 132,
+      minWidth: 132,
       uniTableKeepWidth: true,
+      resizable: false,
       sorter: true,
       hideInSearch: true,
       render: (_, record) =>
@@ -467,7 +489,9 @@ const ShipmentNoticesPage: React.FC = () => {
       title: t('app.kuaizhizao.shipmentNotice.notifiedAt'),
       dataIndex: 'notified_at',
       width: 132,
+      minWidth: 132,
       uniTableKeepWidth: true,
+      resizable: false,
       sorter: true,
       hideInSearch: true,
       render: (_, record) =>
@@ -514,6 +538,7 @@ const ShipmentNoticesPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.salesOrder.lifecycle'),
       dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
+      key: 'lifecycle',
       fixed: 'right',
       valueType: 'select',
       valueEnum: shipmentNoticeLifecycleValueEnum,
@@ -560,7 +585,11 @@ const ShipmentNoticesPage: React.FC = () => {
         title: t('app.kuaizhizao.shipmentNotice.colCustomerNotice'),
         key: 'notice_code',
         dataIndex: 'notice_code',
-        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        width: 240,
+        minWidth: 240,
+        uniTableKeepWidth: true,
+        uniTablePrimaryFlex: false,
+        resizable: false,
         fixed: 'left',
         hideInSearch: false,
         fieldProps: { placeholder: t('app.kuaizhizao.shipmentNotice.colNoticeCode') },
@@ -580,7 +609,12 @@ const ShipmentNoticesPage: React.FC = () => {
         title: t('app.kuaizhizao.shipmentNotice.import.materialName'),
         key: 'material_display',
         dataIndex: 'material_name',
-        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        // 明细视图：物料叠列为 RemainderFlex（无头表明细预览列）
+        minWidth: 160,
+        uniTablePrimaryFlex: true,
+        uniTableRemainderFlex: true,
+        resizable: false,
+        ellipsis: false,
         render: (_, record) => (
           <MaterialStackedCell
             material_name={record.material_name}
@@ -598,6 +632,9 @@ const ShipmentNoticesPage: React.FC = () => {
         title: t('common.quantity'),
         dataIndex: 'notice_quantity',
         width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
         align: 'right',
         render: (val: unknown, record) => (
           <QuantityWithUnitDisplay quantity={val} unit={record.material_unit} />
@@ -607,6 +644,9 @@ const ShipmentNoticesPage: React.FC = () => {
         title: t('app.kuaizhizao.shipmentNotice.import.unitPrice'),
         dataIndex: 'unit_price',
         width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
         align: 'right',
         render: (text: unknown) => (text != null ? Number(text).toFixed(2) : '-'),
       },
@@ -614,6 +654,9 @@ const ShipmentNoticesPage: React.FC = () => {
         title: t('app.kuaizhizao.shipmentNotice.amount'),
         dataIndex: 'total_amount',
         width: 110,
+        minWidth: 110,
+        uniTableKeepWidth: true,
+        resizable: false,
         align: 'right',
         render: (text: unknown) => (text != null ? Number(text).toFixed(2) : '-'),
       },
@@ -621,7 +664,9 @@ const ShipmentNoticesPage: React.FC = () => {
         title: t('app.kuaizhizao.shipmentNotice.plannedShipDate'),
         dataIndex: 'planned_ship_date',
         width: 132,
+        minWidth: 132,
         uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         render: (_: unknown, row) =>
           row.planned_ship_date ? formatDateTime(row.planned_ship_date, 'YYYY-MM-DD') : '-',
@@ -630,7 +675,9 @@ const ShipmentNoticesPage: React.FC = () => {
         title: t('app.kuaizhizao.shipmentNotice.notifiedAt'),
         dataIndex: 'notified_at',
         width: 132,
+        minWidth: 132,
         uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         render: (_: unknown, row) =>
           row.notified_at ? formatDateTime(row.notified_at, 'YYYY-MM-DD HH:mm') : '-',
@@ -664,6 +711,7 @@ const ShipmentNoticesPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.salesOrder.lifecycle'),
         dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
+        key: 'lifecycle',
         fixed: 'right',
         hideInSearch: false,
         valueEnum: shipmentNoticeLifecycleValueEnum,
@@ -1747,7 +1795,8 @@ const ShipmentNoticesPage: React.FC = () => {
                 limit: params.pageSize || 20,
                 ...lifecycleParams,
                 order_by: orderBy,
-                include_items: dataViewModeRef.current === 'detail',
+                // 订单视图明细预览列 + 明细视图展开行均需 items
+                include_items: true,
               };
               if (fuzzyKeyword) {
                 apiParams.keyword = fuzzyKeyword;

@@ -20,7 +20,6 @@ import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import {
   UniTableStackedPrimaryCell,
   UniTableStackedLineBadge,
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
   UNI_TABLE_STACKED_BADGE_DATE_COLUMN_DEFAULTS,
   MaterialStackedCell,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
@@ -67,6 +66,10 @@ import {
   GLOBAL_DOC_DETAIL_TABLE_FIELD_RANK,
   SALES_DOC_LIST_FIELD_RANK,
 } from '../shared/documentFieldAlignment';
+import {
+  DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+  renderDocumentLineMaterialsPreview,
+} from '../shared/documentLineMaterialsPreview';
 import {
   DocumentPushProgressBar,
   DOCUMENT_PROGRESS_COLUMN_DEFAULTS,
@@ -681,7 +684,7 @@ const SalesOrdersPage: React.FC = () => {
     invoice: true,
   };
   // 与 UniTable viewTypes 同步：table=订单维度；其余视图键（明细表格、帮助）走明细数据维度
-  const salesOrderListPersistenceId = 'apps.kuaizhizao.pages.sales-management.sales-orders.v4';
+  const salesOrderListPersistenceId = 'apps.kuaizhizao.pages.sales-management.sales-orders-width-v1';
   const [viewTypeState, setViewTypeState] = useState<'table' | 'detailTable' | 'help'>(() =>
     readPersistedUniTableViewType(salesOrderListPersistenceId, 'table', [
       'table',
@@ -3122,7 +3125,11 @@ const SalesOrdersPage: React.FC = () => {
       title: t('app.kuaizhizao.salesOrder.colOrderPrimary'),
       key: 'order_code',
       dataIndex: 'order_code',
-      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+      width: 240,
+      minWidth: 240,
+      uniTableKeepWidth: true,
+      uniTablePrimaryFlex: false,
+      resizable: false,
       fixed: 'left' as const,
       sorter: true,
       hideInSearch: false,
@@ -3229,7 +3236,9 @@ const SalesOrdersPage: React.FC = () => {
       title: t('app.kuaizhizao.salesOrder.salesman'),
       dataIndex: 'salesman_name',
       width: 96,
+      minWidth: 96,
       uniTableKeepWidth: true,
+      resizable: false,
       sorter: true,
       hideInSearch: true,
       ellipsis: true,
@@ -3239,6 +3248,7 @@ const SalesOrdersPage: React.FC = () => {
       title: t('app.kuaizhizao.salesOrder.deliveryDate'),
       dataIndex: 'delivery_date',
       width: 132,
+      minWidth: 132,
       uniTableKeepWidth: true,
       hideInTable: true,
       sorter: true,
@@ -3258,8 +3268,36 @@ const SalesOrdersPage: React.FC = () => {
         );
       },
     },
-    { title: t('app.kuaizhizao.salesOrder.totalQuantity'), dataIndex: 'total_quantity', width: 100, align: 'right' as const, sorter: true, render: formatQuantity },
-    { title: t('app.kuaizhizao.salesOrder.totalAmountLabel'), dataIndex: 'total_amount', width: 120, align: 'right' as const, sorter: true, render: (_: unknown, r: SalesOrder) => <AmountDisplay resource={SO} fieldName="total_amount" value={r.total_amount} /> },
+    {
+      title: t('app.kuaizhizao.common.colLineMaterials'),
+      ...DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+      render: (_: unknown, record: SalesOrder) =>
+        renderDocumentLineMaterialsPreview(record.items, t),
+    },
+    {
+      title: t('app.kuaizhizao.salesOrder.totalQuantity'),
+      dataIndex: 'total_quantity',
+      width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
+      align: 'right' as const,
+      sorter: true,
+      render: formatQuantity,
+    },
+    {
+      title: t('app.kuaizhizao.salesOrder.totalAmountLabel'),
+      dataIndex: 'total_amount',
+      width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
+      align: 'right' as const,
+      sorter: true,
+      render: (_: unknown, r: SalesOrder) => (
+        <AmountDisplay resource={SO} fieldName="total_amount" value={r.total_amount} />
+      ),
+    },
     {
       title: t('app.kuaizhizao.salesManagement.pushProgress.title'),
       dataIndex: 'work_order_push_progress',
@@ -3307,6 +3345,7 @@ const SalesOrdersPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.salesOrder.lifecycle'),
       dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
+      key: 'lifecycle',
       fixed: 'right' as const,
       valueType: 'select',
       valueEnum: lifecycleValueEnum,
@@ -3371,7 +3410,11 @@ const SalesOrdersPage: React.FC = () => {
       title: t('app.kuaizhizao.salesOrder.colOrderPrimary'),
       key: 'order_code',
       dataIndex: 'order_code',
-      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+      width: 240,
+      minWidth: 240,
+      uniTableKeepWidth: true,
+      uniTablePrimaryFlex: false,
+      resizable: false,
       fixed: 'left' as const,
       hideInSearch: false,
       fieldProps: { placeholder: t('app.kuaizhizao.salesOrder.orderCode') },
@@ -3407,7 +3450,12 @@ const SalesOrdersPage: React.FC = () => {
       title: t('app.kuaizhizao.salesOrder.material'),
       key: 'material_display',
       dataIndex: 'material_name',
-      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+      // 明细视图：物料叠列为 RemainderFlex（无头表明细预览列）
+      minWidth: 160,
+      uniTablePrimaryFlex: true,
+      uniTableRemainderFlex: true,
+      resizable: false,
+      ellipsis: false,
       render: (_, record) => (
         <MaterialStackedCell
           material_name={record.material_name}
@@ -3444,6 +3492,9 @@ const SalesOrdersPage: React.FC = () => {
       title: t('common.quantity'),
       dataIndex: 'required_quantity',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       align: 'right' as const,
       render: (val: any, record: SalesOrderItemRow) => (
         <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
@@ -3456,6 +3507,9 @@ const SalesOrdersPage: React.FC = () => {
       title: t('app.kuaizhizao.salesOrder.unitPrice'),
       dataIndex: 'unit_price',
       width: 90,
+      minWidth: 90,
+      uniTableKeepWidth: true,
+      resizable: false,
       align: 'right' as const,
       render: (val: any) => <AmountDisplay resource={SO} fieldName="unit_price" value={val} />,
     },
@@ -3463,6 +3517,9 @@ const SalesOrdersPage: React.FC = () => {
       title: t('app.kuaizhizao.salesOrder.taxRate'),
       dataIndex: 'tax_rate',
       width: 70,
+      minWidth: 70,
+      uniTableKeepWidth: true,
+      resizable: false,
       align: 'right' as const,
       render: (val: any) => val ?? 0,
     },
@@ -3470,6 +3527,9 @@ const SalesOrdersPage: React.FC = () => {
       title: t('app.kuaizhizao.salesOrder.inclAmount'),
       dataIndex: 'item_amount',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       align: 'right' as const,
       render: (val: any) => <AmountDisplay resource={SO} fieldName="amount_with_tax" value={val} />,
     },
@@ -3477,6 +3537,9 @@ const SalesOrdersPage: React.FC = () => {
       title: t('app.kuaizhizao.salesOrder.deliveredQty'),
       dataIndex: 'delivered_quantity',
       width: 90,
+      minWidth: 90,
+      uniTableKeepWidth: true,
+      resizable: false,
       align: 'right' as const,
       render: (text: any) => text ?? 0,
     },
@@ -3484,6 +3547,9 @@ const SalesOrdersPage: React.FC = () => {
       title: t('app.kuaizhizao.salesOrder.remainingQty'),
       dataIndex: 'remaining_quantity',
       width: 90,
+      minWidth: 90,
+      uniTableKeepWidth: true,
+      resizable: false,
       align: 'right' as const,
       render: (text: any) => text ?? 0,
     },
@@ -3491,7 +3557,9 @@ const SalesOrdersPage: React.FC = () => {
       title: t('app.kuaizhizao.salesOrder.deliveryDate'),
       dataIndex: 'delivery_date',
       width: 132,
+      minWidth: 132,
       uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       render: (_: unknown, row: SalesOrderItemRow) => {
         const raw = row.delivery_date;
@@ -3514,6 +3582,7 @@ const SalesOrdersPage: React.FC = () => {
       key: 'bom_check',
       dataIndex: 'bom_check',
       width: 80,
+      minWidth: 80,
       uniTableKeepWidth: true,
       resizable: false,
       align: 'center' as const,
@@ -3546,6 +3615,7 @@ const SalesOrdersPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.salesOrder.lifecycle'),
       dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
+      key: 'lifecycle',
       fixed: 'right' as const,
       hideInSearch: false,
       valueType: 'select',
@@ -4637,7 +4707,8 @@ const SalesOrdersPage: React.FC = () => {
                 ? formatDateTime(orderDateRange[1] as string | Date, 'YYYY-MM-DD')
                 : apiParams.start_date;
             }
-            apiParams.include_items = dataViewModeRef.current === 'detail';
+            // 订单视图明细预览列 + 明细视图展开行均需 items
+            apiParams.include_items = true;
             if (typeof sf.column_filters === 'string' && sf.column_filters.trim()) {
               apiParams.column_filters = sf.column_filters.trim();
             }

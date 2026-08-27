@@ -47,6 +47,15 @@ class OrderChangeItemResponse(OrderChangeItemBase):
         from_attributes = True
 
 
+class OrderChangeListLinePreview(BaseSchema):
+    """列表明细预览（仅物料名等展示字段）"""
+
+    material_name: str = ""
+    material_code: Optional[str] = None
+    line_no: Optional[int] = None
+    change_type: Optional[str] = None
+
+
 class OrderChangeOrderBase(BaseModel):
     change_reason: str = Field(..., min_length=1)
     change_category: Optional[str] = "MIXED"
@@ -99,6 +108,8 @@ class OrderChangeListResponse(BaseSchema):
         None,
         description="业务态动作 capabilities（不含 RBAC）",
     )
+    # 列表附带明细预览（include_items=true）
+    items: Optional[List[OrderChangeListLinePreview]] = None
 
 
 class SalesOrderChangeListResponse(OrderChangeListResponse):

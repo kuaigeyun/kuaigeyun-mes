@@ -5,17 +5,11 @@
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormInstance } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Space, theme as AntdTheme } from 'antd';
-import { DeleteOutlined } from '@ant-design/icons';
+import { App, Popconfirm, Button, theme as AntdTheme } from 'antd';
 import dayjs from 'dayjs';
 import { ProFormSelect, ProFormDigit, ProFormSwitch, ProFormDatePicker, ProFormField } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
-import {
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-  UniTableStackedPrimaryCell,
-} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { rowActionKind } from '../../../../../components/uni-action';
-import { MarkerTag } from '../../../../../constants/statusBadges';
 import {
   ListPageTemplate,
   FormModalTemplate,
@@ -42,6 +36,7 @@ import {
   renderPerformanceTypeMarker,
 } from '../components/performanceMeta';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import {
   normalizePerformanceListResponse,
   PERFORMANCE_PINNED_IS_ACTIVE_FIELD,
@@ -191,42 +186,39 @@ const EmployeeConfigsPage: React.FC = () => {
   const columns: ProColumns<EmployeePerformanceConfig>[] = useMemo(
     () => alignProColumns<EmployeePerformanceConfig>([
       {
+        // 列稀疏：业务列不堆叠（表单序：员工 → 计薪模式 → 单价/底薪 → 启用）；审计叠列保留
         title: t('app.kuaizhizao.performance.common.columns.employee'),
-        key: 'performance_employee_stacked',
+        key: 'performance_employee_name',
         dataIndex: 'employee_name',
-        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        minWidth: 140,
+        uniTableRemainderFlex: true,
+        uniTablePrimaryFlex: true,
+        resizable: false,
+        ellipsis: true,
         fixed: 'left',
         sorter: true,
-        render: (_, r) => (
-          <UniTableStackedPrimaryCell
-            primary={String(r.employee_name ?? '').trim() || '-'}
-            secondary={getCalcModeText(t, r.calc_mode)}
-            secondaryCopyable={false}
-          />
-        ),
       },
       {
         title: t('app.kuaizhizao.performance.common.columns.calcMode'),
         dataIndex: 'calc_mode',
-        width: 100,
-        minWidth: 100,
-        uniTableKeepWidth: true,
-        resizable: false,
-        sorter: true,
+        hideInTable: true,
         valueType: 'select',
         valueEnum: Object.fromEntries(calcModeOptions.map((o) => [o.value, { text: o.label }])),
-        render: (_, r) => {
-          const mode = r.calc_mode;
-          const label = getCalcModeText(t, mode);
-          const color = mode === 'piece' ? 'geekblue' : mode === 'time' ? 'cyan' : mode === 'mixed' ? 'purple' : 'default';
-          return <MarkerTag color={color}>{label}</MarkerTag>;
-        },
+      },
+      {
+        title: t('app.kuaizhizao.performance.common.columns.calcMode'),
+        dataIndex: 'calc_mode',
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+        hideInSearch: true,
+        sorter: true,
+        render: (_, r) => renderPerformanceTypeMarker(getCalcModeText(t, r.calc_mode)),
       },
       {
         title: t('app.kuaizhizao.performance.employeeConfigs.columns.hourlyRate'),
         dataIndex: 'hourly_rate',
-        width: 110,
-        minWidth: 110,
+        // 表头「工时单价（元/时）」+ 排序钮，勿按单元格数字估宽
+        width: 168,
+        minWidth: 168,
         uniTableKeepWidth: true,
         resizable: false,
         align: 'right',
@@ -234,8 +226,9 @@ const EmployeeConfigsPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.performance.employeeConfigs.columns.defaultPieceRate'),
         dataIndex: 'default_piece_rate',
-        width: 120,
-        minWidth: 120,
+        // 表头「默认计件单价（元/件）」+ 排序钮
+        width: 200,
+        minWidth: 200,
         uniTableKeepWidth: true,
         resizable: false,
         align: 'right',
@@ -243,8 +236,9 @@ const EmployeeConfigsPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.performance.employeeConfigs.columns.baseSalary'),
         dataIndex: 'base_salary',
-        width: 110,
-        minWidth: 110,
+        // 表头「月保障工资（元）」+ 排序钮
+        width: 160,
+        minWidth: 160,
         uniTableKeepWidth: true,
         resizable: false,
         align: 'right',
@@ -257,42 +251,42 @@ const EmployeeConfigsPage: React.FC = () => {
       },
       ...buildDocumentAuditColumns<EmployeePerformanceConfig>(t),
       {
-        title: t('common.status'),
+        title: t('common.enabled'),
         dataIndex: 'is_active',
-        width: 88,
-        minWidth: 88,
-        uniTableKeepWidth: true,
-        resizable: false,
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         hideInSearch: true,
         render: (_, r) => renderActiveTag(t, r.is_active),
       },
       {
         title: t('common.actions'),
         key: 'action',
-        valueType: 'option',
         fixed: 'right',
         hideInSearch: true,
-        render: (_, record) => (
-          <Space>
-            {configPerms.canRead ? (
-              <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)}>
-                {t('common.detail')}
-              </Button>
-            ) : null}
-            {configPerms.canUpdate ? (
-              <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)}>
-                {t('common.edit')}
-              </Button>
-            ) : null}
-            {configPerms.canDelete ? (
-              <Popconfirm key="delete" {...rowActionKind('delete')} title={t('app.kuaizhizao.performance.employeeConfigs.messages.deleteConfirm')} onConfirm={() => handleDelete(record)}>
-                <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-                  {t('common.delete')}
-                </Button>
-              </Popconfirm>
-            ) : null}
-          </Space>
-        ),
+        render: (_, record) => {
+          const parts: React.ReactNode[] = [];
+          if (configPerms.canRead) {
+            parts.push(
+              <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)} />,
+            );
+          }
+          if (configPerms.canUpdate) {
+            parts.push(
+              <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)} />,
+            );
+          }
+          if (configPerms.canDelete) {
+            parts.push(
+              <Popconfirm
+                key="delete"
+                title={t('app.kuaizhizao.performance.employeeConfigs.messages.deleteConfirm')}
+                onConfirm={() => handleDelete(record)}
+              >
+                <Button {...rowActionKind('delete')} />
+              </Popconfirm>,
+            );
+          }
+          return parts;
+        },
       },
     ], SALES_DOC_LIST_FIELD_RANK),
     [t, calcModeOptions, configPerms],
@@ -306,7 +300,7 @@ const EmployeeConfigsPage: React.FC = () => {
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
-          columnPersistenceId="apps.kuaizhizao.pages.performance.employee-configs.v1"
+          columnPersistenceId="apps.kuaizhizao.pages.performance.employee-configs.v4"
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.employeeConfigs')}
           showAdvancedSearch

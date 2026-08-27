@@ -24,6 +24,13 @@ import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { buildDetailDrawerEditExtra } from '../../equipment-management/shared/equipmentMasterDataDetail';
 import { MasterDataDetailDrawer } from '../../../../master-data/pages/shared/masterDataDetailDrawer';
 import { MarkerTag } from '../../../../../constants/statusBadges';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
+import {
+  DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+  renderDocumentLineMaterialsPreview,
+} from '../../sales-management/shared/documentLineMaterialsPreview';
+import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
+import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { assemblyTemplateApi } from '../../../services/assembly-template';
@@ -307,11 +314,14 @@ export const AssemblyTemplatesTab: React.FC = () => {
   };
 
   const columns: ProColumns<AssemblyTemplate>[] = useMemo(
-    () => [
+    () => alignProColumns<AssemblyTemplate>([
       {
         title: t('app.kuaizhizao.assemblyTemplate.colTemplateCode'),
         dataIndex: 'template_code',
-        width: 140,
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
         fixed: 'left',
         render: (_, r) => (
           <Typography.Text copyable={{ text: String(r.template_code ?? '') }} ellipsis>
@@ -323,25 +333,38 @@ export const AssemblyTemplatesTab: React.FC = () => {
         title: t('app.kuaizhizao.assemblyTemplate.colTemplateName'),
         dataIndex: 'template_name',
         width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
         ellipsis: true,
+        render: (_, r) =>
+          r.template_name != null && r.template_name !== '' ? String(r.template_name) : '-',
       },
       {
         title: t('app.kuaizhizao.warehouseCommon.colProductMaterial'),
         dataIndex: 'product_material_name',
         width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
         ellipsis: true,
+        render: (_, r) =>
+          r.product_material_name != null && r.product_material_name !== ''
+            ? String(r.product_material_name)
+            : '-',
+      },
+      {
+        title: t('app.kuaizhizao.common.colLineMaterials'),
+        ...DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+        render: (_, r) => renderDocumentLineMaterialsPreview(r.items, t),
       },
       {
         title: t('app.kuaizhizao.assemblyTemplate.colBaseQuantity'),
         dataIndex: 'base_quantity',
         width: 100,
-        align: 'right',
-        hideInSearch: true,
-      },
-      {
-        title: t('app.kuaizhizao.assemblyTemplate.colLineCount'),
-        dataIndex: 'total_items',
-        width: 80,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
         align: 'right',
         hideInSearch: true,
       },
@@ -349,13 +372,16 @@ export const AssemblyTemplatesTab: React.FC = () => {
         title: t('app.kuaizhizao.assemblyTemplate.colSource'),
         dataIndex: 'source_type',
         width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         render: (_, r) => sourceTypeMap[String(r.source_type ?? 'manual') as keyof typeof sourceTypeMap] || r.source_type,
       },
       {
         title: t('common.status'),
         dataIndex: 'is_active',
-        width: 90,
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         valueType: 'select',
         valueEnum: {
           true: { text: t('common.enabled'), status: 'Success' },
@@ -371,13 +397,17 @@ export const AssemblyTemplatesTab: React.FC = () => {
         title: t('common.updatedAt'),
         dataIndex: 'updated_at',
         width: 168,
+        minWidth: 168,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         render: (_, r) => (r.updated_at ? formatDateTimeBySiteSetting(r.updated_at) : '-'),
       },
       {
         title: t('common.actions'),
-        width: 260,
+        key: 'option',
         fixed: 'right',
+        hideInSearch: true,
         render: (_, record) => (
           <Space>
             <Button {...rowActionKind('read')} onClick={() => openDetailDrawer(record)} />
@@ -391,7 +421,7 @@ export const AssemblyTemplatesTab: React.FC = () => {
           </Space>
         ),
       },
-    ],
+    ], WAREHOUSE_DOC_LIST_FIELD_RANK),
     [t, sourceTypeMap, canUpdate, canDelete],
   );
 
@@ -521,7 +551,7 @@ export const AssemblyTemplatesTab: React.FC = () => {
     <ListPageTemplate>
       <UniTable<AssemblyTemplate>
         headerTitle={t('app.kuaizhizao.assemblyTemplate.headerTitle')}
-        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.assembly-templates"
+        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.assembly-templates-width-v3"
         actionRef={actionRef}
         rowKey="id"
         columns={columns}

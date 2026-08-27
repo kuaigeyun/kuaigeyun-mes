@@ -165,7 +165,7 @@ from apps.kuaizhizao.schemas.assembly_material_binding import ExecuteAssemblyOrd
 from apps.kuaizhizao.schemas.assembly_template import (
     AssemblyTemplateCreate,
     AssemblyTemplateUpdate,
-    AssemblyTemplateResponse,
+    AssemblyTemplateDetailResponse,
     AssemblyTemplateListResponse,
     AssemblyTemplateItemCreateInput,
     AssemblyTemplateItemUpdate,
@@ -1870,7 +1870,7 @@ _ASSEMBLY_ORDERS_DELETE = "kuaizhizao:warehouse-management-assembly-orders:delet
 
 @router.post(
     "/assembly-templates",
-    response_model=AssemblyTemplateResponse,
+    response_model=AssemblyTemplateDetailResponse,
     summary="Create assembly template",
     dependencies=[Depends(require_permission_codes(_ASSEMBLY_ORDERS_CREATE))],
 )
@@ -1878,7 +1878,7 @@ async def create_assembly_template(
     data: AssemblyTemplateCreate,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-) -> AssemblyTemplateResponse:
+) -> AssemblyTemplateDetailResponse:
     try:
         return await assembly_template_service.create_template(
             tenant_id=tenant_id,
@@ -1942,7 +1942,7 @@ async def preview_assembly_template_bom(
 
 @router.get(
     "/assembly-templates/{template_id}",
-    response_model=AssemblyTemplateResponse,
+    response_model=AssemblyTemplateDetailResponse,
     summary="Get assembly template",
     dependencies=[Depends(require_permission_codes(_ASSEMBLY_ORDERS_READ))],
 )
@@ -1950,7 +1950,7 @@ async def get_assembly_template(
     template_id: int,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-) -> AssemblyTemplateResponse:
+) -> AssemblyTemplateDetailResponse:
     try:
         return await assembly_template_service.get_template_by_id(
             tenant_id=tenant_id,
@@ -1962,7 +1962,7 @@ async def get_assembly_template(
 
 @router.put(
     "/assembly-templates/{template_id}",
-    response_model=AssemblyTemplateResponse,
+    response_model=AssemblyTemplateDetailResponse,
     summary="Update assembly template",
     dependencies=[Depends(require_permission_codes(_ASSEMBLY_ORDERS_UPDATE))],
 )
@@ -1971,7 +1971,7 @@ async def update_assembly_template(
     data: AssemblyTemplateUpdate,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-) -> AssemblyTemplateResponse:
+) -> AssemblyTemplateDetailResponse:
     try:
         return await assembly_template_service.update_template(
             tenant_id=tenant_id,
@@ -2088,7 +2088,7 @@ async def delete_assembly_template_item(
 
 @router.post(
     "/assembly-templates/{template_id}/import-from-bom",
-    response_model=AssemblyTemplateResponse,
+    response_model=AssemblyTemplateDetailResponse,
     summary="Import assembly template lines from BOM",
     dependencies=[Depends(require_permission_codes(_ASSEMBLY_ORDERS_UPDATE))],
 )
@@ -2096,7 +2096,7 @@ async def import_assembly_template_from_bom(
     template_id: int,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-) -> AssemblyTemplateResponse:
+) -> AssemblyTemplateDetailResponse:
     try:
         return await assembly_template_service.import_from_bom(
             tenant_id=tenant_id,

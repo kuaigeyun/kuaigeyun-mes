@@ -45,6 +45,10 @@ import { alignDescriptionColumns, alignProColumns } from '../../sales-management
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
+  DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+  renderDocumentLineMaterialsPreview,
+} from '../../sales-management/shared/documentLineMaterialsPreview';
+import {
   WAREHOUSE_DOC_PINNED_STATUS_FIELD,
   buildMaterialBorrowStatusValueEnum,
   normalizeWarehouseListResponse,
@@ -71,6 +75,8 @@ interface MaterialBorrow {
   status?: string;
   total_quantity?: number;
   total_items?: number;
+  /** 列表「明细」列预览（仅 material_name） */
+  items?: { material_name?: string }[];
   notes?: string;
   created_at?: string;
   updated_at?: string;
@@ -212,7 +218,10 @@ const MaterialBorrowsPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.materialBorrow.col.borrowCode'),
       dataIndex: 'borrow_code',
-      width: 140,
+      width: 160,
+      minWidth: 160,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       fixed: 'left',
       sorter: true,
@@ -226,49 +235,66 @@ const MaterialBorrowsPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.warehouseReports.colWarehouse'),
       dataIndex: 'warehouse_name',
-      width: 120,
+      width: 160,
+      minWidth: 160,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       sorter: true,
       hideInSearch: true,
+      render: (_, r) =>
+        r.warehouse_name != null && r.warehouse_name !== '' ? String(r.warehouse_name) : '-',
+    },
+    {
+      title: t('app.kuaizhizao.common.colLineMaterials'),
+      ...DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+      render: (_, r) => renderDocumentLineMaterialsPreview(r.items, t),
     },
     {
       title: t('app.kuaizhizao.warehouseCommon.colTotalQuantity'),
       dataIndex: 'total_quantity',
       width: 100,
-      align: 'right',
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       sorter: true,
       hideInSearch: true,
-      render: formatQuantity,
-    },
-    {
-      title: t('app.kuaizhizao.warehouseCommon.colMaterialKindCount'),
-      dataIndex: 'total_items',
-      width: 90,
-      align: 'right',
-      sorter: true,
-      hideInSearch: true,
-      render: (v: number | null | undefined) => (v != null ? v : '-'),
+      render: (_, r) => formatQuantity(r.total_quantity),
     },
     {
       title: t('app.kuaizhizao.materialBorrow.col.borrower'),
       dataIndex: 'borrower_name',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
       sorter: true,
       hideInSearch: true,
+      render: (_, r) =>
+        r.borrower_name != null && r.borrower_name !== '' ? String(r.borrower_name) : '-',
     },
     {
       title: t('app.kuaizhizao.materialBorrow.col.department'),
       dataIndex: 'department',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
       sorter: true,
       hideInSearch: true,
+      render: (_, r) =>
+        r.department != null && r.department !== '' ? String(r.department) : '-',
     },
     {
       title: t('app.kuaizhizao.materialBorrow.col.expectedReturnDate'),
       dataIndex: 'expected_return_date',
       valueType: 'date',
       width: 132,
+      minWidth: 132,
       uniTableKeepWidth: true,
+      resizable: false,
       sorter: true,
       hideInSearch: true,
     },
@@ -276,7 +302,9 @@ const MaterialBorrowsPage: React.FC = () => {
       title: t('app.kuaizhizao.materialBorrow.col.borrowTime'),
       dataIndex: 'borrow_time',
       width: 132,
+      minWidth: 132,
       uniTableKeepWidth: true,
+      resizable: false,
       sorter: true,
       hideInSearch: true,
       render: (_, r) => (r.borrow_time ? formatDateTime(r.borrow_time) : '-'),
@@ -304,8 +332,9 @@ const MaterialBorrowsPage: React.FC = () => {
     },
     {
       title: t('common.actions'),
-      width: 220,
+      key: 'option',
       fixed: 'right',
+      hideInSearch: true,
       render: (_, record) => {
         return (
           <Space size="small" wrap>
@@ -627,7 +656,7 @@ const MaterialBorrowsPage: React.FC = () => {
           headerTitle={t('app.kuaizhizao.materialBorrow.title')}
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.materialBorrow)}
-          columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.material-borrows.v2"
+          columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.material-borrows-width-v3"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}

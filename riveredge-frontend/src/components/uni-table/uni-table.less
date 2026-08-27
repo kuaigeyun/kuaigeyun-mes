@@ -271,6 +271,38 @@
   flex: none;
 }
 
+/* 余量吸收列：不声明 width，table-layout:fixed 拉伸时只分给本列 */
+.uni-table-container .ant-table-thead > tr > th.uni-table-filler-cell,
+.uni-table-container .ant-table-tbody > tr > td.uni-table-filler-cell {
+  padding: 0;
+  min-width: 0;
+  max-width: none;
+  border-left: none;
+}
+
+.uni-table-container .ant-table-thead > tr > th.uni-table-filler-cell::before,
+.uni-table-container .ant-table-tbody > tr > td.uni-table-filler-cell::before {
+  display: none;
+}
+
+/* 勾选列：与 UNI_TABLE_SELECTION_COL_WIDTH (48px) 对齐，禁止被 table-layout:fixed 按比例拉伸 */
+.uni-table-container .ant-table-thead > tr > th.ant-table-selection-column,
+.uni-table-container .ant-table-tbody > tr > td.ant-table-selection-column {
+  width: 48px;
+  min-width: 48px;
+  max-width: 48px;
+  box-sizing: border-box;
+}
+
+/* MarkerTag 窄列（启用/类型等）：与 lifecycle 同宽 80px，禁止被拉伸 */
+.uni-table-container .ant-table-thead > tr > th.uni-table-marker-badge-cell,
+.uni-table-container .ant-table-tbody > tr > td.uni-table-marker-badge-cell {
+  width: 80px;
+  min-width: 80px;
+  max-width: 80px;
+  box-sizing: border-box;
+}
+
 /*
  * 堆叠主列同一套规则：标识行（单号 / 编码）不可截断，固定 max-content 供实测；
  * 单元格自己包住内容——左固定列是不透明 sticky 单元格，不裁剪就会把溢出部分
@@ -421,6 +453,11 @@
 
 .uni-table-container .ant-table-tbody > tr > td.uni-table-operation-steps-cell .wo-ops-steps-strip {
   margin-inline: auto;
+}
+
+/* 步骤轴左对齐（异常处理等：节点少、列宽有余量时不居中） */
+.uni-table-container .ant-table-tbody > tr > td.uni-table-operation-steps-cell.uni-table-operation-steps-cell-start .wo-ops-steps-strip {
+  margin-inline: 0;
 }
 
 /* 固定节点数（如 8D D1–D8+已关闭）：条带已按列宽预算，禁止单元格内横滚条 */

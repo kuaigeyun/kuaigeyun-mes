@@ -26,7 +26,6 @@ import { theme as AntdTheme } from 'antd';
 import { UniTable, readPersistedUniTableViewType, type UniTableRequestMeta} from '../../../../../components/uni-table';
 import {
   UniTableStackedPrimaryCell,
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
   MaterialStackedCell,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UniCapabilityBatchButton, UniAuditBatchMenuButton, createUniAuditBatchHandlers } from '../../../../../components/uni-batch';
@@ -68,6 +67,10 @@ import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { getSalesReturnLifecycle, buildSalesReturnLifecycleValueEnum, resolveSalesReturnListLifecycleParams } from '../../../utils/salesReturnLifecycle';
 import { createListAuditPhaseColumn } from '../shared/listAuditPhaseColumn';
 import { alignProColumns, alignDescriptionColumns, SALES_DOC_LIST_FIELD_RANK } from '../shared/documentFieldAlignment';
+import {
+  DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+  renderDocumentLineMaterialsPreview,
+} from '../shared/documentLineMaterialsPreview';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { isManualAuditEnabled } from '../../../../../utils/auditMode';
@@ -121,7 +124,7 @@ import { getAntdModal } from '../../../../../utils/antdAppApis';
 
 const SALES_RETURN_RESOURCE = 'kuaizhizao:sales-return';
 const SALES_RETURN_LIST_PERSISTENCE_ID =
-  'apps.kuaizhizao.pages.sales-management.sales-returns.v2';
+  'apps.kuaizhizao.pages.sales-management.sales-returns-width-v1';
 const SALES_RETURN_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_sales_returns';
 
 type SalesReturnItemRow = SalesReturnItem & {
@@ -569,7 +572,11 @@ const SalesReturnsPage: React.FC = () => {
       title: t('app.kuaizhizao.salesReturn.colCustomerReturnCode'),
       key: 'return_code',
       dataIndex: 'return_code',
-      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+      width: 240,
+      minWidth: 240,
+      uniTableKeepWidth: true,
+      uniTablePrimaryFlex: false,
+      resizable: false,
       fixed: 'left',
       sorter: true,
       fieldProps: { placeholder: t('app.kuaizhizao.salesReturn.colReturnCode') },
@@ -602,12 +609,22 @@ const SalesReturnsPage: React.FC = () => {
       },
     },
     {
+      title: t('app.kuaizhizao.common.colLineMaterials'),
+      ...DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+      // 销退专用段位：主标识后、仓库前
+      key: 'sales_return_line_materials',
+      dataIndex: 'sales_return_line_materials',
+      render: (_, record) => renderDocumentLineMaterialsPreview(record.items, t),
+    },
+    {
       title: t('app.kuaizhizao.salesReturn.colWarehouse'),
       key: 'sales_return_warehouse',
       dataIndex: 'warehouse_name',
       width: 140,
-      ellipsis: true,
+      minWidth: 140,
       uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
       sorter: true,
       hideInSearch: true,
     },
@@ -616,7 +633,9 @@ const SalesReturnsPage: React.FC = () => {
       key: 'sales_return_related_docs',
       dataIndex: 'sales_order_code',
       width: 140,
+      minWidth: 140,
       uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       hideInSearch: true,
       render: (_, record) => {
@@ -660,6 +679,9 @@ const SalesReturnsPage: React.FC = () => {
       title: t('app.kuaizhizao.salesReturn.totalQuantity'),
       dataIndex: 'total_quantity',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       align: 'right',
       sorter: true,
       hideInSearch: true,
@@ -669,6 +691,9 @@ const SalesReturnsPage: React.FC = () => {
       title: t('app.kuaizhizao.salesReturn.totalAmount'),
       dataIndex: 'total_amount',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       align: 'right',
       sorter: true,
       hideInSearch: true,
@@ -678,7 +703,9 @@ const SalesReturnsPage: React.FC = () => {
       title: t('app.kuaizhizao.salesReturn.returnTime'),
       dataIndex: 'return_time',
       width: 132,
+      minWidth: 132,
       uniTableKeepWidth: true,
+      resizable: false,
       sorter: true,
       hideInSearch: true,
       render: (_, record) =>
@@ -709,6 +736,7 @@ const SalesReturnsPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.salesReturn.colLifecycle'),
       dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
+      key: 'lifecycle',
       fixed: 'right',
       valueType: 'select',
       valueEnum: salesReturnLifecycleValueEnum,
@@ -1504,7 +1532,11 @@ const SalesReturnsPage: React.FC = () => {
         title: t('app.kuaizhizao.salesReturn.colCustomerReturnCode'),
         key: 'return_code',
         dataIndex: 'return_code',
-        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        width: 240,
+        minWidth: 240,
+        uniTableKeepWidth: true,
+        uniTablePrimaryFlex: false,
+        resizable: false,
         fixed: 'left',
         hideInSearch: false,
         fieldProps: { placeholder: t('app.kuaizhizao.salesReturn.colReturnCode') },
@@ -1545,7 +1577,12 @@ const SalesReturnsPage: React.FC = () => {
         title: t('app.kuaizhizao.salesOrder.materialName'),
         key: 'material_display',
         dataIndex: 'material_name',
-        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        // 明细视图：物料叠列为 RemainderFlex（无头表明细预览列）
+        minWidth: 160,
+        uniTablePrimaryFlex: true,
+        uniTableRemainderFlex: true,
+        resizable: false,
+        ellipsis: false,
         hideInSearch: true,
         render: (_, record) => (
           <MaterialStackedCell
@@ -1565,6 +1602,9 @@ const SalesReturnsPage: React.FC = () => {
         title: t('app.kuaizhizao.salesReturn.returnQuantity'),
         dataIndex: 'return_quantity',
         width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
         align: 'right',
         hideInSearch: true,
         render: (val: unknown, record) => (
@@ -1575,6 +1615,9 @@ const SalesReturnsPage: React.FC = () => {
         title: t('app.kuaizhizao.salesReturn.unitPrice'),
         dataIndex: 'unit_price',
         width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
         align: 'right',
         hideInSearch: true,
         render: (text: unknown) =>
@@ -1584,6 +1627,9 @@ const SalesReturnsPage: React.FC = () => {
         title: t('app.kuaizhizao.salesReturn.totalAmount'),
         dataIndex: 'total_amount',
         width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
         align: 'right',
         hideInSearch: true,
         render: (text: unknown) =>
@@ -1593,6 +1639,9 @@ const SalesReturnsPage: React.FC = () => {
         title: t('app.kuaizhizao.salesReturn.batchNumber'),
         dataIndex: 'batch_number',
         width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         ellipsis: true,
       },
@@ -1600,6 +1649,9 @@ const SalesReturnsPage: React.FC = () => {
         title: t('app.kuaizhizao.salesReturn.location'),
         dataIndex: 'location_code',
         width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         ellipsis: true,
       },
@@ -1607,6 +1659,9 @@ const SalesReturnsPage: React.FC = () => {
         title: t('app.kuaizhizao.salesReturn.colWarehouse'),
         dataIndex: 'warehouse_name',
         width: 140,
+        minWidth: 140,
+        uniTableKeepWidth: true,
+        resizable: false,
         ellipsis: true,
         hideInSearch: true,
       },
@@ -1614,7 +1669,9 @@ const SalesReturnsPage: React.FC = () => {
         title: t('app.kuaizhizao.salesReturn.returnTime'),
         dataIndex: 'return_time',
         width: 132,
+        minWidth: 132,
         uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         render: (_, record) =>
           record.return_time ? formatDateTime(record.return_time, 'YYYY-MM-DD HH:mm') : '-',
@@ -1622,6 +1679,7 @@ const SalesReturnsPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.salesReturn.colLifecycle'),
         dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
+        key: 'lifecycle',
         fixed: 'right',
         hideInSearch: false,
         valueType: 'select',
@@ -1741,7 +1799,8 @@ const SalesReturnsPage: React.FC = () => {
                 limit: params.pageSize || 20,
                 ...lifecycleParams,
                 order_by: orderBy,
-                include_items: dataViewModeRef.current === 'detail',
+                // 订单视图明细预览列 + 明细视图展开行均需 items
+                include_items: true,
               };
               if (fuzzyKeyword) {
                 apiParams.keyword = fuzzyKeyword;

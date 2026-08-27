@@ -6,11 +6,15 @@ import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
 import { ListPageTemplate, TwoColumnLayout, type StatCard, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { UniTable } from '../../../../../components/uni-table';
+import {
+  UniTableStackedPrimaryCell,
+  UNI_TABLE_STACKED_BADGE_DATETIME_COLUMN_DEFAULTS,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
-import { formatDateTime } from '../../../../../utils/format';
-import { UNI_TABLE_STATUS_BADGE_COLUMN_WIDTH } from '../../../../../utils/uniTableLayoutColumns';
+import { formatDateTime, formatDateTimeBySiteSetting } from '../../../../../utils/format';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import {
   ensureReplanTaskForEvent,
   executeDemandReplanTask,
@@ -377,6 +381,9 @@ const DemandReplanDashboardPage: React.FC = () => {
             title: t('app.kuaizhizao.demandReplan.col.taskCode'),
             dataIndex: 'task_code',
             width: 168,
+            minWidth: 168,
+            uniTableKeepWidth: true,
+            resizable: false,
             fixed: 'left',
             sorter: true,
             hideInSearch: false,
@@ -385,8 +392,12 @@ const DemandReplanDashboardPage: React.FC = () => {
           {
             title: t('app.kuaizhizao.demandReplan.col.mode'),
             dataIndex: 'mode',
-            width: 120,
+            // 「全量重算」勿用 80px Marker 定宽
+            width: 100,
+            minWidth: 100,
             uniTableKeepWidth: true,
+            resizable: false,
+            ellipsis: false,
             sorter: true,
             hideInSearch: false,
             valueType: 'select',
@@ -400,8 +411,7 @@ const DemandReplanDashboardPage: React.FC = () => {
           {
             title: t('app.kuaizhizao.demandReplan.col.riskLevel'),
             dataIndex: 'risk_level',
-            width: 110,
-            uniTableKeepWidth: true,
+            ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
             sorter: true,
             hideInSearch: false,
             valueType: 'select',
@@ -415,28 +425,30 @@ const DemandReplanDashboardPage: React.FC = () => {
           {
             title: t('app.kuaizhizao.demandReplan.col.startedAt'),
             dataIndex: 'started_at',
-            width: 132,
-            uniTableKeepWidth: true,
+            ...UNI_TABLE_STACKED_BADGE_DATETIME_COLUMN_DEFAULTS,
             sorter: true,
             hideInSearch: true,
-            render: (_, row) =>
-              row.started_at ? formatDateTime(row.started_at, 'YYYY-MM-DD HH:mm') : '-',
-          },
-          {
-            title: t('app.kuaizhizao.demandReplan.col.finishedAt'),
-            dataIndex: 'finished_at',
-            width: 132,
-            uniTableKeepWidth: true,
-            sorter: true,
-            hideInSearch: true,
-            render: (_, row) =>
-              row.finished_at ? formatDateTime(row.finished_at, 'YYYY-MM-DD HH:mm') : '-',
+            render: (_, row) => (
+              <UniTableStackedPrimaryCell
+                primary={formatDateTimeBySiteSetting(row.started_at)}
+                secondary={formatDateTimeBySiteSetting(row.finished_at)}
+                secondaryCopyable={false}
+                uniformText
+                primaryBadge={t('common.start')}
+                secondaryBadge={t('common.end')}
+              />
+            ),
           },
           {
             title: t('app.kuaizhizao.demandReplan.col.failureReason'),
             key: 'failure_reason',
-            width: 200,
+            dataIndex: 'failure_reason',
+            minWidth: 160,
+            uniTablePrimaryFlex: true,
+            uniTableRemainderFlex: true,
+            resizable: false,
             ellipsis: true,
+            hideInSearch: true,
             render: (_, row) => {
               const err = formatReplanTaskError(row, t);
               if (!err) return '-';
@@ -447,7 +459,7 @@ const DemandReplanDashboardPage: React.FC = () => {
                   style={{ padding: 0, maxWidth: '100%' }}
                   onClick={() => setFailureTask(row)}
                 >
-                  <Typography.Text type="danger" ellipsis style={{ maxWidth: 180 }}>
+                  <Typography.Text type="danger" ellipsis style={{ maxWidth: '100%' }}>
                     {err.split('\n')[0]}
                   </Typography.Text>
                 </Button>
@@ -458,22 +470,19 @@ const DemandReplanDashboardPage: React.FC = () => {
             title: t('common.createdAt'),
             key: 'task_created_at',
             dataIndex: 'created_at',
-            width: 132,
+            width: 160,
+            minWidth: 160,
             uniTableKeepWidth: true,
+            resizable: false,
             sorter: true,
             hideInSearch: true,
-            render: (_, row) =>
-              row.created_at ? formatDateTime(row.created_at, 'YYYY-MM-DD HH:mm') : '-',
+            render: (_, row) => formatDateTimeBySiteSetting(row.created_at),
           },
           {
             title: t('app.kuaizhizao.demandReplan.col.approvalStatus'),
             key: 'audit_phase',
             dataIndex: 'approval_status',
             fixed: 'right',
-            width: UNI_TABLE_STATUS_BADGE_COLUMN_WIDTH,
-            minWidth: UNI_TABLE_STATUS_BADGE_COLUMN_WIDTH,
-            uniTableKeepWidth: true,
-            resizable: false,
             align: 'center',
             hideInSearch: false,
             valueType: 'select',
@@ -724,7 +733,7 @@ const DemandReplanDashboardPage: React.FC = () => {
               <UniTable<DemandReplanTaskItem>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.demandReplanDashboard')}
-                columnPersistenceId="apps.kuaizhizao.pages.plan-management.demand-replan-dashboard.tasks.rank-v3"
+                columnPersistenceId="apps.kuaizhizao.pages.plan-management.demand-replan-dashboard.tasks-width-v1"
                 actionRef={taskTableActionRef}
                 columns={taskColumns}
                 rowKey="id"

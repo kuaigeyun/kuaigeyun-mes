@@ -78,10 +78,10 @@ from apps.kuaizhizao.utils.inventory_helper import (
     batch_list_open_supply_receipts_by_date,
 )
 from apps.kuaizhizao.utils.mrp_quantity import (
+    mrp_apply_suggested_lot_rules,
     mrp_net_requirement,
     mrp_qty,
     mrp_qty_float,
-    mrp_suggested_integer,
 )
 from core.services.business.code_generation_service import CodeGenerationService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
@@ -395,22 +395,7 @@ def _apply_suggested_lot_rules(
     mult: Optional[Decimal],
     fixed_q: Optional[Decimal] = None,
 ) -> Decimal:
-    """批量规则：固定批量 FOQ → 最小 → 倍数 → 上限。"""
-    if raw <= 0:
-        return Decimal(0)
-    q = raw
-    if fixed_q is not None and fixed_q > 0:
-        units = (q / fixed_q).to_integral_value(rounding=ROUND_CEILING)
-        q = units * fixed_q
-    else:
-        if min_q is not None:
-            q = max(q, min_q)
-        if mult is not None and mult > 0:
-            units = (q / mult).to_integral_value(rounding=ROUND_CEILING)
-            q = units * mult
-    if max_q is not None and q > max_q:
-        q = max_q
-    return mrp_suggested_integer(q)
+    return mrp_apply_suggested_lot_rules(raw, min_q, max_q, mult, fixed_q)
 
 
 def _apply_production_waste_to_qty(raw: Decimal, waste_rate: Any) -> Decimal:

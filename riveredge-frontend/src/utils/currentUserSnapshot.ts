@@ -10,6 +10,7 @@ export function isEquivalentCurrentUser(
     prev.id === next.id &&
     prev.uuid === next.uuid &&
     prev.tenant_id === next.tenant_id &&
+    (prev.tenant_name ?? '') === (next.tenant_name ?? '') &&
     prev.permission_version === next.permission_version &&
     prev.username === next.username &&
     prev.full_name === next.full_name &&

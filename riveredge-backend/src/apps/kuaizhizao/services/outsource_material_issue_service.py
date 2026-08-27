@@ -371,12 +371,14 @@ class OutsourceMaterialIssueService(AppBaseService[OutsourceMaterialIssue]):
 
         out: List[OutsourceMaterialIssueResponse] = []
         for issue in issues:
+            name = str(getattr(issue, "material_name", None) or "").strip()
             resp = OutsourceMaterialIssueResponse.model_validate(issue)
             out.append(
                 resp.model_copy(
                     update={
                         "total_quantity": float(issue.quantity or 0),
                         "total_items": 1,
+                        "items": [{"material_name": name}] if name else [],
                     }
                 )
             )

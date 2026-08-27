@@ -13,7 +13,7 @@ import { App, Button, Tag, Space, Modal, Input, Tree, Spin, Table, Form as AntFo
 import type { MenuProps } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import type { ColumnsType } from 'antd/es/table';
-import { EditOutlined, DeleteOutlined, PlusOutlined, MinusCircleOutlined, CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined, UploadOutlined, DiffOutlined, HistoryOutlined, CalculatorOutlined, HighlightOutlined, MoreOutlined, UndoOutlined, StarOutlined, ProductOutlined, UnorderedListOutlined, ClusterOutlined, CopyOutlined, PrinterOutlined, SearchOutlined } from '@ant-design/icons';
+import { DeleteOutlined, PlusOutlined, MinusCircleOutlined, CheckCircleOutlined, CloseCircleOutlined, UploadOutlined, DiffOutlined, HistoryOutlined, CalculatorOutlined, UndoOutlined, StarOutlined, ProductOutlined, UnorderedListOutlined, ClusterOutlined, CopyOutlined, PrinterOutlined, SearchOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { UniTable, type UniTableRequestMeta, readPersistedUniTableViewType, uniTableViewTypePreferencePath } from '../../../../../components/uni-table';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
@@ -27,7 +27,8 @@ import { UniMaterialBatchPicker } from '../../../../../components/uni-material-b
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { SecureImage } from '../../../../../components/secure-image';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
-import { rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { StatusTag, RE_STATUS_BADGE_DRAFT } from '../../../../../constants/statusBadges';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { openPrintHtmlWindow } from '../../../../../utils/printResponseHelpers';
@@ -73,19 +74,20 @@ import { masterCrudCreatedUpdatedColumns } from '../../../utils/materialListCore
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import {
   alignDescriptionColumns,
+  alignProColumns,
+  GLOBAL_DOC_LIST_FIELD_RANK,
   MASTER_DATA_DETAIL_BASIC_FIELD_RANK,
 } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { ProcessMasterDetailDrawer } from '../../process/shared/processMasterDetailDrawer';
 import { isVariantSkuMaterial } from '../../../components/MaterialVariantCombinationsTable';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
-import { UNI_TABLE_STATUS_BADGE_COLUMN_WIDTH } from '../../../../../utils/uniTableLayoutColumns';
 import { flattenBomGroupsForExport, resolveBomExportGroup, loadBomExportNestedItems, collectBomExportMaterialIds, type BomExportGroupSummary } from './utils';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 const BOM_CUSTOM_FIELD_TABLE = 'master_data_boms';
 const BOM_RESOURCE = 'master-data:process:engineering-bom';
-const BOM_LIST_COLUMN_PERSISTENCE_ID = 'apps.master-data.pages.materials.bom.stacked-v2';
+const BOM_LIST_COLUMN_PERSISTENCE_ID = 'apps.master-data.pages.materials.bom.stacked-v3';
 const BOM_LIST_VIEW_TYPES = ['productBom', 'semiProductBom', 'allBom'] as const;
 type BomListViewType = (typeof BOM_LIST_VIEW_TYPES)[number];
 
@@ -148,10 +150,7 @@ interface BOMVersionHistoryRow {
   isObsolete?: boolean;
 }
 
-/** ProTable 操作列可传 UniTable 扩展：控制溢出菜单 directMax 等 */
-type MaterialBOMProColumn = ProColumns<MaterialBOMRow> & {
-  uniActionRenderOptions?: { directMax?: number };
-};
+type MaterialBOMProColumn = ProColumns<MaterialBOMRow>;
 
 /**
  * 单位列展示：接收 Form 的 value（单位 code），渲染字典标签，表格渲染前已映射
@@ -1046,19 +1045,14 @@ const BOMPage: React.FC = () => {
    * 获取审核状态标签
    */
   const getApprovalStatusTag = (status: string) => {
-    const statusMap: Record<string, { color: string; text: string; icon: React.ReactNode }> = {
-      draft: { color: 'default', text: t('app.master-data.bom.statusDraft'), icon: <ClockCircleOutlined /> },
-      pending: { color: 'processing', text: t('app.master-data.bom.statusPending'), icon: <ClockCircleOutlined /> },
-      approved: { color: 'success', text: t('app.master-data.bom.statusApproved'), icon: <CheckCircleOutlined /> },
-      rejected: { color: 'error', text: t('app.master-data.bom.statusRejected'), icon: <CloseCircleOutlined /> },
+    const statusMap: Record<string, { color: string; text: string }> = {
+      draft: { color: RE_STATUS_BADGE_DRAFT, text: t('app.master-data.bom.statusDraft') },
+      pending: { color: 'processing', text: t('app.master-data.bom.statusPending') },
+      approved: { color: 'success', text: t('app.master-data.bom.statusApproved') },
+      rejected: { color: 'error', text: t('app.master-data.bom.statusRejected') },
     };
-    
     const statusInfo = statusMap[status] || statusMap.draft;
-    return (
-      <Tag color={statusInfo.color} icon={statusInfo.icon} variant="solid">
-        {statusInfo.text}
-      </Tag>
-    );
+    return <StatusTag color={statusInfo.color}>{statusInfo.text}</StatusTag>;
   };
 
   /**
@@ -2646,8 +2640,10 @@ const BOMPage: React.FC = () => {
   const bomCustomFieldColumns = generateBomCustomFieldColumns() as MaterialBOMProColumn[];
 
   const groupColumns: MaterialBOMProColumn[] = [
-    { 
-      title: t('app.master-data.bom.materialTitle'), 
+    {
+      // 非稀疏：物料名/码、BOM 名/码保持叠列；审核 StatusTag 右固
+      title: t('app.master-data.bom.materialTitle'),
+      key: 'bom_material_stacked',
       dataIndex: 'materialId',
       ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
       hideInSearch: true,
@@ -2682,12 +2678,15 @@ const BOMPage: React.FC = () => {
             secondaryCopyable={!parts.missing && Boolean(parts.code)}
           />
         );
-      }
+      },
     },
-    { 
-      title: t('app.master-data.bom.versionTitle'), 
-      dataIndex: 'version', 
-      width: 140, 
+    {
+      title: t('app.master-data.bom.versionTitle'),
+      dataIndex: 'version',
+      width: 140,
+      minWidth: 140,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       sorter: true,
       render: (_, r: any) => {
@@ -2730,8 +2729,8 @@ const BOMPage: React.FC = () => {
                 return (
                   <Space size={4}>
                     <span>{meta.version}</span>
-                    {meta.isDefault && <Tag color="gold">{defaultTagText}</Tag>}
-                    {meta.isObsolete && <Tag color="default">{obsoleteTagText}</Tag>}
+                    {meta.isDefault && <Tag color="gold" variant="filled">{defaultTagText}</Tag>}
+                    {meta.isObsolete && <Tag color="default" variant="filled">{obsoleteTagText}</Tag>}
                   </Space>
                 );
               }}
@@ -2742,12 +2741,13 @@ const BOMPage: React.FC = () => {
             />
           );
         }
-        if (r._bomVersion) return <Tag>{r._bomVersion}</Tag>;
+        if (r._bomVersion) return <Tag variant="filled">{r._bomVersion}</Tag>;
         return '-';
-      }
+      },
     },
-    { 
-      title: t('app.master-data.bom.bomName'), 
+    {
+      title: t('app.master-data.bom.bomName'),
+      key: 'bom_name_stacked',
       dataIndex: 'bomName',
       ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
       minWidth: 180,
@@ -2774,7 +2774,7 @@ const BOMPage: React.FC = () => {
             secondaryCopyable
           />
         );
-      }
+      },
     },
     {
       title: t('app.master-data.bom.bomCode'),
@@ -2786,10 +2786,13 @@ const BOMPage: React.FC = () => {
     {
       title: t('app.master-data.materials.processRoute'),
       dataIndex: 'processRoute',
-      width: 140,
+      width: 160,
+      minWidth: 160,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
+      ellipsis: true,
       render: (_: any, r: any) => {
-        // 根行：显示主件工艺路线；子件行（含半成品、工艺型等）：显示该行对应物料的工艺路线（componentId）
         const materialId = isRootRow(r) ? r.materialId : (r.componentId ?? r.materialId);
         if (materialId == null) return '-';
         const material = materials.find((m) => m.id === materialId);
@@ -2797,36 +2800,47 @@ const BOMPage: React.FC = () => {
         return name ?? '-';
       },
     },
-    { 
-      title: t('app.master-data.bom.quantityTitle'), 
-      dataIndex: 'quantity', 
-      width: 100, 
+    {
+      title: t('app.master-data.bom.quantityTitle'),
+      dataIndex: 'quantity',
+      width: 112,
+      minWidth: 112,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
+      align: 'right',
       render: (_, r: any) => {
         if (isRootRow(r)) return '-';
         const unitLabel = r.unit ? (unitValueToLabel[r.unit] || r.unit) : '';
         return `${r.quantity} ${unitLabel}`.trim() || '-';
-      }
+      },
     },
-    { 
-      title: t('common.unit'), 
-      dataIndex: 'unit', 
-      width: 80, 
+    {
+      title: t('common.unit'),
+      dataIndex: 'unit',
+      width: 88,
+      minWidth: 88,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       render: (_, r: any) => {
         if (isRootRow(r)) return '-';
         return (r.unit && unitValueToLabel[r.unit]) ? unitValueToLabel[r.unit] : (r.unit || '-');
-      }
+      },
     },
-    { 
-      title: t('app.master-data.bom.wasteRateTitle'), 
-      dataIndex: 'wasteRate', 
-      width: 90, 
+    {
+      title: t('app.master-data.bom.wasteRateTitle'),
+      dataIndex: 'wasteRate',
+      width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
+      align: 'right',
       render: (_, r: any) => {
         if (isRootRow(r)) return '-';
         return r.wasteRate ? `${r.wasteRate}%` : '0%';
-      }
+      },
     },
     {
       title: t('app.master-data.bom.includeObsolete'),
@@ -2841,17 +2855,17 @@ const BOMPage: React.FC = () => {
     ...masterCrudCreatedUpdatedColumns<MaterialBOMRow>(t),
     {
       title: t('app.master-data.bom.approvalStatusTitle'),
+      key: 'lifecycle',
       dataIndex: 'approvalStatus',
-      width: UNI_TABLE_STATUS_BADGE_COLUMN_WIDTH,
       fixed: 'right' as const,
-      align: 'center' as const,
+      hideInSearch: true,
       valueType: 'select',
       sorter: false,
       valueEnum: {
-        draft: { text: t('app.master-data.bom.statusDraft'), status: 'Default' },
-        pending: { text: t('app.master-data.bom.statusPending'), status: 'Processing' },
-        approved: { text: t('app.master-data.bom.statusApproved'), status: 'Success' },
-        rejected: { text: t('app.master-data.bom.statusRejected'), status: 'Error' },
+        draft: { text: t('app.master-data.bom.statusDraft') },
+        pending: { text: t('app.master-data.bom.statusPending') },
+        approved: { text: t('app.master-data.bom.statusApproved') },
+        rejected: { text: t('app.master-data.bom.statusRejected') },
       },
       render: (_, r: any) => {
         if (isRootRow(r)) return getApprovalStatusTag(r.approvalStatus);
@@ -2861,10 +2875,9 @@ const BOMPage: React.FC = () => {
     },
     {
       title: t('common.actions'),
-      valueType: 'option',
+      key: 'action',
       fixed: 'right',
-      /** 主行直出详情/编辑/设计/审核；页面自管「更多」由 uni-action 钉住，不再二次折叠 */
-      uniActionRenderOptions: { directMax: 5 },
+      hideInSearch: true,
       render: (_, record: any) => {
         if (isBomItemRow(record)) return null;
         const r = record.selectedVersion?.firstItem ?? record.firstItem;
@@ -2875,7 +2888,6 @@ const BOMPage: React.FC = () => {
           navigate(`/apps/master-data/process/engineering-bom/designer?${p}`);
         };
         const isApproved = r.approvalStatus === 'approved';
-        // 更多菜单：按逻辑分组，查看类 → 版本管理 → 其他 → 危险操作
         const moreItems: MenuProps['items'] = [
           {
             type: 'group',
@@ -2905,45 +2917,29 @@ const BOMPage: React.FC = () => {
             disabled: isApproved,
           }] : []),
         ];
-        /** 返回数组，交给 UniTable → renderUniTableOperationCell → normalizeActionTree；顺序：详情 → 编辑 → … */
         return [
           <Button
             key="detail"
             {...rowActionKind('read')}
-            type="link"
-            size="small"
             onClick={() => handleOpenDetail(r)}
-            title={t('common.detail')}
-            data-action-priority={0}
-          >
-            {t('common.detail')}
-          </Button>,
+          />,
           bomPerms.canUpdate ? (
           <Button
             key="edit"
             {...rowActionKind('update')}
-            type="link"
-            size="small"
-            icon={<EditOutlined />}
             onClick={() => handleEdit(r)}
             disabled={isApproved}
             title={isApproved ? t('app.master-data.bom.approvedCannotEditTitle') : t('common.edit')}
-            data-action-priority={1}
             {...(isApproved ? { 'data-row-action-visible-when-disabled': true } : {})}
-          >
-            {t('common.edit')}
-          </Button>
+          />
           ) : null,
           bomPerms.canUpdate ? (
           <Button
             key="design"
             {...rowActionKind('update')}
-            type="link"
-            size="small"
-            icon={<HighlightOutlined />}
+            {...rowActionLabelKeep()}
             onClick={goDesigner}
             title={t('app.master-data.bom.designerTitle')}
-            data-action-priority={2}
           >
             {t('app.master-data.bom.design')}
           </Button>
@@ -2953,12 +2949,9 @@ const BOMPage: React.FC = () => {
             <Button
               key="approve"
               {...rowActionKind('audit')}
-              type="link"
-              size="small"
-              icon={<CheckCircleOutlined />}
+              {...rowActionLabelKeep()}
               onClick={() => handleOpenApproval(record)}
               title={t('app.master-data.bom.approvePassTitle')}
-              data-action-priority={3}
             >
               {t('app.master-data.bom.approve')}
             </Button>
@@ -2968,24 +2961,20 @@ const BOMPage: React.FC = () => {
             <Button
               key="unapprove"
               {...rowActionKind('revoke')}
-              type="link"
-              size="small"
-              icon={<UndoOutlined />}
+              {...rowActionLabelKeep()}
               onClick={() => handleUnapproveGroup(record)}
               title={t('app.master-data.bom.unapproveTitle')}
-              data-action-priority={3}
             >
               {t('app.master-data.bom.unapprove')}
             </Button>
             ) : null
           ),
-          <Dropdown key="more" {...rowActionKind('skip')} menu={{ items: moreItems }} trigger={['click']} data-action-priority={4}>
-            <Button type="text" className="ant-btn-row-action" icon={<MoreOutlined />}>
+          <Dropdown key="more" {...rowActionKind('skip')} menu={{ items: moreItems }} trigger={['click']}>
+            <Button type="text" className="ant-btn-row-action" {...rowActionLabelKeep()}>
               {t('common.more')}
             </Button>
           </Dropdown>,
         ].filter(Boolean);
-
       },
     },
   ];
@@ -3288,7 +3277,7 @@ const BOMPage: React.FC = () => {
         permissionResource={BOM_RESOURCE}
         columnPersistenceId={BOM_LIST_COLUMN_PERSISTENCE_ID}
         actionRef={actionRef}
-        columns={groupColumns}
+        columns={alignProColumns(groupColumns, GLOBAL_DOC_LIST_FIELD_RANK)}
         viewTypes={['productBom', 'semiProductBom', 'allBom', 'help']}
         helpViewConfig={buildListPageHelpViewConfig('masterData.bom')}
         defaultViewType="productBom"

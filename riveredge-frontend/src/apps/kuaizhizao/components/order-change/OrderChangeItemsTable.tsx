@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Button, DatePicker, InputNumber, Space, Table, Tag } from 'antd';
+import { Button, DatePicker, InputNumber, Space, Table, Typography } from 'antd';
 import { DeleteOutlined, PlusOutlined, RollbackOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
@@ -7,6 +7,9 @@ import { UniMaterialSelect } from '../../../../components/uni-material-select';
 import type { Material } from '../../../master-data/types/material';
 import type { OrderChangeItem } from '../../services/sales-order-change';
 import { formatDateTime } from '../../../../utils/format';
+import {
+  renderOrderChangeTypeMarkerTag,
+} from '../../utils/orderChangeType';
 
 interface OrderChangeItemsTableProps {
   items: OrderChangeItem[];
@@ -26,26 +29,51 @@ function calcDelta(row: OrderChangeItem): number {
   return Number((aq * ap - bq * bp).toFixed(2));
 }
 
+/** 与后端 diff_sales_item / diff_purchase_item 一致：按 before/after 推断变更维度 */
+function inferLineChangeTypes(row: OrderChangeItem): string[] {
+  if (row.change_type === 'LINE_ADD') return ['LINE_ADD'];
+  if (row.change_type === 'LINE_CANCEL') return ['LINE_CANCEL'];
+
+  const changes: string[] = [];
+  if (Number(row.after_quantity ?? 0) !== Number(row.before_quantity ?? 0)) {
+    changes.push('QUANTITY');
+  }
+  if (Number(row.after_unit_price ?? 0) !== Number(row.before_unit_price ?? 0)) {
+    changes.push('UNIT_PRICE');
+  }
+  const beforeDate = row.before_delivery_date ? String(row.before_delivery_date).slice(0, 10) : '';
+  const afterDate = row.after_delivery_date ? String(row.after_delivery_date).slice(0, 10) : '';
+  if (afterDate !== beforeDate) {
+    changes.push('DELIVERY_DATE');
+  }
+  return changes;
+}
+
+/** 落库 change_type：与后端「单维取首项、多维暂记 QUANTITY」一致 */
+function inferLineChangeTypeForSave(row: OrderChangeItem): string {
+  const types = inferLineChangeTypes(row);
+  if (types.length === 0) return row.change_type ?? 'QUANTITY';
+  if (types.length === 1) return types[0];
+  return 'QUANTITY';
+}
+
 export const OrderChangeItemsTable: React.FC<OrderChangeItemsTableProps> = ({ items, editable, onChange }) => {
   const { t } = useTranslation();
-
-  const changeTypeLabel = (value: string) => {
-    const labels: Record<string, string> = {
-      QUANTITY: t('common.quantity'),
-      DELIVERY_DATE: t('app.kuaizhizao.orderChange.changeTypeDeliveryDate'),
-      UNIT_PRICE: t('app.kuaizhizao.orderChange.changeTypeUnitPrice'),
-      LINE_CANCEL: t('app.kuaizhizao.orderChange.changeTypeLineCancel'),
-      LINE_ADD: t('app.kuaizhizao.orderChange.changeTypeLineAdd'),
-    };
-    return labels[value] ?? value ?? '-';
-  };
 
   const updateItem = (index: number, patch: Partial<OrderChangeItem>) => {
     if (!onChange) return;
     const next = items.map((row, i) => {
       if (i !== index) return row;
       const merged = { ...row, ...patch };
-      return { ...merged, delta_amount: calcDelta(merged) };
+      const inferredType =
+        merged.change_type === 'LINE_ADD' || merged.change_type === 'LINE_CANCEL'
+          ? merged.change_type
+          : inferLineChangeTypeForSave(merged);
+      return {
+        ...merged,
+        change_type: inferredType,
+        delta_amount: calcDelta(merged),
+      };
     });
     onChange(next);
   };
@@ -114,7 +142,9 @@ export const OrderChangeItemsTable: React.FC<OrderChangeItemsTableProps> = ({ it
           if (row.change_type === 'LINE_ADD' && editable) {
             return (
               <UniMaterialSelect
-                style={{ width: '100%' }}
+                label=""
+                placeholder={t('common.selectMaterial')}
+                formItemProps={{ style: { margin: 0, width: '100%' } }}
                 value={row.material_id}
                 onChange={(_id, material) => onMaterialPick(index, material as Material)}
               />
@@ -131,8 +161,18 @@ export const OrderChangeItemsTable: React.FC<OrderChangeItemsTableProps> = ({ it
       {
         title: t('app.kuaizhizao.orderChange.colChangeType'),
         dataIndex: 'change_type',
-        width: 88,
-        render: (v: string) => <Tag>{changeTypeLabel(v)}</Tag>,
+        width: 96,
+        render: (_v: string, row: OrderChangeItem) => {
+          const types = inferLineChangeTypes(row);
+          if (types.length === 0) return '—';
+          return (
+            <Space size={4} wrap>
+              {types.map((type) => (
+                <span key={type}>{renderOrderChangeTypeMarkerTag(t, type)}</span>
+              ))}
+            </Space>
+          );
+        },
       },
       {
         title: t('app.kuaizhizao.orderChange.colBeforeQuantity'),
@@ -151,7 +191,7 @@ export const OrderChangeItemsTable: React.FC<OrderChangeItemsTableProps> = ({ it
               min={0}
               value={v}
               style={{ width: '100%' }}
-              onChange={(val) => updateItem(index, { after_quantity: val ?? undefined, change_type: row.change_type === 'LINE_ADD' ? 'LINE_ADD' : undefined })}
+              onChange={(val) => updateItem(index, { after_quantity: val ?? undefined })}
             />
           );
         },
@@ -187,7 +227,11 @@ export const OrderChangeItemsTable: React.FC<OrderChangeItemsTableProps> = ({ it
           return (
             <DatePicker
               value={v ? dayjs(v) : undefined}
-              onChange={(d) => updateItem(index, { after_delivery_date: d ? d.format('YYYY-MM-DD') : undefined })}
+              onChange={(val) =>
+                updateItem(index, {
+                  after_delivery_date: val ? val.format('YYYY-MM-DD') : undefined,
+                })
+              }
             />
           );
         },
@@ -229,14 +273,22 @@ export const OrderChangeItemsTable: React.FC<OrderChangeItemsTableProps> = ({ it
   }, [editable, items, t]);
 
   return (
-    <>
-      {editable && (
-        <div style={{ marginBottom: 8 }}>
+    <div style={{ marginBottom: 24 }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: 12,
+        }}
+      >
+        <Typography.Text strong>{t('app.kuaizhizao.orderChange.itemsSectionTitle')}</Typography.Text>
+        {editable ? (
           <Button type="dashed" icon={<PlusOutlined />} onClick={addLine}>
             {t('app.kuaizhizao.orderChange.addLine')}
           </Button>
-        </div>
-      )}
+        ) : null}
+      </div>
       <Table
         rowKey={(r, index) => rowKey(r, index ?? 0)}
         size="small"
@@ -246,9 +298,9 @@ export const OrderChangeItemsTable: React.FC<OrderChangeItemsTableProps> = ({ it
         columns={columns}
         rowClassName={(row) => (row.change_type === 'LINE_CANCEL' ? 'order-change-row-cancelled' : '')}
       />
-      {editable && (
+      {editable ? (
         <style>{`.order-change-row-cancelled td { opacity: 0.55; text-decoration: line-through; }`}</style>
-      )}
-    </>
+      ) : null}
+    </div>
   );
 };

@@ -8,10 +8,10 @@ import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Space, Modal, Table, Select, Typography } from 'antd';
+import { App, Popconfirm, Button, Modal, Table, Select, Typography } from 'antd';
 import { useSearchParams } from 'react-router-dom';
-import { EditOutlined, DeleteOutlined, PlusOutlined, QrcodeOutlined } from '@ant-design/icons';
 import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { useTrialRunMode } from '../../../../../hooks/useTrialRunMode';
@@ -585,31 +585,46 @@ const OperationsPage: React.FC = () => {
       name: t('field.operation.name'),
     }),
     {
+      // 稀疏：编号 → 名称 → 备注 → 报工/超报/不良/人员；启用 Marker；审计叠列保留
       title: t('field.operation.code'),
       dataIndex: 'code',
-      copyable: true,width: 150,
+      copyable: true,
+      width: 168,
+      minWidth: 168,
+      uniTableKeepWidth: true,
+      resizable: false,
       fixed: 'left',
       sorter: true,
       hideInSearch: true,
+      ellipsis: true,
     },
     {
+      // 名称长短不一：唯一 RemainderFlex
       title: t('field.operation.name'),
       dataIndex: 'name',
-      width: 200,
+      minWidth: 160,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
+      resizable: false,
       sorter: true,
       hideInSearch: true,
+      ellipsis: true,
       render: (_: unknown, record: Operation) => resolvePresetOperationNameByName(record.name, t),
     },
     {
       title: t('common.remark'),
       dataIndex: 'description',
+      width: 160,
+      minWidth: 160,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       hideInSearch: true,
     },
     {
       title: t('field.operation.reportingType'),
       dataIndex: 'reportingType',
-      width: 120,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       valueType: 'select',
       valueEnum: operationReportingTypeValueEnum,
       render: (_: any, record: Operation) =>
@@ -622,7 +637,7 @@ const OperationsPage: React.FC = () => {
     {
       title: t('field.operation.overReportMode'),
       dataIndex: 'overReportMode',
-      width: 120,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       hideInSearch: true,
       render: (_: any, record: any) =>
         renderOperationOverReportModeMarker(
@@ -634,7 +649,10 @@ const OperationsPage: React.FC = () => {
     {
       title: t('field.operation.defectTypeUuids'),
       dataIndex: ['defect_types', 'defectTypes'],
-      width: 180,
+      width: 200,
+      minWidth: 200,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       ellipsis: true,
       render: (_: any, record: Operation) => {
@@ -645,7 +663,10 @@ const OperationsPage: React.FC = () => {
     {
       title: t('field.operation.defaultPersonnelConfigs'),
       dataIndex: ['default_operator_names', 'defaultOperatorNames'],
-      width: 180,
+      width: 200,
+      minWidth: 200,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       ellipsis: true,
       render: (_: any, record: Operation) =>
@@ -663,7 +684,7 @@ const OperationsPage: React.FC = () => {
     {
       title: t('app.master-data.operations.isActive'),
       dataIndex: 'isActive',
-      width: 100,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       hideInSearch: true,
       valueEnum: operationActiveValueEnum,
       render: (_: any, record: Operation) => renderOperationActiveStatusTag(t, record.isActive),
@@ -673,38 +694,21 @@ const OperationsPage: React.FC = () => {
     ...masterCrudCreatedUpdatedColumns<Operation>(t),
     {
       title: t('common.actions'),
-      valueType: 'option',
+      key: 'action',
       fixed: 'right',
-      render: (_: any, record: Operation) => (
-        <Space>
-          <Button key="view" {...rowActionKind('read')}
-            size="small"
-            onClick={() => handleOpenDetail(record)}
-          >
-            {t('common.view')}
-          </Button>
-          <Button key="edit" {...rowActionKind('update')}
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          >
-            {t('common.edit')}
-          </Button>
-          <Popconfirm key="delete" {...rowActionKind('delete')} title={t('common.confirmDelete')}
-            description={t('app.master-data.operations.deleteConfirmDesc')}
-            onConfirm={() => handleDelete(record)}
-          >
-            <Button
-              type="link"
-              danger
-              size="small"
-              icon={<DeleteOutlined />}
-            >
-              {t('common.delete')}
-            </Button>
-          </Popconfirm>
-        </Space>
-      ),
+      hideInSearch: true,
+      render: (_: any, record: Operation) => [
+        <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)} />,
+        <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)} />,
+        <Popconfirm
+          key="delete"
+          title={t('common.confirmDelete')}
+          description={t('app.master-data.operations.deleteConfirmDesc')}
+          onConfirm={() => handleDelete(record)}
+        >
+          <Button {...rowActionKind('delete')} />
+        </Popconfirm>,
+      ],
     },
     ];
   }, [customFields, t, operationActiveValueEnum, operationReportingTypeValueEnum]);
@@ -714,7 +718,7 @@ const OperationsPage: React.FC = () => {
       <UniTable<Operation>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('masterData.operations')}
-        columnPersistenceId="apps.master-data.pages.process.operations.status-v2"
+        columnPersistenceId="apps.master-data.pages.process.operations.list-v3"
         actionRef={actionRef}
         columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
         request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {

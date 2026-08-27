@@ -99,6 +99,7 @@ async def list_sales_reviews(
     pullable_only: Optional[bool] = Query(
         None, description="仅可下推销售订单：评审已通过且未关联销售订单"
     ),
+    include_items: bool = Query(False, description="是否附带明细预览（列表物料名）"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -116,6 +117,7 @@ async def list_sales_reviews(
         keyword=keyword,
         order_by=safe_order_by,
         pullable_only=pullable_only,
+        include_items=include_items,
         current_user=current_user,
     )
 

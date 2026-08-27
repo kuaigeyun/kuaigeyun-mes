@@ -17,7 +17,7 @@ import {
   ProFormSwitch,
 } from '@ant-design/pro-components';
 import { DictionarySelect } from '../../../../../components/dictionary-select';
-import { App, Button, Modal, Row, Col, Typography } from 'antd';
+import { App, Button, Modal, Row, Col } from 'antd';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { UniTable } from '../../../../../components/uni-table';
@@ -55,6 +55,7 @@ import {
   resolveLedgerListParams,
 } from '../../../utils/equipmentListCore';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
+import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import {
   renderEquipmentMasterRowActions,
 } from '../shared/equipmentMasterDataDetail';
@@ -311,46 +312,61 @@ const ToolLedgerPage: React.FC = () => {
       search: { order: 22 } as ProColumns['search'],
     },
     {
-      title: t('app.kuaizhizao.toolLedger.colCode'),
+      title: t('app.kuaizhizao.toolLedger.colNameCode'),
       dataIndex: 'code',
-      width: 140,
-      ellipsis: true,
+      minWidth: 200,
+      uniTablePrimaryFlex: true,
+      uniTableRemainderFlex: true,
+      resizable: false,
+      ellipsis: false,
       fixed: 'left',
       sorter: true,
       search: { order: 30 } as ProColumns['search'],
       render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.code ?? '') }} ellipsis>
-          {r.code ?? '-'}
-        </Typography.Text>
+        <UniTableStackedPrimaryCell
+          primary={String(r.name ?? '') || '-'}
+          secondary={String(r.code ?? '') || '-'}
+        />
       ),
-    },
-    {
-      title: t('app.kuaizhizao.toolLedger.colName'),
-      dataIndex: 'name',
-      width: 200,
-      ellipsis: true,
-      sorter: true,
-      hideInSearch: true,
     },
     {
       title: t('app.kuaizhizao.toolLedger.colType'),
       dataIndex: 'type',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
       sorter: true,
       hideInSearch: true,
+      render: (_, r) => (r.type != null && r.type !== '' ? String(r.type) : '-'),
     },
-    { title: t('app.kuaizhizao.toolLedger.colSpec'), dataIndex: 'spec', width: 120, ellipsis: true, hideInSearch: true },
+    {
+      title: t('app.kuaizhizao.toolLedger.colSpec'),
+      dataIndex: 'spec',
+      width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
+      hideInSearch: true,
+      render: (_, r) => (r.spec != null && r.spec !== '' ? String(r.spec) : '-'),
+    },
     {
       title: t('app.kuaizhizao.toolLedger.colTotalUsageCount'),
       dataIndex: 'total_usage_count',
       width: 110,
+      minWidth: 110,
+      uniTableKeepWidth: true,
+      resizable: false,
       sorter: true,
       hideInSearch: true,
+      render: (_, r) => (r.total_usage_count != null ? String(r.total_usage_count) : '-'),
     },
     ...buildDocumentAuditColumns<Record<string, unknown>>(t),
     {
       title: t('common.actions'),
-      valueType: 'option',
+      key: 'option',
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) =>
@@ -384,7 +400,7 @@ const ToolLedgerPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.toolsLedger')}
           headerTitle={t('app.kuaizhizao.toolLedger.title')}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-ledger-equip-rank-v1"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-ledger-width-v2"
           actionRef={actionRef}
           rowKey="uuid"
           columns={columns}

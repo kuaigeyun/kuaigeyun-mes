@@ -5,13 +5,8 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Popconfirm, Space, theme as AntdTheme } from 'antd';
-import { DeleteOutlined } from '@ant-design/icons';
+import { App, Button, Popconfirm, theme as AntdTheme } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
-import {
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-  UniTableStackedPrimaryCell,
-} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
@@ -21,6 +16,7 @@ import { shiftApi } from '../../../services/performance';
 import type { Shift } from '../../../types/performance';
 import { ShiftFormModal } from '../../../components/ShiftFormModal';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import {
   getPerformanceInactiveActiveValueEnum,
   renderActiveTag,
@@ -126,23 +122,26 @@ const ShiftsPage: React.FC = () => {
   const columns: ProColumns<Shift>[] = useMemo(
     () => alignProColumns<Shift>([
       {
-        title: t('app.kuaizhizao.performance.shifts.columns.shiftName'),
-        key: 'performance_name_code_stacked',
-        dataIndex: 'name',
-        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-        fixed: 'left',
-        sorter: true,
-        render: (_, r) => (
-          <UniTableStackedPrimaryCell
-            primary={String(r.name ?? '').trim() || '-'}
-            secondary={String(r.code ?? '').trim() || '-'}
-          />
-        ),
-      },
-      {
+        // 列稀疏：业务列不堆叠（表单序：编码 → 名称）；审计叠列仍走 buildDocumentAuditColumns
         title: t('app.kuaizhizao.performance.shifts.columns.shiftCode'),
         dataIndex: 'code',
-        hideInTable: true,
+        width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
+        fixed: 'left',
+        sorter: true,
+        copyable: true,
+      },
+      {
+        // 班次名称长短不一：唯一 RemainderFlex
+        title: t('app.kuaizhizao.performance.shifts.columns.shiftName'),
+        dataIndex: 'name',
+        minWidth: 140,
+        uniTableRemainderFlex: true,
+        uniTablePrimaryFlex: true,
+        resizable: false,
+        ellipsis: true,
         sorter: true,
       },
       {
@@ -156,20 +155,11 @@ const ShiftsPage: React.FC = () => {
         render: (_, r) => `${r.startTime?.slice(0, 5) ?? '-'} ~ ${r.endTime?.slice(0, 5) ?? '-'}`,
       },
       {
-        title: t('app.kuaizhizao.performance.shifts.columns.crossesMidnight'),
-        dataIndex: 'crossesMidnight',
-        width: 88,
-        minWidth: 88,
-        uniTableKeepWidth: true,
-        resizable: false,
-        hideInSearch: true,
-        render: (_, r) => renderYesNoTag(t, r.crossesMidnight),
-      },
-      {
         title: t('app.kuaizhizao.performance.shifts.columns.standardHours'),
         dataIndex: 'standardHours',
-        width: 96,
-        minWidth: 96,
+        // 稀疏：表头「标准工时」+ 排序钮
+        width: 132,
+        minWidth: 132,
         uniTableKeepWidth: true,
         resizable: false,
         align: 'right',
@@ -177,14 +167,24 @@ const ShiftsPage: React.FC = () => {
         sorter: true,
       },
       {
-        title: t('common.status'),
+        title: t('app.kuaizhizao.performance.shifts.columns.crossesMidnight'),
+        dataIndex: 'crossesMidnight',
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+        hideInSearch: true,
+        render: (_, r) => renderYesNoTag(t, r.crossesMidnight),
+      },
+      {
+        title: t('common.enabled'),
         dataIndex: 'isActive',
-        width: 88,
-        minWidth: 88,
-        uniTableKeepWidth: true,
-        resizable: false,
+        hideInTable: true,
         valueType: 'select',
         valueEnum: getPerformanceInactiveActiveValueEnum(t),
+      },
+      {
+        title: t('common.enabled'),
+        dataIndex: 'isActive',
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+        hideInSearch: true,
         sorter: true,
         render: (_, r) => renderActiveTag(t, r.isActive, 'inactive'),
       },
@@ -192,17 +192,17 @@ const ShiftsPage: React.FC = () => {
       {
         title: t('common.actions'),
         key: 'action',
-        valueType: 'option',
         fixed: 'right',
         hideInSearch: true,
-        render: (_, record) => (
-          <Space>
-            {shiftPerms.canRead ? (
-              <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)}>
-                {t('common.detail')}
-              </Button>
-            ) : null}
-            {shiftPerms.canUpdate ? (
+        render: (_, record) => {
+          const parts: React.ReactNode[] = [];
+          if (shiftPerms.canRead) {
+            parts.push(
+              <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)} />,
+            );
+          }
+          if (shiftPerms.canUpdate) {
+            parts.push(
               <Button
                 key="edit"
                 {...rowActionKind('update')}
@@ -210,14 +210,13 @@ const ShiftsPage: React.FC = () => {
                   setEditUuid(record.uuid);
                   setModalVisible(true);
                 }}
-              >
-                {t('common.edit')}
-              </Button>
-            ) : null}
-            {shiftPerms.canDelete ? (
+              />,
+            );
+          }
+          if (shiftPerms.canDelete) {
+            parts.push(
               <Popconfirm
                 key="delete"
-                {...rowActionKind('delete')}
                 title={t('app.kuaizhizao.performance.shifts.messages.deleteConfirm')}
                 onConfirm={async () => {
                   try {
@@ -229,13 +228,12 @@ const ShiftsPage: React.FC = () => {
                   }
                 }}
               >
-                <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-                  {t('common.delete')}
-                </Button>
-              </Popconfirm>
-            ) : null}
-          </Space>
-        ),
+                <Button {...rowActionKind('delete')} />
+              </Popconfirm>,
+            );
+          }
+          return parts;
+        },
       },
     ], SALES_DOC_LIST_FIELD_RANK),
     [t, messageApi, shiftPerms],
@@ -246,7 +244,7 @@ const ShiftsPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable<Shift>
           headerTitle={t('app.kuaizhizao.performance.shifts.pageTitle')}
-          columnPersistenceId="apps.kuaizhizao.pages.performance.shifts.v1"
+          columnPersistenceId="apps.kuaizhizao.pages.performance.shifts.v4"
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.shifts')}
           actionRef={actionRef}

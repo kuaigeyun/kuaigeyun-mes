@@ -32,6 +32,10 @@ import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
   MaterialStackedCell,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
+import {
+  DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+  renderDocumentLineMaterialsPreview,
+} from '../../sales-management/shared/documentLineMaterialsPreview';
 import { UniAuditBatchMenuButton, UniCapabilityBatchButton } from '../../../../../components/uni-batch';
 import { buildUniPushMenuItems, buildUniPushToolbarDisabledReason, UniPushToolbarButton } from '../../../../../components/uni-push';
 import {
@@ -174,7 +178,7 @@ type PurchaseRequisitionItemRow = PurchaseRequisitionItem & {
 };
 
 const PURCHASE_REQUISITION_LIST_PERSISTENCE_ID =
-  'apps.kuaizhizao.pages.purchase-management.purchase-requisitions.v4';
+  'apps.kuaizhizao.pages.purchase-management.purchase-requisitions-width-v1';
 
 type PullDemandComputationCandidate = DemandComputationPurchasePullLine;
 
@@ -1470,19 +1474,14 @@ const PurchaseRequisitionsPage: React.FC = () => {
       title: t('app.kuaizhizao.purchaseRequisition.col.nameAndCode'),
       key: 'requisition_code',
       dataIndex: 'requisition_code',
-      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-      fixed: 'left',
-      width: 320,
-      minWidth: 320,
+      width: 240,
+      minWidth: 240,
       uniTableKeepWidth: true,
+      uniTablePrimaryFlex: false,
+      resizable: false,
+      fixed: 'left',
       sorter: true,
       hideInSearch: false,
-      onCell: () => ({
-        style: {
-          maxWidth: 320,
-          overflow: 'hidden',
-        },
-      }),
       render: (_, record) => (
         <UniTableStackedPrimaryCell
           primary={String(record.requisition_name ?? '')}
@@ -1508,7 +1507,9 @@ const PurchaseRequisitionsPage: React.FC = () => {
       title: `${t('app.kuaizhizao.purchaseRequisition.col.sourceType')} / ${t('app.kuaizhizao.purchaseRequisition.col.sourceCode')}`,
       dataIndex: 'source_type',
       width: 180,
+      minWidth: 180,
       uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: false,
       ellipsis: true,
       valueEnum: {
@@ -1522,7 +1523,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
           return t('app.kuaizhizao.purchaseRequisition.col.sourceTypeActiveRequest');
         }
         return (
-          <Space direction="vertical" size={0} style={{ lineHeight: 1.35 }}>
+          <Space orientation="vertical" size={0} style={{ lineHeight: 1.35 }}>
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
               {formatPurchaseRequisitionSourceType(record.source_type, t)}
             </Typography.Text>
@@ -1536,11 +1537,18 @@ const PurchaseRequisitionsPage: React.FC = () => {
       },
     },
     {
+      title: t('app.kuaizhizao.common.colLineMaterials'),
+      ...DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+      render: (_, record) => renderDocumentLineMaterialsPreview(record.items, t),
+    },
+    {
       title: t('app.kuaizhizao.purchaseRequisition.col.requiredDate'),
       dataIndex: 'required_date',
       valueType: 'date',
       width: 132,
+      minWidth: 132,
       uniTableKeepWidth: true,
+      resizable: false,
       sorter: true,
       hideInSearch: true,
     },
@@ -1556,6 +1564,9 @@ const PurchaseRequisitionsPage: React.FC = () => {
       title: t('common.quantity'),
       dataIndex: 'total_quantity',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       align: 'right',
       hideInSearch: true,
       render: (_, record) =>
@@ -1565,6 +1576,9 @@ const PurchaseRequisitionsPage: React.FC = () => {
       title: t('app.kuaizhizao.salesOrder.totalAmountLabel'),
       dataIndex: 'total_amount',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       align: 'right',
       hideInSearch: true,
       render: (_, record) =>
@@ -2211,7 +2225,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
               source_type: s.source_type,
               required_date_from: s.required_date_from,
               required_date_to: s.required_date_to,
-              include_items: dataViewModeRef.current === 'detail',
+              include_items: true,
             };
             if (fuzzyKeyword) {
               apiParams.keyword = fuzzyKeyword;

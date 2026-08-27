@@ -38,6 +38,7 @@ import {
 } from '../shared/equipmentMasterDataDetail';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 
 const P = 'app.kuaizhizao.equipmentOps.inspectionScheme';
 const RESOURCE = 'kuaizhizao:equipment-inspection-scheme';
@@ -224,7 +225,11 @@ const InspectionSchemesPage: React.FC = () => {
       {
         title: t('common.code'),
         dataIndex: 'code',
-        width: 120,
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
         fixed: 'left',
         sorter: true,
         search: { order: 30 } as ProColumns['search'],
@@ -232,7 +237,10 @@ const InspectionSchemesPage: React.FC = () => {
       {
         title: t('common.name'),
         dataIndex: 'name',
-        width: 180,
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
         ellipsis: true,
         sorter: true,
         hideInSearch: true,
@@ -241,34 +249,46 @@ const InspectionSchemesPage: React.FC = () => {
         title: t(`${P}.col.cycleType`),
         dataIndex: 'cycle_type',
         width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
+        render: (_, r) => (r.cycle_type != null && r.cycle_type !== '' ? String(r.cycle_type) : '-'),
       },
       {
         title: t(`${P}.col.lineCount`),
+        key: 'line_count',
         dataIndex: 'lines',
         width: 90,
+        minWidth: 90,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         render: (_, r) => r.lines?.length ?? 0,
       },
-      { title: t('common.remark'), dataIndex: 'description', ellipsis: true, hideInSearch: true },
+      {
+        title: t('common.remark'),
+        dataIndex: 'description',
+        minWidth: 160,
+        uniTablePrimaryFlex: true,
+        uniTableRemainderFlex: true,
+        resizable: false,
+        ellipsis: true,
+        hideInSearch: true,
+        render: (_, r) => (r.description != null && r.description !== '' ? String(r.description) : '-'),
+      },
       {
         title: t('common.enabled'),
         dataIndex: 'is_active',
-        width: 80,
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         sorter: true,
         hideInSearch: true,
         render: (_, r) => renderIsActiveTag(t, r.is_active),
       },
-      {
-        title: t('common.updatedAt'),
-        dataIndex: 'updated_at',
-        hideInTable: true,
-        hideInSearch: true,
-      },
       ...buildDocumentAuditColumns<InspectionScheme>(t),
       {
         title: t('common.actions'),
-        key: 'action',
+        key: 'option',
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) =>
@@ -302,7 +322,7 @@ const InspectionSchemesPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.inspectionSchemes)}
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.inspection-schemes"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.inspection-schemes-width-v2"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}

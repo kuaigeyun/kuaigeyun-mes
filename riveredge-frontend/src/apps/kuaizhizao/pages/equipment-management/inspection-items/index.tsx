@@ -35,6 +35,7 @@ import {
 } from '../shared/equipmentMasterDataDetail';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 
 const P = 'app.kuaizhizao.equipmentOps.inspectionItem';
 const RESOURCE = 'kuaizhizao:equipment-inspection-item';
@@ -179,7 +180,11 @@ const InspectionItemsPage: React.FC = () => {
       {
         title: t('common.code'),
         dataIndex: 'code',
-        width: 120,
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
         fixed: 'left',
         sorter: true,
         search: { order: 30 } as ProColumns['search'],
@@ -187,7 +192,10 @@ const InspectionItemsPage: React.FC = () => {
       {
         title: t('common.name'),
         dataIndex: 'name',
-        width: 180,
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
         ellipsis: true,
         sorter: true,
         hideInSearch: true,
@@ -196,29 +204,52 @@ const InspectionItemsPage: React.FC = () => {
         title: t(`${P}.col.valueType`),
         dataIndex: 'value_type',
         width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
-        render: (_, r) => t(`${P}.valueType.${r.value_type || 'boolean'}`, r.value_type || '-'),
+        render: (_, r) => {
+          const vt = String(r.value_type || 'boolean');
+          return t(`${P}.valueType.${vt}`, vt);
+        },
       },
-      { title: t('common.unit'), dataIndex: 'unit', width: 80, hideInSearch: true },
-      { title: t(`${P}.col.requirement`), dataIndex: 'requirement', ellipsis: true, hideInSearch: true },
+      {
+        title: t('common.unit'),
+        dataIndex: 'unit',
+        width: 80,
+        minWidth: 80,
+        uniTableKeepWidth: true,
+        resizable: false,
+        hideInSearch: true,
+        render: (_, r) => {
+          const unit = r.unit;
+          if (unit == null || unit === '') return '-';
+          return typeof unit === 'string' || typeof unit === 'number' ? String(unit) : '-';
+        },
+      },
+      {
+        title: t(`${P}.col.requirement`),
+        dataIndex: 'requirement',
+        minWidth: 160,
+        uniTablePrimaryFlex: true,
+        uniTableRemainderFlex: true,
+        resizable: false,
+        ellipsis: true,
+        hideInSearch: true,
+        render: (_, r) => (r.requirement != null && r.requirement !== '' ? String(r.requirement) : '-'),
+      },
       {
         title: t('common.enabled'),
         dataIndex: 'is_active',
-        width: 80,
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         sorter: true,
         hideInSearch: true,
         render: (_, r) => renderIsActiveTag(t, r.is_active),
       },
-      {
-        title: t('common.updatedAt'),
-        dataIndex: 'updated_at',
-        hideInTable: true,
-        hideInSearch: true,
-      },
       ...buildDocumentAuditColumns<InspectionItem>(t),
       {
         title: t('common.actions'),
-        key: 'action',
+        key: 'option',
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) =>
@@ -252,7 +283,7 @@ const InspectionItemsPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.inspectionItems)}
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.inspection-items"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.inspection-items-width-v2"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}

@@ -10,7 +10,6 @@ import {
 } from '../components/qualityTableColumns';
 import {
   MaterialStackedCell,
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
@@ -333,7 +332,12 @@ const NonconformingLedgerPage: React.FC = () => {
         title: t('app.kuaizhizao.quality.common.columns.material'),
         key: 'quality_inspection_material',
         dataIndex: 'product_name',
-        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        width: 200,
+        minWidth: 200,
+        uniTableKeepWidth: true,
+        uniTablePrimaryFlex: false,
+        resizable: false,
+        ellipsis: false,
         hideInSearch: true,
         render: (_, row) => (
           <MaterialStackedCell
@@ -378,9 +382,10 @@ const NonconformingLedgerPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.quality.nc.columns.defectReason'),
         dataIndex: 'defect_reason',
+        // 无行项目明细：缺陷原因吃掉视口剩余（RemainderFlex）
         minWidth: 200,
         uniTablePrimaryFlex: true,
-        uniTablePrimaryFlexMaxWidth: 480,
+        uniTableRemainderFlex: true,
         resizable: false,
         ellipsis: true,
         sorter: true,
@@ -390,6 +395,9 @@ const NonconformingLedgerPage: React.FC = () => {
         title: t('app.kuaizhizao.quality.nc.columns.downgradeMaterial'),
         dataIndex: 'downgrade_material_name',
         width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
         ellipsis: true,
         hideInSearch: true,
         render: (_, row) =>
@@ -417,8 +425,7 @@ const NonconformingLedgerPage: React.FC = () => {
       },
       {
         title: t('common.actions'),
-        key: 'action',
-        valueType: 'option',
+        key: 'option',
         fixed: 'right',
         hideInSearch: true,
         render: (_, row) => {
@@ -480,7 +487,7 @@ const NonconformingLedgerPage: React.FC = () => {
           onRowSelectionChange={setSelectedRowKeys}
           permissionResource={NC_RESOURCE}
           columns={columns}
-          columnPersistenceId="apps.kuaizhizao.pages.quality-management.nonconforming-ledger-rank-v5"
+          columnPersistenceId="apps.kuaizhizao.pages.quality-management.nonconforming-ledger-width-v1"
           showAdvancedSearch
           pinnedTabsField={NC_LEDGER_PINNED_STATUS_FIELD}
           skipFuzzyPinyinClientFilter

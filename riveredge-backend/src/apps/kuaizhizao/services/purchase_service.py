@@ -46,6 +46,7 @@ from apps.kuaizhizao.services.document_action_policy.enricher import (
     enrich_purchase_order_list_capabilities,
 )
 from core.utils.timezone_utils import resolve_business_datetime, to_site_date, today_site_str
+from core.utils.quantity_precision import quantize_business_quantity
 from apps.kuaizhizao.services.document_action_policy.purchase_order import (
     assert_purchase_order_capability,
     derive_purchase_order_capabilities,
@@ -259,6 +260,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             config_service = BusinessConfigService()
             biz_config = await config_service.get_business_config(tenant_id)
             purchase_price_fluctuation_limit = await config_service.get_purchase_price_fluctuation_limit_percent(tenant_id)
+            quantity_decimal_places = await config_service.get_quantity_decimal_places(tenant_id)
             require_purchase_requisition = (
                 biz_config.get("parameters", {})
                 .get("procurement", {})
@@ -317,10 +319,15 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 )
 
                 # 计算总价
-                total_price = item_data.ordered_quantity * item_data.unit_price
-                outstanding_quantity = item_data.ordered_quantity
+                ordered_qty = quantize_business_quantity(
+                    item_data.ordered_quantity, quantity_decimal_places
+                )
+                total_price = ordered_qty * item_data.unit_price
+                outstanding_quantity = ordered_qty
 
                 item_dict = item_data.model_dump()
+                item_dict["ordered_quantity"] = ordered_qty
+                item_dict["outstanding_quantity"] = outstanding_quantity
                 if not str(item_dict.get("material_name") or "").strip():
                     item_dict["material_name"] = str(material.name or "")[:200]
                 if not str(item_dict.get("material_code") or "").strip():
@@ -346,7 +353,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
 
                 await PurchaseOrderItem.create(**item_dict)
 
-                total_quantity += item_data.ordered_quantity
+                total_quantity += ordered_qty
                 total_amount += total_price
 
             # 更新订单头金额信息
@@ -1058,6 +1065,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 purchase_price_fluctuation_limit = await BusinessConfigService().get_purchase_price_fluctuation_limit_percent(
                     tenant_id
                 )
+                quantity_decimal_places = await BusinessConfigService().get_quantity_decimal_places(tenant_id)
                 partner_settlement_method = None
                 supplier_id_for_items = int(update_dict.get("supplier_id", order.supplier_id) or 0)
                 if supplier_id_for_items > 0:
@@ -1085,10 +1093,15 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                         fluctuation_limit_percent=purchase_price_fluctuation_limit,
                     )
 
-                    total_price = item_data.ordered_quantity * item_data.unit_price
-                    outstanding_quantity = item_data.ordered_quantity
+                    ordered_qty = quantize_business_quantity(
+                        item_data.ordered_quantity, quantity_decimal_places
+                    )
+                    total_price = ordered_qty * item_data.unit_price
+                    outstanding_quantity = ordered_qty
 
                     item_dict = item_data.model_dump()
+                    item_dict["ordered_quantity"] = ordered_qty
+                    item_dict["outstanding_quantity"] = outstanding_quantity
                     if not str(item_dict.get("material_name") or "").strip():
                         item_dict["material_name"] = str(material.name or "")[:200]
                     if not str(item_dict.get("material_code") or "").strip():
@@ -1125,7 +1138,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                         )
                     await PurchaseOrderItem.create(**item_dict)
 
-                    total_quantity += item_data.ordered_quantity
+                    total_quantity += ordered_qty
                     total_amount += total_price
 
                 # 更新订单头金额

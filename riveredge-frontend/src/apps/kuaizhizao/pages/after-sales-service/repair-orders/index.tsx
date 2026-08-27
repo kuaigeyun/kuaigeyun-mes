@@ -9,7 +9,9 @@ import { UniTable } from '../../../../../components/uni-table';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { formatDateTime } from '../../../../../utils/format';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import {
+  AFTER_SALES_CUSTOMER_NAME_COLUMN_DEFAULTS,
   AFTER_SALES_REPAIR_STATUS_COLOR,
   renderAfterSalesStatusTag,
   renderAfterSalesTypeMarker,
@@ -82,8 +84,8 @@ const RepairOrdersPage: React.FC = () => {
           {
             title: t('app.kuaizhizao.afterSalesService.repairOrder.field.orderCode'),
             dataIndex: 'order_code',
-            width: 148,
-            minWidth: 148,
+            width: 188,
+            minWidth: 188,
             uniTableKeepWidth: true,
             resizable: false,
             fixed: 'left',
@@ -92,20 +94,24 @@ const RepairOrdersPage: React.FC = () => {
           {
             title: t('app.kuaizhizao.afterSalesService.repairOrder.field.customerName'),
             dataIndex: 'customer_name',
-            width: 148,
-            minWidth: 148,
-            uniTableKeepWidth: true,
-            resizable: false,
-            ellipsis: true,
+            ...AFTER_SALES_CUSTOMER_NAME_COLUMN_DEFAULTS,
           },
           {
             title: t('app.kuaizhizao.afterSalesService.repairOrder.field.repairMode'),
             dataIndex: 'repair_mode',
-            width: 100,
-            minWidth: 100,
-            uniTableKeepWidth: true,
-            resizable: false,
+            ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
             render: (_, row) => renderAfterSalesTypeMarker(row.repair_mode),
+          },
+          {
+            // 故障描述长短不一：唯一 RemainderFlex（客户列统一 KeepWidth，勿再吃余量）
+            title: t('app.kuaizhizao.afterSalesService.repairOrder.field.faultDescription'),
+            dataIndex: 'fault_description',
+            minWidth: 160,
+            uniTableRemainderFlex: true,
+            uniTablePrimaryFlex: true,
+            resizable: false,
+            ellipsis: true,
+            hideInSearch: true,
           },
           {
             title: t('app.kuaizhizao.afterSalesService.repairOrder.field.reportedAt'),
@@ -126,9 +132,8 @@ const RepairOrdersPage: React.FC = () => {
               renderAfterSalesStatusTag(row.status, AFTER_SALES_REPAIR_STATUS_COLOR),
           },
           {
-            title: t('common.action'),
+            title: t('common.actions'),
             key: 'action',
-            valueType: 'option',
             fixed: 'right',
             hideInSearch: true,
             render: (_, row) => [
@@ -152,7 +157,7 @@ const RepairOrdersPage: React.FC = () => {
         ],
         SALES_DOC_LIST_FIELD_RANK,
       ),
-    [messageApi, modal, perms.canDelete, perms.canUpdate, t],
+    [perms.canDelete, perms.canUpdate, t],
   );
 
   return (
@@ -162,7 +167,7 @@ const RepairOrdersPage: React.FC = () => {
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.afterSalesRepair)}
         actionRef={actionRef}
         columns={columns}
-        columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.repair-orders.v3"
+        columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.repair-orders.v6"
         rowKey="id"
         headerTitle={t('app.kuaizhizao.menu.after-sales-service.repair-orders')}
         request={async (params) => {

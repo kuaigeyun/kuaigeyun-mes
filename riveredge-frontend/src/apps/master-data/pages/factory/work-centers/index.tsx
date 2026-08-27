@@ -25,6 +25,7 @@ import {
 } from '../../../services/factory';
 import {
   buildMasterCrudActiveValueEnum,
+  buildMasterCrudActiveStatusColumn,
   MASTER_CRUD_PINNED_ACTIVE_FIELD,
   MASTER_DATA_LIST_FIELD_RANK,
   masterCrudCodeNameSearchColumns,
@@ -502,27 +503,10 @@ const WorkCentersPage: React.FC = () => {
       hideInSearch: true,
     },
     ...customFieldColumns,
-    {
-      title: t('common.enabled'),
-      dataIndex: 'isActive',
-      hideInTable: true,
-      order: 20,
-      valueType: 'select',
-      valueEnum: workCenterActiveValueEnum,
-      fieldProps: { allowClear: true },
-    },
-    {
-      title: t('common.enabled'),
-      dataIndex: 'isActive',
-      width: 88,
-      minWidth: 88,
-      uniTableKeepWidth: true,
-      resizable: false,
-      hideInSearch: true,
-      sorter: true,
-      valueEnum: workCenterActiveValueEnum,
-      render: (_, record) => renderMasterActiveTag(t, record?.isActive, 'common.enabled', 'common.disabled'),
-    },
+    ...buildMasterCrudActiveStatusColumn<WorkCenter>(t, {
+      activeValueEnum: workCenterActiveValueEnum,
+      statusTitleKey: 'common.enabled',
+    }),
     ...masterCrudCreatedUpdatedColumns<WorkCenter>(t),
     {
       title: t('common.actions'),
@@ -602,7 +586,7 @@ const WorkCentersPage: React.FC = () => {
           message={t('app.master-data.workCenters.dimensionHint')}
         />
         <UniTable<WorkCenter>
-          columnPersistenceId="apps.master-data.pages.factory.work-centers.list-v1"
+          columnPersistenceId="apps.master-data.pages.factory.work-centers.list-v2"
           actionRef={actionRef}
           columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
           viewTypes={['table', 'help']}

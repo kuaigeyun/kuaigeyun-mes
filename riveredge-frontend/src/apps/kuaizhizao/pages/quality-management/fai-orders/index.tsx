@@ -462,8 +462,8 @@ const FaiOrdersPage: React.FC = () => {
           {
             title: t('app.kuaizhizao.quality.fai.faiCode'),
             dataIndex: 'fai_code',
-            width: 140,
-            minWidth: 140,
+            width: 168,
+            minWidth: 168,
             uniTableKeepWidth: true,
             resizable: false,
             ellipsis: false,
@@ -471,12 +471,12 @@ const FaiOrdersPage: React.FC = () => {
             hideInSearch: true,
           },
           {
-            // 余宽在 uniTablePrimaryFlexMaxWidth 内分给标题列（与 8D / 来料等列表同一引擎契约）
+            // 无行项目明细：标题吃掉视口剩余（RemainderFlex）
             title: t('app.kuaizhizao.quality.fai.title'),
             dataIndex: 'title',
             minWidth: 200,
             uniTablePrimaryFlex: true,
-            uniTablePrimaryFlexMaxWidth: 480,
+            uniTableRemainderFlex: true,
             resizable: false,
             ellipsis: true,
             hideInSearch: true,
@@ -488,6 +488,14 @@ const FaiOrdersPage: React.FC = () => {
           },
           {
             ...buildQualityInspectionListMaterialColumn<FaiOrder>(t),
+            // 本页余量已给标题：物料改 ContentKeepWidth，避免双 RemainderFlex
+            width: 200,
+            minWidth: 200,
+            uniTableKeepWidth: true,
+            uniTablePrimaryFlex: false,
+            uniTableRemainderFlex: false,
+            resizable: false,
+            ellipsis: false,
             render: (_, r) => (
               <MaterialStackedCell
                 material_name={r.material_name || r.part_name}
@@ -499,8 +507,8 @@ const FaiOrdersPage: React.FC = () => {
           {
             title: t('app.kuaizhizao.quality.fai.workOrder'),
             dataIndex: 'work_order_code',
-            width: 150,
-            minWidth: 150,
+            width: 180,
+            minWidth: 180,
             uniTableKeepWidth: true,
             resizable: false,
             hideInSearch: true,
@@ -701,7 +709,7 @@ const FaiOrdersPage: React.FC = () => {
           onRowSelectionChange={setSelectedRowKeys}
           columns={columns}
           showAdvancedSearch
-          columnPersistenceId="apps.kuaizhizao.pages.quality-management.fai-orders.list-v9"
+          columnPersistenceId="apps.kuaizhizao.pages.quality-management.fai-orders-width-v1"
           onTableDataChange={(rows) => {
             tableRowsRef.current = rows;
           }}

@@ -15,7 +15,6 @@ import {
   Space,
   Spin,
   Switch,
-  Tag,
   Timeline,
   Typography,
 } from 'antd';
@@ -41,10 +40,11 @@ import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniDetail } from '../../../../../components/uni-detail';
 import {
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
   UNI_TABLE_STACKED_AUDIT_COLUMN_DEFAULTS,
   UniTableStackedPrimaryCell,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { MarkerTag } from '../../../../../constants/statusBadges';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { rowActionKind } from '../../../../../components/uni-action';
@@ -499,8 +499,12 @@ const CustomerPoolPage: React.FC = () => {
       {
         title: t('field.customer.nameCode'),
         dataIndex: 'code',
-        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-        minWidth: 260,
+        // RemainderFlex：只挂宽桶 flag，身份仍用 dataIndex=code（rank 10），禁止另起 key 抢列序
+        minWidth: 200,
+        uniTablePrimaryFlex: true,
+        uniTableRemainderFlex: true,
+        resizable: false,
+        ellipsis: false,
         sorter: true,
         hideInSearch: true,
         render: (_, row) => (
@@ -528,8 +532,11 @@ const CustomerPoolPage: React.FC = () => {
         title: `${t('field.customer.contactPerson')} / ${t('field.customer.phone')}`,
         key: 'pool_contact_phone_stacked',
         dataIndex: 'contact_person',
-        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        width: 190,
         minWidth: 190,
+        uniTableKeepWidth: true,
+        uniTablePrimaryFlex: false,
+        resizable: false,
         sorter: true,
         hideInSearch: true,
         render: (_, row) => (
@@ -544,6 +551,9 @@ const CustomerPoolPage: React.FC = () => {
         key: 'pool_salesman_name',
         dataIndex: 'salesman_name',
         width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
         sorter: true,
         hideInSearch: true,
         render: (_, row) => normalizeUserDisplayName(row.salesman_name) || '—',
@@ -552,6 +562,9 @@ const CustomerPoolPage: React.FC = () => {
         title: t('app.kuaizhizao.customerPool.collaborators'),
         dataIndex: 'collaborators',
         width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         render: (_, row) =>
           row.pool_status === 'owned' ? renderCollaboratorsCell(row.collaborators) : '—',
@@ -588,26 +601,23 @@ const CustomerPoolPage: React.FC = () => {
       {
         title: t('field.customer.poolStatus'),
         dataIndex: 'pool_status',
-        width: 100,
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         sorter: true,
         hideInSearch: true,
-        render: (_, row) => (
+        render: (_, row) =>
           row.pool_status === 'pool' ? (
-            <Tag color="blue" bordered={false} variant="filled">
-              {t('app.kuaizhizao.customerPool.scopePublic')}
-            </Tag>
+            <MarkerTag color="processing">{t('app.kuaizhizao.customerPool.scopePublic')}</MarkerTag>
           ) : (
-            <Tag color="green" bordered={false} variant="filled">
-              {t('app.kuaizhizao.customerPool.scopePrivate')}
-            </Tag>
-          )
-        ),
+            <MarkerTag color="success">{t('app.kuaizhizao.customerPool.scopePrivate')}</MarkerTag>
+          ),
       },
       {
         title: t('field.customer.lastFollowUpAt'),
         dataIndex: 'last_follow_up_at',
         width: 132,
+        minWidth: 132,
         uniTableKeepWidth: true,
+        resizable: false,
         sorter: true,
         hideInSearch: true,
         render: (_, row) => formatCustomerPoolDateTimeCell(row.last_follow_up_at),
@@ -627,7 +637,9 @@ const CustomerPoolPage: React.FC = () => {
         title: t('field.customer.recycleAt'),
         dataIndex: 'recycle_at',
         width: 132,
+        minWidth: 132,
         uniTableKeepWidth: true,
+        resizable: false,
         sorter: true,
         hideInSearch: true,
         render: (_, row) => formatCustomerPoolDateTimeCell(row.recycle_at),
@@ -647,7 +659,9 @@ const CustomerPoolPage: React.FC = () => {
         title: t('field.customer.assignedAt'),
         dataIndex: 'assigned_at',
         width: 132,
+        minWidth: 132,
         uniTableKeepWidth: true,
+        resizable: false,
         sorter: true,
         hideInSearch: true,
         render: (_, row) => formatCustomerPoolDateTimeCell(row.assigned_at),
@@ -707,8 +721,8 @@ const CustomerPoolPage: React.FC = () => {
       {
         title: t('common.actions'),
         dataIndex: 'option',
+        key: 'action',
         fixed: 'right',
-        minWidth: 280,
         hideInSearch: true,
         render: (_, row) => {
           const inline: React.ReactNode[] = [];
@@ -1174,7 +1188,7 @@ const CustomerPoolPage: React.FC = () => {
           headerTitle={t('app.kuaizhizao.menu.sales-management.customer-pool')}
           showAdvancedSearch
           skipFuzzyPinyinClientFilter
-          columnPersistenceId="apps.kuaizhizao.pages.sales-management.customer-pool"
+          columnPersistenceId="apps.kuaizhizao.pages.sales-management.customer-pool-width-v2"
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.customerPool')}
           tanstackQuery={{ queryKeyPrefix: ['apps.kuaizhizao.pages.sales-management.customer-pool', scope] }}

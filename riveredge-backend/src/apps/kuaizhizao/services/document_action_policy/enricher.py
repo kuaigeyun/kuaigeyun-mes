@@ -160,6 +160,35 @@ async def batch_document_item_counts(
     return {int(row[parent_field]): int(row["c"] or 0) for row in rows}
 
 
+async def batch_document_item_material_previews(
+    tenant_id: int,
+    item_model: Any,
+    parent_field: str,
+    parent_ids: List[int],
+    *,
+    material_name_field: str = "material_name",
+) -> Dict[int, List[Dict[str, Any]]]:
+    """
+    批量拉取列表明细物料名预览（仅 material_name，供前端「明细」列 MarkerTag）。
+    按 parent_id、id 升序；前端只展示前 2 条 + 等 N 项。
+    """
+    if not parent_ids:
+        return {}
+    rows = await (
+        item_model.filter(tenant_id=tenant_id, **{f"{parent_field}__in": parent_ids})
+        .order_by(parent_field, "id")
+        .values(parent_field, material_name_field)
+    )
+    out: Dict[int, List[Dict[str, Any]]] = {}
+    for row in rows:
+        pid = int(row[parent_field])
+        name = str(row.get(material_name_field) or "").strip()
+        if not name:
+            continue
+        out.setdefault(pid, []).append({"material_name": name})
+    return out
+
+
 async def batch_document_item_quantity_sums(
     tenant_id: int,
     item_model: Any,
@@ -188,17 +217,19 @@ def enrich_inbound_hub_list_capabilities(
     *,
     item_counts: Optional[Dict[int, int]] = None,
     quantity_sums: Optional[Dict[int, float]] = None,
+    item_previews: Optional[Dict[int, List[Dict[str, Any]]]] = None,
 ) -> List[T]:
     out: List[T] = []
     for record, resp in zip(records, responses):
         caps = derive_inbound_hub_capabilities(record, receipt_type=receipt_type)
         update: Dict[str, Any] = {"capabilities": caps}
+        rid = int(getattr(record, "id", 0) or 0)
         if item_counts is not None:
-            rid = int(getattr(record, "id", 0) or 0)
             update["total_items"] = item_counts.get(rid, 0)
         if quantity_sums is not None:
-            rid = int(getattr(record, "id", 0) or 0)
             update["total_quantity"] = quantity_sums.get(rid, 0)
+        if item_previews is not None:
+            update["items"] = item_previews.get(rid, [])
         if hasattr(resp, "model_copy"):
             out.append(resp.model_copy(update=update))
         else:
@@ -1325,6 +1356,7 @@ def enrich_outbound_hub_list_capabilities(
     outbound_type: str,
     *,
     item_counts: Optional[Dict[int, int]] = None,
+    item_previews: Optional[Dict[int, List[Dict[str, Any]]]] = None,
     audit_required: bool = False,
 ) -> List[T]:
     out: List[T] = []
@@ -1333,9 +1365,14 @@ def enrich_outbound_hub_list_capabilities(
             record, outbound_type=outbound_type, audit_required=audit_required
         )
         enriched = _attach_capabilities_to_response(resp, caps) if hasattr(resp, "model_copy") else resp
-        if item_counts is not None and hasattr(enriched, "model_copy"):
-            rid = int(getattr(record, "id", 0) or 0)
-            enriched = enriched.model_copy(update={"total_items": item_counts.get(rid, 0)})
+        update: Dict[str, Any] = {}
+        rid = int(getattr(record, "id", 0) or 0)
+        if item_counts is not None:
+            update["total_items"] = item_counts.get(rid, 0)
+        if item_previews is not None:
+            update["items"] = item_previews.get(rid, [])
+        if update and hasattr(enriched, "model_copy"):
+            enriched = enriched.model_copy(update=update)
         out.append(enriched)
     return out
 

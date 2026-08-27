@@ -52,7 +52,6 @@ import {
   MaterialStackedCell,
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_BADGE_DATETIME_COLUMN_DEFAULTS,
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import CodeField from '../../../../../components/code-field';
 import { getDataDictionaryByCode, getDictionaryItemList, type DictionaryItem } from '../../../../../services/dataDictionary';
@@ -1488,7 +1487,12 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         title: t('app.kuaizhizao.outsourceWorkOrder.colProduct'),
         key: 'owo_product_stacked',
         dataIndex: 'product_name',
-        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        width: 200,
+        minWidth: 200,
+        uniTableKeepWidth: true,
+        uniTablePrimaryFlex: false,
+        resizable: false,
+        ellipsis: false,
         sorter: true,
         hideInSearch: true,
         render: (_, record) => (
@@ -1520,9 +1524,11 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         title: `${t('app.kuaizhizao.outsourceWorkOrder.colSupplier')} / ${t('app.kuaizhizao.outsourceWorkOrder.colCode')}`,
         key: 'supplier_code_stacked',
         dataIndex: 'supplier_name',
+        // 无行项目明细：供应商/单号叠列吃掉视口剩余（RemainderFlex）
         fixed: 'left',
-        minWidth: 180,
+        minWidth: 200,
         uniTablePrimaryFlex: true,
+        uniTableRemainderFlex: true,
         resizable: false,
         ellipsis: false,
         hideInSearch: true,
@@ -1556,6 +1562,9 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         title: t('app.kuaizhizao.outsourceWorkOrder.colQuantity'),
         dataIndex: 'quantity',
         width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
         sorter: true,
         hideInSearch: true,
         render: (_, record) => (formatQuantity(record.quantity)),
@@ -1564,6 +1573,9 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         title: t('app.kuaizhizao.outsourceWorkOrder.colUnitPrice'),
         dataIndex: 'unit_price',
         width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
         sorter: true,
         hideInSearch: true,
         render: (_, record) => {
@@ -1579,6 +1591,9 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         title: t('app.kuaizhizao.outsourceWorkOrder.colTotalAmount'),
         dataIndex: 'total_amount',
         width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
         sorter: true,
         hideInSearch: true,
         render: (_, record) => {
@@ -1594,6 +1609,9 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         title: t('app.kuaizhizao.outsourceWorkOrder.colPriority'),
         dataIndex: 'priority',
         width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: false,
         valueType: 'select',
         valueEnum: prioritySearchValueEnum,
@@ -1603,6 +1621,9 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         title: t('app.kuaizhizao.outsourceWorkOrder.colIssuedQty'),
         dataIndex: ['issuedQuantity', 'issued_quantity'],
         width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
         render: (_, record) => {
           const qty = record.issuedQuantity || record.issued_quantity;
           return formatQuantity(qty);
@@ -1612,6 +1633,9 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         title: t('app.kuaizhizao.outsourceWorkOrder.colReceivedQty'),
         dataIndex: ['receivedQuantity', 'received_quantity'],
         width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
         render: (_, record) => {
           const qty = record.receivedQuantity || record.received_quantity;
           return formatQuantity(qty);
@@ -1621,6 +1645,9 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         title: t('app.kuaizhizao.outsourceWorkOrder.colQualifiedQty'),
         dataIndex: ['qualifiedQuantity', 'qualified_quantity'],
         width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
         render: (_, record) => {
           const qty = record.qualifiedQuantity || record.qualified_quantity;
           return formatQuantity(qty);
@@ -1712,6 +1739,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       ...owoCustomFieldColumns,
       {
         title: t('common.actions'),
+        key: 'option',
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) => renderOwoRowActionNodes(record),
@@ -1840,7 +1868,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
           headerTitle={t('app.kuaizhizao.outsourceWorkOrder.title')}
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.outsourceWorkOrder)}
-          columnPersistenceId="apps.kuaizhizao.pages.production-execution.outsource-work-orders.v2"
+          columnPersistenceId="apps.kuaizhizao.pages.production-execution.outsource-work-orders-width-v1"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}

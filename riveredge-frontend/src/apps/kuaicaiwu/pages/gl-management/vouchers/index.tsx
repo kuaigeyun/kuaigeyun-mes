@@ -23,7 +23,7 @@ import { ThunderboltOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { useNumericPrecisionPlaces } from '../../../../../hooks/useNumericPrecision';
-import { rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { UniTable } from '../../../../../components/uni-table';
 import {
   FormModalTemplate,
@@ -31,6 +31,7 @@ import {
   MODAL_CONFIG,
 } from '../../../../../components/layout-templates';
 import { StatusTag } from '../../../../../constants/statusBadges';
+import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { useLinkedDocumentDetail } from '../../../../../components/linked-document-detail';
 import { canOpenLinkedDocumentDetail } from '../../../../kuaizhizao/utils/linkedDocumentDetail';
@@ -238,190 +239,222 @@ const GlVouchersPage: React.FC = () => {
   };
 
   const columns: ProColumns<GlVoucher>[] = useMemo(
-    () => [
-      {
-        title: t(`${NS}.col.voucherCode`, { defaultValue: '凭证号' }),
-        dataIndex: 'voucher_code',
-        width: 140,
-        minWidth: 140,
-        uniTableKeepWidth: true,
-        resizable: false,
-        hideInSearch: true,
-      },
-      {
-        title: t(`${NS}.col.keyword`, { defaultValue: '关键字' }),
-        dataIndex: 'keyword',
-        hideInTable: true,
-        fieldProps: { allowClear: true },
-      },
-      {
-        title: t(`${NS}.col.voucherDate`, { defaultValue: '凭证日期' }),
-        dataIndex: 'voucher_date',
-        width: 120,
-        hideInSearch: true,
-      },
-      {
-        title: t(`${NS}.col.period`, { defaultValue: '期间' }),
-        key: 'period',
-        width: 100,
-        hideInSearch: true,
-        render: (_, r) => `${r.period_year}-${String(r.period_month).padStart(2, '0')}`,
-      },
-      {
-        title: t(`${NS}.col.summary`, { defaultValue: '摘要' }),
-        dataIndex: 'summary',
-        ellipsis: true,
-        hideInSearch: true,
-        render: (_, r) => r.summary || '—',
-      },
-      {
-        title: t(`${NS}.col.source`, { defaultValue: '来源单据' }),
-        key: 'source',
-        width: 160,
-        hideInSearch: true,
-        render: (_, r) => {
-          const type = String(r.source_doc_type || '');
-          const id = Number(r.source_doc_id || 0);
-          if (!type || !id) return '—';
-          const label = `${type}#${id}`;
-          if (canOpenLinkedDocumentDetail(type)) {
-            return (
-              <a
-                onClick={() => {
-                  linked.openLinkedDocumentDetail(type, id);
-                }}
-              >
-                {label}
-              </a>
-            );
-          }
-          return label;
-        },
-      },
-      {
-        title: t(`${NS}.col.debit`, { defaultValue: '借方合计' }),
-        dataIndex: 'total_debit',
-        valueType: 'money',
-        align: 'right',
-        hideInSearch: true,
-      },
-      {
-        title: t(`${NS}.col.credit`, { defaultValue: '贷方合计' }),
-        dataIndex: 'total_credit',
-        valueType: 'money',
-        align: 'right',
-        hideInSearch: true,
-      },
-      {
-        title: t('common.status', { defaultValue: '状态' }),
-        dataIndex: 'status',
-        width: 100,
-        minWidth: 100,
-        uniTableKeepWidth: true,
-        resizable: false,
-        valueType: 'select',
-        valueEnum: {
-          draft: { text: t(`${NS}.status.draft`, { defaultValue: '制单' }) },
-          reviewed: { text: t(`${NS}.status.reviewed`, { defaultValue: '已审核' }) },
-          posted: { text: t(`${NS}.status.posted`, { defaultValue: '已记账' }) },
-          cancelled: { text: t(`${NS}.status.cancelled`, { defaultValue: '已作废' }) },
-        },
-        render: (_, r) => (
-          <StatusTag color={statusColor(r.status)}>{statusLabel(r.status)}</StatusTag>
-        ),
-      },
-      {
-        title: t('common.actions', { defaultValue: '操作' }),
-        key: 'action',
-        valueType: 'option',
-        fixed: 'right',
-        hideInSearch: true,
-        render: (_, record) => {
-          const acts: React.ReactNode[] = [];
-          if (record.status === 'draft') {
-            acts.push(
-              <a key="edit" onClick={() => void openEdit(record)}>
-                {t('common.edit', { defaultValue: '编辑' })}
-              </a>,
-            );
-            acts.push(
-              <a
-                key="review"
-                onClick={() =>
-                  void runAction(
-                    () => glService.reviewVoucher(record.id),
-                    t(`${NS}.reviewSuccess`, { defaultValue: '审核成功' }),
-                  )
-                }
-              >
-                {t(`${NS}.action.review`, { defaultValue: '审核' })}
-              </a>,
-            );
-            acts.push(
-              <Popconfirm
-                {...rowActionKind('delete')}
-                key="obsolete"
-                title={t(`${NS}.confirmObsolete`, { defaultValue: '确认作废该凭证？' })}
-                onConfirm={() =>
-                  void runAction(
-                    () => glService.obsoleteVoucher(record.id),
-                    t(`${NS}.obsoleteSuccess`, { defaultValue: '已作废' }),
-                  )
-                }
-              >
-                <a>{t(`${NS}.action.obsolete`, { defaultValue: '作废' })}</a>
-              </Popconfirm>,
-            );
-          }
-          if (record.status === 'reviewed') {
-            acts.push(
-              <a
-                key="unreview"
-                onClick={() =>
-                  void runAction(
-                    () => glService.unreviewVoucher(record.id),
-                    t(`${NS}.unreviewSuccess`, { defaultValue: '已反审核' }),
-                  )
-                }
-              >
-                {t(`${NS}.action.unreview`, { defaultValue: '反审核' })}
-              </a>,
-            );
-            acts.push(
-              <a
-                key="post"
-                onClick={() =>
-                  void runAction(
-                    () => glService.postVoucher(record.id),
-                    t(`${NS}.postSuccess`, { defaultValue: '记账成功' }),
-                  )
-                }
-              >
-                {t(`${NS}.action.post`, { defaultValue: '记账' })}
-              </a>,
-            );
-          }
-          if (record.status === 'posted') {
-            acts.push(
-              <a
-                key="unpost"
-                onClick={() =>
-                  void runAction(
-                    () => glService.unpostVoucher(record.id),
-                    t(`${NS}.unpostSuccess`, { defaultValue: '已反记账' }),
-                  )
-                }
-              >
-                {t(`${NS}.action.unpost`, { defaultValue: '反记账' })}
-              </a>,
-            );
-          }
-          return acts;
-        },
-      },
-    ],
-    [t, messageApi, linked],
+    () =>
+      alignProColumns(
+        [
+          {
+            title: t(`${NS}.col.voucherCode`),
+            dataIndex: 'voucher_code',
+            width: 140,
+            minWidth: 140,
+            uniTableKeepWidth: true,
+            resizable: false,
+            hideInSearch: true,
+            copyable: true,
+            ellipsis: true,
+          },
+          {
+            title: t(`${NS}.col.keyword`),
+            dataIndex: 'keyword',
+            hideInTable: true,
+            fieldProps: { allowClear: true },
+          },
+          {
+            title: t(`${NS}.col.voucherDate`),
+            dataIndex: 'voucher_date',
+            width: 132,
+            minWidth: 132,
+            uniTableKeepWidth: true,
+            resizable: false,
+            hideInSearch: true,
+          },
+          {
+            title: t(`${NS}.col.period`),
+            key: 'period',
+            width: 100,
+            minWidth: 100,
+            uniTableKeepWidth: true,
+            resizable: false,
+            hideInSearch: true,
+            render: (_, r) => `${r.period_year}-${String(r.period_month).padStart(2, '0')}`,
+          },
+          {
+            // 摘要长短不一：唯一 RemainderFlex
+            title: t(`${NS}.col.summary`),
+            dataIndex: 'summary',
+            minWidth: 160,
+            uniTableRemainderFlex: true,
+            uniTablePrimaryFlex: true,
+            resizable: false,
+            ellipsis: true,
+            hideInSearch: true,
+            render: (_, r) => r.summary || '—',
+          },
+          {
+            title: t(`${NS}.col.source`),
+            key: 'gl_voucher_source',
+            width: 160,
+            minWidth: 160,
+            uniTableKeepWidth: true,
+            resizable: false,
+            hideInSearch: true,
+            ellipsis: true,
+            render: (_, r) => {
+              const type = String(r.source_doc_type || '');
+              const id = Number(r.source_doc_id || 0);
+              if (!type || !id) return '—';
+              const label = `${type}#${id}`;
+              if (canOpenLinkedDocumentDetail(type)) {
+                return (
+                  <a
+                    onClick={() => {
+                      linked.openLinkedDocumentDetail(type, id);
+                    }}
+                  >
+                    {label}
+                  </a>
+                );
+              }
+              return label;
+            },
+          },
+          {
+            title: t(`${NS}.col.debit`),
+            dataIndex: 'total_debit',
+            valueType: 'money',
+            align: 'right',
+            width: 120,
+            minWidth: 120,
+            uniTableKeepWidth: true,
+            resizable: false,
+            hideInSearch: true,
+          },
+          {
+            title: t(`${NS}.col.credit`),
+            dataIndex: 'total_credit',
+            valueType: 'money',
+            align: 'right',
+            width: 120,
+            minWidth: 120,
+            uniTableKeepWidth: true,
+            resizable: false,
+            hideInSearch: true,
+          },
+          {
+            title: t('common.status'),
+            key: 'lifecycle',
+            dataIndex: 'status',
+            fixed: 'right',
+            valueType: 'select',
+            valueEnum: {
+              draft: { text: t(`${NS}.status.draft`) },
+              reviewed: { text: t(`${NS}.status.reviewed`) },
+              posted: { text: t(`${NS}.status.posted`) },
+              cancelled: { text: t(`${NS}.status.cancelled`) },
+            },
+            render: (_, r) => (
+              <StatusTag color={statusColor(r.status)}>{statusLabel(r.status)}</StatusTag>
+            ),
+          },
+          {
+            title: t('common.actions'),
+            key: 'action',
+            fixed: 'right',
+            hideInSearch: true,
+            render: (_, record) => {
+              const acts: React.ReactNode[] = [];
+              if (record.status === 'draft') {
+                acts.push(
+                  <Button key="edit" {...rowActionKind('update')} onClick={() => void openEdit(record)} />,
+                );
+                acts.push(
+                  <Button
+                    key="review"
+                    {...rowActionKind('audit')}
+                    {...rowActionLabelKeep()}
+                    onClick={() =>
+                      void runAction(
+                        () => glService.reviewVoucher(record.id),
+                        t(`${NS}.reviewSuccess`),
+                      )
+                    }
+                  >
+                    {t(`${NS}.action.review`)}
+                  </Button>,
+                );
+                acts.push(
+                  <Popconfirm
+                    key="obsolete"
+                    title={t(`${NS}.confirmObsolete`)}
+                    onConfirm={() =>
+                      void runAction(
+                        () => glService.obsoleteVoucher(record.id),
+                        t(`${NS}.obsoleteSuccess`),
+                      )
+                    }
+                  >
+                    <Button {...rowActionKind('obsolete')} />
+                  </Popconfirm>,
+                );
+              }
+              if (record.status === 'reviewed') {
+                acts.push(
+                  <Button
+                    key="unreview"
+                    {...rowActionKind('revoke')}
+                    {...rowActionLabelKeep()}
+                    onClick={() =>
+                      void runAction(
+                        () => glService.unreviewVoucher(record.id),
+                        t(`${NS}.unreviewSuccess`),
+                      )
+                    }
+                  >
+                    {t(`${NS}.action.unreview`)}
+                  </Button>,
+                );
+                acts.push(
+                  <Button
+                    key="post"
+                    {...rowActionKind('execute')}
+                    {...rowActionLabelKeep()}
+                    onClick={() =>
+                      void runAction(
+                        () => glService.postVoucher(record.id),
+                        t(`${NS}.postSuccess`),
+                      )
+                    }
+                  >
+                    {t(`${NS}.action.post`)}
+                  </Button>,
+                );
+              }
+              if (record.status === 'posted') {
+                acts.push(
+                  <Button
+                    key="unpost"
+                    {...rowActionKind('revoke')}
+                    {...rowActionLabelKeep()}
+                    onClick={() =>
+                      void runAction(
+                        () => glService.unpostVoucher(record.id),
+                        t(`${NS}.unpostSuccess`),
+                      )
+                    }
+                  >
+                    {t(`${NS}.action.unpost`)}
+                  </Button>,
+                );
+              }
+              return acts;
+            },
+          },
+        ],
+        GLOBAL_DOC_LIST_FIELD_RANK,
+      ),
+    [t, linked],
   );
+
 
   const lineTotalDebit = lines.reduce((s, l) => s + Number(l.debit_amount || 0), 0);
   const lineTotalCredit = lines.reduce((s, l) => s + Number(l.credit_amount || 0), 0);
@@ -794,7 +827,7 @@ const GlVouchersPage: React.FC = () => {
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.voucher)}
         actionRef={actionRef}
         rowKey="id"
-        columnPersistenceId="apps.kuaicaiwu.pages.gl-management.vouchers.list-v1"
+        columnPersistenceId="apps.kuaicaiwu.pages.gl-management.vouchers.list-v2"
         columns={columns}
         showAdvancedSearch
         skipFuzzyPinyinClientFilter

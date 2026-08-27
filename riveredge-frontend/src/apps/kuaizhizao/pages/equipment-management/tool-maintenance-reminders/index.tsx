@@ -8,7 +8,7 @@ import React, { useRef, useState, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { Button, Typography } from 'antd';
+import { Button } from 'antd';
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import { UniTable } from '../../../../../components/uni-table';
 import { MultiTabListPageTemplate } from '../../../../../components/layout-templates';
@@ -21,6 +21,8 @@ import {
   resolveReminderListParams,
 } from '../../../utils/equipmentListCore';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
+import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import {
   EquipmentMasterDetailDrawer,
   useEquipmentDetailDrawer,
@@ -193,20 +195,28 @@ const ToolMaintenanceRemindersPage: React.FC = () => {
   const maintenanceColumns: ProColumns<ToolMaintenanceReminder>[] = useMemo(
     () => [
       {
-        title: t(`${P}.colToolCode`),
-        dataIndex: 'tool_code',
-        width: 120,
+        title: t(`${P}.colToolName`),
+        dataIndex: 'tool_name',
+        minWidth: 200,
+        uniTablePrimaryFlex: true,
+        uniTableRemainderFlex: true,
+        resizable: false,
+        ellipsis: false,
+        hideInSearch: true,
         render: (_, r) => (
-          <Typography.Text copyable={{ text: String(r.tool_code ?? '') }} ellipsis>
-            {r.tool_code ?? '-'}
-          </Typography.Text>
+          <UniTableStackedPrimaryCell
+            primary={String(r.tool_name ?? '') || '-'}
+            secondary={String(r.tool_code ?? '') || '-'}
+          />
         ),
       },
-      { title: t(`${P}.colToolName`), dataIndex: 'tool_name', width: 160, ellipsis: true },
       {
         title: t(`${P}.colTriggerType`),
         dataIndex: 'trigger_type',
         width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
         valueType: 'select',
         valueEnum: {
           days: { text: t(`${P}.triggerDays`) },
@@ -217,30 +227,42 @@ const ToolMaintenanceRemindersPage: React.FC = () => {
         title: t(`${P}.colTotalUsageCount`),
         dataIndex: 'total_usage_count',
         width: 110,
-        align: 'right',
+        minWidth: 110,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
+        render: (_, r) => (r.total_usage_count != null ? String(r.total_usage_count) : '-'),
       },
       {
         title: t(`${P}.colMaintenanceInterval`),
         dataIndex: 'maintenance_interval',
         width: 100,
-        align: 'right',
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
+        render: (_, r) => (r.maintenance_interval != null ? String(r.maintenance_interval) : '-'),
       },
       {
         title: t(`${P}.colDaysSinceMaintenance`),
         dataIndex: 'days_since_maintenance',
         width: 110,
-        align: 'right',
+        minWidth: 110,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
+        align: 'right' as const,
         render: (_, r) => (r.trigger_type === 'days' ? (r.days_since_maintenance ?? '-') : '-'),
       },
       {
         title: t(`${P}.colUsagesUntilDue`),
         dataIndex: 'usages_until_due',
         width: 100,
-        align: 'right',
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
+        align: 'right' as const,
         render: (_, r) => {
           if (r.trigger_type !== 'usage_count') return '-';
           const v = r.usages_until_due ?? 0;
@@ -253,20 +275,21 @@ const ToolMaintenanceRemindersPage: React.FC = () => {
       {
         title: t(`${P}.colReminderStatus`),
         dataIndex: 'reminder_type',
-        width: 100,
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         valueType: 'select',
         valueEnum: {
           due_soon: { text: t(`${P}.statusDueSoon`) },
           overdue: { text: t(`${P}.statusOverdue`) },
         },
         render: (_, r) => {
-          const color = r.reminder_type === 'overdue' ? 'error' : r.reminder_type === 'due_soon' ? 'warning' : 'default';
+          const color =
+            r.reminder_type === 'overdue' ? 'error' : r.reminder_type === 'due_soon' ? 'warning' : 'default';
           return <MarkerTag color={color}>{reminderStatusLabel(r.reminder_type)}</MarkerTag>;
         },
       },
       {
         title: t('common.actions'),
-        valueType: 'option',
+        key: 'option',
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) =>
@@ -276,7 +299,9 @@ const ToolMaintenanceRemindersPage: React.FC = () => {
                   key="detail"
                   {...rowActionKind('read')}
                   onClick={() => handleMaintenanceDetail(record)}
-                />,
+                >
+                  {t('common.detail')}
+                </Button>,
               ]
             : null,
       },
@@ -287,20 +312,28 @@ const ToolMaintenanceRemindersPage: React.FC = () => {
   const calibrationColumns: ProColumns<ToolCalibrationReminder>[] = useMemo(
     () => [
       {
-        title: t(`${P}.colToolCode`),
-        dataIndex: 'tool_code',
-        width: 120,
+        title: t(`${P}.colToolName`),
+        dataIndex: 'tool_name',
+        minWidth: 200,
+        uniTablePrimaryFlex: true,
+        uniTableRemainderFlex: true,
+        resizable: false,
+        ellipsis: false,
+        hideInSearch: true,
         render: (_, r) => (
-          <Typography.Text copyable={{ text: String(r.tool_code ?? '') }} ellipsis>
-            {r.tool_code ?? '-'}
-          </Typography.Text>
+          <UniTableStackedPrimaryCell
+            primary={String(r.tool_name ?? '') || '-'}
+            secondary={String(r.tool_code ?? '') || '-'}
+          />
         ),
       },
-      { title: t(`${P}.colToolName`), dataIndex: 'tool_name', width: 160, ellipsis: true },
       {
         title: t(`${P}.colDueDate`),
         dataIndex: 'due_date',
         width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         render: (_, r) => (r.due_date ? formatDateTime(r.due_date, 'YYYY-MM-DD') : '-'),
       },
@@ -308,8 +341,11 @@ const ToolMaintenanceRemindersPage: React.FC = () => {
         title: t(`${P}.colDaysUntilDue`),
         dataIndex: 'days_until_due',
         width: 100,
-        align: 'right',
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
+        align: 'right' as const,
         render: (_, r) => {
           const v = r.days_until_due ?? 0;
           if (v < 0) {
@@ -321,7 +357,7 @@ const ToolMaintenanceRemindersPage: React.FC = () => {
       {
         title: t(`${P}.colReminderStatus`),
         dataIndex: 'due_type',
-        width: 100,
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         valueType: 'select',
         valueEnum: {
           due_soon: { text: t(`${P}.statusDueSoon`) },
@@ -334,7 +370,7 @@ const ToolMaintenanceRemindersPage: React.FC = () => {
       },
       {
         title: t('common.actions'),
-        valueType: 'option',
+        key: 'option',
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) =>
@@ -344,7 +380,9 @@ const ToolMaintenanceRemindersPage: React.FC = () => {
                   key="detail"
                   {...rowActionKind('read')}
                   onClick={() => handleCalibrationDetail(record)}
-                />,
+                >
+                  {t('common.detail')}
+                </Button>,
               ]
             : null,
       },
@@ -370,7 +408,7 @@ const ToolMaintenanceRemindersPage: React.FC = () => {
               <UniTable<ToolMaintenanceReminder>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.toolMaintenanceReminders')}
-                columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-maintenance-reminders.maintenance-equip-rank-v1"
+                columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-maintenance-reminders.maintenance-width-v2"
                 actionRef={maintenanceActionRef}
                 showAdvancedSearch
                 skipFuzzyPinyinClientFilter
@@ -416,7 +454,7 @@ const ToolMaintenanceRemindersPage: React.FC = () => {
             label: t(`${P}.tabCalibration`),
             children: (
               <UniTable<ToolCalibrationReminder>
-                columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-maintenance-reminders.calibration-equip-rank-v1"
+                columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-maintenance-reminders.calibration-width-v2"
                 actionRef={calibrationActionRef}
                 showAdvancedSearch
                 skipFuzzyPinyinClientFilter

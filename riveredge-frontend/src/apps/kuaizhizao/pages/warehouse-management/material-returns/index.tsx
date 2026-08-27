@@ -34,6 +34,10 @@ import { alignDescriptionColumns, alignProColumns } from '../../sales-management
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
+  DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+  renderDocumentLineMaterialsPreview,
+} from '../../sales-management/shared/documentLineMaterialsPreview';
+import {
   WAREHOUSE_DOC_PINNED_STATUS_FIELD,
   buildMaterialReturnStatusValueEnum,
   normalizeWarehouseListResponse,
@@ -59,6 +63,8 @@ interface MaterialReturn {
   status?: string;
   total_quantity?: number;
   total_items?: number;
+  /** 列表「明细」列预览（仅 material_name） */
+  items?: { material_name?: string }[];
   notes?: string;
   created_at?: string;
   updated_at?: string;
@@ -400,7 +406,10 @@ const MaterialReturnsPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.warehouseMaterialReturn.col.returnCode'),
         dataIndex: 'return_code',
-        width: 140,
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
         ellipsis: true,
         fixed: 'left',
         sorter: true,
@@ -414,7 +423,10 @@ const MaterialReturnsPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.warehouseMaterialReturn.col.borrowCode'),
         dataIndex: 'borrow_code',
-        width: 140,
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
         ellipsis: true,
         sorter: true,
         hideInSearch: true,
@@ -435,41 +447,52 @@ const MaterialReturnsPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.warehouseMaterialReturn.col.warehouse'),
         dataIndex: 'warehouse_name',
-        width: 120,
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
         ellipsis: true,
         sorter: true,
         hideInSearch: true,
+        render: (_, r) =>
+          r.warehouse_name != null && r.warehouse_name !== '' ? String(r.warehouse_name) : '-',
+      },
+      {
+        title: t('app.kuaizhizao.common.colLineMaterials'),
+        ...DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+        render: (_, r) => renderDocumentLineMaterialsPreview(r.items, t),
       },
       {
         title: t('app.kuaizhizao.warehouseCommon.colTotalQuantity'),
         dataIndex: 'total_quantity',
         width: 100,
-        align: 'right',
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
         sorter: true,
         hideInSearch: true,
-        render: formatQuantity,
-      },
-      {
-        title: t('app.kuaizhizao.warehouseCommon.colMaterialKindCount'),
-        dataIndex: 'total_items',
-        width: 90,
-        align: 'right',
-        sorter: true,
-        hideInSearch: true,
-        render: (v: number | null | undefined) => (v != null ? v : '-'),
+        render: (_, r) => formatQuantity(r.total_quantity),
       },
       {
         title: t('app.kuaizhizao.warehouseMaterialReturn.col.returner'),
         dataIndex: 'returner_name',
         width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
         sorter: true,
         hideInSearch: true,
+        render: (_, r) =>
+          r.returner_name != null && r.returner_name !== '' ? String(r.returner_name) : '-',
       },
       {
         title: t('app.kuaizhizao.warehouseMaterialReturn.col.returnTime'),
         dataIndex: 'return_time',
         width: 132,
+        minWidth: 132,
         uniTableKeepWidth: true,
+        resizable: false,
         sorter: true,
         hideInSearch: true,
         render: (_, r) => (r.return_time ? formatDateTime(r.return_time) : '-'),
@@ -497,10 +520,9 @@ const MaterialReturnsPage: React.FC = () => {
       },
       {
         title: t('common.actions'),
-        valueType: 'option',
+        key: 'option',
         fixed: 'right',
         hideInSearch: true,
-        uniActionRenderOptions: { directMax: 4 },
         render: (_, record) => {
           const actions: React.ReactNode[] = [
             <Button {...rowActionKind('read')} key="detail" onClick={() => handleDetail(record)} />,
@@ -522,7 +544,7 @@ const MaterialReturnsPage: React.FC = () => {
         },
       },
     ], WAREHOUSE_DOC_LIST_FIELD_RANK),
-    [t, materialReturnStatusValueEnum],
+    [t, materialReturnStatusValueEnum, navigate],
   );
 
   const detailColumns = useMemo(
@@ -618,7 +640,7 @@ const MaterialReturnsPage: React.FC = () => {
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
-          columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.material-returns.v2"
+          columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.material-returns-width-v3"
           showAdvancedSearch
           pinnedTabsField={WAREHOUSE_DOC_PINNED_STATUS_FIELD}
           skipFuzzyPinyinClientFilter

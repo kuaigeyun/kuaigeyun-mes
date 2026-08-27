@@ -55,11 +55,8 @@ import {
   type AfterSalesTicketPreset,
 } from '../../../components/AfterSalesTicketFormModal';
 import { AfterSalesTicketDetailDrawer } from './components/AfterSalesTicketDetailDrawer';
-import {
-  UniTableStackedPrimaryCell,
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-} from '../../../../../components/uni-table/stackedPrimaryColumn';
-import { formatDateTime, formatAmount } from '../../../../../utils/format';
+import { formatDateTime, formatDateTimeBySiteSetting, formatAmount } from '../../../../../utils/format';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { customerApi, unwrapSupplyPagedList } from '../../../../master-data/services/supply-chain';
@@ -72,6 +69,7 @@ import {
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
+  AFTER_SALES_CUSTOMER_NAME_COLUMN_DEFAULTS,
   AFTER_SALES_TICKET_STATUS_COLOR,
   renderAfterSalesStatusTag,
   renderAfterSalesTypeMarker,
@@ -870,27 +868,27 @@ const AfterSalesTicketsPage: React.FC = () => {
         },
       },
       {
-        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
         title: t('app.kuaizhizao.afterSalesTicket.colTicketCode'),
-        key: 'after_sales_ticket_stacked',
         dataIndex: 'ticket_code',
+        width: 188,
+        minWidth: 188,
+        uniTableKeepWidth: true,
+        resizable: false,
         fixed: 'left',
         sorter: true,
         hideInSearch: true,
-        render: (_, row) => (
-          <UniTableStackedPrimaryCell
-            primary={row.ticket_code || '-'}
-            secondary={row.customer_name || '-'}
-          />
-        ),
+        copyable: true,
+      },
+      {
+        title: t('app.kuaizhizao.afterSalesTicket.colCustomer'),
+        dataIndex: 'customer_name',
+        ...AFTER_SALES_CUSTOMER_NAME_COLUMN_DEFAULTS,
+        hideInSearch: true,
       },
       {
         title: t('app.kuaizhizao.afterSalesTicket.colRequestType'),
         dataIndex: 'request_type',
-        width: 100,
-        minWidth: 100,
-        uniTableKeepWidth: true,
-        resizable: false,
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         sorter: true,
         hideInSearch: true,
         render: (_, row) => renderAfterSalesTypeMarker(row.request_type),
@@ -904,11 +902,12 @@ const AfterSalesTicketsPage: React.FC = () => {
         valueEnum: requestTypeValueEnum,
       },
       {
+        // 问题描述长短不一：唯一 RemainderFlex，避免全 KeepWidth 在右固定前留空白
         title: t('app.kuaizhizao.afterSalesTicket.colContent'),
         dataIndex: 'content',
-        width: 220,
-        minWidth: 220,
-        uniTableKeepWidth: true,
+        minWidth: 160,
+        uniTableRemainderFlex: true,
+        uniTablePrimaryFlex: true,
         resizable: false,
         ellipsis: true,
         hideInSearch: true,
@@ -935,7 +934,7 @@ const AfterSalesTicketsPage: React.FC = () => {
         sorter: true,
         hideInSearch: true,
         render: (_, row) =>
-          row.registered_at ? formatDateTime(row.registered_at, 'YYYY-MM-DD HH:mm') : '',
+          row.registered_at ? formatDateTimeBySiteSetting(row.registered_at) : '',
       },
       {
         title: t('app.kuaizhizao.afterSalesTicket.colRegisteredAtRange'),
@@ -966,7 +965,6 @@ const AfterSalesTicketsPage: React.FC = () => {
       {
         title: t('common.actions'),
         key: 'action',
-        valueType: 'option',
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) => {
@@ -982,12 +980,9 @@ const AfterSalesTicketsPage: React.FC = () => {
             parts.push(
               <Button
                 key="close"
-                type="link"
-                icon={<CheckOutlined />}
+                {...rowActionKind('close')}
                 onClick={() => handleCloseTicket(record)}
-              >
-                {t('common.close')}
-              </Button>,
+              />,
             );
           }
           if (perms.canDelete) {
@@ -1006,7 +1001,7 @@ const AfterSalesTicketsPage: React.FC = () => {
     <>
       <ListPageTemplate style={{ padding: 0 }}>
         <UniTable<AfterSalesTicket>
-          columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.tickets.v1"
+          columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.tickets.v4"
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.afterSalesTicket)}
           selectedRowKeys={selectedRowKeys}

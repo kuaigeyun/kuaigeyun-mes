@@ -293,9 +293,13 @@ class OutsourceProductReturnService(AppBaseService[OutsourceProductReturn]):
             enrich_outsource_docs_with_supplier,
         )
         responses = [OutsourceProductReturnResponse.model_validate(row) for row in rows]
-        item_counts = {int(r.id): 1 for r in rows}
+        # 退货单无 product_name/material_name 字段；明细预览由 enrich_outsource_docs_with_supplier
+        # 从委外工单 product_name 写入 items。
         responses = enrich_inbound_hub_list_capabilities(
-            rows, responses, "outsource_product_return", item_counts=item_counts
+            rows,
+            responses,
+            "outsource_product_return",
+            item_counts={int(r.id): 1 for r in rows},
         )
         return await enrich_outsource_docs_with_supplier(tenant_id, rows, responses)
 

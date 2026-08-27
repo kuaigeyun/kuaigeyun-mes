@@ -46,10 +46,6 @@ import {
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query';
 import {
-  MaterialStackedCell,
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-} from '../../../../../components/uni-table/stackedPrimaryColumn';
-import {
   buildInspectorNameColumn,
   buildQualityInspectionListCodeColumn,
   buildQualityInspectionListKindColumn,
@@ -1040,7 +1036,7 @@ const ProcessInspectionPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.processInspection)}
         headerTitle={t('app.kuaizhizao.quality.process.pageTitle')}
-        columnPersistenceId="apps.kuaizhizao.pages.quality-management.process-inspection.rank-v7"
+        columnPersistenceId="apps.kuaizhizao.pages.quality-management.process-inspection-width-v1"
         actionRef={actionRef}
         rowKey="id"
         columns={columns}

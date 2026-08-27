@@ -12,7 +12,6 @@ import {
 import { EquipmentPersonSelect, resolveUserUuidById } from '../../../components/EquipmentPersonSelect';
 import { EQUIPMENT_DATE_FIELD_PROPS } from '../../../utils/equipmentFormFieldProps';
 import { App, Button, Modal, Row, Col } from 'antd';
-import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
@@ -253,59 +252,92 @@ const MoldBorrowsPage: React.FC = () => {
       {
         title: t(`${P}.col.borrowNo`),
         dataIndex: 'document_no',
-        width: 140,
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
         fixed: 'left',
         sorter: true,
         search: { order: 30 } as ProColumns['search'],
-        render: (_, r) => r.document_no ?? r.borrow_no ?? '-',
+        render: (_, r) => {
+          const no = r.document_no ?? r.borrow_no;
+          return no != null && no !== '' ? String(no) : '-';
+        },
       },
-      { title: t(`${P}.col.mold`), dataIndex: 'mold_name', width: 160, ellipsis: true, sorter: true, hideInSearch: true },
+      {
+        title: t(`${P}.col.mold`),
+        dataIndex: 'mold_name',
+        minWidth: 160,
+        uniTablePrimaryFlex: true,
+        uniTableRemainderFlex: true,
+        resizable: false,
+        ellipsis: true,
+        hideInSearch: true,
+        render: (_, r) => (r.mold_name != null && r.mold_name !== '' ? String(r.mold_name) : '-'),
+      },
       {
         title: t(`${P}.col.workOrderNo`),
         dataIndex: 'source_no',
         width: 130,
+        minWidth: 130,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
         sorter: true,
         hideInSearch: true,
-        render: (_, r) => r.source_no ?? r.work_order_no ?? '-',
+        render: (_, r) => {
+          const no = r.source_no ?? r.work_order_no;
+          return no != null && no !== '' ? String(no) : '-';
+        },
       },
-      { title: t(`${P}.col.borrower`), dataIndex: 'borrower_name', width: 100, sorter: true, hideInSearch: true },
+      {
+        title: t(`${P}.col.borrower`),
+        dataIndex: 'borrower_name',
+        width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
+        sorter: true,
+        hideInSearch: true,
+        render: (_, r) =>
+          r.borrower_name != null && r.borrower_name !== '' ? String(r.borrower_name) : '-',
+      },
       {
         title: t(`${P}.col.borrowDate`),
         dataIndex: 'borrow_date',
         width: 132,
+        minWidth: 132,
         uniTableKeepWidth: true,
-        valueType: 'date',
+        resizable: false,
         sorter: true,
         hideInSearch: true,
+        valueType: 'date',
       },
       {
         title: t(`${P}.col.expectedReturnDate`),
         dataIndex: 'expected_return_date',
         width: 132,
+        minWidth: 132,
         uniTableKeepWidth: true,
-        valueType: 'date',
+        resizable: false,
         sorter: true,
         hideInSearch: true,
-      },
-      {
-        title: t('common.updatedAt'),
-        dataIndex: 'updated_at',
-        hideInTable: true,
-        hideInSearch: true,
+        valueType: 'date',
       },
       ...buildDocumentAuditColumns<MoldBorrow>(t),
       {
         title: t('common.status'),
         key: 'lifecycle',
         dataIndex: 'status',
-        width: 90,
         hideInSearch: true,
         fixed: 'right',
         render: (_, r) => renderDocumentStatusTag(r.status ?? '-', r.status),
       },
       {
         title: t('common.actions'),
-        key: 'action',
+        key: 'option',
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) => (
@@ -326,7 +358,6 @@ const MoldBorrowsPage: React.FC = () => {
                 {...rowActionKind('update')}
                 type="link"
                 size="small"
-                icon={<EditOutlined />}
                 onClick={(e) => {
                   e.stopPropagation();
                   void handleEdit(record);
@@ -341,7 +372,6 @@ const MoldBorrowsPage: React.FC = () => {
                 type="link"
                 size="small"
                 danger
-                icon={<DeleteOutlined />}
                 onClick={(e) => {
                   e.stopPropagation();
                   getAntdModal().confirm({
@@ -367,7 +397,7 @@ const MoldBorrowsPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.moldBorrows)}
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.mold-borrows-equip-rank-v1"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.mold-borrows-width-v2"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}

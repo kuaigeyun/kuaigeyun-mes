@@ -47,6 +47,7 @@ import type { DocumentAttachmentFile } from '../../../utils/documentAttachments'
 import { fetchKuaiiotFillContext } from '../../../../../utils/kuaiiotFillContext';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 const P = 'app.kuaizhizao.equipmentOps.spotCheck';
 const RESOURCE = 'kuaizhizao:equipment-spot-check';
 
@@ -530,24 +531,35 @@ const SpotChecksPage: React.FC = () => {
       {
         title: t(`${P}.col.documentNo`),
         dataIndex: 'document_no',
-        width: 140,
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
         fixed: 'left',
         sorter: true,
         search: { order: 30 } as ProColumns['search'],
+        render: (_, r) => (r.document_no != null && r.document_no !== '' ? String(r.document_no) : '-'),
       },
       {
         title: t(`${P}.col.equipment`),
         dataIndex: 'equipment_name',
-        width: 160,
+        minWidth: 160,
+        uniTablePrimaryFlex: true,
+        uniTableRemainderFlex: true,
+        resizable: false,
         ellipsis: true,
         sorter: true,
         hideInSearch: true,
+        render: (_, r) => (r.equipment_name != null && r.equipment_name !== '' ? String(r.equipment_name) : '-'),
       },
       {
         title: t(`${P}.col.checkDate`),
         dataIndex: 'check_date',
         width: 132,
+        minWidth: 132,
         uniTableKeepWidth: true,
+        resizable: false,
         valueType: 'date',
         sorter: true,
         hideInSearch: true,
@@ -556,13 +568,19 @@ const SpotChecksPage: React.FC = () => {
         title: t(`${P}.col.inspector`),
         dataIndex: 'inspector_name',
         width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
         sorter: true,
         hideInSearch: true,
+        render: (_, r) =>
+          r.inspector_name != null && r.inspector_name !== '' ? String(r.inspector_name) : '-',
       },
       {
         title: t(`${P}.col.abnormality`),
         dataIndex: 'has_abnormality',
-        width: 80,
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         sorter: true,
         hideInSearch: true,
         render: (_, r) =>
@@ -576,6 +594,9 @@ const SpotChecksPage: React.FC = () => {
         title: t(`${P}.col.linkedFault`),
         dataIndex: 'fault_report_uuid',
         width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         render: (_, r) =>
           r.fault_report_uuid ? (
@@ -593,12 +614,6 @@ const SpotChecksPage: React.FC = () => {
             '-'
           ),
       },
-      {
-        title: t('common.updatedAt'),
-        dataIndex: 'updated_at',
-        hideInTable: true,
-        hideInSearch: true,
-      },
       ...buildDocumentAuditColumns<SpotCheck>(t),
       {
         title: t('common.status'),
@@ -610,7 +625,7 @@ const SpotChecksPage: React.FC = () => {
       },
       {
         title: t('common.actions'),
-        key: 'action',
+        key: 'option',
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) =>
@@ -644,7 +659,7 @@ const SpotChecksPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.spotChecks)}
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.spot-checks-equip-rank-v1"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.spot-checks-width-v2"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}

@@ -72,6 +72,7 @@ async def list_change_orders(
     start_date: Optional[date] = Query(None, description="创建日期起"),
     end_date: Optional[date] = Query(None, description="创建日期止"),
     order_by: Optional[str] = Query(None, description="排序字段，如 created_at、-applied_at"),
+    include_items: bool = Query(False, description="是否附带明细预览（列表物料名）"),
     tenant_id: int = Depends(get_current_tenant),
     _: None = Depends(require_kuaizhizao_module_access("purchase-order-change")),
 ):
@@ -95,6 +96,7 @@ async def list_change_orders(
         start_date=start_date,
         end_date=end_date,
         order_by=safe_order_by,
+        include_items=include_items,
     )
     return PurchaseOrderChangePagedListResponse(items=items, total=total)
 

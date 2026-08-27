@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { ProColumns } from '@ant-design/pro-components';
-import { App, Popover, Select, Space, Tag, Typography } from 'antd';
+import { App, Popover, Select, Space, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { formatQuantity, todaySiteDateString } from '../../../../../utils/format';
 import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
@@ -11,11 +11,15 @@ import {
   MaterialStackedCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { MarkerTag } from '../../../../../constants/statusBadges';
 import { apiRequest } from '../../../../../services/api';
 import { warehouseApi } from '../../../../master-data/services/warehouse';
 import { resolveInventoryMaterialBalanceListParams } from '../../../utils/warehouseListCore';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 import { fetchAllCurrentPageItems } from '../../../../../utils/fetchAllListPages';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
+import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
+import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
 
 interface InTransitBreakdown {
   purchase_quantity: number;
@@ -125,7 +129,7 @@ function renderAlertCell(record: InventoryItem, t: (key: string) => string) {
   else if (status === 'expired') color = 'error';
   else if (status === 'normal') color = 'success';
 
-  const tag = <Tag color={color}>{label}</Tag>;
+  const tag = <MarkerTag color={color}>{label}</MarkerTag>;
   if (record.alert_message && status !== 'normal') {
     return (
       <Popover content={<Typography.Text style={{ fontSize: 12 }}>{record.alert_message}</Typography.Text>}>
@@ -134,6 +138,14 @@ function renderAlertCell(record: InventoryItem, t: (key: string) => string) {
     );
   }
   return tag;
+}
+
+function renderInventoryStockStatus(status: string) {
+  let color: string = 'default';
+  if (status === '已过期') color = 'error';
+  else if (status === '无库存') color = 'warning';
+  else if (status === '在库') color = 'success';
+  return <MarkerTag color={color}>{status}</MarkerTag>;
 }
 
 const InventoryPage: React.FC = () => {
@@ -284,114 +296,145 @@ const InventoryPage: React.FC = () => {
   );
 
   const columns: ProColumns<InventoryItem>[] = useMemo(
-    () => [
-      {
-        title: t('app.kuaizhizao.warehouseCommon.colMaterial'),
-        key: 'material_name',
-        dataIndex: 'material_name',
-        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-        fixed: 'left',
-        render: (_, r) => (
-          <MaterialStackedCell material_name={r.material_name} material_code={r.material_code} />
-        ),
-      },
-      { title: t('app.kuaizhizao.warehouseReports.colMaterialCode'), dataIndex: 'material_code', hideInTable: true, sorter: true },
-      { title: t('app.kuaizhizao.warehouseReports.colMaterialName'), dataIndex: 'material_name', hideInTable: true },
-      {
-        title: t('app.master-data.materials.specification'),
-        dataIndex: 'material_spec',
-        width: 120,
-        ellipsis: true,
-        hideInSearch: true,
-        render: (_, r) => renderCell(r.material_spec),
-      },
-      {
-        title: t('app.master-data.materials.model'),
-        dataIndex: 'model',
-        width: 100,
-        ellipsis: true,
-        hideInSearch: true,
-        render: (_, r) => renderCell(r.model),
-      },
-      {
-        title: t('app.kuaizhizao.warehouseInventory.colBrand'),
-        dataIndex: 'brand',
-        width: 100,
-        ellipsis: true,
-        hideInSearch: true,
-        render: (_, r) => renderCell(r.brand),
-      },
-      {
-        title: t('app.kuaizhizao.warehouseInventory.colTexture'),
-        dataIndex: 'texture',
-        width: 100,
-        ellipsis: true,
-        hideInSearch: true,
-        render: (_, r) => renderCell(r.texture),
-      },
-      {
-        title: t('common.unit'),
-        dataIndex: 'material_unit',
-        width: 72,
-        hideInSearch: true,
-        render: (_, r) => renderCell(r.material_unit),
-      },
-      {
-        title: t('app.kuaizhizao.warehouseReports.colStockQty'),
-        dataIndex: 'quantity',
-        width: 100,
-        align: 'right',
-        valueType: 'digit',
-        sorter: true,
-        render: (_, record) => {
-          const qty = Number(record.quantity || 0);
-          return (
-            <span style={{ color: qty <= 0 ? '#ff4d4f' : undefined }}>
-              <QuantityWithUnitDisplay quantity={qty} unit={record.material_unit} />
-            </span>
-          );
-        },
-      },
-      {
-        title: t('app.kuaizhizao.warehouseInventory.colInTransit'),
-        dataIndex: 'in_transit_quantity',
-        width: 100,
-        align: 'right',
-        hideInSearch: true,
-        render: (_, record) => renderInTransitCell(record, t),
-      },
-      {
-        title: t('app.kuaizhizao.warehouseInventory.colAlert'),
-        dataIndex: 'alert_label',
-        width: 96,
-        align: 'center',
-        hideInSearch: true,
-        render: (_, record) => renderAlertCell(record, t),
-      },
-      {
-        title: t('common.status'),
-        dataIndex: 'status',
-        width: 100,
-        hideInTable: false,
-        hideInSearch: true,
-        sorter: true,
-        render: (_, record) => {
-          let color = 'default';
-          if (record.status === '已过期') color = 'red';
-          else if (record.status === '无库存') color = 'orange';
-          else if (record.status === '在库') color = 'green';
-          return <Tag color={color}>{record.status}</Tag>;
-        },
-      },
-      {
-        title: t('app.kuaizhizao.warehouseReports.colWarehouse'),
-        dataIndex: 'warehouse_name',
-        width: 120,
-        sorter: true,
-        render: (_, r) => r.warehouse_name || '-',
-      },
-    ],
-    [t]
+    () =>
+      alignProColumns<InventoryItem>(
+        [
+          {
+            title: t('app.kuaizhizao.warehouseCommon.colMaterial'),
+            key: 'material_name',
+            dataIndex: 'material_name',
+            ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+            fixed: 'left',
+            render: (_, r) => (
+              <MaterialStackedCell material_name={r.material_name} material_code={r.material_code} />
+            ),
+          },
+          {
+            title: t('app.kuaizhizao.warehouseReports.colMaterialCode'),
+            dataIndex: 'material_code',
+            hideInTable: true,
+            sorter: true,
+          },
+          {
+            title: t('app.kuaizhizao.warehouseReports.colMaterialName'),
+            dataIndex: 'material_name',
+            hideInTable: true,
+          },
+          {
+            title: t('app.master-data.materials.specification'),
+            dataIndex: 'material_spec',
+            width: 140,
+            minWidth: 140,
+            uniTableKeepWidth: true,
+            resizable: false,
+            ellipsis: true,
+            hideInSearch: true,
+            render: (_, r) => renderCell(r.material_spec),
+          },
+          {
+            title: t('app.master-data.materials.model'),
+            dataIndex: 'model',
+            width: 88,
+            minWidth: 88,
+            uniTableKeepWidth: true,
+            resizable: false,
+            ellipsis: true,
+            hideInSearch: true,
+            render: (_, r) => renderCell(r.model),
+          },
+          {
+            title: t('app.kuaizhizao.warehouseInventory.colBrand'),
+            dataIndex: 'brand',
+            width: 88,
+            minWidth: 88,
+            uniTableKeepWidth: true,
+            resizable: false,
+            ellipsis: true,
+            hideInSearch: true,
+            render: (_, r) => renderCell(r.brand),
+          },
+          {
+            title: t('app.kuaizhizao.warehouseInventory.colTexture'),
+            dataIndex: 'texture',
+            width: 72,
+            minWidth: 72,
+            uniTableKeepWidth: true,
+            resizable: false,
+            ellipsis: true,
+            hideInSearch: true,
+            render: (_, r) => renderCell(r.texture),
+          },
+          {
+            title: t('common.unit'),
+            dataIndex: 'material_unit',
+            width: 56,
+            minWidth: 56,
+            uniTableKeepWidth: true,
+            resizable: false,
+            hideInSearch: true,
+            render: (_, r) => renderCell(r.material_unit),
+          },
+          {
+            title: t('app.kuaizhizao.warehouseReports.colStockQty'),
+            dataIndex: 'quantity',
+            width: 110,
+            minWidth: 110,
+            uniTableKeepWidth: true,
+            resizable: false,
+            align: 'right',
+            valueType: 'digit',
+            sorter: true,
+            render: (_, record) => {
+              const qty = Number(record.quantity || 0);
+              return (
+                <span style={{ color: qty <= 0 ? '#ff4d4f' : undefined }}>
+                  <QuantityWithUnitDisplay quantity={qty} unit={record.material_unit} />
+                </span>
+              );
+            },
+          },
+          {
+            title: t('app.kuaizhizao.warehouseInventory.colInTransit'),
+            dataIndex: 'in_transit_quantity',
+            width: 88,
+            minWidth: 88,
+            uniTableKeepWidth: true,
+            resizable: false,
+            align: 'right',
+            hideInSearch: true,
+            render: (_, record) => renderInTransitCell(record, t),
+          },
+          {
+            title: t('app.kuaizhizao.warehouseInventory.colAlert'),
+            dataIndex: 'alert_label',
+            ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+            hideInSearch: true,
+            render: (_, record) => renderAlertCell(record, t),
+          },
+          {
+            title: t('common.status'),
+            dataIndex: 'status',
+            ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+            hideInTable: false,
+            hideInSearch: true,
+            sorter: true,
+            render: (_, record) => renderInventoryStockStatus(record.status),
+          },
+          {
+            title: t('app.kuaizhizao.warehouseReports.colWarehouse'),
+            dataIndex: 'warehouse_name',
+            minWidth: 160,
+            uniTableRemainderFlex: true,
+            uniTablePrimaryFlex: true,
+            resizable: false,
+            ellipsis: true,
+            sorter: true,
+            render: (_, r) => r.warehouse_name || '-',
+          },
+        ],
+        WAREHOUSE_DOC_LIST_FIELD_RANK,
+      ),
+    [t],
   );
 
   const fetchInventory = async (params: any, sort: any, _filter: any, searchFormValues?: Record<string, any>) => {
@@ -490,7 +533,7 @@ const InventoryPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.inventory')}
         headerActions={tableHeaderActions}
-        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.inventory"
+        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.inventory-width-v4"
         actionRef={actionRef}
         columns={columns}
         request={fetchInventory}

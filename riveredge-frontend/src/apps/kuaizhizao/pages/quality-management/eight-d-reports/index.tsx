@@ -143,22 +143,20 @@ const EightDReportsPage: React.FC = () => {
       hideInTable: true,
       search: { order: 31 } as ProColumns['search'],
     },
-    {
-      ...stackedPrimarySecondaryColumn<Quality8DReport>(
-        t('app.kuaizhizao.eightD.columns.titleAndCode'),
-        'eightDStacked',
-        ['title'],
-        ['report_code', 'reportCode'],
-        { dataIndex: 'title', fixed: 'left' },
-      ),
-      // 余宽只进主列，避免 table-layout:fixed 把「来源」等 keepWidth 列等比撑开
-      uniTablePrimaryFlexMaxWidth: 480,
-    },
+    stackedPrimarySecondaryColumn<Quality8DReport>(
+      t('app.kuaizhizao.eightD.columns.titleAndCode'),
+      'eightDStacked',
+      ['title'],
+      ['report_code', 'reportCode'],
+      { dataIndex: 'title', fixed: 'left', widthMode: 'remainder' },
+    ),
     {
       title: t('app.kuaizhizao.eightD.columns.severity'),
       dataIndex: 'severity',
       width: 90,
+      minWidth: 90,
       uniTableKeepWidth: true,
+      resizable: false,
       sorter: true,
       hideInSearch: true,
       render: (_, row) => {
@@ -246,7 +244,9 @@ const EightDReportsPage: React.FC = () => {
       title: t('app.kuaizhizao.eightD.columns.dueDate'),
       dataIndex: 'due_date',
       width: 168,
+      minWidth: 168,
       uniTableKeepWidth: true,
+      resizable: false,
       sorter: true,
       hideInSearch: true,
       render: (_, row) =>
@@ -255,7 +255,7 @@ const EightDReportsPage: React.FC = () => {
     ...buildDocumentAuditColumns<Quality8DReport>(t),
     {
       title: t('common.actions'),
-      valueType: 'option',
+      key: 'option',
       fixed: 'right',
       hideInSearch: true,
       render: (_, row) => {
@@ -347,7 +347,7 @@ const EightDReportsPage: React.FC = () => {
           onRowSelectionChange={setSelectedRowKeys}
           permissionResource={EIGHT_D_RESOURCE}
           columns={columns}
-          columnPersistenceId="apps.kuaizhizao.pages.quality-management.eight-d-reports.stage-source-v8"
+          columnPersistenceId="apps.kuaizhizao.pages.quality-management.eight-d-reports-width-v1"
           showAdvancedSearch
           pinnedTabsField={EIGHT_D_PINNED_STATUS_FIELD}
           skipFuzzyPinyinClientFilter

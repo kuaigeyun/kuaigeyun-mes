@@ -11,15 +11,16 @@ import { SearchOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
-import { MarkerTag } from '../../../../../constants/statusBadges';
+import { MarkerTag, StatusTag } from '../../../../../constants/statusBadges';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { MASTER_DATA_LIST_FIELD_RANK } from '../../../utils/masterListCore';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { materialApi } from '../../../services/material';
 import { operationApi, processRouteApi, unwrapProcessPagedList } from '../../../services/process';
-import { drawingApi, type EngineeringDrawing } from '../../../services/drawing';
+import { drawingApi, type DrawingStatus, type EngineeringDrawing } from '../../../services/drawing';
 import {
   drawingWhereUsedApi,
   type DrawingWhereUsedKind,
@@ -29,6 +30,14 @@ import { workOrderApi } from '../../../../kuaizhizao/services/work-order';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 
 const RESOURCE = 'master-data:process:drawing-where-used';
+
+const DRAWING_STATUS_COLOR: Record<DrawingStatus, string> = {
+  Draft: 'default',
+  Editing: 'processing',
+  Pending: 'warning',
+  Released: 'success',
+  Obsolete: 'error',
+};
 
 type QueryKind = 'material' | 'process_route' | 'operation' | 'work_order' | 'drawing';
 type Direction = 'forward' | 'reverse';
@@ -138,28 +147,61 @@ const DrawingWhereUsedPage: React.FC = () => {
     () =>
       alignProColumns(
         [
-          { title: t('app.master-data.drawings.code'), dataIndex: 'code', width: 140 },
-          { title: t('app.master-data.drawings.name'), dataIndex: 'name', ellipsis: true, width: 200 },
-          { title: t('app.master-data.drawings.revision'), dataIndex: 'revision', width: 72 },
+          {
+            // 稀疏查询结果：业务列不叠；名称 RemainderFlex；状态 StatusTag 右固
+            title: t('app.master-data.drawings.code'),
+            dataIndex: 'code',
+            width: 140,
+            minWidth: 140,
+            uniTableKeepWidth: true,
+            resizable: false,
+            fixed: 'left',
+            ellipsis: true,
+          },
+          {
+            title: t('app.master-data.drawings.name'),
+            dataIndex: 'name',
+            minWidth: 160,
+            uniTableRemainderFlex: true,
+            uniTablePrimaryFlex: true,
+            resizable: false,
+            ellipsis: true,
+          },
+          {
+            title: t('app.master-data.drawings.revision'),
+            dataIndex: 'revision',
+            width: 100,
+            minWidth: 100,
+            uniTableKeepWidth: true,
+            resizable: false,
+          },
           {
             title: t('common.status'),
             dataIndex: 'status',
-            width: 88,
+            hideInTable: true,
+          },
+          {
+            title: t('common.status'),
+            key: 'lifecycle',
+            dataIndex: 'status',
+            fixed: 'right',
+            hideInSearch: true,
             render: (_, record) => (
-              <MarkerTag color="processing">{t(`app.master-data.drawings.status.${record.status}`)}</MarkerTag>
+              <StatusTag color={DRAWING_STATUS_COLOR[record.status]}>
+                {t(`app.master-data.drawings.status.${record.status}`)}
+              </StatusTag>
             ),
           },
           {
             title: t('common.actions'),
-            valueType: 'option',
-            fixed: 'right' as const,
+            key: 'action',
+            fixed: 'right',
+            hideInSearch: true,
             render: (_, record) => (
               <Button
                 {...rowActionKind('read')}
                 onClick={() => navigate(`/apps/master-data/process/drawings?uuid=${record.uuid}`)}
-              >
-                {t('common.detail')}
-              </Button>
+              />
             ),
           },
         ],
@@ -169,17 +211,50 @@ const DrawingWhereUsedPage: React.FC = () => {
   );
 
   const usageColumns: ProColumns<DrawingWhereUsedUsage>[] = useMemo(
-    () => [
-      {
-        title: t('app.master-data.drawingWhereUsed.usageKind'),
-        dataIndex: 'kind',
-        width: 120,
-        render: (_, record) => <MarkerTag color="default">{kindLabel(record.kind)}</MarkerTag>,
-      },
-      { title: t('app.master-data.drawingWhereUsed.usageCode'), dataIndex: 'code', width: 160 },
-      { title: t('app.master-data.drawingWhereUsed.usageName'), dataIndex: 'name', ellipsis: true },
-      { title: t('app.master-data.drawingWhereUsed.usageExtra'), dataIndex: 'extra', width: 140 },
-    ],
+    () =>
+      alignProColumns(
+        [
+          {
+            title: t('app.master-data.drawingWhereUsed.usageKind'),
+            key: 'drawing_where_used_kind',
+            dataIndex: 'kind',
+            ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+            render: (_, record) => <MarkerTag color="default">{kindLabel(record.kind)}</MarkerTag>,
+          },
+          {
+            title: t('app.master-data.drawingWhereUsed.usageCode'),
+            key: 'drawing_where_used_code',
+            dataIndex: 'code',
+            width: 168,
+            minWidth: 168,
+            uniTableKeepWidth: true,
+            resizable: false,
+            ellipsis: true,
+          },
+          {
+            // 对象名称长短不一：唯一 RemainderFlex
+            title: t('app.master-data.drawingWhereUsed.usageName'),
+            key: 'drawing_where_used_name',
+            dataIndex: 'name',
+            minWidth: 160,
+            uniTableRemainderFlex: true,
+            uniTablePrimaryFlex: true,
+            resizable: false,
+            ellipsis: true,
+          },
+          {
+            title: t('app.master-data.drawingWhereUsed.usageExtra'),
+            key: 'drawing_where_used_extra',
+            dataIndex: 'extra',
+            width: 160,
+            minWidth: 160,
+            uniTableKeepWidth: true,
+            resizable: false,
+            ellipsis: true,
+          },
+        ],
+        MASTER_DATA_LIST_FIELD_RANK,
+      ),
     [t, kindLabel],
   );
 
@@ -220,7 +295,7 @@ const DrawingWhereUsedPage: React.FC = () => {
         rowKey="uuid"
         permissionResource={RESOURCE}
         headerTitle={t('app.master-data.menu.process.drawing-where-used')}
-        columnPersistenceId="apps.master-data.pages.process.drawing-where-used.v1"
+        columnPersistenceId="apps.master-data.pages.process.drawing-where-used.v2"
         columns={(queryRef.current.direction === 'reverse' ? usageColumns : drawingColumns) as ProColumns<EngineeringDrawing | DrawingWhereUsedUsage>[]}
         showCreateButton={false}
         showExportButton={canExport}

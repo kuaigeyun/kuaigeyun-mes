@@ -32,10 +32,11 @@ import Phase2ProjectSelect from '../../../components/Phase2ProjectSelect';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
-import { formatDateTime } from '../../../../../utils/format';
+import { formatDateTimeBySiteSetting } from '../../../../../utils/format';
 import { testGenerateCode } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import {
   plmCodeTitleSearchColumns,
   plmCreatedUpdatedColumns,
@@ -169,18 +170,25 @@ const DesignReviewsPage: React.FC = () => {
         titleField: 'title',
       }),
       {
+        // 稀疏：编号 → 标题 → 项目 → 类型 → 评审人 → 计划时间；审计叠列保留；状态 StatusTag
         title: t('app.kuaiplm.phase2.designReviews.columns.code'),
         dataIndex: 'review_code',
-        width: 140,
-        minWidth: 140,
+        width: 168,
+        minWidth: 168,
         uniTableKeepWidth: true,
         resizable: false,
         sorter: true,
         hideInSearch: true,
+        ellipsis: true,
       },
       {
+        // 标题长短不一：唯一 RemainderFlex
         title: t('app.kuaiplm.phase2.designReviews.columns.title'),
         dataIndex: 'title',
+        minWidth: 160,
+        uniTableRemainderFlex: true,
+        uniTablePrimaryFlex: true,
+        resizable: false,
         sorter: true,
         ellipsis: true,
         hideInSearch: true,
@@ -188,17 +196,17 @@ const DesignReviewsPage: React.FC = () => {
       {
         title: t('app.kuaiplm.phase2.requirements.columns.project'),
         dataIndex: 'project_name',
-        width: 140,
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         ellipsis: true,
       },
       {
         title: t('app.kuaiplm.phase2.designReviews.columns.type'),
         dataIndex: 'review_type',
-        width: 100,
-        minWidth: 100,
-        uniTableKeepWidth: true,
-        resizable: false,
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         sorter: true,
         hideInSearch: true,
         render: (_, row) => renderPhase2ReviewTypeMarker(t, row.review_type),
@@ -206,76 +214,59 @@ const DesignReviewsPage: React.FC = () => {
       {
         title: t('app.kuaiplm.phase2.designReviews.columns.reviewer'),
         dataIndex: 'reviewer_name',
-        width: 100,
-        minWidth: 100,
+        width: 112,
+        minWidth: 112,
         uniTableKeepWidth: true,
         resizable: false,
         hideInSearch: true,
+        ellipsis: true,
       },
       {
         title: t('app.kuaiplm.phase2.designReviews.columns.scheduledAt'),
         dataIndex: 'review_date',
-        width: 132,
-        minWidth: 132,
+        width: 180,
+        minWidth: 180,
         uniTableKeepWidth: true,
         resizable: false,
         hideInSearch: true,
         render: (_, row) =>
-          row.review_date
-            ? formatDateTime(row.review_date, 'YYYY-MM-DD HH:mm')
-            : '-',
+          row.review_date ? formatDateTimeBySiteSetting(row.review_date) : '-',
       },
       ...plmCreatedUpdatedColumns<RdDesignReview>(t),
       {
         title: t('common.status'),
         key: 'lifecycle',
         dataIndex: 'status',
-        width: 90,
-        minWidth: 90,
-        uniTableKeepWidth: true,
-        resizable: false,
         fixed: 'right',
         valueEnum: designReviewStatusValueEnum,
         render: (_, row) => renderPhase2DesignReviewStatusTag(t, row.status),
       },
       plmListActionColumn<RdDesignReview>(t, (_, row) => [
-            <Button
-              {...rowActionKind('read')}
-              key="detail"
-              type="link"
-              size="small"
-              onClick={() => setDetailRecord(row)}
-            >
-              {t('common.detail')}
-            </Button>,
-            <Button
-              {...rowActionKind('edit')}
-              key="edit"
-              type="link"
-              size="small"
-              onClick={() => setEditingRecord(row)}
-            >
-              {t('common.edit')}
-            </Button>,
-            <Button {...rowActionKind('delete')}
-              key="del"
-              type="link"
-              size="small"
-              danger
-              onClick={() => {
-                modalApi.confirm({
-                  title: t('app.kuaiplm.phase2.designReviews.deleteOneTitle'),
-                  onOk: async () => {
-                    await deleteDesignReview(row.id!);
-                    messageApi.success(t('common.deleteSuccess'));
-                    actionRef.current?.reload();
-                  },
-                });
-              }}
-            >
-              {t('common.delete')}
-            </Button>,
-          ]),
+        <Button
+          key="detail"
+          {...rowActionKind('read')}
+          onClick={() => setDetailRecord(row)}
+        />,
+        <Button
+          key="edit"
+          {...rowActionKind('update')}
+          onClick={() => setEditingRecord(row)}
+        />,
+        <Button
+          key="del"
+          {...rowActionKind('delete')}
+          onClick={() => {
+            modalApi.confirm({
+              title: t('app.kuaiplm.phase2.designReviews.deleteOneTitle'),
+              onOk: async () => {
+                await deleteDesignReview(row.id!);
+                messageApi.success(t('common.deleteSuccess'));
+                actionRef.current?.reload();
+              },
+            });
+          }}
+        />,
+      ]),
     ],
     [designReviewStatusValueEnum, modalApi, messageApi, t],
   );
@@ -287,7 +278,7 @@ const DesignReviewsPage: React.FC = () => {
           type="info"
           showIcon
           style={{ marginBottom: 16 }}
-          message={t('app.kuaiplm.phase2.common.projectFilterHint', { id: filterProjectId })}
+          title={t('app.kuaiplm.phase2.common.projectFilterHint', { id: filterProjectId })}
         />
       ) : null}
       <UniTable<RdDesignReview>
@@ -300,7 +291,7 @@ const DesignReviewsPage: React.FC = () => {
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
         columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
-        columnPersistenceId="apps.kuaiplm.pages.phase2.design-reviews.list-v1"
+        columnPersistenceId="apps.kuaiplm.pages.phase2.design-reviews.list-v2"
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
         pinnedTabsField={PLM_PHASE2_PINNED_STATUS_FIELD}

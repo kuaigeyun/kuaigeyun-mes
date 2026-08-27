@@ -62,6 +62,7 @@ export interface PurchaseOrderChangeListParams {
   start_date?: string;
   end_date?: string;
   order_by?: string;
+  include_items?: boolean;
 }
 
 export interface PurchaseOrderChangeListResult {

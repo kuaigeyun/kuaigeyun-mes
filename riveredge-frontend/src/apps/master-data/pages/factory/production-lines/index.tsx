@@ -25,6 +25,7 @@ import {
 } from '../../../services/factory';
 import {
   buildMasterCrudActiveValueEnum,
+  buildMasterCrudActiveStatusColumn,
   MASTER_CRUD_PINNED_ACTIVE_FIELD,
   MASTER_DATA_LIST_FIELD_RANK,
   masterCrudCodeNameSearchColumns,
@@ -635,30 +636,10 @@ const ProductionLinesPage: React.FC = () => {
       hideInSearch: true,
     },
     ...customFieldColumns,
-    {
-      title: t('app.master-data.productionLines.statusLabel'),
-      dataIndex: 'isActive',
-      hideInTable: true,
-      order: 20,
-      valueType: 'select',
-      valueEnum: productionLineActiveValueEnum,
-      fieldProps: { allowClear: true },
-    },
-    {
-      title: t('app.master-data.productionLines.statusLabel'),
-      dataIndex: 'isActive',
-      width: 88,
-      minWidth: 88,
-      uniTableKeepWidth: true,
-      resizable: false,
-      hideInSearch: true,
-      sorter: true,
-      valueEnum: productionLineActiveValueEnum,
-      render: (_, record) => {
-        const isActive = record?.isActive;
-        return renderMasterActiveTag(t, isActive, 'common.enabled', 'common.disabled');
-      },
-    },
+    ...buildMasterCrudActiveStatusColumn<ProductionLine>(t, {
+      activeValueEnum: productionLineActiveValueEnum,
+      statusTitleKey: 'app.master-data.productionLines.statusLabel',
+    }),
     ...masterCrudCreatedUpdatedColumns<ProductionLine>(t),
     {
       title: t('common.actions'),
@@ -752,7 +733,7 @@ const ProductionLinesPage: React.FC = () => {
           message={t('app.master-data.productionLines.dimensionHint')}
         />
         <UniTable<ProductionLine>
-        columnPersistenceId="apps.master-data.pages.factory.production-lines.list-v1"
+        columnPersistenceId="apps.master-data.pages.factory.production-lines.list-v2"
         actionRef={actionRef}
         columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
         request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {

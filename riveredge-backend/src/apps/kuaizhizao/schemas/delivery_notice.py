@@ -12,6 +12,7 @@ from typing import Optional, List, Any, Dict
 from pydantic import Field
 from core.schemas.base import BaseSchema
 from apps.kuaizhizao.services.document_action_policy.types import SalesDeliveryPullCapabilities
+from apps.kuaizhizao.schemas.warehouse import DocumentLineMaterialPreview
 
 
 # === 送货单 ===
@@ -68,7 +69,9 @@ class DeliveryNoticeResponse(DeliveryNoticeBase):
 
 class DeliveryNoticeListResponse(DeliveryNoticeResponse):
     """送货单列表响应schema"""
-    pass
+    items: Optional[List[DocumentLineMaterialPreview]] = Field(
+        None, description="明细物料名预览（列表「明细」列）",
+    )
 
 
 # === 送货单明细 ===

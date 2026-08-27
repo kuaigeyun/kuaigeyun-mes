@@ -54,6 +54,9 @@ export type RowActionVisualProfile =
   | 'reset-password'
   | 'test-connection'
   | 'balloon-annotate'
+  | 'copy-create'
+  | 'collect-receipt'
+  | 'issue-invoice'
 
 export function rowActionKind(
   kind: RowActionPermissionKind,
@@ -113,6 +116,45 @@ export function rowActionBalloonAnnotate(
   }
 }
 
+/** 复制新建：行内双字「复制」；RBAC 默认 create */
+export function rowActionCopyCreate(
+  permission: 'skip' | 'create' = 'create',
+): {
+  [ROW_ACTION_KIND_ATTR]: RowActionPermissionKind
+  [ROW_ACTION_VISUAL_PROFILE_ATTR]: RowActionVisualProfile
+} {
+  return {
+    [ROW_ACTION_KIND_ATTR]: permission,
+    [ROW_ACTION_VISUAL_PROFILE_ATTR]: 'copy-create',
+  }
+}
+
+/** 应收下推收款：行内双字「收款」；RBAC 默认 execute */
+export function rowActionCollectReceipt(
+  permission: 'skip' | 'execute' | 'create' = 'execute',
+): {
+  [ROW_ACTION_KIND_ATTR]: RowActionPermissionKind
+  [ROW_ACTION_VISUAL_PROFILE_ATTR]: RowActionVisualProfile
+} {
+  return {
+    [ROW_ACTION_KIND_ATTR]: permission,
+    [ROW_ACTION_VISUAL_PROFILE_ATTR]: 'collect-receipt',
+  }
+}
+
+/** 应收/应付下推开票：行内双字「开票」；RBAC 默认 create */
+export function rowActionIssueInvoice(
+  permission: 'skip' | 'create' = 'create',
+): {
+  [ROW_ACTION_KIND_ATTR]: RowActionPermissionKind
+  [ROW_ACTION_VISUAL_PROFILE_ATTR]: RowActionVisualProfile
+} {
+  return {
+    [ROW_ACTION_KIND_ATTR]: permission,
+    [ROW_ACTION_VISUAL_PROFILE_ATTR]: 'issue-invoice',
+  }
+}
+
 export function readActionVisualProfile(node: React.ReactNode): RowActionVisualProfile | null {
   if (!React.isValidElement(node)) return null
   const raw = (node.props as Record<string, unknown>)?.[ROW_ACTION_VISUAL_PROFILE_ATTR]
@@ -120,7 +162,10 @@ export function readActionVisualProfile(node: React.ReactNode): RowActionVisualP
     raw === 'add-follow-up-from-document' ||
     raw === 'reset-password' ||
     raw === 'test-connection' ||
-    raw === 'balloon-annotate'
+    raw === 'balloon-annotate' ||
+    raw === 'copy-create' ||
+    raw === 'collect-receipt' ||
+    raw === 'issue-invoice'
   ) {
     return raw
   }

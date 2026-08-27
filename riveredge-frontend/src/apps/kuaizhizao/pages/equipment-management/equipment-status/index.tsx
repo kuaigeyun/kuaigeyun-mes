@@ -21,9 +21,6 @@ import dayjs from 'dayjs';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { EquipmentTraceBriefPrimaryActions } from '../EquipmentTraceBriefFooter';
 import { formatDateTime } from '../../../../../utils/format';
-import { ThemedSegmented } from '../../../../../components/themed-segmented';
-import RichDocumentHelpView from '../../../../../components/page-help-wiki/RichDocumentHelpView';
-import { DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 const { Meta } = Card;
 const { Option } = Select;
@@ -88,7 +85,6 @@ const EquipmentStatusPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const [statusList, setStatusList] = useState<EquipmentStatus[]>([]);
   const [loading, setLoading] = useState(false);
-  const [pageView, setPageView] = useState<'main' | 'help'>('main');
   const [autoRefresh, setAutoRefresh] = useState(true);
   const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -367,21 +363,6 @@ const EquipmentStatusPage: React.FC = () => {
 
   return (
     <ListPageTemplate>
-      <div style={{ marginBottom: 16 }}>
-        <ThemedSegmented
-          value={pageView}
-          options={[
-            { label: t('help.moduleCenter.view.workbench'), value: 'main' },
-            { label: t('help.moduleCenter.view.help'), value: 'help' },
-          ]}
-          onChange={(val) => setPageView((val as 'main' | 'help') ?? 'main')}
-        />
-      </div>
-      {pageView === 'help' ? (
-        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <RichDocumentHelpView docKey={DOCUMENT_LIST_HELP_KEYS.equipmentStatus} />
-        </div>
-      ) : (
       <>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <Typography.Title level={4} style={{ margin: 0 }}>
@@ -732,7 +713,6 @@ const EquipmentStatusPage: React.FC = () => {
         />
       </FormModalTemplate>
       </>
-      )}
     </ListPageTemplate>
   );
 };

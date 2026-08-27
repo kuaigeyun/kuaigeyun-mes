@@ -162,7 +162,10 @@ const BarcodeMappingRulesPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.barcodeMapping.colRuleCode'),
       dataIndex: 'code',
-      width: 120,
+      width: 140,
+      minWidth: 140,
+      uniTableKeepWidth: true,
+      resizable: false,
       fixed: 'left',
       render: (_, r) => (
         <Typography.Text copyable={{ text: String(r.code ?? '') }} ellipsis>
@@ -173,13 +176,20 @@ const BarcodeMappingRulesPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.barcodeMapping.colRuleName'),
       dataIndex: 'name',
-      width: 150,
+      minWidth: 160,
+      uniTablePrimaryFlex: true,
+      uniTableRemainderFlex: true,
+      resizable: false,
       ellipsis: true,
+      render: (_, r) => (r.name != null && r.name !== '' ? String(r.name) : '-'),
     },
     {
       title: t('app.kuaizhizao.warehouseCommon.colCustomer'),
       dataIndex: 'customer_name',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       render: (_, record) => record.customer_name || t('app.kuaizhizao.barcodeMapping.allCustomers'),
     },
@@ -187,12 +197,18 @@ const BarcodeMappingRulesPage: React.FC = () => {
       title: t('app.kuaizhizao.barcodeMapping.colBarcodePattern'),
       dataIndex: 'barcode_pattern',
       width: 200,
+      minWidth: 200,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
     },
     {
       title: t('app.kuaizhizao.barcodeMapping.colBarcodeType'),
       dataIndex: 'barcode_type',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       render: (_, record) => (
         <Tag color={record.barcode_type === '2d' ? 'blue' : 'default'}>
           {record.barcode_type === '2d'
@@ -205,18 +221,27 @@ const BarcodeMappingRulesPage: React.FC = () => {
       title: t('app.kuaizhizao.barcodeMapping.colMappedMaterialCode'),
       dataIndex: 'material_code',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
     },
     {
       title: t('app.kuaizhizao.barcodeMapping.colMappedMaterialName'),
       dataIndex: 'material_name',
       width: 150,
+      minWidth: 150,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
     },
     {
       title: t('app.kuaizhizao.barcodeMapping.colEnabledStatus'),
       dataIndex: 'is_enabled',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       render: (_, record) => (
         <Tag color={record.is_enabled ? 'success' : 'default'}>
           {record.is_enabled
@@ -229,13 +254,17 @@ const BarcodeMappingRulesPage: React.FC = () => {
       title: t('app.kuaizhizao.barcodeMapping.colPriority'),
       dataIndex: 'priority',
       width: 80,
+      minWidth: 80,
+      uniTableKeepWidth: true,
+      resizable: false,
       align: 'right',
     },
     ...buildDocumentAuditColumns<BarcodeMappingRule>(t),
     {
       title: t('common.actions'),
-      width: 180,
+      key: 'option',
       fixed: 'right',
+      hideInSearch: true,
       render: (_, record) => (
         <Space>
           <Button {...rowActionKind('read')} onClick={() => handleDetail(record)} />
@@ -335,7 +364,7 @@ const BarcodeMappingRulesPage: React.FC = () => {
         actionRef={actionRef}
         rowKey="id"
         columns={alignProColumns(columns, WAREHOUSE_DOC_LIST_FIELD_RANK)}
-        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.barcode-mapping-rules"
+        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.barcode-mapping-rules-width-v2"
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.barcodeMappingRules')}
         showCreateButton={true}

@@ -10,6 +10,8 @@ import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_AUDIT_COLUMN_DEFAULTS,
 } from '../../../components/uni-table/stackedPrimaryColumn';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../utils/uniTableLayoutColumns';
+import { renderMasterActiveTag } from './masterListPresentation';
 
 export const MASTER_CRUD_PINNED_ACTIVE_FIELD = 'isActive';
 
@@ -216,6 +218,57 @@ export function buildMasterCrudActiveValueEnum(
     true: { text: t(enabledKey) },
     false: { text: t(disabledKey) },
   };
+}
+
+/** 主数据列表「启用/停用」列：搜索 + 表格，宽度走 UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS（80px） */
+export function buildMasterCrudActiveStatusColumn<T extends Record<string, unknown>>(
+  t: TFunction,
+  options?: {
+    dataIndex?: string;
+    fixed?: 'left' | 'right';
+    enabledKey?: string;
+    disabledKey?: string;
+    activeValueEnum?: Record<string, { text: string }>;
+    searchOrder?: number;
+    sorter?: boolean;
+    /** 默认 common.status */
+    statusTitleKey?: string;
+    resolveActive?: (record: T) => boolean | null | undefined;
+  },
+): ProColumns<T>[] {
+  const dataIndex = options?.dataIndex ?? 'isActive';
+  const enabledKey = options?.enabledKey ?? 'common.enabled';
+  const disabledKey = options?.disabledKey ?? 'common.disabled';
+  const statusTitle = t(options?.statusTitleKey ?? 'common.status');
+  const valueEnum =
+    options?.activeValueEnum ?? buildMasterCrudActiveValueEnum(t, enabledKey, disabledKey);
+  return [
+    {
+      title: statusTitle,
+      dataIndex,
+      hideInTable: true,
+      order: options?.searchOrder ?? 20,
+      valueType: 'select',
+      valueEnum,
+      fieldProps: { allowClear: true },
+    },
+    {
+      title: statusTitle,
+      dataIndex,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+      fixed: options?.fixed,
+      sorter: options?.sorter ?? true,
+      hideInSearch: true,
+      valueEnum,
+      render: (_, record) =>
+        renderMasterActiveTag(
+          t,
+          options?.resolveActive?.(record) ?? (record[dataIndex] as boolean | undefined),
+          enabledKey,
+          disabledKey,
+        ),
+    },
+  ];
 }
 
 export function formatMasterDateTimeCell(value: unknown): string {

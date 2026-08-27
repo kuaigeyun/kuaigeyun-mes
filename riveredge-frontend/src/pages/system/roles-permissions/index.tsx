@@ -137,7 +137,6 @@ import {
   resolvePermissionLabel,
 } from '../../../utils/permissionContract';
 import { TWO_COLUMN_LEFT_PANEL_BACKGROUND } from '../../../components/layout-templates/constants';
-import RichListPageHelpView from '../../../components/page-help-wiki/RichListPageHelpView';
 
 const ROLE_FUNCTIONAL_DOMAIN_I18N: Record<string, string> = {
   sales: 'field.role.functionalDomainSales',
@@ -507,7 +506,6 @@ const RolesPermissionsPage: React.FC = () => {
   const { t } = useTranslation();
   const trialRunMode = useTrialRunMode();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [pageView, setPageView] = useState<'main' | 'help'>('main');
 
   // 角色列表相关状态
   const [roles, setRoles] = useState<Role[]>([]);
@@ -1558,30 +1556,6 @@ const RolesPermissionsPage: React.FC = () => {
 
   return (
     <>
-      <div style={{ marginBottom: 16 }}>
-        <ThemedSegmented
-          value={pageView}
-          options={[
-            { label: t('help.moduleCenter.view.workbench'), value: 'main' },
-            { label: t('help.moduleCenter.view.help'), value: 'help' },
-          ]}
-          onChange={(val) => setPageView((val as 'main' | 'help') ?? 'main')}
-        />
-      </div>
-      {pageView === 'help' ? (
-        <div
-          style={{
-            flex: 1,
-            minHeight: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden',
-            height: 'calc(100% - 48px)',
-          }}
-        >
-          <RichListPageHelpView pageKey="system.roles" />
-        </div>
-      ) : (
       <div
         className="roles-permissions-page"
         style={{
@@ -2405,7 +2379,6 @@ const RolesPermissionsPage: React.FC = () => {
         )}
         </div>
       </div>
-      )}
 
       {/* 角色编辑 Modal - 复用 RoleFormModal（Schema 驱动，代码在名称前） */}
       <RoleFormModal

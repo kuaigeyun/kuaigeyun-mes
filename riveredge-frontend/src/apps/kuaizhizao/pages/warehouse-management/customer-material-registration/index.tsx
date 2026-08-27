@@ -43,6 +43,10 @@ import dayjs from 'dayjs';
 import { coerceFormDate, formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import {formatDateTime, formatQuantity} from '../../../../../utils/format';
 import { alignDescriptionColumns, alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
+import {
+  DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+  renderDocumentLineMaterialsPreview,
+} from '../../sales-management/shared/documentLineMaterialsPreview';
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
@@ -620,7 +624,11 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.warehouseCommon.colCode'),
       dataIndex: 'registration_code',
-      width: 150,
+      width: 160,
+      minWidth: 160,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
       fixed: 'left',
       sorter: true,
       search: { order: 40 } as ProColumns['search'],
@@ -634,56 +642,67 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
       title: t('app.kuaizhizao.warehouseCommon.colCustomer'),
       dataIndex: 'customer_name',
       width: 140,
+      minWidth: 140,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       sorter: true,
       hideInSearch: true,
+      render: (_, r) =>
+        r.customer_name != null && r.customer_name !== '' ? String(r.customer_name) : '-',
     },
     {
       title: t('app.kuaizhizao.warehouseCommon.colWorkOrder'),
       dataIndex: 'work_order_code',
-      width: 120,
+      width: 140,
+      minWidth: 140,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       sorter: true,
       hideInSearch: true,
+      render: (_, r) =>
+        r.work_order_code != null && r.work_order_code !== '' ? String(r.work_order_code) : '-',
     },
     {
-      title: t('app.kuaizhizao.warehouseCommon.colMaterial'),
-      dataIndex: 'mapped_material_name',
-      width: 140,
-      ellipsis: true,
-      sorter: true,
-      hideInSearch: true,
+      title: t('app.kuaizhizao.common.colLineMaterials'),
+      ...DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+      render: (_, r) => renderDocumentLineMaterialsPreview(r.items, t),
     },
     {
       title: t('common.quantity'),
       dataIndex: 'total_quantity',
-      width: 90,
-      align: 'right',
+      width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
-      render: (_, r) => formatQuantity(r.total_quantity ?? r.quantity),
+      render: (_, r) =>
+        formatQuantity(r.total_quantity ?? r.quantity),
     },
     {
       title: t('app.kuaizhizao.warehouseCommon.colWarehouse'),
       dataIndex: 'warehouse_name',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       sorter: true,
       hideInSearch: true,
+      render: (_, r) =>
+        r.warehouse_name != null && r.warehouse_name !== '' ? String(r.warehouse_name) : '-',
     },
     {
       title: t('app.kuaizhizao.warehouseCommon.colRegistrationDate'),
       dataIndex: 'registration_date',
       width: 132,
+      minWidth: 132,
       uniTableKeepWidth: true,
+      resizable: false,
       sorter: true,
       hideInSearch: true,
       render: (_, r) => (r.registration_date ? formatDateTime(r.registration_date) : '-'),
-    },
-    {
-      title: t('common.updatedAt'),
-      dataIndex: 'updated_at',
-      hideInTable: true,
-      hideInSearch: true,
     },
     ...buildDocumentAuditColumns<CustomerMaterialRegistration>(t),
     {
@@ -708,8 +727,9 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
     },
     {
       title: t('common.actions'),
-      width: 280,
+      key: 'option',
       fixed: 'right',
+      hideInSearch: true,
       render: (_, record) => (
         <Space>
           <Button {...rowActionKind('read')} onClick={() => handleDetail(record)} />
@@ -995,7 +1015,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
-        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.customer-material-registration"
+        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.customer-material-registration-width-v3"
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.customerMaterialRegistration')}
         showAdvancedSearch

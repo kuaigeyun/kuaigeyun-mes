@@ -30,6 +30,7 @@ from apps.kuaizhizao.schemas.sales_review import (
     SalesReviewItemResponse,
     SalesReviewListEnvelope,
     SalesReviewListItem,
+    SalesReviewListLinePreview,
     SalesReviewPushPreview,
     SalesReviewPushResult,
     SalesReviewResponse,
@@ -266,6 +267,7 @@ class SalesReviewService(AppBaseService):
         keyword: Optional[str] = None,
         order_by: Optional[str] = None,
         pullable_only: Optional[bool] = None,
+        include_items: bool = False,
         current_user: Optional[User] = None,
     ) -> SalesReviewListEnvelope:
         qs = SalesReview.filter(tenant_id=tenant_id, deleted_at__isnull=True)
@@ -296,6 +298,26 @@ class SalesReviewService(AppBaseService):
             if field in SALES_REVIEW_SORTABLE_FIELDS:
                 sort = order_by
         rows = await qs.order_by(sort).offset(skip).limit(limit)
+        items_by_review: Dict[int, List[SalesReviewListLinePreview]] = {}
+        if include_items and rows:
+            review_ids = [int(r.id) for r in rows if r.id is not None]
+            if review_ids:
+                all_lines = (
+                    await SalesReviewItem.filter(
+                        tenant_id=tenant_id, sales_review_id__in=review_ids
+                    )
+                    .order_by("sales_review_id", "line_no", "id")
+                    .all()
+                )
+                for line in all_lines:
+                    rid = int(line.sales_review_id)
+                    items_by_review.setdefault(rid, []).append(
+                        SalesReviewListLinePreview(
+                            material_name=str(line.material_name or ""),
+                            material_code=line.material_code,
+                            line_no=line.line_no,
+                        )
+                    )
         items = [
             SalesReviewListItem(
                 id=r.id,
@@ -319,6 +341,7 @@ class SalesReviewService(AppBaseService):
                 created_by_name=r.created_by_name,
                 updated_by=r.updated_by,
                 updated_by_name=r.updated_by_name,
+                items=items_by_review.get(int(r.id)) if include_items else None,
             )
             for r in rows
         ]

@@ -20,7 +20,6 @@ import { ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { apiRequest } from '../../../../../services/api';
 import { glService, type GlAccount, type GlVoucherLine } from '../../../services/gl';
-import { ListPageHelpToggle, RichListPageHelpView } from '../../../../../components/page-help-wiki';
 
 const NS = 'app.kuaicaiwu.gl.books';
 
@@ -361,7 +360,6 @@ const GlBooksPage: React.FC = () => {
 
   return (
     <ListPageTemplate>
-      <ListPageHelpToggle helpContent={<RichListPageHelpView pageKey="kuaicaiwu.books" />}>
       <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, justifyItems: 'center', justifyContent: 'space-between' }}>
           <Space wrap>
@@ -521,7 +519,6 @@ const GlBooksPage: React.FC = () => {
           scroll={{ x: 960 }}
         />
       </Space>
-      </ListPageHelpToggle>
 
       <Modal
         title={t(`${NS}.voucherDetail`, { defaultValue: '凭证详情' })}

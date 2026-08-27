@@ -29,6 +29,7 @@ import {
 } from '../../../services/factory';
 import {
   buildMasterCrudActiveValueEnum,
+  buildMasterCrudActiveStatusColumn,
   formatMasterDateTimeCell,
   MASTER_CRUD_PINNED_ACTIVE_FIELD,
   MASTER_DATA_LIST_FIELD_RANK,
@@ -640,30 +641,11 @@ const WorkshopsPage: React.FC = () => {
         ellipsis: true,
         hideInSearch: true,
       },
-      {
-        title: t('app.master-data.workshops.statusLabel'),
-        dataIndex: 'isActive',
-        hideInTable: true,
-        order: 20,
-        valueType: 'select',
-        valueEnum: workshopActiveValueEnum,
-        fieldProps: { allowClear: true },
-      },
-      {
-        title: t('app.master-data.workshops.statusLabel'),
-        dataIndex: 'isActive',
-        width: 88,
-        minWidth: 88,
-        uniTableKeepWidth: true,
-        resizable: false,
-        sorter: true,
-        hideInSearch: true,
-        valueEnum: workshopActiveValueEnum,
-        render: (_text, record) => {
-          const isActive = record?.isActive ?? (record as any)?.is_active;
-          return renderMasterActiveTag(t, isActive, 'common.enabled', 'common.disabled');
-        },
-      },
+      ...buildMasterCrudActiveStatusColumn<Workshop>(t, {
+        activeValueEnum: workshopActiveValueEnum,
+        statusTitleKey: 'app.master-data.workshops.statusLabel',
+        resolveActive: (record) => record?.isActive ?? (record as { is_active?: boolean }).is_active,
+      }),
       ...customFieldColumns,
       ...masterCrudCreatedUpdatedColumns<Workshop>(t),
       {
@@ -752,7 +734,7 @@ const WorkshopsPage: React.FC = () => {
       <ListPageTemplate>
         {customFieldsLoaded ? (
         <UniTable<Workshop>
-        columnPersistenceId="apps.master-data.pages.factory.workshops.list-v1"
+        columnPersistenceId="apps.master-data.pages.factory.workshops.list-v2"
         actionRef={actionRef}
         columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
         viewTypes={['table', 'help']}

@@ -13,7 +13,6 @@ import {
 import { EquipmentPersonSelect, resolveUserUuidById } from '../../../components/EquipmentPersonSelect';
 import { EQUIPMENT_DATE_FIELD_PROPS } from '../../../utils/equipmentFormFieldProps';
 import { App, Button, Modal, Row, Col } from 'antd';
-import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
@@ -262,44 +261,93 @@ const ToolBorrowsPage: React.FC = () => {
       {
         title: t(`${P}.col.borrowNo`),
         dataIndex: 'document_no',
-        width: 140,
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
         fixed: 'left',
         sorter: true,
         search: { order: 30 } as ProColumns['search'],
-        render: (_, r) => r.document_no ?? r.borrow_no ?? '-',
+        render: (_, r) => {
+          const no = r.document_no ?? r.borrow_no;
+          return no != null && no !== '' ? String(no) : '-';
+        },
       },
-      { title: t(`${P}.col.tool`), dataIndex: 'tool_name', width: 160, ellipsis: true, sorter: true, hideInSearch: true },
-      { title: t(`${P}.col.workOrderNo`), dataIndex: 'source_no', width: 130, sorter: true, hideInSearch: true, render: (_, r) => r.source_no ?? r.work_order_no ?? '-' },
-      { title: t(`${P}.col.borrower`), dataIndex: 'borrower_name', width: 100, sorter: true, hideInSearch: true },
+      {
+        title: t(`${P}.col.tool`),
+        dataIndex: 'tool_name',
+        minWidth: 160,
+        uniTablePrimaryFlex: true,
+        uniTableRemainderFlex: true,
+        resizable: false,
+        ellipsis: true,
+        sorter: true,
+        hideInSearch: true,
+        render: (_, r) => (r.tool_name != null && r.tool_name !== '' ? String(r.tool_name) : '-'),
+      },
+      {
+        title: t(`${P}.col.workOrderNo`),
+        dataIndex: 'source_no',
+        width: 130,
+        minWidth: 130,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
+        sorter: true,
+        hideInSearch: true,
+        render: (_, r) => {
+          const no = r.source_no ?? r.work_order_no;
+          return no != null && no !== '' ? String(no) : '-';
+        },
+      },
+      {
+        title: t(`${P}.col.borrower`),
+        dataIndex: 'borrower_name',
+        width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
+        sorter: true,
+        hideInSearch: true,
+        render: (_, r) =>
+          r.borrower_name != null && r.borrower_name !== '' ? String(r.borrower_name) : '-',
+      },
       {
         title: t(`${P}.col.borrowDate`),
         dataIndex: 'borrow_date',
         width: 132,
+        minWidth: 132,
         uniTableKeepWidth: true,
-        valueType: 'date',
+        resizable: false,
         sorter: true,
         hideInSearch: true,
+        valueType: 'date',
       },
-      { title: t(`${P}.col.plannedQty`), dataIndex: 'planned_qty', width: 90, sorter: true, hideInSearch: true },
       {
-        title: t('common.updatedAt'),
-        dataIndex: 'updated_at',
-        hideInTable: true,
+        title: t(`${P}.col.plannedQty`),
+        dataIndex: 'planned_qty',
+        width: 90,
+        minWidth: 90,
+        uniTableKeepWidth: true,
+        resizable: false,
+        sorter: true,
         hideInSearch: true,
+        render: (_, r) => (r.planned_qty != null ? String(r.planned_qty) : '-'),
       },
       ...buildDocumentAuditColumns<ToolBorrow>(t),
       {
         title: t('common.status'),
         key: 'lifecycle',
         dataIndex: 'status',
-        width: 90,
         hideInSearch: true,
         fixed: 'right',
         render: (_, r) => renderDocumentStatusTag(r.status ?? '-', r.status),
       },
       {
         title: t('common.actions'),
-        key: 'action',
+        key: 'option',
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) => (
@@ -308,7 +356,6 @@ const ToolBorrowsPage: React.FC = () => {
               {...rowActionKind('read')}
               type="link"
               size="small"
-              icon={<EyeOutlined />}
               onClick={(e) => {
                 e.stopPropagation();
                 handleDetail(record);
@@ -321,7 +368,6 @@ const ToolBorrowsPage: React.FC = () => {
                 {...rowActionKind('update')}
                 type="link"
                 size="small"
-                icon={<EditOutlined />}
                 onClick={(e) => {
                   e.stopPropagation();
                   void handleEdit(record);
@@ -336,7 +382,6 @@ const ToolBorrowsPage: React.FC = () => {
                 type="link"
                 size="small"
                 danger
-                icon={<DeleteOutlined />}
                 onClick={(e) => {
                   e.stopPropagation();
                   getAntdModal().confirm({
@@ -362,7 +407,7 @@ const ToolBorrowsPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.toolBorrows)}
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-borrows-equip-rank-v1"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-borrows-width-v2"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}

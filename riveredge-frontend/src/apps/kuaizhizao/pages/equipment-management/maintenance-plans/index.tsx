@@ -650,7 +650,10 @@ const MaintenancePlansPage: React.FC = () => {
     {
       title: t(`${P}.col.planNo`),
       dataIndex: 'plan_no',
-      width: 140,
+      width: 160,
+      minWidth: 160,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       fixed: 'left',
       sorter: true,
@@ -664,53 +667,61 @@ const MaintenancePlansPage: React.FC = () => {
     {
       title: t(`${P}.col.planName`),
       dataIndex: 'plan_name',
-      width: 200,
+      minWidth: 160,
+      uniTablePrimaryFlex: true,
+      uniTableRemainderFlex: true,
+      resizable: false,
       ellipsis: true,
-      sorter: true,
       hideInSearch: true,
+      render: (_, r) => (r.plan_name != null && r.plan_name !== '' ? String(r.plan_name) : '-'),
     },
     {
       title: t(`${P}.col.planType`),
       dataIndex: 'plan_type',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
       sorter: true,
       hideInSearch: true,
-    },
-    {
-      title: t(`${P}.col.equipmentCode`),
-      dataIndex: 'equipment_code',
-      width: 180,
-      hideInSearch: true,
-      render: (_, r) => (
-        <Typography.Text ellipsis title={formatMaintenancePlanEquipmentText(r)}>
-          {formatMaintenancePlanEquipmentText(r)}
-        </Typography.Text>
-      ),
+      render: (_, r) => (r.plan_type != null && r.plan_type !== '' ? String(r.plan_type) : '-'),
     },
     {
       title: t(`${P}.col.equipmentName`),
       dataIndex: 'equipment_name',
-      width: 220,
+      width: 200,
+      minWidth: 200,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       sorter: true,
       hideInSearch: true,
-      render: (_, r) => (
-        <Typography.Text ellipsis title={formatMaintenancePlanEquipmentText(r)}>
-          {formatMaintenancePlanEquipmentText(r)}
-        </Typography.Text>
-      ),
+      render: (_, r) => {
+        const text = formatMaintenancePlanEquipmentText(r);
+        return <Typography.Text ellipsis={{ tooltip: text }}>{text}</Typography.Text>;
+      },
     },
     {
       title: t(`${P}.col.maintenanceType`),
       dataIndex: 'maintenance_type',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
       sorter: true,
       hideInSearch: true,
+      render: (_, r) =>
+        r.maintenance_type != null && r.maintenance_type !== '' ? String(r.maintenance_type) : '-',
     },
     {
       title: t(`${P}.col.maintenanceCycle`),
       dataIndex: 'cycle_value',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       render: (_, record) =>
         record ? `${record.cycle_value ?? ''} ${record.cycle_unit ?? ''}`.trim() || '-' : '-',
@@ -720,7 +731,9 @@ const MaintenancePlansPage: React.FC = () => {
       dataIndex: 'planned_start_date',
       valueType: 'date',
       width: 132,
+      minWidth: 132,
       uniTableKeepWidth: true,
+      resizable: false,
       sorter: true,
       hideInSearch: true,
     },
@@ -737,7 +750,7 @@ const MaintenancePlansPage: React.FC = () => {
     },
     {
       title: t('common.actions'),
-      key: 'action',
+      key: 'option',
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) => renderPlanRowNodes(record),
@@ -756,7 +769,7 @@ const MaintenancePlansPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.maintenancePlans)}
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.maintenance-plans-equip-rank-v1"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.maintenance-plans-width-v2"
           actionRef={actionRef}
           rowKey="uuid"
           columns={columns}

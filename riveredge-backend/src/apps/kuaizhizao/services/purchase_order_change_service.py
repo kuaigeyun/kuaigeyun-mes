@@ -9,7 +9,11 @@ from tortoise.transactions import in_transaction
 
 from apps.common.base_service import AppBaseService
 from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus, is_draft_status, normalize_status
-from apps.kuaizhizao.constants.order_change import OrderChangeApplyStatus, OrderChangeLineType
+from apps.kuaizhizao.constants.order_change import (
+    OrderChangeApplyStatus,
+    OrderChangeCategory,
+    OrderChangeLineType,
+)
 from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderItem, PurchaseOrderChange
 from apps.kuaizhizao.models.purchase_order_change_order import PurchaseOrderChangeOrder, PurchaseOrderChangeItem
 from apps.kuaizhizao.schemas.order_change import (
@@ -17,6 +21,7 @@ from apps.kuaizhizao.schemas.order_change import (
     ChangeImpactPreviewResponse,
     OrderChangeItemCreate,
     OrderChangeItemResponse,
+    OrderChangeListLinePreview,
     PurchaseOrderChangeCreate,
     PurchaseOrderChangeListResponse,
     PurchaseOrderChangeUpdate,
@@ -432,6 +437,84 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
                 await PurchaseOrderChangeItem.create(tenant_id=tenant_id, change_order_id=doc.id, **row)
         return await self._to_detail(doc)
 
+    async def create_delivery_date_change_from_line(
+        self,
+        tenant_id: int,
+        order_id: int,
+        source_item_id: int,
+        after_delivery_date: date,
+        created_by: int,
+        change_reason: str,
+    ) -> PurchaseOrderChangeWithItemsResponse:
+        """到货延期等场景：仅对指定明细行生成交期变更（不复制整单未变更行）。"""
+        order = await self._validate_source_order(tenant_id, order_id)
+        src = await PurchaseOrderItem.get_or_none(
+            tenant_id=tenant_id,
+            id=source_item_id,
+            order_id=order.id,
+            deleted_at__isnull=True,
+        )
+        if not src:
+            raise NotFoundError(f"采购订单明细不存在: {source_item_id}")
+
+        has_pending_change = await self._has_pending_change(tenant_id, order_id)
+        assert_purchase_order_capability(
+            order,
+            "create_change_order",
+            has_items=True,
+            has_pending_change=has_pending_change,
+        )
+
+        b_amt = line_amount(src.ordered_quantity, src.unit_price)
+        before_qty = Decimal(str(src.ordered_quantity or 0))
+        row = {
+            "line_no": 1,
+            "source_item_id": src.id,
+            "change_type": OrderChangeLineType.DELIVERY_DATE.value,
+            "material_id": src.material_id,
+            "material_code": src.material_code,
+            "material_name": src.material_name,
+            "material_spec": src.material_spec,
+            "material_unit": src.unit,
+            "before_quantity": src.ordered_quantity,
+            "after_quantity": src.ordered_quantity,
+            "before_unit_price": src.unit_price,
+            "after_unit_price": src.unit_price,
+            "before_delivery_date": src.required_date,
+            "after_delivery_date": after_delivery_date,
+            "before_amount": b_amt,
+            "after_amount": b_amt,
+            "delta_amount": Decimal("0"),
+            "notes": None,
+        }
+
+        async with in_transaction():
+            user_info = await self.get_user_info(created_by)
+            doc = await PurchaseOrderChangeOrder.create(
+                tenant_id=tenant_id,
+                change_code=await self._generate_code(tenant_id),
+                source_order_id=order.id,
+                source_order_code=order.order_code,
+                change_version=await self._next_version(tenant_id, order.id),
+                supplier_id=order.supplier_id,
+                supplier_name=order.supplier_name,
+                change_reason=change_reason,
+                change_category=OrderChangeCategory.DELIVERY.value,
+                status=DocumentStatus.DRAFT.value,
+                review_status=ReviewStatus.PENDING.value,
+                before_total_quantity=before_qty,
+                after_total_quantity=before_qty,
+                before_total_amount=b_amt,
+                after_total_amount=b_amt,
+                delta_amount=Decimal("0"),
+                created_by=created_by,
+                created_by_name=user_info["name"],
+                updated_by=created_by,
+                updated_by_name=user_info["name"],
+            )
+            await PurchaseOrderChangeItem.create(tenant_id=tenant_id, change_order_id=doc.id, **row)
+        return await self._to_detail(doc)
+
     async def create_change_order(
         self, tenant_id: int, data: PurchaseOrderChangeCreate, created_by: int
     ) -> PurchaseOrderChangeWithItemsResponse:
@@ -541,11 +624,12 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
         tenant_id: int,
         docs: List[PurchaseOrderChangeOrder],
         lifecycle_stage: Optional[str] = None,
+        include_items: bool = False,
     ) -> List[PurchaseOrderChangeListResponse]:
         change_ids = [d.id for d in docs]
         all_items = await PurchaseOrderChangeItem.filter(
             tenant_id=tenant_id, change_order_id__in=change_ids
-        ).all() if change_ids else []
+        ).order_by("change_order_id", "line_no", "id").all() if change_ids else []
         items_by_change: Dict[int, List[PurchaseOrderChangeItem]] = {}
         for it in all_items:
             items_by_change.setdefault(it.change_order_id, []).append(it)
@@ -592,6 +676,17 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
                 supplier_id=doc.supplier_id,
                 supplier_name=doc.supplier_name,
                 partner_name=doc.supplier_name,
+                items=[
+                    OrderChangeListLinePreview(
+                        material_name=str(i.material_name or ""),
+                        material_code=i.material_code,
+                        line_no=i.line_no,
+                        change_type=i.change_type,
+                    )
+                    for i in doc_items
+                ]
+                if include_items
+                else None,
             )
             result.append(
                 enrich_purchase_order_change_capabilities_on_response(
@@ -618,6 +713,7 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
         order_by: Optional[str] = None,
+        include_items: bool = False,
     ) -> Tuple[List[PurchaseOrderChangeListResponse], int]:
         qs = PurchaseOrderChangeOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if source_order_id:
@@ -653,13 +749,15 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
 
         if lifecycle_filter:
             docs = await qs.order_by(order_clause, "-id").all()
-            rows = await self._build_change_list_rows(tenant_id, docs, lifecycle_stage=lifecycle_filter)
+            rows = await self._build_change_list_rows(
+                tenant_id, docs, lifecycle_stage=lifecycle_filter, include_items=include_items
+            )
             total = len(rows)
             return rows[skip : skip + limit], total
 
         total = await qs.count()
         docs = await qs.order_by(order_clause, "-id").offset(skip).limit(limit)
-        rows = await self._build_change_list_rows(tenant_id, docs)
+        rows = await self._build_change_list_rows(tenant_id, docs, include_items=include_items)
         return rows, total
 
     async def get_by_id(self, tenant_id: int, change_id: int) -> PurchaseOrderChangeWithItemsResponse:

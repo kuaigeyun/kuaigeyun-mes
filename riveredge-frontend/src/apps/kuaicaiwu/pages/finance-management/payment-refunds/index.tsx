@@ -4,7 +4,7 @@ export default function PaymentRefundsPage() {
   return (
     <FinanceRefundVoucherPage
       mode="payment-refund"
-      columnPersistenceId="apps.kuaicaiwu.pages.finance-management.payment-refunds.list-v1"
+      columnPersistenceId="apps.kuaicaiwu.pages.finance-management.payment-refunds.list-v2"
     />
   );
 }

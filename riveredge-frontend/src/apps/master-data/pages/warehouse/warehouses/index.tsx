@@ -26,6 +26,7 @@ import {
 } from '../../../services/factory';
 import {
   buildMasterCrudActiveValueEnum,
+  buildMasterCrudActiveStatusColumn,
   MASTER_CRUD_PINNED_ACTIVE_FIELD,
   MASTER_DATA_LIST_FIELD_RANK,
   masterCrudCodeNameSearchColumns,
@@ -673,27 +674,7 @@ const WarehousesPage: React.FC = () => {
     },
     // 插入自定义字段列
     ...customFieldColumns,
-    {
-      title: t('common.status'),
-      dataIndex: 'isActive',
-      hideInTable: true,
-      order: 20,
-      valueType: 'select',
-      valueEnum: warehouseActiveValueEnum,
-      fieldProps: { allowClear: true },
-    },
-    {
-      title: t('common.status'),
-      dataIndex: 'isActive',
-      width: 88,
-      minWidth: 88,
-      uniTableKeepWidth: true,
-      resizable: false,
-      hideInSearch: true,
-      valueEnum: warehouseActiveValueEnum,
-      render: (_: any, record: Warehouse) => renderMasterActiveTag(t, record?.isActive, 'common.enabled', 'common.disabled'),
-      sorter: true,
-    },
+    ...buildMasterCrudActiveStatusColumn<Warehouse>(t, { activeValueEnum: warehouseActiveValueEnum }),
     ...masterCrudCreatedUpdatedColumns<Warehouse>(t),
     {
       title: t('common.actions'),
@@ -789,7 +770,7 @@ const WarehousesPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<Warehouse>
-        columnPersistenceId="apps.master-data.pages.warehouse.warehouses.list-v1"
+        columnPersistenceId="apps.master-data.pages.warehouse.warehouses.list-v2"
         actionRef={actionRef}
         columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
         request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {

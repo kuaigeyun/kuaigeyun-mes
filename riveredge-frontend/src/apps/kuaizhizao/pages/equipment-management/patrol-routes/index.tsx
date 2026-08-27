@@ -39,6 +39,7 @@ import {
 } from '../shared/equipmentMasterDataDetail';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 
 const P = 'app.kuaizhizao.equipmentOps.patrolRoute';
 const RESOURCE = 'kuaizhizao:equipment-patrol-route';
@@ -242,7 +243,11 @@ const PatrolRoutesPage: React.FC = () => {
       {
         title: t('common.code'),
         dataIndex: 'code',
-        width: 120,
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
         fixed: 'left',
         sorter: true,
         search: { order: 30 } as ProColumns['search'],
@@ -250,37 +255,49 @@ const PatrolRoutesPage: React.FC = () => {
       {
         title: t('common.name'),
         dataIndex: 'name',
-        width: 180,
+        minWidth: 160,
+        uniTablePrimaryFlex: true,
+        uniTableRemainderFlex: true,
+        resizable: false,
         ellipsis: true,
         sorter: true,
         hideInSearch: true,
+        render: (_, r) => (r.name != null && r.name !== '' ? String(r.name) : '-'),
       },
-      { title: t(`${P}.col.workshop`), dataIndex: 'workshop_name', width: 120, hideInSearch: true },
+      {
+        title: t(`${P}.col.workshop`),
+        dataIndex: 'workshop_name',
+        width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
+        hideInSearch: true,
+        render: (_, r) => (r.workshop_name != null && r.workshop_name !== '' ? String(r.workshop_name) : '-'),
+      },
       {
         title: t(`${P}.col.stepCount`),
+        key: 'step_count',
         dataIndex: 'steps',
         width: 90,
+        minWidth: 90,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         render: (_, r) => r.steps?.length ?? 0,
       },
       {
         title: t('common.enabled'),
         dataIndex: 'is_active',
-        width: 80,
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         sorter: true,
         hideInSearch: true,
         render: (_, r) => renderIsActiveTag(t, r.is_active),
       },
-      {
-        title: t('common.updatedAt'),
-        dataIndex: 'updated_at',
-        hideInTable: true,
-        hideInSearch: true,
-      },
       ...buildDocumentAuditColumns<PatrolRoute>(t),
       {
         title: t('common.actions'),
-        key: 'action',
+        key: 'option',
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) =>
@@ -314,7 +331,7 @@ const PatrolRoutesPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.patrolRoutes)}
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.patrol-routes"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.patrol-routes-width-v2"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}

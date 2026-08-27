@@ -187,11 +187,19 @@ class DisassemblyOrderService(AppBaseService[DisassemblyOrder]):
         total = await query.count()
         orders = await query.order_by(order_clause).offset(skip).limit(limit)
         from apps.kuaizhizao.services.document_lifecycle_service import get_disassembly_order_lifecycle
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            batch_document_item_material_previews,
+        )
 
+        order_ids = [int(o.id) for o in orders]
+        item_previews = await batch_document_item_material_previews(
+            tenant_id, DisassemblyOrderItem, "disassembly_order_id", order_ids
+        )
         items: list[DisassemblyOrderResponse] = []
         for order in orders:
             resp = DisassemblyOrderResponse.model_validate(order)
             resp.lifecycle = get_disassembly_order_lifecycle(order, milestones=[])
+            resp = resp.model_copy(update={"items": item_previews.get(int(order.id), [])})
             items.append(resp)
         return DisassemblyOrderListResponse(items=items, total=total)
 

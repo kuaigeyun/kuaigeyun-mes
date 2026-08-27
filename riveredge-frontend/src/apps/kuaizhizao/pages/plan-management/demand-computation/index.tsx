@@ -58,7 +58,13 @@ import {
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { UniTable } from '../../../../../components/uni-table'
-import { MaterialStackedCell, UniTableStackedPrimaryCell, UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS } from '../../../../../components/uni-table/stackedPrimaryColumn'
+import {
+  MaterialStackedCell,
+  UniTableStackedPrimaryCell,
+  UNI_TABLE_STACKED_IDENTITY_CLASS,
+  UNI_TABLE_STACKED_BADGE_DATETIME_COLUMN_DEFAULTS,
+} from '../../../../../components/uni-table/stackedPrimaryColumn'
+import { MarkerTag } from '../../../../../constants/statusBadges'
 import { UniLifecycle } from '../../../../../components/uni-lifecycle'
 import {
   MultiTabListPageTemplate,
@@ -132,6 +138,10 @@ import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns'
 import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_DEFAULTS } from '../../sales-management/shared/DocumentPushProgressBar'
 import { resolveDownstreamPushPercent } from '../../sales-management/shared/pushProgress'
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment'
+import {
+  DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+  renderDocumentLineMaterialsPreview,
+} from '../../sales-management/shared/documentLineMaterialsPreview'
 import {formatDateBySiteSetting, formatDateTime, formatDateTimeBySiteSetting, formatQuantity} from '../../../../../utils/format'
 import { extractProTableSort } from '../../../../../utils/tableQueryKey'
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate'
@@ -2179,36 +2189,73 @@ const DemandComputationPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.demandComputation.colComputationCode'),
       dataIndex: 'computation_code',
-      width: 168,
+      width: 200,
+      minWidth: 200,
+      uniTableKeepWidth: true,
+      resizable: false,
       fixed: 'left',
       hideInSearch: false,
       sorter: true,
-      render: (_: unknown, record: DemandComputation) => (
-        <Space size={4} wrap={false} style={{ whiteSpace: 'nowrap' }}>
-          <span style={{ whiteSpace: 'nowrap' }}>{record.computation_code ?? '-'}</span>
-          {record.computation_code ? (
-            <Tooltip title={t('field.invitationCode.copy')}>
-              <Button
-                type="link"
-                size="small"
-                icon={<CopyOutlined style={{ fontSize: 12 }} />}
-                onClick={e => {
-                  e.stopPropagation()
-                  void navigator.clipboard.writeText(record.computation_code!).then(
-                    () => messageApi.success(t('app.kuaizhizao.demandComputation.copied')),
-                    () => messageApi.error(t('common.copyFailed'))
-                  )
-                }}
-              />
-            </Tooltip>
-          ) : null}
-        </Space>
-      ),
+      render: (_: unknown, record: DemandComputation) => {
+        let monitorSecondary: React.ReactNode = null
+        if (record.computation_status === '完成' && record.id) {
+          const summary = monitorSummaries[String(record.id)]
+          if (!summary) {
+            if (monitorSummariesLoading) {
+              monitorSecondary = <Spin size="small" />
+            }
+          } else if (summary.has_upstream_change || summary.has_downstream_risk) {
+            monitorSecondary = (
+              <Space size={4} wrap={false}>
+                {summary.has_upstream_change ? (
+                  <MarkerTag color="warning">{t('app.kuaizhizao.demandComputation.monitorBadgeUpstream')}</MarkerTag>
+                ) : null}
+                {summary.has_downstream_risk ? (
+                  <MarkerTag color="error">{t('app.kuaizhizao.demandComputation.monitorBadgeDownstream')}</MarkerTag>
+                ) : null}
+              </Space>
+            )
+          }
+        }
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 0, minWidth: 0 }}>
+            <div
+              className={UNI_TABLE_STACKED_IDENTITY_CLASS}
+              style={{ display: 'flex', alignItems: 'center', columnGap: 6, flexWrap: 'nowrap', whiteSpace: 'nowrap' }}
+            >
+              <span style={{ whiteSpace: 'nowrap' }}>{record.computation_code ?? '-'}</span>
+              {record.computation_code ? (
+                <Tooltip title={t('field.invitationCode.copy')}>
+                  <Button
+                    type="link"
+                    size="small"
+                    icon={<CopyOutlined style={{ fontSize: 12 }} />}
+                    onClick={e => {
+                      e.stopPropagation()
+                      void navigator.clipboard.writeText(record.computation_code!).then(
+                        () => messageApi.success(t('app.kuaizhizao.demandComputation.copied')),
+                        () => messageApi.error(t('common.copyFailed'))
+                      )
+                    }}
+                  />
+                </Tooltip>
+              ) : null}
+            </div>
+            {monitorSecondary ? (
+              <div style={{ marginTop: 1, display: 'flex', alignItems: 'center' }}>{monitorSecondary}</div>
+            ) : null}
+          </div>
+        )
+      },
     },
     {
       title: t('app.kuaizhizao.demandComputation.colSourceNo'),
       dataIndex: 'demand_code',
-      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+      width: 240,
+      minWidth: 240,
+      uniTableKeepWidth: true,
+      uniTablePrimaryFlex: false,
+      resizable: false,
       hideInSearch: false,
       sorter: true,
       render: (_: unknown, record: DemandComputation) => (
@@ -2225,7 +2272,10 @@ const DemandComputationPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.demandComputation.colSourceType'),
       dataIndex: 'demand_type',
-      width: 110,
+      width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'select',
       sorter: true,
       valueEnum: {
@@ -2239,8 +2289,11 @@ const DemandComputationPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.demandComputation.colBusinessMode'),
       dataIndex: 'business_mode',
-      width: 140,
+      width: 160,
+      minWidth: 160,
       uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: false,
       valueType: 'select',
       sorter: true,
       valueEnum: buildDemandBusinessModeValueEnum((mode) => {
@@ -2249,13 +2302,18 @@ const DemandComputationPage: React.FC = () => {
         return t('app.kuaizhizao.demandManagement.businessModeAto');
       }),
       hideInSearch: false,
+      render: (_, record) => renderDemandBusinessModeMarkerTag(t, record.business_mode),
+    },
+    {
+      title: t('app.kuaizhizao.common.colLineMaterials'),
+      ...DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+      render: (_, record) => renderDocumentLineMaterialsPreview(record.items, t),
     },
     {
       title: t('app.kuaizhizao.demandComputation.colStartTime'),
       key: 'computation_start_end_time_stacked',
       dataIndex: 'computation_start_time',
-      width: 188,
-      uniTableKeepWidth: true,
+      ...UNI_TABLE_STACKED_BADGE_DATETIME_COLUMN_DEFAULTS,
       sorter: true,
       hideInSearch: true,
       render: (_, record) => (
@@ -2285,35 +2343,11 @@ const DemandComputationPage: React.FC = () => {
         )
       },
     },
-    {
-      title: t('app.kuaizhizao.demandComputation.colDynamicMonitor'),
-      dataIndex: 'dynamic_monitor',
-      width: 148,
-      uniTableKeepWidth: true,
-      hideInSearch: true,
-      render: (_, record) => {
-        if (record.computation_status !== '完成' || !record.id) return '-'
-        const summary = monitorSummaries[String(record.id)]
-        if (!summary) {
-          return monitorSummariesLoading ? <Spin size="small" /> : '-'
-        }
-        if (!summary.has_upstream_change && !summary.has_downstream_risk) return '-'
-        return (
-          <Space size={4} wrap>
-            {summary.has_upstream_change ? (
-              <Tag color="warning">{t('app.kuaizhizao.demandComputation.monitorBadgeUpstream')}</Tag>
-            ) : null}
-            {summary.has_downstream_risk ? (
-              <Tag color="error">{t('app.kuaizhizao.demandComputation.monitorBadgeDownstream')}</Tag>
-            ) : null}
-          </Space>
-        )
-      },
-    },
     ...buildDocumentAuditColumns<DemandComputation>(t),
     {
       title: t('app.kuaizhizao.demandComputation.colLifecycle'),
       dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
+      key: 'lifecycle',
       fixed: 'right',
       hideInSearch: false,
       valueType: 'select',
@@ -2538,7 +2572,7 @@ const DemandComputationPage: React.FC = () => {
   const listTabContent = (
       <>
       <UniTable<DemandComputation>
-        columnPersistenceId="apps.kuaizhizao.pages.plan-management.demand-computation-source-label-v1"
+        columnPersistenceId="apps.kuaizhizao.pages.plan-management.demand-computation-width-v2"
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.demandComputation)}
         actionRef={actionRef}

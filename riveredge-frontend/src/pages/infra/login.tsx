@@ -10,6 +10,7 @@ import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { infraSuperAdminLogin } from '../../services/infraAdmin';
+import { getTenantById } from '../../services/tenant';
 import { setToken, setUserInfo, setTenantId } from '../../utils/auth';
 import { useGlobalStore } from '../../stores';
 import { useConfigStore } from '../../stores/configStore';
@@ -65,15 +66,28 @@ export default function PlatformLoginPage() {
       // 保存认证信息
       setToken(response.access_token);
 
-      setUserInfo({
-        ...response.user,
-        user_type: 'infra_superadmin',
-      });
-
-      // 设置默认租户 ID（如果返回了默认租户）
-      if (response.default_tenant_id) {
-        setTenantId(response.default_tenant_id);
+      const defaultTenantId = response.default_tenant_id;
+      let tenantName: string | undefined;
+      if (defaultTenantId != null) {
+        setTenantId(defaultTenantId);
+        try {
+          const tenant = await getTenantById(defaultTenantId, true);
+          tenantName = tenant.name;
+        } catch (err: any) {
+          console.error('平台超管登录后拉取默认组织名称失败:', err);
+          messageApi.error(err?.message || t('ui.message.tenantNameUnavailable'));
+        }
       }
+
+      const sessionUser = {
+        ...response.user,
+        user_type: 'infra_superadmin' as const,
+        is_infra_admin: true,
+        is_tenant_admin: false,
+        tenant_id: defaultTenantId,
+        tenant_name: tenantName,
+      };
+      setUserInfo(sessionUser);
 
       // 平台超管进入壳层前必须先有 configs.timezone（运营看板等会 formatDateTime）
       const platformTz =
@@ -96,7 +110,8 @@ export default function PlatformLoginPage() {
         full_name: response.user.full_name,
         is_infra_admin: true,
         is_tenant_admin: false,
-        tenant_id: response.default_tenant_id,
+        tenant_id: defaultTenantId,
+        tenant_name: tenantName,
         user_type: 'infra_superadmin',
       });
 

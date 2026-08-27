@@ -172,6 +172,14 @@ class SalesReviewResponse(SalesReviewBase):
     updated_by_name: Optional[str] = None
 
 
+class SalesReviewListLinePreview(BaseSchema):
+    """列表明细预览（仅物料名等展示字段）"""
+
+    material_name: str = ""
+    material_code: Optional[str] = None
+    line_no: Optional[int] = None
+
+
 class SalesReviewListItem(BaseSchema):
     id: int
     review_code: str
@@ -194,6 +202,8 @@ class SalesReviewListItem(BaseSchema):
     created_by_name: Optional[str] = None
     updated_by: Optional[int] = None
     updated_by_name: Optional[str] = None
+    # 列表附带明细预览（include_items=true）
+    items: Optional[List[SalesReviewListLinePreview]] = None
 
 
 class SalesReviewListEnvelope(BaseSchema):

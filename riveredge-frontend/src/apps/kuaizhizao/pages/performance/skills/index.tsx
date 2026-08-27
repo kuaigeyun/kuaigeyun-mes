@@ -1,4 +1,3 @@
-import { rowActionKind } from '../../../../../components/uni-action';
 /**
  * 技能管理页面
  */
@@ -6,13 +5,9 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import React, { useRef, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Space, theme as AntdTheme } from 'antd';
-import { DeleteOutlined } from '@ant-design/icons';
+import { App, Popconfirm, Button, theme as AntdTheme } from 'antd';
 import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
-import {
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-  UniTableStackedPrimaryCell,
-} from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { buildDetailDrawerEditExtra } from '../../equipment-management/shared/equipmentMasterDataDetail';
@@ -22,6 +17,7 @@ import { SkillFormModal } from '../../../components/SkillFormModal';
 import type { Skill } from '../../../types/performance';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import {
   getPerformanceActiveValueEnum,
   renderActiveTag,
@@ -147,41 +143,41 @@ const SkillsPage: React.FC = () => {
     const customFieldColumns = generateCustomFieldColumns();
     return alignProColumns<Skill>([
     {
-      title: t('app.kuaizhizao.performance.skills.columns.skillName'),
-      key: 'performance_name_code_stacked',
-      dataIndex: 'name',
-      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-      fixed: 'left',
-      sorter: true,
-      render: (_, r) => (
-        <UniTableStackedPrimaryCell
-          primary={String(r.name ?? '').trim() || '-'}
-          secondary={String(r.code ?? '').trim() || '-'}
-        />
-      ),
-    },
-    {
+      // 列稀疏：业务列不堆叠（表单序：编码 → 名称 → 分类 → 备注）；审计叠列保留
       title: t('app.kuaizhizao.performance.skills.columns.skillCode'),
       dataIndex: 'code',
-      hideInTable: true,
+      width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
+      fixed: 'left',
+      sorter: true,
+      copyable: true,
+    },
+    {
+      title: t('app.kuaizhizao.performance.skills.columns.skillName'),
+      dataIndex: 'name',
+      width: 160,
+      minWidth: 160,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
       sorter: true,
     },
     {
       title: t('app.kuaizhizao.performance.skills.columns.category'),
       dataIndex: 'category',
-      width: 110,
-      minWidth: 110,
-      uniTableKeepWidth: true,
-      resizable: false,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       sorter: true,
       render: (_, r) => renderPerformanceTypeMarker(r.category),
     },
     {
+      // 备注长短不一：唯一 RemainderFlex
       title: t('common.remark'),
       dataIndex: 'description',
-      width: 200,
-      minWidth: 200,
-      uniTableKeepWidth: true,
+      minWidth: 160,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
       resizable: false,
       ellipsis: true,
       hideInSearch: true,
@@ -196,42 +192,42 @@ const SkillsPage: React.FC = () => {
     },
     ...buildDocumentAuditColumns<Skill>(t),
     {
-      title: t('common.status'),
+      title: t('common.enabled'),
       dataIndex: 'isActive',
-      width: 88,
-      minWidth: 88,
-      uniTableKeepWidth: true,
-      resizable: false,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       hideInSearch: true,
       render: (_, r) => renderActiveTag(t, r.isActive),
     },
     {
       title: t('common.actions'),
       key: 'action',
-      valueType: 'option',
       fixed: 'right',
       hideInSearch: true,
-      render: (_, record) => (
-        <Space>
-          {skillPerms.canRead ? (
-            <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)}>
-              {t('common.detail')}
-            </Button>
-          ) : null}
-          {skillPerms.canUpdate ? (
-            <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)}>
-              {t('common.edit')}
-            </Button>
-          ) : null}
-          {skillPerms.canDelete ? (
-            <Popconfirm key="delete" {...rowActionKind('delete')} title={t('app.kuaizhizao.performance.skills.messages.deleteConfirm')} onConfirm={() => handleDelete(record)}>
-              <Button type="link" danger size="small" icon={<DeleteOutlined />}>
-                {t('common.delete')}
-              </Button>
-            </Popconfirm>
-          ) : null}
-        </Space>
-      ),
+      render: (_, record) => {
+        const parts: React.ReactNode[] = [];
+        if (skillPerms.canRead) {
+          parts.push(
+            <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)} />,
+          );
+        }
+        if (skillPerms.canUpdate) {
+          parts.push(
+            <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)} />,
+          );
+        }
+        if (skillPerms.canDelete) {
+          parts.push(
+            <Popconfirm
+              key="delete"
+              title={t('app.kuaizhizao.performance.skills.messages.deleteConfirm')}
+              onConfirm={() => handleDelete(record)}
+            >
+              <Button {...rowActionKind('delete')} />
+            </Popconfirm>,
+          );
+        }
+        return parts;
+      },
     },
     ], SALES_DOC_LIST_FIELD_RANK);
   }, [t, customFields, skillPerms]);
@@ -243,7 +239,7 @@ const SkillsPage: React.FC = () => {
           headerTitle={t('app.kuaizhizao.performance.skills.pageTitle')}
           actionRef={actionRef}
           columns={columns}
-          columnPersistenceId="apps.kuaizhizao.pages.performance.skills.v1"
+          columnPersistenceId="apps.kuaizhizao.pages.performance.skills.v3"
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.skills')}
           request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {

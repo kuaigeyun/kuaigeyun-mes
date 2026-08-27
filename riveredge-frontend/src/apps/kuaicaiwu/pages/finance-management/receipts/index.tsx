@@ -4,11 +4,11 @@
  * 记录从客户收取的款项，可用于核销应收单。
  */
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
-import { rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Modal, Typography, Spin, Alert, Table, Empty, Form } from 'antd';
 import { ModalForm, ProForm, ProFormDatePicker, ProFormDigit, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
-import { EyeOutlined, PlusOutlined } from '@ant-design/icons';
+import { PlusOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -79,6 +79,7 @@ import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { MarkerTag } from '../../../../../constants/statusBadges';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { renderRefundExecutionMarker } from '../../../utils/financeUiLabels';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
@@ -632,10 +633,7 @@ const ReceiptsPage: React.FC = () => {
     {
       title: t('app.kuaicaiwu.financeUi.refundExecution.label'),
       dataIndex: 'refund_execution_status',
-      width: 100,
-      minWidth: 100,
-      uniTableKeepWidth: true,
-      resizable: false,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       hideInSearch: true,
       render: (_, record) => {
         const { label, color } = renderRefundExecutionMarker(record.refund_execution_status, t);
@@ -725,60 +723,68 @@ const ReceiptsPage: React.FC = () => {
     {
       title: t('common.actions'),
       key: 'action',
-      valueType: 'option',
       fixed: 'right',
       hideInSearch: true,
-      render: (_, record) => [
-            <Button {...rowActionKind('read')} key="det" onClick={() => openDetail(record)}>
-              {t('common.detail')}
+      render: (_, record) => {
+        const acts: React.ReactNode[] = [
+          <Button key="det" {...rowActionKind('read')} onClick={() => openDetail(record)} />,
+        ];
+        if (record.status === 'Draft' && receiptPerms.canAction?.('audit')) {
+          acts.push(
+            <Button key="cf" {...rowActionKind('audit')} onClick={() => handleConfirm(record)} />,
+          );
+        }
+        if (record.status === 'Confirmed' && Number(record.unsettled_amount ?? 0) > 0) {
+          acts.push(
+            <Button
+              key="st"
+              {...rowActionKind('submit')}
+              {...rowActionLabelKeep()}
+              onClick={() => {
+                const qs = new URLSearchParams({ tab: 'receivable' });
+                if (record.customer_id != null) qs.set('customerId', String(record.customer_id));
+                if (record.id != null) qs.set('receiptId', String(record.id));
+                navigate(`/apps/kuaicaiwu/finance-management/settlement?${qs.toString()}`);
+              }}
+            >
+              {t('app.kuaicaiwu.common.settle')}
             </Button>,
-            record.status === 'Draft' && receiptPerms.canAction?.('audit') ? (
-              <Button {...rowActionKind('audit')} key="cf" onClick={() => handleConfirm(record)}>
-                {t('common.confirm')}
-              </Button>
-            ) : null,
-            record.status === 'Confirmed' && Number(record.unsettled_amount ?? 0) > 0 ? (
-              <Button
-                {...rowActionKind('submit')}
-                key="st"
-                onClick={() => {
-                  const qs = new URLSearchParams({ tab: 'receivable' });
-                  if (record.customer_id != null) qs.set('customerId', String(record.customer_id));
-                  if (record.id != null) qs.set('receiptId', String(record.id));
-                  navigate(`/apps/kuaicaiwu/finance-management/settlement?${qs.toString()}`);
-                }}
-              >
-                {t('app.kuaicaiwu.common.settle')}
-              </Button>
-            ) : null,
-            record.status === 'Confirmed'
-              && canCreateRefundFromVoucher(record, 'receipt')
-              && receiptRefundPerms.canCreate ? (
-              <Button
-                {...rowActionKind('submit')}
-                key="refund"
-                onClick={() =>
-                  navigate('/apps/kuaicaiwu/finance-management/receipt-refunds', {
-                    state: { pullSourceId: record.id },
-                  })
-                }
-              >
-                {t('app.kuaicaiwu.receiptRefund.pullCreate')}
-              </Button>
-            ) : null,
-            record.status !== 'Cancelled' && record.settled_amount === 0 && receiptPerms.canAction?.('revoke') ? (
-              <Button {...rowActionKind('revoke')} key="ca" onClick={() => handleCancel(record)}>
-                {t('app.kuaicaiwu.common.void')}
-              </Button>
-            ) : null,
-            record.status !== 'Confirmed' && receiptPerms.canDelete ? (
-              <Button {...rowActionKind('delete')} key="del" onClick={() => handleDelete(record)}>
-                {t('common.delete')}
-              </Button>
-            ) : null,
-          ].filter(Boolean) as React.ReactNode[],
+          );
+        }
+        if (
+          record.status === 'Confirmed' &&
+          canCreateRefundFromVoucher(record, 'receipt') &&
+          receiptRefundPerms.canCreate
+        ) {
+          acts.push(
+            <Button
+              key="refund"
+              {...rowActionKind('submit')}
+              {...rowActionLabelKeep()}
+              onClick={() =>
+                navigate('/apps/kuaicaiwu/finance-management/receipt-refunds', {
+                  state: { pullSourceId: record.id },
+                })
+              }
+            >
+              {t('app.kuaicaiwu.receiptRefund.pullCreate')}
+            </Button>,
+          );
+        }
+        if (record.status !== 'Cancelled' && record.settled_amount === 0 && receiptPerms.canAction?.('revoke')) {
+          acts.push(
+            <Button key="ca" {...rowActionKind('revoke')} onClick={() => handleCancel(record)} />,
+          );
+        }
+        if (record.status !== 'Confirmed' && receiptPerms.canDelete) {
+          acts.push(
+            <Button key="del" {...rowActionKind('delete')} onClick={() => handleDelete(record)} />,
+          );
+        }
+        return acts;
+      },
     },
-  ], [t, navigate, customerOptions, receiptSettlementTypeOptions, receiptPerms, receiptRefundPerms, openDetail]);
+  ], [t, customerOptions, receiptPerms, receiptRefundPerms, navigate, openDetail, handleConfirm, handleCancel, handleDelete, receiptSettlementTypeOptions]);
 
   return (
     <ListPageTemplate>
@@ -791,7 +797,7 @@ const ReceiptsPage: React.FC = () => {
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
         rowKey="id"
-        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.receipts.list-v1"
+        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.receipts.list-v2"
         showAdvancedSearch
         search={{ labelWidth: 120 }}
         showCreateButton={false}

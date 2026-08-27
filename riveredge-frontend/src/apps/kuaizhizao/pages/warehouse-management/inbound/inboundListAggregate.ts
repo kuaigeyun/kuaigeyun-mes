@@ -104,7 +104,11 @@ export async function fetchInboundHubList(
       ? customerMaterialRegistrationApi.list({ ...baseParams, status: sourceStatus('pending', 'processed') })
       : Promise.resolve(emptyList),
     fetchSalesReturn
-      ? warehouseApi.salesReturn.list({ ...baseParams, status: sourceStatus('待退货', '已退货') })
+      ? warehouseApi.salesReturn.list({
+          ...baseParams,
+          status: sourceStatus('待退货', '已退货'),
+          include_items: true,
+        })
       : Promise.resolve(emptyList),
     fetchOutsourceReceipt
       ? outsourceMaterialReceiptApi.list({ ...baseParams, status: sourceStatus('draft', 'completed') })
@@ -198,6 +202,14 @@ export async function fetchInboundHubList(
               : (item as Record<string, unknown>).status,
         receipt_date: (item as Record<string, unknown>).registration_date,
         received_by: (item as Record<string, unknown>).processed_by_name || (item as Record<string, unknown>).registered_by_name,
+        items: (() => {
+          const name = String(
+            (item as Record<string, unknown>).mapped_material_name
+              ?? (item as Record<string, unknown>).material_name
+              ?? '',
+          ).trim();
+          return name ? [{ material_name: name }] : [];
+        })(),
       }) as InboundHubOrder,
   );
   const salesReturnData = toList(salesReturnRes).items.map(

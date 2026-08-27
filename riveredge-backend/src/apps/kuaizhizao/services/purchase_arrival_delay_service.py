@@ -3,24 +3,21 @@
 from __future__ import annotations
 
 from datetime import date
-from decimal import Decimal
 from typing import List, Optional
 
 from tortoise.transactions import in_transaction
 
 from apps.common.base_service import AppBaseService
 from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus
-from apps.kuaizhizao.constants.order_change import OrderChangeApplyStatus, OrderChangeCategory, OrderChangeLineType
+from apps.kuaizhizao.constants.order_change import OrderChangeApplyStatus
 from apps.kuaizhizao.models.purchase_arrival_delay_report import PurchaseArrivalDelayReport
 from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderItem
-from apps.kuaizhizao.models.purchase_order_change_order import PurchaseOrderChangeOrder, PurchaseOrderChangeItem
 from apps.kuaizhizao.schemas.purchase_arrival import (
     ApproveDelayReportRequest,
     PurchaseArrivalDelayReportCreate,
     PurchaseArrivalDelayReportResponse,
     PurchaseArrivalDelayReportUpdate,
 )
-from apps.kuaizhizao.services.order_change.helpers import infer_change_category, line_amount
 from apps.kuaizhizao.services.purchase_po_line_impact_service import PurchasePoLineImpactService
 from apps.kuaizhizao.services.purchase_order_change_service import PurchaseOrderChangeService
 from core.utils.timezone_utils import resolve_business_datetime
@@ -223,28 +220,14 @@ class PurchaseArrivalDelayService(AppBaseService[PurchaseArrivalDelayReport]):
         reason_label = self.DELAY_REASON_LABELS.get(doc.delay_reason, doc.delay_reason)
         change_reason = f"到货延期：{reason_label}，新交期 {doc.estimated_arrival_date}"
 
-        poc = await self.change_service.create_from_order(
-            tenant_id, doc.purchase_order_id, operator_id, change_reason=change_reason
+        poc = await self.change_service.create_delivery_date_change_from_line(
+            tenant_id,
+            doc.purchase_order_id,
+            int(doc.purchase_order_item_id),
+            doc.estimated_arrival_date,
+            operator_id,
+            change_reason=change_reason,
         )
-
-        ch_item = await PurchaseOrderChangeItem.get_or_none(
-            tenant_id=tenant_id,
-            change_order_id=poc.id,
-            source_item_id=doc.purchase_order_item_id,
-        )
-        if not ch_item:
-            raise BusinessLogicError("生成采购变更单失败：未找到对应明细行")
-
-        ch_item.change_type = OrderChangeLineType.DELIVERY_DATE.value
-        ch_item.after_delivery_date = doc.estimated_arrival_date
-        ch_item.delta_amount = Decimal("0")
-        await ch_item.save()
-
-        poc_doc = await PurchaseOrderChangeOrder.get_or_none(tenant_id=tenant_id, id=poc.id)
-        if poc_doc:
-            poc_doc.change_category = OrderChangeCategory.DELIVERY.value
-            poc_doc.change_reason = change_reason
-            await poc_doc.save()
 
         doc.purchase_order_change_id = poc.id
         doc.purchase_order_change_code = poc.change_code

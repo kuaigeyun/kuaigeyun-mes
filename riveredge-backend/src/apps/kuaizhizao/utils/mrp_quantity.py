@@ -1,9 +1,9 @@
-"""MRP 数量精度与建议量取整（与前端 formatQuantity 两位小数对齐）。"""
+"""MRP 数量精度：净需求与建议工单/采购/委外量统一量化到 4 位小数（展示随业务配置 formatQuantity）。"""
 
 from __future__ import annotations
 
 from decimal import Decimal, InvalidOperation, ROUND_CEILING, ROUND_HALF_UP
-from typing import Any
+from typing import Any, Optional
 
 MRP_QTY_STEP = Decimal("0.0001")
 
@@ -37,9 +37,28 @@ def mrp_net_requirement(gross: Any, supply: Any) -> Decimal:
     return max(Decimal("0"), mrp_qty(gross) - mrp_qty(supply))
 
 
-def mrp_suggested_integer(value: Any) -> Decimal:
-    """建议工单/采购/委外量：向上取整为整数（0 保持 0）。"""
-    q = mrp_qty(value)
-    if q <= 0:
-        return Decimal("0")
-    return q.to_integral_value(rounding=ROUND_CEILING)
+def mrp_apply_suggested_lot_rules(
+    raw: Decimal,
+    min_q: Optional[Decimal],
+    max_q: Optional[Decimal],
+    mult: Optional[Decimal],
+    fixed_q: Optional[Decimal] = None,
+) -> Decimal:
+    """批量规则：固定批量 FOQ → 最小 → 倍数 → 上限；结果与净需求同精度（4 位小数）。"""
+    if raw <= 0:
+        return Decimal(0)
+    q = raw
+    if fixed_q is not None and fixed_q > 0:
+        units = (q / fixed_q).to_integral_value(rounding=ROUND_CEILING)
+        q = units * fixed_q
+    else:
+        if min_q is not None:
+            q = max(q, min_q)
+        if mult is not None and mult > 0:
+            units = (q / mult).to_integral_value(rounding=ROUND_CEILING)
+            q = units * mult
+    if max_q is not None and q > max_q:
+        q = max_q
+    return mrp_qty(q)
+
+

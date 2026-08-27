@@ -65,7 +65,7 @@ export interface FormModalTemplateProps {
   extraFooter?: ReactNode;
   /** 主提交按钮之后的额外底栏（如「拒收」） */
   extraFooterAfter?: ReactNode;
-  /** 新建模式主按钮文案，默认使用 i18n submitCreate */
+  /** 新建模式主按钮文案（默认「保存」，与 Ctrl+S 快捷键一致） */
   submitText?: string;
   /** 隐藏默认提交按钮（仅保留取消与 extraFooter） */
   submitHidden?: boolean;
@@ -179,7 +179,7 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
               <Button type="primary" loading={loading} onClick={triggerFormSubmit}>
                 {(isEdit
                   ? t('components.layoutTemplates.formModal.submitUpdate')
-                  : submitText ?? t('common.create')) + SUBMIT_SHORTCUT_HINT}
+                  : submitText ?? t('common.save')) + SUBMIT_SHORTCUT_HINT}
               </Button>
             ) : null}
             {extraFooterAfter}

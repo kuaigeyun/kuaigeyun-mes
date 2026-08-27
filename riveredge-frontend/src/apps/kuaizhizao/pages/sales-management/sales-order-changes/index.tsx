@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useSearchParams } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Descriptions, Form, Input, Space, Tag } from 'antd';
+import { App, Button, Descriptions, Form, Space } from 'antd';
 import { CheckOutlined, DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined, PrinterOutlined, RollbackOutlined, SendOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
@@ -22,8 +22,9 @@ import {
 } from '../../../../../components/uni-pull-query';
 import {
   UniTableStackedPrimaryCell,
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
+import { MarkerTag } from '../../../../../constants/statusBadges';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG,   useDetailDrawerDescriptionItems } from '../../../../../components/layout-templates';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
@@ -63,6 +64,10 @@ import { OrderChangeImpactModal } from '../../../components/order-change/OrderCh
 import { isSourceOrderEligibleForChange } from '../../../utils/orderChangeSourceOrder';
 import { ListUniLifecycleCell } from '../shared/ListUniLifecycleCell';
 import { alignProColumns, alignDescriptionColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../shared/documentFieldAlignment';
+import {
+  DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+  renderDocumentLineMaterialsPreview,
+} from '../shared/documentLineMaterialsPreview';
 import { createListAuditPhaseColumn } from '../shared/listAuditPhaseColumn';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
@@ -76,7 +81,7 @@ import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal'
 import {
   resolveKuaizhizaoDocumentAction,
 } from '../../../constants/documentActionRegistry';
-import { formatDateTime, formatNumber } from '../../../../../utils/format';
+import { formatAmount, formatDateTime, formatNumber } from '../../../../../utils/format';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
@@ -136,7 +141,6 @@ const SalesOrderChangesPage: React.FC = () => {
   const [editItems, setEditItems] = useState<SalesOrderChange['items']>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [creatingSourceOrderId, setCreatingSourceOrderId] = useState<number | null>(null);
-  const [createReason, setCreateReason] = useState(() => t('app.kuaizhizao.salesOrderChange.defaultReason'));
   const [impactOpen, setImpactOpen] = useState(false);
   const [impactLoading, setImpactLoading] = useState(false);
   const [impactData, setImpactData] = useState<Awaited<ReturnType<typeof previewSalesOrderChangeImpact>> | null>(null);
@@ -358,7 +362,7 @@ const SalesOrderChangesPage: React.FC = () => {
         message.warning(t('app.kuaizhizao.salesOrderChange.selectSalesOrder'));
         return;
       }
-      await openCreateFromOrder(selectedId, createReason || t('app.kuaizhizao.salesOrderChange.defaultReason'));
+      await openCreateFromOrder(selectedId, t('app.kuaizhizao.salesOrderChange.defaultReason'));
       pullFromSalesOrderQuery.closeModal();
     },
   });
@@ -406,9 +410,8 @@ const SalesOrderChangesPage: React.FC = () => {
   );
 
   const openCreate = useCallback(() => {
-    setCreateReason(t('app.kuaizhizao.salesOrderChange.defaultReason'));
     pullFromSalesOrderQuery.openModal();
-  }, [pullFromSalesOrderQuery, t]);
+  }, [pullFromSalesOrderQuery]);
   useNewShortcut(openCreate);
 
   useEffect(() => {
@@ -548,11 +551,12 @@ const SalesOrderChangesPage: React.FC = () => {
       title: t('app.kuaizhizao.salesOrderChange.colCustomerChangeCode'),
       key: 'change_code',
       dataIndex: 'change_code',
-      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-      fixed: 'left',
-      width: 220,
-      minWidth: 220,
+      width: 240,
+      minWidth: 240,
       uniTableKeepWidth: true,
+      uniTablePrimaryFlex: false,
+      resizable: false,
+      fixed: 'left',
       sorter: true,
       fieldProps: { placeholder: t('app.kuaizhizao.salesOrderChange.colChangeCode') },
       render: (_, record) => (
@@ -594,34 +598,40 @@ const SalesOrderChangesPage: React.FC = () => {
       ),
     },
     {
-      title: t('app.kuaizhizao.salesOrderChange.colChangeReason'),
-      dataIndex: 'change_reason',
-      minWidth: 180,
-      ellipsis: true,
-      hideInSearch: true,
-      uniTablePrimaryFlex: true,
-    },
-    {
       title: t('app.kuaizhizao.salesOrderChange.colCategory'),
       dataIndex: 'change_category',
-      width: 100,
-      minWidth: 100,
-      uniTableKeepWidth: true,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       sorter: true,
       valueType: 'select',
       valueEnum: changeCategoryValueEnum,
       render: (_, r) => (
-        <Tag color="blue" bordered={false}>
+        <MarkerTag color="processing">
           {formatOrderChangeCategory(r.change_category)}
-        </Tag>
+        </MarkerTag>
       ),
+    },
+    {
+      title: t('app.kuaizhizao.common.colLineMaterials'),
+      ...DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+      render: (_, record) => renderDocumentLineMaterialsPreview(record.items, t),
+    },
+    {
+      title: t('app.kuaizhizao.salesOrderChange.colChangeReason'),
+      dataIndex: 'change_reason',
+      width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
+      hideInSearch: true,
     },
     {
       title: t('app.kuaizhizao.salesOrderChange.colDeltaAmount'),
       dataIndex: 'delta_amount',
-      width: 100,
-      minWidth: 100,
+      width: 128,
+      minWidth: 128,
       uniTableKeepWidth: true,
+      resizable: false,
       sorter: true,
       hideInSearch: true,
       align: 'right',
@@ -642,7 +652,9 @@ const SalesOrderChangesPage: React.FC = () => {
       title: t('app.kuaizhizao.salesOrderChange.colAppliedAt'),
       dataIndex: 'applied_at',
       width: 132,
+      minWidth: 132,
       uniTableKeepWidth: true,
+      resizable: false,
       sorter: true,
       hideInSearch: true,
       render: (_, r) => (r.applied_at ? formatDateTime(r.applied_at, 'YYYY-MM-DD HH:mm') : '-'),
@@ -651,6 +663,7 @@ const SalesOrderChangesPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.salesOrderChange.colLifecycle'),
       dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
+      key: 'lifecycle',
       fixed: 'right',
       valueType: 'select',
       valueEnum: orderChangeLifecycleValueEnum,
@@ -761,6 +774,7 @@ const SalesOrderChangesPage: React.FC = () => {
         limit: Number(params.pageSize) || 20,
         ...lifecycleParams,
         order_by: orderBy,
+        include_items: true,
       };
       if (fuzzyKeyword) {
         apiParams.keyword = fuzzyKeyword;
@@ -859,7 +873,7 @@ const SalesOrderChangesPage: React.FC = () => {
         onTableDataChange={(rows) => {
           tableRowsRef.current = rows;
         }}
-        columnPersistenceId="apps.kuaizhizao.pages.sales-management.sales-order-changes.list-v1"
+        columnPersistenceId="apps.kuaizhizao.pages.sales-management.sales-order-changes-width-v2"
         pinnedTabsField={LIST_LIFECYCLE_STAGE_FIELD}
         pinnedTabsValueEnum={orderChangeLifecycleValueEnum}
         toolBarRender={() => [
@@ -955,17 +969,6 @@ const SalesOrderChangesPage: React.FC = () => {
             pullFromSalesOrderQuery.hasDisabledSelection ||
             pullFromSalesOrderQuery.loading,
         }}
-        alert={
-          <Form layout="vertical">
-            <Form.Item label={t('app.kuaizhizao.salesOrderChange.colChangeReason')} required style={{ marginBottom: 0 }}>
-              <Input.TextArea
-                rows={2}
-                value={createReason}
-                onChange={(e) => setCreateReason(e.target.value)}
-              />
-            </Form.Item>
-          </Form>
-        }
       />
 
       <FormModalTemplate
@@ -991,8 +994,8 @@ const SalesOrderChangesPage: React.FC = () => {
       >
         <OrderChangeItemsTable items={editItems ?? []} editable onChange={setEditItems} />
         <ProFormTextArea name="change_reason" label={t('app.kuaizhizao.salesOrderChange.colChangeReason')} rules={[{ required: true }]} />
-        <DocumentAttachmentsField category="sales_order_change_attachments" />
         <ProFormTextArea name="notes" label={t('common.remark')} />
+        <DocumentAttachmentsField category="sales_order_change_attachments" />
       </FormModalTemplate>
 
       <DetailDrawerTemplate

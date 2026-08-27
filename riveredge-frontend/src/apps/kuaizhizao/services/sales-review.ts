@@ -113,6 +113,8 @@ export interface SalesReviewListItem {
   created_by_name?: string | null;
   updated_by?: number | null;
   updated_by_name?: string | null;
+  /** include_items=true 时附带 */
+  items?: Array<{ material_name?: string; material_code?: string; line_no?: number }>;
 }
 
 export interface SalesReviewListResult {
@@ -131,6 +133,8 @@ export interface SalesReviewListParams {
   order_by?: string;
   /** 仅可下推销售订单：评审已通过且未关联销售订单 */
   pullable_only?: boolean;
+  /** 列表附带明细预览 */
+  include_items?: boolean;
 }
 
 export interface SalesReviewItemInput {

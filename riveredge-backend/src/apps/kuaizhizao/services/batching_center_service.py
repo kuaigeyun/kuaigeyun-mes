@@ -533,6 +533,11 @@ class BatchingCenterService:
                         suggested_warehouse_id=tgt_wh_id,
                         suggested_warehouse_name=tgt_wh_name,
                         target_warehouse_name=tgt_wh_name,
+                        items=[
+                            {"material_name": str(x.material_name or "").strip()}
+                            for x in batching_shortages
+                            if str(getattr(x, "material_name", "") or "").strip()
+                        ],
                     )
                 )
             except Exception as exc:
@@ -783,6 +788,11 @@ class BatchingCenterService:
                     suggested_warehouse_id=tgt_wh_id,
                     suggested_warehouse_name=tgt_wh_name,
                     target_warehouse_name=tgt_wh_name,
+                    items=[
+                        {"material_name": str(ln.material_name or "").strip()}
+                        for ln in lines
+                        if str(getattr(ln, "material_name", "") or "").strip()
+                    ],
                 )
             )
         self._sort_tasks(tasks)
@@ -822,6 +832,7 @@ class BatchingCenterService:
                 or created_by_name
             )
             event_at = row.processed_at or row.updated_at or row.created_at
+            name = str(row.material_name or "").strip()
             tasks.append(
                 BatchingCenterTaskItem(
                     task_type="backflush_alert",
@@ -839,6 +850,7 @@ class BatchingCenterService:
                     updated_by_name=updated_by_name,
                     created_at=row.created_at or event_at,
                     updated_at=event_at,
+                    items=[{"material_name": name}] if name else [],
                 )
             )
         if priority:

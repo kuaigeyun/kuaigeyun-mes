@@ -13,7 +13,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormInstance } from '@ant-design/pro-components';
 import { App, Button, Space, Tag, notification, Descriptions, Typography, Empty, Spin, theme as AntdTheme } from 'antd';
-import { CheckOutlined, EyeOutlined, CheckCircleOutlined, ReloadOutlined, PlayCircleOutlined } from '@ant-design/icons';
+import { ReloadOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { FormModalTemplate, DetailDrawerTemplate, DRAWER_CONFIG, MultiTabListPageTemplate,   useDetailDrawerDescriptionItems } from '../../../../../components/layout-templates';
@@ -35,6 +35,7 @@ import {
 } from '../../../utils/equipmentListCore';
 import { ROUTES } from '../../../constants/routes';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
+import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
 
 const P = 'app.kuaizhizao.maintenanceReminder';
 
@@ -370,27 +371,33 @@ const MaintenanceRemindersPage: React.FC = () => {
         {
           title: t(`${P}.col.equipmentCode`),
           dataIndex: 'equipment_code',
-          width: 120,
-          fixed: 'left',
-          sorter: true,
+          hideInTable: true,
           search: { order: 30 } as ProColumns['search'],
-          render: (_, r) => (
-            <Typography.Text copyable={{ text: String(r.equipment_code ?? '') }} ellipsis>
-              {r.equipment_code ?? '-'}
-            </Typography.Text>
-          ),
         },
         {
           title: t(`${P}.col.equipmentName`),
           dataIndex: 'equipment_name',
-          width: 150,
-          sorter: true,
+          minWidth: 200,
+          uniTablePrimaryFlex: true,
+          uniTableRemainderFlex: true,
+          resizable: false,
+          ellipsis: false,
+          fixed: 'left',
           hideInSearch: true,
+          render: (_, r) => (
+            <UniTableStackedPrimaryCell
+              primary={String(r.equipment_name ?? '') || '-'}
+              secondary={String(r.equipment_code ?? '') || '-'}
+            />
+          ),
         },
         {
           title: t(`${P}.col.reminderType`),
           dataIndex: 'reminder_type',
           width: 120,
+          minWidth: 120,
+          uniTableKeepWidth: true,
+          resizable: false,
           sorter: true,
           hideInSearch: true,
           render: (_, record) => getReminderTypeTag(record.reminder_type || ''),
@@ -399,7 +406,9 @@ const MaintenanceRemindersPage: React.FC = () => {
           title: t(`${P}.col.plannedMaintenanceDate`),
           dataIndex: 'planned_maintenance_date',
           width: 132,
+          minWidth: 132,
           uniTableKeepWidth: true,
+          resizable: false,
           sorter: true,
           hideInSearch: true,
           render: (_, record) =>
@@ -411,6 +420,9 @@ const MaintenanceRemindersPage: React.FC = () => {
           title: t(`${P}.col.daysUntilDue`),
           dataIndex: 'days_until_due',
           width: 100,
+          minWidth: 100,
+          uniTableKeepWidth: true,
+          resizable: false,
           sorter: true,
           hideInSearch: true,
           render: (_, record) => renderDaysUntilDue(record.days_until_due || 0),
@@ -418,16 +430,25 @@ const MaintenanceRemindersPage: React.FC = () => {
         {
           title: t(`${P}.col.reminderMessage`),
           dataIndex: 'reminder_message',
-          ellipsis: true,
           width: 200,
+          minWidth: 200,
+          uniTableKeepWidth: true,
+          resizable: false,
+          ellipsis: true,
           sorter: true,
           hideInSearch: true,
+          render: (_, r) =>
+            r.reminder_message != null && r.reminder_message !== ''
+              ? String(r.reminder_message)
+              : '-',
         },
         {
           title: t(`${P}.col.reminderDate`),
           dataIndex: 'reminder_date',
           width: 132,
+          minWidth: 132,
           uniTableKeepWidth: true,
+          resizable: false,
           sorter: true,
           hideInSearch: true,
           render: (_, record) =>
@@ -435,19 +456,17 @@ const MaintenanceRemindersPage: React.FC = () => {
         },
         {
           title: t('common.actions'),
-          valueType: 'option',
+          key: 'option',
           fixed: 'right',
           render: (_, record) => (
             <Space>
               <Button key="view" {...rowActionKind('read')}
-                icon={<EyeOutlined />}
                 onClick={() => handleViewDetail(record)}
               >
                 {t('common.view')}
               </Button>
               {!record.is_read && (
                 <Button key="approve" {...rowActionKind('audit')}
-                  icon={<CheckOutlined />}
                   onClick={() => handleMarkAsRead(record)}
                 >
                   {t(`${P}.action.markRead`)}
@@ -455,14 +474,12 @@ const MaintenanceRemindersPage: React.FC = () => {
               )}
               {!record.is_handled && (
                 <Button key="approve" {...rowActionKind('audit')}
-                  icon={<CheckCircleOutlined />}
                   onClick={() => handleMarkAsHandled(record)}
                 >
                   {t(`${P}.action.markHandled`)}
                 </Button>
               )}
               <Button key="execute" {...rowActionKind('update')}
-                icon={<PlayCircleOutlined />}
                 onClick={() => handleGoExecute(record)}
               >
                 {t(`${P}.action.goExecute`)}
@@ -487,20 +504,28 @@ const MaintenanceRemindersPage: React.FC = () => {
   const calibrationColumns: ProColumns<EquipmentCalibrationReminder>[] = useMemo(
     () => [
       {
-        title: t(`${P}.calibration.colEquipmentCode`),
-        dataIndex: 'equipment_code',
-        width: 120,
+        title: t(`${P}.calibration.colEquipmentName`),
+        dataIndex: 'equipment_name',
+        minWidth: 200,
+        uniTablePrimaryFlex: true,
+        uniTableRemainderFlex: true,
+        resizable: false,
+        ellipsis: false,
+        hideInSearch: true,
         render: (_, r) => (
-          <Typography.Text copyable={{ text: String(r.equipment_code ?? '') }} ellipsis>
-            {r.equipment_code ?? '-'}
-          </Typography.Text>
+          <UniTableStackedPrimaryCell
+            primary={String(r.equipment_name ?? '') || '-'}
+            secondary={String(r.equipment_code ?? '') || '-'}
+          />
         ),
       },
-      { title: t(`${P}.calibration.colEquipmentName`), dataIndex: 'equipment_name', width: 160, ellipsis: true },
       {
         title: t(`${P}.calibration.colDueDate`),
         dataIndex: 'due_date',
         width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         render: (_, r) => (r.due_date ? formatDateTime(r.due_date, 'YYYY-MM-DD') : '-'),
       },
@@ -508,7 +533,9 @@ const MaintenanceRemindersPage: React.FC = () => {
         title: t(`${P}.calibration.colDaysUntilDue`),
         dataIndex: 'days_until_due',
         width: 100,
-        align: 'right',
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         render: (_, r) => {
           const v = r.days_until_due ?? 0;
@@ -519,7 +546,6 @@ const MaintenanceRemindersPage: React.FC = () => {
       {
         title: t(`${P}.calibration.colReminderStatus`),
         dataIndex: 'due_type',
-        width: 100,
         valueType: 'select',
         valueEnum: {
           due_soon: { text: t(`${P}.calibration.statusDueSoon`), status: 'Warning' },
@@ -550,7 +576,7 @@ const MaintenanceRemindersPage: React.FC = () => {
               <UniTable<MaintenanceReminder>
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.maintenanceReminders)}
-        columnPersistenceId="apps.kuaizhizao.pages.equipment-management.maintenance-reminders"
+        columnPersistenceId="apps.kuaizhizao.pages.equipment-management.maintenance-reminders-width-v2"
         actionRef={actionRef}
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
@@ -612,7 +638,7 @@ const MaintenanceRemindersPage: React.FC = () => {
             label: t(`${P}.tabCalibration`),
             children: (
               <UniTable<EquipmentCalibrationReminder>
-                columnPersistenceId="apps.kuaizhizao.pages.equipment-management.maintenance-reminders.calibration"
+                columnPersistenceId="apps.kuaizhizao.pages.equipment-management.maintenance-reminders.calibration-width-v2"
                 actionRef={calibrationActionRef}
                 showAdvancedSearch
                 skipFuzzyPinyinClientFilter

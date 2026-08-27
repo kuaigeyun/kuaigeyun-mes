@@ -31,6 +31,7 @@ import { customerApi, getUserOptions, getDictionaryOptions } from '../../../serv
 import { getDictionaryLabelMapSync } from '../../../../../services/dataDictionaryCache';
 import {
   buildMasterCrudActiveValueEnum,
+  buildMasterCrudActiveStatusColumn,
   MASTER_CRUD_PINNED_ACTIVE_FIELD,
   masterCrudCodeNameSearchColumns,
   masterCrudCreatedUpdatedColumns,
@@ -837,27 +838,10 @@ const CustomersPage: React.FC = () => {
         placeholder: t('field.customer.salesmanPlaceholder'),
       },
     },
-    {
-      title: t('common.status'),
-      dataIndex: 'isActive',
-      hideInTable: true,
-      order: 20,
-      valueType: 'select',
-      valueEnum: customerActiveValueEnum,
-      fieldProps: { allowClear: true },
-    },
-    {
-      title: t('common.status'),
-      dataIndex: 'isActive',
-      width: 88,
-      minWidth: 88,
-      uniTableKeepWidth: true,
-      resizable: false,
-      hideInSearch: true,
-      valueEnum: customerActiveValueEnum,
-      render: (_, record) => renderMasterActiveTag(t, record?.isActive ?? (record as any)?.is_active, 'common.enabled', 'common.disabled'),
-      sorter: true,
-    },
+    ...buildMasterCrudActiveStatusColumn<Customer>(t, {
+      activeValueEnum: customerActiveValueEnum,
+      resolveActive: (record) => record?.isActive ?? (record as { is_active?: boolean }).is_active,
+    }),
     ...customFieldColumns,
     ...masterCrudCreatedUpdatedColumns<Customer>(t),
     {
@@ -1021,7 +1005,7 @@ const CustomersPage: React.FC = () => {
       <UniTable<Customer>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('masterData.customers')}
-        columnPersistenceId="apps.master-data.pages.supply-chain.customers.list-v2"
+        columnPersistenceId="apps.master-data.pages.supply-chain.customers.list-v3"
         actionRef={actionRef}
         columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
         request={async (params, sort, __filter, searchFormValues, meta?: UniTableRequestMeta) => {

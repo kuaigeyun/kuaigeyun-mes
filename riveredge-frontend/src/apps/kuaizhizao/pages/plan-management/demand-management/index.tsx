@@ -15,7 +15,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProForm, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormInstance } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Row, Col, Table, Input, InputNumber, Alert, Spin, Form as AntForm, DatePicker, Typography, Tooltip, Dropdown, Empty, theme as AntdTheme, Switch } from 'antd';
+import { App, Button, Space, Modal, Row, Col, Table, Input, InputNumber, Alert, Spin, Form as AntForm, DatePicker, Typography, Tooltip, Dropdown, Empty, theme as AntdTheme, Switch } from 'antd';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG, type StatCard } from '../../../../../components/layout-templates';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import {
@@ -53,8 +53,10 @@ import { UniTable } from '../../../../../components/uni-table';
 import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
 import {
   UniTableStackedPrimaryCell,
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+  UNI_TABLE_STACKED_BADGE_DATE_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
+import { MarkerTag } from '../../../../../constants/statusBadges';
 import {
   getDemandLifecycle,
   buildDemandPlanLifecycleValueEnum,
@@ -64,6 +66,10 @@ import {
 import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
 import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import {
+  DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+  renderDocumentLineMaterialsPreview,
+} from '../../sales-management/shared/documentLineMaterialsPreview';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_DEFAULTS } from '../../sales-management/shared/DocumentPushProgressBar';
 import {
@@ -73,7 +79,7 @@ import {
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { UniAuditBatchMenuButton, createUniAuditBatchHandlers } from '../../../../../components/uni-batch';
-import { getDemandBusinessModeTagColor, buildDemandBusinessModeValueEnum, translateDemandBusinessMode } from '../../../utils/businessMode';
+import { buildDemandBusinessModeValueEnum, translateDemandBusinessMode, renderDemandBusinessModeMarkerTag } from '../../../utils/businessMode';
 import { getDemandTypeTagProps, translateDemandType } from '../../../utils/demandType';
 import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
 import dayjs from 'dayjs';
@@ -587,7 +593,11 @@ const DemandManagementPage: React.FC = () => {
       title: t('app.kuaizhizao.demandManagement.colDemandPrimary'),
       key: 'demand_code',
       dataIndex: 'demand_code',
-      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+      width: 240,
+      minWidth: 240,
+      uniTableKeepWidth: true,
+      uniTablePrimaryFlex: false,
+      resizable: false,
       fixed: 'left',
       sorter: true,
       hideInSearch: false,
@@ -614,18 +624,48 @@ const DemandManagementPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.demandManagement.demandType'),
       dataIndex: 'demand_type',
-      width: 120,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       hideInTable: true,
       hideInSearch: true,
       sorter: true,
       render: (_: unknown, record: Demand) => (
-        <Tag {...getDemandTypeTagProps(record.demand_type)}>{formatDemandTypeLabel(record.demand_type)}</Tag>
+        <MarkerTag {...getDemandTypeTagProps(record.demand_type)}>
+          {formatDemandTypeLabel(record.demand_type)}
+        </MarkerTag>
       ),
+    },
+    {
+      title: t('app.kuaizhizao.demandManagement.businessMode'),
+      dataIndex: 'business_mode',
+      // 「按库存生产 (MTS)」等长文案，勿用 80px Marker 定宽
+      width: 160,
+      minWidth: 160,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: false,
+      sorter: true,
+      hideInSearch: false,
+      valueEnum: buildDemandBusinessModeValueEnum((mode) => {
+        if (mode === 'MTS') return t('app.kuaizhizao.demandManagement.businessModeMts');
+        if (mode === 'MTO') return t('app.kuaizhizao.demandManagement.businessModeMto');
+        return t('app.kuaizhizao.demandManagement.businessModeAto');
+      }),
+      render: (_: unknown, record: Demand) =>
+        renderDemandBusinessModeMarkerTag(t, record.business_mode),
+    },
+    {
+      title: t('app.kuaizhizao.common.colLineMaterials'),
+      ...DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+      render: (_: unknown, record: Demand) =>
+        renderDocumentLineMaterialsPreview(record.items, t),
     },
     {
       title: t('app.kuaizhizao.salesOrder.totalQuantity'),
       dataIndex: 'total_quantity',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       align: 'right',
       sorter: true,
       hideInSearch: true,
@@ -658,24 +698,10 @@ const DemandManagementPage: React.FC = () => {
       },
     },
     {
-      title: t('app.kuaizhizao.demandManagement.businessMode'),
-      dataIndex: 'business_mode',
-      width: 140,
-      uniTableKeepWidth: true,
-      sorter: true,
-      hideInSearch: false,
-      valueEnum: buildDemandBusinessModeValueEnum((mode) => {
-        if (mode === 'MTS') return t('app.kuaizhizao.demandManagement.businessModeMts');
-        if (mode === 'MTO') return t('app.kuaizhizao.demandManagement.businessModeMto');
-        return t('app.kuaizhizao.demandManagement.businessModeAto');
-      }),
-    },
-    {
       title: t('app.kuaizhizao.salesForecast.startDate'),
       key: 'start_end_date_stacked',
       dataIndex: 'start_date',
-      width: 132,
-      uniTableKeepWidth: true,
+      ...UNI_TABLE_STACKED_BADGE_DATE_COLUMN_DEFAULTS,
       sorter: true,
       hideInSearch: true,
       render: (_: unknown, record: Demand) => {
@@ -698,6 +724,7 @@ const DemandManagementPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.salesOrder.lifecycle'),
       dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
+      key: 'lifecycle',
       fixed: 'right' as const,
       hideInSearch: false,
       valueEnum: demandPlanLifecycleValueEnum,
@@ -707,7 +734,6 @@ const DemandManagementPage: React.FC = () => {
     },
     {
       title: t('common.actions'),
-      width: 240,
       fixed: 'right' as const,
       hideInSearch: true,
       render: (_, record) => {
@@ -926,7 +952,7 @@ const DemandManagementPage: React.FC = () => {
     <>
       <ListPageTemplate statCards={statCards}>
         <UniTable<Demand>
-          columnPersistenceId="apps.kuaizhizao.pages.plan-management.demand-management"
+          columnPersistenceId="apps.kuaizhizao.pages.plan-management.demand-management-width-v2"
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.demandManagement)}
           headerTitle={t('app.kuaizhizao.demandManagement.title')}
@@ -950,6 +976,7 @@ const DemandManagementPage: React.FC = () => {
               business_mode: s.business_mode as Demand['business_mode'],
               start_date_from: s.start_date_from as string | undefined,
               start_date_to: s.start_date_to as string | undefined,
+              include_items: true,
             };
 
             if (fuzzyKeyword) {

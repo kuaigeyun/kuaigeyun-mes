@@ -92,6 +92,8 @@ export interface SalesOrderChangeListParams {
   start_date?: string;
   end_date?: string;
   order_by?: string;
+  /** 列表附带明细预览 */
+  include_items?: boolean;
 }
 
 export interface SalesOrderChangeListResult {

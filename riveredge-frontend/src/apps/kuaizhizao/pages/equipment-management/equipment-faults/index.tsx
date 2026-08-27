@@ -60,6 +60,8 @@ import { useResourcePermissions } from '../../../../../hooks/useResourcePermissi
 import { ROUTES } from '../../../constants/routes';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
+import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
 const P = 'app.kuaizhizao.equipmentFault';
 const FAULT_RESOURCE = 'kuaizhizao:equipment-fault';
 const MAINT_RESOURCE = 'kuaizhizao:maintenance-plan';
@@ -664,7 +666,10 @@ const EquipmentFaultsPage: React.FC = () => {
     {
       title: t(`${P}.col.faultNo`),
       dataIndex: 'fault_no',
-      width: 140,
+      width: 160,
+      minWidth: 160,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       fixed: 'left',
       sorter: true,
@@ -676,31 +681,30 @@ const EquipmentFaultsPage: React.FC = () => {
       ),
     },
     {
-      title: t(`${P}.col.equipmentCode`),
-      dataIndex: 'equipment_code',
-      width: 140,
+      title: t(`${P}.col.equipmentNameCode`),
+      dataIndex: 'equipment_name',
+      minWidth: 200,
+      uniTablePrimaryFlex: true,
+      uniTableRemainderFlex: true,
+      resizable: false,
+      ellipsis: false,
       sorter: true,
       hideInSearch: true,
       render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.equipment_code ?? '') }} ellipsis>
-          {r.equipment_code ?? '-'}
-        </Typography.Text>
+        <UniTableStackedPrimaryCell
+          primary={String(r.equipment_name ?? '') || '-'}
+          secondary={String(r.equipment_code ?? '') || '-'}
+        />
       ),
-    },
-    {
-      title: t(`${P}.col.equipmentName`),
-      dataIndex: 'equipment_name',
-      width: 200,
-      ellipsis: true,
-      sorter: true,
-      hideInSearch: true,
     },
     {
       title: t(`${P}.col.faultDate`),
       dataIndex: 'fault_date',
       valueType: 'date',
       width: 132,
+      minWidth: 132,
       uniTableKeepWidth: true,
+      resizable: false,
       sorter: true,
       hideInSearch: true,
     },
@@ -708,13 +712,18 @@ const EquipmentFaultsPage: React.FC = () => {
       title: t(`${P}.col.faultType`),
       dataIndex: 'fault_type',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
       sorter: true,
       hideInSearch: true,
+      render: (_, r) => (r.fault_type != null && r.fault_type !== '' ? String(r.fault_type) : '-'),
     },
     {
       title: t(`${P}.col.faultLevel`),
       dataIndex: 'fault_level',
-      width: 100,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       sorter: true,
       hideInSearch: true,
       render: (_, record) => {
@@ -727,7 +736,7 @@ const EquipmentFaultsPage: React.FC = () => {
     {
       title: t(`${P}.col.repairRequired`),
       dataIndex: 'repair_required',
-      width: 100,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       sorter: true,
       hideInSearch: true,
       render: (_, record) => (
@@ -749,7 +758,7 @@ const EquipmentFaultsPage: React.FC = () => {
     },
     {
       title: t('common.actions'),
-      key: 'action',
+      key: 'option',
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) => renderFaultRowNodes(record),
@@ -768,7 +777,7 @@ const EquipmentFaultsPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.equipmentFaults)}
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.equipment-faults-equip-rank-v1"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.equipment-faults-width-v2"
           actionRef={actionRef}
           rowKey="uuid"
           columns={columns}

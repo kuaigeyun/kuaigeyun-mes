@@ -8,6 +8,8 @@ from typing import List, Optional
 
 from pydantic import BaseModel, Field, ConfigDict
 
+from apps.kuaizhizao.schemas.warehouse import DocumentLineMaterialPreview
+
 
 class AssemblyTemplateItemBase(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -93,7 +95,14 @@ class AssemblyTemplateResponse(AssemblyTemplateBase):
     updated_at: datetime
     created_by: Optional[int] = None
     created_by_name: Optional[str] = None
-    items: Optional[List[AssemblyTemplateItemResponse]] = None
+    items: Optional[List[DocumentLineMaterialPreview]] = Field(
+        None, description="明细物料名预览（列表「明细」列）",
+    )
+
+
+class AssemblyTemplateDetailResponse(AssemblyTemplateResponse):
+    """详情/写回：完整组件行"""
+    items: List[AssemblyTemplateItemResponse] = Field(default_factory=list, description="完整明细")
 
 
 class AssemblyTemplateListResponse(BaseModel):

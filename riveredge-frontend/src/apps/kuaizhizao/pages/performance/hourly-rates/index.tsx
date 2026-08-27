@@ -5,14 +5,9 @@
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormInstance } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Space, theme as AntdTheme } from 'antd';
-import { DeleteOutlined } from '@ant-design/icons';
+import { App, Popconfirm, Button, theme as AntdTheme } from 'antd';
 import { ProFormSelect, ProFormDigit, ProFormSwitch } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
-import {
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-  UniTableStackedPrimaryCell,
-} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { rowActionKind } from '../../../../../components/uni-action';
 import {
   ListPageTemplate,
@@ -26,6 +21,7 @@ import { employeePerformanceApi } from '../../../services/performance';
 import type { HourlyRate } from '../../../types/performance';
 import { getPerformanceYesNoValueEnum, renderActiveTag } from '../components/performanceMeta';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import {
   normalizePerformanceListResponse,
   PERFORMANCE_PINNED_IS_ACTIVE_FIELD,
@@ -144,31 +140,35 @@ const HourlyRatesPage: React.FC = () => {
   const columns: ProColumns<HourlyRate>[] = useMemo(
     () => alignProColumns<HourlyRate>([
       {
+        // 列稀疏：业务列不堆叠（表单序：部门 → 岗位 → 单价 → 启用）；审计叠列保留
         title: t('app.kuaizhizao.performance.common.columns.department'),
-        key: 'performance_dept_pos_stacked',
+        key: 'performance_hourly_department',
         dataIndex: 'department_name',
-        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        minWidth: 140,
+        uniTableRemainderFlex: true,
+        uniTablePrimaryFlex: true,
+        resizable: false,
+        ellipsis: true,
         fixed: 'left',
         sorter: true,
-        render: (_, r) => (
-          <UniTableStackedPrimaryCell
-            primary={String(r.department_name ?? '').trim() || '-'}
-            secondary={String(r.position_name ?? '').trim() || '-'}
-            secondaryCopyable={false}
-          />
-        ),
       },
       {
         title: t('app.kuaizhizao.performance.common.columns.position'),
+        key: 'performance_hourly_position',
         dataIndex: 'position_name',
-        hideInTable: true,
+        width: 140,
+        minWidth: 140,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
         sorter: true,
       },
       {
         title: t('app.kuaizhizao.performance.hourlyRates.columns.rate'),
         dataIndex: 'rate',
-        width: 120,
-        minWidth: 120,
+        // 稀疏：表头「工时单价（元/时）」+ 排序钮
+        width: 168,
+        minWidth: 168,
         uniTableKeepWidth: true,
         resizable: false,
         align: 'right',
@@ -182,42 +182,42 @@ const HourlyRatesPage: React.FC = () => {
       },
       ...buildDocumentAuditColumns<HourlyRate>(t),
       {
-        title: t('common.status'),
+        title: t('common.enabled'),
         dataIndex: 'is_active',
-        width: 88,
-        minWidth: 88,
-        uniTableKeepWidth: true,
-        resizable: false,
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         hideInSearch: true,
         render: (_, r) => renderActiveTag(t, r.is_active),
       },
       {
         title: t('common.actions'),
         key: 'action',
-        valueType: 'option',
         fixed: 'right',
         hideInSearch: true,
-        render: (_, record) => (
-          <Space>
-            {ratePerms.canRead ? (
-              <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)}>
-                {t('common.detail')}
-              </Button>
-            ) : null}
-            {ratePerms.canUpdate ? (
-              <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)}>
-                {t('common.edit')}
-              </Button>
-            ) : null}
-            {ratePerms.canDelete ? (
-              <Popconfirm key="delete" {...rowActionKind('delete')} title={t('app.kuaizhizao.performance.hourlyRates.messages.deleteConfirm')} onConfirm={() => handleDelete(record)}>
-                <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-                  {t('common.delete')}
-                </Button>
-              </Popconfirm>
-            ) : null}
-          </Space>
-        ),
+        render: (_, record) => {
+          const parts: React.ReactNode[] = [];
+          if (ratePerms.canRead) {
+            parts.push(
+              <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)} />,
+            );
+          }
+          if (ratePerms.canUpdate) {
+            parts.push(
+              <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)} />,
+            );
+          }
+          if (ratePerms.canDelete) {
+            parts.push(
+              <Popconfirm
+                key="delete"
+                title={t('app.kuaizhizao.performance.hourlyRates.messages.deleteConfirm')}
+                onConfirm={() => handleDelete(record)}
+              >
+                <Button {...rowActionKind('delete')} />
+              </Popconfirm>,
+            );
+          }
+          return parts;
+        },
       },
     ], SALES_DOC_LIST_FIELD_RANK),
     [t, ratePerms],
@@ -231,7 +231,7 @@ const HourlyRatesPage: React.FC = () => {
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
-          columnPersistenceId="apps.kuaizhizao.pages.performance.hourly-rates.v1"
+          columnPersistenceId="apps.kuaizhizao.pages.performance.hourly-rates.v3"
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.hourlyRates')}
           showAdvancedSearch

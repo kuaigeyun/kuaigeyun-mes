@@ -13,7 +13,6 @@ import { useTranslation } from 'react-i18next';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { glService, type GlAccount } from '../../../services/gl';
-import { ListPageHelpToggle, RichListPageHelpView } from '../../../../../components/page-help-wiki';
 
 const NS = 'app.kuaicaiwu.gl.settings';
 
@@ -169,7 +168,6 @@ const GlSettingsPage: React.FC = () => {
 
   return (
     <ListPageTemplate>
-      <ListPageHelpToggle helpContent={<RichListPageHelpView pageKey="kuaicaiwu.glSettings" />}>
       <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
         {settings?.initialized ? (
           <Alert
@@ -422,7 +420,6 @@ const GlSettingsPage: React.FC = () => {
           />
         </Card>
       </Space>
-      </ListPageHelpToggle>
     </ListPageTemplate>
   );
 };

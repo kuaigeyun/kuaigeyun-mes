@@ -45,7 +45,12 @@ import {
   resolveAssemblyDisassemblyOrderListParams,
 } from '../../../utils/warehouseListCore';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
-import { alignDescriptionColumns } from '../../sales-management/shared/documentFieldAlignment';
+import { alignDescriptionColumns, alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
+import { WAREHOUSE_DOC_LIST_FIELD_RANK } from './warehouseDocListFieldRank';
+import {
+  DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+  renderDocumentLineMaterialsPreview,
+} from '../../sales-management/shared/documentLineMaterialsPreview';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
@@ -468,7 +473,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
   const workflowStatusValueEnum = useMemo(() => buildWarehouseWorkflowStatusValueEnum(t), [t]);
 
   const columns: ProColumns<OrderLike>[] = useMemo(
-    () => [
+    () => alignProColumns<OrderLike>([
     {
       title: t('common.updatedAt'),
       dataIndex: 'updated_at_range',
@@ -496,7 +501,10 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
     {
       title: config.orderCodeLabel,
       dataIndex: 'code',
-      width: 150,
+      width: 160,
+      minWidth: 160,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       fixed: 'left',
       sorter: true,
@@ -511,15 +519,22 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
       title: t('app.kuaizhizao.warehouseCommon.colWarehouse'),
       dataIndex: 'warehouse_name',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       sorter: true,
       hideInSearch: true,
+      render: (_, r) =>
+        r.warehouse_name != null && r.warehouse_name !== '' ? String(r.warehouse_name) : '-',
     },
     {
       title: config.dateLabel,
       dataIndex: config.dateField,
       width: 132,
+      minWidth: 132,
       uniTableKeepWidth: true,
+      resizable: false,
       sorter: true,
       hideInSearch: true,
       valueType: 'date',
@@ -528,26 +543,33 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
       title: t('app.kuaizhizao.warehouseCommon.colProductMaterial'),
       dataIndex: 'product_material_name',
       width: 160,
+      minWidth: 160,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       sorter: true,
       hideInSearch: true,
+      render: (_, r) =>
+        r.product_material_name != null && r.product_material_name !== ''
+          ? String(r.product_material_name)
+          : '-',
+    },
+    {
+      title: t('app.kuaizhizao.common.colLineMaterials'),
+      ...DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+      render: (_, r) => renderDocumentLineMaterialsPreview(r.items, t),
     },
     {
       title: config.quantityLabel,
       dataIndex: 'total_quantity',
       width: 110,
+      minWidth: 110,
+      uniTableKeepWidth: true,
+      resizable: false,
       align: 'right',
       sorter: true,
       hideInSearch: true,
       render: formatQuantity,
-    },
-    {
-      title: t('app.kuaizhizao.warehouseCommon.colComponentCount'),
-      dataIndex: 'total_items',
-      width: 90,
-      align: 'right',
-      sorter: true,
-      hideInSearch: true,
     },
     ...buildDocumentAuditColumns<OrderLike>(t),
     {
@@ -572,8 +594,9 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
     },
     {
       title: t('common.actions'),
-      width: 260,
+      key: 'option',
       fixed: 'right',
+      hideInSearch: true,
       render: (_, record) => (
         <Space>
           <Button {...rowActionKind('read')} onClick={() => openDetailDrawer(record)} />
@@ -596,7 +619,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
         </Space>
       ),
     },
-  ],
+  ], WAREHOUSE_DOC_LIST_FIELD_RANK),
     [config, t, workflowStatusValueEnum],
   );
 

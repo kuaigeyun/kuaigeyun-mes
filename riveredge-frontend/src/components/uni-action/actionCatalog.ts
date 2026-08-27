@@ -45,6 +45,9 @@ const VISUAL_PROFILE_LABEL_FALLBACK: Record<RowActionVisualProfile, string> = {
   'reset-password': '重置',
   'test-connection': '测试连接',
   'balloon-annotate': '标注',
+  'copy-create': '复制',
+  'collect-receipt': '收款',
+  'issue-invoice': '开票',
 }
 
 const ROW_ACTION_I18N_KEY: Partial<Record<RowActionPermissionKind, string>> = {
@@ -79,6 +82,9 @@ const VISUAL_PROFILE_I18N_KEY: Record<RowActionVisualProfile, string> = {
   'reset-password': 'components.uniAction.resetPassword',
   'test-connection': 'components.uniAction.testConnection',
   'balloon-annotate': 'components.uniAction.balloonAnnotate',
+  'copy-create': 'components.uniAction.copyCreate',
+  'collect-receipt': 'components.uniAction.collectReceipt',
+  'issue-invoice': 'components.uniAction.issueInvoice',
 }
 
 /** 行内操作排序（细于 detail/edit/delete 三分法；与 overflow 直出/折叠一致） */
@@ -114,6 +120,9 @@ const VISUAL_PROFILE_SORT_RANK: Record<RowActionVisualProfile, number> = {
   'add-follow-up-from-document': 85,
   'test-connection': 15,
   'balloon-annotate': 15,
+  'copy-create': 71,
+  'collect-receipt': 72,
+  'issue-invoice': 73,
   'reset-password': 990,
 }
 

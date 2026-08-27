@@ -8,7 +8,7 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Modal, Space, Descriptions, Typography, Tag, Table, Empty, Spin } from 'antd';
+import { App, Button, Modal, Space, Descriptions, Typography, Table, Empty, Spin } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -34,8 +34,8 @@ import {
 } from '../../../../master-data/services/supply-chain';
 import {
   UniTableStackedPrimaryCell,
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { MarkerTag } from '../../../../../constants/statusBadges';
 import {
   CustomerFollowUpFormModal,
   type CustomerFollowUpPreset,
@@ -108,9 +108,9 @@ const CustomerFollowUpsPage: React.FC = () => {
 
   const renderActivityTypeTag = useCallback(
     (activityTypeCode?: string) => (
-      <Tag color={activityColorMap[activityTypeCode ?? ''] || 'blue'} bordered={false}>
+      <MarkerTag color={activityColorMap[activityTypeCode ?? ''] || 'processing'}>
         {activityLabelMap[activityTypeCode ?? ''] ?? '—'}
-      </Tag>
+      </MarkerTag>
     ),
     [activityLabelMap, activityColorMap],
   );
@@ -409,7 +409,11 @@ const CustomerFollowUpsPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.customerFollowUp.colCustomer'),
       dataIndex: 'customer_name',
-      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+      width: 240,
+      minWidth: 240,
+      uniTableKeepWidth: true,
+      uniTablePrimaryFlex: false,
+      resizable: false,
       fixed: 'left',
       sorter: true,
       hideInSearch: true,
@@ -458,6 +462,7 @@ const CustomerFollowUpsPage: React.FC = () => {
       width: 120,
       minWidth: 120,
       uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       sorter: true,
       hideInSearch: true,
@@ -476,20 +481,14 @@ const CustomerFollowUpsPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.customerFollowUp.colContent'),
       dataIndex: 'content',
-      width: 420,
-      minWidth: 420,
-      uniTableKeepWidth: true,
+      // RemainderFlex：跟进内容长度不确定；身份仍用 content（rank），不另起 key
+      minWidth: 160,
+      uniTablePrimaryFlex: true,
+      uniTableRemainderFlex: true,
+      resizable: false,
       ellipsis: true,
       sorter: true,
       hideInSearch: true,
-      onCell: () => ({
-        style: {
-          maxWidth: 420,
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-        },
-      }),
       render: (_, row) => (
         <Typography.Text ellipsis={{ tooltip: row.content ?? '—' }} style={{ maxWidth: '100%' }}>
           {row.content?.trim() ? row.content : '—'}
@@ -514,7 +513,9 @@ const CustomerFollowUpsPage: React.FC = () => {
       title: t('app.kuaizhizao.customerFollowUp.colOccurredAt'),
       dataIndex: 'occurred_at',
       width: 132,
+      minWidth: 132,
       uniTableKeepWidth: true,
+      resizable: false,
       sorter: true,
       hideInSearch: true,
       render: (_, row) =>
@@ -535,7 +536,9 @@ const CustomerFollowUpsPage: React.FC = () => {
       title: t('app.kuaizhizao.customerFollowUp.colNextFollowUp'),
       dataIndex: 'next_follow_up_at',
       width: 168,
+      minWidth: 168,
       uniTableKeepWidth: true,
+      resizable: false,
       sorter: true,
       hideInSearch: true,
       render: (_, row) => {
@@ -553,13 +556,9 @@ const CustomerFollowUpsPage: React.FC = () => {
           >
             <span>{text}</span>
             {overdue ? (
-              <Tag
-                color="error"
-                bordered={false}
-                style={{ marginInlineEnd: 0, paddingInline: 4, lineHeight: '18px', flexShrink: 0 }}
-              >
+              <MarkerTag color="error" style={{ marginInlineEnd: 0, paddingInline: 4, lineHeight: '18px', flexShrink: 0 }}>
                 {t('app.kuaizhizao.customerFollowUp.tagOverdue')}
-              </Tag>
+              </MarkerTag>
             ) : null}
           </span>
         );
@@ -593,7 +592,7 @@ const CustomerFollowUpsPage: React.FC = () => {
     ...buildDocumentAuditColumns<CustomerFollowUp>(t),
     {
       title: t('common.actions'),
-      valueType: 'option',
+      key: 'action',
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) => {
@@ -622,7 +621,7 @@ const CustomerFollowUpsPage: React.FC = () => {
       `}</style>
       <ListPageTemplate style={{ padding: 0 }}>
         <UniTable<CustomerFollowUp>
-          columnPersistenceId="apps.kuaizhizao.pages.sales-management.customer-follow-ups-person-count-v1"
+          columnPersistenceId="apps.kuaizhizao.pages.sales-management.customer-follow-ups-width-v1"
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.customerFollowUps')}
           selectedRowKeys={selectedRowKeys}
