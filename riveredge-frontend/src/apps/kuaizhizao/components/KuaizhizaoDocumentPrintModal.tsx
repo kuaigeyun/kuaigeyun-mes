@@ -7,9 +7,9 @@ import { App, Button, Modal, Select, Space, Spin, theme } from 'antd';
 import { FilePdfOutlined, PrinterOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../services/api';
 import { getPrintTemplateList, type PrintTemplate } from '../../../services/printTemplate';
-import { DOCUMENT_TYPE_TO_CODE } from '../../../config/printTemplateSchemas';
+import { DOCUMENT_TYPE_TO_CODE, PRINT_TEMPLATE_SCHEMAS } from '../../../config/printTemplateSchemas';
 import { loadKuaizhizaoPrintTemplatePresets } from '../services/print';
-import { buildKuaizhizaoPrintApiPath } from '../utils/kuaizhizaoPrintConfig';
+import { buildKuaizhizaoPrintApiPath, getPrintTemplateDocumentTypesForPicker } from '../utils/kuaizhizaoPrintConfig';
 import { MODAL_CONFIG } from '../../../components/layout-templates';
 import { handleError } from '../../../utils/errorHandler';
 import {
@@ -17,6 +17,43 @@ import {
   type DocumentPrintApiResult,
   withPrintPreviewScreenPadding,
 } from '../../../utils/printResponseHelpers';
+
+function readDefaultForDocumentTypes(tpl: PrintTemplate): string[] {
+  const raw = tpl.config?.default_for_document_types;
+  if (!Array.isArray(raw)) return [];
+  return raw.map((x) => String(x || '').trim()).filter(Boolean);
+}
+
+function isPrintTemplateDefaultFor(tpl: PrintTemplate, documentType: string): boolean {
+  if (readDefaultForDocumentTypes(tpl).includes(documentType)) return true;
+  const tplType = String(tpl.config?.document_type || '').trim();
+  return Boolean(tpl.is_default && tplType === documentType);
+}
+
+function pickDefaultPrintTemplate(
+  data: PrintTemplate[],
+  documentType: string,
+  code: string | undefined,
+): PrintTemplate | undefined {
+  return (
+    data.find((x) => readDefaultForDocumentTypes(x).includes(documentType)) ??
+    data.find((x) => isPrintTemplateDefaultFor(x, documentType)) ??
+    (code
+      ? data.find((x) => x.code === code || x.code?.toUpperCase().startsWith(`${code}_`))
+      : undefined) ??
+    data[0]
+  );
+}
+
+function printTemplateOptionLabel(tpl: PrintTemplate, documentType: string): string {
+  const tplType = String(tpl.config?.document_type || '').trim();
+  const typeHint =
+    tplType && tplType !== documentType
+      ? `（${PRINT_TEMPLATE_SCHEMAS[tplType]?.name || tplType}）`
+      : '';
+  const defaultHint = isPrintTemplateDefaultFor(tpl, documentType) ? '（默认）' : '';
+  return `${tpl.name}${typeHint}${defaultHint}`;
+}
 
 interface KuaizhizaoDocumentPrintModalProps {
   open: boolean;
@@ -78,7 +115,17 @@ const KuaizhizaoDocumentPrintModal: React.FC<KuaizhizaoDocumentPrintModalProps> 
         } catch {
           // 无预设加载权限时跳过，仍可使用已有模板
         }
-        let data = await getPrintTemplateList({ is_active: true, document_type: documentType });
+        const typeList = getPrintTemplateDocumentTypesForPicker(documentType);
+        const lists = await Promise.all(
+          typeList.map((dt) => getPrintTemplateList({ is_active: true, document_type: dt })),
+        );
+        const byUuid = new Map<string, PrintTemplate>();
+        for (const list of lists) {
+          for (const tpl of list) {
+            if (tpl.uuid && !byUuid.has(tpl.uuid)) byUuid.set(tpl.uuid, tpl);
+          }
+        }
+        let data = Array.from(byUuid.values());
         const code = DOCUMENT_TYPE_TO_CODE[documentType];
         if (!data.length && code) {
           const all = await getPrintTemplateList({ is_active: true });
@@ -86,11 +133,11 @@ const KuaizhizaoDocumentPrintModal: React.FC<KuaizhizaoDocumentPrintModalProps> 
             (tpl) =>
               tpl.code === code ||
               tpl.code?.toUpperCase().startsWith(`${code}_`) ||
-              tpl.config?.document_type === documentType,
+              typeList.includes(String(tpl.config?.document_type || '')),
           );
         }
         setTemplates(data);
-        const defaultTpl = data.find((x) => x.is_default) ?? data.find((x) => x.code === code) ?? data[0];
+        const defaultTpl = pickDefaultPrintTemplate(data, documentType, code);
         if (defaultTpl) setSelectedTemplateId(defaultTpl.uuid);
       } catch (e) {
         handleError(e as Error, '加载打印模板失败');
@@ -244,7 +291,7 @@ const KuaizhizaoDocumentPrintModal: React.FC<KuaizhizaoDocumentPrintModalProps> 
       }
     >
       <Spin spinning={loading || printLoading || pdfLoading}>
-        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+        <Space orientation="vertical" style={{ width: '100%' }} size="middle">
           <Select
             style={{ width: '100%' }}
             placeholder="选择打印模板"
@@ -252,7 +299,7 @@ const KuaizhizaoDocumentPrintModal: React.FC<KuaizhizaoDocumentPrintModalProps> 
             onChange={setSelectedTemplateId}
             options={templates.map((tpl) => ({
               value: tpl.uuid,
-              label: `${tpl.name}${tpl.is_default ? '（默认）' : ''}`,
+              label: printTemplateOptionLabel(tpl, documentType),
             }))}
           />
           <div

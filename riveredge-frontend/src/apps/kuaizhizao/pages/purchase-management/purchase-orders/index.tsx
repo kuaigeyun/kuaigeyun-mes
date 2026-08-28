@@ -3597,6 +3597,8 @@ const PurchaseOrdersPage: React.FC = () => {
               icon={<FileTextOutlined />}
               size="middle"
             />,
+          ]}
+          rightToolBarActionsBeforeExport={[
             <UniCapabilityBatchButton
               key="purchase-order-print"
               selectedRowKeys={selectedRowKeys}
@@ -3701,7 +3703,7 @@ const PurchaseOrdersPage: React.FC = () => {
           }}
           showSyncButton={viewTypeState !== 'detailTable'}
           onSync={() => setSyncModalVisible(true)}
-          toolbar={{ actions: [purchaseOrderHighlightOverdueToolbar] }}
+          toolBarActionsEnd={[purchaseOrderHighlightOverdueToolbar]}
           request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
             try {
               const sf = searchFormValues ?? {};

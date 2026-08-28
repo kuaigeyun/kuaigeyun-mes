@@ -81,6 +81,9 @@ export interface SalesContract {
 
   contract_type?: 'single' | 'framework' | string;
 
+  /** 是否录入明细：false=金额总框（无产品行，手填总金额） */
+  enter_line_items?: boolean;
+
   customer_id?: number;
 
   customer_name?: string;

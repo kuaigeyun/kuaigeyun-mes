@@ -585,12 +585,11 @@ const ReceivableList: React.FC = () => {
             ),
         },
         {
-            // 付款条件长短不一：唯一 RemainderFlex
             title: t(`${P}.col.paymentTerms`),
             dataIndex: 'payment_terms',
+            width: 140,
             minWidth: 140,
-            uniTableRemainderFlex: true,
-            uniTablePrimaryFlex: true,
+            uniTableKeepWidth: true,
             resizable: false,
             hideInSearch: true,
             ellipsis: true,
@@ -765,6 +764,18 @@ const ReceivableList: React.FC = () => {
                 );
             },
         },
+        {
+            // 备注长短不一：唯一 RemainderFlex
+            title: t('common.remark'),
+            dataIndex: 'notes',
+            minWidth: 160,
+            uniTableRemainderFlex: true,
+            uniTablePrimaryFlex: true,
+            resizable: false,
+            hideInSearch: true,
+            ellipsis: true,
+            render: (_, record) => record.notes || '—',
+        },
         ...financeDocCreatedUpdatedColumns<Receivable>(t),
         {
             title: t('app.kuaicaiwu.common.lifecycle'),
@@ -877,7 +888,7 @@ const ReceivableList: React.FC = () => {
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.receivable)}
                 actionRef={actionRef}
                 columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
-                columnPersistenceId="apps.kuaicaiwu.pages.finance-management.receivables.list-v4"
+                columnPersistenceId="apps.kuaicaiwu.pages.finance-management.receivables.list-v5"
                 request={async (params, sort, _filter, searchFormValues) => {
                     const { current, pageSize } = params;
                     const listParams = resolveReceivableListParams(searchFormValues, sort, urlAgingFilters);

@@ -5,7 +5,7 @@
  */
 
 import React, { useRef, useState, useMemo } from 'react';
-import { rowActionKind, rowActionTestConnection } from '../../../../components/uni-action';
+import { rowActionKind, rowActionLabelKeep, rowActionTestConnection } from '../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import {
   ActionType,
@@ -27,6 +27,7 @@ import {
   Button,
 } from 'antd';
 import { MarkerTag } from '../../../../constants/statusBadges';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../utils/uniTableLayoutColumns';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { renderSystemActiveTag, renderSystemTypeMarker } from '../../utils/systemListPresentation';
 import {
@@ -1205,8 +1206,24 @@ const ApplicationConnectionsListPage: React.FC = () => {
   };
 
   const columns = useMemo<ProColumns<ApplicationConnection>[]>(() => alignProColumns([
-    { title: t('pages.system.applicationConnections.columnName'), dataIndex: 'name', width: 180, fixed: 'left' },
-    { title: t('pages.system.applicationConnections.columnCode'), dataIndex: 'code', width: 140, minWidth: 140, uniTableKeepWidth: true, resizable: false },
+    {
+      title: t('pages.system.applicationConnections.columnName'),
+      dataIndex: 'name',
+      width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
+    },
+    {
+      title: t('pages.system.applicationConnections.columnCode'),
+      dataIndex: 'code',
+      width: 140,
+      minWidth: 140,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
+    },
     {
       title: t('pages.system.applicationConnections.columnType'),
       dataIndex: 'type',
@@ -1223,6 +1240,9 @@ const ApplicationConnectionsListPage: React.FC = () => {
       title: t('pages.system.applicationConnections.columnModel'),
       dataIndex: ['config', 'model'],
       width: 160,
+      minWidth: 160,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       hideInSearch: true,
       render: (_, record) => {
@@ -1230,12 +1250,22 @@ const ApplicationConnectionsListPage: React.FC = () => {
         return record.config?.model || t('common.dash');
       },
     },
-    { title: t('common.remark'), dataIndex: 'description', ellipsis: true, hideInSearch: true },
+    {
+      // 备注长短不一：唯一 RemainderFlex
+      title: t('common.remark'),
+      dataIndex: 'description',
+      minWidth: 140,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
+      resizable: false,
+      ellipsis: true,
+      hideInSearch: true,
+    },
     {
       title: t('pages.system.applicationConnections.columnConnectionStatus'),
       dataIndex: 'is_connected',
-      width: 100,
-      minWidth: 100,
+      width: 110,
+      minWidth: 110,
       uniTableKeepWidth: true,
       resizable: false,
       render: (_, record) => {
@@ -1246,10 +1276,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
     {
       title: t('common.enabled'),
       dataIndex: 'is_active',
-      width: 80,
-      minWidth: 80,
-      uniTableKeepWidth: true,
-      resizable: false,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       render: (_, record) =>
         renderSystemActiveTag(
           t,
@@ -1283,27 +1310,19 @@ const ApplicationConnectionsListPage: React.FC = () => {
     {
       title: t('common.actions'),
       key: 'action',
-      valueType: 'option',
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) =>
         [
-            <Button {...rowActionKind('read')} key="view" onClick={() => handleView(record)}>
-              {t('common.view')}
-            </Button>,
-            <Button {...rowActionKind('update')} key="edit" onClick={() => handleEdit(record)}>
-              {t('common.edit')}
-            </Button>,
+            <Button {...rowActionKind('read')} key="view" onClick={() => handleView(record)} />,
+            <Button {...rowActionKind('update')} key="edit" onClick={() => handleEdit(record)} />,
             <Button
               {...rowActionTestConnection('execute')}
               key="test"
               onClick={() => handleTestConnection(record)}
-            >
-              {t('pages.system.applicationConnections.testConnection')}
-            </Button>,
+            />,
             record.type === 'wecom' && canSyncContacts ? (
               <Popconfirm
-                {...rowActionKind('execute')}
                 key="sync-contacts"
                 title={t('pages.system.applicationConnections.syncContactsConfirmTitle')}
                 description={t('pages.system.applicationConnections.syncContactsConfirmContent')}
@@ -1312,9 +1331,8 @@ const ApplicationConnectionsListPage: React.FC = () => {
                 cancelText={t('common.cancel')}
               >
                 <Button
-                  type="link"
-                  size="small"
-                  icon={<SyncOutlined />}
+                  {...rowActionKind('skip')}
+                  {...rowActionLabelKeep()}
                   loading={syncingContactsUuid === record.uuid}
                 >
                   {t('pages.system.applicationConnections.syncContacts')}
@@ -1323,27 +1341,23 @@ const ApplicationConnectionsListPage: React.FC = () => {
             ) : null,
             record.type === 'kingdee_galaxy' && canLoadApiPresets ? (
               <Button
-                {...rowActionKind('create')}
+                {...rowActionKind('skip')}
+                {...rowActionLabelKeep()}
                 key="load-api-presets"
-                type="link"
-                size="small"
-                icon={<ApiOutlined />}
                 loading={loadingApiPresetsUuid === record.uuid}
                 onClick={() => void handleLoadApiPresets(record)}
               >
                 {t('pages.system.applicationConnections.loadApiPresets')}
               </Button>
             ) : null,
-            <Popconfirm {...rowActionKind('delete')}
+            <Popconfirm
               key="delete"
               title={t('pages.system.applicationConnections.deleteConfirmTitle')}
               onConfirm={() => handleDelete(record)}
               okText={t('common.confirm')}
               cancelText={t('common.cancel')}
             >
-              <Button type="link" size="small" icon={<DeleteOutlined />} danger>
-                {t('common.delete')}
-              </Button>
+              <Button {...rowActionKind('delete')} />
             </Popconfirm>,
           ].filter(Boolean),
     },
@@ -1419,7 +1433,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
         <UniTable<ApplicationConnection>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('system.applicationConnections')}
-          columnPersistenceId="pages.system.application-connections.list-v1"
+          columnPersistenceId="pages.system.application-connections.list-v2"
           actionRef={actionRef}
           columns={columns}
           request={async (params, _sort, _filter, searchFormValues) => {

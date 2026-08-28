@@ -4,7 +4,7 @@
  * 记录从客户收取的款项，可用于核销应收单。
  */
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
-import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { rowActionKind, rowActionSettleVoucher, rowActionCreateRefund } from '../../../../../components/uni-action';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Modal, Typography, Spin, Alert, Table, Empty, Form } from 'antd';
 import { ModalForm, ProForm, ProFormDatePicker, ProFormDigit, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
@@ -74,10 +74,7 @@ import {
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
-import {
-  UniTableStackedPrimaryCell,
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-} from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { renderRefundExecutionMarker } from '../../../utils/financeUiLabels';
@@ -570,13 +567,19 @@ const ReceiptsPage: React.FC = () => {
       partnerOptions: customerOptions,
     }),
     {
+      // 有 RemainderFlex：主标识叠列 KeepWidth
       title: t(`${R}.col.code`),
       key: 'finance_doc_partner_stacked',
       dataIndex: 'receipt_code',
-      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+      width: 240,
+      minWidth: 240,
+      uniTableKeepWidth: true,
+      uniTablePrimaryFlex: false,
+      resizable: false,
       fixed: 'left',
       hideInSearch: true,
       sorter: true,
+      ellipsis: false,
       render: (_, r) => (
         <UniTableStackedPrimaryCell
           primary={String(r.customer_name ?? '')}
@@ -642,10 +645,11 @@ const ReceiptsPage: React.FC = () => {
     },
     {
       title: t(`${R}.col.receiptDate`),
+      key: 'finance_receipt_date',
       dataIndex: 'receipt_date',
       valueType: 'date',
-      width: 110,
-      minWidth: 110,
+      width: 120,
+      minWidth: 120,
       uniTableKeepWidth: true,
       resizable: false,
       hideInSearch: true,
@@ -662,8 +666,8 @@ const ReceiptsPage: React.FC = () => {
     {
       title: t(`${R}.col.paymentMethod`),
       dataIndex: 'payment_method',
-      width: 110,
-      minWidth: 110,
+      width: 120,
+      minWidth: 120,
       uniTableKeepWidth: true,
       resizable: false,
       hideInSearch: true,
@@ -672,6 +676,7 @@ const ReceiptsPage: React.FC = () => {
     },
     {
       title: t('app.kuaicaiwu.common.referenceNumber'),
+      key: 'finance_voucher_reference',
       dataIndex: 'bank_account',
       width: 140,
       minWidth: 140,
@@ -682,7 +687,19 @@ const ReceiptsPage: React.FC = () => {
       render: (_, record) => record.bank_account || '—',
     },
     {
-      title: t(`${R}.settlementType`, '结算类型'),
+      // 备注长短不一：唯一 RemainderFlex
+      title: t('common.remark'),
+      dataIndex: 'notes',
+      minWidth: 160,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
+      resizable: false,
+      hideInSearch: true,
+      ellipsis: true,
+      render: (_, record) => record.notes || '—',
+    },
+    {
+      title: t(`${R}.settlementType`),
       dataIndex: 'settlement_type',
       hideInTable: true,
       order: 15,
@@ -738,17 +755,14 @@ const ReceiptsPage: React.FC = () => {
           acts.push(
             <Button
               key="st"
-              {...rowActionKind('submit')}
-              {...rowActionLabelKeep()}
+              {...rowActionSettleVoucher('submit')}
               onClick={() => {
                 const qs = new URLSearchParams({ tab: 'receivable' });
                 if (record.customer_id != null) qs.set('customerId', String(record.customer_id));
                 if (record.id != null) qs.set('receiptId', String(record.id));
                 navigate(`/apps/kuaicaiwu/finance-management/settlement?${qs.toString()}`);
               }}
-            >
-              {t('app.kuaicaiwu.common.settle')}
-            </Button>,
+            />,
           );
         }
         if (
@@ -759,16 +773,13 @@ const ReceiptsPage: React.FC = () => {
           acts.push(
             <Button
               key="refund"
-              {...rowActionKind('submit')}
-              {...rowActionLabelKeep()}
+              {...rowActionCreateRefund('create')}
               onClick={() =>
                 navigate('/apps/kuaicaiwu/finance-management/receipt-refunds', {
                   state: { pullSourceId: record.id },
                 })
               }
-            >
-              {t('app.kuaicaiwu.receiptRefund.pullCreate')}
-            </Button>,
+            />,
           );
         }
         if (record.status !== 'Cancelled' && record.settled_amount === 0 && receiptPerms.canAction?.('revoke')) {
@@ -786,6 +797,7 @@ const ReceiptsPage: React.FC = () => {
     },
   ], [t, customerOptions, receiptPerms, receiptRefundPerms, navigate, openDetail, handleConfirm, handleCancel, handleDelete, receiptSettlementTypeOptions]);
 
+
   return (
     <ListPageTemplate>
       <UniTable<ReceiptVoucher>
@@ -797,7 +809,7 @@ const ReceiptsPage: React.FC = () => {
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
         rowKey="id"
-        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.receipts.list-v2"
+        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.receipts.list-v4"
         showAdvancedSearch
         search={{ labelWidth: 120 }}
         showCreateButton={false}

@@ -25,6 +25,7 @@ from infra.models.user import User
 from infra.exceptions.exceptions import ValidationError, NotFoundError, BusinessLogicError
 
 from apps.kuaizhizao.services.sales_order_service import SalesOrderService
+from apps.kuaizhizao.services.contract_milestone_billing_service import ContractMilestoneBillingService
 from apps.kuaizhizao.services.sales_order_ocr_service import SalesOrderOcrService
 from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
 from apps.kuaizhizao.schemas.document_relation import ChangeImpactResponse
@@ -45,6 +46,7 @@ from apps.kuaizhizao.schemas.partner_material_price_trend import PartnerMaterial
 
 # 初始化服务实例
 sales_order_service = SalesOrderService()
+milestone_billing_service = ContractMilestoneBillingService()
 document_relation_service = DocumentRelationNewService()
 
 # 创建路由
@@ -846,6 +848,35 @@ async def update_sales_order(
     except Exception as e:
         logger.error(f"更新销售订单失败: {e}")
         raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "更新销售订单失败", "/sales-orders/{sales_order_id}", tenant_id)
+
+
+@router.post(
+    "/{sales_order_id}/milestones/{milestone_id}/generate-receivable",
+    summary="Generate receivable from sales order payment milestone",
+)
+async def generate_order_milestone_receivable(
+    sales_order_id: int = Path(..., description="销售订单ID"),
+    milestone_id: int = Path(..., description="收款里程碑ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _: None = Depends(require_kuaizhizao_sales_order_access),
+):
+    try:
+        return await milestone_billing_service.generate_receivable_for_order_milestone(
+            tenant_id, sales_order_id, milestone_id, current_user.id
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(
+            http_status.HTTP_404_NOT_FOUND, str(e),
+            "/sales-orders/{sales_order_id}/milestones/{milestone_id}/generate-receivable",
+            tenant_id,
+        )
+    except BusinessLogicError as e:
+        raise _http_exception_with_trace(
+            http_status.HTTP_400_BAD_REQUEST, str(e),
+            "/sales-orders/{sales_order_id}/milestones/{milestone_id}/generate-receivable",
+            tenant_id,
+        )
 
 
 @router.post("/{sales_order_id}/submit", response_model=SalesOrderResponse, summary="Submit sales order")

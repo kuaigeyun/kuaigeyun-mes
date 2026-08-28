@@ -77,6 +77,22 @@ export function getKuaizhizaoPrintTitle(documentType: string): string {
   return schema?.name ? `打印${schema.name}` : '打印预览';
 }
 
+/**
+ * 打印某单据时可一并选用的其它 document_type 模板（如销售订单可选销售合同模板）。
+ * 仍走本单据 print API；模板 uuid 不受 document_type 限制。
+ */
+export const PRINT_TEMPLATE_RELATED_DOCUMENT_TYPES: Partial<
+  Record<KuaizhizaoPrintDocumentType, readonly string[]>
+> = {
+  sales_order: ['sales_contract'],
+};
+
+export function getPrintTemplateDocumentTypesForPicker(documentType: string): string[] {
+  const related =
+    PRINT_TEMPLATE_RELATED_DOCUMENT_TYPES[documentType as KuaizhizaoPrintDocumentType] ?? [];
+  return [documentType, ...related.filter((t) => t && t !== documentType)];
+}
+
 export function inboundReceiptTypeToPrintDocumentType(
   receiptType?: InboundReceiptType,
 ): KuaizhizaoPrintDocumentType | null {

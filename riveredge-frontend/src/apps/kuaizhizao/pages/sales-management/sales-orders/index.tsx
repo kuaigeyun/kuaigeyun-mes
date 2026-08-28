@@ -77,6 +77,22 @@ import {
   ratioToPushProgressPercent,
 } from '../shared/DocumentPushProgressBar';
 import { collectSalesOrderPushDocuments } from '../shared/pushProgress';
+import { applyCustomerFormFields } from '../shared/applyCustomerFormFields';
+import {
+  SalesOrderPaymentMilestonesFields,
+  SalesOrderContractTermsFields,
+} from '../shared/salesOrderTermsMilestonesFields';
+import SalesContractTermsManageModal from '../sales-contracts/SalesContractTermsManageModal';
+import { salesContractTermApi, type SalesContractTermSnapshot } from '../../../services/sales-contract-term';
+import {
+  buildTermTemplatesFromGroupItems,
+  extractFieldBindingsFromTerms,
+  extractPlaceholdersFromTerms,
+  resolveContractTermFieldBindings,
+  resolveTermsWithPlaceholders,
+  type ContractTermFieldBindingContext,
+} from '../sales-contracts/contract-term-placeholders';
+import { formatBusinessDateOnly } from '../../../../../utils/format';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { ListUniLifecycleCell } from '../shared/ListUniLifecycleCell';
@@ -116,7 +132,7 @@ import {
   renderPullQueryReviewStatus,
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query';
-import { UniAuditBatchMenuButton, UniBatchButton, UniCapabilityBatchButton } from '../../../../../components/uni-batch';
+import { UniAuditBatchMenuButton, UniBatchButton, UniCapabilityBatchButton, runCapabilityBatchBulk, type UniBatchMenuItem } from '../../../../../components/uni-batch';
 import { buildUniPushMenuItems, buildUniPushToolbarDisabledReason, UniPushToolbarButton } from '../../../../../components/uni-push';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import {
@@ -700,6 +716,11 @@ const SalesOrdersPage: React.FC = () => {
   }, [dataViewMode]);
 
   const [formEditOrder, setFormEditOrder] = useState<SalesOrder | null>(null);
+  const [termGroupOptions, setTermGroupOptions] = useState<Array<{ label: string; value: number }>>([]);
+  const [termTemplateTerms, setTermTemplateTerms] = useState<SalesContractTermSnapshot[]>([]);
+  const [termPlaceholderValues, setTermPlaceholderValues] = useState<Record<string, string>>({});
+  const [termsPreview, setTermsPreview] = useState<SalesContractTermSnapshot[]>([]);
+  const [termsManageOpen, setTermsManageOpen] = useState(false);
   const [importModalVisible, setImportModalVisible] = useState(false);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
   /** 价税合计正在编辑的行：{ index, value }，失焦时反算单价 */
@@ -708,6 +729,26 @@ const SalesOrdersPage: React.FC = () => {
   const lastPriceTypeRef = useRef<PriceTypeValue>(DEFAULT_SALES_PRICE_TYPE);
 
   const [modalSubmitting, setModalSubmitting] = useState(false);
+
+  const loadTermGroupOptions = useCallback(async () => {
+    try {
+      const res = await salesContractTermApi.listGroups({ limit: 500, is_active: true });
+      setTermGroupOptions(
+        (res.items || []).map((g) => ({
+          label: g.group_name,
+          value: g.id!,
+        })),
+      );
+    } catch {
+      setTermGroupOptions([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isFormPage || termsManageOpen) {
+      void loadTermGroupOptions();
+    }
+  }, [isFormPage, termsManageOpen, loadTermGroupOptions]);
 
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -881,6 +922,120 @@ const SalesOrdersPage: React.FC = () => {
     loadPaymentTerms();
   }, [messageApi, t]);
 
+  const termPlaceholderKeys = useMemo(
+    () => extractPlaceholdersFromTerms(termTemplateTerms),
+    [termTemplateTerms],
+  );
+  const termFieldBindingKeys = useMemo(
+    () => extractFieldBindingsFromTerms(termTemplateTerms),
+    [termTemplateTerms],
+  );
+  const termFieldBindingContext = useMemo((): ContractTermFieldBindingContext => {
+    const fromOptions = (opts: Array<{ label: string; value: string }>) =>
+      Object.fromEntries(opts.map((o) => [o.value, o.label]));
+    return {
+      dictionaryLabelsByCode: {
+        PAYMENT_TERMS: fromOptions(paymentTermsOptions),
+        SHIPPING_METHOD: fromOptions(shippingMethodOptions),
+        CURRENCY: salesOrderImportDict.packs.CURRENCY?.labelByCode,
+      },
+      formatDate: (value) => formatBusinessDateOnly(value as string, ''),
+    };
+  }, [paymentTermsOptions, shippingMethodOptions, salesOrderImportDict.packs]);
+
+  const syncOrderTermsPreview = useCallback(
+    (templates: SalesContractTermSnapshot[], placeholderValues: Record<string, string>) => {
+      const raw = (formRef.current?.getFieldsValue(true) ?? {}) as Record<string, unknown>;
+      // 订单表头无 contract_date：用 order_date 供 {@contract_date} 绑定
+      const formValues = {
+        ...raw,
+        contract_date: raw.contract_date ?? raw.order_date,
+      };
+      const requestedFields = extractFieldBindingsFromTerms(templates);
+      const fieldBindings = resolveContractTermFieldBindings(
+        formValues,
+        termFieldBindingContext,
+        requestedFields.length ? requestedFields : undefined,
+      );
+      setTermsPreview(resolveTermsWithPlaceholders(templates, placeholderValues, fieldBindings));
+    },
+    [termFieldBindingContext],
+  );
+
+  const handleSalesOrderFormValuesChange = useCallback(
+    (changedValues: Record<string, unknown>) => {
+      if (!termTemplateTerms.length || !termFieldBindingKeys.length) return;
+      const affectsBindings = Object.keys(changedValues).some((key) =>
+        termFieldBindingKeys.includes(key),
+      );
+      if (!affectsBindings) return;
+      syncOrderTermsPreview(termTemplateTerms, termPlaceholderValues);
+    },
+    [termTemplateTerms, termFieldBindingKeys, termPlaceholderValues, syncOrderTermsPreview],
+  );
+
+  useEffect(() => {
+    if (!termTemplateTerms.length) return;
+    syncOrderTermsPreview(termTemplateTerms, termPlaceholderValues);
+  }, [
+    paymentTermsOptions,
+    shippingMethodOptions,
+    salesOrderImportDict.packs,
+    termTemplateTerms,
+    termPlaceholderValues,
+    syncOrderTermsPreview,
+  ]);
+
+  const applyOrderTermGroupPreview = useCallback(
+    async (groupId?: number, existingTerms?: SalesContractTermSnapshot[]) => {
+      if (!groupId) {
+        setTermTemplateTerms([]);
+        setTermPlaceholderValues({});
+        setTermsPreview([]);
+        return;
+      }
+      if (existingTerms?.length) {
+        const templates = existingTerms.map((term) => ({
+          ...term,
+          template_content: term.template_content ?? term.content,
+        }));
+        const mergedValues: Record<string, string> = {};
+        for (const term of existingTerms) {
+          if (term.placeholder_values) {
+            Object.assign(mergedValues, term.placeholder_values);
+          }
+        }
+        setTermTemplateTerms(templates);
+        setTermPlaceholderValues(mergedValues);
+        syncOrderTermsPreview(templates, mergedValues);
+        return;
+      }
+      try {
+        const group = await salesContractTermApi.getGroup(groupId);
+        const templates = buildTermTemplatesFromGroupItems(group.items || []);
+        setTermTemplateTerms(templates);
+        setTermPlaceholderValues({});
+        syncOrderTermsPreview(templates, {});
+      } catch {
+        setTermTemplateTerms([]);
+        setTermPlaceholderValues({});
+        setTermsPreview([]);
+      }
+    },
+    [syncOrderTermsPreview],
+  );
+
+  const handleOrderTermPlaceholderChange = useCallback(
+    (key: string, value: string) => {
+      setTermPlaceholderValues((prev) => {
+        const next = { ...prev, [key]: value };
+        syncOrderTermsPreview(termTemplateTerms, next);
+        return next;
+      });
+    },
+    [termTemplateTerms, syncOrderTermsPreview],
+  );
+
   /**
    * 处理新建销售订单
    * 若启用编号规则，用 testGenerateCode 预填订单编号（不占用序号）
@@ -905,6 +1060,9 @@ const SalesOrdersPage: React.FC = () => {
     setFormEditOrder(null);
     lastHeaderDeliveryRef.current = null;
     resetSalesOrderFormFieldValues();
+    setTermTemplateTerms([]);
+    setTermPlaceholderValues({});
+    setTermsPreview([]);
     formRef.current?.resetFields();
     setTimeout(() => {
       formRef.current?.setFieldsValue({
@@ -1048,11 +1206,22 @@ const SalesOrdersPage: React.FC = () => {
         order_date: data.order_date ? dayjs(data.order_date) : undefined,
         delivery_date: data.delivery_date ? dayjs(data.delivery_date) : undefined,
         attachments: (data as any).attachments || [],
+        payment_milestones: ((data as any).payment_milestones ?? []).map((ms: any) => ({
+          ...ms,
+          id: ms.id && ms.id > 0 ? ms.id : undefined,
+          is_prepayment: Boolean(ms.is_prepayment),
+          planned_date: ms.planned_date ? dayjs(ms.planned_date) : undefined,
+        })),
+        term_group_id: (data as any).term_group_id,
       };
       window.setTimeout(() => {
         formRef.current?.setFieldsValue(formData);
         lastHeaderDeliveryRef.current = coerceFormDate(formData.delivery_date);
         lastPriceTypeRef.current = normalizeSalesPriceType((formData as any)?.price_type);
+        void applyOrderTermGroupPreview(
+          (data as any).term_group_id,
+          (data as any).contract_terms as SalesContractTermSnapshot[] | undefined,
+        );
         if (orderId != null) {
           loadSalesOrderFormFieldValues(orderId).then((fieldFormValues) => {
             formRef.current?.setFieldsValue(fieldFormValues);
@@ -1368,6 +1537,37 @@ const SalesOrdersPage: React.FC = () => {
         }
         return { uid: f.uid, name: f.name, status: 'done', url: f.url };
       });
+
+      const milestoneRows = normalizeFormListItems<any>(values.payment_milestones).filter(
+        (ms: any) =>
+          ms?.milestone_name?.trim() ||
+          ms?.planned_date ||
+          ms?.planned_amount != null ||
+          ms?.planned_ratio != null ||
+          ms?.is_prepayment,
+      );
+      const prepayCount = milestoneRows.filter((ms: any) => Boolean(ms?.is_prepayment)).length;
+      if (prepayCount > 1) {
+        messageApi.error(t('app.kuaizhizao.salesOrder.prepaymentOnlyOne'));
+        throw new Error('sales_order_prepayment_only_one');
+      }
+      values.payment_milestones = milestoneRows
+        .filter((ms: any) => ms?.milestone_name?.trim() && toApiDateString(ms.planned_date))
+        .map((ms: any) => ({
+          milestone_name: String(ms.milestone_name).trim(),
+          planned_date: toApiDateString(ms.planned_date)!,
+          planned_amount: ms.planned_amount != null ? Number(ms.planned_amount) : 0,
+          planned_ratio: ms.planned_ratio != null ? Number(ms.planned_ratio) : undefined,
+          billing_trigger: ms.billing_trigger || 'milestone',
+          is_prepayment: Boolean(ms.is_prepayment),
+          bank_account_id: ms.is_prepayment ? ms.bank_account_id ?? undefined : undefined,
+          notes: ms.notes,
+        }));
+      // 预收由收款计划回写订单字段；表单不再单独提交表头预收
+      const prepayMs = values.payment_milestones.find((ms: any) => ms.is_prepayment);
+      values.prepayment_amount = prepayMs ? prepayMs.planned_amount : null;
+      values.prepayment_bank_account_id = prepayMs?.bank_account_id ?? null;
+      values.contract_terms = termsPreview.length ? termsPreview : undefined;
 
       // 新建时若启用编号规则，保存草稿/提交均正式占号，避免预览编号重复导致创建失败
       const ruleCodeToUse = effectiveRuleCode || getPageRuleCode('kuaizhizao-sales-order');
@@ -2898,6 +3098,67 @@ const SalesOrdersPage: React.FC = () => {
     [resolveSelectedOrders, selectedRowKeys],
   );
 
+  const salesOrderBatchExtraMenuItems = useMemo<UniBatchMenuItem[]>(
+    () => [
+      {
+        key: 'sales-order-batch-close',
+        label: t('app.kuaizhizao.salesOrder.batchClose'),
+        icon: <StopOutlined />,
+        disabled: !salesOrderBatchCloseAllowed(selectedOrdersForBatch, salesOrderPerms.canUpdate),
+        requireConfirm: true,
+        confirmTitle: t('app.kuaizhizao.salesOrder.batchCloseConfirmTitle'),
+        confirmDescription: (c) =>
+          t('app.kuaizhizao.salesOrder.batchCloseConfirmDescription', { count: c }),
+        onClick: async (keys) => {
+          await runCapabilityBatchBulk({
+            keys,
+            records: selectedOrdersForBatch,
+            capabilityKey: 'close',
+            permAllowed: salesOrderPerms.canUpdate,
+            resolveId: (key) => resolveSalesOrderBatchId(key),
+            notAllowedMessage: t('app.kuaizhizao.salesOrder.batchCloseNotAllowed'),
+            onRunBulk: bulkCloseSalesOrders,
+            onSuccess: handleBulkCapabilityBatchSuccess,
+            message: messageApi,
+            t,
+          });
+        },
+      },
+      {
+        key: 'sales-order-batch-reopen',
+        label: t('app.kuaizhizao.salesOrder.batchReopen'),
+        icon: <RollbackOutlined />,
+        disabled: !salesOrderBatchReopenAllowed(selectedOrdersForBatch, salesOrderPerms.canUpdate),
+        requireConfirm: true,
+        confirmTitle: t('app.kuaizhizao.salesOrder.batchReopenConfirmTitle'),
+        confirmDescription: (c) =>
+          t('app.kuaizhizao.salesOrder.batchReopenConfirmDescription', { count: c }),
+        onClick: async (keys) => {
+          await runCapabilityBatchBulk({
+            keys,
+            records: selectedOrdersForBatch,
+            capabilityKey: 'reopen',
+            permAllowed: salesOrderPerms.canUpdate,
+            resolveId: (key) => resolveSalesOrderBatchId(key),
+            notAllowedMessage: t('app.kuaizhizao.salesOrder.batchReopenNotAllowed'),
+            onRunBulk: bulkReopenSalesOrders,
+            onSuccess: handleBulkCapabilityBatchSuccess,
+            message: messageApi,
+            t,
+          });
+        },
+      },
+    ],
+    [
+      handleBulkCapabilityBatchSuccess,
+      messageApi,
+      resolveSalesOrderBatchId,
+      salesOrderPerms.canUpdate,
+      selectedOrdersForBatch,
+      t,
+    ],
+  );
+
   const buildToolbarPushMenuItems = useCallback((record: SalesOrder) => {
     const resolvePushReason = (
       cap: { allowed?: boolean; reason?: string | null } | undefined,
@@ -3814,7 +4075,7 @@ const SalesOrdersPage: React.FC = () => {
         <div className="document-form-untitled-groups">
           <div className="document-form-untitled-group">
       <Row gutter={16}>
-        <Col span={8}>
+        <Col span={6}>
           <ProFormText
             name="order_code"
             label={t('app.kuaizhizao.salesOrder.orderCode')}
@@ -3823,7 +4084,7 @@ const SalesOrdersPage: React.FC = () => {
             fieldProps={{ disabled: isEditPage }}
           />
         </Col>
-        <Col span={8}>
+        <Col span={6}>
           <ProForm.Item
             name="customer_id"
             label={t('app.kuaizhizao.salesOrder.customerName')}
@@ -3839,49 +4100,18 @@ const SalesOrdersPage: React.FC = () => {
               autoLoad={false}
               modalZIndex={nestedElevatedPopupZIndex}
               onCustomerPick={(c) => {
-                if (c) {
-                  const sIdRaw = (c as any).salesmanId ?? (c as any).salesman_id;
-                  const sId =
-                    sIdRaw != null && sIdRaw !== '' && Number.isFinite(Number(sIdRaw)) ? Number(sIdRaw) : undefined;
-                  const salesman = sId != null ? users.find((u) => Number(u.id) === sId) : undefined;
-                  const sName =
-                    (c as any).salesmanName ??
-                    (c as any).salesman_name ??
-                    (salesman ? normalizeUserDisplayName(salesman.full_name || salesman.username) : '');
-                  formRef.current?.setFieldsValue({
-                    customer_name: c.name ?? (c as any).customer_name,
-                    customer_contact: (c as any).contactPerson ?? (c as any).contact_person ?? (c as any).contact,
-                    customer_phone: (c as any).phone ?? (c as any).customer_phone,
-                    salesman_id: sId,
-                    salesman_name: normalizeUserDisplayName(sName),
-                    shipping_address:
-                      (c as any).deliveryAddress ??
-                      (c as any).delivery_address ??
-                      (c as any).address ??
-                      (c as any).shipping_address ??
-                      '',
-                  });
-                } else {
-                  formRef.current?.setFieldsValue({
-                    customer_name: undefined,
-                    customer_contact: undefined,
-                    customer_phone: undefined,
-                    salesman_id: undefined,
-                    salesman_name: undefined,
-                    shipping_address: undefined,
-                  });
-                }
+                applyCustomerFormFields(formRef, c as Record<string, unknown> | null, {
+                  users,
+                  customerList: customers as unknown as Array<Record<string, unknown>>,
+                  paymentTermsOptions,
+                });
               }}
             />
           </ProForm.Item>
         </Col>
-        <Col span={8}>
+        <Col span={6}>
           <SalesOrderSalesmanField userList={users} loading={usersLoading} />
         </Col>
-      </Row>
-          </div>
-          <div className="document-form-untitled-group">
-      <Row gutter={16}>
         <Col span={6}>
           <ProFormDatePicker
             name="order_date"
@@ -3890,6 +4120,10 @@ const SalesOrdersPage: React.FC = () => {
             fieldProps={{ style: { width: '100%' } }}
           />
         </Col>
+      </Row>
+          </div>
+          <div className="document-form-untitled-group">
+      <Row gutter={16}>
         <Col span={6}>
           <ProFormDatePicker
             name="delivery_date"
@@ -3913,28 +4147,6 @@ const SalesOrdersPage: React.FC = () => {
           />
         </Col>
         <Col span={6}>
-          <ProForm.Item
-            name="prepayment_amount"
-            label={t('app.kuaizhizao.salesOrder.prepaymentAmount')}
-          >
-            <InputNumber min={0} precision={amountDecimals} style={{ width: '100%' }} placeholder={t('app.kuaizhizao.salesOrder.prepaymentAmountPlaceholder')} />
-          </ProForm.Item>
-        </Col>
-        <Col span={6}>
-          <ProFormSelect
-            name="prepayment_bank_account_id"
-            label={t('app.kuaizhizao.salesOrder.prepaymentBankAccount')}
-            options={bankAccountOptions}
-            showSearch
-            allowClear
-            placeholder={t('app.kuaizhizao.salesOrder.prepaymentBankAccountPlaceholder')}
-          />
-        </Col>
-      </Row>
-          </div>
-          <div className="document-form-untitled-group">
-      <Row gutter={16}>
-        <Col span={5}>
           <DictionarySelect
             dictionaryCode="SHIPPING_METHOD"
             name="shipping_method"
@@ -3944,21 +4156,7 @@ const SalesOrdersPage: React.FC = () => {
             valueEqualsLabel={false}
           />
         </Col>
-        <Col span={5}>
-          <ProFormText
-            name="customer_contact"
-            label={salesCommonFormLabels.contact}
-            placeholder={t('app.kuaizhizao.salesOrder.contactPlaceholder')}
-          />
-        </Col>
-        <Col span={5}>
-          <ProFormText
-            name="customer_phone"
-            label={salesCommonFormLabels.phone}
-            placeholder={t('app.kuaizhizao.salesOrder.phonePlaceholder')}
-          />
-        </Col>
-        <Col span={5}>
+        <Col span={6}>
           <DictionarySelect
             dictionaryCode="PAYMENT_TERMS"
             name="payment_terms"
@@ -3968,7 +4166,7 @@ const SalesOrdersPage: React.FC = () => {
             valueEqualsLabel={false}
           />
         </Col>
-        <Col span={4}>
+        <Col span={6}>
           <DictionarySelect
             dictionaryCode="CURRENCY"
             name="currency_code"
@@ -3980,8 +4178,24 @@ const SalesOrdersPage: React.FC = () => {
           />
         </Col>
       </Row>
+          </div>
+          <div className="document-form-untitled-group">
       <Row gutter={16}>
-        <Col span={24}>
+        <Col span={6}>
+          <ProFormText
+            name="customer_contact"
+            label={salesCommonFormLabels.contact}
+            placeholder={t('app.kuaizhizao.salesOrder.contactPlaceholder')}
+          />
+        </Col>
+        <Col span={6}>
+          <ProFormText
+            name="customer_phone"
+            label={salesCommonFormLabels.phone}
+            placeholder={t('app.kuaizhizao.salesOrder.phonePlaceholder')}
+          />
+        </Col>
+        <Col span={12}>
           <ProFormText
             name="shipping_address"
             label={t('app.kuaizhizao.salesOrder.shippingAddress')}
@@ -4515,6 +4729,27 @@ const SalesOrdersPage: React.FC = () => {
           />
       </DetailDrawerSection>
 
+      <DetailDrawerSection titleAccent title={t('app.kuaizhizao.salesOrder.paymentPlan')}>
+        <SalesOrderPaymentMilestonesFields
+          formRef={formRef}
+          t={t}
+          amountDecimals={amountDecimals}
+          bankAccountOptions={bankAccountOptions}
+        />
+      </DetailDrawerSection>
+
+      <DetailDrawerSection titleAccent title={t('app.kuaizhizao.salesOrder.termsSection')}>
+        <SalesOrderContractTermsFields
+          termGroupOptions={termGroupOptions}
+          termsPreview={termsPreview}
+          onTermGroupChange={(groupId) => void applyOrderTermGroupPreview(groupId)}
+          t={t}
+          termPlaceholderKeys={termPlaceholderKeys}
+          termPlaceholderValues={termPlaceholderValues}
+          onTermPlaceholderChange={handleOrderTermPlaceholderChange}
+        />
+      </DetailDrawerSection>
+
       <DetailDrawerSection titleAccent title={t('app.uniDetail.sectionAttachments')} marginBottom={0}>
           <DocumentAttachmentsField
             category="sales_order_attachments"
@@ -4599,6 +4834,7 @@ const SalesOrdersPage: React.FC = () => {
                 layout="vertical"
                 submitter={false}
                 scrollToFirstError
+                onValuesChange={handleSalesOrderFormValuesChange}
                 onFinish={async () => {
                   setModalSubmitting(true);
                   try {
@@ -4849,57 +5085,24 @@ const SalesOrdersPage: React.FC = () => {
               permGates={salesOrderPerms}
               bulkHandlers={salesOrderAuditBulkHandlers}
               resolveIdFromKey={resolveSalesOrderBatchId}
+              extraMenuItems={salesOrderBatchExtraMenuItems}
               onSuccess={handleBulkCapabilityBatchSuccess}
               toolBarButtonSize="middle"
             />,
           ]}
           toolBarActionsAfterBatch={[
-            <UniCapabilityBatchButton
-              key="sales-order-batch-close"
-              selectedRowKeys={selectedRowKeys}
-              selectedRecords={selectedOrdersForBatch}
-              capabilityKey="close"
-              permAllowed={salesOrderPerms.canUpdate}
-              batchAllowed={(records, perm) => salesOrderBatchCloseAllowed(records, perm)}
-              onRunBulk={bulkCloseSalesOrders}
-              onSuccess={handleBulkCapabilityBatchSuccess}
-              resolveId={(key) => resolveSalesOrderBatchId(key)}
-              notAllowedMessage={t('app.kuaizhizao.salesOrder.batchCloseNotAllowed')}
-              requireConfirm
-              labels={{
-                single: t('app.kuaizhizao.salesOrder.batchClose'),
-                batch: t('app.kuaizhizao.salesOrder.batchClose'),
-                singleConfirmTitle: t('app.kuaizhizao.salesOrder.batchCloseConfirmTitle'),
-                batchConfirmTitle: t('app.kuaizhizao.salesOrder.batchCloseConfirmTitle'),
-                batchConfirmDescription: (c) =>
-                  t('app.kuaizhizao.salesOrder.batchCloseConfirmDescription', { count: c }),
-              }}
-              icon={<StopOutlined />}
-              size="middle"
-            />,
-            <UniCapabilityBatchButton
-              key="sales-order-batch-reopen"
-              selectedRowKeys={selectedRowKeys}
-              selectedRecords={selectedOrdersForBatch}
-              capabilityKey="reopen"
-              permAllowed={salesOrderPerms.canUpdate}
-              batchAllowed={(records, perm) => salesOrderBatchReopenAllowed(records, perm)}
-              onRunBulk={bulkReopenSalesOrders}
-              onSuccess={handleBulkCapabilityBatchSuccess}
-              resolveId={(key) => resolveSalesOrderBatchId(key)}
-              notAllowedMessage={t('app.kuaizhizao.salesOrder.batchReopenNotAllowed')}
-              requireConfirm
-              labels={{
-                single: t('app.kuaizhizao.salesOrder.batchReopen'),
-                batch: t('app.kuaizhizao.salesOrder.batchReopen'),
-                singleConfirmTitle: t('app.kuaizhizao.salesOrder.batchReopenConfirmTitle'),
-                batchConfirmTitle: t('app.kuaizhizao.salesOrder.batchReopenConfirmTitle'),
-                batchConfirmDescription: (c) =>
-                  t('app.kuaizhizao.salesOrder.batchReopenConfirmDescription', { count: c }),
-              }}
-              icon={<RollbackOutlined />}
-              size="middle"
-            />,
+            ...(salesContractPerms.canUpdate
+              ? [
+                  <Button
+                    {...rowActionKind('update')}
+                    key="terms-manage"
+                    icon={<FileTextOutlined />}
+                    onClick={() => setTermsManageOpen(true)}
+                  >
+                    {t('app.kuaizhizao.salesContract.terms.manageBtn')}
+                  </Button>,
+                ]
+              : []),
             <UniBatchButton
               key="sales-order-add-follow-up"
               selectedRowKeys={selectedRowKeys}
@@ -4914,6 +5117,9 @@ const SalesOrdersPage: React.FC = () => {
             >
               {t('components.uniAction.addFollowUpFromDocument')}
             </UniBatchButton>,
+          ]}
+          toolBarActionsEnd={[salesOrderHighlightOverdueToolbar]}
+          rightToolBarActionsBeforeExport={[
             <UniCapabilityBatchButton
               key="sales-order-batch-print"
               selectedRowKeys={selectedRowKeys}
@@ -4999,7 +5205,6 @@ const SalesOrdersPage: React.FC = () => {
           }}
           showSyncButton
           onSync={() => setSyncModalVisible(true)}
-          toolbar={{ actions: [salesOrderHighlightOverdueToolbar] }}
           importHeaders={[
             t('app.kuaizhizao.salesOrder.orderCode'),
             t('app.kuaizhizao.salesOrder.orderDate'),
@@ -6090,6 +6295,13 @@ const SalesOrdersPage: React.FC = () => {
         onClose={() => {
           setFollowUpModalOpen(false);
           setFollowUpPreset(null);
+        }}
+      />
+      <SalesContractTermsManageModal
+        open={termsManageOpen}
+        onClose={() => {
+          setTermsManageOpen(false);
+          void loadTermGroupOptions();
         }}
       />
       {PrintModal}

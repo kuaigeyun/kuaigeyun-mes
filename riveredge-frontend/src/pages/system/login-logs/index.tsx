@@ -218,8 +218,9 @@ const LoginLogsPage: React.FC = () => {
       dataIndex: 'login_ip',
       key: 'login_ip',
       ellipsis: true,
-      width: 120,
-      minWidth: 120,
+      // IPv6 最长约 39 字符，KeepWidth 360
+      width: 360,
+      minWidth: 360,
       uniTableKeepWidth: true,
       resizable: false,
     },
@@ -229,7 +230,10 @@ const LoginLogsPage: React.FC = () => {
       key: 'login_location',
       ellipsis: true,
       search: false,
-      width: 150,
+      width: 220,
+      minWidth: 220,
+      uniTableKeepWidth: true,
+      resizable: false,
     },
     {
       title: t('pages.system.loginLogs.loginDevice'),
@@ -248,7 +252,10 @@ const LoginLogsPage: React.FC = () => {
       key: 'login_browser',
       ellipsis: true,
       search: false,
-      width: 150,
+      width: 140,
+      minWidth: 140,
+      uniTableKeepWidth: true,
+      resizable: false,
     },
     {
       title: t('pages.system.loginLogs.loginTime'),
@@ -263,12 +270,16 @@ const LoginLogsPage: React.FC = () => {
       resizable: false,
     },
     {
+      // 失败原因长短不一：唯一 RemainderFlex
       title: t('pages.system.loginLogs.failureReason'),
       dataIndex: 'failure_reason',
       key: 'failure_reason',
       ellipsis: true,
       search: false,
-      width: 200,
+      minWidth: 140,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
+      resizable: false,
       render: (_: unknown, record: LoginLog) => record.failure_reason || '-',
     },
     {
@@ -296,7 +307,7 @@ const LoginLogsPage: React.FC = () => {
         <UniTable<LoginLog>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('system.loginLogs')}
-          columnPersistenceId="pages.system.login-logs.list-v2"
+          columnPersistenceId="pages.system.login-logs.list-v5"
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {

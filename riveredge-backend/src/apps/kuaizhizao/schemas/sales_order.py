@@ -16,7 +16,36 @@ from pydantic import Field, field_validator, model_validator
 from core.schemas.base import BaseSchema
 from apps.kuaizhizao.constants import DemandStatus, ReviewStatus
 from apps.kuaizhizao.constants.price_type import DEFAULT_SALES_PRICE_TYPE
+from apps.kuaizhizao.schemas.sales_contract_term import SalesContractTermSnapshot
 from apps.kuaizhizao.services.document_action_policy.types import SalesOrderCapabilities
+
+
+# === 销售订单收款里程碑 ===
+
+class SalesOrderMilestoneCreate(BaseSchema):
+    milestone_name: str = Field(..., max_length=200)
+    planned_date: date
+    planned_amount: Decimal = Decimal("0")
+    planned_ratio: Optional[Decimal] = None
+    billing_trigger: str = "milestone"
+    is_prepayment: bool = False
+    bank_account_id: Optional[int] = None
+    notes: Optional[str] = None
+
+
+class SalesOrderMilestoneResponse(SalesOrderMilestoneCreate):
+    id: int
+    uuid: str
+    tenant_id: int
+    sales_order_id: int
+    status: str
+    receivable_id: Optional[int] = None
+    receivable_code: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
 
 
 # === 销售订单明细 ===
@@ -141,6 +170,10 @@ class SalesOrderBase(BaseSchema):
     prepayment_amount: Optional[Decimal] = Field(None, ge=0, description="预收款金额")
     prepayment_bank_account_id: Optional[int] = Field(None, description="预收款银行账户ID")
 
+    term_group_id: Optional[int] = Field(None, description="条款组ID")
+    term_group_name: Optional[str] = Field(None, max_length=200, description="条款组名称（快照）")
+    contract_terms: Optional[List[SalesContractTermSnapshot]] = Field(None, description="订单条款快照")
+
     notes: Optional[str] = Field(None, description="备注")
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
     
@@ -156,6 +189,9 @@ class SalesOrderCreate(SalesOrderBase):
         None, ge=0, description="总金额（省略则按明细与整单优惠计算）"
     )
     items: List[SalesOrderItemCreate] = Field(default_factory=list, description="订单明细")
+    payment_milestones: List[SalesOrderMilestoneCreate] = Field(
+        default_factory=list, description="收款里程碑"
+    )
     
     @model_validator(mode='after')
     def validate_items(self):
@@ -188,7 +224,10 @@ class SalesOrderUpdate(BaseSchema):
     attachments: Optional[List[dict]] = None
     fee_details: Optional[List[dict]] = None
     total_fee_amount: Optional[Decimal] = Field(None, ge=0)
+    term_group_id: Optional[int] = None
+    contract_terms: Optional[List[SalesContractTermSnapshot]] = None
     items: Optional[List[SalesOrderItemCreate]] = None
+    payment_milestones: Optional[List[SalesOrderMilestoneCreate]] = None
 
 
 class SalesOrderResponse(SalesOrderBase):
@@ -213,6 +252,9 @@ class SalesOrderResponse(SalesOrderBase):
     created_at: datetime
     updated_at: datetime
     items: Optional[List[SalesOrderItemResponse]] = Field(None, description="订单明细")
+    payment_milestones: Optional[List[SalesOrderMilestoneResponse]] = Field(
+        None, description="收款里程碑"
+    )
     duration_info: Optional[dict] = Field(None, description="耗时统计信息")
     delivery_progress: Optional[float] = Field(None, description="交货进度 0-100")
     invoice_progress: Optional[float] = Field(None, description="开票进度 0-100")

@@ -2344,6 +2344,8 @@ const PurchaseRequisitionsPage: React.FC = () => {
               onSuccess={handlePurchaseRequisitionAuditBatchSuccess}
               toolBarButtonSize="middle"
             />,
+          ]}
+          rightToolBarActionsBeforeExport={[
             <UniCapabilityBatchButton
               key="purchase-requisition-print"
               selectedRowKeys={selectedRowKeys}

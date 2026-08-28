@@ -9,8 +9,7 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Typography } from 'antd';
-import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
+import { App, Button, Descriptions, List, Modal, Popconfirm, Typography } from 'antd';
 import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
@@ -82,7 +81,6 @@ import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/s
 import {
   renderMasterActiveTag,
 } from '../../../utils/masterListPresentation';
-import { UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
@@ -725,8 +723,10 @@ const CustomersPage: React.FC = () => {
     {
       title: t('field.customer.name'),
       dataIndex: 'name',
-      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-      // 主数据名单行：可省略，禁止撑破单元格导致右固定错位
+      width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       sorter: true,
       hideInSearch: true,
@@ -811,11 +811,12 @@ const CustomersPage: React.FC = () => {
       defaultShow: false,
     },
     {
+      // 地址长短不一：唯一 RemainderFlex（稀疏不叠）
       title: t('field.partner.deliveryAddress'),
       dataIndex: 'deliveryAddress',
-      width: 200,
-      minWidth: 200,
-      uniTableKeepWidth: true,
+      minWidth: 160,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
       resizable: false,
       hideInSearch: true,
       ellipsis: true,
@@ -847,38 +848,31 @@ const CustomersPage: React.FC = () => {
     {
       title: t('common.actions'),
       key: 'action',
-      valueType: 'option',
       fixed: 'right',
       hideInSearch: true,
-      render: (_, record) => (
-        <Space>
-          <Button key="view" {...rowActionKind('read')}
-            size="small"
-            onClick={() => handleOpenDetail(record)}
-          >
-            {t('common.view')}
-          </Button>
-          <Button key="edit" {...rowActionKind('update')}
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          >
-            {t('common.edit')}
-          </Button>
-          <Popconfirm key="delete" {...rowActionKind('delete')} title={t('app.master-data.customers.deleteConfirm')}
-            onConfirm={() => handleDelete(record)}
-          >
-            <Button
-              type="link"
-              danger
-              size="small"
-              icon={<DeleteOutlined />}
-            >
-              {t('common.delete')}
-            </Button>
-          </Popconfirm>
-        </Space>
-      ),
+      render: (_, record) => [
+        <Button
+          key="view"
+          type="link"
+          size="small"
+          {...rowActionKind('read')}
+          onClick={() => handleOpenDetail(record)}
+        />,
+        <Button
+          key="edit"
+          type="link"
+          size="small"
+          {...rowActionKind('update')}
+          onClick={() => handleEdit(record)}
+        />,
+        <Popconfirm
+          key="delete"
+          title={t('app.master-data.customers.deleteConfirm')}
+          onConfirm={() => handleDelete(record)}
+        >
+          <Button type="link" size="small" {...rowActionKind('delete')} />
+        </Popconfirm>,
+      ],
     },
     ];
   }, [customFields, t, dictLabel, salesmanValueEnum, salesmanOptions, customerActiveValueEnum]);
@@ -1005,7 +999,7 @@ const CustomersPage: React.FC = () => {
       <UniTable<Customer>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('masterData.customers')}
-        columnPersistenceId="apps.master-data.pages.supply-chain.customers.list-v3"
+        columnPersistenceId="apps.master-data.pages.supply-chain.customers.list-v4"
         actionRef={actionRef}
         columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
         request={async (params, sort, __filter, searchFormValues, meta?: UniTableRequestMeta) => {

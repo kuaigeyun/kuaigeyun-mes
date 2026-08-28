@@ -3881,6 +3881,12 @@ class MaterialService:
         # 检查主物料和子物料不能相同
         if data.material_id == data.component_id:
             raise ValidationError("主物料和子物料不能相同")
+
+        version = await MaterialService._assert_bom_material_version_available(
+            tenant_id,
+            data.material_id,
+            getattr(data, "version", None),
+        )
         
         # 循环依赖检测（PLM 最佳实践：禁止成环）
         has_cycle = await MaterialService.detect_bom_cycle(
@@ -3895,6 +3901,7 @@ class MaterialService:
         payload = data.dict() if hasattr(data, "dict") else data.model_dump()
         payload["level"] = 1
         payload["path"] = f"{data.material_id}/{data.component_id}"
+        payload["version"] = version
         payload["approval_status"] = "draft"
         payload.pop("approved_by", None)
         payload.pop("approved_at", None)
@@ -3995,6 +4002,26 @@ class MaterialService:
         return version, bom_code, bom_name, parent_base_qty
 
     @staticmethod
+    async def _assert_bom_material_version_available(
+        tenant_id: int,
+        material_id: int,
+        version: Optional[str],
+    ) -> str:
+        """新建 BOM 时：同物料同版本不得已存在（禁止追加合并到已有版本）。返回规范化版本号。"""
+        ver = (str(version).strip() if version is not None else "") or "1.0"
+        exists = await BOM.filter(
+            tenant_id=tenant_id,
+            material_id=material_id,
+            version=ver,
+            deleted_at__isnull=True,
+        ).exists()
+        if exists:
+            raise ValidationError(
+                f"该物料版本 {ver} 的 BOM 已存在，请升版或编辑已有草稿，禁止重复创建同版本"
+            )
+        return ver
+
+    @staticmethod
     def _assert_bom_components_have_source_type(components: List[Material]) -> None:
         """BOM 子件须在物料主数据已维护来源类型，禁止在 BOM 保存/审核时静默回写或兜底。"""
         missing_labels: List[str] = []
@@ -4067,6 +4094,13 @@ class MaterialService:
         
         if not material:
             raise ValidationError(f"主物料 {data.material_id} 不存在")
+
+        version = await MaterialService._assert_bom_material_version_available(
+            tenant_id,
+            data.material_id,
+            data.version,
+        )
+        data.version = version
         
         # 检查所有子物料是否存在，并检查主物料和子物料不能相同
         component_ids = [item.component_id for item in data.items]
@@ -4097,21 +4131,12 @@ class MaterialService:
                     f"添加子物料 {item.component_id} 将导致 BOM 循环依赖，请检查层级关系"
                 )
         
-        # 获取主物料信息（用于编码生成上下文）
-        material = await Material.filter(
-            tenant_id=tenant_id,
-            id=data.material_id,
-            deleted_at__isnull=True
-        ).first()
-        if not material:
-            raise ValidationError("主物料不存在")
-        
         # 自动生成BOM编码（如果未提供）
         if not data.bom_code:
             try:
                 # 构建编码规则的上下文
                 context: Dict[str, Any] = {
-                    "version": data.version or "1.0",
+                    "version": version,
                 }
                 
                 # 添加主物料信息到上下文
@@ -4144,7 +4169,7 @@ class MaterialService:
             data.bom_name,
             material,
             data.bom_code,
-            data.version or "1.0",
+            version,
         )
         async with in_transaction():
             for item in data.items:
@@ -4160,7 +4185,7 @@ class MaterialService:
                     "issue_method": getattr(item, 'issue_method', None) or "pick",
                     "level": 1,  # 直接子件深度 1（根主料为 0）
                     "path": f"{data.material_id}/{item.component_id}",
-                    "version": data.version,
+                    "version": version,
                     "bom_code": data.bom_code,
                     "bom_name": version_bom_name,
                     "effective_date": data.effective_date,
@@ -4906,14 +4931,11 @@ class MaterialService:
              except ValueError:
                  new_version = f"{bom.version}_rev1"
 
-        exists = await BOM.filter(
-            tenant_id=tenant_id,
-            material_id=bom.material_id,
-            version=new_version,
-            deleted_at__isnull=True
-        ).exists()
-        if exists:
-            raise ValidationError(f"新版本 {new_version} 已存在")
+        new_version = await MaterialService._assert_bom_material_version_available(
+            tenant_id,
+            bom.material_id,
+            new_version,
+        )
         
         # 2. 查找源BOM的所有组成部分（同一 material_id + version，仅当前主件）
         source_boms = await BOM.filter(
@@ -6764,14 +6786,11 @@ class MaterialService:
         if not current_boms:
             raise NotFoundError(f"物料 {material_id} 的BOM不存在")
 
-        exists = await BOM.filter(
-            tenant_id=tenant_id,
-            material_id=material_id,
-            version=data.version,
-            deleted_at__isnull=True,
-        ).exists()
-        if exists:
-            raise ValidationError(f"版本 {data.version} 已存在")
+        new_version = await MaterialService._assert_bom_material_version_available(
+            tenant_id,
+            material_id,
+            data.version,
+        )
         
         # 获取当前版本号
         current_version = current_boms[0].version
@@ -6794,7 +6813,7 @@ class MaterialService:
                         issue_method=getattr(bom, "issue_method", None) or "pick",
                         level=bom.level,
                         path=bom.path,
-                        version=data.version,
+                        version=new_version,
                         bom_code=current_bom_code,
                         bom_name=bom.bom_name,
                         is_default=False,
@@ -6815,7 +6834,7 @@ class MaterialService:
         
         logger.info(
             f"创建BOM新版本成功：物料 {material_id}，"
-            f"从版本 {current_version} 创建版本 {data.version}"
+            f"从版本 {current_version} 创建版本 {new_version}"
         )
         
         return [BOMResponse.model_validate(bom) for bom in new_bom_list]

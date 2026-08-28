@@ -39,7 +39,7 @@ export function DashboardWelcomeBar({
         </p>
       </div>
       <div className="dashboard-welcome-line__actions">
-        {launchWizardEnabled ? <OnboardingWizardEntry variant="welcome" /> : null}
+        {launchWizardEnabled ? <OnboardingWizardEntry /> : null}
         <WorkplaceToolkit
           isDark={isDark}
           cardRadius={cardRadius}

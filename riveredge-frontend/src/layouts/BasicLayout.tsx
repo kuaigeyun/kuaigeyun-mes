@@ -149,7 +149,6 @@ import { buildChatIntegrationStatusQueryKey } from '../hooks/useChatIntegrationS
 import { hasPermission, resolveUserForMenuPermission } from '../utils/permission';
 import { AiAssistantHeaderButton } from './AiAssistantHeaderButton';
 import OnboardingGuide from '../components/onboarding-guide';
-import { OnboardingWizardEntry } from '../components/onboarding-guide/OnboardingWizardEntry';
 import { HeaderQuickEntryPopover } from '../components/quick-entry';
 import { useConfigStore, resolveEffectiveHomePath, getDefaultTenantHomePath } from '../stores/configStore';
 import { getMenuBadgeCounts, type MenuBadgeEntry } from '../services/dashboard';
@@ -1094,7 +1093,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
   // 站点设置：统一从 configStore 获取（app.tsx 初始化时已 fetchConfigs，site-settings 保存时会 refresh）
   const siteName = (useConfigStore((s) => (s.getConfig('site_name', '') as string)?.trim()) || '') || 'RiverEdge SaaS';
-  const launchWizardEnabled = useConfigStore((s) => s.configs.enable_launch_wizard !== false);
   const enableSystemDashboard = useConfigStore((s) => s.configs.enable_system_dashboard !== false);
   const documentVisible = useDocumentVisible();
 
@@ -2954,18 +2952,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               isDarkHeader={!isLightModeLightBg}
             />,
           );
-          }
-
-          // 上线向导：工作台欢迎条右侧展示；其他页面保留顶栏入口
-          if (launchWizardEnabled && location.pathname !== '/system/dashboard/workplace') {
-            actions.push(
-              <OnboardingWizardEntry
-                key="onboarding"
-                variant="header"
-                compact={isMobileOrTablet}
-                isLightModeLightBg={isLightModeLightBg}
-              />,
-            );
           }
 
           // 顶栏小程序码（开启且已上传图片时显示）- 置于手机客户端下载前

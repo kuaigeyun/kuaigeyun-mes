@@ -57,6 +57,22 @@ export type RowActionVisualProfile =
   | 'copy-create'
   | 'collect-receipt'
   | 'issue-invoice'
+  | 'settle-voucher'
+  | 'create-refund'
+  | 'fill-invoice-number'
+  | 'make-payment'
+  | 'pick-settlement'
+  | 'match-settlement'
+  | 'transfer-settle'
+  | 'view-doc-chain'
+  | 'view-bank-flow'
+  | 'note-endorse'
+  | 'note-discount'
+  | 'note-collect'
+  | 'note-honor'
+  | 'tax-certify'
+  | 'tax-transfer-out'
+  | 'tax-red-flush'
 
 export function rowActionKind(
   kind: RowActionPermissionKind,
@@ -155,6 +171,214 @@ export function rowActionIssueInvoice(
   }
 }
 
+/** 收/付款核销：行内双字「核销」；RBAC 默认 submit */
+export function rowActionSettleVoucher(
+  permission: 'skip' | 'submit' | 'execute' = 'submit',
+): {
+  [ROW_ACTION_KIND_ATTR]: RowActionPermissionKind
+  [ROW_ACTION_VISUAL_PROFILE_ATTR]: RowActionVisualProfile
+} {
+  return {
+    [ROW_ACTION_KIND_ATTR]: permission,
+    [ROW_ACTION_VISUAL_PROFILE_ATTR]: 'settle-voucher',
+  }
+}
+
+/** 收/付款创建退款：行内双字「退款」；RBAC 默认 create */
+export function rowActionCreateRefund(
+  permission: 'skip' | 'create' | 'submit' = 'create',
+): {
+  [ROW_ACTION_KIND_ATTR]: RowActionPermissionKind
+  [ROW_ACTION_VISUAL_PROFILE_ATTR]: RowActionVisualProfile
+} {
+  return {
+    [ROW_ACTION_KIND_ATTR]: permission,
+    [ROW_ACTION_VISUAL_PROFILE_ATTR]: 'create-refund',
+  }
+}
+
+/** 销售/采购发票填写号码：行内双字「填号」；RBAC 默认 update */
+export function rowActionFillInvoiceNumber(
+  permission: 'skip' | 'update' = 'update',
+): {
+  [ROW_ACTION_KIND_ATTR]: RowActionPermissionKind
+  [ROW_ACTION_VISUAL_PROFILE_ATTR]: RowActionVisualProfile
+} {
+  return {
+    [ROW_ACTION_KIND_ATTR]: permission,
+    [ROW_ACTION_VISUAL_PROFILE_ATTR]: 'fill-invoice-number',
+  }
+}
+
+/** 应付下推付款：行内双字「付款」；RBAC 默认 execute */
+export function rowActionMakePayment(
+  permission: 'skip' | 'execute' | 'create' = 'execute',
+): {
+  [ROW_ACTION_KIND_ATTR]: RowActionPermissionKind
+  [ROW_ACTION_VISUAL_PROFILE_ATTR]: RowActionVisualProfile
+} {
+  return {
+    [ROW_ACTION_KIND_ATTR]: permission,
+    [ROW_ACTION_VISUAL_PROFILE_ATTR]: 'make-payment',
+  }
+}
+
+/** 往来核销：行内双字「选择」；UI 选侧单据，RBAC 默认 skip */
+export function rowActionPickSettlement(
+  permission: 'skip' | 'read' | 'update' = 'skip',
+): {
+  [ROW_ACTION_KIND_ATTR]: RowActionPermissionKind
+  [ROW_ACTION_VISUAL_PROFILE_ATTR]: RowActionVisualProfile
+} {
+  return {
+    [ROW_ACTION_KIND_ATTR]: permission,
+    [ROW_ACTION_VISUAL_PROFILE_ATTR]: 'pick-settlement',
+  }
+}
+
+/** 往来核销：行内双字「匹配」；RBAC 默认 update */
+export function rowActionMatchSettlement(
+  permission: 'skip' | 'update' = 'update',
+): {
+  [ROW_ACTION_KIND_ATTR]: RowActionPermissionKind
+  [ROW_ACTION_VISUAL_PROFILE_ATTR]: RowActionVisualProfile
+} {
+  return {
+    [ROW_ACTION_KIND_ATTR]: permission,
+    [ROW_ACTION_VISUAL_PROFILE_ATTR]: 'match-settlement',
+  }
+}
+
+/** 预收预付转核销：行内双字「转核」；RBAC 默认 update */
+export function rowActionTransferSettle(
+  permission: 'skip' | 'update' | 'execute' = 'update',
+): {
+  [ROW_ACTION_KIND_ATTR]: RowActionPermissionKind
+  [ROW_ACTION_VISUAL_PROFILE_ATTR]: RowActionVisualProfile
+} {
+  return {
+    [ROW_ACTION_KIND_ATTR]: permission,
+    [ROW_ACTION_VISUAL_PROFILE_ATTR]: 'transfer-settle',
+  }
+}
+
+/** 单据对账：行内双字「链路」；RBAC 默认 read */
+export function rowActionViewDocChain(
+  permission: 'skip' | 'read' = 'read',
+): {
+  [ROW_ACTION_KIND_ATTR]: RowActionPermissionKind
+  [ROW_ACTION_VISUAL_PROFILE_ATTR]: RowActionVisualProfile
+} {
+  return {
+    [ROW_ACTION_KIND_ATTR]: permission,
+    [ROW_ACTION_VISUAL_PROFILE_ATTR]: 'view-doc-chain',
+  }
+}
+
+/** 银行账户：行内双字「流水」；RBAC 默认 read */
+export function rowActionViewBankFlow(
+  permission: 'skip' | 'read' = 'read',
+): {
+  [ROW_ACTION_KIND_ATTR]: RowActionPermissionKind
+  [ROW_ACTION_VISUAL_PROFILE_ATTR]: RowActionVisualProfile
+} {
+  return {
+    [ROW_ACTION_KIND_ATTR]: permission,
+    [ROW_ACTION_VISUAL_PROFILE_ATTR]: 'view-bank-flow',
+  }
+}
+
+/** 应收票据背书：行内双字「背书」；RBAC 默认 update */
+export function rowActionNoteEndorse(
+  permission: 'skip' | 'update' = 'update',
+): {
+  [ROW_ACTION_KIND_ATTR]: RowActionPermissionKind
+  [ROW_ACTION_VISUAL_PROFILE_ATTR]: RowActionVisualProfile
+} {
+  return {
+    [ROW_ACTION_KIND_ATTR]: permission,
+    [ROW_ACTION_VISUAL_PROFILE_ATTR]: 'note-endorse',
+  }
+}
+
+/** 应收票据贴现：行内双字「贴现」；RBAC 默认 update */
+export function rowActionNoteDiscount(
+  permission: 'skip' | 'update' = 'update',
+): {
+  [ROW_ACTION_KIND_ATTR]: RowActionPermissionKind
+  [ROW_ACTION_VISUAL_PROFILE_ATTR]: RowActionVisualProfile
+} {
+  return {
+    [ROW_ACTION_KIND_ATTR]: permission,
+    [ROW_ACTION_VISUAL_PROFILE_ATTR]: 'note-discount',
+  }
+}
+
+/** 应收票据托收：行内双字「托收」；RBAC 默认 update */
+export function rowActionNoteCollect(
+  permission: 'skip' | 'update' = 'update',
+): {
+  [ROW_ACTION_KIND_ATTR]: RowActionPermissionKind
+  [ROW_ACTION_VISUAL_PROFILE_ATTR]: RowActionVisualProfile
+} {
+  return {
+    [ROW_ACTION_KIND_ATTR]: permission,
+    [ROW_ACTION_VISUAL_PROFILE_ATTR]: 'note-collect',
+  }
+}
+
+/** 应付票据兑付：行内双字「兑付」；RBAC 默认 update */
+export function rowActionNoteHonor(
+  permission: 'skip' | 'update' = 'update',
+): {
+  [ROW_ACTION_KIND_ATTR]: RowActionPermissionKind
+  [ROW_ACTION_VISUAL_PROFILE_ATTR]: RowActionVisualProfile
+} {
+  return {
+    [ROW_ACTION_KIND_ATTR]: permission,
+    [ROW_ACTION_VISUAL_PROFILE_ATTR]: 'note-honor',
+  }
+}
+
+/** 进项认证：行内双字「认证」；RBAC 默认 update */
+export function rowActionTaxCertify(
+  permission: 'skip' | 'update' | 'execute' = 'update',
+): {
+  [ROW_ACTION_KIND_ATTR]: RowActionPermissionKind
+  [ROW_ACTION_VISUAL_PROFILE_ATTR]: RowActionVisualProfile
+} {
+  return {
+    [ROW_ACTION_KIND_ATTR]: permission,
+    [ROW_ACTION_VISUAL_PROFILE_ATTR]: 'tax-certify',
+  }
+}
+
+/** 进项转出：行内双字「转出」；RBAC 默认 update */
+export function rowActionTaxTransferOut(
+  permission: 'skip' | 'update' = 'update',
+): {
+  [ROW_ACTION_KIND_ATTR]: RowActionPermissionKind
+  [ROW_ACTION_VISUAL_PROFILE_ATTR]: RowActionVisualProfile
+} {
+  return {
+    [ROW_ACTION_KIND_ATTR]: permission,
+    [ROW_ACTION_VISUAL_PROFILE_ATTR]: 'tax-transfer-out',
+  }
+}
+
+/** 进项红冲：行内双字「红冲」；RBAC 默认 update */
+export function rowActionTaxRedFlush(
+  permission: 'skip' | 'update' = 'update',
+): {
+  [ROW_ACTION_KIND_ATTR]: RowActionPermissionKind
+  [ROW_ACTION_VISUAL_PROFILE_ATTR]: RowActionVisualProfile
+} {
+  return {
+    [ROW_ACTION_KIND_ATTR]: permission,
+    [ROW_ACTION_VISUAL_PROFILE_ATTR]: 'tax-red-flush',
+  }
+}
+
 export function readActionVisualProfile(node: React.ReactNode): RowActionVisualProfile | null {
   if (!React.isValidElement(node)) return null
   const raw = (node.props as Record<string, unknown>)?.[ROW_ACTION_VISUAL_PROFILE_ATTR]
@@ -165,7 +389,23 @@ export function readActionVisualProfile(node: React.ReactNode): RowActionVisualP
     raw === 'balloon-annotate' ||
     raw === 'copy-create' ||
     raw === 'collect-receipt' ||
-    raw === 'issue-invoice'
+    raw === 'issue-invoice' ||
+    raw === 'settle-voucher' ||
+    raw === 'create-refund' ||
+    raw === 'fill-invoice-number' ||
+    raw === 'make-payment' ||
+    raw === 'pick-settlement' ||
+    raw === 'match-settlement' ||
+    raw === 'transfer-settle' ||
+    raw === 'view-doc-chain' ||
+    raw === 'view-bank-flow' ||
+    raw === 'note-endorse' ||
+    raw === 'note-discount' ||
+    raw === 'note-collect' ||
+    raw === 'note-honor' ||
+    raw === 'tax-certify' ||
+    raw === 'tax-transfer-out' ||
+    raw === 'tax-red-flush'
   ) {
     return raw
   }

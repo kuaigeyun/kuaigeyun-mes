@@ -901,7 +901,7 @@ const SalesOrderChangesPage: React.FC = () => {
             onSuccess={handleChangeAuditBatchSuccess}
           />,
         ]}
-        toolBarActionsAfterBatch={[
+        rightToolBarActionsBeforeExport={[
           <UniCapabilityBatchButton
             key="sales-order-change-print"
             selectedRowKeys={selectedRowKeys}

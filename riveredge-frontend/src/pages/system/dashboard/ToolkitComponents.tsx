@@ -1,4 +1,5 @@
 import { formatAmount } from '../../../utils/format';
+import { amountToChineseRmb } from '../../../utils/rmbUppercase';
 import { useState, useEffect } from 'react';
 import { Typography, Space, InputNumber, Select, Row, Col, Divider, Input, Button, message, Image, Segmented, Checkbox } from 'antd';
 import { ArrowDown, Copy } from 'lucide-react';
@@ -418,29 +419,14 @@ export const UnitConverter = () => {
  */
 export const RmbCapitalizer = () => {
   const { t, i18n } = useTranslation();
+  const amountDecimals = useNumericPrecisionPlaces('amount');
   const [num, setNum] = useState<number>(0);
   const isChinese = i18n.language.startsWith('zh');
 
   const formatNum = (n: number) =>
     Number.isFinite(n) ? formatAmount(n) : "—";
-    
-  const convertToChinese = (n: number) => {
-    const fraction = ['角', '分'];
-    const digit = ['零', '壹', '贰', '叁', '肆', '伍', '陆', '柒', '捌', '玖'];
-    const unit = [['元', '万', '亿'], ['', '拾', '佰', '仟']];
-    let s = '';
-    for (let i = 0; i < fraction.length; i++) s += (digit[Math.floor(n * 10 * Math.pow(10, i)) % 10] + fraction[i]).replace(/零./, '');
-    s = s || '整';
-    n = Math.floor(n);
-    for (let i = 0; i < unit[0].length && n > 0; i++) {
-        let p = '';
-        for (let j = 0; j < unit[1].length && n > 0; j++) { p = digit[n % 10] + unit[1][j] + p; n = Math.floor(n / 10); }
-        s = p.replace(/(零.)*零$/, '').replace(/^$/, '零') + unit[0][i] + s;
-    }
-    return s.replace(/(零.)*零元/, '元').replace(/(零.)+/g, '零').replace(/^整$/, '零元整');
-  };
 
-  const result = convertToChinese(num);
+  const result = amountToChineseRmb(num);
   const copyAll = () => {
     const line = `${formatNum(num)} ${isChinese ? '元' : 'CNY'}\n${isChinese ? result : ''}`;
     void navigator.clipboard.writeText(line);

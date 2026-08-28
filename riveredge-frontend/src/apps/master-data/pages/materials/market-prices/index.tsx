@@ -6,14 +6,14 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNumericPrecision } from '../../../../../hooks/useNumericPrecision';
 import { ActionType, ProColumns, ProFormDatePicker, ProFormDigit, ProFormSelect, ProFormText } from '@ant-design/pro-components';
-import { App, Button, InputNumber, Modal, Popconfirm, Space, Table } from 'antd';
-import { DeleteOutlined, EditOutlined } from '@ant-design/icons';
+import { App, Button, InputNumber, Modal, Popconfirm, Table } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { formatBusinessDateOnly, todaySiteDateString } from '../../../../../utils/format';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { MarkerTag } from '../../../../../constants/statusBadges';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
@@ -42,19 +42,25 @@ function numericPrice(value: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+function marketPriceRowKey(record: MaterialMarketPrice): string {
+  if (record.uuid) return record.uuid;
+  return `virtual:${record.code}:${String(record.priceDate || '').slice(0, 10)}`;
+}
+
 const TodayPriceInput: React.FC<{
   record: MaterialMarketPrice;
   disabled: boolean;
   placeholder: string;
+  precision: number;
   onSave: (record: MaterialMarketPrice, unitPrice: number) => Promise<void>;
-}> = ({ record, disabled, placeholder, onSave }) => {
+}> = ({ record, disabled, placeholder, precision, onSave }) => {
   const [value, setValue] = useState<number | null>(
     numericPrice(record.unitPrice) > 0 ? numericPrice(record.unitPrice) : null,
   );
 
   useEffect(() => {
     setValue(numericPrice(record.unitPrice) > 0 ? numericPrice(record.unitPrice) : null);
-  }, [record.uuid, record.unitPrice, record.updatedAt]);
+  }, [record.uuid, record.code, record.priceDate, record.unitPrice, record.updatedAt]);
 
   const commit = async (next: number | null) => {
     const unitPrice = next == null || Number.isNaN(next) ? 0 : next;
@@ -65,7 +71,7 @@ const TodayPriceInput: React.FC<{
   return (
     <InputNumber
       min={0}
-      precision={priceDecimals}
+      precision={precision}
       value={value}
       disabled={disabled}
       placeholder={placeholder}
@@ -79,7 +85,7 @@ const TodayPriceInput: React.FC<{
 
 const MarketPricesPage: React.FC = () => {
   const { t } = useTranslation();
-  const { price: priceDecimals, amount: amountDecimals } = useNumericPrecision();
+  const { price: priceDecimals } = useNumericPrecision();
   const { message: messageApi } = App.useApp();
   const perms = useResourcePermissions('master-data:material');
   const actionRef = useRef<ActionType>(null);
@@ -110,6 +116,20 @@ const MarketPricesPage: React.FC = () => {
   };
 
   const handleEdit = async (record: MaterialMarketPrice) => {
+    // 沿用行未落库：按新建当日行情打开，保存走 upsert
+    if (!record.uuid) {
+      setIsEdit(false);
+      setCurrentUuid(null);
+      setModalVisible(true);
+      formRef.current?.setFieldsValue({
+        code: record.code,
+        name: record.name,
+        priceDate: record.priceDate || today,
+        unitPrice: numericPrice(record.unitPrice) > 0 ? numericPrice(record.unitPrice) : undefined,
+        priceType: record.priceType === 'tax_exclusive' ? 'tax_exclusive' : 'tax_inclusive',
+      });
+      return;
+    }
     setIsEdit(true);
     setCurrentUuid(record.uuid);
     setModalVisible(true);
@@ -162,6 +182,10 @@ const MarketPricesPage: React.FC = () => {
   };
 
   const handleDelete = async (record: MaterialMarketPrice) => {
+    if (!record.uuid) {
+      messageApi.error(t('app.master-data.marketPrices.virtualRowNotPersisted'));
+      return;
+    }
     try {
       await materialMarketPriceApi.delete(record.uuid);
       messageApi.success(t('common.deleteSuccess'));
@@ -172,29 +196,46 @@ const MarketPricesPage: React.FC = () => {
   };
 
   const handleBatchDelete = async (keys: React.Key[]) => {
-    for (const key of keys) {
-      await materialMarketPriceApi.delete(String(key));
+    const persisted = keys.map(String).filter((key) => !key.startsWith('virtual:'));
+    if (persisted.length === 0) {
+      messageApi.error(t('app.master-data.marketPrices.virtualRowNotPersisted'));
+      return;
     }
-    messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
+    for (const key of persisted) {
+      await materialMarketPriceApi.delete(key);
+    }
+    messageApi.success(t('common.batchDeleteSuccess', { count: persisted.length }));
     setSelectedRowKeys([]);
     actionRef.current?.reload();
   };
 
   const handleSaveTodayPrice = async (record: MaterialMarketPrice, unitPrice: number) => {
-    if (unitPrice < 0) {
+    if (!(unitPrice > 0)) {
       messageApi.error(t('app.master-data.marketPrices.priceInvalid'));
       return;
     }
-    if (savingRef.current.has(record.uuid)) return;
-    savingRef.current.add(record.uuid);
+    const saveKey = marketPriceRowKey(record);
+    if (savingRef.current.has(saveKey)) return;
+    savingRef.current.add(saveKey);
     try {
-      await materialMarketPriceApi.update(record.uuid, { unitPrice });
+      if (record.uuid) {
+        await materialMarketPriceApi.update(record.uuid, { unitPrice });
+      } else {
+        // 沿用行改价：落库当日行情
+        await materialMarketPriceApi.create({
+          code: record.code,
+          name: record.name,
+          priceDate: formatDate(record.priceDate) || today,
+          unitPrice,
+          priceType: record.priceType === 'tax_exclusive' ? 'tax_exclusive' : 'tax_inclusive',
+        });
+      }
       messageApi.success(t('app.master-data.marketPrices.priceSaved'));
       actionRef.current?.reload();
     } catch (e: any) {
       messageApi.error(getApiErrorMessage(e, t('common.operationFailed')));
     } finally {
-      savingRef.current.delete(record.uuid);
+      savingRef.current.delete(saveKey);
     }
   };
 
@@ -248,7 +289,7 @@ const MarketPricesPage: React.FC = () => {
         valueType: 'date',
         initialValue: today,
         sorter: true,
-        render: (_, r) => (r.priceDate ? formatBusinessDateOnly(String(r.priceDate)) : '-'),
+        render: (_, r) => (r.priceDate ? formatBusinessDateOnly(String(r.priceDate)) : '—'),
       },
       {
         title: t('app.master-data.marketPrices.quoteCode'),
@@ -263,11 +304,12 @@ const MarketPricesPage: React.FC = () => {
         sorter: true,
       },
       {
+        // 品种名称长短不一：唯一 RemainderFlex（无备注列）
         title: t('app.master-data.marketPrices.quoteName'),
         dataIndex: 'name',
-        width: 180,
-        minWidth: 180,
-        uniTableKeepWidth: true,
+        minWidth: 160,
+        uniTableRemainderFlex: true,
+        uniTablePrimaryFlex: true,
         resizable: false,
         ellipsis: true,
         hideInSearch: true,
@@ -292,22 +334,20 @@ const MarketPricesPage: React.FC = () => {
             <TodayPriceInput
               record={record}
               disabled={false}
+              precision={priceDecimals}
               placeholder={t('app.master-data.marketPrices.pricePlaceholder')}
               onSave={handleSaveTodayPrice}
             />
           ) : numericPrice(record.unitPrice) > 0 ? (
             numericPrice(record.unitPrice)
           ) : (
-            '-'
+            '—'
           ),
       },
       {
         title: t('app.kuaizhizao.salesOrder.priceType'),
         dataIndex: 'priceType',
-        width: 80,
-        minWidth: 80,
-        uniTableKeepWidth: true,
-        resizable: false,
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         hideInSearch: true,
         render: (_, r) => (
           <MarkerTag>
@@ -321,50 +361,48 @@ const MarketPricesPage: React.FC = () => {
       {
         title: t('common.actions'),
         key: 'action',
-        valueType: 'option',
         fixed: 'right',
+        hideInSearch: true,
         render: (_, record) => {
           const actions: React.ReactNode[] = [];
           if (perms.canRead) {
             actions.push(
               <Button
                 key="detail"
-                {...rowActionKind('read')}
+                type="link"
                 size="small"
+                {...rowActionKind('read')}
                 onClick={() => openTrend(record)}
-              >
-                {t('common.detail')}
-              </Button>,
+              />,
             );
           }
           if (perms.canUpdate) {
             actions.push(
               <Button
                 key="edit"
-                {...rowActionKind('update')}
+                type="link"
                 size="small"
-                icon={<EditOutlined />}
-                onClick={() => handleEdit(record)}
-              >
-                {t('common.edit')}
-              </Button>,
-              <Popconfirm
-                key="delete"
-                {...rowActionKind('delete')}
-                title={t('common.confirmDelete')}
-                onConfirm={() => handleDelete(record)}
-              >
-                <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-                  {t('common.delete')}
-                </Button>
-              </Popconfirm>,
+                {...rowActionKind('update')}
+                onClick={() => void handleEdit(record)}
+              />,
             );
+            if (record.uuid) {
+              actions.push(
+                <Popconfirm
+                  key="delete"
+                  title={t('common.confirmDelete')}
+                  onConfirm={() => handleDelete(record)}
+                >
+                  <Button type="link" size="small" {...rowActionKind('delete')} />
+                </Popconfirm>,
+              );
+            }
           }
-          return actions.length > 0 ? <Space>{actions}</Space> : null;
+          return actions;
         },
       },
     ],
-    [t, perms.canRead, perms.canUpdate, today],
+    [t, perms.canRead, perms.canUpdate, today, priceDecimals],
   );
 
   return (
@@ -372,10 +410,10 @@ const MarketPricesPage: React.FC = () => {
       <UniTable<MaterialMarketPrice>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('masterData.marketPrices')}
-        columnPersistenceId="apps.master-data.pages.materials.market-prices.list-v4"
+        columnPersistenceId="apps.master-data.pages.materials.market-prices.list-v6"
         headerTitle={t('app.master-data.menu.materials.market-prices')}
         actionRef={actionRef}
-        rowKey="uuid"
+        rowKey={marketPriceRowKey}
         columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
         request={async (params, sort, _filter, search) => {
           const { current = 1, pageSize = 20 } = params;

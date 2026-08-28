@@ -316,15 +316,22 @@ const OnlineUsersPage: React.FC = () => {
       key: 'full_name',
       ellipsis: true,
       search: false,
-      width: 150,
+      width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
     },
     {
+      // 邮箱长短不一：唯一 RemainderFlex
       title: t('pages.system.onlineUsers.email'),
       dataIndex: 'email',
       key: 'email',
       ellipsis: true,
       search: false,
-      width: 200,
+      minWidth: 160,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
+      resizable: false,
     },
     {
       title: t('pages.system.onlineUsers.loginIp'),
@@ -416,7 +423,7 @@ const OnlineUsersPage: React.FC = () => {
     <>
       <ListPageTemplate statCards={statCards}>
         <UniTable<OnlineUser>
-          columnPersistenceId="pages.system.online-users.list-v1"
+          columnPersistenceId="pages.system.online-users.list-v2"
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {

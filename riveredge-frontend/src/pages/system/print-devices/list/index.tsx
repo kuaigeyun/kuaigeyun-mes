@@ -12,6 +12,7 @@ import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, Pr
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Badge, Button, Card, Form, Modal, Popconfirm, Space, Tag, Tooltip, Typography, theme } from 'antd';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../utils/uniTableLayoutColumns';
 import { renderSystemActiveTag, renderSystemTypeMarker } from '../../utils/systemListPresentation';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PrinterOutlined, CheckCircleOutlined, PrinterFilled } from '@ant-design/icons';
 import { CheckCircle2, XCircle } from 'lucide-react';
@@ -532,12 +533,6 @@ const PrintDeviceListPage: React.FC = () => {
    */
   const columns = useMemo<ProColumns<PrintDevice>[]>(() => alignProColumns([
     {
-      title: t('pages.system.printDevices.columnName'),
-      dataIndex: 'name',
-      width: 200,
-      ellipsis: true,
-    },
-    {
       title: t('pages.system.printDevices.columnCode'),
       dataIndex: 'code',
       width: 150,
@@ -547,10 +542,20 @@ const PrintDeviceListPage: React.FC = () => {
       ellipsis: true,
     },
     {
+      // 名称长短不一：唯一 RemainderFlex
+      title: t('pages.system.printDevices.columnName'),
+      dataIndex: 'name',
+      minWidth: 160,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
+      resizable: false,
+      ellipsis: true,
+    },
+    {
       title: t('pages.system.printDevices.columnType'),
       dataIndex: 'type',
-      width: 120,
-      minWidth: 120,
+      width: 110,
+      minWidth: 110,
       uniTableKeepWidth: true,
       resizable: false,
       valueType: 'select',
@@ -568,10 +573,7 @@ const PrintDeviceListPage: React.FC = () => {
     {
       title: t('common.enabled'),
       dataIndex: 'is_active',
-      width: 100,
-      minWidth: 100,
-      uniTableKeepWidth: true,
-      resizable: false,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       valueType: 'select',
       valueEnum: {
         true: { text: t('common.enabled'), status: 'Success' },
@@ -583,10 +585,7 @@ const PrintDeviceListPage: React.FC = () => {
     {
       title: t('pages.system.printDevices.columnOnline'),
       dataIndex: 'is_online',
-      width: 100,
-      minWidth: 100,
-      uniTableKeepWidth: true,
-      resizable: false,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       hideInSearch: true,
       render: (_, record) =>
         renderSystemTypeMarker(
@@ -597,10 +596,7 @@ const PrintDeviceListPage: React.FC = () => {
     {
       title: t('pages.system.printDevices.columnDefault'),
       dataIndex: 'is_default',
-      width: 100,
-      minWidth: 100,
-      uniTableKeepWidth: true,
-      resizable: false,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       hideInSearch: true,
       render: (_, record) =>
         record.is_default
@@ -639,61 +635,25 @@ const PrintDeviceListPage: React.FC = () => {
     {
       title: t('common.actions'),
       key: 'action',
-      valueType: 'option',
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) =>
         [
-            <Button {...rowActionKind('read')} key="view" onClick={() => handleView(record)}>
-              {t('common.detail')}
-            </Button>,
-            <Button {...rowActionKind('update')} key="edit" onClick={() => handleEdit(record)}>
-              {t('common.edit')}
-            </Button>,
-            <Popconfirm {...rowActionKind('delete')}
+            <Button {...rowActionKind('read')} key="view" onClick={() => handleView(record)} />,
+            <Button {...rowActionKind('update')} key="edit" onClick={() => handleEdit(record)} />,
+            <Popconfirm
               key="delete"
               title={t('pages.system.printDevices.deleteConfirmTitle')}
               onConfirm={() => handleDelete(record)}
               okText={t('common.confirm')}
               cancelText={t('common.cancel')}
             >
-              <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-                {t('common.delete')}
-              </Button>
+              <Button {...rowActionKind('delete')} />
             </Popconfirm>,
-            <Button {...rowActionKind('read')}
-              key="test"
-              type="link"
-              size="small"
-              icon={<CheckCircleOutlined />}
-              onClick={() => handleTest(record)}
-              disabled={!record.is_active}
-            >
-              {t('pages.system.printDevices.testConnection')}
-            </Button>,
-            <Button {...rowActionKind('print')}
-              key="print"
-              type="link"
-              size="small"
-              icon={<PrinterOutlined />}
-              onClick={() => handlePrint(record)}
-              disabled={!record.is_active || !record.is_online}
-            >
-              {t('pages.system.printDevices.printTask')}
-            </Button>,
-            <Button {...rowActionKind('print')}
-              key="print-test"
-              type="link"
-              size="small"
-              icon={<PrinterOutlined />}
-              onClick={() => handlePrintTestPage(record)}
-              disabled={!record.is_active || !record.is_online}
-            >
-              {t('pages.system.printDevices.printTestPage')}
-            </Button>,
           ],
     },
-  ], GLOBAL_DOC_LIST_FIELD_RANK), [t, handleView, handleEdit, handleDelete, handlePrintTestPage]);
+  ], GLOBAL_DOC_LIST_FIELD_RANK), [t, handleView, handleEdit, handleDelete]);
+
 
   /**
    * 详情列定义
@@ -747,7 +707,7 @@ const PrintDeviceListPage: React.FC = () => {
     <>
       <ListPageTemplate statCards={statCards}>
         <UniTable<PrintDevice>
-          columnPersistenceId="pages.system.print-devices.list-v1"
+          columnPersistenceId="pages.system.print-devices.list-v2"
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {

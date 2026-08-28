@@ -127,6 +127,18 @@ def get_preset_print_templates() -> list[dict]:
     return PRESET_PRINT_TEMPLATES
 
 
+def _resolve_seal_size_unit(width: Any, size_unit: Any) -> str:
+    """印章尺寸单位：显式 sizeUnit 优先；历史宽≥60 视为 px，否则 mm。"""
+    unit = str(size_unit or "").strip().lower()
+    if unit in ("mm", "px"):
+        return unit
+    try:
+        w = float(width)
+    except (TypeError, ValueError):
+        return "mm"
+    return "px" if w >= 60 else "mm"
+
+
 class PrintTemplateService:
     _CODE_SUFFIX_PATTERN = re.compile(r"^(?P<base>.+)_(?P<seq>\d+)$")
 
@@ -973,11 +985,25 @@ class PrintTemplateService:
                     lines.append(f'<div{wrapper_css}><img {" ".join(img_attrs)} style="{img_style_str}" /></div>')
                 elif blk_type == "seal_overlay":
                     url = str(blk.get("url") or "{{ company_seal }}").strip()
-                    width = blk.get("width", 88)
-                    height = blk.get("height", 88)
+                    width_raw = blk.get("width", 40)
+                    height_raw = blk.get("height", 40)
                     keep_ratio = blk.get("keepRatio", True)
+                    size_unit = _resolve_seal_size_unit(width_raw, blk.get("sizeUnit"))
+                    try:
+                        width_val = float(width_raw)
+                    except (TypeError, ValueError):
+                        width_val = 40.0
+                    try:
+                        height_val = float(height_raw)
+                    except (TypeError, ValueError):
+                        height_val = 40.0
+                    if width_val <= 0:
+                        width_val = 40.0
+                    if height_val <= 0:
+                        height_val = 40.0
+                    width_css = f"{width_val:g}{size_unit}"
+                    height_css = f"{height_val:g}{size_unit}"
                     content = str(blk.get("content") or "")
-                    min_height = blk.get("minHeight", height)
                     seal_align = str(blk.get("sealAlign") or "center").strip().lower()
                     try:
                         offset_x = int(blk.get("sealOffsetX") or 0)
@@ -996,23 +1022,30 @@ class PrintTemplateService:
                             f"left:50%;top:{offset_y}px;"
                             f"transform:translateX(calc(-50% + {offset_x}px));"
                         )
-                    img_height_css = "height:auto;" if keep_ratio else f"height:{height}px;"
+                    bg_size = f"{width_css} auto" if keep_ratio else f"{width_css} {height_css}"
                     text_style_str = _get_style_str(blk, is_root=False)
+                    if "white-space" not in text_style_str.lower():
+                        text_style_str = f"{text_style_str}white-space:pre-wrap;"
                     wrapper_style_str = _get_style_str(blk, is_root) if is_root else ""
                     wrapper_css = f' style="{wrapper_style_str}"' if wrapper_style_str else ""
                     if is_root:
                         wrapper_css = f' class="print-block"{wrapper_css}'
-                    img_html = (
-                        f'<img src="{url}" width="{width}" '
-                        f'style="position:absolute;z-index:0;{seal_pos}{img_height_css}'
-                        f'opacity:0.88;pointer-events:none;" />'
+                    # 印章用绝对定位背景层，不参与文档流，避免撑开行高/换行
+                    seal_mark_html = (
+                        f'<div class="print-seal-overlay-mark" aria-hidden="true" style="'
+                        f"position:absolute;z-index:0;pointer-events:none;opacity:0.88;"
+                        f"{seal_pos}width:{width_css};height:{height_css};"
+                        f"background-image:url('{url}');background-repeat:no-repeat;"
+                        f"background-position:center;background-size:{bg_size};"
+                        f'"></div>'
                     )
                     text_html = (
-                        f'<div style="position:relative;z-index:1;{text_style_str}">{content}</div>'
+                        f'<div class="print-seal-overlay-text" style="position:relative;z-index:1;'
+                        f'{text_style_str}">{content}</div>'
                     )
                     inner = (
-                        f'<div style="position:relative;min-height:{min_height}px;width:100%;">'
-                        f'{img_html}{text_html}'
+                        f'<div class="print-seal-overlay" style="position:relative;overflow:visible;width:100%;">'
+                        f"{seal_mark_html}{text_html}"
                         f"</div>"
                     )
                     lines.append(f"<div{wrapper_css}>{inner}</div>")
@@ -1300,6 +1333,13 @@ class PrintTemplateService:
         parts.append("  thead { display: table-header-group; }")
         parts.append("  tr, td, th { page-break-inside: avoid; }")
         parts.append("  img { max-width: 100%; height: auto; display: block; }")
+        parts.append("  .print-seal-overlay { position: relative; overflow: visible; width: 100%; }")
+        parts.append(
+            "  .print-seal-overlay-mark { position: absolute !important; z-index: 0; pointer-events: none; }"
+        )
+        parts.append(
+            "  .print-seal-overlay-text { position: relative; z-index: 1; white-space: pre-wrap; }"
+        )
         # Ensure blocks respect item_spacing strictly
         parts.append("  .print-block { width: 100%; position: relative; }")
         parts.append(
@@ -1350,6 +1390,9 @@ class PrintTemplateService:
         preview_data = dict(data.preview_data or {})
         preview_data.setdefault("page_num", 1)
         preview_data.setdefault("total_pages", 1)
+        from core.utils.amount_uppercase_cn import enrich_print_amount_uppercase_fields
+
+        enrich_print_amount_uppercase_fields(preview_data)
         rendered_html = render_template(
             compiled["compiled_template"],
             preview_data,

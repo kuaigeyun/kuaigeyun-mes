@@ -5,7 +5,6 @@
  */
 
 import { App, Button, Popconfirm } from 'antd';
-import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import React, { useState, useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { rowActionKind } from '../../../components/uni-action';
@@ -236,12 +235,21 @@ export default function PackageManagementPage() {
       title: t('pages.infra.package.name'),
       dataIndex: 'name',
       key: 'name',
+      minWidth: 160,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
+      resizable: false,
+      ellipsis: true,
       sorter: true,
     },
     {
       title: t('pages.infra.package.plan'),
       dataIndex: 'plan',
       key: 'plan',
+      width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       sorter: true,
       render: (_: any, record: Package) => {
         const planInfo = planMap[record.plan] || { text: record.plan, color: 'default' };
@@ -252,6 +260,10 @@ export default function PackageManagementPage() {
       title: t('pages.infra.package.maxUsers'),
       dataIndex: 'max_users',
       key: 'max_users',
+      width: 110,
+      minWidth: 110,
+      uniTableKeepWidth: true,
+      resizable: false,
       sorter: true,
       render: (_, record) => record.max_users?.toLocaleString() || '-',
     },
@@ -259,6 +271,10 @@ export default function PackageManagementPage() {
       title: t('pages.infra.package.maxStorage'),
       dataIndex: 'max_storage_mb',
       key: 'max_storage_mb',
+      width: 150,
+      minWidth: 150,
+      uniTableKeepWidth: true,
+      resizable: false,
       sorter: true,
       render: (_, record) => record.max_storage_mb?.toLocaleString() || '-',
     },
@@ -266,6 +282,10 @@ export default function PackageManagementPage() {
       title: t('pages.infra.package.maxBranchOrganizations'),
       dataIndex: 'max_branch_organizations',
       key: 'max_branch_organizations',
+      width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       sorter: true,
       render: (_, record) =>
         record.max_branch_organizations === null || record.max_branch_organizations === undefined
@@ -276,6 +296,10 @@ export default function PackageManagementPage() {
       title: t('pages.infra.package.allowProApps'),
       dataIndex: 'allow_pro_apps',
       key: 'allow_pro_apps',
+      width: 140,
+      minWidth: 140,
+      uniTableKeepWidth: true,
+      resizable: false,
       render: (_, record) => (
         <MarkerTag color={record.allow_pro_apps ? 'success' : 'default'}>
           {record.allow_pro_apps ? t('common.yes') : t('common.no')}
@@ -286,6 +310,10 @@ export default function PackageManagementPage() {
       title: t('pages.infra.package.allowedApps'),
       dataIndex: 'allowed_app_codes',
       key: 'allowed_app_codes',
+      width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       render: (_, record) => {
         const codes = record.allowed_app_codes || [];
         if (!codes.length) {
@@ -302,6 +330,10 @@ export default function PackageManagementPage() {
       title: t('common.createdAt'),
       dataIndex: 'created_at',
       key: 'created_at',
+      width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'dateTime',
       sorter: true,
     },
@@ -310,6 +342,8 @@ export default function PackageManagementPage() {
       dataIndex: 'is_active',
       key: 'lifecycle',
       fixed: 'right',
+      width: 100,
+      minWidth: 100,
       uniTableKeepWidth: true,
       resizable: false,
       render: (_, record) => (
@@ -321,30 +355,23 @@ export default function PackageManagementPage() {
     {
       title: t('common.actions'),
       key: 'action',
-      valueType: 'option',
       fixed: 'right',
+      hideInSearch: true,
       render: (_: any, record: Package) => [
         <Button
           key="edit"
           {...rowActionKind('update')}
-          size="small"
-          icon={<EditOutlined />}
           onClick={() => handleEdit(record)}
-        >
-          {t('common.edit')}
-        </Button>,
+        />,
         <Popconfirm
           key="delete"
-          {...rowActionKind('delete')}
           title={t('pages.infra.package.deleteConfirmTitle')}
           description={t('pages.infra.package.deleteConfirmContent', { name: record.name })}
           onConfirm={() => handleSingleDelete(record.id)}
           okText={t('common.confirm')}
           cancelText={t('common.cancel')}
         >
-          <Button size="small" icon={<DeleteOutlined />} loading={deleteMutation.isPending}>
-            {t('common.delete')}
-          </Button>
+          <Button {...rowActionKind('delete')} loading={deleteMutation.isPending} />
         </Popconfirm>,
       ],
     },
@@ -356,7 +383,7 @@ export default function PackageManagementPage() {
         <UniTable<Package>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('infra.packages')}
-          columnPersistenceId="pages.infra.packages-lifecycle-v2"
+          columnPersistenceId="pages.infra.packages-lifecycle-v4"
           actionRef={actionRef}
           columns={columns}
           request={handleRequest}

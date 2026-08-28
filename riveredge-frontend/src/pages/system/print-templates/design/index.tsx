@@ -2,9 +2,22 @@ import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { App, Button, Input, Space, Typography, Card, Select, InputNumber, Divider, ColorPicker, Radio, Checkbox, theme } from 'antd';
-import { ArrowLeftOutlined, SaveOutlined, EyeOutlined, QrcodeOutlined, DashOutlined, FontSizeOutlined, BoldOutlined, AlignCenterOutlined, AlignLeftOutlined, AlignRightOutlined, AppstoreOutlined, FunctionOutlined, OrderedListOutlined, SettingOutlined, ZoomInOutlined, ZoomOutOutlined, DeleteOutlined, VerticalAlignTopOutlined, VerticalAlignBottomOutlined, AppstoreAddOutlined, PlusOutlined, TableOutlined, BarcodeOutlined, PictureOutlined, HolderOutlined, UploadOutlined, DownloadOutlined, SafetyCertificateOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, SaveOutlined, EyeOutlined, QrcodeOutlined, DashOutlined, FontSizeOutlined, BoldOutlined, AlignCenterOutlined, AlignLeftOutlined, AlignRightOutlined, AppstoreOutlined, FunctionOutlined, OrderedListOutlined, SettingOutlined, ZoomInOutlined, ZoomOutOutlined, DeleteOutlined, VerticalAlignTopOutlined, VerticalAlignBottomOutlined, AppstoreAddOutlined, PlusOutlined, TableOutlined, BarcodeOutlined, PictureOutlined, HolderOutlined, UploadOutlined, DownloadOutlined, SafetyCertificateOutlined, TeamOutlined } from '@ant-design/icons';
 import { compilePrintTemplate, compilePreviewPrintTemplate, getPrintTemplateByUuid, updatePrintTemplate } from '../../../../services/printTemplate';
 import { getArrayTableTemplates, getTemplateVariableItems, type TemplateVariableItem } from '../../../../config/printTemplateSchemas';
+import {
+  createPartyBuyerComponent,
+  createPartyDualColumnsComponent,
+  createPartySellerComponent,
+  PARTY_COMPONENT_DOCUMENT_TYPES,
+} from '../../../../config/printPartyComponentPresets';
+import {
+  createDefaultSealOverlayFields,
+  resolveSealOverlayDimensionCss,
+  resolveSealOverlaySizeUnit,
+  SEAL_OVERLAY_DEFAULT_SIZE_MM,
+  type SealOverlaySizeUnit,
+} from '../../../../config/printSealOverlayDefaults';
 import { useSiteLogoUrl } from '../../../../hooks/useSiteLogoUrl';
 import { QRCodeSVG } from 'qrcode.react';
 import {
@@ -241,6 +254,8 @@ type DesignerNodeSchema =
       url: string;
       width: number;
       height: number;
+      /** 印章尺寸单位；缺省时宽≥60 视为历史 px，否则 mm */
+      sizeUnit?: SealOverlaySizeUnit;
       keepRatio?: boolean;
       content: string;
       minHeight?: number;
@@ -420,6 +435,61 @@ const getSamplePresetsByDocType = (t: any, docType: string): SamplePreset[] => {
   },
 ];
 
+const SALES_CONTRACT_SAMPLE_PRESETS: SamplePreset[] = [
+  {
+    key: 'sales-contract-default',
+    label: t('pages.system.printTemplatesDesign.sampleSalesContract'),
+    data: {
+      contract_code: 'SC-2026-0008',
+      customer_name: t('pages.system.printTemplatesDesign.sampleCustomer4'),
+      customer_contact: '张经理',
+      customer_phone: '13800138000',
+      tax_registration_no: '91440300MA5XXXXXXX',
+      invoice_title: t('pages.system.printTemplatesDesign.sampleCustomer4'),
+      invoice_address: '深圳市南山区科技园示例路 1 号',
+      invoice_phone: '0755-88886666',
+      invoice_bank_name: '招商银行深圳分行',
+      invoice_bank_account: '7559XXXXXXXXXXXX',
+      invoice_bank_info: '招商银行深圳分行 7559XXXXXXXXXXXX',
+      invoice_address_phone: '深圳市南山区科技园示例路 1 号 0755-88886666',
+      invoice_type: '数电票（增值税专用发票）',
+      invoice_type_code: 'digital_vat_special',
+      taxpayer_type: '一般纳税人',
+      taxpayer_type_code: 'general',
+      contract_date: '2026-04-25',
+      valid_from: '2026-04-25',
+      valid_to: '2026-12-31',
+      currency_code: 'CNY',
+      total_quantity: 130,
+      total_amount: 30440,
+      total_amount_uppercase: '叁万零肆佰肆拾元整',
+      released_amount: 0,
+      released_amount_uppercase: '零元整',
+      remaining_amount: 30440,
+      remaining_amount_uppercase: '叁万零肆佰肆拾元整',
+      notes: t('pages.system.printTemplatesDesign.sampleNotes4'),
+      items: [
+        {
+          chinese_short_name: t('pages.system.printTemplatesDesign.sampleMaterial5'),
+          model_number: 'DZ-01',
+          material_unit: t('pages.system.printTemplatesDesign.sampleUnit1'),
+          contract_quantity: 50,
+          unit_price: 320,
+          total_amount: 16000,
+        },
+        {
+          chinese_short_name: t('pages.system.printTemplatesDesign.sampleMaterial6'),
+          model_number: 'DW-09',
+          material_unit: t('pages.system.printTemplatesDesign.sampleUnit1'),
+          contract_quantity: 80,
+          unit_price: 180.5,
+          total_amount: 14440,
+        },
+      ],
+    },
+  },
+];
+
 const SALES_ORDER_SAMPLE_PRESETS: SamplePreset[] = [
   {
     key: 'sales-order-default',
@@ -427,9 +497,25 @@ const SALES_ORDER_SAMPLE_PRESETS: SamplePreset[] = [
     data: {
       order_code: 'SO-2026-0012',
       customer_name: t('pages.system.printTemplatesDesign.sampleCustomer4'),
+      customer_contact: '张经理',
+      customer_phone: '13800138000',
+      tax_registration_no: '91440300MA5XXXXXXX',
+      invoice_title: t('pages.system.printTemplatesDesign.sampleCustomer4'),
+      invoice_address: '深圳市南山区科技园示例路 1 号',
+      invoice_phone: '0755-88886666',
+      invoice_bank_name: '招商银行深圳分行',
+      invoice_bank_account: '7559XXXXXXXXXXXX',
+      invoice_bank_info: '招商银行深圳分行 7559XXXXXXXXXXXX',
+      invoice_address_phone: '深圳市南山区科技园示例路 1 号 0755-88886666',
+      invoice_type: '数电票（增值税专用发票）',
+      invoice_type_code: 'digital_vat_special',
+      taxpayer_type: '一般纳税人',
+      taxpayer_type_code: 'general',
       order_date: '2026-04-25',
       delivery_date: '2026-05-03',
+      currency_code: 'CNY',
       total_amount: 98650.2,
+      total_amount_uppercase: '玖万捌仟陆佰伍拾元贰角',
       notes: t('pages.system.printTemplatesDesign.sampleNotes4'),
       items: [
         { material_code: 'SOM-001', material_name: t('pages.system.printTemplatesDesign.sampleMaterial5'), material_spec: 'DZ-01', material_unit: t('pages.system.printTemplatesDesign.sampleUnit1'), order_quantity: 50, unit_price: 320, total_amount: 16000 },
@@ -477,6 +563,7 @@ const COMMON_SAMPLE_PRESETS: SamplePreset[] = [
 ];
 
   if (docType === 'quotation') return QUOTATION_SAMPLE_PRESETS;
+  if (docType === 'sales_contract') return SALES_CONTRACT_SAMPLE_PRESETS;
   if (docType === 'sales_order') return SALES_ORDER_SAMPLE_PRESETS;
   if (docType === 'purchase_order') return PURCHASE_ORDER_SAMPLE_PRESETS;
   if (docType === 'equipment_card') {
@@ -549,7 +636,16 @@ const groupVariables = (t: any, items: TemplateVariableItem[]): VariableCategory
 
   items.forEach((item) => {
     const k = item.key.toLowerCase();
-    if (k.includes('code') || k.includes('date') || k.includes('name') || k.includes('customer') || k.includes('supplier')) {
+    if (
+      k.includes('code') ||
+      k.includes('date') ||
+      k.includes('name') ||
+      k.includes('customer') ||
+      k.includes('supplier') ||
+      k.includes('invoice') ||
+      k.includes('tax_registration') ||
+      k.includes('taxpayer')
+    ) {
       groups.header.items.push(item);
     } else if (k.includes('amount') || k.includes('price') || k.includes('tax') || k.includes('currency') || k.includes('total')) {
       groups.financial.items.push(item);
@@ -795,19 +891,32 @@ const SealOverlayBlock: React.FC<{ block: DesignerNodeSchema & { type: 'seal_ove
   const { token } = theme.useToken();
   const rawUrl = block.url || '';
   const sealPreviewUrl = /\{\{\s*company_seal\s*\}\}/i.test(rawUrl) ? '' : rawUrl;
-  const minHeight = block.minHeight ?? block.height ?? 88;
+  const hasContent = Boolean((block.content || '').trim());
   const sealAlign = block.sealAlign || 'center';
   const offsetX = block.sealOffsetX ?? 0;
   const offsetY = block.sealOffsetY ?? 0;
+  const sealWidth = block.width ?? SEAL_OVERLAY_DEFAULT_SIZE_MM;
+  const sealHeight = block.height ?? SEAL_OVERLAY_DEFAULT_SIZE_MM;
+  const sizeUnit = resolveSealOverlaySizeUnit(block.width, block.sizeUnit);
+  const sealWidthCss = resolveSealOverlayDimensionCss(sealWidth, sizeUnit);
+  const sealHeightCss = resolveSealOverlayDimensionCss(sealHeight, sizeUnit, sealHeight);
 
-  const sealPositionStyle: React.CSSProperties = {
+  const sealLayerStyle: React.CSSProperties = {
     position: 'absolute',
     zIndex: 0,
-    width: block.width,
-    height: block.keepRatio !== false ? 'auto' : block.height,
+    width: sealWidthCss,
+    height: block.keepRatio !== false ? sealWidthCss : sealHeightCss,
     opacity: 0.88,
     pointerEvents: 'none',
     top: offsetY,
+    backgroundRepeat: 'no-repeat',
+    backgroundPosition: 'center',
+    backgroundSize: block.keepRatio !== false ? 'contain' : `${sealWidthCss} ${sealHeightCss}`,
+    ...(sealPreviewUrl ? { backgroundImage: `url(${sealPreviewUrl})` } : {
+      borderRadius: '50%',
+      border: `2px dashed ${token.colorBorderSecondary}`,
+      background: token.colorFillTertiary,
+    }),
     ...(sealAlign === 'left'
       ? { left: offsetX }
       : sealAlign === 'right'
@@ -826,25 +935,14 @@ const SealOverlayBlock: React.FC<{ block: DesignerNodeSchema & { type: 'seal_ove
       }}
       onClick={(e) => { e.stopPropagation(); onSelect?.(); }}
     >
-      <div style={{ position: 'relative', minHeight, width: '100%' }}>
-        {sealPreviewUrl ? (
-          <img src={sealPreviewUrl} alt="" style={sealPositionStyle} />
-        ) : (
-          <div
-            style={{
-              ...sealPositionStyle,
-              borderRadius: '50%',
-              border: `2px dashed ${token.colorBorderSecondary}`,
-              background: token.colorFillTertiary,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: token.colorTextQuaternary,
-            }}
-          >
-            <SafetyCertificateOutlined style={{ fontSize: 28 }} />
-          </div>
-        )}
+      <div style={{ position: 'relative', width: '100%', minHeight: hasContent ? undefined : (block.minHeight ?? sealHeight) }}>
+        <div style={sealLayerStyle} aria-hidden>
+          {!sealPreviewUrl && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', color: token.colorTextQuaternary }}>
+              <SafetyCertificateOutlined style={{ fontSize: 28 }} />
+            </div>
+          )}
+        </div>
         <div
           style={{
             position: 'relative',
@@ -1817,15 +1915,19 @@ const ComponentLibrary: React.FC<{
   onSpacer: (height: number) => void;
   onLogo: () => void;
   onSealOverlay: () => void;
+  onPartySeller: () => void;
+  onPartyBuyer: () => void;
+  onPartyDual: () => void;
   onHeader: (style: number) => void;
   onFooter: () => void;
   templateType: string;
 }> = ({ 
   onInsertText, onDivider, onTable, onIf, onFor, onColumns, onQRCode, onBarcode, onImage, 
-  onSpacer, onLogo, onSealOverlay, onHeader, onFooter,
+  onSpacer, onLogo, onSealOverlay, onPartySeller, onPartyBuyer, onPartyDual, onHeader, onFooter,
   templateType 
 }) => {
   const { t } = useTranslation();
+  const showPartyComponents = PARTY_COMPONENT_DOCUMENT_TYPES.has(templateType);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div style={{ fontWeight: 600, fontSize: 13, color: '#8c8c8c', marginBottom: 4 }}>{t('pages.system.printTemplatesDesign.compBase')}</div>
@@ -1850,6 +1952,17 @@ const ComponentLibrary: React.FC<{
         <DraggableSidebarItem type="columns" label={t('pages.system.printTemplatesDesign.compHeader')} icon={<VerticalAlignTopOutlined />} onClick={() => onHeader(1)} />
         <DraggableSidebarItem type="columns" label={t('pages.system.printTemplatesDesign.compFooter')} icon={<VerticalAlignBottomOutlined />} onClick={onFooter} />
       </div>
+
+      {showPartyComponents && (
+        <>
+          <div style={{ fontWeight: 600, fontSize: 13, color: '#8c8c8c', marginTop: 12, marginBottom: 4 }}>{t('pages.system.printTemplatesDesign.compContractParty')}</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <DraggableSidebarItem type="party_a" label={t('pages.system.printTemplatesDesign.compPartyA')} icon={<TeamOutlined />} onClick={onPartySeller} />
+            <DraggableSidebarItem type="party_b" label={t('pages.system.printTemplatesDesign.compPartyB')} icon={<SafetyCertificateOutlined />} onClick={onPartyBuyer} />
+            <DraggableSidebarItem type="party_dual" label={t('pages.system.printTemplatesDesign.compPartyDual')} icon={<TeamOutlined />} onClick={onPartyDual} payload={{ kind: 'dual' }} />
+          </div>
+        </>
+      )}
       
       <div style={{ fontWeight: 600, fontSize: 13, color: '#8c8c8c', marginTop: 12, marginBottom: 4 }}>{t('pages.system.printTemplatesDesign.compLogic')}</div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
@@ -2429,11 +2542,21 @@ const PrintTemplateDesignPage: React.FC = () => {
   const handleInsertFieldToken = (key: string, label: string) => {
     const k = key.toLowerCase();
     const isFinancial = k.match(/amount|price|tax|total/) && !k.includes('quantity') && !k.includes('count');
-    const token = isFinancial ? `{{ "%.2f"|format(${key}) }} ${t('pages.system.printTemplatesDesign.yuan')}` : `{{ ${key} }}`;
+    const token = isFinancial
+      ? `{{ ${key} | money }} ${t('pages.system.printTemplatesDesign.yuan')}`
+      : `{{ ${key} }}`;
     if (!selectedBlockId) {
-      const fieldKey = isFinancial ? `${key}|format("%.2f")` : key;
-      const fieldLabel = isFinancial ? `${label} (${t('pages.system.printTemplatesDesign.yuan')})` : label;
-      handleInsertField(fieldKey, fieldLabel);
+      if (isFinancial) {
+        const item: DesignerNodeSchema = {
+          id: `text-${Date.now()}`,
+          type: 'text',
+          content: token.trim(),
+        };
+        setSchemaBlocks((prev) => [...prev, item]);
+        setSelectedBlockId(item.id);
+      } else {
+        handleInsertField(key, label);
+      }
       return;
     }
     let consumed = false;
@@ -2540,15 +2663,26 @@ const PrintTemplateDesignPage: React.FC = () => {
     const item: DesignerNodeSchema = {
       id: `seal-${Date.now()}`,
       type: 'seal_overlay',
-      url: '{{ company_seal }}',
-      width: 88,
-      height: 88,
-      keepRatio: true,
-      content: t('pages.system.printTemplatesDesign.sealOverlayDefaultContent'),
-      sealAlign: 'center',
-      minHeight: 88,
-      style: { fontSize: '10px' },
+      ...createDefaultSealOverlayFields(t('pages.system.printTemplatesDesign.sealOverlayDefaultContent')),
     };
+    setSchemaBlocks((prev) => [...prev, item]);
+    setSelectedBlockId(item.id);
+  };
+
+  const handleInsertPartySeller = () => {
+    const item = createPartySellerComponent();
+    setSchemaBlocks((prev) => [...prev, item]);
+    setSelectedBlockId(item.id);
+  };
+
+  const handleInsertPartyBuyer = () => {
+    const item = createPartyBuyerComponent();
+    setSchemaBlocks((prev) => [...prev, item]);
+    setSelectedBlockId(item.id);
+  };
+
+  const handleInsertPartyDual = () => {
+    const item = createPartyDualColumnsComponent();
     setSchemaBlocks((prev) => [...prev, item]);
     setSelectedBlockId(item.id);
   };
@@ -2828,15 +2962,17 @@ const PrintTemplateDesignPage: React.FC = () => {
           newBlock = {
             id,
             type: 'seal_overlay',
-            url: '{{ company_seal }}',
-            width: 88,
-            height: 88,
-            keepRatio: true,
-            content: t('pages.system.printTemplatesDesign.sealOverlayDefaultContent'),
-            sealAlign: 'center',
-            minHeight: 88,
-            style: { fontSize: '10px' },
+            ...createDefaultSealOverlayFields(t('pages.system.printTemplatesDesign.sealOverlayDefaultContent')),
           };
+          break;
+        case 'party_a':
+          newBlock = createPartySellerComponent();
+          break;
+        case 'party_b':
+          newBlock = createPartyBuyerComponent();
+          break;
+        case 'party_dual':
+          newBlock = createPartyDualColumnsComponent();
           break;
         case 'spacer':
           newBlock = { id, type: 'spacer', height: 20 };
@@ -2869,14 +3005,14 @@ const PrintTemplateDesignPage: React.FC = () => {
           });
         };
         setSchemaBlocks(prev => insertIntoCol(prev));
-        setSelectedBlockId(id);
+        setSelectedBlockId(newBlock.id);
         return;
       }
 
       // Drop onto the ROOT CANVAS (empty area)
       if (overData?.type === 'root') {
         setSchemaBlocks(prev => [...prev, newBlock]);
-        setSelectedBlockId(id);
+        setSelectedBlockId(newBlock.id);
         return;
       }
 
@@ -2900,7 +3036,7 @@ const PrintTemplateDesignPage: React.FC = () => {
       } else {
         setSchemaBlocks(prev => [...prev, newBlock]);
       }
-      setSelectedBlockId(id);
+      setSelectedBlockId(newBlock.id);
     }
   };
 
@@ -3187,6 +3323,9 @@ const PrintTemplateDesignPage: React.FC = () => {
                 onSpacer={handleInsertSpacer}
                 onLogo={handleInsertLogo}
                 onSealOverlay={handleInsertSealOverlay}
+                onPartySeller={handleInsertPartySeller}
+                onPartyBuyer={handleInsertPartyBuyer}
+                onPartyDual={handleInsertPartyDual}
                 onHeader={handleInsertHeaderPreset}
                 onFooter={handleInsertFooterPreset}
                 templateType={templateType}
@@ -3805,6 +3944,8 @@ const PrintTemplateDesignPage: React.FC = () => {
                     <Space orientation="vertical" style={{ width: '100%' }} size={12}>
                       <div style={{ background: token.colorFillTertiary, padding: '8px 12px', borderRadius: 6, fontSize: 12, color: token.colorTextSecondary }}>
                         {t('pages.system.printTemplatesDesign.sealOverlayHint')}
+                        {' '}
+                        {t('pages.system.printTemplatesDesign.sealSizeHint')}
                       </div>
                       <div>
                         <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.sealOverlayContent')}</div>
@@ -3827,17 +3968,13 @@ const PrintTemplateDesignPage: React.FC = () => {
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                         <div>
-                          <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.widthPx')}</div>
-                          <InputNumber style={{ width: '100%' }} value={selectedBlock.width} onChange={v => updateSelectedBlock({ width: v || 88 })} />
+                          <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.sealWidthMm')}</div>
+                          <InputNumber min={10} max={80} style={{ width: '100%' }} value={selectedBlock.width ?? SEAL_OVERLAY_DEFAULT_SIZE_MM} onChange={v => updateSelectedBlock({ width: v || SEAL_OVERLAY_DEFAULT_SIZE_MM, sizeUnit: 'mm' })} />
                         </div>
                         <div>
-                          <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.heightPx')} {selectedBlock.keepRatio !== false && <span style={{ color: '#bfbfbf' }}>{t('pages.system.printTemplatesDesign.auto')}</span>}</div>
-                          <InputNumber disabled={selectedBlock.keepRatio !== false} style={{ width: '100%' }} value={selectedBlock.height} onChange={v => updateSelectedBlock({ height: v || 88 })} />
+                          <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.sealHeightMm')} {selectedBlock.keepRatio !== false && <span style={{ color: '#bfbfbf' }}>{t('pages.system.printTemplatesDesign.auto')}</span>}</div>
+                          <InputNumber min={10} max={80} disabled={selectedBlock.keepRatio !== false} style={{ width: '100%' }} value={selectedBlock.height ?? SEAL_OVERLAY_DEFAULT_SIZE_MM} onChange={v => updateSelectedBlock({ height: v || SEAL_OVERLAY_DEFAULT_SIZE_MM, sizeUnit: 'mm' })} />
                         </div>
-                      </div>
-                      <div>
-                        <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.minHeightPx')}</div>
-                        <InputNumber min={40} max={400} style={{ width: '100%' }} value={selectedBlock.minHeight ?? selectedBlock.height} onChange={v => updateSelectedBlock({ minHeight: v || 88 })} />
                       </div>
                       <div>
                         <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.sealAlign')}</div>

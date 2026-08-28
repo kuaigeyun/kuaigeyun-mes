@@ -33,3 +33,22 @@
     border-bottom: none !important;
   }
 }
+
+/*
+ * 虚线「添加」按钮默认主题色（费用明细 / 收款计划 / 合同条款），
+ * 与 UniTableDetail 右上角添加操作一致。
+ */
+.ant-btn.document-subline-add-btn.ant-btn-dashed {
+  color: var(--ant-color-primary, #1677ff);
+  border-color: var(--ant-color-primary, #1677ff);
+
+  &:not(:disabled):hover {
+    color: var(--ant-color-primary-hover, #4096ff);
+    border-color: var(--ant-color-primary-hover, #4096ff);
+  }
+
+  &:not(:disabled):active {
+    color: var(--ant-color-primary-active, #0958d9);
+    border-color: var(--ant-color-primary-active, #0958d9);
+  }
+}

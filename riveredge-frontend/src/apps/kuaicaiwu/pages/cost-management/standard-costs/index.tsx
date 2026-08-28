@@ -9,14 +9,10 @@ import {
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, Button, Popconfirm, Space } from 'antd';
+import { App, Button, Popconfirm } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { UniTable } from '../../../../../components/uni-table';
-import {
-  UniTableStackedPrimaryCell,
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { standardCostService, type StandardCost } from '../../../services/cost/standard-cost';
 import {
@@ -36,6 +32,8 @@ import {
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
+import { MarkerTag } from '../../../../../constants/statusBadges';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 
 const StandardCostsPage: React.FC = () => {
   const { t } = useTranslation();
@@ -75,44 +73,55 @@ const StandardCostsPage: React.FC = () => {
         targetName: t('app.kuaicaiwu.standardCost.col.targetName'),
       }),
       {
-        title: t('app.kuaicaiwu.standardCost.col.targetName'),
-        key: 'finance_doc_partner_stacked',
-        dataIndex: 'target_name',
-        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-        fixed: 'left',
+        title: t('app.kuaicaiwu.standardCost.col.targetCode'),
+        dataIndex: 'target_code',
+        width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
         hideInSearch: true,
         sorter: true,
-        render: (_, r) => (
-          <UniTableStackedPrimaryCell
-            primary={String(r.target_name ?? '')}
-            secondary={String(r.target_code ?? '')}
-          />
-        ),
       },
-      { title: t('app.kuaicaiwu.standardCost.col.targetCode'), dataIndex: 'target_code', hideInTable: true },
+      {
+        title: t('app.kuaicaiwu.standardCost.col.targetName'),
+        dataIndex: 'target_name',
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
+        hideInSearch: true,
+        sorter: true,
+      },
       {
         title: t('app.kuaicaiwu.standardCost.col.targetType'),
         dataIndex: 'target_type',
-        width: 100,
-        minWidth: 100,
-        uniTableKeepWidth: true,
-        resizable: false,
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         hideInSearch: true,
         sorter: true,
-        render: (_, r) => formatTargetType(r.target_type, t),
+        render: (_, r) => <MarkerTag>{formatTargetType(r.target_type, t)}</MarkerTag>,
       },
       {
         title: t('app.kuaicaiwu.standardCost.col.costItemType'),
         dataIndex: 'cost_item_type',
-        width: 100,
-        minWidth: 100,
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+        hideInSearch: true,
+        sorter: true,
+        render: (_, r) => <MarkerTag>{formatCostItemType(r.cost_item_type, t)}</MarkerTag>,
+      },
+      {
+        title: t('app.kuaicaiwu.standardCost.col.standardValue'),
+        dataIndex: 'standard_value',
+        valueType: 'money',
+        align: 'right',
+        width: 120,
+        minWidth: 120,
         uniTableKeepWidth: true,
         resizable: false,
         hideInSearch: true,
         sorter: true,
-        render: (_, r) => formatCostItemType(r.cost_item_type, t),
       },
-      { title: t('app.kuaicaiwu.standardCost.col.standardValue'), dataIndex: 'standard_value', valueType: 'money', align: 'right', hideInSearch: true, sorter: true },
       {
         title: t('common.unit'),
         dataIndex: 'unit',
@@ -175,12 +184,22 @@ const StandardCostsPage: React.FC = () => {
         sorter: true,
       },
       {
+        // 备注长短不一：唯一 RemainderFlex
+        title: t('common.remark'),
+        dataIndex: 'description',
+        key: 'notes',
+        minWidth: 160,
+        uniTableRemainderFlex: true,
+        uniTablePrimaryFlex: true,
+        resizable: false,
+        ellipsis: true,
+        hideInSearch: true,
+        render: (_, r) => r.description || '—',
+      },
+      {
         title: t('common.status'),
         dataIndex: 'is_active',
-        width: 80,
-        minWidth: 80,
-        uniTableKeepWidth: true,
-        resizable: false,
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         hideInSearch: true,
         sorter: true,
         valueType: 'select',
@@ -200,36 +219,31 @@ const StandardCostsPage: React.FC = () => {
       {
         title: t('common.actions'),
         key: 'action',
-        valueType: 'option',
         fixed: 'right',
         hideInSearch: true,
-        render: (_, record) => (
-          <Space size={0}>
-            <Button
-              {...rowActionKind('update')}
-              size="small"
-              onClick={() => {
-                setEditing(record);
-                setModalVisible(true);
-              }}
-            >
-              {t('common.edit')}
-            </Button>
-            <Popconfirm
-              {...rowActionKind('delete')}
-              title={t('app.kuaicaiwu.standardCost.confirmDelete')}
-              onConfirm={async () => {
-                await standardCostService.delete(record.id);
-                messageApi.success(t('common.deleteSuccess'));
-                actionRef.current?.reload();
-              }}
-            >
-              <Button type="link" danger size="small">
-                {t('common.delete')}
-              </Button>
-            </Popconfirm>
-          </Space>
-        ),
+        render: (_, record) => [
+          <Button
+            key="edit"
+            type="link"
+            size="small"
+            {...rowActionKind('update')}
+            onClick={() => {
+              setEditing(record);
+              setModalVisible(true);
+            }}
+          />,
+          <Popconfirm
+            key="del"
+            title={t('app.kuaicaiwu.standardCost.confirmDelete')}
+            onConfirm={async () => {
+              await standardCostService.delete(record.id);
+              messageApi.success(t('common.deleteSuccess'));
+              actionRef.current?.reload();
+            }}
+          >
+            <Button type="link" size="small" {...rowActionKind('delete')} />
+          </Popconfirm>,
+        ],
       },
     ],
     [t, messageApi],
@@ -251,7 +265,7 @@ const StandardCostsPage: React.FC = () => {
       <UniTable<StandardCost>
         actionRef={actionRef}
         rowKey="id"
-        columnPersistenceId="apps.kuaicaiwu.pages.cost-management.standard-costs.list-v2"
+        columnPersistenceId="apps.kuaicaiwu.pages.cost-management.standard-costs.list-v3"
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaicaiwu.standardCosts')}
         columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}

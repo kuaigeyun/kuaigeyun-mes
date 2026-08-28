@@ -6,12 +6,11 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { rowActionKind } from '../../../../components/uni-action';
+import { rowActionKind, rowActionLabelKeep } from '../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Space, Modal, message, Input, Badge, Row, Col, Select } from 'antd';
-import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, PlayCircleOutlined, PauseCircleOutlined } from '@ant-design/icons';
+import { App, Popconfirm, Button, Modal, Input, Row, Col, Select } from 'antd';
 import { UniTable } from '../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../utils/errorHandler';
@@ -30,13 +29,10 @@ import {
   CreateScheduledTaskData,
   UpdateScheduledTaskData,
 } from '../../../../services/scheduledTask';
-import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
 import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 import { todaySiteDateString } from '../../../../utils/format';
 import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
-
-const { TextArea } = Input;
 
 /**
  * 定时任务管理列表页面组件
@@ -287,22 +283,35 @@ const ScheduledTaskListPage: React.FC = () => {
     {
       title: t('field.scheduledTask.name'),
       dataIndex: 'name',
-      width: 200,
-      fixed: 'left',
+      key: 'name',
+      width: 160,
+      minWidth: 160,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
     },
     {
       title: t('field.scheduledTask.code'),
       dataIndex: 'code',
-      width: 150,
+      key: 'code',
+      width: 140,
+      minWidth: 140,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
     },
     {
       title: t('field.scheduledTask.type'),
       dataIndex: 'type',
+      key: 'type',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'select',
       valueEnum: {
-        python_script: { text: t('field.scheduledTask.typePython'), status: 'Processing' },
-        api_call: { text: t('field.scheduledTask.typeApi'), status: 'Success' },
+        python_script: { text: t('field.scheduledTask.typePython') },
+        api_call: { text: t('field.scheduledTask.typeApi') },
       },
       render: (_, record) => {
         const typeMap: Record<string, { color: string; textKey: string }> = {
@@ -310,18 +319,22 @@ const ScheduledTaskListPage: React.FC = () => {
           api_call: { color: 'green', textKey: 'field.scheduledTask.typeApi' },
         };
         const typeInfo = typeMap[record.type] || { color: 'default', textKey: record.type };
-        return <Tag color={typeInfo.color}>{t(typeInfo.textKey)}</Tag>;
+        return <MarkerTag color={typeInfo.color}>{t(typeInfo.textKey)}</MarkerTag>;
       },
     },
     {
       title: t('field.scheduledTask.triggerType'),
       dataIndex: 'trigger_type',
-      width: 120,
+      key: 'trigger_type',
+      width: 110,
+      minWidth: 110,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'select',
       valueEnum: {
-        cron: { text: t('field.scheduledTask.triggerCron'), status: 'Success' },
-        interval: { text: t('field.scheduledTask.triggerInterval'), status: 'Processing' },
-        date: { text: t('field.scheduledTask.triggerDate'), status: 'Warning' },
+        cron: { text: t('field.scheduledTask.triggerCron') },
+        interval: { text: t('field.scheduledTask.triggerInterval') },
+        date: { text: t('field.scheduledTask.triggerDate') },
       },
       render: (_, record) => {
         const triggerMap: Record<string, { color: string; textKey: string }> = {
@@ -330,33 +343,41 @@ const ScheduledTaskListPage: React.FC = () => {
           date: { color: 'green', textKey: 'field.scheduledTask.triggerDate' },
         };
         const triggerInfo = triggerMap[record.trigger_type] || { color: 'default', textKey: record.trigger_type };
-        return <Tag color={triggerInfo.color}>{t(triggerInfo.textKey)}</Tag>;
+        return <MarkerTag color={triggerInfo.color}>{t(triggerInfo.textKey)}</MarkerTag>;
       },
     },
     {
       title: t('common.remark'),
       dataIndex: 'description',
+      key: 'description',
+      minWidth: 140,
+      uniTableRemainderFlex: true,
+      resizable: false,
       ellipsis: true,
       hideInSearch: true,
     },
     {
       title: t('field.scheduledTask.runStatus'),
       dataIndex: 'is_running',
+      key: 'is_running',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       render: (_, record) => (
-        <Space>
-          {record.is_running ? (
-            <Badge status="processing" text={t('field.scheduledTask.running')} />
-          ) : (
-            <Badge status="default" text={t('field.scheduledTask.notRunning')} />
-          )}
-        </Space>
+        <MarkerTag color={record.is_running ? 'processing' : 'default'}>
+          {record.is_running ? t('field.scheduledTask.running') : t('field.scheduledTask.notRunning')}
+        </MarkerTag>
       ),
     },
     {
       title: t('field.scheduledTask.lastRunAt'),
       dataIndex: 'last_run_at',
+      key: 'last_run_at',
       width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'dateTime',
       hideInSearch: true,
       sorter: true,
@@ -364,7 +385,11 @@ const ScheduledTaskListPage: React.FC = () => {
     {
       title: t('field.scheduledTask.lastRunStatus'),
       dataIndex: 'last_run_status',
-      width: 120,
+      key: 'last_run_status',
+      width: 110,
+      minWidth: 110,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       render: (_, record) => {
         if (!record.last_run_status) {
@@ -375,13 +400,17 @@ const ScheduledTaskListPage: React.FC = () => {
           failed: { color: 'error', textKey: 'field.scheduledTask.failed' },
         };
         const statusInfo = statusMap[record.last_run_status] || { color: 'default', textKey: record.last_run_status };
-        return <Tag color={statusInfo.color}>{t(statusInfo.textKey)}</Tag>;
+        return <MarkerTag color={statusInfo.color}>{t(statusInfo.textKey)}</MarkerTag>;
       },
     },
     {
       title: t('common.createdAt'),
       dataIndex: 'created_at',
+      key: 'created_at',
       width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'dateTime',
       hideInSearch: true,
       sorter: true,
@@ -391,13 +420,14 @@ const ScheduledTaskListPage: React.FC = () => {
       dataIndex: 'is_active',
       key: 'lifecycle',
       width: 100,
+      minWidth: 100,
       fixed: 'right',
       uniTableKeepWidth: true,
       resizable: false,
       valueType: 'select',
       valueEnum: {
-        true: { text: t('common.enabled'), status: 'Success' },
-        false: { text: t('common.disabled'), status: 'Default' },
+        true: { text: t('common.enabled') },
+        false: { text: t('common.disabled') },
       },
       render: (_, record) => (
         <StatusTag color={record.is_active ? 'success' : 'default'}>
@@ -407,53 +437,39 @@ const ScheduledTaskListPage: React.FC = () => {
     },
     {
       title: t('common.actions'),
-      valueType: 'option',
+      key: 'action',
       fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button key="view" {...rowActionKind('read')}
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleView(record)}
+      hideInSearch: true,
+      render: (_, record) => [
+        <Button key="view" {...rowActionKind('read')} onClick={() => handleView(record)} />,
+        <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)} />,
+        record.is_active ? (
+          <Button
+            key="stop"
+            {...rowActionKind('execute')}
+            {...rowActionLabelKeep()}
+            onClick={() => handleStop(record)}
           >
-            {t('common.view')}
+            {t('field.scheduledTask.stop')}
           </Button>
-          <Button key="edit" {...rowActionKind('update')}
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
+        ) : (
+          <Button
+            key="execute"
+            {...rowActionKind('execute')}
+            {...rowActionLabelKeep()}
+            onClick={() => handleStart(record)}
           >
-            {t('common.edit')}
+            {t('field.scheduledTask.start')}
           </Button>
-          {record.is_active ? (
-            <Button key="stop" {...rowActionKind('execute')}
-              size="small"
-              icon={<PauseCircleOutlined />}
-              onClick={() => handleStop(record)}
-            >
-              {t('field.scheduledTask.stop')}
-            </Button>
-          ) : (
-            <Button key="execute" {...rowActionKind('execute')}
-              size="small"
-              icon={<PlayCircleOutlined />}
-              onClick={() => handleStart(record)}
-            >
-              {t('field.scheduledTask.start')}
-            </Button>
-          )}
-          <Popconfirm key="delete" {...rowActionKind('delete')} title={t('field.scheduledTask.deleteConfirm')}
-            onConfirm={() => handleDelete(record)}
-          >
-            <Button
-              size="small"
-              icon={<DeleteOutlined />}
-            >
-              {t('common.delete')}
-            </Button>
-          </Popconfirm>
-        </Space>
-      ),
+        ),
+        <Popconfirm
+          key="delete"
+          title={t('field.scheduledTask.deleteConfirm')}
+          onConfirm={() => handleDelete(record)}
+        >
+          <Button {...rowActionKind('delete')} />
+        </Popconfirm>,
+      ],
     },
   ];
 
@@ -463,7 +479,7 @@ const ScheduledTaskListPage: React.FC = () => {
         <UniTable<ScheduledTask>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('infra.scheduledTasks')}
-          columnPersistenceId="pages.infra.scheduled-tasks.list-v2"
+          columnPersistenceId="pages.infra.scheduled-tasks.list-v3"
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {

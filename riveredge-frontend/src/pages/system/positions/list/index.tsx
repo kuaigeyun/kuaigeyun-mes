@@ -13,7 +13,7 @@ import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pr
 import { App, Popconfirm, Button, Space, message, Modal, Table } from 'antd';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { renderSystemActiveTag } from '../../utils/systemListPresentation';
-import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../utils/uniTableLayoutColumns';
 import { UniTable } from '../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../utils/errorHandler';
@@ -199,28 +199,33 @@ const PositionListPage: React.FC = () => {
       title: t('field.position.name'),
       dataIndex: 'name',
       key: 'name',
-      width: 150,
-      minWidth: 150,
+      width: 160,
+      minWidth: 160,
       uniTableKeepWidth: true,
       resizable: false,
-      fixed: 'left',
       sorter: true,
+      ellipsis: true,
       render: (_, record) => resolvePresetPositionName(record, t),
     },
     {
       title: t('field.position.code'),
       dataIndex: 'code',
       key: 'code',
-      width: 150,
-      minWidth: 150,
+      width: 140,
+      minWidth: 140,
       uniTableKeepWidth: true,
       resizable: false,
       copyable: true,
+      ellipsis: true,
     },
     {
       title: t('field.position.departmentUuid'),
       dataIndex: 'department_uuid',
-      width: 200,
+      width: 160,
+      minWidth: 160,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
       valueType: 'treeSelect',
       fieldProps: {
         treeData: deptTreeData,
@@ -229,8 +234,13 @@ const PositionListPage: React.FC = () => {
       render: (_, record) => record.department?.name || '-',
     },
     {
+      // 备注长短不一：唯一 RemainderFlex
       title: t('common.remark'),
       dataIndex: 'description',
+      minWidth: 140,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
+      resizable: false,
       ellipsis: true,
       hideInSearch: true,
     },
@@ -258,10 +268,7 @@ const PositionListPage: React.FC = () => {
       title: t('common.status'),
       dataIndex: 'is_active',
       key: 'is_active',
-      width: 100,
-      minWidth: 100,
-      uniTableKeepWidth: true,
-      resizable: false,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       valueType: 'select',
       valueEnum: {
         true: { text: t('common.enabled'), status: 'Success' },
@@ -295,20 +302,13 @@ const PositionListPage: React.FC = () => {
     {
       title: t('common.actions'),
       key: 'action',
-      valueType: 'option',
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) => [
-            <Button {...rowActionKind('read')} key="view" onClick={() => handleView(record)}>
-              {t('common.view')}
-            </Button>,
-            <Button {...rowActionKind('update')} key="edit" onClick={() => handleEdit(record)}>
-              {t('common.edit')}
-            </Button>,
-            <Popconfirm {...rowActionKind('delete')} key="delete" title={t('field.position.deleteConfirm')} onConfirm={() => handleDelete(record)}>
-              <Button type="link" danger size="small" icon={<DeleteOutlined />}>
-                {t('common.delete')}
-              </Button>
+            <Button {...rowActionKind('read')} key="view" onClick={() => handleView(record)} />,
+            <Button {...rowActionKind('update')} key="edit" onClick={() => handleEdit(record)} />,
+            <Popconfirm key="delete" title={t('field.position.deleteConfirm')} onConfirm={() => handleDelete(record)}>
+              <Button {...rowActionKind('delete')} />
             </Popconfirm>,
           ],
     },
@@ -318,7 +318,7 @@ const PositionListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<Position>
-          columnPersistenceId="pages.system.positions.list-v1"
+          columnPersistenceId="pages.system.positions.list-v2"
           viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('system.positions')}
           actionRef={actionRef}

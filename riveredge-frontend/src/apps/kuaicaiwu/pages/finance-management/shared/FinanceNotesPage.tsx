@@ -10,7 +10,7 @@ import {
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { Alert, App, Button, Descriptions, Modal, Popconfirm, Space } from 'antd';
+import { Alert, App, Button, Descriptions, Modal, Popconfirm } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
@@ -25,7 +25,6 @@ import {
 import { UniTable } from '../../../../../components/uni-table';
 import {
   UniTableStackedPrimaryCell,
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import { apiRequest } from '../../../../../services/api';
@@ -46,6 +45,14 @@ import {
 } from '../../../utils/financeUiLabels';
 import { renderFinanceTypeMarker } from '../../../utils/financeListPresentation';
 import { FINANCE_DOC_PINNED_STATUS_FIELD, financeDocCreatedUpdatedColumns } from '../../../utils/financeListCore';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
+import {
+  rowActionKind,
+  rowActionNoteCollect,
+  rowActionNoteDiscount,
+  rowActionNoteEndorse,
+  rowActionNoteHonor,
+} from '../../../../../components/uni-action';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 type Props = {
@@ -130,10 +137,15 @@ const FinanceNotesPage: React.FC<Props> = ({ direction, resource, columnPersiste
             hideInTable: true,
           },
           {
+            // 有 RemainderFlex：主标识叠列 KeepWidth
             title: t(`${NS}.col.billNo`),
             key: 'finance_note_stacked',
             dataIndex: 'bill_no',
-            ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+            width: 240,
+            minWidth: 240,
+            uniTableKeepWidth: true,
+            uniTablePrimaryFlex: false,
+            resizable: false,
             fixed: 'left',
             hideInSearch: true,
             sorter: true,
@@ -146,18 +158,21 @@ const FinanceNotesPage: React.FC<Props> = ({ direction, resource, columnPersiste
           },
           {
             title: partnerLabel,
+            key: 'finance_note_partner',
             dataIndex: isReceivable ? 'customer_name' : 'supplier_name',
+            width: 160,
+            minWidth: 160,
+            uniTableKeepWidth: true,
+            resizable: false,
             ellipsis: true,
             hideInSearch: true,
             sorter: true,
           },
           {
             title: t(`${NS}.col.billType`),
+            key: 'finance_note_bill_type',
             dataIndex: 'bill_type',
-            width: 100,
-            minWidth: 100,
-            uniTableKeepWidth: true,
-            resizable: false,
+            ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
             hideInSearch: true,
             sorter: true,
             render: (_, r) =>
@@ -165,9 +180,14 @@ const FinanceNotesPage: React.FC<Props> = ({ direction, resource, columnPersiste
           },
           {
             title: t(`${NS}.col.amount`),
+            key: 'finance_note_amount',
             dataIndex: 'amount',
             valueType: 'money',
             align: 'right',
+            width: 120,
+            minWidth: 120,
+            uniTableKeepWidth: true,
+            resizable: false,
             hideInSearch: true,
             sorter: true,
           },
@@ -201,62 +221,101 @@ const FinanceNotesPage: React.FC<Props> = ({ direction, resource, columnPersiste
             formItemProps: formDateRangeFormItemProps,
           },
           {
+            // 备注长短不一：唯一 RemainderFlex
+            title: t('common.remark'),
+            key: 'finance_note_notes',
+            dataIndex: 'notes',
+            minWidth: 160,
+            uniTableRemainderFlex: true,
+            uniTablePrimaryFlex: true,
+            resizable: false,
+            ellipsis: true,
+            hideInSearch: true,
+            render: (_, r) => r.notes || '—',
+          },
+          {
             title: t('common.status'),
             dataIndex: 'status',
             valueType: 'select',
             valueEnum: Object.fromEntries(
               getNoteStatusSelectOptions(direction, t).map((o) => [o.value, { text: o.label }]),
             ),
-            width: 100,
-            minWidth: 100,
-            uniTableKeepWidth: true,
-            resizable: false,
-            ...FINANCE_DOC_PINNED_STATUS_FIELD,
+            ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+            hideInSearch: true,
             render: (_, r) => statusTag(String(r.status)),
           },
           ...financeDocCreatedUpdatedColumns(t),
           {
             title: t('common.actions'),
-            key: 'actions',
-            width: 160,
+            key: 'action',
             fixed: 'right',
             hideInSearch: true,
             render: (_, r) => {
               const actions: React.ReactNode[] = [];
               if (perms.canRead) {
                 actions.push(
-                  <a key="view" onClick={() => { setDetail(r); setDetailOpen(true); }}>
-                    {t('common.view')}
-                  </a>,
+                  <Button
+                    key="view"
+                    type="link"
+                    size="small"
+                    {...rowActionKind('read')}
+                    onClick={() => {
+                      setDetail(r);
+                      setDetailOpen(true);
+                    }}
+                  />,
                 );
               }
               const active = isReceivable ? r.status === 'held' : r.status === 'issued';
               if (active && perms.canUpdate) {
                 if (isReceivable) {
                   actions.push(
-                    <a key="endorse" onClick={() => setActionModal({ note: r, action: 'endorse' })}>
-                      {t(`${NS}.action.endorse`)}
-                    </a>,
-                    <a key="discount" onClick={() => setActionModal({ note: r, action: 'discount' })}>
-                      {t(`${NS}.action.discount`)}
-                    </a>,
-                    <a key="collect" onClick={() => setActionModal({ note: r, action: 'collect' })}>
-                      {t(`${NS}.action.collect`)}
-                    </a>,
+                    <Button
+                      key="endorse"
+                      type="link"
+                      size="small"
+                      {...rowActionNoteEndorse('update')}
+                      onClick={() => setActionModal({ note: r, action: 'endorse' })}
+                    />,
+                    <Button
+                      key="discount"
+                      type="link"
+                      size="small"
+                      {...rowActionNoteDiscount('update')}
+                      onClick={() => setActionModal({ note: r, action: 'discount' })}
+                    />,
+                    <Button
+                      key="collect"
+                      type="link"
+                      size="small"
+                      {...rowActionNoteCollect('update')}
+                      onClick={() => setActionModal({ note: r, action: 'collect' })}
+                    />,
                   );
                 } else {
                   actions.push(
-                    <a key="honor" onClick={() => setActionModal({ note: r, action: 'honor' })}>
-                      {t(`${NS}.action.honor`)}
-                    </a>,
+                    <Button
+                      key="honor"
+                      type="link"
+                      size="small"
+                      {...rowActionNoteHonor('update')}
+                      onClick={() => setActionModal({ note: r, action: 'honor' })}
+                    />,
                   );
                 }
               }
               if (active && perms.canUpdate) {
                 actions.push(
-                  <a key="edit" onClick={() => { setEditing(r); setModalOpen(true); }}>
-                    {t('common.edit')}
-                  </a>,
+                  <Button
+                    key="edit"
+                    type="link"
+                    size="small"
+                    {...rowActionKind('update')}
+                    onClick={() => {
+                      setEditing(r);
+                      setModalOpen(true);
+                    }}
+                  />,
                 );
               }
               if (active && perms.canDelete) {
@@ -274,17 +333,17 @@ const FinanceNotesPage: React.FC<Props> = ({ direction, resource, columnPersiste
                       }
                     }}
                   >
-                    <a>{t('common.delete')}</a>
+                    <Button type="link" size="small" {...rowActionKind('delete')} />
                   </Popconfirm>,
                 );
               }
-              return <Space size="small" split="|">{actions}</Space>;
+              return actions;
             },
           },
         ],
         SALES_DOC_LIST_FIELD_RANK,
       ),
-    [direction, isReceivable, partnerLabel, perms, statusTag, t],
+    [direction, isReceivable, messageApi, partnerLabel, perms, statusTag, t],
   );
 
   const filterAlert = expiringDays ? (
@@ -315,6 +374,7 @@ const FinanceNotesPage: React.FC<Props> = ({ direction, resource, columnPersiste
           isReceivable ? DOCUMENT_LIST_HELP_KEYS.notesReceivable : DOCUMENT_LIST_HELP_KEYS.notesPayable,
         )}
         columns={columns}
+        pinnedTabsField={FINANCE_DOC_PINNED_STATUS_FIELD}
         headerTitle={isReceivable ? t(`${NS}.titleReceivable`) : t(`${NS}.titlePayable`)}
         toolBarRender={() =>
           perms.canCreate

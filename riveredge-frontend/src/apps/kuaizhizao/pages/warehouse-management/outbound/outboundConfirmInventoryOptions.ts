@@ -179,6 +179,16 @@ async function resolveWarehouseFifoMode(): Promise<WarehouseFifoMode> {
   }
 }
 
+/** 租户仓存参数：是否允许负库存出库（与 InventoryService 扣减真源一致） */
+export async function resolveAllowNegativeInventory(): Promise<boolean> {
+  try {
+    const cfg = await getBusinessConfig();
+    return Boolean(cfg?.parameters?.warehouse?.allow_negative_inventory);
+  } catch {
+    return false;
+  }
+}
+
 export async function loadBatchOptionsByMaterialId(
   materialIds: number[],
   warehouseId?: number,

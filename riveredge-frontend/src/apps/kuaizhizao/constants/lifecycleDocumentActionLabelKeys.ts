@@ -4,7 +4,6 @@
  */
 export const LIFECYCLE_DOCUMENT_ACTION_LABEL_KEYS = {
   salesOrderFromSalesContract: 'app.kuaizhizao.documentAction.sales_order.pull_from_sales_contract.label',
-  workOrderFromSalesContract: 'app.kuaizhizao.documentAction.work_order.pull_from_sales_contract.label',
   demandComputationFromSalesOrder: 'app.kuaizhizao.documentAction.demand_computation.pull_from_sales_order.label',
   demandComputationFromSalesForecast: 'app.kuaizhizao.documentAction.demand_computation.pull_from_sales_forecast.label',
   demandComputationFromDemand: 'app.kuaizhizao.documentAction.demand_computation.pull_from_demand.label',

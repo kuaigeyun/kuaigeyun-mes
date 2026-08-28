@@ -8,7 +8,7 @@
 
 import type { TFunction } from 'i18next';
 
-export type PlatformUpdateType = 'feature' | 'improvement' | 'fix' | 'security';
+export type PlatformUpdateType = 'major' | 'feature' | 'improvement' | 'fix' | 'security';
 
 export interface PlatformUpdateLogEntry {
   id: string;
@@ -21,6 +21,7 @@ export interface PlatformUpdateLogEntry {
 
 /** 更新类型展示顺序（Modal 分组） */
 export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
+  'major',
   'feature',
   'improvement',
   'fix',
@@ -32,6 +33,69 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  * titleKey / descriptionKey 对应 pages.dashboard.updateLog.entries.{id}.*
  */
 export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
+  {
+    id: 'sales-contract-print-rmb-uppercase',
+    date: '2026-08-28',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-contract-print-rmb-uppercase.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.sales-contract-print-rmb-uppercase.description',
+  },
+  {
+    id: 'confidential-files-terminology',
+    date: '2026-08-28',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.confidential-files-terminology.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.confidential-files-terminology.description',
+  },
+  {
+    id: 'private-files-vault-and-company-seal',
+    date: '2026-08-28',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.private-files-vault-and-company-seal.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.private-files-vault-and-company-seal.description',
+  },
+  {
+    id: 'sales-order-framework-contract-merge',
+    date: '2026-08-28',
+    type: 'major',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-order-framework-contract-merge.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.sales-order-framework-contract-merge.description',
+  },
+  {
+    id: 'warehouse-allow-negative-inventory',
+    date: '2026-08-28',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.warehouse-allow-negative-inventory.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.warehouse-allow-negative-inventory.description',
+  },
+  {
+    id: 'mrp-dual-source-primary-and-net-cover',
+    date: '2026-08-28',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.mrp-dual-source-primary-and-net-cover.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.mrp-dual-source-primary-and-net-cover.description',
+  },
+  {
+    id: 'mrp-process-route-resolve-priority',
+    date: '2026-08-28',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.mrp-process-route-resolve-priority.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.mrp-process-route-resolve-priority.description',
+  },
+  {
+    id: 'sales-contract-amount-framework',
+    date: '2026-08-28',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-contract-amount-framework.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.sales-contract-amount-framework.description',
+  },
+  {
+    id: 'bom-create-version-unique-guard',
+    date: '2026-08-28',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.bom-create-version-unique-guard.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.bom-create-version-unique-guard.description',
+  },
   {
     id: 'inspection-plan-copy-create',
     date: '2026-08-27',
@@ -1030,6 +1094,8 @@ export function resolveUpdateLogText(
 
 export function getUpdateTypeMarkerColor(type: PlatformUpdateType): string {
   switch (type) {
+    case 'major':
+      return 'purple';
     case 'feature':
       return 'success';
     case 'improvement':

@@ -14,7 +14,7 @@ import { ActionType, ProColumns, type ProDescriptionsItemProps } from '@ant-desi
 import { App, Button, Modal, Space, Tag, Typography } from 'antd';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { renderSystemTypeMarker } from '../utils/systemListPresentation';
-import { EyeOutlined, BarChartOutlined } from '@ant-design/icons';
+import { BarChartOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../components/uni-table';
 import { StatCardTrendArea } from '../../../components/common/StatCardTrendArea';
 import { ListPageTemplate } from '../../../components/layout-templates';
@@ -22,6 +22,7 @@ import { SystemMasterDetailDrawer } from '../shared/systemMasterDetailDrawer';
 import { getApiErrorMessage } from '../../../utils/errorHandler';
 import { useListPageStatCardsVisible } from '../../../components/layout-templates/listPageStatCardsContext';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
+import { rowActionKind } from '../../../components/uni-action';
 import {
   getOperationLogs,
   getOperationLogStats,
@@ -83,7 +84,7 @@ const OperationLogsPage: React.FC = () => {
   /**
    * 查看日志详情
    */
-  const loadDetail = async (uuid: string) => {
+  const loadDetail = React.useCallback(async (uuid: string) => {
     setDetailLoading(true);
     setDetailError(null);
     try {
@@ -95,15 +96,15 @@ const OperationLogsPage: React.FC = () => {
     } finally {
       setDetailLoading(false);
     }
-  };
+  }, [t]);
 
-  const handleViewDetail = async (record: OperationLog) => {
+  const handleViewDetail = React.useCallback(async (record: OperationLog) => {
     detailRetryUuidRef.current = record.uuid;
     setDetailDrawerVisible(true);
     setCurrentLog(null);
     setDetailError(null);
     void loadDetail(record.uuid);
-  };
+  }, [loadDetail]);
 
   /**
    * 操作类型标签
@@ -168,12 +169,12 @@ const OperationLogsPage: React.FC = () => {
     { title: t('pages.system.operationLogs.operationType'), dataIndex: 'operation_type', render: (_: React.ReactNode, record: OperationLog) => getOperationTypeTag(record.operation_type) },
     { title: t('pages.system.operationLogs.operationModule'), dataIndex: 'operation_module', render: (_: React.ReactNode, record: OperationLog) => formatModuleName(record.operation_module) },
     { title: t('pages.system.operationLogs.operationObjectType'), dataIndex: 'operation_object_type', render: (_: React.ReactNode, record: OperationLog) => record.operation_object_type || '-' },
-    { title: t('pages.system.operationLogs.operationContent'), dataIndex: 'operation_content', span: 2, render: (_: React.ReactNode, record: OperationLog) => (<div style={{ wordBreak: 'break-word' }}>{formatOperationContent(record.operation_content, record.operation_object_type)}</div>) },
+    { title: t('pages.system.operationLogs.operationContent'), dataIndex: 'operation_content', render: (_: React.ReactNode, record: OperationLog) => (<div style={{ wordBreak: 'break-word' }}>{formatOperationContent(record.operation_content, record.operation_object_type)}</div>) },
     { title: t('pages.system.operationLogs.operator'), dataIndex: 'user_id', render: (_: React.ReactNode, record: OperationLog) => getUserDisplayName(record) },
     { title: t('pages.system.operationLogs.ipAddress'), dataIndex: 'ip_address', render: (_: React.ReactNode, record: OperationLog) => record.ip_address || '-' },
     { title: t('pages.system.operationLogs.requestMethod'), dataIndex: 'request_method', render: (_: React.ReactNode, record: OperationLog) => record.request_method || '-' },
-    { title: t('pages.system.operationLogs.requestPath'), dataIndex: 'request_path', span: 2, render: (_: React.ReactNode, record: OperationLog) => (<div style={{ wordBreak: 'break-word', fontFamily: CODE_FONT_FAMILY, fontSize: '12px' }}>{record.request_path || '-'}</div>) },
-    { title: t('pages.system.operationLogs.userAgent'), dataIndex: 'user_agent', span: 2, render: (_: React.ReactNode, record: OperationLog) => (<div style={{ wordBreak: 'break-word', maxHeight: '100px', overflow: 'auto', fontSize: '12px', color: '#666' }}>{record.user_agent || '-'}</div>) },
+    { title: t('pages.system.operationLogs.requestPath'), dataIndex: 'request_path', render: (_: React.ReactNode, record: OperationLog) => (<div style={{ wordBreak: 'break-word', fontFamily: CODE_FONT_FAMILY, fontSize: '12px' }}>{record.request_path || '-'}</div>) },
+    { title: t('pages.system.operationLogs.userAgent'), dataIndex: 'user_agent', render: (_: React.ReactNode, record: OperationLog) => (<div style={{ wordBreak: 'break-word', maxHeight: '100px', overflow: 'auto', fontSize: '12px', color: '#666' }}>{record.user_agent || '-'}</div>) },
   ];
 
   const renderDOD = (today?: number, yesterday?: number) => {
@@ -280,6 +281,9 @@ const OperationLogsPage: React.FC = () => {
       key: 'operation_module',
       ellipsis: true,
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       render: (_: React.ReactNode, record: OperationLog) => formatModuleName(record.operation_module),
     },
     {
@@ -288,15 +292,22 @@ const OperationLogsPage: React.FC = () => {
       key: 'operation_object_type',
       ellipsis: true,
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       render: (_: React.ReactNode, record: OperationLog) => record.operation_object_type || '-',
     },
     {
+      // 操作内容长短不一：唯一 RemainderFlex
       title: t('pages.system.operationLogs.operationContent'),
       dataIndex: 'operation_content',
       key: 'operation_content',
       ellipsis: true,
       search: false,
-      width: 250,
+      minWidth: 180,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
+      resizable: false,
       render: (_: React.ReactNode, record: OperationLog) => formatOperationContent(record.operation_content, record.operation_object_type),
     },
     {
@@ -305,6 +316,10 @@ const OperationLogsPage: React.FC = () => {
       key: 'user_id',
       valueType: 'digit',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
       render: (_: any, record: OperationLog) => getUserDisplayName(record),
     },
     {
@@ -340,7 +355,20 @@ const OperationLogsPage: React.FC = () => {
       width: 200,
       hideInTable: true,
     },
-  ], GLOBAL_DOC_LIST_FIELD_RANK), [t]);
+    {
+      title: t('common.actions'),
+      key: 'action',
+      fixed: 'right',
+      hideInSearch: true,
+      render: (_: unknown, record: OperationLog) => [
+        <Button
+          key="view"
+          {...rowActionKind('read')}
+          onClick={() => void handleViewDetail(record)}
+        />,
+      ],
+    },
+  ], GLOBAL_DOC_LIST_FIELD_RANK), [t, handleViewDetail]);
 
   return (
     <>
@@ -348,7 +376,7 @@ const OperationLogsPage: React.FC = () => {
         <UniTable<OperationLog>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('system.operationLogs')}
-          columnPersistenceId="pages.system.operation-logs.list-v1"
+          columnPersistenceId="pages.system.operation-logs.list-v3"
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {
@@ -439,16 +467,6 @@ const OperationLogsPage: React.FC = () => {
             </Button>,
           ]}
           headerTitle={t('pages.system.operationLogs.headerTitle')}
-          onDetail={async (keys: React.Key[]) => {
-            if (keys.length === 1) {
-              const uuid = String(keys[0]);
-              detailRetryUuidRef.current = uuid;
-              setDetailDrawerVisible(true);
-              setCurrentLog(null);
-              setDetailError(null);
-              void loadDetail(uuid);
-            }
-          }}
         />
       </ListPageTemplate>
 
@@ -462,6 +480,7 @@ const OperationLogsPage: React.FC = () => {
         }}
         detail={currentLog}
         detailColumns={detailColumns}
+        basicColumn={1}
         loading={detailLoading}
         error={detailError}
         onRetry={() => {

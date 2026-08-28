@@ -93,11 +93,32 @@ def render_plain_template(template_content: str, data: Dict[str, Any]) -> str:
     return result
 
 
+def _coerce_jinja_number(value: Any) -> Any:
+    """将打印变量中的数字字符串转为 float，供 format/round 等过滤器使用。"""
+    if value is None or value == "":
+        return 0.0
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, (int, float)):
+        return value
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, str):
+        normalized = value.strip().replace(",", "")
+        if not normalized:
+            return 0.0
+        try:
+            return float(normalized)
+        except ValueError:
+            return value
+    return value
+
+
 def _jinja_filter_money(value: Any) -> str:
     if value is None or value == "":
         return "0.00"
     try:
-        return f"{float(value):,.2f}"
+        return f"{float(_coerce_jinja_number(value)):,.2f}"
     except Exception:
         return str(value)
 
@@ -122,12 +143,40 @@ def _jinja_filter_date(value: Any, fmt: str = "%Y-%m-%d") -> str:
     return str(value)
 
 
+def _jinja_filter_format(fmt: str, *args: Any, **kwargs: Any) -> str:
+    """兼容打印数据中金额/数量为字符串的 %.2f 等格式化。"""
+    coerced_args = tuple(_coerce_jinja_number(a) for a in args)
+    coerced_kwargs = {k: _coerce_jinja_number(v) for k, v in kwargs.items()}
+    try:
+        return str(fmt) % (coerced_kwargs or coerced_args)
+    except Exception:
+        if coerced_args:
+            return str(coerced_args[0])
+        return ""
+
+
+def _jinja_filter_round(value: Any, precision: int = 0, method: str = "common") -> float:
+    from jinja2.filters import do_round
+
+    try:
+        return do_round(_coerce_jinja_number(value), precision, method)
+    except Exception:
+        try:
+            return float(_coerce_jinja_number(value))
+        except Exception:
+            return 0.0
+
+
 def _jinja_filter_number(value: Any, digits: int = 2) -> str:
     if value is None or value == "":
         return ""
     try:
+        prec = int(digits)
+    except (TypeError, ValueError):
+        prec = 2
+    try:
         d = Decimal(str(value))
-        q = Decimal("1") if digits <= 0 else Decimal(f"1.{'0' * digits}")
+        q = Decimal("1") if prec <= 0 else Decimal(f"1.{'0' * prec}")
         return format(d.quantize(q), "f")
     except Exception:
         return str(value)
@@ -235,6 +284,8 @@ def _build_jinja_environment(
     env.filters["money"] = _jinja_filter_money
     env.filters["date"] = _jinja_filter_date
     env.filters["number"] = _jinja_filter_number
+    env.filters["format"] = _jinja_filter_format
+    env.filters["round"] = _jinja_filter_round
     env.filters["qrcode"] = _jinja_filter_qrcode
     env.filters["barcode"] = _jinja_filter_barcode
     if extra_filters:
@@ -259,6 +310,8 @@ def render_jinja_template(
         template = env.from_string(template_content)
         return template.render(**(data or {}))
     except TemplateError as exc:
+        raise ValidationError(f"Jinja2 模板渲染失败: {exc}") from exc
+    except TypeError as exc:
         raise ValidationError(f"Jinja2 模板渲染失败: {exc}") from exc
 
 

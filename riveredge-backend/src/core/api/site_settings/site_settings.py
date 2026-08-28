@@ -15,7 +15,7 @@ from core.utils.integration_settings import (
     mask_integrations_for_response,
     merge_integrations_update,
 )
-from core.utils.site_setting_response import mask_company_seal_for_response
+from core.utils.site_setting_response import mask_company_seal_for_response, mask_private_vault_for_response
 from core.services.authorization.user_permission_service import UserPermissionService
 from core.api.deps.access import AuthContext, get_auth_context, require_permission_codes
 from core.api.deps.deps import get_current_tenant, get_current_user
@@ -202,6 +202,7 @@ async def get_settings(
         merged_settings,
         include_seal_value=await _include_company_seal_in_response(auth),
     )
+    merged_settings = mask_private_vault_for_response(merged_settings)
     return SiteSettingResponse(
         uuid=site_settings.uuid,
         tenant_id=site_settings.tenant_id,
@@ -230,6 +231,7 @@ async def update_settings(
         SiteSettingResponse: 更新后的站点设置对象
     """
     settings_payload = dict(data.settings or {})
+    settings_payload.pop("private_files_password_hash", None)
     tenant_domain = settings_payload.pop("tenant_domain", None)
     current_tenant = await Tenant.get_or_none(id=tenant_id)
     if not current_tenant:
@@ -284,6 +286,7 @@ async def update_settings(
         merged_settings,
         include_seal_value=await _include_company_seal_in_response(auth),
     )
+    merged_settings = mask_private_vault_for_response(merged_settings)
     return SiteSettingResponse(
         uuid=settings.uuid,
         tenant_id=settings.tenant_id,

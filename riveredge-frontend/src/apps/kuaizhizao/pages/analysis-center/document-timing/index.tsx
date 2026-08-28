@@ -4,12 +4,13 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Empty } from 'antd';
-import { EyeOutlined, DownloadOutlined, PrinterOutlined } from '@ant-design/icons';
+import { App, Button, Empty, Typography } from 'antd';
+import { DownloadOutlined, PrinterOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { apiRequest } from '../../../../../services/api';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { getDocumentTimingLifecycle } from '../../../utils/documentTimingLifecycle';
@@ -114,10 +115,11 @@ const DocumentTimingPage: React.FC = () => {
     {
       title: t('app.kuaireport.analysis.col.documentCode', { defaultValue: '单据编号' }),
       dataIndex: 'document_code',
-      width: 180,
-      minWidth: 180,
+      width: 168,
+      minWidth: 168,
       uniTableKeepWidth: true,
       resizable: false,
+      ellipsis: true,
       fixed: 'left',
       render: (_, r) => (
         <Typography.Text copyable={{ text: String(r.document_code ?? '') }} ellipsis>
@@ -126,12 +128,14 @@ const DocumentTimingPage: React.FC = () => {
       ),
     },
     {
+      // 余量列（同车辆「车型」）：禁止全表 KeepWidth，否则右固定前 filler 留巨空白
       title: t('app.kuaireport.analysis.col.documentType', { defaultValue: '单据类型' }),
       dataIndex: 'document_type',
-      width: 120,
       minWidth: 120,
-      uniTableKeepWidth: true,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
       resizable: false,
+      ellipsis: true,
       valueEnum: {
         work_order: { text: docTypeLabel('work_order'), status: 'processing' },
         purchase_order: { text: docTypeLabel('purchase_order'), status: 'default' },
@@ -153,8 +157,8 @@ const DocumentTimingPage: React.FC = () => {
     {
       title: t('app.kuaireport.analysis.col.totalHours', { defaultValue: '总耗时（小时）' }),
       dataIndex: 'total_duration_hours',
-      width: 120,
-      minWidth: 120,
+      width: 140,
+      minWidth: 140,
       uniTableKeepWidth: true,
       resizable: false,
       align: 'right',
@@ -177,9 +181,7 @@ const DocumentTimingPage: React.FC = () => {
       fixed: 'right',
       search: false,
       render: (_, record) => (
-        <a onClick={() => handleDetail(record)}>
-          <EyeOutlined /> {t('common.detail', { defaultValue: '详情' })}
-        </a>
+        <Button key="detail" {...rowActionKind('read')} onClick={() => handleDetail(record)} />
       ),
     },
   ];
@@ -189,7 +191,7 @@ const DocumentTimingPage: React.FC = () => {
       <UniTable
         headerTitle={t('app.kuaireport.analysis.timing.title', { defaultValue: '单据节点耗时' })}
         actionRef={actionRef}
-        columnPersistenceId="apps.kuaireport.pages.analysis-center.document-timing.list-v1"
+        columnPersistenceId="apps.kuaireport.pages.analysis-center.document-timing.list-v3"
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.documentTiming')}
         rowKey={(r) => `${r.document_type}-${r.document_id}-${r.document_code}`}

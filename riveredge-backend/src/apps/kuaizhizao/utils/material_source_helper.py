@@ -239,13 +239,23 @@ def resolve_mrp_supply_source_type(material: Material) -> str:
     """
     MRP 计划订单供应通道。
 
-    双选自制+采购时优先走采购（库存净算后不足部分给采购建议，不生成自制工单）。
-    单选仍按 material.source_type。
+    以物料主来源类型 ``source_type`` 为准（自制主类型 → 建议工单并展开 BOM；
+    采购主类型 → 建议采购）。双选自制+采购不再强制改走采购，避免主类型为自制时
+    净需求被改通道后无法下推工单、也无法展开子件。
     """
-    if is_make_and_buy_material(material):
-        return SOURCE_TYPE_BUY
     primary = normalize_material_source_type(material.source_type)
-    return primary or SOURCE_TYPE_BUY
+    if primary:
+        return primary
+    types = material_source_types_set(material)
+    if SOURCE_TYPE_MAKE in types and SOURCE_TYPE_BUY not in types:
+        return SOURCE_TYPE_MAKE
+    if SOURCE_TYPE_OUTSOURCE in types:
+        return SOURCE_TYPE_OUTSOURCE
+    if SOURCE_TYPE_CONFIGURE in types:
+        return SOURCE_TYPE_CONFIGURE
+    if SOURCE_TYPE_BUY in types:
+        return SOURCE_TYPE_BUY
+    return SOURCE_TYPE_BUY
 
 
 async def get_material_mrp_supply_source_type(
@@ -293,7 +303,15 @@ async def validate_material_source_config(
             approval_status="approved",
             deleted_at__isnull=True
         ).count()
-        has_process_route = bool(material.process_route_id)
+        # 与工单一致：产品工艺 > 物料默认 > 分组默认（勿只看 material.process_route_id）
+        from apps.master_data.services.material_product_process_service import (
+            MaterialProductProcessService,
+        )
+
+        effective_route = await MaterialProductProcessService.resolve_process_route_for_material(
+            tenant_id, material_id
+        )
+        has_process_route = effective_route is not None
 
         if manufacturing_mode == MANUFACTURING_MODE_FABRICATION:
             if not has_process_route:
@@ -996,6 +1014,8 @@ def build_material_source_config(material: Material) -> Dict[str, Any]:
     if source_type == SOURCE_TYPE_MAKE:
         config.update({
             "manufacturing_mode": source_config.get("manufacturing_mode"),
+            # 注意：此处同步口径仅带物料 FK；生效路线解析见
+            # MaterialProductProcessService.resolve_process_route_for_material
             "process_route_id": material.process_route_id,
             "production_lead_time": source_config.get("production_lead_time"),
             "min_production_batch": source_config.get("min_production_batch"),

@@ -7,14 +7,15 @@
  */
 
 import React, { useMemo, useRef, useState } from 'react';
-import { rowActionKind } from '../../../../components/uni-action';
+import { rowActionKind, rowActionLabelKeep } from '../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormSwitch, ProFormDigit, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Button, Space, Drawer, Modal, Table, Input, theme } from 'antd';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { renderSystemActiveTag, renderSystemYesNoTag } from '../../utils/systemListPresentation';
-import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, TranslationOutlined, SettingOutlined } from '@ant-design/icons';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../utils/uniTableLayoutColumns';
+import { PlusOutlined, SettingOutlined, TranslationOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import {
   ListPageTemplate,
@@ -430,7 +431,7 @@ const LanguageListPage: React.FC = () => {
       minWidth: 120,
       uniTableKeepWidth: true,
       resizable: false,
-      fixed: 'left',
+      ellipsis: true,
       render: (_, record) => (
         <span style={{ fontFamily: CODE_FONT_FAMILY, fontWeight: 'bold' }}>{record.code}</span>
       ),
@@ -438,19 +439,28 @@ const LanguageListPage: React.FC = () => {
     {
       title: t('field.language.name'),
       dataIndex: 'name',
-      width: 150,
+      width: 140,
+      minWidth: 140,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
     },
     {
+      // 本地名称长短不一：唯一 RemainderFlex
       title: t('field.language.nativeName'),
       dataIndex: 'native_name',
-      width: 150,
+      minWidth: 140,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
+      resizable: false,
+      ellipsis: true,
       hideInSearch: true,
     },
     {
       title: t('field.language.translationCount'),
       dataIndex: 'translations',
-      width: 120,
-      minWidth: 120,
+      width: 100,
+      minWidth: 100,
       uniTableKeepWidth: true,
       resizable: false,
       hideInSearch: true,
@@ -459,10 +469,11 @@ const LanguageListPage: React.FC = () => {
     {
       title: t('field.language.isDefault'),
       dataIndex: 'is_default',
-      width: 100,
-      minWidth: 100,
+      width: 128,
+      minWidth: 128,
       uniTableKeepWidth: true,
       resizable: false,
+      align: 'center',
       valueType: 'select',
       valueEnum: {
         true: { text: t('common.yes'), status: 'Success' },
@@ -473,8 +484,8 @@ const LanguageListPage: React.FC = () => {
     {
       title: t('field.department.sortOrder'),
       dataIndex: 'sort_order',
-      width: 80,
-      minWidth: 80,
+      width: 100,
+      minWidth: 100,
       uniTableKeepWidth: true,
       resizable: false,
       hideInSearch: true,
@@ -483,10 +494,7 @@ const LanguageListPage: React.FC = () => {
     {
       title: t('common.status'),
       dataIndex: 'is_active',
-      width: 100,
-      minWidth: 100,
-      uniTableKeepWidth: true,
-      resizable: false,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       valueType: 'select',
       valueEnum: {
         true: { text: t('common.enabled'), status: 'Success' },
@@ -509,34 +517,28 @@ const LanguageListPage: React.FC = () => {
     {
       title: t('common.actions'),
       key: 'action',
-      valueType: 'option',
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) => [
-            <Button {...rowActionKind('read')} key="view" onClick={() => handleView(record)}>
-              {t('common.view')}
-            </Button>,
-            <Button {...rowActionKind('read')}
+            <Button {...rowActionKind('read')} key="view" type="link" size="small" onClick={() => handleView(record)} />,
+            <Button
+              {...rowActionKind('skip')}
+              {...rowActionLabelKeep()}
               key="translations"
               type="link"
               size="small"
-              icon={<TranslationOutlined />}
               onClick={() => handleManageTranslations(record)}
             >
               {t('field.language.translations')}
             </Button>,
-            <Button {...rowActionKind('update')} key="edit" onClick={() => handleEdit(record)}>
-              {t('common.edit')}
-            </Button>,
-            <Popconfirm {...rowActionKind('delete')}
+            <Button {...rowActionKind('update')} key="edit" type="link" size="small" onClick={() => handleEdit(record)} />,
+            <Popconfirm
               key="delete"
               title={t('field.language.deleteConfirm')}
               onConfirm={() => handleDelete(record)}
               disabled={record.is_default}
             >
-              <Button type="link" danger size="small" icon={<DeleteOutlined />} disabled={record.is_default}>
-                {t('common.delete')}
-              </Button>
+              <Button {...rowActionKind('delete')} disabled={record.is_default} />
             </Popconfirm>,
           ],
     },
@@ -620,7 +622,7 @@ const LanguageListPage: React.FC = () => {
         <UniTable<Language>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('system.languages')}
-          columnPersistenceId="pages.system.languages.list-v1"
+          columnPersistenceId="pages.system.languages.list-v3"
           actionRef={actionRef}
           columns={columns}
           request={async (params, _sort, _filter, searchFormValues) => {

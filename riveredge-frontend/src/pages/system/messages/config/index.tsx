@@ -22,6 +22,7 @@ import {
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Button, Input, Modal, Popconfirm } from 'antd';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../utils/uniTableLayoutColumns';
 import { renderSystemActiveTag, renderSystemTypeMarker, renderSystemYesNoTag } from '../../utils/systemListPresentation';
 import {
   EditOutlined,
@@ -360,24 +361,28 @@ const MessageConfigListPage: React.FC = () => {
    */
   const columns = useMemo<ProColumns<MessageConfig>[]>(() => alignProColumns([
     {
-      title: t('pages.system.messageConfig.name'),
-      dataIndex: 'name',
-      width: 200,
-      fixed: 'left',
-    },
-    {
       title: t('pages.system.messageConfig.code'),
       dataIndex: 'code',
       width: 150,
       minWidth: 150,
       uniTableKeepWidth: true,
       resizable: false,
+      ellipsis: true,
+    },
+    {
+      title: t('pages.system.messageConfig.name'),
+      dataIndex: 'name',
+      width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
     },
     {
       title: t('pages.system.messageConfig.type'),
       dataIndex: 'type',
-      width: 120,
-      minWidth: 120,
+      width: 110,
+      minWidth: 110,
       uniTableKeepWidth: true,
       resizable: false,
       valueType: 'select',
@@ -399,18 +404,20 @@ const MessageConfigListPage: React.FC = () => {
       },
     },
     {
+      // 备注长短不一：唯一 RemainderFlex
       title: t('common.remark'),
       dataIndex: 'description',
+      minWidth: 140,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
+      resizable: false,
       ellipsis: true,
       hideInSearch: true,
     },
     {
       title: t('pages.system.messageConfig.activeStatus'),
       dataIndex: 'is_active',
-      width: 100,
-      minWidth: 100,
-      uniTableKeepWidth: true,
-      resizable: false,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       valueType: 'select',
       valueEnum: {
         true: { text: t('common.enabled'), status: 'Success' },
@@ -422,10 +429,7 @@ const MessageConfigListPage: React.FC = () => {
     {
       title: t('pages.system.messageConfig.defaultConfig'),
       dataIndex: 'is_default',
-      width: 100,
-      minWidth: 100,
-      uniTableKeepWidth: true,
-      resizable: false,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       valueType: 'select',
       valueEnum: {
         true: { text: t('common.yes'), status: 'Success' },
@@ -447,42 +451,28 @@ const MessageConfigListPage: React.FC = () => {
     {
       title: t('common.actions'),
       key: 'action',
-      valueType: 'option',
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) => [
-            <Button {...rowActionKind('read')} key="view" onClick={() => handleView(record)}>
-              {t('common.view')}
-            </Button>,
-            <Button {...rowActionKind('update')}
+            <Button {...rowActionKind('read')} key="view" onClick={() => handleView(record)} />,
+            <Button
+              {...rowActionKind('update')}
               key="edit"
-              type="link"
-              size="small"
-              icon={<EditOutlined />}
               disabled={isBuiltInChannel(record)}
               onClick={() => handleEdit(record)}
-            >
-              {t('common.edit')}
-            </Button>,
-            <Popconfirm {...rowActionKind('delete')}
+            />,
+            <Popconfirm
               key="delete"
               title={t('pages.system.messageConfig.deleteConfirm')}
               disabled={isBuiltInChannel(record)}
               onConfirm={() => handleDelete(record)}
             >
-              <Button
-                type="link"
-                danger
-                size="small"
-                icon={<DeleteOutlined />}
-                disabled={isBuiltInChannel(record)}
-              >
-                {t('common.delete')}
-              </Button>
+              <Button {...rowActionKind('delete')} disabled={isBuiltInChannel(record)} />
             </Popconfirm>,
           ],
     },
-  ], GLOBAL_DOC_LIST_FIELD_RANK), [t, handleView, handleEdit, handleDelete, isBuiltInChannel]);
+  ], GLOBAL_DOC_LIST_FIELD_RANK), [t, handleView, handleEdit, handleDelete]);
+
 
   /**
    * 详情列定义
@@ -542,7 +532,7 @@ const MessageConfigListPage: React.FC = () => {
         <UniTable<MessageConfig>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('system.messageConfig')}
-        columnPersistenceId="pages.system.messages.config.list-v1"
+        columnPersistenceId="pages.system.messages.config.list-v2"
         actionRef={actionRef}
         columns={columns}
         request={async (params, _sort, _filter, searchFormValues) => {

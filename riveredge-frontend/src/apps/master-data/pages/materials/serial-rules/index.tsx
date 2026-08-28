@@ -8,10 +8,10 @@ import React, { useRef, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { ProForm, ProFormText, ProFormTextArea, ProFormSelect, ProFormDigit, ProFormSwitch } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Space } from 'antd';
-import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
+import { App, Popconfirm, Button } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
+import { rowActionKind } from '../../../../../components/uni-action';
 import {
   buildMasterCrudActiveValueEnum,
   MASTER_CRUD_PINNED_ACTIVE_FIELD,
@@ -20,6 +20,7 @@ import {
   masterRuleCodeNameSearchColumns,
   resolveRuleListParams,
 } from '../../../utils/materialListCore';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
@@ -165,10 +166,22 @@ const SerialRulesPage: React.FC = () => {
       name: t('app.master-data.seqRules.ruleName'),
     }),
     {
+      title: t('app.master-data.seqRules.ruleCode'),
+      dataIndex: 'code',
+      width: 140,
+      minWidth: 140,
+      uniTableKeepWidth: true,
+      resizable: false,
+      copyable: true,
+      ellipsis: true,
+      sorter: true,
+      hideInSearch: true,
+    },
+    {
       title: t('app.master-data.seqRules.ruleName'),
       dataIndex: 'name',
-      width: 150,
-      minWidth: 150,
+      width: 160,
+      minWidth: 160,
       uniTableKeepWidth: true,
       resizable: false,
       ellipsis: true,
@@ -176,28 +189,28 @@ const SerialRulesPage: React.FC = () => {
       sorter: true,
       hideInSearch: true,
     },
-    { title: t('app.master-data.seqRules.ruleCode'), dataIndex: 'code', copyable: true, width: 120, sorter: true, hideInSearch: true },
-    {
-      title: t('common.remark'),
-      dataIndex: 'description',
-      width: 168,
-      minWidth: 168,
-      uniTableKeepWidth: true,
-      resizable: false,
-      ellipsis: true,
-      sorter: true,
-      hideInSearch: true,
-    },
     {
       title: t('app.master-data.seqRules.seqReset'),
       dataIndex: 'seqResetRule',
-      width: 100,
-      minWidth: 100,
-      uniTableKeepWidth: true,
-      resizable: false,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       sorter: true,
       hideInSearch: true,
-      render: (_, r) => seqResetOptions.find((o) => o.value === r.seqResetRule)?.label || r.seqResetRule || '-',
+      render: (_, r) => {
+        const label = seqResetOptions.find((o) => o.value === r.seqResetRule)?.label || r.seqResetRule;
+        return label ? renderMasterTypeMarker(String(label)) : '—';
+      },
+    },
+    {
+      // 备注长短不一：唯一 RemainderFlex（稀疏不叠）
+      title: t('common.remark'),
+      dataIndex: 'description',
+      minWidth: 160,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
+      resizable: false,
+      ellipsis: true,
+      hideInSearch: true,
+      render: (_, r) => r.description || '—',
     },
     {
       title: t('common.status'),
@@ -211,10 +224,7 @@ const SerialRulesPage: React.FC = () => {
     {
       title: t('common.status'),
       dataIndex: 'isActive',
-      width: 88,
-      minWidth: 88,
-      uniTableKeepWidth: true,
-      resizable: false,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       sorter: true,
       hideInSearch: true,
       valueEnum: ruleActiveValueEnum,
@@ -225,28 +235,30 @@ const SerialRulesPage: React.FC = () => {
       title: t('common.actions'),
       key: 'action',
       fixed: 'right',
-      render: (_, record) => (
-        <Space>
+      hideInSearch: true,
+      render: (_, record) => [
+        <Button
+          key="edit"
+          type="link"
+          size="small"
+          {...rowActionKind('update')}
+          onClick={() => handleEdit(record)}
+          disabled={record.isSystem}
+        />,
+        <Popconfirm
+          key="delete"
+          title={t('app.master-data.seqRules.deleteConfirm')}
+          onConfirm={() => handleDelete(record)}
+          disabled={record.isSystem}
+        >
           <Button
             type="link"
             size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
+            {...rowActionKind('delete')}
             disabled={record.isSystem}
-          >
-            {t('common.edit')}
-          </Button>
-          <Popconfirm
-            title={t('app.master-data.seqRules.deleteConfirm')}
-            onConfirm={() => handleDelete(record)}
-            disabled={record.isSystem}
-          >
-            <Button type="link" size="small" danger icon={<DeleteOutlined />} disabled={record.isSystem}>
-              {t('common.delete')}
-            </Button>
-          </Popconfirm>
-        </Space>
-      ),
+          />
+        </Popconfirm>,
+      ],
     },
   ], [t, seqResetOptions, ruleActiveValueEnum]);
 
@@ -255,7 +267,7 @@ const SerialRulesPage: React.FC = () => {
       <UniTable<SerialRule>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('masterData.serialRules')}
-        columnPersistenceId="apps.master-data.pages.materials.serial-rules.list-v1"
+        columnPersistenceId="apps.master-data.pages.materials.serial-rules.list-v2"
         headerTitle={t('app.master-data.serialRules.headerTitle')}
         actionRef={actionRef}
         rowKey="uuid"

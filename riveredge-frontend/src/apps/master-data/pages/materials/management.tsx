@@ -3779,7 +3779,12 @@ const MaterialsManagementPage: React.FC = () => {
         title: t('app.master-data.materials.colMaterialPrimary'),
         key: 'mainCode',
         dataIndex: 'mainCode',
-        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        // 有 RemainderFlex：主标识叠列 KeepWidth（物料信息保持堆叠）
+        width: 240,
+        minWidth: 240,
+        uniTableKeepWidth: true,
+        uniTablePrimaryFlex: false,
+        resizable: false,
         fixed: 'left',
         sorter: true,
         render: (_, record) => (
@@ -3861,9 +3866,9 @@ const MaterialsManagementPage: React.FC = () => {
         title: t('app.master-data.materials.colProcessRouteSource'),
         key: 'processRouteSource',
         dataIndex: ['processRouteName', 'process_route_name'],
-        minWidth: 140,
+        minWidth: 160,
+        uniTableRemainderFlex: true,
         uniTablePrimaryFlex: true,
-        uniTablePrimaryFlexMaxWidth: 220,
         resizable: false,
         hideInSearch: true,
         render: (_, record) =>
@@ -4040,31 +4045,32 @@ const MaterialsManagementPage: React.FC = () => {
       {
         title: t('common.actions'),
         key: 'action',
-        valueType: 'option',
         fixed: 'right',
         hideInSearch: true,
-        render: (_, record) => (
-          <Space>
-            <Button key="view" {...rowActionKind('read')} onClick={() => handleViewMaterial(record)}>
-              {t('common.detail')}
-            </Button>
-            <Button key="edit" {...rowActionKind('update')}
-              size="small"
-              icon={<EditOutlined />}
-              onClick={() => handleEditMaterial(record)}
-            >
-              {t('common.edit')}
-            </Button>
-            <Popconfirm key="delete" {...rowActionKind('delete')} title={t('app.master-data.materials.deleteMaterialConfirm')}
-              description={t('app.master-data.materials.deleteMaterialDesc')}
-              onConfirm={() => handleDeleteMaterial(record)}
-            >
-              <Button type="link" danger size="small" icon={<DeleteOutlined />}>
-                {t('common.delete')}
-              </Button>
-            </Popconfirm>
-          </Space>
-        ),
+        render: (_, record) => [
+          <Button
+            key="view"
+            type="link"
+            size="small"
+            {...rowActionKind('read')}
+            onClick={() => handleViewMaterial(record)}
+          />,
+          <Button
+            key="edit"
+            type="link"
+            size="small"
+            {...rowActionKind('update')}
+            onClick={() => handleEditMaterial(record)}
+          />,
+          <Popconfirm
+            key="delete"
+            title={t('app.master-data.materials.deleteMaterialConfirm')}
+            description={t('app.master-data.materials.deleteMaterialDesc')}
+            onConfirm={() => handleDeleteMaterial(record)}
+          >
+            <Button type="link" size="small" {...rowActionKind('delete')} />
+          </Popconfirm>,
+        ],
       },
     ],
     [
@@ -4248,7 +4254,7 @@ const MaterialsManagementPage: React.FC = () => {
               }}
             >
               <UniTable<Material>
-                columnPersistenceId="apps.master-data.pages.materials.management.list-v2"
+                columnPersistenceId="apps.master-data.pages.materials.management.list-v3"
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('masterData.materials')}
                 tanstackQuery={{ queryKeyPrefix: ['apps.master-data.pages.materials.management', String(selectedGroupKeys[0] ?? 'all')] }}

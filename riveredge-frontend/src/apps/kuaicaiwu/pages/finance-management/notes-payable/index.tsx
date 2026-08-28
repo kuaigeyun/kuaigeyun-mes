@@ -6,7 +6,7 @@ export default function NotesPayablePage() {
     <FinanceNotesPage
       direction="payable"
       resource={NOTES_PAYABLE_RESOURCE}
-      columnPersistenceId="apps.kuaicaiwu.pages.finance-management.notes-payable.list-v1"
+      columnPersistenceId="apps.kuaicaiwu.pages.finance-management.notes-payable.list-v2"
     />
   );
 }

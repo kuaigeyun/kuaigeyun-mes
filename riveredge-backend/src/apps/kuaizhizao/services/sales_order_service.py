@@ -64,7 +64,7 @@ from infra.services.business_config_service import BusinessConfigService
 
 
 # 写入 ORM 时排除：明细单独处理；order_name/audit 为响应层虚拟字段（BaseSchema）
-_SALES_ORDER_PERSIST_EXCLUDE = frozenset({"items", "order_name", "audit"})
+_SALES_ORDER_PERSIST_EXCLUDE = frozenset({"items", "order_name", "audit", "payment_milestones"})
 
 
 class SalesOrderService:
@@ -724,6 +724,7 @@ class SalesOrderService:
         material_code_fallback: Optional[Dict[int, str]] = None,
         material_fallback: Optional[Dict[int, Dict[str, Any]]] = None,
         milestones: Optional[List[Dict[str, Any]]] = None,
+        payment_milestones: Optional[List[Any]] = None,
         shippable_hint: Optional[Dict[str, Any]] = None,
         pushed_work_order_quantity: Optional[Decimal] = None,
         remaining_push_quantity: Optional[Decimal] = None,
@@ -782,6 +783,9 @@ class SalesOrderService:
             "contract_id": getattr(order, "contract_id", None),
             "contract_code": getattr(order, "contract_code", None),
             "is_release_order": bool(getattr(order, "is_release_order", False)),
+            "term_group_id": getattr(order, "term_group_id", None),
+            "term_group_name": getattr(order, "term_group_name", None),
+            "contract_terms": getattr(order, "contract_terms", None),
             "currency_code": getattr(order, "currency_code", None) or "CNY",
             "notes": order.notes,
             "attachments": getattr(order, "attachments", None),
@@ -901,6 +905,8 @@ class SalesOrderService:
                 )
                 for it in items
             ]
+        if payment_milestones is not None:
+            base["payment_milestones"] = payment_milestones
         return SalesOrderResponse(**base)
 
     async def _get_linked_demand(self, tenant_id: int, sales_order_id: int) -> Optional[Demand]:
@@ -1351,9 +1357,11 @@ class SalesOrderService:
         require_contract = bool(
             cfg.get("parameters", {}).get("sales", {}).get("require_contract_before_order", False)
         )
+        if require_contract:
+            raise BusinessLogicError(
+                "配置项「须先建销售合同再下推订单」已废弃，请在业务配置中关闭 require_contract_before_order"
+            )
         contract_id = getattr(sales_order_data, "contract_id", None)
-        if require_contract and not contract_id:
-            raise BusinessLogicError("当前租户配置要求销售订单必须关联销售合同，请从合同下推订单")
         if not contract_id:
             return
         contract = await SalesContract.get_or_none(
@@ -1361,11 +1369,21 @@ class SalesOrderService:
         )
         if not contract:
             raise NotFoundError(f"销售合同不存在: {contract_id}")
+        ctype = (contract.contract_type or "single").strip()
+        if ctype != "framework":
+            # 存量单次合同在迁移打标前仍允许释放；新建仅框架
+            if ctype != "single" or getattr(contract, "migrated_to_order_at", None):
+                raise BusinessLogicError("仅框架合同可关联释放销售订单")
         st = (contract.status or "").strip()
         if st not in ("已生效", "执行中"):
             raise BusinessLogicError("关联的销售合同须已生效")
         if not _is_approved(contract.review_status):
             raise BusinessLogicError("关联的销售合同未审核通过")
+        # 金额总框：仅引用关联，不走明细释放
+        if getattr(contract, "enter_line_items", True) is False:
+            if not sales_order_data.contract_code:
+                sales_order_data.contract_code = contract.contract_code
+            return
         if not sales_order_data.contract_code:
             sales_order_data.contract_code = contract.contract_code
 
@@ -1423,6 +1441,17 @@ class SalesOrderService:
                 total_fee_amount=getattr(sales_order_data, "total_fee_amount", None),
             )
             order_dict = sales_order_data.model_dump(exclude=_SALES_ORDER_PERSIST_EXCLUDE)
+            from apps.kuaizhizao.services.sales_order_terms_service import SalesOrderTermsService
+
+            terms_svc = SalesOrderTermsService()
+            term_group_id, term_group_name, contract_terms = await terms_svc.resolve_order_terms(
+                tenant_id,
+                sales_order_data.term_group_id,
+                sales_order_data.contract_terms,
+            )
+            order_dict["term_group_id"] = term_group_id
+            order_dict["term_group_name"] = term_group_name
+            order_dict["contract_terms"] = contract_terms
             order_dict["status"] = sales_order_data.status
             order_dict["review_status"] = sales_order_data.review_status
             order_dict["created_by"] = created_by
@@ -1512,6 +1541,9 @@ class SalesOrderService:
                 total_amount=total_amt,
             )
             order = await SalesOrder.get(id=order.id)
+            await terms_svc.replace_order_milestones(
+                tenant_id, int(order.id), sales_order_data.payment_milestones
+            )
             items = await SalesOrderItem.filter(
                 tenant_id=tenant_id, sales_order_id=order.id
             ).order_by("id")
@@ -1519,7 +1551,15 @@ class SalesOrderService:
             shipped_by = await self._shipped_qty_by_sales_order(tenant_id, [order.id])
             dp = self._merged_delivery_progress(order, list(items), shipped_by.get(order.id, Decimal("0")))
             audit_enabled = await self.business_config_service.check_audit_required(tenant_id, "sales_order")
-            return self._order_to_response(order, items=items, demand=demand, delivery_progress=dp, audit_enabled=audit_enabled)
+            payment_milestones = await terms_svc.load_payment_milestones(tenant_id, int(order.id))
+            return self._order_to_response(
+                order,
+                items=items,
+                demand=demand,
+                delivery_progress=dp,
+                audit_enabled=audit_enabled,
+                payment_milestones=payment_milestones,
+            )
 
     async def apply_push_default_mode_after_create(
         self,
@@ -1667,7 +1707,12 @@ class SalesOrderService:
         pushable_by_item = await get_pushable_qty_for_order_items(
             tenant_id, sales_order_id, items
         )
-        return enrich_sales_order_capabilities_on_response(
+        from apps.kuaizhizao.services.sales_order_terms_service import SalesOrderTermsService
+
+        payment_milestones = await SalesOrderTermsService.load_payment_milestones(
+            tenant_id, sales_order_id
+        )
+        resp = enrich_sales_order_capabilities_on_response(
             order,
             self._order_to_response(
                 order,
@@ -1677,6 +1722,7 @@ class SalesOrderService:
                 material_code_fallback=material_code_fallback,
                 material_fallback=material_fallback,
                 milestones=milestones,
+                payment_milestones=payment_milestones,
                 delivery_progress=delivery_progress,
                 invoice_progress=finance.get("invoice_progress", 0.0),
                 invoice_amount_progress=finance.get("invoice_amount_progress", 0.0),
@@ -1688,6 +1734,7 @@ class SalesOrderService:
                 order, items, demand, pushable_by_item=pushable_by_item
             ),
         )
+        return resp
 
     async def _sales_order_ids_matching_lifecycle(
         self,
@@ -2357,6 +2404,9 @@ class SalesOrderService:
 
         async with in_transaction():
             from apps.common.base_service import AppBaseService
+            from apps.kuaizhizao.services.sales_order_terms_service import SalesOrderTermsService
+
+            terms_svc = SalesOrderTermsService()
             updater_name = await AppBaseService().get_user_name(updated_by)
             self._validate_sales_order_non_negative(
                 discount_amount=getattr(sales_order_data, "discount_amount", Decimal("0")) or Decimal("0"),
@@ -2367,6 +2417,15 @@ class SalesOrderService:
             upd = sales_order_data.model_dump(
                 exclude_unset=True, exclude=_SALES_ORDER_PERSIST_EXCLUDE
             )
+            if "term_group_id" in sales_order_data.model_fields_set or sales_order_data.contract_terms is not None:
+                term_group_id, term_group_name, contract_terms = await terms_svc.resolve_order_terms(
+                    tenant_id,
+                    sales_order_data.term_group_id if "term_group_id" in sales_order_data.model_fields_set else order.term_group_id,
+                    sales_order_data.contract_terms if sales_order_data.contract_terms is not None else None,
+                )
+                upd["term_group_id"] = term_group_id
+                upd["term_group_name"] = term_group_name
+                upd["contract_terms"] = contract_terms
             upd["updated_by"] = updated_by
             upd["updated_by_name"] = updater_name
             # status/review_status 由工作流控制，禁止通过 update 修改，确保二者始终同步
@@ -2438,6 +2497,11 @@ class SalesOrderService:
                 await SalesOrder.filter(id=sales_order_id).update(
                     total_quantity=total_qty,
                     total_amount=total_amt,
+                )
+
+            if sales_order_data.payment_milestones is not None:
+                await terms_svc.replace_order_milestones(
+                    tenant_id, sales_order_id, sales_order_data.payment_milestones
                 )
 
         result = await self.get_sales_order_by_id(tenant_id, sales_order_id, include_items=True)
@@ -4391,7 +4455,7 @@ class SalesOrderService:
         sales_order, contract = await SalesContractService().convert_to_sales_order(
             tenant_id=tenant_id,
             contract_id=contract_id,
-            released_by=created_by,
+            created_by=created_by,
             selected_item_ids=selected_item_ids,
             release_lines=release_lines,
         )

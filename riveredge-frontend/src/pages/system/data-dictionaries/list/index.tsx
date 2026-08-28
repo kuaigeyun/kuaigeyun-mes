@@ -8,7 +8,7 @@
 
 import React, { useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { rowActionKind } from '../../../../components/uni-action';
+import { rowActionKind, rowActionLabelKeep } from '../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import {
   ActionType,
@@ -23,7 +23,8 @@ import {
 } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Drawer, Modal, Table, Tooltip, theme, Space } from 'antd';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
-import { renderSystemActiveTag, renderSystemTypeMarker, renderSystemYesNoTag } from '../../utils/systemListPresentation';
+import { renderSystemActiveTag, renderSystemYesNoTag } from '../../utils/systemListPresentation';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../utils/uniTableLayoutColumns';
 import { SettingOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import {
@@ -359,21 +360,30 @@ const DataDictionaryListPage: React.FC = () => {
     {
       title: t('field.dataDictionary.name'),
       dataIndex: 'name',
-      width: 150,
-      fixed: 'left',
+      width: 160,
+      minWidth: 160,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
       render: (_, record) => resolveSystemDictionaryName(record, t),
     },
     {
       title: t('field.dataDictionary.code'),
       dataIndex: 'code',
-      width: 150,
-      minWidth: 150,
+      width: 160,
+      minWidth: 160,
       uniTableKeepWidth: true,
       resizable: false,
+      ellipsis: true,
     },
     {
+      // 备注长短不一：唯一 RemainderFlex
       title: t('common.remark'),
       dataIndex: 'description',
+      minWidth: 160,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
+      resizable: false,
       ellipsis: true,
       hideInSearch: true,
       render: (_, record) => resolveSystemDictionaryDescription(record, t),
@@ -381,10 +391,7 @@ const DataDictionaryListPage: React.FC = () => {
     {
       title: t('field.dataDictionary.systemDictionary'),
       dataIndex: 'is_system',
-      width: 100,
-      minWidth: 100,
-      uniTableKeepWidth: true,
-      resizable: false,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       valueType: 'select',
       valueEnum: {
         true: { text: t('common.yes'), status: 'Default' },
@@ -395,10 +402,7 @@ const DataDictionaryListPage: React.FC = () => {
     {
       title: t('common.status'),
       dataIndex: 'is_active',
-      width: 100,
-      minWidth: 100,
-      uniTableKeepWidth: true,
-      resizable: false,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       valueType: 'select',
       valueEnum: {
         true: { text: t('common.enabled'), status: 'Success' },
@@ -421,26 +425,29 @@ const DataDictionaryListPage: React.FC = () => {
     {
       title: t('common.actions'),
       key: 'action',
-      valueType: 'option',
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) => [
-            <Button {...rowActionKind('read')} key="view" onClick={() => handleView(record)}>
-              {t('common.detail')}
-            </Button>,
-            <Button {...rowActionKind('update')}
+            <Button {...rowActionKind('read')} key="view" type="link" size="small" onClick={() => handleView(record)} />,
+            <Button
+              {...rowActionKind('update')}
               key="edit"
               type="link"
               size="small"
               onClick={() => handleEdit(record)}
               disabled={record.is_system}
+            />,
+            <Button
+              {...rowActionKind('skip')}
+              {...rowActionLabelKeep()}
+              key="items"
+              type="link"
+              size="small"
+              onClick={() => handleManageItems(record)}
             >
-              {t('common.edit')}
-            </Button>,
-            <Button {...rowActionKind('read')} key="items" onClick={() => handleManageItems(record)}>
               {t('field.dataDictionary.items')}
             </Button>,
-            <Popconfirm {...rowActionKind('delete')}
+            <Popconfirm
               key="delete"
               title={t('field.dataDictionary.deleteConfirm')}
               onConfirm={() => handleDelete(record)}
@@ -450,9 +457,7 @@ const DataDictionaryListPage: React.FC = () => {
                 title={record.is_system ? t('field.dataDictionary.systemDictionaryNoDelete') : undefined}
               >
                 <span>
-                  <Button type="link" danger size="small" disabled={record.is_system}>
-                    {t('common.delete')}
-                  </Button>
+                  <Button {...rowActionKind('delete')} disabled={record.is_system} />
                 </span>
               </Tooltip>
             </Popconfirm>,
@@ -564,7 +569,7 @@ const DataDictionaryListPage: React.FC = () => {
         <UniTable<DataDictionary>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('system.dataDictionaries')}
-        columnPersistenceId="pages.system.data-dictionaries.list-v1"
+        columnPersistenceId="pages.system.data-dictionaries.list-v2"
         actionRef={actionRef}
         searchParamsRef={searchParamsRef}
         columns={columns}

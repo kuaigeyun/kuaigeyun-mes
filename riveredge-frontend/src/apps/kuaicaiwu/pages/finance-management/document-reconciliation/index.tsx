@@ -3,7 +3,7 @@ import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Card, DatePicker, Form, Select, Space, Steps, Alert } from 'antd';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-import { LinkOutlined, SearchOutlined } from '@ant-design/icons';
+import { SearchOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { MultiTabListPageTemplate } from '../../../../../components/layout-templates';
 import { UniTable } from '../../../../../components/uni-table';
@@ -23,6 +23,8 @@ import {
   resolveDocumentReconciliationGapListParams,
 } from '../../../utils/financeListCore';
 import { MarkerTag } from '../../../../../constants/statusBadges';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
+import { rowActionViewDocChain } from '../../../../../components/uni-action';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 type GapRow = DocumentReconciliationGapItem;
@@ -251,20 +253,8 @@ const DocumentReconciliationPage: React.FC = () => {
       docTypeEnum,
     }),
     {
-      title: t(`${D}.col.docType`),
-      dataIndex: 'doc_type',
-      width: 120,
-      minWidth: 120,
-      uniTableKeepWidth: true,
-      resizable: false,
-      hideInSearch: true,
-      sorter: true,
-      valueType: 'select',
-      valueEnum: docTypeEnum,
-      render: (_, r) => renderFinanceHierarchyDocType(formatDocType(r.doc_type, t), r),
-    },
-    {
       title: t(`${D}.col.docCode`),
+      key: 'finance_recon_doc_code',
       dataIndex: 'doc_code',
       width: 160,
       minWidth: 160,
@@ -275,7 +265,19 @@ const DocumentReconciliationPage: React.FC = () => {
       sorter: true,
     },
     {
+      title: t(`${D}.col.docType`),
+      key: 'finance_recon_doc_type',
+      dataIndex: 'doc_type',
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+      hideInSearch: true,
+      sorter: true,
+      valueType: 'select',
+      valueEnum: docTypeEnum,
+      render: (_, r) => renderFinanceHierarchyDocType(formatDocType(r.doc_type, t), r),
+    },
+    {
       title: t(`${S}.preview.col.docAmount`),
+      key: 'finance_recon_doc_amount',
       dataIndex: 'quantity',
       valueType: 'money',
       align: 'right',
@@ -288,6 +290,7 @@ const DocumentReconciliationPage: React.FC = () => {
     },
     {
       title: t(`${S}.preview.col.settledAmount`),
+      key: 'finance_recon_settled_amount',
       dataIndex: 'pushed_quantity',
       valueType: 'money',
       align: 'right',
@@ -300,34 +303,35 @@ const DocumentReconciliationPage: React.FC = () => {
     },
     {
       title: t(`${S}.preview.col.settleableAmount`),
+      key: 'finance_recon_settleable_amount',
       dataIndex: 'max_push_quantity',
       valueType: 'money',
       align: 'right',
-      width: 120,
-      minWidth: 120,
+      width: 130,
+      minWidth: 130,
       uniTableKeepWidth: true,
       resizable: false,
       hideInSearch: true,
       sorter: true,
     },
     {
-      title: t(`${D}.col.gapReason`),
-      dataIndex: 'gap_reason',
-      key: 'gap_reason',
-      minWidth: 200,
-      uniTablePrimaryFlex: true,
-      uniTablePrimaryFlexMaxWidth: 280,
-      resizable: false,
-      ellipsis: false,
-      render: (_, r) => (r.gap_reason ? documentReconciliationGapReasonMessage(r.gap_reason, t) : '—'),
+      title: t(`${D}.col.settlementMethod`),
+      dataIndex: 'settlement_type',
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+      hideInSearch: true,
+      render: (_, r) =>
+        r.settlement_type ? (
+          <MarkerTag>{formatSettlementType(String(r.settlement_type), t)}</MarkerTag>
+        ) : (
+          '—'
+        ),
     },
     {
       title: t(`${D}.col.link`),
+      key: 'finance_recon_link',
       dataIndex: 'finance_related_count',
-      width: 100,
-      minWidth: 100,
-      uniTableKeepWidth: true,
-      resizable: false,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+      hideInSearch: true,
       render: (v) =>
         Number(v) > 0 ? (
           <MarkerTag color="success">{v}</MarkerTag>
@@ -336,31 +340,31 @@ const DocumentReconciliationPage: React.FC = () => {
         ),
     },
     {
-      title: t(`${D}.col.settlementMethod`),
-      dataIndex: 'settlement_type',
-      width: 100,
-      minWidth: 100,
-      uniTableKeepWidth: true,
+      // 缺口原因长短不一：唯一 RemainderFlex
+      title: t(`${D}.col.gapReason`),
+      key: 'finance_recon_gap_reason',
+      dataIndex: 'gap_reason',
+      minWidth: 200,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
       resizable: false,
-      render: (_, r) => (r.settlement_type ? formatSettlementType(String(r.settlement_type), t) : '—'),
+      ellipsis: true,
+      hideInSearch: true,
+      render: (_, r) => (r.gap_reason ? documentReconciliationGapReasonMessage(r.gap_reason, t) : '—'),
     },
     {
       title: t('common.actions'),
       key: 'action',
-      valueType: 'option',
       fixed: 'right',
       hideInSearch: true,
-      uniActionRenderOptions: { directMax: 1 },
       render: (_, r) => [
         <Button
           key="link"
           type="link"
           size="small"
-          icon={<LinkOutlined />}
+          {...rowActionViewDocChain('read')}
           onClick={() => openChainFromGap(r)}
-        >
-          {t(`${D}.col.linkChain`)}
-        </Button>,
+        />,
       ],
     },
   ], [t, docTypeEnum]);
@@ -500,7 +504,7 @@ const DocumentReconciliationPage: React.FC = () => {
         request={gapRequest}
         tanstackQuery={{ enabled: false }}
         rowKey={(r) => `${r.doc_type}-${r.doc_id}`}
-        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.document-reconciliation.gaps.list-v3"
+        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.document-reconciliation.gaps.list-v4"
         columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
         loading={loading}
         showAdvancedSearch

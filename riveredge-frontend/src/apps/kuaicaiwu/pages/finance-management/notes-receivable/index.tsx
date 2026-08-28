@@ -6,7 +6,7 @@ export default function NotesReceivablePage() {
     <FinanceNotesPage
       direction="receivable"
       resource={NOTES_RECEIVABLE_RESOURCE}
-      columnPersistenceId="apps.kuaicaiwu.pages.finance-management.notes-receivable.list-v1"
+      columnPersistenceId="apps.kuaicaiwu.pages.finance-management.notes-receivable.list-v2"
     />
   );
 }

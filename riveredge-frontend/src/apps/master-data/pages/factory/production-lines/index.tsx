@@ -8,9 +8,8 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { Alert, App, Button, List, Modal, Popconfirm, Space, Typography } from 'antd';
+import { Alert, App, Button, List, Modal, Popconfirm, Typography } from 'antd';
 import { downloadFile } from '../../../../../utils';
-import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
@@ -596,8 +595,8 @@ const ProductionLinesPage: React.FC = () => {
     {
       title: t('app.master-data.productionLines.code'),
       dataIndex: 'code',
-      width: 120,
-      minWidth: 120,
+      width: 140,
+      minWidth: 140,
       uniTableKeepWidth: true,
       resizable: false,
       fixed: 'left',
@@ -609,17 +608,22 @@ const ProductionLinesPage: React.FC = () => {
     {
       title: t('app.master-data.productionLines.name'),
       dataIndex: 'name',
-      width: 168,
-      minWidth: 168,
+      width: 180,
+      minWidth: 180,
       uniTableKeepWidth: true,
       resizable: false,
+      ellipsis: true,
       sorter: true,
       hideInSearch: true,
     },
     {
       title: t('app.master-data.productionLines.workshopName'),
+      key: 'master_ref_workshop',
       dataIndex: 'workshopId',
-      width: 200,
+      width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
       order: 15,
       valueType: 'select',
       valueEnum: workshops.reduce((acc, workshop) => {
@@ -630,10 +634,16 @@ const ProductionLinesPage: React.FC = () => {
       render: (_, record) => formatWorkshopDisplay(record),
     },
     {
+      // 备注长短不一：唯一 RemainderFlex（稀疏不叠）
       title: t('common.remark'),
       dataIndex: 'description',
+      minWidth: 160,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
+      resizable: false,
       ellipsis: true,
       hideInSearch: true,
+      render: (_, r) => r.description || '—',
     },
     ...customFieldColumns,
     ...buildMasterCrudActiveStatusColumn<ProductionLine>(t, {
@@ -644,41 +654,35 @@ const ProductionLinesPage: React.FC = () => {
     {
       title: t('common.actions'),
       key: 'action',
-      valueType: 'option',
       fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button key="view" {...rowActionKind('read')}
-            size="small"
-            onClick={() => handleOpenDetail(record)}
-          >
-            {t('common.view')}
-          </Button>
-          <Button key="edit" {...rowActionKind('update')}
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          >
-            {t('common.edit')}
-          </Button>
-          <Popconfirm key="delete" {...rowActionKind('delete')} title={t('app.master-data.productionLines.deleteConfirm')}
-            description={t('app.master-data.productionLines.deleteDescription')}
-            onConfirm={() => handleDelete(record)}
-          >
-            <Button
-              type="link"
-              danger
-              size="small"
-              icon={<DeleteOutlined />}
-            >
-              {t('common.delete')}
-            </Button>
-          </Popconfirm>
-        </Space>
-      ),
+      hideInSearch: true,
+      render: (_, record) => [
+        <Button
+          key="view"
+          type="link"
+          size="small"
+          {...rowActionKind('read')}
+          onClick={() => handleOpenDetail(record)}
+        />,
+        <Button
+          key="edit"
+          type="link"
+          size="small"
+          {...rowActionKind('update')}
+          onClick={() => handleEdit(record)}
+        />,
+        <Popconfirm
+          key="delete"
+          title={t('app.master-data.productionLines.deleteConfirm')}
+          description={t('app.master-data.productionLines.deleteDescription')}
+          onConfirm={() => handleDelete(record)}
+        >
+          <Button type="link" size="small" {...rowActionKind('delete')} />
+        </Popconfirm>,
+      ],
     },
     ];
-  }, [customFields, t, workshops, productionLineActiveValueEnum]);
+  }, [customFields, t, workshops, productionLineActiveValueEnum, formatWorkshopDisplay]);
 
   /**
    * 详情 Drawer 的列定义
@@ -733,7 +737,7 @@ const ProductionLinesPage: React.FC = () => {
           message={t('app.master-data.productionLines.dimensionHint')}
         />
         <UniTable<ProductionLine>
-        columnPersistenceId="apps.master-data.pages.factory.production-lines.list-v2"
+        columnPersistenceId="apps.master-data.pages.factory.production-lines.list-v3"
         actionRef={actionRef}
         columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
         request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {

@@ -27,19 +27,13 @@ import {
   Space,
   Input,
 } from 'antd'
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../utils/uniTableLayoutColumns'
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment'
 import { renderSystemActiveTag, renderSystemTypeMarker } from '../../utils/systemListPresentation'
 import {
-  EditOutlined,
-  DeleteOutlined,
-  EyeOutlined,
   DatabaseOutlined,
 } from '@ant-design/icons'
 import { UniTable } from '../../../../components/uni-table'
-import {
-  UniTableStackedPrimaryCell,
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-} from '../../../../components/uni-table/stackedPrimaryColumn'
 import {
   FormModalTemplate,
   MODAL_CONFIG,
@@ -59,7 +53,7 @@ import {
 } from '../../../../services/apiManagement'
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts'
 import { extractProTableSort, mergeListKeyword, mapApiListSortField } from '../../../../utils/tableQueryKey'
-import { rowActionKind } from '../../../../components/uni-action'
+import { rowActionKind, rowActionLabelKeep } from '../../../../components/uni-action'
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 import { todaySiteDateString } from '../../../../utils/format';
 import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
@@ -515,21 +509,26 @@ const APIListPage: React.FC = () => {
     }
   }
 
-  /**
-   * 表格列定义
-   */
   const columns = useMemo<ProColumns<API>[]>(() => alignProColumns([
     {
       title: t('pages.system.apis.columnName'),
-      key: 'name_code_stacked',
       dataIndex: 'name',
-      fixed: 'left',
-      hideInSearch: true,
+      width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
       sorter: true,
-      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-      render: (_, record) => (
-        <UniTableStackedPrimaryCell primary={record.name} secondary={record.code} />
-      ),
+    },
+    {
+      title: t('pages.system.apis.columnCode'),
+      dataIndex: 'code',
+      width: 140,
+      minWidth: 140,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
+      hideInSearch: true,
     },
     {
       title: t('pages.system.apis.columnMethod'),
@@ -560,27 +559,32 @@ const APIListPage: React.FC = () => {
     {
       title: t('pages.system.apis.columnConnection'),
       dataIndex: 'connection_name',
+      width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       hideInSearch: true,
-      width: 180,
       render: (_, record) =>
         record.connection_name
           ? `${record.connection_name}${record.connection_type ? ` (${record.connection_type})` : ''}`
           : '-',
     },
     {
+      // 备注长短不一：唯一 RemainderFlex
       title: t('common.remark'),
       dataIndex: 'description',
+      minWidth: 140,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
+      resizable: false,
       ellipsis: true,
       hideInSearch: true,
     },
     {
       title: t('pages.system.apis.columnActive'),
       dataIndex: 'is_active',
-      width: 100,
-      minWidth: 100,
-      uniTableKeepWidth: true,
-      resizable: false,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       valueType: 'select',
       valueEnum: {
         true: { text: t('common.enabled'), status: 'Success' },
@@ -592,10 +596,7 @@ const APIListPage: React.FC = () => {
     {
       title: t('pages.system.apis.columnSystem'),
       dataIndex: 'is_system',
-      width: 100,
-      minWidth: 100,
-      uniTableKeepWidth: true,
-      resizable: false,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       hideInSearch: true,
       render: (_, record) =>
         renderSystemTypeMarker(
@@ -617,31 +618,24 @@ const APIListPage: React.FC = () => {
     {
       title: t('common.actions'),
       key: 'action',
-      valueType: 'option',
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) => {
         const actions: React.ReactNode[] = [
-          <Button key="view" {...rowActionKind('read')} onClick={() => handleView(record)}>
-            {t('common.view')}
-          </Button>,
-          <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)}>
-            {t('common.edit')}
-          </Button>,
-          <Button key="test" {...rowActionKind('read')} onClick={() => handleTest(record)}>
+          <Button key="view" {...rowActionKind('read')} onClick={() => handleView(record)} />,
+          <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)} />,
+          <Button key="test" {...rowActionKind('skip')} {...rowActionLabelKeep()} onClick={() => handleTest(record)}>
             {t('pages.system.apis.test')}
           </Button>,
         ]
         if (!record.is_system) {
           actions.push(
-            <Popconfirm key="delete" {...rowActionKind('delete')} title={t('pages.system.apis.deleteConfirmTitle')} onConfirm={() => handleDelete(record)}>
-              <Button type="link" danger size="small" icon={<DeleteOutlined />}>
-                {t('common.delete')}
-              </Button>
+            <Popconfirm key="delete" title={t('pages.system.apis.deleteConfirmTitle')} onConfirm={() => handleDelete(record)}>
+              <Button {...rowActionKind('delete')} />
             </Popconfirm>,
           )
         }
-        return actions;
+        return actions
       },
     },
   ], GLOBAL_DOC_LIST_FIELD_RANK), [t, handleView, handleEdit, handleTest, handleDelete])
@@ -656,7 +650,7 @@ const APIListPage: React.FC = () => {
             <UniTable<API>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('system.apis')}
-          columnPersistenceId="pages.system.apis.list-v4"
+          columnPersistenceId="pages.system.apis.list-v5"
           tanstackQuery={{ queryKeyPrefix: ['pages.system.apis.list', selectedCategoryKey] }}
           actionRef={actionRef}
           columns={columns}

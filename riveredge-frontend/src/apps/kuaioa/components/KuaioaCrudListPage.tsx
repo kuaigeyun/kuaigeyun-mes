@@ -16,14 +16,13 @@ import {
 } from '@ant-design/pro-components';
 import { App, Button, Form } from 'antd';
 import type { FormInstance } from 'antd';
-import { DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import { ThemedSegmented } from '../../../components/themed-segmented';
 import { UniTable } from '../../../components/uni-table';
 import { FormModalGridBlock, FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../components/layout-templates';
 import { useResourcePermissions } from '../../../hooks/useResourcePermissions';
-import { rowActionKind } from '../../../components/uni-action';
+import { rowActionKind, rowActionLabelKeep } from '../../../components/uni-action';
 import { UniWorkflowActions } from '../../../components/uni-workflow-actions';
 import {
   alignProColumns,
@@ -31,6 +30,7 @@ import {
 } from '../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../kuaizhizao/pages/shared/documentAuditColumns';
 import { formatDateBySiteSetting, formatDateTimeBySiteSetting } from '../../../utils/format';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../utils/uniTableLayoutColumns';
 import KuaioaDetailDrawer, { type KuaioaDetailDrawerVariant } from './KuaioaDetailDrawer';
 import {
   renderOaActiveTag,
@@ -219,7 +219,7 @@ const KuaioaCrudListPage: React.FC<Props> = ({
   }, [expiringListFn, searchParams]);
 
   const persistenceId =
-    columnPersistenceId ?? `apps.kuaioa.${resource.replace(':', '.')}.list-v2`;
+    columnPersistenceId ?? `apps.kuaioa.${resource.replace(':', '.')}.list-v5`;
 
   const reloadTable = useCallback(() => {
     actionRef.current?.reload();
@@ -406,12 +406,24 @@ const KuaioaCrudListPage: React.FC<Props> = ({
     const businessFields = fields.filter((f) => !f.hideInTable && f.name !== 'status');
 
     const base: ProColumns<Record<string, unknown>>[] = businessFields.map((field) => {
+      const isNameRemainder = field.name === nameField;
       const col: ProColumns<Record<string, unknown>> = {
         title: t(field.labelKey),
         dataIndex: field.name,
-        ...keepWidthProps(field.width),
-        ellipsis: !field.width || field.name === nameField || field.name === 'title',
+        ellipsis: true,
       };
+
+      if (isNameRemainder) {
+        // 与车辆管理同构：名称/标题唯一 RemainderFlex，禁止全 KeepWidth
+        col.minWidth = field.width ?? 140;
+        col.uniTableRemainderFlex = true;
+        col.uniTablePrimaryFlex = true;
+        col.resizable = false;
+      } else if (field.type === 'switch') {
+        Object.assign(col, UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS);
+      } else {
+        Object.assign(col, keepWidthProps(field.width));
+      }
 
       if (field.type === 'switch') {
         col.hideInSearch = true;
@@ -495,7 +507,6 @@ const KuaioaCrudListPage: React.FC<Props> = ({
         dataIndex: 'status',
         valueType: statusEnum ? 'select' : undefined,
         valueEnum: statusEnum,
-        ...keepWidthProps(statusField.width ?? 100),
         render: (_, row) => {
           const value = row.status == null ? null : String(row.status);
           if (statusPresentation === 'lifecycle') {
@@ -505,8 +516,11 @@ const KuaioaCrudListPage: React.FC<Props> = ({
         },
       };
       if (statusPresentation === 'lifecycle') {
+        // SystemFixed：禁止页面写 width
         statusCol.key = 'lifecycle';
         statusCol.fixed = 'right';
+      } else {
+        Object.assign(statusCol, UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS);
       }
       base.push(statusCol);
     }
@@ -514,7 +528,6 @@ const KuaioaCrudListPage: React.FC<Props> = ({
     base.push({
       title: t('common.actions'),
       key: 'action',
-      valueType: 'option',
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) => {
@@ -523,18 +536,12 @@ const KuaioaCrudListPage: React.FC<Props> = ({
           <Button
             {...rowActionKind('read')}
             key="detail"
-            type="link"
-            icon={<EyeOutlined />}
             onClick={() => void openDetail(record)}
-          >
-            {t('common.detail')}
-          </Button>,
+          />,
         );
         if (perms.canUpdate) {
           actions.push(
-            <Button key="edit" type="link" icon={<EditOutlined />} onClick={() => openEdit(record)}>
-              {t('common.edit')}
-            </Button>,
+            <Button key="edit" {...rowActionKind('update')} onClick={() => openEdit(record)} />,
           );
         }
         extraActions.forEach((action) => {
@@ -543,8 +550,8 @@ const KuaioaCrudListPage: React.FC<Props> = ({
           actions.push(
             <Button
               key={action.key}
-              type="link"
-              icon={action.icon}
+              {...rowActionKind('skip')}
+              {...rowActionLabelKeep()}
               onClick={async () => {
                 try {
                   await action.onClick(record);
@@ -594,9 +601,7 @@ const KuaioaCrudListPage: React.FC<Props> = ({
         }
         if (perms.canDelete && deleteFn) {
           actions.push(
-            <Button key="delete" type="link" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>
-              {t('common.delete')}
-            </Button>,
+            <Button key="delete" {...rowActionKind('delete')} onClick={() => handleDelete(record)} />,
           );
         }
         return actions;

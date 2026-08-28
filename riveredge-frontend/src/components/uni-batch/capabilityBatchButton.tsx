@@ -3,12 +3,13 @@
  */
 
 import React, { useCallback, useMemo } from 'react';
-import { App } from 'antd';
+import { App, Tooltip } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { batchSomeCapabilityAllowed } from '../../hooks/useDocumentCapabilities';
 import { pickCapability, defaultAuditBatchAllowed } from './auditBatchMenu';
 import { UniBatchButton, type UniBatchButtonProps } from './index';
 import { getApiErrorMessage } from '../../utils/errorHandler';
+import { useUniTableDataActionIconOnly } from '../uni-table/dataActionIconOnlyContext';
 
 export type BulkCapabilityResult = {
   success_count?: number;
@@ -177,6 +178,8 @@ export type UniCapabilityBatchButtonProps<T extends { id?: number }> = Omit<
   /** 仅允许选中一条（如打印） */
   singleOnly?: boolean;
   i18nPrefix?: string;
+  /** 仅图标；未传时跟随 UniTable 右侧数据能力簇的宽窄切换 */
+  iconOnly?: boolean;
 };
 
 export function UniCapabilityBatchButton<T extends { id?: number }>({
@@ -195,11 +198,14 @@ export function UniCapabilityBatchButton<T extends { id?: number }>({
   i18nPrefix,
   requireConfirm = false,
   disabled: disabledProp,
+  iconOnly: iconOnlyProp,
   ...buttonProps
 }: UniCapabilityBatchButtonProps<T>) {
   const { message } = App.useApp();
   const { t } = useTranslation();
   const count = selectedRowKeys.length;
+  const toolbarIconOnly = useUniTableDataActionIconOnly();
+  const iconOnly = iconOnlyProp ?? toolbarIconOnly;
 
   const toolbarEnabled = useMemo(() => {
     if (singleOnly && count !== 1) return false;
@@ -262,7 +268,11 @@ export function UniCapabilityBatchButton<T extends { id?: number }>({
     ? pickLabel(labels.singleConfirmDescription, labels.batchConfirmDescription)
     : undefined;
 
-  return (
+  const textLabel = isSingle ? labels.single : labels.batch;
+  const ariaLabel =
+    typeof textLabel === 'string' || typeof textLabel === 'number' ? String(textLabel) : undefined;
+
+  const button = (
     <UniBatchButton
       selectedRowKeys={selectedRowKeys}
       onAction={handleAction}
@@ -270,9 +280,15 @@ export function UniCapabilityBatchButton<T extends { id?: number }>({
       requireConfirm={requireConfirm}
       confirmTitle={confirmTitle}
       confirmDescription={confirmDescription}
+      aria-label={ariaLabel}
       {...buttonProps}
     >
-      {isSingle ? labels.single : labels.batch}
+      {iconOnly ? null : textLabel}
     </UniBatchButton>
   );
+
+  if (iconOnly && ariaLabel) {
+    return <Tooltip title={ariaLabel}>{button}</Tooltip>;
+  }
+  return button;
 }

@@ -5,8 +5,7 @@
 import React, { useRef, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Space } from 'antd';
-import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { App, Popconfirm, Button } from 'antd';
 import { ProFormText, ProFormSelect, ProFormDigit, ProFormDatePicker } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
 import { rowActionKind } from '../../../../../components/uni-action';
@@ -19,6 +18,7 @@ import {
   masterCrudCreatedUpdatedColumns,
   resolveBatchSerialLedgerListParams,
 } from '../../../utils/materialListCore';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { materialBatchApi, materialApi } from '../../../services/material';
 import type { MaterialBatch, MaterialBatchCreate, MaterialBatchUpdate } from '../../../types/material';
 import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
@@ -185,11 +185,12 @@ const BatchesPage: React.FC = () => {
       copyable: true,
     },
     {
+      // 物料名称长短不一：唯一 RemainderFlex（台账无备注列）
       title: t('app.master-data.batches.materialName'),
       dataIndex: 'materialName',
-      width: 160,
       minWidth: 160,
-      uniTableKeepWidth: true,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
       resizable: false,
       ellipsis: true,
       hideInSearch: true,
@@ -218,10 +219,7 @@ const BatchesPage: React.FC = () => {
     {
       title: t('common.status'),
       dataIndex: 'status',
-      width: 100,
-      minWidth: 100,
-      uniTableKeepWidth: true,
-      resizable: false,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       sorter: true,
       hideInSearch: true,
       valueEnum: batchStatusValueEnum,
@@ -235,7 +233,7 @@ const BatchesPage: React.FC = () => {
                 ? 'warning'
                 : 'default';
         const text =
-          batchStatusValueEnum[r.status as keyof typeof batchStatusValueEnum]?.text || r.status || '-';
+          batchStatusValueEnum[r.status as keyof typeof batchStatusValueEnum]?.text || r.status || '—';
         return renderMasterTypeMarker(text, color);
       },
     },
@@ -278,31 +276,24 @@ const BatchesPage: React.FC = () => {
     {
       title: t('common.actions'),
       key: 'action',
-      valueType: 'option',
       fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button
-            key="edit"
-            {...rowActionKind('update')}
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          >
-            {t('common.edit')}
-          </Button>
-          <Popconfirm
-            key="delete"
-            {...rowActionKind('delete')}
-            title={t('common.confirmDelete')}
-            onConfirm={() => handleDelete(record)}
-          >
-            <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-              {t('common.delete')}
-            </Button>
-          </Popconfirm>
-        </Space>
-      ),
+      hideInSearch: true,
+      render: (_, record) => [
+        <Button
+          key="edit"
+          type="link"
+          size="small"
+          {...rowActionKind('update')}
+          onClick={() => handleEdit(record)}
+        />,
+        <Popconfirm
+          key="delete"
+          title={t('common.confirmDelete')}
+          onConfirm={() => handleDelete(record)}
+        >
+          <Button type="link" size="small" {...rowActionKind('delete')} />
+        </Popconfirm>,
+      ],
     },
   ], [t, batchStatusValueEnum]);
 
@@ -311,7 +302,7 @@ const BatchesPage: React.FC = () => {
       <UniTable<MaterialBatch>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('masterData.batches')}
-        columnPersistenceId="apps.master-data.pages.materials.batches.list-v1"
+        columnPersistenceId="apps.master-data.pages.materials.batches.list-v2"
         headerTitle={t('app.master-data.menu.materials.batches')}
         actionRef={actionRef}
         rowKey="uuid"

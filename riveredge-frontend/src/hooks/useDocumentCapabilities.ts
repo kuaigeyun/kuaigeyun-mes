@@ -493,6 +493,7 @@ export const SALES_CONTRACT_CAPABILITY_REASON_MESSAGES: Record<string, string> =
   'sales_contract.push.expired': '合同已过期，无法下推订单',
   'sales_contract.push.not_yet_valid': '合同尚未到生效日期',
   'sales_contract.push.no_items': '合同无明细',
+  'sales_contract.push.amount_framework': '金额总框不支持按明细下推，请在销售订单中关联本合同',
   'sales_contract.push.no_remaining': '合同剩余额度不足',
   'sales_contract.push.no_releasable_items': '无可释放的合同明细',
   'sales_contract.print.not_allowed': '正式合同打印须在已生效、执行中或已关闭且审核通过后',

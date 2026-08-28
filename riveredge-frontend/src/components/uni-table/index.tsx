@@ -8,8 +8,8 @@
  *    - **2.1 左侧**：**uni-search** — `UniSearch`（模糊/高级搜索、重置等）。
  *    - **2.2 右侧**：**uni-view** — `UniView`（表格/明细/卡片/看板/… 及 `customViews`）。
  * 3. **第二行工具区**（`ProTable` 的标题行 + 工具栏）：
- *    - **3.1 左侧功能按钮区** — `headerTitle` ← `buildLeftActions()`：**可选 `toolBarActionsBeforeCreate`**、**新建**、**uni-pull / uni-push**（下推请用 `UniPushToolbarButton`，`type="primary"` + `ArrowDownOutlined`，放 `toolBarActionsAfterCreate`；勿与右侧数据能力混排）、**uni-batch**（删除用 `UniBatchDeleteButton`；其它批量操作用 `UniBatchMenuButton` 或 `toolBarActionsAfterDelete`）、编辑、工具栏「详情」入口等；实现上通过 `headerActions` 或 `toolBarActions` / `toolBarActionsAfterDelete`，以及 **ProTable `toolBarRender` 的返回值（见下）** 注入。
- *    - **3.2 右侧** — 组件内 `buildRightActions()` + `toolbar.actions`：**uni-import**、**uni-export**、**uni-sync**、**数据集**（可选，位于同步后）、**打印**；**表格设定**为 ProTable 原生 **`options`**。
+ *    - **3.1 左侧功能按钮区** — `headerTitle` ← `buildLeftActions()`：**可选 `toolBarActionsBeforeCreate`**、**新建**、**uni-pull / uni-push**（下推请用 `UniPushToolbarButton`，`type="primary"` + `ArrowDownOutlined`，放 `toolBarActionsAfterCreate`；勿与右侧数据能力混排）、**uni-batch**（删除用 `UniBatchDeleteButton`；其它批量操作用 `UniBatchMenuButton` 或 `toolBarActionsAfterDelete`）、编辑、工具栏「详情」入口、**`toolBarActionsEnd`（如高亮逾期，左侧最后一个）** 等；实现上通过 `headerActions` 或 `toolBarActions` / `toolBarActionsAfterDelete`，以及 **ProTable `toolBarRender` 的返回值（见下）** 注入。
+ *    - **3.2 右侧** — 组件内 `buildRightActions()` + `toolbar.actions`：**打印**、**uni-import**、**uni-export**、**uni-sync**、**指标卡**（有 ListPageTemplate.statCards 时）、**数据集**（可选）；**表格设定**为 ProTable 原生 **`options`**。宽度够时显示文案，不足时仅图标（`.uni-table-data-actions`）。
  *
  * **重要**：传入的 **`toolBarRender` 会被剥离后只在左侧复用**：其返回值并入 `headerTitle`，**不会**出现在 ProTable 默认右侧工具栏；传给 `ProTable` 的 `toolBarRender` 由本组件重写，仅负责同步选中行并渲染 **3.2** 内建按钮。
  *
@@ -73,12 +73,38 @@ import { UniSyncButton } from '../uni-sync'
 // 深路径导入工具栏按钮，避免经 uni-import/uni-export barrel 静态拉起 Univer
 import { UniImportToolbarButton } from '../uni-import/UniImportToolbarButton'
 import { UniExportMenuButton } from '../uni-export/UniExportMenuButton'
+import { UniTableDataActionIconOnlyContext } from './dataActionIconOnlyContext'
 
 // 懒加载：UniImport 内含 UniverJS（约 2MB+），仅在用户点击导入时加载
 const LazyUniImport = lazy(() => import('../uni-import'))
 
-/** 工具栏 DOM 尚未就绪时的回退：整表宽度低于此值则导入/导出/同步仅图标 */
+/** 工具栏 DOM 尚未就绪时的回退：整表宽度低于此值则打印/导入/导出/同步仅图标 */
 const DATA_ACTION_ICON_ONLY_MAX_WIDTH = 1280
+
+/** 工具栏左簇 / 数据能力 / 设定图标之间的间距预算 */
+const TOOLBAR_CLUSTER_GAP = 16
+
+/**
+ * 测量元素「内容实际占用」宽度。
+ * ProTable 工具栏 left/right 常带 flex:1，直接读 scrollWidth 会被撑满，导致永远判定为仅图标。
+ */
+function measureOccupiedWidth(el: HTMLElement | null | undefined): number {
+  if (!el) return 0
+  const kids = Array.from(el.children) as HTMLElement[]
+  if (kids.length === 0) return 0
+  let minL = Infinity
+  let maxR = -Infinity
+  for (const kid of kids) {
+    const r = kid.getBoundingClientRect()
+    if (r.width <= 0) continue
+    minL = Math.min(minL, r.left)
+    maxR = Math.max(maxR, r.right)
+  }
+  if (!Number.isFinite(minL) || !Number.isFinite(maxR) || maxR <= minL) {
+    return Math.ceil(el.scrollWidth) || 0
+  }
+  return Math.ceil(maxR - minL)
+}
 
 /** 行点击切换勾选：命中可操作子元素时不切换，避免误选（成本仅一次 DOM closest） */
 function shouldIgnoreRowClickForSelection(target: Element): boolean {
@@ -649,6 +675,10 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    */
   toolBarActionsAfterBatch?: ReactNode[]
   /**
+   * **3.1 左侧功能区最后一个插槽**（编辑/详情之后）。如「高亮逾期」开关，勿放 `toolbar.actions`（那是右侧）。
+   */
+  toolBarActionsEnd?: ReactNode[]
+  /**
    * 是否显示导入按钮（默认：true）。
    * 实际渲染还须 onImport + 完整模板（或 autoGenerateImportConfig）+ canImport。
    */
@@ -762,7 +792,8 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    */
   exportButtonText?: string
   /**
-   * 右侧工具栏：插入在导入/导出图标组之前的附加按钮（如自定义上传）
+   * 右侧工具栏：插入在「打印」之后、「导入」之前（如单据 UniCapabilityBatchButton 打印）。
+   * 右侧顺序：打印（`showPrintButton`）→ **本插槽** → 导入 → 导出 → 同步；勿把打印放左侧 `toolBarActionsAfterBatch`。
    */
   rightToolBarActionsBeforeExport?: ReactNode[]
   /**
@@ -781,7 +812,6 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
   syncButtonText?: string
   /**
    * 是否显示「数据集」配置入口按钮（默认：false；位于同步按钮之后）
-   * 右侧顺序：导入 → 导出 → **本按钮** → 同步 → 打印（与「同步」同一工具区，占同步前一位）。
    */
   showDatasetConfigButton?: boolean
   /** 「数据集」配置入口点击回调（如打开绑定数据集弹窗） */
@@ -789,7 +819,7 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
   /** 按钮文案（不传则用 i18n `components.uniTable.datasetConfig`） */
   datasetConfigButtonText?: string
   /**
-   * 是否显示打印按钮（默认：false，位于右侧：导入/导出/同步/打印/表格设置）。
+   * 是否显示打印按钮（默认：false；右侧数据能力簇最前：打印 → 导入 → 导出 → 同步）
    */
   showPrintButton?: boolean
   /**
@@ -1156,6 +1186,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   toolBarActions = [],
   toolBarActionsAfterDelete = [],
   toolBarActionsAfterBatch = [],
+  toolBarActionsEnd = [],
   showImportButton = true,
   onImport,
   onImportPrecheck,
@@ -1340,8 +1371,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const [dataActionIconOnly, setDataActionIconOnly] = useState(false)
   const dataActionIconOnlyRef = useRef(false)
   dataActionIconOnlyRef.current = dataActionIconOnly
-  /** 带文案时右侧工具栏固有宽；icon-only 时仍用此值判断，避免量到缩小宽度后振荡 */
-  const labeledRightToolbarWidthRef = useRef(0)
+  /** 带文案时数据能力簇（打印/导入/导出/同步）固有宽；icon-only 时仍用此值判断，避免振荡 */
+  const labeledDataActionsWidthRef = useRef(0)
   /** 操作列 key → 实测内容宽度；见 utils/uniTableLayoutColumns.ts 的两段式推导 */
   const [measuredOperationWidths, setMeasuredOperationWidths] = useState<Record<string, number>>({})
   /** 堆叠主列 key → 不可截断内容（标识行 + 树形缩进）的实测宽度下界 */
@@ -1586,24 +1617,33 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       if (typeof col.dataIndex === 'string' && !col.render) {
         const dictionaryCode = resolveSystemDictionaryFieldCode(col.dataIndex)
         if (dictionaryCode) {
+          const dataIndex = col.dataIndex
           return {
             ...col,
-            render: (val: unknown) => (
-              <DictionaryLabel dictionaryCode={dictionaryCode} value={val as string} />
-            ),
+            render: (_: unknown, record: T) => {
+              const val = record?.[dataIndex as keyof T]
+              return (
+                <DictionaryLabel dictionaryCode={dictionaryCode} value={val as string} />
+              )
+            },
           }
         }
       }
       // 单位列：主数据单位目录为唯一真源（禁止 DictionaryLabel "unit"，该码不存在会渲染空串）
+      // ProTable render 首参是已渲染 dom，须从 record 取真值（否则 String(ReactNode)=[object Object]）
       const unitFields = ['material_unit', 'unit', 'baseUnit', 'base_unit'];
       if (typeof col.dataIndex === 'string' && unitFields.includes(col.dataIndex) && !col.render) {
+        const dataIndex = col.dataIndex
         const unitWidth = typeof col.width === 'number' ? col.width : 80
         return {
           ...col,
           width: unitWidth,
           minWidth: typeof col.minWidth === 'number' ? col.minWidth : unitWidth,
           uniTableKeepWidth: true,
-          render: (val: unknown) => <MaterialUnitLabel value={val as string | null} />,
+          render: (_: unknown, record: T) => {
+            const val = record?.[dataIndex as keyof T]
+            return <MaterialUnitLabel value={val as string | null} />
+          },
         }
       }
       /** 列表头表进度列：全局 80px，禁止页面/持久化漂移 */
@@ -2645,12 +2685,40 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       )
     }
 
+    if (toolBarActionsEnd.length > 0) {
+      actions.push(...withToolbarItemKeys(toolBarActionsEnd, 'uni-tb-end'))
+    }
+
     return actions.length > 0 ? <Space>{actions}</Space> : undefined
   }
 
-  /** 3.2 右侧：uni-import / uni-export / uni-sync / 数据集（可选）/ 打印（表格设定见 `memoizedOptions`） */
+  /** 3.2 右侧：打印 → uni-import → uni-export → uni-sync → 指标卡 → 数据集（可选）；表格设定见 `memoizedOptions` */
   const buildRightActions = (iconOnly = false) => {
     const rightButtons: ReactNode[] = []
+
+    if (showPrintButton && onPrint) {
+      const printLabel = printButtonText ?? t('common.print')
+      const printBtn = (
+        <Button
+          size={toolBarButtonSize}
+          icon={<PrinterOutlined />}
+          disabled={selectedRowKeys.length !== 1 || printButtonDisabled}
+          onClick={() => onPrint(selectedRowKeys, tableData)}
+          aria-label={printLabel}
+        >
+          {iconOnly ? null : printLabel}
+        </Button>
+      )
+      rightButtons.push(
+        iconOnly ? (
+          <Tooltip key="print" title={printLabel}>
+            {printBtn}
+          </Tooltip>
+        ) : (
+          <React.Fragment key="print">{printBtn}</React.Fragment>
+        ),
+      )
+    }
 
     const beforeExportActions = withToolbarItemKeys(
       rightToolBarActionsBeforeExport,
@@ -2697,6 +2765,36 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       )
     }
 
+    if (statCardsCtx?.enabled) {
+      const statCardsLabel = t('components.uniTable.statCards')
+      const statCardsHint = t(
+        statCardsCtx.visible
+          ? 'components.uniTable.hideStatCards'
+          : 'components.uniTable.showStatCards',
+      )
+      const statCardsBtn = (
+        <Button
+          size={toolBarButtonSize}
+          type={statCardsCtx.visible ? 'primary' : 'default'}
+          icon={<PieChartOutlined />}
+          onClick={statCardsCtx.toggle}
+          aria-label={statCardsHint}
+          aria-pressed={statCardsCtx.visible}
+        >
+          {iconOnly ? null : statCardsLabel}
+        </Button>
+      )
+      rightButtons.push(
+        iconOnly ? (
+          <Tooltip key="stat-cards" title={statCardsHint}>
+            {statCardsBtn}
+          </Tooltip>
+        ) : (
+          <React.Fragment key="stat-cards">{statCardsBtn}</React.Fragment>
+        ),
+      )
+    }
+
     if (showDatasetConfigButton && onDatasetConfig) {
       rightButtons.push(
         <Button
@@ -2711,25 +2809,15 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       )
     }
 
-    if (showPrintButton && onPrint) {
-      rightButtons.push(
-        <Button
-          key="print"
-          size={toolBarButtonSize}
-          icon={<PrinterOutlined />}
-          disabled={selectedRowKeys.length !== 1 || printButtonDisabled}
-          onClick={() => onPrint(selectedRowKeys, tableData)}
-        >
-          {printButtonText ?? t('common.print')}
-        </Button>
-      )
-    }
+    if (rightButtons.length === 0) return undefined
 
-    return rightButtons.length > 0 ? (
-      <Space size="small" wrap={false}>
-        {rightButtons}
-      </Space>
-    ) : undefined
+    return (
+      <UniTableDataActionIconOnlyContext.Provider value={iconOnly}>
+        <Space className="uni-table-data-actions" size="small" wrap={false}>
+          {rightButtons}
+        </Space>
+      </UniTableDataActionIconOnlyContext.Provider>
+    )
   }
 
   const buildHeaderActions = () => {
@@ -2747,6 +2835,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       toolBarActions,
       toolBarActionsAfterDelete,
       toolBarActionsAfterBatch,
+      toolBarActionsEnd,
       gatedShowCreateButton,
       gatedShowDeleteButton,
       deleteButtonDisabled,
@@ -2788,39 +2877,6 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     },
   }), [mergedToolbarOptions, handleColumnReset, reloadWithTanstackCacheBust, zebraStripeEnabled, handleZebraStripeChange])
 
-  const statCardsOptionsRender = useCallback(
-    (_props: unknown, defaultDom: React.ReactNode[]) => {
-      if (!statCardsCtx?.enabled) return defaultDom
-      const toggleNode = (
-        <span key="uni-stat-cards-toggle" onClick={statCardsCtx.toggle}>
-          <Tooltip
-            title={t(
-              statCardsCtx.visible
-                ? 'components.uniTable.hideStatCards'
-                : 'components.uniTable.showStatCards',
-            )}
-          >
-            <PieChartOutlined
-              style={
-                statCardsCtx.visible
-                  ? undefined
-                  : { color: token.colorTextQuaternary }
-              }
-            />
-          </Tooltip>
-        </span>
-      )
-      const reloadIdx = defaultDom.findIndex(
-        (node) => React.isValidElement(node) && node.key === 'reload',
-      )
-      if (reloadIdx >= 0) {
-        return [...defaultDom.slice(0, reloadIdx), toggleNode, ...defaultDom.slice(reloadIdx)]
-      }
-      return [toggleNode, ...defaultDom]
-    },
-    [statCardsCtx, t, token.colorTextQuaternary],
-  )
-
   const memoizedRightActions = !isMobile ? buildRightActions(dataActionIconOnly) : undefined
 
   const memoizedToolbar = React.useMemo(() => ({
@@ -2855,15 +2911,17 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     }
   }, [restProps])
 
-  /** 有左固定列时勾选列一并固定（antd 原生契约）；调用方显式 fixed 优先 */
+  /** 有左固定列时勾选列一并固定（antd 原生契约）；调用方显式 fixed 优先。
+   * 空表取消钉列：rc-table sticky 空态会吞掉中间表头，只剩左右固定列。 */
   const selectionFixedForNativePin = React.useMemo(() => {
+    if (tableData.length === 0) return undefined
     const userFixed =
       normalizedUserRowSelection && typeof normalizedUserRowSelection === 'object'
         ? normalizedUserRowSelection.fixed
         : undefined
     if (userFixed !== undefined) return userFixed
     return hasUniTableFixedLeftColumns(effectiveTableColumns) ? true : undefined
-  }, [normalizedUserRowSelection, effectiveTableColumns])
+  }, [normalizedUserRowSelection, effectiveTableColumns, tableData.length])
 
   const memoizedRowSelection = React.useMemo(
     () =>
@@ -3024,14 +3082,28 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       if (!key) continue
       widthByKey.set(key, { width: c.width, minWidth: c.minWidth })
     }
-    return effectiveTableColumns.map((col: any) => {
+    const withWidths = effectiveTableColumns.map((col: any) => {
       const key = String(col.key ?? '')
       const patch = key ? widthByKey.get(key) : undefined
       if (!patch) return col
       return { ...col, width: patch.width, minWidth: patch.minWidth }
     })
-  }, [effectiveTableColumns, layoutPlan.columns])
+    // 空表 + 固定列：取消 fixed，避免 sticky 分表导致中间表头被吞（半宽双栏空态尤甚）
+    if (!isEmptyTable || !hasUniTableFixedColumns(withWidths)) return withWidths
+    return withWidths.map((col: any) => {
+      if (!col || typeof col !== 'object') return col
+      const fixed = col.fixed
+      if (fixed == null || fixed === false) return col
+      const { fixed: _omitFixed, ...rest } = col
+      return rest
+    })
+  }, [effectiveTableColumns, layoutPlan.columns, isEmptyTable])
   const computedTableScrollX = layoutPlan.scrollX
+  /** 空表已取消钉列：scroll.x 贴视口，避免假横滚把中间列滚出首屏 */
+  const emptySafeTableScrollX =
+    emptyTableHasFixedColumns && containerLayoutWidth > 0
+      ? Math.min(computedTableScrollX, containerLayoutWidth)
+      : computedTableScrollX
 
   const rowClickSelectionEnabled =
     !disableRowClickSelection && tableHasRowSelection && !!memoizedRowSelection
@@ -3368,8 +3440,6 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     const root = containerRef.current
     if (!root) return
 
-    const TOOLBAR_CLUSTER_GAP = 16
-
     const syncContainerLayout = () => {
       // 列宽预算必须用横向滚动口 clientWidth，禁止用外层 container 宽：
       // 外层常比 .ant-table-body/.ant-table-content 宽几～十几 px，会把 scroll.x 撑出假横滚。
@@ -3393,14 +3463,24 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       }
 
       const left = toolbar.querySelector('.ant-pro-table-list-toolbar-left') as HTMLElement | null
-      const right = toolbar.querySelector('.ant-pro-table-list-toolbar-right') as HTMLElement | null
-      if (right && !dataActionIconOnlyRef.current) {
-        labeledRightToolbarWidthRef.current = right.scrollWidth
+      const dataActions = toolbar.querySelector('.uni-table-data-actions') as HTMLElement | null
+      const settings = toolbar.querySelector(
+        '.ant-pro-table-list-toolbar-setting-items',
+      ) as HTMLElement | null
+
+      // 仅在「带文案」时刷新基准宽，icon-only 时继续用该值判断是否恢复文案（防振荡）
+      if (dataActions && !dataActionIconOnlyRef.current) {
+        labeledDataActionsWidthRef.current = measureOccupiedWidth(dataActions)
       }
-      const labeledRight =
-        labeledRightToolbarWidthRef.current || right?.scrollWidth || 0
-      const need = (left?.scrollWidth ?? 0) + labeledRight + TOOLBAR_CLUSTER_GAP
-      const next = toolbar.clientWidth > 0 && need > toolbar.clientWidth
+      const labeledNeed =
+        labeledDataActionsWidthRef.current || measureOccupiedWidth(dataActions)
+
+      const leftNeed = measureOccupiedWidth(left)
+      const optionsWidth = measureOccupiedWidth(settings)
+
+      // 剩余给「打印/导入/导出/同步」的宽度；够放文案则显示文字，否则仅图标
+      const available = toolbar.clientWidth - leftNeed - optionsWidth - TOOLBAR_CLUSTER_GAP
+      const next = labeledNeed > 0 && available < labeledNeed
       setDataActionIconOnly((prev) => (prev === next ? prev : next))
     }
 
@@ -3414,8 +3494,12 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     if (ro && toolbar) ro.observe(toolbar)
     const left = root.querySelector('.ant-pro-table-list-toolbar-left')
     const right = root.querySelector('.ant-pro-table-list-toolbar-right')
+    const dataActionsEl = root.querySelector('.uni-table-data-actions')
+    const settingsEl = root.querySelector('.ant-pro-table-list-toolbar-setting-items')
     if (ro && left) ro.observe(left)
     if (ro && right) ro.observe(right)
+    if (ro && dataActionsEl) ro.observe(dataActionsEl)
+    if (ro && settingsEl) ro.observe(settingsEl)
     window.addEventListener('resize', syncContainerLayout)
     return () => {
       ro?.disconnect()
@@ -3769,7 +3853,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                 let mergedScroll =
                   allowCustomScrollX && normalizedUserScroll?.x !== undefined
                     ? normalizedUserScroll
-                    : { ...(normalizedUserScroll || {}), x: computedTableScrollX }
+                    : { ...(normalizedUserScroll || {}), x: emptySafeTableScrollX }
                 const useVirtual = virtualized || userVirtual === true
                 if (!useVirtual && mergedScroll?.y === undefined && listPageScrollY) {
                   mergedScroll = {
@@ -3811,7 +3895,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
               })()}
               size="small"
               options={memoizedOptions}
-              optionsRender={statCardsCtx?.enabled ? statCardsOptionsRender : (restProps as any).optionsRender}
+              optionsRender={(restProps as any).optionsRender}
               revalidateOnFocus={false}
               />
               {enableRowSelection && selectedRowKeys.length > 0 ? (

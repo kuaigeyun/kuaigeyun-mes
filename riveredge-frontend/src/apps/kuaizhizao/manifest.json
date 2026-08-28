@@ -4167,7 +4167,7 @@
             "node_key": "sales_contract",
             "entity_type": "sales_contract",
             "resource": "kuaizhizao:sales-contract",
-            "name": "销售合同审核",
+            "name": "框架合同审核",
             "template": "simple",
             "config_category": "sales"
         },
@@ -4215,7 +4215,7 @@
             "node_key": "sales_contract_change",
             "entity_type": "sales_contract_change",
             "resource": "kuaizhizao:sales-contract",
-            "name": "销售合同变更审核",
+            "name": "框架合同变更审核",
             "template": "simple",
             "config_category": "sales"
         },
@@ -4447,7 +4447,7 @@
         },
         {
             "page_code": "kuaizhizao-sales-contract",
-            "page_name": "销售合同",
+            "page_name": "框架合同",
             "page_path": "/apps/kuaizhizao/sales-management/sales-contracts",
             "code_field": "contract_code",
             "code_field_label": "合同编码",
@@ -4459,7 +4459,7 @@
         },
         {
             "page_code": "kuaizhizao-sales-contract-change",
-            "page_name": "销售合同变更",
+            "page_name": "框架合同变更",
             "page_path": "/apps/kuaizhizao/sales-management/sales-contracts",
             "code_field": "change_code",
             "code_field_label": "合同变更编码",
@@ -5117,19 +5117,19 @@
         },
         {
             "page_code": "kuaizhizao-sales-contract",
-            "page_name": "销售合同",
+            "page_name": "框架合同",
             "page_path": "/apps/kuaizhizao/sales-management/sales-contracts",
             "table_name": "apps_kuaizhizao_sales_contracts",
-            "table_name_label": "销售合同表",
+            "table_name_label": "框架合同表",
             "module": "快制造",
             "module_icon": "tool"
         },
         {
             "page_code": "kuaizhizao-sales-contract-change",
-            "page_name": "销售合同变更",
+            "page_name": "框架合同变更",
             "page_path": "/apps/kuaizhizao/sales-management/sales-contracts",
             "table_name": "apps_kuaizhizao_sales_contract_changes",
-            "table_name_label": "销售合同变更表",
+            "table_name_label": "框架合同变更表",
             "module": "快制造",
             "module_icon": "tool"
         },

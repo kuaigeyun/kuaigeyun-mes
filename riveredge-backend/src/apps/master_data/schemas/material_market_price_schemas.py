@@ -35,10 +35,12 @@ class MaterialMarketPriceUpdate(BaseModel):
 
 
 class MaterialMarketPriceResponse(BaseModel):
+    """列表可含当日只读沿用行：未落库时 id/uuid 为空。"""
+
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
-    id: int
-    uuid: str
+    id: Optional[int] = None
+    uuid: Optional[str] = None
     code: str
     name: str
     price_date: date = Field(..., alias="priceDate")

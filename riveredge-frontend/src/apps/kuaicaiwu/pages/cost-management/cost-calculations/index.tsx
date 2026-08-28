@@ -51,9 +51,9 @@ import {
 import { UniTable } from '../../../../../components/uni-table';
 import {
   UniTableStackedPrimaryCell,
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { MarkerTag } from '../../../../../constants/statusBadges';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import {
   ListPageTemplate,
   MultiTabListPageTemplate,
@@ -643,7 +643,12 @@ const CostCalculationPage: React.FC = () => {
         title: t('app.kuaicaiwu.costCalculation.col.calculationNo'),
         key: 'finance_doc_partner_stacked',
         dataIndex: 'calculation_no',
-        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        // 有 RemainderFlex：主标识叠列 KeepWidth
+        width: 240,
+        minWidth: 240,
+        uniTableKeepWidth: true,
+        uniTablePrimaryFlex: false,
+        resizable: false,
         fixed: 'left',
         hideInSearch: true,
         sorter: true,
@@ -662,10 +667,7 @@ const CostCalculationPage: React.FC = () => {
         title: t('app.kuaicaiwu.costCalculation.col.calculationType'),
         dataIndex: 'calculation_type',
         key: 'calculation_type',
-        width: 120,
-        minWidth: 120,
-        uniTableKeepWidth: true,
-        resizable: false,
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         hideInSearch: true,
         sorter: true,
         render: (_, r) => {
@@ -789,15 +791,27 @@ const CostCalculationPage: React.FC = () => {
         valueType: 'select',
         valueEnum: calculationStatusEnum,
       },
+      {
+        // 备注长短不一：唯一 RemainderFlex
+        title: t('common.remark'),
+        dataIndex: 'remark',
+        key: 'notes',
+        minWidth: 160,
+        uniTableRemainderFlex: true,
+        uniTablePrimaryFlex: true,
+        resizable: false,
+        ellipsis: true,
+        hideInSearch: true,
+        render: (_, r) => r.remark || '—',
+      },
       ...costDocCreatedUpdatedColumns<CostCalculation>(t),
       {
         title: t('common.actions'),
-        valueType: 'option',
         key: 'action',
         fixed: 'right',
         hideInSearch: true,
         render: (_: unknown, record: CostCalculation) => [
-          <Button key="detail" {...rowActionKind('read')} onClick={() => handleDetail(record)} />,
+          <Button key="detail" type="link" size="small" {...rowActionKind('read')} onClick={() => handleDetail(record)} />,
         ],
       },
     ],
@@ -808,7 +822,7 @@ const CostCalculationPage: React.FC = () => {
     <ListPageTemplate>
       <UniTable<CostCalculation>
         actionRef={actionRef}
-        columnPersistenceId="apps.kuaicaiwu.pages.cost-management.cost-calculations.list-v5"
+        columnPersistenceId="apps.kuaicaiwu.pages.cost-management.cost-calculations.list-v6"
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaicaiwu.costCalculations')}
         showAdvancedSearch

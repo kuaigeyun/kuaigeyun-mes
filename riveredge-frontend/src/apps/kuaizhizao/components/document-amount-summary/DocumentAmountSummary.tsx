@@ -3,6 +3,7 @@ import { Divider, Form, InputNumber, theme as antdTheme } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useNumericPrecisionPlaces } from '../../../../hooks/useNumericPrecision';
 import { formatQuantity } from '../../../../utils/format';
+import { amountToChineseRmb } from '../../../../utils/rmbUppercase';
 import { normalizeFormListItems } from '../../../../utils/formListItems';
 import {
   computeDocumentGoodsTotals,
@@ -10,7 +11,6 @@ import {
   computePurchaseDocumentTotals,
   computeSalesDocumentTotals,
   formatDocumentMoneyYuan,
-  type DocumentGoodsTotals,
   type DocumentTotalsWithDiscount,
   type PurchaseDocumentTotals,
   type SalesDocumentTotals,
@@ -28,66 +28,51 @@ type SummaryRowDef = {
   hidden?: boolean;
 };
 
+function splitBodyAndEmphasis(rows: SummaryRowDef[]): {
+  bodyRows: SummaryRowDef[];
+  emphasisRows: SummaryRowDef[];
+} {
+  // 仅「结算结果」下沉底栏；价税合计留在明细流里（单列更整齐）
+  const footerKeys = new Set([
+    'afterDiscount',
+    'estimatedReceivable',
+    'estimatedPayable',
+    'estimatedTotalCost',
+    'amount',
+  ]);
+  const emphasisIndex = rows.findIndex((row) => row.emphasis && footerKeys.has(row.key));
+  if (emphasisIndex < 0) {
+    return { bodyRows: rows, emphasisRows: [] };
+  }
+  return {
+    bodyRows: rows.slice(0, emphasisIndex),
+    emphasisRows: rows.slice(emphasisIndex),
+  };
+}
+
 function appendDiscountRows(
   t: (key: string) => string,
   totals: DocumentTotalsWithDiscount,
-  options: { finalEmphasis?: boolean },
+  options: { finalEmphasis?: boolean; /** 上方已有整单优惠输入时不再重复展示 */ omitDiscountAmount?: boolean },
 ): SummaryRowDef[] {
   if (totals.discountAmount <= 0.005) return [];
-  return [
-    {
+  const rows: SummaryRowDef[] = [];
+  if (!options.omitDiscountAmount) {
+    rows.push({
       key: 'discount',
       label: t('app.kuaizhizao.salesOrder.discountAmount'),
       hint: t('app.kuaizhizao.salesOrder.discountAmountHint'),
       value: totals.discountAmount,
       secondary: true,
-    },
-    {
-      key: 'afterDiscount',
-      label: t('app.kuaizhizao.salesOrder.amountAfterDiscount'),
-      hint: t('app.kuaizhizao.salesOrder.amountAfterDiscountHint'),
-      value: totals.goodsAfterDiscount,
-      emphasis: options.finalEmphasis,
-    },
-  ];
-}
-
-function buildGoodsRows(
-  t: (key: string) => string,
-  goods: DocumentGoodsTotals,
-  options?: { showQuantity?: boolean; showTax?: boolean; showGoodsIncl?: boolean },
-): SummaryRowDef[] {
-  const showTax = options?.showTax ?? Math.abs(goods.taxAmount) > 0.005;
-  const showGoodsIncl = options?.showGoodsIncl ?? true;
-  const rows: SummaryRowDef[] = [];
-  if (options?.showQuantity) {
-    rows.push({
-      key: 'quantity',
-      label: t('app.kuaizhizao.quotation.summary.totalQuantity'),
-      value: goods.totalQuantity,
-      secondary: true,
     });
   }
   rows.push({
-    key: 'goodsExcl',
-    label: t('app.kuaizhizao.salesOrder.amountGoodsValue'),
-    hint: t('app.kuaizhizao.salesOrder.amountGoodsValueHint'),
-    value: goods.goodsExcl,
+    key: 'afterDiscount',
+    label: t('app.kuaizhizao.salesOrder.amountAfterDiscount'),
+    hint: t('app.kuaizhizao.salesOrder.amountAfterDiscountHint'),
+    value: totals.goodsAfterDiscount,
+    emphasis: options.finalEmphasis,
   });
-  if (showTax) {
-    rows.push({
-      key: 'tax',
-      label: t('app.kuaizhizao.salesOrder.amountTax'),
-      value: goods.taxAmount,
-    });
-  }
-  if (showGoodsIncl) {
-    rows.push({
-      key: 'goodsIncl',
-      label: t('app.kuaizhizao.salesOrder.amountGoodsInclTax'),
-      value: goods.goodsIncl,
-    });
-  }
   return rows;
 }
 
@@ -100,15 +85,17 @@ function buildSalesRows(
   const hasFees = totals.customerFees > 0.005 || totals.ourFees > 0.005;
   const hasDiscount = totals.discountAmount > 0.005;
   const hasTax = Math.abs(totals.taxAmount) > 0.005;
-  const rows: SummaryRowDef[] = [
-    {
-      key: 'quantity',
-      label: t('app.kuaizhizao.quotation.summary.totalQuantity'),
-      value: totals.totalQuantity,
-      secondary: true,
-    },
-  ];
+  const rows: SummaryRowDef[] = [];
 
+  // 1) 总数量单独一行
+  rows.push({
+    key: 'quantity',
+    label: t('app.kuaizhizao.quotation.summary.totalQuantity'),
+    value: totals.totalQuantity,
+    secondary: true,
+  });
+
+  // 2) 价税拆分（含税）：未税 / 税额 / 价税合计
   if (isInclusive) {
     rows.push({
       key: 'goodsExcl',
@@ -139,8 +126,15 @@ function buildSalesRows(
     });
   }
 
-  rows.push(...appendDiscountRows(t, totals, { finalEmphasis: !hasFees }));
+  // 3) 折让：上方已有输入，此处只展示优惠后金额
+  rows.push(
+    ...appendDiscountRows(t, totals, {
+      finalEmphasis: !hasFees,
+      omitDiscountAmount: true,
+    }),
+  );
 
+  // 4) 费用
   rows.push(
     {
       key: 'customerFees',
@@ -160,6 +154,7 @@ function buildSalesRows(
     },
   );
 
+  // 5) 预计应收
   if (hasFees) {
     rows.push({
       key: 'estimatedReceivable',
@@ -181,14 +176,14 @@ function buildPurchaseRows(
   const isInclusive = priceType === 'tax_inclusive';
   const hasFees = totals.otherSideFees > 0.005 || totals.ourSideFees > 0.005;
   const hasTax = Math.abs(totals.taxAmount) > 0.005;
-  const rows: SummaryRowDef[] = [
-    {
-      key: 'quantity',
-      label: t('app.kuaizhizao.quotation.summary.totalQuantity'),
-      value: totals.totalQuantity,
-      secondary: true,
-    },
-  ];
+  const rows: SummaryRowDef[] = [];
+
+  rows.push({
+    key: 'quantity',
+    label: t('app.kuaizhizao.quotation.summary.totalQuantity'),
+    value: totals.totalQuantity,
+    secondary: true,
+  });
 
   if (isInclusive) {
     rows.push({
@@ -267,23 +262,22 @@ function buildLinesRows(
   const isInclusive = priceType === 'tax_inclusive';
   const hasTax = Math.abs(totals.taxAmount) > 0.005;
   const hasDiscount = totals.discountAmount > 0.005;
-  const quantityRow: SummaryRowDef = {
+  const rows: SummaryRowDef[] = [];
+
+  rows.push({
     key: 'quantity',
     label: t('app.kuaizhizao.quotation.summary.totalQuantity'),
     value: totals.totalQuantity,
     secondary: true,
-  };
+  });
 
   if (isInclusive) {
-    const rows: SummaryRowDef[] = [
-      quantityRow,
-      {
-        key: 'goodsExcl',
-        label: t('app.kuaizhizao.salesOrder.amountGoodsValue'),
-        hint: t('app.kuaizhizao.salesOrder.amountGoodsValueHint'),
-        value: totals.goodsExcl,
-      },
-    ];
+    rows.push({
+      key: 'goodsExcl',
+      label: t('app.kuaizhizao.salesOrder.amountGoodsValue'),
+      hint: t('app.kuaizhizao.salesOrder.amountGoodsValueHint'),
+      value: totals.goodsExcl,
+    });
     if (hasTax) {
       rows.push({
         key: 'tax',
@@ -297,20 +291,21 @@ function buildLinesRows(
       value: totals.goodsIncl,
       emphasis: !hasDiscount,
     });
-    rows.push(...appendDiscountRows(t, totals, { finalEmphasis: true }));
-    return rows;
-  }
-
-  const rows: SummaryRowDef[] = [
-    quantityRow,
-    {
+  } else {
+    rows.push({
       key: 'grandTotal',
       label: t('app.kuaizhizao.quotation.summary.grandTotal'),
       value: totals.goodsExcl,
       emphasis: !hasDiscount,
-    },
-  ];
-  rows.push(...appendDiscountRows(t, totals, { finalEmphasis: true }));
+    });
+  }
+
+  rows.push(
+    ...appendDiscountRows(t, totals, {
+      finalEmphasis: true,
+      omitDiscountAmount: true,
+    }),
+  );
   return rows;
 }
 
@@ -341,47 +336,90 @@ function buildBasicRows(
   ];
 }
 
-const SummaryRow: React.FC<{
+const LABEL_FONT_SIZE = 13;
+const VALUE_FONT_SIZE = 13;
+const EMPHASIS_FONT_SIZE = 16;
+const SUMMARY_ITEM_INNER_GAP = 12;
+const SUMMARY_ROW_GAP = 8;
+/** 单列汇总宽度：避免标签与金额撑得过开 */
+const SUMMARY_PANEL_MAX_WIDTH = 320;
+
+const SummaryItem: React.FC<{
   row: SummaryRowDef;
   token: ReturnType<typeof antdTheme.useToken>['token'];
-}> = ({ row, token }) => {
-  if (row.hidden) return null;
+  showRmbUppercase?: boolean;
+}> = ({ row, token, showRmbUppercase }) => {
+  const { t } = useTranslation();
   const isQuantity = row.key === 'quantity';
   const displayValue = isQuantity ? formatQuantity(row.value) : formatDocumentMoneyYuan(row.value);
+  const uppercase = showRmbUppercase && !isQuantity ? amountToChineseRmb(row.value) : '';
+  const fontSize = row.emphasis ? EMPHASIS_FONT_SIZE : LABEL_FONT_SIZE;
+  const valueSize = row.emphasis ? EMPHASIS_FONT_SIZE : VALUE_FONT_SIZE;
 
   return (
     <div
       style={{
         display: 'flex',
+        flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'baseline',
-        gap: 24,
-        padding: row.emphasis ? '6px 0 2px' : '3px 0',
+        gap: SUMMARY_ITEM_INNER_GAP,
+        width: '100%',
+        padding: `${SUMMARY_ROW_GAP / 2}px 0`,
       }}
       title={row.hint}
     >
       <span
         style={{
           color: row.emphasis ? token.colorText : token.colorTextSecondary,
-          fontSize: row.emphasis ? 14 : 13,
+          fontSize,
           fontWeight: row.emphasis ? 600 : 400,
-          flex: '1 1 auto',
-          minWidth: 0,
+          lineHeight: 1.4,
+          whiteSpace: 'nowrap',
+          flexShrink: 0,
         }}
       >
         {row.label}
       </span>
-      <span
+      <div
         style={{
-          fontSize: row.emphasis ? 18 : 14,
-          fontWeight: row.emphasis ? 700 : 500,
-          fontVariantNumeric: 'tabular-nums',
-          color: row.emphasis ? token.colorPrimary : token.colorText,
-          whiteSpace: 'nowrap',
+          display: 'flex',
+          flexDirection: 'row',
+          alignItems: 'baseline',
+          justifyContent: 'flex-end',
+          flexWrap: 'wrap',
+          gap: 8,
+          minWidth: 0,
+          textAlign: 'right',
         }}
       >
-        {displayValue}
-      </span>
+        <span
+          style={{
+            fontSize: valueSize,
+            fontWeight: row.emphasis ? 700 : 500,
+            fontVariantNumeric: 'tabular-nums',
+            color: row.emphasis ? token.colorPrimary : token.colorText,
+            lineHeight: 1.4,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {displayValue}
+        </span>
+        {uppercase ? (
+          <span
+            style={{
+              fontSize: valueSize,
+              fontWeight: 500,
+              color: token.colorTextSecondary,
+              lineHeight: 1.4,
+              wordBreak: 'break-all',
+            }}
+            title={t('app.kuaizhizao.documentAmount.rmbUppercase')}
+          >
+            ({uppercase})
+          </span>
+        ) : null}
+      </div>
     </div>
   );
 };
@@ -410,14 +448,19 @@ const DocumentDiscountInput: React.FC<{
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        gap: 24,
-        padding: '3px 0 10px',
+        gap: 16,
+        padding: `0 0 ${SUMMARY_ROW_GAP}px`,
+        marginBottom: SUMMARY_ROW_GAP,
         borderBottom: `1px dashed ${token.colorBorderSecondary}`,
-        marginBottom: 8,
       }}
     >
       <span
-        style={{ color: token.colorTextSecondary, fontSize: 13 }}
+        style={{
+          color: token.colorTextSecondary,
+          fontSize: LABEL_FONT_SIZE,
+          fontWeight: 400,
+          lineHeight: 1.4,
+        }}
         title={t('app.kuaizhizao.salesOrder.discountAmountHint')}
       >
         {t('app.kuaizhizao.salesOrder.discountAmount')}
@@ -428,7 +471,8 @@ const DocumentDiscountInput: React.FC<{
           max={goodsIncl > 0 ? goodsIncl : undefined}
           precision={amountDecimals}
           prefix="¥"
-          style={{ width: 140 }}
+          size="small"
+          style={{ width: 140, fontSize: VALUE_FONT_SIZE }}
         />
       </Form.Item>
     </div>
@@ -500,9 +544,8 @@ export const DocumentAmountSummary: React.FC<DocumentAmountSummaryProps> = ({
   }, [variant, items, feeDetails, priceType, quantityField, discountAmount, t]);
 
   const visibleRows = rows.filter((row) => !row.hidden);
-  const emphasisIndex = visibleRows.findIndex((row) => row.emphasis);
-  const bodyRows = emphasisIndex >= 0 ? visibleRows.slice(0, emphasisIndex) : visibleRows;
-  const emphasisRows = emphasisIndex >= 0 ? visibleRows.slice(emphasisIndex) : [];
+  const { bodyRows, emphasisRows } = splitBodyAndEmphasis(visibleRows);
+  const hasFooter = emphasisRows.length > 0;
 
   return (
     <div
@@ -510,25 +553,30 @@ export const DocumentAmountSummary: React.FC<DocumentAmountSummaryProps> = ({
       style={{
         marginTop: 12,
         marginBottom: 24,
-        padding: '14px 20px',
+        padding: '12px 16px',
         background: token.colorFillAlter,
         borderRadius: token.borderRadiusLG,
         border: `1px solid ${token.colorBorderSecondary}`,
         ...style,
       }}
     >
-      <div style={{ maxWidth: 440, marginLeft: 'auto' }}>
+      <div style={{ maxWidth: SUMMARY_PANEL_MAX_WIDTH, marginLeft: 'auto' }}>
         {showDiscount && getFieldValue && (
           <DocumentDiscountInput goodsIncl={goodsInclForCap} token={token} />
         )}
         {bodyRows.map((row) => (
-          <SummaryRow key={row.key} row={row} token={token} />
+          <SummaryItem
+            key={row.key}
+            row={row}
+            token={token}
+            showRmbUppercase={!hasFooter && !!row.emphasis}
+          />
         ))}
-        {emphasisRows.length > 0 && bodyRows.length > 0 && (
-          <Divider style={{ margin: '8px 0 6px', borderColor: token.colorBorderSecondary }} />
+        {hasFooter && bodyRows.length > 0 && (
+          <Divider style={{ margin: `${SUMMARY_ROW_GAP}px 0`, borderColor: token.colorBorderSecondary }} />
         )}
         {emphasisRows.map((row) => (
-          <SummaryRow key={row.key} row={row} token={token} />
+          <SummaryItem key={row.key} row={row} token={token} showRmbUppercase={!!row.emphasis} />
         ))}
       </div>
     </div>

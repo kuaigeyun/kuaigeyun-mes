@@ -9,7 +9,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState, lazy, Suspens
 import { rowActionKind } from '../../../../../components/uni-action';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useLeaveFormTab } from '../../../../../components/uni-tabs/navigateClosingTab';
 
 import { useTranslation } from 'react-i18next';
@@ -37,9 +37,13 @@ import {
 
   ProFormDatePicker,
 
+  ProFormDependency,
+
   ProFormDigit,
 
   ProFormSelect,
+
+  ProFormSwitch,
 
   ProFormText,
 
@@ -63,17 +67,12 @@ import {
 
   Empty,
 
-  Form as AntForm,
-
   Input,
 
   InputNumber,
 
   List,
   Modal,
-  Card,
-
-  Radio,
 
   Row,
 
@@ -85,8 +84,6 @@ import {
 
   Table,
 
-  Tag,
-
   Tooltip,
 
   Typography,
@@ -95,41 +92,26 @@ import {
 
 import {
 
-  CheckOutlined,
-
-  CloseOutlined,
-
   DeleteOutlined,
 
   EditOutlined,
-
-  EyeOutlined,
 
   FormOutlined,
 
   PlusOutlined,
 
-  ShoppingOutlined,
-  ToolOutlined,
+  QuestionCircleOutlined,
 
   StopOutlined,
 
-  SendOutlined,
-
   ArrowLeftOutlined,
 
-  ImportOutlined,
-
-  FileTextOutlined,
-
   PrinterOutlined,
-
-  RollbackOutlined,
 
 } from '@ant-design/icons';
 
 import dayjs from 'dayjs';
-import { formatDateTime, formatQuantity, formatAmount, formatCurrencyAmount, formatCurrencyPrice, todaySiteDateString } from '../../../../../utils/format';
+import { formatDateTime, formatQuantity, formatCurrencyAmount, formatCurrencyPrice, todaySiteDateString } from '../../../../../utils/format';
 import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
 
 import {
@@ -150,8 +132,6 @@ import {
   useDetailDrawerDescriptionItems,
 
 } from '../../../../../components/layout-templates';
-import { DOCUMENT_SUBLINE_TABLE_PROPS } from '../../../../../components/document-subline-table';
-
 import { UniTable, readPersistedUniTableViewType } from '../../../../../components/uni-table';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import {
@@ -160,18 +140,8 @@ import {
   UNI_TABLE_STACKED_BADGE_DATE_COLUMN_DEFAULTS,
   MaterialStackedCell,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
-import { MarkerTag } from '../../../../../constants/statusBadges';
 import { UniAuditBatchMenuButton, UniCapabilityBatchButton } from '../../../../../components/uni-batch';
 import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
-import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
-import {
-  UniPullQueryModal,
-  UNI_PULL_QUERY_MAX_FETCH_LIMIT,
-  pagePullCandidates,
-  renderPullQueryDocStatus,
-  renderPullQueryReviewStatus,
-  useUniPullQuery,
-} from '../../../../../components/uni-pull-query';
 
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 
@@ -198,8 +168,6 @@ import {
   salesContractCapabilityReasonMessage,
   salesContractBatchDeleteAllowed,
   salesContractBatchPrintAllowed,
-  quotationCapabilityAllowed,
-  quotationCapabilityReasonMessage,
   useSalesContractCapabilities,
 } from '../../../../../hooks/useDocumentCapabilities';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
@@ -237,10 +205,8 @@ import salesContractApi, {
   type SalesContract,
   type SalesContractChange,
   type SalesContractItem,
-  type SalesContractPaymentSummary,
   type SalesContractPushPreviewResponse,
 } from '../../../services/sales-contract';
-import { listQuotations, type Quotation, type QuotationCapabilities } from '../../../services/quotation';
 
 import { SalesContractItemsFormTable } from './SalesContractItemsFormTable';
 import {
@@ -268,8 +234,6 @@ import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { flattenDocumentDetailRows, resolveDetailTableViewMode } from '../../shared/detailTableFlatRows';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { testGenerateCode, getCodeRulePageConfig, generateCode } from '../../../../../services/codeRule';
-import SalesContractTermsManageModal from './SalesContractTermsManageModal';
-import { ContractTermPreviewContent } from './ContractTermPreviewContent';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import {
   appendDocumentAttachmentsToSupplementary,
@@ -278,23 +242,7 @@ import {
 } from '../../../components/DocumentAttachmentsReadonly';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
-import {
-  buildTermTemplatesFromGroupItems,
-  extractFieldBindingsFromTerms,
-  extractPlaceholdersFromTerms,
-  resolveContractTermFieldBindings,
-  resolveTermsWithPlaceholders,
-  type ContractTermFieldBindingContext,
-} from './contract-term-placeholders';
-import { formatBusinessDateOnly } from '../../../../../utils/format';
-import {
-  salesContractTermApi,
-  type SalesContractTermSnapshot,
-} from '../../../services/sales-contract-term';
-import {
-  buildKuaizhizaoPullCreateMenuItems,
-  resolveKuaizhizaoDocumentAction,
-} from '../../../constants/documentActionRegistry';
+import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 
 const LazyUniImport = lazy(() =>
   import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport })),
@@ -329,18 +277,6 @@ function remainingItemQty(item: { contract_quantity?: number; released_quantity?
 
 }
 
-const defaultMilestone = {
-  milestone_name: '',
-  planned_date: undefined as string | undefined,
-  planned_amount: undefined as number | undefined,
-  planned_ratio: undefined as number | undefined,
-  billing_trigger: 'milestone',
-  notes: '',
-};
-
-
-type ContractPushTarget = 'sales_order' | 'work_order';
-
 
 const SALES_CONTRACT_LIST_PATH = '/apps/kuaizhizao/sales-management/sales-contracts';
 const SALES_CONTRACT_CREATE_PATH = `${SALES_CONTRACT_LIST_PATH}/new`;
@@ -360,31 +296,11 @@ type SalesContractItemRow = SalesContractItem & {
 const SALES_CONTRACT_LIST_PERSISTENCE_ID =
   'apps.kuaizhizao.pages.sales-management.sales-contracts-width-v2';
 
-type PullQuotationCandidate = {
-  id: number;
-  quotation_code: string;
-  customer_name?: string;
-  quotation_date?: string;
-  delivery_date?: string;
-  total_amount?: number;
-  status?: string;
-  review_status?: string;
-  salesman_name?: string;
-  contract_id?: number;
-  contract_code?: string;
-  capabilities?: QuotationCapabilities;
-};
-
-const isPullQuotationSelectable = (record: PullQuotationCandidate): boolean =>
-  quotationCapabilityAllowed(record as Quotation, 'convert_to_contract');
-
 const SalesContractsPage: React.FC = () => {
 
   const navigate = useNavigate();
 
   const location = useLocation();
-
-  const [searchParams] = useSearchParams();
 
   const isCreatePage = location.pathname.endsWith('/sales-contracts/new');
   const editRouteMatch = location.pathname.match(/\/sales-contracts\/(\d+)\/edit$/);
@@ -398,17 +314,8 @@ const SalesContractsPage: React.FC = () => {
 
   const { t, i18n } = useTranslation();
   const amountDecimals = useNumericPrecisionPlaces('amount');
-  const pullFromQuotationAction = resolveKuaizhizaoDocumentAction(t, 'sales_contract.pull_from_quotation');
   const pushToSalesOrderAction = resolveKuaizhizaoDocumentAction(t, 'sales_order.pull_from_sales_contract');
-  const pushToWorkOrderAction = resolveKuaizhizaoDocumentAction(t, 'work_order.pull_from_sales_contract');
   const salesCommonLabels = useMemo(() => getSalesCommonFormLabels(t), [t]);
-  const contractTypeLabels = useMemo(
-    () => ({
-      single: t('app.kuaizhizao.salesContract.contractTypeSingle'),
-      framework: t('app.kuaizhizao.salesContract.contractTypeFramework'),
-    }),
-    [t],
-  );
   const contractLifecycleValueEnum = useMemo(
     () => buildSalesContractLifecycleValueEnum(t),
     [t],
@@ -434,12 +341,12 @@ const SalesContractsPage: React.FC = () => {
     [t],
   );
   const materialUnitImport = useImportMaterialUnitOptions();
+  const contractLineUnitOptions = materialUnitImport.options;
   const contractImportDict = useImportDictionaryOptions([
     'CURRENCY',
     'SHIPPING_METHOD',
     'PAYMENT_TERMS',
   ]);
-  const contractLineUnitOptions = materialUnitImport.options;
   const contractImportDictBag = useMemo(
     () => ({
       ...contractImportDict,
@@ -558,8 +465,6 @@ const SalesContractsPage: React.FC = () => {
 
   const [detailLoading, setDetailLoading] = useState(false);
 
-  const [paymentSummary, setPaymentSummary] = useState<SalesContractPaymentSummary | null>(null);
-
   const [trackingRefreshKey, setTrackingRefreshKey] = useState(0);
 
 
@@ -567,11 +472,9 @@ const SalesContractsPage: React.FC = () => {
   const [pushPreviewLoading, setPushPreviewLoading] = useState(false);
   const [pushPreviewConfirming, setPushPreviewConfirming] = useState(false);
   const [pushPreviewData, setPushPreviewData] = useState<SalesContractPushPreviewResponse | null>(null);
-  const [pushPreviewTarget, setPushPreviewTarget] = useState<ContractPushTarget | null>(null);
   const [pushPreviewRecord, setPushPreviewRecord] = useState<SalesContract | null>(null);
   const [pushSelectedItemIds, setPushSelectedItemIds] = useState<number[]>([]);
   const [pushQuantities, setPushQuantities] = useState<Record<number, number>>({});
-  const [workOrderPushMode, setWorkOrderPushMode] = useState<'draft' | 'confirm'>('draft');
 
 
   const [closeModalOpen, setCloseModalOpen] = useState(false);
@@ -587,12 +490,6 @@ const SalesContractsPage: React.FC = () => {
 
   const [changeSubmitting, setChangeSubmitting] = useState(false);
 
-  const [termsManageOpen, setTermsManageOpen] = useState(false);
-  const [termGroupOptions, setTermGroupOptions] = useState<{ label: string; value: number }[]>([]);
-  const [termTemplateTerms, setTermTemplateTerms] = useState<SalesContractTermSnapshot[]>([]);
-  const [termPlaceholderValues, setTermPlaceholderValues] = useState<Record<string, string>>({});
-  const [termsPreview, setTermsPreview] = useState<SalesContractTermSnapshot[]>([]);
-
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const tableRowsRef = useRef<SalesContract[]>([]);
 
@@ -604,33 +501,6 @@ const SalesContractsPage: React.FC = () => {
     [selectedRowKeys],
   );
   const leaveSalesContractFormPage = useLeaveFormTab(SALES_CONTRACT_LIST_PATH);
-
-  const termPlaceholderKeys = useMemo(
-    () => extractPlaceholdersFromTerms(termTemplateTerms),
-    [termTemplateTerms],
-  );
-
-  const termFieldBindingKeys = useMemo(
-    () => extractFieldBindingsFromTerms(termTemplateTerms),
-    [termTemplateTerms],
-  );
-
-  const termFieldBindingContext = useMemo(
-    (): ContractTermFieldBindingContext => ({
-      dictionaryLabelsByCode: {
-        PAYMENT_TERMS: contractImportDict.packs.PAYMENT_TERMS?.labelByCode,
-        SHIPPING_METHOD: contractImportDict.packs.SHIPPING_METHOD?.labelByCode,
-        CURRENCY: contractImportDict.packs.CURRENCY?.labelByCode,
-      },
-      contractTypeLabels: {
-        single: t('app.kuaizhizao.salesContract.contractTypeSingle'),
-        framework: t('app.kuaizhizao.salesContract.contractTypeFramework'),
-      },
-      formatDate: (value) => formatBusinessDateOnly(value as string, ''),
-    }),
-    [contractImportDict.packs, t],
-  );
-
 
   const contractTracking = useDocumentTracking(
 
@@ -688,109 +558,6 @@ const SalesContractsPage: React.FC = () => {
       cancelled = true;
     };
   }, [currentUser, isFormPage]);
-
-  const loadTermGroupOptions = useCallback(async () => {
-    try {
-      const res = await salesContractTermApi.listGroups({ limit: 500, is_active: true });
-      setTermGroupOptions(
-        (res.items || []).map((g) => ({
-          label: g.group_name,
-          value: g.id!,
-        })),
-      );
-    } catch (e) {
-      console.error('加载条款组失败', e);
-      setTermGroupOptions([]);
-    }
-  }, []);
-
-  const syncTermsPreview = useCallback(
-    (templates: SalesContractTermSnapshot[], placeholderValues: Record<string, string>) => {
-      const formValues = formRef.current?.getFieldsValue(true) ?? {};
-      const requestedFields = extractFieldBindingsFromTerms(templates);
-      const fieldBindings = resolveContractTermFieldBindings(
-        formValues,
-        termFieldBindingContext,
-        requestedFields.length ? requestedFields : undefined,
-      );
-      const resolved = resolveTermsWithPlaceholders(templates, placeholderValues, fieldBindings);
-      setTermsPreview(resolved);
-    },
-    [termFieldBindingContext],
-  );
-
-  const handleContractFormValuesChange = useCallback(
-    (changedValues: Record<string, unknown>) => {
-      if (!termTemplateTerms.length || !termFieldBindingKeys.length) return;
-      const affectsBindings = Object.keys(changedValues).some((key) => termFieldBindingKeys.includes(key));
-      if (!affectsBindings) return;
-      syncTermsPreview(termTemplateTerms, termPlaceholderValues);
-    },
-    [termTemplateTerms, termFieldBindingKeys, termPlaceholderValues, syncTermsPreview],
-  );
-
-  useEffect(() => {
-    if (!termTemplateTerms.length) return;
-    syncTermsPreview(termTemplateTerms, termPlaceholderValues);
-  }, [contractImportDict.packs, termTemplateTerms, termPlaceholderValues, syncTermsPreview]);
-
-  const applyTermGroupPreview = useCallback(
-    async (groupId: number | undefined | null, existingTerms?: SalesContractTermSnapshot[]) => {
-      if (!groupId) {
-        setTermTemplateTerms([]);
-        setTermPlaceholderValues({});
-        setTermsPreview([]);
-        return;
-      }
-      if (existingTerms?.length) {
-        const templates = existingTerms.map((term) => ({
-          ...term,
-          template_content: term.template_content ?? term.content,
-        }));
-        const mergedValues: Record<string, string> = {};
-        for (const term of existingTerms) {
-          if (term.placeholder_values) {
-            Object.assign(mergedValues, term.placeholder_values);
-          }
-        }
-        setTermTemplateTerms(templates);
-        setTermPlaceholderValues(mergedValues);
-        syncTermsPreview(templates, mergedValues);
-        return;
-      }
-      try {
-        const group = await salesContractTermApi.getGroup(groupId);
-        const templates = buildTermTemplatesFromGroupItems(group.items || []);
-        setTermTemplateTerms(templates);
-        setTermPlaceholderValues({});
-        syncTermsPreview(templates, {});
-      } catch (e: any) {
-        messageApi.error(e?.message || t('app.kuaizhizao.salesContract.loadTermGroupFailed'));
-        setTermTemplateTerms([]);
-        setTermPlaceholderValues({});
-        setTermsPreview([]);
-      }
-    },
-    [messageApi, syncTermsPreview],
-  );
-
-  const handleTermPlaceholderChange = useCallback(
-    (key: string, value: string) => {
-      setTermPlaceholderValues((prev) => {
-        const next = { ...prev, [key]: value };
-        syncTermsPreview(termTemplateTerms, next);
-        return next;
-      });
-    },
-    [termTemplateTerms, syncTermsPreview],
-  );
-
-  useEffect(() => {
-    if (isFormPage || termsManageOpen) {
-      loadTermGroupOptions();
-    }
-  }, [isFormPage, termsManageOpen, loadTermGroupOptions]);
-
 
   const handleContractPriceTypeChange = useCallback((nextChecked: boolean) => {
     const nextType: PriceTypeValue = nextChecked ? 'tax_inclusive' : 'tax_exclusive';
@@ -1101,29 +868,7 @@ const SalesContractsPage: React.FC = () => {
 
 
   const buildFormPayload = (values: any) => {
-
-    const validItems = normalizeFormListItems<any>(values.items).filter(
-
-      (it: any) => it.material_id && Number(it.contract_quantity) > 0 && Number(it.unit_price) >= 0,
-
-    );
-
-    if (!validItems.length) {
-
-      messageApi.error(t('app.kuaizhizao.salesContract.itemsRequired'));
-
-      throw new Error(CONTRACT_ITEMS_REQUIRED);
-
-    }
-
-    const missingMaterialMeta = validItems.find((it: any) => {
-      const resolved = resolveContractLineMaterialFields(it, materialList);
-      return !resolved.material_code || !resolved.material_name || !resolved.material_unit;
-    });
-    if (missingMaterialMeta) {
-      messageApi.error(t('app.kuaizhizao.salesContract.lineMaterialMissing'));
-      throw new Error('contract_line_material_missing');
-    }
+    const enterLineItems = values.enter_line_items !== false;
 
     const customerId = Number(values.customer_id);
     if (!Number.isFinite(customerId) || customerId <= 0) {
@@ -1138,127 +883,106 @@ const SalesContractsPage: React.FC = () => {
     }
 
     const cust = customerList.find((c: any) => (c.id ?? c.customer_id) === customerId);
-
     const customerName = (cust?.name ?? cust?.customer_name ?? values.customer_name ?? '').trim();
     if (!customerName) {
       messageApi.error(t('app.kuaizhizao.salesContract.selectCustomerRequired'));
       throw new Error('contract_customer_name_required');
     }
 
-    const milestoneRows = normalizeFormListItems<any>(values.milestones).filter(
-      (ms: any) =>
-        ms?.milestone_name?.trim() ||
-        ms?.planned_date ||
-        ms?.planned_amount != null ||
-        ms?.planned_ratio != null,
-    );
-    const invalidMilestone = milestoneRows.find(
-      (ms: any) => ms?.milestone_name?.trim() && !toApiDateString(ms.planned_date),
-    );
-    if (invalidMilestone) {
-      messageApi.error(t('app.kuaizhizao.salesContract.milestonePlannedDateRequired'));
-      throw new Error('contract_milestone_date_required');
+    const validFrom = toApiDateString(values.valid_from) || contractDate;
+    const validTo = toApiDateString(values.valid_to);
+
+    if (!enterLineItems) {
+      if (!validFrom || !validTo) {
+        messageApi.error(t('app.kuaizhizao.salesContract.amountFrameworkValidityRequired'));
+        throw new Error('contract_amount_validity_required');
+      }
+      const totalAmount = Number(values.total_amount);
+      if (!Number.isFinite(totalAmount) || totalAmount <= 0) {
+        messageApi.error(t('app.kuaizhizao.salesContract.amountFrameworkTotalRequired'));
+        throw new Error('contract_amount_total_required');
+      }
+      return {
+        contract_type: 'framework',
+        enter_line_items: false,
+        customer_id: customerId,
+        customer_name: customerName,
+        contract_date: contractDate,
+        valid_from: validFrom,
+        valid_to: validTo,
+        price_type: normalizeSalesPriceType(values.price_type),
+        currency_code: values.currency_code || 'CNY',
+        salesman_id:
+          values.salesman_id != null && values.salesman_id !== '' && Number.isFinite(Number(values.salesman_id))
+            ? Number(values.salesman_id)
+            : undefined,
+        salesman_name: values.salesman_name,
+        notes: values.notes,
+        attachments: normalizeDocumentAttachments(values.attachments),
+        discount_amount: Number(values.discount_amount ?? 0) || 0,
+        total_amount: totalAmount,
+        items: [],
+      };
     }
 
-    const milestones = milestoneRows
-      .filter((ms: any) => ms?.milestone_name?.trim() && toApiDateString(ms.planned_date))
-      .map((ms: any) => ({
-        milestone_name: String(ms.milestone_name).trim(),
-        planned_date: toApiDateString(ms.planned_date)!,
-        planned_amount: ms.planned_amount != null ? Number(ms.planned_amount) : 0,
-        planned_ratio: ms.planned_ratio != null ? Number(ms.planned_ratio) : undefined,
-        billing_trigger: ms.billing_trigger || 'milestone',
-        notes: ms.notes,
-      }));
+    const validItems = normalizeFormListItems<any>(values.items).filter(
+      (it: any) => it.material_id && Number(it.contract_quantity) > 0 && Number(it.unit_price) >= 0,
+    );
+    if (!validItems.length) {
+      messageApi.error(t('app.kuaizhizao.salesContract.itemsRequired'));
+      throw new Error(CONTRACT_ITEMS_REQUIRED);
+    }
+
+    const missingMaterialMeta = validItems.find((it: any) => {
+      const resolved = resolveContractLineMaterialFields(it, materialList);
+      return !resolved.material_code || !resolved.material_name || !resolved.material_unit;
+    });
+    if (missingMaterialMeta) {
+      messageApi.error(t('app.kuaizhizao.salesContract.lineMaterialMissing'));
+      throw new Error('contract_line_material_missing');
+    }
 
     return {
-
-      contract_type: values.contract_type || 'single',
-
+      contract_type: 'framework',
+      enter_line_items: true,
       customer_id: customerId,
-
       customer_name: customerName,
-
-      customer_contact: values.customer_contact,
-
-      customer_phone: values.customer_phone,
-
       contract_date: contractDate,
-
       valid_from: toApiDateString(values.valid_from),
-
       valid_to: toApiDateString(values.valid_to),
-
       price_type: normalizeSalesPriceType(values.price_type),
-
       currency_code: values.currency_code || 'CNY',
-
       salesman_id:
         values.salesman_id != null && values.salesman_id !== '' && Number.isFinite(Number(values.salesman_id))
           ? Number(values.salesman_id)
           : undefined,
-
       salesman_name: values.salesman_name,
-
-      shipping_address: values.shipping_address,
-
-      shipping_method: values.shipping_method,
-
-      payment_terms: values.payment_terms,
-
-      term_group_id: values.term_group_id || undefined,
-
-      contract_terms: termsPreview.length ? termsPreview : undefined,
-
       notes: values.notes,
-
       attachments: normalizeDocumentAttachments(values.attachments),
-
       discount_amount: Number(values.discount_amount ?? 0) || 0,
-
       items: validItems.map((it: any) => {
         const resolved = resolveContractLineMaterialFields(it, materialList);
         return {
           material_id: Number(it.material_id),
-
           material_code: resolved.material_code,
-
           material_name: resolved.material_name,
-
           material_spec: it.material_spec,
-
           material_unit: resolved.material_unit,
-
           contract_quantity: Number(it.contract_quantity),
-
           unit_price: Number(it.unit_price),
-
           tax_rate: Number(it.tax_rate ?? 0),
-
           total_amount: calcContractLineAmounts(
-
             it.contract_quantity,
-
             it.unit_price,
-
             it.tax_rate,
-
             values.price_type,
-
           ).incl,
-
           delivery_date: toApiDateString(it.delivery_date),
-
           variant_attributes: it.variant_attributes,
-
           notes: it.notes,
         };
       }),
-
-      milestones,
-
     };
-
   };
 
 
@@ -1270,19 +994,14 @@ const SalesContractsPage: React.FC = () => {
     formRef.current?.resetFields();
     setTimeout(() => {
       formRef.current?.setFieldsValue({
-        contract_type: 'single',
         contract_date: dayjs(),
         valid_from: dayjs(),
         price_type: DEFAULT_SALES_PRICE_TYPE,
         currency_code: 'CNY',
         discount_amount: 0,
+        enter_line_items: true,
         items: [{ ...defaultContractItem }],
-        milestones: [],
-        term_group_id: undefined,
       });
-      setTermTemplateTerms([]);
-      setTermPlaceholderValues({});
-      setTermsPreview([]);
     }, 100);
     const applyPreviewCode = async (ruleCode: string, contractDate?: dayjs.Dayjs) => {
       try {
@@ -1325,38 +1044,30 @@ const SalesContractsPage: React.FC = () => {
       setTimeout(() => {
         formRef.current?.setFieldsValue({
           contract_code: data.contract_code,
-          contract_type: data.contract_type || 'single',
           customer_id: data.customer_id,
           customer_name: data.customer_name,
-          customer_contact: data.customer_contact,
-          customer_phone: data.customer_phone,
           contract_date: data.contract_date ? dayjs(data.contract_date) : undefined,
           valid_from: data.valid_from ? dayjs(data.valid_from) : undefined,
           valid_to: data.valid_to ? dayjs(data.valid_to) : undefined,
           price_type: normalizeSalesPriceType(data.price_type),
           currency_code: data.currency_code || 'CNY',
           discount_amount: Number(data.discount_amount ?? 0) || 0,
+          total_amount: Number(data.total_amount ?? 0) || 0,
+          enter_line_items: data.enter_line_items !== false,
           salesman_id: data.salesman_id,
           salesman_name: data.salesman_name,
-          shipping_address: data.shipping_address,
-          shipping_method: data.shipping_method,
-          payment_terms: data.payment_terms,
           notes: data.notes,
           attachments: mapAttachmentsToUploadList(data.attachments),
-          items: (data.items ?? []).length
-            ? data.items!.map((it) => ({
-                ...it,
-                delivery_date: it.delivery_date ? dayjs(it.delivery_date) : undefined,
-              }))
-            : [{ ...defaultContractItem }],
-          milestones: (data.milestones ?? []).map((ms) => ({
-            ...ms,
-            planned_date: ms.planned_date ? dayjs(ms.planned_date) : undefined,
-          })),
-          term_group_id: data.term_group_id,
-          contract_terms: data.contract_terms,
+          items:
+            data.enter_line_items === false
+              ? []
+              : (data.items ?? []).length
+                ? data.items!.map((it) => ({
+                    ...it,
+                    delivery_date: it.delivery_date ? dayjs(it.delivery_date) : undefined,
+                  }))
+                : [{ ...defaultContractItem }],
         });
-        applyTermGroupPreview(data.term_group_id, data.contract_terms as SalesContractTermSnapshot[] | undefined);
       }, 100);
     } catch (e: any) {
       messageApi.error(e?.message || t('app.kuaizhizao.salesContract.loadContractFailed'));
@@ -1366,179 +1077,6 @@ const SalesContractsPage: React.FC = () => {
 
   const handleCreate = () => {
     navigate(SALES_CONTRACT_CREATE_PATH);
-  };
-
-  const mapPullQuotationRows = useCallback((rows: Quotation[]): PullQuotationCandidate[] => {
-    return rows
-      .filter((q) => q.id && q.quotation_code)
-      .map((q) => ({
-        id: Number(q.id),
-        quotation_code: String(q.quotation_code),
-        customer_name: q.customer_name || '',
-        quotation_date: q.quotation_date || '',
-        delivery_date: q.delivery_date || '',
-        total_amount: q.total_amount != null ? Number(q.total_amount) : undefined,
-        status: q.status || '',
-        review_status: q.review_status || '',
-        salesman_name: q.salesman_name || '',
-        contract_id: q.contract_id ? Number(q.contract_id) : undefined,
-        contract_code: q.contract_code || '',
-        capabilities: q.capabilities,
-      }));
-  }, []);
-
-  const pullFromQuotationScopeOptions = useMemo(
-    () => [
-      { label: t('components.uniPullQuery.scopePullable'), value: 'pullable' },
-      { label: t('components.uniPullQuery.scopeAll'), value: 'all' },
-    ],
-    [t],
-  );
-
-  const pullFromQuotationQuery = useUniPullQuery<PullQuotationCandidate>({
-    rowKey: 'id',
-    selectionType: 'radio',
-    scopeOptions: pullFromQuotationScopeOptions,
-    defaultScope: 'pullable',
-    isRowDisabled: (record) => !isPullQuotationSelectable(record),
-    loadData: async ({ keyword, page, pageSize, scope }) => {
-      try {
-        const result = await listQuotations({
-          skip: 0,
-          limit: UNI_PULL_QUERY_MAX_FETCH_LIMIT,
-          keyword: keyword.trim() || undefined,
-        });
-        const rows: Quotation[] = Array.isArray(result) ? result : result.data || [];
-        return pagePullCandidates(mapPullQuotationRows(rows), scope, page, pageSize, isPullQuotationSelectable);
-      } catch (error: any) {
-        messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.salesOrder.loadQuotationsFailed')));
-        return { data: [], total: 0 };
-      }
-    },
-    onConfirm: async (keys, rows) => {
-      const selectedId = Number(keys[0]);
-      const selected = rows[0];
-      if (!selectedId || selectedId <= 0) {
-        messageApi.warning(t('app.kuaizhizao.salesOrder.selectQuotationFirst'));
-        return;
-      }
-      if (selected && !isPullQuotationSelectable(selected)) {
-        const reason =
-          quotationCapabilityReasonMessage(selected.capabilities?.convert_to_contract?.reason, t) ||
-          t('app.kuaizhizao.salesOrder.pullQuotationNotAllowed');
-        messageApi.warning(reason);
-        return;
-      }
-      try {
-        const result = await salesContractApi.pullSalesContractFromQuotation(selectedId);
-        messageApi.success(
-          result?.message ||
-            t('app.kuaizhizao.salesOrder.createdFromQuotation', {
-              code: result?.sales_contract?.contract_code || '',
-            }),
-        );
-        pullFromQuotationQuery.closeModal();
-        reload();
-        if (result?.sales_contract?.id) {
-          void openDetail(Number(result.sales_contract.id));
-        }
-      } catch (error: any) {
-        messageApi.error(
-          getApiErrorMessage(
-            error,
-            t('app.kuaizhizao.salesOrder.pullCreateFailed', {
-              source: pullFromQuotationAction.sourceLabel,
-              target: pullFromQuotationAction.targetLabel,
-            }),
-          ),
-        );
-        throw error;
-      }
-    },
-  });
-
-  const pullQuotationColumns = useMemo(
-    () => [
-      { title: t('app.kuaizhizao.quotation.import.code'), dataIndex: 'quotation_code', width: 180 },
-      {
-        title: t('app.kuaizhizao.salesOrder.customerName'),
-        dataIndex: 'customer_name',
-        width: 180,
-        ellipsis: true,
-        render: (v: string) => v || '-',
-      },
-      {
-        title: t('app.kuaizhizao.quotation.colQuotationDate'),
-        dataIndex: 'quotation_date',
-        width: 120,
-        render: (v: string) => (v ? formatDateTime(v, 'YYYY-MM-DD') : '-'),
-      },
-      {
-        title: t('app.kuaizhizao.salesOrder.deliveryDate'),
-        dataIndex: 'delivery_date',
-        width: 120,
-        render: (v: string) => (v ? formatDateTime(v, 'YYYY-MM-DD') : '-'),
-      },
-      {
-        title: t('app.kuaizhizao.salesOrder.totalAmountLabel'),
-        dataIndex: 'total_amount',
-        width: 130,
-        align: 'right' as const,
-        render: (v: number | undefined) =>
-          v != null
-            ? formatAmount(v)
-            : '-',
-      },
-      {
-        title: t('common.status'),
-        dataIndex: 'status',
-        width: 100,
-        align: 'center' as const,
-        render: (v) => renderPullQueryDocStatus(t, v),
-      },
-      {
-        title: t('app.kuaizhizao.salesOrder.reviewStatus'),
-        dataIndex: 'review_status',
-        width: 120,
-        render: (v) => renderPullQueryReviewStatus(t, v),
-      },
-      {
-        title: t('app.kuaizhizao.salesOrder.salesman'),
-        dataIndex: 'salesman_name',
-        width: 120,
-        ellipsis: true,
-        render: (v: string) => v || '-',
-      },
-      {
-        title: t('app.kuaizhizao.salesOrder.duplicateGuardHint'),
-        width: 260,
-        render: (_: unknown, record: PullQuotationCandidate) => {
-          if (isPullQuotationSelectable(record)) {
-            return t('app.kuaizhizao.salesOrder.canCreate');
-          }
-          if (record.contract_id) {
-            return t('app.kuaizhizao.salesOrder.alreadyCreated', {
-              code: record.contract_code || '-',
-            });
-          }
-          const reason = quotationCapabilityReasonMessage(
-            record.capabilities?.convert_to_contract?.reason,
-            t,
-          );
-          return reason || t('app.kuaizhizao.salesOrder.pullQuotationNotAllowed');
-        },
-      },
-    ],
-    [t],
-  );
-
-  const selectedPullQuotation = pullFromQuotationQuery.selectedRows[0];
-  const selectedPullQuotationNotPullable = !!(
-    selectedPullQuotation && !isPullQuotationSelectable(selectedPullQuotation)
-  );
-
-  const handlePullFromQuotation = () => {
-    pullFromQuotationQuery.openModal();
   };
 
   const handleEdit = (record: SalesContract) => {
@@ -1653,8 +1191,7 @@ const SalesContractsPage: React.FC = () => {
         err?.message === 'contract_line_material_missing' ||
         err?.message === 'contract_customer_required' ||
         err?.message === 'contract_date_required' ||
-        err?.message === 'contract_customer_name_required' ||
-        err?.message === 'contract_milestone_date_required'
+        err?.message === 'contract_customer_name_required'
       ) {
         return;
       }
@@ -1790,6 +1327,16 @@ const SalesContractsPage: React.FC = () => {
                   name="valid_from"
                   label={t('app.kuaizhizao.salesContract.validFrom')}
                   fieldProps={{ style: { width: '100%' } }}
+                  dependencies={['enter_line_items']}
+                  rules={[
+                    ({ getFieldValue }) => ({
+                      validator: async (_: unknown, value: unknown) => {
+                        if (getFieldValue('enter_line_items') === false && !value) {
+                          throw new Error(t('app.kuaizhizao.salesContract.amountFrameworkValidityRequired'));
+                        }
+                      },
+                    }),
+                  ]}
                 />
               </Col>
               <Col span={8}>
@@ -1802,39 +1349,23 @@ const SalesContractsPage: React.FC = () => {
                     baseFieldName: 'contract_date',
                     t,
                   })}
+                  dependencies={['enter_line_items']}
+                  rules={[
+                    ({ getFieldValue }) => ({
+                      validator: async (_: unknown, value: unknown) => {
+                        if (getFieldValue('enter_line_items') === false && !value) {
+                          throw new Error(t('app.kuaizhizao.salesContract.amountFrameworkValidityRequired'));
+                        }
+                      },
+                    }),
+                  ]}
                 />
               </Col>
             </Row>
           </div>
           <div className="document-form-untitled-group">
             <Row gutter={16}>
-              <Col span={5}>
-                <DictionarySelect
-                  dictionaryCode="SHIPPING_METHOD"
-                  name="shipping_method"
-                  label={t('app.kuaizhizao.salesOrder.shippingMethod')}
-                  placeholder={t('app.kuaizhizao.salesContract.selectShippingMethod')}
-                  formRef={formRef}
-                  valueEqualsLabel={false}
-                />
-              </Col>
-              <Col span={5}>
-                <ProFormText name="customer_contact" label={salesCommonLabels.contact} />
-              </Col>
-              <Col span={5}>
-                <ProFormText name="customer_phone" label={salesCommonLabels.phone} />
-              </Col>
-              <Col span={5}>
-                <DictionarySelect
-                  dictionaryCode="PAYMENT_TERMS"
-                  name="payment_terms"
-                  label={t('app.kuaizhizao.salesOrder.paymentTerms')}
-                  placeholder={t('app.kuaizhizao.salesContract.selectPaymentTerms')}
-                  formRef={formRef}
-                  valueEqualsLabel={false}
-                />
-              </Col>
-              <Col span={4}>
+              <Col span={8}>
                 <DictionarySelect
                   dictionaryCode="CURRENCY"
                   name="currency_code"
@@ -1845,40 +1376,41 @@ const SalesContractsPage: React.FC = () => {
                   valueEqualsLabel={false}
                 />
               </Col>
-            </Row>
-            <Row gutter={16}>
-              <Col span={24}>
-                <ProFormText
-                  name="shipping_address"
-                  label={t('app.kuaizhizao.salesOrder.shippingAddress')}
-                  placeholder={t('app.kuaizhizao.salesContract.shippingAddressPlaceholder')}
-                />
-              </Col>
-            </Row>
-          </div>
-          <div className="document-form-untitled-group">
-            <Row gutter={16}>
-              <Col span={12}>
-                <ProFormSelect
-                  name="contract_type"
-                  label={t('app.kuaizhizao.salesContract.contractType')}
-                  rules={[{ required: true, message: t('app.kuaizhizao.salesContract.contractTypeRequired') }]}
-                  options={[
-                    { label: t('app.kuaizhizao.salesContract.contractTypeSingle'), value: 'single' },
-                    { label: t('app.kuaizhizao.salesContract.contractTypeFramework'), value: 'framework' },
-                  ]}
-                />
-              </Col>
-              <Col span={12}>
-                <ProFormSelect
-                  name="term_group_id"
-                  label={t('app.kuaizhizao.salesContract.terms.selectGroup')}
-                  placeholder={t('app.kuaizhizao.salesContract.terms.selectGroupPlaceholder')}
-                  options={termGroupOptions}
+              <Col span={8}>
+                <ProFormSwitch
+                  name="enter_line_items"
+                  label={
+                    <Space size={4} align="center">
+                      <span>{t('app.kuaizhizao.salesContract.enterLineItems')}</span>
+                      <Tooltip title={t('app.kuaizhizao.salesContract.enterLineItemsHint')}>
+                        <Button
+                          type="text"
+                          size="small"
+                          icon={<QuestionCircleOutlined />}
+                          aria-label={t('app.kuaizhizao.salesContract.enterLineItemsHint')}
+                          style={{
+                            padding: 0,
+                            height: 'auto',
+                            color: 'var(--ant-color-text-tertiary)',
+                          }}
+                          onClick={(e) => e.preventDefault()}
+                        />
+                      </Tooltip>
+                    </Space>
+                  }
+                  initialValue={true}
                   fieldProps={{
-                    allowClear: true,
-                    onChange: (val: number) => {
-                      applyTermGroupPreview(val);
+                    checkedChildren: t('app.kuaizhizao.salesContract.enterLineItemsOn'),
+                    unCheckedChildren: t('app.kuaizhizao.salesContract.enterLineItemsOff'),
+                    onChange: (checked: boolean) => {
+                      if (checked) {
+                        const cur = normalizeFormListItems(formRef.current?.getFieldValue('items'));
+                        if (!cur.length) {
+                          formRef.current?.setFieldsValue({ items: [{ ...defaultContractItem }] });
+                        }
+                      } else {
+                        formRef.current?.setFieldsValue({ items: [] });
+                      }
                     },
                   }}
                 />
@@ -1890,6 +1422,45 @@ const SalesContractsPage: React.FC = () => {
         <ProFormText name="price_type" hidden initialValue={DEFAULT_SALES_PRICE_TYPE} />
       </DetailDrawerSection>
 
+      <ProFormDependency name={['enter_line_items']}>
+        {({ enter_line_items }) => {
+          const enterLineItems = enter_line_items !== false;
+          if (!enterLineItems) {
+            return (
+              <DetailDrawerSection titleAccent title={t('app.kuaizhizao.salesContract.amountFrameworkSection')}>
+                <Row gutter={16}>
+                  <Col span={8}>
+                    <ProFormDigit
+                      name="total_amount"
+                      label={t('app.kuaizhizao.salesContract.totalAmount')}
+                      rules={[
+                        { required: true, message: t('app.kuaizhizao.salesContract.amountFrameworkTotalRequired') },
+                        {
+                          validator: async (_: unknown, value: number) => {
+                            if (value == null || Number(value) <= 0) {
+                              throw new Error(t('app.kuaizhizao.salesContract.amountFrameworkTotalRequired'));
+                            }
+                          },
+                        },
+                      ]}
+                      fieldProps={{
+                        style: { width: '100%' },
+                        min: 0,
+                        precision: amountDecimals,
+                      }}
+                    />
+                  </Col>
+                </Row>
+                <Alert
+                  type="info"
+                  showIcon
+                  title={t('app.kuaizhizao.salesContract.amountFrameworkAlert')}
+                  style={{ marginTop: 8 }}
+                />
+              </DetailDrawerSection>
+            );
+          }
+          return (
       <DetailDrawerSection titleAccent title={t('app.uniDetail.sectionLines')}>
         <SalesContractItemsFormTable
           formRef={formRef}
@@ -1909,174 +1480,12 @@ const SalesContractsPage: React.FC = () => {
           setEditingIncl={setContractEditingIncl}
           editingInclValueRef={contractEditingInclValueRef}
         />
+      </DetailDrawerSection>
+          );
+        }}
+      </ProFormDependency>
 
-        <ProForm.Item label={t('app.kuaizhizao.salesContract.paymentPlanOptional')} colon={false} style={{ marginTop: 16 }}>
-          <AntForm.List name="milestones">
-            {(fields, { add, remove }) => {
-              const msCols = [
-                {
-                  title: t('app.kuaizhizao.salesContract.milestoneName'),
-                  width: 160,
-                  render: (_: unknown, __: unknown, index: number) => (
-                    <ProFormText
-                      name={[index, 'milestone_name']}
-                      placeholder={t('app.kuaizhizao.salesContract.milestoneNamePlaceholder')}
-                      formItemProps={{ style: { margin: 0 } }}
-                    />
-                  ),
-                },
-                {
-                  title: t('app.kuaizhizao.salesContract.plannedDate'),
-                  width: 140,
-                  render: (_: unknown, __: unknown, index: number) => (
-                    <ProFormDatePicker
-                      name={[index, 'planned_date']}
-                      fieldProps={buildFutureDateShortcutFieldProps({
-                        getForm: () => formRef.current,
-                        fieldName: 'planned_date',
-                        baseFieldName: 'contract_date',
-                        t,
-                        onApply: (date) =>
-                          formRef.current?.setFieldValue?.(['milestones', index, 'planned_date'], date),
-                      })}
-                      formItemProps={{ style: { margin: 0 } }}
-                    />
-                  ),
-                },
-                {
-                  title: t('app.kuaizhizao.salesContract.plannedAmount'),
-                  width: 120,
-                  render: (_: unknown, __: unknown, index: number) => (
-                    <ProFormDigit
-                      name={[index, 'planned_amount']}
-                      min={0}
-                      fieldProps={{ style: { width: '100%' } }}
-                      formItemProps={{ style: { margin: 0 } }}
-                    />
-                  ),
-                },
-                {
-                  title: t('app.kuaizhizao.salesContract.ratioPercent'),
-                  width: 100,
-                  render: (_: unknown, __: unknown, index: number) => (
-                    <ProFormDigit
-                      name={[index, 'planned_ratio']}
-                      min={0}
-                      max={100}
-                      fieldProps={{ style: { width: '100%' } }}
-                      formItemProps={{ style: { margin: 0 } }}
-                    />
-                  ),
-                },
-                {
-                  title: t('app.kuaizhizao.salesContract.billingTrigger'),
-                  width: 120,
-                  render: (_: unknown, __: unknown, index: number) => (
-                    <ProFormSelect
-                      name={[index, 'billing_trigger']}
-                      options={[
-                        { label: t('app.kuaizhizao.salesContract.billingTriggerMilestone'), value: 'milestone' },
-                        { label: t('app.kuaizhizao.salesContract.billingTriggerDelivery'), value: 'delivery' },
-                      ]}
-                      formItemProps={{ style: { margin: 0 } }}
-                    />
-                  ),
-                },
-                {
-                  title: t('common.actions'),
-                  width: 60,
-                  render: (_: unknown, __: unknown, index: number) => (
-                    <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => remove(index)} />
-                  ),
-                },
-              ];
-              return (
-                <>
-                  {fields.length > 0 ? (
-                    <Table
-                      {...DOCUMENT_SUBLINE_TABLE_PROPS}
-                      rowKey="key"
-                      dataSource={fields}
-                      columns={msCols as any}
-                      scroll={{ x: 'max-content' }}
-                    />
-                  ) : null}
-                  <Button
-                    type="dashed"
-                    block
-                    icon={<PlusOutlined />}
-                    style={{ marginTop: 8 }}
-                    onClick={() => add({ ...defaultMilestone })}
-                  >
-                    {t('app.kuaizhizao.salesContract.addPaymentNode')}
-                  </Button>
-                </>
-              );
-            }}
-          </AntForm.List>
-        </ProForm.Item>
-
-        {termFieldBindingKeys.length > 0 && (
-          <Card
-            size="small"
-            title={t('app.kuaizhizao.salesContract.terms.fieldBindingAutoTitle')}
-            style={{ marginBottom: 16 }}
-          >
-            <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
-              {t('app.kuaizhizao.salesContract.terms.fieldBindingAutoHint')}
-            </Typography.Paragraph>
-            <Space size={[8, 8]} wrap>
-              {termFieldBindingKeys.map((field) => (
-                <Tag key={field} color="blue">
-                  {t('app.kuaizhizao.salesContract.terms.fieldBindingItem', { field })}
-                </Tag>
-              ))}
-            </Space>
-          </Card>
-        )}
-
-        {termPlaceholderKeys.length > 0 && (
-          <Card
-            size="small"
-            title={t('app.kuaizhizao.salesContract.terms.placeholderFillTitle')}
-            style={{ marginBottom: 16 }}
-          >
-            <Row gutter={[16, 12]}>
-              {termPlaceholderKeys.map((key) => (
-                <Col key={key} span={8}>
-                  <div style={{ marginBottom: 4 }}>
-                    <Typography.Text type="secondary">{key}</Typography.Text>
-                  </div>
-                  <Input
-                    value={termPlaceholderValues[key] ?? ''}
-                    placeholder={t('app.kuaizhizao.salesContract.terms.placeholderInputHint', { name: key })}
-                    onChange={(e) => handleTermPlaceholderChange(key, e.target.value)}
-                  />
-                </Col>
-              ))}
-            </Row>
-          </Card>
-        )}
-
-        {termsPreview.length > 0 && (
-          <Card
-            size="small"
-            title={t('app.kuaizhizao.salesContract.terms.previewTitle')}
-            style={{ marginBottom: 16 }}
-          >
-            {termsPreview.map((term, idx) => (
-              <div key={`${term.term_item_id ?? idx}-${term.term_name}`} style={{ marginBottom: 12 }}>
-                <Typography.Text strong>
-                  {idx + 1}. {term.term_name}
-                </Typography.Text>
-                <Typography.Paragraph style={{ marginBottom: 0, whiteSpace: 'pre-wrap' }}>
-                  <ContractTermPreviewContent content={term.content ?? ''} />
-                </Typography.Paragraph>
-              </div>
-            ))}
-          </Card>
-        )}
-
+      <DetailDrawerSection titleAccent title={t('common.remark')}>
         <ProFormTextArea name="notes" label={t('common.remark')} fieldProps={{ rows: 2 }} />
       </DetailDrawerSection>
 
@@ -2091,38 +1500,17 @@ const SalesContractsPage: React.FC = () => {
   );
 
 
-  const loadPaymentSummary = async (id: number) => {
-
-    try {
-
-      const summary = await salesContractApi.paymentSummary(id);
-
-      setPaymentSummary(summary);
-
-    } catch {
-
-      setPaymentSummary(null);
-
-    }
-
-  };
-
-
   const openDetail = async (id: number) => {
 
     setDetailLoading(true);
 
     setDetailOpen(true);
 
-    setPaymentSummary(null);
-
     try {
 
       const data = await salesContractApi.get(id);
 
       setDetail(data);
-
-      void loadPaymentSummary(id);
 
     } catch (e: any) {
 
@@ -2162,7 +1550,6 @@ const SalesContractsPage: React.FC = () => {
   const refreshDetail = async (id: number) => {
     const data = await salesContractApi.get(id);
     setDetail(data);
-    void loadPaymentSummary(id);
     setTrackingRefreshKey((k) => k + 1);
     reload();
   };
@@ -2272,28 +1659,22 @@ const SalesContractsPage: React.FC = () => {
     setPushPreviewOpen(false);
     setPushPreviewData(null);
     setPushPreviewRecord(null);
-    setPushPreviewTarget(null);
     setPushSelectedItemIds([]);
     setPushQuantities({});
-    setWorkOrderPushMode('draft');
   };
 
   const showContractPushPreview = useCallback(
-    (record: SalesContract, target: ContractPushTarget) => {
+    (record: SalesContract) => {
       if (!record.id) return;
       setPushPreviewOpen(true);
       setPushPreviewLoading(true);
       setPushPreviewConfirming(false);
       setPushPreviewData(null);
-      setPushPreviewTarget(target);
       setPushPreviewRecord(record);
       setPushSelectedItemIds([]);
       setPushQuantities({});
-      const fetchPreview =
-        target === 'sales_order'
-          ? () => salesContractApi.previewPushToSalesOrder(record.id!)
-          : () => salesContractApi.previewPushToWorkOrder(record.id!);
-      void fetchPreview()
+      void salesContractApi
+        .previewPushToSalesOrder(record.id!)
         .then((res) => {
           setPushPreviewData(res);
           const defaultIds: number[] = [];
@@ -2307,9 +1688,6 @@ const SalesContractsPage: React.FC = () => {
           });
           setPushSelectedItemIds(defaultIds);
           setPushQuantities(qtyMap);
-          if (target === 'work_order') {
-            setWorkOrderPushMode(res.push_mode_default === 'confirm' ? 'confirm' : 'draft');
-          }
         })
         .catch((error: any) => {
           messageApi.error(
@@ -2323,7 +1701,7 @@ const SalesContractsPage: React.FC = () => {
   );
 
   const handlePushPreviewConfirm = async () => {
-    if (!pushPreviewRecord?.id || !pushPreviewData || !pushPreviewTarget) return;
+    if (!pushPreviewRecord?.id || !pushPreviewData) return;
     if (pushPreviewData.has_blocking_issues && pushPreviewData.blocking_reason) {
       const reason =
         salesContractCapabilityReasonMessage(pushPreviewData.blocking_reason as string, t) ||
@@ -2342,7 +1720,6 @@ const SalesContractsPage: React.FC = () => {
     }
 
     const lines: { item_id: number; release_quantity: number }[] = [];
-    const blockingIssues: string[] = [];
     for (const itemId of selectedIds) {
       const row = rowById.get(itemId);
       const qty = Number(pushQuantities[itemId] ?? 0);
@@ -2359,48 +1736,23 @@ const SalesContractsPage: React.FC = () => {
         );
         return;
       }
-      if (Array.isArray(row?.blocking_issues) && row.blocking_issues.length > 0) {
-        blockingIssues.push(...row.blocking_issues.map((m) => String(m)));
-      }
       lines.push({ item_id: itemId, release_quantity: qty });
-    }
-
-    if (
-      pushPreviewTarget === 'work_order' &&
-      workOrderPushMode === 'confirm' &&
-      blockingIssues.length > 0
-    ) {
-      messageApi.warning(t('app.kuaizhizao.salesOrder.masterDataMissingForConfirmPush'));
-      return;
     }
 
     setPushPreviewConfirming(true);
     try {
-      if (pushPreviewTarget === 'work_order') {
-        const res = await salesContractApi.pushToWorkOrder(pushPreviewRecord.id, {
-          release_lines: lines,
-          push_mode: workOrderPushMode,
-        });
-        messageApi.success(res?.message || t('app.kuaizhizao.salesContract.workOrderGenerated'));
-      } else {
-        const res = await salesContractApi.convertToOrder(pushPreviewRecord.id, { release_lines: lines });
-        const orderId = (res.sales_order as { id?: number })?.id;
-        const orderCode = (res.sales_order as { order_code?: string })?.order_code || '';
-        messageApi.success(t('app.kuaizhizao.salesContract.orderGenerated', { code: orderCode }));
-        navigate('/apps/kuaizhizao/sales-management/sales-orders', {
-          state: orderId ? { openSalesOrderId: orderId } : undefined,
-        });
-      }
+      const res = await salesContractApi.convertToOrder(pushPreviewRecord.id, { release_lines: lines });
+      const orderId = (res.sales_order as { id?: number })?.id;
+      const orderCode = (res.sales_order as { order_code?: string })?.order_code || '';
+      messageApi.success(t('app.kuaizhizao.salesContract.orderGenerated', { code: orderCode }));
+      navigate('/apps/kuaizhizao/sales-management/sales-orders', {
+        state: orderId ? { openSalesOrderId: orderId } : undefined,
+      });
       resetPushPreviewModal();
       if (detail?.id === pushPreviewRecord.id) await refreshDetail(pushPreviewRecord.id);
       else reload();
     } catch (e: any) {
-      messageApi.error(
-        e?.message ||
-          (pushPreviewTarget === 'work_order'
-            ? t('app.kuaizhizao.salesContract.pushWorkOrderFailed')
-            : t('app.kuaizhizao.salesContract.pushOrderFailed')),
-      );
+      messageApi.error(e?.message || t('app.kuaizhizao.salesContract.pushOrderFailed'));
     } finally {
       setPushPreviewConfirming(false);
     }
@@ -2419,20 +1771,6 @@ const SalesContractsPage: React.FC = () => {
       if (!record.capabilities?.push_to_sales_order?.allowed) {
         return (
           salesContractCapabilityReasonMessage(record.capabilities?.push_to_sales_order?.reason, t) ||
-          t('app.kuaizhizao.salesContract.pushOrderStatusRequired')
-        );
-      }
-      return undefined;
-    },
-    [t],
-  );
-
-  const resolveContractPushWorkOrderReason = useCallback(
-    (record: typeof selectedContractForPush) => {
-      if (!record) return undefined;
-      if (!record.capabilities?.push_to_work_order?.allowed) {
-        return (
-          salesContractCapabilityReasonMessage(record.capabilities?.push_to_work_order?.reason, t) ||
           t('app.kuaizhizao.salesContract.pushOrderStatusRequired')
         );
       }
@@ -2467,41 +1805,14 @@ const SalesContractsPage: React.FC = () => {
       );
       return;
     }
-    await showContractPushPreview(record, 'sales_order');
-  }, [messageApi, selectedContractForPush, showContractPushPreview, t]);
-
-  const handleToolbarPushToWorkOrder = useCallback(async () => {
-    const record = selectedContractForPush;
-    if (!record?.id) {
-      messageApi.warning(t('app.kuaizhizao.salesContract.selectContract'));
-      return;
-    }
-    if (!record.capabilities?.push_to_work_order?.allowed) {
-      messageApi.warning(
-        salesContractCapabilityReasonMessage(record.capabilities?.push_to_work_order?.reason, t) ||
-          t('app.kuaizhizao.salesContract.pushOrderStatusRequired'),
-      );
-      return;
-    }
-    showContractPushPreview(record, 'work_order');
+    await showContractPushPreview(record);
   }, [messageApi, selectedContractForPush, showContractPushPreview, t]);
 
   const salesContractToolbarRenderItems = useMemo(
     () => [
-      <UniPullCreateToolbar
-        key="create-sales-contract-with-pull"
-        compactKey="create-sales-contract-with-pull"
-        createIcon={<PlusOutlined />}
-        createLabel={t('app.kuaizhizao.salesContract.create')}
-        onCreate={handleCreate}
-        menuItems={buildKuaizhizaoPullCreateMenuItems(t, [
-          {
-            key: 'pull-from-quotation',
-            actionKey: 'sales_contract.pull_from_quotation',
-            onClick: handlePullFromQuotation,
-          },
-        ])}
-      />,
+      <Button key="create-sales-contract" type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
+        {t('app.kuaizhizao.salesContract.create')}
+      </Button>,
       <UniPushToolbarButton
         key={`sales-contract-push-toolbar-${selectedRowKeys.join('-') || 'none'}`}
         disabled={selectedRowKeys.length !== 1 || !selectedContractForPush}
@@ -2514,26 +1825,15 @@ const SalesContractsPage: React.FC = () => {
             title: resolveContractPushOrderReason(selectedContractForPush),
             onClick: () => void handleToolbarPushToOrder(),
           },
-          {
-            key: 'push-to-work-order',
-            label: pushToWorkOrderAction.label,
-            disabled: !!resolveContractPushWorkOrderReason(selectedContractForPush),
-            title: resolveContractPushWorkOrderReason(selectedContractForPush),
-            onClick: () => void handleToolbarPushToWorkOrder(),
-          },
         ])}
       />,
     ],
     [
       contractToolbarPushDisabledReason,
       handleCreate,
-      handlePullFromQuotation,
       handleToolbarPushToOrder,
-      handleToolbarPushToWorkOrder,
       pushToSalesOrderAction.label,
-      pushToWorkOrderAction.label,
       resolveContractPushOrderReason,
-      resolveContractPushWorkOrderReason,
       selectedContractForPush,
       selectedRowKeys,
       t,
@@ -2649,29 +1949,6 @@ const SalesContractsPage: React.FC = () => {
   };
 
 
-  const handleGenerateReceivable = async (milestoneId: number) => {
-
-    if (!detail?.id) return;
-
-    try {
-
-      await salesContractApi.generateMilestoneReceivable(detail.id, milestoneId);
-
-      messageApi.success(t('app.kuaizhizao.salesContract.receivableGenerated'));
-
-      await refreshDetail(detail.id);
-
-      void loadPaymentSummary(detail.id);
-
-    } catch (e: any) {
-
-      messageApi.error(e?.message || t('app.kuaizhizao.salesContract.generateReceivableFailed'));
-
-    }
-
-  };
-
-
   const renderLifecycleCell = (record: SalesContract) => (
     <ListUniLifecycleCell lifecycle={getSalesContractLifecycle(record as Record<string, unknown>, t)} />
   );
@@ -2698,26 +1975,6 @@ const SalesContractsPage: React.FC = () => {
             primary={String(r.customer_name ?? '')}
             secondary={String(r.contract_code ?? '')}
           />
-        ),
-      },
-
-      {
-        title: t('app.kuaizhizao.salesContract.contractType'),
-        dataIndex: 'contract_type',
-        width: 100,
-        minWidth: 100,
-        uniTableKeepWidth: true,
-        resizable: false,
-        sorter: true,
-        valueType: 'select',
-        valueEnum: {
-          single: { text: contractTypeLabels.single },
-          framework: { text: contractTypeLabels.framework },
-        },
-        render: (_, r) => (
-          <MarkerTag color="processing">
-            {contractTypeLabels[r.contract_type as keyof typeof contractTypeLabels] || r.contract_type}
-          </MarkerTag>
         ),
       },
 
@@ -2905,7 +2162,6 @@ const SalesContractsPage: React.FC = () => {
     [
       t,
       contractAuditColumn,
-      contractTypeLabels,
       contractCustomerSearchOptions,
       contractLifecycleValueEnum,
       statusLabels,
@@ -3048,25 +2304,7 @@ const SalesContractsPage: React.FC = () => {
     () => [
     { title: t('app.kuaizhizao.salesContract.contractCode'), dataIndex: 'contract_code' },
 
-    {
-
-      title: t('app.kuaizhizao.salesContract.contractType'),
-
-      dataIndex: 'contract_type',
-
-      render: (_, r) => (
-        <Tag color="blue" variant="filled">
-          {contractTypeLabels[r.contract_type as keyof typeof contractTypeLabels] || r.contract_type}
-        </Tag>
-      ),
-
-    },
-
     { title: t('app.kuaizhizao.salesContract.customer'), dataIndex: 'customer_name' },
-
-    { title: salesCommonLabels.contact, dataIndex: 'customer_contact' },
-
-    { title: salesCommonLabels.phone, dataIndex: 'customer_phone' },
 
     { title: t('app.kuaizhizao.salesContract.contractDate'), dataIndex: 'contract_date', valueType: 'date' },
 
@@ -3156,68 +2394,12 @@ const SalesContractsPage: React.FC = () => {
 
     },
 
-    {
-
-      title: t('app.kuaizhizao.salesOrder.paymentTerms'),
-
-      dataIndex: 'payment_terms',
-
-      render: (_, r) => (
-
-        <DictionaryLabel dictionaryCode="PAYMENT_TERMS" value={r.payment_terms} />
-
-      ),
-
-    },
-
     { title: salesCommonLabels.salesman, dataIndex: 'salesman_name' },
-
-    {
-
-      title: t('app.kuaizhizao.salesOrder.shippingMethod'),
-
-      dataIndex: 'shipping_method',
-
-      render: (_, r) => (
-
-        <DictionaryLabel dictionaryCode="SHIPPING_METHOD" value={r.shipping_method} />
-
-      ),
-
-    },
-
-    { title: t('app.kuaizhizao.salesContract.sourceQuotation'), dataIndex: 'quotation_code', key: 'quotation_code_link' },
-
-    { title: t('app.kuaizhizao.salesOrder.shippingAddress'), dataIndex: 'shipping_address', span: 3 },
-
-    {
-      title: t('app.kuaizhizao.salesContract.terms.selectGroup'),
-      dataIndex: 'term_group_name',
-      span: 3,
-      render: (_, r) =>
-        r.term_group_name ? (
-          <Space direction="vertical" size={4} style={{ width: '100%' }}>
-            <span>{r.term_group_name}</span>
-            {(r.contract_terms as SalesContractTermSnapshot[] | undefined)?.map((term, idx) => (
-              <div key={`${term.term_item_id ?? idx}`}>
-                <Typography.Text strong>
-                  {idx + 1}. {term.term_name}
-                </Typography.Text>
-                <Typography.Paragraph style={{ marginBottom: 4, whiteSpace: 'pre-wrap' }}>
-                  {term.content}
-                </Typography.Paragraph>
-              </div>
-            ))}
-          </Space>
-        ) : (
-          '—'
-        ),
-    },
 
     { title: t('common.remark'), dataIndex: 'notes', span: 3 },
 
   ],
-    [t, contractTypeLabels, salesCommonLabels],
+    [t, salesCommonLabels],
   );
   const alignedDetailBasicColumns = useMemo(
     () => alignDescriptionColumns(detailBasicColumns),
@@ -3265,14 +2447,13 @@ const SalesContractsPage: React.FC = () => {
                 layout="vertical"
                 submitter={false}
                 scrollToFirstError
-                onValuesChange={handleContractFormValuesChange}
                 onFinish={(values) => handleFormSubmit(values, { asDraft: false })}
                 onFinishFailed={({ errorFields }) => {
                   const first = errorFields?.[0];
                   const msg = first?.errors?.filter(Boolean)[0];
                   messageApi.error(msg || t('components.layoutTemplates.formModal.checkFormHint'));
                 }}
-                initialValues={isCreatePage ? { items: [{ ...defaultContractItem }], discount_amount: 0, price_type: DEFAULT_SALES_PRICE_TYPE } : undefined}
+                initialValues={isCreatePage ? { items: [{ ...defaultContractItem }], discount_amount: 0, price_type: DEFAULT_SALES_PRICE_TYPE, enter_line_items: true } : undefined}
               >
                 {renderCreateForm()}
               </ProForm>
@@ -3308,15 +2489,6 @@ const SalesContractsPage: React.FC = () => {
 
   const salesContractAttachments = documentAttachmentsFromRecord(detail);
   const salesContractAttLabel = t('app.uniDetail.sectionAttachments');
-  const salesContractPaymentSupplementary = paymentSummary ? (
-    <Descriptions column={3} size="small" bordered>
-      <Descriptions.Item label={t('app.kuaizhizao.salesContract.totalContractAmount')}>¥{Number(paymentSummary.total_amount ?? 0).toFixed(2)}</Descriptions.Item>
-      <Descriptions.Item label={t('app.kuaizhizao.salesContract.plannedMilestones')}>¥{Number(paymentSummary.planned_milestone_amount ?? 0).toFixed(2)}</Descriptions.Item>
-      <Descriptions.Item label={t('app.kuaizhizao.salesContract.invoiced')}>¥{Number(paymentSummary.invoiced_amount ?? 0).toFixed(2)}</Descriptions.Item>
-      <Descriptions.Item label={t('app.kuaizhizao.salesContract.collected')}>¥{Number(paymentSummary.collected_amount ?? 0).toFixed(2)}</Descriptions.Item>
-      <Descriptions.Item label={t('app.kuaizhizao.salesContract.pendingInvoice')}>¥{Number(paymentSummary.pending_amount ?? 0).toFixed(2)}</Descriptions.Item>
-    </Descriptions>
-  ) : undefined;
 
   return (
 
@@ -3362,21 +2534,7 @@ const SalesContractsPage: React.FC = () => {
 
         enableRowSelection={viewTypeState !== 'detailTable'}
 
-        headerTitle={
-
-          <Space>
-
-            <span>{t('app.kuaizhizao.salesContract.title')}</span>
-
-            <Button type="link" size="small" onClick={() => navigate('/apps/kuaizhizao/sales-management/quotations')}>
-
-              {t('app.kuaizhizao.salesContract.fromQuotationLink')}
-
-            </Button>
-
-          </Space>
-
-        }
+        headerTitle={t('app.kuaizhizao.salesContract.title')}
 
         showCreateButton={false}
         createButtonText={t('app.kuaizhizao.salesContract.create')}
@@ -3398,11 +2556,8 @@ const SalesContractsPage: React.FC = () => {
             toolBarButtonSize="middle"
           />,
         ]}
-        toolBarActionsAfterBatch={[
-          <Button {...rowActionKind('update')} key="terms-manage" onClick={() => setTermsManageOpen(true)}>
-            {t('app.kuaizhizao.salesContract.terms.manageBtn')}
-          </Button>,
-          ...(contractPerms.canPrint
+        rightToolBarActionsBeforeExport={
+          contractPerms.canPrint
             ? [
                 <UniCapabilityBatchButton
                   key="contract-batch-print"
@@ -3428,8 +2583,8 @@ const SalesContractsPage: React.FC = () => {
                   size="middle"
                 />,
               ]
-            : []),
-        ]}
+            : []
+        }
 
         showExportButton={contractPerms.canExport}
         showImportButton={contractPerms.canCreate}
@@ -3493,8 +2648,6 @@ const SalesContractsPage: React.FC = () => {
                 : undefined,
 
             status: lifecycleParams.status ?? searchFormValues?.status,
-
-            contract_type: searchFormValues?.contract_type,
 
             customer_id:
               searchFormValues?.customer_id != null && searchFormValues.customer_id !== ''
@@ -3577,8 +2730,6 @@ const SalesContractsPage: React.FC = () => {
           setDetailOpen(false);
 
           setDetail(null);
-
-          setPaymentSummary(null);
 
         }}
 
@@ -3665,15 +2816,13 @@ const SalesContractsPage: React.FC = () => {
         }
 
         supplementaryTitle={
-          paymentSummary
-            ? t('app.kuaizhizao.salesContract.paymentSummary')
-            : hasDocumentAttachments(salesContractAttachments)
-              ? salesContractAttLabel
-              : undefined
+          hasDocumentAttachments(salesContractAttachments)
+            ? salesContractAttLabel
+            : undefined
         }
 
         supplementary={appendDocumentAttachmentsToSupplementary(
-          salesContractPaymentSupplementary,
+          undefined,
           salesContractAttachments,
           salesContractAttLabel,
         )}
@@ -3726,66 +2875,6 @@ const SalesContractsPage: React.FC = () => {
                   ]}
 
                 />
-
-              ) : null}
-
-              {detail.milestones?.length ? (
-
-                <div style={{ marginTop: detail.items?.length ? 16 : 0 }}>
-
-                  <Typography.Title level={5} style={{ marginBottom: 8 }}>
-
-                    {t('app.kuaizhizao.salesContract.paymentMilestones')}
-
-                  </Typography.Title>
-
-                  <Table
-
-                    size="small"
-
-                    rowKey="id"
-
-                    pagination={false}
-
-                    dataSource={detail.milestones}
-
-                    columns={[
-
-                      { title: t('app.kuaizhizao.salesContract.milestone'), dataIndex: 'milestone_name' },
-
-                      { title: t('app.kuaizhizao.salesContract.plannedDate'), dataIndex: 'planned_date', render: (v) => (v ? formatDateTime(v, 'YYYY-MM-DD') : '—') },
-
-                      { title: t('app.kuaizhizao.salesContract.plannedAmount'), dataIndex: 'planned_amount', render: (v) => `¥${Number(v ?? 0).toFixed(2)}` },
-
-                      { title: t('common.status'), dataIndex: 'status' },
-
-                      { title: t('app.kuaizhizao.salesContract.receivableDoc'), dataIndex: 'receivable_code', render: (v) => v || '—' },
-
-                      {
-
-                        title: t('common.actions'),
-
-                        width: 100,
-
-                        render: (_, r) =>
-
-                          r.id && r.status !== 'collected' && !r.receivable_id ? (
-
-                            <Button type="link" size="small" onClick={() => handleGenerateReceivable(r.id!)}>
-
-                              {t('app.kuaizhizao.salesContract.generateReceivable')}
-
-                            </Button>
-
-                          ) : null,
-
-                      },
-
-                    ]}
-
-                  />
-
-                </div>
 
               ) : null}
 
@@ -4012,24 +3101,6 @@ const SalesContractsPage: React.FC = () => {
                 }
               />
             ) : null}
-            {pushPreviewTarget === 'work_order' ? (
-              <div style={{ marginBottom: 12 }}>
-                <Typography.Text type="secondary" style={{ marginRight: 12 }}>
-                  {t('app.kuaizhizao.salesOrder.pushModeLabel')}
-                </Typography.Text>
-                <Radio.Group
-                  value={workOrderPushMode}
-                  onChange={(e) => setWorkOrderPushMode(e.target.value)}
-                  optionType="button"
-                  buttonStyle="solid"
-                  size="small"
-                  options={[
-                    { label: t('app.kuaizhizao.salesOrder.pushModeDraft'), value: 'draft' },
-                    { label: t('app.kuaizhizao.salesOrder.pushModeConfirm'), value: 'confirm' },
-                  ]}
-                />
-              </div>
-            ) : null}
             {pushPreviewData.items?.length > 0 ? (
               <Table
                 size="small"
@@ -4127,17 +3198,6 @@ const SalesContractsPage: React.FC = () => {
                     dataIndex: 'material_unit',
                     width: 60,
                   },
-                  ...(pushPreviewTarget === 'work_order'
-                    ? [
-                        {
-                          title: t('app.kuaizhizao.salesContract.pushPreviewBlocking'),
-                          width: 200,
-                          ellipsis: true,
-                          render: (_: unknown, row: SalesContractPushPreviewResponse['items'][number]) =>
-                            row.blocking_issues?.length ? row.blocking_issues.join('；') : '-',
-                        },
-                      ]
-                    : []),
                 ]}
               />
             ) : (
@@ -4210,45 +3270,6 @@ const SalesContractsPage: React.FC = () => {
       </Modal>
 
 
-      <UniPullQueryModal<PullQuotationCandidate>
-        title={pullFromQuotationAction.label}
-        open={pullFromQuotationQuery.open}
-        onCancel={pullFromQuotationQuery.closeModal}
-        onOk={pullFromQuotationQuery.handleConfirm}
-        okText={t('app.kuaizhizao.salesContract.create')}
-        rowKey="id"
-        columns={pullQuotationColumns}
-        dataSource={pullFromQuotationQuery.dataSource}
-        loading={pullFromQuotationQuery.loading}
-        confirmLoading={pullFromQuotationQuery.confirmLoading}
-        selectionType={pullFromQuotationQuery.selectionType}
-        selectedRowKeys={pullFromQuotationQuery.selectedRowKeys}
-        selectedRows={pullFromQuotationQuery.selectedRows}
-        onSelectedRowKeysChange={pullFromQuotationQuery.handleSelectedRowKeysChange}
-        isRowDisabled={pullFromQuotationQuery.isRowDisabled}
-        searchDraft={pullFromQuotationQuery.searchDraft}
-        onSearchDraftChange={pullFromQuotationQuery.setSearchDraft}
-        onSearchApply={pullFromQuotationQuery.handleSearchApply}
-        onSearchClear={pullFromQuotationQuery.handleSearchClear}
-        appliedKeyword={pullFromQuotationQuery.appliedKeyword}
-        page={pullFromQuotationQuery.page}
-        pageSize={pullFromQuotationQuery.pageSize}
-        total={pullFromQuotationQuery.total}
-        onPageChange={pullFromQuotationQuery.handlePageChange}
-        scopeOptions={pullFromQuotationQuery.scopeOptions}
-        scope={pullFromQuotationQuery.scope}
-        onScopeChange={pullFromQuotationQuery.handleScopeChange}
-        searchPlaceholder={t('app.kuaizhizao.salesOrder.searchQuotationPlaceholder')}
-        emptyText={t('app.kuaizhizao.salesOrder.noQuotationAvailable')}
-        emptySearchText={t('app.kuaizhizao.salesOrder.quotationNotFound')}
-        okButtonProps={{
-          disabled:
-            pullFromQuotationQuery.selectedRowKeys.length === 0 ||
-            selectedPullQuotationNotPullable ||
-            pullFromQuotationQuery.loading,
-        }}
-      />
-
       {PrintModal}
 
 
@@ -4266,14 +3287,6 @@ const SalesContractsPage: React.FC = () => {
 
         }}
 
-      />
-
-      <SalesContractTermsManageModal
-        open={termsManageOpen}
-        onClose={() => {
-          setTermsManageOpen(false);
-          loadTermGroupOptions();
-        }}
       />
 
     </ListPageTemplate>

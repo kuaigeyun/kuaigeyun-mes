@@ -256,6 +256,8 @@ const AUDIT_STACKED_COLUMN_KEYS = new Set(['updated_at', 'updatedAt']);
 export function isUniTableAuditStackedColumn(col: unknown): boolean {
   if (!col || typeof col !== 'object') return false;
   const c = col as { key?: unknown; dataIndex?: unknown; uniTableAuditStackedColumn?: unknown };
+  // 纯墙钟「更新时间」（非人+时叠列）显式退出 SystemFixed 120
+  if (c.uniTableAuditStackedColumn === false) return false;
   if (c.uniTableAuditStackedColumn === true) return true;
   const key = String(c.key ?? '');
   const dataIndex = Array.isArray(c.dataIndex)

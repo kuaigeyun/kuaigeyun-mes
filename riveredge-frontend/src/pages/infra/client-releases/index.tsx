@@ -6,14 +6,14 @@ import React, { useMemo, useRef, useState } from 'react';
 import { rowActionKind, rowActionLabelKeep } from '../../../components/uni-action';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Popconfirm } from 'antd';
-import { DeleteOutlined, DownloadOutlined, EditOutlined, EyeOutlined, QrcodeOutlined, SettingOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { QrcodeOutlined, SettingOutlined } from '@ant-design/icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 
 import { ListPageTemplate } from '../../../components/layout-templates';
 import { UniTable } from '../../../components/uni-table';
-import { StatusTag } from '../../../constants/statusBadges';
+import { MarkerTag, StatusTag } from '../../../constants/statusBadges';
 import {
   activateClientRelease,
   deleteClientRelease,
@@ -131,25 +131,51 @@ const ClientReleasesPage: React.FC = () => {
     {
       title: t('pages.infra.clientReleases.columnClient'),
       dataIndex: 'client_key',
+      key: 'client_key',
+      minWidth: 160,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
+      resizable: false,
       valueType: 'select',
       fieldProps: { options: clientSearchOptions, allowClear: true },
       initialValue: initialClientKey,
+      ellipsis: true,
       render: (_, record) => productMap.get(record.client_key) ?? record.client_key,
     },
     {
       title: t('pages.infra.clientReleases.columnPlatform'),
       dataIndex: 'platform',
-      width: 100,
+      key: 'platform',
+      width: 110,
+      minWidth: 110,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'select',
       valueEnum: {
         android: { text: 'Android' },
         ios: { text: 'iOS' },
         windows: { text: 'Windows' },
       },
+      render: (_, record) => {
+        const text =
+          record.platform === 'android'
+            ? 'Android'
+            : record.platform === 'ios'
+              ? 'iOS'
+              : record.platform === 'windows'
+                ? 'Windows'
+                : record.platform;
+        return <MarkerTag color="processing">{text}</MarkerTag>;
+      },
     },
     {
       title: t('pages.infra.clientReleases.columnVersion'),
       dataIndex: 'app_version',
+      key: 'app_version',
+      width: 140,
+      minWidth: 140,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       render: (_, record) =>
         `${record.app_version}${record.version_code ? ` (${record.version_code})` : ''}`,
@@ -157,27 +183,45 @@ const ClientReleasesPage: React.FC = () => {
     {
       title: t('pages.infra.clientReleases.columnUpdateType'),
       dataIndex: 'update_type',
-      width: 96,
+      key: 'update_type',
+      width: 110,
+      minWidth: 110,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
+      render: (_, record) => <MarkerTag>{record.update_type || '-'}</MarkerTag>,
     },
     {
       title: t('pages.infra.clientReleases.columnRollout'),
       dataIndex: 'rollout_percent',
-      width: 80,
+      key: 'rollout_percent',
+      width: 90,
+      minWidth: 90,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       render: (v) => `${v ?? 100}%`,
     },
     {
       title: t('common.remark'),
       dataIndex: 'release_notes',
+      key: 'release_notes',
+      width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       hideInSearch: true,
     },
     {
       title: t('pages.infra.clientReleases.columnPublishedAt'),
       dataIndex: 'published_at',
+      key: 'published_at',
       valueType: 'dateTime',
-      width: 168,
+      width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
     },
     {
@@ -185,13 +229,14 @@ const ClientReleasesPage: React.FC = () => {
       dataIndex: 'is_active',
       key: 'lifecycle',
       width: 100,
+      minWidth: 100,
       fixed: 'right',
       uniTableKeepWidth: true,
       resizable: false,
       valueType: 'select',
       valueEnum: {
-        true: { text: t('pages.infra.clientReleases.statusActive'), status: 'Success' },
-        false: { text: t('pages.infra.clientReleases.statusHistory'), status: 'Default' },
+        true: { text: t('pages.infra.clientReleases.statusActive') },
+        false: { text: t('pages.infra.clientReleases.statusHistory') },
       },
       render: (_, record) =>
         record.is_active ? (
@@ -202,43 +247,22 @@ const ClientReleasesPage: React.FC = () => {
     },
     {
       title: t('common.actions'),
-      valueType: 'option',
+      key: 'action',
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) => {
         const packageUrl = record.package?.url || record.apk?.url;
-        const actions: React.ReactNode[] = [];
-
-        actions.push(
-          <Button
-            {...rowActionKind('read')}
-            key="detail"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleOpenDetail(record)}
-          />,
-        );
-
-        actions.push(
-          <Button
-            {...rowActionKind('update')}
-            key="edit"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          >
-            {t('common.edit')}
-          </Button>,
-        );
+        const actions: React.ReactNode[] = [
+          <Button key="detail" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)} />,
+          <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)} />,
+        ];
 
         if (packageUrl) {
           actions.push(
             <Button
+              key="download"
               {...rowActionKind('skip')}
               {...rowActionLabelKeep()}
-              key="download"
-              size="small"
-              icon={<DownloadOutlined />}
               onClick={() => window.open(packageUrl, '_blank', 'noopener,noreferrer')}
             >
               {t('pages.infra.clientReleases.downloadPackage')}
@@ -249,10 +273,9 @@ const ClientReleasesPage: React.FC = () => {
         if (!record.is_active) {
           actions.push(
             <Button
-              {...rowActionKind('update')}
               key="activate"
-              size="small"
-              icon={<ThunderboltOutlined />}
+              {...rowActionKind('update')}
+              {...rowActionLabelKeep()}
               loading={activatingId === record.id}
               onClick={() => void handleActivate(record)}
             >
@@ -263,7 +286,6 @@ const ClientReleasesPage: React.FC = () => {
 
         actions.push(
           <Popconfirm
-            {...rowActionKind('delete')}
             key="delete"
             title={t('pages.infra.clientReleases.deleteConfirmTitle')}
             description={t('pages.infra.clientReleases.deleteConfirmDesc', {
@@ -274,17 +296,11 @@ const ClientReleasesPage: React.FC = () => {
             cancelText={t('common.cancel')}
             onConfirm={() => void handleDelete(record)}
           >
-            <Button
-              size="small"
-              icon={<DeleteOutlined />}
-              loading={deletingId === record.id}
-            >
-              {t('common.delete')}
-            </Button>
+            <Button {...rowActionKind('delete')} loading={deletingId === record.id} />
           </Popconfirm>,
         );
 
-        return actions.length ? actions : '—';
+        return actions;
       },
     },
   ];
@@ -295,7 +311,7 @@ const ClientReleasesPage: React.FC = () => {
         <UniTable<ClientRelease>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('infra.clientReleases')}
-          columnPersistenceId="pages.infra.client-releases-v4"
+          columnPersistenceId="pages.infra.client-releases-v5"
           actionRef={actionRef}
           columns={columns}
           rowKey="id"

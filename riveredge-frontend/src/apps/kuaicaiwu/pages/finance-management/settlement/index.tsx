@@ -1,6 +1,10 @@
 import { formatCurrencyAmount } from '../../../../../utils/format';
 import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
-import { rowActionKind } from '../../../../../components/uni-action';
+import {
+  rowActionKind,
+  rowActionPickSettlement,
+  rowActionMatchSettlement,
+} from '../../../../../components/uni-action';
 import type { ActionType } from '@ant-design/pro-components';
 import { ProColumns } from '@ant-design/pro-components';
 import { Modal, message, Space, InputNumber, Divider, Typography, Row, Col, Alert, Button, Spin, Table, Empty } from 'antd';
@@ -9,10 +13,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useNumericPrecisionPlaces } from '../../../../../hooks/useNumericPrecision';
 import { UniTable } from '../../../../../components/uni-table';
-import {
-  UniTableStackedPrimaryCell,
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-} from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { MultiTabListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { settlementService, type SettlementPreview } from '../../../services/finance/settlement';
 import { receivableService } from '../../../services/finance/receivable';
@@ -42,10 +43,21 @@ import {
   referenceDisplayToIdOptions,
   searchReferenceDisplay,
 } from '../../../../../utils/referenceDisplay';
+import { MarkerTag } from '../../../../../constants/statusBadges';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 
 const P = 'app.kuaicaiwu.settlement';
 const SETTLEMENT_RESOURCE = 'kuaicaiwu:settlement';
 const C = 'app.kuaicaiwu.common';
+
+/** 半宽选单无备注列：编号叠列唯一 RemainderFlex，吃掉视口余量、避免假横滚 */
+const SETTLEMENT_PICK_STACKED_REMAINDER = {
+  minWidth: 160,
+  uniTableRemainderFlex: true,
+  uniTablePrimaryFlex: true,
+  resizable: false,
+  ellipsis: false,
+} as const;
 
 const formatSettleMoney = (value: number) =>
   formatCurrencyAmount(value || 0);
@@ -506,10 +518,11 @@ const SettlementPage: React.FC = () => {
         partnerRequest: searchCustomers,
       }),
       {
+        // 无备注：编号叠列唯一 RemainderFlex
         title: t(`${C}.code`),
         key: 'finance_doc_partner_stacked',
         dataIndex: 'receivable_code',
-        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        ...SETTLEMENT_PICK_STACKED_REMAINDER,
         fixed: 'left',
         hideInSearch: true,
         sorter: true,
@@ -521,26 +534,35 @@ const SettlementPage: React.FC = () => {
         ),
       },
       { title: t('app.kuaicaiwu.common.customer'), dataIndex: 'customer_name', hideInTable: true },
-      { title: t(`${P}.col.pendingReceive`), dataIndex: 'remaining_amount', valueType: 'money', align: 'right', hideInSearch: true, sorter: true },
+      {
+        title: t(`${P}.col.pendingReceive`),
+        dataIndex: 'remaining_amount',
+        valueType: 'money',
+        align: 'right',
+        width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
+        hideInSearch: true,
+        sorter: true,
+      },
       ...financeDocCreatedUpdatedColumns<Record<string, unknown>>(t),
       {
         title: t('common.actions'),
         key: 'action',
-        valueType: 'option',
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) => [
-          <a
+          <Button
             key="sel"
+            {...rowActionPickSettlement('skip')}
             onClick={() => {
               setSelectedReceivable(record);
               setSelectedReceipt(null);
               setArPreviewData(null);
               setSettleAmount(0);
             }}
-          >
-            {t('common.select')}
-          </a>,
+          />,
         ],
       },
     ],
@@ -561,7 +583,7 @@ const SettlementPage: React.FC = () => {
         title: t(`${C}.code`),
         key: 'finance_doc_partner_stacked',
         dataIndex: 'receipt_code',
-        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        ...SETTLEMENT_PICK_STACKED_REMAINDER,
         fixed: 'left',
         hideInSearch: true,
         sorter: true,
@@ -573,30 +595,40 @@ const SettlementPage: React.FC = () => {
         ),
       },
       { title: t('app.kuaicaiwu.common.customer'), dataIndex: 'customer_name', hideInTable: true },
-      { title: t(`${P}.col.balance`), dataIndex: 'unsettled_amount', valueType: 'money', align: 'right', hideInSearch: true, sorter: true },
+      {
+        title: t(`${P}.col.balance`),
+        dataIndex: 'unsettled_amount',
+        valueType: 'money',
+        align: 'right',
+        width: 110,
+        minWidth: 110,
+        uniTableKeepWidth: true,
+        resizable: false,
+        hideInSearch: true,
+        sorter: true,
+      },
       ...financeDocCreatedUpdatedColumns<Record<string, unknown>>(t),
       {
         title: t('common.actions'),
         key: 'action',
-        valueType: 'option',
         fixed: 'right',
         hideInSearch: true,
-        render: (_, record) => [
-          settlementPerms.canUpdate ? (
-          <a
-            key="m"
-            onClick={() => {
-              if (!selectedReceivable) {
-                message.warning(t(`${P}.selectReceivableFirst`));
-                return;
-              }
-              setSelectedReceipt(record);
-            }}
-          >
-            {t(`${P}.match`)}
-          </a>
-          ) : null,
-        ],
+        render: (_, record) => {
+          if (!settlementPerms.canUpdate) return [];
+          return [
+            <Button
+              key="m"
+              {...rowActionMatchSettlement('update')}
+              onClick={() => {
+                if (!selectedReceivable) {
+                  message.warning(t(`${P}.selectReceivableFirst`));
+                  return;
+                }
+                setSelectedReceipt(record);
+              }}
+            />,
+          ];
+        },
       },
     ],
     [t, selectedReceivable, searchCustomers, settlementPerms.canUpdate],
@@ -616,7 +648,7 @@ const SettlementPage: React.FC = () => {
         title: t(`${C}.code`),
         key: 'finance_doc_partner_stacked',
         dataIndex: 'payable_code',
-        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        ...SETTLEMENT_PICK_STACKED_REMAINDER,
         fixed: 'left',
         hideInSearch: true,
         sorter: true,
@@ -628,26 +660,35 @@ const SettlementPage: React.FC = () => {
         ),
       },
       { title: t('app.kuaicaiwu.common.supplier'), dataIndex: 'supplier_name', hideInTable: true },
-      { title: t(`${P}.col.pendingPay`), dataIndex: 'remaining_amount', valueType: 'money', align: 'right', hideInSearch: true, sorter: true },
+      {
+        title: t(`${P}.col.pendingPay`),
+        dataIndex: 'remaining_amount',
+        valueType: 'money',
+        align: 'right',
+        width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
+        hideInSearch: true,
+        sorter: true,
+      },
       ...financeDocCreatedUpdatedColumns<Record<string, unknown>>(t),
       {
         title: t('common.actions'),
         key: 'action',
-        valueType: 'option',
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) => [
-          <a
+          <Button
             key="sel"
+            {...rowActionPickSettlement('skip')}
             onClick={() => {
               setSelectedPayable(record);
               setSelectedPayment(null);
               setApPreviewData(null);
               setSettleAmount(0);
             }}
-          >
-            {t('common.select')}
-          </a>,
+          />,
         ],
       },
     ],
@@ -668,7 +709,7 @@ const SettlementPage: React.FC = () => {
         title: t(`${C}.code`),
         key: 'finance_doc_partner_stacked',
         dataIndex: 'payment_code',
-        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        ...SETTLEMENT_PICK_STACKED_REMAINDER,
         fixed: 'left',
         hideInSearch: true,
         sorter: true,
@@ -680,137 +721,168 @@ const SettlementPage: React.FC = () => {
         ),
       },
       { title: t('app.kuaicaiwu.common.supplier'), dataIndex: 'supplier_name', hideInTable: true },
-      { title: t(`${P}.col.balance`), dataIndex: 'unsettled_amount', valueType: 'money', align: 'right', hideInSearch: true, sorter: true },
+      {
+        title: t(`${P}.col.balance`),
+        dataIndex: 'unsettled_amount',
+        valueType: 'money',
+        align: 'right',
+        width: 110,
+        minWidth: 110,
+        uniTableKeepWidth: true,
+        resizable: false,
+        hideInSearch: true,
+        sorter: true,
+      },
       ...financeDocCreatedUpdatedColumns<Record<string, unknown>>(t),
       {
         title: t('common.actions'),
         key: 'action',
-        valueType: 'option',
         fixed: 'right',
         hideInSearch: true,
-        render: (_, record) => [
-          settlementPerms.canUpdate ? (
-          <a
-            key="m"
-            onClick={() => {
-              if (!selectedPayable) {
-                message.warning(t(`${P}.selectPayableFirst`));
-                return;
-              }
-              setSelectedPayment(record);
-            }}
-          >
-            {t(`${P}.match`)}
-          </a>
-          ) : null,
-        ],
+        render: (_, record) => {
+          if (!settlementPerms.canUpdate) return [];
+          return [
+            <Button
+              key="m"
+              {...rowActionMatchSettlement('update')}
+              onClick={() => {
+                if (!selectedPayable) {
+                  message.warning(t(`${P}.selectPayableFirst`));
+                  return;
+                }
+                setSelectedPayment(record);
+              }}
+            />,
+          ];
+        },
       },
     ],
     [t, selectedPayable, searchSuppliers, settlementPerms.canUpdate],
   );
 
   const historyColumns: ProColumns<SettlementRecord>[] = useMemo(
-    () => [
-      {
-        title: t(`${P}.history.col.settlementCode`),
-        dataIndex: 'settlement_code',
-        width: 140,
-        minWidth: 140,
-        uniTableKeepWidth: true,
-        hideInSearch: true,
-        sorter: true,
-      },
-      {
-        title: t(`${P}.history.col.businessType`),
-        dataIndex: 'business_type',
-        width: 100,
-        minWidth: 100,
-        uniTableKeepWidth: true,
-        valueType: 'select',
-        order: 10,
-        valueEnum: {
-          receivable: { text: t(`${P}.tabReceivable`) },
-          payable: { text: t(`${P}.tabPayable`) },
-        },
-        render: (_, record) =>
-          record.debit_doc_type === 'Payable'
-            ? t(`${P}.tabPayable`)
-            : t(`${P}.tabReceivable`),
-      },
-      {
-        title: t(`${P}.history.col.partner`),
-        dataIndex: 'partner_name',
-        width: 160,
-        minWidth: 160,
-        uniTableKeepWidth: true,
-        hideInSearch: true,
-        sorter: true,
-        ellipsis: true,
-      },
-      {
-        title: t(`${P}.history.col.debitDoc`),
-        dataIndex: 'debit_doc_code',
-        width: 140,
-        minWidth: 140,
-        uniTableKeepWidth: true,
-        hideInSearch: true,
-        ellipsis: true,
-      },
-      {
-        title: t(`${P}.history.col.creditDoc`),
-        dataIndex: 'credit_doc_code',
-        width: 140,
-        minWidth: 140,
-        uniTableKeepWidth: true,
-        hideInSearch: true,
-        ellipsis: true,
-      },
-      {
-        title: t(`${P}.history.col.amount`),
-        dataIndex: 'amount',
-        valueType: 'money',
-        align: 'right',
-        width: 120,
-        minWidth: 120,
-        uniTableKeepWidth: true,
-        hideInSearch: true,
-        sorter: true,
-      },
-      {
-        title: t(`${P}.history.col.settlementDate`),
-        dataIndex: 'settlement_date',
-        valueType: 'date',
-        width: 120,
-        minWidth: 120,
-        uniTableKeepWidth: true,
-        hideInSearch: true,
-        sorter: true,
-      },
-      {
-        title: t(`${P}.history.col.settlementDate`),
-        dataIndex: 'settlement_date_range',
-        valueType: 'dateRange',
-        hideInTable: true,
-        order: 11,
-        formItemProps: formDateRangeFormItemProps,
-      },
-      {
-        title: t(`${P}.history.col.operator`),
-        dataIndex: 'operator_name',
-        width: 100,
-        minWidth: 100,
-        uniTableKeepWidth: true,
-        hideInSearch: true,
-        ellipsis: true,
-        render: (_, record) => record.operator_name || '—',
-      },
-      {
-        title: t('common.keyword'),
-        dataIndex: 'keyword',
-        hideInTable: true,
-        order: 12,
-      },
-    ],
+    () =>
+      alignProColumns(
+        [
+          {
+            title: t(`${P}.history.col.settlementCode`),
+            dataIndex: 'settlement_code',
+            width: 160,
+            minWidth: 160,
+            uniTableKeepWidth: true,
+            resizable: false,
+            hideInSearch: true,
+            sorter: true,
+          },
+          {
+            title: t(`${P}.history.col.businessType`),
+            key: 'finance_settlement_business_type',
+            dataIndex: 'business_type',
+            ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+            valueType: 'select',
+            order: 10,
+            valueEnum: {
+              receivable: { text: t(`${P}.tabReceivable`) },
+              payable: { text: t(`${P}.tabPayable`) },
+            },
+            render: (_, record) => {
+              const isPayable = record.debit_doc_type === 'Payable';
+              return (
+                <MarkerTag color={isPayable ? 'orange' : 'blue'}>
+                  {isPayable ? t(`${P}.tabPayable`) : t(`${P}.tabReceivable`)}
+                </MarkerTag>
+              );
+            },
+          },
+          {
+            // 伙伴名长短不一：唯一 RemainderFlex
+            title: t(`${P}.history.col.partner`),
+            key: 'finance_settlement_partner',
+            dataIndex: 'partner_name',
+            minWidth: 160,
+            uniTableRemainderFlex: true,
+            uniTablePrimaryFlex: true,
+            resizable: false,
+            hideInSearch: true,
+            sorter: true,
+            ellipsis: true,
+          },
+          {
+            title: t(`${P}.history.col.debitDoc`),
+            key: 'finance_settlement_debit_doc',
+            dataIndex: 'debit_doc_code',
+            width: 150,
+            minWidth: 150,
+            uniTableKeepWidth: true,
+            resizable: false,
+            hideInSearch: true,
+            ellipsis: true,
+          },
+          {
+            title: t(`${P}.history.col.creditDoc`),
+            key: 'finance_settlement_credit_doc',
+            dataIndex: 'credit_doc_code',
+            width: 150,
+            minWidth: 150,
+            uniTableKeepWidth: true,
+            resizable: false,
+            hideInSearch: true,
+            ellipsis: true,
+          },
+          {
+            title: t(`${P}.history.col.amount`),
+            key: 'finance_settlement_amount',
+            dataIndex: 'amount',
+            valueType: 'money',
+            align: 'right',
+            width: 130,
+            minWidth: 130,
+            uniTableKeepWidth: true,
+            resizable: false,
+            hideInSearch: true,
+            sorter: true,
+          },
+          {
+            title: t(`${P}.history.col.settlementDate`),
+            key: 'finance_settlement_date',
+            dataIndex: 'settlement_date',
+            valueType: 'date',
+            width: 120,
+            minWidth: 120,
+            uniTableKeepWidth: true,
+            resizable: false,
+            hideInSearch: true,
+            sorter: true,
+          },
+          {
+            title: t(`${P}.history.col.settlementDate`),
+            dataIndex: 'settlement_date_range',
+            valueType: 'dateRange',
+            hideInTable: true,
+            order: 11,
+            formItemProps: formDateRangeFormItemProps,
+          },
+          {
+            title: t(`${P}.history.col.operator`),
+            key: 'finance_settlement_operator',
+            dataIndex: 'operator_name',
+            width: 100,
+            minWidth: 100,
+            uniTableKeepWidth: true,
+            resizable: false,
+            hideInSearch: true,
+            ellipsis: true,
+            render: (_, record) => record.operator_name || '—',
+          },
+          {
+            title: t('common.keyword'),
+            dataIndex: 'keyword',
+            hideInTable: true,
+            order: 12,
+          },
+        ],
+        SALES_DOC_LIST_FIELD_RANK,
+      ),
     [t],
   );
 
@@ -823,7 +895,7 @@ const SettlementPage: React.FC = () => {
         rowKey="id"
         viewTypes={[...tableOnlyViewTypes, 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.settlement)}
-        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.settlement.history-v1"
+        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.settlement.history-v2"
         search={{ labelWidth: 'auto' }}
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
@@ -898,7 +970,7 @@ const SettlementPage: React.FC = () => {
             enableRowSelection
             rowKey="id"
             viewTypes={[...tableOnlyViewTypes]}
-            columnPersistenceId="apps.kuaicaiwu.pages.finance-management.settlement.list-v1"
+            columnPersistenceId="apps.kuaicaiwu.pages.finance-management.settlement.list-v4"
             search={{ labelWidth: 'auto' }}
             showAdvancedSearch
             skipFuzzyPinyinClientFilter
@@ -937,7 +1009,7 @@ const SettlementPage: React.FC = () => {
             enableRowSelection
             rowKey="id"
             viewTypes={[...tableOnlyViewTypes]}
-            columnPersistenceId="apps.kuaicaiwu.pages.finance-management.settlement:2.list-v1"
+            columnPersistenceId="apps.kuaicaiwu.pages.finance-management.settlement:2.list-v4"
             search={{ labelWidth: 'auto' }}
             showAdvancedSearch
             skipFuzzyPinyinClientFilter
@@ -1027,7 +1099,7 @@ const SettlementPage: React.FC = () => {
             enableRowSelection
             rowKey="id"
             viewTypes={[...tableOnlyViewTypes]}
-            columnPersistenceId="apps.kuaicaiwu.pages.finance-management.settlement:payable.list-v1"
+            columnPersistenceId="apps.kuaicaiwu.pages.finance-management.settlement:payable.list-v4"
             search={{ labelWidth: 'auto' }}
             showAdvancedSearch
             skipFuzzyPinyinClientFilter
@@ -1066,7 +1138,7 @@ const SettlementPage: React.FC = () => {
             enableRowSelection
             rowKey="id"
             viewTypes={[...tableOnlyViewTypes]}
-            columnPersistenceId="apps.kuaicaiwu.pages.finance-management.settlement:payment.list-v1"
+            columnPersistenceId="apps.kuaicaiwu.pages.finance-management.settlement:payment.list-v4"
             search={{ labelWidth: 'auto' }}
             showAdvancedSearch
             skipFuzzyPinyinClientFilter

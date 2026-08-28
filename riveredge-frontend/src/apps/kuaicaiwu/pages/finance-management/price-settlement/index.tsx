@@ -7,7 +7,7 @@ import { formatCurrencyAmount } from '../../../../../utils/format';
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Alert, Button, DatePicker, Form, Modal, Select, Space, InputNumber } from 'antd';
+import { App, Alert, Button, DatePicker, Form, Modal, Select, Space, InputNumber, Typography } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 import dayjs, { Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';
@@ -24,6 +24,7 @@ import {
 } from '../../../services/finance/priceSettlement';
 import { apiRequest } from '../../../../../services/api';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 
 const P = 'app.kuaicaiwu.priceSettlement';
 const RESOURCE = 'kuaicaiwu:price-settlement';
@@ -282,170 +283,184 @@ const PriceSettlementPanel: React.FC<SettlementPanelProps> = ({
   );
 
   const columns: ProColumns<PriceSettlementRow>[] = useMemo(
-    () => [
-      {
-        title: t(`${P}.col.orderCode`),
-        dataIndex: 'source_order_code',
-        width: 132,
-        minWidth: 132,
-        uniTableKeepWidth: true,
-        resizable: false,
-        ellipsis: true,
-        hideInSearch: true,
-        render: (_, row) => (
-          <Button
-            type="link"
-            size="small"
-            style={{ padding: 0, height: 'auto' }}
-            onClick={() =>
-              linked.openLinkedDocumentDetail(
-                side === 'sales' ? 'sales_order' : 'purchase_order',
-                row.source_order_id,
-              )
-            }
-          >
-            {row.source_order_code}
-          </Button>
-        ),
-      },
-      {
-        title: t(`${P}.col.materialCode`),
-        dataIndex: 'material_code',
-        width: 120,
-        minWidth: 120,
-        uniTableKeepWidth: true,
-        resizable: false,
-        ellipsis: true,
-        hideInSearch: true,
-        render: (_, row) => dashText(row.material_code),
-      },
-      {
-        title: t(`${P}.col.material`),
-        dataIndex: 'material_name',
-        width: 160,
-        minWidth: 160,
-        ellipsis: true,
-        hideInSearch: true,
-        render: (_, row) => dashText(row.material_name),
-      },
-      {
-        title: t(`${P}.col.materialSpec`),
-        dataIndex: 'material_spec',
-        width: 120,
-        minWidth: 120,
-        uniTableKeepWidth: true,
-        resizable: false,
-        ellipsis: true,
-        hideInSearch: true,
-        render: (_, row) => dashText(row.material_spec),
-      },
-      {
-        title: t(`${P}.col.materialModel`),
-        dataIndex: 'material_model',
-        width: 100,
-        minWidth: 100,
-        uniTableKeepWidth: true,
-        resizable: false,
-        ellipsis: true,
-        hideInSearch: true,
-        render: (_, row) => dashText(row.material_model),
-      },
-      {
-        title: t(`${P}.col.materialUnit`),
-        dataIndex: 'material_unit',
-        width: 72,
-        minWidth: 72,
-        uniTableKeepWidth: true,
-        resizable: false,
-        ellipsis: true,
-        hideInSearch: true,
-        render: (_, row) => dashText(row.material_unit),
-      },
-      {
-        title: t(`${P}.col.settledQty`),
-        dataIndex: 'settled_quantity',
-        align: 'right',
-        width: 110,
-        minWidth: 110,
-        uniTableKeepWidth: true,
-        resizable: false,
-        hideInSearch: true,
-      },
-      {
-        title: t(`${P}.col.beforePrice`),
-        dataIndex: 'before_unit_price',
-        align: 'right',
-        width: 120,
-        minWidth: 120,
-        uniTableKeepWidth: true,
-        resizable: false,
-        hideInSearch: true,
-        render: (_, row) => money(row.before_unit_price),
-      },
-      {
-        title: t(`${P}.col.suggestedPrice`),
-        dataIndex: 'suggested_unit_price',
-        align: 'right',
-        width: 120,
-        minWidth: 120,
-        uniTableKeepWidth: true,
-        resizable: false,
-        hideInSearch: true,
-        render: (_, row) =>
-          row.suggested_unit_price != null ? money(row.suggested_unit_price) : '—',
-      },
-      {
-        title: t(`${P}.col.provisionalPrice`),
-        dataIndex: 'provisional_unit_price',
-        align: 'right',
-        width: 120,
-        minWidth: 120,
-        uniTableKeepWidth: true,
-        resizable: false,
-        hideInSearch: true,
-        render: (_, row) =>
-          row.provisional_unit_price != null ? money(row.provisional_unit_price) : '—',
-      },
-      {
-        title: t(`${P}.col.afterPrice`),
-        key: 'after_unit_price',
-        dataIndex: 'after_unit_price',
-        width: 148,
-        minWidth: 148,
-        uniTableKeepWidth: true,
-        resizable: false,
-        ellipsis: false,
-        hideInSearch: true,
-        render: (_, row) =>
-          canSettle ? (
-            <div style={{ minWidth: 128, overflow: 'visible' }}>
-              <InputNumber
-                min={0}
-                precision={4}
-                value={row.after_unit_price ?? null}
-                placeholder={t(`${P}.inputAfterPrice`)}
-                onChange={(val) => handleAfterPriceChange(row, val)}
-                style={{ width: 128 }}
-              />
-            </div>
-          ) : (
-            row.after_unit_price != null ? money(Number(row.after_unit_price)) : '—'
-          ),
-      },
-      {
-        title: t(`${P}.col.delta`),
-        key: 'delta',
-        dataIndex: 'delta_amount',
-        align: 'right',
-        width: 148,
-        minWidth: 148,
-        uniTableKeepWidth: true,
-        resizable: false,
-        ellipsis: false,
-        hideInSearch: true,
-        render: (_, row) => renderDeltaCell(row),
-      },
-    ],
+    () =>
+      alignProColumns(
+        [
+          {
+            title: t(`${P}.col.orderCode`),
+            key: 'finance_price_order_code',
+            dataIndex: 'source_order_code',
+            width: 140,
+            minWidth: 140,
+            uniTableKeepWidth: true,
+            resizable: false,
+            ellipsis: true,
+            hideInSearch: true,
+            render: (_, row) => (
+              <Typography.Link
+                onClick={() =>
+                  linked.openLinkedDocumentDetail(
+                    side === 'sales' ? 'sales_order' : 'purchase_order',
+                    row.source_order_id,
+                  )
+                }
+              >
+                {row.source_order_code}
+              </Typography.Link>
+            ),
+          },
+          {
+            title: t(`${P}.col.materialCode`),
+            key: 'finance_price_material_code',
+            dataIndex: 'material_code',
+            width: 120,
+            minWidth: 120,
+            uniTableKeepWidth: true,
+            resizable: false,
+            ellipsis: true,
+            hideInSearch: true,
+            render: (_, row) => dashText(row.material_code),
+          },
+          {
+            // 物料名长短不一：唯一 RemainderFlex
+            title: t(`${P}.col.material`),
+            key: 'finance_price_material_name',
+            dataIndex: 'material_name',
+            minWidth: 160,
+            uniTableRemainderFlex: true,
+            uniTablePrimaryFlex: true,
+            resizable: false,
+            ellipsis: true,
+            hideInSearch: true,
+            render: (_, row) => dashText(row.material_name),
+          },
+          {
+            title: t(`${P}.col.materialSpec`),
+            key: 'finance_price_material_spec',
+            dataIndex: 'material_spec',
+            width: 120,
+            minWidth: 120,
+            uniTableKeepWidth: true,
+            resizable: false,
+            ellipsis: true,
+            hideInSearch: true,
+            render: (_, row) => dashText(row.material_spec),
+          },
+          {
+            title: t(`${P}.col.materialModel`),
+            key: 'finance_price_material_model',
+            dataIndex: 'material_model',
+            width: 100,
+            minWidth: 100,
+            uniTableKeepWidth: true,
+            resizable: false,
+            ellipsis: true,
+            hideInSearch: true,
+            render: (_, row) => dashText(row.material_model),
+          },
+          {
+            title: t(`${P}.col.materialUnit`),
+            key: 'finance_price_material_unit',
+            dataIndex: 'material_unit',
+            width: 72,
+            minWidth: 72,
+            uniTableKeepWidth: true,
+            resizable: false,
+            ellipsis: true,
+            hideInSearch: true,
+            render: (_, row) => dashText(row.material_unit),
+          },
+          {
+            title: t(`${P}.col.settledQty`),
+            key: 'finance_price_settled_qty',
+            dataIndex: 'settled_quantity',
+            align: 'right',
+            width: 110,
+            minWidth: 110,
+            uniTableKeepWidth: true,
+            resizable: false,
+            hideInSearch: true,
+          },
+          {
+            title: t(`${P}.col.beforePrice`),
+            key: 'finance_price_before',
+            dataIndex: 'before_unit_price',
+            align: 'right',
+            width: 120,
+            minWidth: 120,
+            uniTableKeepWidth: true,
+            resizable: false,
+            hideInSearch: true,
+            render: (_, row) => money(row.before_unit_price),
+          },
+          {
+            title: t(`${P}.col.suggestedPrice`),
+            key: 'finance_price_suggested',
+            dataIndex: 'suggested_unit_price',
+            align: 'right',
+            width: 120,
+            minWidth: 120,
+            uniTableKeepWidth: true,
+            resizable: false,
+            hideInSearch: true,
+            render: (_, row) =>
+              row.suggested_unit_price != null ? money(row.suggested_unit_price) : '—',
+          },
+          {
+            title: t(`${P}.col.provisionalPrice`),
+            key: 'finance_price_provisional',
+            dataIndex: 'provisional_unit_price',
+            align: 'right',
+            width: 120,
+            minWidth: 120,
+            uniTableKeepWidth: true,
+            resizable: false,
+            hideInSearch: true,
+            render: (_, row) =>
+              row.provisional_unit_price != null ? money(row.provisional_unit_price) : '—',
+          },
+          {
+            title: t(`${P}.col.afterPrice`),
+            key: 'finance_price_after',
+            dataIndex: 'after_unit_price',
+            width: 148,
+            minWidth: 148,
+            uniTableKeepWidth: true,
+            resizable: false,
+            ellipsis: false,
+            hideInSearch: true,
+            render: (_, row) =>
+              canSettle ? (
+                <div style={{ minWidth: 128, overflow: 'visible' }}>
+                  <InputNumber
+                    min={0}
+                    precision={4}
+                    value={row.after_unit_price ?? null}
+                    placeholder={t(`${P}.inputAfterPrice`)}
+                    onChange={(val) => handleAfterPriceChange(row, val)}
+                    style={{ width: 128 }}
+                  />
+                </div>
+              ) : (
+                row.after_unit_price != null ? money(Number(row.after_unit_price)) : '—'
+              ),
+          },
+          {
+            title: t(`${P}.col.delta`),
+            key: 'finance_price_delta',
+            dataIndex: 'delta_amount',
+            align: 'right',
+            width: 148,
+            minWidth: 148,
+            uniTableKeepWidth: true,
+            resizable: false,
+            ellipsis: false,
+            hideInSearch: true,
+            render: (_, row) => renderDeltaCell(row),
+          },
+        ],
+        SALES_DOC_LIST_FIELD_RANK,
+      ),
     [canSettle, handleAfterPriceChange, linked, renderDeltaCell, side, t],
   );
 
@@ -540,7 +555,7 @@ const PriceSettlementPanel: React.FC<SettlementPanelProps> = ({
           tableRowsRef.current = rows as PriceSettlementRow[];
         }}
         rowKey="source_line_id"
-        columnPersistenceId={`apps.kuaicaiwu.pages.finance-management.price-settlement.${side}.list-v2`}
+        columnPersistenceId={`apps.kuaicaiwu.pages.finance-management.price-settlement.${side}.list-v3`}
         columns={columns}
         loading={loading}
         search={false}

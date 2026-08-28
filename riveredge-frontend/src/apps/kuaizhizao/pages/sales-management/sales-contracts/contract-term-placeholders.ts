@@ -203,7 +203,89 @@ export function applyPlaceholders(text: string, values: Record<string, string>):
 
 export type PlaceholderTextSegment =
   | { type: 'text'; value: string }
-  | { type: 'placeholder'; value: string };
+  | { type: 'placeholder'; value: string; filled: boolean };
+
+type TemplatePart =
+  | { type: 'text'; value: string }
+  | { type: 'placeholder'; key: string };
+
+function splitTemplateParts(template: string): TemplatePart[] {
+  const parts: TemplatePart[] = [];
+  const re = new RegExp(PLACEHOLDER_RE.source, 'g');
+  let lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(template)) !== null) {
+    if (m.index > lastIndex) {
+      parts.push({ type: 'text', value: template.slice(lastIndex, m.index) });
+    }
+    parts.push({ type: 'placeholder', key: m[1].trim() });
+    lastIndex = m.index + m[0].length;
+  }
+  if (lastIndex < template.length) {
+    parts.push({ type: 'text', value: template.slice(lastIndex) });
+  }
+  return parts.length ? parts : [{ type: 'text', value: template }];
+}
+
+/**
+ * 用模板与已解析正文对齐，推断各占位符当前展示值。
+ * 已填：抽出实际文案；未填：正文仍为 `{key}`，不写入结果。
+ */
+export function inferPlaceholderValuesFromResolved(
+  template: string,
+  resolved: string,
+): Record<string, string> {
+  if (!template || !resolved) return {};
+  const parts = splitTemplateParts(template);
+  const result: Record<string, string> = {};
+  let cursor = 0;
+
+  for (let i = 0; i < parts.length; i += 1) {
+    const part = parts[i];
+    if (part.type === 'text') {
+      if (resolved.slice(cursor, cursor + part.value.length) !== part.value) {
+        return result;
+      }
+      cursor += part.value.length;
+      continue;
+    }
+
+    const nextText = parts.slice(i + 1).find((p): p is Extract<TemplatePart, { type: 'text' }> => p.type === 'text');
+    const unresolved = `{${part.key}}`;
+    let end: number;
+    if (!nextText) {
+      end = resolved.length;
+    } else {
+      end = resolved.indexOf(nextText.value, cursor);
+      if (end < 0) return result;
+    }
+    const extracted = resolved.slice(cursor, end);
+    if (extracted !== unresolved && extracted !== '') {
+      result[part.key] = extracted;
+    }
+    cursor = end;
+  }
+  return result;
+}
+
+/** 按模板拆分预览片段；已填与未填占位均标记为 placeholder */
+export function splitTermPreviewSegments(
+  template: string,
+  values: Record<string, string> = {},
+): PlaceholderTextSegment[] {
+  if (!template) return [];
+  const parts = splitTemplateParts(template);
+  return parts.map((part) => {
+    if (part.type === 'text') {
+      return { type: 'text', value: part.value };
+    }
+    const val = values[part.key];
+    if (val != null && val !== '') {
+      return { type: 'placeholder', value: val, filled: true };
+    }
+    return { type: 'placeholder', value: `{${part.key}}`, filled: false };
+  });
+}
 
 /** 将仍含 `{...}` 的预览文本拆成普通片段与未填占位符片段 */
 export function splitUnresolvedPlaceholderSegments(text: string): PlaceholderTextSegment[] {
@@ -216,13 +298,30 @@ export function splitUnresolvedPlaceholderSegments(text: string): PlaceholderTex
     if (m.index > lastIndex) {
       segments.push({ type: 'text', value: text.slice(lastIndex, m.index) });
     }
-    segments.push({ type: 'placeholder', value: m[0] });
+    segments.push({ type: 'placeholder', value: m[0], filled: false });
     lastIndex = m.index + m[0].length;
   }
   if (lastIndex < text.length) {
     segments.push({ type: 'text', value: text.slice(lastIndex) });
   }
   return segments.length ? segments : [{ type: 'text', value: text }];
+}
+
+/** 条款预览：优先按模板拆分（已填/未填均粗体下划线），无模板则仅高亮未填 `{...}` */
+export function buildTermPreviewSegments(
+  content: string,
+  template?: string,
+  values?: Record<string, string>,
+): PlaceholderTextSegment[] {
+  const tpl = (template ?? '').trim() ? template! : '';
+  if (!tpl) {
+    return splitUnresolvedPlaceholderSegments(content);
+  }
+  const mergedValues = {
+    ...inferPlaceholderValuesFromResolved(tpl, content),
+    ...(values ?? {}),
+  };
+  return splitTermPreviewSegments(tpl, mergedValues);
 }
 
 export function buildTermTemplatesFromGroupItems(

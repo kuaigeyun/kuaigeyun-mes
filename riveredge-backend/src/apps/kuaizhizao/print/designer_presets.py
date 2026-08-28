@@ -90,27 +90,93 @@ def _info_columns(info_items: list[tuple[str, str]]) -> dict[str, Any]:
     }
 
 
+PARTY_LINE_STYLE = {"fontSize": "13px"}
+PARTY_TITLE_STYLE = {"fontSize": "16px", "fontWeight": "700"}
+SEAL_OVERLAY_DEFAULT_SIZE_MM = 40
+
+PARTY_A_SELLER_LINES = (
+    "单位名称：",
+    "统一社会信用代码：",
+    "单位地址：",
+    "法定代表人：",
+    "委托代理人：",
+    "电话：",
+    "开户银行：",
+    "账号：",
+)
+
+PARTY_B_BUYER_SEAL_CONTENT = """单位名称：{{ customer_name }}
+统一社会信用代码：{{ tax_registration_no }}
+单位地址：{{ invoice_address }}
+法定代表人：
+委托代理人：
+电话：{{ customer_phone }}
+开户银行：{{ invoice_bank_name }}
+账号：{{ invoice_bank_account }}"""
+
+
+def _party_seller_blocks(title: str = "甲方（卖方）") -> list[dict[str, Any]]:
+    blocks: list[dict[str, Any]] = [
+        _text(title, style=PARTY_TITLE_STYLE),
+    ]
+    blocks.extend(_text(line, style=PARTY_LINE_STYLE) for line in PARTY_A_SELLER_LINES)
+    return blocks
+
+
+def _party_buyer_seal_blocks(title: str = "乙方（买方）") -> list[dict[str, Any]]:
+    return [
+        _text(title, style=PARTY_TITLE_STYLE),
+        _seal_overlay_block(
+            PARTY_B_BUYER_SEAL_CONTENT,
+            seal_align="center",
+            seal_offset_y=8,
+            style=PARTY_LINE_STYLE,
+        ),
+    ]
+
+
+def _party_dual_columns_block(
+    seller_title: str = "甲方（卖方）",
+    buyer_title: str = "乙方（买方）",
+) -> dict[str, Any]:
+    return {
+        "id": _id("party"),
+        "type": "columns",
+        "horizontalAlign": "start",
+        "verticalAlign": "top",
+        "cols": [
+            {"id": _id("left"), "width": "1", "blocks": _party_seller_blocks(seller_title)},
+            {"id": _id("right"), "width": "1", "blocks": _party_buyer_seal_blocks(buyer_title)},
+        ],
+    }
+
+
 def _seal_overlay_block(
     content: str,
     *,
     url: str = "{{ company_seal }}",
-    width: int = 88,
-    height: int = 88,
+    width: int = SEAL_OVERLAY_DEFAULT_SIZE_MM,
+    height: int = SEAL_OVERLAY_DEFAULT_SIZE_MM,
+    size_unit: str = "mm",
     seal_align: str = "center",
-    min_height: int = 88,
+    seal_offset_x: int = 0,
+    seal_offset_y: int = 0,
+    style: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """签章叠放：印章衬于文字下方，定位相对于所在分栏（随文档流下移）。"""
+    """签章叠放：印章衬于文字下方，不参与换行排版。默认 40mm。"""
     return {
         "id": _id("seal"),
         "type": "seal_overlay",
         "url": url,
         "width": width,
         "height": height,
+        "sizeUnit": size_unit,
         "keepRatio": True,
         "content": content,
         "sealAlign": seal_align,
-        "minHeight": min_height,
-        "style": {"fontSize": "10px"},
+        "sealOffsetX": seal_offset_x,
+        "sealOffsetY": seal_offset_y,
+        "style": style or {"fontSize": "13px"},
     }
 
 
@@ -653,7 +719,7 @@ def build_sales_contract_general_schema() -> dict[str, Any]:
     """销售合同通用模板（视觉组件版，甲方信息预留空白）。"""
     return {
         "version": "v1",
-        "preset_version": "sales_contract_general_v1",
+        "preset_version": "sales_contract_general_v2",
         "pageSize": "A4",
         "orientation": "portrait",
         "margins": {"top": 14, "right": 12, "bottom": 16, "left": 12},
@@ -662,40 +728,7 @@ def build_sales_contract_general_schema() -> dict[str, Any]:
             _header_block("销售合同"),
             _text("甲方（卖方）与乙方（买方）经友好协商，依据相关法规签订本合同，共同遵守执行。", style={"fontSize": "10px"}),
             _section_title("合同主体信息"),
-            {
-                "id": _id("party"),
-                "type": "columns",
-                "cols": [
-                    {
-                        "id": _id("left"),
-                        "width": "1",
-                        "blocks": [
-                            _text("甲方（卖方）", style={"fontWeight": "700", "fontSize": "11px"}),
-                            _text("公司名称：________________"),
-                            _text("地址：________________"),
-                            _text("联系人：________________"),
-                            _text("电话：________________"),
-                            _text("开户银行：________________"),
-                            _text("银行账号：________________"),
-                            _text("税号：________________"),
-                        ],
-                    },
-                    {
-                        "id": _id("right"),
-                        "width": "1",
-                        "blocks": [
-                            _text("乙方（买方）", style={"fontWeight": "700", "fontSize": "11px"}),
-                            _field("customer_name", "公司名称"),
-                            _field("customer_contact", "联系人"),
-                            _field("customer_phone", "电话"),
-                            _field("shipping_address", "地址"),
-                            _text("开户银行：________________"),
-                            _text("银行账号：________________"),
-                            _text("税号：________________"),
-                        ],
-                    },
-                ],
-            },
+            _party_dual_columns_block(),
             _section_title("合同摘要"),
             _info_columns(
                 [
@@ -729,6 +762,10 @@ def build_sales_contract_general_schema() -> dict[str, Any]:
             _text(
                 "总数量：{{ total_quantity | number }}    合同总额：{{ total_amount | money }}",
                 style={"textAlign": "right", "fontSize": "11px", "fontWeight": "600"},
+            ),
+            _text(
+                "合同总额（大写）：{{ total_amount_uppercase }}",
+                style={"textAlign": "right", "fontSize": "11px"},
             ),
             _section_title("合同条款"),
             _field("contract_terms", "合同条款", show_label=False),
@@ -764,6 +801,14 @@ def build_designer_schema(layout: DocumentLayout) -> dict[str, Any]:
                 style={"textAlign": "right", "fontSize": "11px", "fontWeight": "600"},
             )
         )
+        if layout.document_type in ("sales_contract", "sales_order"):
+            label = "合同总额（大写）" if layout.document_type == "sales_contract" else "总金额（大写）"
+            blocks.append(
+                _text(
+                    f"{label}：{{{{ total_amount_uppercase }}}}",
+                    style={"textAlign": "right", "fontSize": "11px"},
+                )
+            )
     elif layout.document_type == "delivery_notice":
         blocks.append(
             _text(

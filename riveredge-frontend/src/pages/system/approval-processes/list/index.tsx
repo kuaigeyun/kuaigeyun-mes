@@ -11,7 +11,7 @@ import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, Pr
 import { App, Popconfirm, Button } from 'antd';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { renderSystemActiveTag } from '../../utils/systemListPresentation';
-import { EditOutlined, DeleteOutlined, EyeOutlined, HighlightOutlined } from '@ant-design/icons';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../utils/uniTableLayoutColumns';
 import { useNavigate } from 'react-router-dom';
 import { countWithPagedRequests } from '../../../../utils/pagedCount';
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
@@ -33,7 +33,7 @@ import {
   resolvePresetApprovalProcessDescription,
   resolvePresetApprovalProcessName,
 } from '../../../../utils/presetEntityI18n';
-import { rowActionKind } from '../../../../components/uni-action';
+import { rowActionKind, rowActionLabelKeep } from '../../../../components/uni-action';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 import { todaySiteDateString } from '../../../../utils/format';
 import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
@@ -293,25 +293,32 @@ const ApprovalProcessListPage: React.FC = () => {
    */
   const columns = useMemo<ProColumns<ApprovalProcess>[]>(() => alignProColumns([
     {
-      title: t('pages.system.approvalProcesses.name'),
-      dataIndex: 'name',
-      width: 200,
-      ellipsis: true,
-      render: (_, record) => resolvePresetApprovalProcessName(record, t),
-    },
-    {
       title: t('pages.system.approvalProcesses.code'),
       dataIndex: 'code',
-      width: 150,
-      minWidth: 150,
+      width: 160,
+      minWidth: 160,
       uniTableKeepWidth: true,
       resizable: false,
       ellipsis: true,
     },
     {
+      title: t('pages.system.approvalProcesses.name'),
+      dataIndex: 'name',
+      width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
+      render: (_, record) => resolvePresetApprovalProcessName(record, t),
+    },
+    {
+      // 备注长短不一：唯一 RemainderFlex
       title: t('common.remark'),
       dataIndex: 'description',
-      width: 200,
+      minWidth: 160,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
+      resizable: false,
       ellipsis: true,
       hideInSearch: true,
       render: (_, record) => resolvePresetApprovalProcessDescription(record, t),
@@ -319,10 +326,7 @@ const ApprovalProcessListPage: React.FC = () => {
     {
       title: t('pages.system.approvalProcesses.enableStatus'),
       dataIndex: 'is_active',
-      width: 100,
-      minWidth: 100,
-      uniTableKeepWidth: true,
-      resizable: false,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       valueType: 'select',
       valueEnum: {
         true: { text: t('common.enabled'), status: 'Success' },
@@ -344,39 +348,27 @@ const ApprovalProcessListPage: React.FC = () => {
     {
       title: t('common.actions'),
       key: 'action',
-      valueType: 'option',
       fixed: 'right',
       hideInSearch: true,
-      uniActionRenderOptions: { directMax: 4 },
       render: (_, record) => [
-            <Button key="view" {...rowActionKind('read')} onClick={() => handleView(record)}>
-              {t('common.view')}
-            </Button>,
-            <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)}>
-              {t('common.edit')}
-            </Button>,
+            <Button key="view" {...rowActionKind('read')} onClick={() => handleView(record)} />,
+            <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)} />,
             <Button
               key="design"
-              {...rowActionKind('update')}
-              type="link"
-              size="small"
-              icon={<HighlightOutlined />}
+              {...rowActionKind('skip')}
+              {...rowActionLabelKeep()}
               onClick={() => handleDesign(record)}
-              data-action-priority={2}
             >
               {t('pages.system.approvalProcesses.design')}
             </Button>,
             <Popconfirm
               key="delete"
-              {...rowActionKind('delete')}
               title={t('pages.system.approvalProcesses.deleteConfirmTitle')}
               onConfirm={() => handleDelete(record)}
               okText={t('common.confirm')}
               cancelText={t('common.cancel')}
             >
-              <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-                {t('common.delete')}
-              </Button>
+              <Button {...rowActionKind('delete')} />
             </Popconfirm>,
           ],
     },
@@ -388,7 +380,7 @@ const ApprovalProcessListPage: React.FC = () => {
         <UniTable<ApprovalProcess>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('system.approvalProcesses')}
-        columnPersistenceId="pages.system.approval-processes.list-v1"
+        columnPersistenceId="pages.system.approval-processes.list-v2"
         headerTitle={t('pages.system.approvalProcesses.headerTitle')}
         actionRef={actionRef}
         columns={columns}

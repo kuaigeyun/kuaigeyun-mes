@@ -8,8 +8,7 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import React, { useRef, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, List, Modal, Popconfirm, Space, Typography } from 'antd';
-import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
+import { App, Button, List, Modal, Popconfirm, Typography } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
@@ -467,8 +466,8 @@ const WorkGroupsPage: React.FC = () => {
     {
       title: t('field.workGroup.code'),
       dataIndex: 'code',
-      width: 120,
-      minWidth: 120,
+      width: 140,
+      minWidth: 140,
       uniTableKeepWidth: true,
       resizable: false,
       fixed: 'left',
@@ -480,8 +479,8 @@ const WorkGroupsPage: React.FC = () => {
     {
       title: t('field.workGroup.name'),
       dataIndex: 'name',
-      width: 168,
-      minWidth: 168,
+      width: 180,
+      minWidth: 180,
       uniTableKeepWidth: true,
       resizable: false,
       ellipsis: true,
@@ -489,25 +488,31 @@ const WorkGroupsPage: React.FC = () => {
       hideInSearch: true,
     },
     {
+      // 成员名单长短不一：唯一 RemainderFlex
       title: t('field.workGroup.members'),
+      key: 'master_work_group_members',
       dataIndex: 'members',
-      width: 280,
+      minWidth: 200,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
+      resizable: false,
       ellipsis: true,
       hideInSearch: true,
       render: (_: React.ReactNode, record: WorkGroup) => {
         const text = formatMembersSummary(record);
-        return text ? text : '-';
+        return text ? text : '—';
       },
     },
     {
       title: t('common.remark'),
       dataIndex: 'description',
-      width: 168,
-      minWidth: 168,
+      width: 160,
+      minWidth: 160,
       uniTableKeepWidth: true,
       resizable: false,
       ellipsis: true,
       hideInSearch: true,
+      render: (_, r) => r.description || '—',
     },
     ...buildMasterCrudActiveStatusColumn<WorkGroup>(t, {
       activeValueEnum: workGroupActiveValueEnum,
@@ -517,32 +522,34 @@ const WorkGroupsPage: React.FC = () => {
     {
       title: t('common.actions'),
       key: 'action',
-      valueType: 'option',
       fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)}>
-            {t('common.view')}
-          </Button>
-          <Button key="edit" {...rowActionKind('update')}
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          >
-            {t('common.edit')}
-          </Button>
-          <Popconfirm key="delete" {...rowActionKind('delete')} title={t('app.master-data.workGroups.deleteConfirm')}
-            description={t('app.master-data.workGroups.deleteDescription')}
-            onConfirm={() => handleDelete(record)}
-            okText={t('common.confirm')}
-            cancelText={t('common.cancel')}
-          >
-            <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-              {t('common.delete')}
-            </Button>
-          </Popconfirm>
-        </Space>
-      ),
+      hideInSearch: true,
+      render: (_, record) => [
+        <Button
+          key="view"
+          type="link"
+          size="small"
+          {...rowActionKind('read')}
+          onClick={() => handleOpenDetail(record)}
+        />,
+        <Button
+          key="edit"
+          type="link"
+          size="small"
+          {...rowActionKind('update')}
+          onClick={() => handleEdit(record)}
+        />,
+        <Popconfirm
+          key="delete"
+          title={t('app.master-data.workGroups.deleteConfirm')}
+          description={t('app.master-data.workGroups.deleteDescription')}
+          onConfirm={() => handleDelete(record)}
+          okText={t('common.confirm')}
+          cancelText={t('common.cancel')}
+        >
+          <Button type="link" size="small" {...rowActionKind('delete')} />
+        </Popconfirm>,
+      ],
     },
   ], [t, workGroupActiveValueEnum]);
 
@@ -581,7 +588,7 @@ const WorkGroupsPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<WorkGroup>
-          columnPersistenceId="apps.master-data.pages.factory.work-groups.list-v2"
+          columnPersistenceId="apps.master-data.pages.factory.work-groups.list-v4"
           actionRef={actionRef}
           columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
           viewTypes={['table', 'help']}

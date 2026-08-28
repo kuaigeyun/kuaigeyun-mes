@@ -12,7 +12,8 @@ import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pr
 import { App, Button, List, Modal, Popconfirm, Space, Tag, Typography } from 'antd';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { renderSystemActiveTag, renderSystemTypeMarker, renderSystemYesNoTag, SystemUserAvatar } from '../../utils/systemListPresentation';
-import { EditOutlined, DeleteOutlined, EyeOutlined, ReloadOutlined, QrcodeOutlined } from '@ant-design/icons';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../utils/uniTableLayoutColumns';
+import { QrcodeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../utils/errorHandler';
@@ -475,7 +476,6 @@ const UserListPage: React.FC = () => {
       uniTableKeepWidth: true,
       resizable: false,
       hideInSearch: true,
-      fixed: 'left',
       render: (_, record) => (
         <SystemUserAvatar
           avatarUuid={record.avatar}
@@ -487,23 +487,29 @@ const UserListPage: React.FC = () => {
     {
       title: t('field.user.username'),
       dataIndex: 'username',
-      width: 150,
-      minWidth: 150,
+      width: 140,
+      minWidth: 140,
       uniTableKeepWidth: true,
       resizable: false,
-      fixed: 'left',
+      ellipsis: true,
       sorter: true,
     },
     {
       title: t('field.user.fullName'),
       dataIndex: 'full_name',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
     },
     {
       title: t('field.user.department'),
       dataIndex: 'department_uuid',
-      width: 150,
+      width: 140,
+      minWidth: 140,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       valueType: 'select',
       fieldProps: {
@@ -517,6 +523,9 @@ const UserListPage: React.FC = () => {
       title: t('field.user.position'),
       dataIndex: 'position_uuid',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       valueType: 'select',
       fieldProps: {
@@ -526,9 +535,13 @@ const UserListPage: React.FC = () => {
         record.position ? resolvePresetPositionName(record.position, t) : '-',
     },
     {
+      // 角色多枚徽章：唯一 RemainderFlex
       title: t('field.user.roles'),
       dataIndex: 'roles',
-      width: 150,
+      minWidth: 140,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
+      resizable: false,
       ellipsis: true,
       hideInSearch: true,
       render: (_, record) => (
@@ -552,22 +565,25 @@ const UserListPage: React.FC = () => {
       title: t('field.user.phone'),
       dataIndex: 'phone',
       width: 130,
+      minWidth: 130,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
     },
     {
       title: t('field.user.email'),
       dataIndex: 'email',
       width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       hideInSearch: true,
     },
     {
       title: t('field.user.isTenantAdmin'),
       dataIndex: 'is_tenant_admin',
-      width: 120,
-      minWidth: 120,
-      uniTableKeepWidth: true,
-      resizable: false,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       valueType: 'select',
       valueEnum: {
         true: { text: t('common.yes'), status: 'Warning' },
@@ -579,10 +595,7 @@ const UserListPage: React.FC = () => {
     {
       title: t('common.status'),
       dataIndex: 'is_active',
-      width: 100,
-      minWidth: 100,
-      uniTableKeepWidth: true,
-      resizable: false,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       valueType: 'select',
       valueEnum: {
         true: { text: t('common.enabled'), status: 'Success' },
@@ -626,46 +639,28 @@ const UserListPage: React.FC = () => {
     {
       title: t('common.actions'),
       key: 'action',
-      valueType: 'option',
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) => [
             <Button
               key="view"
               {...rowActionKind('read')}
-              type="link"
-              size="small"
-              icon={<EyeOutlined />}
               onClick={() => handleView(record)}
-            >
-              {t('common.view')}
-            </Button>,
+            />,
             <Button
               key="edit"
               {...rowActionKind('update')}
-              type="link"
-              size="small"
-              icon={<EditOutlined />}
               onClick={() => handleEdit(record)}
-            >
-              {t('common.edit')}
-            </Button>,
-            <Popconfirm key="delete" {...rowActionKind('delete')} title={t('field.user.deleteConfirm')} onConfirm={() => handleDelete(record)}>
-              <Button type="link" danger size="small" icon={<DeleteOutlined />}>
-                {t('common.delete')}
-              </Button>
+            />,
+            <Popconfirm key="delete" title={t('field.user.deleteConfirm')} onConfirm={() => handleDelete(record)}>
+              <Button {...rowActionKind('delete')} />
             </Popconfirm>,
             <Button
               key="reset"
               {...rowActionResetPassword('update')}
               {...rowActionToneDestructive()}
-              type="link"
-              size="small"
-              icon={<ReloadOutlined />}
               onClick={() => handleResetPassword(record)}
-            >
-              {t('common.reset')}
-            </Button>,
+            />,
           ],
     },
   ], GLOBAL_DOC_LIST_FIELD_RANK), [t, departmentOptions, positionOptions, handleView, handleEdit, handleResetPassword, handleDelete, handleOpenRoleEdit]);
@@ -735,7 +730,7 @@ const UserListPage: React.FC = () => {
         <UniTable<User>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('system.users')}
-        columnPersistenceId="pages.system.users.list-v2"
+        columnPersistenceId="pages.system.users.list-v3"
         actionRef={actionRef}
         columns={columns}
         request={async (params, _, __, searchFormValues) => {

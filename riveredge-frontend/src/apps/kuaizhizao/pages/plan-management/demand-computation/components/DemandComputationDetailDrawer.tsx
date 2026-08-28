@@ -57,7 +57,10 @@ import {
   getMaterialSourceTypeLabel,
   getMaterialSourceTypeTagColor,
 } from '../../../../../master-data/utils/materialSourceType'
-import { renderAvailableInventoryCell } from './availableInventoryCell'
+import {
+  renderAvailableInventoryCell,
+  renderNetRequirementCell,
+} from './availableInventoryCell'
 import { MrpMaterialPlanPanel } from './MrpMaterialPlanPanel'
 import { mrpExceptionListHasError } from './mrpExceptionHelpers'
 import { useResourcePermissions } from '../../../../../../hooks/useResourcePermissions'
@@ -742,7 +745,12 @@ export const DemandComputationDetailDrawer: React.FC<DemandComputationDetailDraw
                     dataIndex: 'net_requirement',
                     width: 90,
                     align: 'right',
-                    render: (v) => <span style={{ fontWeight: 'bold' }}>{v}</span>,
+                    render: (v: number, record: DemandComputationItem) =>
+                      renderNetRequirementCell(
+                        v,
+                        record.detail_results as Record<string, unknown> | undefined,
+                        (n) => <span style={{ fontWeight: 'bold' }}>{formatQuantity(n)}</span>,
+                      ),
                   },
                   {
                     title: (

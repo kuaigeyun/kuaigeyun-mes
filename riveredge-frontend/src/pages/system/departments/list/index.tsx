@@ -7,7 +7,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { rowActionKind } from '../../../../components/uni-action';
+import { rowActionKind, rowActionLabelKeep } from '../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import {
@@ -27,7 +27,7 @@ import {
 } from 'antd';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { renderSystemActiveTag, renderSystemTypeMarker } from '../../utils/systemListPresentation';
-import { EditOutlined, DeleteOutlined, PlusOutlined, EyeOutlined } from '@ant-design/icons';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../utils/uniTableLayoutColumns';
 import { ListPageTemplate } from '../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../utils/errorHandler';
 import { buildDetailDrawerEditExtra } from '../../../../apps/kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
@@ -533,8 +533,11 @@ const DepartmentListPage: React.FC = () => {
     {
       title: t('field.department.name'),
       dataIndex: 'name',
-      width: 250,
-      fixed: 'left',
+      width: 200,
+      minWidth: 200,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
       render: (_, record) => (
         <Space>
           <span style={{ fontWeight: 500 }}>{resolvePresetDepartmentName(record, t)}</span>
@@ -547,23 +550,32 @@ const DepartmentListPage: React.FC = () => {
     {
       title: t('field.department.code'),
       dataIndex: 'code',
-      width: 150,
-      minWidth: 150,
+      width: 140,
+      minWidth: 140,
       uniTableKeepWidth: true,
       resizable: false,
       copyable: true,
+      ellipsis: true,
     },
     {
       title: t('field.department.managerName'),
       dataIndex: 'manager_name',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       hideInSearch: true,
       render: (_, record) => record.manager_name || '-',
     },
     {
+      // 备注长短不一：唯一 RemainderFlex
       title: t('common.remark'),
       dataIndex: 'description',
+      minWidth: 140,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
+      resizable: false,
       ellipsis: true,
       hideInSearch: true,
     },
@@ -584,8 +596,8 @@ const DepartmentListPage: React.FC = () => {
     {
       title: t('field.department.sortOrder'),
       dataIndex: 'sort_order',
-      width: 80,
-      minWidth: 80,
+      width: 100,
+      minWidth: 100,
       uniTableKeepWidth: true,
       resizable: false,
       valueType: 'digit',
@@ -595,10 +607,7 @@ const DepartmentListPage: React.FC = () => {
     {
       title: t('common.status'),
       dataIndex: 'is_active',
-      width: 100,
-      minWidth: 100,
-      uniTableKeepWidth: true,
-      resizable: false,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       valueType: 'select',
       valueEnum: {
         true: { text: t('common.enabled'), status: 'Success' },
@@ -632,27 +641,21 @@ const DepartmentListPage: React.FC = () => {
     {
       title: t('common.actions'),
       key: 'action',
-      valueType: 'option',
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) => {
         const actions: React.ReactNode[] = [
-          <Button {...rowActionKind('read')} key="view" onClick={() => handleView(record)}>
-            {t('common.view')}
-          </Button>,
-          <Button {...rowActionKind('update')} key="edit" onClick={() => handleEdit(record)}>
-            {t('common.edit')}
-          </Button>,
-          <Button {...rowActionKind('create')}
+          <Button {...rowActionKind('read')} key="view" onClick={() => handleView(record)} />,
+          <Button {...rowActionKind('update')} key="edit" onClick={() => handleEdit(record)} />,
+          <Button
+            {...rowActionKind('skip')}
+            {...rowActionLabelKeep()}
             key="addChild"
-            type="link"
-            size="small"
-            icon={<PlusOutlined />}
             onClick={() => handleCreate(record.uuid)}
           >
             {t('field.department.addChild')}
           </Button>,
-          <Popconfirm {...rowActionKind('delete')}
+          <Popconfirm
             key="delete"
             title={t('field.department.deleteConfirm', { name: record.name })}
             description={t('field.department.deleteConfirmDesc')}
@@ -660,14 +663,7 @@ const DepartmentListPage: React.FC = () => {
             okText={t('common.confirm')}
             cancelText={t('common.cancel')}
           >
-            <Button
-              type="link"
-              size="small"
-              danger
-              icon={<DeleteOutlined />}
-            >
-              {t('common.delete')}
-            </Button>
+            <Button {...rowActionKind('delete')} />
           </Popconfirm>,
         ];
         return actions;
@@ -678,7 +674,7 @@ const DepartmentListPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<Department>
-        columnPersistenceId="pages.system.departments.list-v1"
+        columnPersistenceId="pages.system.departments.list-v2"
         permissionResource="system:department"
         viewTypes={['table', 'help']}
         helpViewConfig={buildListPageHelpViewConfig('system.departments')}

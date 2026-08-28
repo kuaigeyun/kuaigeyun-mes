@@ -7,7 +7,7 @@
 
 import React, { useState, useMemo, useRef } from 'react';
 import dayjs from 'dayjs';
-import { rowActionKind } from '../../../components/uni-action';
+import { rowActionKind, rowActionLabelKeep } from '../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import {
@@ -553,11 +553,15 @@ const DataBackupsPage: React.FC = () => {
    */
   const columns = useMemo<ProColumns<DataBackup>[]>(() => alignProColumns([
     {
+      // 名称长短不一：唯一 RemainderFlex
       title: t('pages.system.dataBackups.columnName'),
       dataIndex: 'name',
       key: 'name',
       ellipsis: true,
-      width: 200,
+      minWidth: 180,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
+      resizable: false,
     },
     {
       title: t('pages.system.dataBackups.columnType'),
@@ -568,8 +572,8 @@ const DataBackupsPage: React.FC = () => {
         incremental: { text: t('pages.system.dataBackups.typeIncremental') },
       },
       render: (_: any, record: DataBackup) => getBackupTypeTag(record.backup_type),
-      width: 100,
-      minWidth: 100,
+      width: 110,
+      minWidth: 110,
       uniTableKeepWidth: true,
       resizable: false,
     },
@@ -643,44 +647,43 @@ const DataBackupsPage: React.FC = () => {
     {
       title: t('common.actions'),
       key: 'action',
-      valueType: 'option',
       fixed: 'right',
       hideInSearch: true,
       render: (_: any, record: DataBackup) => {
         const actions: React.ReactNode[] = [
-          <Button {...rowActionKind('read')} key="view" onClick={() => handleViewDetail(record)}>
-            {t('common.detail')}
-          </Button>,
+          <Button {...rowActionKind('read')} key="view" onClick={() => handleViewDetail(record)} />,
         ];
         if (record.status === 'success') {
           actions.push(
-            <Button {...rowActionKind('read')}
+            <Button
+              {...rowActionKind('skip')}
+              {...rowActionLabelKeep()}
               key="download"
-              type="link"
-              size="small"
-              icon={<DownloadOutlined />}
               onClick={() => handleDownload(record)}
             >
               {t('pages.system.dataBackups.downloadBackup')}
             </Button>,
           );
           actions.push(
-            <Button {...rowActionKind('update')} key="restore" onClick={() => handleRestore(record)}>
+            <Button
+              {...rowActionKind('skip')}
+              {...rowActionLabelKeep()}
+              key="restore"
+              onClick={() => handleRestore(record)}
+            >
               {t('pages.system.dataBackups.restore')}
             </Button>,
           );
         }
         actions.push(
-          <Popconfirm {...rowActionKind('delete')}
+          <Popconfirm
             key="delete"
             title={t('pages.system.dataBackups.deleteConfirmTitle')}
             onConfirm={() => handleDelete(record)}
             okText={t('common.confirm')}
             cancelText={t('common.cancel')}
           >
-            <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-              {t('common.delete')}
-            </Button>
+            <Button {...rowActionKind('delete')} />
           </Popconfirm>,
         );
         return actions;
@@ -748,7 +751,7 @@ const DataBackupsPage: React.FC = () => {
     <>
       <ListPageTemplate statCards={statCards}>
         <UniTable<DataBackup>
-          columnPersistenceId="pages.system.data-backups.list-v1"
+          columnPersistenceId="pages.system.data-backups.list-v2"
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {

@@ -28,6 +28,7 @@ import {
   loadBatchOptionsByMaterialId,
   loadInStockSerialOptions,
   normalizeOutboundBatchNo,
+  resolveAllowNegativeInventory,
   resolveOutboundConfirmBatchValue,
   type InventoryPickOption,
 } from './outboundConfirmInventoryOptions';
@@ -150,6 +151,7 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
   >({});
   const [oqcEnsure, setOqcEnsure] = useState<EnsureOqcForSalesDeliveryResult | null>(null);
   const [oqcEnsureLoading, setOqcEnsureLoading] = useState(false);
+  const [allowNegativeInventory, setAllowNegativeInventory] = useState(false);
 
   const outboundType = record?.outbound_type;
   const recordId = record?.id;
@@ -213,7 +215,11 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
       setLoading(true);
       setOqcEnsure(null);
       try {
-        const detailData = await fetchOutboundDetail(hubRecord);
+        const [detailData, allowNegative] = await Promise.all([
+          fetchOutboundDetail(hubRecord),
+          resolveAllowNegativeInventory(),
+        ]);
+        if (!cancelled) setAllowNegativeInventory(allowNegative);
         if (cancelled) return;
         if (!detailData) {
           messageApi.error(t('app.kuaizhizao.warehouseOutbound.msg.loadDetailFailed'));
@@ -696,6 +702,7 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
       return;
     }
     const vals = form.getFieldsValue(true);
+    const negativeStockWarnings: string[] = [];
 
     for (const it of activeLines) {
       const lineId = Number(it.id);
@@ -710,15 +717,25 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
             ? opts.reduce((sum, o) => sum + (Number(o.quantity) || 0), 0)
             : Number(stockQtyByMaterialId[lookupKey] ?? 0);
         if (qty > 0 && !stockQtyLoading && available < qty) {
-          messageApi.error(
-            t('app.kuaizhizao.warehouseOutbound.confirm.batchQtyInsufficient', {
-              material: String(it.material_code ?? ''),
-              batch: opts.length ? opts.map((o) => o.value).join('、') : '—',
-              available,
-              required: qty,
-            }),
-          );
-          return;
+          if (allowNegativeInventory) {
+            negativeStockWarnings.push(
+              t('app.kuaizhizao.warehouseOutbound.confirm.negativeStockLineHint', {
+                material: String(it.material_code ?? ''),
+                available,
+                required: qty,
+              }),
+            );
+          } else {
+            messageApi.error(
+              t('app.kuaizhizao.warehouseOutbound.confirm.batchQtyInsufficient', {
+                material: String(it.material_code ?? ''),
+                batch: opts.length ? opts.map((o) => o.value).join('、') : '—',
+                available,
+                required: qty,
+              }),
+            );
+            return;
+          }
         }
         continue;
       }
@@ -749,67 +766,100 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
         (o) => o.value === String(batchRaw ?? '').trim() || o.value === normalizeOutboundBatchNo(batchRaw),
       );
       if (picked?.quantity != null && qty > 0 && picked.quantity < qty) {
-        messageApi.error(
-          t('app.kuaizhizao.warehouseOutbound.confirm.batchQtyInsufficient', {
-            material: String(it.material_code ?? ''),
-            batch: picked.value,
-            available: picked.quantity,
-            required: qty,
-          }),
-        );
-        return;
+        if (allowNegativeInventory) {
+          negativeStockWarnings.push(
+            t('app.kuaizhizao.warehouseOutbound.confirm.negativeStockLineHint', {
+              material: String(it.material_code ?? ''),
+              available: picked.quantity,
+              required: qty,
+            }),
+          );
+        } else {
+          messageApi.error(
+            t('app.kuaizhizao.warehouseOutbound.confirm.batchQtyInsufficient', {
+              material: String(it.material_code ?? ''),
+              batch: picked.value,
+              available: picked.quantity,
+              required: qty,
+            }),
+          );
+          return;
+        }
       }
     }
 
-    const payloadWhName = String(detail.warehouse_name ?? record.warehouse_name ?? whName);
-    const payload = buildOutboundConfirmPayloadFromForm(
-      record.outbound_type,
-      activeLines,
-      vals,
-      whId > 0 ? whId : undefined,
-      payloadWhName,
-    );
+    const executeConfirm = async () => {
+      const payloadWhName = String(detail.warehouse_name ?? record.warehouse_name ?? whName);
+      const payload = buildOutboundConfirmPayloadFromForm(
+        record.outbound_type,
+        activeLines,
+        vals,
+        whId > 0 ? whId : undefined,
+        payloadWhName,
+      );
 
-    // sales_delivery 的 item_batches 已由 buildOutboundConfirmPayloadFromForm 生成：
-    // 空批号保持空串，禁止再 normalize 成 DEFAULT（会误走指定批号扣库，且与「未选批号」语义冲突）。
+      setSubmitting(true);
+      try {
+        const id = String(record.id);
+        let raw: unknown;
+        if (record.outbound_type === 'production_picking') {
+          raw = await warehouseApi.productionPicking.confirm(id, payload);
+        } else if (record.outbound_type === 'sales_delivery') {
+          raw = await warehouseApi.salesDelivery.confirm(id, payload);
+        } else if (record.outbound_type === 'other_outbound') {
+          raw = await warehouseApi.otherOutbound.confirm(id, payload);
+        } else if (record.outbound_type === 'material_borrow') {
+          raw = await warehouseApi.materialBorrow.confirm(id, payload);
+        } else {
+          messageApi.error(t('app.kuaizhizao.warehouseOutbound.confirm.typeNotSupported'));
+          return;
+        }
+        const updated = parseConfirmResult(raw);
+        const st = (updated.status ?? '').trim();
+        const posted =
+          st === '已出库' ||
+          st === '已领料' ||
+          st === '已完成' ||
+          st === 'completed' ||
+          st === '已借出';
+        if (!posted && record.outbound_type !== 'production_picking') {
+          messageApi.error(t('app.kuaizhizao.warehouseOutbound.confirm.notPosted', { status: st || t('app.kuaizhizao.warehouseOutbound.msg.unknownError') }));
+        } else {
+          messageApi.success(t('app.kuaizhizao.warehouseOutbound.confirm.success'));
+        }
+        onSuccess();
+        onClose();
+      } catch (e: unknown) {
+        const err = e as { message?: string; response?: { data?: { detail?: string } } };
+        messageApi.error(err?.message || err?.response?.data?.detail || t('app.kuaizhizao.warehouseOutbound.confirm.failed'));
+      } finally {
+        setSubmitting(false);
+      }
+    };
 
-    setSubmitting(true);
-    try {
-      const id = String(record.id);
-      let raw: unknown;
-      if (record.outbound_type === 'production_picking') {
-        raw = await warehouseApi.productionPicking.confirm(id, payload);
-      } else if (record.outbound_type === 'sales_delivery') {
-        raw = await warehouseApi.salesDelivery.confirm(id, payload);
-      } else if (record.outbound_type === 'other_outbound') {
-        raw = await warehouseApi.otherOutbound.confirm(id, payload);
-      } else if (record.outbound_type === 'material_borrow') {
-        raw = await warehouseApi.materialBorrow.confirm(id, payload);
-      } else {
-        messageApi.error(t('app.kuaizhizao.warehouseOutbound.confirm.typeNotSupported'));
-        return;
-      }
-      const updated = parseConfirmResult(raw);
-      const st = (updated.status ?? '').trim();
-      const posted =
-        st === '已出库' ||
-        st === '已领料' ||
-        st === '已完成' ||
-        st === 'completed' ||
-        st === '已借出';
-      if (!posted && record.outbound_type !== 'production_picking') {
-        messageApi.error(t('app.kuaizhizao.warehouseOutbound.confirm.notPosted', { status: st || t('app.kuaizhizao.warehouseOutbound.msg.unknownError') }));
-      } else {
-        messageApi.success(t('app.kuaizhizao.warehouseOutbound.confirm.success'));
-      }
-      onSuccess();
-      onClose();
-    } catch (e: unknown) {
-      const err = e as { message?: string; response?: { data?: { detail?: string } } };
-      messageApi.error(err?.message || err?.response?.data?.detail || t('app.kuaizhizao.warehouseOutbound.confirm.failed'));
-    } finally {
-      setSubmitting(false);
+    if (negativeStockWarnings.length > 0) {
+      Modal.confirm({
+        title: t('app.kuaizhizao.warehouseOutbound.confirm.negativeStockTitle'),
+        content: (
+          <div>
+            <Typography.Paragraph type="warning" style={{ marginBottom: 8 }}>
+              {t('app.kuaizhizao.warehouseOutbound.confirm.negativeStockHint')}
+            </Typography.Paragraph>
+            <ul style={{ margin: 0, paddingLeft: 18 }}>
+              {negativeStockWarnings.map((line, i) => (
+                <li key={i}>{line}</li>
+              ))}
+            </ul>
+          </div>
+        ),
+        okText: t('app.kuaizhizao.warehouseOutbound.confirm.negativeStockContinue'),
+        cancelText: t('common.cancel'),
+        onOk: executeConfirm,
+      });
+      return;
     }
+
+    await executeConfirm();
   };
 
   const typeLabel = record?.outbound_type

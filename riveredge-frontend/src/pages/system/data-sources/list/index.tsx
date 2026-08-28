@@ -10,11 +10,12 @@ import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDependency, ProFormDigit, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Tag, Space, Badge, Typography, Alert, Tooltip, Card, Button, theme } from 'antd';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../utils/uniTableLayoutColumns';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { renderSystemActiveTag, renderSystemTypeMarker } from '../../utils/systemListPresentation';
 import { DeleteOutlined, EyeOutlined, DatabaseOutlined, ThunderboltOutlined, EditOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
-import { rowActionKind } from '../../../../components/uni-action';
+import { rowActionKind, rowActionTestConnection } from '../../../../components/uni-action';
 import { DetailDrawerActions, ListPageTemplate, FormModalTemplate, FormModalGridBlock, MODAL_CONFIG } from '../../../../components/layout-templates';
 import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer';
 import { getApiErrorMessage } from '../../../../utils/errorHandler';
@@ -631,8 +632,11 @@ const DataSourceListPage: React.FC = () => {
     {
       title: t('pages.system.dataSources.columnName'),
       dataIndex: 'name',
-      width: 200,
-      fixed: 'left',
+      width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
       render: (_, record) => (
         <Space size="small">
           <span>{record.name}</span>
@@ -645,10 +649,11 @@ const DataSourceListPage: React.FC = () => {
     {
       title: t('pages.system.dataSources.columnCode'),
       dataIndex: 'code',
-      width: 150,
-      minWidth: 150,
+      width: 140,
+      minWidth: 140,
       uniTableKeepWidth: true,
       resizable: false,
+      ellipsis: true,
     },
     {
       title: t('pages.system.dataSources.columnType'),
@@ -667,16 +672,21 @@ const DataSourceListPage: React.FC = () => {
       },
     },
     {
+      // 备注长短不一：唯一 RemainderFlex
       title: t('common.remark'),
       dataIndex: 'description',
+      minWidth: 140,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
+      resizable: false,
       ellipsis: true,
       hideInSearch: true,
     },
     {
       title: t('pages.system.dataSources.columnConnectionStatus'),
       dataIndex: 'is_connected',
-      width: 120,
-      minWidth: 120,
+      width: 130,
+      minWidth: 130,
       uniTableKeepWidth: true,
       resizable: false,
       valueType: 'select',
@@ -700,10 +710,7 @@ const DataSourceListPage: React.FC = () => {
     {
       title: t('pages.system.dataSources.columnActive'),
       dataIndex: 'is_active',
-      width: 100,
-      minWidth: 100,
-      uniTableKeepWidth: true,
-      resizable: false,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       valueType: 'select',
       valueEnum: {
         true: { text: t('common.enabled'), status: 'Success' },
@@ -737,61 +744,34 @@ const DataSourceListPage: React.FC = () => {
     {
       title: t('common.actions'),
       key: 'action',
-      valueType: 'option',
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) => {
         const actions: React.ReactNode[] = [
-          <Button
-            key="view"
-            {...rowActionKind('read')}
-            type="link"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleView(record)}
-          >
-            {t('common.view')}
-          </Button>,
+          <Button key="view" {...rowActionKind('read')} onClick={() => handleView(record)} />,
         ];
         if (record.is_editable !== false) {
           actions.push(
-            <Button
-              key="edit"
-              {...rowActionKind('update')}
-              type="link"
-              size="small"
-              icon={<EditOutlined />}
-              onClick={() => handleEdit(record)}
-            >
-              {t('common.edit')}
-            </Button>,
+            <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)} />,
           );
         }
         actions.push(
           <Button
             key="test"
-            {...rowActionKind('read')}
-            type="link"
-            size="small"
-            icon={<ThunderboltOutlined />}
+            {...rowActionTestConnection('execute')}
             onClick={() => handleTestConnection(record)}
-          >
-            {t('pages.system.dataSources.testConnection')}
-          </Button>,
+          />,
         );
         if (record.is_editable !== false) {
           actions.push(
             <Popconfirm
               key="delete"
-              {...rowActionKind('delete')}
               title={t('pages.system.dataSources.deleteConfirmTitle')}
               onConfirm={() => handleDelete(record)}
               okText={t('common.confirm')}
               cancelText={t('common.cancel')}
             >
-              <Button type="link" size="small" icon={<DeleteOutlined />} danger>
-                {t('common.delete')}
-              </Button>
+              <Button {...rowActionKind('delete')} />
             </Popconfirm>,
           );
         }
@@ -799,6 +779,7 @@ const DataSourceListPage: React.FC = () => {
       },
     },
   ], GLOBAL_DOC_LIST_FIELD_RANK), [t, handleView, handleEdit, handleTestConnection, handleDelete]);
+
 
   /**
    * 详情列定义
@@ -900,7 +881,7 @@ const DataSourceListPage: React.FC = () => {
     <>
       <ListPageTemplate statCards={statCards}>
         <UniTable<DataSource>
-          columnPersistenceId="pages.system.data-sources.list-v1"
+          columnPersistenceId="pages.system.data-sources.list-v2"
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {

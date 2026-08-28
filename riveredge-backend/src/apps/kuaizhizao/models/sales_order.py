@@ -73,6 +73,10 @@ class SalesOrder(BaseModel):
     )
     prepayment_bank_account_id = fields.IntField(null=True, description="预收款银行账户ID")
 
+    term_group_id = fields.IntField(null=True, description="条款组ID")
+    term_group_name = fields.CharField(max_length=200, null=True, description="条款组名称（快照）")
+    contract_terms = fields.JSONField(null=True, description="订单条款快照")
+
     notes = fields.TextField(null=True, description="备注")
     attachments = fields.JSONField(null=True, description="附件列表")
 

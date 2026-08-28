@@ -26,6 +26,7 @@ from urllib.parse import urlsplit, parse_qs
 from core.services.print.print_template_service import PrintTemplateService
 from core.schemas.print_template import PrintTemplateRenderRequest
 from core.services.i18n.print_localization import PrintLocalization
+from core.utils.amount_uppercase_cn import enrich_print_amount_uppercase_fields
 from core.services.data.data_dictionary_service import DataDictionaryService
 from apps.kuaizhizao.constants.price_type import DEFAULT_SALES_PRICE_TYPE
 from apps.kuaizhizao.print.document_qrcode import attach_document_qrcode_fields
@@ -502,6 +503,86 @@ async def _resolve_company_seal_for_print(tenant_id: int) -> str:
     return await _resolve_site_image_setting_for_print(tenant_id, "company_seal")
 
 
+_PARTNER_INVOICE_TYPE_PRINT_LABELS = {
+    "digital_vat_special": "数电票（增值税专用发票）",
+    "digital_vat_ordinary": "数电票（增值税普通发票）",
+}
+
+_PARTNER_TAXPAYER_TYPE_PRINT_LABELS = {
+    "general": "一般纳税人",
+    "small_scale": "小规模纳税人",
+    "non_enterprise": "非企业单位",
+}
+
+_CUSTOMER_INVOICE_PRINT_FIELD_KEYS = (
+    "tax_registration_no",
+    "invoice_title",
+    "invoice_address",
+    "invoice_phone",
+    "invoice_bank_name",
+    "invoice_bank_account",
+    "invoice_type_code",
+    "invoice_type",
+    "taxpayer_type_code",
+    "taxpayer_type",
+    "invoice_bank_info",
+    "invoice_address_phone",
+)
+
+
+def _empty_customer_invoice_print_fields() -> Dict[str, str]:
+    return {key: "" for key in _CUSTOMER_INVOICE_PRINT_FIELD_KEYS}
+
+
+def _join_print_text(*parts: Any) -> str:
+    chunks = [str(part).strip() for part in parts if part is not None and str(part).strip()]
+    return " ".join(chunks)
+
+
+async def _resolve_customer_invoice_print_fields(
+    tenant_id: int,
+    customer_id: Optional[int],
+) -> Dict[str, str]:
+    """从客户主数据开票资料补齐打印变量（销售订单/销售合同）。"""
+    if not customer_id:
+        return _empty_customer_invoice_print_fields()
+
+    from apps.master_data.models.customer import Customer
+
+    customer = await Customer.get_or_none(
+        tenant_id=tenant_id,
+        id=int(customer_id),
+        deleted_at__isnull=True,
+    )
+    if not customer:
+        return _empty_customer_invoice_print_fields()
+
+    invoice_type_code = str(getattr(customer, "invoice_type_code", None) or "").strip()
+    taxpayer_type_code = str(getattr(customer, "taxpayer_type_code", None) or "").strip()
+    invoice_address = str(getattr(customer, "invoice_address", None) or "").strip()
+    invoice_phone = str(getattr(customer, "invoice_phone", None) or "").strip()
+    bank_name = str(getattr(customer, "invoice_bank_name", None) or "").strip()
+    bank_account = str(getattr(customer, "invoice_bank_account", None) or "").strip()
+    invoice_title = str(getattr(customer, "invoice_title", None) or "").strip()
+    if not invoice_title:
+        invoice_title = str(getattr(customer, "name", None) or "").strip()
+
+    return {
+        "tax_registration_no": str(getattr(customer, "tax_registration_no", None) or "").strip(),
+        "invoice_title": invoice_title,
+        "invoice_address": invoice_address,
+        "invoice_phone": invoice_phone,
+        "invoice_bank_name": bank_name,
+        "invoice_bank_account": bank_account,
+        "invoice_type_code": invoice_type_code,
+        "invoice_type": _PARTNER_INVOICE_TYPE_PRINT_LABELS.get(invoice_type_code, invoice_type_code),
+        "taxpayer_type_code": taxpayer_type_code,
+        "taxpayer_type": _PARTNER_TAXPAYER_TYPE_PRINT_LABELS.get(taxpayer_type_code, taxpayer_type_code),
+        "invoice_bank_info": _join_print_text(bank_name, bank_account),
+        "invoice_address_phone": _join_print_text(invoice_address, invoice_phone),
+    }
+
+
 def _format_sales_contract_terms_for_print(contract_terms: Any) -> str:
     """
     将销售合同条款快照格式化为可打印文本，避免直接渲染出 Python/JSON 结构。
@@ -804,6 +885,7 @@ class DocumentPrintService:
             document_data["logo"] = document_data["company_logo"]
         if not document_data.get("company_seal"):
             document_data["company_seal"] = await _resolve_company_seal_for_print(tenant_id)
+        enrich_print_amount_uppercase_fields(document_data)
 
         try:
             if template_uuid or template_code:
@@ -919,7 +1001,9 @@ class DocumentPrintService:
         document_id: int,
     ) -> Dict[str, Any]:
         """与 `print_document` / HTML 模板渲染共用 `_get_document_data`，供 print-variables API 调试预览。"""
-        return await self._get_document_data(tenant_id, document_type, document_id)
+        document_data = await self._get_document_data(tenant_id, document_type, document_id)
+        enrich_print_amount_uppercase_fields(document_data)
+        return document_data
 
     @staticmethod
     def _finalize_print_context(
@@ -1685,19 +1769,34 @@ class DocumentPrintService:
                     "delivery_status": i.delivery_status,
                     "work_order_code": i.work_order_code,
                     "notes": i.notes,
-                    # 与报价单模板列键兼容的别名字段
+                    # 与报价单 / 销售合同模板列键兼容的别名字段
                     "chinese_short_name": chinese_short_name,
                     "model_number": model_number,
                     "image_url": image_url,
                     "quote_quantity": str(i.order_quantity),
                     "required_quantity": str(i.order_quantity),
+                    "contract_quantity": str(i.order_quantity),
                 }
             )
+        shipping_method_label = await _resolve_print_dictionary_label(
+            order.tenant_id, "SHIPPING_METHOD", getattr(order, "shipping_method", None)
+        )
+        payment_terms_label = await _resolve_print_dictionary_label(
+            order.tenant_id, "PAYMENT_TERMS", getattr(order, "payment_terms", None)
+        )
+        currency_code = getattr(order, "currency_code", None) or "CNY"
+        customer_invoice_fields = await _resolve_customer_invoice_print_fields(
+            order.tenant_id, getattr(order, "customer_id", None)
+        )
         return {
             "document_type": "sales_order",
             "code": order.order_code,
+            "order_code": order.order_code,
             "order_name": getattr(order, "order_name", None) or order.order_code,
             "customer_name": order.customer_name,
+            "customer_contact": getattr(order, "customer_contact", None),
+            "customer_phone": getattr(order, "customer_phone", None),
+            **customer_invoice_fields,
             "order_date": to_api_isoformat(order.order_date) if order.order_date else None,
             "delivery_date": to_api_isoformat(order.delivery_date) if order.delivery_date else None,
             "total_quantity": str(order.total_quantity),
@@ -1705,6 +1804,23 @@ class DocumentPrintService:
             "status": i18n.document_status(order.status),
             "status_code": order.status,
             "created_at": to_api_isoformat(order.created_at) if order.created_at else None,
+            "salesman_name": getattr(order, "salesman_name", None),
+            "shipping_address": getattr(order, "shipping_address", None),
+            "shipping_method": shipping_method_label,
+            "payment_terms": payment_terms_label,
+            "currency_code": currency_code,
+            "price_type": getattr(order, "price_type", None) or DEFAULT_SALES_PRICE_TYPE,
+            "notes": getattr(order, "notes", None),
+            # 销售合同模板别名：单据号/日期用订单真源；关联框架合同编码单独保留
+            "contract_code": order.order_code,
+            "related_contract_code": getattr(order, "contract_code", None) or "",
+            "contract_date": to_api_isoformat(order.order_date) if order.order_date else None,
+            "valid_from": to_api_isoformat(order.order_date) if order.order_date else None,
+            "valid_to": to_api_isoformat(order.delivery_date) if order.delivery_date else None,
+            "quotation_code": "",
+            "contract_terms": _format_sales_contract_terms_for_print(getattr(order, "contract_terms", None)),
+            "contract_terms_raw": getattr(order, "contract_terms", None),
+            "term_group_name": getattr(order, "term_group_name", None) or "",
             "items": items_data,
         }
 
@@ -2079,6 +2195,10 @@ class DocumentPrintService:
             contract.tenant_id, "PAYMENT_TERMS", contract.payment_terms
         )
         contract_type_label = _resolve_sales_contract_type_label(contract.contract_type)
+        currency_code = contract.currency_code or "CNY"
+        customer_invoice_fields = await _resolve_customer_invoice_print_fields(
+            contract.tenant_id, getattr(contract, "customer_id", None)
+        )
         return {
             "document_type": "sales_contract",
             "code": contract.contract_code,
@@ -2086,10 +2206,11 @@ class DocumentPrintService:
             "contract_type": contract_type_label,
             "version_no": int(getattr(contract, "version_no", None) or 1),
             "review_status": contract.review_status,
-            "currency_code": contract.currency_code or "CNY",
+            "currency_code": currency_code,
             "customer_name": contract.customer_name,
             "customer_contact": contract.customer_contact,
             "customer_phone": contract.customer_phone,
+            **customer_invoice_fields,
             "contract_date": to_api_isoformat(contract.contract_date) if contract.contract_date else None,
             "valid_from": to_api_isoformat(contract.valid_from) if contract.valid_from else None,
             "valid_to": to_api_isoformat(contract.valid_to) if contract.valid_to else None,

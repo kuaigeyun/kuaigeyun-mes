@@ -23,6 +23,10 @@ class SalesContract(BaseModel):
         default="single",
         description="合同类型：single 单次 / framework 框架",
     )
+    enter_line_items = fields.BooleanField(
+        default=True,
+        description="是否录入明细：true=数量框架，false=金额总框（无明细、手填总金额）",
+    )
     party_type = fields.CharField(
         max_length=20,
         default="customer",
@@ -77,6 +81,9 @@ class SalesContract(BaseModel):
     term_group_name = fields.CharField(max_length=200, null=True, description="条款组名称（快照）")
     contract_terms = fields.JSONField(null=True, description="合同条款快照")
     attachments = fields.JSONField(null=True, description="附件列表")
+
+    migrated_to_order_at = fields.DatetimeField(null=True, description="单次合同迁移至销售订单时间")
+    migration_batch_id = fields.CharField(max_length=50, null=True, description="迁移批次ID")
 
     is_active = fields.BooleanField(default=True, description="是否有效")
     deleted_at = fields.DatetimeField(null=True, description="删除时间")

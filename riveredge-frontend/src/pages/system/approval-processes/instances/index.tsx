@@ -31,7 +31,7 @@ import {
   ApprovalInstanceActionData,
 } from '../../../../services/approvalInstance';
 import { getApprovalProcessList } from '../../../../services/approvalProcess';
-import { rowActionKind } from '../../../../components/uni-action';
+import { rowActionKind, rowActionLabelKeep } from '../../../../components/uni-action';
 import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 import { formatDateBySiteSetting, todaySiteDateString } from '../../../../utils/format';
@@ -203,22 +203,32 @@ const ApprovalInstanceListPage: React.FC = () => {
 
   const columns = useMemo<ProColumns<ApprovalInstance>[]>(() => alignProColumns([
     {
+      // 标题长短不一：唯一 RemainderFlex
       title: t('pages.system.approvalInstances.title'),
       dataIndex: 'title',
-      width: 200,
+      minWidth: 180,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
+      resizable: false,
       ellipsis: true,
     },
     {
       title: t('pages.system.approvalInstances.relatedProcess'),
       dataIndex: 'process_uuid',
       width: 150,
+      minWidth: 150,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       hideInSearch: true,
     },
     {
       title: t('pages.system.approvalInstances.currentNode'),
       dataIndex: 'current_node',
-      width: 150,
+      width: 140,
+      minWidth: 140,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       hideInSearch: true,
     },
@@ -264,32 +274,24 @@ const ApprovalInstanceListPage: React.FC = () => {
     {
       title: t('common.actions'),
       key: 'action',
-      valueType: 'option',
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) => {
-        const actions = [
+        const actions: React.ReactNode[] = [
           <Button
             key="view"
             {...rowActionKind('read')}
-            type="link"
-            size="small"
-            icon={<EyeOutlined />}
             onClick={() => handleView(record)}
-          >
-            {t('common.view')}
-          </Button>,
+          />,
         ];
-        
+
         if (record.status === 'pending') {
           if (record.current_approver_id) {
             actions.push(
               <Button
                 key="approve"
                 {...rowActionKind('approve')}
-                type="link"
-                size="small"
-                icon={<CheckOutlined />}
+                {...rowActionLabelKeep()}
                 onClick={() => handleAction(record, 'approve')}
               >
                 {t('pages.system.approvalInstances.approve')}
@@ -297,10 +299,7 @@ const ApprovalInstanceListPage: React.FC = () => {
               <Button
                 key="reject"
                 {...rowActionKind('reject')}
-                type="link"
-                size="small"
-                danger
-                icon={<CloseOutlined />}
+                {...rowActionLabelKeep()}
                 onClick={() => handleAction(record, 'reject')}
               >
                 {t('pages.system.approvalInstances.reject')}
@@ -308,30 +307,26 @@ const ApprovalInstanceListPage: React.FC = () => {
               <Button
                 key="transfer"
                 {...rowActionKind('assign')}
-                type="link"
-                size="small"
-                icon={<SwapOutlined />}
+                {...rowActionLabelKeep()}
                 onClick={() => handleAction(record, 'transfer')}
               >
                 {t('pages.system.approvalInstances.transfer')}
-              </Button>
+              </Button>,
             );
           }
           const isSubmitter = currentUser?.id != null && record.submitter_id === currentUser.id;
           if (isSubmitter) {
             actions.push(
-              <Tooltip {...rowActionKind('skip')} key="cancel-tt" title={t('pages.system.approvalInstances.cancelOnlySubmitter')}>
+              <Tooltip key="cancel-tt" title={t('pages.system.approvalInstances.cancelOnlySubmitter')}>
                 <Button
                   key="cancel"
                   {...rowActionKind('revoke')}
-                  type="link"
-                  size="small"
-                  icon={<StopOutlined />}
+                  {...rowActionLabelKeep()}
                   onClick={() => handleAction(record, 'cancel')}
                 >
                   {t('common.cancel')}
                 </Button>
-              </Tooltip>
+              </Tooltip>,
             );
           }
         }
@@ -340,6 +335,7 @@ const ApprovalInstanceListPage: React.FC = () => {
       },
     },
   ], GLOBAL_DOC_LIST_FIELD_RANK), [t, currentUser?.id, handleAction, handleView]);
+
 
   /**
    * 渲染看板卡片
@@ -501,7 +497,7 @@ const ApprovalInstanceListPage: React.FC = () => {
         }
       >
         <UniTable<ApprovalInstance>
-          columnPersistenceId="pages.system.approval-processes.instances.list-v1"
+          columnPersistenceId="pages.system.approval-processes.instances.list-v2"
           headerTitle={t('pages.system.approvalInstances.headerTitle')}
           actionRef={actionRef}
           columns={columns}

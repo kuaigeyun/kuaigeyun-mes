@@ -11,7 +11,7 @@ import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { getDictionaryItemList, getDataDictionaryByCode, type DictionaryItem } from '../../services/dataDictionary';
 import { mapSystemDictionaryItemOptions } from '../../utils/systemDictionaryI18n';
 import { ThemedSegmented } from '../themed-segmented';
-import { DOCUMENT_SUBLINE_TABLE_PROPS } from '../document-subline-table';
+import { DOCUMENT_SUBLINE_TABLE_PROPS, DOCUMENT_SUBLINE_ADD_BUTTON_CLASS } from '../document-subline-table';
 
 interface FeeDetailsTableProps {
   name?: string;
@@ -149,6 +149,7 @@ const FeeDetailsTable: React.FC<FeeDetailsTableProps> = ({
               type="dashed"
               block
               icon={<PlusOutlined />}
+              className={DOCUMENT_SUBLINE_ADD_BUTTON_CLASS}
               style={{ marginTop: 8 }}
               onClick={() => add({ ...defaultFeeRow })}
             >

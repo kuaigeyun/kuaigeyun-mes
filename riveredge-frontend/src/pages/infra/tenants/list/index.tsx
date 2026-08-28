@@ -6,13 +6,13 @@
  */
 
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
-import { rowActionKind, rowActionToneDestructive } from '../../../../components/uni-action';
+import { rowActionKind, rowActionLabelKeep, rowActionToneDestructive } from '../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormSelect, ProFormDigit, ProFormDateTimePicker, ProFormInstance, ProFormGroup, ProFormSwitch } from '@ant-design/pro-components';
 import type { ProDescriptionsItemProps } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Space, Modal, List, Typography, Divider, Spin, Alert, Tooltip } from 'antd';
-import { CheckOutlined, CloseOutlined, EditOutlined, DeleteOutlined, SyncOutlined, StarOutlined, StarFilled, AppstoreOutlined } from '@ant-design/icons';
+import { App, Popconfirm, Button, Modal, List, Typography, Divider, Spin, Alert, Tooltip } from 'antd';
+import { SyncOutlined, StarFilled } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../utils/errorHandler';
@@ -972,16 +972,20 @@ const SuperAdminTenantList: React.FC = () => {
       dataIndex: 'id',
       key: 'id',
       width: 80,
+      minWidth: 80,
       uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       sorter: true,
     },
     {
       title: t('pages.infra.tenant.name'),
       dataIndex: 'name',
-      width: 260,
-      minWidth: 260,
-      uniTableKeepWidth: true,
+      key: 'name',
+      minWidth: 220,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
+      resizable: false,
       ellipsis: true,
       sorter: true,
       responsive: ['md'],
@@ -1011,39 +1015,24 @@ const SuperAdminTenantList: React.FC = () => {
     {
       title: t('pages.infra.tenant.domain'),
       dataIndex: 'domain',
+      key: 'domain',
+      width: 140,
+      minWidth: 140,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       sorter: true,
       responsive: ['md'],
-      fieldProps: {
-        // 自动完成功能：从后端获取域名选项（暂时移除，先完成基础功能）
-        // autoCompleteApi: async (keyword: string) => {
-        //   if (!keyword || keyword.length < 1) {
-        //     return [];
-        //   }
-        //   try {
-        //     const result = await getTenantList(
-        //       {
-        //         page: 1,
-        //         page_size: 20,
-        //         domain: keyword,
-        //       },
-        //       true // 超级管理员接口
-        //     );
-        //     return result.items.map((tenant) => ({
-        //       label: `${tenant.domain} (${tenant.name})`,
-        //       value: tenant.domain,
-        //     }));
-        //   } catch (error) {
-        //     return [];
-        //   }
-        // },
-      },
     },
     {
       title: '组织类型',
       dataIndex: 'is_subtenant',
+      key: 'is_subtenant',
       hideInSearch: true,
-      width: 120,
+      width: 110,
+      minWidth: 110,
+      uniTableKeepWidth: true,
+      resizable: false,
       render: (_, record) => (
         <MarkerTag color={record.is_subtenant ? 'purple' : 'processing'}>
           {record.is_subtenant ? '子组织' : '主组织'}
@@ -1053,8 +1042,11 @@ const SuperAdminTenantList: React.FC = () => {
     {
       title: t('pages.infra.tenant.plan'),
       dataIndex: 'plan',
+      key: 'plan',
       width: 112,
+      minWidth: 112,
       uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'select',
       sorter: true,
       valueEnum: packagePlanValueEnum,
@@ -1065,7 +1057,11 @@ const SuperAdminTenantList: React.FC = () => {
     {
       title: t('pages.infra.tenant.maxUsers'),
       dataIndex: 'max_users',
-      width: 120,
+      key: 'max_users',
+      width: 110,
+      minWidth: 110,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       sorter: true,
       responsive: ['lg'],
@@ -1074,7 +1070,11 @@ const SuperAdminTenantList: React.FC = () => {
     {
       title: t('pages.infra.tenant.userCount'),
       dataIndex: 'user_count',
-      width: 120,
+      key: 'user_count',
+      width: 110,
+      minWidth: 110,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       responsive: ['lg'],
       render: (_, record) => record.user_count ?? 0,
@@ -1082,7 +1082,11 @@ const SuperAdminTenantList: React.FC = () => {
     {
       title: t('pages.infra.tenant.maxStorage'),
       dataIndex: 'max_storage',
+      key: 'max_storage',
       width: 150,
+      minWidth: 150,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       sorter: true,
       responsive: ['lg'],
@@ -1090,18 +1094,26 @@ const SuperAdminTenantList: React.FC = () => {
     {
       title: t('common.createdAt'),
       dataIndex: 'created_at',
+      key: 'created_at',
       valueType: 'dateTime',
       hideInSearch: true,
       width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
       sorter: true,
       responsive: ['xl'],
     },
     {
       title: t('pages.infra.tenant.lastLoginAt'),
       dataIndex: 'last_login_at',
+      key: 'last_login_at',
       valueType: 'dateTime',
       hideInSearch: true,
       width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
       responsive: ['xl'],
     },
     {
@@ -1109,6 +1121,8 @@ const SuperAdminTenantList: React.FC = () => {
       dataIndex: 'status',
       key: 'lifecycle',
       fixed: 'right',
+      width: 100,
+      minWidth: 100,
       uniTableKeepWidth: true,
       resizable: false,
       valueType: 'select',
@@ -1130,8 +1144,9 @@ const SuperAdminTenantList: React.FC = () => {
     },
     {
       title: t('common.actions'),
-      valueType: 'option',
+      key: 'action',
       fixed: 'right',
+      hideInSearch: true,
       uniActionRenderOptions: { minPrimaryVisible: 2 },
       render: (_, record) => {
         const isInactive = record.status === TenantStatus.INACTIVE;
@@ -1139,146 +1154,154 @@ const SuperAdminTenantList: React.FC = () => {
         const isSuspended = record.status === TenantStatus.SUSPENDED;
         const isDefaultLogin = defaultTenantId === record.id;
 
-        return (
-          <Space wrap size={[4, 4]}>
-            <Button key="view" {...rowActionKind('read')}
-              size="small"
-              onClick={() => handleOpenDetail(record.id)}
-            >
-              {t('common.detail')}
-            </Button>
-            <Button key="edit" {...rowActionKind('update')}
-              size="small"
-              icon={<EditOutlined />}
-              onClick={() => openEditModal(record.id)}
-            >
-              {t('common.edit')}
-            </Button>
+        const actions: React.ReactNode[] = [
+          <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record.id)} />,
+          <Button key="edit" {...rowActionKind('update')} onClick={() => openEditModal(record.id)} />,
+          <Button
+            key="app-center-permissions"
+            {...rowActionKind('update')}
+            {...rowActionLabelKeep()}
+            onClick={() => {
+              setAppCenterPermTenant(record);
+              setAppCenterPermOpen(true);
+            }}
+          >
+            {t('pages.infra.tenantApplicationCenterPermissions.title')}
+          </Button>,
+        ];
+
+        if (!record.is_subtenant) {
+          actions.push(
             <Button
-              key="app-center-permissions"
-              {...rowActionKind('update')}
-              data-action-priority={22}
-              size="small"
-              icon={<AppstoreOutlined />}
-              onClick={() => {
-                setAppCenterPermTenant(record);
-                setAppCenterPermOpen(true);
+              key="create-subtenant"
+              {...rowActionKind('create')}
+              {...rowActionLabelKeep()}
+              onClick={() => handleCreateSubtenant(record.id)}
+            >
+              新增子组织
+            </Button>,
+          );
+        }
+
+        if (isSuspended) {
+          actions.push(
+            <Popconfirm
+              key="delete"
+              title={t('pages.infra.tenant.deleteRowConfirmTitle')}
+              description={t('pages.infra.tenant.deleteRowConfirmContent')}
+              onConfirm={() => handleDeleteRow(record.id)}
+            >
+              <Button {...rowActionKind('delete')} />
+            </Popconfirm>,
+          );
+        }
+
+        if (isInactive) {
+          actions.push(
+            <Popconfirm
+              key="approve"
+              title={t('pages.infra.tenant.approveConfirm')}
+              onConfirm={async () => {
+                const success = await approveTenant(record.id);
+                if (success) {
+                  actionRef.current?.reload();
+                }
               }}
             >
-              {t('pages.infra.tenantApplicationCenterPermissions.title')}
-            </Button>
-            {!record.is_subtenant && (
-              <Button
-                key="create-subtenant"
-                {...rowActionKind('create')}
-                size="small"
-                onClick={() => handleCreateSubtenant(record.id)}
-              >
-                新增子组织
+              <Button {...rowActionKind('audit')} {...rowActionLabelKeep()}>
+                {t('pages.infra.tenant.approve')}
               </Button>
-            )}
-            {isSuspended && (
-              <Popconfirm key="delete" {...rowActionKind('delete')} title={t('pages.infra.tenant.deleteRowConfirmTitle')}
-                description={t('pages.infra.tenant.deleteRowConfirmContent')}
-                onConfirm={() => handleDeleteRow(record.id)}
-              >
-                <Button size="small" icon={<DeleteOutlined />}>
-                  {t('common.delete')}
-                </Button>
-              </Popconfirm>
-            )}
-            {isInactive && (
-              <Popconfirm key="approve" {...rowActionKind('audit')} title={t('pages.infra.tenant.approveConfirm')}
-                onConfirm={async () => {
-                  const success = await approveTenant(record.id);
-                  if (success) {
-                    actionRef.current?.reload();
-                  }
-                }}
-              >
-                <Button size="small" icon={<CheckOutlined />}>
-                  {t('pages.infra.tenant.approve')}
-                </Button>
-              </Popconfirm>
-            )}
-            {isInactive && (
-              <Popconfirm key="reject" {...rowActionKind('reject')} title={t('pages.infra.tenant.rejectConfirm')}
-                onConfirm={async () => {
-                  const success = await rejectTenant(record.id);
-                  if (success) {
-                    actionRef.current?.reload();
-                  }
-                }}
-              >
-                <Button size="small" icon={<CloseOutlined />}>
-                  {t('pages.infra.tenant.reject')}
-                </Button>
-              </Popconfirm>
-            )}
-            {isSuspended && (
-              <Popconfirm key="activate" title={t('pages.infra.tenant.activateConfirm')}
-                onConfirm={async () => {
-                  const success = await activateTenant(record.id);
-                  if (success) {
-                    actionRef.current?.reload();
-                  }
-                }}
-              >
-                <Button {...rowActionKind('execute')}>
-                  {t('common.enabled')}
-                </Button>
-              </Popconfirm>
-            )}
-            {isActive && (
-              <Popconfirm key="deactivate" title={t('pages.infra.tenant.deactivateConfirm')}
-                onConfirm={async () => {
-                  const success = await deactivateTenant(record.id);
-                  if (success) {
-                    actionRef.current?.reload();
-                  }
-                }}
-              >
-                <Button {...rowActionKind('close')} {...rowActionToneDestructive()}>
-                  {t('pages.infra.tenant.deactivate')}
-                </Button>
-              </Popconfirm>
-            )}
-            {isActive && !isDefaultLogin && (
-              <Popconfirm
-                key="set-default"
+            </Popconfirm>,
+            <Popconfirm
+              key="reject"
+              title={t('pages.infra.tenant.rejectConfirm')}
+              onConfirm={async () => {
+                const success = await rejectTenant(record.id);
+                if (success) {
+                  actionRef.current?.reload();
+                }
+              }}
+            >
+              <Button {...rowActionKind('reject')} />
+            </Popconfirm>,
+          );
+        }
+
+        if (isSuspended) {
+          actions.push(
+            <Popconfirm
+              key="activate"
+              title={t('pages.infra.tenant.activateConfirm')}
+              onConfirm={async () => {
+                const success = await activateTenant(record.id);
+                if (success) {
+                  actionRef.current?.reload();
+                }
+              }}
+            >
+              <Button {...rowActionKind('execute')} {...rowActionLabelKeep()}>
+                {t('common.enabled')}
+              </Button>
+            </Popconfirm>,
+          );
+        }
+
+        if (isActive) {
+          actions.push(
+            <Popconfirm
+              key="deactivate"
+              title={t('pages.infra.tenant.deactivateConfirm')}
+              onConfirm={async () => {
+                const success = await deactivateTenant(record.id);
+                if (success) {
+                  actionRef.current?.reload();
+                }
+              }}
+            >
+              <Button {...rowActionKind('close')} {...rowActionToneDestructive()} {...rowActionLabelKeep()}>
+                {t('pages.infra.tenant.deactivate')}
+              </Button>
+            </Popconfirm>,
+          );
+        }
+
+        if (isActive && !isDefaultLogin) {
+          actions.push(
+            <Popconfirm
+              key="set-default"
+              title={t('pages.infra.tenant.setDefaultConfirm')}
+              onConfirm={() => handleSetDefaultTenant(record.id)}
+            >
+              <Button
                 {...rowActionKind('update')}
-                data-action-priority={21}
-                title={t('pages.infra.tenant.setDefaultConfirm')}
-                onConfirm={() => handleSetDefaultTenant(record.id)}
+                {...rowActionLabelKeep()}
+                loading={defaultTenantLoadingId === record.id}
               >
-                <Button
-                  size="small"
-                  icon={<StarOutlined />}
-                  loading={defaultTenantLoadingId === record.id}
-                >
-                  {t('pages.infra.tenant.setDefault')}
-                </Button>
-              </Popconfirm>
-            )}
-            {isDefaultLogin && (
-              <Popconfirm
-                key="clear-default"
+                {t('pages.infra.tenant.setDefault')}
+              </Button>
+            </Popconfirm>,
+          );
+        }
+
+        if (isDefaultLogin) {
+          actions.push(
+            <Popconfirm
+              key="clear-default"
+              title={t('pages.infra.tenant.clearDefaultConfirm')}
+              onConfirm={() => handleSetDefaultTenant(null)}
+            >
+              <Button
                 {...rowActionKind('update')}
-                data-action-priority={21}
-                title={t('pages.infra.tenant.clearDefaultConfirm')}
-                onConfirm={() => handleSetDefaultTenant(null)}
+                {...rowActionLabelKeep()}
+                loading={defaultTenantLoadingId === record.id}
               >
-                <Button
-                  size="small"
-                  icon={<StarFilled />}
-                  loading={defaultTenantLoadingId === record.id}
-                >
-                  {t('pages.infra.tenant.clearDefault')}
-                </Button>
-              </Popconfirm>
-            )}
-          </Space>
-        );
+                {t('pages.infra.tenant.clearDefault')}
+              </Button>
+            </Popconfirm>,
+          );
+        }
+
+        return actions;
       },
     },
   ];
@@ -1287,7 +1310,7 @@ const SuperAdminTenantList: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<Tenant>
-      columnPersistenceId="pages.infra.tenants.list-lifecycle-v2"
+      columnPersistenceId="pages.infra.tenants.list-lifecycle-v4"
       actionRef={actionRef}
       columns={columns}
       rowKey="id"

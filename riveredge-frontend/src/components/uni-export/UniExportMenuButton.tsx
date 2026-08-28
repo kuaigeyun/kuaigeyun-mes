@@ -1,12 +1,13 @@
 /**
  * 列表工具栏「导出」下拉（选中 / 本页 / 全部），与 UniTable 3.2 行为一致。
+ * 图标与导入成对：ImportOutlined / ExportOutlined。
  */
 
 import React from 'react';
 import { Button, Dropdown, Tooltip } from 'antd';
 import type { MenuProps } from 'antd';
 import type { ButtonProps } from 'antd';
-import { DownloadOutlined, DownOutlined } from '@ant-design/icons';
+import { DownOutlined, ExportOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 
 export type UniExportScope = 'selected' | 'currentPage' | 'all';
@@ -71,7 +72,7 @@ export function UniExportMenuButton<T extends Record<string, any> = Record<strin
   if (items.length === 0) return null;
 
   const trigger = (
-    <Button icon={<DownloadOutlined />} size={size} aria-label={exportLabel}>
+    <Button icon={<ExportOutlined />} size={size} aria-label={exportLabel}>
       {iconOnly ? null : (
         <>
           {exportLabel}

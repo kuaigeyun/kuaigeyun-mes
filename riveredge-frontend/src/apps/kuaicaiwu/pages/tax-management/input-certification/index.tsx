@@ -1,8 +1,8 @@
 /**
  * 进项认证
  */
-import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns } from '@ant-design/pro-components';
+import React, { useMemo, useRef, useState } from 'react';
+import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Input, Modal } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -12,6 +12,16 @@ import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { taxService } from '../../../services/tax';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
+import { MarkerTag } from '../../../../../constants/statusBadges';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
+import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import {
+  rowActionKind,
+  rowActionTaxCertify,
+  rowActionTaxRedFlush,
+  rowActionTaxTransferOut,
+  rowActionToneDestructive,
+} from '../../../../../components/uni-action';
 
 const NS = 'app.kuaicaiwu.tax.inputCert';
 const INPUT_CERT_PINNED_STATUS_FIELD = 'verification_status';
@@ -30,81 +40,174 @@ const InputCertificationPage: React.FC = () => {
   const [redId, setRedId] = useState<number | null>(null);
   const [redReason, setRedReason] = useState('');
 
-  const columns: ProColumns<Row>[] = [
-    { title: t(`${NS}.col.code`, { defaultValue: '发票编码' }), dataIndex: 'invoice_code', width: 140 },
-    { title: t(`${NS}.col.number`, { defaultValue: '票号' }), dataIndex: 'invoice_number', width: 120 },
-    { title: t(`${NS}.col.supplier`, { defaultValue: '供应商' }), dataIndex: 'supplier_name', ellipsis: true },
-    { title: t(`${NS}.col.date`, { defaultValue: '开票日' }), dataIndex: 'invoice_date', width: 110 },
-    {
-      title: t(`${NS}.col.tax`, { defaultValue: '税额' }),
-      dataIndex: 'tax_amount',
-      width: 100,
-      render: (_, row) => Number(row.tax_amount || 0).toFixed(2),
-    },
-    {
-      title: t(`${NS}.col.status`, { defaultValue: '认证状态' }),
-      dataIndex: 'verification_status',
-      width: 100,
-      hideInSearch: false,
-      initialValue: 'pending',
-      valueEnum: {
-        pending: { text: t(`${NS}.status.pending`, { defaultValue: '待认证' }) },
-        certified: { text: t(`${NS}.status.certified`, { defaultValue: '已认证' }) },
-        transferred_out: { text: t(`${NS}.status.transferred`, { defaultValue: '已转出' }) },
-        not_deductible: { text: t(`${NS}.status.notDeductible`, { defaultValue: '不可抵扣' }) },
-      },
-    },
-    {
-      title: t('common.actions', { defaultValue: '操作' }),
-      valueType: 'option',
-      width: 220,
-      render: (_, row) => [
-        <Button key="view" type="link" size="small" onClick={() => navigate(`/apps/kuaicaiwu/finance-management/purchase-invoices/${row.id}`)}>
-          {t('common.detail', { defaultValue: '详情' })}
-        </Button>,
-        canUpdate && row.verification_status === 'pending' && (
-          <Button
-            key="certify"
-            type="link"
-            size="small"
-            onClick={async () => {
-              try {
-                await taxService.certify(row.id);
-                messageApi.success(t(`${NS}.certified`, { defaultValue: '认证成功' }));
-                actionRef.current?.reload();
-              } catch (error) {
-                messageApi.error(getApiErrorMessage(error, t(`${NS}.certifyFailed`, { defaultValue: '认证失败' })));
-              }
-            }}
-          >
-            {t(`${NS}.certify`, { defaultValue: '认证' })}
-          </Button>
-        ),
-        canUpdate && row.verification_status === 'certified' && (
-          <Button key="transfer" type="link" size="small" onClick={() => setTransferId(row.id)}>
-            {t(`${NS}.transferOut`, { defaultValue: '转出' })}
-          </Button>
-        ),
-        canUpdate && !row.original_invoice_id && row.status === '已审核' && !row.red_flush_invoice_id && (
-          <Button key="red" type="link" size="small" danger onClick={() => setRedId(row.id)}>
-            {t(`${NS}.redFlush`, { defaultValue: '红冲' })}
-          </Button>
-        ),
-      ],
-    },
-  ];
+  const statusEnum = useMemo(
+    () => ({
+      pending: { text: t(`${NS}.status.pending`) },
+      certified: { text: t(`${NS}.status.certified`) },
+      transferred_out: { text: t(`${NS}.status.transferred`) },
+      not_deductible: { text: t(`${NS}.status.notDeductible`) },
+    }),
+    [t],
+  );
+
+  const renderVerifyStatus = (status: string) => {
+    const text = statusEnum[status as keyof typeof statusEnum]?.text ?? status;
+    const color =
+      status === 'pending'
+        ? 'warning'
+        : status === 'certified'
+          ? 'success'
+          : status === 'transferred_out'
+            ? 'processing'
+            : 'default';
+    return <MarkerTag color={color}>{text}</MarkerTag>;
+  };
+
+  const columns: ProColumns<Row>[] = useMemo(
+    () =>
+      alignProColumns<Row>(
+        [
+          {
+            title: t(`${NS}.col.code`),
+            key: 'finance_tax_invoice_code',
+            dataIndex: 'invoice_code',
+            width: 140,
+            minWidth: 140,
+            uniTableKeepWidth: true,
+            resizable: false,
+            ellipsis: true,
+            hideInSearch: true,
+          },
+          {
+            title: t(`${NS}.col.number`),
+            key: 'finance_tax_invoice_number',
+            dataIndex: 'invoice_number',
+            width: 140,
+            minWidth: 140,
+            uniTableKeepWidth: true,
+            resizable: false,
+            ellipsis: true,
+            hideInSearch: true,
+          },
+          {
+            // 销方长短不一：唯一 RemainderFlex
+            title: t(`${NS}.col.supplier`),
+            key: 'finance_tax_supplier',
+            dataIndex: 'supplier_name',
+            minWidth: 160,
+            uniTableRemainderFlex: true,
+            uniTablePrimaryFlex: true,
+            resizable: false,
+            ellipsis: true,
+            hideInSearch: true,
+          },
+          {
+            title: t(`${NS}.col.date`),
+            key: 'finance_tax_invoice_date',
+            dataIndex: 'invoice_date',
+            valueType: 'date',
+            width: 132,
+            minWidth: 132,
+            uniTableKeepWidth: true,
+            resizable: false,
+            hideInSearch: true,
+          },
+          {
+            title: t(`${NS}.col.tax`),
+            key: 'finance_tax_amount',
+            dataIndex: 'tax_amount',
+            align: 'right',
+            width: 110,
+            minWidth: 110,
+            uniTableKeepWidth: true,
+            resizable: false,
+            hideInSearch: true,
+            render: (_, row) => Number(row.tax_amount || 0).toFixed(2),
+          },
+          {
+            title: t(`${NS}.col.status`),
+            key: 'finance_tax_verify_status',
+            dataIndex: 'verification_status',
+            ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+            hideInSearch: false,
+            initialValue: 'pending',
+            valueType: 'select',
+            valueEnum: statusEnum,
+            render: (_, row) => renderVerifyStatus(String(row.verification_status ?? '')),
+          },
+          {
+            title: t('common.actions'),
+            key: 'action',
+            fixed: 'right',
+            hideInSearch: true,
+            render: (_, row) => [
+              <Button
+                key="view"
+                type="link"
+                size="small"
+                {...rowActionKind('read')}
+                onClick={() =>
+                  navigate(`/apps/kuaicaiwu/finance-management/purchase-invoices/${row.id}`)
+                }
+              />,
+              canUpdate && row.verification_status === 'pending' ? (
+                <Button
+                  key="certify"
+                  type="link"
+                  size="small"
+                  {...rowActionTaxCertify('update')}
+                  onClick={async () => {
+                    try {
+                      await taxService.certify(row.id);
+                      messageApi.success(t(`${NS}.certified`));
+                      actionRef.current?.reload();
+                    } catch (error) {
+                      messageApi.error(getApiErrorMessage(error, t(`${NS}.certifyFailed`)));
+                    }
+                  }}
+                />
+              ) : null,
+              canUpdate && row.verification_status === 'certified' ? (
+                <Button
+                  key="transfer"
+                  type="link"
+                  size="small"
+                  {...rowActionTaxTransferOut('update')}
+                  onClick={() => setTransferId(row.id)}
+                />
+              ) : null,
+              canUpdate &&
+              !row.original_invoice_id &&
+              row.status === '已审核' &&
+              !row.red_flush_invoice_id ? (
+                <Button
+                  key="red"
+                  type="link"
+                  size="small"
+                  {...rowActionTaxRedFlush('update')}
+                  {...rowActionToneDestructive()}
+                  onClick={() => setRedId(row.id)}
+                />
+              ) : null,
+            ],
+          },
+        ],
+        GLOBAL_DOC_LIST_FIELD_RANK,
+      ),
+    [canUpdate, messageApi, navigate, statusEnum, t],
+  );
 
   return (
     <ListPageTemplate>
       <UniTable<Row>
         viewTypes={['table', 'help']}
-          helpViewConfig={buildListPageHelpViewConfig('kuaicaiwu.inputCertification')}
+        helpViewConfig={buildListPageHelpViewConfig('kuaicaiwu.inputCertification')}
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
         enableRowSelection={canUpdate}
         onRowSelectionChange={(rows) => setSelected(rows as Row[])}
-        columnPersistenceId="apps.kuaicaiwu.pages.tax-management.input-certification.list-v1"
+        columnPersistenceId="apps.kuaicaiwu.pages.tax-management.input-certification.list-v2"
         pinnedTabsField={INPUT_CERT_PINNED_STATUS_FIELD}
         skipFuzzyPinyinClientFilter
         toolBarRender={() =>
@@ -119,18 +222,17 @@ const InputCertificationPage: React.FC = () => {
                       const res = await taxService.batchCertify(selected.map((r) => r.id));
                       messageApi.success(
                         t(`${NS}.batchDone`, {
-                          defaultValue: '已认证 {{n}} 张',
                           n: res.certified?.length ?? 0,
                         }),
                       );
                       actionRef.current?.reload();
                       actionRef.current?.clearSelected?.();
                     } catch (error) {
-                      messageApi.error(getApiErrorMessage(error, t(`${NS}.certifyFailed`, { defaultValue: '认证失败' })));
+                      messageApi.error(getApiErrorMessage(error, t(`${NS}.certifyFailed`)));
                     }
                   }}
                 >
-                  {t(`${NS}.batchCertify`, { defaultValue: '批量认证' })}
+                  {t(`${NS}.batchCertify`)}
                 </Button>,
               ]
             : []
@@ -140,14 +242,16 @@ const InputCertificationPage: React.FC = () => {
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize || 20,
             verification_status: (searchFormValues?.verification_status as string) || 'pending',
-            keyword: (searchFormValues?.keyword as string | undefined) ?? (params.keyword as string | undefined),
+            keyword:
+              (searchFormValues?.keyword as string | undefined) ??
+              (params.keyword as string | undefined),
           });
           return { data: res.items as Row[], success: true, total: res.total };
         }}
       />
 
       <Modal
-        title={t(`${NS}.transferOut`, { defaultValue: '进项转出' })}
+        title={t(`${NS}.transferOut`)}
         open={transferId != null}
         onCancel={() => {
           setTransferId(null);
@@ -157,21 +261,26 @@ const InputCertificationPage: React.FC = () => {
           if (!transferId || !transferReason.trim()) return;
           try {
             await taxService.transferOut(transferId, transferReason.trim());
-            messageApi.success(t(`${NS}.transferred`, { defaultValue: '已转出' }));
+            messageApi.success(t(`${NS}.transferred`));
             setTransferId(null);
             setTransferReason('');
             actionRef.current?.reload();
           } catch (error) {
-            messageApi.error(getApiErrorMessage(error, t(`${NS}.transferFailed`, { defaultValue: '转出失败' })));
+            messageApi.error(getApiErrorMessage(error, t(`${NS}.transferFailed`)));
           }
         }}
         destroyOnHidden
       >
-        <Input.TextArea rows={3} value={transferReason} onChange={(e) => setTransferReason(e.target.value)} placeholder={t(`${NS}.transferReason`, { defaultValue: '转出原因' })} />
+        <Input.TextArea
+          rows={3}
+          value={transferReason}
+          onChange={(e) => setTransferReason(e.target.value)}
+          placeholder={t(`${NS}.transferReason`)}
+        />
       </Modal>
 
       <Modal
-        title={t(`${NS}.redFlush`, { defaultValue: '红冲' })}
+        title={t(`${NS}.redFlush`)}
         open={redId != null}
         onCancel={() => {
           setRedId(null);
@@ -181,17 +290,22 @@ const InputCertificationPage: React.FC = () => {
           if (!redId || !redReason.trim()) return;
           try {
             await taxService.redFlush(redId, redReason.trim());
-            messageApi.success(t(`${NS}.redDone`, { defaultValue: '红字发票已生成' }));
+            messageApi.success(t(`${NS}.redDone`));
             setRedId(null);
             setRedReason('');
             actionRef.current?.reload();
           } catch (error) {
-            messageApi.error(getApiErrorMessage(error, t(`${NS}.redFailed`, { defaultValue: '红冲失败' })));
+            messageApi.error(getApiErrorMessage(error, t(`${NS}.redFailed`)));
           }
         }}
         destroyOnHidden
       >
-        <Input.TextArea rows={3} value={redReason} onChange={(e) => setRedReason(e.target.value)} placeholder={t(`${NS}.redReason`, { defaultValue: '红冲原因' })} />
+        <Input.TextArea
+          rows={3}
+          value={redReason}
+          onChange={(e) => setRedReason(e.target.value)}
+          placeholder={t(`${NS}.redReason`)}
+        />
       </Modal>
     </ListPageTemplate>
   );

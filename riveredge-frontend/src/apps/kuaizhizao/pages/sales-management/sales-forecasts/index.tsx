@@ -2192,6 +2192,8 @@ export default function SalesForecastsPage() {
               }}
               toolBarButtonSize="middle"
             />,
+          ]}
+          rightToolBarActionsBeforeExport={[
             <UniCapabilityBatchButton
               key="sales-forecast-batch-print"
               selectedRowKeys={selectedRowKeys}

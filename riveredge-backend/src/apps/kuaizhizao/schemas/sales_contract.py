@@ -68,6 +68,10 @@ class SalesContractMilestoneResponse(SalesContractMilestoneCreate):
 class SalesContractCreate(BaseModel):
     contract_code: Optional[str] = Field(None, max_length=50, description="合同编码（自动生成，可手工填写）")
     contract_type: str = Field(default="single", description="single / framework")
+    enter_line_items: bool = Field(
+        True,
+        description="是否录入明细：true=数量框架，false=金额总框",
+    )
     customer_id: int
     customer_name: str
     customer_contact: Optional[str] = None
@@ -85,6 +89,10 @@ class SalesContractCreate(BaseModel):
     term_group_id: Optional[int] = None
     contract_terms: Optional[List[SalesContractTermSnapshot]] = None
     quotation_id: Optional[int] = None
+    total_amount: Optional[Decimal] = Field(
+        None,
+        description="合同总金额（金额总框必填；数量框架可由明细汇总）",
+    )
     discount_amount: Decimal = Decimal("0")
     notes: Optional[str] = None
     attachments: Optional[list] = None
@@ -94,6 +102,7 @@ class SalesContractCreate(BaseModel):
 
 class SalesContractUpdate(BaseModel):
     contract_type: Optional[str] = None
+    enter_line_items: Optional[bool] = None
     customer_id: Optional[int] = None
     customer_name: Optional[str] = None
     customer_contact: Optional[str] = None
@@ -110,6 +119,10 @@ class SalesContractUpdate(BaseModel):
     payment_terms: Optional[str] = None
     term_group_id: Optional[int] = None
     contract_terms: Optional[List[SalesContractTermSnapshot]] = None
+    total_amount: Optional[Decimal] = Field(
+        None,
+        description="合同总金额（金额总框可手填）",
+    )
     discount_amount: Optional[Decimal] = None
     notes: Optional[str] = None
     attachments: Optional[list] = None
@@ -123,6 +136,7 @@ class SalesContractResponse(BaseSchema):
     tenant_id: int
     contract_code: str
     contract_type: str
+    enter_line_items: bool = True
     party_type: str
     customer_id: int
     customer_name: str

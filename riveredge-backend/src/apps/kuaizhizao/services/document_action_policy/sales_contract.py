@@ -116,7 +116,10 @@ def derive_sales_contract_capabilities(
 
     push_allowed = False
     push_reason = "sales_contract.push.not_effective"
-    if not _is_effective(status):
+    enter_line_items = getattr(contract, "enter_line_items", True)
+    if enter_line_items is False:
+        push_reason = "sales_contract.push.amount_framework"
+    elif not _is_effective(status):
         push_reason = "sales_contract.push.not_effective"
     elif not _is_approved(review_status):
         push_reason = "sales_contract.push.not_approved"
@@ -169,7 +172,7 @@ def derive_sales_contract_capabilities(
         reject=reject_cap,
         revoke_approval=revoke_cap,
         push_to_sales_order=push_cap,
-        push_to_work_order=push_cap,
+        push_to_work_order=_cap(False, "sales_contract.push_to_work_order.removed"),
         print=print_cap,
         close=close_cap,
         create_change=create_change_cap,

@@ -32,9 +32,18 @@ def test_resolve_mrp_supply_source_type_buy_only():
     assert resolve_mrp_supply_source_type(m) == SOURCE_TYPE_BUY
 
 
-def test_resolve_mrp_supply_source_type_dual_make_buy_prefers_buy():
+def test_resolve_mrp_supply_source_type_dual_make_buy_follows_primary_make():
     m = _material(
         source_type=SOURCE_TYPE_MAKE,
+        source_config={"source_types": ["Make", "Buy"]},
+    )
+    assert is_make_and_buy_material(m) is True
+    assert resolve_mrp_supply_source_type(m) == SOURCE_TYPE_MAKE
+
+
+def test_resolve_mrp_supply_source_type_dual_make_buy_follows_primary_buy():
+    m = _material(
+        source_type=SOURCE_TYPE_BUY,
         source_config={"source_types": ["Make", "Buy"]},
     )
     assert is_make_and_buy_material(m) is True

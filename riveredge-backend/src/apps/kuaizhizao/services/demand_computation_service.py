@@ -607,8 +607,13 @@ def _collect_material_structure_gaps(
     *,
     has_bom: bool,
     bom_overridden: bool,
+    has_process_route: bool,
 ) -> List[Dict[str, Any]]:
-    """检出来源配置/BOM/工艺路线等结构性缺失（可补齐或需跳转主数据）。"""
+    """检出来源配置/BOM/工艺路线等结构性缺失（可补齐或需跳转主数据）。
+
+    has_process_route：须由 MaterialProductProcessService.resolve_process_route_for_material
+    解析结果传入（产品工艺 > 物料默认 > 分组默认），禁止仅看 material.process_route_id。
+    """
     gaps: List[Dict[str, Any]] = []
     source_config = getattr(material, "source_config", None) or {}
     if not isinstance(source_config, dict):
@@ -643,7 +648,6 @@ def _collect_material_structure_gaps(
         return gaps
 
     bom_ok = has_bom or bom_overridden
-    has_process_route = bool(getattr(material, "process_route_id", None))
 
     if st == SOURCE_TYPE_MAKE:
         manufacturing_mode = source_config.get("manufacturing_mode")
@@ -826,8 +830,99 @@ def _compute_supply_and_net(
         "gross_requirement": mrp_qty_float(gross_requirement),
         "net_requirement": mrp_qty_float(net_requirement),
         "lines_zh": lines_zh,
+        "covered_by_supply": bool(
+            mrp_qty(gross_requirement) > 0 and mrp_qty(net_requirement) <= 0
+        ),
     }
     return mrp_qty_float(supply), mrp_qty_float(net_requirement), calc_detail
+
+
+def _build_llc_supply_calculation_detail(
+    pending: Dict[str, Any],
+    *,
+    mrp_basis: str,
+    schedule_direction: str,
+    use_work_calendar: bool,
+    forecast_consume_enabled: bool,
+    forecast_consumed_total: float,
+    firm_entry: Dict[str, Any],
+    include_safety_stock: bool,
+) -> Dict[str, Any]:
+    """
+    LLC 分时净算落库用的供应说明。
+
+    「可用库存」列只存期初；净需求还冲抵在途/开放供应。须写入 lines_zh，
+    避免界面把「库存 0 + 净需求 0」误读成无需求或未计算。
+    """
+
+    def _fmt(n: Any) -> str:
+        s = f"{mrp_qty_float(n):.2f}".rstrip("0").rstrip(".")
+        return s if s else "0"
+
+    beginning = mrp_qty_float(pending.get("available_inventory"))
+    in_transit = mrp_qty_float(pending.get("in_transit_qty"))
+    gross = mrp_qty_float(pending.get("gross_requirement"))
+    net = mrp_qty_float(pending.get("net_requirement"))
+    safety = mrp_qty_float(pending.get("safety_stock"))
+    dated = pending.get("dated_supply") or []
+    planned_orders = pending.get("planned_orders") or []
+
+    lines_zh: List[str] = [
+        f"本列「可用库存」= 期初可用库存 {_fmt(beginning)}（不含在途/在制）",
+        f"计入开放供应 / 在途合计：+{_fmt(in_transit)}",
+    ]
+    if include_safety_stock and safety > 0:
+        lines_zh.append(f"净算已按安全库存考虑：安全库存 {_fmt(safety)}")
+    lines_zh.append(f"毛需求 = {_fmt(gross)}")
+    lines_zh.append(
+        f"净需求 = {_fmt(net)}（分时净算：期初 + 开放供应 − 毛需求，再按批/提前期生成计划订单）"
+    )
+    covered_by_supply = gross > 0 and net <= 0
+    if covered_by_supply:
+        lines_zh.append(
+            "净需求为 0：毛需求已被期初库存与/或在途（开放供应）冲抵，"
+            "并非「无需求」；因此无建议工单/采购，也不会展开 BOM 子件"
+        )
+    if dated:
+        preview = "；".join(
+            f"{row.get('document_code') or row.get('source_type') or '供应'}"
+            f" {_fmt(row.get('qty'))}"
+            + (f"@{row.get('date')}" if row.get("date") else "")
+            for row in dated[:8]
+        )
+        more = f" 等共 {len(dated)} 笔" if len(dated) > 8 else ""
+        lines_zh.append(f"开放供应明细：{preview}{more}")
+
+    return {
+        "mrp_engine": "llc_time_phased",
+        "mrp_suggestion_basis": mrp_basis,
+        "llc": pending.get("llc"),
+        "schedule_direction": schedule_direction,
+        "use_work_calendar": use_work_calendar,
+        "forecast_consume_enabled": forecast_consume_enabled,
+        "forecast_consumed_total": forecast_consumed_total,
+        "frozen": bool(firm_entry.get("frozen")),
+        "beginning_inventory": beginning,
+        "in_transit_quantity": in_transit,
+        "gross_requirement": gross,
+        "net_requirement": net,
+        "covered_by_supply": covered_by_supply,
+        "lines_zh": lines_zh,
+        "planned_orders": [
+            {
+                "qty": po.get("qty"),
+                "receipt_date": po["receipt_date"].isoformat()
+                if isinstance(po.get("receipt_date"), date)
+                else po.get("receipt_date"),
+                "release_date": po["release_date"].isoformat()
+                if isinstance(po.get("release_date"), date)
+                else po.get("release_date"),
+                "firm": bool(po.get("firm")),
+                "frozen": bool(po.get("frozen") or firm_entry.get("frozen")),
+            }
+            for po in planned_orders
+        ],
+    }
 
 
 DEMAND_COMPUTATION_SORTABLE_FIELDS = frozenset({
@@ -1511,18 +1606,26 @@ class DemandComputationService(AppBaseService):
         )
         bom_map = await MaterialService.batch_check_has_bom(tenant_id, material_ids)
         gaps: List[Dict[str, Any]] = []
+        from apps.master_data.services.material_product_process_service import (
+            MaterialProductProcessService,
+        )
+
         for mid in material_ids:
             material = await Material.get_or_none(tenant_id=tenant_id, id=mid, deleted_at__isnull=True)
             if not material:
                 continue
             source_type = await get_material_source_type(tenant_id, mid)
             bom_overridden = _material_bom_overridden(mid, params, is_seed=mid in seed_id_set)
+            effective_route = await MaterialProductProcessService.resolve_process_route_for_material(
+                tenant_id, mid
+            )
             gaps.extend(
                 _collect_material_structure_gaps(
                     material,
                     source_type,
                     has_bom=bool(bom_map.get(mid)),
                     bom_overridden=bom_overridden,
+                    has_process_route=effective_route is not None,
                 )
             )
             gaps.extend(_collect_material_mrp_gaps(material, source_type))
@@ -3250,30 +3353,18 @@ class DemandComputationService(AppBaseService):
             )
 
             firm_entry = firmed_map.get(int(material_id)) or {}
-            supply_for_detail = {
-                "mrp_engine": "llc_time_phased",
-                "mrp_suggestion_basis": mrp_basis,
-                "llc": pending.get("llc"),
-                "schedule_direction": schedule_direction,
-                "use_work_calendar": use_work_calendar,
-                "forecast_consume_enabled": forecast_consume_enabled,
-                "forecast_consumed_total": forecast_consumed_total,
-                "frozen": bool(firm_entry.get("frozen")),
-                "planned_orders": [
-                    {
-                        "qty": po.get("qty"),
-                        "receipt_date": po["receipt_date"].isoformat()
-                        if isinstance(po.get("receipt_date"), date)
-                        else po.get("receipt_date"),
-                        "release_date": po["release_date"].isoformat()
-                        if isinstance(po.get("release_date"), date)
-                        else po.get("release_date"),
-                        "firm": bool(po.get("firm")),
-                        "frozen": bool(po.get("frozen") or firm_entry.get("frozen")),
-                    }
-                    for po in (pending.get("planned_orders") or [])
-                ],
-            }
+            supply_for_detail = _build_llc_supply_calculation_detail(
+                pending,
+                mrp_basis=mrp_basis,
+                schedule_direction=schedule_direction,
+                use_work_calendar=use_work_calendar,
+                forecast_consume_enabled=forecast_consume_enabled,
+                forecast_consumed_total=forecast_consumed_total,
+                firm_entry=firm_entry,
+                include_safety_stock=bool(
+                    netting_params_for_supply.get("include_safety_stock", True)
+                ),
+            )
 
             await DemandComputationItem.create(
                 tenant_id=tenant_id,
@@ -3324,6 +3415,7 @@ class DemandComputationService(AppBaseService):
                     "on_hand": _safe_float(pending["inventory_info"].get("on_hand")),
                     "inventory_breakdown": pending["inventory_info"].get("breakdown") or {},
                     "supply_calculation": supply_for_detail,
+                    "covered_by_supply": bool(supply_for_detail.get("covered_by_supply")),
                     "time_buckets": pending.get("time_buckets") or [],
                     "exceptions": pending.get("exceptions") or [],
                     "dated_supply": pending.get("dated_supply") or [],

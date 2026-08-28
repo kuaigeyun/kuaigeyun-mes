@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   applyPlaceholders,
+  buildTermPreviewSegments,
   extractFieldBindings,
   extractPlaceholders,
   resolveContractTermFieldBindings,
@@ -45,9 +46,26 @@ describe('contract-term-placeholders', () => {
   it('splits unresolved placeholders for preview highlighting', () => {
     expect(splitUnresolvedPlaceholderSegments('定金 {定金比例}，交期 {交期}')).toEqual([
       { type: 'text', value: '定金 ' },
-      { type: 'placeholder', value: '{定金比例}' },
+      { type: 'placeholder', value: '{定金比例}', filled: false },
       { type: 'text', value: '，交期 ' },
-      { type: 'placeholder', value: '{交期}' },
+      { type: 'placeholder', value: '{交期}', filled: false },
+    ]);
+  });
+
+  it('highlights filled and unresolved placeholders from template + resolved content', () => {
+    expect(
+      buildTermPreviewSegments(
+        '方式 月结30天，定金 30%，交期 {交期}',
+        '方式 {@payment_terms}，定金 {定金比例}，交期 {交期}',
+        { 定金比例: '30%' },
+      ),
+    ).toEqual([
+      { type: 'text', value: '方式 ' },
+      { type: 'placeholder', value: '月结30天', filled: true },
+      { type: 'text', value: '，定金 ' },
+      { type: 'placeholder', value: '30%', filled: true },
+      { type: 'text', value: '，交期 ' },
+      { type: 'placeholder', value: '{交期}', filled: false },
     ]);
   });
 });

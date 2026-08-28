@@ -89,7 +89,6 @@ import {
   convertQuotationToOrder,
   convertQuotationToSalesReview,
   previewPushQuotationToSalesOrder,
-  previewPushQuotationToSalesContract,
   previewPushQuotationToSalesReview,
   type QuotationPushPreviewResponse,
   submitQuotation,
@@ -106,7 +105,6 @@ import {
   Quotation,
   type QuotationItem,
 } from '../../../services/quotation';
-import { salesContractApi } from '../../../services/sales-contract';
 import { useOptionalLinkedDocumentDetail } from '../../../../../components/linked-document-detail';
 import { getQuotationLifecycle, buildQuotationLifecycleValueEnum, resolveQuotationListLifecycleParams } from '../../../utils/quotationLifecycle';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
@@ -617,14 +615,11 @@ const QuotationFormSummary: React.FC = () => (
 
 const QUOTATION_RESOURCE = 'kuaizhizao:quotation';
 const SALES_CONTRACT_RESOURCE = 'kuaizhizao:sales-contract';
-const SALES_CONTRACT_LIST_PATH = '/apps/kuaizhizao/sales-management/sales-contracts';
-const salesContractEditPath = (id: number) => `${SALES_CONTRACT_LIST_PATH}/${id}/edit`;
 
 const QuotationsPage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const { quantity: quantityDecimals, price: priceDecimals, amount: amountDecimals } = useNumericPrecision();
   const pushToSalesOrderAction = resolveKuaizhizaoDocumentAction(t, 'sales_order.pull_from_quotation');
-  const pushToSalesContractAction = resolveKuaizhizaoDocumentAction(t, 'sales_contract.pull_from_quotation');
   const pushToSalesReviewAction = resolveKuaizhizaoDocumentAction(t, 'sales_review.pull_from_quotation');
   const salesCommonFormLabels = useMemo(() => getSalesCommonFormLabels(t), [t]);
   const quotationLifecycleValueEnum = useMemo(
@@ -910,7 +905,7 @@ const QuotationsPage: React.FC = () => {
   const [paymentTermsOptions, setPaymentTermsOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [followUpModalOpen, setFollowUpModalOpen] = useState(false);
   const [followUpPreset, setFollowUpPreset] = useState<CustomerFollowUpPreset | null>(null);
-  type QuotationPushTarget = 'sales_order' | 'sales_contract' | 'sales_review';
+  type QuotationPushTarget = 'sales_order' | 'sales_review';
   const [pushPreviewOpen, setPushPreviewOpen] = useState(false);
   const [pushPreviewLoading, setPushPreviewLoading] = useState(false);
   const [pushPreviewConfirming, setPushPreviewConfirming] = useState(false);
@@ -1013,9 +1008,10 @@ const QuotationsPage: React.FC = () => {
         users: userList,
         customerList,
         includeCustomerId: true,
+        paymentTermsOptions,
       });
     },
-    [userList, customerList],
+    [userList, customerList, paymentTermsOptions],
   );
 
   const applyCustomerById = useCallback(
@@ -2065,9 +2061,7 @@ const QuotationsPage: React.FC = () => {
       const fetchPreview =
         target === 'sales_order'
           ? () => previewPushQuotationToSalesOrder(record.id!)
-          : target === 'sales_contract'
-            ? () => previewPushQuotationToSalesContract(record.id!)
-            : () => previewPushQuotationToSalesReview(record.id!);
+          : () => previewPushQuotationToSalesReview(record.id!);
       void fetchPreview()
         .then((res) => {
           setPushPreviewData(res);
@@ -2146,35 +2140,6 @@ const QuotationsPage: React.FC = () => {
         invalidateSalesOrderList();
         actionRef.current?.reload();
         closeQuotationDetailDrawer();
-      } else if (pushPreviewTarget === 'sales_contract') {
-        const contract = await salesContractApi.convertFromQuotation(pushPreviewRecord.id);
-        const contractId = contract.id;
-        const contractCode = contract.contract_code || '';
-        messageApi.success({
-          content: (
-            <span>
-              {t('app.kuaizhizao.quotation.pushedToSalesContract')}
-              {contractId ? (
-                <Button
-                  type="link"
-                  size="small"
-                  style={{ padding: 0, height: 'auto' }}
-                  onClick={() => navigate(salesContractEditPath(contractId))}
-                >
-                  {contractCode}
-                </Button>
-              ) : (
-                contractCode
-              )}
-            </span>
-          ),
-          duration: 6,
-        });
-        invalidateMenuBadgeCounts();
-        actionRef.current?.reload();
-        if (quotationDetail?.id === pushPreviewRecord.id) {
-          void loadQuotationDetail(pushPreviewRecord.id);
-        }
       } else {
         const res = await convertQuotationToSalesReview(pushPreviewRecord.id, { selected_item_ids: selectedIds });
         const reviewCode = res.sales_review?.review_code || '';
@@ -2200,9 +2165,7 @@ const QuotationsPage: React.FC = () => {
           error?.detail ||
           (pushPreviewTarget === 'sales_order'
             ? t('app.kuaizhizao.quotation.convertFailed')
-            : pushPreviewTarget === 'sales_contract'
-              ? t('app.kuaizhizao.quotation.pushToSalesContractFailed')
-              : t('app.kuaizhizao.quotation.pushToSalesReviewFailed', { defaultValue: '下推订单评审失败' })),
+            : t('app.kuaizhizao.quotation.pushToSalesReviewFailed', { defaultValue: '下推订单评审失败' })),
       );
     } finally {
       setPushPreviewConfirming(false);
@@ -2211,10 +2174,6 @@ const QuotationsPage: React.FC = () => {
 
   const handleConvert = (record: Quotation) => {
     showQuotationPushPreview(record, 'sales_order');
-  };
-
-  const handleConvertToContract = (record: Quotation) => {
-    showQuotationPushPreview(record, 'sales_contract');
   };
 
   const handleConvertToSalesReview = (record: Quotation) => {
@@ -2496,19 +2455,13 @@ const QuotationsPage: React.FC = () => {
     (record: Quotation) => {
       const superseded = isQuotationSuperseded(record);
       const orderBizAllowed = quotationCapabilityAllowed(record, 'convert_to_order');
-      const contractBizAllowed = quotationCapabilityAllowed(record, 'convert_to_contract');
       const reviewBizAllowed = quotationCapabilityAllowed(record, 'convert_to_sales_review');
       const orderPushPermAllowed = quotationCanPushToSalesOrder(quotationPerms);
       const convertible = orderBizAllowed && orderPushPermAllowed;
-      const contractConvertible = contractBizAllowed;
       const hasContract =
         record.contract_id != null &&
         Number(record.contract_id) > 0 &&
         record.contract_downstream_missing !== true;
-      const hasLiveSalesOrder =
-        record.sales_order_id != null &&
-        Number(record.sales_order_id) > 0 &&
-        record.conversion_downstream_missing !== true;
       const notLatest = record.is_latest_in_series === false;
       const orderPushTitle = superseded
         ? t('app.kuaizhizao.quotation.supersededConvertHint')
@@ -2524,20 +2477,6 @@ const QuotationsPage: React.FC = () => {
                   })
                 : permDeniedTitle
               : undefined;
-      const contractPushTitle = superseded
-        ? t('app.kuaizhizao.quotation.supersededConvertHint')
-        : hasContract
-          ? t('app.kuaizhizao.quotation.alreadyLinkedContract')
-          : hasLiveSalesOrder
-            ? t('app.kuaizhizao.quotation.alreadyLinkedSalesOrder')
-            : !contractConvertible
-              ? quotationCapabilityReasonMessage(record.capabilities?.convert_to_contract?.reason, t) ||
-                t('app.kuaizhizao.quotation.pushBlockedStatus', {
-                  status: quotationStatusNorm(record) || '-',
-                })
-              : !salesContractPerms.canCreate
-                ? permDeniedTitle
-                : undefined;
       const reviewPushTitle = superseded
         ? t('app.kuaizhizao.quotation.supersededConvertHint')
         : !reviewBizAllowed
@@ -2565,23 +2504,6 @@ const QuotationsPage: React.FC = () => {
           },
         },
         {
-          key: 'sales-contract',
-          label: pushToSalesContractAction.label,
-          disabled: superseded || !contractConvertible || !salesContractPerms.canCreate,
-          title: contractPushTitle,
-          onClick: () => {
-            if (superseded || !contractConvertible || !salesContractPerms.canCreate) return;
-            void (async () => {
-              try {
-                const latest = await getQuotation(record.id!);
-                handleConvertToContract(latest);
-              } catch (error: any) {
-                messageApi.error(error?.message || t('app.kuaizhizao.quotation.loadFailed'));
-              }
-            })();
-          },
-        },
-        {
           key: 'sales-review',
           label: pushToSalesReviewAction.label,
           disabled: superseded || !reviewBizAllowed,
@@ -2602,13 +2524,10 @@ const QuotationsPage: React.FC = () => {
     },
     [
       handleConvert,
-      handleConvertToContract,
       handleConvertToSalesReview,
       messageApi,
       quotationPerms,
-      salesContractPerms.canCreate,
       permDeniedTitle,
-      pushToSalesContractAction.label,
       pushToSalesOrderAction.label,
       pushToSalesReviewAction.label,
       t,
@@ -3187,12 +3106,13 @@ const QuotationsPage: React.FC = () => {
             applyCustomerFormFields(formRef, c as Record<string, unknown>, {
               users: userList,
               customerList,
+              paymentTermsOptions,
             });
           }
         }
       }
     },
-    [customerList, userList],
+    [customerList, userList, paymentTermsOptions],
   );
 
   const triggerQuotationFormSubmit = useCallback(() => {

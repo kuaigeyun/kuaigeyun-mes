@@ -13,11 +13,11 @@ import {
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, Button, List, Modal, Popconfirm, Space, Typography } from 'antd';
-import { DeleteOutlined, EditOutlined } from '@ant-design/icons';
+import { App, Button, List, Modal, Popconfirm, Typography } from 'antd';
 import SafeProFormSelect from '../../../../../components/safe-pro-form-select';
 import { UniTable } from '../../../../../components/uni-table';
 import { rowActionKind } from '../../../../../components/uni-action';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import {
   FormModalTemplate,
   MODAL_CONFIG,
@@ -631,10 +631,11 @@ const UnitsPage: React.FC = () => {
       {
         title: t('app.master-data.units.name'),
         dataIndex: 'name',
-        width: 150,
-        minWidth: 150,
+        width: 160,
+        minWidth: 160,
         uniTableKeepWidth: true,
         resizable: false,
+        ellipsis: true,
         sorter: true,
         fixed: 'left',
       },
@@ -651,83 +652,81 @@ const UnitsPage: React.FC = () => {
       {
         title: t('app.master-data.units.isSystem'),
         dataIndex: 'is_system',
-        width: 100,
-        minWidth: 100,
-        uniTableKeepWidth: true,
-        resizable: false,
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         hideInSearch: true,
         render: (_, r) =>
-          r.is_system ? renderMasterTypeMarker(t('app.master-data.units.isSystem')) : '-',
+          r.is_system ? renderMasterTypeMarker(t('app.master-data.units.isSystem')) : '—',
       },
       {
         title: t('common.status'),
         dataIndex: 'is_active',
-        width: 88,
-        minWidth: 88,
-        uniTableKeepWidth: true,
-        resizable: false,
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         valueType: 'select',
         valueEnum: {
-          true: { text: t('common.enabled'), status: 'Success' },
-          false: { text: t('common.disabled'), status: 'Default' },
+          true: { text: t('common.enabled') },
+          false: { text: t('common.disabled') },
         },
         render: (_, r) => renderMasterActiveTag(t, r.is_active, 'common.enabled', 'common.disabled'),
       },
       {
+        // 备注长短不一：唯一 RemainderFlex（稀疏不叠）
         title: t('common.remark'),
         dataIndex: 'description',
+        minWidth: 160,
+        uniTableRemainderFlex: true,
+        uniTablePrimaryFlex: true,
+        resizable: false,
         ellipsis: true,
         hideInSearch: true,
+        render: (_, r) => r.description || '—',
       },
       ...masterCrudCreatedUpdatedSnakeColumns<MaterialUnit>(t),
       {
         title: t('common.actions'),
         key: 'action',
-        valueType: 'option',
         fixed: 'right',
-        render: (_, record) => (
-          <Space>
-            {perms.canUpdate ? (
+        hideInSearch: true,
+        render: (_, record) => [
+          perms.canUpdate ? (
+            <Button
+              key="edit"
+              type="link"
+              size="small"
+              {...rowActionKind('update')}
+              onClick={async () => {
+                setUnitEditingUuid(record.uuid);
+                setUnitModalOpen(true);
+                const detail = await materialUnitApi.get(record.uuid);
+                unitFormRef.current?.setFieldsValue(detail);
+              }}
+            />
+          ) : null,
+          perms.canDelete ? (
+            <Popconfirm
+              key="delete"
+              title={
+                record.is_system
+                  ? t('app.master-data.units.systemCannotDelete')
+                  : t('common.confirmDelete')
+              }
+              disabled={record.is_system}
+              onConfirm={async () => {
+                if (record.is_system) return;
+                await materialUnitApi.delete(record.uuid);
+                invalidateMaterialUnitDisplayMapCache();
+                messageApi.success(t('common.deleteSuccess'));
+                unitActionRef.current?.reload();
+              }}
+            >
               <Button
-                key="edit"
-                {...rowActionKind('update')}
+                type="link"
                 size="small"
-                icon={<EditOutlined />}
-                onClick={async () => {
-                  setUnitEditingUuid(record.uuid);
-                  setUnitModalOpen(true);
-                  const detail = await materialUnitApi.get(record.uuid);
-                  unitFormRef.current?.setFieldsValue(detail);
-                }}
-              >
-                {t('common.edit')}
-              </Button>
-            ) : null}
-            {perms.canDelete ? (
-              <Popconfirm
-                key="delete"
                 {...rowActionKind('delete')}
-                title={
-                  record.is_system
-                    ? t('app.master-data.units.systemCannotDelete')
-                    : t('common.confirmDelete')
-                }
                 disabled={record.is_system}
-                onConfirm={async () => {
-                  if (record.is_system) return;
-                  await materialUnitApi.delete(record.uuid);
-                  invalidateMaterialUnitDisplayMapCache();
-                  messageApi.success(t('common.deleteSuccess'));
-                  unitActionRef.current?.reload();
-                }}
-              >
-                <Button type="link" danger size="small" icon={<DeleteOutlined />} disabled={record.is_system}>
-                  {t('common.delete')}
-                </Button>
-              </Popconfirm>
-            ) : null}
-          </Space>
-        ),
+              />
+            </Popconfirm>
+          ) : null,
+        ],
       },
     ],
     [t, perms.canUpdate, perms.canDelete, messageApi],
@@ -738,6 +737,11 @@ const UnitsPage: React.FC = () => {
       {
         title: t('app.master-data.units.formula'),
         dataIndex: 'from_unit_code',
+        width: 240,
+        minWidth: 240,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
         hideInSearch: true,
         render: (_, r) =>
           `1 ${r.from_unit_code} = ${r.numerator}/${r.denominator} ${r.to_unit_code}`,
@@ -757,82 +761,80 @@ const UnitsPage: React.FC = () => {
       {
         title: t('app.master-data.units.isSystem'),
         dataIndex: 'is_system',
-        width: 100,
-        minWidth: 100,
-        uniTableKeepWidth: true,
-        resizable: false,
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         hideInSearch: true,
         render: (_, r) =>
-          r.is_system ? renderMasterTypeMarker(t('app.master-data.units.isSystem')) : '-',
+          r.is_system ? renderMasterTypeMarker(t('app.master-data.units.isSystem')) : '—',
       },
       {
         title: t('common.status'),
         dataIndex: 'is_active',
-        width: 88,
-        minWidth: 88,
-        uniTableKeepWidth: true,
-        resizable: false,
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         valueType: 'select',
         valueEnum: {
-          true: { text: t('common.enabled'), status: 'Success' },
-          false: { text: t('common.disabled'), status: 'Default' },
+          true: { text: t('common.enabled') },
+          false: { text: t('common.disabled') },
         },
         render: (_, r) => renderMasterActiveTag(t, r.is_active, 'common.enabled', 'common.disabled'),
       },
       {
+        // 备注长短不一：唯一 RemainderFlex
         title: t('common.remark'),
         dataIndex: 'description',
+        minWidth: 160,
+        uniTableRemainderFlex: true,
+        uniTablePrimaryFlex: true,
+        resizable: false,
         ellipsis: true,
         hideInSearch: true,
+        render: (_, r) => r.description || '—',
       },
       ...masterCrudCreatedUpdatedSnakeColumns<MaterialUnitConversion>(t),
       {
         title: t('common.actions'),
         key: 'action',
-        valueType: 'option',
         fixed: 'right',
-        render: (_, record) => (
-          <Space>
-            {perms.canUpdate ? (
+        hideInSearch: true,
+        render: (_, record) => [
+          perms.canUpdate ? (
+            <Button
+              key="edit"
+              type="link"
+              size="small"
+              {...rowActionKind('update')}
+              onClick={async () => {
+                await loadUnitOptions();
+                setConvEditingUuid(record.uuid);
+                setConvModalOpen(true);
+                convFormRef.current?.setFieldsValue(record);
+              }}
+            />
+          ) : null,
+          perms.canDelete ? (
+            <Popconfirm
+              key="delete"
+              title={
+                record.is_system
+                  ? t('app.master-data.units.systemCannotDelete')
+                  : t('common.confirmDelete')
+              }
+              disabled={record.is_system}
+              onConfirm={async () => {
+                if (record.is_system) return;
+                await materialUnitApi.deleteConversion(record.uuid);
+                messageApi.success(t('common.deleteSuccess'));
+                convActionRef.current?.reload();
+              }}
+            >
               <Button
-                key="edit"
-                {...rowActionKind('update')}
+                type="link"
                 size="small"
-                icon={<EditOutlined />}
-                onClick={async () => {
-                  await loadUnitOptions();
-                  setConvEditingUuid(record.uuid);
-                  setConvModalOpen(true);
-                  convFormRef.current?.setFieldsValue(record);
-                }}
-              >
-                {t('common.edit')}
-              </Button>
-            ) : null}
-            {perms.canDelete ? (
-              <Popconfirm
-                key="delete"
                 {...rowActionKind('delete')}
-                title={
-                  record.is_system
-                    ? t('app.master-data.units.systemCannotDelete')
-                    : t('common.confirmDelete')
-                }
                 disabled={record.is_system}
-                onConfirm={async () => {
-                  if (record.is_system) return;
-                  await materialUnitApi.deleteConversion(record.uuid);
-                  messageApi.success(t('common.deleteSuccess'));
-                  convActionRef.current?.reload();
-                }}
-              >
-                <Button type="link" danger size="small" icon={<DeleteOutlined />} disabled={record.is_system}>
-                  {t('common.delete')}
-                </Button>
-              </Popconfirm>
-            ) : null}
-          </Space>
-        ),
+              />
+            </Popconfirm>
+          ) : null,
+        ],
       },
     ],
     [t, perms.canUpdate, perms.canDelete, messageApi, loadUnitOptions],
@@ -859,7 +861,7 @@ const UnitsPage: React.FC = () => {
               <UniTable<MaterialUnit>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('masterData.units')}
-                columnPersistenceId="apps.master-data.pages.materials.units.catalog.list-v1"
+                columnPersistenceId="apps.master-data.pages.materials.units.catalog.list-v2"
                 permissionResource="master-data:material-unit"
                 actionRef={unitActionRef}
                 rowKey="uuid"
@@ -920,7 +922,7 @@ const UnitsPage: React.FC = () => {
             label: t('app.master-data.units.tabConversions'),
             children: (
               <UniTable<MaterialUnitConversion>
-                columnPersistenceId="apps.master-data.pages.materials.units.conversions.list-v1"
+                columnPersistenceId="apps.master-data.pages.materials.units.conversions.list-v2"
                 permissionResource="master-data:material-unit"
                 actionRef={convActionRef}
                 rowKey="uuid"

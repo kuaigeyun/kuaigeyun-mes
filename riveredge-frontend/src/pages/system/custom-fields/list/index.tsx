@@ -17,7 +17,8 @@ import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Badge, Button, Col, Form, Input, Popconfirm, Row, Space, Spin, Tooltip, theme } from 'antd';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { renderSystemActiveTag, renderSystemTypeMarker, renderSystemYesNoTag } from '../../utils/systemListPresentation';
-import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, DatabaseOutlined, MinusCircleOutlined } from '@ant-design/icons';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../utils/uniTableLayoutColumns';
+import { PlusOutlined, DatabaseOutlined, MinusCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { FormModalTemplate, MODAL_CONFIG, TwoColumnLayout } from '../../../../components/layout-templates';
 import { FEATURE_PAGE_LIST_ITEM_CLASS, FEATURE_PAGE_RIGHT_PANEL_HEADER_STYLE, FEATURE_PAGE_RIGHT_PANEL_NAME_STYLE, FEATURE_PAGE_RIGHT_PANEL_PATH_STYLE, FEATURE_PAGE_RIGHT_PANEL_TITLE_ROW_STYLE } from '../../../../components/layout-templates/constants';
@@ -943,16 +944,20 @@ const CustomFieldListPage: React.FC = () => {
     {
       title: t('field.customField.name'),
       dataIndex: 'name',
-      width: 150,
-      fixed: 'left',
+      width: 160,
+      minWidth: 160,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
     },
     {
       title: t('field.customField.code'),
       dataIndex: 'code',
-      width: 150,
-      minWidth: 150,
+      width: 140,
+      minWidth: 140,
       uniTableKeepWidth: true,
       resizable: false,
+      ellipsis: true,
     },
     {
       title: t('field.customField.tableName'),
@@ -963,6 +968,7 @@ const CustomFieldListPage: React.FC = () => {
     {
       title: t('field.customField.fieldType'),
       dataIndex: 'field_type',
+      // 类型文案较长，勿挂 MarkerBadge 固定 80
       width: 120,
       minWidth: 120,
       uniTableKeepWidth: true,
@@ -1006,18 +1012,20 @@ const CustomFieldListPage: React.FC = () => {
       },
     },
     {
+      // 显示名长短不一：唯一 RemainderFlex
       title: t('field.customField.label'),
       dataIndex: 'label',
-      width: 150,
+      minWidth: 140,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
+      resizable: false,
+      ellipsis: true,
       hideInSearch: true,
     },
     {
       title: t('field.customField.isRequired'),
       dataIndex: 'is_required',
-      width: 100,
-      minWidth: 100,
-      uniTableKeepWidth: true,
-      resizable: false,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       valueType: 'select',
       valueEnum: {
         true: { text: t('common.yes'), status: 'Success' },
@@ -1028,8 +1036,8 @@ const CustomFieldListPage: React.FC = () => {
     {
       title: t('field.customField.sortOrder'),
       dataIndex: 'sort_order',
-      width: 80,
-      minWidth: 80,
+      width: 100,
+      minWidth: 100,
       uniTableKeepWidth: true,
       resizable: false,
       hideInSearch: true,
@@ -1038,10 +1046,7 @@ const CustomFieldListPage: React.FC = () => {
     {
       title: t('common.status'),
       dataIndex: 'is_active',
-      width: 100,
-      minWidth: 100,
-      uniTableKeepWidth: true,
-      resizable: false,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       valueType: 'select',
       valueEnum: {
         true: { text: t('common.enabled'), status: 'Success' },
@@ -1064,20 +1069,13 @@ const CustomFieldListPage: React.FC = () => {
     {
       title: t('common.actions'),
       key: 'action',
-      valueType: 'option',
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) => [
-            <Button {...rowActionKind('read')} key="view" onClick={() => handleView(record)}>
-              {t('common.view')}
-            </Button>,
-            <Button {...rowActionKind('update')} key="edit" onClick={() => handleEdit(record)}>
-              {t('common.edit')}
-            </Button>,
-            <Popconfirm {...rowActionKind('delete')} key="delete" title={t('field.customField.deleteConfirm')} onConfirm={() => handleDelete(record)}>
-              <Button type="link" danger size="small" icon={<DeleteOutlined />}>
-                {t('common.delete')}
-              </Button>
+            <Button {...rowActionKind('read')} key="view" onClick={() => handleView(record)} />,
+            <Button {...rowActionKind('update')} key="edit" onClick={() => handleEdit(record)} />,
+            <Popconfirm key="delete" title={t('field.customField.deleteConfirm')} onConfirm={() => handleDelete(record)}>
+              <Button {...rowActionKind('delete')} />
             </Popconfirm>,
           ],
     },
@@ -1298,7 +1296,7 @@ const CustomFieldListPage: React.FC = () => {
                   <UniTable<CustomField>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('system.customFields')}
-                    columnPersistenceId="pages.system.custom-fields.list-v1"
+                    columnPersistenceId="pages.system.custom-fields.list-v2"
                     actionRef={actionRef}
                     params={{ table_name: selectedPage.tableName }}
                     columns={columns}

@@ -5,8 +5,7 @@
 import React, { useRef, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Space } from 'antd';
-import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { App, Popconfirm, Button } from 'antd';
 import { ProFormText, ProFormSelect, ProFormDatePicker } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
 import { rowActionKind } from '../../../../../components/uni-action';
@@ -18,6 +17,7 @@ import {
   masterCrudCreatedUpdatedColumns,
   resolveBatchSerialLedgerListParams,
 } from '../../../utils/materialListCore';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { materialSerialApi, materialApi } from '../../../services/material';
 import type { MaterialSerial, MaterialSerialCreate, MaterialSerialUpdate } from '../../../types/material';
 import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
@@ -183,11 +183,12 @@ const SerialsPage: React.FC = () => {
       copyable: true,
     },
     {
+      // 物料名称长短不一：唯一 RemainderFlex（台账无备注列）
       title: t('app.master-data.serials.materialName'),
       dataIndex: 'materialName',
-      width: 160,
       minWidth: 160,
-      uniTableKeepWidth: true,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
       resizable: false,
       ellipsis: true,
       hideInSearch: true,
@@ -216,10 +217,7 @@ const SerialsPage: React.FC = () => {
     {
       title: t('common.status'),
       dataIndex: 'status',
-      width: 100,
-      minWidth: 100,
-      uniTableKeepWidth: true,
-      resizable: false,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       sorter: true,
       hideInSearch: true,
       valueEnum: serialStatusValueEnum,
@@ -233,7 +231,7 @@ const SerialsPage: React.FC = () => {
                 ? 'warning'
                 : 'default';
         const text =
-          serialStatusValueEnum[r.status as keyof typeof serialStatusValueEnum]?.text || r.status || '-';
+          serialStatusValueEnum[r.status as keyof typeof serialStatusValueEnum]?.text || r.status || '—';
         return renderMasterTypeMarker(text, color);
       },
     },
@@ -253,6 +251,9 @@ const SerialsPage: React.FC = () => {
       title: t('app.master-data.serials.factoryDate'),
       dataIndex: 'factoryDate',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'date',
       sorter: true,
       hideInSearch: true,
@@ -262,31 +263,24 @@ const SerialsPage: React.FC = () => {
     {
       title: t('common.actions'),
       key: 'action',
-      valueType: 'option',
       fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button
-            key="edit"
-            {...rowActionKind('update')}
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          >
-            {t('common.edit')}
-          </Button>
-          <Popconfirm
-            key="delete"
-            {...rowActionKind('delete')}
-            title={t('common.confirmDelete')}
-            onConfirm={() => handleDelete(record)}
-          >
-            <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-              {t('common.delete')}
-            </Button>
-          </Popconfirm>
-        </Space>
-      ),
+      hideInSearch: true,
+      render: (_, record) => [
+        <Button
+          key="edit"
+          type="link"
+          size="small"
+          {...rowActionKind('update')}
+          onClick={() => handleEdit(record)}
+        />,
+        <Popconfirm
+          key="delete"
+          title={t('common.confirmDelete')}
+          onConfirm={() => handleDelete(record)}
+        >
+          <Button type="link" size="small" {...rowActionKind('delete')} />
+        </Popconfirm>,
+      ],
     },
   ], [t, serialStatusValueEnum]);
 
@@ -295,7 +289,7 @@ const SerialsPage: React.FC = () => {
       <UniTable<MaterialSerial>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('masterData.serials')}
-        columnPersistenceId="apps.master-data.pages.materials.serials.list-v1"
+        columnPersistenceId="apps.master-data.pages.materials.serials.list-v2"
         headerTitle={t('app.master-data.menu.materials.serials')}
         actionRef={actionRef}
         rowKey="uuid"

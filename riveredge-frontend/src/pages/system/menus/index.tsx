@@ -7,11 +7,10 @@
  */
 
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
-import { rowActionKind } from '../../../components/uni-action';
+import { rowActionKind, rowActionLabelKeep } from '../../../components/uni-action';
 import { ProFormText, ProFormSwitch, ProColumns, ProFormTreeSelect, ProFormSelect, ProFormItem, ProDescriptionsItemProps, ProFormInstance } from '@ant-design/pro-components';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import {
-  DeleteOutlined,
   PlusOutlined,
   AppstoreOutlined,
   LinkOutlined,
@@ -24,6 +23,7 @@ import {
 import { App, Button, Space, Popconfirm, Tooltip, Col, Modal, Spin, Switch, Typography } from 'antd';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { renderSystemActiveTag, renderSystemTypeMarker } from '../utils/systemListPresentation';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../utils/uniTableLayoutColumns';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../components/layout-templates';
 import { SystemMasterDetailDrawer } from '../shared/systemMasterDetailDrawer';
 import { getApiErrorMessage } from '../../../utils/errorHandler';
@@ -724,8 +724,11 @@ const MenuListPage: React.FC = () => {
     {
         title: t('pages.system.menus.menuName'),
         dataIndex: 'name',
-        width: 250,
-        fixed: 'left',
+        width: 220,
+        minWidth: 220,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
         render: (_: any, record: Menu) => {
              const treeItem = record as unknown as MenuTree;
              const displayName = translateAppMenuItemName(
@@ -763,8 +766,13 @@ const MenuListPage: React.FC = () => {
         }
     },
     {
+        // 路径长短不一：唯一 RemainderFlex
         title: t('pages.system.menus.path'),
         dataIndex: 'path',
+        minWidth: 180,
+        uniTableRemainderFlex: true,
+        uniTablePrimaryFlex: true,
+        resizable: false,
         copyable: true,
         ellipsis: true,
     },
@@ -772,19 +780,29 @@ const MenuListPage: React.FC = () => {
         title: t('pages.system.menus.icon'),
         dataIndex: 'icon',
         width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         render: (_: any, record: Menu) => renderMenuIconMarker(record.icon, 14),
     },
     {
         title: t('pages.system.menus.component'),
         dataIndex: 'component',
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
         ellipsis: true,
         hideInSearch: true,
     },
     {
         title: t('pages.system.menus.sort'),
         dataIndex: 'sort_order',
-        width: 80,
+        width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
         valueType: 'digit',
         hideInSearch: true,
         sorter: (a: Menu, b: Menu) => a.sort_order - b.sort_order,
@@ -792,7 +810,7 @@ const MenuListPage: React.FC = () => {
     {
         title: t('common.status'),
         dataIndex: 'is_active',
-        width: 100,
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         valueType: 'select',
         valueEnum: {
             true: { text: t('common.enabled'), status: 'Success' },
@@ -804,7 +822,7 @@ const MenuListPage: React.FC = () => {
     {
         title: t('pages.system.menus.source'),
         dataIndex: 'application_uuid',
-        width: 100,
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         hideInSearch: true,
         render: (_: any, record: Menu) =>
           record.application_uuid ? (
@@ -818,7 +836,6 @@ const MenuListPage: React.FC = () => {
     {
         title: t('common.actions'),
         key: 'action',
-        valueType: 'option',
         fixed: 'right',
         hideInSearch: true,
         render: (_: any, record: Menu) => {
@@ -828,21 +845,16 @@ const MenuListPage: React.FC = () => {
             const canSetHome =
               record.is_active && !record.is_external && !!(record.path && String(record.path).trim());
             const actions: React.ReactNode[] = [
-              <Button {...rowActionKind('read')} key="detail" type="default" onClick={() => handleView(record)}>
-                {t('common.detail')}
-              </Button>,
-              <Button {...rowActionKind('update')} key="edit" type="primary" onClick={() => handleEdit(record)}>
-                {t('common.edit')}
-              </Button>,
-              <Tooltip {...rowActionKind('update')}
+              <Button {...rowActionKind('read')} key="detail" onClick={() => handleView(record)} />,
+              <Button {...rowActionKind('update')} key="edit" onClick={() => handleEdit(record)} />,
+              <Tooltip
                 key="setHome"
                 title={canSetHome ? undefined : t('pages.system.menus.setBackendHomeDisabled')}
               >
                 <span>
                   <Button
-                    type="default"
-                    size="small"
-                    icon={<HomeOutlined />}
+                    {...rowActionKind('skip')}
+                    {...rowActionLabelKeep()}
                     disabled={!canSetHome}
                     onClick={() => void handleSetBackendHome(record)}
                   >
@@ -850,7 +862,7 @@ const MenuListPage: React.FC = () => {
                   </Button>
                 </span>
               </Tooltip>,
-              <Popconfirm {...rowActionKind('delete')}
+              <Popconfirm
                 key="delete"
                 title={t('pages.system.menus.deleteConfirm')}
                 onConfirm={() => handleDelete(record)}
@@ -864,17 +876,14 @@ const MenuListPage: React.FC = () => {
                   }
                 >
                   <span>
-                    <Button type="default" size="small" danger icon={<DeleteOutlined />} disabled={!canDelete}>
-                      {t('common.delete')}
-                    </Button>
+                    <Button {...rowActionKind('delete')} disabled={!canDelete} />
                   </span>
                 </Tooltip>
               </Popconfirm>,
-              <Button {...rowActionKind('create')}
+              <Button
+                {...rowActionKind('skip')}
+                {...rowActionLabelKeep()}
                 key="addChild"
-                type="default"
-                size="small"
-                icon={<PlusOutlined />}
                 onClick={() => handleCreate(record.uuid)}
               >
                 {t('pages.system.menus.addChild')}
@@ -892,7 +901,7 @@ const MenuListPage: React.FC = () => {
         <UniTable<Menu>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('system.menus')}
-            columnPersistenceId="pages.system.menus.list-v1"
+            columnPersistenceId="pages.system.menus.list-v2"
             actionRef={actionRef}
             headerTitle={t('pages.system.menus.listTitle')}
             rowKey="uuid"

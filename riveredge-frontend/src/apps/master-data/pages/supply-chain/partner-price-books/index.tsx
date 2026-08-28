@@ -22,9 +22,6 @@ import {
 } from 'antd';
 import {
   CheckCircleOutlined,
-  DeleteOutlined,
-  EditOutlined,
-  EyeOutlined,
   PlusOutlined,
   StopOutlined,
 } from '@ant-design/icons';
@@ -56,13 +53,10 @@ import { convertUnitPriceByPriceType } from '../../../utils/resolve-partner-mate
 import { formatDateTime } from '../../../../../utils/format';
 import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
-  UniTableStackedPrimaryCell,
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-} from '../../../../../components/uni-table/stackedPrimaryColumn';
-import {
   renderMasterActiveTag,
   renderMasterTypeMarker,
 } from '../../../utils/masterListPresentation';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 import {
   buildMasterCrudActiveValueEnum,
@@ -474,32 +468,54 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
           ? t('field.customer.code', '客户编号')
           : t('field.supplier.code', '供应商编号'),
         dataIndex: 'partnerCode',
-        key: 'partnerName',
-        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        key: 'partnerCode',
+        width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         sorter: true,
-        render: (_, r) => (
-          <UniTableStackedPrimaryCell
-            primary={r.partnerName ?? ''}
-            secondary={r.partnerCode ?? ''}
-            skipLinkedDocumentLink
-          />
-        ),
+        ellipsis: true,
+        copyable: true,
+      },
+      {
+        title: isCustomer
+          ? t('field.customer.name', '客户名称')
+          : t('field.supplier.name', '供应商名称'),
+        dataIndex: 'partnerName',
+        key: 'partnerName',
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
+        hideInSearch: true,
+        sorter: true,
+        ellipsis: true,
       },
       {
         title: t('app.master-data.materialForm.mainCode', '物料主编号'),
         dataIndex: 'materialCode',
-        key: 'price_book_material_stacked',
-        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        key: 'price_book_material_code',
+        width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
         sorter: true,
-        render: (_, r) => (
-          <UniTableStackedPrimaryCell
-            primary={r.materialName ?? ''}
-            secondary={r.materialCode ?? ''}
-            skipLinkedDocumentLink
-          />
-        ),
+        ellipsis: true,
+        copyable: true,
+      },
+      {
+        title: t('app.master-data.materials.materialName'),
+        dataIndex: 'materialName',
+        key: 'price_book_material_name',
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
+        hideInSearch: true,
+        sorter: true,
+        ellipsis: true,
       },
       {
         title: isCustomer
@@ -514,14 +530,15 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
         ellipsis: true,
       },
       {
+        // 伙伴品名长短不一：唯一 RemainderFlex（稀疏不叠）
         title: isCustomer
           ? t('app.master-data.priceBook.customerMaterialName')
           : t('app.master-data.priceBook.supplierMaterialName'),
         dataIndex: 'partnerMaterialName',
         key: 'partnerMaterialName',
-        width: 120,
-        minWidth: 120,
-        uniTableKeepWidth: true,
+        minWidth: 140,
+        uniTableRemainderFlex: true,
+        uniTablePrimaryFlex: true,
         resizable: false,
         ellipsis: true,
       },
@@ -538,12 +555,14 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
         render: (_, r) => (r.unitPrice != null ? Number(r.unitPrice).toFixed(4) : '—'),
       },
       {
-        title: t('app.master-data.priceBook.variantPricesSection', 'SKU 价'),
+        // 长表头「属性 SKU 单价」+「N 条 SKU 价」徽章：勿标 MarkerBadge（会强制 ~80）
+        title: t('app.master-data.priceBook.variantPricesSection'),
         dataIndex: 'variantPrices',
-        width: 90,
-        minWidth: 90,
+        width: 160,
+        minWidth: 160,
         uniTableKeepWidth: true,
         resizable: false,
+        align: 'center',
         search: false,
         render: (_, r) =>
           r.variantPrices?.length
@@ -585,10 +604,7 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
       {
         title: t('common.enabled', '状态'),
         dataIndex: 'isActive',
-        width: 88,
-        minWidth: 88,
-        uniTableKeepWidth: true,
-        resizable: false,
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         hideInSearch: true,
         sorter: true,
         valueEnum: priceBookActiveValueEnum,
@@ -598,47 +614,44 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
       {
         title: t('common.actions', '操作'),
         key: 'action',
-        valueType: 'option',
         fixed: 'right',
         render: (_, record) => [
           <Button
-            {...rowActionKind('read')}
             key="detail"
             type="link"
             size="small"
-            icon={<EyeOutlined />}
+            {...rowActionKind('read')}
             onClick={(e) => {
               e.stopPropagation();
               openDetail(record);
             }}
-          >
-            {t('common.detail', '详情')}
-          </Button>,
+          />,
           <Button
-            {...rowActionKind('update')}
             key="edit"
+            type="link"
+            size="small"
+            {...rowActionKind('update')}
             onClick={(e) => {
               e.stopPropagation();
               handleEdit(record);
             }}
+          />,
+          <Popconfirm
+            key="delete"
+            title={t('common.confirmDelete')}
+            onConfirm={() => handleDelete(record)}
           >
-            {t('common.edit')}
-          </Button>,
-          <Popconfirm {...rowActionKind('delete')} key="delete" title={t('common.confirmDelete')} onConfirm={() => handleDelete(record)}>
             <Button
               type="link"
               size="small"
-              danger
-              icon={<DeleteOutlined />}
+              {...rowActionKind('delete')}
               onClick={(e) => e.stopPropagation()}
-            >
-              {t('common.delete')}
-            </Button>
+            />
           </Popconfirm>,
         ],
       },
     ],
-    [handleDelete, handleEdit, isCustomer, t, partnerOptions, priceBookActiveValueEnum],
+    [handleDelete, handleEdit, isCustomer, t, partnerOptions, priceBookActiveValueEnum, openDetail],
   );
 
   const createButtonLabel = isCustomer
@@ -655,7 +668,7 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
-          columnPersistenceId={`apps.master-data.pages.supply-chain.partner-price-books.${partnerType}.list-v3`}
+          columnPersistenceId={`apps.master-data.pages.supply-chain.partner-price-books.${partnerType}.list-v6`}
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('masterData.partnerPriceBooks')}
           headerTitle={pageTitle}

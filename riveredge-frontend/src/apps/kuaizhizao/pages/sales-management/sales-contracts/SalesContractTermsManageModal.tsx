@@ -1,9 +1,8 @@
 /**
- * 销售合同条款管理弹窗（条款项 + 条款组）
+ * 销售合同条款管理弹窗（条款项 + 条款组 + 公司印章）
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { rowActionKind } from '../../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import {
@@ -13,11 +12,15 @@ import {
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, Button, Modal, Space, Tabs, Tag, Transfer } from 'antd';
-import { DeleteOutlined, EditOutlined } from '@ant-design/icons';
+import { App, Button, Modal, Tabs, Transfer } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
+import { rowActionKind } from '../../../../../components/uni-action';
+import { MODAL_CONFIG } from '../../../../../components/layout-templates/constants';
+import { MarkerTag } from '../../../../../constants/statusBadges';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { extractPlaceholders, extractFieldBindings } from './contract-term-placeholders';
 import { ContractTermContentField } from './ContractTermContentField';
+import { useCompanySealSettings } from './CompanySealSettingsPanel';
 import {
   salesContractTermApi,
   type SalesContractTermGroup,
@@ -44,6 +47,7 @@ export const SalesContractTermsManageModal: React.FC<SalesContractTermsManageMod
   const [editingGroup, setEditingGroup] = useState<SalesContractTermGroup | null>(null);
   const [allItems, setAllItems] = useState<SalesContractTermItem[]>([]);
   const [selectedItemIds, setSelectedItemIds] = useState<number[]>([]);
+  const companySeal = useCompanySealSettings({ enabled: open });
 
   const loadAllItems = useCallback(async () => {
     try {
@@ -93,11 +97,30 @@ export const SalesContractTermsManageModal: React.FC<SalesContractTermsManageMod
 
   const itemColumns: ProColumns<SalesContractTermItem>[] = useMemo(
     () => [
-      { title: t('app.kuaizhizao.salesContract.terms.colCode'), dataIndex: 'term_code', width: 120 },
-      { title: t('app.kuaizhizao.salesContract.terms.colName'), dataIndex: 'term_name', width: 180 },
+      {
+        title: t('app.kuaizhizao.salesContract.terms.colCode'),
+        dataIndex: 'term_code',
+        width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
+      },
+      {
+        title: t('app.kuaizhizao.salesContract.terms.colName'),
+        dataIndex: 'term_name',
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
+      },
       {
         title: t('app.kuaizhizao.salesContract.terms.colContent'),
         dataIndex: 'content',
+        minWidth: 200,
+        uniTablePrimaryFlex: true,
+        uniTableRemainderFlex: true,
+        resizable: false,
         ellipsis: true,
         render: (_, r) => (
           <span title={r.content}>{r.content?.length > 80 ? `${r.content.slice(0, 80)}…` : r.content}</span>
@@ -105,7 +128,12 @@ export const SalesContractTermsManageModal: React.FC<SalesContractTermsManageMod
       },
       {
         title: t('app.kuaizhizao.salesContract.terms.colPlaceholders'),
+        key: 'placeholders',
+        dataIndex: 'placeholders',
         width: 140,
+        minWidth: 140,
+        uniTableKeepWidth: true,
+        resizable: false,
         ellipsis: true,
         render: (_, r) => {
           const manual = extractPlaceholders(r.content ?? '');
@@ -117,44 +145,44 @@ export const SalesContractTermsManageModal: React.FC<SalesContractTermsManageMod
           return parts.length ? parts.join('、') : '—';
         },
       },
-      { title: t('app.kuaizhizao.salesContract.terms.colSort'), dataIndex: 'sort_order', width: 72 },
+      {
+        title: t('app.kuaizhizao.salesContract.terms.colSort'),
+        dataIndex: 'sort_order',
+        width: 72,
+        minWidth: 72,
+        uniTableKeepWidth: true,
+        resizable: false,
+      },
       {
         title: t('common.status'),
         dataIndex: 'is_active',
-        width: 88,
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         render: (_, r) =>
           r.is_active ? (
-            <Tag color="success">{t('common.enabled')}</Tag>
+            <MarkerTag color="success">{t('common.enabled')}</MarkerTag>
           ) : (
-            <Tag>{t('common.disabled')}</Tag>
+            <MarkerTag color="default">{t('common.disabled')}</MarkerTag>
           ),
       },
       {
         title: t('common.actions'),
         valueType: 'option',
         fixed: 'right',
-        render: (_, record) => (
-          <Space>
-            <Button key="edit" {...rowActionKind('update')}
-              size="small"
-              icon={<EditOutlined />}
-              onClick={() => {
-                setEditingItem(record);
-                setItemFormOpen(true);
-              }}
-            >
-              {t('common.edit')}
-            </Button>
-            <Button key="delete" {...rowActionKind('delete')}
-              size="small"
-              danger
-              icon={<DeleteOutlined />}
-              onClick={() => handleDeleteItem(record)}
-            >
-              {t('common.delete')}
-            </Button>
-          </Space>
-        ),
+        render: (_, record) => [
+          <Button
+            key="edit"
+            {...rowActionKind('update')}
+            onClick={() => {
+              setEditingItem(record);
+              setItemFormOpen(true);
+            }}
+          />,
+          <Button
+            key="delete"
+            {...rowActionKind('delete')}
+            onClick={() => handleDeleteItem(record)}
+          />,
+        ],
       },
     ],
     [t, modal, message],
@@ -162,56 +190,68 @@ export const SalesContractTermsManageModal: React.FC<SalesContractTermsManageMod
 
   const groupColumns: ProColumns<SalesContractTermGroup>[] = useMemo(
     () => [
-      { title: t('app.kuaizhizao.salesContract.terms.colGroupCode'), dataIndex: 'group_code', width: 120 },
-      { title: t('app.kuaizhizao.salesContract.terms.colGroupName'), dataIndex: 'group_name', width: 180 },
+      {
+        title: t('app.kuaizhizao.salesContract.terms.colGroupCode'),
+        dataIndex: 'group_code',
+        width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
+      },
+      {
+        title: t('app.kuaizhizao.salesContract.terms.colGroupName'),
+        dataIndex: 'group_name',
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
+      },
       {
         title: t('common.remark'),
         dataIndex: 'description',
+        minWidth: 160,
+        uniTablePrimaryFlex: true,
+        uniTableRemainderFlex: true,
+        resizable: false,
         ellipsis: true,
       },
       {
         title: t('common.status'),
         dataIndex: 'is_active',
-        width: 88,
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         render: (_, r) =>
           r.is_active ? (
-            <Tag color="success">{t('common.enabled')}</Tag>
+            <MarkerTag color="success">{t('common.enabled')}</MarkerTag>
           ) : (
-            <Tag>{t('common.disabled')}</Tag>
+            <MarkerTag color="default">{t('common.disabled')}</MarkerTag>
           ),
       },
       {
         title: t('common.actions'),
         valueType: 'option',
         fixed: 'right',
-        render: (_, record) => (
-          <Space>
-            <Button key="edit" {...rowActionKind('update')}
-              size="small"
-              icon={<EditOutlined />}
-              onClick={async () => {
-                try {
-                  const detail = await salesContractTermApi.getGroup(record.id!);
-                  setEditingGroup(detail);
-                  setSelectedItemIds((detail.items || []).map((it) => it.term_item_id));
-                  setGroupFormOpen(true);
-                } catch (e: any) {
-                  message.error(e?.message || t('common.loadFailed'));
-                }
-              }}
-            >
-              {t('common.edit')}
-            </Button>
-            <Button key="delete" {...rowActionKind('delete')}
-              size="small"
-              danger
-              icon={<DeleteOutlined />}
-              onClick={() => handleDeleteGroup(record)}
-            >
-              {t('common.delete')}
-            </Button>
-          </Space>
-        ),
+        render: (_, record) => [
+          <Button
+            key="edit"
+            {...rowActionKind('update')}
+            onClick={async () => {
+              try {
+                const detail = await salesContractTermApi.getGroup(record.id!);
+                setEditingGroup(detail);
+                setSelectedItemIds((detail.items || []).map((it) => it.term_item_id));
+                setGroupFormOpen(true);
+              } catch (e: any) {
+                message.error(e?.message || t('common.loadFailed'));
+              }
+            }}
+          />,
+          <Button
+            key="delete"
+            {...rowActionKind('delete')}
+            onClick={() => handleDeleteGroup(record)}
+          />,
+        ],
       },
     ],
     [t, modal, message],
@@ -234,7 +274,7 @@ export const SalesContractTermsManageModal: React.FC<SalesContractTermsManageMod
         open={open}
         onCancel={onClose}
         footer={null}
-        width={960}
+        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
         destroyOnHidden
       >
         <Tabs
@@ -248,6 +288,7 @@ export const SalesContractTermsManageModal: React.FC<SalesContractTermsManageMod
               children: (
                 <UniTable<SalesContractTermItem>
                   embedded
+                  columnPersistenceId="apps.kuaizhizao.sales-contracts.terms-items-width-v1"
                   actionRef={itemActionRef}
                   rowKey="id"
                   search={false}
@@ -262,9 +303,8 @@ export const SalesContractTermsManageModal: React.FC<SalesContractTermsManageMod
                     setItemFormOpen(true);
                   }}
                   pagination={{ pageSize: 10 }}
-                  allowCustomScrollX
                   allowCustomScrollY
-                  scroll={{ x: 'max-content', y: 360 }}
+                  scroll={{ y: 360 }}
                   request={async (params) => {
                     const res = await salesContractTermApi.listItems({
                       skip: ((params.current || 1) - 1) * (params.pageSize || 10),
@@ -282,6 +322,7 @@ export const SalesContractTermsManageModal: React.FC<SalesContractTermsManageMod
               children: (
                 <UniTable<SalesContractTermGroup>
                   embedded
+                  columnPersistenceId="apps.kuaizhizao.sales-contracts.terms-groups-width-v1"
                   actionRef={groupActionRef}
                   rowKey="id"
                   search={false}
@@ -298,9 +339,8 @@ export const SalesContractTermsManageModal: React.FC<SalesContractTermsManageMod
                     loadAllItems();
                   }}
                   pagination={{ pageSize: 10 }}
-                  allowCustomScrollX
                   allowCustomScrollY
-                  scroll={{ x: 'max-content', y: 360 }}
+                  scroll={{ y: 360 }}
                   request={async (params) => {
                     const res = await salesContractTermApi.listGroups({
                       skip: ((params.current || 1) - 1) * (params.pageSize || 10),
@@ -312,9 +352,16 @@ export const SalesContractTermsManageModal: React.FC<SalesContractTermsManageMod
                 />
               ),
             },
+            {
+              key: 'seal',
+              label: t('app.kuaizhizao.salesContract.terms.tabSeal'),
+              children: companySeal.panel,
+            },
           ]}
         />
       </Modal>
+
+      {companySeal.cropModal}
 
       <ModalForm<SalesContractTermItem>
         title={

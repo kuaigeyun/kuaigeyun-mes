@@ -150,17 +150,24 @@ async def validate_mrp_scope_materials(
             source_type == SOURCE_TYPE_MAKE
             and manufacturing_mode == MANUFACTURING_MODE_ASSEMBLY
             and bom_ok
-            and not material.process_route_id
         ):
-            msg = f"组合型自制件建议配置工艺路线（装配工序），物料: {material.main_code} ({material.name})"
-            _append_scope_issue(
-                warnings_raw,
-                warning_seen,
-                material_id=mid,
-                material_code=material.main_code or "",
-                material_name=material.name or "",
-                message=msg,
+            from apps.master_data.services.material_product_process_service import (
+                MaterialProductProcessService,
             )
+
+            effective_route = await MaterialProductProcessService.resolve_process_route_for_material(
+                tenant_id, mid
+            )
+            if not effective_route:
+                msg = f"组合型自制件建议配置工艺路线（装配工序），物料: {material.main_code} ({material.name})"
+                _append_scope_issue(
+                    warnings_raw,
+                    warning_seen,
+                    material_id=mid,
+                    material_code=material.main_code or "",
+                    material_name=material.name or "",
+                    message=msg,
+                )
 
     blocking_errors = _merge_scope_issue_messages(blocking_raw)
     warnings = _merge_scope_issue_messages(warnings_raw)

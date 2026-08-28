@@ -1969,6 +1969,8 @@ const SalesReturnsPage: React.FC = () => {
               color="orange"
               variant="solid"
             />,
+          ]}
+          rightToolBarActionsBeforeExport={[
             <UniCapabilityBatchButton
               key="sales-return-print"
               selectedRowKeys={selectedRowKeys}

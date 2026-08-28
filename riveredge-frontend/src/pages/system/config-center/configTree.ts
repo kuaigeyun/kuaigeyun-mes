@@ -306,6 +306,7 @@ export const AUTOMATION_CATEGORIES: ConfigCategory[] = createCategories({
   ],
   warehouse: [
     { key: 'warehouse.auto_outbound', nameKey: 'pages.system.configCenter.param.warehouse_auto_outbound', descriptionKey: 'pages.system.configCenter.param.warehouse_auto_outbound_desc', source: 'business_config', sourcePath: 'parameters.warehouse.auto_outbound', type: 'boolean' },
+    { key: 'warehouse.allow_negative_inventory', nameKey: 'pages.system.configCenter.param.warehouse_allow_negative_inventory', descriptionKey: 'pages.system.configCenter.param.warehouse_allow_negative_inventory_desc', source: 'business_config', sourcePath: 'parameters.warehouse.allow_negative_inventory', type: 'boolean' },
   ],
   finance: [
     {

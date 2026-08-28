@@ -10,8 +10,7 @@ import { rowActionKind } from '../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormTextArea, ProFormSelect, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Space, Modal, message, Input, Row, Col } from 'antd';
-import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, PlayCircleOutlined } from '@ant-design/icons';
+import { App, Popconfirm, Button, Modal, Row, Col } from 'antd';
 import { UniTable } from '../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../utils/errorHandler';
@@ -36,8 +35,6 @@ import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 import { todaySiteDateString } from '../../../../utils/format';
 import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
-
-const { TextArea } = Input;
 
 /**
  * 脚本管理列表页面组件
@@ -259,19 +256,31 @@ const ScriptListPage: React.FC = () => {
     {
       title: t('pages.infra.scripts.columnName'),
       dataIndex: 'name',
-      width: 200,
+      key: 'name',
+      minWidth: 160,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
+      resizable: false,
       ellipsis: true,
     },
     {
       title: t('pages.infra.scripts.columnCode'),
       dataIndex: 'code',
-      width: 150,
+      key: 'code',
+      width: 140,
+      minWidth: 140,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
     },
     {
       title: t('pages.infra.scripts.columnType'),
       dataIndex: 'type',
-      width: 120,
+      key: 'type',
+      width: 110,
+      minWidth: 110,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'select',
       valueEnum: {
         python: { text: t('pages.infra.scripts.typePython') },
@@ -289,24 +298,32 @@ const ScriptListPage: React.FC = () => {
           other: { color: 'default', text: t('pages.infra.scripts.typeOther') },
         };
         const typeInfo = typeMap[record.type] || { color: 'default', text: record.type };
-        return <Tag color={typeInfo.color}>{typeInfo.text}</Tag>;
+        return <MarkerTag color={typeInfo.color}>{typeInfo.text}</MarkerTag>;
       },
     },
     {
       title: t('pages.infra.scripts.columnRunning'),
       dataIndex: 'is_running',
+      key: 'is_running',
       width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       render: (_, record) => (
-        <Tag color={record.is_running ? 'processing' : 'default'}>
+        <MarkerTag color={record.is_running ? 'processing' : 'default'}>
           {record.is_running ? t('pages.infra.scripts.runningRunning') : t('pages.infra.scripts.runningIdle')}
-        </Tag>
+        </MarkerTag>
       ),
     },
     {
       title: t('pages.infra.scripts.columnLastRunStatus'),
       dataIndex: 'last_run_status',
+      key: 'last_run_status',
       width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
       render: (_, record) => {
         if (!record.last_run_status) return '-';
@@ -316,20 +333,28 @@ const ScriptListPage: React.FC = () => {
           running: { color: 'processing', text: t('pages.infra.scripts.statusRunning') },
         };
         const statusInfo = statusMap[record.last_run_status] || { color: 'default', text: record.last_run_status };
-        return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
+        return <MarkerTag color={statusInfo.color}>{statusInfo.text}</MarkerTag>;
       },
     },
     {
       title: t('pages.infra.scripts.columnLastRunAt'),
       dataIndex: 'last_run_at',
+      key: 'last_run_at',
       width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'dateTime',
       hideInSearch: true,
     },
     {
       title: t('common.createdAt'),
       dataIndex: 'created_at',
+      key: 'created_at',
       width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
       valueType: 'dateTime',
       hideInSearch: true,
     },
@@ -338,13 +363,14 @@ const ScriptListPage: React.FC = () => {
       dataIndex: 'is_active',
       key: 'lifecycle',
       width: 100,
+      minWidth: 100,
       fixed: 'right',
       uniTableKeepWidth: true,
       resizable: false,
       valueType: 'select',
       valueEnum: {
-        true: { text: t('common.enabled'), status: 'Success' },
-        false: { text: t('common.disabled'), status: 'Default' },
+        true: { text: t('common.enabled') },
+        false: { text: t('common.disabled') },
       },
       render: (_, record) => (
         <StatusTag color={record.is_active ? 'success' : 'default'}>
@@ -354,49 +380,26 @@ const ScriptListPage: React.FC = () => {
     },
     {
       title: t('common.actions'),
-      valueType: 'option',
+      key: 'action',
       fixed: 'right',
-      render: (_, record) => {
-        return [
-          <Button {...rowActionKind('read')}
-            key="view"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleView(record)}
-          >
-            {t('common.view')}
-          </Button>,
-          <Button {...rowActionKind('update')}
-            key="edit"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          >
-            {t('common.edit')}
-          </Button>,
-          <Button {...rowActionKind('execute')}
-            key="execute"
-            size="small"
-            icon={<PlayCircleOutlined />}
-            onClick={() => handleExecute(record)}
-            disabled={!record.is_active || record.is_running}
-          >
-            {t('pages.infra.scripts.execute')}
-          </Button>,
-          <Popconfirm {...rowActionKind('delete')}
-            key="delete"
-            title={t('pages.infra.scripts.deleteConfirmTitle')}
-            onConfirm={() => handleDelete(record)}
-          >
-            <Button
-              size="small"
-              icon={<DeleteOutlined />}
-            >
-              {t('common.delete')}
-            </Button>
-          </Popconfirm>,
-        ];
-      },
+      hideInSearch: true,
+      render: (_, record) => [
+        <Button key="view" {...rowActionKind('read')} onClick={() => handleView(record)} />,
+        <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)} />,
+        <Button
+          key="execute"
+          {...rowActionKind('execute')}
+          onClick={() => handleExecute(record)}
+          disabled={!record.is_active || record.is_running}
+        />,
+        <Popconfirm
+          key="delete"
+          title={t('pages.infra.scripts.deleteConfirmTitle')}
+          onConfirm={() => handleDelete(record)}
+        >
+          <Button {...rowActionKind('delete')} />
+        </Popconfirm>,
+      ],
     },
   ];
 
@@ -406,7 +409,7 @@ const ScriptListPage: React.FC = () => {
         <UniTable<Script>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('infra.scripts')}
-          columnPersistenceId="pages.infra.scripts.list-v2"
+          columnPersistenceId="pages.infra.scripts.list-v3"
           headerTitle={t('pages.infra.scripts.title')}
           actionRef={actionRef}
           columns={columns}

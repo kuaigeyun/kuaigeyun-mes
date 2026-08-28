@@ -43,6 +43,7 @@ import {
   ScissorOutlined,
   SnippetsOutlined,
   SettingOutlined,
+  LockOutlined,
 } from '@ant-design/icons';
 import type { DataNode, TreeProps } from 'antd/es/tree';
 import type { MenuProps } from 'antd';
@@ -67,12 +68,22 @@ import {
   FILE_SYSTEM_FOLDERS_GROUP_KEY,
   FILE_USER_FOLDERS_GROUP_KEY,
   FILE_UNCATEGORIZED_GROUP_KEY,
+  FILE_PRIVATE_FILES_GROUP_KEY,
+  PRIVATE_FILE_CATEGORIES,
   collectDocumentAttachmentCategories,
   isDocumentAttachmentCategory,
+  isPrivateFileCategory,
   isSystemFolderCategory,
   isUserFolderCategory,
+  isVirtualFileTreeKey,
   resolveFileUploadCategoryDisplayName,
 } from '../../../../core/constants/fileUploadCategories';
+import {
+  getPrivateVaultStatus,
+  isPrivateVaultUnlocked,
+} from '../../../../services/privateFileVault';
+import PrivateVaultUnlockModal from './PrivateVaultUnlockModal';
+import PrivateVaultSettingsModal from './PrivateVaultSettingsModal';
 import { getAntdModal } from '../../../../utils/antdAppApis';
 import { formatDateTimeBySiteSetting } from '../../../../utils/format';
 
@@ -182,6 +193,19 @@ const CLIENT_FILTER_TREE_KEYS = new Set([
   FILE_USER_FOLDERS_GROUP_KEY,
 ]);
 
+function treeKeyRequiresPrivateVault(key: string | undefined): boolean {
+  if (!key || key === 'all') return false;
+  return key === FILE_PRIVATE_FILES_GROUP_KEY || isPrivateFileCategory(key);
+}
+
+function resolveUploadCategoryFromTreeKey(key: string | undefined): string | undefined {
+  if (!key || key === 'all' || isVirtualFileTreeKey(key)) return undefined;
+  if (isPrivateFileCategory(key) || isSystemFolderCategory(key) || isUserFolderCategory(key)) {
+    return key;
+  }
+  return undefined;
+}
+
 function isValidUserFolderName(name: string): boolean {
   return /[\u4e00-\u9fff]/.test(name.trim());
 }
@@ -273,6 +297,16 @@ const FileListPage: React.FC = () => {
   const [editingFolderCategory, setEditingFolderCategory] = useState<string | null>(null);
   const [savingFolderEdit, setSavingFolderEdit] = useState(false);
   const [storageSettingsVisible, setStorageSettingsVisible] = useState(false);
+  const [vaultUnlockVisible, setVaultUnlockVisible] = useState(false);
+  const [vaultSettingsVisible, setVaultSettingsVisible] = useState(false);
+  const [vaultConfigured, setVaultConfigured] = useState(false);
+  const [vaultUnlocked, setVaultUnlocked] = useState(() => isPrivateVaultUnlocked());
+
+  useEffect(() => {
+    void getPrivateVaultStatus()
+      .then((status) => setVaultConfigured(status.configured))
+      .catch(() => setVaultConfigured(false));
+  }, [vaultSettingsVisible, vaultUnlockVisible]);
   
   // 右键菜单状态
   const [contextMenuVisible, setContextMenuVisible] = useState(false);
@@ -359,8 +393,16 @@ const FileListPage: React.FC = () => {
         return;
       }
 
+      if (key === FILE_PRIVATE_FILES_GROUP_KEY) {
+        setFileList(response.items);
+        return;
+      }
+
       setFileList(response.items);
     } catch (error: any) {
+      if (treeKey && treeKeyRequiresPrivateVault(treeKey)) {
+        setFileList([]);
+      }
       messageApi.error(error.message || t('pages.system.files.loadListFailed'));
     } finally {
       setLoading(false);
@@ -376,12 +418,17 @@ const FileListPage: React.FC = () => {
     loadFileList(key);
   }, [loadFileList, selectedTreeKeys]);
 
+  const isPrivateFileManagerContext = useCallback((): boolean => {
+    return treeKeyRequiresPrivateVault(selectedTreeKeys[0] as string | undefined);
+  }, [selectedTreeKeys]);
+
   const resolvePathDisplayName = useCallback(
     (pathKey: string): string => {
       if (pathKey === ROOT_PATH_KEY) return t('pages.system.files.allFiles');
       if (pathKey === FILE_SYSTEM_FOLDERS_GROUP_KEY) return t('pages.system.files.systemFolders');
       if (pathKey === FILE_USER_FOLDERS_GROUP_KEY) return t('pages.system.files.userFolders');
       if (pathKey === FILE_UNCATEGORIZED_GROUP_KEY) return t('pages.system.files.uncategorizedFolder');
+      if (pathKey === FILE_PRIVATE_FILES_GROUP_KEY) return t('pages.system.files.privateFilesFolder');
       if (pathKey === FILE_ATTACHMENTS_GROUP_KEY) return t('pages.system.files.attachmentsFolder');
       return resolveCategoryDisplayName(pathKey);
     },
@@ -391,6 +438,7 @@ const FileListPage: React.FC = () => {
   const resolveTreePath = useCallback((key: string): string[] => {
     if (key === 'all') return [ROOT_PATH_KEY];
     if (key === FILE_UNCATEGORIZED_GROUP_KEY) return [ROOT_PATH_KEY, FILE_UNCATEGORIZED_GROUP_KEY];
+    if (key === FILE_PRIVATE_FILES_GROUP_KEY) return [ROOT_PATH_KEY, FILE_PRIVATE_FILES_GROUP_KEY];
     if (key === FILE_USER_FOLDERS_GROUP_KEY) return [ROOT_PATH_KEY, FILE_USER_FOLDERS_GROUP_KEY];
     if (key === FILE_SYSTEM_FOLDERS_GROUP_KEY) return [ROOT_PATH_KEY, FILE_SYSTEM_FOLDERS_GROUP_KEY];
     if (key === FILE_ATTACHMENTS_GROUP_KEY) {
@@ -400,6 +448,7 @@ const FileListPage: React.FC = () => {
       return [ROOT_PATH_KEY, FILE_SYSTEM_FOLDERS_GROUP_KEY, FILE_ATTACHMENTS_GROUP_KEY, key];
     }
     if (isUserFolderCategory(key)) return [ROOT_PATH_KEY, FILE_USER_FOLDERS_GROUP_KEY, key];
+    if (isPrivateFileCategory(key)) return [ROOT_PATH_KEY, FILE_PRIVATE_FILES_GROUP_KEY, key];
     if (isSystemFolderCategory(key)) return [ROOT_PATH_KEY, FILE_SYSTEM_FOLDERS_GROUP_KEY, key];
     return [ROOT_PATH_KEY, key];
   }, []);
@@ -444,10 +493,14 @@ const FileListPage: React.FC = () => {
     categories.forEach(category => {
       if (isUserFolderCategory(category)) {
         userCategories.push(category);
-      } else if (!isDocumentAttachmentCategory(category)) {
+      } else if (!isDocumentAttachmentCategory(category) && !isPrivateFileCategory(category)) {
         systemCategories.push(category);
       }
     });
+
+    const privateCategoryNodes = PRIVATE_FILE_CATEGORIES
+      .map(category => makeCategoryNode(category, 'system'))
+      .sort((a, b) => naturalCompare(String(a.displayTitle), String(b.displayTitle)));
 
     const attachmentChildren = attachmentCategories
       .map(category => makeCategoryNode(category, 'system'))
@@ -475,6 +528,14 @@ const FileListPage: React.FC = () => {
     systemChildren.push(...systemCategoryNodes);
 
     const topLevelChildren: FileFolderNode[] = [
+      normalizeFolderNode({
+        title: t('pages.system.files.privateFilesFolder'),
+        key: FILE_PRIVATE_FILES_GROUP_KEY,
+        displayTitle: t('pages.system.files.privateFilesFolder'),
+        folderKind: 'system-group',
+        icon: <LockOutlined style={{ color: '#722ED1', fontSize: 16 }} />,
+        children: privateCategoryNodes.length > 0 ? privateCategoryNodes : undefined,
+      }),
       normalizeFolderNode({
         title: t('pages.system.files.systemFolders'),
         key: FILE_SYSTEM_FOLDERS_GROUP_KEY,
@@ -521,6 +582,7 @@ const FileListPage: React.FC = () => {
       setExpandedKeys(prev => {
         const next = new Set(prev);
         next.add('all');
+        next.add(FILE_PRIVATE_FILES_GROUP_KEY);
         next.add(FILE_SYSTEM_FOLDERS_GROUP_KEY);
         next.add(FILE_USER_FOLDERS_GROUP_KEY);
         if (attachmentChildren.length > 0) {
@@ -581,6 +643,7 @@ const FileListPage: React.FC = () => {
       setExpandedKeys(prev => {
         const next = new Set(prev);
         next.add('all');
+        next.add(FILE_PRIVATE_FILES_GROUP_KEY);
         next.add(FILE_SYSTEM_FOLDERS_GROUP_KEY);
         next.add(FILE_USER_FOLDERS_GROUP_KEY);
         next.add(FILE_ATTACHMENTS_GROUP_KEY);
@@ -700,6 +763,13 @@ const FileListPage: React.FC = () => {
       setSelectedRowKeys([]);
       lastSelectedFileUuidRef.current = null;
       setCurrentPath(resolveTreePath(key));
+      if (treeKeyRequiresPrivateVault(key) && !isPrivateVaultUnlocked()) {
+        setVaultUnlocked(false);
+        setFileList([]);
+        setVaultUnlockVisible(true);
+        return;
+      }
+      setVaultUnlocked(isPrivateVaultUnlocked());
       if (key === 'all') {
         loadFileList(undefined);
       } else {
@@ -728,11 +798,22 @@ const FileListPage: React.FC = () => {
       messageApi.warning(t('pages.system.files.selectFilesToUpload'));
       return;
     }
+    const selectedKey = selectedTreeKeys[0] as string | undefined;
+    const uploadCategory = resolveUploadCategoryFromTreeKey(selectedKey);
+    if (uploadCategory && treeKeyRequiresPrivateVault(uploadCategory) && !isPrivateVaultUnlocked()) {
+      setVaultUnlockVisible(true);
+      return;
+    }
     try {
       setUploading(true);
       const uploadPromises = uploadFileList.map(file => {
         if (file.originFileObj) {
-          return uploadFile(file.originFileObj);
+          return uploadFile(
+            file.originFileObj,
+            uploadCategory
+              ? { category: uploadCategory, fileManagerPrivate: isPrivateFileCategory(uploadCategory) }
+              : undefined,
+          );
         }
         return Promise.resolve(null);
       });
@@ -844,7 +925,9 @@ const FileListPage: React.FC = () => {
           return;
         }
         try {
-          await batchDeleteFiles(filesInFolder.map(file => file.uuid));
+          await batchDeleteFiles(filesInFolder.map(file => file.uuid), {
+            fileManagerPrivate: isPrivateFileCategory(category),
+          });
           messageApi.success(t('pages.system.files.folderDeleteSuccess'));
           setSelectedTreeKeys(['all']);
           setCurrentPath([ROOT_PATH_KEY]);
@@ -893,7 +976,9 @@ const FileListPage: React.FC = () => {
     }
     
     try {
-      await batchDeleteFiles(filesToDelete.map(f => f.uuid));
+      await batchDeleteFiles(filesToDelete.map(f => f.uuid), {
+        fileManagerPrivate: isPrivateFileManagerContext(),
+      });
       messageApi.success(t('common.deleteSuccess'));
       setSelectedRowKeys([]);
       reloadCurrentFolder();
@@ -914,7 +999,9 @@ const FileListPage: React.FC = () => {
     try {
       await updateFile(renameFile.uuid, {
         name: renameValue.trim(),
-      } as FileUpdate);
+      } as FileUpdate, {
+        fileManagerPrivate: isPrivateFileManagerContext(),
+      });
       messageApi.success(t('pages.system.files.renameSuccess'));
       setRenameVisible(false);
       setRenameFile(null);
@@ -1407,6 +1494,12 @@ const FileListPage: React.FC = () => {
                 >
                   {t('pages.system.files.storageSettingsButton')}
                 </Button>
+                <Button
+                  icon={<LockOutlined />}
+                  onClick={() => setVaultSettingsVisible(true)}
+                >
+                  {t('pages.system.files.privateVault.settingsButton')}
+                </Button>
                 <div style={{ width: 1, height: 16, backgroundColor: token.colorSplit, margin: '0 8px' }} />
                 <Space>
                   <span style={{ color: token.colorTextSecondary, fontSize: 12 }}>{t('pages.system.files.sortLabel')}</span>
@@ -1546,6 +1639,32 @@ const FileListPage: React.FC = () => {
         open={storageSettingsVisible}
         onClose={() => setStorageSettingsVisible(false)}
         onImageTiersBackfilled={reloadCurrentFolder}
+      />
+
+      <PrivateVaultUnlockModal
+        open={vaultUnlockVisible}
+        configured={vaultConfigured}
+        onClose={() => setVaultUnlockVisible(false)}
+        onOpenSettings={() => {
+          setVaultUnlockVisible(false);
+          setVaultSettingsVisible(true);
+        }}
+        onUnlocked={() => {
+          setVaultUnlocked(true);
+          setVaultUnlockVisible(false);
+          const key = selectedTreeKeys[0] as string | undefined;
+          if (key && key !== 'all') {
+            loadFileList(key);
+          }
+        }}
+      />
+
+      <PrivateVaultSettingsModal
+        open={vaultSettingsVisible}
+        onClose={() => setVaultSettingsVisible(false)}
+        onConfigured={() => {
+          setVaultConfigured(true);
+        }}
       />
 
       {/* 重命名 Modal */}

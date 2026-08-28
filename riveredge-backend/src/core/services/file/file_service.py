@@ -19,6 +19,11 @@ from core.models.file import File
 from core.schemas.file import FileCreate, FileUpdate
 from core.services.file.image_compress import compress_image_content, effective_storage_extension
 from core.services.file.image_tier_service import ImageTierService
+from core.services.file.private_file_vault_service import (
+    FILE_PRIVATE_FILES_GROUP_KEY,
+    PRIVATE_FILE_CATEGORIES,
+    PrivateFileVaultService,
+)
 from core.services.content.sensitive_word_service import SensitiveWordService
 from core.services.content.sensitive_word_ip_guard import (
     SensitiveWordIpGuardService,
@@ -283,10 +288,15 @@ class FileService:
         ).exclude(category__isnull=True).exclude(category="").distinct().values_list("category", flat=True)
         for raw in direct_rows:
             if raw and str(raw).strip():
-                categories.add(str(raw).strip())
+                cat = str(raw).strip()
+                if PrivateFileVaultService.is_private_category(cat):
+                    continue
+                categories.add(cat)
 
         for category in FileService.LINKED_ATTACHMENT_CATEGORIES:
             if category in categories:
+                continue
+            if PrivateFileVaultService.is_private_category(category):
                 continue
             linked_uuids = await FileService._linked_file_uuids_for_category(tenant_id, category)
             if not linked_uuids:
@@ -338,7 +348,9 @@ class FileService:
             )
         
         # 筛选条件
-        if category == FileService.UNCATEGORIZED_CATEGORY:
+        if category == FILE_PRIVATE_FILES_GROUP_KEY:
+            query = query.filter(category__in=list(PRIVATE_FILE_CATEGORIES))
+        elif category == FileService.UNCATEGORIZED_CATEGORY:
             linked_uuids = await FileService.collect_all_linked_attachment_file_uuids(tenant_id)
             query = query.filter(Q(category__isnull=True) | Q(category=""))
             if linked_uuids:
@@ -349,6 +361,9 @@ class FileService:
                 query = query.filter(Q(category=category) | Q(uuid__in=linked_uuids))
             else:
                 query = query.filter(category=category)
+        else:
+            # 全部文件列表不含保密 category
+            query = query.exclude(category__in=list(PRIVATE_FILE_CATEGORIES))
         
         if file_type:
             query = query.filter(file_type=file_type)

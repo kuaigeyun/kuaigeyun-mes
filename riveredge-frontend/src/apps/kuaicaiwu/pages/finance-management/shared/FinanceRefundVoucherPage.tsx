@@ -62,10 +62,7 @@ import {
 } from '../../../utils/financeListCore';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
-import {
-  UniTableStackedPrimaryCell,
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-} from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { rowActionKind } from '../../../../../components/uni-action';
@@ -472,122 +469,155 @@ const FinanceRefundVoucherPage: React.FC<Props> = ({ mode, columnPersistenceId }
   );
 
   const columns: ProColumns<RefundVoucher>[] = useMemo(
-    () => [
-      ...financeDocCodePartnerSearchColumns({
-        docCodeLabel: t(`${NS}.col.code`),
-        docCodeField: cfg.codeField,
-        partnerLabel: t(cfg.partnerLabelKey),
-        partnerIdField: cfg.partnerIdField,
-        partnerNameField: cfg.partnerNameField,
-        partnerOptions,
-      }),
-      {
-        title: t(`${NS}.col.code`),
-        key: 'finance_doc_partner_stacked',
-        dataIndex: cfg.codeField,
-        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-        fixed: 'left',
-        hideInSearch: true,
-        sorter: true,
-        render: (_, r) => (
-          <UniTableStackedPrimaryCell
-            primary={String((r as Record<string, string>)[cfg.partnerNameField] ?? '')}
-            secondary={String((r as Record<string, string>)[cfg.codeField] ?? '')}
-            onSecondaryClick={() => openDetail(r)}
-          />
-        ),
-      },
-      {
-        title: t(`${NS}.col.amount`),
-        dataIndex: 'total_amount',
-        valueType: 'money',
-        align: 'right',
-        width: 130,
-        hideInSearch: true,
-        sorter: true,
-      },
-      {
-        title: t(`${NS}.col.date`),
-        dataIndex: cfg.dateField,
-        valueType: 'date',
-        width: 110,
-        hideInSearch: true,
-        sorter: true,
-      },
-      {
-        title: t(`${NS}.col.date`),
-        dataIndex: `${cfg.dateField}_range`,
-        valueType: 'dateRange',
-        hideInTable: true,
-        formItemProps: formDateRangeFormItemProps,
-      },
-      {
-        title: t(`${NS}.col.paymentMethod`),
-        dataIndex: 'payment_method',
-        width: 110,
-        hideInSearch: true,
-        render: (_, record) => formatPaymentMethod(record.payment_method, t),
-      },
-      {
-        title: t(`${NS}.col.settlementType`),
-        dataIndex: 'settlement_type',
-        width: 100,
-        hideInSearch: true,
-        render: (_, record) => (
-          <MarkerTag color="orange">{formatSettlementType(record.settlement_type, t)}</MarkerTag>
-        ),
-      },
-      {
-        title: t('common.status'),
-        dataIndex: 'status',
-        hideInTable: true,
-        valueEnum: buildVoucherStatusEnum(t),
-      },
-      ...financeDocCreatedUpdatedColumns<RefundVoucher>(t),
-      {
-        title: t('app.kuaicaiwu.common.lifecycle'),
-        key: 'lifecycle',
-        fixed: 'right',
-        hideInSearch: true,
-        render: (_, record) => {
-          const lc = getFinanceVoucherLifecycle(record as Record<string, unknown>, t);
-          return (
-            <UniLifecycle
-              percent={lc.percent}
-              stageName={lc.stageName}
-              status={lc.status}
-              showLabel
-              size="small"
-              showCircleTooltip={false}
-            />
-          );
-        },
-      },
-      {
-        title: t('common.actions'),
-        key: 'action',
-        valueType: 'option',
-        fixed: 'right',
-        hideInSearch: true,
-        render: (_, record) => [
-          <Button {...rowActionKind('read')} key="det" onClick={() => openDetail(record)}>
-            {t('common.detail')}
-          </Button>,
-          record.status === 'Draft' && perms.canAction?.('audit') ? (
-            <Button {...rowActionKind('audit')} key="cf" onClick={() => handleConfirm(record)}>
-              {t('common.confirm')}
-            </Button>
-          ) : null,
-          record.status === 'Draft' && perms.canAction?.('revoke') ? (
-            <Button {...rowActionKind('obsolete')} key="ca" onClick={() => handleCancel(record)}>
-              {t('app.kuaicaiwu.common.void')}
-            </Button>
-          ) : null,
+    () =>
+      alignProColumns(
+        [
+          ...financeDocCodePartnerSearchColumns({
+            docCodeLabel: t(`${NS}.col.code`),
+            docCodeField: cfg.codeField,
+            partnerLabel: t(cfg.partnerLabelKey),
+            partnerIdField: cfg.partnerIdField,
+            partnerNameField: cfg.partnerNameField,
+            partnerOptions,
+          }),
+          {
+            // 有 RemainderFlex：主标识叠列 KeepWidth
+            title: t(`${NS}.col.code`),
+            key: 'finance_doc_partner_stacked',
+            dataIndex: cfg.codeField,
+            width: 240,
+            minWidth: 240,
+            uniTableKeepWidth: true,
+            uniTablePrimaryFlex: false,
+            resizable: false,
+            fixed: 'left',
+            hideInSearch: true,
+            sorter: true,
+            ellipsis: false,
+            render: (_, r) => (
+              <UniTableStackedPrimaryCell
+                primary={String((r as Record<string, string>)[cfg.partnerNameField] ?? '')}
+                secondary={String((r as Record<string, string>)[cfg.codeField] ?? '')}
+                onSecondaryClick={() => openDetail(r)}
+              />
+            ),
+          },
+          {
+            title: t(`${NS}.col.amount`),
+            dataIndex: 'total_amount',
+            valueType: 'money',
+            align: 'right',
+            width: 130,
+            minWidth: 130,
+            uniTableKeepWidth: true,
+            resizable: false,
+            hideInSearch: true,
+            sorter: true,
+          },
+          {
+            title: t(`${NS}.col.date`),
+            key: cfg.dateField === 'receipt_date' ? 'finance_receipt_date' : 'finance_payment_date',
+            dataIndex: cfg.dateField,
+            valueType: 'date',
+            width: 120,
+            minWidth: 120,
+            uniTableKeepWidth: true,
+            resizable: false,
+            hideInSearch: true,
+            sorter: true,
+          },
+          {
+            title: t(`${NS}.col.date`),
+            dataIndex: `${cfg.dateField}_range`,
+            valueType: 'dateRange',
+            hideInTable: true,
+            formItemProps: formDateRangeFormItemProps,
+          },
+          {
+            title: t(`${NS}.col.paymentMethod`),
+            dataIndex: 'payment_method',
+            width: 120,
+            minWidth: 120,
+            uniTableKeepWidth: true,
+            resizable: false,
+            hideInSearch: true,
+            render: (_, record) => formatPaymentMethod(record.payment_method, t),
+          },
+          {
+            title: t(`${NS}.col.settlementType`),
+            dataIndex: 'settlement_type',
+            ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+            hideInSearch: true,
+            render: (_, record) => (
+              <MarkerTag color="orange">{formatSettlementType(record.settlement_type, t)}</MarkerTag>
+            ),
+          },
+          {
+            // 备注长短不一：唯一 RemainderFlex
+            title: t('common.remark'),
+            dataIndex: 'notes',
+            minWidth: 160,
+            uniTableRemainderFlex: true,
+            uniTablePrimaryFlex: true,
+            resizable: false,
+            hideInSearch: true,
+            ellipsis: true,
+            render: (_, record) => (record as { notes?: string }).notes || '—',
+          },
+          {
+            title: t('common.status'),
+            dataIndex: 'status',
+            hideInTable: true,
+            valueEnum: buildVoucherStatusEnum(t),
+          },
+          ...financeDocCreatedUpdatedColumns<RefundVoucher>(t),
+          {
+            title: t('app.kuaicaiwu.common.lifecycle'),
+            key: 'lifecycle',
+            fixed: 'right',
+            hideInSearch: true,
+            render: (_, record) => {
+              const lc = getFinanceVoucherLifecycle(record as Record<string, unknown>, t);
+              return (
+                <UniLifecycle
+                  percent={lc.percent}
+                  stageName={lc.stageName}
+                  status={lc.status}
+                  showLabel
+                  size="small"
+                  showCircleTooltip={false}
+                />
+              );
+            },
+          },
+          {
+            title: t('common.actions'),
+            key: 'action',
+            fixed: 'right',
+            hideInSearch: true,
+            render: (_, record) => {
+              const acts: React.ReactNode[] = [
+                <Button key="det" {...rowActionKind('read')} onClick={() => openDetail(record)} />,
+              ];
+              if (record.status === 'Draft' && perms.canAction?.('audit')) {
+                acts.push(
+                  <Button key="cf" {...rowActionKind('audit')} onClick={() => handleConfirm(record)} />,
+                );
+              }
+              if (record.status === 'Draft' && perms.canAction?.('revoke')) {
+                acts.push(
+                  <Button key="ca" {...rowActionKind('obsolete')} onClick={() => handleCancel(record)} />,
+                );
+              }
+              return acts;
+            },
+          },
         ],
-      },
-    ],
-    [t, cfg, partnerOptions, perms],
+        SALES_DOC_LIST_FIELD_RANK,
+      ),
+    [t, cfg, partnerOptions, perms, openDetail, handleConfirm, handleCancel, NS],
   );
+
 
   return (
     <ListPageTemplate helpViewConfig={undefined}>

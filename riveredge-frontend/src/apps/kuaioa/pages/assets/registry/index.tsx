@@ -38,7 +38,7 @@ const AssetsRegistryPage: React.FC = () => {
         statusPresentation="marker"
         detailVariant="master"
         getDetailFn={getFixedAsset}
-        columnPersistenceId="apps.kuaioa.asset.registry.list-v3"
+        columnPersistenceId="apps.kuaioa.asset.registry.list-v4"
         fields={[
           { name: 'asset_code', labelKey: 'app.kuaioa.asset.code', width: 140 },
           { name: 'asset_name', labelKey: 'app.kuaioa.asset.name', required: true, width: 200 },

@@ -14,6 +14,23 @@ import { DemandStatus, ReviewStatus } from './demand';
  * 销售订单接口定义
  */
 export { DemandStatus as SalesOrderStatus, ReviewStatus };
+
+export interface SalesOrderPaymentMilestone {
+  id?: number;
+  milestone_name: string;
+  planned_date: string;
+  planned_amount?: number;
+  planned_ratio?: number;
+  billing_trigger?: string;
+  /** 预收节点：审单自动生成预收收款单 */
+  is_prepayment?: boolean;
+  bank_account_id?: number | null;
+  status?: string;
+  receivable_id?: number;
+  receivable_code?: string;
+  notes?: string;
+}
+
 export interface SalesOrder {
   id?: number;
   uuid?: string;
@@ -66,9 +83,14 @@ export interface SalesOrder {
     duration_to_review?: number | null;
     duration_submit_to_review?: number | null;
   };
-  /** 关联销售合同 */
+  /** 关联框架合同 */
   contract_id?: number;
   contract_code?: string;
+  is_release_order?: boolean;
+  term_group_id?: number;
+  term_group_name?: string;
+  contract_terms?: import('./sales-contract-term').SalesContractTermSnapshot[];
+  payment_milestones?: SalesOrderPaymentMilestone[];
   /** 交货进度 0-100（列表接口返回） */
   delivery_progress?: number | null;
   /** 开票进度 0-100（列表接口返回） */
@@ -915,6 +937,16 @@ export async function reopenSalesOrder(id: number): Promise<SalesOrder> {
   return apiRequest(`/apps/kuaizhizao/sales-orders/${id}/reopen`, {
     method: 'POST',
   });
+}
+
+export async function generateSalesOrderMilestoneReceivable(
+  salesOrderId: number,
+  milestoneId: number,
+): Promise<unknown> {
+  return apiRequest(
+    `/apps/kuaizhizao/sales-orders/${salesOrderId}/milestones/${milestoneId}/generate-receivable`,
+    { method: 'POST' },
+  );
 }
 
 /** 销售订单行价格趋势（按客户 + 物料） */

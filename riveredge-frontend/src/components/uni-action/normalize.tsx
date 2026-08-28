@@ -30,6 +30,7 @@ import {
   ReloadOutlined,
   ApiOutlined,
   HighlightOutlined,
+  SwapOutlined,
 } from '@ant-design/icons'
 import type { NormalizeActionContext } from './types'
 import {
@@ -126,6 +127,42 @@ function defaultIconForRowActionWithKind(
   }
   if (readActionVisualProfile(node) === 'copy-create') {
     return <CopyOutlined />
+  }
+  if (readActionVisualProfile(node) === 'pick-settlement') {
+    return <CheckCircleOutlined />
+  }
+  if (readActionVisualProfile(node) === 'match-settlement') {
+    return <LinkOutlined />
+  }
+  if (readActionVisualProfile(node) === 'transfer-settle') {
+    return <SwapOutlined />
+  }
+  if (readActionVisualProfile(node) === 'view-doc-chain') {
+    return <LinkOutlined />
+  }
+  if (readActionVisualProfile(node) === 'view-bank-flow') {
+    return <UnorderedListOutlined />
+  }
+  if (readActionVisualProfile(node) === 'note-endorse') {
+    return <FormOutlined />
+  }
+  if (readActionVisualProfile(node) === 'note-discount') {
+    return <VerticalAlignBottomOutlined />
+  }
+  if (readActionVisualProfile(node) === 'note-collect') {
+    return <CheckCircleOutlined />
+  }
+  if (readActionVisualProfile(node) === 'note-honor') {
+    return <CheckCircleOutlined />
+  }
+  if (readActionVisualProfile(node) === 'tax-certify') {
+    return <AuditOutlined />
+  }
+  if (readActionVisualProfile(node) === 'tax-transfer-out') {
+    return <ExportOutlined />
+  }
+  if (readActionVisualProfile(node) === 'tax-red-flush') {
+    return <StopOutlined />
   }
   const explicit = readExplicitActionKind(node) ?? inheritedExplicit ?? null
   if (explicit === 'read' || explicit === 'display') return <EyeOutlined />

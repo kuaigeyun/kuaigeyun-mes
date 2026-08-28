@@ -12,6 +12,7 @@ import { ActionType, ProColumns, ProFormInstance, ProFormText, ProFormTextArea, 
 import { App, Button, Card, Dropdown, Modal, Popconfirm, Space, Switch, Tag, Typography, Alert, Divider, Menu, Breadcrumb, Tooltip, message, Row, Col, Tree, Select, Table } from 'antd';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { renderSystemActiveTag, renderSystemTypeMarker, renderSystemYesNoTag } from '../../utils/systemListPresentation';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../utils/uniTableLayoutColumns';
 import { ThemedSegmented } from '../../../../components/themed-segmented';
 import { useCurrentUser } from '../../../../hooks/useCurrentUser';
 const { Paragraph, Text } = Typography;
@@ -789,7 +790,10 @@ const ApplicationListPage: React.FC = () => {
     {
       title: t('pages.system.applications.name'),
       dataIndex: 'name',
-      width: 200,
+      width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       render: (_val: any, record: Application) => (
         <span>{resolveApplicationDisplayName(record, t)}</span>
@@ -798,16 +802,20 @@ const ApplicationListPage: React.FC = () => {
     {
       title: t('pages.system.applications.code'),
       dataIndex: 'code',
-      width: 150,
-      minWidth: 150,
+      width: 140,
+      minWidth: 140,
       uniTableKeepWidth: true,
       resizable: false,
       ellipsis: true,
     },
     {
+      // 描述长短不一：唯一 RemainderFlex
       title: t('pages.system.applications.description'),
       dataIndex: 'description',
-      width: 250,
+      minWidth: 160,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
+      resizable: false,
       ellipsis: true,
       hideInSearch: true,
       render: (_val: any, record: Application) => (
@@ -826,10 +834,7 @@ const ApplicationListPage: React.FC = () => {
     {
       title: t('pages.system.applications.isSystem'),
       dataIndex: 'is_system',
-      width: 100,
-      minWidth: 100,
-      uniTableKeepWidth: true,
-      resizable: false,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       valueType: 'select',
       valueEnum: {
         true: { text: t('common.yes'), status: 'Default' },
@@ -840,10 +845,7 @@ const ApplicationListPage: React.FC = () => {
     {
       title: t('pages.system.applications.installStatus'),
       dataIndex: 'is_installed',
-      width: 100,
-      minWidth: 100,
-      uniTableKeepWidth: true,
-      resizable: false,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       valueType: 'select',
       valueEnum: {
         true: { text: t('pages.system.applications.installed'), status: 'Success' },
@@ -858,10 +860,7 @@ const ApplicationListPage: React.FC = () => {
     {
       title: t('common.status'),
       dataIndex: 'is_active',
-      width: 100,
-      minWidth: 100,
-      uniTableKeepWidth: true,
-      resizable: false,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       valueType: 'select',
       valueEnum: {
         true: { text: t('common.enabled'), status: 'Success' },
@@ -882,7 +881,6 @@ const ApplicationListPage: React.FC = () => {
     {
       title: t('common.actions'),
       key: 'action',
-      valueType: 'option',
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) => {
@@ -890,25 +888,21 @@ const ApplicationListPage: React.FC = () => {
         const actions: React.ReactNode[] = [
           <Button
             key="view"
-            {...rowActionKind('read')}
             type="link"
             size="small"
-            icon={<EyeOutlined />}
+            {...rowActionKind('read')}
             onClick={() => handleView(record)}
-          >
-            {t('common.view')}
-          </Button>
+          />,
         ];
 
         // 更多操作同步自 Card View 的 menuItems 逻辑
         actions.push(
           <Button
             key="edit"
-            {...rowActionKind('skip')}
-            {...rowActionLabelKeep()}
             type="link"
             size="small"
-            icon={<APP_ACTION_ICON.settings />}
+            {...rowActionKind('skip')}
+            {...rowActionLabelKeep()}
             onClick={() => {
               setEditingApp(record);
               setEditModalVisible(true);
@@ -941,12 +935,7 @@ const ApplicationListPage: React.FC = () => {
                 }
               }}
             >
-              <Button
-                {...rowActionLabelKeep()}
-                type="link"
-                size="small"
-                icon={<APP_ACTION_ICON.syncMenu />}
-              >
+              <Button {...rowActionLabelKeep()} type="link" size="small">
                 {t('pages.system.applications.syncMenu')}
               </Button>
             </Popconfirm>
@@ -961,7 +950,6 @@ const ApplicationListPage: React.FC = () => {
               {...rowActionLabelKeep()}
               type="link"
               size="small"
-              icon={<APP_ACTION_ICON.dedicatedBinding />}
               onClick={() => openDedicatedBindingModal(record)}
             >
               {t('pages.system.applications.dedicatedOrgBinding')}
@@ -979,7 +967,6 @@ const ApplicationListPage: React.FC = () => {
                 {...rowActionToneDestructive()}
                 type="link"
                 size="small"
-                icon={<APP_ACTION_ICON.resetData />}
                 onClick={() => {
                   setResetTargetApp(record);
                   setResetStage(1);
@@ -1006,7 +993,6 @@ const ApplicationListPage: React.FC = () => {
                 type="link"
                 size="small"
                 disabled={record.is_system || !canToggleAppLifecycle(record)}
-                icon={<APP_ACTION_ICON.uninstall />}
               >
                 {t('pages.system.applications.uninstall')}
               </Button>
@@ -1019,7 +1005,6 @@ const ApplicationListPage: React.FC = () => {
               {...rowActionLabelKeep()}
               type="link"
               size="small"
-              icon={<LockOutlined />}
               onClick={() => showProUpgradeRequired(record)}
             >
               {t('pages.system.applications.proLockedTag', { defaultValue: '需升级专业版' })}
@@ -1039,7 +1024,6 @@ const ApplicationListPage: React.FC = () => {
                 type="link"
                 size="small"
                 disabled={!canToggleAppLifecycle(record)}
-                icon={<APP_ACTION_ICON.install />}
               >
                 {t('pages.system.applications.install')}
               </Button>
@@ -1574,7 +1558,7 @@ const ApplicationListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<Application>
-          columnPersistenceId="pages.system.applications.list-v1"
+          columnPersistenceId="pages.system.applications.list-v2"
           tanstackQuery={{ queryKeyPrefix: ['pages.system.applications.list', appCategoryFilter] }}
           key={`application-list-${appCategoryFilter}`}
           headerTitle={t('pages.system.applications.headerTitle')}

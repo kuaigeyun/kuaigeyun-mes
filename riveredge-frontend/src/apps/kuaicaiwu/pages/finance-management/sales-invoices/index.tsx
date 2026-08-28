@@ -4,7 +4,7 @@
  * 管理向客户开具的销项发票，支持关联销售订单和应收单。
  */
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
-import { rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind, rowActionFillInvoiceNumber } from '../../../../../components/uni-action';
 import { ActionType, ProColumns, type ProFormInstance } from '@ant-design/pro-components';
 import { App, Button, Modal, Typography, Space, Dropdown, Alert, Spin, Table, Empty, Form } from 'antd';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -20,7 +20,7 @@ import {
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { CheckCircleOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, DownOutlined } from '@ant-design/icons';
+import { CheckCircleOutlined, DeleteOutlined, PlusOutlined, DownOutlined } from '@ant-design/icons';
 import { apiRequest, formatApiErrorDetail } from '../../../../../services/api';
 import {
   LedgerAccountFormFields,
@@ -87,10 +87,7 @@ import {
 } from '../../../utils/financeListCore';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
-import {
-  UniTableStackedPrimaryCell,
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-} from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import { renderFinanceTypeMarker } from '../../../utils/financeListPresentation';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
@@ -569,7 +566,7 @@ const SalesInvoicesPage: React.FC = () => {
   const columns: ProColumns<SalesInvoice>[] = useMemo(
     () => [
       ...financeDocCodePartnerSearchColumns({
-        docCodeLabel: t(`${P}.col.internalCode`, '系统编号'),
+        docCodeLabel: t(`${P}.col.internalCode`),
         docCodeField: 'invoice_code',
         partnerLabel: t('app.kuaicaiwu.common.customer'),
         partnerIdField: 'customer_id',
@@ -578,13 +575,19 @@ const SalesInvoicesPage: React.FC = () => {
       }),
       financeInvoiceNumberSearchColumn(t('app.kuaicaiwu.invoice.col.invoiceNumber')),
       {
-        title: t(`${P}.col.internalCode`, '系统编号'),
+        // 有 RemainderFlex：主标识叠列 KeepWidth
+        title: t(`${P}.col.internalCode`),
         key: 'finance_doc_partner_stacked',
         dataIndex: 'invoice_code',
-        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        width: 240,
+        minWidth: 240,
+        uniTableKeepWidth: true,
+        uniTablePrimaryFlex: false,
+        resizable: false,
         fixed: 'left',
         hideInSearch: true,
         sorter: true,
+        ellipsis: false,
         render: (_, r) => (
           <UniTableStackedPrimaryCell
             primary={String(r.customer_name ?? '')}
@@ -634,10 +637,11 @@ const SalesInvoicesPage: React.FC = () => {
       },
       {
         title: t('app.kuaicaiwu.common.invoiceDate'),
+        key: 'finance_invoice_date',
         dataIndex: 'invoice_date',
         valueType: 'date',
-        width: 110,
-        minWidth: 110,
+        width: 120,
+        minWidth: 120,
         uniTableKeepWidth: true,
         resizable: false,
         hideInSearch: true,
@@ -654,8 +658,8 @@ const SalesInvoicesPage: React.FC = () => {
       {
         title: t(`${P}.col.taxRate`),
         dataIndex: 'tax_rate',
-        width: 80,
-        minWidth: 80,
+        width: 88,
+        minWidth: 88,
         uniTableKeepWidth: true,
         resizable: false,
         hideInSearch: true,
@@ -705,6 +709,7 @@ const SalesInvoicesPage: React.FC = () => {
       },
       {
         title: t(`${P}.col.linkedReceivable`),
+        key: 'finance_linked_receivable',
         dataIndex: 'receivable_code',
         width: 140,
         minWidth: 140,
@@ -719,6 +724,18 @@ const SalesInvoicesPage: React.FC = () => {
           ) : (
             '—'
           ),
+      },
+      {
+        // 备注长短不一：唯一 RemainderFlex
+        title: t('common.remark'),
+        dataIndex: 'notes',
+        minWidth: 160,
+        uniTableRemainderFlex: true,
+        uniTablePrimaryFlex: true,
+        resizable: false,
+        hideInSearch: true,
+        ellipsis: true,
+        render: (_, r) => r.notes || '—',
       },
       {
         title: t('common.status'),
@@ -758,39 +775,39 @@ const SalesInvoicesPage: React.FC = () => {
       {
         title: t('common.actions'),
         key: 'action',
-        valueType: 'option',
         fixed: 'right',
         hideInSearch: true,
-        render: (_, record) => [
-          !['已审核', '已作废', '已红冲'].includes(String(record.status || '').trim()) && salesInvoicePerms.canUpdate ? (
-            <Button {...rowActionKind('edit')} key="edit" onClick={() => openEditModal(record)}>
-              {t(`${P}.fillNumber`)}
-            </Button>
-          ) : null,
-          <Button {...rowActionKind('read')}
-            key="det"
-            type="link"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => navigate(`/apps/kuaicaiwu/finance-management/sales-invoices/${record.id}`)}
-          >
-            {t('common.detail')}
-          </Button>,
-          record.review_status === '待审核' && salesInvoicePerms.canAction?.('audit') ? (
-            <Button {...rowActionKind('audit')} key="ap" onClick={() => handleApprove(record)}>
-              {t('components.uniAction.audit')}
-            </Button>
-          ) : null,
-          canDeleteSalesInvoice(record) && salesInvoicePerms.canDelete ? (
-            <Button {...rowActionKind('delete')} key="del" onClick={() => handleDelete(record)}>
-              {t('common.delete')}
-            </Button>
-          ) : null,
-        ].filter(Boolean) as React.ReactNode[],
+        render: (_, record) => {
+          const acts: React.ReactNode[] = [];
+          if (!['已审核', '已作废', '已红冲'].includes(String(record.status || '').trim()) && salesInvoicePerms.canUpdate) {
+            acts.push(
+              <Button key="edit" {...rowActionFillInvoiceNumber('update')} onClick={() => openEditModal(record)} />,
+            );
+          }
+          acts.push(
+            <Button
+              key="det"
+              {...rowActionKind('read')}
+              onClick={() => navigate(`/apps/kuaicaiwu/finance-management/sales-invoices/${record.id}`)}
+            />,
+          );
+          if (record.review_status === '待审核' && salesInvoicePerms.canAction?.('audit')) {
+            acts.push(
+              <Button key="ap" {...rowActionKind('audit')} onClick={() => handleApprove(record)} />,
+            );
+          }
+          if (canDeleteSalesInvoice(record) && salesInvoicePerms.canDelete) {
+            acts.push(
+              <Button key="del" {...rowActionKind('delete')} onClick={() => handleDelete(record)} />,
+            );
+          }
+          return acts;
+        },
       },
     ],
     [t, navigate, reviewStatusEnum, customerOptions, salesInvoicePerms],
   );
+
 
   const pullTableColumns = useMemo(
     () => [
@@ -937,7 +954,7 @@ const SalesInvoicesPage: React.FC = () => {
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
         rowKey="id"
-        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.sales-invoices.list-v2"
+        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.sales-invoices.list-v3"
         showAdvancedSearch
         search={{ labelWidth: 120 }}
         showCreateButton={false}

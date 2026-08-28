@@ -8,7 +8,7 @@ import React, { useRef, useState, useMemo } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { App, Space, Button, Popconfirm, Modal, Table } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { PlusOutlined } from '@ant-design/icons';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSelect, ProFormSwitch, ProFormDigit, ProFormInstance, ProForm } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
 import {
@@ -19,6 +19,7 @@ import {
   variantAttributeCodeNameSearchColumns,
   VARIANT_ATTRIBUTE_PINNED_ACTIVE_FIELD,
 } from '../../../utils/materialListCore';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { useTrialRunMode } from '../../../../../hooks/useTrialRunMode';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
@@ -87,37 +88,42 @@ const VariantAttributesPage: React.FC = () => {
     {
       title: t('app.master-data.variantAttributes.attributeName'),
       dataIndex: 'attribute_name',
-      width: 150,
+      width: 140,
+      minWidth: 140,
+      uniTableKeepWidth: true,
+      resizable: false,
       fixed: 'left',
+      ellipsis: true,
       sorter: true,
       hideInSearch: true,
     },
     {
       title: t('app.master-data.variantAttributes.displayName'),
       dataIndex: 'display_name',
-      width: 150,
+      width: 160,
+      minWidth: 160,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
       sorter: true,
       hideInSearch: true,
     },
     {
       title: t('app.master-data.variantAttributes.attributeType'),
       dataIndex: 'attribute_type',
-      width: 100,
-      minWidth: 100,
-      uniTableKeepWidth: true,
-      resizable: false,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       valueType: 'select',
       valueEnum: {
-        enum: { text: t('app.master-data.variantAttributes.typeEnum'), status: 'Default' },
-        text: { text: t('app.master-data.variantAttributes.typeText'), status: 'Default' },
-        number: { text: t('app.master-data.variantAttributes.typeNumber'), status: 'Default' },
-        date: { text: t('app.master-data.variantAttributes.typeDate'), status: 'Default' },
-        boolean: { text: t('app.master-data.variantAttributes.typeBoolean'), status: 'Default' },
+        enum: { text: t('app.master-data.variantAttributes.typeEnum') },
+        text: { text: t('app.master-data.variantAttributes.typeText') },
+        number: { text: t('app.master-data.variantAttributes.typeNumber') },
+        date: { text: t('app.master-data.variantAttributes.typeDate') },
+        boolean: { text: t('app.master-data.variantAttributes.typeBoolean') },
       },
       render: (_, record) => {
         const type = attributeTypeLabels[record.attribute_type] || {
           text: record.attribute_type,
-          color: 'default',
+          color: 'default' as const,
         };
         return <MarkerTag color={type.color}>{type.text}</MarkerTag>;
       },
@@ -125,29 +131,25 @@ const VariantAttributesPage: React.FC = () => {
     {
       title: t('app.master-data.variantAttributes.allowMultiple'),
       dataIndex: 'allow_multiple',
-      width: 90,
-      minWidth: 90,
-      uniTableKeepWidth: true,
-      resizable: false,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       hideInSearch: true,
       render: (_, record) =>
         record.attribute_type === 'enum' ? (
           <MarkerTag color={record.allow_multiple ? 'blue' : 'default'}>
             {record.allow_multiple ? t('common.yes') : t('common.no')}
           </MarkerTag>
-        ) : '-',
+        ) : (
+          '—'
+        ),
     },
     {
       title: t('app.master-data.variantAttributes.isRequired'),
       dataIndex: 'is_required',
-      width: 90,
-      minWidth: 90,
-      uniTableKeepWidth: true,
-      resizable: false,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       valueType: 'select',
       valueEnum: {
-        true: { text: t('common.yes'), status: 'Error' },
-        false: { text: t('common.no'), status: 'Success' },
+        true: { text: t('common.yes') },
+        false: { text: t('common.no') },
       },
       render: (_, record) => (
         <MarkerTag color={record.is_required ? 'red' : 'green'}>
@@ -163,26 +165,28 @@ const VariantAttributesPage: React.FC = () => {
       uniTableKeepWidth: true,
       resizable: false,
       sorter: true,
+      hideInSearch: true,
     },
     {
+      // 枚举值长短不一：唯一 RemainderFlex
       title: t('app.master-data.variantAttributes.enumValues'),
       dataIndex: 'enum_values',
-      width: 168,
-      minWidth: 168,
-      uniTableKeepWidth: true,
+      minWidth: 200,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
       resizable: false,
-      hideInTable: false,
+      hideInSearch: true,
       render: (_, record) => {
         if (record.attribute_type === 'enum' && record.enum_values && record.enum_values.length > 0) {
           return (
-            <Space wrap>
+            <Space wrap size={[4, 4]}>
               {record.enum_values.map((value, index) => (
                 <MarkerTag key={index}>{value}</MarkerTag>
               ))}
             </Space>
           );
         }
-        return '-';
+        return '—';
       },
     },
     {
@@ -197,10 +201,7 @@ const VariantAttributesPage: React.FC = () => {
     {
       title: t('common.status'),
       dataIndex: 'is_active',
-      width: 88,
-      minWidth: 88,
-      uniTableKeepWidth: true,
-      resizable: false,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       sorter: true,
       hideInSearch: true,
       valueEnum: attributeActiveValueEnum,
@@ -213,44 +214,43 @@ const VariantAttributesPage: React.FC = () => {
       minWidth: 80,
       uniTableKeepWidth: true,
       resizable: false,
+      hideInSearch: true,
     },
     {
       title: t('common.remark'),
       dataIndex: 'description',
+      width: 160,
+      minWidth: 160,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       hideInSearch: true,
+      render: (_, r) => r.description || '—',
     },
     ...masterCrudCreatedUpdatedSnakeColumns<VariantAttributeDefinition>(t),
     {
       title: t('common.actions'),
       key: 'action',
-      valueType: 'option',
       fixed: 'right',
-      render: (_: any, record: VariantAttributeDefinition) => (
-        <Space>
-          <Button key="edit" {...rowActionKind('update')}
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          >
-            {t('common.edit')}
-          </Button>
-          <Popconfirm key="delete" {...rowActionKind('delete')} title={t('common.confirmDelete')}
-            onConfirm={() => handleDelete(record.uuid)}
-            okText={t('common.confirm')}
-            cancelText={t('common.cancel')}
-          >
-            <Button
-              type="link"
-              danger
-              size="small"
-              icon={<DeleteOutlined />}
-            >
-              {t('common.delete')}
-            </Button>
-          </Popconfirm>
-        </Space>
-      ),
+      hideInSearch: true,
+      render: (_: any, record: VariantAttributeDefinition) => [
+        <Button
+          key="edit"
+          type="link"
+          size="small"
+          {...rowActionKind('update')}
+          onClick={() => handleEdit(record)}
+        />,
+        <Popconfirm
+          key="delete"
+          title={t('common.confirmDelete')}
+          onConfirm={() => handleDelete(record.uuid)}
+          okText={t('common.confirm')}
+          cancelText={t('common.cancel')}
+        >
+          <Button type="link" size="small" {...rowActionKind('delete')} />
+        </Popconfirm>,
+      ],
     },
   ], [t, attributeTypeLabels, attributeActiveValueEnum]);
 
@@ -395,7 +395,7 @@ const VariantAttributesPage: React.FC = () => {
         <UniTable<VariantAttributeDefinition>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('masterData.variantAttributes')}
-          columnPersistenceId="apps.master-data.pages.materials.variant-attributes.list-v1"
+          columnPersistenceId="apps.master-data.pages.materials.variant-attributes.list-v3"
           headerTitle={t('app.master-data.menu.materials.variant-attributes')}
           actionRef={actionRef}
           columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}

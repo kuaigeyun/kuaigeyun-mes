@@ -159,34 +159,40 @@
             "sort_order": 10
           },
           {
+            "title": "app.kuaicaiwu.menu.finance-management.price-settlement",
+            "path": "/apps/kuaicaiwu/finance-management/price-settlement",
+            "permission": "kuaicaiwu:price-settlement:read",
+            "sort_order": 11
+          },
+          {
             "title": "app.kuaicaiwu.menu.finance-management.prepayments",
             "path": "/apps/kuaicaiwu/finance-management/prepayments",
             "permission": "kuaicaiwu:prepayment:read",
-            "sort_order": 11
+            "sort_order": 12
           },
           {
             "title": "app.kuaicaiwu.menu.finance-management.document-reconciliation",
             "path": "/apps/kuaicaiwu/finance-management/document-reconciliation",
             "permission": "kuaicaiwu:document-reconciliation:read",
-            "sort_order": 12
+            "sort_order": 13
           },
           {
             "title": "app.kuaicaiwu.menu.finance-management.bank-accounts",
             "path": "/apps/kuaicaiwu/finance-management/bank-accounts",
             "permission": "kuaicaiwu:bank-account:read",
-            "sort_order": 13
+            "sort_order": 14
           },
           {
             "title": "app.kuaicaiwu.menu.finance-management.notes-receivable",
             "path": "/apps/kuaicaiwu/finance-management/notes-receivable",
             "permission": "kuaicaiwu:notes-receivable:read",
-            "sort_order": 14
+            "sort_order": 15
           },
           {
             "title": "app.kuaicaiwu.menu.finance-management.notes-payable",
             "path": "/apps/kuaicaiwu/finance-management/notes-payable",
             "permission": "kuaicaiwu:notes-payable:read",
-            "sort_order": 15
+            "sort_order": 16
           }
         ]
       },
@@ -343,6 +349,9 @@
     "kuaicaiwu:partner-statement:audit",
     "kuaicaiwu:partner-statement:reject",
     "kuaicaiwu:partner-statement:print",
+    "kuaicaiwu:price-settlement:read",
+    "kuaicaiwu:price-settlement:create",
+    "kuaicaiwu:price-settlement:execute",
     "kuaicaiwu:payable:read",
     "kuaicaiwu:payable:create",
     "kuaicaiwu:payable:delete",

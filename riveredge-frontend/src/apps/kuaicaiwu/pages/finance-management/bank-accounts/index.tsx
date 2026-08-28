@@ -1,4 +1,4 @@
-import { rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind, rowActionViewBankFlow } from '../../../../../components/uni-action';
 import React, { useMemo, useRef, useState } from 'react';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import {
@@ -8,7 +8,7 @@ import {
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, Popconfirm, Typography } from 'antd';
+import { App, Button, Popconfirm, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import {
   DetailDrawerTemplate,
@@ -18,10 +18,6 @@ import {
   MODAL_CONFIG,
 } from '../../../../../components/layout-templates';
 import { UniTable } from '../../../../../components/uni-table';
-import {
-  UniTableStackedPrimaryCell,
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { bankAccountService, type BankAccount } from '../../../services/finance/bank-account';
 import { getCurrencySelectOptions, formatBankDirection, formatCurrency } from '../../../utils/financeUiLabels';
@@ -41,6 +37,7 @@ import DocumentAttachmentsField from '../../../../kuaizhizao/components/Document
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 type BankTx = Record<string, unknown>;
@@ -77,28 +74,34 @@ const BankAccountsPage: React.FC = () => {
       accountNumber: t(`${BA}.col.accountNumber`),
     }),
     {
-      title: t(`${BA}.col.accountName`),
-      key: 'finance_doc_partner_stacked',
-      dataIndex: 'account_name',
-      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-      fixed: 'left',
-      hideInSearch: true,
-      sorter: true,
-      render: (_, r) => (
-        <UniTableStackedPrimaryCell
-          primary={String(r.account_name ?? '')}
-          secondary={String(r.account_code ?? '')}
-        />
-      ),
-    },
-    { title: t(`${BA}.col.accountCode`), dataIndex: 'account_code', hideInTable: true },
-    {
-      title: t(`${BA}.col.accountType`),
-      dataIndex: 'account_type',
-      width: 100,
-      minWidth: 100,
+      title: t(`${BA}.col.accountCode`),
+      key: 'finance_bank_account_code',
+      dataIndex: 'account_code',
+      width: 120,
+      minWidth: 120,
       uniTableKeepWidth: true,
       resizable: false,
+      ellipsis: true,
+      hideInSearch: true,
+      sorter: true,
+    },
+    {
+      title: t(`${BA}.col.accountName`),
+      key: 'finance_bank_account_name',
+      dataIndex: 'account_name',
+      width: 160,
+      minWidth: 160,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
+      hideInSearch: true,
+      sorter: true,
+    },
+    {
+      title: t(`${BA}.col.accountType`),
+      key: 'finance_bank_account_type',
+      dataIndex: 'account_type',
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       hideInSearch: true,
       sorter: true,
       render: (_, r) =>
@@ -110,8 +113,14 @@ const BankAccountsPage: React.FC = () => {
         ),
     },
     {
+      // 开户行长短不一：唯一 RemainderFlex（列表无备注列）
       title: t(`${BA}.col.bankName`),
+      key: 'finance_bank_name',
       dataIndex: 'bank_name',
+      minWidth: 140,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
+      resizable: false,
       ellipsis: true,
       hideInSearch: true,
       sorter: true,
@@ -119,6 +128,7 @@ const BankAccountsPage: React.FC = () => {
     },
     {
       title: t(`${BA}.col.accountNumber`),
+      key: 'finance_bank_account_number',
       dataIndex: 'account_number',
       width: 180,
       minWidth: 180,
@@ -131,6 +141,7 @@ const BankAccountsPage: React.FC = () => {
     },
     {
       title: t(`${BA}.col.currency`),
+      key: 'finance_bank_currency',
       dataIndex: 'currency',
       width: 100,
       minWidth: 100,
@@ -140,14 +151,23 @@ const BankAccountsPage: React.FC = () => {
       sorter: true,
       render: (_, r) => formatCurrency(String(r.currency ?? ''), t),
     },
-    { title: t(`${BA}.col.balance`), dataIndex: 'current_balance', valueType: 'money', align: 'right', hideInSearch: true, sorter: true },
+    {
+      title: t(`${BA}.col.balance`),
+      key: 'finance_bank_balance',
+      dataIndex: 'current_balance',
+      valueType: 'money',
+      align: 'right',
+      width: 130,
+      minWidth: 130,
+      uniTableKeepWidth: true,
+      resizable: false,
+      hideInSearch: true,
+      sorter: true,
+    },
     {
       title: t('common.status'),
       dataIndex: 'is_active',
-      width: 80,
-      minWidth: 80,
-      uniTableKeepWidth: true,
-      resizable: false,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       hideInSearch: true,
       sorter: true,
       valueType: 'select',
@@ -158,18 +178,44 @@ const BankAccountsPage: React.FC = () => {
     {
       title: t('common.actions'),
       key: 'action',
-      valueType: 'option',
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) => {
         const isCash = String(record.account_type || 'bank') === 'cash';
         return [
-          <a key="tx" onClick={() => { setTxAccount(record); setTxDrawerOpen(true); }}>{t(`${BA}.action.transactions`)}</a>,
+          <Button
+            key="tx"
+            type="link"
+            size="small"
+            {...rowActionViewBankFlow('read')}
+            onClick={() => {
+              setTxAccount(record);
+              setTxDrawerOpen(true);
+            }}
+          />,
           isCash ? null : (
-            <a key="import" onClick={() => { setImportAccount(record); setImportOpen(true); }}>{t('common.import')}</a>
+            <Button
+              key="import"
+              type="link"
+              size="small"
+              {...rowActionKind('import')}
+              onClick={() => {
+                setImportAccount(record);
+                setImportOpen(true);
+              }}
+            />
           ),
-          <a key="edit" onClick={() => { setEditing(record); setModalVisible(true); }}>{t('common.edit')}</a>,
-          <Popconfirm {...rowActionKind('delete')}
+          <Button
+            key="edit"
+            type="link"
+            size="small"
+            {...rowActionKind('update')}
+            onClick={() => {
+              setEditing(record);
+              setModalVisible(true);
+            }}
+          />,
+          <Popconfirm
             key="del"
             title={t(`${BA}.confirmDelete`)}
             onConfirm={async () => {
@@ -178,7 +224,7 @@ const BankAccountsPage: React.FC = () => {
               actionRef.current?.reload();
             }}
           >
-            <a>{t('common.delete')}</a>
+            <Button type="link" size="small" {...rowActionKind('delete')} />
           </Popconfirm>,
         ];
       },
@@ -227,16 +273,35 @@ const BankAccountsPage: React.FC = () => {
     {
       title: t(`${BA}.col.direction`),
       dataIndex: 'direction',
-      width: 80,
-      minWidth: 80,
-      uniTableKeepWidth: true,
-      resizable: false,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       hideInSearch: true,
       sorter: true,
       render: (_, r) => renderFinanceDirectionTag(t, String(r.direction ?? '')),
     },
-    { title: t('app.kuaicaiwu.invoice.line.amount'), dataIndex: 'amount', valueType: 'money', align: 'right', hideInSearch: true, sorter: true },
-    { title: t(`${BA}.col.balance`), dataIndex: 'balance_after', valueType: 'money', align: 'right', hideInSearch: true, sorter: true },
+    {
+      title: t('app.kuaicaiwu.invoice.line.amount'),
+      dataIndex: 'amount',
+      valueType: 'money',
+      align: 'right',
+      width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
+      hideInSearch: true,
+      sorter: true,
+    },
+    {
+      title: t(`${BA}.col.balance`),
+      dataIndex: 'balance_after',
+      valueType: 'money',
+      align: 'right',
+      width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
+      hideInSearch: true,
+      sorter: true,
+    },
     {
       title: t(`${BA}.col.sourceCode`),
       dataIndex: 'source_doc_code',
@@ -248,7 +313,19 @@ const BankAccountsPage: React.FC = () => {
       hideInSearch: true,
       sorter: true,
     },
-    { title: t(`${BA}.col.summary`), dataIndex: 'summary', ellipsis: true, hideInSearch: true, sorter: true },
+    {
+      // 摘要长短不一：流水表唯一 RemainderFlex
+      title: t(`${BA}.col.summary`),
+      key: 'finance_bank_tx_summary',
+      dataIndex: 'summary',
+      minWidth: 160,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
+      resizable: false,
+      ellipsis: true,
+      hideInSearch: true,
+      sorter: true,
+    },
     ...financeDocCreatedUpdatedColumns<BankTx>(t),
   ], [t]);
 
@@ -280,7 +357,7 @@ const BankAccountsPage: React.FC = () => {
         rowKey="id"
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.bankAccount)}
-        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.bank-accounts.list-v1"
+        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.bank-accounts.list-v2"
         columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
@@ -342,7 +419,7 @@ const BankAccountsPage: React.FC = () => {
             actionRef={txRef}
             enableRowSelection
             rowKey="id"
-            columnPersistenceId="apps.kuaicaiwu.pages.finance-management.bank-accounts.transactions.list-v1"
+            columnPersistenceId="apps.kuaicaiwu.pages.finance-management.bank-accounts.transactions.list-v2"
             columns={alignProColumns(txColumns, SALES_DOC_LIST_FIELD_RANK)}
             showAdvancedSearch
             skipFuzzyPinyinClientFilter

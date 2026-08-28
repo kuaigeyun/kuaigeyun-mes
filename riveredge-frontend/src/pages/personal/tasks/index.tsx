@@ -6,13 +6,12 @@
  */
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { rowActionKind } from '../../../components/uni-action';
+import { rowActionKind, rowActionLabelKeep } from '../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Badge, Tag, Button, Space, Typography } from 'antd';
+import { App, Badge, Button, Space, Tag, Typography } from 'antd';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { renderSystemStatusTag } from '../../system/utils/systemListPresentation';
-import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, DeleteOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../components/layout-templates';
 import { useListPageStatCardsVisible } from '../../../components/layout-templates/listPageStatCardsContext';
@@ -287,11 +286,15 @@ const UserTasksPage: React.FC = () => {
       title: t('pages.personal.tasks.title'),
       dataIndex: 'title',
       key: 'title',
+      width: 220,
+      minWidth: 220,
+      uniTableKeepWidth: true,
+      resizable: false,
       ellipsis: true,
       render: (_: any, record: UserTask) => {
         const isPending = record.status === 'pending' && taskType === 'pending';
         return (
-          <Space>
+          <Space size={6}>
             {isPending && <Badge status="error" dot />}
             <span style={{ fontWeight: isPending ? 600 : 400 }}>
               {formatApprovalTaskTitle(record.title, t)}
@@ -301,9 +304,14 @@ const UserTasksPage: React.FC = () => {
       },
     },
     {
+      // 内容长短不一：唯一 RemainderFlex
       title: t('pages.personal.tasks.content'),
       dataIndex: 'content',
       key: 'content',
+      minWidth: 180,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
+      resizable: false,
       ellipsis: true,
       hideInSearch: true,
       render: (_: any, record: UserTask) => formatApprovalTaskContent(record.content, t),
@@ -316,6 +324,7 @@ const UserTasksPage: React.FC = () => {
       minWidth: 120,
       uniTableKeepWidth: true,
       resizable: false,
+      ellipsis: true,
       hideInSearch: true,
       render: (_: any, record: UserTask) => {
         if (taskType === 'submitted') {
@@ -331,8 +340,8 @@ const UserTasksPage: React.FC = () => {
       valueType: 'dateTime',
       hideInSearch: true,
       sorter: true,
-      width: 160,
-      minWidth: 160,
+      width: 180,
+      minWidth: 180,
       uniTableKeepWidth: true,
       resizable: false,
     },
@@ -357,60 +366,58 @@ const UserTasksPage: React.FC = () => {
     {
       title: t('common.actions'),
       key: 'action',
-      valueType: 'option',
       fixed: 'right',
       hideInSearch: true,
       render: (_: any, record: UserTask) => {
         const isPending = record.status === 'pending' && taskType === 'pending';
-        return (
-          <Space>
-            <Button key="view" {...rowActionKind('read')}
-              size="small"
-              icon={<EyeOutlined />}
-              onClick={() => handleView(record)}
+        const actions: React.ReactNode[] = [
+          <Button
+            key="view"
+            {...rowActionKind('read')}
+            onClick={() => handleView(record)}
+          />,
+        ];
+        if (isPending) {
+          actions.push(
+            <Button
+              key="approve"
+              {...rowActionKind('audit')}
+              {...rowActionLabelKeep()}
+              onClick={() => handleProcessTask(record, 'approve')}
             >
-              {t('common.view')}
-            </Button>
-            {isPending && (
-              <>
-                <Button key="approve" {...rowActionKind('audit')}
-                  size="small"
-                  icon={<CheckCircleOutlined />}
-                  onClick={() => handleProcessTask(record, 'approve')}
-                >
-                  {record.data?.is_personal ? t('pages.personal.tasks.complete') : t('pages.personal.tasks.approve')}
-                </Button>
-                {!record.data?.is_personal && (
-                  <Button key="reject" {...rowActionKind('reject')}
-                    size="small"
-                    danger
-                    icon={<CloseCircleOutlined />}
-                    onClick={() => handleProcessTask(record, 'reject')}
-                  >
-                    {t('pages.personal.tasks.reject')}
-                  </Button>
-                )}
-              </>
-            )}
-            {taskType === 'submitted' && (
-              <Button key="delete" {...rowActionKind('delete')}
-                size="small"
-                danger
-                icon={<DeleteOutlined />}
-                onClick={() => {
-                  modalApi.confirm({
-                    title: t('pages.personal.tasks.deleteConfirmTitle'),
-                    centered: true,
-                    okButtonProps: { danger: true },
-                    onOk: () => handleDeleteTask(record),
-                  });
-                }}
+              {record.data?.is_personal ? t('pages.personal.tasks.complete') : t('pages.personal.tasks.approve')}
+            </Button>,
+          );
+          if (!record.data?.is_personal) {
+            actions.push(
+              <Button
+                key="reject"
+                {...rowActionKind('reject')}
+                {...rowActionLabelKeep()}
+                onClick={() => handleProcessTask(record, 'reject')}
               >
-                {t('common.delete')}
-              </Button>
-            )}
-          </Space>
-        );
+                {t('pages.personal.tasks.reject')}
+              </Button>,
+            );
+          }
+        }
+        if (taskType === 'submitted') {
+          actions.push(
+            <Button
+              key="delete"
+              {...rowActionKind('delete')}
+              onClick={() => {
+                modalApi.confirm({
+                  title: t('pages.personal.tasks.deleteConfirmTitle'),
+                  centered: true,
+                  okButtonProps: { danger: true },
+                  onOk: () => handleDeleteTask(record),
+                });
+              }}
+            />,
+          );
+        }
+        return actions;
       },
     },
   ], GLOBAL_DOC_LIST_FIELD_RANK), [taskType, t, handleView, handleProcessTask, handleDeleteTask, getStatusTag, modalApi]);
@@ -521,7 +528,7 @@ const UserTasksPage: React.FC = () => {
         ]}
       >
         <UniTable<UserTask>
-          columnPersistenceId="pages.personal.tasks.list-v1"
+          columnPersistenceId="pages.personal.tasks.list-v2"
           headerTitle={t('pages.personal.tasks.headerTitle')}
           actionRef={actionRef}
           columns={columns}

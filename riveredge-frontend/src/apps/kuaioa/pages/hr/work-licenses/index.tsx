@@ -17,7 +17,7 @@ const WorkLicensesPage: React.FC = () => (
     autoGenerateCode
     statusPresentation="marker"
     detailVariant="master"
-    columnPersistenceId="apps.kuaioa.work-license.list-v4"
+    columnPersistenceId="apps.kuaioa.work-license.list-v5"
     fields={[
       { name: 'license_code', labelKey: 'app.kuaioa.workLicense.code', width: 140 },
       { name: 'license_name', labelKey: 'app.kuaioa.workLicense.name', required: true, width: 200 },

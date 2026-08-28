@@ -8,6 +8,7 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from typing import List, Optional, Dict, Any
 
+from loguru import logger
 from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 from tortoise.exceptions import IntegrityError
@@ -233,6 +234,7 @@ class SalesContractService(AppBaseService[SalesContract]):
             "tenant_id": contract.tenant_id,
             "contract_code": contract.contract_code,
             "contract_type": contract.contract_type,
+            "enter_line_items": bool(getattr(contract, "enter_line_items", True)),
             "party_type": contract.party_type,
             "customer_id": contract.customer_id,
             "customer_name": contract.customer_name,
@@ -407,6 +409,48 @@ class SalesContractService(AppBaseService[SalesContract]):
             discount_amount=discount,
         )
 
+    @staticmethod
+    def _is_amount_framework(enter_line_items: Optional[bool]) -> bool:
+        """金额总框：不录入明细，按头表总金额管控。"""
+        return enter_line_items is False
+
+    @staticmethod
+    def _normalize_enter_line_items(value: Optional[bool], *, default: bool = True) -> bool:
+        if value is None:
+            return default
+        return bool(value)
+
+    def _validate_framework_mode_payload(
+        self,
+        *,
+        enter_line_items: bool,
+        items: Optional[List[SalesContractItemCreate]],
+        total_amount: Optional[Decimal],
+        valid_from: Optional[date],
+        valid_to: Optional[date],
+        require_items_when_quantity: bool = True,
+    ) -> tuple[List[SalesContractItemCreate], Decimal, Decimal]:
+        """按录入明细模式校验并返回 (items, total_qty, net_header_amount_before_discount_apply)。
+
+        数量框架：返回明细汇总 qty/amt；金额总框：qty=0，amt=手填 total_amount。
+        """
+        item_list = list(items or [])
+        if self._is_amount_framework(enter_line_items):
+            if item_list:
+                raise ValidationError("金额总框不允许录入合同明细，请关闭「录入明细」或清空明细行")
+            if valid_from is None or valid_to is None:
+                raise ValidationError("金额总框须填写生效日期与终止日期")
+            if valid_to < valid_from:
+                raise ValidationError("终止日期不能早于生效日期")
+            amt = Decimal(str(total_amount if total_amount is not None else 0))
+            if amt <= Decimal("0"):
+                raise ValidationError("金额总框的合同总金额必须大于 0")
+            return [], Decimal("0"), amt
+        if require_items_when_quantity and not item_list:
+            raise ValidationError("合同明细不能为空")
+        total_qty, total_amt = self._sum_items(item_list)
+        return item_list, total_qty, total_amt
+
     async def create_contract(
         self,
         tenant_id: int,
@@ -417,19 +461,31 @@ class SalesContractService(AppBaseService[SalesContract]):
         is_enabled = await self.business_config_service.check_node_enabled(tenant_id, "sales_contract")
         if not is_enabled:
             raise BusinessLogicError("销售合同模块未启用，无法创建销售合同")
-        if not data.items:
-            raise ValidationError("合同明细不能为空")
-        cfg = await self.business_config_service.get_business_config(tenant_id)
-        if (data.contract_type or self.CONTRACT_TYPE_SINGLE) == self.CONTRACT_TYPE_FRAMEWORK:
-            if cfg.get("parameters", {}).get("sales", {}).get("contract_milestone_required") and not data.milestones:
-                raise ValidationError("框架合同须维护至少一条收款里程碑")
-        total_qty, total_amt = self._sum_items(data.items)
+        contract_type = (data.contract_type or self.CONTRACT_TYPE_FRAMEWORK).strip()
+        if contract_type != self.CONTRACT_TYPE_FRAMEWORK:
+            raise ValidationError("销售合同已收窄为框架合同，仅支持 framework 类型")
+        enter_line_items = self._normalize_enter_line_items(
+            getattr(data, "enter_line_items", None),
+            default=True,
+        )
+        item_list, total_qty, goods_amt = self._validate_framework_mode_payload(
+            enter_line_items=enter_line_items,
+            items=data.items,
+            total_amount=getattr(data, "total_amount", None),
+            valid_from=data.valid_from or data.contract_date,
+            valid_to=data.valid_to,
+        )
+        data = data.model_copy(
+            update={
+                "contract_type": self.CONTRACT_TYPE_FRAMEWORK,
+                "enter_line_items": enter_line_items,
+                "items": item_list,
+            }
+        )
         discount, net_amt = self._apply_header_discount(
-            total_amt, getattr(data, "discount_amount", None)
+            goods_amt, getattr(data, "discount_amount", None)
         )
-        term_group_id, term_group_name, contract_terms = await self._resolve_contract_terms(
-            tenant_id, data.term_group_id, data.contract_terms
-        )
+        term_group_id, term_group_name, contract_terms = None, None, None
         contract_code = (data.contract_code or "").strip() if data.contract_code else ""
         last_error: Optional[Exception] = None
         for attempt in range(5):
@@ -479,11 +535,12 @@ class SalesContractService(AppBaseService[SalesContract]):
             contract = await SalesContract.create(
                 tenant_id=tenant_id,
                 contract_code=contract_code,
-                contract_type=data.contract_type or self.CONTRACT_TYPE_SINGLE,
+                contract_type=self.CONTRACT_TYPE_FRAMEWORK,
+                enter_line_items=bool(getattr(data, "enter_line_items", True)),
                 customer_id=data.customer_id,
                 customer_name=data.customer_name,
-                customer_contact=data.customer_contact,
-                customer_phone=data.customer_phone,
+                customer_contact=None,
+                customer_phone=None,
                 contract_date=data.contract_date,
                 valid_from=data.valid_from or data.contract_date,
                 valid_to=data.valid_to,
@@ -496,12 +553,12 @@ class SalesContractService(AppBaseService[SalesContract]):
                 review_status=ReviewStatus.PENDING,
                 salesman_id=data.salesman_id,
                 salesman_name=data.salesman_name,
-                shipping_address=data.shipping_address,
-                shipping_method=data.shipping_method,
-                payment_terms=data.payment_terms,
-                term_group_id=term_group_id,
-                term_group_name=term_group_name,
-                contract_terms=contract_terms,
+                shipping_address=None,
+                shipping_method=None,
+                payment_terms=None,
+                term_group_id=None,
+                term_group_name=None,
+                contract_terms=None,
                 quotation_id=data.quotation_id,
                 notes=data.notes,
                 attachments=data.attachments,
@@ -535,20 +592,6 @@ class SalesContractService(AppBaseService[SalesContract]):
                         variant_attributes=it.variant_attributes,
                         delivery_date=it.delivery_date,
                         notes=it.notes,
-                    )
-                )
-            milestone_rows = []
-            for ms in data.milestones or []:
-                milestone_rows.append(
-                    await SalesContractMilestone.create(
-                        tenant_id=tenant_id,
-                        contract_id=contract.id,
-                        milestone_name=ms.milestone_name,
-                        planned_date=ms.planned_date,
-                        planned_amount=ms.planned_amount,
-                        planned_ratio=ms.planned_ratio,
-                        billing_trigger=ms.billing_trigger or "milestone",
-                        notes=ms.notes,
                     )
                 )
             contract.root_contract_id = contract.id
@@ -741,6 +784,10 @@ class SalesContractService(AppBaseService[SalesContract]):
             tenant_id, contract_id, current_user=current_user
         )
         assert_sales_contract_capability(contract, "update")
+        if data.contract_type and str(data.contract_type).strip() != self.CONTRACT_TYPE_FRAMEWORK:
+            raise ValidationError("销售合同已收窄为框架合同，仅支持 framework 类型")
+        if getattr(contract, "migrated_to_order_at", None):
+            raise BusinessLogicError("已迁移至销售订单的历史单次合同不可再编辑")
         is_draft = (contract.status or "") in ("草稿",)
         is_pending = (contract.status or "") in ("待审核",)
         if not is_draft:
@@ -761,7 +808,20 @@ class SalesContractService(AppBaseService[SalesContract]):
             from core.config.audit_editable_fields import is_field_editable
 
             node_editable = approval_edit_context.get("editable_fields")
-            preview = data.model_dump(exclude_unset=True, exclude={"items", "milestones", "contract_terms"})
+            preview = data.model_dump(
+                exclude_unset=True,
+                exclude={
+                    "items",
+                    "milestones",
+                    "contract_terms",
+                    "term_group_id",
+                    "shipping_address",
+                    "shipping_method",
+                    "payment_terms",
+                    "customer_contact",
+                    "customer_phone",
+                },
+            )
             for field in preview:
                 if field in ("updated_by",):
                     continue
@@ -769,36 +829,70 @@ class SalesContractService(AppBaseService[SalesContract]):
                     raise ValidationError(f"字段「{field}」不允许在审核中修改")
             if data.items is not None and not is_field_editable("sales_contract", "items", node_editable):
                 raise ValidationError("字段「合同明细」不允许在审核中修改")
-            if data.milestones is not None and not is_field_editable("sales_contract", "milestones", node_editable):
-                raise ValidationError("字段「合同里程碑」不允许在审核中修改")
-            if data.contract_terms is not None and not is_field_editable(
-                "sales_contract", "contract_terms", node_editable
-            ):
-                raise ValidationError("字段「合同条款」不允许在审核中修改")
 
         async with in_transaction():
-            update_fields = data.model_dump(exclude_unset=True, exclude={"items", "milestones", "contract_terms"})
-            if "term_group_id" in data.model_fields_set or data.contract_terms is not None:
-                term_group_id, term_group_name, contract_terms = await self._resolve_contract_terms(
-                    tenant_id,
-                    data.term_group_id if "term_group_id" in data.model_fields_set else contract.term_group_id,
-                    data.contract_terms,
-                )
-                contract.term_group_id = term_group_id
-                contract.term_group_name = term_group_name
-                contract.contract_terms = contract_terms
-            elif "term_group_id" in update_fields and data.term_group_id is None:
-                contract.term_group_id = None
-                contract.term_group_name = None
-                contract.contract_terms = None
+            update_fields = data.model_dump(
+                exclude_unset=True,
+                exclude={
+                    "items",
+                    "milestones",
+                    "contract_terms",
+                    "term_group_id",
+                    "shipping_address",
+                    "shipping_method",
+                    "payment_terms",
+                    "customer_contact",
+                    "customer_phone",
+                    "total_amount",
+                },
+            )
+            if "enter_line_items" in update_fields and not is_draft:
+                raise BusinessLogicError("仅草稿状态可切换「录入明细」模式")
             for k, v in update_fields.items():
                 setattr(contract, k, v)
             contract.updated_by = updated_by
-            if data.items is not None:
-                if not data.items:
-                    raise ValidationError("合同明细不能为空")
+
+            enter_line_items = self._normalize_enter_line_items(
+                getattr(contract, "enter_line_items", True),
+                default=True,
+            )
+            contract.enter_line_items = enter_line_items
+
+            if self._is_amount_framework(enter_line_items):
+                if data.items is not None and data.items:
+                    raise ValidationError("金额总框不允许录入合同明细，请关闭「录入明细」或清空明细行")
                 await SalesContractItem.filter(tenant_id=tenant_id, contract_id=contract_id).delete()
-                for it in data.items:
+                header_amt = (
+                    data.total_amount
+                    if data.total_amount is not None
+                    else getattr(contract, "total_amount", None)
+                )
+                item_list, total_qty, goods_amt = self._validate_framework_mode_payload(
+                    enter_line_items=False,
+                    items=[],
+                    total_amount=header_amt,
+                    valid_from=contract.valid_from or contract.contract_date,
+                    valid_to=contract.valid_to,
+                )
+                discount, net_amt = self._apply_header_discount(
+                    goods_amt,
+                    data.discount_amount
+                    if data.discount_amount is not None
+                    else getattr(contract, "discount_amount", None),
+                )
+                contract.total_quantity = total_qty
+                contract.total_amount = net_amt
+                contract.discount_amount = discount
+            elif data.items is not None:
+                item_list, _qty, _amt = self._validate_framework_mode_payload(
+                    enter_line_items=True,
+                    items=data.items,
+                    total_amount=None,
+                    valid_from=contract.valid_from or contract.contract_date,
+                    valid_to=contract.valid_to,
+                )
+                await SalesContractItem.filter(tenant_id=tenant_id, contract_id=contract_id).delete()
+                for it in item_list:
                     await SalesContractItem.create(
                         tenant_id=tenant_id,
                         contract_id=contract_id,
@@ -826,24 +920,14 @@ class SalesContractService(AppBaseService[SalesContract]):
                     contract_id,
                     data.discount_amount,
                 )
-            if data.items is not None or data.discount_amount is not None:
+            if (
+                not self._is_amount_framework(enter_line_items)
+                and (data.items is not None or data.discount_amount is not None)
+            ):
                 refreshed = await SalesContract.get(id=contract_id)
                 contract.total_quantity = refreshed.total_quantity
                 contract.total_amount = refreshed.total_amount
                 contract.discount_amount = refreshed.discount_amount
-            if data.milestones is not None:
-                await SalesContractMilestone.filter(tenant_id=tenant_id, contract_id=contract_id).delete()
-                for ms in data.milestones:
-                    await SalesContractMilestone.create(
-                        tenant_id=tenant_id,
-                        contract_id=contract_id,
-                        milestone_name=ms.milestone_name,
-                        planned_date=ms.planned_date,
-                        planned_amount=ms.planned_amount,
-                        planned_ratio=ms.planned_ratio,
-                        billing_trigger=ms.billing_trigger or "milestone",
-                        notes=ms.notes,
-                    )
             await contract.save()
         return await self.get_contract_by_id(tenant_id, contract_id, current_user=current_user)
 
@@ -1542,7 +1626,7 @@ class SalesContractService(AppBaseService[SalesContract]):
             raise BusinessLogicError("销售订单无有效明细数量，无法补签销售合同")
 
         create_data = SalesContractCreate(
-            contract_type=self.CONTRACT_TYPE_SINGLE,
+            contract_type=self.CONTRACT_TYPE_FRAMEWORK,
             customer_id=order.customer_id,
             customer_name=order.customer_name,
             customer_contact=order.customer_contact,
@@ -1558,7 +1642,7 @@ class SalesContractService(AppBaseService[SalesContract]):
             shipping_method=order.shipping_method,
             payment_terms=order.payment_terms,
             discount_amount=getattr(order, "discount_amount", None) or Decimal("0"),
-            notes=order.notes or f"由销售订单 {order.order_code} 补签",
+            notes=order.notes or f"由销售订单 {order.order_code} 补建框架合同",
             items=contract_items,
         )
 
@@ -1622,123 +1706,9 @@ class SalesContractService(AppBaseService[SalesContract]):
         tenant_id: int,
         quotation_id: int,
         created_by: int,
-        contract_type: str = "single",
+        contract_type: str = "framework",
     ) -> SalesContractResponse:
-        from apps.kuaizhizao.services.quotation_service import QuotationService
-
-        quotation_svc = QuotationService()
-        await quotation_svc._detach_quotation_if_contract_deleted(
-            tenant_id, quotation_id, created_by
-        )
-        quotation = await Quotation.get_or_none(tenant_id=tenant_id, id=quotation_id, deleted_at__isnull=True)
-        if not quotation:
-            raise NotFoundError("报价单不存在")
-        from infra.services.business_config_service import BusinessConfigService
-        from apps.kuaizhizao.services.document_action_policy import assert_quotation_capability
-
-        audit_required = await BusinessConfigService().check_audit_required(
-            tenant_id, "quotation"
-        )
-        contract_missing = await QuotationService._quotation_contract_downstream_missing(
-            tenant_id, quotation
-        )
-        assert_quotation_capability(
-            quotation,
-            "convert_to_contract",
-            audit_required=audit_required,
-            contract_downstream_missing=contract_missing,
-        )
-        items = await QuotationItem.filter(tenant_id=tenant_id, quotation_id=quotation_id).order_by("id")
-        if not items:
-            raise BusinessLogicError("报价单无明细")
-        create_data = SalesContractCreate(
-            contract_type=contract_type,
-            customer_id=quotation.customer_id,
-            customer_name=quotation.customer_name,
-            customer_contact=quotation.customer_contact,
-            customer_phone=quotation.customer_phone,
-            contract_date=quotation.quotation_date,
-            valid_from=quotation.quotation_date,
-            price_type=getattr(quotation, "price_type", None) or DEFAULT_SALES_PRICE_TYPE,
-            currency_code=quotation.currency_code or "CNY",
-            salesman_id=quotation.salesman_id,
-            salesman_name=quotation.salesman_name,
-            shipping_address=quotation.shipping_address,
-            shipping_method=quotation.shipping_method,
-            payment_terms=quotation.payment_terms,
-            quotation_id=quotation_id,
-            discount_amount=getattr(quotation, "discount_amount", None) or Decimal("0"),
-            notes=quotation.notes,
-            items=[
-                SalesContractItemCreate(
-                    material_id=it.material_id,
-                    material_code=it.material_code,
-                    material_name=it.material_name,
-                    material_spec=it.material_spec,
-                    material_unit=it.material_unit,
-                    contract_quantity=it.quote_quantity,
-                    unit_price=it.unit_price,
-                    tax_rate=getattr(it, "tax_rate", None) or Decimal("0"),
-                    total_amount=it.total_amount,
-                    variant_attributes=getattr(it, "variant_attributes", None),
-                    delivery_date=it.delivery_date,
-                    notes=it.notes,
-                )
-                for it in items
-            ],
-        )
-        from apps.kuaizhizao.models.sales_opportunity import SalesOpportunity
-        from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
-        from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
-
-        raw_push_mode = await self.business_config_service.get_push_default_mode(tenant_id)
-        push_as_confirm = str(raw_push_mode or "").strip().lower() == "confirm"
-        prev_status = (quotation.status or "").strip() or "已发送"
-        from apps.common.base_service import AppBaseService
-
-        op_name = await AppBaseService().get_user_name(created_by)
-
-        async with in_transaction():
-            contract_resp = await self.create_contract(
-                tenant_id, create_data, created_by, auto_submit=push_as_confirm
-            )
-            await Quotation.filter(id=quotation_id).update(
-                status="已转订单",
-                contract_id=contract_resp.id,
-                contract_code=contract_resp.contract_code,
-                updated_by=created_by,
-            )
-            await quotation_svc._log_quotation_state_transition(
-                tenant_id,
-                quotation_id,
-                prev_status,
-                "已转订单",
-                created_by,
-                op_name,
-                "转销售合同",
-            )
-            await SalesOpportunity.filter(tenant_id=tenant_id, quotation_id=quotation_id).update(
-                contract_id=contract_resp.id,
-                contract_code=contract_resp.contract_code,
-            )
-            await DocumentRelationNewService().create_relation(
-                tenant_id=tenant_id,
-                relation_data=DocumentRelationCreate(
-                    source_type="quotation",
-                    source_id=quotation_id,
-                    source_code=quotation.quotation_code,
-                    source_name=quotation.quotation_code,
-                    target_type="sales_contract",
-                    target_id=contract_resp.id,
-                    target_code=contract_resp.contract_code,
-                    target_name=contract_resp.contract_code,
-                    relation_type="source",
-                    relation_mode="push",
-                    relation_desc="报价单转销售合同",
-                ),
-                created_by=created_by,
-            )
-        return contract_resp
+        raise BusinessLogicError("报价单不再下推销售合同，请直接下推销售订单")
 
     async def convert_to_sales_order(
         self,
@@ -1761,6 +1731,10 @@ class SalesContractService(AppBaseService[SalesContract]):
             has_releasable_items=ctx["has_releasable_items"],
             remaining_amount=ctx["remaining_amount"],
         )
+        if self._is_amount_framework(getattr(contract, "enter_line_items", True)):
+            raise BusinessLogicError(
+                "金额总框不支持按明细下推，请在销售订单中关联本合同"
+            )
         if not all_items:
             raise BusinessLogicError("合同无明细")
         plan, item_qty_map, order_qty, order_amt = self._resolve_release_plan(
@@ -1811,7 +1785,9 @@ class SalesContractService(AppBaseService[SalesContract]):
             contract_code=contract.contract_code,
             is_release_order=contract.contract_type == self.CONTRACT_TYPE_FRAMEWORK,
             currency_code=contract.currency_code or "CNY",
-            notes=contract.notes or f"由销售合同 {contract.contract_code} 释放",
+            notes=contract.notes or f"由框架合同 {contract.contract_code} 释放",
+            term_group_id=contract.term_group_id,
+            contract_terms=contract.contract_terms,
             items=so_items,
         )
         from apps.kuaizhizao.services.sales_order_service import SalesOrderService
@@ -1821,6 +1797,11 @@ class SalesContractService(AppBaseService[SalesContract]):
             tenant_id=tenant_id,
             sales_order_data=so_create,
             created_by=created_by,
+        )
+        from apps.kuaizhizao.services.sales_order_terms_service import SalesOrderTermsService
+
+        await SalesOrderTermsService.copy_milestones_from_contract(
+            tenant_id, int(sales_order.id), contract_id, skip_invoiced=True
         )
         await self._apply_release_to_contract(
             contract, order_qty, order_amt, item_qty_map, all_items=all_items
@@ -1922,6 +1903,10 @@ class SalesContractService(AppBaseService[SalesContract]):
         contract, items, _ctx, caps = await self._load_contract_push_preview_context(
             tenant_id, contract_id, current_user=current_user
         )
+        if self._is_amount_framework(getattr(contract, "enter_line_items", True)):
+            raise BusinessLogicError(
+                "金额总框不支持按明细下推，请在销售订单中关联本合同"
+            )
         if not items:
             raise BusinessLogicError("合同无明细，无法下推销售订单")
 
@@ -1960,6 +1945,10 @@ class SalesContractService(AppBaseService[SalesContract]):
         contract, all_items, _ctx, caps = await self._load_contract_push_preview_context(
             tenant_id, contract_id, current_user=current_user
         )
+        if self._is_amount_framework(getattr(contract, "enter_line_items", True)):
+            raise BusinessLogicError(
+                "金额总框不支持按明细下推，请在销售订单中关联本合同"
+            )
         if not all_items:
             raise BusinessLogicError("合同无明细，无法直推工单")
 
@@ -2055,6 +2044,10 @@ class SalesContractService(AppBaseService[SalesContract]):
             has_releasable_items=ctx["has_releasable_items"],
             remaining_amount=ctx["remaining_amount"],
         )
+        if self._is_amount_framework(getattr(contract, "enter_line_items", True)):
+            raise BusinessLogicError(
+                "金额总框不支持按明细下推，请在销售订单中关联本合同"
+            )
         if not all_items:
             raise BusinessLogicError("合同无明细，无法直推工单")
 

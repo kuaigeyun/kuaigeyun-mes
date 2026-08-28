@@ -7,6 +7,34 @@
 
 import { apiRequest } from './api';
 import { compressImageForUpload } from '../utils/compressImageForUpload';
+import {
+  privateVaultFileManagerHeaders,
+  privateVaultRequestHeaders,
+} from './privateFileVault';
+import {
+  FILE_PRIVATE_FILES_GROUP_KEY,
+  isPrivateFileCategory,
+} from '../core/constants/fileUploadCategories';
+
+export interface FileRequestOptions {
+  /** 文件管理页对保密文件的写操作须传 true；单据等业务上传不传 */
+  fileManagerPrivate?: boolean;
+}
+
+function resolvePrivateListHeaders(category?: string): Record<string, string> {
+  const raw = (category || '').trim();
+  if (!raw) return {};
+  if (raw === FILE_PRIVATE_FILES_GROUP_KEY || isPrivateFileCategory(raw)) {
+    return privateVaultRequestHeaders();
+  }
+  return {};
+}
+
+function resolveFileManagerPrivateHeaders(
+  enabled?: boolean,
+): Record<string, string> {
+  return enabled ? privateVaultFileManagerHeaders() : {};
+}
 
 export interface File {
   uuid: string;
@@ -115,6 +143,7 @@ export interface FileUploadResponse {
 export async function getFileList(params?: FileListParams): Promise<FileListResponse> {
   return apiRequest<FileListResponse>('/core/files', {
     params,
+    headers: resolvePrivateListHeaders(params?.category),
   });
 }
 
@@ -145,6 +174,7 @@ export async function uploadFile(
     category?: string;
     tags?: string[];
     description?: string;
+    fileManagerPrivate?: boolean;
   }
 ): Promise<FileUploadResponse> {
   const formData = new FormData();
@@ -180,8 +210,7 @@ export async function uploadFile(
   return apiRequest<FileUploadResponse>(url, {
     method: 'POST',
     body: formData,
-    // 注意：上传文件时不要设置 Content-Type，让浏览器自动设置（包含 boundary）
-    headers: {},
+    headers: resolveFileManagerPrivateHeaders(options?.fileManagerPrivate),
   });
 }
 
@@ -198,6 +227,7 @@ export async function uploadMultipleFiles(
   files: (File | Blob)[],
   options?: {
     category?: string;
+    fileManagerPrivate?: boolean;
   }
 ): Promise<FileUploadResponse[]> {
   const formData = new FormData();
@@ -226,7 +256,7 @@ export async function uploadMultipleFiles(
   return apiRequest<FileUploadResponse[]>(url, {
     method: 'POST',
     body: formData,
-    headers: {},
+    headers: resolveFileManagerPrivateHeaders(options?.fileManagerPrivate),
   });
 }
 
@@ -241,11 +271,13 @@ export async function uploadMultipleFiles(
  */
 export async function updateFile(
   fileUuid: string,
-  data: FileUpdate
+  data: FileUpdate,
+  options?: FileRequestOptions,
 ): Promise<File> {
   return apiRequest<File>(`/core/files/${fileUuid}`, {
     method: 'PUT',
     data,
+    headers: resolveFileManagerPrivateHeaders(options?.fileManagerPrivate),
   });
 }
 
@@ -256,9 +288,13 @@ export async function updateFile(
  * 
  * @param fileUuid - 文件 UUID
  */
-export async function deleteFile(fileUuid: string): Promise<void> {
+export async function deleteFile(
+  fileUuid: string,
+  options?: FileRequestOptions,
+): Promise<void> {
   return apiRequest<void>(`/core/files/${fileUuid}`, {
     method: 'DELETE',
+    headers: resolveFileManagerPrivateHeaders(options?.fileManagerPrivate),
   });
 }
 
@@ -270,10 +306,14 @@ export async function deleteFile(fileUuid: string): Promise<void> {
  * @param fileUuids - 文件 UUID 列表
  * @returns 删除的文件数量
  */
-export async function batchDeleteFiles(fileUuids: string[]): Promise<{ deleted_count: number }> {
+export async function batchDeleteFiles(
+  fileUuids: string[],
+  options?: FileRequestOptions,
+): Promise<{ deleted_count: number }> {
   return apiRequest<{ deleted_count: number }>('/core/files/batch-delete', {
     method: 'POST',
     data: fileUuids,
+    headers: resolveFileManagerPrivateHeaders(options?.fileManagerPrivate),
   });
 }
 
@@ -293,6 +333,7 @@ const BRANDING_UPLOAD_CATEGORIES = new Set([
   'site-logo',
   'platform-logo',
   'platform-favicon',
+  'company-seal',
 ]);
 
 export type FilePreviewOptions = {

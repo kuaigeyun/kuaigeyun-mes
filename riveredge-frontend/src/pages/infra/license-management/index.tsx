@@ -1,18 +1,20 @@
 /**
  * 平台许可证管理
+ * 列表布局与物流「车辆管理」同构：一列 RemainderFlex 吃余量，其余 KeepWidth/Marker；
+ * 禁止全 KeepWidth（filler 夹在状态/操作间）；操作仅目录双字，禁止 LabelKeep 四字文案。
  */
 
-import { rowActionKind } from '../../../components/uni-action';
+import { rowActionCopyCreate, rowActionKind, rowActionLabelKeep } from '../../../components/uni-action';
 import { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ActionType, ProColumns, ProFormInstance } from '@ant-design/pro-components';
-import { App, Button, Space } from 'antd';
-import { CopyOutlined, ReloadOutlined } from '@ant-design/icons';
+import { App, Button } from 'antd';
+import { ReloadOutlined } from '@ant-design/icons';
 import { ProFormDigit, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import { FormModalTemplate, ListPageTemplate } from '../../../components/layout-templates';
 import { UniTable } from '../../../components/uni-table';
 import { UniBatchButton } from '../../../components/uni-batch';
-import { StatusTag } from '../../../constants/statusBadges';
+import { MarkerTag, StatusTag } from '../../../constants/statusBadges';
 import {
   PRO_APP_CODES,
   PRO_PLACEHOLDER_META,
@@ -43,10 +45,7 @@ export default function LicenseManagementPage() {
 
   const appCodeLabelMap = useMemo(() => {
     const map = new Map<string, string>();
-    map.set(
-      GLOBAL_SCOPE,
-      t('pages.infra.licenseCenter.globalScope', { defaultValue: '全部 PRO 应用' }),
-    );
+    map.set(GLOBAL_SCOPE, t('pages.infra.licenseCenter.globalScope'));
     for (const code of PRO_APP_CODES) {
       const meta = PRO_PLACEHOLDER_META[code];
       map.set(code, t(meta.nameKey, { defaultValue: meta.nameDefault }));
@@ -71,119 +70,144 @@ export default function LicenseManagementPage() {
     return valueEnum;
   }, [appCodeLabelMap]);
 
-  const columns: ProColumns<PlatformLicenseItem>[] = [
-    {
-      title: t('pages.infra.licenseCenter.scope', { defaultValue: '适用范围' }),
-      dataIndex: 'app_code',
-      width: 180,
-      valueType: 'select',
-      valueEnum: scopeValueEnum,
-      render: (_, record) => appCodeLabelMap.get(record.app_code) || record.app_code,
-    },
-    {
-      title: t('pages.infra.licenseCenter.alias', { defaultValue: '别名' }),
-      dataIndex: 'alias',
-      width: 160,
-      ellipsis: true,
-      render: (_, record) => record.alias || '-',
-    },
-    {
-      title: t('pages.infra.licenseCenter.last4', { defaultValue: '密钥尾号' }),
-      dataIndex: 'key_last4',
-      width: 120,
-      render: (_, record) => `****${record.key_last4}`,
-    },
-    {
-      title: t('pages.infra.licenseCenter.activationUsage', { defaultValue: '激活使用' }),
-      dataIndex: 'current_activations',
-      width: 140,
-      hideInSearch: true,
-      render: (_, record) => `${record.current_activations}/${record.max_activations}`,
-    },
-    {
-      title: t('common.remark', { defaultValue: '备注' }),
-      dataIndex: 'remark',
-      ellipsis: true,
-      hideInSearch: true,
-      render: (_, record) => record.remark || '-',
-    },
-    {
-      title: t('common.updatedAt', { defaultValue: '更新时间' }),
-      dataIndex: 'updated_at',
-      valueType: 'dateTime',
-      width: 180,
-      hideInSearch: true,
-    },
-    {
-      title: t('common.status', { defaultValue: '状态' }),
-      dataIndex: 'is_active',
-      key: 'lifecycle',
-      width: 120,
-      fixed: 'right',
-      uniTableKeepWidth: true,
-      resizable: false,
-      valueType: 'select',
-      valueEnum: {
-        true: { text: t('pages.infra.licenseCenter.active', { defaultValue: '生效中' }), status: 'Success' },
-        false: { text: t('pages.infra.licenseCenter.revoked', { defaultValue: '已撤销' }), status: 'Default' },
+  const columns: ProColumns<PlatformLicenseItem>[] = useMemo(
+    () => [
+      {
+        // 余量列（同车辆「车型」）：禁止全表 KeepWidth，否则右固定前 filler 留巨空白 / 假横滚
+        title: t('pages.infra.licenseCenter.scope'),
+        dataIndex: 'app_code',
+        key: 'app_code',
+        minWidth: 120,
+        uniTableRemainderFlex: true,
+        uniTablePrimaryFlex: true,
+        resizable: false,
+        ellipsis: true,
+        valueType: 'select',
+        valueEnum: scopeValueEnum,
+        render: (_, record) => {
+          const label = appCodeLabelMap.get(record.app_code) || record.app_code;
+          return <MarkerTag color="processing">{label}</MarkerTag>;
+        },
       },
-      render: (_, record) =>
-        record.is_active ? (
-          <StatusTag color="success">{t('pages.infra.licenseCenter.active', { defaultValue: '生效中' })}</StatusTag>
-        ) : (
-          <StatusTag color="default">{t('pages.infra.licenseCenter.revoked', { defaultValue: '已撤销' })}</StatusTag>
-        ),
-    },
-    {
-      title: t('common.actions', { defaultValue: '操作' }),
-      valueType: 'option',
-      fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button
-            key="copy"
-            {...rowActionKind('read')}
-            size="small"
-            icon={<CopyOutlined />}
-            onClick={async () => {
-              try {
-                const resp = await getPlatformLicensePlainKey(record.uuid);
-                await copyTextToClipboard(resp.license_key);
-                messageApi.success(t('pages.infra.licenseCenter.copySuccess', { defaultValue: 'License Key 已复制' }));
-              } catch (error: any) {
-                messageApi.error(
-                  error?.message && !String(error.message).startsWith('clipboard_') && error.message !== 'empty_clipboard_text'
-                    ? error.message
-                    : t('pages.infra.licenseCenter.copyFailed', { defaultValue: '复制失败，请重试' }),
-                );
-              }
-            }}
-          >
-            {t('pages.infra.licenseCenter.copyKey', { defaultValue: '复制KEY' })}
-          </Button>
-          <Button
-            key="revoke"
-            {...rowActionKind('revoke')}
-            size="small"
-            disabled={!record.is_active}
-            onClick={() => {
-              getAntdModal().confirm({
-                title: t('pages.infra.licenseCenter.revokeTitle', { defaultValue: '撤销许可证' }),
-                content: t('pages.infra.licenseCenter.revokeConfirm', { defaultValue: '撤销后将不能再用于新激活，是否继续？' }),
-                onOk: async () => {
-                  await revokePlatformLicense(record.uuid);
-                  messageApi.success(t('pages.infra.licenseCenter.revokeSuccess', { defaultValue: '许可证已撤销' }));
-                  actionRef.current?.reload();
-                },
-              });
-            }}
-          >
-            {t('pages.infra.licenseCenter.revoke', { defaultValue: '撤销' })}
-          </Button>
-        </Space>
-      ),
-    },
-  ];
+      {
+        title: t('pages.infra.licenseCenter.alias'),
+        dataIndex: 'alias',
+        key: 'alias',
+        width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
+        render: (_, record) => record.alias || '-',
+      },
+      {
+        title: t('pages.infra.licenseCenter.last4'),
+        dataIndex: 'key_last4',
+        key: 'key_last4',
+        width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
+        render: (_, record) => `****${record.key_last4}`,
+      },
+      {
+        title: t('pages.infra.licenseCenter.activationUsage'),
+        dataIndex: 'current_activations',
+        key: 'current_activations',
+        width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
+        hideInSearch: true,
+        align: 'right',
+        render: (_, record) => `${record.current_activations}/${record.max_activations}`,
+      },
+      {
+        title: t('common.remark'),
+        dataIndex: 'remark',
+        key: 'remark',
+        width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
+        hideInSearch: true,
+        render: (_, record) => record.remark || '-',
+      },
+      {
+        title: t('common.status'),
+        dataIndex: 'is_active',
+        key: 'lifecycle',
+        fixed: 'right',
+        hideInSearch: true,
+        valueType: 'select',
+        valueEnum: {
+          true: { text: t('pages.infra.licenseCenter.active') },
+          false: { text: t('pages.infra.licenseCenter.revoked') },
+        },
+        render: (_, record) =>
+          record.is_active ? (
+            <StatusTag color="success">{t('pages.infra.licenseCenter.active')}</StatusTag>
+          ) : (
+            <StatusTag color="default">{t('pages.infra.licenseCenter.revoked')}</StatusTag>
+          ),
+      },
+      {
+        title: t('common.action'),
+        key: 'action',
+        fixed: 'right',
+        hideInSearch: true,
+        render: (_, record) => {
+          // 目录「撤销审核」四字会撑操作列；仅此处 LabelKeep 收成双字「撤销」（车辆页本身无四字 kind）
+          const nodes: React.ReactNode[] = [
+            <Button
+              key="copy"
+              {...rowActionCopyCreate('skip')}
+              onClick={async () => {
+                try {
+                  const resp = await getPlatformLicensePlainKey(record.uuid);
+                  await copyTextToClipboard(resp.license_key);
+                  messageApi.success(t('pages.infra.licenseCenter.copySuccess'));
+                } catch (error: any) {
+                  messageApi.error(
+                    error?.message &&
+                      !String(error.message).startsWith('clipboard_') &&
+                      error.message !== 'empty_clipboard_text'
+                      ? error.message
+                      : t('pages.infra.licenseCenter.copyFailed'),
+                  );
+                }
+              }}
+            />,
+          ];
+          if (record.is_active) {
+            nodes.push(
+              <Button
+                key="revoke"
+                {...rowActionKind('revoke')}
+                {...rowActionLabelKeep()}
+                onClick={() => {
+                  getAntdModal().confirm({
+                    title: t('pages.infra.licenseCenter.revokeTitle'),
+                    content: t('pages.infra.licenseCenter.revokeConfirm'),
+                    onOk: async () => {
+                      await revokePlatformLicense(record.uuid);
+                      messageApi.success(t('pages.infra.licenseCenter.revokeSuccess'));
+                      actionRef.current?.reload();
+                    },
+                  });
+                }}
+              >
+                {t('pages.infra.licenseCenter.revoke')}
+              </Button>,
+            );
+          }
+          return nodes;
+        },
+      },
+    ],
+    [appCodeLabelMap, messageApi, scopeValueEnum, t],
+  );
 
   const handleBatchRevoke = async (keys: React.Key[]) => {
     if (!keys.length) {
@@ -195,12 +219,12 @@ export default function LicenseManagementPage() {
     const failed = results.filter((item) => item.status === 'rejected').length;
     const success = keys.length - failed;
     if (success > 0) {
-      messageApi.success(t('pages.infra.licenseCenter.batchRevokeSuccess', { count: success, defaultValue: '已撤销 {{count}} 条许可证' }));
+      messageApi.success(t('pages.infra.licenseCenter.batchRevokeSuccess', { count: success }));
       actionRef.current?.clearSelected?.();
       actionRef.current?.reload();
     }
     if (failed > 0) {
-      messageApi.error(t('pages.infra.licenseCenter.batchRevokeFailed', { count: failed, defaultValue: '撤销失败 {{count}} 条' }));
+      messageApi.error(t('pages.infra.licenseCenter.batchRevokeFailed', { count: failed }));
     }
   };
 
@@ -208,9 +232,8 @@ export default function LicenseManagementPage() {
     <ListPageTemplate>
       <UniTable<PlatformLicenseItem>
         viewTypes={['table', 'help']}
-          helpViewConfig={buildListPageHelpViewConfig('infra.licenseManagement')}
-        columnPersistenceId="pages.infra.license-management-v2"
-        headerTitle={t('menu.infra.license-management')}
+        helpViewConfig={buildListPageHelpViewConfig('infra.licenseManagement')}
+        columnPersistenceId="pages.infra.license-management-v8"
         actionRef={actionRef}
         columns={columns}
         rowKey="uuid"
@@ -219,13 +242,15 @@ export default function LicenseManagementPage() {
         rowSelectionGetCheckboxProps={(record) => ({
           disabled: !record.is_active,
         })}
-        request={async (params) => {
+        request={async (params, _sort, _filter, searchFormValues) => {
+          const form = (searchFormValues || {}) as Record<string, unknown>;
+          const merged = { ...params, ...form } as Record<string, unknown>;
           const list = await listPlatformLicenses({
-            app_code: (params as any).app_code || undefined,
+            app_code: (merged.app_code as string) || undefined,
             is_active:
-              (params as any).is_active === undefined || (params as any).is_active === ''
+              merged.is_active === undefined || merged.is_active === ''
                 ? undefined
-                : (params as any).is_active === 'true' || (params as any).is_active === true,
+                : merged.is_active === 'true' || merged.is_active === true,
           });
           return { data: list, success: true, total: list.length };
         }}
@@ -233,7 +258,7 @@ export default function LicenseManagementPage() {
         showExportButton={false}
         showImportButton={false}
         showCreateButton
-        createButtonText={t('pages.infra.licenseCenter.createButton', { defaultValue: '新增许可证' })}
+        createButtonText={t('pages.infra.licenseCenter.createButton')}
         onCreate={() => setModalOpen(true)}
         toolBarActionsAfterCreate={[
           <UniBatchButton
@@ -242,20 +267,17 @@ export default function LicenseManagementPage() {
             selectedRowKeys={selectedRowKeys}
             requireConfirm
             confirmTitle={(count) =>
-              t('pages.infra.licenseCenter.batchRevokeConfirm', {
-                count,
-                defaultValue: '确定批量撤销选中的 {{count}} 条许可证吗？',
-              })
+              t('pages.infra.licenseCenter.batchRevokeConfirm', { count })
             }
             onAction={handleBatchRevoke}
           >
-            {t('pages.infra.licenseCenter.batchRevoke', { defaultValue: '批量撤销' })}
+            {t('pages.infra.licenseCenter.batchRevoke')}
           </UniBatchButton>,
         ]}
       />
 
       <FormModalTemplate
-        title={t('pages.infra.licenseCenter.createTitle', { defaultValue: '新增许可证密钥' })}
+        title={t('pages.infra.licenseCenter.createTitle')}
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         onFinish={async (values: any) => {
@@ -268,7 +290,7 @@ export default function LicenseManagementPage() {
               alias: values.alias?.trim() || undefined,
               remark: values.remark?.trim() || undefined,
             });
-            messageApi.success(t('pages.infra.licenseCenter.createSuccess', { defaultValue: '许可证创建成功' }));
+            messageApi.success(t('pages.infra.licenseCenter.createSuccess'));
             setModalOpen(false);
             actionRef.current?.reload();
             return;
@@ -292,45 +314,48 @@ export default function LicenseManagementPage() {
                 formRef.current?.setFieldsValue({
                   license_key: generated.license_key,
                 });
-                messageApi.success(t('pages.infra.licenseCenter.generateSuccess', { defaultValue: 'License Key 已自动生成' }));
+                messageApi.success(t('pages.infra.licenseCenter.generateSuccess'));
               } finally {
                 setGenerating(false);
               }
             }}
           >
-            {t('pages.infra.licenseCenter.generateButton', { defaultValue: '自动生成 License Key' })}
+            {t('pages.infra.licenseCenter.generateButton')}
           </Button>
         </div>
         <ProFormText.Password
           name="license_key"
-          label={t('pages.infra.licenseCenter.licenseKey', { defaultValue: 'License Key（许可证密钥）' })}
-          placeholder={t('pages.infra.licenseCenter.licenseKeyPlaceholder', { defaultValue: '请输入 License Key' })}
-          rules={[{ required: true, message: t('common.required', { defaultValue: '必填' }) }, { min: 8, message: '至少 8 位' }]}
+          label={t('pages.infra.licenseCenter.licenseKey')}
+          placeholder={t('pages.infra.licenseCenter.licenseKeyPlaceholder')}
+          rules={[
+            { required: true, message: t('common.required') },
+            { min: 8, message: t('pages.infra.licenseCenter.licenseKeyMinLength') },
+          ]}
           fieldProps={{ autoComplete: 'off' }}
         />
         <ProFormSelect
           name="app_code"
-          label={t('pages.infra.licenseCenter.scope', { defaultValue: '适用范围' })}
+          label={t('pages.infra.licenseCenter.scope')}
           options={appCodeOptions}
           initialValue={GLOBAL_SCOPE}
-          rules={[{ required: true, message: t('common.required', { defaultValue: '必填' }) }]}
+          rules={[{ required: true, message: t('common.required') }]}
         />
         <ProFormDigit
           name="max_activations"
-          label={t('pages.infra.licenseCenter.maxActivations', { defaultValue: '最大激活租户数' })}
+          label={t('pages.infra.licenseCenter.maxActivations')}
           initialValue={1}
           fieldProps={{ min: 1, precision: 0 }}
-          rules={[{ required: true, message: t('common.required', { defaultValue: '必填' }) }]}
-          extra={t('pages.infra.licenseCenter.maxActivationsHint', { defaultValue: '默认 1，表示该 Key 仅允许 1 个租户激活。' })}
+          rules={[{ required: true, message: t('common.required') }]}
+          extra={t('pages.infra.licenseCenter.maxActivationsHint')}
         />
         <ProFormText
           name="alias"
-          label={t('pages.infra.licenseCenter.alias', { defaultValue: '别名' })}
-          placeholder={t('pages.infra.licenseCenter.aliasPlaceholder', { defaultValue: '例如：AI 演示许可' })}
+          label={t('pages.infra.licenseCenter.alias')}
+          placeholder={t('pages.infra.licenseCenter.aliasPlaceholder')}
         />
         <ProFormTextArea
           name="remark"
-          label={t('common.remark', { defaultValue: '备注' })}
+          label={t('common.remark')}
           fieldProps={{ rows: 3 }}
         />
       </FormModalTemplate>

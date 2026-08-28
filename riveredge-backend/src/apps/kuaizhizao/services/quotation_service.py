@@ -2234,7 +2234,9 @@ class QuotationService:
             raise BusinessLogicError("该报价单已关联销售订单，无法重复转换")
         biz = await self.business_config_service.get_business_config(tenant_id)
         if biz.get("parameters", {}).get("sales", {}).get("require_contract_before_order"):
-            raise BusinessLogicError("当前配置要求经销售合同转单，请先将报价转为销售合同并从合同下推订单")
+            raise BusinessLogicError(
+                "配置项「须先建销售合同再下推订单」已废弃，请在业务配置中关闭 require_contract_before_order"
+            )
 
         items = await QuotationItem.filter(
             tenant_id=tenant_id, quotation_id=quotation_id

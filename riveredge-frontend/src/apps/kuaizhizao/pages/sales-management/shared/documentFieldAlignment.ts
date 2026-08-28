@@ -72,6 +72,26 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   receipt_code: 10,
   /** 轻财务单据主标识叠列（伙伴名 + 单号） */
   finance_doc_partner_stacked: 10,
+  /** 轻财务往来核销历史：业务类型 / 伙伴 / 借贷方单号 */
+  finance_settlement_business_type: 20.05,
+  finance_settlement_partner: 20.1,
+  finance_settlement_debit_doc: 20.15,
+  finance_settlement_credit_doc: 20.2,
+  /** 轻财务往来对账期间 */
+  finance_statement_period: 20.25,
+  /** 轻财务月结定价工作台列序 */
+  finance_price_order_code: 10.1,
+  finance_price_material_code: 20.5,
+  finance_price_material_name: 20.55,
+  finance_price_material_spec: 20.6,
+  finance_price_material_model: 20.65,
+  finance_price_material_unit: 20.7,
+  finance_price_settled_qty: 32.05,
+  finance_price_before: 33.05,
+  finance_price_suggested: 33.12,
+  finance_price_provisional: 33.15,
+  finance_price_after: 33.18,
+  finance_price_delta: 33.22,
   receivable_code: 10,
   payment_code: 10,
   invoice_code: 10,
@@ -154,11 +174,13 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
 
   // —— 15 伙伴主称谓 / 项目上下文 ——
   customer_name: 15,
+  partnerCode: 14.95,
   partnerName: 15,
   partnerId: 15.1,
   supplier_name: 15.2,
-  /** 客户/供应商价格本：伙伴叠列 → 物料叠列 → 伙伴料号/品名 */
-  price_book_material_stacked: 15.5,
+  /** 客户/供应商价格本：伙伴编码/名称 → 物料编码/名称 → 伙伴料号/品名 */
+  price_book_material_code: 15.4,
+  price_book_material_name: 15.5,
   partnerMaterialCode: 15.6,
   partnerMaterialName: 15.7,
   /** 订单评审等：项目名称紧跟客户，勿落 75+ 偶发段 */
@@ -466,8 +488,12 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   calculation_status: 23.5,
   /** 轻财务：开票/收票状态（MarkerTag） */
   invoice_status: 23.6,
-  /** 轻财务往来：付款条件（列表 RemainderFlex） */
+  /** 轻财务往来：付款条件 */
   payment_terms: 24,
+  /** 轻财务发票类型 / 税号 */
+  invoice_type: 24.2,
+  partner_tax_no: 24.4,
+  invoice_number: 24.6,
   batch_no: 25,
 
   // —— 30 品种数 / 数量 / 金额 ——
@@ -508,12 +534,72 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   variantPrices: 33.1,
   standard_value: 33.2,
   unit: 33.3,
+  /** 轻财务发票：税率 / 不含税 / 税额（总额 34） */
+  tax_rate: 33.4,
+  invoice_amount: 33.5,
+  tax_amount: 33.6,
   total_amount: 34,
   /** 轻财务应收/应付金额簇（紧接总额） */
   received_amount: 34.05,
   remaining_amount: 34.1,
+  /** 轻财务应付：已付金额（对称已收） */
+  paid_amount: 34.06,
   invoiced_amount: 34.15,
   remaining_invoice_amount: 34.2,
+  /** 轻财务收/付款：已核销 / 未核销 */
+  settled_amount: 34.25,
+  unsettled_amount: 34.3,
+  /** 轻财务往来核销历史金额 */
+  finance_settlement_amount: 34.08,
+  /** 轻财务往来对账：期初 / 期末 */
+  opening_balance: 34.41,
+  closing_balance: 34.42,
+  /** 轻财务预收预付余额汇总 */
+  finance_prepayment_partner: 15.05,
+  finance_prepayment_balance: 34.43,
+  finance_prepayment_doc_count: 34.44,
+  /** 轻财务单据对账缺口 */
+  finance_recon_doc_code: 10.15,
+  finance_recon_doc_type: 20.28,
+  finance_recon_doc_amount: 34.46,
+  finance_recon_settled_amount: 34.47,
+  finance_recon_settleable_amount: 34.48,
+  finance_recon_link: 34.49,
+  finance_recon_gap_reason: 80.05,
+  /** 轻财务银行账户（稀疏分列） */
+  finance_bank_account_name: 11.05,
+  finance_bank_account_code: 10.16,
+  finance_bank_account_type: 20.29,
+  finance_bank_name: 80.06,
+  finance_bank_account_number: 34.5,
+  finance_bank_currency: 34.51,
+  finance_bank_balance: 34.52,
+  finance_bank_tx_summary: 80.07,
+  /** 轻财务应收/应付票据 */
+  finance_note_stacked: 10.17,
+  finance_note_partner: 15.06,
+  finance_note_bill_type: 20.3,
+  finance_note_amount: 34.53,
+  finance_note_notes: 80.08,
+  /** 轻财务进项认证 */
+  finance_tax_invoice_code: 10.18,
+  finance_tax_invoice_number: 10.19,
+  finance_tax_supplier: 80.09,
+  finance_tax_invoice_date: 40.05,
+  finance_tax_amount: 34.54,
+  finance_tax_verify_status: 91.05,
+  /** 主数据厂区层级归属（稀疏列表父级） */
+  master_ref_plant: 15.1,
+  master_ref_workshop: 15.2,
+  master_ref_production_line: 15.3,
+  master_ref_warehouse: 15.4,
+  master_ref_storage_area: 15.5,
+  master_work_group_members: 34.6,
+  master_warehouse_type: 20.31,
+  master_warehouse_workshop_name: 15.21,
+  master_warehouse_work_center_name: 15.22,
+  /** 轻财务收/付款：退款执行态 Marker */
+  refund_execution_status: 34.35,
   /** 工单委外：已发料数量（紧接金额；下推进度 50 须排在其后） */
   issued_quantity: 34.5,
   issuedQuantity: 34.5,
@@ -556,6 +642,8 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   /** 轻财务应收：收款下推 / 开票下推 */
   receipt_push_progress: 50.05,
   invoice_push_progress: 50.1,
+  /** 轻财务应付：付款下推 */
+  payment_push_progress: 50.06,
   delivery_progress: 51,
   receipt_progress: 51,
 
@@ -567,6 +655,16 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   /** 轻财务往来业务日 / 到期日（禁用裸 due_date，避免撞详情段位） */
   finance_business_date: 60.2,
   finance_due_date: 60.3,
+  finance_receipt_date: 60.25,
+  finance_payment_date: 60.26,
+  finance_invoice_date: 60.27,
+  finance_settlement_date: 60.28,
+  finance_settlement_operator: 60.29,
+  payment_method: 60.35,
+  /** 轻财务结算类型 Marker */
+  settlement_type: 60.38,
+  /** 轻财务收/付款参考号 */
+  finance_voucher_reference: 60.4,
   start_date: 60.5,
   end_date: 60.6,
   planned_start_date: 61,
@@ -659,6 +757,11 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   material_id: 79.35,
   materialId: 79.35,
   materialModel: 79.4,
+  /** 轻财务等列表备注（RemainderFlex 真源段） */
+  notes: 80,
+  /** 轻财务发票：关联应收/应付（勿用裸 receivable_code=10） */
+  finance_linked_receivable: 40.2,
+  finance_linked_payable: 40.3,
   target_code: 80.1,
   target_name: 80.2,
   downgrade_material_name: 80.3,

@@ -1826,12 +1826,6 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
           position: relative;
           z-index: 1;
         }
-        /* 上线向导：图标与文案间距 4px，!important 避免被 Space/主题覆盖 */
-        .ant-pro-layout .ant-pro-layout-header .riveredge-header-onboarding-space.ant-space,
-        .ant-pro-layout .ant-layout-header .riveredge-header-onboarding-space.ant-space {
-          gap: 4px !important;
-          column-gap: 4px !important;
-        }
         /* 租户选择器内的选择框样式 - 根据显示模式统一 */
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select,
         .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select,

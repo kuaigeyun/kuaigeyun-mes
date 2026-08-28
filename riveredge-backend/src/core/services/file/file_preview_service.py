@@ -47,6 +47,8 @@ class FilePreviewService:
         file_uuid: str,
         tenant_id: int,
         expires_in: int = 3600,
+        *,
+        vault_authorized: bool = False,
     ) -> str:
         now = now_utc()
         stable_now = now.replace(minute=0, second=0, microsecond=0)
@@ -57,6 +59,8 @@ class FilePreviewService:
             "exp": stable_now + timedelta(seconds=expires_in + 3600),
             "iat": stable_now,
         }
+        if vault_authorized:
+            payload["vault_authorized"] = True
 
         token = jwt.encode(payload, FilePreviewService.TOKEN_SECRET, algorithm="HS256")
         return token
@@ -131,6 +135,8 @@ class FilePreviewService:
         file_uuid: str,
         tenant_id: int,
         size: Optional[int] = None,
+        *,
+        vault_authorized: bool = False,
     ) -> str:
         """
         生成浏览器 img/iframe 可用的预览 URL。
@@ -138,7 +144,11 @@ class FilePreviewService:
         始终返回相对路径，由当前页面 origin 加载；BASE_URL 仅用于服务端 HTTP 出站等场景，
         拼进预览链会导致与反向代理/局域网访问 origin 不一致时图片 404。
         """
-        token = FilePreviewService._generate_preview_token(file_uuid, tenant_id)
+        token = FilePreviewService._generate_preview_token(
+            file_uuid,
+            tenant_id,
+            vault_authorized=vault_authorized,
+        )
         path = f"/api/v1/core/files/{file_uuid}/download?token={token}"
         if size is not None:
             path += f"&size={size}"
@@ -150,6 +160,8 @@ class FilePreviewService:
         tenant_id: int,
         force_simple_for_image: bool = False,
         thumbnail_size: Optional[int] = None,
+        *,
+        vault_authorized: bool = False,
     ) -> Dict[str, Any]:
         from core.services.file.file_service import FileService
 
@@ -163,6 +175,7 @@ class FilePreviewService:
             file_uuid=file.uuid,
             tenant_id=file.tenant_id,
             size=resolved_size,
+            vault_authorized=vault_authorized,
         )
         return {
             "preview_mode": "simple",

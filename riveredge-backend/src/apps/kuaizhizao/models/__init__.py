@@ -116,6 +116,7 @@ from .sales_forecast import SalesForecast
 from .sales_forecast_item import SalesForecastItem
 from .sales_order import SalesOrder
 from .sales_order_item import SalesOrderItem
+from .sales_order_milestone import SalesOrderMilestone
 from .sales_order_change_order import SalesOrderChangeOrder, SalesOrderChangeItem
 from .sales_contract import SalesContract
 from .sales_contract_item import SalesContractItem
@@ -358,6 +359,7 @@ __all__ = [
     'SalesForecastItem',
     'SalesOrder',
     'SalesOrderItem',
+    'SalesOrderMilestone',
     'SalesOrderChangeOrder',
     'SalesOrderChangeItem',
     'SalesContract',

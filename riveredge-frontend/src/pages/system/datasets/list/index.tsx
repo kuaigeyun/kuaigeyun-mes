@@ -18,6 +18,7 @@ import {
 } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Button, Tag, Space, Modal, Badge, Table } from 'antd';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../utils/uniTableLayoutColumns';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { renderSystemActiveTag, renderSystemTypeMarker } from '../../utils/systemListPresentation';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlayCircleOutlined, CopyOutlined, HighlightOutlined } from '@ant-design/icons';
@@ -48,7 +49,7 @@ import {
   getDataConnectionsForDataset,
   IntegrationConfig,
 } from '../../../../services/integrationConfig';
-import { rowActionKind } from '../../../../components/uni-action';
+import { rowActionKind, rowActionLabelKeep, rowActionCopyCreate } from '../../../../components/uni-action';
 import { getAntdModal } from '../../../../utils/antdAppApis';
 import { todaySiteDateString } from '../../../../utils/format';
 import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
@@ -533,21 +534,29 @@ const DatasetListPage: React.FC = () => {
     {
       title: t('pages.system.datasets.columnName'),
       dataIndex: 'name',
-      width: 200,
-      fixed: 'left',
+      width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
     },
     {
       title: t('pages.system.datasets.columnCode'),
       dataIndex: 'code',
-      width: 150,
-      minWidth: 150,
+      width: 140,
+      minWidth: 140,
       uniTableKeepWidth: true,
       resizable: false,
+      ellipsis: true,
     },
     {
       title: t('pages.system.datasets.columnDataConnection'),
       dataIndex: 'data_source_uuid',
-      width: 200,
+      width: 160,
+      minWidth: 160,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
       hideInSearch: true,
       render: (_, record) => {
         const conn = dataConnectionsFlat.find(c => c.uuid === record.data_source_uuid);
@@ -557,8 +566,8 @@ const DatasetListPage: React.FC = () => {
     {
       title: t('pages.system.datasets.columnOutputType'),
       dataIndex: 'output_type',
-      width: 120,
-      minWidth: 120,
+      width: 110,
+      minWidth: 110,
       uniTableKeepWidth: true,
       resizable: false,
       hideInSearch: true,
@@ -576,8 +585,8 @@ const DatasetListPage: React.FC = () => {
     {
       title: t('pages.system.datasets.columnQueryType'),
       dataIndex: 'query_type',
-      width: 120,
-      minWidth: 120,
+      width: 100,
+      minWidth: 100,
       uniTableKeepWidth: true,
       resizable: false,
       valueType: 'select',
@@ -595,18 +604,20 @@ const DatasetListPage: React.FC = () => {
       },
     },
     {
+      // 备注长短不一：唯一 RemainderFlex
       title: t('common.remark'),
       dataIndex: 'description',
+      minWidth: 140,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
+      resizable: false,
       ellipsis: true,
       hideInSearch: true,
     },
     {
       title: t('pages.system.datasets.columnEnabled'),
       dataIndex: 'is_active',
-      width: 100,
-      minWidth: 100,
-      uniTableKeepWidth: true,
-      resizable: false,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       valueType: 'select',
       valueEnum: {
         true: { text: t('common.enabled'), status: 'Success' },
@@ -640,49 +651,42 @@ const DatasetListPage: React.FC = () => {
     {
       title: t('common.actions'),
       key: 'action',
-      valueType: 'option',
       fixed: 'right',
       hideInSearch: true,
-      uniActionRenderOptions: { directMax: 5 },
       render: (_, record) => [
-            <Button key="view" {...rowActionKind('read')} onClick={() => handleView(record)}>
-              {t('common.view')}
-            </Button>,
-            <Button key="design" {...rowActionKind('update')} onClick={() => handleDesign(record)}>
+            <Button key="view" {...rowActionKind('read')} onClick={() => handleView(record)} />,
+            <Button
+              key="design"
+              {...rowActionKind('skip')}
+              {...rowActionLabelKeep()}
+              onClick={() => handleDesign(record)}
+            >
               {t('pages.system.datasets.design')}
             </Button>,
-            <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)}>
-              {t('common.edit')}
-            </Button>,
+            <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)} />,
             <Button
               key="execute"
-              {...rowActionKind('execute')}
-              type="link"
-              size="small"
-              icon={<PlayCircleOutlined />}
+              {...rowActionKind('skip')}
+              {...rowActionLabelKeep()}
               loading={executingUuid === record.uuid}
               onClick={() => handleExecute(record)}
             >
               {t('pages.system.datasets.executeQuery')}
             </Button>,
-            <Button key="copy" {...rowActionKind('create')} onClick={() => handleCopy(record)}>
-              {t('pages.system.datasets.copy')}
-            </Button>,
+            <Button key="copy" {...rowActionCopyCreate('create')} onClick={() => handleCopy(record)} />,
             <Popconfirm
               key="delete"
-              {...rowActionKind('delete')}
               title={t('pages.system.datasets.confirmDelete')}
               onConfirm={() => handleDelete(record)}
               okText={t('common.confirm')}
               cancelText={t('common.cancel')}
             >
-              <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-                {t('common.delete')}
-              </Button>
+              <Button {...rowActionKind('delete')} />
             </Popconfirm>,
           ],
     },
   ], GLOBAL_DOC_LIST_FIELD_RANK), [t, dataConnectionsFlat, executingUuid, handleView, handleDesign, handleEdit, handleExecute, handleCopy, handleDelete]);
+
 
   return (
     <>
@@ -694,7 +698,7 @@ const DatasetListPage: React.FC = () => {
             <UniTable<Dataset>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('system.datasets')}
-          columnPersistenceId="pages.system.datasets.list-v2"
+          columnPersistenceId="pages.system.datasets.list-v3"
           tanstackQuery={{ queryKeyPrefix: ['pages.system.datasets.list', selectedCategoryKey] }}
           actionRef={actionRef}
           columns={columns}

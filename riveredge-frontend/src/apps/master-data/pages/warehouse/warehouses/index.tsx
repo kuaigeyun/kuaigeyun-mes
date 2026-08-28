@@ -8,9 +8,8 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, List, Modal, Popconfirm, Space, Table, Tooltip, Typography } from 'antd';
+import { App, Button, List, Modal, Popconfirm, Table, Tooltip, Typography } from 'antd';
 import { downloadFile } from '../../../../../utils';
-import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
@@ -39,6 +38,7 @@ import {
   renderMasterActiveTag,
   renderMasterTypeMarker,
 } from '../../../utils/masterListPresentation';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { WarehouseFormModal } from '../../../components/WarehouseFormModal';
 import { QRCodeGenerator } from '../../../../../components/qrcode';
 import type { Warehouse, WarehouseCreate } from '../../../types/warehouse';
@@ -611,7 +611,10 @@ const WarehousesPage: React.FC = () => {
       title: t('app.master-data.warehouses.code'),
       dataIndex: 'code',
       copyable: true,
-      width: 150,
+      width: 140,
+      minWidth: 140,
+      uniTableKeepWidth: true,
+      resizable: false,
       fixed: 'left',
       ellipsis: true,
       sorter: true,
@@ -620,20 +623,19 @@ const WarehousesPage: React.FC = () => {
     {
       title: t('app.master-data.warehouses.name'),
       dataIndex: 'name',
-      width: 168,
-      minWidth: 168,
+      width: 180,
+      minWidth: 180,
       uniTableKeepWidth: true,
       resizable: false,
+      ellipsis: true,
       sorter: true,
       hideInSearch: true,
     },
     {
       title: t('field.warehouse.warehouseType'),
+      key: 'master_warehouse_type',
       dataIndex: 'warehouseType',
-      width: 100,
-      minWidth: 100,
-      uniTableKeepWidth: true,
-      resizable: false,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       order: 15,
       valueType: 'select',
       valueEnum: warehouseTypeEnum,
@@ -641,36 +643,44 @@ const WarehousesPage: React.FC = () => {
       sorter: true,
       render: (_, record) =>
         renderMasterTypeMarker(
-          warehouseTypeEnum[record.warehouseType || 'normal']?.text || record.warehouseType || '-',
+          warehouseTypeEnum[record.warehouseType || 'normal']?.text || record.warehouseType || '—',
         ),
     },
     {
       title: t('field.warehouse.workshopName'),
+      key: 'master_warehouse_workshop_name',
       dataIndex: 'workshopName',
-      width: 120,
-      minWidth: 120,
+      width: 160,
+      minWidth: 160,
       uniTableKeepWidth: true,
       resizable: false,
       ellipsis: true,
       hideInSearch: true,
-      render: (_, record) => record.workshopName || '-',
+      render: (_, record) => record.workshopName || '—',
     },
     {
       title: t('field.warehouse.workCenterName'),
+      key: 'master_warehouse_work_center_name',
       dataIndex: 'workCenterName',
-      width: 120,
-      minWidth: 120,
+      width: 160,
+      minWidth: 160,
       uniTableKeepWidth: true,
       resizable: false,
       ellipsis: true,
       hideInSearch: true,
-      render: (_, record) => record.workCenterName || '-',
+      render: (_, record) => record.workCenterName || '—',
     },
     {
+      // 备注长短不一：唯一 RemainderFlex（稀疏不叠）
       title: t('common.remark'),
       dataIndex: 'description',
+      minWidth: 160,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
+      resizable: false,
       ellipsis: true,
       hideInSearch: true,
+      render: (_, r) => r.description || '—',
     },
     // 插入自定义字段列
     ...customFieldColumns,
@@ -679,38 +689,32 @@ const WarehousesPage: React.FC = () => {
     {
       title: t('common.actions'),
       key: 'action',
-      valueType: 'option',
       fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button key="view" {...rowActionKind('read')}
-            size="small"
-            onClick={() => handleOpenDetail(record)}
-          >
-            {t('common.view')}
-          </Button>
-          <Button key="edit" {...rowActionKind('update')}
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          >
-            {t('common.edit')}
-          </Button>
-          <Popconfirm key="delete" {...rowActionKind('delete')} title={t('app.master-data.warehouses.deleteConfirm')}
-            description={t('app.master-data.warehouses.deleteDescription')}
-            onConfirm={() => handleDelete(record)}
-          >
-            <Button
-              type="link"
-              danger
-              size="small"
-              icon={<DeleteOutlined />}
-            >
-              {t('common.delete')}
-            </Button>
-          </Popconfirm>
-        </Space>
-      ),
+      hideInSearch: true,
+      render: (_, record) => [
+        <Button
+          key="view"
+          type="link"
+          size="small"
+          {...rowActionKind('read')}
+          onClick={() => handleOpenDetail(record)}
+        />,
+        <Button
+          key="edit"
+          type="link"
+          size="small"
+          {...rowActionKind('update')}
+          onClick={() => handleEdit(record)}
+        />,
+        <Popconfirm
+          key="delete"
+          title={t('app.master-data.warehouses.deleteConfirm')}
+          description={t('app.master-data.warehouses.deleteDescription')}
+          onConfirm={() => handleDelete(record)}
+        >
+          <Button type="link" size="small" {...rowActionKind('delete')} />
+        </Popconfirm>,
+      ],
     },
     ];
   }, [customFields, t, warehouseActiveValueEnum]);
@@ -770,7 +774,7 @@ const WarehousesPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<Warehouse>
-        columnPersistenceId="apps.master-data.pages.warehouse.warehouses.list-v2"
+        columnPersistenceId="apps.master-data.pages.warehouse.warehouses.list-v3"
         actionRef={actionRef}
         columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
         request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {

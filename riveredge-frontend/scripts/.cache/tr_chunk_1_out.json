@@ -1,0 +1,2752 @@
+{
+  "新建设备调拨单": {
+    "en": "Create Equipment Transfer",
+    "ja": "設備移動伝票を新規作成",
+    "vi": "Tạo phiếu điều chuyển thiết bị"
+  },
+  "编辑设备调拨单": {
+    "en": "Edit Equipment Transfer",
+    "ja": "設備移動伝票を編集",
+    "vi": "Sửa phiếu điều chuyển thiết bị"
+  },
+  "加载调拨单失败": {
+    "en": "Failed to load transfer document",
+    "ja": "移動伝票の読み込みに失敗しました",
+    "vi": "Tải phiếu điều chuyển thất bại"
+  },
+  "驳回调拨单": {
+    "en": "Reject Transfer Document",
+    "ja": "移動伝票を差し戻す",
+    "vi": "Từ chối phiếu điều chuyển"
+  },
+  "原车间": {
+    "en": "Source Workshop",
+    "ja": "移動元工場",
+    "vi": "Phân xưởng nguồn"
+  },
+  "目标车间": {
+    "en": "Target Workshop",
+    "ja": "移動先工場",
+    "vi": "Phân xưởng đích"
+  },
+  "目标位置": {
+    "en": "Target Location",
+    "ja": "移動先ロケーション",
+    "vi": "Vị trí đích"
+  },
+  "目标工位/位置": {
+    "en": "Target Station / Location",
+    "ja": "移動先ステーション／ロケーション",
+    "vi": "Trạm/vị trí đích"
+  },
+  "调拨后状态": {
+    "en": "Status After Transfer",
+    "ja": "移動後ステータス",
+    "vi": "Trạng thái sau điều chuyển"
+  },
+  "{{date}} 计划": {
+    "en": "{{date}} Plan",
+    "ja": "{{date}} の計画",
+    "vi": "Kế hoạch {{date}}"
+  },
+  "当日无保养计划": {
+    "en": "No maintenance plan for this day",
+    "ja": "当日の保全計画はありません",
+    "vi": "Không có kế hoạch bảo dưỡng trong ngày"
+  },
+  "保存试模单失败": {
+    "en": "Failed to save mold trial order",
+    "ja": "金型トライ伝票の保存に失敗しました",
+    "vi": "Lưu phiếu thử khuôn thất bại"
+  },
+  "保存领用单失败": {
+    "en": "Failed to save requisition",
+    "ja": "払出伝票の保存に失敗しました",
+    "vi": "Lưu phiếu lĩnh dùng thất bại"
+  },
+  "当前选中通知单不可批量通知仓库（仅待发货可通知）。": {
+    "en": "The selected notices cannot be sent to the warehouse in bulk (only Pending Delivery can be notified).",
+    "ja": "選択された通知伝票は一括で倉庫へ通知できません（出荷待ちのみ通知可能）。",
+    "vi": "Các phiếu thông báo đã chọn không thể thông báo kho hàng loạt (chỉ trạng thái Chờ giao hàng mới thông báo được)."
+  },
+  "当前选中通知单不可批量撤回通知（仅已通知可撤回）。": {
+    "en": "The selected notices cannot be withdrawn in bulk (only Notified can be withdrawn).",
+    "ja": "選択された通知伝票は一括で通知を撤回できません（通知済みのみ撤回可能）。",
+    "vi": "Các phiếu thông báo đã chọn không thể thu hồi thông báo hàng loạt (chỉ trạng thái Đã thông báo mới thu hồi được)."
+  },
+  "请先选择一条采购订单": {
+    "en": "Please select a purchase order first",
+    "ja": "先に発注伝票を1件選択してください",
+    "vi": "Vui lòng chọn một đơn mua hàng trước"
+  },
+  "当前收货通知单不可通知仓库": {
+    "en": "This goods receipt notice cannot be sent to the warehouse",
+    "ja": "この入荷通知伝票は倉庫へ通知できません",
+    "vi": "Phiếu thông báo nhận hàng hiện tại không thể thông báo kho"
+  },
+  "无可通知明细": {
+    "en": "No lines available to notify",
+    "ja": "通知可能な明細がありません",
+    "vi": "Không có dòng chi tiết để thông báo"
+  },
+  "只能更新待收货状态的通知单": {
+    "en": "Only notices in Pending Receipt status can be updated",
+    "ja": "入荷待ちステータスの通知伝票のみ更新できます",
+    "vi": "Chỉ có thể cập nhật phiếu thông báo ở trạng thái Chờ nhận hàng"
+  },
+  "只能删除待收货状态的通知单": {
+    "en": "Only notices in Pending Receipt status can be deleted",
+    "ja": "入荷待ちステータスの通知伝票のみ削除できます",
+    "vi": "Chỉ có thể xóa phiếu thông báo ở trạng thái Chờ nhận hàng"
+  },
+  "只有待收货状态的通知单才能通知仓库": {
+    "en": "Only notices in Pending Receipt status can be sent to the warehouse",
+    "ja": "入荷待ちステータスの通知伝票のみ倉庫へ通知できます",
+    "vi": "Chỉ phiếu thông báo ở trạng thái Chờ nhận hàng mới thông báo được cho kho"
+  },
+  "收货通知单无明细，无法通知仓库": {
+    "en": "The goods receipt notice has no lines and cannot be sent to the warehouse",
+    "ja": "入荷通知伝票に明細がないため、倉庫へ通知できません",
+    "vi": "Phiếu thông báo nhận hàng không có dòng chi tiết, không thể thông báo kho"
+  },
+  "收货通知单缺少仓库，无法通知仓库": {
+    "en": "The goods receipt notice has no warehouse and cannot be sent to the warehouse",
+    "ja": "入荷通知伝票に倉庫が設定されていないため、倉庫へ通知できません",
+    "vi": "Phiếu thông báo nhận hàng thiếu kho, không thể thông báo kho"
+  },
+  "通知数量超过采购订单未入库数量": {
+    "en": "The notified quantity exceeds the quantity not yet received on the purchase order",
+    "ja": "通知数量が発注伝票の未入庫数量を超えています",
+    "vi": "Số lượng thông báo vượt quá số lượng chưa nhập kho của đơn mua hàng"
+  },
+  "只有已通知状态的收货通知单才能撤回": {
+    "en": "Only goods receipt notices in Notified status can be withdrawn",
+    "ja": "通知済みステータスの入荷通知伝票のみ撤回できます",
+    "vi": "Chỉ phiếu thông báo nhận hàng ở trạng thái Đã thông báo mới thu hồi được"
+  },
+  "关联的采购入库单已在处理中，无法撤回": {
+    "en": "The linked purchase goods receipt is already in progress and cannot be withdrawn",
+    "ja": "関連する仕入入庫伝票が処理中のため撤回できません",
+    "vi": "Phiếu nhập kho mua hàng liên quan đang được xử lý, không thể thu hồi"
+  },
+  "{{count}} 笔业财单据待结清或未关联": {
+    "en": "{{count}} business-finance documents pending settlement or unlinked",
+    "ja": "業務および財務の伝票 {{count}} 件が未消込または未関連です",
+    "vi": "{{count}} chứng từ nghiệp vụ tài chính chờ tất toán hoặc chưa liên kết"
+  },
+  "业财待结": {
+    "en": "Pending Business-Finance Settlement",
+    "ja": "業財未消込",
+    "vi": "Chờ đối trừ nghiệp vụ tài chính"
+  },
+  "应收 {{receivable}} - 应付 {{payable}} - 收款 {{receipt}} - 付款 {{payment}}": {
+    "en": "AR {{receivable}} - AP {{payable}} - Receipts {{receipt}} - Payments {{payment}}",
+    "ja": "売掛 {{receivable}} - 買掛 {{payable}} - 入金 {{receipt}} - 支払 {{payment}}",
+    "vi": "Phải thu {{receivable}} - Phải trả {{payable}} - Thu tiền {{receipt}} - Chi tiền {{payment}}"
+  },
+  "加载源单失败": {
+    "en": "Failed to load source document",
+    "ja": "元伝票の読み込みに失敗しました",
+    "vi": "Tải chứng từ nguồn thất bại"
+  },
+  "请输入应收金额": {
+    "en": "Please enter the receivable amount",
+    "ja": "売掛金額を入力してください",
+    "vi": "Vui lòng nhập số tiền phải thu"
+  },
+  "请完善应收金额、到期日等必填项后再提交": {
+    "en": "Please complete required fields such as receivable amount and due date before submitting",
+    "ja": "売掛金額、支払期日などの必須項目を入力してから提出してください",
+    "vi": "Vui lòng hoàn thiện các mục bắt buộc như số tiền phải thu, ngày đến hạn rồi mới gửi"
+  },
+  "预览数据未就绪，请关闭弹窗后重试": {
+    "en": "Preview data is not ready. Close the dialog and try again",
+    "ja": "プレビューデータが未準備です。ダイアログを閉じてから再試行してください",
+    "vi": "Dữ liệu xem trước chưa sẵn sàng, vui lòng đóng hộp thoại rồi thử lại"
+  },
+  "当前源单不可创建应收单": {
+    "en": "An AR document cannot be created from this source document",
+    "ja": "この元伝票からは売掛伝票を作成できません",
+    "vi": "Không thể tạo chứng từ phải thu từ chứng từ nguồn hiện tại"
+  },
+  "源单无可应收金额": {
+    "en": "The source document has no available receivable amount",
+    "ja": "元伝票に売掛可能金額がありません",
+    "vi": "Chứng từ nguồn không có số tiền phải thu khả dụng"
+  },
+  "应收金额不能超过可应收金额 ¥{{max}}": {
+    "en": "The receivable amount cannot exceed the available receivable amount ¥{{max}}",
+    "ja": "売掛金額は売掛可能金額 ¥{{max}} を超えられません",
+    "vi": "Số tiền phải thu không được vượt quá số tiền phải thu khả dụng ¥{{max}}"
+  },
+  "已成功创建{{target}}": {
+    "en": "{{target}} created successfully",
+    "ja": "{{target}} を作成しました",
+    "vi": "Đã tạo thành công {{target}}"
+  },
+  "搜索订单号/出库单号/客户": {
+    "en": "Search order no. / goods issue no. / customer",
+    "ja": "受注番号／出庫伝票番号／得意先を検索",
+    "vi": "Tìm số đơn hàng/số phiếu xuất kho/khách hàng"
+  },
+  "源单状态": {
+    "en": "Source Document Status",
+    "ja": "元伝票ステータス",
+    "vi": "Trạng thái chứng từ nguồn"
+  },
+  "源单日期": {
+    "en": "Source Document Date",
+    "ja": "元伝票日付",
+    "vi": "Ngày chứng từ nguồn"
+  },
+  "单据金额": {
+    "en": "Document Amount",
+    "ja": "伝票金額",
+    "vi": "Số tiền chứng từ"
+  },
+  "已应收": {
+    "en": "Receivable Created",
+    "ja": "売掛計上済",
+    "vi": "Đã ghi phải thu"
+  },
+  "预收冲抵": {
+    "en": "Advance Offset",
+    "ja": "前受金充当",
+    "vi": "Bù trừ tiền thu trước"
+  },
+  "可应收": {
+    "en": "Available Receivable",
+    "ja": "売掛可能額",
+    "vi": "Phải thu khả dụng"
+  },
+  "当前状态的销售订单不可加载应收单": {
+    "en": "Sales orders in the current status cannot be loaded into an AR document",
+    "ja": "現在のステータスの受注伝票からは売掛伝票を読み込めません",
+    "vi": "Đơn bán hàng ở trạng thái hiện tại không thể tải vào chứng từ phải thu"
+  },
+  "销售订单无可应收金额": {
+    "en": "The sales order has no available receivable amount",
+    "ja": "受注伝票に売掛可能金額がありません",
+    "vi": "Đơn bán hàng không có số tiền phải thu khả dụng"
+  },
+  "销售订单可应收金额已全部占用，删除未审核应收单后可再次加载": {
+    "en": "The sales order's available receivable amount is fully used. Delete unapproved AR documents to load it again.",
+    "ja": "受注伝票の売掛可能金額はすべて使用済みです。未承認の売掛伝票を削除すると再度読み込めます。",
+    "vi": "Số tiền phải thu khả dụng của đơn bán hàng đã dùng hết. Xóa chứng từ phải thu chưa duyệt để tải lại."
+  },
+  "当前状态的销售出库单不可加载应收单": {
+    "en": "Sales goods issues in the current status cannot be loaded into an AR document",
+    "ja": "現在のステータスの売上出庫伝票からは売掛伝票を読み込めません",
+    "vi": "Phiếu xuất kho bán hàng ở trạng thái hiện tại không thể tải vào chứng từ phải thu"
+  },
+  "销售出库单无可应收金额": {
+    "en": "The sales goods issue has no available receivable amount",
+    "ja": "売上出庫伝票に売掛可能金額がありません",
+    "vi": "Phiếu xuất kho bán hàng không có số tiền phải thu khả dụng"
+  },
+  "销售出库单可应收金额已全部占用，删除未审核应收单后可再次加载": {
+    "en": "The sales goods issue's available receivable amount is fully used. Delete unapproved AR documents to load it again.",
+    "ja": "売上出庫伝票の売掛可能金額はすべて使用済みです。未承認の売掛伝票を削除すると再度読み込めます。",
+    "vi": "Số tiền phải thu khả dụng của phiếu xuất kho bán hàng đã dùng hết. Xóa chứng từ phải thu chưa duyệt để tải lại."
+  },
+  "当前状态的应收单不可加载收款单": {
+    "en": "AR documents in the current status cannot be loaded into a receipt voucher",
+    "ja": "現在のステータスの売掛伝票からは入金伝票を読み込めません",
+    "vi": "Chứng từ phải thu ở trạng thái hiện tại không thể tải vào phiếu thu tiền"
+  },
+  "应收单无可收款金额": {
+    "en": "The AR document has no amount available for receipt",
+    "ja": "売掛伝票に入金可能金額がありません",
+    "vi": "Chứng từ phải thu không có số tiền thu khả dụng"
+  },
+  "应收单可收款金额已全部占用，作废未核销收款单后可再次加载": {
+    "en": "The AR document's available receipt amount is fully used. Void unsettled receipt vouchers to load it again.",
+    "ja": "売掛伝票の入金可能金額はすべて使用済みです。未消込の入金伝票を取り消すと再度読み込めます。",
+    "vi": "Số tiền thu khả dụng của chứng từ phải thu đã dùng hết. Hủy phiếu thu chưa đối trừ để tải lại."
+  },
+  "请输入应付金额": {
+    "en": "Please enter the payable amount",
+    "ja": "買掛金額を入力してください",
+    "vi": "Vui lòng nhập số tiền phải trả"
+  },
+  "请完善应付金额、到期日等必填项后再提交": {
+    "en": "Please complete required fields such as payable amount and due date before submitting",
+    "ja": "買掛金額、支払期日などの必須項目を入力してから提出してください",
+    "vi": "Vui lòng hoàn thiện các mục bắt buộc như số tiền phải trả, ngày đến hạn rồi mới gửi"
+  },
+  "当前源单不可创建应付单": {
+    "en": "An AP document cannot be created from this source document",
+    "ja": "この元伝票からは買掛伝票を作成できません",
+    "vi": "Không thể tạo chứng từ phải trả từ chứng từ nguồn hiện tại"
+  },
+  "源单无可应付金额": {
+    "en": "The source document has no available payable amount",
+    "ja": "元伝票に買掛可能金額がありません",
+    "vi": "Chứng từ nguồn không có số tiền phải trả khả dụng"
+  },
+  "应付金额不能超过可应付金额 ¥{{max}}": {
+    "en": "The payable amount cannot exceed the available payable amount ¥{{max}}",
+    "ja": "買掛金額は買掛可能金額 ¥{{max}} を超えられません",
+    "vi": "Số tiền phải trả không được vượt quá số tiền phải trả khả dụng ¥{{max}}"
+  },
+  "搜索订单号/入库单号/供应商": {
+    "en": "Search order no. / goods receipt no. / supplier",
+    "ja": "発注番号／入庫伝票番号／仕入先を検索",
+    "vi": "Tìm số đơn hàng/số phiếu nhập kho/nhà cung cấp"
+  },
+  "已应付": {
+    "en": "Payable Created",
+    "ja": "買掛計上済",
+    "vi": "Đã ghi phải trả"
+  },
+  "可应付": {
+    "en": "Available Payable",
+    "ja": "買掛可能額",
+    "vi": "Phải trả khả dụng"
+  },
+  "当前状态的采购订单不可加载应付单": {
+    "en": "Purchase orders in the current status cannot be loaded into an AP document",
+    "ja": "現在のステータスの発注伝票からは買掛伝票を読み込めません",
+    "vi": "Đơn mua hàng ở trạng thái hiện tại không thể tải vào chứng từ phải trả"
+  },
+  "采购订单无可应付金额": {
+    "en": "The purchase order has no available payable amount",
+    "ja": "発注伝票に買掛可能金額がありません",
+    "vi": "Đơn mua hàng không có số tiền phải trả khả dụng"
+  },
+  "采购订单可应付金额已全部占用，删除未审核应付单后可再次加载": {
+    "en": "The purchase order's available payable amount is fully used. Delete unapproved AP documents to load it again.",
+    "ja": "発注伝票の買掛可能金額はすべて使用済みです。未承認の買掛伝票を削除すると再度読み込めます。",
+    "vi": "Số tiền phải trả khả dụng của đơn mua hàng đã dùng hết. Xóa chứng từ phải trả chưa duyệt để tải lại."
+  },
+  "当前状态的采购入库单不可加载应付单": {
+    "en": "Purchase goods receipts in the current status cannot be loaded into an AP document",
+    "ja": "現在のステータスの仕入入庫伝票からは買掛伝票を読み込めません",
+    "vi": "Phiếu nhập kho mua hàng ở trạng thái hiện tại không thể tải vào chứng từ phải trả"
+  },
+  "采购入库单无可应付金额": {
+    "en": "The purchase goods receipt has no available payable amount",
+    "ja": "仕入入庫伝票に買掛可能金額がありません",
+    "vi": "Phiếu nhập kho mua hàng không có số tiền phải trả khả dụng"
+  },
+  "采购入库单可应付金额已全部占用，删除未审核应付单后可再次加载": {
+    "en": "The purchase goods receipt's available payable amount is fully used. Delete unapproved AP documents to load it again.",
+    "ja": "仕入入庫伝票の買掛可能金額はすべて使用済みです。未承認の買掛伝票を削除すると再度読み込めます。",
+    "vi": "Số tiền phải trả khả dụng của phiếu nhập kho mua hàng đã dùng hết. Xóa chứng từ phải trả chưa duyệt để tải lại."
+  },
+  "当前状态的应付单不可加载付款单": {
+    "en": "AP documents in the current status cannot be loaded into a payment voucher",
+    "ja": "現在のステータスの買掛伝票からは支払伝票を読み込めません",
+    "vi": "Chứng từ phải trả ở trạng thái hiện tại không thể tải vào phiếu chi tiền"
+  },
+  "应付单无可付款金额": {
+    "en": "The AP document has no amount available for payment",
+    "ja": "買掛伝票に支払可能金額がありません",
+    "vi": "Chứng từ phải trả không có số tiền chi khả dụng"
+  },
+  "应付单可付款金额已全部占用，作废未核销付款单后可再次加载": {
+    "en": "The AP document's available payment amount is fully used. Void unsettled payment vouchers to load it again.",
+    "ja": "買掛伝票の支払可能金額はすべて使用済みです。未消込の支払伝票を取り消すと再度読み込めます。",
+    "vi": "Số tiền chi khả dụng của chứng từ phải trả đã dùng hết. Hủy phiếu chi chưa đối trừ để tải lại."
+  },
+  "收款金额不能超过可收款金额 {{max}}": {
+    "en": "The receipt amount cannot exceed the available receipt amount {{max}}",
+    "ja": "入金金額は入金可能金額 {{max}} を超えられません",
+    "vi": "Số tiền thu không được vượt quá số tiền thu khả dụng {{max}}"
+  },
+  "收款金额必须大于 0": {
+    "en": "The receipt amount must be greater than 0",
+    "ja": "入金金額は 0 より大きい必要があります",
+    "vi": "Số tiền thu phải lớn hơn 0"
+  },
+  "可收款": {
+    "en": "Available for Receipt",
+    "ja": "入金可能額",
+    "vi": "Có thể thu"
+  },
+  "付款金额不能超过可付款金额 {{max}}": {
+    "en": "The payment amount cannot exceed the available payment amount {{max}}",
+    "ja": "支払金額は支払可能金額 {{max}} を超えられません",
+    "vi": "Số tiền chi không được vượt quá số tiền chi khả dụng {{max}}"
+  },
+  "可付款": {
+    "en": "Available for Payment",
+    "ja": "支払可能額",
+    "vi": "Có thể chi"
+  },
+  "请完善发票号码、开票日期、开票金额等必填项后再提交": {
+    "en": "Please complete required fields such as invoice number, invoice date and invoice amount before submitting",
+    "ja": "請求書番号、発行日、発行金額などの必須項目を入力してから提出してください",
+    "vi": "Vui lòng hoàn thiện các mục bắt buộc như số hóa đơn, ngày xuất hóa đơn, số tiền hóa đơn rồi mới gửi"
+  },
+  "当前源单不可创建销项发票": {
+    "en": "An output invoice cannot be created from this source document",
+    "ja": "この元伝票からは売上請求書を作成できません",
+    "vi": "Không thể tạo hóa đơn đầu ra từ chứng từ nguồn hiện tại"
+  },
+  "源单无可开票金额": {
+    "en": "The source document has no invoiceable amount",
+    "ja": "元伝票に請求可能金額がありません",
+    "vi": "Chứng từ nguồn không có số tiền có thể xuất hóa đơn"
+  },
+  "价税合计不能超过可开票金额 {{max}}": {
+    "en": "The total including tax cannot exceed the invoiceable amount {{max}}",
+    "ja": "税込合計は請求可能金額 {{max}} を超えられません",
+    "vi": "Tổng tiền gồm thuế không được vượt quá số tiền có thể xuất hóa đơn {{max}}"
+  },
+  "可开票": {
+    "en": "Invoiceable",
+    "ja": "請求可能額",
+    "vi": "Có thể xuất hóa đơn"
+  },
+  "当前源单不可创建采购发票": {
+    "en": "A purchase invoice cannot be created from this source document",
+    "ja": "この元伝票からは仕入請求書を作成できません",
+    "vi": "Không thể tạo hóa đơn mua hàng từ chứng từ nguồn hiện tại"
+  },
+  "当前状态的采购订单不可加载进项发票": {
+    "en": "Purchase orders in the current status cannot be loaded into an input invoice",
+    "ja": "現在のステータスの発注伝票からは仕入請求書を読み込めません",
+    "vi": "Đơn mua hàng ở trạng thái hiện tại không thể tải vào hóa đơn đầu vào"
+  },
+  "采购订单无可开票金额": {
+    "en": "The purchase order has no invoiceable amount",
+    "ja": "発注伝票に請求可能金額がありません",
+    "vi": "Đơn mua hàng không có số tiền có thể xuất hóa đơn"
+  },
+  "采购订单可开票金额已全部开票，删除未审核发票后可再次加载": {
+    "en": "The purchase order's invoiceable amount has been fully invoiced. Delete unapproved invoices to load it again.",
+    "ja": "発注伝票の請求可能金額はすべて請求済みです。未承認の請求書を削除すると再度読み込めます。",
+    "vi": "Số tiền có thể xuất hóa đơn của đơn mua hàng đã xuất hết. Xóa hóa đơn chưa duyệt để tải lại."
+  },
+  "当前状态的采购入库单不可加载进项发票": {
+    "en": "Purchase goods receipts in the current status cannot be loaded into an input invoice",
+    "ja": "現在のステータスの仕入入庫伝票からは仕入請求書を読み込めません",
+    "vi": "Phiếu nhập kho mua hàng ở trạng thái hiện tại không thể tải vào hóa đơn đầu vào"
+  },
+  "采购入库单无可开票金额": {
+    "en": "The purchase goods receipt has no invoiceable amount",
+    "ja": "仕入入庫伝票に請求可能金額がありません",
+    "vi": "Phiếu nhập kho mua hàng không có số tiền có thể xuất hóa đơn"
+  },
+  "采购入库单可开票金额已全部开票，删除未审核发票后可再次加载": {
+    "en": "The purchase goods receipt's invoiceable amount has been fully invoiced. Delete unapproved invoices to load it again.",
+    "ja": "仕入入庫伝票の請求可能金額はすべて請求済みです。未承認の請求書を削除すると再度読み込めます。",
+    "vi": "Số tiền có thể xuất hóa đơn của phiếu nhập kho mua hàng đã xuất hết. Xóa hóa đơn chưa duyệt để tải lại."
+  },
+  "当前状态的应付单不可加载进项发票": {
+    "en": "AP documents in the current status cannot be loaded into an input invoice",
+    "ja": "現在のステータスの買掛伝票からは仕入請求書を読み込めません",
+    "vi": "Chứng từ phải trả ở trạng thái hiện tại không thể tải vào hóa đơn đầu vào"
+  },
+  "应付单无可开票金额": {
+    "en": "The AP document has no invoiceable amount",
+    "ja": "買掛伝票に請求可能金額がありません",
+    "vi": "Chứng từ phải trả không có số tiền có thể xuất hóa đơn"
+  },
+  "应付单可开票金额已全部开票，删除未审核发票后可再次加载": {
+    "en": "The AP document's invoiceable amount has been fully invoiced. Delete unapproved invoices to load it again.",
+    "ja": "買掛伝票の請求可能金額はすべて請求済みです。未承認の請求書を削除すると再度読み込めます。",
+    "vi": "Số tiền có thể xuất hóa đơn của chứng từ phải trả đã xuất hết. Xóa hóa đơn chưa duyệt để tải lại."
+  },
+  "加载核销预览失败": {
+    "en": "Failed to load settlement preview",
+    "ja": "消込プレビューの読み込みに失敗しました",
+    "vi": "Tải xem trước đối trừ thất bại"
+  },
+  "正在加载核销预览…": {
+    "en": "Loading settlement preview…",
+    "ja": "消込プレビューを読み込み中…",
+    "vi": "Đang tải xem trước đối trừ…"
+  },
+  "无可核销金额": {
+    "en": "No amount available for settlement",
+    "ja": "消込可能金額がありません",
+    "vi": "Không có số tiền để đối trừ"
+  },
+  "确认核销": {
+    "en": "Confirm Settlement",
+    "ja": "消込を確定",
+    "vi": "Xác nhận đối trừ"
+  },
+  "核销金额不能超过可核销金额 ¥{{max}}": {
+    "en": "The settlement amount cannot exceed the available settlement amount ¥{{max}}",
+    "ja": "消込金額は消込可能金額 ¥{{max}} を超えられません",
+    "vi": "Số tiền đối trừ không được vượt quá số tiền đối trừ khả dụng ¥{{max}}"
+  },
+  "请先在左侧选择应收单": {
+    "en": "Select an AR document on the left first",
+    "ja": "先に左側で売掛伝票を選択してください",
+    "vi": "Vui lòng chọn chứng từ phải thu ở bên trái trước"
+  },
+  "请先在左侧选择应付单": {
+    "en": "Select an AP document on the left first",
+    "ja": "先に左側で買掛伝票を選択してください",
+    "vi": "Vui lòng chọn chứng từ phải trả ở bên trái trước"
+  },
+  "已选应收单：{{code}}，请在右侧匹配收款单": {
+    "en": "AR document selected: {{code}}. Match a receipt voucher on the right.",
+    "ja": "選択した売掛伝票：{{code}}。右側で入金伝票を照合してください",
+    "vi": "Đã chọn chứng từ phải thu: {{code}}, vui lòng khớp phiếu thu ở bên phải"
+  },
+  "已选应付单：{{code}}，请在右侧匹配付款单": {
+    "en": "AP document selected: {{code}}. Match a payment voucher on the right.",
+    "ja": "選択した買掛伝票：{{code}}。右側で支払伝票を照合してください",
+    "vi": "Đã chọn chứng từ phải trả: {{code}}, vui lòng khớp phiếu chi ở bên phải"
+  },
+  "可核销": {
+    "en": "Available for Settlement",
+    "ja": "消込可能額",
+    "vi": "Có thể đối trừ"
+  },
+  "当前状态的应收单不可核销": {
+    "en": "AR documents in the current status cannot be settled",
+    "ja": "現在のステータスの売掛伝票は消込できません",
+    "vi": "Chứng từ phải thu ở trạng thái hiện tại không thể đối trừ"
+  },
+  "应收单与收款单客户不一致，不可核销": {
+    "en": "The AR document and the receipt voucher have different customers and cannot be settled",
+    "ja": "売掛伝票と入金伝票の得意先が一致しないため消込できません",
+    "vi": "Chứng từ phải thu và phiếu thu khác khách hàng, không thể đối trừ"
+  },
+  "当前状态的收款单不可核销": {
+    "en": "Receipt vouchers in the current status cannot be settled",
+    "ja": "現在のステータスの入金伝票は消込できません",
+    "vi": "Phiếu thu ở trạng thái hiện tại không thể đối trừ"
+  },
+  "应收待收与收款余额均为零，无可核销金额": {
+    "en": "Both the outstanding receivable and the receipt balance are zero, so there is no amount to settle",
+    "ja": "売掛未収残と入金残高がいずれもゼロのため、消込可能金額がありません",
+    "vi": "Số phải thu còn lại và số dư phiếu thu đều bằng 0, không có số tiền để đối trừ"
+  },
+  "当前状态的应付单不可核销": {
+    "en": "AP documents in the current status cannot be settled",
+    "ja": "現在のステータスの買掛伝票は消込できません",
+    "vi": "Chứng từ phải trả ở trạng thái hiện tại không thể đối trừ"
+  },
+  "应付单与付款单供应商不一致，不可核销": {
+    "en": "The AP document and the payment voucher have different suppliers and cannot be settled",
+    "ja": "買掛伝票と支払伝票の仕入先が一致しないため消込できません",
+    "vi": "Chứng từ phải trả và phiếu chi khác nhà cung cấp, không thể đối trừ"
+  },
+  "当前状态的付款单不可核销": {
+    "en": "Payment vouchers in the current status cannot be settled",
+    "ja": "現在のステータスの支払伝票は消込できません",
+    "vi": "Phiếu chi ở trạng thái hiện tại không thể đối trừ"
+  },
+  "应付待付与付款余额均为零，无可核销金额": {
+    "en": "Both the outstanding payable and the payment balance are zero, so there is no amount to settle",
+    "ja": "買掛未払残と支払残高がいずれもゼロのため、消込可能金額がありません",
+    "vi": "Số phải trả còn lại và số dư phiếu chi đều bằng 0, không có số tiền để đối trừ"
+  },
+  "请输入正确的核销金额": {
+    "en": "Please enter a valid settlement amount",
+    "ja": "正しい消込金額を入力してください",
+    "vi": "Vui lòng nhập số tiền đối trừ hợp lệ"
+  },
+  "有异议": {
+    "en": "Disputed",
+    "ja": "異議あり",
+    "vi": "Có tranh chấp"
+  },
+  "导出后微信/邮件发送": {
+    "en": "Export then send via WeChat/email",
+    "ja": "エクスポート後に WeChat／メールで送信",
+    "vi": "Xuất file rồi gửi qua WeChat/email"
+  },
+  "打印邮寄": {
+    "en": "Print and Mail",
+    "ja": "印刷して郵送",
+    "vi": "In và gửi bưu điện"
+  },
+  "导出文件发送": {
+    "en": "Send as Exported File",
+    "ja": "エクスポートファイルで送信",
+    "vi": "Gửi bằng file xuất"
+  },
+  "邮件手动发送": {
+    "en": "Send Manually by Email",
+    "ja": "メールで手動送信",
+    "vi": "Gửi email thủ công"
+  },
+  "对账单-{{code}}.{{ext}}": {
+    "en": "Statement-{{code}}.{{ext}}",
+    "ja": "残高確認書-{{code}}.{{ext}}",
+    "vi": "Bang-doi-chieu-cong-no-{{code}}.{{ext}}"
+  },
+  "订单交付周期": {
+    "en": "Order Delivery Lead Time",
+    "ja": "受注リードタイム",
+    "vi": "Chu kỳ giao hàng của đơn hàng"
+  },
+  "须完成期初库存导入且全部数据行校验通过后，方可进入下一步。": {
+    "en": "You can proceed to the next step only after the opening inventory import is complete and all data rows pass validation.",
+    "ja": "期首在庫のインポートを完了し、すべてのデータ行の検証に合格してから次のステップへ進めます。",
+    "vi": "Chỉ có thể sang bước tiếp theo sau khi hoàn tất nhập tồn kho đầu kỳ và tất cả dòng dữ liệu qua kiểm tra."
+  },
+  "若无期初应收应付数据，或将于财务模块另行处理，可跳过本步骤。": {
+    "en": "If there is no opening AR/AP data, or it will be handled separately in the finance module, you can skip this step.",
+    "ja": "期首の売掛金と買掛金のデータがない場合、または財務モジュールで別途処理する場合は、このステップをスキップできます。",
+    "vi": "Nếu không có dữ liệu phải thu, phải trả đầu kỳ, hoặc sẽ xử lý riêng trong phân hệ tài chính, có thể bỏ qua bước này."
+  },
+  "建议在完成与财务数据核对后，于上线助手中标记「期初数据已核对」。": {
+    "en": "After reconciling with the finance data, mark \"Opening data reconciled\" in the go-live assistant.",
+    "ja": "財務データとの照合が完了したら、導入アシスタントで「期首データ照合済み」をマークすることを推奨します。",
+    "vi": "Nên đánh dấu \"Đã đối chiếu dữ liệu đầu kỳ\" trong trợ lý go-live sau khi đối chiếu xong với dữ liệu tài chính."
+  },
+  "该客户对该物料的编号": {
+    "en": "The customer's part number for this material",
+    "ja": "この品目に対する得意先の品番",
+    "vi": "Mã của khách hàng cho vật tư này"
+  },
+  "该供应商对该物料的编号": {
+    "en": "The supplier's part number for this material",
+    "ja": "この品目に対する仕入先の品番",
+    "vi": "Mã của nhà cung cấp cho vật tư này"
+  },
+  "对方对该物料的名称，可不填": {
+    "en": "The counterparty's name for this material, optional",
+    "ja": "取引先側での品目名称（任意）",
+    "vi": "Tên vật tư theo phía đối tác, có thể bỏ trống"
+  },
+  "物料导入仅支持主物料，请删除列：{{columns}}。属性 SKU 请在物料详情的「属性组合」中导入。": {
+    "en": "Material import supports master materials only. Remove the columns: {{columns}}. Import attribute SKUs from \"Attribute Combinations\" in the material details.",
+    "ja": "品目インポートは主品目のみ対応です。列：{{columns}} を削除してください。属性 SKU は品目詳細の「属性組合せ」からインポートしてください。",
+    "vi": "Nhập vật tư chỉ hỗ trợ vật tư chính, vui lòng xóa các cột: {{columns}}. SKU thuộc tính vui lòng nhập trong \"Tổ hợp thuộc tính\" ở chi tiết vật tư."
+  },
+  "未找到物料分组：{{value}}（请填写分组编码，或从下拉选择「编号 - 名称」）": {
+    "en": "Material group not found: {{value}} (enter the group code, or select \"Code - Name\" from the dropdown)",
+    "ja": "品目グループが見つかりません：{{value}}（グループコードを入力するか、ドロップダウンから「コード - 名称」を選択してください）",
+    "vi": "Không tìm thấy nhóm vật tư: {{value}} (vui lòng nhập mã nhóm, hoặc chọn \"Mã - Tên\" từ danh sách thả xuống)"
+  },
+  "导入的物料不在当前左侧分组筛选范围内，已切换到全部物料以便查看": {
+    "en": "The imported materials are outside the current group filter on the left, so the view switched to All Materials",
+    "ja": "インポートした品目は左側のグループ絞り込み範囲外のため、確認できるよう「すべての品目」に切り替えました",
+    "vi": "Vật tư đã nhập không nằm trong phạm vi lọc nhóm bên trái, đã chuyển sang Tất cả vật tư để tiện xem"
+  },
+  "主编码、辅助单位、换算分子、换算分母": {
+    "en": "Primary Code, Alternate UoM, Conversion Numerator, Conversion Denominator",
+    "ja": "主コード、補助単位、換算分子、換算分母",
+    "vi": "Mã chính, đơn vị phụ, tử số quy đổi, mẫu số quy đổi"
+  },
+  "已启用 {{count}} 条记录": {
+    "en": "{{count}} records enabled",
+    "ja": "{{count}} 件のレコードを有効化しました",
+    "vi": "Đã kích hoạt {{count}} bản ghi"
+  },
+  "已停用 {{count}} 条记录": {
+    "en": "{{count}} records disabled",
+    "ja": "{{count}} 件のレコードを無効化しました",
+    "vi": "Đã ngừng kích hoạt {{count}} bản ghi"
+  },
+  "将按以下 {{count}} 个工序批量创建 SOP 草稿，再逐条进入设计器完善流程。": {
+    "en": "SOP drafts will be created in bulk for the following {{count}} operations, then refined one by one in the designer.",
+    "ja": "以下の {{count}} 工程について SOP のドラフトを一括作成し、その後デザイナーで個別に仕上げます。",
+    "vi": "Sẽ tạo hàng loạt bản nháp SOP theo {{count}} công đoạn sau, rồi vào trình thiết kế hoàn thiện từng bản."
+  },
+  "不选则建在顶级；选中则在所选分组下创建预设分类子组": {
+    "en": "Leave empty to create at the top level; select a group to create preset category subgroups under it",
+    "ja": "未選択の場合は最上位に作成し、選択した場合は選択したグループの下にプリセット分類のサブグループを作成します",
+    "vi": "Không chọn thì tạo ở cấp cao nhất; chọn thì tạo nhóm con phân loại mặc định dưới nhóm đã chọn"
+  },
+  "没有未保存的修改": {
+    "en": "No unsaved changes",
+    "ja": "未保存の変更はありません",
+    "vi": "Không có thay đổi chưa lưu"
+  },
+  "并行度": {
+    "en": "Parallelism",
+    "ja": "並列度",
+    "vi": "Mức song song"
+  },
+  "触屏专用用于工位触屏端管理员，按普通内部权限配置，不绑定客户/供应商/设备制造商": {
+    "en": "Touchscreen-only is for station touchscreen administrators. Configure it with regular internal permissions and do not bind it to a customer / supplier / equipment manufacturer",
+    "ja": "タッチパネル専用はステーションのタッチ端末管理者向けです。通常の社内権限として設定し、得意先／仕入先／設備メーカーには紐付けません",
+    "vi": "Chuyên dùng màn hình cảm ứng dành cho quản trị viên màn hình cảm ứng tại trạm, cấu hình theo quyền nội bộ thông thường, không gắn với khách hàng/nhà cung cấp/nhà sản xuất thiết bị"
+  },
+  "未设置时，领料确认等按职能绑定的业务配置无法匹配该角色": {
+    "en": "If not set, function-based business settings such as material issue confirmation cannot match this role",
+    "ja": "未設定の場合、払出確認など職能に紐付く業務設定はこのロールと一致しません",
+    "vi": "Nếu không thiết lập, các cấu hình nghiệp vụ gắn theo chức năng như xác nhận lĩnh vật tư sẽ không khớp với vai trò này"
+  },
+  "仅外部角色需要设置；内部与触屏专用角色会自动清空该值": {
+    "en": "Only external roles need this. Internal and touchscreen-only roles clear the value automatically",
+    "ja": "外部ロールのみ設定が必要です。社内ロールとタッチパネル専用ロールでは自動的にクリアされます",
+    "vi": "Chỉ vai trò bên ngoài mới cần thiết lập; vai trò nội bộ và chuyên dùng màn hình cảm ứng sẽ tự động xóa giá trị này"
+  },
+  "勾选后将同步创建同名、同代码的职位（备注与启用状态与角色一致）": {
+    "en": "When checked, a position with the same name and code is created at the same time (remark and enabled status follow the role)",
+    "ja": "チェックすると、同名、同コードの職位を同時に作成します（備考と有効状態はロールに従います）",
+    "vi": "Khi chọn sẽ đồng thời tạo chức danh cùng tên, cùng mã (ghi chú và trạng thái kích hoạt theo vai trò)"
+  },
+  "同步完成：新增 {{created}} 条，更新 {{updated}} 条，跳过 {{skipped}} 行（无部门名称）": {
+    "en": "Sync complete: {{created}} added, {{updated}} updated, {{skipped}} rows skipped (no department name)",
+    "ja": "同期完了：新規 {{created}} 件、更新 {{updated}} 件、スキップ {{skipped}} 行（部門名称なし）",
+    "vi": "Đồng bộ hoàn tất: thêm mới {{created}}, cập nhật {{updated}}, bỏ qua {{skipped}} dòng (không có tên bộ phận)"
+  },
+  "系统预置字典项不允许删除；本字典下自行新增的项可删除": {
+    "en": "System preset dictionary entries cannot be deleted. Entries you add under this dictionary can be deleted",
+    "ja": "システム標準の辞書項目は削除できません。この辞書に自分で追加した項目は削除できます",
+    "vi": "Không được xóa mục từ điển hệ thống cài sẵn; các mục tự thêm dưới từ điển này có thể xóa"
+  },
+  "仅平台管理员可安装、卸载、启用或禁用应用。": {
+    "en": "Only platform administrators can install, uninstall, enable or disable applications.",
+    "ja": "アプリのインストール、アンインストール、有効化、無効化はプラットフォーム管理者のみ実行できます。",
+    "vi": "Chỉ quản trị viên nền tảng mới có thể cài đặt, gỡ bỏ, bật hoặc tắt ứng dụng."
+  },
+  "RAG 检索引擎": {
+    "en": "RAG Retrieval Engine",
+    "ja": "RAG 検索エンジン",
+    "vi": "Công cụ truy xuất RAG"
+  },
+  "原生（默认）": {
+    "en": "Native (default)",
+    "ja": "ネイティブ（既定）",
+    "vi": "Gốc (mặc định)"
+  },
+  "LlamaIndex": {
+    "en": "LlamaIndex",
+    "ja": "LlamaIndex",
+    "vi": "LlamaIndex"
+  },
+  "仅主组织可创建分支组织；分支组织不可继续创建下级组织。": {
+    "en": "Only the primary organization can create branch organizations. Branch organizations cannot create further sub-organizations.",
+    "ja": "支店組織を作成できるのは主組織のみです。支店組織はさらに下位組織を作成できません。",
+    "vi": "Chỉ tổ chức chính mới có thể tạo tổ chức chi nhánh; tổ chức chi nhánh không thể tạo tiếp tổ chức cấp dưới."
+  },
+  "默认沿用当前组织管理员本人账号和密码。": {
+    "en": "By default, the current organization administrator's own account and password are used.",
+    "ja": "既定では、現在の組織管理者本人のアカウントとパスワードを引き継ぎます。",
+    "vi": "Mặc định sử dụng tài khoản và mật khẩu của chính quản trị viên tổ chức hiện tại."
+  },
+  "设置业务单据之间的序时关系与前置条件": {
+    "en": "Define the sequence and prerequisites between business documents",
+    "ja": "業務伝票間の順序関係と前提条件を設定します",
+    "vi": "Thiết lập quan hệ trình tự và điều kiện tiên quyết giữa các chứng từ nghiệp vụ"
+  },
+  "参数配置": {
+    "en": "Parameter Settings",
+    "ja": "パラメータ設定",
+    "vi": "Cấu hình tham số"
+  },
+  "开单用户指定(默认{{count}}人)": {
+    "en": "Specified by the document creator (default {{count}} users)",
+    "ja": "伝票作成者が指定（既定 {{count}} 名）",
+    "vi": "Người lập chứng từ chỉ định (mặc định {{count}} người)"
+  },
+  "默认站内通知，可多选其它已配置渠道": {
+    "en": "In-app notification by default, other configured channels can also be selected",
+    "ja": "既定はアプリ内通知です。設定済みの他チャネルも複数選択できます",
+    "vi": "Mặc định thông báo trong hệ thống, có thể chọn thêm các kênh đã cấu hình khác"
+  },
+  "部分步骤未成功，可稍后在系统设置中补全": {
+    "en": "Some steps did not succeed, you can complete them later in System Settings",
+    "ja": "一部のステップが完了していません。後でシステム設定から補完できます",
+    "vi": "Một số bước chưa thành công, có thể bổ sung sau trong Cài đặt hệ thống"
+  },
+  "简体中文、English 等系统语言": {
+    "en": "System languages such as Simplified Chinese and English",
+    "ja": "簡体字中国語、English などのシステム言語",
+    "vi": "Ngôn ngữ hệ thống như Tiếng Trung giản thể, English"
+  },
+  "系统名称、时区、货币等参数（必选）": {
+    "en": "Parameters such as system name, time zone and currency (required)",
+    "ja": "システム名称、タイムゾーン、通貨などのパラメータ（必須）",
+    "vi": "Các tham số như tên hệ thống, múi giờ, tiền tệ (bắt buộc)"
+  },
+  "工单、物料、销售单等编码规则": {
+    "en": "Numbering rules for work orders, materials, sales orders and more",
+    "ja": "製造指示、品目、受注などの採番ルール",
+    "vi": "Quy tắc đánh mã cho lệnh sản xuất, vật tư, đơn bán hàng"
+  },
+  "采购单、销售单等审批流程": {
+    "en": "Approval workflows for purchase orders, sales orders and more",
+    "ja": "発注、受注などの承認フロー",
+    "vi": "Quy trình phê duyệt cho đơn mua hàng, đơn bán hàng"
+  },
+  "审批通知、验证码等消息模板": {
+    "en": "Message templates for approval notifications, verification codes and more",
+    "ja": "承認通知、認証コードなどのメッセージテンプレート",
+    "vi": "Mẫu tin nhắn cho thông báo phê duyệt, mã xác minh"
+  },
+  "通用标签、收据等打印模板": {
+    "en": "Print templates for general labels, receipts and more",
+    "ja": "汎用ラベル、領収書などの印刷テンプレート",
+    "vi": "Mẫu in cho nhãn chung, biên nhận"
+  },
+  "中国中小制造业极简部门结构": {
+    "en": "Minimal department structure for small and medium Chinese manufacturers",
+    "ja": "中国の中小製造業向けの最小限の部門構成",
+    "vi": "Cơ cấu bộ phận tối giản cho doanh nghiệp sản xuất vừa và nhỏ Trung Quốc"
+  },
+  "总经理、生产经理等常用职位": {
+    "en": "Common positions such as General Manager and Production Manager",
+    "ja": "総経理、製造部長など一般的な職位",
+    "vi": "Các chức danh thường dùng như Tổng giám đốc, Trưởng phòng sản xuất"
+  },
+  "部门经理、普通员工等常用角色": {
+    "en": "Common roles such as Department Manager and Employee",
+    "ja": "部門長、一般社員など一般的なロール",
+    "vi": "Các vai trò thường dùng như Trưởng bộ phận, Nhân viên"
+  },
+  "原料仓、成品仓、半成品仓、不良品仓等": {
+    "en": "Raw material, finished goods, semi-finished and defective warehouses",
+    "ja": "原材料倉庫、製品倉庫、半製品倉庫、不良品倉庫など",
+    "vi": "Kho nguyên liệu, kho thành phẩm, kho bán thành phẩm, kho hàng lỗi"
+  },
+  "领料确认额外职能域": {
+    "en": "Additional Function Domains for Material Issue Confirmation",
+    "ja": "払出確認の追加職能ドメイン",
+    "vi": "Miền chức năng bổ sung cho xác nhận lĩnh vật tư"
+  },
+  "启用客户信用额度管控": {
+    "en": "Enable customer credit limit control",
+    "ja": "得意先与信限度の管理を有効化",
+    "vi": "Bật kiểm soát hạn mức tín dụng khách hàng"
+  },
+  "开启后，销售订单审核与出库确认将校验客户信用额度（主数据维护额度）。": {
+    "en": "When enabled, sales order approval and goods issue confirmation validate the customer credit limit (limits are maintained in master data).",
+    "ja": "有効にすると、受注承認と出庫確認時に得意先与信限度を検証します（限度額はマスタデータで管理）。",
+    "vi": "Khi bật, việc duyệt đơn bán hàng và xác nhận xuất kho sẽ kiểm tra hạn mức tín dụng khách hàng (hạn mức duy trì trong dữ liệu chính)."
+  },
+  "已停用。成品检验改为入库前自动补齐，或在工单下推「从工单创建成品检验单」手工补建；打开此项也不会在报工时建单。": {
+    "en": "Disabled. Final inspection is now generated automatically before goods receipt, or created manually from the work order via \"Create Final Inspection from Work Order\". Enabling this option will not create documents at production reporting.",
+    "ja": "無効です。完成検査は入庫前に自動補完されるか、製造指示の後続伝票を作成「製造指示から完成検査伝票を作成」で手動作成します。本項目を有効にしても出来高報告時に伝票は作成されません。",
+    "vi": "Đã ngừng sử dụng. Kiểm tra thành phẩm chuyển sang tự động bổ sung trước khi nhập kho, hoặc tạo thủ công từ lệnh sản xuất qua \"Tạo phiếu kiểm tra thành phẩm từ lệnh sản xuất\"; bật mục này cũng không tạo chứng từ khi báo cáo sản xuất."
+  },
+  "来料单号": {
+    "en": "Incoming Material No.",
+    "ja": "受入伝票番号",
+    "vi": "Số phiếu hàng đến"
+  },
+  "可加载明细": {
+    "en": "Loadable Lines",
+    "ja": "読み込み可能明細",
+    "vi": "Dòng chi tiết có thể tải"
+  },
+  "{{pushable}}/{{total}} 条": {
+    "en": "{{pushable}}/{{total}} lines",
+    "ja": "{{pushable}}/{{total}} 件",
+    "vi": "{{pushable}}/{{total}} dòng"
+  },
+  "可加载状态": {
+    "en": "Loadable Status",
+    "ja": "読み込み可能ステータス",
+    "vi": "Trạng thái có thể tải"
+  },
+  "可加载": {
+    "en": "Loadable",
+    "ja": "読み込み可能",
+    "vi": "Có thể tải"
+  },
+  "请至少选择一条可加载工序": {
+    "en": "Select at least one loadable operation",
+    "ja": "読み込み可能な工程を1件以上選択してください",
+    "vi": "Vui lòng chọn ít nhất một công đoạn có thể tải"
+  },
+  "当前状态的工单不可加载过程检验": {
+    "en": "Work orders in the current status cannot be loaded into in-process inspection",
+    "ja": "現在のステータスの製造指示からは工程内検査を読み込めません",
+    "vi": "Lệnh sản xuất ở trạng thái hiện tại không thể tải kiểm tra quá trình"
+  },
+  "工单未关联产品物料，无法加载过程检验": {
+    "en": "The work order has no product material linked, so in-process inspection cannot be loaded",
+    "ja": "製造指示に製品品目が紐付いていないため、工程内検査を読み込めません",
+    "vi": "Lệnh sản xuất chưa liên kết vật tư sản phẩm, không thể tải kiểm tra quá trình"
+  },
+  "工单工序均未配置过程检验，无需加载": {
+    "en": "No work order operation is configured for in-process inspection, nothing to load",
+    "ja": "製造指示のいずれの工程にも工程内検査が設定されていないため、読み込みは不要です",
+    "vi": "Không công đoạn nào của lệnh sản xuất cấu hình kiểm tra quá trình, không cần tải"
+  },
+  "工单无工序明细，无法加载过程检验": {
+    "en": "The work order has no operation lines, so in-process inspection cannot be loaded",
+    "ja": "製造指示に工程明細がないため、工程内検査を読み込めません",
+    "vi": "Lệnh sản xuất không có dòng công đoạn, không thể tải kiểm tra quá trình"
+  },
+  "相关工序均已存在待检验的过程检验单，删除后可再次加载": {
+    "en": "In-process inspections pending inspection already exist for all related operations. Delete them to load again.",
+    "ja": "関連工程にはすでに検査待ちの工程内検査伝票が存在します。削除すると再度読み込めます。",
+    "vi": "Các công đoạn liên quan đều đã có phiếu kiểm tra quá trình chờ kiểm, xóa rồi có thể tải lại."
+  },
+  "只有待检验状态的出货检验单可执行检验": {
+    "en": "Only outgoing inspections in Pending Inspection status can be inspected",
+    "ja": "検査待ちステータスの出荷検査伝票のみ検査を実行できます",
+    "vi": "Chỉ phiếu kiểm tra xuất hàng ở trạng thái Chờ kiểm mới thực hiện kiểm tra được"
+  },
+  "已审核的出货检验单不可执行检验，请先撤销审核": {
+    "en": "Approved outgoing inspections cannot be inspected, revoke the approval first",
+    "ja": "承認済みの出荷検査伝票は検査を実行できません。先に承認を取り消してください",
+    "vi": "Phiếu kiểm tra xuất hàng đã duyệt không thể thực hiện kiểm tra, vui lòng hủy duyệt trước"
+  },
+  "出货检验单当前不可审核": {
+    "en": "This outgoing inspection cannot be approved right now",
+    "ja": "この出荷検査伝票は現在承認できません",
+    "vi": "Phiếu kiểm tra xuất hàng hiện không thể duyệt"
+  },
+  "仅已审核通过的出货检验单可撤销审核": {
+    "en": "Only approved outgoing inspections can have their approval revoked",
+    "ja": "承認済みの出荷検査伝票のみ承認を取り消せます",
+    "vi": "Chỉ phiếu kiểm tra xuất hàng đã duyệt mới có thể hủy duyệt"
+  },
+  "仅待检验状态的出货检验单可删除": {
+    "en": "Only outgoing inspections in Pending Inspection status can be deleted",
+    "ja": "検査待ちステータスの出荷検査伝票のみ削除できます",
+    "vi": "Chỉ phiếu kiểm tra xuất hàng ở trạng thái Chờ kiểm mới xóa được"
+  },
+  "当前状态的发货通知单不可加载出货检验": {
+    "en": "Delivery notices in the current status cannot be loaded into outgoing inspection",
+    "ja": "現在のステータスの出荷通知伝票からは出荷検査を読み込めません",
+    "vi": "Phiếu thông báo giao hàng ở trạng thái hiện tại không thể tải kiểm tra xuất hàng"
+  },
+  "发货通知单无需要出货检验的明细": {
+    "en": "The delivery notice has no lines requiring outgoing inspection",
+    "ja": "出荷通知伝票に出荷検査が必要な明細はありません",
+    "vi": "Phiếu thông báo giao hàng không có dòng cần kiểm tra xuất hàng"
+  },
+  "相关明细均已存在出货检验单，删除后可再次加载": {
+    "en": "Outgoing inspections already exist for all related lines. Delete them to load again.",
+    "ja": "関連明細にはすでに出荷検査伝票が存在します。削除すると再度読み込めます。",
+    "vi": "Các dòng liên quan đều đã có phiếu kiểm tra xuất hàng, xóa rồi có thể tải lại."
+  },
+  "当前状态的销售出库单不可加载出货检验": {
+    "en": "Sales goods issues in the current status cannot be loaded into outgoing inspection",
+    "ja": "現在のステータスの売上出庫伝票からは出荷検査を読み込めません",
+    "vi": "Phiếu xuất kho bán hàng ở trạng thái hiện tại không thể tải kiểm tra xuất hàng"
+  },
+  "销售出库单无需要出货检验的明细": {
+    "en": "The sales goods issue has no lines requiring outgoing inspection",
+    "ja": "売上出庫伝票に出荷検査が必要な明細はありません",
+    "vi": "Phiếu xuất kho bán hàng không có dòng cần kiểm tra xuất hàng"
+  },
+  "点击任一采样记录即可加载该质量特性的 I-MR 控制图。": {
+    "en": "Click any sampling record to load the I-MR control chart for that quality characteristic.",
+    "ja": "任意のサンプリング記録をクリックすると、その品質特性の I-MR 管理図を読み込みます。",
+    "vi": "Nhấp vào bất kỳ bản ghi lấy mẫu nào để tải biểu đồ kiểm soát I-MR của đặc tính chất lượng đó."
+  },
+  "加载来料检验…": {
+    "en": "Loading incoming inspection…",
+    "ja": "受入検査を読み込み中…",
+    "vi": "Đang tải kiểm tra hàng đến…"
+  },
+  "暂无关联来料检验": {
+    "en": "No linked incoming inspection",
+    "ja": "関連する受入検査はありません",
+    "vi": "Chưa có kiểm tra hàng đến liên quan"
+  },
+  "去来料检验": {
+    "en": "Go to Incoming Inspection",
+    "ja": "受入検査へ移動",
+    "vi": "Đến kiểm tra hàng đến"
+  },
+  "加载出货检验…": {
+    "en": "Loading outgoing inspection…",
+    "ja": "出荷検査を読み込み中…",
+    "vi": "Đang tải kiểm tra xuất hàng…"
+  },
+  "暂无关联出货检验 (OQC)": {
+    "en": "No linked outgoing inspection (OQC)",
+    "ja": "関連する出荷検査 (OQC) はありません",
+    "vi": "Chưa có kiểm tra xuất hàng (OQC) liên quan"
+  },
+  "去出货检验": {
+    "en": "Go to Outgoing Inspection",
+    "ja": "出荷検査へ移動",
+    "vi": "Đến kiểm tra xuất hàng"
+  },
+  "加载成品检验…": {
+    "en": "Loading final inspection…",
+    "ja": "完成検査を読み込み中…",
+    "vi": "Đang tải kiểm tra thành phẩm…"
+  },
+  "暂无关联成品检验 (FQC)": {
+    "en": "No linked final inspection (FQC)",
+    "ja": "関連する完成検査 (FQC) はありません",
+    "vi": "Chưa có kiểm tra thành phẩm (FQC) liên quan"
+  },
+  "去成品检验": {
+    "en": "Go to Final Inspection",
+    "ja": "完成検査へ移動",
+    "vi": "Đến kiểm tra thành phẩm"
+  },
+  "已放行": {
+    "en": "Released",
+    "ja": "リリース済",
+    "vi": "Đã thông qua"
+  },
+  "登记不合格品 (NC)": {
+    "en": "Record Nonconformance (NC)",
+    "ja": "不適合品 (NC) を登録",
+    "vi": "Ghi nhận hàng không đạt (NC)"
+  },
+  "查看质量异常": {
+    "en": "View Quality Issue",
+    "ja": "品質異常を表示",
+    "vi": "Xem bất thường chất lượng"
+  },
+  "继续 OQC 处置": {
+    "en": "Continue OQC Disposition",
+    "ja": "OQC 処置を続行",
+    "vi": "Tiếp tục xử lý OQC"
+  },
+  "开启后，登录主界面顶栏手机图标前显示小程序入口": {
+    "en": "When enabled, a mini program entry appears before the mobile icon in the top bar of the main screen after login",
+    "ja": "有効にすると、ログイン後のメイン画面上部バーのスマホアイコンの前にミニプログラムの入口を表示します",
+    "vi": "Khi bật, hiển thị lối vào mini program trước biểu tượng điện thoại trên thanh trên cùng của màn hình chính sau khi đăng nhập"
+  },
+  "尚未配置 AI 密钥，可点击「添加 AI 连接器」从市场选择。": {
+    "en": "No AI key configured yet. Click \"Add AI Connector\" to choose one from the marketplace.",
+    "ja": "AI キーが未設定です。「AI コネクタを追加」をクリックしてマーケットから選択できます。",
+    "vi": "Chưa cấu hình khóa AI, có thể nhấp \"Thêm bộ kết nối AI\" để chọn từ chợ ứng dụng."
+  },
+  "自适应（随内容增高，以下为表头/表体最小行高）": {
+    "en": "Adaptive (grows with content, the values below are the minimum row heights for header/body)",
+    "ja": "自動調整（内容に応じて高くなります。以下はヘッダー／明細の最小行高です）",
+    "vi": "Tự thích ứng (cao theo nội dung, bên dưới là chiều cao dòng tối thiểu của tiêu đề/thân bảng)"
+  },
+  "固定（表头/表体行高一致、偏紧凑排版）": {
+    "en": "Fixed (same row height for header/body, compact layout)",
+    "ja": "固定（ヘッダー／明細の行高を統一、コンパクトなレイアウト）",
+    "vi": "Cố định (chiều cao dòng tiêu đề/thân bảng giống nhau, bố cục gọn)"
+  },
+  "当前单据类型未配置明细表列，无法插入表格": {
+    "en": "No line table columns are configured for this document type, so a table cannot be inserted",
+    "ja": "この伝票種別には明細テーブルの列が設定されていないため、表を挿入できません",
+    "vi": "Loại chứng từ hiện tại chưa cấu hình cột bảng chi tiết, không thể chèn bảng"
+  },
+  "执行打印": {
+    "en": "Print",
+    "ja": "印刷を実行",
+    "vi": "Thực hiện in"
+  },
+  "打印测试页": {
+    "en": "Print Test Page",
+    "ja": "テストページを印刷",
+    "vi": "In trang thử"
+  },
+  "恢复后点击 Logo 将打开系统默认工作台（或应用中心），确定？": {
+    "en": "After restoring, clicking the logo opens the system default workspace (or App Center). Continue?",
+    "ja": "復元後、ロゴをクリックするとシステム既定のワークスペース（またはアプリセンター）が開きます。よろしいですか？",
+    "vi": "Sau khi khôi phục, nhấp vào Logo sẽ mở bàn làm việc mặc định của hệ thống (hoặc Trung tâm ứng dụng). Xác nhận?"
+  },
+  "已加载系统默认菜单，可继续调整后保存": {
+    "en": "System default menu loaded, adjust it and then save",
+    "ja": "システム既定のメニューを読み込みました。調整後に保存できます",
+    "vi": "Đã tải menu mặc định của hệ thống, có thể điều chỉnh rồi lưu"
+  },
+  "功能": {
+    "en": "Feature",
+    "ja": "機能",
+    "vi": "Chức năng"
+  },
+  "销售全链路追踪": {
+    "en": "Sales End-to-End Traceability",
+    "ja": "受注全工程トレーサビリティ",
+    "vi": "Truy vết toàn chuỗi bán hàng"
+  },
+  "采购全链路追踪": {
+    "en": "Purchasing End-to-End Traceability",
+    "ja": "調達全工程トレーサビリティ",
+    "vi": "Truy vết toàn chuỗi mua hàng"
+  },
+  "OEE(%)": {
+    "en": "OEE (%)",
+    "ja": "OEE (%)",
+    "vi": "OEE (%)"
+  },
+  "进度(%)": {
+    "en": "Progress (%)",
+    "ja": "進捗 (%)",
+    "vi": "Tiến độ (%)"
+  },
+  "检验组": {
+    "en": "Inspection Team",
+    "ja": "検査グループ",
+    "vi": "Tổ kiểm tra"
+  },
+  "抽检数": {
+    "en": "Sample Qty",
+    "ja": "抜取検査数",
+    "vi": "Số lượng kiểm mẫu"
+  },
+  "不良数": {
+    "en": "Defect Qty",
+    "ja": "不良数",
+    "vi": "Số lượng lỗi"
+  },
+  "待开工": {
+    "en": "Not Started",
+    "ja": "着手待ち",
+    "vi": "Chờ khởi công"
+  },
+  "延误": {
+    "en": "Delayed",
+    "ja": "遅延",
+    "vi": "Trễ hạn"
+  },
+  "铝合金外壳 A型": {
+    "en": "Aluminum Alloy Housing Type A",
+    "ja": "アルミ合金ケース A型",
+    "vi": "Vỏ hợp kim nhôm loại A"
+  },
+  "质检一组": {
+    "en": "QC Team 1",
+    "ja": "品質検査 第1グループ",
+    "vi": "Tổ kiểm tra chất lượng 1"
+  },
+  "卡片列表": {
+    "en": "Card List",
+    "ja": "カードリスト",
+    "vi": "Danh sách thẻ"
+  },
+  "滚动间隔(ms)": {
+    "en": "Scroll Interval (ms)",
+    "ja": "スクロール間隔 (ms)",
+    "vi": "Khoảng thời gian cuộn (ms)"
+  },
+  "卡片宽度": {
+    "en": "Card Width",
+    "ja": "カード幅",
+    "vi": "Chiều rộng thẻ"
+  },
+  "卡片方向": {
+    "en": "Card Orientation",
+    "ja": "カードの向き",
+    "vi": "Hướng thẻ"
+  },
+  "竖向（上图下文）": {
+    "en": "Vertical (image on top, text below)",
+    "ja": "縦向き（上に画像、下にテキスト）",
+    "vi": "Dọc (ảnh trên, chữ dưới)"
+  },
+  "横向（左图右文）": {
+    "en": "Horizontal (image on left, text on right)",
+    "ja": "横向き（左に画像、右にテキスト）",
+    "vi": "Ngang (ảnh trái, chữ phải)"
+  },
+  "列表绑定": {
+    "en": "List Binding",
+    "ja": "リストのバインド",
+    "vi": "Liên kết danh sách"
+  },
+  "图片字段": {
+    "en": "Image Field",
+    "ja": "画像フィールド",
+    "vi": "Trường hình ảnh"
+  },
+  "标题字段": {
+    "en": "Title Field",
+    "ja": "タイトルフィールド",
+    "vi": "Trường tiêu đề"
+  },
+  "编码字段": {
+    "en": "Code Field",
+    "ja": "コードフィールド",
+    "vi": "Trường mã"
+  },
+  "标签字段1": {
+    "en": "Tag Field 1",
+    "ja": "タグフィールド1",
+    "vi": "Trường nhãn 1"
+  },
+  "标签字段2": {
+    "en": "Tag Field 2",
+    "ja": "タグフィールド2",
+    "vi": "Trường nhãn 2"
+  },
+  "状态字段": {
+    "en": "Status Field",
+    "ja": "ステータスフィールド",
+    "vi": "Trường trạng thái"
+  },
+  "关系": {
+    "en": "Relation",
+    "ja": "関係",
+    "vi": "Quan hệ"
+  },
+  "或签": {
+    "en": "Any Approver",
+    "ja": "いずれか承認",
+    "vi": "Duyệt bất kỳ"
+  },
+  "会签": {
+    "en": "All Approvers",
+    "ja": "全員承認",
+    "vi": "Duyệt tất cả"
+  },
+  "有条件过滤": {
+    "en": "Conditional Filter",
+    "ja": "条件付きフィルタ",
+    "vi": "Lọc có điều kiện"
+  },
+  "审核中允许修改单据": {
+    "en": "Allow editing the document during approval",
+    "ja": "承認中の伝票編集を許可",
+    "vi": "Cho phép sửa chứng từ khi đang duyệt"
+  },
+  "改单后刷新条件上下文": {
+    "en": "Refresh condition context after the document changes",
+    "ja": "伝票変更後に条件コンテキストを更新",
+    "vi": "Làm mới ngữ cảnh điều kiện sau khi sửa chứng từ"
+  },
+  "允许转交": {
+    "en": "Allow Transfer",
+    "ja": "転送を許可",
+    "vi": "Cho phép chuyển giao"
+  },
+  "允许加签": {
+    "en": "Allow Adding Approvers",
+    "ja": "承認者の追加を許可",
+    "vi": "Cho phép thêm người duyệt"
+  },
+  "限时审批（小时）": {
+    "en": "Approval Time Limit (hours)",
+    "ja": "承認期限（時間）",
+    "vi": "Thời hạn phê duyệt (giờ)"
+  },
+  "超时后自动催办并记录升级；0 或不填表示不限时": {
+    "en": "Automatically send a reminder and log an escalation after timeout. 0 or blank means no limit",
+    "ja": "期限超過後に自動督促し、エスカレーションを記録します。0 または未入力は無制限です",
+    "vi": "Sau khi quá hạn sẽ tự động nhắc và ghi nhận leo thang; 0 hoặc để trống nghĩa là không giới hạn"
+  },
+  "抄送对象类型": {
+    "en": "CC Recipient Type",
+    "ja": "CC 対象の種別",
+    "vi": "Loại đối tượng nhận CC"
+  },
+  "分支名称": {
+    "en": "Branch Name",
+    "ja": "分岐名称",
+    "vi": "Tên nhánh"
+  },
+  "发布流程": {
+    "en": "Publish Workflow",
+    "ja": "フローを公開",
+    "vi": "Phát hành quy trình"
+  },
+  "流程已发布": {
+    "en": "Workflow published",
+    "ja": "フローを公開しました",
+    "vi": "Đã phát hành quy trình"
+  },
+  "置信度": {
+    "en": "Confidence",
+    "ja": "信頼度",
+    "vi": "Độ tin cậy"
+  },
+  "历史销量": {
+    "en": "Historical Sales Volume",
+    "ja": "過去の販売数量",
+    "vi": "Sản lượng bán lịch sử"
+  },
+  "确认预测": {
+    "en": "Confirm Forecast",
+    "ja": "予測を確定",
+    "vi": "Xác nhận dự báo"
+  },
+  "修改预测后重新提交审核": {
+    "en": "Resubmit for approval after modifying the forecast",
+    "ja": "予測を修正した後、再度承認申請します",
+    "vi": "Sửa dự báo rồi gửi duyệt lại"
+  },
+  "单据视图": {
+    "en": "Document View",
+    "ja": "伝票ビュー",
+    "vi": "Chế độ xem chứng từ"
+  },
+  "明细视图": {
+    "en": "Line View",
+    "ja": "明細ビュー",
+    "vi": "Chế độ xem chi tiết"
+  },
+  "当前选中预测不可批量提交（仅草稿可提交）。": {
+    "en": "The selected forecasts cannot be submitted in bulk (only drafts can be submitted).",
+    "ja": "選択された予測は一括提出できません（下書きのみ提出可能）。",
+    "vi": "Các dự báo đã chọn không thể gửi hàng loạt (chỉ bản nháp mới gửi được)."
+  },
+  "同步指标值": {
+    "en": "Sync Metric Values",
+    "ja": "指標値を同期",
+    "vi": "Đồng bộ giá trị chỉ tiêu"
+  },
+  "一键初始化销售预测指标": {
+    "en": "Initialize sales forecast metrics in one click",
+    "ja": "販売予測指標をワンクリックで初期化",
+    "vi": "Khởi tạo chỉ tiêu dự báo bán hàng bằng một thao tác"
+  },
+  "需求已变更时，请前往需求计算重新执行计算": {
+    "en": "If demand has changed, go to Demand Calculation and run the calculation again",
+    "ja": "需要が変更された場合は、需要計算で再計算を実行してください",
+    "vi": "Khi nhu cầu đã thay đổi, vui lòng vào Tính toán nhu cầu để chạy lại"
+  },
+  "当前选中退货单不可批量确认（仅待退货可确认）。": {
+    "en": "The selected return orders cannot be confirmed in bulk (only Pending Return can be confirmed).",
+    "ja": "選択された返品伝票は一括確定できません（返品待ちのみ確定可能）。",
+    "vi": "Các phiếu trả hàng đã chọn không thể xác nhận hàng loạt (chỉ trạng thái Chờ trả hàng mới xác nhận được)."
+  },
+  "当前选中退货单不可批量撤回（仅已退货可撤回）。": {
+    "en": "The selected return orders cannot be withdrawn in bulk (only Returned can be withdrawn).",
+    "ja": "選択された返品伝票は一括撤回できません（返品済みのみ撤回可能）。",
+    "vi": "Các phiếu trả hàng đã chọn không thể thu hồi hàng loạt (chỉ trạng thái Đã trả hàng mới thu hồi được)."
+  },
+  "只有待退货状态的采购退货单可编辑": {
+    "en": "Only purchase returns in Pending Return status can be edited",
+    "ja": "返品待ちステータスの仕入返品伝票のみ編集できます",
+    "vi": "Chỉ phiếu trả hàng mua ở trạng thái Chờ trả hàng mới sửa được"
+  },
+  "只有待退货状态的采购退货单才能删除": {
+    "en": "Only purchase returns in Pending Return status can be deleted",
+    "ja": "返品待ちステータスの仕入返品伝票のみ削除できます",
+    "vi": "Chỉ phiếu trả hàng mua ở trạng thái Chờ trả hàng mới xóa được"
+  },
+  "只有待退货状态的采购退货单才能确认退货": {
+    "en": "Only purchase returns in Pending Return status can be confirmed as returned",
+    "ja": "返品待ちステータスの仕入返品伝票のみ返品を確定できます",
+    "vi": "Chỉ phiếu trả hàng mua ở trạng thái Chờ trả hàng mới xác nhận trả hàng được"
+  },
+  "采购退货单无明细，无法确认退货": {
+    "en": "The purchase return has no lines, so the return cannot be confirmed",
+    "ja": "仕入返品伝票に明細がないため、返品を確定できません",
+    "vi": "Phiếu trả hàng mua không có dòng chi tiết, không thể xác nhận trả hàng"
+  },
+  "采购退货单已确认退货": {
+    "en": "The purchase return has already been confirmed",
+    "ja": "仕入返品伝票はすでに返品確定済みです",
+    "vi": "Phiếu trả hàng mua đã xác nhận trả hàng"
+  },
+  "已取消的采购退货单不能确认退货": {
+    "en": "A cancelled purchase return cannot be confirmed as returned",
+    "ja": "取消済みの仕入返品伝票は返品を確定できません",
+    "vi": "Phiếu trả hàng mua đã hủy không thể xác nhận trả hàng"
+  },
+  "只有已退货状态的采购退货单才能撤回": {
+    "en": "Only purchase returns in Returned status can be withdrawn",
+    "ja": "返品済みステータスの仕入返品伝票のみ撤回できます",
+    "vi": "Chỉ phiếu trả hàng mua ở trạng thái Đã trả hàng mới thu hồi được"
+  },
+  "只有已检验或已审核且存在不合格数量的来料检验单才能下推采购退货单": {
+    "en": "Only incoming inspections that are inspected or approved and have a nonconforming quantity can create a downstream purchase return",
+    "ja": "検査済みまたは承認済みで、かつ不合格数量がある受入検査伝票のみ、後続伝票を作成して仕入返品伝票にできます",
+    "vi": "Chỉ phiếu kiểm tra hàng đến đã kiểm hoặc đã duyệt và có số lượng không đạt mới tạo được chứng từ tiếp theo là phiếu trả hàng mua"
+  },
+  "不合格数量已全部下推采购退货，删除待退货单后可再次下推": {
+    "en": "The entire nonconforming quantity has already created downstream purchase returns. Delete the pending return document to create them again.",
+    "ja": "不合格数量はすべて仕入返品伝票として後続伝票を作成済みです。返品待ち伝票を削除すると再度作成できます。",
+    "vi": "Toàn bộ số lượng không đạt đã tạo chứng từ trả hàng mua tiếp theo, xóa phiếu chờ trả hàng để tạo lại."
+  },
+  "当前状态的采购入库单不可加载来料检验": {
+    "en": "Purchase goods receipts in the current status cannot be loaded into incoming inspection",
+    "ja": "現在のステータスの仕入入庫伝票からは受入検査を読み込めません",
+    "vi": "Phiếu nhập kho mua hàng ở trạng thái hiện tại không thể tải kiểm tra hàng đến"
+  },
+  "采购入库单无需要来料检验的明细": {
+    "en": "The purchase goods receipt has no lines requiring incoming inspection",
+    "ja": "仕入入庫伝票に受入検査が必要な明細はありません",
+    "vi": "Phiếu nhập kho mua hàng không có dòng cần kiểm tra hàng đến"
+  },
+  "相关物料均已存在来料检验单，删除后可再次加载": {
+    "en": "Incoming inspections already exist for all related materials. Delete them to load again.",
+    "ja": "関連品目にはすでに受入検査伝票が存在します。削除すると再度読み込めます。",
+    "vi": "Các vật tư liên quan đều đã có phiếu kiểm tra hàng đến, xóa rồi có thể tải lại."
+  },
+  "当前状态的代工来料单不可加载来料检验": {
+    "en": "Subcontract incoming material documents in the current status cannot be loaded into incoming inspection",
+    "ja": "現在のステータスの受託加工支給品受入伝票からは受入検査を読み込めません",
+    "vi": "Phiếu nhận vật tư gia công ở trạng thái hiện tại không thể tải kiểm tra hàng đến"
+  },
+  "代工来料单无需要来料检验的明细": {
+    "en": "The subcontract incoming material document has no lines requiring incoming inspection",
+    "ja": "受託加工支給品受入伝票に受入検査が必要な明細はありません",
+    "vi": "Phiếu nhận vật tư gia công không có dòng cần kiểm tra hàng đến"
+  },
+  "选填，内容会写入销售出库单，仓库出库时可查看": {
+    "en": "Optional. The content is written to the sales goods issue and visible to the warehouse when issuing",
+    "ja": "任意入力。内容は売上出庫伝票に書き込まれ、倉庫の出庫作業時に確認できます",
+    "vi": "Tùy chọn, nội dung sẽ được ghi vào phiếu xuất kho bán hàng, kho có thể xem khi xuất kho"
+  },
+  "销售退货单仅支持单一退入仓库，请为所选明细选择相同仓库": {
+    "en": "A sales return supports only one receiving warehouse, select the same warehouse for all selected lines",
+    "ja": "売上返品伝票は返品先倉庫を1つのみ指定できます。選択した明細には同じ倉庫を指定してください",
+    "vi": "Phiếu trả hàng bán chỉ hỗ trợ một kho nhận, vui lòng chọn cùng một kho cho các dòng đã chọn"
+  },
+  "进项发票明细": {
+    "en": "Input Invoice Lines",
+    "ja": "仕入請求書明細",
+    "vi": "Chi tiết hóa đơn đầu vào"
+  },
+  "销项发票明细": {
+    "en": "Output Invoice Lines",
+    "ja": "売上請求書明細",
+    "vi": "Chi tiết hóa đơn đầu ra"
+  },
+  "进项转出明细": {
+    "en": "Input VAT Transfer-Out Lines",
+    "ja": "仕入税額転出明細",
+    "vi": "Chi tiết chuyển ra thuế đầu vào"
+  },
+  "提前期内短缺": {
+    "en": "Shortage Within Lead Time",
+    "ja": "リードタイム内の不足",
+    "vi": "Thiếu hụt trong thời gian chờ"
+  },
+  "MRP例外 {{count}} 条待处理": {
+    "en": "{{count}} MRP exceptions pending",
+    "ja": "MRP 例外 {{count}} 件が未処理です",
+    "vi": "{{count}} ngoại lệ MRP chờ xử lý"
+  },
+  "换型": {
+    "en": "Changeover",
+    "ja": "段取替え",
+    "vi": "Chuyển đổi mẫu"
+  },
+  "客户要求": {
+    "en": "Customer Request",
+    "ja": "顧客要求",
+    "vi": "Yêu cầu khách hàng"
+  },
+  "新产品": {
+    "en": "New Product",
+    "ja": "新製品",
+    "vi": "Sản phẩm mới"
+  },
+  "复产": {
+    "en": "Production Resumption",
+    "ja": "生産再開",
+    "vi": "Sản xuất lại"
+  },
+  "现行有效": {
+    "en": "Currently Effective",
+    "ja": "現行有効",
+    "vi": "Đang hiệu lực"
+  },
+  "表单": {
+    "en": "Form",
+    "ja": "帳票",
+    "vi": "Biểu mẫu"
+  },
+  "质量手册": {
+    "en": "Quality Manual",
+    "ja": "品質マニュアル",
+    "vi": "Sổ tay chất lượng"
+  },
+  "程序文件": {
+    "en": "Procedure Document",
+    "ja": "手順書",
+    "vi": "Tài liệu quy trình"
+  },
+  "记录": {
+    "en": "Record",
+    "ja": "記録",
+    "vi": "Hồ sơ"
+  },
+  "技术": {
+    "en": "Technical",
+    "ja": "技術",
+    "vi": "Kỹ thuật"
+  },
+  "已撤回下达": {
+    "en": "Release Withdrawn",
+    "ja": "発行を撤回済",
+    "vi": "Đã thu hồi ban hành"
+  },
+  "本季度": {
+    "en": "This Quarter",
+    "ja": "今四半期",
+    "vi": "Quý này"
+  },
+  "微信小程序": {
+    "en": "WeChat Mini Program",
+    "ja": "WeChat ミニプログラム",
+    "vi": "Mini Program WeChat"
+  },
+  "使用微信扫一扫打开小程序": {
+    "en": "Scan with WeChat to open the mini program",
+    "ja": "WeChat のスキャンでミニプログラムを開きます",
+    "vi": "Dùng WeChat quét mã để mở mini program"
+  },
+  "请用微信扫一扫识别小程序码": {
+    "en": "Scan the mini program code with WeChat",
+    "ja": "WeChat のスキャンでミニプログラムコードを読み取ってください",
+    "vi": "Vui lòng dùng WeChat quét để nhận diện mã mini program"
+  },
+  "请输入微信号": {
+    "en": "Enter WeChat ID",
+    "ja": "WeChat ID を入力してください",
+    "vi": "Vui lòng nhập WeChat ID"
+  },
+  "填写微信号，便于同事联系": {
+    "en": "Enter your WeChat ID so colleagues can reach you",
+    "ja": "同僚が連絡できるよう WeChat ID を入力してください",
+    "vi": "Điền WeChat ID để đồng nghiệp tiện liên hệ"
+  },
+  "与企微通讯录账号一致，如 ZhangSan": {
+    "en": "Same as the WeCom directory account, e.g. ZhangSan",
+    "ja": "WeCom（企業微信）アドレス帳のアカウントと同一です。例：ZhangSan",
+    "vi": "Trùng với tài khoản danh bạ WeCom, ví dụ ZhangSan"
+  },
+  "首次企微扫码登录会按手机号/邮箱自动绑定；也可在此扫码手动绑定": {
+    "en": "The first WeCom QR login binds automatically by mobile number/email, you can also scan here to bind manually",
+    "ja": "初回の WeCom QR ログインでは携帯番号／メールで自動的に紐付けられます。ここでスキャンして手動で紐付けることもできます",
+    "vi": "Lần đầu đăng nhập quét mã WeCom sẽ tự động liên kết theo số điện thoại/email; cũng có thể quét mã tại đây để liên kết thủ công"
+  },
+  "扫码绑定企业微信": {
+    "en": "Scan to Bind WeCom",
+    "ja": "QR コードで WeCom を紐付け",
+    "vi": "Quét mã liên kết WeCom"
+  },
+  "重新扫码绑定": {
+    "en": "Rescan to Bind",
+    "ja": "再スキャンして紐付け",
+    "vi": "Quét mã liên kết lại"
+  },
+  "确定要解绑企业微信吗？": {
+    "en": "Unbind WeCom?",
+    "ja": "WeCom の紐付けを解除しますか？",
+    "vi": "Bạn có chắc muốn hủy liên kết WeCom?"
+  },
+  "企业微信已解绑": {
+    "en": "WeCom unbound",
+    "ja": "WeCom の紐付けを解除しました",
+    "vi": "Đã hủy liên kết WeCom"
+  },
+  "企业微信解绑失败": {
+    "en": "Failed to unbind WeCom",
+    "ja": "WeCom の紐付け解除に失敗しました",
+    "vi": "Hủy liên kết WeCom thất bại"
+  },
+  "已绑定：{{userid}}": {
+    "en": "Bound: {{userid}}",
+    "ja": "紐付け済み：{{userid}}",
+    "vi": "Đã liên kết: {{userid}}"
+  },
+  "企业微信绑定成功": {
+    "en": "WeCom bound successfully",
+    "ja": "WeCom を紐付けました",
+    "vi": "Liên kết WeCom thành công"
+  },
+  "企业微信绑定失败": {
+    "en": "Failed to bind WeCom",
+    "ja": "WeCom の紐付けに失敗しました",
+    "vi": "Liên kết WeCom thất bại"
+  },
+  "请使用企业微信 App 扫描下方二维码完成绑定": {
+    "en": "Use the WeCom app to scan the QR code below to complete binding",
+    "ja": "WeCom アプリで下の QR コードをスキャンして紐付けを完了してください",
+    "vi": "Vui lòng dùng ứng dụng WeCom quét mã QR bên dưới để hoàn tất liên kết"
+  },
+  "请输入 QQ 号": {
+    "en": "Enter QQ number",
+    "ja": "QQ 番号を入力してください",
+    "vi": "Vui lòng nhập số QQ"
+  },
+  "填写 QQ 号，便于同事联系": {
+    "en": "Enter your QQ number so colleagues can reach you",
+    "ja": "同僚が連絡できるよう QQ 番号を入力してください",
+    "vi": "Điền số QQ để đồng nghiệp tiện liên hệ"
+  },
+  "请输入钉钉账号或手机号": {
+    "en": "Enter DingTalk account or mobile number",
+    "ja": "DingTalk アカウントまたは携帯番号を入力してください",
+    "vi": "Vui lòng nhập tài khoản DingTalk hoặc số điện thoại"
+  },
+  "填写钉钉账号，便于同事联系": {
+    "en": "Enter your DingTalk account so colleagues can reach you",
+    "ja": "同僚が連絡できるよう DingTalk アカウントを入力してください",
+    "vi": "Điền tài khoản DingTalk để đồng nghiệp tiện liên hệ"
+  },
+  "请输入飞书账号或手机号": {
+    "en": "Enter Feishu account or mobile number",
+    "ja": "Feishu アカウントまたは携帯番号を入力してください",
+    "vi": "Vui lòng nhập tài khoản Feishu hoặc số điện thoại"
+  },
+  "填写飞书账号，便于同事联系": {
+    "en": "Enter your Feishu account so colleagues can reach you",
+    "ja": "同僚が連絡できるよう Feishu アカウントを入力してください",
+    "vi": "Điền tài khoản Feishu để đồng nghiệp tiện liên hệ"
+  },
+  "报工默认数量": {
+    "en": "Default Reporting Quantity",
+    "ja": "出来高報告の既定数量",
+    "vi": "Số lượng báo cáo sản xuất mặc định"
+  },
+  "计划中": {
+    "en": "Planned",
+    "ja": "計画中",
+    "vi": "Đang lên kế hoạch"
+  },
+  "自定义导入": {
+    "en": "Custom Import",
+    "ja": "カスタムインポート",
+    "vi": "Nhập tùy chỉnh"
+  },
+  "自定义导入字段": {
+    "en": "Custom Import Fields",
+    "ja": "カスタムインポート項目",
+    "vi": "Trường nhập tùy chỉnh"
+  },
+  "全选字段": {
+    "en": "Select All Fields",
+    "ja": "すべての項目を選択",
+    "vi": "Chọn tất cả trường"
+  },
+  "已选择 {{selected}} / {{total}}": {
+    "en": "{{selected}} / {{total}} selected",
+    "ja": "{{selected}} / {{total}} を選択済み",
+    "vi": "Đã chọn {{selected}} / {{total}}"
+  },
+  "应用字段选择": {
+    "en": "Apply Field Selection",
+    "ja": "項目選択を適用",
+    "vi": "Áp dụng lựa chọn trường"
+  },
+  "已应用 {{count}} 个导入字段": {
+    "en": "{{count}} import fields applied",
+    "ja": "{{count}} 個のインポート項目を適用しました",
+    "vi": "Đã áp dụng {{count}} trường nhập"
+  },
+  "字段标识": {
+    "en": "Field Key",
+    "ja": "項目識別子",
+    "vi": "Mã trường"
+  },
+  "高级关联导入": {
+    "en": "Advanced Linked Import",
+    "ja": "高度な関連インポート",
+    "vi": "Nhập liên kết nâng cao"
+  },
+  "关联实体": {
+    "en": "Linked Entity",
+    "ja": "関連エンティティ",
+    "vi": "Thực thể liên kết"
+  },
+  "绩效信息": {
+    "en": "Performance Information",
+    "ja": "業績情報",
+    "vi": "Thông tin hiệu suất"
+  },
+  "检测到 {{rows}} 行业务数据（默认跳过表头与示例行）": {
+    "en": "{{rows}} rows of business data detected (header and sample rows are skipped by default)",
+    "ja": "業務データ {{rows}} 行を検出しました（ヘッダー行とサンプル行は既定でスキップ）",
+    "vi": "Phát hiện {{rows}} dòng dữ liệu nghiệp vụ (mặc định bỏ qua dòng tiêu đề và dòng ví dụ)"
+  },
+  "写入策略": {
+    "en": "Write Strategy",
+    "ja": "書き込みポリシー",
+    "vi": "Chiến lược ghi dữ liệu"
+  },
+  "Upsert（存在更新，不存在创建）": {
+    "en": "Upsert (update if exists, create if not)",
+    "ja": "Upsert（存在すれば更新、なければ作成）",
+    "vi": "Upsert (có thì cập nhật, không có thì tạo)"
+  },
+  "仅创建（已存在不更新）": {
+    "en": "Create only (existing records are not updated)",
+    "ja": "作成のみ（既存は更新しない）",
+    "vi": "Chỉ tạo (đã tồn tại thì không cập nhật)"
+  },
+  "仅关联主数据（BOM 明细仍按导入写入）": {
+    "en": "Link master data only (BOM lines are still written from the import)",
+    "ja": "マスタデータの関連付けのみ（BOM 明細はインポート内容どおり書き込み）",
+    "vi": "Chỉ liên kết dữ liệu chính (chi tiết BOM vẫn ghi theo file nhập)"
+  },
+  "严格失败（缺失即失败）": {
+    "en": "Strict (fail on missing data)",
+    "ja": "厳格（欠落があれば失敗）",
+    "vi": "Nghiêm ngặt (thiếu dữ liệu là lỗi)"
+  },
+  "缺少关联导入必填列：{{columns}}": {
+    "en": "Missing required columns for linked import: {{columns}}",
+    "ja": "関連インポートの必須列が不足しています：{{columns}}",
+    "vi": "Thiếu cột bắt buộc cho nhập liên kết: {{columns}}"
+  },
+  "{{entity}} 关联导入缺少列：{{columns}}": {
+    "en": "Linked import for {{entity}} is missing columns: {{columns}}",
+    "ja": "{{entity}} の関連インポートで列が不足しています：{{columns}}",
+    "vi": "Nhập liên kết {{entity}} thiếu cột: {{columns}}"
+  },
+  "第 {{row}} 行缺少 {{entity}} 必填字段：{{field}}": {
+    "en": "Row {{row}} is missing the required {{entity}} field: {{field}}",
+    "ja": "{{row}} 行目に {{entity}} の必須項目がありません：{{field}}",
+    "vi": "Dòng {{row}} thiếu trường bắt buộc của {{entity}}: {{field}}"
+  },
+  "预检": {
+    "en": "Precheck",
+    "ja": "事前チェック",
+    "vi": "Kiểm tra trước"
+  },
+  "执行导入": {
+    "en": "Run Import",
+    "ja": "インポートを実行",
+    "vi": "Thực hiện nhập"
+  },
+  "预检警告": {
+    "en": "Precheck Warning",
+    "ja": "事前チェック警告",
+    "vi": "Cảnh báo kiểm tra trước"
+  },
+  "预检错误": {
+    "en": "Precheck Error",
+    "ja": "事前チェックエラー",
+    "vi": "Lỗi kiểm tra trước"
+  },
+  "批量撤回提交": {
+    "en": "Bulk Withdraw Submission",
+    "ja": "提出を一括撤回",
+    "vi": "Thu hồi gửi duyệt hàng loạt"
+  },
+  "当前选中单据不可批量提交。": {
+    "en": "The selected documents cannot be submitted in bulk.",
+    "ja": "選択された伝票は一括提出できません。",
+    "vi": "Các chứng từ đã chọn không thể gửi hàng loạt."
+  },
+  "当前选中单据不可批量撤回提交。": {
+    "en": "The submission of the selected documents cannot be withdrawn in bulk.",
+    "ja": "選択された伝票は提出を一括撤回できません。",
+    "vi": "Các chứng từ đã chọn không thể thu hồi gửi duyệt hàng loạt."
+  },
+  "当前选中单据不可批量审核。": {
+    "en": "The selected documents cannot be approved in bulk.",
+    "ja": "選択された伝票は一括承認できません。",
+    "vi": "Các chứng từ đã chọn không thể duyệt hàng loạt."
+  },
+  "当前选中单据不可批量撤销审核。": {
+    "en": "The approval of the selected documents cannot be revoked in bulk.",
+    "ja": "選択された伝票は承認を一括取り消しできません。",
+    "vi": "Các chứng từ đã chọn không thể hủy duyệt hàng loạt."
+  },
+  "{{action}}完成：成功 {{success}} 条，失败 {{failed}} 条（{{reason}}）": {
+    "en": "{{action}} complete: {{success}} succeeded, {{failed}} failed ({{reason}})",
+    "ja": "{{action}}完了：成功 {{success}} 件、失敗 {{failed}} 件（{{reason}}）",
+    "vi": "{{action}} hoàn tất: thành công {{success}}, thất bại {{failed}} ({{reason}})"
+  },
+  "当前选中单据不可执行该操作。": {
+    "en": "This action cannot be performed on the selected documents.",
+    "ja": "選択された伝票に対してこの操作は実行できません。",
+    "vi": "Không thể thực hiện thao tác này với các chứng từ đã chọn."
+  },
+  "操作成功：{{count}} 条": {
+    "en": "Operation succeeded: {{count}} records",
+    "ja": "操作成功：{{count}} 件",
+    "vi": "Thao tác thành công: {{count}} bản ghi"
+  },
+  "操作完成：成功 {{success}} 条，失败 {{failed}} 条": {
+    "en": "Operation complete: {{success}} succeeded, {{failed}} failed",
+    "ja": "操作完了：成功 {{success}} 件、失敗 {{failed}} 件",
+    "vi": "Thao tác hoàn tất: thành công {{success}}, thất bại {{failed}}"
+  },
+  "操作完成：成功 {{success}} 条，失败 {{failed}} 条（{{reason}}）": {
+    "en": "Operation complete: {{success}} succeeded, {{failed}} failed ({{reason}})",
+    "ja": "操作完了：成功 {{success}} 件、失敗 {{failed}} 件（{{reason}}）",
+    "vi": "Thao tác hoàn tất: thành công {{success}}, thất bại {{failed}} ({{reason}})"
+  },
+  "构建来源与可选统计": {
+    "en": "Build Source and Optional Telemetry",
+    "ja": "ビルド元と任意の統計",
+    "vi": "Nguồn bản dựng và thống kê tùy chọn"
+  },
+  "系统可展示当前部署的 commit 与 git remote 来源；首次进入主界面时，可选择向官方上报不含业务数据的构建元数据，用于安全公告与渠道统计。关闭或失败不影响任何功能。": {
+    "en": "The system can display the commit and git remote of the current deployment. On first entry to the main screen you may choose to report build metadata containing no business data to the vendor, used for security advisories and channel statistics. Turning it off or a failed report does not affect any functionality.",
+    "ja": "システムは現在のデプロイの commit と git remote を表示できます。初回にメイン画面へ入る際、業務データを含まないビルドメタデータを公式へ送信するか選択できます（セキュリティ告知とチャネル統計に使用）。無効化しても送信に失敗しても、機能には影響しません。",
+    "vi": "Hệ thống có thể hiển thị commit và git remote của bản triển khai hiện tại; khi vào giao diện chính lần đầu, bạn có thể chọn gửi siêu dữ liệu bản dựng không chứa dữ liệu nghiệp vụ về nhà cung cấp, dùng cho thông báo bảo mật và thống kê kênh. Tắt hoặc gửi thất bại đều không ảnh hưởng đến bất kỳ chức năng nào."
+  },
+  "阅读可选实例统计披露文档": {
+    "en": "Read the optional instance telemetry disclosure",
+    "ja": "任意インスタンス統計の開示文書を読む",
+    "vi": "Đọc tài liệu công bố về thống kê phiên bản tùy chọn"
+  },
+  "产品模型": {
+    "en": "Product Model",
+    "ja": "製品モデル",
+    "vi": "Mô hình sản phẩm"
+  },
+  "接入配置": {
+    "en": "Connection Settings",
+    "ja": "接続設定",
+    "vi": "Cấu hình kết nối"
+  },
+  "点位映射": {
+    "en": "Tag Mapping",
+    "ja": "ポイントマッピング",
+    "vi": "Ánh xạ điểm dữ liệu"
+  },
+  "告警中心": {
+    "en": "Alarm Center",
+    "ja": "アラームセンター",
+    "vi": "Trung tâm cảnh báo"
+  },
+  "边缘配置": {
+    "en": "Edge Configuration",
+    "ja": "エッジ設定",
+    "vi": "Cấu hình biên"
+  },
+  "数采链路": {
+    "en": "Data Acquisition Pipeline",
+    "ja": "データ収集経路",
+    "vi": "Luồng thu thập dữ liệu"
+  },
+  "设备总数": {
+    "en": "Total Devices",
+    "ja": "設備台数",
+    "vi": "Tổng số thiết bị"
+  },
+  "今日点数": {
+    "en": "Data Points Today",
+    "ja": "本日のポイント数",
+    "vi": "Số điểm dữ liệu hôm nay"
+  },
+  "连接源总数": {
+    "en": "Total Connection Sources",
+    "ja": "接続ソース総数",
+    "vi": "Tổng số nguồn kết nối"
+  },
+  "启用连接": {
+    "en": "Active Connections",
+    "ja": "有効な接続",
+    "vi": "Kết nối đang bật"
+  },
+  "点位总数": {
+    "en": "Total Tags",
+    "ja": "ポイント総数",
+    "vi": "Tổng số điểm dữ liệu"
+  },
+  "最近上报设备": {
+    "en": "Recently Reporting Devices",
+    "ja": "最近レポートした設備",
+    "vi": "Thiết bị báo dữ liệu gần đây"
+  },
+  "HTTP 上报：POST /api/v1/apps/kuaiiot/ingest/{device_token}，body 见 docs/apps/kuaiiot/ROADMAP.md": {
+    "en": "HTTP reporting: POST /api/v1/apps/kuaiiot/ingest/{device_token}, see docs/apps/kuaiiot/ROADMAP.md for the body",
+    "ja": "HTTP レポート：POST /api/v1/apps/kuaiiot/ingest/{device_token}、body は docs/apps/kuaiiot/ROADMAP.md を参照",
+    "vi": "Gửi dữ liệu qua HTTP: POST /api/v1/apps/kuaiiot/ingest/{device_token}, xem body tại docs/apps/kuaiiot/ROADMAP.md"
+  },
+  "健康状态": {
+    "en": "Health Status",
+    "ja": "ヘルス状態",
+    "vi": "Tình trạng hoạt động"
+  },
+  "外部设备 ID": {
+    "en": "External Device ID",
+    "ja": "外部デバイス ID",
+    "vi": "ID thiết bị bên ngoài"
+  },
+  "最后上报": {
+    "en": "Last Report",
+    "ja": "最終レポート",
+    "vi": "Lần báo dữ liệu cuối"
+  },
+  "点位 Key": {
+    "en": "Tag Key",
+    "ja": "ポイント Key",
+    "vi": "Key điểm dữ liệu"
+  },
+  "写回目标": {
+    "en": "Write-back Target",
+    "ja": "書き戻し先",
+    "vi": "Đích ghi ngược"
+  },
+  "同步设备": {
+    "en": "Sync Devices",
+    "ja": "設備を同期",
+    "vi": "Đồng bộ thiết bị"
+  },
+  "拉取遥测": {
+    "en": "Pull Telemetry",
+    "ja": "テレメトリを取得",
+    "vi": "Lấy dữ liệu telemetry"
+  },
+  "健康检查": {
+    "en": "Health Check",
+    "ja": "ヘルスチェック",
+    "vi": "Kiểm tra tình trạng"
+  },
+  "轮换 Token": {
+    "en": "Rotate Token",
+    "ja": "Token をローテーション",
+    "vi": "Xoay vòng Token"
+  },
+  "查看数据": {
+    "en": "View Data",
+    "ja": "データを表示",
+    "vi": "Xem dữ liệu"
+  },
+  "接入调试": {
+    "en": "Connection Debug",
+    "ja": "接続デバッグ",
+    "vi": "Gỡ lỗi kết nối"
+  },
+  "批量新建": {
+    "en": "Bulk Create",
+    "ja": "一括新規作成",
+    "vi": "Tạo mới hàng loạt"
+  },
+  "加载内置产品": {
+    "en": "Load Built-in Products",
+    "ja": "内蔵製品を読み込む",
+    "vi": "Tải sản phẩm dựng sẵn"
+  },
+  "添加点位": {
+    "en": "Add Tag",
+    "ja": "ポイントを追加",
+    "vi": "Thêm điểm dữ liệu"
+  },
+  "模拟上报": {
+    "en": "Simulate Report",
+    "ja": "レポートをシミュレート",
+    "vi": "Mô phỏng gửi dữ liệu"
+  },
+  "导出CSV": {
+    "en": "Export CSV",
+    "ja": "CSV をエクスポート",
+    "vi": "Xuất CSV"
+  },
+  "点位数": {
+    "en": "Tag Count",
+    "ja": "ポイント数",
+    "vi": "Số điểm dữ liệu"
+  },
+  "名称前缀": {
+    "en": "Name Prefix",
+    "ja": "名称プレフィックス",
+    "vi": "Tiền tố tên"
+  },
+  "创建数量": {
+    "en": "Quantity to Create",
+    "ja": "作成数量",
+    "vi": "Số lượng tạo"
+  },
+  "编码前缀": {
+    "en": "Code Prefix",
+    "ja": "コードプレフィックス",
+    "vi": "Tiền tố mã"
+  },
+  "上报载荷": {
+    "en": "Report Payload",
+    "ja": "レポートペイロード",
+    "vi": "Payload gửi lên"
+  },
+  "趋势图": {
+    "en": "Trend Chart",
+    "ja": "トレンドグラフ",
+    "vi": "Biểu đồ xu hướng"
+  },
+  "接入指引": {
+    "en": "Integration Guide",
+    "ja": "接続ガイド",
+    "vi": "Hướng dẫn kết nối"
+  },
+  "阈值告警": {
+    "en": "Threshold Alarm",
+    "ja": "しきい値アラーム",
+    "vi": "Cảnh báo ngưỡng"
+  },
+  "离线告警": {
+    "en": "Offline Alarm",
+    "ja": "オフラインアラーム",
+    "vi": "Cảnh báo mất kết nối"
+  },
+  "最新快照": {
+    "en": "Latest Snapshot",
+    "ja": "最新スナップショット",
+    "vi": "Ảnh chụp mới nhất"
+  },
+  "历史表格": {
+    "en": "History Table",
+    "ja": "履歴テーブル",
+    "vi": "Bảng lịch sử"
+  },
+  "已导入 {{created}} 个产品，跳过 {{skipped}} 个，共 {{total}} 个": {
+    "en": "{{created}} products imported, {{skipped}} skipped, {{total}} in total",
+    "ja": "製品 {{created}} 件をインポート、{{skipped}} 件をスキップ、合計 {{total}} 件",
+    "vi": "Đã nhập {{created}} sản phẩm, bỏ qua {{skipped}}, tổng {{total}}"
+  },
+  "上报成功，accepted={{accepted}}，MES同步={{synced}}": {
+    "en": "Report succeeded, accepted={{accepted}}, MES sync={{synced}}",
+    "ja": "レポート成功、accepted={{accepted}}、MES 同期={{synced}}",
+    "vi": "Gửi dữ liệu thành công, accepted={{accepted}}, đồng bộ MES={{synced}}"
+  },
+  "已批量创建 {{total}} 台设备": {
+    "en": "{{total}} devices created in bulk",
+    "ja": "設備 {{total}} 台を一括作成しました",
+    "vi": "Đã tạo hàng loạt {{total}} thiết bị"
+  },
+  "短窗历史": {
+    "en": "Short-window History",
+    "ja": "短時間ウィンドウ履歴",
+    "vi": "Lịch sử cửa sổ ngắn"
+  },
+  "当前值": {
+    "en": "Current Value",
+    "ja": "現在値",
+    "vi": "Giá trị hiện tại"
+  },
+  "Broker 地址": {
+    "en": "Broker Address",
+    "ja": "Broker アドレス",
+    "vi": "Địa chỉ Broker"
+  },
+  "Broker 端口": {
+    "en": "Broker Port",
+    "ja": "Broker ポート",
+    "vi": "Cổng Broker"
+  },
+  "Topic 过滤": {
+    "en": "Topic Filter",
+    "ja": "Topic フィルタ",
+    "vi": "Bộ lọc Topic"
+  },
+  "QoS": {
+    "en": "QoS",
+    "ja": "QoS",
+    "vi": "QoS"
+  },
+  "启用 TLS": {
+    "en": "Enable TLS",
+    "ja": "TLS を有効化",
+    "vi": "Bật TLS"
+  },
+  "点位模板": {
+    "en": "Tag Template",
+    "ja": "ポイントテンプレート",
+    "vi": "Mẫu điểm dữ liệu"
+  },
+  "已同步 {{count}} 台设备": {
+    "en": "{{count}} devices synced",
+    "ja": "設備 {{count}} 台を同期しました",
+    "vi": "Đã đồng bộ {{count}} thiết bị"
+  },
+  "已入站 {{ingested}} 台，跳过 {{skipped}} 台": {
+    "en": "{{ingested}} ingested, {{skipped}} skipped",
+    "ja": "{{ingested}} 台を取り込み、{{skipped}} 台をスキップしました",
+    "vi": "Đã tiếp nhận {{ingested}} thiết bị, bỏ qua {{skipped}} thiết bị"
+  },
+  "告警规则": {
+    "en": "Alarm Rule",
+    "ja": "アラームルール",
+    "vi": "Quy tắc cảnh báo"
+  },
+  "告警记录": {
+    "en": "Alarm Log",
+    "ja": "アラーム履歴",
+    "vi": "Nhật ký cảnh báo"
+  },
+  "填充目标": {
+    "en": "Fill Target",
+    "ja": "反映先",
+    "vi": "Đích điền dữ liệu"
+  },
+  "比较符": {
+    "en": "Comparison Operator",
+    "ja": "比較演算子",
+    "vi": "Toán tử so sánh"
+  },
+  "数值阈值": {
+    "en": "Numeric Threshold",
+    "ja": "数値しきい値",
+    "vi": "Ngưỡng số"
+  },
+  "文本阈值": {
+    "en": "Text Threshold",
+    "ja": "テキストしきい値",
+    "vi": "Ngưỡng văn bản"
+  },
+  "冷却秒数": {
+    "en": "Cooldown (seconds)",
+    "ja": "クールダウン秒数",
+    "vi": "Số giây chờ lặp lại"
+  },
+  "启用通知": {
+    "en": "Enable Notification",
+    "ja": "通知を有効化",
+    "vi": "Bật thông báo"
+  },
+  "协议": {
+    "en": "Protocol",
+    "ja": "プロトコル",
+    "vi": "Giao thức"
+  },
+  "边缘配置 JSON": {
+    "en": "Edge Configuration JSON",
+    "ja": "エッジ設定 JSON",
+    "vi": "JSON cấu hình biên"
+  },
+  "导出 Agent 规格": {
+    "en": "Export Agent Spec",
+    "ja": "Agent 仕様をエクスポート",
+    "vi": "Xuất đặc tả Agent"
+  },
+  "JSON 配置格式无效": {
+    "en": "Invalid JSON configuration format",
+    "ja": "JSON 設定の形式が無効です",
+    "vi": "Định dạng cấu hình JSON không hợp lệ"
+  },
+  "OEE 实时信号": {
+    "en": "OEE Live Signals",
+    "ja": "OEE リアルタイム信号",
+    "vi": "Tín hiệu OEE thời gian thực"
+  },
+  "绑定 MES 设备并接入 sensor 状态后可查看 OEE 实时信号": {
+    "en": "Bind an MES device and connect the sensor status to view OEE live signals",
+    "ja": "MES 設備を紐付け、sensor 状態を接続すると OEE リアルタイム信号を表示できます",
+    "vi": "Liên kết thiết bị MES và kết nối trạng thái sensor để xem tín hiệu OEE thời gian thực"
+  },
+  "Sensor 可用率": {
+    "en": "Sensor Availability",
+    "ja": "Sensor 可用率",
+    "vi": "Tỷ lệ khả dụng Sensor"
+  },
+  "OEE Live": {
+    "en": "OEE Live",
+    "ja": "OEE Live",
+    "vi": "OEE Live"
+  },
+  "运维概览": {
+    "en": "Operations Overview",
+    "ja": "運用保守の概要",
+    "vi": "Tổng quan vận hành"
+  },
+  "在线 Agent": {
+    "en": "Online Agents",
+    "ja": "オンライン Agent",
+    "vi": "Agent trực tuyến"
+  },
+  "超时未上报": {
+    "en": "Report Timeout",
+    "ja": "レポート未着（タイムアウト）",
+    "vi": "Quá hạn chưa gửi dữ liệu"
+  },
+  "配置版本": {
+    "en": "Configuration Version",
+    "ja": "設定バージョン",
+    "vi": "Phiên bản cấu hình"
+  },
+  "Agent 状态": {
+    "en": "Agent Status",
+    "ja": "Agent ステータス",
+    "vi": "Trạng thái Agent"
+  },
+  "缓冲待传": {
+    "en": "Buffered Pending Upload",
+    "ja": "バッファ内の送信待ち",
+    "vi": "Đang đệm chờ gửi"
+  },
+  "最近心跳": {
+    "en": "Last Heartbeat",
+    "ja": "最終ハートビート",
+    "vi": "Nhịp tim gần nhất"
+  },
+  "未配置 InfluxDB 时序库。请在系统数据源创建 type=influxdb、code=kuaiiot_tsdb 的集成后查看历史。": {
+    "en": "No InfluxDB time-series database configured. Create an integration with type=influxdb and code=kuaiiot_tsdb in system data sources to view history.",
+    "ja": "InfluxDB 時系列データベースが未設定です。システムデータソースで type=influxdb、code=kuaiiot_tsdb の連携を作成してから履歴を確認してください。",
+    "vi": "Chưa cấu hình cơ sở dữ liệu chuỗi thời gian InfluxDB. Vui lòng tạo tích hợp type=influxdb, code=kuaiiot_tsdb trong nguồn dữ liệu hệ thống rồi xem lịch sử."
+  },
+  "设备 Token": {
+    "en": "Device Token",
+    "ja": "デバイス Token",
+    "vi": "Token thiết bị"
+  },
+  "kuaiiot/ingest/+": {
+    "en": "kuaiiot/ingest/+",
+    "ja": "kuaiiot/ingest/+",
+    "vi": "kuaiiot/ingest/+"
+  },
+  "HTTP Webhook": {
+    "en": "HTTP Webhook",
+    "ja": "HTTP Webhook",
+    "vi": "HTTP Webhook"
+  },
+  "MQTT": {
+    "en": "MQTT",
+    "ja": "MQTT",
+    "vi": "MQTT"
+  },
+  "振动": {
+    "en": "Vibration",
+    "ja": "振動",
+    "vi": "Rung động"
+  },
+  "SOP 温度 (sop_parameters.temp)": {
+    "en": "SOP Temperature (sop_parameters.temp)",
+    "ja": "SOP 温度 (sop_parameters.temp)",
+    "vi": "Nhiệt độ SOP (sop_parameters.temp)"
+  },
+  "SOP 压力 (sop_parameters.pressure)": {
+    "en": "SOP Pressure (sop_parameters.pressure)",
+    "ja": "SOP 圧力 (sop_parameters.pressure)",
+    "vi": "Áp suất SOP (sop_parameters.pressure)"
+  },
+  "点检项 (spot_check.item_code)": {
+    "en": "Spot Check Item (spot_check.item_code)",
+    "ja": "日常点検項目 (spot_check.item_code)",
+    "vi": "Hạng mục kiểm tra định kỳ (spot_check.item_code)"
+  },
+  "Modbus TCP": {
+    "en": "Modbus TCP",
+    "ja": "Modbus TCP",
+    "vi": "Modbus TCP"
+  },
+  "Modbus RTU": {
+    "en": "Modbus RTU",
+    "ja": "Modbus RTU",
+    "vi": "Modbus RTU"
+  },
+  "OPC UA": {
+    "en": "OPC UA",
+    "ja": "OPC UA",
+    "vi": "OPC UA"
+  },
+  "S7": {
+    "en": "S7",
+    "ja": "S7",
+    "vi": "S7"
+  },
+  "1 分钟": {
+    "en": "1 minute",
+    "ja": "1 分",
+    "vi": "1 phút"
+  },
+  "5 分钟": {
+    "en": "5 minutes",
+    "ja": "5 分",
+    "vi": "5 phút"
+  },
+  "10 分钟": {
+    "en": "10 minutes",
+    "ja": "10 分",
+    "vi": "10 phút"
+  },
+  "30 分钟": {
+    "en": "30 minutes",
+    "ja": "30 分",
+    "vi": "30 phút"
+  },
+  "1 小时": {
+    "en": "1 hour",
+    "ja": "1 時間",
+    "vi": "1 giờ"
+  },
+  "已停用": {
+    "en": "Disabled",
+    "ja": "無効",
+    "vi": "Đã ngừng sử dụng"
+  },
+  "该设备暂无可用点位": {
+    "en": "No tags available for this device",
+    "ja": "この設備に利用可能なポイントはありません",
+    "vi": "Thiết bị này chưa có điểm dữ liệu khả dụng"
+  },
+  "人事管理": {
+    "en": "HR Management",
+    "ja": "人事管理",
+    "vi": "Quản lý nhân sự"
+  },
+  "合规证照": {
+    "en": "Compliance Licenses",
+    "ja": "コンプライアンス許認可",
+    "vi": "Giấy phép tuân thủ"
+  },
+  "固定资产": {
+    "en": "Fixed Assets",
+    "ja": "固定資産",
+    "vi": "Tài sản cố định"
+  },
+  "行政办公": {
+    "en": "Administration",
+    "ja": "総務業務",
+    "vi": "Hành chính văn phòng"
+  },
+  "公告通知": {
+    "en": "Announcements",
+    "ja": "お知らせ",
+    "vi": "Thông báo chung"
+  },
+  "会议管理": {
+    "en": "Meeting Management",
+    "ja": "会議管理",
+    "vi": "Quản lý cuộc họp"
+  },
+  "用途": {
+    "en": "Purpose",
+    "ja": "用途",
+    "vi": "Mục đích sử dụng"
+  },
+  "无查看权限": {
+    "en": "No view permission",
+    "ja": "閲覧権限がありません",
+    "vi": "Không có quyền xem"
+  },
+  "确认删除该记录吗": {
+    "en": "Delete this record?",
+    "ja": "このレコードを削除しますか",
+    "vi": "Xác nhận xóa bản ghi này?"
+  },
+  "待评审门径": {
+    "en": "Gates Pending Review",
+    "ja": "レビュー待ちゲート",
+    "vi": "Cổng chờ đánh giá"
+  },
+  "暂无待评审门径": {
+    "en": "No gates pending review",
+    "ja": "レビュー待ちのゲートはありません",
+    "vi": "Chưa có cổng chờ đánh giá"
+  },
+  "阶段模板": {
+    "en": "Stage Template",
+    "ja": "ステージテンプレート",
+    "vi": "Mẫu giai đoạn"
+  },
+  "请选择阶段门模板": {
+    "en": "Select a stage-gate template",
+    "ja": "ステージゲートテンプレートを選択してください",
+    "vi": "Vui lòng chọn mẫu cổng giai đoạn"
+  },
+  "研发模板": {
+    "en": "R&D Template",
+    "ja": "研究開発テンプレート",
+    "vi": "Mẫu R&D"
+  },
+  "交付模板": {
+    "en": "Delivery Template",
+    "ja": "デリバリーテンプレート",
+    "vi": "Mẫu bàn giao"
+  },
+  "添加阶段": {
+    "en": "Add Stage",
+    "ja": "ステージを追加",
+    "vi": "Thêm giai đoạn"
+  },
+  "保存阶段配置": {
+    "en": "Save Stage Settings",
+    "ja": "ステージ設定を保存",
+    "vi": "Lưu cấu hình giai đoạn"
+  },
+  "添加交付物": {
+    "en": "Add Deliverable",
+    "ja": "成果物を追加",
+    "vi": "Thêm sản phẩm bàn giao"
+  },
+  "阶段标识": {
+    "en": "Stage Key",
+    "ja": "ステージ識別子",
+    "vi": "Mã giai đoạn"
+  },
+  "里程碑角色": {
+    "en": "Milestone Role",
+    "ja": "マイルストーン役割",
+    "vi": "Vai trò cột mốc"
+  },
+  "交付物类型": {
+    "en": "Deliverable Type",
+    "ja": "成果物の種別",
+    "vi": "Loại sản phẩm bàn giao"
+  },
+  "下推交付项目": {
+    "en": "Create Downstream Delivery Project",
+    "ja": "後続伝票を作成：デリバリープロジェクト",
+    "vi": "Tạo chứng từ tiếp theo: dự án bàn giao"
+  },
+  "副本": {
+    "en": "Copy",
+    "ja": "複製",
+    "vi": "Bản sao"
+  },
+  "暂无模板": {
+    "en": "No templates",
+    "ja": "テンプレートはありません",
+    "vi": "Chưa có mẫu"
+  },
+  "请选择左侧模板": {
+    "en": "Select a template on the left",
+    "ja": "左側のテンプレートを選択してください",
+    "vi": "Vui lòng chọn mẫu ở bên trái"
+  },
+  "默认交付物": {
+    "en": "Default Deliverable",
+    "ja": "既定の成果物",
+    "vi": "Sản phẩm bàn giao mặc định"
+  },
+  "阶段 {{order}}": {
+    "en": "Stage {{order}}",
+    "ja": "ステージ {{order}}",
+    "vi": "Giai đoạn {{order}}"
+  },
+  "新交付物": {
+    "en": "New Deliverable",
+    "ja": "新規成果物",
+    "vi": "Sản phẩm bàn giao mới"
+  },
+  "{{count}} 个阶段": {
+    "en": "{{count}} stages",
+    "ja": "{{count}} ステージ",
+    "vi": "{{count}} giai đoạn"
+  },
+  "确定删除该模板？": {
+    "en": "Delete this template?",
+    "ja": "このテンプレートを削除しますか？",
+    "vi": "Xác nhận xóa mẫu này?"
+  },
+  "加载模板列表失败": {
+    "en": "Failed to load the template list",
+    "ja": "テンプレート一覧の読み込みに失敗しました",
+    "vi": "Tải danh sách mẫu thất bại"
+  },
+  "已设为默认模板": {
+    "en": "Set as the default template",
+    "ja": "既定テンプレートに設定しました",
+    "vi": "Đã đặt làm mẫu mặc định"
+  },
+  "设置默认模板失败": {
+    "en": "Failed to set the default template",
+    "ja": "既定テンプレートの設定に失敗しました",
+    "vi": "Đặt mẫu mặc định thất bại"
+  },
+  "至少保留一个阶段": {
+    "en": "Keep at least one stage",
+    "ja": "ステージは1つ以上必要です",
+    "vi": "Phải giữ lại ít nhất một giai đoạn"
+  },
+  "阶段标识不可重复": {
+    "en": "Stage keys must be unique",
+    "ja": "ステージ識別子は重複できません",
+    "vi": "Mã giai đoạn không được trùng"
+  },
+  "「下推交付项目」里程碑至多配置一个": {
+    "en": "At most one \"Create Downstream Delivery Project\" milestone can be configured",
+    "ja": "「後続伝票を作成：デリバリープロジェクト」マイルストーンは最大1つまで設定できます",
+    "vi": "Chỉ được cấu hình tối đa một cột mốc \"Tạo chứng từ tiếp theo: dự án bàn giao\""
+  },
+  "模型设置": {
+    "en": "Model Settings",
+    "ja": "モデル設定",
+    "vi": "Cài đặt mô hình"
+  },
+  "对话模型": {
+    "en": "Chat Model",
+    "ja": "対話モデル",
+    "vi": "Mô hình hội thoại"
+  },
+  "打开应用连接器": {
+    "en": "Open App Connectors",
+    "ja": "アプリコネクタを開く",
+    "vi": "Mở bộ kết nối ứng dụng"
+  },
+  "当前 AI 连接": {
+    "en": "Current AI Connection",
+    "ja": "現在の AI 接続",
+    "vi": "Kết nối AI hiện tại"
+  },
+  "请选择一条 AI 连接": {
+    "en": "Select an AI connection",
+    "ja": "AI 接続を1件選択してください",
+    "vi": "Vui lòng chọn một kết nối AI"
+  },
+  "选择应用连接器中的 AI 连接": {
+    "en": "Select an AI connection from App Connectors",
+    "ja": "アプリコネクタ内の AI 接続を選択します",
+    "vi": "Chọn kết nối AI trong bộ kết nối ứng dụng"
+  },
+  "暂无 AI 连接，请先到应用连接器新建": {
+    "en": "No AI connections yet, create one in App Connectors first",
+    "ja": "AI 接続がありません。先にアプリコネクタで作成してください",
+    "vi": "Chưa có kết nối AI, vui lòng tạo mới trong bộ kết nối ứng dụng trước"
+  },
+  "未配置 Key": {
+    "en": "Key not configured",
+    "ja": "Key 未設定",
+    "vi": "Chưa cấu hình Key"
+  },
+  "智能录单": {
+    "en": "Smart Document Entry",
+    "ja": "スマート伝票入力",
+    "vi": "Nhập chứng từ thông minh"
+  },
+  "物料健康助手": {
+    "en": "Material Health Assistant",
+    "ja": "品目ヘルスアシスタント",
+    "vi": "Trợ lý sức khỏe dữ liệu vật tư"
+  },
+  "正在分析物料数据…": {
+    "en": "Analyzing material data…",
+    "ja": "品目データを分析中…",
+    "vi": "Đang phân tích dữ liệu vật tư…"
+  },
+  "健康度": {
+    "en": "Health Score",
+    "ja": "健全度",
+    "vi": "Mức độ lành mạnh"
+  },
+  "完备度": {
+    "en": "Completeness",
+    "ja": "完全性",
+    "vi": "Mức độ đầy đủ"
+  },
+  "编码重复": {
+    "en": "Duplicate Codes",
+    "ja": "コード重複",
+    "vi": "Trùng mã"
+  },
+  "未发现明显问题，物料数据状态良好": {
+    "en": "No obvious issues found, the material data is in good shape",
+    "ja": "明らかな問題は見つかりません。品目データは良好な状態です",
+    "vi": "Không phát hiện vấn đề rõ ràng, dữ liệu vật tư ở trạng thái tốt"
+  },
+  "暂无检查结果": {
+    "en": "No check results yet",
+    "ja": "チェック結果はまだありません",
+    "vi": "Chưa có kết quả kiểm tra"
+  },
+  "健康检查失败": {
+    "en": "Health check failed",
+    "ja": "ヘルスチェックに失敗しました",
+    "vi": "Kiểm tra tình trạng thất bại"
+  },
+  "重新检查": {
+    "en": "Recheck",
+    "ja": "再チェック",
+    "vi": "Kiểm tra lại"
+  },
+  "{{count}} 项问题": {
+    "en": "{{count}} issues",
+    "ja": "{{count}} 件の問題",
+    "vi": "{{count}} vấn đề"
+  },
+  "合理性": {
+    "en": "Reasonableness",
+    "ja": "妥当性",
+    "vi": "Tính hợp lý"
+  },
+  "多物一码": {
+    "en": "Multiple Materials, One Code",
+    "ja": "複数品目に同一コード",
+    "vi": "Nhiều vật tư một mã"
+  },
+  "一物多码": {
+    "en": "One Material, Multiple Codes",
+    "ja": "同一品目に複数コード",
+    "vi": "Một vật tư nhiều mã"
+  },
+  "相似重复": {
+    "en": "Similar Duplicates",
+    "ja": "類似重複",
+    "vi": "Trùng lặp tương tự"
+  },
+  "待试产": {
+    "en": "Pending Trial Production",
+    "ja": "試作待ち",
+    "vi": "Chờ sản xuất thử"
+  },
+  "注塑机单据": {
+    "en": "Injection Molding Machine Documents",
+    "ja": "射出成形機の伝票",
+    "vi": "Chứng từ máy ép nhựa"
+  },
+  "注塑机点检单": {
+    "en": "Injection Molding Machine Spot Check",
+    "ja": "射出成形機 日常点検伝票",
+    "vi": "Phiếu kiểm tra định kỳ máy ép nhựa"
+  },
+  "注塑机巡检单": {
+    "en": "Injection Molding Machine Patrol Inspection",
+    "ja": "射出成形機 巡回点検伝票",
+    "vi": "Phiếu tuần tra kiểm tra máy ép nhựa"
+  },
+  "注塑机维保单": {
+    "en": "Injection Molding Machine Maintenance Order",
+    "ja": "射出成形機 保全伝票",
+    "vi": "Phiếu bảo trì máy ép nhựa"
+  },
+  "注塑机维保完成单": {
+    "en": "Injection Molding Machine Maintenance Completion",
+    "ja": "射出成形機 保全完了伝票",
+    "vi": "Phiếu hoàn thành bảo trì máy ép nhựa"
+  },
+  "注塑机产出单": {
+    "en": "Injection Molding Machine Output Report",
+    "ja": "射出成形機 出来高報告伝票",
+    "vi": "Phiếu sản lượng máy ép nhựa"
+  },
+  "注塑机状态调整单": {
+    "en": "Injection Molding Machine Status Adjustment",
+    "ja": "射出成形機 状態変更伝票",
+    "vi": "Phiếu điều chỉnh trạng thái máy ép nhựa"
+  },
+  "注塑机验收单": {
+    "en": "Injection Molding Machine Acceptance",
+    "ja": "射出成形機 受入検収伝票",
+    "vi": "Phiếu nghiệm thu máy ép nhựa"
+  },
+  "注塑机状态看板": {
+    "en": "Injection Molding Machine Status Board",
+    "ja": "射出成形機 状態ボード",
+    "vi": "Bảng trạng thái máy ép nhựa"
+  },
+  "注塑机产能查询": {
+    "en": "Injection Molding Machine Capacity Inquiry",
+    "ja": "射出成形機 能力照会",
+    "vi": "Tra cứu năng lực máy ép nhựa"
+  },
+  "注塑机保养计划表": {
+    "en": "Injection Molding Machine Maintenance Schedule",
+    "ja": "射出成形機 保全計画表",
+    "vi": "Bảng kế hoạch bảo dưỡng máy ép nhựa"
+  },
+  "年份": {
+    "en": "Year",
+    "ja": "年度",
+    "vi": "Năm"
+  },
+  "直通率": {
+    "en": "First Pass Yield",
+    "ja": "直行率",
+    "vi": "Tỷ lệ đạt lần đầu"
+  },
+  "首次报工一次合格占比，不含返工后再合格": {
+    "en": "Share of units passing on the first production report, excluding those passing after rework",
+    "ja": "初回の出来高報告で一発合格した比率（手直し後の合格は含みません）",
+    "vi": "Tỷ lệ đạt ngay ở lần báo cáo sản xuất đầu tiên, không tính phần đạt sau khi làm lại"
+  },
+  "工序开始/完成时间": {
+    "en": "Operation Start/Finish Time",
+    "ja": "工程の開始／完了時刻",
+    "vi": "Thời gian bắt đầu/hoàn thành công đoạn"
+  },
+  "工序开始时间": {
+    "en": "Operation Start Time",
+    "ja": "工程開始時刻",
+    "vi": "Thời gian bắt đầu công đoạn"
+  },
+  "工序完成时间": {
+    "en": "Operation Finish Time",
+    "ja": "工程完了時刻",
+    "vi": "Thời gian hoàn thành công đoạn"
+  },
+  "结束时间不能早于开始时间": {
+    "en": "The end time cannot be earlier than the start time",
+    "ja": "終了時刻は開始時刻より前にできません",
+    "vi": "Thời gian kết thúc không được sớm hơn thời gian bắt đầu"
+  },
+  "请选择工作小组": {
+    "en": "Select a work team",
+    "ja": "作業グループを選択してください",
+    "vi": "Vui lòng chọn tổ làm việc"
+  },
+  "快速新建工作小组": {
+    "en": "Quick Create Work Team",
+    "ja": "作業グループをクイック作成",
+    "vi": "Tạo nhanh tổ làm việc"
+  },
+  "路线模式": {
+    "en": "Routing Mode",
+    "ja": "工程ルートモード",
+    "vi": "Chế độ tuyến công nghệ"
+  },
+  "动态返工路线": {
+    "en": "Dynamic Rework Routing",
+    "ja": "動的な手直し工程ルート",
+    "vi": "Tuyến làm lại động"
+  },
+  "预设返工路线": {
+    "en": "Preset Rework Routing",
+    "ja": "既定の手直し工程ルート",
+    "vi": "Tuyến làm lại định sẵn"
+  },
+  "需要复检": {
+    "en": "Reinspection Required",
+    "ja": "再検査が必要",
+    "vi": "Cần kiểm tra lại"
+  },
+  "可返工数量": {
+    "en": "Reworkable Quantity",
+    "ja": "手直し可能数量",
+    "vi": "Số lượng có thể làm lại"
+  },
+  "预设工序路线": {
+    "en": "Preset Operation Routing",
+    "ja": "既定の工程ルート",
+    "vi": "Tuyến công đoạn định sẵn"
+  },
+  "勾选需返工的工序并调整返工顺序，按表格中的返工序号依次执行。": {
+    "en": "Select the operations to rework and adjust their order. Execution follows the rework sequence numbers in the table.",
+    "ja": "手直しが必要な工程を選択し、順序を調整してください。表の手直し順序番号どおりに実行します。",
+    "vi": "Chọn các công đoạn cần làm lại và điều chỉnh thứ tự, thực hiện lần lượt theo số thứ tự làm lại trong bảng."
+  },
+  "返工序号": {
+    "en": "Rework Sequence No.",
+    "ja": "手直し順序番号",
+    "vi": "Số thứ tự làm lại"
+  },
+  "纳入": {
+    "en": "Include",
+    "ja": "対象に含める",
+    "vi": "Đưa vào"
+  },
+  "请至少选择一道返工工序": {
+    "en": "Select at least one rework operation",
+    "ja": "手直し工程を1つ以上選択してください",
+    "vi": "Vui lòng chọn ít nhất một công đoạn làm lại"
+  },
+  "工序序号": {
+    "en": "Operation Sequence No.",
+    "ja": "工程順序番号",
+    "vi": "Số thứ tự công đoạn"
+  },
+  "返工数量不能超过可返工数量（{{quantity}}）": {
+    "en": "The rework quantity cannot exceed the reworkable quantity ({{quantity}})",
+    "ja": "手直し数量は手直し可能数量（{{quantity}}）を超えられません",
+    "vi": "Số lượng làm lại không được vượt quá số lượng có thể làm lại ({{quantity}})"
+  },
+  "售后中心": {
+    "en": "After-Sales Center",
+    "ja": "アフターサービスセンター",
+    "vi": "Trung tâm sau bán hàng"
+  },
+  "待处理工单": {
+    "en": "Work Orders to Handle",
+    "ja": "未処理の作業指示",
+    "vi": "Lệnh công việc chờ xử lý"
+  },
+  "待派工安装": {
+    "en": "Installation Pending Dispatch",
+    "ja": "派遣待ちの据付作業",
+    "vi": "Chờ điều phối lắp đặt"
+  },
+  "待派工维修": {
+    "en": "Repair Pending Dispatch",
+    "ja": "派遣待ちの修理作業",
+    "vi": "Chờ điều phối sửa chữa"
+  },
+  "待接单派工": {
+    "en": "Pending Acceptance and Dispatch",
+    "ja": "受付および派遣待ち",
+    "vi": "Chờ tiếp nhận và điều phối"
+  },
+  "待审核申领": {
+    "en": "Requisitions Pending Approval",
+    "ja": "承認待ちの払出申請",
+    "vi": "Đề nghị lĩnh dùng chờ duyệt"
+  },
+  "待审核结算": {
+    "en": "Settlements Pending Approval",
+    "ja": "承認待ちの精算",
+    "vi": "Quyết toán chờ duyệt"
+  },
+  "近期回访": {
+    "en": "Recent Follow-ups",
+    "ja": "直近のフォロー訪問",
+    "vi": "Thăm hỏi gần đây"
+  },
+  "新建装机档案": {
+    "en": "Create Installation Record",
+    "ja": "据付台帳を新規作成",
+    "vi": "Tạo hồ sơ lắp đặt"
+  },
+  "编辑装机档案": {
+    "en": "Edit Installation Record",
+    "ja": "据付台帳を編集",
+    "vi": "Sửa hồ sơ lắp đặt"
+  },
+  "资产编码": {
+    "en": "Asset Code",
+    "ja": "資産コード",
+    "vi": "Mã tài sản"
+  }
+}

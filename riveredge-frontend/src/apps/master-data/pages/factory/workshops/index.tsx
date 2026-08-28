@@ -8,9 +8,8 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import React, { useRef, useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, List, Modal, Popconfirm, Space, Typography } from 'antd';
+import { App, Button, List, Modal, Popconfirm, Typography } from 'antd';
 import { downloadFile } from '../../../../../utils';
-import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
@@ -602,8 +601,8 @@ const WorkshopsPage: React.FC = () => {
       {
         title: t('app.master-data.workshops.code'),
         dataIndex: 'code',
-        width: 120,
-        minWidth: 120,
+        width: 140,
+        minWidth: 140,
         uniTableKeepWidth: true,
         resizable: false,
         fixed: 'left' as const,
@@ -615,8 +614,8 @@ const WorkshopsPage: React.FC = () => {
       {
         title: t('app.master-data.workshops.name'),
         dataIndex: 'name',
-        width: 168,
-        minWidth: 168,
+        width: 180,
+        minWidth: 180,
         uniTableKeepWidth: true,
         resizable: false,
         ellipsis: true,
@@ -625,8 +624,12 @@ const WorkshopsPage: React.FC = () => {
       },
       {
         title: t('app.master-data.workshops.plantName'),
+        key: 'master_ref_plant',
         dataIndex: 'plantId',
-        width: 150,
+        width: 180,
+        minWidth: 180,
+        uniTableKeepWidth: true,
+        resizable: false,
         order: 15,
         valueType: 'select' as const,
         valueEnum: plants.reduce((acc, plant) => {
@@ -636,10 +639,16 @@ const WorkshopsPage: React.FC = () => {
         render: (_text, record) => formatPlantDisplay(record),
       },
       {
+        // 备注长短不一：唯一 RemainderFlex（稀疏不叠）
         title: t('common.remark'),
         dataIndex: 'description',
+        minWidth: 160,
+        uniTableRemainderFlex: true,
+        uniTablePrimaryFlex: true,
+        resizable: false,
         ellipsis: true,
         hideInSearch: true,
+        render: (_, r) => r.description || '—',
       },
       ...buildMasterCrudActiveStatusColumn<Workshop>(t, {
         activeValueEnum: workshopActiveValueEnum,
@@ -651,39 +660,33 @@ const WorkshopsPage: React.FC = () => {
       {
         title: t('common.actions'),
         key: 'action',
-        valueType: 'option',
         fixed: 'right' as const,
-        render: (_text, record) => (
-          <Space>
-            <Button key="view" {...rowActionKind('read')}
-              size="small"
-              onClick={() => handleOpenDetail(record)}
-            >
-              {t('common.view')}
-            </Button>
-            <Button key="edit" {...rowActionKind('update')}
-              size="small"
-              icon={<EditOutlined />}
-              onClick={() => handleEdit(record)}
-            >
-              {t('common.edit')}
-            </Button>
-            <Popconfirm key="delete" {...rowActionKind('delete')} title={t('app.master-data.workshops.deleteConfirm')}
-              description={t('app.master-data.workshops.deleteDescription')}
-              onConfirm={() => handleDelete(record)}
-            >
-              <Button
-                type="link"
-                danger
-                size="small"
-                icon={<DeleteOutlined />}
-              >
-                {t('common.delete')}
-              </Button>
-            </Popconfirm>
-          </Space>
-      ),
-    },
+        hideInSearch: true,
+        render: (_text, record) => [
+          <Button
+            key="view"
+            type="link"
+            size="small"
+            {...rowActionKind('read')}
+            onClick={() => handleOpenDetail(record)}
+          />,
+          <Button
+            key="edit"
+            type="link"
+            size="small"
+            {...rowActionKind('update')}
+            onClick={() => handleEdit(record)}
+          />,
+          <Popconfirm
+            key="delete"
+            title={t('app.master-data.workshops.deleteConfirm')}
+            description={t('app.master-data.workshops.deleteDescription')}
+            onConfirm={() => handleDelete(record)}
+          >
+            <Button type="link" size="small" {...rowActionKind('delete')} />
+          </Popconfirm>,
+        ],
+      },
     ];
   }, [customFields, plants, t, formatPlantDisplay, workshopActiveValueEnum]);
 
@@ -734,7 +737,7 @@ const WorkshopsPage: React.FC = () => {
       <ListPageTemplate>
         {customFieldsLoaded ? (
         <UniTable<Workshop>
-        columnPersistenceId="apps.master-data.pages.factory.workshops.list-v2"
+        columnPersistenceId="apps.master-data.pages.factory.workshops.list-v3"
         actionRef={actionRef}
         columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
         viewTypes={['table', 'help']}

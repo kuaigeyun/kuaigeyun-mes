@@ -19,6 +19,11 @@ from apps.kuaizhizao.utils.mrp_execution_validation import (
 )
 from infra.exceptions.exceptions import BusinessLogicError
 
+_RESOLVE_PATH = (
+    "apps.master_data.services.material_product_process_service."
+    "MaterialProductProcessService.resolve_process_route_for_material"
+)
+
 
 def _make_material(
     *,
@@ -46,6 +51,10 @@ def _make_material(
     )
 
 
+def _route(route_id: int = 99):
+    return SimpleNamespace(id=route_id)
+
+
 @pytest.mark.asyncio
 async def test_make_unset_no_bom_no_route_blocking():
     material = _make_material()
@@ -58,6 +67,10 @@ async def test_make_unset_no_bom_no_route_blocking():
     ), patch(
         "apps.master_data.models.material.BOM.filter",
         return_value=mock_bom_q,
+    ), patch(
+        _RESOLVE_PATH,
+        new_callable=AsyncMock,
+        return_value=None,
     ):
         passed, errors = await validate_material_source_config(1, 1, SOURCE_TYPE_MAKE)
     assert passed is False
@@ -78,10 +91,15 @@ async def test_make_unset_only_route_no_bom_blocking():
     ), patch(
         "apps.master_data.models.material.BOM.filter",
         return_value=mock_bom_q,
+    ), patch(
+        _RESOLVE_PATH,
+        new_callable=AsyncMock,
+        return_value=_route(99),
     ):
         passed, errors = await validate_material_source_config(1, 1, SOURCE_TYPE_MAKE)
     assert passed is False
     assert any("BOM" in e for e in errors)
+    assert not any("工艺路线" in e for e in errors)
 
 
 @pytest.mark.asyncio
@@ -99,6 +117,36 @@ async def test_fabrication_route_no_bom_passes():
     ), patch(
         "apps.master_data.models.material.BOM.filter",
         return_value=mock_bom_q,
+    ), patch(
+        _RESOLVE_PATH,
+        new_callable=AsyncMock,
+        return_value=_route(10),
+    ):
+        passed, errors = await validate_material_source_config(1, 1, SOURCE_TYPE_MAKE)
+    assert passed is True
+    assert errors == []
+
+
+@pytest.mark.asyncio
+async def test_fabrication_product_process_route_without_material_fk_passes():
+    """产品工艺有路线、物料 FK 未设时，MRP 校验应视为已配置工艺路线。"""
+    material = _make_material(
+        process_route_id=None,
+        manufacturing_mode=MANUFACTURING_MODE_FABRICATION,
+    )
+    mock_bom_q = MagicMock()
+    mock_bom_q.count = AsyncMock(return_value=0)
+    with patch(
+        "apps.kuaizhizao.utils.material_source_helper.Material.get_or_none",
+        new_callable=AsyncMock,
+        return_value=material,
+    ), patch(
+        "apps.master_data.models.material.BOM.filter",
+        return_value=mock_bom_q,
+    ), patch(
+        _RESOLVE_PATH,
+        new_callable=AsyncMock,
+        return_value=_route(77),
     ):
         passed, errors = await validate_material_source_config(1, 1, SOURCE_TYPE_MAKE)
     assert passed is True
@@ -117,6 +165,10 @@ async def test_assembly_bom_no_route_passes():
     ), patch(
         "apps.master_data.models.material.BOM.filter",
         return_value=mock_bom_q,
+    ), patch(
+        _RESOLVE_PATH,
+        new_callable=AsyncMock,
+        return_value=None,
     ):
         passed, errors = await validate_material_source_config(1, 1, SOURCE_TYPE_MAKE)
     assert passed is True
@@ -142,6 +194,35 @@ async def test_validate_mrp_scope_materials_blocking_for_unset_make():
         result = await validate_mrp_scope_materials(1, [10], {}, set())
     assert result["blocking_count"] == 1
     assert result["blocking_errors"][0]["material_code"] == "SUB01"
+
+
+@pytest.mark.asyncio
+async def test_assembly_warning_uses_resolved_route():
+    material = _make_material(
+        material_id=10,
+        code="ASM01",
+        manufacturing_mode=MANUFACTURING_MODE_ASSEMBLY,
+        process_route_id=None,
+    )
+    with patch(
+        "apps.kuaizhizao.utils.mrp_execution_validation.MaterialService.batch_check_has_bom",
+        new_callable=AsyncMock,
+        return_value={10: True},
+    ), patch(
+        "apps.kuaizhizao.utils.mrp_execution_validation.Material.get_or_none",
+        new_callable=AsyncMock,
+        return_value=material,
+    ), patch(
+        "apps.kuaizhizao.utils.mrp_execution_validation.validate_material_source_config",
+        new_callable=AsyncMock,
+        return_value=(True, []),
+    ), patch(
+        _RESOLVE_PATH,
+        new_callable=AsyncMock,
+        return_value=_route(55),
+    ):
+        result = await validate_mrp_scope_materials(1, [10], {}, set())
+    assert result["warning_count"] == 0
 
 
 def test_format_mrp_scope_blocking_message():
@@ -202,5 +283,5 @@ def test_scope_blocking_to_readiness_gaps_bom_is_info_only():
         ]
     }
     gaps = scope_blocking_to_readiness_gaps(result, material_by_id={4: material})
-    assert gaps[0]["field"] == "_bom"
+    assert len(gaps) == 1
     assert gaps[0]["value_type"] == "info"

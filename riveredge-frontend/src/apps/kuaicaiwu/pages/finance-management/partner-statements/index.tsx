@@ -18,7 +18,6 @@ import {
   Divider,
 } from 'antd';
 import { ProForm } from '@ant-design/pro-components';
-import { EyeOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import dayjs, { Dayjs } from 'dayjs';
@@ -63,11 +62,9 @@ import {
   resolvePartnerStatementListParams,
 } from '../../../utils/financeListCore';
 import type { PartnerStatementListParams } from '../../../services/finance/partnerStatement';
-import {
-  UniTableStackedPrimaryCell,
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-} from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { MarkerTag } from '../../../../../constants/statusBadges';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { buildReportHelpViewConfig } from '../../../../../components/page-help-wiki';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
@@ -286,13 +283,19 @@ const PartnerStatementsPage: React.FC = () => {
         periodLabel: t(`${PS}.col.period`),
       }),
       {
+        // 有 RemainderFlex：主标识叠列 KeepWidth
         title: t(`${PS}.col.code`),
         key: 'finance_doc_partner_stacked',
         dataIndex: 'statement_code',
-        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        width: 240,
+        minWidth: 240,
+        uniTableKeepWidth: true,
+        uniTablePrimaryFlex: false,
+        resizable: false,
         fixed: 'left',
         hideInSearch: true,
         sorter: true,
+        ellipsis: false,
         render: (_, r) => (
           <UniTableStackedPrimaryCell
             primary={String(r.partner_name ?? '')}
@@ -310,6 +313,7 @@ const PartnerStatementsPage: React.FC = () => {
       },
       {
         title: t(`${PS}.col.period`),
+        key: 'finance_statement_period',
         dataIndex: 'statement_period',
         width: 200,
         minWidth: 200,
@@ -362,10 +366,7 @@ const PartnerStatementsPage: React.FC = () => {
       {
         title: t('common.status'),
         dataIndex: 'status',
-        width: 100,
-        minWidth: 100,
-        uniTableKeepWidth: true,
-        resizable: false,
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         hideInSearch: true,
         sorter: true,
         valueEnum: statusEnum,
@@ -380,36 +381,45 @@ const PartnerStatementsPage: React.FC = () => {
           return <MarkerTag color={colorMap[r.status] || 'default'}>{m.text}</MarkerTag>;
         },
       },
+      {
+        // 备注长短不一：唯一 RemainderFlex
+        title: t('common.remark'),
+        dataIndex: 'notes',
+        minWidth: 160,
+        uniTableRemainderFlex: true,
+        uniTablePrimaryFlex: true,
+        resizable: false,
+        hideInSearch: true,
+        ellipsis: true,
+        render: (_, r) => r.notes || '—',
+      },
       ...financeDocCreatedUpdatedColumns<PartnerStatement>(t),
-    {
-      title: t('common.actions'),
-      key: 'action',
-      valueType: 'option',
-      fixed: 'right',
-      hideInSearch: true,
-      render: (_, record) => [
-            <Button {...rowActionKind('read')}
+      {
+        title: t('common.actions'),
+        key: 'action',
+        fixed: 'right',
+        hideInSearch: true,
+        render: (_, record) => {
+          const acts: React.ReactNode[] = [
+            <Button
               key="det"
-              type="link"
-              size="small"
-              icon={<EyeOutlined />}
-              onClick={() => navigate(`/apps/kuaicaiwu/finance-management/partner-statements/${record.id}`)}
-            >
-              {t('common.detail')}
-            </Button>,
-            record.status === 'Draft' && statementPerms.canDelete ? (
-              <Button {...rowActionKind('delete')}
+              {...rowActionKind('read')}
+              onClick={() =>
+                navigate(`/apps/kuaicaiwu/finance-management/partner-statements/${record.id}`)
+              }
+            />,
+          ];
+          if (record.status === 'Draft' && statementPerms.canDelete) {
+            acts.push(
+              <Button
                 key="del"
-                type="link"
-                size="small"
-                danger
-                icon={<DeleteOutlined />}
+                {...rowActionKind('delete')}
                 onClick={() => handleDelete(record)}
-              >
-                {t('common.delete')}
-              </Button>
-            ) : null,
-          ].filter(Boolean) as React.ReactNode[],
+              />,
+            );
+          }
+          return acts;
+        },
       },
     ],
     [t, navigate, statusEnum, partnerOptions, statementPerms.canDelete],
@@ -489,7 +499,7 @@ const PartnerStatementsPage: React.FC = () => {
       selectedRowKeys={customerSelectedRowKeys}
       onRowSelectionChange={setCustomerSelectedRowKeys}
       rowKey="id"
-      columnPersistenceId="apps.kuaicaiwu.pages.finance-management.partner-statements.Customer.list-v1"
+      columnPersistenceId="apps.kuaicaiwu.pages.finance-management.partner-statements.Customer.list-v3"
       viewTypes={['table', 'help']}
       helpViewConfig={buildReportHelpViewConfig()}
       showAdvancedSearch
@@ -537,7 +547,7 @@ const PartnerStatementsPage: React.FC = () => {
       selectedRowKeys={supplierSelectedRowKeys}
       onRowSelectionChange={setSupplierSelectedRowKeys}
       rowKey="id"
-      columnPersistenceId="apps.kuaicaiwu.pages.finance-management.partner-statements.Supplier.list-v1"
+      columnPersistenceId="apps.kuaicaiwu.pages.finance-management.partner-statements.Supplier.list-v3"
       viewTypes={['table', 'help']}
       helpViewConfig={buildReportHelpViewConfig()}
       showAdvancedSearch

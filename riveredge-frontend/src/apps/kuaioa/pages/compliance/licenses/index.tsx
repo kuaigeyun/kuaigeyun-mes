@@ -19,7 +19,7 @@ const LicensesPage: React.FC = () => (
     statusPresentation="marker"
     detailVariant="master"
     getDetailFn={getComplianceLicense}
-    columnPersistenceId="apps.kuaioa.license.list-v4"
+    columnPersistenceId="apps.kuaioa.license.list-v5"
     fields={[
       { name: 'license_code', labelKey: 'app.kuaioa.license.code', width: 140 },
       { name: 'license_name', labelKey: 'app.kuaioa.license.name', required: true, width: 200 },

@@ -11,14 +11,9 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormSelect, ProFormTextArea, ProFormSwitch } from '@ant-design/pro-components';
-import { App, Button, Space, Popconfirm } from 'antd';
-import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { App, Button, Popconfirm } from 'antd';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { UniTable } from '../../../../../components/uni-table';
-import {
-  UniTableStackedPrimaryCell,
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import {
   ListPageTemplate,
@@ -38,6 +33,8 @@ import {
   costRuleSearchColumns,
   resolveCostRuleListParams,
 } from '../../../utils/costListCore';
+import { MarkerTag } from '../../../../../constants/statusBadges';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 
 interface CostRule {
   id?: number;
@@ -278,29 +275,34 @@ const CostRulePage: React.FC = () => {
         },
       },
       {
-        title: t('app.kuaicaiwu.costRule.col.name'),
-        key: 'finance_doc_partner_stacked',
-        dataIndex: 'name',
-        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-        fixed: 'left',
-        hideInSearch: true,
-        sorter: true,
-        render: (_, r) => (
-          <UniTableStackedPrimaryCell
-            primary={String(r.name ?? '')}
-            secondary={String(r.code ?? '')}
-          />
-        ),
-      },
-      { title: t('app.kuaicaiwu.costRule.col.code'), dataIndex: 'code', key: 'code', hideInTable: true },
-      {
-        title: t('app.kuaicaiwu.costRule.col.ruleType'),
-        dataIndex: 'rule_type',
-        key: 'rule_type',
+        title: t('app.kuaicaiwu.costRule.col.code'),
+        dataIndex: 'code',
+        key: 'code',
         width: 120,
         minWidth: 120,
         uniTableKeepWidth: true,
         resizable: false,
+        ellipsis: true,
+        hideInSearch: true,
+        sorter: true,
+      },
+      {
+        title: t('app.kuaicaiwu.costRule.col.name'),
+        dataIndex: 'name',
+        key: 'name',
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
+        hideInSearch: true,
+        sorter: true,
+      },
+      {
+        title: t('app.kuaicaiwu.costRule.col.ruleType'),
+        dataIndex: 'rule_type',
+        key: 'rule_type',
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         hideInSearch: true,
         sorter: true,
         render: (dom) => getRuleTypeTag(String(dom ?? ''), t),
@@ -342,40 +344,68 @@ const CostRulePage: React.FC = () => {
         title: t('app.kuaicaiwu.costRule.col.sourceModule'),
         dataIndex: 'source_module',
         key: 'source_module',
-        width: 120,
-        minWidth: 120,
+        width: 100,
+        minWidth: 100,
         uniTableKeepWidth: true,
         resizable: false,
         hideInSearch: true,
         sorter: true,
       },
+      {
+        // 备注长短不一：唯一 RemainderFlex
+        title: t('common.remark'),
+        dataIndex: 'description',
+        key: 'notes',
+        minWidth: 160,
+        uniTableRemainderFlex: true,
+        uniTablePrimaryFlex: true,
+        resizable: false,
+        ellipsis: true,
+        hideInSearch: true,
+        render: (_, r) => r.description || '—',
+      },
+      {
+        title: t('app.kuaicaiwu.costRule.col.isActive'),
+        dataIndex: 'is_active',
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+        hideInSearch: true,
+        sorter: true,
+        render: (_, r) =>
+          r.is_active ? (
+            <MarkerTag color="success">{t('common.enabled')}</MarkerTag>
+          ) : (
+            <MarkerTag color="default">{t('common.disabled')}</MarkerTag>
+          ),
+      },
       ...costDocCreatedUpdatedColumns<CostRule>(t),
       {
         title: t('common.actions'),
         key: 'action',
-        valueType: 'option',
         fixed: 'right',
         hideInSearch: true,
-        render: (_: any, record: CostRule) => (
-          <Space>
-            <Button key="view" {...rowActionKind('read')} size="small" onClick={() => handleDetail(record)}>
-              {t('common.detail')}
-            </Button>
-            <Button key="edit" {...rowActionKind('update')} size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-              {t('common.edit')}
-            </Button>
-            <Popconfirm
-              key="delete"
-              {...rowActionKind('delete')}
-              title={t('common.confirmDelete')}
-              onConfirm={() => handleDelete(record)}
-            >
-              <Button type="link" danger size="small" icon={<DeleteOutlined />}>
-                {t('common.delete')}
-              </Button>
-            </Popconfirm>
-          </Space>
-        ),
+        render: (_: any, record: CostRule) => [
+          <Button
+            key="view"
+            type="link"
+            size="small"
+            {...rowActionKind('read')}
+            onClick={() => handleDetail(record)}
+          />,
+          <Button
+            key="edit"
+            type="link"
+            size="small"
+            {...rowActionKind('update')}
+            onClick={() => handleEdit(record)}
+          />,
+          <Popconfirm
+            key="delete"
+            title={t('common.confirmDelete')}
+            onConfirm={() => handleDelete(record)}
+          >
+            <Button type="link" size="small" {...rowActionKind('delete')} />
+          </Popconfirm>,
+        ],
       },
     ],
     [t],
@@ -417,7 +447,7 @@ const CostRulePage: React.FC = () => {
         enableRowSelection
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
-        columnPersistenceId="apps.kuaicaiwu.pages.cost-management.cost-rules.list-v1"
+        columnPersistenceId="apps.kuaicaiwu.pages.cost-management.cost-rules.list-v2"
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaicaiwu.costRules')}
         showAdvancedSearch

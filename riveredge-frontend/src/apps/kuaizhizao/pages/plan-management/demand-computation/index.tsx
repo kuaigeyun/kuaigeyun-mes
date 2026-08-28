@@ -129,7 +129,10 @@ import { warehouseApi } from '../../../../master-data/services/warehouse'
 import ComputationHistoryTab from './ComputationHistoryTab'
 import { DemandComputationDetailDrawer } from './components/DemandComputationDetailDrawer'
 import MrpExceptionInboxTab from './components/MrpExceptionInboxTab'
-import { renderAvailableInventoryCell } from './components/availableInventoryCell'
+import {
+  renderAvailableInventoryCell,
+  renderNetRequirementCell,
+} from './components/availableInventoryCell'
 import { MrpParametersCustomerGuideTrigger } from './MrpParametersCustomerGuide'
 import { readinessFieldHelpI18nKey } from './readinessFieldHelp'
 import { buildDemandPushPreviewSummary } from './pushPreviewSummary'
@@ -3511,7 +3514,12 @@ const DemandComputationPage: React.FC = () => {
                           dataIndex: 'net_requirement',
                           width: 90,
                           align: 'right' as const,
-                          render: formatQuantity,
+                          render: (v: number, r: DemandComputationItem) =>
+                            renderNetRequirementCell(
+                              v,
+                              r.detail_results as Record<string, unknown> | undefined,
+                              formatQuantity,
+                            ),
                         },
                         {
                           title: t('app.kuaizhizao.demandComputation.colSuggestedWorkOrder'),
@@ -3879,7 +3887,12 @@ const DemandComputationPage: React.FC = () => {
                   title: t('app.kuaizhizao.demandComputation.colNetRequirement'),
                   dataIndex: 'net_requirement',
                   width: 90,
-                  render: (v: number) => formatQuantity(v),
+                  render: (v: number, r) =>
+                    renderNetRequirementCell(
+                      v,
+                      r.detail_results as Record<string, unknown> | undefined,
+                      formatQuantity,
+                    ),
                 },
                 {
                   title: t('app.kuaizhizao.demandComputation.colSuggestedWorkOrder'),

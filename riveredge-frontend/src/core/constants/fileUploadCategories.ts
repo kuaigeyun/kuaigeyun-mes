@@ -227,6 +227,18 @@ export const FILE_ATTACHMENTS_GROUP_KEY = '@attachments';
 export const FILE_SYSTEM_FOLDERS_GROUP_KEY = '@system-folders';
 export const FILE_USER_FOLDERS_GROUP_KEY = '@user-folders';
 export const FILE_UNCATEGORIZED_GROUP_KEY = '@uncategorized';
+/** 文件管理侧栏：保密文件虚拟分组 */
+export const FILE_PRIVATE_FILES_GROUP_KEY = '@private-files';
+
+/** 归入「保密文件」的 category（文件管理浏览须二次密码） */
+export const PRIVATE_FILE_CATEGORIES: readonly string[] = ['company-seal'];
+
+export function isPrivateFileCategory(category: string | undefined): boolean {
+  const raw = (category || '').trim();
+  if (!raw) return false;
+  if (raw === FILE_PRIVATE_FILES_GROUP_KEY) return true;
+  return PRIVATE_FILE_CATEGORIES.includes(raw);
+}
 
 /** 侧栏虚拟节点（非 DB category） */
 export function isVirtualFileTreeKey(key: string | undefined): boolean {
@@ -240,10 +252,11 @@ export function isUserFolderCategory(category: string | undefined): boolean {
   return /[\u4e00-\u9fff]/.test(raw);
 }
 
-/** 系统文件夹（含附件子目录、Logo/头像等业务 category） */
+/** 系统文件夹（含附件子目录、Logo/头像等业务 category；不含保密文件） */
 export function isSystemFolderCategory(category: string | undefined): boolean {
   const raw = (category || '').trim();
   if (!raw || isVirtualFileTreeKey(raw)) return false;
+  if (isPrivateFileCategory(raw)) return false;
   return !isUserFolderCategory(raw);
 }
 

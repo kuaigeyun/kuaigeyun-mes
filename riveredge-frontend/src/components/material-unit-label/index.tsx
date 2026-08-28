@@ -10,6 +10,15 @@ export interface MaterialUnitLabelProps {
   emptyText?: string;
 }
 
+function coerceUnitRaw(value: unknown): string {
+  if (value == null) return '';
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return String(value).trim();
+  }
+  // ProTable 误把已渲染 dom 传入时勿 String(ReactNode) → [object Object]
+  return '';
+}
+
 /** 单位 code → 主数据名称（替代 DictionaryLabel MATERIAL_UNIT） */
 export const MaterialUnitLabel: React.FC<MaterialUnitLabelProps> = ({
   value,
@@ -31,7 +40,7 @@ export const MaterialUnitLabel: React.FC<MaterialUnitLabelProps> = ({
     };
   }, []);
 
-  const raw = String(value ?? '').trim();
+  const raw = coerceUnitRaw(value);
   if (!raw) return <>{emptyText}</>;
   return <>{resolveMaterialUnitLabel(raw, map) || emptyText}</>;
 };

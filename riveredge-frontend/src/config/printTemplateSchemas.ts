@@ -19,6 +19,22 @@ export interface TemplateSchema {
   fields: FieldSchema[];
 }
 
+/** 客户主数据开票资料（销售订单/销售合同打印变量） */
+export const CUSTOMER_INVOICE_PRINT_FIELDS: FieldSchema[] = [
+  { key: 'tax_registration_no', label: '税号', type: 'string' },
+  { key: 'invoice_title', label: '发票抬头', type: 'string' },
+  { key: 'invoice_address', label: '开票地址', type: 'string' },
+  { key: 'invoice_phone', label: '开票电话', type: 'string' },
+  { key: 'invoice_bank_name', label: '开票开户银行', type: 'string' },
+  { key: 'invoice_bank_account', label: '开票银行账号', type: 'string' },
+  { key: 'invoice_bank_info', label: '开票银行资料', type: 'string' },
+  { key: 'invoice_address_phone', label: '开票地址电话', type: 'string' },
+  { key: 'invoice_type', label: '发票类型', type: 'string' },
+  { key: 'invoice_type_code', label: '发票类型编码', type: 'string' },
+  { key: 'taxpayer_type', label: '纳税人类型', type: 'string' },
+  { key: 'taxpayer_type_code', label: '纳税人类型编码', type: 'string' },
+];
+
 /** 手机端扫描用单据二维码（打印页眉右上角） */
 export const DOCUMENT_QRCODE_FIELD: FieldSchema = {
   key: 'document_qrcode',
@@ -617,10 +633,14 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
       { key: 'code', label: '订单号', type: 'string' },
       { key: 'order_name', label: '订单名称', type: 'string' },
       { key: 'customer_name', label: '客户名称', type: 'string' },
+      { key: 'customer_contact', label: '客户联系人', type: 'string' },
+      { key: 'customer_phone', label: '客户电话', type: 'string' },
+      ...CUSTOMER_INVOICE_PRINT_FIELDS,
       { key: 'order_date', label: '订单日期', type: 'date' },
       { key: 'delivery_date', label: '交货日期', type: 'date' },
       { key: 'total_quantity', label: '总数量', type: 'number' },
       { key: 'total_amount', label: '总金额', type: 'number' },
+      { key: 'total_amount_uppercase', label: '总金额大写', type: 'string' },
       { key: 'status', label: '状态', type: 'string' },
       { key: 'created_at', label: '创建时间', type: 'date' },
       {
@@ -663,15 +683,19 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
       { key: 'customer_name', label: '客户名称', type: 'string' },
       { key: 'customer_contact', label: '客户联系人', type: 'string' },
       { key: 'customer_phone', label: '客户电话', type: 'string' },
+      ...CUSTOMER_INVOICE_PRINT_FIELDS,
       { key: 'contract_date', label: '合同日期', type: 'date' },
       { key: 'valid_from', label: '有效期起', type: 'date' },
       { key: 'valid_to', label: '有效期止', type: 'date' },
       { key: 'total_quantity', label: '总数量', type: 'number' },
       { key: 'total_amount', label: '总金额', type: 'number' },
+      { key: 'total_amount_uppercase', label: '总金额大写', type: 'string' },
       { key: 'released_quantity', label: '已释放数量', type: 'number' },
       { key: 'released_amount', label: '已释放金额', type: 'number' },
+      { key: 'released_amount_uppercase', label: '已释放金额大写', type: 'string' },
       { key: 'remaining_quantity', label: '剩余数量', type: 'number' },
       { key: 'remaining_amount', label: '剩余金额', type: 'number' },
+      { key: 'remaining_amount_uppercase', label: '剩余金额大写', type: 'string' },
       { key: 'salesman_name', label: '销售员', type: 'string' },
       { key: 'shipping_address', label: '收货地址', type: 'string' },
       { key: 'shipping_method', label: '发货方式', type: 'string' },

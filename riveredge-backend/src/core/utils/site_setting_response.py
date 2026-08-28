@@ -24,3 +24,13 @@ def mask_company_seal_for_response(
     if not include_seal_value:
         result.pop("company_seal", None)
     return result
+
+
+def mask_private_vault_for_response(settings: Dict[str, Any]) -> Dict[str, Any]:
+    """保密文件二次密码哈希不得经站点设置 API 泄露。"""
+    if not settings:
+        return settings
+    result = deepcopy(settings)
+    configured = bool(str(result.pop("private_files_password_hash", "") or "").strip())
+    result["private_files_password_configured"] = configured
+    return result

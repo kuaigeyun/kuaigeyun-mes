@@ -5,7 +5,7 @@ import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react'
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Col, Modal, Typography, Alert, Spin, Table, Empty, Form } from 'antd';
-import { EyeOutlined, PlusOutlined } from '@ant-design/icons';
+import { PlusOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { apiRequest, formatApiErrorDetail } from '../../../../../services/api';
 import {
@@ -81,10 +81,7 @@ import {
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import type { PurchaseInvoiceListParams } from '../../../types/finance/purchase-invoice';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
-import {
-  UniTableStackedPrimaryCell,
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-} from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
@@ -509,10 +506,15 @@ const PurchaseInvoiceList: React.FC = () => {
         title: t(`${P}.col.code`),
         key: 'finance_doc_partner_stacked',
         dataIndex: 'invoice_code',
-        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        width: 240,
+        minWidth: 240,
+        uniTableKeepWidth: true,
+        uniTablePrimaryFlex: false,
+        resizable: false,
         fixed: 'left',
         hideInSearch: true,
         sorter: true,
+        ellipsis: false,
         render: (_, entity) => (
           <UniTableStackedPrimaryCell
             primary={String(entity.supplier_name ?? '')}
@@ -522,6 +524,11 @@ const PurchaseInvoiceList: React.FC = () => {
             }
           />
         ),
+      },
+      {
+        title: t('app.kuaicaiwu.common.supplier'),
+        dataIndex: 'supplier_name',
+        hideInTable: true,
       },
       {
         title: t(`${P}.col.purchaseOrder`),
@@ -534,15 +541,10 @@ const PurchaseInvoiceList: React.FC = () => {
         sorter: true,
       },
       {
-        title: t('app.kuaicaiwu.common.supplier'),
-        dataIndex: 'supplier_name',
-        hideInTable: true,
-      },
-      {
         title: t(`${P}.col.invoiceNumber`),
         dataIndex: 'invoice_number',
-        width: 120,
-        minWidth: 120,
+        width: 160,
+        minWidth: 160,
         uniTableKeepWidth: true,
         resizable: false,
         hideInSearch: true,
@@ -553,8 +555,8 @@ const PurchaseInvoiceList: React.FC = () => {
         dataIndex: 'total_amount',
         valueType: 'money',
         align: 'right',
-        width: 120,
-        minWidth: 120,
+        width: 130,
+        minWidth: 130,
         uniTableKeepWidth: true,
         resizable: false,
         hideInSearch: true,
@@ -562,6 +564,7 @@ const PurchaseInvoiceList: React.FC = () => {
       },
       {
         title: t('app.kuaicaiwu.common.invoiceDate'),
+        key: 'finance_invoice_date',
         dataIndex: 'invoice_date',
         valueType: 'date',
         width: 120,
@@ -578,6 +581,17 @@ const PurchaseInvoiceList: React.FC = () => {
         hideInTable: true,
         order: 20,
         formItemProps: formDateRangeFormItemProps,
+      },
+      {
+        title: t('common.remark'),
+        dataIndex: 'notes',
+        minWidth: 160,
+        uniTableRemainderFlex: true,
+        uniTablePrimaryFlex: true,
+        resizable: false,
+        hideInSearch: true,
+        ellipsis: true,
+        render: (_, r) => r.notes || '—',
       },
       {
         title: t('common.status'),
@@ -617,43 +631,37 @@ const PurchaseInvoiceList: React.FC = () => {
       {
         title: t('common.actions'),
         key: 'action',
-        valueType: 'option',
         fixed: 'right',
         hideInSearch: true,
-        render: (_, record) =>
-          [
-            <Button
-              {...rowActionKind('read')}
-              key="det"
-              type="link"
-              size="small"
-              icon={<EyeOutlined />}
-              onClick={() => navigate(`/apps/kuaicaiwu/finance-management/purchase-invoices/${record.id}`)}
-            >
-              {t('common.detail')}
-            </Button>,
-            <UniWorkflowActions
-              {...rowActionKind('skip')}
-              key="wf"
-              record={record}
-              apiPrefix="/apps/kuaicaiwu/purchase-invoices"
-              entityType="purchase_invoice"
-              entityName={t(`${P}.entityName`)}
-              statusField="status"
-              reviewStatusField="review_status"
-              draftStatuses={['草稿', 'draft']}
-              pendingStatuses={['待审核']}
-              approvedStatuses={['已审核']}
-              rejectedStatuses={['已驳回', '驳回']}
-              theme="link"
-              size="small"
-              onSuccess={() => actionRef.current?.reload()}
-            />,
-          ].filter(Boolean) as React.ReactNode[],
+        render: (_, record) => [
+          <Button
+            key="det"
+            {...rowActionKind('read')}
+            onClick={() => navigate(`/apps/kuaicaiwu/finance-management/purchase-invoices/${record.id}`)}
+          />,
+          <UniWorkflowActions
+            {...rowActionKind('skip')}
+            key="wf"
+            record={record}
+            apiPrefix="/apps/kuaicaiwu/purchase-invoices"
+            entityType="purchase_invoice"
+            entityName={t(`${P}.entityName`)}
+            statusField="status"
+            reviewStatusField="review_status"
+            draftStatuses={['草稿', 'draft']}
+            pendingStatuses={['待审核']}
+            approvedStatuses={['已审核']}
+            rejectedStatuses={['已驳回', '驳回']}
+            theme="link"
+            size="small"
+            onSuccess={() => actionRef.current?.reload()}
+          />,
+        ],
       },
     ],
     [t, navigate, supplierOptions, reviewStatusEnum],
   );
+
 
   const pullTableColumns = useMemo(
     () => [
@@ -805,7 +813,7 @@ const PurchaseInvoiceList: React.FC = () => {
         onRowSelectionChange={setSelectedRowKeys}
         onTableDataChange={setTableRows}
         columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
-        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.purchase-invoices.list-v1"
+        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.purchase-invoices.list-v2"
         showAdvancedSearch
         request={async (params, sort, _filter, searchFormValues) => {
           const listParams = resolvePurchaseInvoiceListParams(searchFormValues, sort);

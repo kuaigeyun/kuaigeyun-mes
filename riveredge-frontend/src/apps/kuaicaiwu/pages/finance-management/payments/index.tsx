@@ -4,7 +4,7 @@
  * 记录向供应商支付的款项，可用于核销应付单。
  */
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
-import { rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind, rowActionSettleVoucher, rowActionCreateRefund } from '../../../../../components/uni-action';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Modal, Typography, Spin, Alert, Table, Empty, Form } from 'antd';
 import { ModalForm, ProForm, ProFormDatePicker, ProFormDigit, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
@@ -73,17 +73,16 @@ import {
 } from '../../../utils/financeListCore';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
-import {
-  UniTableStackedPrimaryCell,
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-} from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { MarkerTag } from '../../../../../constants/statusBadges';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { renderRefundExecutionMarker } from '../../../utils/financeUiLabels';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import {
   buildFinanceVoucherLinkHandlers,
+  FinanceVoucherDetailProvider,
   useFinanceVoucherDetail,
 } from '../../../components/FinanceVoucherDetailProvider';
 import { canCreateRefundFromVoucher } from '../../../utils/financeVoucherDocType';
@@ -536,13 +535,19 @@ const PaymentsPage: React.FC = () => {
       partnerOptions: supplierOptions,
     }),
     {
+      // 有 RemainderFlex：主标识叠列 KeepWidth
       title: t(`${P}.col.code`),
       key: 'finance_doc_partner_stacked',
       dataIndex: 'payment_code',
-      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+      width: 240,
+      minWidth: 240,
+      uniTableKeepWidth: true,
+      uniTablePrimaryFlex: false,
+      resizable: false,
       fixed: 'left',
       hideInSearch: true,
       sorter: true,
+      ellipsis: false,
       render: (_, r) => (
         <UniTableStackedPrimaryCell
           primary={String(r.supplier_name ?? '')}
@@ -599,10 +604,7 @@ const PaymentsPage: React.FC = () => {
     {
       title: t('app.kuaicaiwu.financeUi.refundExecution.label'),
       dataIndex: 'refund_execution_status',
-      width: 100,
-      minWidth: 100,
-      uniTableKeepWidth: true,
-      resizable: false,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       hideInSearch: true,
       render: (_, record) => {
         const { label, color } = renderRefundExecutionMarker(record.refund_execution_status, t);
@@ -611,10 +613,11 @@ const PaymentsPage: React.FC = () => {
     },
     {
       title: t(`${P}.col.paymentDate`),
+      key: 'finance_payment_date',
       dataIndex: 'payment_date',
       valueType: 'date',
-      width: 110,
-      minWidth: 110,
+      width: 120,
+      minWidth: 120,
       uniTableKeepWidth: true,
       resizable: false,
       hideInSearch: true,
@@ -631,8 +634,8 @@ const PaymentsPage: React.FC = () => {
     {
       title: t(`${P}.col.paymentMethod`),
       dataIndex: 'payment_method',
-      width: 110,
-      minWidth: 110,
+      width: 120,
+      minWidth: 120,
       uniTableKeepWidth: true,
       resizable: false,
       hideInSearch: true,
@@ -641,6 +644,7 @@ const PaymentsPage: React.FC = () => {
     },
     {
       title: t('app.kuaicaiwu.common.referenceNumber'),
+      key: 'finance_voucher_reference',
       dataIndex: 'bank_account',
       width: 140,
       minWidth: 140,
@@ -651,7 +655,19 @@ const PaymentsPage: React.FC = () => {
       render: (_, record) => record.bank_account || '—',
     },
     {
-      title: t(`${P}.settlementType`, '结算类型'),
+      // 备注长短不一：唯一 RemainderFlex
+      title: t('common.remark'),
+      dataIndex: 'notes',
+      minWidth: 160,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
+      resizable: false,
+      hideInSearch: true,
+      ellipsis: true,
+      render: (_, record) => record.notes || '—',
+    },
+    {
+      title: t(`${P}.settlementType`),
       dataIndex: 'settlement_type',
       hideInTable: true,
       order: 15,
@@ -692,55 +708,59 @@ const PaymentsPage: React.FC = () => {
     {
       title: t('common.actions'),
       key: 'action',
-      valueType: 'option',
       fixed: 'right',
       hideInSearch: true,
-      render: (_, record) => [
-            <Button {...rowActionKind('read')} key="det" onClick={() => openDetail(record)}>
-              {t('common.detail')}
-            </Button>,
-            record.status === 'Draft' && paymentPerms.canAction?.('audit') ? (
-              <Button {...rowActionKind('audit')} key="cf" onClick={() => handleConfirm(record)}>
-                {t('common.confirm')}
-              </Button>
-            ) : null,
-            record.status === 'Confirmed' && Number(record.unsettled_amount ?? 0) > 0 ? (
-              <Button
-                {...rowActionKind('submit')}
-                key="st"
-                onClick={() => {
-                  const qs = new URLSearchParams({ tab: 'payable' });
-                  if (record.supplier_id != null) qs.set('supplierId', String(record.supplier_id));
-                  if (record.id != null) qs.set('paymentId', String(record.id));
-                  navigate(`/apps/kuaicaiwu/finance-management/settlement?${qs.toString()}`);
-                }}
-              >
-                {t('app.kuaicaiwu.common.settle')}
-              </Button>
-            ) : null,
-            record.status === 'Confirmed'
-              && canCreateRefundFromVoucher(record, 'payment')
-              && paymentRefundPerms.canCreate ? (
-              <Button
-                {...rowActionKind('submit')}
-                key="refund"
-                onClick={() =>
-                  navigate('/apps/kuaicaiwu/finance-management/payment-refunds', {
-                    state: { pullSourceId: record.id },
-                  })
-                }
-              >
-                {t('app.kuaicaiwu.paymentRefund.pullCreate')}
-              </Button>
-            ) : null,
-            record.status !== 'Cancelled' && record.settled_amount === 0 && paymentPerms.canAction?.('revoke') ? (
-              <Button {...rowActionKind('revoke')} key="ca" onClick={() => handleCancelVoucher(record)}>
-                {t('app.kuaicaiwu.common.void')}
-              </Button>
-            ) : null,
-          ].filter(Boolean) as React.ReactNode[],
+      render: (_, record) => {
+        const acts: React.ReactNode[] = [
+          <Button key="det" {...rowActionKind('read')} onClick={() => openDetail(record)} />,
+        ];
+        if (record.status === 'Draft' && paymentPerms.canAction?.('audit')) {
+          acts.push(
+            <Button key="cf" {...rowActionKind('audit')} onClick={() => handleConfirm(record)} />,
+          );
+        }
+        if (record.status === 'Confirmed' && Number(record.unsettled_amount ?? 0) > 0) {
+          acts.push(
+            <Button
+              key="st"
+              {...rowActionSettleVoucher('submit')}
+              onClick={() => {
+                const qs = new URLSearchParams({ tab: 'payable' });
+                if (record.supplier_id != null) qs.set('supplierId', String(record.supplier_id));
+                if (record.id != null) qs.set('paymentId', String(record.id));
+                navigate(`/apps/kuaicaiwu/finance-management/settlement?${qs.toString()}`);
+              }}
+            />,
+          );
+        }
+        if (
+          record.status === 'Confirmed' &&
+          canCreateRefundFromVoucher(record, 'payment') &&
+          paymentRefundPerms.canCreate
+        ) {
+          acts.push(
+            <Button
+              key="refund"
+              {...rowActionCreateRefund('create')}
+              onClick={() =>
+                navigate('/apps/kuaicaiwu/finance-management/payment-refunds', {
+                  state: { pullSourceId: record.id },
+                })
+              }
+            />,
+          );
+        }
+        if (record.status !== 'Cancelled' && record.settled_amount === 0 && paymentPerms.canAction?.('revoke')) {
+          acts.push(
+            <Button key="ca" {...rowActionKind('revoke')} onClick={() => handleCancelVoucher(record)} />,
+          );
+        }
+        return acts;
+      },
     },
-  ], [t, navigate, supplierOptions, paymentSettlementTypeOptions, paymentPerms, paymentRefundPerms, openDetail]);
+  ], [t, supplierOptions, paymentPerms, paymentRefundPerms, navigate, openDetail, handleConfirm, handleCancelVoucher, paymentSettlementTypeOptions]);
+
+
 
   return (
     <ListPageTemplate>
@@ -753,7 +773,7 @@ const PaymentsPage: React.FC = () => {
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
         rowKey="id"
-        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.payments.list-v1"
+        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.payments.list-v2"
         showAdvancedSearch
         search={{ labelWidth: 120 }}
         showCreateButton={false}
@@ -1126,4 +1146,11 @@ const PaymentsPage: React.FC = () => {
   );
 };
 
-export default PaymentsPage;
+/** 页级 Provider：与 hook 同模块实例，避免 HMR 后应用壳 Context 错位 */
+const PaymentsPageRoute: React.FC = () => (
+  <FinanceVoucherDetailProvider>
+    <PaymentsPage />
+  </FinanceVoucherDetailProvider>
+);
+
+export default PaymentsPageRoute;

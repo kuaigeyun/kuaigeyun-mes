@@ -1,8 +1,9 @@
 export type MarketPriceType = 'tax_inclusive' | 'tax_exclusive';
 
 export interface MaterialMarketPrice {
-  id: number;
-  uuid: string;
+  /** 当日只读沿用上日价时未落库，id/uuid 为空 */
+  id?: number | null;
+  uuid?: string | null;
   code: string;
   name: string;
   priceDate: string;

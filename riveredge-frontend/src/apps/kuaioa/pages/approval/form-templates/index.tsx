@@ -74,7 +74,7 @@ const FormTemplatesPage: React.FC = () => {
           },
         },
       ]}
-      columnPersistenceId="apps.kuaioa.form-template.list-v3"
+      columnPersistenceId="apps.kuaioa.form-template.list-v4"
       renderModalBody={(form, editing) => (
         <FormTemplateModalBody form={form} editing={editing} />
       )}

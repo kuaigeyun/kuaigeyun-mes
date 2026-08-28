@@ -12,11 +12,11 @@ import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, Pr
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Button, Tag, Modal, Form, Space, Typography, Tooltip, Card, theme } from 'antd';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../utils/uniTableLayoutColumns';
 import { renderSystemActiveTag, renderSystemTypeMarker } from '../../utils/systemListPresentation';
 import { DeleteOutlined, EyeOutlined, PrinterOutlined, FileTextOutlined, EditOutlined, HighlightOutlined } from '@ant-design/icons';
-import { useCompanySealSettings } from '../CompanySealSettingsPanel';
 import { UniTable } from '../../../../components/uni-table';
-import { rowActionKind } from '../../../../components/uni-action';
+import { rowActionKind, rowActionLabelKeep } from '../../../../components/uni-action';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../utils/errorHandler';
 import { buildDetailDrawerEditExtra } from '../../../../apps/kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
@@ -125,7 +125,6 @@ const PrintTemplateListPage: React.FC = () => {
   const [currentRenderTemplateUuid, setCurrentRenderTemplateUuid] = useState<string | null>(null);
   const [renderFormRef] = Form.useForm();
   const [renderResult, setRenderResult] = useState<PrintTemplateRenderResponse | null>(null);
-  const companySeal = useCompanySealSettings();
   
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -503,18 +502,30 @@ const PrintTemplateListPage: React.FC = () => {
    */
   const columns = useMemo<ProColumns<PrintTemplate>[]>(() => alignProColumns([
     {
+      title: t('pages.system.printTemplates.columnCode'),
+      dataIndex: 'code',
+      width: 150,
+      minWidth: 150,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
+    },
+    {
+      // 名称长短不一：唯一 RemainderFlex
       title: t('pages.system.printTemplates.columnName'),
       dataIndex: 'name',
-      width: 200,
+      minWidth: 180,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
+      resizable: false,
       ellipsis: true,
       render: (_, record) => resolvePresetPrintTemplateName(record, t),
     },
-    { title: t('pages.system.printTemplates.columnCode'), dataIndex: 'code', width: 150, minWidth: 150, uniTableKeepWidth: true, resizable: false, ellipsis: true },
     {
       title: t('pages.system.printTemplates.columnType'),
       dataIndex: 'type',
-      width: 120,
-      minWidth: 120,
+      width: 100,
+      minWidth: 100,
       uniTableKeepWidth: true,
       resizable: false,
       valueType: 'select',
@@ -533,10 +544,7 @@ const PrintTemplateListPage: React.FC = () => {
     {
       title: t('common.enabled'),
       dataIndex: 'is_active',
-      width: 100,
-      minWidth: 100,
-      uniTableKeepWidth: true,
-      resizable: false,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       valueType: 'select',
       valueEnum: {
         true: { text: t('common.enabled'), status: 'Success' },
@@ -548,10 +556,7 @@ const PrintTemplateListPage: React.FC = () => {
     {
       title: t('pages.system.printTemplates.columnDefault'),
       dataIndex: 'is_default',
-      width: 100,
-      minWidth: 100,
-      uniTableKeepWidth: true,
-      resizable: false,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       hideInSearch: true,
       render: (_, record) =>
         record.is_default
@@ -590,44 +595,33 @@ const PrintTemplateListPage: React.FC = () => {
     {
       title: t('common.actions'),
       key: 'action',
-      valueType: 'option',
       fixed: 'right',
       hideInSearch: true,
-      uniActionRenderOptions: { directMax: 4 },
       render: (_, record) =>
         [
-            <Button key="view" {...rowActionKind('read')} onClick={() => handleView(record)}>
-              {t('common.detail')}
-            </Button>,
-            <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)}>
-              {t('common.edit')}
-            </Button>,
+            <Button key="view" {...rowActionKind('read')} onClick={() => handleView(record)} />,
+            <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)} />,
             <Button
               key="design"
-              {...rowActionKind('update')}
-              type="link"
-              size="small"
-              icon={<HighlightOutlined />}
+              {...rowActionKind('skip')}
+              {...rowActionLabelKeep()}
               onClick={() => handleOpenDesigner(record)}
-              data-action-priority={2}
             >
               {t('pages.system.printTemplates.design')}
             </Button>,
             <Popconfirm
               key="delete"
-              {...rowActionKind('delete')}
               title={t('pages.system.printTemplates.deleteConfirmTitle')}
               onConfirm={() => handleDelete(record)}
               okText={t('common.confirm')}
               cancelText={t('common.cancel')}
             >
-              <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-                {t('common.delete')}
-              </Button>
+              <Button {...rowActionKind('delete')} />
             </Popconfirm>,
           ],
     },
   ], GLOBAL_DOC_LIST_FIELD_RANK), [t, handleView, handleEdit, handleOpenDesigner, handleDelete]);
+
 
   /**
    * 详情列定义
@@ -690,7 +684,7 @@ const PrintTemplateListPage: React.FC = () => {
     <>
       <ListPageTemplate statCards={statCards}>
         <UniTable<PrintTemplate>
-          columnPersistenceId="pages.system.print-templates.list-v1"
+          columnPersistenceId="pages.system.print-templates.list-v2"
           actionRef={actionRef}
           columns={columns}
           request={async (params, _sort, _filter, searchFormValues) => {
@@ -743,7 +737,6 @@ const PrintTemplateListPage: React.FC = () => {
           showDeleteButton
           onDelete={handleBatchDelete}
           deleteButtonText={t('common.batchDelete')}
-          toolBarActionsAfterDelete={[companySeal.toolbarActions]}
           toolBarRender={() => [
             <Button {...rowActionKind('import')} key="loadPreset" onClick={handleLoadPreset} loading={presetLoading}>
               {t('pages.system.printTemplates.loadPresetButton')}
@@ -943,7 +936,6 @@ const PrintTemplateListPage: React.FC = () => {
         detail={detailData}
         detailColumns={detailColumns as any}
       />
-      {companySeal.cropModal}
     </>
   );
 };

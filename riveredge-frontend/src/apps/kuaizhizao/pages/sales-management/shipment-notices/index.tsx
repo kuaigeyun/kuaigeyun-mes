@@ -1731,6 +1731,8 @@ const ShipmentNoticesPage: React.FC = () => {
               color="orange"
               variant="solid"
             />,
+          ]}
+          rightToolBarActionsBeforeExport={[
             <UniCapabilityBatchButton
               key="shipment-notice-print"
               selectedRowKeys={selectedRowKeys}

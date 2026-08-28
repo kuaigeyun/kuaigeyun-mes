@@ -23,6 +23,10 @@ from core.schemas.file import (
 from core.services.file.file_service import FileService
 from core.services.file.file_preview_service import FilePreviewService
 from core.services.file.file_preview_markup_service import FilePreviewMarkupService
+from core.services.file.private_file_vault_service import (
+    PrivateFileVaultService,
+    VAULT_SCOPE_HEADER,
+)
 from core.services.file.image_tier_service import ImageTierService, IMAGE_TIER_THUMB_SIZE
 from core.services.file.storage import (
     get_file_storage_settings,
@@ -31,6 +35,13 @@ from core.services.file.storage import (
 from core.schemas.file_preview_markup import (
     FilePreviewMarkupResponse,
     FilePreviewMarkupSaveRequest,
+)
+from core.schemas.private_file_vault import (
+    PrivateFileVaultStatusResponse,
+    PrivateFileVaultSetPasswordRequest,
+    PrivateFileVaultChangePasswordRequest,
+    PrivateFileVaultUnlockRequest,
+    PrivateFileVaultUnlockResponse,
 )
 from core.api.deps.deps import get_current_tenant
 from core.api.deps.access import AuthContext, require_access
@@ -43,6 +54,8 @@ from infra.utils.client_ip import get_client_ip
 
 router = APIRouter(prefix="/files", tags=["Core - Files"])
 
+VAULT_TOKEN_HEADER = "X-Private-Vault-Token"
+
 
 @router.post("/upload", response_model=FileUploadResponse, status_code=status.HTTP_201_CREATED)
 async def upload_file(
@@ -51,6 +64,8 @@ async def upload_file(
     category: Optional[str] = Query(None, description="文件分类（可选）"),
     tags: Optional[str] = Query(None, description="文件标签（JSON数组字符串，可选）"),
     description: Optional[str] = Query(None, description="文件描述（可选）"),
+    x_private_vault_token: Optional[str] = Header(None, alias=VAULT_TOKEN_HEADER),
+    x_private_vault_scope: Optional[str] = Header(None, alias=VAULT_SCOPE_HEADER),
     _auth: AuthContext = Depends(require_file_upload_access()),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -109,6 +124,14 @@ async def upload_file(
                 tags_list = json.loads(tags)
             except json.JSONDecodeError:
                 tags_list = [tags]  # 如果不是JSON，当作单个标签
+
+        await PrivateFileVaultService.assert_file_manager_vault_access(
+            tenant_id,
+            current_user.id,
+            x_private_vault_token,
+            x_private_vault_scope,
+            category=category,
+        )
         
         # 保存文件
         file_obj = await FileService.save_uploaded_file(
@@ -149,6 +172,8 @@ async def upload_multiple_files(
     files: List[UploadFile] = FastAPIFile(...),
     category: Optional[str] = Query(None, description="文件分类（可选）"),
     category_from_form: Optional[str] = Form(None, alias="category"),
+    x_private_vault_token: Optional[str] = Header(None, alias=VAULT_TOKEN_HEADER),
+    x_private_vault_scope: Optional[str] = Header(None, alias=VAULT_SCOPE_HEADER),
     _auth: AuthContext = Depends(require_file_upload_access()),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -168,6 +193,13 @@ async def upload_multiple_files(
     """
     results = []
     resolved_category = (category or category_from_form or "").strip() or None
+    await PrivateFileVaultService.assert_file_manager_vault_access(
+        tenant_id,
+        current_user.id,
+        x_private_vault_token,
+        x_private_vault_scope,
+        category=resolved_category,
+    )
     for file in files:
         try:
             # 读取文件内容
@@ -226,6 +258,7 @@ async def list_files(
     category: Optional[str] = Query(None, description="文件分类筛选"),
     file_type: Optional[str] = Query(None, description="文件类型筛选"),
     include_preview_url: bool = Query(False, description="是否包含预览URL（缩略图）"),
+    x_private_vault_token: Optional[str] = Header(None, alias=VAULT_TOKEN_HEADER),
     _auth: object = Depends(require_access("system.file", "read")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -247,6 +280,12 @@ async def list_files(
     Returns:
         FileListResponse: 文件列表（分页）
     """
+    await PrivateFileVaultService.assert_private_list_vault_access(
+        tenant_id,
+        current_user.id,
+        x_private_vault_token,
+        category=category,
+    )
     result = await FileService.list_files(
         tenant_id=tenant_id,
         page=page,
@@ -267,7 +306,6 @@ async def list_files(
     for file in result["items"]:
         file_dict = FileResponse.model_validate(file).model_dump()
         if include_preview_url and file.file_type and file.file_type.startswith("image/"):
-            # 优化：直接生成预览 URL，避免 get_preview_info 内部再次查询数据库 (N+1问题修复)
             preview_url = await FilePreviewService.generate_simple_preview_url(
                 file_uuid=file.uuid,
                 tenant_id=tenant_id,
@@ -357,6 +395,50 @@ async def migrate_storage_to_object_storage(
         return FileStorageMigrateResponse(**result)
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+
+
+@router.get("/private-vault/status", response_model=PrivateFileVaultStatusResponse)
+async def get_private_vault_status(
+    _auth: object = Depends(require_access("system.file", "read")),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """保密文件库：是否已设置二次密码。"""
+    return PrivateFileVaultStatusResponse(**await PrivateFileVaultService.get_status(tenant_id))
+
+
+@router.post("/private-vault/set-password", status_code=status.HTTP_204_NO_CONTENT)
+async def set_private_vault_password(
+    data: PrivateFileVaultSetPasswordRequest,
+    _auth: object = Depends(require_access("system.file", "update")),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """首次设置保密文件二次密码。"""
+    await PrivateFileVaultService.set_password(tenant_id, data.password)
+
+
+@router.post("/private-vault/change-password", status_code=status.HTTP_204_NO_CONTENT)
+async def change_private_vault_password(
+    data: PrivateFileVaultChangePasswordRequest,
+    _auth: object = Depends(require_access("system.file", "update")),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """修改保密文件二次密码。"""
+    await PrivateFileVaultService.change_password(tenant_id, data.old_password, data.new_password)
+
+
+@router.post("/private-vault/unlock", response_model=PrivateFileVaultUnlockResponse)
+async def unlock_private_vault(
+    data: PrivateFileVaultUnlockRequest,
+    _auth: object = Depends(require_access("system.file", "read")),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """验证二次密码并签发解锁令牌（会话级）。"""
+    result = await PrivateFileVaultService.unlock(tenant_id, current_user.id, data.password)
+    return PrivateFileVaultUnlockResponse(**result)
 
 
 @router.get("/{uuid}", response_model=FileResponse)
@@ -635,6 +717,8 @@ async def save_file_preview_markup(
 async def update_file(
     uuid: str,
     data: FileUpdate,
+    x_private_vault_token: Optional[str] = Header(None, alias=VAULT_TOKEN_HEADER),
+    x_private_vault_scope: Optional[str] = Header(None, alias=VAULT_SCOPE_HEADER),
     _auth: object = Depends(require_access("system.file", "update")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -656,6 +740,22 @@ async def update_file(
         HTTPException: 当文件不存在时抛出
     """
     try:
+        existing = await FileService.get_file_by_uuid(tenant_id=tenant_id, uuid=uuid)
+        await PrivateFileVaultService.assert_file_manager_vault_access(
+            tenant_id,
+            current_user.id,
+            x_private_vault_token,
+            x_private_vault_scope,
+            file_category=existing.category,
+        )
+        if data.category is not None:
+            await PrivateFileVaultService.assert_file_manager_vault_access(
+                tenant_id,
+                current_user.id,
+                x_private_vault_token,
+                x_private_vault_scope,
+                category=data.category,
+            )
         file = await FileService.update_file(
             tenant_id=tenant_id,
             uuid=uuid,
@@ -672,6 +772,8 @@ async def update_file(
 @router.delete("/{uuid}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_file(
     uuid: str,
+    x_private_vault_token: Optional[str] = Header(None, alias=VAULT_TOKEN_HEADER),
+    x_private_vault_scope: Optional[str] = Header(None, alias=VAULT_SCOPE_HEADER),
     _auth: object = Depends(require_access("system.file", "delete")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -689,6 +791,14 @@ async def delete_file(
         HTTPException: 当文件不存在时抛出
     """
     try:
+        existing = await FileService.get_file_by_uuid(tenant_id=tenant_id, uuid=uuid)
+        await PrivateFileVaultService.assert_file_manager_vault_access(
+            tenant_id,
+            current_user.id,
+            x_private_vault_token,
+            x_private_vault_scope,
+            file_category=existing.category,
+        )
         await FileService.delete_file(
             tenant_id=tenant_id,
             uuid=uuid
@@ -703,6 +813,8 @@ async def delete_file(
 @router.post("/batch-delete", status_code=status.HTTP_200_OK)
 async def batch_delete_files(
     uuids: List[str],
+    x_private_vault_token: Optional[str] = Header(None, alias=VAULT_TOKEN_HEADER),
+    x_private_vault_scope: Optional[str] = Header(None, alias=VAULT_SCOPE_HEADER),
     _auth: object = Depends(require_access("system.file", "delete")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -719,6 +831,18 @@ async def batch_delete_files(
     Returns:
         Dict[str, Any]: 删除结果（包含删除数量）
     """
+    for file_uuid in uuids:
+        try:
+            existing = await FileService.get_file_by_uuid(tenant_id=tenant_id, uuid=file_uuid)
+            await PrivateFileVaultService.assert_file_manager_vault_access(
+                tenant_id,
+                current_user.id,
+                x_private_vault_token,
+                x_private_vault_scope,
+                file_category=existing.category,
+            )
+        except NotFoundError:
+            continue
     count = await FileService.batch_delete_files(
         tenant_id=tenant_id,
         uuids=uuids

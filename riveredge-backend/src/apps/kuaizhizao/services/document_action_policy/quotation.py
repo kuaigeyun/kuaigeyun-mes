@@ -195,30 +195,8 @@ def derive_quotation_capabilities(
         convert_order_reason if not convert_order_allowed else None,
     )
 
-    # convert_to_contract
-    convert_contract_allowed = False
-    convert_contract_reason = "quotation.convert_contract.not_allowed"
-    if superseded:
-        convert_contract_reason = "quotation.convert_contract.superseded"
-    elif linked_contract:
-        convert_contract_reason = "quotation.convert_contract.linked_contract"
-    elif linked_so:
-        convert_contract_reason = "quotation.convert_contract.linked_sales_order"
-    elif linked_review:
-        convert_contract_reason = "quotation.convert_contract.linked_sales_review"
-    elif st == "已转订单":
-        if conversion_downstream_missing:
-            convert_contract_allowed = True
-        else:
-            convert_contract_reason = "quotation.convert_contract.not_allowed"
-    elif st == "已接受":
-        convert_contract_allowed = True
-    elif _sent_allows_business_action(st, audit_required, rs):
-        convert_contract_allowed = True
-    convert_contract_cap = _cap(
-        convert_contract_allowed,
-        convert_contract_reason if not convert_contract_allowed else None,
-    )
+    # convert_to_contract — 已废弃，报价仅下推销售订单
+    convert_contract_cap = _cap(False, "quotation.convert_contract.removed")
 
     # convert_to_sales_review — 与转订单同门槛，但不改变报价状态；已关联评审则不可重复
     convert_review_allowed = False

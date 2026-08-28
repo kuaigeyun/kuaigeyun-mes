@@ -7974,7 +7974,7 @@ const WorkOrdersPage: React.FC = () => {
           }}
           showSyncButton
           onSync={() => setSyncModalVisible(true)}
-          toolbar={{ actions: [workOrderHighlightOverdueToolbar] }}
+          toolBarActionsEnd={[workOrderHighlightOverdueToolbar]}
           toolBarRender={() => [
             <UniPullCreateToolbar
               key="create-work-order-with-pull"
@@ -8013,7 +8013,9 @@ const WorkOrdersPage: React.FC = () => {
             >
               {t('app.kuaizhizao.workOrder.actionSmartRelease')}
             </Button>,
-            ...(workOrderPerms.canPrint
+          ]}
+          rightToolBarActionsBeforeExport={
+            workOrderPerms.canPrint
               ? [
                   <UniCapabilityBatchButton
                     key="work-order-print"
@@ -8040,8 +8042,8 @@ const WorkOrdersPage: React.FC = () => {
                     size="middle"
                   />,
                 ]
-              : []),
-          ]}
+              : []
+          }
           onDelete={handleDelete}
           deleteConfirmTitle={(count) => t('app.kuaizhizao.workOrder.msgConfirmDeleteCount', { count })}
           viewTypes={['table', 'productTree', 'orderTree', 'help']}

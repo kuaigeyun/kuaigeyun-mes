@@ -7,11 +7,9 @@ import { PlusOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { FormModalTemplate, MultiTabListPageTemplate, MODAL_CONFIG, type StatCard } from '../../../../../components/layout-templates';
 import { UniTable } from '../../../../../components/uni-table';
-import {
-  UniTableStackedPrimaryCell,
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-} from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { MarkerTag } from '../../../../../constants/statusBadges';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { apiRequest } from '../../../../../services/api';
 import { receiptService, type ReceiptListParams } from '../../../services/finance/receipt';
@@ -43,6 +41,7 @@ import {
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
+import { rowActionTransferSettle } from '../../../../../components/uni-action';
 
 type PrepaymentRow = Record<string, unknown>;
 
@@ -141,18 +140,50 @@ const PrepaymentsPage: React.FC = () => {
     [balances, t],
   );
 
-  const balanceColumns: ProColumns<PrepaymentRow>[] = useMemo(() => [
-    ...prepaymentBalanceSearchColumns(t(`${P}.col.partner`)),
-    { title: t(`${P}.col.partner`), dataIndex: 'partner_name', ellipsis: true, hideInSearch: true, sorter: true },
-    { title: t(`${P}.col.balance`), dataIndex: 'prepayment_balance', valueType: 'money', align: 'right', hideInSearch: true, sorter: true },
-    {
-      title: t(`${P}.col.docCount`),
-      dataIndex: 'receipt_count',
-      hideInSearch: true,
-      sorter: true,
-      render: (_, r) => r.receipt_count ?? r.payment_count,
-    },
-  ], [t]);
+  const balanceColumns: ProColumns<PrepaymentRow>[] = useMemo(
+    () => [
+      ...prepaymentBalanceSearchColumns(t(`${P}.col.partner`)),
+      {
+        // 往来单位长短不一：唯一 RemainderFlex（余额汇总稀疏不叠）
+        title: t(`${P}.col.partner`),
+        key: 'finance_prepayment_partner',
+        dataIndex: 'partner_name',
+        minWidth: 160,
+        uniTableRemainderFlex: true,
+        uniTablePrimaryFlex: true,
+        resizable: false,
+        ellipsis: true,
+        hideInSearch: true,
+        sorter: true,
+      },
+      {
+        title: t(`${P}.col.balance`),
+        key: 'finance_prepayment_balance',
+        dataIndex: 'prepayment_balance',
+        valueType: 'money',
+        align: 'right',
+        width: 130,
+        minWidth: 130,
+        uniTableKeepWidth: true,
+        resizable: false,
+        hideInSearch: true,
+        sorter: true,
+      },
+      {
+        title: t(`${P}.col.docCount`),
+        key: 'finance_prepayment_doc_count',
+        dataIndex: 'receipt_count',
+        width: 90,
+        minWidth: 90,
+        uniTableKeepWidth: true,
+        resizable: false,
+        hideInSearch: true,
+        sorter: true,
+        render: (_, r) => r.receipt_count ?? r.payment_count,
+      },
+    ],
+    [t],
+  );
 
   const receiptColumns: ProColumns<PrepaymentRow>[] = useMemo(() => [
     ...financeDocCodePartnerSearchColumns({
@@ -164,13 +195,19 @@ const PrepaymentsPage: React.FC = () => {
       partnerOptions: customerOptions,
     }),
     {
+      // 有 RemainderFlex：主标识叠列 KeepWidth
       title: t(`${P}.col.receiptCode`),
       key: 'finance_doc_partner_stacked',
       dataIndex: 'receipt_code',
-      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+      width: 240,
+      minWidth: 240,
+      uniTableKeepWidth: true,
+      uniTablePrimaryFlex: false,
+      resizable: false,
       fixed: 'left',
       hideInSearch: true,
       sorter: true,
+      ellipsis: false,
       render: (_, r) => (
         <UniTableStackedPrimaryCell
           primary={String(r.customer_name ?? '')}
@@ -181,10 +218,11 @@ const PrepaymentsPage: React.FC = () => {
     { title: t('app.kuaicaiwu.common.customer'), dataIndex: 'customer_name', hideInTable: true },
     {
       title: t(`${P}.col.receiptDate`),
+      key: 'finance_receipt_date',
       dataIndex: 'receipt_date',
       valueType: 'date',
-      width: 132,
-      minWidth: 132,
+      width: 120,
+      minWidth: 120,
       uniTableKeepWidth: true,
       resizable: false,
       hideInSearch: true,
@@ -198,64 +236,96 @@ const PrepaymentsPage: React.FC = () => {
       order: 20,
       formItemProps: formDateRangeFormItemProps,
     },
-    { title: t(`${P}.col.receiptAmount`), dataIndex: 'total_amount', valueType: 'money', align: 'right', hideInSearch: true, sorter: true },
-    { title: t(`${P}.col.unsettledBalance`), dataIndex: 'unsettled_amount', valueType: 'money', align: 'right', hideInSearch: true, sorter: true },
+    {
+      title: t(`${P}.col.receiptAmount`),
+      dataIndex: 'total_amount',
+      valueType: 'money',
+      align: 'right',
+      width: 130,
+      minWidth: 130,
+      uniTableKeepWidth: true,
+      resizable: false,
+      hideInSearch: true,
+      sorter: true,
+    },
+    {
+      title: t(`${P}.col.unsettledBalance`),
+      dataIndex: 'unsettled_amount',
+      valueType: 'money',
+      align: 'right',
+      width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
+      hideInSearch: true,
+      sorter: true,
+    },
     {
       title: t(`${P}.col.settlementMethod`),
       dataIndex: 'settlement_type',
-      width: 100,
-      minWidth: 100,
-      uniTableKeepWidth: true,
-      resizable: false,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       hideInSearch: true,
       render: (_, r) => prepaymentTag(String(r.settlement_type ?? 'normal'), t),
     },
     {
       title: t('common.status'),
       dataIndex: 'status',
-      width: 100,
-      minWidth: 100,
-      uniTableKeepWidth: true,
-      resizable: false,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       hideInSearch: true,
       sorter: true,
       valueType: 'select',
       valueEnum: buildVoucherStatusEnum(t),
+      render: (_, r) => {
+        const statusEnum = buildVoucherStatusEnum(t);
+        const m = statusEnum[String(r.status) as keyof typeof statusEnum] || { text: String(r.status ?? '') };
+        return <MarkerTag>{m.text}</MarkerTag>;
+      },
+    },
+    {
+      // 备注长短不一：唯一 RemainderFlex
+      title: t('common.remark'),
+      dataIndex: 'notes',
+      minWidth: 160,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
+      resizable: false,
+      hideInSearch: true,
+      ellipsis: true,
+      render: (_, r) => (r.notes as string) || '—',
     },
     ...financeDocCreatedUpdatedColumns<PrepaymentRow>(t),
     {
       title: t('common.actions'),
       key: 'action',
-      valueType: 'option',
       fixed: 'right',
       hideInSearch: true,
-      render: (_, r) => [
-        prepaymentPerms.canUpdate && Number(r.unsettled_amount) > 0 ? (
-        <a
-          key="apply"
-          onClick={async () => {
-            setSelectedReceipt(r);
-            const res = await receivableService.listReceivables({
-              skip: 0,
-              limit: 200,
-              customer_id: Number(r.customer_id),
-              pending_settlement: true,
-            });
-            setReceivableOptions((res?.items || []).map((item) => ({
-              label: t(`${P}.receivableOption`, {
-                code: item.receivable_code,
-                amount: item.remaining_amount,
-              }),
-              value: item.id,
-              remaining: Number(item.remaining_amount),
-            })));
-            setApplyReceiptVisible(true);
-          }}
-        >
-          {t(`${P}.applySettle`)}
-        </a>
-        ) : null,
-      ],
+      render: (_, r) => {
+        if (!prepaymentPerms.canUpdate || Number(r.unsettled_amount) <= 0) return [];
+        return [
+          <Button
+            key="apply"
+            {...rowActionTransferSettle('update')}
+            onClick={async () => {
+              setSelectedReceipt(r);
+              const res = await receivableService.listReceivables({
+                skip: 0,
+                limit: 200,
+                customer_id: Number(r.customer_id),
+                pending_settlement: true,
+              });
+              setReceivableOptions((res?.items || []).map((item) => ({
+                label: t(`${P}.receivableOption`, {
+                  code: item.receivable_code,
+                  amount: item.remaining_amount,
+                }),
+                value: item.id,
+                remaining: Number(item.remaining_amount),
+              })));
+              setApplyReceiptVisible(true);
+            }}
+          />,
+        ];
+      },
     },
   ], [t, customerOptions, prepaymentPerms.canUpdate]);
 
@@ -272,10 +342,15 @@ const PrepaymentsPage: React.FC = () => {
       title: t(`${P}.col.paymentCode`),
       key: 'finance_doc_partner_stacked',
       dataIndex: 'payment_code',
-      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+      width: 240,
+      minWidth: 240,
+      uniTableKeepWidth: true,
+      uniTablePrimaryFlex: false,
+      resizable: false,
       fixed: 'left',
       hideInSearch: true,
       sorter: true,
+      ellipsis: false,
       render: (_, r) => (
         <UniTableStackedPrimaryCell
           primary={String(r.supplier_name ?? '')}
@@ -286,10 +361,11 @@ const PrepaymentsPage: React.FC = () => {
     { title: t('app.kuaicaiwu.common.supplier'), dataIndex: 'supplier_name', hideInTable: true },
     {
       title: t(`${P}.col.paymentDate`),
+      key: 'finance_payment_date',
       dataIndex: 'payment_date',
       valueType: 'date',
-      width: 132,
-      minWidth: 132,
+      width: 120,
+      minWidth: 120,
       uniTableKeepWidth: true,
       resizable: false,
       hideInSearch: true,
@@ -303,64 +379,95 @@ const PrepaymentsPage: React.FC = () => {
       order: 20,
       formItemProps: formDateRangeFormItemProps,
     },
-    { title: t(`${P}.col.paymentAmount`), dataIndex: 'total_amount', valueType: 'money', align: 'right', hideInSearch: true, sorter: true },
-    { title: t(`${P}.col.unsettledBalance`), dataIndex: 'unsettled_amount', valueType: 'money', align: 'right', hideInSearch: true, sorter: true },
+    {
+      title: t(`${P}.col.paymentAmount`),
+      dataIndex: 'total_amount',
+      valueType: 'money',
+      align: 'right',
+      width: 130,
+      minWidth: 130,
+      uniTableKeepWidth: true,
+      resizable: false,
+      hideInSearch: true,
+      sorter: true,
+    },
+    {
+      title: t(`${P}.col.unsettledBalance`),
+      dataIndex: 'unsettled_amount',
+      valueType: 'money',
+      align: 'right',
+      width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
+      hideInSearch: true,
+      sorter: true,
+    },
     {
       title: t(`${P}.col.settlementMethod`),
       dataIndex: 'settlement_type',
-      width: 100,
-      minWidth: 100,
-      uniTableKeepWidth: true,
-      resizable: false,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       hideInSearch: true,
       render: (_, r) => prepaymentTag(String(r.settlement_type ?? 'normal'), t),
     },
     {
       title: t('common.status'),
       dataIndex: 'status',
-      width: 100,
-      minWidth: 100,
-      uniTableKeepWidth: true,
-      resizable: false,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       hideInSearch: true,
       sorter: true,
       valueType: 'select',
       valueEnum: buildVoucherStatusEnum(t),
+      render: (_, r) => {
+        const statusEnum = buildVoucherStatusEnum(t);
+        const m = statusEnum[String(r.status) as keyof typeof statusEnum] || { text: String(r.status ?? '') };
+        return <MarkerTag>{m.text}</MarkerTag>;
+      },
+    },
+    {
+      title: t('common.remark'),
+      dataIndex: 'notes',
+      minWidth: 160,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
+      resizable: false,
+      hideInSearch: true,
+      ellipsis: true,
+      render: (_, r) => (r.notes as string) || '—',
     },
     ...financeDocCreatedUpdatedColumns<PrepaymentRow>(t),
     {
       title: t('common.actions'),
       key: 'action',
-      valueType: 'option',
       fixed: 'right',
       hideInSearch: true,
-      render: (_, r) => [
-        prepaymentPerms.canUpdate && Number(r.unsettled_amount) > 0 ? (
-        <a
-          key="apply"
-          onClick={async () => {
-            setSelectedPayment(r);
-            const res = await payableService.listPayables({
-              skip: 0,
-              limit: 200,
-              supplier_id: Number(r.supplier_id),
-              pending_settlement: true,
-            });
-            setPayableOptions((res?.items || []).map((item) => ({
-              label: t(`${P}.payableOption`, {
-                code: item.payable_code,
-                amount: item.remaining_amount,
-              }),
-              value: item.id,
-              remaining: Number(item.remaining_amount),
-            })));
-            setApplyPaymentVisible(true);
-          }}
-        >
-          {t(`${P}.applySettle`)}
-        </a>
-        ) : null,
-      ],
+      render: (_, r) => {
+        if (!prepaymentPerms.canUpdate || Number(r.unsettled_amount) <= 0) return [];
+        return [
+          <Button
+            key="apply"
+            {...rowActionTransferSettle('update')}
+            onClick={async () => {
+              setSelectedPayment(r);
+              const res = await payableService.listPayables({
+                skip: 0,
+                limit: 200,
+                supplier_id: Number(r.supplier_id),
+                pending_settlement: true,
+              });
+              setPayableOptions((res?.items || []).map((item) => ({
+                label: t(`${P}.payableOption`, {
+                  code: item.payable_code,
+                  amount: item.remaining_amount,
+                }),
+                value: item.id,
+                remaining: Number(item.remaining_amount),
+              })));
+              setApplyPaymentVisible(true);
+            }}
+          />,
+        ];
+      },
     },
   ], [t, supplierOptions, prepaymentPerms.canUpdate]);
 
@@ -412,7 +519,7 @@ const PrepaymentsPage: React.FC = () => {
                     rowKey={(r) => `c-${r.partner_id}`}
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.prepayment)}
-                    columnPersistenceId="apps.kuaicaiwu.pages.finance-management.prepayments.customer-balance.list-v1"
+                    columnPersistenceId="apps.kuaicaiwu.pages.finance-management.prepayments.customer-balance.list-v2"
                     columns={alignProColumns(balanceColumns, SALES_DOC_LIST_FIELD_RANK)}
                     showAdvancedSearch
                     skipFuzzyPinyinClientFilter
@@ -450,7 +557,7 @@ const PrepaymentsPage: React.FC = () => {
                     actionRef={receiptRef}
                     enableRowSelection
                     rowKey="id"
-                    columnPersistenceId="apps.kuaicaiwu.pages.finance-management.prepayments.receipts.list-v1"
+                    columnPersistenceId="apps.kuaicaiwu.pages.finance-management.prepayments.receipts.list-v2"
                     columns={alignProColumns(receiptColumns, SALES_DOC_LIST_FIELD_RANK)}
                     showAdvancedSearch
                     skipFuzzyPinyinClientFilter
@@ -504,7 +611,7 @@ const PrepaymentsPage: React.FC = () => {
                     actionRef={supplierBalanceRef}
                     enableRowSelection
                     rowKey={(r) => `s-${r.partner_id}`}
-                    columnPersistenceId="apps.kuaicaiwu.pages.finance-management.prepayments.supplier-balance.list-v1"
+                    columnPersistenceId="apps.kuaicaiwu.pages.finance-management.prepayments.supplier-balance.list-v2"
                     columns={alignProColumns(balanceColumns, SALES_DOC_LIST_FIELD_RANK)}
                     showAdvancedSearch
                     skipFuzzyPinyinClientFilter
@@ -542,7 +649,7 @@ const PrepaymentsPage: React.FC = () => {
                     actionRef={paymentRef}
                     enableRowSelection
                     rowKey="id"
-                    columnPersistenceId="apps.kuaicaiwu.pages.finance-management.prepayments.payments.list-v1"
+                    columnPersistenceId="apps.kuaicaiwu.pages.finance-management.prepayments.payments.list-v2"
                     columns={alignProColumns(paymentColumns, SALES_DOC_LIST_FIELD_RANK)}
                     showAdvancedSearch
                     skipFuzzyPinyinClientFilter

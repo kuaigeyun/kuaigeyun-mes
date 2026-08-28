@@ -8,8 +8,7 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, List, Modal, Popconfirm, Space, Typography } from 'antd';
-import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
+import { App, Button, List, Modal, Popconfirm, Typography } from 'antd';
 import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
@@ -521,8 +520,8 @@ const PlantsPage: React.FC = () => {
       {
         title: t('app.master-data.plants.code'),
         dataIndex: 'code',
-        width: 120,
-        minWidth: 120,
+        width: 140,
+        minWidth: 140,
         uniTableKeepWidth: true,
         resizable: false,
         fixed: 'left' as const,
@@ -534,8 +533,8 @@ const PlantsPage: React.FC = () => {
       {
         title: t('app.master-data.plants.name'),
         dataIndex: 'name',
-        width: 168,
-        minWidth: 168,
+        width: 180,
+        minWidth: 180,
         uniTableKeepWidth: true,
         resizable: false,
         ellipsis: true,
@@ -545,22 +544,25 @@ const PlantsPage: React.FC = () => {
       {
         title: t('app.master-data.plants.address'),
         dataIndex: 'address',
-        width: 200,
-        minWidth: 200,
+        width: 220,
+        minWidth: 220,
         uniTableKeepWidth: true,
         resizable: false,
         ellipsis: true,
         hideInSearch: true,
+        render: (_, r) => r.address || '—',
       },
       {
+        // 备注长短不一：唯一 RemainderFlex（稀疏不叠）
         title: t('common.remark'),
         dataIndex: 'description',
-        width: 168,
-        minWidth: 168,
-        uniTableKeepWidth: true,
+        minWidth: 160,
+        uniTableRemainderFlex: true,
+        uniTablePrimaryFlex: true,
         resizable: false,
         ellipsis: true,
         hideInSearch: true,
+        render: (_, r) => r.description || '—',
       },
       ...buildMasterCrudActiveStatusColumn<Plant>(t, { activeValueEnum: plantActiveValueEnum }),
       ...customFieldColumns,
@@ -568,41 +570,35 @@ const PlantsPage: React.FC = () => {
       {
         title: t('common.actions'),
         key: 'action',
-        valueType: 'option',
         fixed: 'right' as const,
-        render: (_, record) => (
-        <Space>
-          <Button key="view" {...rowActionKind('read')}
+        hideInSearch: true,
+        render: (_, record) => [
+          <Button
+            key="view"
+            type="link"
             size="small"
+            {...rowActionKind('read')}
             onClick={() => handleOpenDetail(record)}
-          >
-            {t('common.view')}
-          </Button>
-          <Button key="edit" {...rowActionKind('update')}
+          />,
+          <Button
+            key="edit"
+            type="link"
             size="small"
-            icon={<EditOutlined />}
+            {...rowActionKind('update')}
             onClick={() => handleEdit(record)}
-          >
-            {t('common.edit')}
-          </Button>
-          <Popconfirm key="delete" {...rowActionKind('delete')} title={t('app.master-data.plants.deleteConfirm')}
+          />,
+          <Popconfirm
+            key="delete"
+            title={t('app.master-data.plants.deleteConfirm')}
             description={t('app.master-data.plants.deleteDescription')}
             onConfirm={() => handleDelete(record)}
             okText={t('common.confirm')}
             cancelText={t('common.cancel')}
           >
-            <Button
-              type="link"
-              size="small"
-              danger
-              icon={<DeleteOutlined />}
-            >
-              {t('common.delete')}
-            </Button>
-          </Popconfirm>
-        </Space>
-      ),
-    },
+            <Button type="link" size="small" {...rowActionKind('delete')} />
+          </Popconfirm>,
+        ],
+      },
     ];
   }, [customFields, plantActiveValueEnum, t]);
 
@@ -627,7 +623,7 @@ const PlantsPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<Plant>
-          columnPersistenceId="apps.master-data.pages.factory.plants.list-v2"
+          columnPersistenceId="apps.master-data.pages.factory.plants.list-v3"
           actionRef={actionRef}
           columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
           viewTypes={['table', 'help']}
