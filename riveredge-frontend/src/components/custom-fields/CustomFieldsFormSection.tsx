@@ -44,6 +44,7 @@ import {
   type CustomFieldGridColumns,
 } from './customFieldFormLayout';
 import { FORM_LAYOUT } from '../layout-templates/constants';
+import { formDateFormItemProps } from '../../utils/formDate';
 import './customFieldFormLayout.less';
 
 const CUSTOM_PREFIX = 'custom_';
@@ -127,6 +128,7 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
             label={labelNode}
             placeholder={placeholder}
             {...layout}
+            {...formDateFormItemProps}
             rules={field.is_required ? [{ required: true, message: `请选择${label}` }] : []}
             fieldProps={customFieldFieldProps({ format: field.config?.format || 'YYYY-MM-DD' })}
             initialValue={initialVal}
@@ -151,6 +153,7 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
             label={labelNode}
             placeholder={placeholder}
             {...layout}
+            {...formDateFormItemProps}
             rules={field.is_required ? [{ required: true, message: `请选择${label}` }] : []}
             fieldProps={customFieldFieldProps({ format: field.config?.format || 'YYYY-MM-DD HH:mm:ss' })}
             initialValue={initialVal}

@@ -95,7 +95,7 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
         // ⚠️ 关键修复：增加超时时间，防止后端重启时连接超时
-        timeout: 120000, // 菜单全量同步等重操作可能超过 30 秒，统一放宽到 120 秒
+        timeout: 600000, // 主数据/单据 sync-from-source 可能较慢，与前端 timeoutMs 对齐
         ws: true, // 支持 WebSocket
         // 后端重启时必须立刻结束响应，否则浏览器 fetch 会一直挂到 proxy timeout（最长 120s）表现为页面转圈
         configure: (proxy, _options) => {
@@ -114,7 +114,20 @@ export default defineConfig({
             }
           });
           proxy.on('proxyReq', (proxyReq, _req, _res) => {
-            proxyReq.setTimeout(120000);
+            proxyReq.setTimeout(600000);
+          });
+          // 同步 NDJSON 进度流不可缓冲，否则前端一直停在「正在处理…」
+          proxy.on('proxyRes', (proxyRes, _req, res) => {
+            const contentType = String(proxyRes.headers['content-type'] || '');
+            if (
+              contentType.includes('application/x-ndjson') ||
+              contentType.includes('text/event-stream')
+            ) {
+              res.setHeader('Cache-Control', 'no-cache, no-transform');
+              res.setHeader('X-Accel-Buffering', 'no');
+              delete proxyRes.headers['content-encoding'];
+              delete proxyRes.headers['content-length'];
+            }
           });
         },
       } as ProxyOptions,

@@ -667,3 +667,53 @@ export async function allocatePurchaseCosts(orderId: number, data: LandingCostAl
     data,
   });
 }
+
+export type PurchaseOrderSyncSourceType = 'api' | 'dataset';
+
+export interface PurchaseOrderSyncBinding {
+  source_type?: PurchaseOrderSyncSourceType | null;
+  api_uuid?: string | null;
+  dataset_uuid?: string | null;
+  field_mapping: Record<string, string>;
+  match_key_field: string;
+  sync_mode: string;
+  schedule_interval_minutes?: number;
+  last_success_at?: string | null;
+  last_attempt_at?: string | null;
+  last_error?: string | null;
+}
+
+export interface PurchaseOrderSyncFromSourcePayload {
+  source_type?: PurchaseOrderSyncSourceType;
+  api_uuid?: string;
+  dataset_uuid?: string;
+  field_mapping?: Record<string, string>;
+  save_binding?: boolean;
+  sync_mode?: string;
+  schedule_interval_minutes?: number;
+  incremental?: boolean;
+  active_only?: boolean;
+  skip_prerequisite_syncs?: boolean;
+}
+
+export interface PurchaseOrderSyncFromSourceResult {
+  created: number;
+  updated: number;
+  skipped: number;
+  failed: number;
+  errors: string[];
+}
+
+export async function getPurchaseOrderSyncBinding(): Promise<PurchaseOrderSyncBinding> {
+  return apiRequest<PurchaseOrderSyncBinding>('/apps/kuaizhizao/purchase-orders/sync-binding');
+}
+
+export async function syncPurchaseOrdersFromSource(
+  payload: PurchaseOrderSyncFromSourcePayload,
+): Promise<PurchaseOrderSyncFromSourceResult> {
+  return apiRequest<PurchaseOrderSyncFromSourceResult>('/apps/kuaizhizao/purchase-orders/sync-from-source', {
+    method: 'POST',
+    data: payload,
+    timeoutMs: 600_000,
+  });
+}

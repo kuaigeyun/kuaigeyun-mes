@@ -79,6 +79,33 @@ class APITestResponse(BaseModel):
     elapsed_time: float = Field(..., description="请求耗时（秒）")
 
 
+class APIProbeRequest(BaseModel):
+    """草稿接口探测（编辑弹窗预览，无需已保存接口）"""
+
+    connection_uuid: UUID = Field(..., description="应用连接器 UUID")
+    path: str = Field(..., max_length=500, description="接口路径")
+    method: str = Field(default="POST", max_length=10, description="请求方法")
+    request_headers: Optional[Dict[str, Any]] = Field(None, description="请求头")
+    request_params: Optional[Dict[str, Any]] = Field(None, description="请求参数")
+    request_body: Optional[Dict[str, Any]] = Field(None, description="请求体")
+
+
+class KingdeeExecuteBillQueryFieldOption(BaseModel):
+    key: str = Field(..., description="字段编码")
+    label: str = Field(..., description="字段名称")
+
+
+class KingdeeExecuteBillQueryFormCatalogItem(BaseModel):
+    form_id: str = Field(..., description="FormId")
+    name: str = Field(..., description="业务对象名称")
+    default_field_keys: List[str] = Field(default_factory=list, description="默认字段")
+    fields: List[KingdeeExecuteBillQueryFieldOption] = Field(default_factory=list, description="可选字段")
+
+
+class KingdeeExecuteBillQueryCatalogResponse(BaseModel):
+    items: List[KingdeeExecuteBillQueryFormCatalogItem] = Field(default_factory=list)
+
+
 class ApiLibraryItemPreview(BaseModel):
     """接口库条目预览"""
 
@@ -97,6 +124,7 @@ class ApiLibraryPackResponse(BaseModel):
     category_name: str = Field(..., description="加载后归入的分类名称")
     api_count: int = Field(..., description="接口数量")
     items: List[ApiLibraryItemPreview] = Field(default_factory=list, description="接口条目")
+    source: Optional[str] = Field(default="system", description="来源：system / official")
 
 
 class ApiLibraryListResponse(BaseModel):
@@ -126,4 +154,26 @@ class InstallApiLibraryPackResponse(BaseModel):
     created_codes: List[str] = Field(default_factory=list, description="新建接口 code")
     skipped_codes: List[str] = Field(default_factory=list, description="跳过接口 code")
     categorized_codes: List[str] = Field(default_factory=list, description="补充分类接口 code")
+
+
+class SubmitOfficialApiLibraryRequest(BaseModel):
+    """向官方接口库提交本组织接口"""
+
+    name: str = Field(..., min_length=1, max_length=100, description="接口包名称")
+    description: str = Field(default="", max_length=2000, description="接口包说明")
+    connector_type: str = Field(..., min_length=1, max_length=50, description="所需连接器类型")
+    category_name: str = Field(..., min_length=1, max_length=50, description="分类名称")
+    category_code: Optional[str] = Field(default=None, max_length=50, description="分类代码")
+    category_description: Optional[str] = Field(default=None, max_length=200, description="分类说明")
+    api_uuids: List[UUID] = Field(..., min_length=1, description="本组织接口 UUID 列表")
+    submitter_hint: Optional[str] = Field(default=None, max_length=200, description="提交方提示")
+
+
+class SubmitOfficialApiLibraryResponse(BaseModel):
+    """提交官方接口库结果"""
+
+    pack_id: str = Field(..., description="官方接口包 ID")
+    name: str = Field(..., description="接口包名称")
+    api_count: int = Field(..., description="提交接口数")
+    status: str = Field(..., description="状态")
 

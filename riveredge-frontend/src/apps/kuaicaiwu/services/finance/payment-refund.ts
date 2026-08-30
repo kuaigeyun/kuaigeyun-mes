@@ -6,6 +6,7 @@ export type PaymentRefundPullCandidate = {
   id: number;
   code: string;
   payment_code?: string;
+  supplier_id?: number;
   supplier_name?: string;
   source_status?: string;
   source_date?: string;
@@ -17,8 +18,10 @@ export type PaymentRefundPullCandidate = {
 
 export type PaymentRefundPullPreview = DocumentPushPreview & {
   source_type?: 'payment';
+  source_ids?: number[];
   supplier_id?: number;
   supplier_name?: string;
+  max_push_total?: number;
 };
 
 export type PaymentRefundCreateData = {
@@ -32,7 +35,8 @@ export type PaymentRefundCreateData = {
   notes?: string;
   attachments?: unknown;
   source_type: 'payment';
-  source_id: number;
+  source_id?: number;
+  source_ids?: number[];
 };
 
 const API = '/apps/kuaicaiwu/payment-refunds';
@@ -59,6 +63,12 @@ export const paymentRefundService = {
   previewPull: (paymentId: number) =>
     apiRequest<PaymentRefundPullPreview>(`${API}/from-payment/${paymentId}/pull-preview`, {
       method: 'GET',
+    }),
+
+  previewPullMulti: (paymentIds: number[]) =>
+    apiRequest<PaymentRefundPullPreview>(`${API}/from-payments/pull-preview`, {
+      method: 'GET',
+      params: { payment_ids: paymentIds.join(',') },
     }),
 };
 

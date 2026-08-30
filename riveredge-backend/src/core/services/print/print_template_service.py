@@ -962,12 +962,16 @@ class PrintTemplateService:
                     lines.append(f'<div{css}><img src="{{{{ {barcode_expr} }}}}" height="{height}" /></div>')
                 elif blk_type == "image":
                     url = str(blk.get("url") or "").strip()
+                    if not url:
+                        blk_id = str(blk.get("id") or "")
+                        if blk_id.startswith("logo-"):
+                            url = "{{ company_logo }}"
+                        else:
+                            warnings_list.append(f"block[{index}] image 缺少 url，已跳过")
+                            continue
                     width = blk.get("width", 100)
                     height = blk.get("height", 60)
                     preserve_ratio = blk.get("keepRatio", blk.get("preserveAspectRatio", False))
-                    if not url:
-                        warnings_list.append(f"block[{index}] image 缺少 url，已跳过")
-                        continue
                     style_str = _get_style_str(blk, is_root)
                     wrapper_css = f' style="{style_str}"' if style_str else ""
                     if is_root:
@@ -1171,7 +1175,12 @@ class PrintTemplateService:
                     if border_style != "none":
                         cell_border = f"{border_width}px {border_style} {border_color}"
 
-                    table_styles = ["border-collapse:collapse", "table-layout:auto", f"width:{table_width}"]
+                    table_styles = [
+                        "border-collapse:collapse",
+                        "table-layout:fixed",
+                        f"width:{table_width}",
+                        "max-width:100%",
+                    ]
                     if cell_border:
                         table_styles.append(f"border:{cell_border}")
 
@@ -1183,20 +1192,29 @@ class PrintTemplateService:
                         v = raw.strip().lower()
                         return v if v in ("top", "middle", "bottom") else fallback
 
+                    valid_columns = [
+                        col
+                        for col in columns
+                        if isinstance(col, dict) and str(col.get("key") or "").strip()
+                    ]
+                    col_count = len(valid_columns)
+                    all_cols_implicit_width = col_count > 0 and all(
+                        not str(col.get("width") or "").strip() for col in valid_columns
+                    )
+                    equal_col_pct = 100.0 / col_count if col_count > 0 else 0.0
+
                     header_cells: list[str] = []
                     body_cells: list[str] = []
                     colgroup_parts: list[str] = []
-                    for col in columns:
-                        if not isinstance(col, dict):
-                            continue
+                    for col in valid_columns:
                         label = str(col.get("label") or "").strip()
                         key = str(col.get("key") or "").strip()
                         col_type = str(col.get("type") or "text").strip().lower()
-                        if not key:
-                            continue
                         cw = str(col.get("width") or "").strip()
                         if cw:
                             colgroup_parts.append(f'<col style="width:{cw}" />')
+                        elif all_cols_implicit_width:
+                            colgroup_parts.append(f'<col style="width:{equal_col_pct:.6f}%" />')
                         else:
                             colgroup_parts.append("<col />")
 
@@ -1216,6 +1234,8 @@ class PrintTemplateService:
                                 f"text-align:{header_ta}",
                                 f"vertical-align:{col_va}",
                                 "word-break:break-word",
+                                "overflow-wrap:anywhere",
+                                "min-width:0",
                             ]
                         )
                         th_style_attr = ";".join(th_parts)
@@ -1231,6 +1251,8 @@ class PrintTemplateService:
                                 f"text-align:{col_body_ta}",
                                 f"vertical-align:{col_va}",
                                 "word-break:break-word",
+                                "overflow-wrap:anywhere",
+                                "min-width:0",
                             ]
                         )
                         td_style_attr = ";".join(td_parts)
@@ -1275,7 +1297,7 @@ class PrintTemplateService:
 
                     table_style_attr = ";".join(table_styles)
                     table_html = (
-                        f'<table style="{table_style_attr}">{colgroup_html}'
+                        f'<table class="print-detail-table" style="{table_style_attr}">{colgroup_html}'
                         f"<thead><tr>{''.join(header_cells)}</tr></thead>"
                         f"<tbody>{{% for {row_alias} in {collection} %}}<tr{zebra_tr_attr}>{''.join(body_cells)}</tr>{{% endfor %}}</tbody>"
                         "</table>"
@@ -1327,8 +1349,21 @@ class PrintTemplateService:
             "  body { margin: 0 !important; padding: 0 !important; "
             f"font-family: {_PRINT_TEMPLATE_BODY_FONT_STACK}; "
             "line-height: 1.5; color: #334155; }")
-        parts.append("  table { width: 100%; border-collapse: collapse; margin-bottom: 8px; table-layout: auto; border: 1px solid #e2e8f0; }")
-        parts.append("  th, td { border: 1px solid #e2e8f0; padding: 8px 12px; word-break: break-word; text-align: left; vertical-align: top; font-size: 13px; }")
+        parts.append(
+            "  table:not(.print-detail-table) { width: 100%; border-collapse: collapse; "
+            "margin-bottom: 8px; table-layout: auto; border: 1px solid #e2e8f0; }"
+        )
+        parts.append(
+            "  .print-detail-table { width: 100%; max-width: 100%; table-layout: fixed; "
+            "border-collapse: collapse; margin-bottom: 8px; }"
+        )
+        parts.append(
+            "  th, td { border: 1px solid #e2e8f0; padding: 8px 12px; word-break: break-word; "
+            "text-align: left; vertical-align: top; font-size: 13px; }"
+        )
+        parts.append(
+            "  .print-detail-table th, .print-detail-table td { min-width: 0; overflow-wrap: anywhere; }"
+        )
         parts.append("  th { background-color: #f8fafc; font-weight: 600; color: #475569; }")
         parts.append("  thead { display: table-header-group; }")
         parts.append("  tr, td, th { page-break-inside: avoid; }")

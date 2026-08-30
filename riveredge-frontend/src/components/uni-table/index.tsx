@@ -811,6 +811,11 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    */
   syncButtonText?: string
   /**
+   * 同步按钮旁附加内容：ReactNode 显示在按钮左侧；
+   * 或传入 `(syncButton) => node`，把按钮包进 Tooltip（如上次同步时间）。
+   */
+  syncToolbarExtra?: ReactNode | ((syncButton: React.ReactElement) => React.ReactNode)
+  /**
    * 是否显示「数据集」配置入口按钮（默认：false；位于同步按钮之后）
    */
   showDatasetConfigButton?: boolean
@@ -1208,6 +1213,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   showSyncButton = false,
   onSync,
   syncButtonText,
+  syncToolbarExtra,
   showDatasetConfigButton = false,
   onDatasetConfig,
   datasetConfigButtonText,
@@ -2754,7 +2760,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     }
 
     if (showSyncButton && onSync) {
-      rightButtons.push(
+      const syncButton = (
         <UniSyncButton
           key="sync"
           size={toolBarButtonSize}
@@ -2763,6 +2769,18 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           buttonText={syncButtonText}
         />
       )
+      if (typeof syncToolbarExtra === 'function') {
+        rightButtons.push(
+          <React.Fragment key="sync-wrapped">{syncToolbarExtra(syncButton)}</React.Fragment>,
+        )
+      } else {
+        if (syncToolbarExtra) {
+          rightButtons.push(
+            <React.Fragment key="sync-extra">{syncToolbarExtra}</React.Fragment>,
+          )
+        }
+        rightButtons.push(syncButton)
+      }
     }
 
     if (statCardsCtx?.enabled) {

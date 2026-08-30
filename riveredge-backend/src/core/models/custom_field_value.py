@@ -5,10 +5,45 @@
 """
 
 from typing import Optional, Any
-from datetime import date
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from tortoise import fields
 from .base import BaseModel
+from core.utils.timezone_utils import to_site_date
+
+
+def _parse_custom_field_date(value: Any) -> date:
+    """自定义日期 → 站点业务日历日。
+
+    - 纯 ``YYYY-MM-DD``：按日历日原样入库（禁止再做时区换算）
+    - 任何带时刻 / ``Z`` / 偏移的串：解析为瞬时后经站点时区取日历日
+      （东八区选 12 号零点常被序列化为 ``2026-05-11T16:00:00.000Z``，
+      禁止 ``s[:10]``，否则会落成 11 号）
+    """
+    if isinstance(value, datetime):
+        return to_site_date(value)
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str):
+        s = value.strip()
+        if not s:
+            raise ValueError("自定义日期字段值不能为空字符串")
+        # 仅纯日历日走字面量；其余一律按瞬时 → 站点日
+        if len(s) == 10 and s[4] == "-" and s[7] == "-":
+            try:
+                return date.fromisoformat(s)
+            except ValueError as exc:
+                raise ValueError(f"无法解析自定义日期字段值: {value!r}") from exc
+        try:
+            normalized = s.replace("Z", "+00:00").replace("z", "+00:00")
+            dt = datetime.fromisoformat(normalized)
+        except ValueError as exc:
+            raise ValueError(f"无法解析自定义日期字段值: {value!r}") from exc
+        if dt.tzinfo is None:
+            # 与 SiteTimezoneJSONResponse 一致：naive ISO 按 UTC 瞬时
+            dt = dt.replace(tzinfo=timezone.utc)
+        return to_site_date(dt)
+    raise ValueError(f"自定义日期字段类型无效: {type(value).__name__}")
 
 
 class CustomFieldValue(BaseModel):
@@ -139,15 +174,7 @@ class CustomFieldValue(BaseModel):
             else:
                 self.value_text = str(value)
         elif field_type == "date":
-            if isinstance(value, date):
-                self.value_date = value
-            elif isinstance(value, str):
-                # 尝试解析日期字符串
-                from datetime import datetime
-                try:
-                    self.value_date = datetime.fromisoformat(value.replace('Z', '+00:00')).date()
-                except Exception:
-                    pass
+            self.value_date = _parse_custom_field_date(value)
         elif field_type in ("time", "datetime"):
             self.value_text = str(value)
         elif field_type == "json":

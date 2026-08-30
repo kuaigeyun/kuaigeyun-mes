@@ -354,6 +354,12 @@ class Quality8DService(AppBaseService[Quality8DReport]):
         row.updated_by = user_id
         row.updated_by_name = user_info["name"]
         await row.save()
+        if payload.to_status == "closed":
+            await self._close_linked_quality_exception_on_8d_close(
+                tenant_id=tenant_id,
+                report=row,
+                handled_by=user_id,
+            )
         resp = self._build_response(row)
         return resp.model_copy(
             update={
@@ -363,6 +369,53 @@ class Quality8DService(AppBaseService[Quality8DReport]):
                 ]
                 + resp.next_step_suggestions
             }
+        )
+
+    async def _close_linked_quality_exception_on_8d_close(
+        self,
+        *,
+        tenant_id: int,
+        report: Quality8DReport,
+        handled_by: int,
+    ) -> None:
+        """8D 关闭时同步关闭关联质量异常（优先主键，其次不合格品台账同检验单）。"""
+        from apps.kuaizhizao.services.exception_service import ExceptionService
+
+        svc = ExceptionService()
+        remarks = f"[8D 关闭] {report.report_code}"
+        verification = self._normalize_text(report.verification_result) or "8D 报告已关闭"
+        if report.quality_exception_id:
+            await svc.close_open_quality_exception_by_id(
+                tenant_id,
+                int(report.quality_exception_id),
+                handled_by,
+                remarks=remarks,
+                verification_result=verification,
+            )
+            return
+        if not report.defect_record_id:
+            return
+        from apps.kuaizhizao.models.defect_record import DefectRecord
+        from apps.kuaizhizao.services.defect_record_service import DefectRecordService
+
+        defect = await DefectRecord.get_or_none(
+            id=int(report.defect_record_id),
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        )
+        if not defect:
+            return
+        link = DefectRecordService._resolve_linked_inspection(defect)
+        if not link:
+            return
+        source_type, source_id = link
+        await svc.close_open_quality_exceptions_for_inspection(
+            tenant_id,
+            inspection_source_type=source_type,
+            inspection_record_id=source_id,
+            handled_by=handled_by,
+            remarks=remarks,
+            verification_result=verification,
         )
 
     async def delete_report(self, tenant_id: int, report_id: int, user_id: int) -> None:

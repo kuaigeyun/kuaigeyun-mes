@@ -160,6 +160,21 @@ export const NonconformingLedgerDetailDrawer: React.FC<NonconformingLedgerDetail
             render: (_, row) => (row.other_inbound_id ? `#${row.other_inbound_id}` : '-'),
           },
           {
+            title: t('app.kuaizhizao.quality.nc.columns.purchaseReturn'),
+            dataIndex: 'purchase_return_id',
+            render: (_, row) => (row.purchase_return_id ? `#${row.purchase_return_id}` : '-'),
+          },
+          {
+            title: t('app.kuaizhizao.quality.nc.columns.reworkOrder'),
+            dataIndex: 'rework_order_id',
+            render: (_, row) => (row.rework_order_id ? `#${row.rework_order_id}` : '-'),
+          },
+          {
+            title: t('app.kuaizhizao.quality.nc.columns.scrapRecord'),
+            dataIndex: 'scrap_record_id',
+            render: (_, row) => (row.scrap_record_id ? `#${row.scrap_record_id}` : '-'),
+          },
+          {
             title: t('common.status'),
             dataIndex: 'status',
             render: (_, row) => renderNcLedgerStatusTag(t, row.status),

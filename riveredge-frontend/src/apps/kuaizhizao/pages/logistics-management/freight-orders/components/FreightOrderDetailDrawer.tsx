@@ -253,6 +253,11 @@ export const FreightOrderDetailDrawer: React.FC<FreightOrderDetailDrawerProps> =
           )
         ) : undefined
       }
+      attachmentCenter={
+        contentReady && effective.id
+          ? { documentType: 'freight_order', documentId: effective.id }
+          : undefined
+      }
     />
   );
 };

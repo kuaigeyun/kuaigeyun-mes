@@ -24,11 +24,6 @@ import { getSalesForecastLifecycle } from '../../../../utils/salesForecastLifecy
 import type { SalesForecast } from '../../../../services/sales-forecast';
 import { alignDescriptionColumns } from '../../shared/documentFieldAlignment';
 import { formatDateBySiteSetting } from '../../../../../../utils/format';
-import {
-  DocumentAttachmentsReadonly,
-  documentAttachmentsFromRecord,
-  hasDocumentAttachments,
-} from '../../../../components/DocumentAttachmentsReadonly';
 
 const SALES_FORECAST_RESOURCE = 'kuaizhizao:sales-forecast';
 
@@ -125,8 +120,6 @@ export const SalesForecastDetailDrawer: React.FC<SalesForecastDetailDrawerProps>
   const showError = Boolean(error) && !contentReady && !loading;
   const showLoading = loading || (!contentReady && !showError);
   const effective = forecast ?? PLACEHOLDER_FORECAST;
-  const attachments = documentAttachmentsFromRecord(forecast as { attachments?: unknown });
-  const showAttachments = contentReady && hasDocumentAttachments(attachments);
 
   const tracking = useDocumentTracking(
     open && contentReady ? 'sales_forecast' : undefined,
@@ -227,13 +220,6 @@ export const SalesForecastDetailDrawer: React.FC<SalesForecastDetailDrawerProps>
           />
         ) : null
       }
-      supplementary={
-        showAttachments ? <DocumentAttachmentsReadonly attachments={attachments} /> : undefined
-      }
-      supplementaryTitle={
-        showAttachments ? t('app.uniDetail.sectionAttachments') : undefined
-      }
-      supplementaryVisible={showAttachments}
       lines={
         contentReady ? (
           (effective.items || []).length > 0 ? (

@@ -1,4 +1,5 @@
-import { api } from '../../../services/api';
+import { api, apiRequest } from '../../../services/api';
+import type { MasterDataSyncBinding, MasterDataSyncFromSourceResult } from './supply-chain';
 import type {
   MaterialUnit,
   MaterialUnitConversion,
@@ -65,3 +66,25 @@ export const materialUnitApi = {
       params: { baseUnit, auxUnit },
     }),
 };
+
+export async function getMaterialUnitSyncBinding(): Promise<MasterDataSyncBinding> {
+  return api.get(`${BASE}/units/sync-binding`);
+}
+
+export async function syncMaterialUnitsFromSource(payload: {
+  source_type?: 'api' | 'dataset';
+  api_uuid?: string;
+  dataset_uuid?: string;
+  field_mapping?: Record<string, string>;
+  save_binding?: boolean;
+  sync_mode?: string;
+  schedule_interval_minutes?: number;
+  incremental?: boolean;
+  active_only?: boolean;
+}): Promise<MasterDataSyncFromSourceResult> {
+  return apiRequest<MasterDataSyncFromSourceResult>(`${BASE}/units/sync-from-source`, {
+    method: 'POST',
+    data: payload,
+    timeoutMs: 600_000,
+  });
+}

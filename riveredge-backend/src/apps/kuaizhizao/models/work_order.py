@@ -205,6 +205,8 @@ class WorkOrder(BaseModel):
     remarks = fields.TextField(null=True, description="备注")
     attachments = fields.JSONField(null=True, description="附件列表")
 
+    external_sync_at = fields.DatetimeField(null=True, description="最近从外部接口/数据集同步时间")
+
     # 创建更新信息
 
     # 软删除字段

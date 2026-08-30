@@ -21,7 +21,6 @@ import type { AuditPhaseRecord } from '../../../../../components/uni-audit/Audit
 import { alignDescriptionColumns } from '../../sales-management/shared/documentFieldAlignment';
 import { getIncomingInspectionLifecycle } from '../../../utils/incomingInspectionLifecycle';
 import InspectionTemplateConductResultsTable from './InspectionTemplateConductResultsTable';
-import QualityInspectionDetailAttachments from './QualityInspectionDetailAttachments';
 
 export type QualityInspectionDetailRecord = {
   id?: number;
@@ -80,9 +79,7 @@ export function QualityInspectionDetailDrawer<T extends QualityInspectionDetailR
   const nextSteps = lifecycle?.nextStepSuggestions;
   const alignedBasic = alignDescriptionColumns(basicColumns);
   const basicItems = useDetailDrawerDescriptionItems(alignedBasic, inspection, 'quality_inspection');
-  const attachments = Array.isArray(inspection?.attachments) ? inspection.attachments : [];
   if (!open) return null;
-  const hasAttachments = attachments.length > 0;
 
   return (
     <DetailDrawerTemplate
@@ -150,13 +147,6 @@ export function QualityInspectionDetailDrawer<T extends QualityInspectionDetailR
           />
         ) : null
       }
-      supplementary={
-        contentReady && hasAttachments ? (
-          <QualityInspectionDetailAttachments attachments={attachments} />
-        ) : undefined
-      }
-      supplementaryTitle={t('app.kuaizhizao.quality.common.sections.attachments')}
-      supplementaryVisible={contentReady && hasAttachments}
       linesTitle={t('app.kuaizhizao.quality.common.sections.detailInfo')}
       lines={
         contentReady && inspection ? (

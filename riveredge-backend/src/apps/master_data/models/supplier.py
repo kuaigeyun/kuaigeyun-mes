@@ -110,6 +110,7 @@ class Supplier(BaseModel):
     
     # 状态信息
     is_active = fields.BooleanField(default=True, description="是否启用")
+    external_sync_at = fields.DatetimeField(null=True, description="最近从外部接口/数据集同步时间")
 
     # 准入与评级（轻 SRM）
     qualification_status = fields.CharField(

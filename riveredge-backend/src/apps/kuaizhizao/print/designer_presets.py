@@ -94,7 +94,7 @@ PARTY_LINE_STYLE = {"fontSize": "13px"}
 PARTY_TITLE_STYLE = {"fontSize": "16px", "fontWeight": "700"}
 SEAL_OVERLAY_DEFAULT_SIZE_MM = 40
 
-PARTY_A_SELLER_LINES = (
+PARTY_SELLER_LINES = (
     "单位名称：",
     "统一社会信用代码：",
     "单位地址：",
@@ -105,7 +105,7 @@ PARTY_A_SELLER_LINES = (
     "账号：",
 )
 
-PARTY_B_BUYER_SEAL_CONTENT = """单位名称：{{ customer_name }}
+PARTY_BUYER_CONTENT = """单位名称：{{ customer_name }}
 统一社会信用代码：{{ tax_registration_no }}
 单位地址：{{ invoice_address }}
 法定代表人：
@@ -114,20 +114,25 @@ PARTY_B_BUYER_SEAL_CONTENT = """单位名称：{{ customer_name }}
 开户银行：{{ invoice_bank_name }}
 账号：{{ invoice_bank_account }}"""
 
+# 兼容旧脚本引用
+PARTY_A_SELLER_LINES = PARTY_SELLER_LINES
+PARTY_B_BUYER_SEAL_CONTENT = PARTY_BUYER_CONTENT
 
-def _party_seller_blocks(title: str = "甲方（卖方）") -> list[dict[str, Any]]:
-    blocks: list[dict[str, Any]] = [
+
+def _party_buyer_blocks(title: str = "甲方") -> list[dict[str, Any]]:
+    body_style = {**PARTY_LINE_STYLE, "whiteSpace": "pre-wrap"}
+    return [
         _text(title, style=PARTY_TITLE_STYLE),
+        _text(PARTY_BUYER_CONTENT, style=body_style),
     ]
-    blocks.extend(_text(line, style=PARTY_LINE_STYLE) for line in PARTY_A_SELLER_LINES)
-    return blocks
 
 
-def _party_buyer_seal_blocks(title: str = "乙方（买方）") -> list[dict[str, Any]]:
+def _party_seller_seal_blocks(title: str = "乙方") -> list[dict[str, Any]]:
+    seller_body = "\n".join(PARTY_SELLER_LINES)
     return [
         _text(title, style=PARTY_TITLE_STYLE),
         _seal_overlay_block(
-            PARTY_B_BUYER_SEAL_CONTENT,
+            seller_body,
             seal_align="center",
             seal_offset_y=8,
             style=PARTY_LINE_STYLE,
@@ -136,8 +141,8 @@ def _party_buyer_seal_blocks(title: str = "乙方（买方）") -> list[dict[str
 
 
 def _party_dual_columns_block(
-    seller_title: str = "甲方（卖方）",
-    buyer_title: str = "乙方（买方）",
+    buyer_title: str = "甲方",
+    seller_title: str = "乙方",
 ) -> dict[str, Any]:
     return {
         "id": _id("party"),
@@ -145,8 +150,8 @@ def _party_dual_columns_block(
         "horizontalAlign": "start",
         "verticalAlign": "top",
         "cols": [
-            {"id": _id("left"), "width": "1", "blocks": _party_seller_blocks(seller_title)},
-            {"id": _id("right"), "width": "1", "blocks": _party_buyer_seal_blocks(buyer_title)},
+            {"id": _id("left"), "width": "1", "blocks": _party_buyer_blocks(buyer_title)},
+            {"id": _id("right"), "width": "1", "blocks": _party_seller_seal_blocks(seller_title)},
         ],
     }
 

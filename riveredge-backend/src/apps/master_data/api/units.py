@@ -22,6 +22,12 @@ from apps.master_data.schemas.unit_schemas import (
     MaterialUnitUpdate,
 )
 from apps.master_data.services.unit_service import MaterialUnitConversionService, MaterialUnitService
+from apps.master_data.schemas.master_data_sync import (
+    MasterDataSyncBindingOut,
+    MasterDataSyncBindingUpsert,
+    MasterDataSyncFromSourceOut,
+    MasterDataSyncFromSourceRequest,
+)
 from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.exceptions.exceptions import NotFoundError, ValidationError
@@ -69,6 +75,62 @@ async def ensure_unit_presets(
 ):
     try:
         return await MaterialUnitService.ensure_presets_and_backfill(tenant_id, user=current_user)
+    except ValidationError as e:
+        raise _http(status.HTTP_400_BAD_REQUEST, getattr(e, "message", None) or str(e))
+
+
+material_unit_sync_service = None
+
+
+def _material_unit_sync_service():
+    global material_unit_sync_service
+    if material_unit_sync_service is None:
+        from apps.master_data.services.unit_sync_service import MaterialUnitSyncService
+        material_unit_sync_service = MaterialUnitSyncService()
+    return material_unit_sync_service
+
+
+@router.get(
+    "/units/sync-binding",
+    response_model=MasterDataSyncBindingOut,
+    summary="物料单位同步绑定配置",
+    dependencies=[_UNIT_MANAGE],
+)
+async def get_material_unit_sync_binding(
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    return await _material_unit_sync_service().get_binding(tenant_id)
+
+
+@router.put(
+    "/units/sync-binding",
+    response_model=MasterDataSyncBindingOut,
+    summary="保存物料单位同步绑定配置",
+    dependencies=[_UNIT_MANAGE],
+)
+async def put_material_unit_sync_binding(
+    body: MasterDataSyncBindingUpsert,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    try:
+        return await _material_unit_sync_service().upsert_binding(tenant_id, body)
+    except ValidationError as e:
+        raise _http(status.HTTP_400_BAD_REQUEST, getattr(e, "message", None) or str(e))
+
+
+@router.post(
+    "/units/sync-from-source",
+    response_model=MasterDataSyncFromSourceOut,
+    summary="从数据接口或数据集同步物料单位",
+    dependencies=[_UNIT_MANAGE],
+)
+async def sync_material_units_from_source(
+    body: MasterDataSyncFromSourceRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    try:
+        return await _material_unit_sync_service().sync_from_source(tenant_id, current_user, body)
     except ValidationError as e:
         raise _http(status.HTTP_400_BAD_REQUEST, getattr(e, "message", None) or str(e))
 

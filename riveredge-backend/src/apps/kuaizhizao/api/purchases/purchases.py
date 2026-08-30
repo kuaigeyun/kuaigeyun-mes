@@ -29,7 +29,14 @@ from apps.kuaizhizao.schemas.purchase import (
     PurchaseReceiptPullCandidateListResponse,
 )
 from apps.kuaizhizao.schemas.partner_material_price_trend import PartnerMaterialPriceTrendResponse
+from apps.kuaizhizao.schemas.purchase_order_sync import (
+    PurchaseOrderSyncBindingOut,
+    PurchaseOrderSyncBindingUpsert,
+    PurchaseOrderSyncFromSourceOut,
+    PurchaseOrderSyncFromSourceRequest,
+)
 from apps.kuaizhizao.services.purchase_service import PurchaseService
+from apps.kuaizhizao.services.purchase_order_sync_service import PurchaseOrderSyncService
 from apps.kuaizhizao.services.purchase_inquiry_service import PurchaseInquiryService
 from apps.kuaizhizao.services.purchase_cost_service import PurchaseCostService
 from apps.kuaizhizao.services.print_service import DocumentPrintService
@@ -44,6 +51,59 @@ router = APIRouter(
     tags=["App - Kuaige Zhizao - Purchase Order Management"],
     dependencies=[Depends(require_kuaizhizao_module_access("purchase-order"))],
 )
+
+purchase_order_sync_service = PurchaseOrderSyncService()
+
+
+@router.get(
+    "/purchase-orders/sync-binding",
+    response_model=PurchaseOrderSyncBindingOut,
+    summary="采购订单同步绑定配置",
+)
+async def get_purchase_order_sync_binding(
+    current_user: CurrentUser = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_permission_codes("kuaizhizao:purchase-order:read")),
+):
+    return await purchase_order_sync_service.get_binding(tenant_id)
+
+
+@router.put(
+    "/purchase-orders/sync-binding",
+    response_model=PurchaseOrderSyncBindingOut,
+    summary="保存采购订单同步绑定配置",
+)
+async def put_purchase_order_sync_binding(
+    body: PurchaseOrderSyncBindingUpsert,
+    current_user: CurrentUser = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_permission_codes("kuaizhizao:purchase-order:update")),
+):
+    try:
+        return await purchase_order_sync_service.upsert_binding(tenant_id, body)
+    except ValidationError as e:
+        raise HTTPException(status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.post(
+    "/purchase-orders/sync-from-source",
+    response_model=PurchaseOrderSyncFromSourceOut,
+    summary="从数据接口或数据集同步采购订单",
+)
+async def sync_purchase_orders_from_source(
+    body: PurchaseOrderSyncFromSourceRequest = Body(default_factory=PurchaseOrderSyncFromSourceRequest),
+    current_user: CurrentUser = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_permission_codes("kuaizhizao:purchase-order:create")),
+):
+    try:
+        return await purchase_order_sync_service.sync_from_source(
+            tenant_id=tenant_id,
+            user_id=current_user.id,
+            request=body,
+        )
+    except ValidationError as e:
+        raise HTTPException(status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
 
 
 # === 采购订单CRUD接口 ===

@@ -796,6 +796,7 @@ class SalesOrderService:
             "created_by_name": getattr(order, "created_by_name", None),
             "updated_by": getattr(order, "updated_by", None),
             "updated_by_name": getattr(order, "updated_by_name", None),
+            "external_sync_at": getattr(order, "external_sync_at", None),
             "created_at": order.created_at,
             "updated_at": order.updated_at,
         }
@@ -1458,9 +1459,11 @@ class SalesOrderService:
             order_dict["created_by_name"] = operator_name
             order_dict["updated_by"] = created_by
             order_dict["updated_by_name"] = operator_name
-            # 表字段非空；总额在明细分配后回写，此处占位
+            # 表字段非空；总额/总数量在明细处理后回写，此处占位
             if order_dict.get("total_amount") is None:
                 order_dict["total_amount"] = Decimal("0")
+            if order_dict.get("total_quantity") is None:
+                order_dict["total_quantity"] = Decimal("0")
 
             # 自动带出归属业务员与月结方式
             partner_settlement_method = None

@@ -39,32 +39,55 @@ def _line_doc_key(doc_type: Any, doc_id: Any) -> Optional[tuple[str, int]]:
         return None
 
 
-async def _get_source_voucher_ref(
+async def _list_source_voucher_refs(
     tenant_id: int,
     refund_id: int,
     kind: VoucherKind,
-) -> Optional[Dict[str, Any]]:
-    rel = await DocumentRelation.filter(
+) -> List[Dict[str, Any]]:
+    relations = await DocumentRelation.filter(
         tenant_id=tenant_id,
         source_type=kind,
         target_type=kind,
         target_id=refund_id,
         relation_mode="pull",
-    ).first()
-    if not rel or not rel.source_id:
-        return None
-    source_id = int(rel.source_id)
+    ).all()
+    if not relations:
+        return []
+
+    source_ids = [int(rel.source_id) for rel in relations if rel.source_id]
+    code_by_id: Dict[int, str] = {}
     if kind == "receipt":
-        source = await Receipt.get_or_none(
-            tenant_id=tenant_id, id=source_id, deleted_at__isnull=True
+        rows = await Receipt.filter(
+            tenant_id=tenant_id, id__in=source_ids, deleted_at__isnull=True
         )
-        code = str(source.receipt_code or source_id) if source else str(rel.source_code or source_id)
+        code_by_id = {int(r.id): str(r.receipt_code or r.id) for r in rows}
     else:
-        source = await Payment.get_or_none(
-            tenant_id=tenant_id, id=source_id, deleted_at__isnull=True
+        rows = await Payment.filter(
+            tenant_id=tenant_id, id__in=source_ids, deleted_at__isnull=True
         )
-        code = str(source.payment_code or source_id) if source else str(rel.source_code or source_id)
-    return {"id": source_id, "code": code}
+        code_by_id = {int(p.id): str(p.payment_code or p.id) for p in rows}
+
+    refs: List[Dict[str, Any]] = []
+    for rel in relations:
+        if not rel.source_id:
+            continue
+        sid = int(rel.source_id)
+        refs.append(
+            {
+                "id": sid,
+                "code": code_by_id.get(sid) or str(rel.source_code or sid),
+            }
+        )
+    return refs
+
+
+async def _get_source_voucher_ref(
+    tenant_id: int,
+    refund_id: int,
+    kind: VoucherKind,
+) -> Optional[Dict[str, Any]]:
+    refs = await _list_source_voucher_refs(tenant_id, refund_id, kind)
+    return refs[0] if refs else None
 
 
 async def _list_refund_voucher_refs(
@@ -200,10 +223,11 @@ async def enrich_voucher_detail(
     enriched = dict(payload)
 
     if settlement_type == "refund":
-        source = await _get_source_voucher_ref(tenant_id, voucher_id, kind)
-        if source:
-            enriched["source_voucher_id"] = source["id"]
-            enriched["source_voucher_code"] = source["code"]
+        sources = await _list_source_voucher_refs(tenant_id, voucher_id, kind)
+        if sources:
+            enriched["source_vouchers"] = sources
+            enriched["source_voucher_id"] = sources[0]["id"]
+            enriched["source_voucher_code"] = "、".join(str(s["code"]) for s in sources)
     else:
         enriched["linked_refund_vouchers"] = await _list_refund_voucher_refs(
             tenant_id, voucher_id, kind

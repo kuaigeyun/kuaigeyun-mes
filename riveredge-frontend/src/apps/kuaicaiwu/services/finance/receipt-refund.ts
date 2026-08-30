@@ -6,6 +6,7 @@ export type ReceiptRefundPullCandidate = {
   id: number;
   code: string;
   receipt_code?: string;
+  customer_id?: number;
   customer_name?: string;
   source_status?: string;
   source_date?: string;
@@ -17,8 +18,10 @@ export type ReceiptRefundPullCandidate = {
 
 export type ReceiptRefundPullPreview = DocumentPushPreview & {
   source_type?: 'receipt';
+  source_ids?: number[];
   customer_id?: number;
   customer_name?: string;
+  max_push_total?: number;
 };
 
 export type ReceiptRefundCreateData = {
@@ -32,7 +35,8 @@ export type ReceiptRefundCreateData = {
   notes?: string;
   attachments?: unknown;
   source_type: 'receipt';
-  source_id: number;
+  source_id?: number;
+  source_ids?: number[];
 };
 
 const API = '/apps/kuaicaiwu/receipt-refunds';
@@ -59,6 +63,12 @@ export const receiptRefundService = {
   previewPull: (receiptId: number) =>
     apiRequest<ReceiptRefundPullPreview>(`${API}/from-receipt/${receiptId}/pull-preview`, {
       method: 'GET',
+    }),
+
+  previewPullMulti: (receiptIds: number[]) =>
+    apiRequest<ReceiptRefundPullPreview>(`${API}/from-receipts/pull-preview`, {
+      method: 'GET',
+      params: { receipt_ids: receiptIds.join(',') },
     }),
 };
 

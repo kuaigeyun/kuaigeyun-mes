@@ -21,6 +21,7 @@ export type FinanceVoucherOpenTarget = {
 export type FinanceVoucherLinkFields = {
   source_voucher_id?: number;
   source_voucher_code?: string;
+  source_vouchers?: FinanceVoucherLinkRef[];
   linked_refund_vouchers?: FinanceVoucherLinkRef[];
   linked_partner_statements?: PartnerStatementBriefRef[];
   capabilities?: {

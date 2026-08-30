@@ -356,7 +356,11 @@ def get_sales_order_lifecycle(
         )
 
     effective = _is_approved(review_status) and (
-        _is_confirmed(status) or pushed
+        _is_confirmed(status)
+        or _is_audited(status)
+        or status in LEGACY_AUDITED_VALUES
+        or pushed
+        or status in ("IN_PROGRESS", "执行中", "进行中")
     )
 
     if _is_cancelled(status):

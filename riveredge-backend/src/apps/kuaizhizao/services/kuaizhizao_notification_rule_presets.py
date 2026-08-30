@@ -16,6 +16,7 @@ from apps.kuaizhizao.services.kuaizhizao_business_notification import (
     ACTION_ARRIVAL_OVERDUE,
     ACTION_ASSIGNED,
     ACTION_COMPLETED,
+    ACTION_OPERATION_COMPLETED,
     ACTION_CONFIRMED,
     ACTION_CREATED,
     ACTION_DELIVERY_DELAYED,
@@ -153,8 +154,9 @@ KUAIZHIZAO_NOTIFICATION_RULE_PRESETS: List[Dict[str, Any]] = [
         "trigger_document": DOC_PURCHASE_ORDER_CHANGE,
         "trigger_action": ACTION_SUBMITTED,
         "template_code": "KZ_POC_SUBMITTED",
-        "recipient_scopes": [],
-        "enabled": False,
+        # 开单用户指定 + 提交时把当前审批人写入 submitted_notify_user_ids
+        "recipient_scopes": ["user_specified"],
+        "enabled": True,
     },
     {
         "id": "kz_preset_poc_approved",
@@ -182,6 +184,15 @@ KUAIZHIZAO_NOTIFICATION_RULE_PRESETS: List[Dict[str, Any]] = [
         "template_code": "KZ_WO_COMPLETED",
         "recipient_scopes": ["creator"],
         "enabled": False,
+    },
+    {
+        "id": "kz_preset_wo_operation_completed",
+        "scene_name": "工序完成后通知下一工序",
+        "trigger_document": DOC_WORK_ORDER,
+        "trigger_action": ACTION_OPERATION_COMPLETED,
+        "template_code": "KZ_WO_NEXT_OPERATION",
+        "recipient_scopes": ["next_operation_assignees"],
+        "enabled": True,
     },
     {
         "id": "kz_preset_wo_reworked",
@@ -324,7 +335,7 @@ async def load_kuaizhizao_notification_rule_presets(tenant_id: int) -> Dict[str,
     补齐快制造消息提醒规则到 parameters.notifications.rules。
     - 先确保对应消息模板存在（load_preset_sme）
     - 已存在同单据+动作：合并缺失收件范围、补绑模板；不改 enabled
-    - 新建规则默认 enabled=false（防打扰）
+    - 新建规则：enabled 取自预设（多数为 false 防打扰；少数业务关键节点可为 true）
     """
     templates_created = await MessageTemplateService.load_preset_sme(
         tenant_id,
@@ -360,6 +371,14 @@ async def load_kuaizhizao_notification_rule_presets(tenant_id: int) -> Dict[str,
         )
         if changed:
             rule["recipient_scopes"] = merged_scopes
+            updated += 1
+        # 采购变更单待审核：历史预设无接收范围且默认关闭，加载预设时对齐并开启
+        if (
+            _rule_identity(rule) == (DOC_PURCHASE_ORDER_CHANGE, ACTION_SUBMITTED)
+            and bool(preset.get("enabled"))
+            and rule.get("enabled") is False
+        ):
+            rule["enabled"] = True
             updated += 1
         preset_scene = str(preset.get("scene_name") or "").strip()
         if preset_scene and current_scene != preset_scene:

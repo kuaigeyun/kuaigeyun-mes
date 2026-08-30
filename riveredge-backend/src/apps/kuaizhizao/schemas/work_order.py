@@ -253,6 +253,9 @@ class WorkOrderResponse(WorkOrderBase):
     created_by_name: str = Field(..., description="创建人姓名")
     updated_by: Optional[int] = Field(None, description="更新人ID")
     updated_by_name: Optional[str] = Field(None, description="更新人姓名")
+    external_sync_at: Optional[datetime] = Field(
+        None, description="最近从外部接口/数据集同步时间", serialization_alias="externalSyncAt"
+    )
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
     lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycleStepper 展示）")
@@ -364,6 +367,8 @@ class WorkOrderListResponse(BaseSchema):
     production_mode: str = Field(..., description="生产模式")
     sales_order_code: Optional[str] = Field(None, description="销售订单编码")
     sales_order_name: Optional[str] = Field(None, description="销售订单名称（冗余展示）")
+    customer_id: Optional[int] = Field(None, description="客户ID（来自关联销售订单）")
+    customer_name: Optional[str] = Field(None, description="客户名称（来自关联销售订单）")
     status: str = Field(..., description="工单状态")
     priority: Optional[str] = Field(None, description="优先级")
     planned_start_date: Optional[datetime] = Field(None, description="计划开始时间")
@@ -405,6 +410,9 @@ class WorkOrderListResponse(BaseSchema):
     group_role: Optional[str] = Field(None, description="组内角色 root/component/outsource_component")
     bom_parent_work_order_id: Optional[int] = Field(None, description="BOM 上级工单 ID")
     supply_mode: Optional[str] = Field(None, description="供应模式 stocked/direct")
+    external_sync_at: Optional[datetime] = Field(
+        None, description="最近从外部接口/数据集同步时间", serialization_alias="externalSyncAt"
+    )
     created_at: datetime = Field(..., description="创建时间")
     operations: Optional[List[WorkOrderOperationMinimalForGantt]] = Field(None, description="工序列表（include_operations=true 时返回）")
     operation_steps: Optional[List[WorkOrderOperationStepSummary]] = Field(

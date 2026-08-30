@@ -10,22 +10,14 @@ import { useTranslation } from 'react-i18next'
 import {
   ActionType,
   ProColumns,
-  ProFormText,
-  ProFormTextArea,
-  ProFormSwitch,
-  ProFormList,
-  ProFormGroup,
   ProDescriptionsItemProps,
-  ProFormDependency,
 } from '@ant-design/pro-components'
-import SafeProFormSelect from '../../../../components/safe-pro-form-select'
 import {
   App,
   Popconfirm,
   Button,
   Tag,
   Space,
-  Input,
 } from 'antd'
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../utils/uniTableLayoutColumns'
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment'
@@ -34,11 +26,6 @@ import {
   DatabaseOutlined,
 } from '@ant-design/icons'
 import { UniTable } from '../../../../components/uni-table'
-import {
-  FormModalTemplate,
-  MODAL_CONFIG,
-  TwoColumnLayout,
-} from '../../../../components/layout-templates'
 import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer'
 import { getApiErrorMessage } from '../../../../utils/errorHandler'
 import {
@@ -61,54 +48,15 @@ import { useResourcePermissions } from '../../../../hooks/useResourcePermissions
 import {
   getBusinessSystemConnectionsForApi,
   type DataConnectionGroupOption,
+  type IntegrationConfig,
 } from '../../../../services/integrationConfig';
 import { useResourceCategoryPanel } from '../../shared/useResourceCategoryPanel';
 import { RESOURCE_CATEGORY_UNCATEGORIZED_KEY, type ResourceCategoryListFilter } from '../../../../services/resourceCategory';
 import { ApiLibraryModal } from '../ApiLibraryModal';
 import { ApiTestDrawer } from '../ApiTestDrawer';
+import { ApiFormModal, normalizeApiFormInitialValues, type ApiFormSubmitValues } from '../ApiFormModal';
+import { TwoColumnLayout } from '../../../../components/layout-templates';
 
-/** 将对象转为键值对数组，用于表单 */
-const objectToKeyValueList = (
-  obj: Record<string, any> | undefined
-): Array<{ key: string; value: string }> => {
-  if (!obj || typeof obj !== 'object') return []
-  return Object.entries(obj).map(([key, value]) => ({
-    key,
-    value: typeof value === 'string' ? value : JSON.stringify(value),
-  }))
-}
-
-/** 将键值对数组转为对象，用于提交 */
-const keyValueListToObject = (
-  list: Array<{ key?: string; value?: string }> | undefined
-): Record<string, any> => {
-  if (!Array.isArray(list)) return {}
-  return list.reduce<Record<string, any>>((acc, { key, value }) => {
-    if (!key) return acc
-    if (value === undefined || value === '') {
-      acc[key] = ''
-      return acc
-    }
-    const trimmed = value.trim()
-    if (
-      trimmed.startsWith('{') ||
-      trimmed.startsWith('[') ||
-      trimmed === 'true' ||
-      trimmed === 'false'
-    ) {
-      try {
-        acc[key] = JSON.parse(trimmed)
-      } catch {
-        acc[key] = value
-      }
-    } else if (/^-?\d+(\.\d+)?$/.test(trimmed)) {
-      acc[key] = Number(trimmed)
-    } else {
-      acc[key] = value
-    }
-    return acc
-  }, {})
-}
 
 /**
  * 接口管理列表页面组件
@@ -170,11 +118,15 @@ const APIListPage: React.FC = () => {
   const [testDrawerVisible, setTestDrawerVisible] = useState(false)
   const [testingApiUuid, setTestingApiUuid] = useState<string | null>(null)
   const [connectionGroups, setConnectionGroups] = useState<DataConnectionGroupOption[]>([])
+  const [connectionItems, setConnectionItems] = useState<IntegrationConfig[]>([])
 
   useEffect(() => {
     if (!connectionPerms.canRead) return
     void getBusinessSystemConnectionsForApi()
-      .then(({ groups }) => setConnectionGroups(groups))
+      .then(({ groups, items }) => {
+        setConnectionGroups(groups)
+        setConnectionItems(items)
+      })
       .catch(() => {
         // 无连接器读权限或列表为空时不阻断接口管理
       })
@@ -197,9 +149,6 @@ const APIListPage: React.FC = () => {
       category_uuid: presetCategoryUuid,
       request_headers: [],
       request_params: [],
-      request_body: [],
-      response_format: [],
-      response_example: [],
     })
     setModalVisible(true)
   }
@@ -214,22 +163,7 @@ const APIListPage: React.FC = () => {
 
       // 获取接口详情
       const detail = await getAPIByUuid(record.uuid)
-      setFormInitialValues({
-        name: detail.name,
-        code: detail.code,
-        description: detail.description,
-        connection_uuid: detail.connection_uuid || undefined,
-        category_uuid: detail.category_uuid || undefined,
-        path: detail.path,
-        method: detail.method,
-        is_active: detail.is_active,
-        is_system: detail.is_system,
-        request_headers: objectToKeyValueList(detail.request_headers),
-        request_params: objectToKeyValueList(detail.request_params),
-        request_body: objectToKeyValueList(detail.request_body),
-        response_format: objectToKeyValueList(detail.response_format),
-        response_example: objectToKeyValueList(detail.response_example),
-      })
+      setFormInitialValues(normalizeApiFormInitialValues(detail))
       setModalVisible(true)
     } catch (error: any) {
       messageApi.error(error.message || t('pages.system.apis.getDetailFailed'))
@@ -449,16 +383,9 @@ const APIListPage: React.FC = () => {
   /**
    * 处理提交表单（创建/更新接口）
    */
-  const handleSubmit = async (values: any): Promise<void> => {
+  const handleSubmit = async (values: ApiFormSubmitValues): Promise<void> => {
     try {
       setFormLoading(true)
-
-      // 解析键值对表单为对象
-      const requestHeaders = keyValueListToObject(values.request_headers)
-      const requestParams = keyValueListToObject(values.request_params)
-      const requestBody = keyValueListToObject(values.request_body)
-      const responseFormat = keyValueListToObject(values.response_format)
-      const responseExample = keyValueListToObject(values.response_example)
 
       if (isEdit && currentApiUuid) {
         await updateAPI(currentApiUuid, {
@@ -469,11 +396,11 @@ const APIListPage: React.FC = () => {
           category_uuid: values.category_uuid ?? null,
           path: values.path,
           method: values.method,
-          request_headers: requestHeaders,
-          request_params: requestParams,
-          request_body: requestBody,
-          response_format: responseFormat,
-          response_example: responseExample,
+          request_headers: values.request_headers,
+          request_params: values.request_params,
+          request_body: values.request_body,
+          response_format: values.response_format,
+          response_example: values.response_example,
           is_active: values.is_active,
         } as UpdateAPIData)
         messageApi.success(t('common.updateSuccess'))
@@ -486,11 +413,11 @@ const APIListPage: React.FC = () => {
           category_uuid: values.category_uuid || undefined,
           path: values.path,
           method: values.method,
-          request_headers: requestHeaders,
-          request_params: requestParams,
-          request_body: requestBody,
-          response_format: responseFormat,
-          response_example: responseExample,
+          request_headers: values.request_headers,
+          request_params: values.request_params,
+          request_body: values.request_body,
+          response_format: values.response_format,
+          response_example: values.response_example,
           is_active: values.is_active,
           is_system: values.is_system || false,
         } as CreateAPIData)
@@ -858,9 +785,7 @@ const APIListPage: React.FC = () => {
         }}
       />
 
-      {/* 创建/编辑接口 Modal */}
-      <FormModalTemplate
-        title={isEdit ? t('pages.system.apis.modalEdit') : t('pages.system.apis.modalCreate')}
+      <ApiFormModal
         open={modalVisible}
         onClose={() => {
           setModalVisible(false)
@@ -870,160 +795,11 @@ const APIListPage: React.FC = () => {
         isEdit={isEdit}
         initialValues={formInitialValues}
         loading={formLoading}
-        width={MODAL_CONFIG.STANDARD_WIDTH}
-        grid
-      >
-        <ProFormText
-          name="code"
-          label={t('pages.system.apis.labelCode')}
-          rules={[
-            { required: true, message: t('pages.system.apis.codeRequired') },
-            { pattern: /^[a-z0-9_]+$/, message: t('pages.system.apis.codePattern') },
-          ]}
-          placeholder={t('pages.system.apis.codePlaceholder')}
-          disabled={isEdit}
-          colProps={{ span: 12 }}
-        />
-        <ProFormText
-          name="name"
-          label={t('pages.system.apis.labelName')}
-          rules={[{ required: true, message: t('pages.system.apis.nameRequired') }]}
-          placeholder={t('pages.system.apis.namePlaceholder')}
-          colProps={{ span: 12 }}
-        />
-        {connectionPerms.canRead ? (
-          <SafeProFormSelect
-            name="connection_uuid"
-            label={t('pages.system.apis.labelConnection')}
-            options={connectionGroups}
-            allowClear
-            placeholder={t('pages.system.apis.connectionPlaceholder')}
-            colProps={{ span: 24 }}
-          />
-        ) : null}
-        <SafeProFormSelect
-          name="category_uuid"
-          label={t('pages.system.resourceCategory.fieldCategory')}
-          options={categorySelectOptions}
-          allowClear
-          placeholder={t('pages.system.resourceCategory.categoryPlaceholder')}
-          colProps={{ span: 24 }}
-        />
-        <ProFormDependency name={['connection_uuid']}>
-          {({ connection_uuid }) => (
-            <ProFormText
-              name="path"
-              label={t('pages.system.apis.labelPath')}
-              rules={[{ required: true, message: t('pages.system.apis.pathRequired') }]}
-              placeholder={
-                connection_uuid
-                  ? t('pages.system.apis.pathPlaceholderRelative')
-                  : t('pages.system.apis.pathPlaceholder')
-              }
-              colProps={{ span: 12 }}
-            />
-          )}
-        </ProFormDependency>
-        <SafeProFormSelect
-          name="method"
-          label={t('pages.system.apis.labelMethod')}
-          rules={[{ required: true, message: t('pages.system.apis.methodRequired') }]}
-          options={[
-            { label: 'GET', value: 'GET' },
-            { label: 'POST', value: 'POST' },
-            { label: 'PUT', value: 'PUT' },
-            { label: 'DELETE', value: 'DELETE' },
-            { label: 'PATCH', value: 'PATCH' },
-          ]}
-          colProps={{ span: 12 }}
-        />
-        <ProFormGroup colProps={{ span: 12 }} style={{ paddingLeft: 4, paddingRight: 4 }}>
-          <ProFormList
-            name="request_headers"
-            label={t('pages.system.apis.labelRequestHeaders')}
-            creatorButtonProps={{ creatorButtonText: t('pages.system.apis.addRequestHeader') }}
-            min={0}
-          >
-            <ProFormGroup>
-              <ProFormText name="key" placeholder={t('pages.system.apis.headerKeyPlaceholder')} colProps={{ span: 8 }} />
-              <ProFormText name="value" placeholder={t('pages.system.apis.headerValuePlaceholder')} colProps={{ span: 14 }} />
-            </ProFormGroup>
-          </ProFormList>
-        </ProFormGroup>
-        <ProFormGroup colProps={{ span: 12 }} style={{ paddingLeft: 4, paddingRight: 4 }}>
-          <ProFormList
-            name="request_params"
-            label={t('pages.system.apis.labelRequestParams')}
-            creatorButtonProps={{ creatorButtonText: t('pages.system.apis.addParam') }}
-            min={0}
-          >
-            <ProFormGroup>
-              <ProFormText name="key" placeholder={t('pages.system.apis.paramKeyPlaceholder')} colProps={{ span: 8 }} />
-              <ProFormText
-                name="value"
-                placeholder={t('pages.system.apis.paramValuePlaceholder')}
-                colProps={{ span: 14 }}
-              />
-            </ProFormGroup>
-          </ProFormList>
-        </ProFormGroup>
-        <ProFormGroup colProps={{ span: 12 }} style={{ paddingLeft: 4, paddingRight: 4 }}>
-          <ProFormList
-            name="request_body"
-            label={t('pages.system.apis.labelRequestBody')}
-            creatorButtonProps={{ creatorButtonText: t('pages.system.apis.addBodyField') }}
-            min={0}
-          >
-            <ProFormGroup>
-              <ProFormText name="key" placeholder={t('pages.system.apis.bodyKeyPlaceholder')} colProps={{ span: 8 }} />
-              <ProFormText
-                name="value"
-                placeholder={t('pages.system.apis.bodyValuePlaceholder')}
-                colProps={{ span: 14 }}
-              />
-            </ProFormGroup>
-          </ProFormList>
-        </ProFormGroup>
-        <ProFormGroup colProps={{ span: 12 }} style={{ paddingLeft: 4, paddingRight: 4 }}>
-          <ProFormList
-            name="response_format"
-            label={t('pages.system.apis.labelResponseFormat')}
-            creatorButtonProps={{ creatorButtonText: t('pages.system.apis.addFormatField') }}
-            min={0}
-          >
-            <ProFormGroup>
-              <ProFormText name="key" placeholder={t('pages.system.apis.formatKeyPlaceholder')} colProps={{ span: 8 }} />
-              <ProFormText name="value" placeholder={t('pages.system.apis.formatValuePlaceholder')} colProps={{ span: 14 }} />
-            </ProFormGroup>
-          </ProFormList>
-        </ProFormGroup>
-        <ProFormGroup colProps={{ span: 24 }} style={{ paddingLeft: 4, paddingRight: 4 }}>
-          <ProFormList
-            name="response_example"
-            label={t('pages.system.apis.labelResponseExample')}
-            creatorButtonProps={{ creatorButtonText: t('pages.system.apis.addExampleField') }}
-            min={0}
-          >
-            <ProFormGroup>
-              <ProFormText name="key" placeholder={t('pages.system.apis.exampleKeyPlaceholder')} colProps={{ span: 8 }} />
-              <ProFormText
-                name="value"
-                placeholder={t('pages.system.apis.exampleValuePlaceholder')}
-                colProps={{ span: 14 }}
-              />
-            </ProFormGroup>
-          </ProFormList>
-        </ProFormGroup>
-        <ProFormTextArea
-          name="description"
-          label={t('common.remark')}
-          placeholder={t('pages.system.apis.descriptionPlaceholder')}
-          fieldProps={{ rows: 3 }}
-          colProps={{ span: 24 }}
-        />
-        <ProFormSwitch name="is_active" label={t('common.enabled')} colProps={{ span: 12 }} />
-        {!isEdit && <ProFormSwitch name="is_system" label={t('pages.system.apis.labelSystem')} colProps={{ span: 12 }} />}
-      </FormModalTemplate>
+        connectionGroups={connectionGroups}
+        connectionItems={connectionItems}
+        categorySelectOptions={categorySelectOptions}
+        canReadConnection={connectionPerms.canRead}
+      />
 
       {/* 查看详情 Drawer */}
       <SystemMasterDetailDrawer

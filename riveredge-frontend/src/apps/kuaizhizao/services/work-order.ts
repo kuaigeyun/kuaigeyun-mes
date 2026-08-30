@@ -84,6 +84,8 @@ export interface WorkOrderExecutionConfig {
   fqc_module_enabled?: boolean;
   /** 成品检验合格才入库 */
   require_fqc_before_finished_goods_receipt?: boolean;
+  /** 工单列表是否展示客户名称并可按客户筛选 */
+  show_customer_name?: boolean;
 }
 
 export interface WorkOrderGroupMember {
@@ -559,3 +561,53 @@ export const reworkOrderApi = {
   resume: async (id: string) =>
     apiRequest(`/apps/kuaizhizao/rework-orders/${id}/resume`, { method: 'POST' }),
 };
+
+export type WorkOrderSyncSourceType = 'api' | 'dataset';
+
+export interface WorkOrderSyncBinding {
+  source_type?: WorkOrderSyncSourceType | null;
+  api_uuid?: string | null;
+  dataset_uuid?: string | null;
+  field_mapping: Record<string, string>;
+  match_key_field: string;
+  sync_mode: string;
+  schedule_interval_minutes?: number;
+  last_success_at?: string | null;
+  last_attempt_at?: string | null;
+  last_error?: string | null;
+}
+
+export interface WorkOrderSyncFromSourcePayload {
+  source_type?: WorkOrderSyncSourceType;
+  api_uuid?: string;
+  dataset_uuid?: string;
+  field_mapping?: Record<string, string>;
+  save_binding?: boolean;
+  sync_mode?: string;
+  schedule_interval_minutes?: number;
+  incremental?: boolean;
+  active_only?: boolean;
+  skip_prerequisite_syncs?: boolean;
+}
+
+export interface WorkOrderSyncFromSourceResult {
+  created: number;
+  updated: number;
+  skipped: number;
+  failed: number;
+  errors: string[];
+}
+
+export async function getWorkOrderSyncBinding(): Promise<WorkOrderSyncBinding> {
+  return apiRequest<WorkOrderSyncBinding>('/apps/kuaizhizao/work-orders/sync-binding');
+}
+
+export async function syncWorkOrdersFromSource(
+  payload: WorkOrderSyncFromSourcePayload,
+): Promise<WorkOrderSyncFromSourceResult> {
+  return apiRequest<WorkOrderSyncFromSourceResult>('/apps/kuaizhizao/work-orders/sync-from-source', {
+    method: 'POST',
+    data: payload,
+    timeoutMs: 600_000,
+  });
+}

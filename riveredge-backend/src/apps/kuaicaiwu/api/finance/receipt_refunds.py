@@ -4,7 +4,7 @@
 
 import uuid
 from decimal import Decimal
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Path
@@ -93,7 +93,15 @@ async def create_receipt_refund(
     from apps.kuaicaiwu.services.bank_account_service import BankAccountService
     from infra.exceptions.exceptions import ValidationError as FinanceValidationError
 
-    if data.source_type != "receipt" or not data.source_id:
+    if data.source_type != "receipt":
+        raise _http_exception_with_trace(400, "收款退款须指定源收款单", "/receipt-refunds", tenant_id)
+
+    source_ids: list[int] = []
+    if data.source_ids:
+        source_ids = [int(x) for x in data.source_ids if x]
+    elif data.source_id:
+        source_ids = [int(data.source_id)]
+    if not source_ids:
         raise _http_exception_with_trace(400, "收款退款须指定源收款单", "/receipt-refunds", tenant_id)
 
     try:
@@ -109,7 +117,7 @@ async def create_receipt_refund(
         pull_preview = await refund_service.assert_pull_create_allowed(
             tenant_id=tenant_id,
             source_type="receipt",
-            source_id=int(data.source_id),
+            source_ids=source_ids,
             total_amount=Decimal(data.total_amount),
         )
     except BusinessLogicError as e:
@@ -138,10 +146,9 @@ async def create_receipt_refund(
     }
     apply_create_audit(receipt_payload, current_user)
     receipt = await Receipt.create(**receipt_payload)
-    await refund_service.create_pull_relation(
+    await refund_service.create_pull_relations(
         tenant_id=tenant_id,
-        source_receipt_id=int(data.source_id),
-        source_code=str(pull_preview.get("source_code") or ""),
+        allocations=pull_preview.get("allocations") or [],
         refund_receipt_id=int(receipt.id),
         refund_receipt_code=str(receipt.receipt_code),
         created_by=current_user.id,
@@ -211,6 +218,33 @@ async def list_receipt_refund_pull_candidates(
     return await refund_service.list_receipt_pull_candidates(
         tenant_id=tenant_id, skip=skip, limit=limit, keyword=keyword
     )
+
+
+@router.get("/from-receipts/pull-preview")
+async def preview_pull_receipt_refund_multi(
+    receipt_ids: str = Query(..., description="源收款单ID，逗号分隔"),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:receipt-refund:read")),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    from infra.exceptions.exceptions import NotFoundError, ValidationError
+
+    ids: List[int] = []
+    for part in str(receipt_ids or "").split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            ids.append(int(part))
+        except ValueError as exc:
+            raise _http_exception_with_trace(
+                422, f"无效的收款单ID: {part}", "/receipt-refunds/from-receipts/pull-preview", tenant_id
+            ) from exc
+    try:
+        return await refund_service.preview_pull_from_receipts(tenant_id, ids)
+    except (NotFoundError, ValidationError, BusinessLogicError) as exc:
+        raise _http_exception_with_trace(
+            422, str(exc), "/receipt-refunds/from-receipts/pull-preview", tenant_id
+        ) from exc
 
 
 @router.get("/from-receipt/{receipt_id}/pull-preview")

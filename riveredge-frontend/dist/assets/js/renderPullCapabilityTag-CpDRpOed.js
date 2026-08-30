@@ -1,1 +1,0 @@
-import{j as r}from"./vendor-DTMskFkP.js";import{M as o}from"./statusBadges-BwuFWFMV.js";function t(e,i,n){return e?r.jsx(o,{color:"success",children:i}):r.jsx(o,{color:"warning",children:n})}export{t as r};

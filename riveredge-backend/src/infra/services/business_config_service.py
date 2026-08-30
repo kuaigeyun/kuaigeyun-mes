@@ -318,6 +318,7 @@ PARAMETER_KEYS = {
     "parameters.work_order.split",
     "parameters.work_order.merge",
     "parameters.work_order.last_operation_auto_inbound_mode",
+    "parameters.work_order.show_customer_name",
     "parameters.work_order.score_enabled",
     "parameters.work_order.score_stale_minutes",
     "parameters.reporting.quick_reporting",
@@ -393,6 +394,7 @@ IMPLEMENTED_PARAMETER_KEYS = {
     "parameters.work_order.split",
     "parameters.work_order.merge",
     "parameters.work_order.last_operation_auto_inbound_mode",
+    "parameters.work_order.show_customer_name",
     "parameters.work_order.score_enabled",
     "parameters.work_order.score_stale_minutes",
     "parameters.reporting.quick_reporting",
@@ -536,6 +538,7 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
         "require_confirmed_picking_before_operation_start": False,
         "require_confirmed_picking_before_reporting": False,
         "last_operation_auto_inbound_mode": "none",
+        "show_customer_name": False,
         "score_enabled": True,
         "score_stale_minutes": 30,
         "score_profiles": {

@@ -14,9 +14,13 @@ from core.schemas.api import (
     APIResponse,
     APITestRequest,
     APITestResponse,
+    APIProbeRequest,
+    KingdeeExecuteBillQueryCatalogResponse,
     ApiLibraryListResponse,
     InstallApiLibraryPackRequest,
     InstallApiLibraryPackResponse,
+    SubmitOfficialApiLibraryRequest,
+    SubmitOfficialApiLibraryResponse,
 )
 from core.schemas.resource_category import (
     ResourceCategoryCreate,
@@ -299,6 +303,88 @@ async def list_api_library(
         )
 
 
+@router.get("/library/official", response_model=ApiLibraryListResponse)
+async def list_official_api_library(
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """获取官方接口库目录（固定地址 kuaigeyun.com）。"""
+    try:
+        result = await APIService().list_official_api_library()
+        return ApiLibraryListResponse(**result)
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取官方接口库失败: {str(e)}",
+        )
+
+
+@router.post(
+    "/library/official/submit",
+    response_model=SubmitOfficialApiLibraryResponse,
+    dependencies=[Depends(require_permission_codes("system:api:create"))],
+)
+async def submit_official_api_library(
+    data: SubmitOfficialApiLibraryRequest,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """将本组织接口提交到官方接口库（kuaigeyun.com）。"""
+    try:
+        result = await APIService().submit_official_api_library(
+            tenant_id=tenant_id,
+            name=data.name,
+            description=data.description,
+            connector_type=data.connector_type,
+            category_name=data.category_name,
+            category_code=data.category_code,
+            category_description=data.category_description,
+            api_uuids=data.api_uuids,
+            submitter_hint=data.submitter_hint,
+        )
+        return SubmitOfficialApiLibraryResponse(**result)
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"提交官方接口库失败: {str(e)}",
+        )
+
+
+@router.post(
+    "/library/official/{pack_id}/install",
+    response_model=InstallApiLibraryPackResponse,
+    dependencies=[Depends(require_permission_codes("system:api:create"))],
+)
+async def install_official_api_library_pack(
+    pack_id: str,
+    data: InstallApiLibraryPackRequest,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """将官方接口库包加载到当前组织。"""
+    try:
+        result = await APIService().install_official_api_library_pack(
+            tenant_id=tenant_id,
+            pack_id=pack_id,
+            connection_uuid=data.connection_uuid,
+            item_keys=data.item_keys,
+        )
+        return InstallApiLibraryPackResponse(**result)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"加载官方接口库失败: {str(e)}",
+        )
+
+
 @router.post(
     "/library/{pack_id}/install",
     response_model=InstallApiLibraryPackResponse,
@@ -310,7 +396,7 @@ async def install_api_library_pack(
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    """将接口库包加载到当前组织。"""
+    """将系统预置接口库包加载到当前组织。"""
     try:
         result = await APIService().install_api_library_pack(
             tenant_id=tenant_id,
@@ -327,6 +413,50 @@ async def install_api_library_pack(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"加载接口库失败: {str(e)}",
+        )
+
+
+@router.get(
+    "/integrations/kingdee-galaxy/execute-bill-query/catalog",
+    response_model=KingdeeExecuteBillQueryCatalogResponse,
+)
+async def get_kingdee_execute_bill_query_catalog(
+    current_user: User = Depends(soil_get_current_user),
+):
+    """金蝶 ExecuteBillQuery 常用 FormId 与字段目录（编辑弹窗字段勾选）。"""
+    from core.services.integration.kingdee_execute_bill_query_catalog import (
+        list_kingdee_execute_bill_query_catalog,
+    )
+
+    return KingdeeExecuteBillQueryCatalogResponse(items=list_kingdee_execute_bill_query_catalog())
+
+
+@router.post("/actions/probe-draft", response_model=APITestResponse)
+async def probe_api_draft(
+    data: APIProbeRequest,
+    timeout: float = Query(30.0, ge=1.0, le=300.0, description="请求超时时间（秒）"),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """草稿接口探测（编辑弹窗预览，无需已保存接口）。"""
+    try:
+        result = await APIService().probe_api_draft(
+            tenant_id=tenant_id,
+            connection_uuid=data.connection_uuid,
+            path=data.path,
+            method=data.method,
+            request_headers=data.request_headers,
+            request_params=data.request_params,
+            request_body=data.request_body,
+            timeout=timeout,
+        )
+        return APITestResponse(**result)
+    except ValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"探测接口失败: {str(exc)}",
         )
 
 

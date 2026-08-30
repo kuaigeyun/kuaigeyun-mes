@@ -168,18 +168,54 @@ class DocumentReconciliationService:
             )
 
     def _index_chain_nodes(self, trace: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        将 trace_document_chain 的嵌套结构展平后按 document_type 分桶。
+
+        trace 节点形态为 { document: {...}, upstream_chain|downstream_chain: [...] }，
+        不可只读顶层 document_type（会永远读空，链条只剩起始锚点）。
+        """
         buckets: Dict[str, List[Dict[str, Any]]] = {}
-        for key in ("upstream_chain", "downstream_chain"):
-            raw = trace.get(key)
-            if not isinstance(raw, list):
-                continue
-            for node in raw:
+        seen: set[tuple[str, int]] = set()
+
+        def _ingest(doc: Dict[str, Any]) -> None:
+            dtype = self._normalize_doc_type(doc.get("document_type") or doc.get("type") or "")
+            if not dtype:
+                return
+            raw_id = doc.get("document_id") if doc.get("document_id") is not None else doc.get("id")
+            try:
+                doc_id = int(raw_id) if raw_id is not None else None
+            except (TypeError, ValueError):
+                doc_id = None
+            key = (dtype, doc_id or 0)
+            if doc_id is not None and key in seen:
+                return
+            if doc_id is not None:
+                seen.add(key)
+            buckets.setdefault(dtype, []).append(
+                {
+                    **doc,
+                    "document_type": dtype,
+                    "document_id": doc_id,
+                    "document_code": doc.get("document_code") or doc.get("code"),
+                    "amount": doc.get("amount") if doc.get("amount") is not None else doc.get("total_amount"),
+                }
+            )
+
+        def _walk(nodes: Any, child_key: str) -> None:
+            if not isinstance(nodes, list):
+                return
+            for node in nodes:
                 if not isinstance(node, dict):
                     continue
-                dtype = self._normalize_doc_type(node.get("document_type") or node.get("type") or "")
-                if not dtype:
-                    continue
-                buckets.setdefault(dtype, []).append(node)
+                nested_doc = node.get("document")
+                if isinstance(nested_doc, dict):
+                    _ingest(nested_doc)
+                elif node.get("document_type") or node.get("type"):
+                    _ingest(node)
+                _walk(node.get(child_key), child_key)
+
+        _walk(trace.get("upstream_chain"), "upstream_chain")
+        _walk(trace.get("downstream_chain"), "downstream_chain")
         return buckets
 
     async def build_standard_chain(

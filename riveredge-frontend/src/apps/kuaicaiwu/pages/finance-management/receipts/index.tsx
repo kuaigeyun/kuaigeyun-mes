@@ -538,6 +538,39 @@ const ReceiptsPage: React.FC = () => {
   const formatPullMoney = (v: number) =>
     formatCurrencyAmount(v || 0);
 
+  const tableRowsRef = useRef<ReceiptVoucher[]>([]);
+
+  const handleBatchCreateRefund = async (keys: React.Key[]) => {
+    if (!receiptRefundPerms.canCreate) {
+      messageApi.warning(t('app.kuaicaiwu.receipt.batchRefundNoPermission'));
+      return;
+    }
+    const ids = keys.map((k) => Number(k)).filter((id) => Number.isFinite(id) && id > 0);
+    if (ids.length < 1) {
+      messageApi.warning(t('app.kuaicaiwu.receipt.batchRefundSelectRequired'));
+      return;
+    }
+    const rows = tableRowsRef.current.filter((r) => ids.includes(Number(r.id)));
+    if (!rows.length) {
+      messageApi.warning(t('app.kuaicaiwu.receipt.batchRefundRowsMissing'));
+      return;
+    }
+    const customerIds = new Set(rows.map((r) => Number(r.customer_id || 0)).filter((id) => id > 0));
+    if (customerIds.size > 1) {
+      messageApi.warning(t('app.kuaicaiwu.receipt.batchRefundSameCustomer'));
+      return;
+    }
+    const ineligible = rows.filter((r) => !canCreateRefundFromVoucher(r, 'receipt'));
+    if (ineligible.length) {
+      messageApi.warning(t('app.kuaicaiwu.receipt.batchRefundIneligible'));
+      return;
+    }
+    navigate('/apps/kuaicaiwu/finance-management/receipt-refunds', {
+      state: { pullSourceIds: ids },
+    });
+    setSelectedRowKeys([]);
+  };
+
   const batchMenuItems = useMemo(() => [
     {
       key: 'batch-confirm',
@@ -548,6 +581,11 @@ const ReceiptsPage: React.FC = () => {
       onClick: handleBatchConfirm,
     },
     {
+      key: 'batch-create-refund',
+      label: t('app.kuaicaiwu.receipt.batchCreateRefund'),
+      onClick: handleBatchCreateRefund,
+    },
+    {
       key: 'batch-cancel',
       label: t('app.kuaicaiwu.common.batchVoid'),
       requireConfirm: true,
@@ -555,7 +593,7 @@ const ReceiptsPage: React.FC = () => {
       confirmDescription: t(`${R}.batchVoidDesc`),
       onClick: handleBatchCancel,
     },
-  ], [t]);
+  ], [t, receiptRefundPerms.canCreate]);
 
   const columns: ProColumns<ReceiptVoucher>[] = useMemo(() => [
     ...financeDocCodePartnerSearchColumns({
@@ -776,7 +814,7 @@ const ReceiptsPage: React.FC = () => {
               {...rowActionCreateRefund('create')}
               onClick={() =>
                 navigate('/apps/kuaicaiwu/finance-management/receipt-refunds', {
-                  state: { pullSourceId: record.id },
+                  state: { pullSourceIds: [record.id] },
                 })
               }
             />,
@@ -808,6 +846,9 @@ const ReceiptsPage: React.FC = () => {
         enableRowSelection
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
+        onTableDataChange={(rows) => {
+          tableRowsRef.current = rows;
+        }}
         rowKey="id"
         columnPersistenceId="apps.kuaicaiwu.pages.finance-management.receipts.list-v4"
         showAdvancedSearch
@@ -1132,7 +1173,7 @@ const ReceiptsPage: React.FC = () => {
                       {...rowActionKind('submit')}
                       onClick={() =>
                         navigate('/apps/kuaicaiwu/finance-management/receipt-refunds', {
-                          state: { pullSourceId: detailRecord.id },
+                          state: { pullSourceIds: [detailRecord.id] },
                         })
                       }
                     >

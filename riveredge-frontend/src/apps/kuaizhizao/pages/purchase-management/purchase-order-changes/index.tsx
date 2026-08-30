@@ -93,9 +93,11 @@ function orderChangeItemHasContent(item: OrderChangeLineItem): boolean {
   if (changeType === 'LINE_ADD' || changeType === 'LINE_CANCEL') return true;
   const delta = Number(item.delta_amount ?? 0);
   if (Number.isFinite(delta) && delta !== 0) return true;
-  if (item.after_quantity !== item.before_quantity) return true;
-  if (item.after_unit_price !== item.before_unit_price) return true;
-  if (item.after_delivery_date !== item.before_delivery_date) return true;
+  if (Number(item.after_quantity ?? 0) !== Number(item.before_quantity ?? 0)) return true;
+  if (Number(item.after_unit_price ?? 0) !== Number(item.before_unit_price ?? 0)) return true;
+  const beforeDate = item.before_delivery_date ? String(item.before_delivery_date).slice(0, 10) : '';
+  const afterDate = item.after_delivery_date ? String(item.after_delivery_date).slice(0, 10) : '';
+  if (afterDate !== beforeDate) return true;
   return false;
 }
 

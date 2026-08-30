@@ -184,9 +184,12 @@ class SalesOrderBase(BaseSchema):
 
 class SalesOrderCreate(SalesOrderBase):
     """创建销售订单schema"""
-    # 覆盖 Base 默认 0：省略时由服务端按明细汇总，避免下推/合同转单未传总额被当成「显式 0」重摊
+    # 覆盖 Base 默认 0：省略时由服务端按明细汇总，避免下推/合同转单/同步未传总额被当成「显式 0」
     total_amount: Optional[Decimal] = Field(
         None, ge=0, description="总金额（省略则按明细与整单优惠计算）"
+    )
+    total_quantity: Optional[Decimal] = Field(
+        None, ge=0, description="总数量（省略则按明细汇总）"
     )
     items: List[SalesOrderItemCreate] = Field(default_factory=list, description="订单明细")
     payment_milestones: List[SalesOrderMilestoneCreate] = Field(
@@ -249,6 +252,9 @@ class SalesOrderResponse(SalesOrderBase):
     created_by_name: Optional[str] = None
     updated_by: Optional[int] = None
     updated_by_name: Optional[str] = None
+    external_sync_at: Optional[datetime] = Field(
+        None, description="最近从外部接口/数据集同步时间", serialization_alias="externalSyncAt"
+    )
     created_at: datetime
     updated_at: datetime
     items: Optional[List[SalesOrderItemResponse]] = Field(None, description="订单明细")
@@ -277,6 +283,7 @@ class SalesOrderResponse(SalesOrderBase):
 
     class Config:
         from_attributes = True
+        populate_by_name = True
 
 
 class SalesOrderListResponse(BaseSchema):

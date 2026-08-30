@@ -6,8 +6,14 @@
 
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
+import {
+  ExternalSyncSourceIcon,
+  hasExternalSyncSource,
+} from '../../../../../components/external-sync-source/ExternalSyncSourceIcon';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
+import { usePagePermissionResource } from '../../../../../hooks/usePagePermissionResource';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, Descriptions, List, Modal, Popconfirm, Typography } from 'antd';
 import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
@@ -26,7 +32,7 @@ import {
   MASTER_DATA_DETAIL_BASIC_FIELD_RANK,
 } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 
-import { customerApi, getUserOptions, getDictionaryOptions } from '../../../services/supply-chain';
+import { customerApi, getCustomerSyncBinding, getUserOptions, getDictionaryOptions } from '../../../services/supply-chain';
 import { getDictionaryLabelMapSync } from '../../../../../services/dataDictionaryCache';
 import {
   buildMasterCrudActiveValueEnum,
@@ -38,6 +44,8 @@ import {
   resolveCustomerListParams,
 } from '../../../utils/supplyChainListCore';
 import { CustomerFormModal } from '../../../components/CustomerFormModal';
+import CustomerSyncFromSourceModal from '../../../components/CustomerSyncFromSourceModal';
+import { SyncFreshnessBadge } from '../../../../../components/sync-from-source-modal/SyncFreshnessBadge';
 import type { Customer, CustomerCreate } from '../../../types/supply-chain';
 import {
   partnerEnterpriseTypeLabel,
@@ -96,6 +104,9 @@ const CustomersPage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
+  const location = useLocation();
+  const pagePermissionResource = usePagePermissionResource(location.pathname);
+  const { canCreate } = useResourcePermissions(pagePermissionResource);
   const [searchParams, setSearchParams] = useSearchParams();
   const actionRef = useRef<ActionType>(null);
   const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
@@ -238,6 +249,9 @@ const CustomersPage: React.FC = () => {
 
   const [followUpModalOpen, setFollowUpModalOpen] = useState(false);
   const [followUpPreset, setFollowUpPreset] = useState<CustomerFollowUpPreset | null>(null);
+  const [syncModalVisible, setSyncModalVisible] = useState(false);
+  const [syncFreshnessKey, setSyncFreshnessKey] = useState(0);
+  const loadCustomerSyncBinding = useCallback(() => getCustomerSyncBinding(), []);
   const [salesmanOptions, setSalesmanOptions] = useState<Array<{ label: string; value: string | number }>>([]);
 
   useEffect(() => {
@@ -389,6 +403,11 @@ const CustomersPage: React.FC = () => {
     setModalVisible(false);
     setEditUuid(null);
   };
+
+  const handleSyncComplete = useCallback(() => {
+    setSyncFreshnessKey((key) => key + 1);
+    actionRef.current?.reload();
+  }, []);
 
   /**
    * 处理批量导入客户（分片 bulkCreate）
@@ -730,6 +749,16 @@ const CustomersPage: React.FC = () => {
       ellipsis: true,
       sorter: true,
       hideInSearch: true,
+      render: (_, record) => (
+        <span style={{ display: 'inline-flex', alignItems: 'center', maxWidth: '100%', minWidth: 0 }}>
+          <Typography.Text ellipsis style={{ minWidth: 0 }}>
+            {record.name}
+          </Typography.Text>
+          {hasExternalSyncSource(record as unknown as Record<string, unknown>) ? (
+            <ExternalSyncSourceIcon style={{ marginLeft: 4 }} />
+          ) : null}
+        </span>
+      ),
     },
     {
       title: t('field.customer.shortName'),
@@ -1070,6 +1099,20 @@ const CustomersPage: React.FC = () => {
         onRowSelectionChange={setSelectedRowKeys}
         showImportButton={true}
         onImport={handleImport}
+        showSyncButton={canCreate}
+        onSync={() => setSyncModalVisible(true)}
+        syncToolbarExtra={
+          canCreate
+            ? (syncButton) => (
+                <SyncFreshnessBadge
+                  getBinding={loadCustomerSyncBinding}
+                  refreshKey={syncFreshnessKey}
+                >
+                  {syncButton}
+                </SyncFreshnessBadge>
+              )
+            : undefined
+        }
         importHeaders={customerImportTemplate.importHeaders}
         importExampleRow={customerImportTemplate.importExampleRow}
         importColumnOptions={customerImportTemplate.importColumnOptions}
@@ -1187,6 +1230,12 @@ const CustomersPage: React.FC = () => {
           setFollowUpModalOpen(false);
           setFollowUpPreset(null);
         }}
+      />
+
+      <CustomerSyncFromSourceModal
+        open={syncModalVisible}
+        onClose={() => setSyncModalVisible(false)}
+        onComplete={handleSyncComplete}
       />
     </>
   );

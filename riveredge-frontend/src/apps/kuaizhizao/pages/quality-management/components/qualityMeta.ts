@@ -166,10 +166,34 @@ export function getQualityDefectTypeOptions(t: TFunction) {
   }));
 }
 
-export function getQualityDispositionValueEnum(t: TFunction): Record<string, string> {
-  return Object.fromEntries(
-    Object.entries(QUALITY_DISPOSAL_I18N).map(([value, key]) => [value, t(key)]),
-  );
+export function getQualityDispositionValueEnum(
+  t: TFunction,
+  options?: { source?: 'incoming' | 'process' | 'finished' | 'ledger' },
+): Record<string, string> {
+  const source = options?.source ?? 'ledger';
+  const entries = Object.entries(QUALITY_DISPOSAL_I18N).filter(([value]) => {
+    if (source === 'incoming') {
+      return !['rework', 'scrap'].includes(value);
+    }
+    if (source === 'process' || source === 'finished') {
+      return value !== 'return';
+    }
+    return true;
+  });
+  return Object.fromEntries(entries.map(([value, key]) => [value, t(key)]));
+}
+
+export function resolveNcDispositionSource(
+  row?: {
+    incoming_inspection_id?: number | null;
+    process_inspection_id?: number | null;
+    finished_goods_inspection_id?: number | null;
+  } | null,
+): 'incoming' | 'process' | 'finished' | 'ledger' {
+  if (row?.incoming_inspection_id) return 'incoming';
+  if (row?.process_inspection_id) return 'process';
+  if (row?.finished_goods_inspection_id) return 'finished';
+  return 'ledger';
 }
 
 export function getQualityDefectTypeText(

@@ -69,14 +69,34 @@ function parseBySiteTimezone(
 
 /**
  * 纯业务日期（DateField / YYYY-MM-DD）：不做 UTC→本地二次偏移。
- * 若误传带时刻的 ISO 字符串，仅取前 10 位日历日再格式化。
+ * 带 Z/偏移的 ISO 须按站点时区取日历日，禁止对 ISO 直接 slice(0,10)
+ * （东八区选 12 号常序列化为 `…T16:00:00.000Z`，切前 10 位会显示成 11 号）。
  */
 export function formatBusinessDateOnly(
   date: string | Date | number | Dayjs | null | undefined,
   fallback: string = '-'
 ): string {
   if (date == null || date === '') return fallback;
+  if (dayjs.isDayjs(date)) {
+    return date.isValid() ? date.format(getDateFormatFromSiteSetting()) : fallback;
+  }
+  if (date instanceof Date) {
+    if (Number.isNaN(date.getTime())) return fallback;
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return dayjs(`${y}-${m}-${d}`).format(getDateFormatFromSiteSetting());
+  }
   const text = String(date).trim();
+  if (DATE_ONLY_PATTERN.test(text)) {
+    return dayjs(text).format(getDateFormatFromSiteSetting());
+  }
+  if (/^\d{4}-\d{2}-\d{2}T/.test(text) || /Z|[+-]\d{2}:?\d{2}$/i.test(text)) {
+    const tz = getTimezoneFromSiteSetting();
+    const d = dayjs(text).tz(tz);
+    return d.isValid() ? d.format(getDateFormatFromSiteSetting()) : fallback;
+  }
+  // 无时区的墙钟日期时间：取日期段
   const datePart = text.length >= 10 ? text.slice(0, 10) : text;
   if (DATE_ONLY_PATTERN.test(datePart)) {
     return dayjs(datePart).format(getDateFormatFromSiteSetting());

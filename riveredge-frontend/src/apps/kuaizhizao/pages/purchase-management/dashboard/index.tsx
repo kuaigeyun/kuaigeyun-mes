@@ -44,28 +44,6 @@ const PurchaseTopColumn = lazy(async () => {
   return { default: (props: React.ComponentProps<typeof Column>) => <Column {...props} /> };
 });
 
-/** 到货预警行按采购订单去重（取最早要求到货日） */
-function dedupeWarningsByPurchaseOrder(
-  rows: PurchaseArrivalWarningRow[],
-): PurchaseArrivalWarningRow[] {
-  const byPo = new Map<number, PurchaseArrivalWarningRow>();
-  for (const row of rows) {
-    const poId = Number(row.purchase_order_id);
-    if (!Number.isFinite(poId) || poId <= 0) continue;
-    const prev = byPo.get(poId);
-    if (!prev) {
-      byPo.set(poId, row);
-      continue;
-    }
-    const prevDate = prev.required_date ? String(prev.required_date) : '';
-    const nextDate = row.required_date ? String(row.required_date) : '';
-    if (nextDate && (!prevDate || nextDate < prevDate)) {
-      byPo.set(poId, row);
-    }
-  }
-  return Array.from(byPo.values());
-}
-
 const PurchaseDashboard: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -121,9 +99,9 @@ const PurchaseDashboard: React.FC = () => {
     [recentOrders],
   );
 
-  // 逾期未到货：到货预警真源（行级未关闭且逾期），按订单去重
+  // 逾期未到货：与菜单角标 / 订单列表统计同口径（行级未关闭逾期），不再按单去重、不截断前 6 条
   const overdueReceiptOrders = useMemo(
-    () => dedupeWarningsByPurchaseOrder(overdueWarningsData?.data || []).slice(0, 6),
+    () => (overdueWarningsData?.data || []).slice(0, 50),
     [overdueWarningsData],
   );
 
@@ -248,6 +226,13 @@ const PurchaseDashboard: React.FC = () => {
         ),
       },
       {
+        title: t('app.kuaizhizao.purchaseDashboard.colMaterial'),
+        dataIndex: 'material_name',
+        ellipsis: true,
+        render: (_: unknown, record: PurchaseArrivalWarningRow) =>
+          record.material_name || record.material_code || '-',
+      },
+      {
         title: t('app.kuaizhizao.purchaseDashboard.colSupplier'),
         dataIndex: 'supplier_name',
         ellipsis: true,
@@ -344,7 +329,9 @@ const PurchaseDashboard: React.FC = () => {
               tableLayout="fixed"
               dataSource={overdueReceiptOrders}
               pagination={false}
-              rowKey={(r) => String(r.purchase_order_id)}
+              rowKey={(r) =>
+                String(r.purchase_order_item_id || r.id || `${r.purchase_order_id}-${r.material_code}`)
+              }
               columns={overdueColumns}
               locale={{ emptyText: t('app.kuaizhizao.purchaseDashboard.noOverdueReceipts') }}
             />

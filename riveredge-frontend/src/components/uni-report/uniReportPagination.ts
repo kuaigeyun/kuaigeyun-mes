@@ -9,7 +9,8 @@ export function buildUniReportTablePagination(
   t: (key: string, options?: Record<string, unknown>) => string,
 ): PaginationProps {
   return {
-    defaultPageSize: UNI_REPORT_PAGE_SIZE_ALL,
+    // 默认 50：避免首屏按「全部」请求/渲染上万行导致页卡死；仍可选「全部」
+    defaultPageSize: 50,
     showSizeChanger: {
       options: UNI_REPORT_PAGE_SIZE_OPTIONS.map((size) => ({
         value: size,

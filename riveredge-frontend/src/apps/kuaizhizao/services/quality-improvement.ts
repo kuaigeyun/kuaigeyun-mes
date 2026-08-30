@@ -65,6 +65,7 @@ export interface DefectLedgerItem {
   defect_reason: string;
   disposition: string;
   remarks?: string;
+  quarantine_location?: string;
   status: string;
   created_at?: string;
   updated_at?: string;
@@ -76,6 +77,9 @@ export interface DefectLedgerItem {
   downgrade_warehouse_id?: number;
   downgrade_warehouse_name?: string;
   other_inbound_id?: number;
+  purchase_return_id?: number;
+  rework_order_id?: number;
+  scrap_record_id?: number;
   incoming_inspection_id?: number;
   incoming_inspection_code?: string;
   process_inspection_id?: number;
@@ -197,6 +201,8 @@ export const qualityImprovementApi = {
         disposition: string;
         status?: string;
         quarantine_location?: string;
+        quarantine_warehouse_id?: number;
+        stock_warehouse_id?: number;
         downgrade_material_id?: number;
         downgrade_warehouse_id?: number;
         remarks?: string;

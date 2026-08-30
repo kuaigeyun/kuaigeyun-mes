@@ -796,6 +796,7 @@ async def create_red_letter_sales_invoice(
         code = await _generate_sales_invoice_code(tenant_id)
         desc = (orig.description or "").strip()
         tail = f"\n红冲原发票#{orig.id}（{orig.invoice_code}）：{reason}"
+        # 与进项红冲对称：红字票继承蓝字关联应收，列表「关联应收」与业财链条才能认到
         red_create_payload: dict = {
             "tenant_id": tenant_id,
             "invoice_code": code,
@@ -819,6 +820,8 @@ async def create_red_letter_sales_invoice(
             "description": (desc + tail) if desc else tail.strip(),
             "status": "未审核",
             "original_invoice_id": orig.id,
+            "receivable_id": getattr(orig, "receivable_id", None),
+            "receivable_code": getattr(orig, "receivable_code", None),
         }
         apply_create_audit(red_create_payload, current_user)
         new_inv = await Invoice.create(**red_create_payload)
@@ -863,14 +866,20 @@ async def create_red_letter_sales_invoice(
         apply_update_audit(red_orig_payload, current_user)
         await Invoice.filter(tenant_id=tenant_id, id=orig.id).update(**red_orig_payload)
 
+        rid = getattr(orig, "receivable_id", None)
+        if rid:
+            await sales_invoice_service.create_pull_relation(
+                tenant_id=tenant_id,
+                source_type="receivable",
+                source_id=int(rid),
+                source_code=str(getattr(orig, "receivable_code", None) or rid),
+                invoice_id=int(new_inv.id),
+                invoice_code=str(new_inv.invoice_code),
+                created_by=current_user.id,
+            )
+
         fresh = await Invoice.get_or_none(tenant_id=tenant_id, id=new_inv.id, category="OUT")
         if not fresh:
             raise _http_exception_with_trace(500, "红字发票创建后读取失败", "/sales-invoices/{id}/red-letter", tenant_id)
 
-    await _maybe_auto_generate_receivable_for_sales_invoice(
-        tenant_id=tenant_id,
-        invoice=fresh,
-        created_by=current_user.id,
-    )
-    final_inv = await _get_or_404(tenant_id, fresh.id)
-    return await _serialize_detail(tenant_id, current_user.id, final_inv)
+    return await _serialize_detail(tenant_id, current_user.id, fresh)

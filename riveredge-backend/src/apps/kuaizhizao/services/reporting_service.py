@@ -210,6 +210,118 @@ async def _sync_operation_completion_status(
     )
 
 
+def _operation_assignee_user_ids(operation: WorkOrderOperation) -> List[int]:
+    """工单工序指派人（多人派工优先，兼容主责字段）。"""
+    out: List[int] = []
+    raw_ids = getattr(operation, "assigned_worker_ids", None) or []
+    if isinstance(raw_ids, list):
+        for item in raw_ids:
+            try:
+                uid = int(item)
+            except (TypeError, ValueError):
+                continue
+            if uid > 0 and uid not in out:
+                out.append(uid)
+    if not out:
+        primary = getattr(operation, "assigned_worker_id", None)
+        if primary is not None:
+            try:
+                uid = int(primary)
+            except (TypeError, ValueError):
+                uid = 0
+            if uid > 0:
+                out.append(uid)
+    return out
+
+
+async def _find_next_work_order_operation(
+    tenant_id: int,
+    work_order_id: int,
+    current: WorkOrderOperation,
+    *,
+    operations: Optional[List[WorkOrderOperation]] = None,
+) -> Optional[WorkOrderOperation]:
+    """按 sequence / id 取当前工序之后的下一道工序。"""
+    ops = operations
+    if ops is None:
+        ops = await WorkOrderOperation.filter(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id,
+            deleted_at__isnull=True,
+        ).all()
+    current_key = (int(current.sequence or 0), int(current.id or 0))
+    later = [
+        op
+        for op in ops
+        if op.id != current.id
+        and (int(op.sequence or 0), int(op.id or 0)) > current_key
+    ]
+    if not later:
+        return None
+    return min(later, key=lambda op: (int(op.sequence or 0), int(op.id or 0)))
+
+
+async def notify_next_operation_assignees_after_completed(
+    tenant_id: int,
+    work_order: WorkOrder,
+    completed_operation: WorkOrderOperation,
+    *,
+    operations: Optional[List[WorkOrderOperation]] = None,
+) -> int:
+    """
+    当前工序刚变为 completed 时，向下一工序指派人发送站内信。
+    无下一工序或未派工时返回 0。
+    """
+    next_op = await _find_next_work_order_operation(
+        tenant_id,
+        int(work_order.id),
+        completed_operation,
+        operations=operations,
+    )
+    if not next_op:
+        return 0
+    assignee_ids = _operation_assignee_user_ids(next_op)
+    if not assignee_ids:
+        logger.info(
+            "工序完成但下一工序未指派人员，跳过提醒 tenant={} wo={} next_op={}",
+            tenant_id,
+            work_order.id,
+            next_op.id,
+        )
+        return 0
+
+    from apps.kuaizhizao.services.kuaizhizao_business_notification import (
+        notify_work_order_next_operation,
+    )
+
+    try:
+        return await notify_work_order_next_operation(
+            tenant_id,
+            work_order_id=int(work_order.id),
+            work_order_code=work_order.code or str(work_order.id),
+            product_name=work_order.product_name or "—",
+            completed_operation_name=(
+                completed_operation.operation_name
+                or completed_operation.operation_code
+                or "—"
+            ),
+            next_operation_name=(
+                next_op.operation_name or next_op.operation_code or "—"
+            ),
+            next_operation_assignee_user_ids=assignee_ids,
+            creator_user_id=work_order.created_by,
+        )
+    except Exception as exc:
+        logger.warning(
+            "工序完成通知下一工序失败 tenant={} wo={} op={}: {}",
+            tenant_id,
+            work_order.id,
+            completed_operation.id,
+            exc,
+        )
+        return 0
+
+
 async def sync_work_order_operations_completion(
     tenant_id: int,
     work_order_id: int,
@@ -229,10 +341,21 @@ async def sync_work_order_operations_completion(
         deleted_at__isnull=True,
     ).all()
     status_changed = False
+    newly_completed: List[WorkOrderOperation] = []
     for op in operations:
+        was_completed = op.status == "completed"
         if await _sync_operation_completion_status(tenant_id, work_order, op):
             await op.save()
             status_changed = True
+            if not was_completed and op.status == "completed":
+                newly_completed.append(op)
+    for completed_op in newly_completed:
+        await notify_next_operation_assignees_after_completed(
+            tenant_id,
+            work_order,
+            completed_op,
+            operations=operations,
+        )
     if not status_changed and not operations:
         return
 
@@ -1067,13 +1190,21 @@ class ReportingService(AppBaseService[ReportingRecord]):
             work_order_operation.unqualified_quantity = (
                 work_order_operation.unqualified_quantity or Decimal("0")
             ) + reporting_data.unqualified_quantity
-            if reporting_type == "status" and reported_quantity_dec > 0:
-                work_order_operation.status = "completed"
-                work_order_operation.actual_end_date = resolve_business_datetime()
-            else:
-                await _sync_operation_completion_status(
-                    tenant_id, work_order, work_order_operation
-                )
+            # 待审核报工可累计数量，但工序 completed 须在审核通过后判定（与撤回报工「仅统计 approved」一致）
+            operation_became_completed = False
+            if reporting_record.status == "approved":
+                if reporting_type == "status" and reported_quantity_dec > 0:
+                    if work_order_operation.status != "completed":
+                        work_order_operation.status = "completed"
+                        work_order_operation.actual_end_date = resolve_business_datetime()
+                        operation_became_completed = True
+                else:
+                    was_completed = work_order_operation.status == "completed"
+                    if await _sync_operation_completion_status(
+                        tenant_id, work_order, work_order_operation
+                    ):
+                        if not was_completed and work_order_operation.status == "completed":
+                            operation_became_completed = True
 
             _sync_operation_assigned_producer_from_reporting(
                 work_order_operation,
@@ -1120,6 +1251,14 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 work_order.qualified_quantity = Decimal("0")
             
             await work_order.save()
+
+            if operation_became_completed:
+                await notify_next_operation_assignees_after_completed(
+                    tenant_id,
+                    work_order,
+                    work_order_operation,
+                    operations=all_operations,
+                )
 
             if wo_became_completed:
                 from apps.kuaizhizao.services.kuaizhizao_business_notification import (
@@ -2490,72 +2629,8 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 updated_by=created_by,
                 updated_by_name=user_info["name"],
             )
+            created_id = int(defect_record.id)
 
-            # 根据处理方式执行相应操作
-            rework_order_id = None
-            scrap_record_id = None
-            
-            if defect_data.disposition == 'rework':
-                # 如果处理方式为返工，创建返工单
-                rework_service = ReworkOrderService()
-                rework_order_data = ReworkOrderCreate(
-                    original_work_order_id=work_order.id,
-                    original_work_order_uuid=work_order.uuid,
-                    product_id=work_order.product_id,
-                    product_code=work_order.product_code,
-                    product_name=work_order.product_name,
-                    quantity=defect_data.defect_quantity,
-                    rework_reason=defect_data.defect_reason,
-                    rework_type="返工",  # 不良品返工
-                    workshop_id=work_order.workshop_id,
-                    workshop_name=work_order.workshop_name,
-                    work_center_id=work_order.work_center_id,
-                    work_center_name=work_order.work_center_name,
-                    remarks=f"从不良品记录 {code} 创建，原因：{defect_data.defect_reason}",
-                )
-                rework_order = await rework_service.create_rework_order(
-                    tenant_id=tenant_id,
-                    rework_order_data=rework_order_data,
-                    created_by=created_by
-                )
-                rework_order_id = rework_order.id
-                logger.info(f"从不良品记录 {code} 创建返工单: {rework_order.code}")
-                
-            elif defect_data.disposition == 'scrap':
-                # 如果处理方式为报废，创建报废记录
-                scrap_data = ScrapRecordCreateFromReporting(
-                    scrap_quantity=defect_data.defect_quantity,
-                    scrap_reason=f"不良品报废：{defect_data.defect_reason}",
-                    scrap_type="quality",  # 质量原因报废
-                    remarks=f"从不良品记录 {code} 创建",
-                )
-                scrap_record = await self.record_scrap(
-                    tenant_id=tenant_id,
-                    reporting_record_id=reporting_record_id,
-                    scrap_data=scrap_data,
-                    created_by=created_by
-                )
-                scrap_record_id = scrap_record.id
-                logger.info(f"从不良品记录 {code} 创建报废记录: {scrap_record.code}")
-            
-            elif defect_data.disposition == 'quarantine':
-                # 如果处理方式为隔离，隔离位置已在创建时记录（quarantine_location字段）
-                logger.info(f"不良品记录 {code} 已隔离，隔离位置: {defect_data.quarantine_location or '未指定'}")
-            
-            # 更新不良品记录，关联返工单ID或报废记录ID
-            if rework_order_id or scrap_record_id:
-                await DefectRecord.filter(
-                    tenant_id=tenant_id,
-                    id=defect_record.id
-                ).update(
-                    rework_order_id=rework_order_id,
-                    scrap_record_id=scrap_record_id,
-                    updated_by=created_by,
-                    updated_by_name=user_info["name"],
-                )
-                # 重新获取更新后的记录
-                defect_record = await DefectRecord.get(id=defect_record.id)
-            
             # 更新工单的不合格数量
             await self._update_work_order_unqualified_quantity(
                 tenant_id=tenant_id,
@@ -2564,8 +2639,24 @@ class ReportingService(AppBaseService[ReportingRecord]):
             )
             await work_order.save()
 
-            logger.info(f"创建不良品记录成功: {code}, 工单: {work_order.code}, 不良品数量: {defect_data.defect_quantity}, 处理方式: {defect_data.disposition}")
-            return DefectRecordResponse.model_validate(defect_record)
+        from apps.kuaizhizao.services.defect_record_service import DefectRecordService
+
+        defect_record = await DefectRecordService()._apply_disposition_after_persist(
+            tenant_id=tenant_id,
+            defect_id=created_id,
+            updated_by=created_by,
+            quarantine_location=defect_data.quarantine_location,
+            quarantine_warehouse_id=getattr(defect_data, "quarantine_warehouse_id", None),
+            stock_warehouse_id=getattr(defect_data, "stock_warehouse_id", None),
+            downgrade_material_id=getattr(defect_data, "downgrade_material_id", None),
+            downgrade_warehouse_id=getattr(defect_data, "downgrade_warehouse_id", None),
+        )
+
+        logger.info(
+            f"创建不良品记录成功: {code}, 工单: {work_order.code}, "
+            f"不良品数量: {defect_data.defect_quantity}, 处理方式: {defect_data.disposition}"
+        )
+        return DefectRecordResponse.model_validate(defect_record)
 
     async def correct_reporting_data(
         self,

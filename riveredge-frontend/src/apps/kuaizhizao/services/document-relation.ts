@@ -145,6 +145,45 @@ export async function traceDocumentChain(
   return response;
 }
 
+export interface DocumentAttachmentCenterItem {
+  uid: string;
+  name: string;
+  status?: string;
+}
+
+export interface DocumentAttachmentCenterGroup {
+  document_type: string;
+  document_id: number;
+  document_code?: string;
+  is_self: boolean;
+  attachments: DocumentAttachmentCenterItem[];
+}
+
+export interface DocumentAttachmentCenterData {
+  document_type: string;
+  document_id: number;
+  groups: DocumentAttachmentCenterGroup[];
+}
+
+/**
+ * 聚合本单与全链路关联单据附件
+ */
+export async function getDocumentAttachmentCenter(
+  documentType: string,
+  documentId: number,
+  maxDepth: number = 10,
+): Promise<DocumentAttachmentCenterData> {
+  return apiRequest<DocumentAttachmentCenterData>(
+    `/apps/kuaizhizao/document-relations/${documentType}/${documentId}/attachment-center`,
+    {
+      method: 'GET',
+      params: {
+        max_depth: maxDepth,
+      },
+    },
+  );
+}
+
 /** 变更影响项 */
 export interface ChangeImpactItem {
   id: number;

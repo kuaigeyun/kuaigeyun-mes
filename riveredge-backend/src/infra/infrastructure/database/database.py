@@ -186,6 +186,7 @@ TORTOISE_ORM = {
                 "infra.models.industry_template",  # 行业模板模型
                 "infra.models.platform_settings",  # 平台设置模型
                 "infra.models.install_registration",  # 可选实例安装登记
+                "infra.models.official_api_library",  # 官方接口库包
                 # 系统级模型（core）
                 "core.models.role",
                 "core.models.permission",
@@ -264,6 +265,7 @@ TORTOISE_ORM = {
                 "apps.master_data.models.unit",  # 物料单位与全局换算
                 "apps.master_data.models.process",  # 工艺数据模型（不良品、工序、工艺路线、SOP）
                 "apps.master_data.models.customer",  # 供应链数据模型（客户）
+                "apps.master_data.models.master_data_sync_binding",  # 客户/物料/单位/分组同步绑定
                 "apps.master_data.models.supplier",  # 供应链数据模型（供应商）
                 "apps.master_data.models.partner_price_book",  # 客户供应商价格本
                 "apps.master_data.models.performance",  # 绩效数据模型（假期、技能）
@@ -357,6 +359,9 @@ TORTOISE_ORM = {
                 "apps.kuaizhizao.models.sales_forecast_item",  # 销售预测明细模型
                 "apps.kuaizhizao.models.sales_order",  # 销售订单模型
                 "apps.kuaizhizao.models.sales_order_item",  # 销售订单明细模型
+                "apps.kuaizhizao.models.sales_order_sync_binding",  # 销售订单同步绑定
+                "apps.kuaizhizao.models.purchase_order_sync_binding",  # 采购订单同步绑定
+                "apps.kuaizhizao.models.work_order_sync_binding",  # 生产工单同步绑定
                 # 统一需求管理模型（第一阶段重构）
                 "apps.kuaizhizao.models.demand",  # 统一需求模型
                 "apps.kuaizhizao.models.demand_item",  # 统一需求明细模型

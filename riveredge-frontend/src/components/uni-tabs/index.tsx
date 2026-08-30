@@ -671,6 +671,13 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
       return;
     }
 
+    // 未开启持久化时不从 localStorage 恢复，避免开关关闭仍带回历史标签
+    if (!tabsPersistence) {
+      setTabs([]);
+      didRestoreFromSyncRef.current = true;
+      return;
+    }
+
     const restored = loadPersistedTabs(menuConfig, t, tenantHomePath);
     if (restored?.length) {
       setTabs(restored);
@@ -682,7 +689,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
       setTabs([]);
     }
     didRestoreFromSyncRef.current = true;
-  }, [tenantIdStrForTabs, menuConfig, t, tenantHomePath]);
+  }, [tenantIdStrForTabs, menuConfig, t, tenantHomePath, tabsPersistence]);
 
   /** 会话内实时缓存标签，跨 APP / 组件 remount 不丢 */
   useLayoutEffect(() => {

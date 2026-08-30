@@ -1,4 +1,4 @@
-"""降级改判：目标物料不得与原产品相同。"""
+"""降级改判与处置校验契约。"""
 
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from apps.kuaizhizao.services.defect_record_service import DefectRecordService
-from infra.exceptions.exceptions import ValidationError
+from infra.exceptions.exceptions import BusinessLogicError, ValidationError
 
 
 def test_downgrade_rejects_same_product_material():
@@ -42,3 +42,23 @@ def test_downgrade_resolves_different_target_material():
 
     assert result[0] == 200
     assert result[1] == "FG002"
+
+
+def test_validate_return_requires_incoming_inspection():
+    svc = DefectRecordService()
+    defect = MagicMock(incoming_inspection_id=None, work_order_id=1, operation_id=1)
+    with pytest.raises(BusinessLogicError, match="来料检验"):
+        svc._validate_disposition_choice(defect, "return")
+
+
+def test_validate_rework_requires_work_order():
+    svc = DefectRecordService()
+    defect = MagicMock(incoming_inspection_id=1, work_order_id=None, operation_id=None)
+    with pytest.raises(BusinessLogicError, match="返工或报废"):
+        svc._validate_disposition_choice(defect, "rework")
+
+
+def test_validate_accept_allowed_without_work_order():
+    svc = DefectRecordService()
+    defect = MagicMock(incoming_inspection_id=1, work_order_id=None, operation_id=None)
+    svc._validate_disposition_choice(defect, "accept")

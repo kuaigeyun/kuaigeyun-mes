@@ -308,8 +308,9 @@ class PaymentVoucherBase(BaseSchema):
 class PaymentVoucherCreate(PaymentVoucherBase):
     """付款单创建schema"""
 
-    source_type: Optional[str] = Field(None, description="加载源单类型 payable")
-    source_id: Optional[int] = Field(None, description="加载源单ID")
+    source_type: Optional[str] = Field(None, description="加载源单类型 payable|payment")
+    source_id: Optional[int] = Field(None, description="加载源单ID（单源兼容）")
+    source_ids: Optional[List[int]] = Field(None, description="加载源付款单ID列表（多源一起退款）")
 
 
 class PaymentVoucherUpdate(BaseSchema):
@@ -337,8 +338,11 @@ class PaymentVoucherResponse(PaymentVoucherBase):
     updated_at: datetime
     created_by_name: Optional[str] = None
     updated_by_name: Optional[str] = None
-    source_voucher_id: Optional[int] = Field(None, description="退款源付款单ID")
-    source_voucher_code: Optional[str] = Field(None, description="退款源付款单号")
+    source_voucher_id: Optional[int] = Field(None, description="退款源付款单ID（首张）")
+    source_voucher_code: Optional[str] = Field(None, description="退款源付款单号（多源时拼接）")
+    source_vouchers: Optional[List["FinanceVoucherLinkRef"]] = Field(
+        None, description="退款关联的全部源付款单"
+    )
     linked_refund_vouchers: Optional[List["FinanceVoucherLinkRef"]] = None
     linked_partner_statements: Optional[List["PartnerStatementBriefRef"]] = None
     capabilities: Optional[Dict[str, Any]] = None
@@ -374,8 +378,9 @@ class ReceiptVoucherBase(BaseSchema):
 class ReceiptVoucherCreate(ReceiptVoucherBase):
     """收款单创建schema"""
 
-    source_type: Optional[str] = Field(None, description="加载源单类型 receivable")
-    source_id: Optional[int] = Field(None, description="加载源单ID")
+    source_type: Optional[str] = Field(None, description="加载源单类型 receivable|receipt")
+    source_id: Optional[int] = Field(None, description="加载源单ID（单源兼容）")
+    source_ids: Optional[List[int]] = Field(None, description="加载源收款单ID列表（多源一起退款）")
 
 
 class ReceiptVoucherUpdate(BaseSchema):
@@ -403,8 +408,11 @@ class ReceiptVoucherResponse(ReceiptVoucherBase):
     updated_at: datetime
     created_by_name: Optional[str] = None
     updated_by_name: Optional[str] = None
-    source_voucher_id: Optional[int] = Field(None, description="退款源收款单ID")
-    source_voucher_code: Optional[str] = Field(None, description="退款源收款单号")
+    source_voucher_id: Optional[int] = Field(None, description="退款源收款单ID（首张）")
+    source_voucher_code: Optional[str] = Field(None, description="退款源收款单号（多源时拼接）")
+    source_vouchers: Optional[List[FinanceVoucherLinkRef]] = Field(
+        None, description="退款关联的全部源收款单"
+    )
     linked_refund_vouchers: Optional[List[FinanceVoucherLinkRef]] = None
     linked_partner_statements: Optional[List[PartnerStatementBriefRef]] = None
     capabilities: Optional[Dict[str, Any]] = None

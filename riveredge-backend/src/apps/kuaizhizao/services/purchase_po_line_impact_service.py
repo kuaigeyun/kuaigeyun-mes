@@ -30,6 +30,19 @@ class PurchasePoLineImpactService:
             )
             if pr_line and pr_line.demand_computation_item_id:
                 return int(pr_line.demand_computation_item_id)
+        # 需求计算直推采购且历史行未写 demand_computation_item_id：按计算头+物料回查
+        if src_type in {"demandcomputation", "demandcomp"} and item.source_id and item.material_id:
+            dc_item = (
+                await DemandComputationItem.filter(
+                    tenant_id=tenant_id,
+                    computation_id=int(item.source_id),
+                    material_id=int(item.material_id),
+                )
+                .order_by("id")
+                .first()
+            )
+            if dc_item and dc_item.id is not None:
+                return int(dc_item.id)
         return None
 
     def _label_with_so(self, assembly: str, order_code: Optional[str]) -> str:

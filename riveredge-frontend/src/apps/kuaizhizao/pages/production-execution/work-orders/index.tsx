@@ -97,6 +97,7 @@ import {
   UNI_TABLE_STACKED_BADGE_DATETIME_COLUMN_DEFAULTS,
   UNI_TABLE_OPERATION_STEPS_COLUMN_MIN_WIDTH,
 } from '../../../../../components/uni-table/stackedPrimaryColumn'
+import { renderExternalSyncPrimaryExtra } from '../../../../../components/external-sync-source/ExternalSyncSourceIcon'
 import { useUserPreferenceStore } from '../../../../../stores/userPreferenceStore'
 import { useConfigStore } from '../../../../../stores/configStore'
 import {
@@ -116,7 +117,12 @@ import {
   WORK_ORDER_GROUP_ROW_KIND,
 } from './workOrderListGroupTree'
 import { ThemedSegmented } from '../../../../../components/themed-segmented'
-const SyncFromDatasetModal = lazy(() => import('../../../../../components/sync-from-dataset-modal'))
+const SyncFreshnessBadge = lazy(() =>
+  import('../../../../../components/sync-from-source-modal/SyncFreshnessBadge'),
+)
+const WorkOrderSyncFromSourceModal = lazy(
+  () => import('./WorkOrderSyncFromSourceModal'),
+)
 import {
   ListPageTemplate,
   FormModalTemplate,
@@ -167,6 +173,7 @@ import {
   productionControlApi,
   reportingApi,
 } from '../../../services/production'
+import { getWorkOrderSyncBinding } from '../../../services/work-order'
 import { UniDropdown } from '../../../../../components/uni-dropdown'
 import { listSalesOrders } from '../../../services/sales'
 import {
@@ -455,6 +462,8 @@ interface WorkOrder {
   sales_order_id?: number
   sales_order_code?: string
   sales_order_name?: string
+  customer_id?: number
+  customer_name?: string
   workshop_id?: number
   workshop_name?: string
   work_center_id?: number
@@ -1047,7 +1056,7 @@ function renderWorkOrderBatchSerialLine(
 }
 
 /** 工单列表列结构版本：列增删改时递增，避免 HMR 下 columns useMemo 沿用旧缓存 */
-const WORK_ORDER_LIST_COLUMNS_REV = 'work-order-audit-phase-v1'
+const WORK_ORDER_LIST_COLUMNS_REV = 'work-order-customer-name-v1'
 
 function summarizeWorkOrderTreeChildren(record: WorkOrder) {
   const children = record.children ?? []
@@ -1241,6 +1250,7 @@ const WorkOrderListPrimaryCell = React.memo(function WorkOrderListPrimaryCell({
   const kind = record.row_kind || 'work_order'
   const { token } = theme.useToken()
   const splitTagStyle = getWorkOrderStackedPrimaryTagStyle(token)
+  const syncExtra = renderExternalSyncPrimaryExtra(record as unknown as Record<string, unknown>)
 
   if (kind === 'work_order_group') {
     const groupCode = String(record.group_code ?? record.code ?? '').trim() || '-'
@@ -1249,9 +1259,12 @@ const WorkOrderListPrimaryCell = React.memo(function WorkOrderListPrimaryCell({
       <UniTableStackedPrimaryCell
         primary={title}
         primaryExtra={
-          <Tag color="geekblue" variant="filled" style={{ margin: 0, ...splitTagStyle }}>
-            工单组
-          </Tag>
+          <>
+            <Tag color="geekblue" variant="filled" style={{ margin: 0, ...splitTagStyle }}>
+              工单组
+            </Tag>
+            {syncExtra}
+          </>
         }
         secondary={groupCode}
         secondaryCopyable={groupCode !== '-'}
@@ -1268,9 +1281,12 @@ const WorkOrderListPrimaryCell = React.memo(function WorkOrderListPrimaryCell({
       <UniTableStackedPrimaryCell
         primary={operationLabel}
         primaryExtra={
-          <Tag color="orange" variant="filled" style={{ margin: 0, ...splitTagStyle }}>
-            返工单
-          </Tag>
+          <>
+            <Tag color="orange" variant="filled" style={{ margin: 0, ...splitTagStyle }}>
+              返工单
+            </Tag>
+            {syncExtra}
+          </>
         }
         secondary={reworkCode}
         secondaryCopyable={reworkCode !== '-'}
@@ -1286,9 +1302,12 @@ const WorkOrderListPrimaryCell = React.memo(function WorkOrderListPrimaryCell({
       <UniTableStackedPrimaryCell
         primary={operationName}
         primaryExtra={
-          <Tag color="purple" variant="filled" style={{ margin: 0, ...splitTagStyle }}>
-            委外单
-          </Tag>
+          <>
+            <Tag color="purple" variant="filled" style={{ margin: 0, ...splitTagStyle }}>
+              委外单
+            </Tag>
+            {syncExtra}
+          </>
         }
         secondary={outsourceCode}
         secondaryCopyable={outsourceCode !== '-'}
@@ -1301,15 +1320,18 @@ const WorkOrderListPrimaryCell = React.memo(function WorkOrderListPrimaryCell({
       <WorkOrderProductCodeCell
         record={record}
         primaryExtra={
-          <Tag color="cyan" variant="filled" style={{ margin: 0, ...splitTagStyle }}>
-            拆分工单
-          </Tag>
+          <>
+            <Tag color="cyan" variant="filled" style={{ margin: 0, ...splitTagStyle }}>
+              拆分工单
+            </Tag>
+            {syncExtra}
+          </>
         }
       />
     )
   }
 
-  return <WorkOrderProductCodeCell record={record} />
+  return <WorkOrderProductCodeCell record={record} primaryExtra={syncExtra} />
 })
 
 const WorkOrderTreeProductCodeCell = React.memo(function WorkOrderTreeProductCodeCell({
@@ -2537,6 +2559,8 @@ const WorkOrdersPage: React.FC = () => {
   }, [dispatchModalVisible])
 
   const [syncModalVisible, setSyncModalVisible] = useState(false)
+  const [syncFreshnessKey, setSyncFreshnessKey] = useState(0)
+  const loadWorkOrderSyncBinding = useCallback(() => getWorkOrderSyncBinding(), [])
 
   const selectedRows = useMemo(() => {
     return selectedRowKeys.map(key => {
@@ -4543,26 +4567,11 @@ const WorkOrdersPage: React.FC = () => {
   /**
    * 处理删除工单
    */
-  const handleSyncConfirm = async (rows: Record<string, any>[]) => {
-    try {
-      let successCount = 0
-      for (const row of rows) {
-        const payload = {
-          work_order_code: row.work_order_code || row.workOrderCode,
-          plan_code: row.plan_code || row.planCode,
-          material_code: row.material_code || row.materialCode,
-          planned_quantity: row.planned_quantity ?? row.plannedQuantity,
-          status: row.status || 'draft',
-        }
-        await workOrderApi.create(payload)
-        successCount += 1
-      }
-      messageApi.success(`已同步 ${successCount} 条工单`)
-      invalidateStatistics(); actionRef.current?.reload()
-    } catch (error: any) {
-      messageApi.error(error?.message || '同步失败')
-    }
-  }
+  const handleSyncComplete = useCallback(() => {
+    setSyncFreshnessKey((key) => key + 1)
+    invalidateStatistics()
+    actionRef.current?.reload()
+  }, [invalidateStatistics])
 
   const handleListImport = async (data: any[][]) => {
     if (!data || data.length < 2) {
@@ -7166,6 +7175,30 @@ const WorkOrdersPage: React.FC = () => {
       hideInSearch: false,
       fieldProps: { placeholder: t('app.kuaizhizao.workOrder.formSourceOrderPlaceholder') },
     },
+    ...(executionConfig?.show_customer_name
+      ? [
+          {
+            title: t('app.kuaizhizao.workOrder.colCustomer'),
+            dataIndex: 'customer_name',
+            key: 'customer_name',
+            width: 140,
+            minWidth: 140,
+            uniTableKeepWidth: true,
+            resizable: false,
+            ellipsis: true,
+            hideInSearch: false,
+            fieldProps: {
+              placeholder: t('app.kuaizhizao.workOrder.formCustomerNamePlaceholder'),
+            },
+            render: (_: unknown, record: WorkOrder) =>
+              isWorkOrderGroupListRow(record) ? null : (
+                <Typography.Text ellipsis={{ tooltip: true }}>
+                  {record.customer_name?.trim() || '—'}
+                </Typography.Text>
+              ),
+          } as ProColumns<WorkOrder>,
+        ]
+      : []),
     {
       title: t('app.kuaizhizao.workOrder.colPriority'),
       dataIndex: 'priority',
@@ -7577,6 +7610,7 @@ const WorkOrdersPage: React.FC = () => {
     workOrderAuditEnabled,
     workOrderAuditColumn,
     handleWorkOrderAuditSuccess,
+    executionConfig?.show_customer_name,
   ])
 
   const workOrderTableBodyColSpan = useMemo(() => {
@@ -7837,7 +7871,7 @@ const WorkOrdersPage: React.FC = () => {
         <UniTable<WorkOrder>
           className="kuaizhizao-work-orders-table"
           scroll={{ scrollToFirstRowOnChange: false }}
-          columnPersistenceId="apps.kuaizhizao.pages.production-execution.work-orders-width-v2"
+          columnPersistenceId="apps.kuaizhizao.pages.production-execution.work-orders-width-v3"
           headerTitle={t('app.kuaizhizao.workOrder.pageTitle')}
           formRef={tableSearchFormRef}
           searchParamsRef={tableSearchParamsRef}
@@ -7972,8 +8006,22 @@ const WorkOrdersPage: React.FC = () => {
               messageApi.error(error?.message || t('common.exportFailed'))
             }
           }}
-          showSyncButton
+          showSyncButton={workOrderPerms.canCreate}
           onSync={() => setSyncModalVisible(true)}
+          syncToolbarExtra={
+            workOrderPerms.canCreate
+              ? (syncButton) => (
+                  <Suspense fallback={syncButton}>
+                    <SyncFreshnessBadge
+                      getBinding={loadWorkOrderSyncBinding}
+                      refreshKey={syncFreshnessKey}
+                    >
+                      {syncButton}
+                    </SyncFreshnessBadge>
+                  </Suspense>
+                )
+              : undefined
+          }
           toolBarActionsEnd={[workOrderHighlightOverdueToolbar]}
           toolBarRender={() => [
             <UniPullCreateToolbar
@@ -8058,6 +8106,14 @@ const WorkOrdersPage: React.FC = () => {
           }}
         />
       </ListPageTemplate>
+
+      <Suspense fallback={null}>
+        <WorkOrderSyncFromSourceModal
+          open={syncModalVisible}
+          onClose={() => setSyncModalVisible(false)}
+          onComplete={handleSyncComplete}
+        />
+      </Suspense>
 
       {readinessModalTarget ? (
         <Suspense fallback={null}>

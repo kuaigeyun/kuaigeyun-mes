@@ -175,8 +175,34 @@ class APIService:
             raise ValidationError("当前仅支持金蝶云星空连接器加载常用接口")
 
         from core.services.integration.kingdee_galaxy_api_presets import (
+            CUSTOMER_PRESET_CODE_SUFFIX,
+            MATERIAL_GROUP_PRESET_CODE_SUFFIX,
+            MATERIAL_PRESET_CODE_SUFFIX,
+            PRD_MO_PRESET_CODE_SUFFIX,
+            PURCHASE_ORDER_PRESET_CODE_SUFFIX,
+            SALES_ORDER_PRESET_CODE_SUFFIX,
+            SUPPLIER_PRESET_CODE_SUFFIX,
+            UNIT_PRESET_CODE_SUFFIX,
+            WAREHOUSE_PRESET_CODE_SUFFIX,
+            bill_open_preset_needs_upgrade,
+            build_customer_query_preset_body,
+            build_material_group_query_preset_body,
+            build_material_query_preset_body,
+            build_prd_mo_query_preset_body,
+            build_purchase_order_query_preset_body,
+            build_sales_order_query_preset_body,
+            build_supplier_query_preset_body,
+            build_unit_query_preset_body,
+            build_warehouse_query_preset_body,
+            customer_preset_needs_upgrade,
             list_kingdee_galaxy_api_presets,
+            master_data_scope_preset_needs_upgrade,
+            material_group_preset_needs_upgrade,
+            material_preset_needs_upgrade,
+            purchase_order_preset_needs_upgrade,
             resolve_preset_api_code,
+            sales_order_preset_needs_upgrade,
+            supplier_preset_needs_upgrade,
         )
 
         allowed_suffixes: Optional[set[str]] = None
@@ -188,6 +214,7 @@ class APIService:
         created: List[str] = []
         skipped: List[str] = []
         categorized: List[str] = []
+        upgraded: List[str] = []
         for preset in list_kingdee_galaxy_api_presets():
             code_suffix = str(preset["code_suffix"] or "").strip()
             if allowed_suffixes is not None and code_suffix not in allowed_suffixes:
@@ -199,6 +226,78 @@ class APIService:
                 deleted_at__isnull=True,
             ).first()
             if existing:
+                if (
+                    code_suffix == SALES_ORDER_PRESET_CODE_SUFFIX
+                    and sales_order_preset_needs_upgrade(existing.request_body)
+                ):
+                    existing.request_body = build_sales_order_query_preset_body()
+                    existing.description = preset["description"]
+                    await existing.save(update_fields=["request_body", "description", "updated_at"])
+                    upgraded.append(code)
+                elif (
+                    code_suffix == MATERIAL_PRESET_CODE_SUFFIX
+                    and material_preset_needs_upgrade(existing.request_body)
+                ):
+                    existing.request_body = build_material_query_preset_body()
+                    existing.description = preset["description"]
+                    await existing.save(update_fields=["request_body", "description", "updated_at"])
+                    upgraded.append(code)
+                elif (
+                    code_suffix == CUSTOMER_PRESET_CODE_SUFFIX
+                    and customer_preset_needs_upgrade(existing.request_body)
+                ):
+                    existing.request_body = build_customer_query_preset_body()
+                    existing.description = preset["description"]
+                    await existing.save(update_fields=["request_body", "description", "updated_at"])
+                    upgraded.append(code)
+                elif (
+                    code_suffix == SUPPLIER_PRESET_CODE_SUFFIX
+                    and supplier_preset_needs_upgrade(existing.request_body)
+                ):
+                    existing.request_body = build_supplier_query_preset_body()
+                    existing.description = preset["description"]
+                    await existing.save(update_fields=["request_body", "description", "updated_at"])
+                    upgraded.append(code)
+                elif (
+                    code_suffix == UNIT_PRESET_CODE_SUFFIX
+                    and master_data_scope_preset_needs_upgrade(existing.request_body)
+                ):
+                    existing.request_body = build_unit_query_preset_body()
+                    existing.description = preset["description"]
+                    await existing.save(update_fields=["request_body", "description", "updated_at"])
+                    upgraded.append(code)
+                elif (
+                    code_suffix == MATERIAL_GROUP_PRESET_CODE_SUFFIX
+                    and material_group_preset_needs_upgrade(existing.request_body)
+                ):
+                    existing.request_body = build_material_group_query_preset_body()
+                    existing.description = preset["description"]
+                    await existing.save(update_fields=["request_body", "description", "updated_at"])
+                    upgraded.append(code)
+                elif (
+                    code_suffix == WAREHOUSE_PRESET_CODE_SUFFIX
+                    and master_data_scope_preset_needs_upgrade(existing.request_body)
+                ):
+                    existing.request_body = build_warehouse_query_preset_body()
+                    existing.description = preset["description"]
+                    await existing.save(update_fields=["request_body", "description", "updated_at"])
+                    upgraded.append(code)
+                elif (
+                    code_suffix == PURCHASE_ORDER_PRESET_CODE_SUFFIX
+                    and purchase_order_preset_needs_upgrade(existing.request_body)
+                ):
+                    existing.request_body = build_purchase_order_query_preset_body()
+                    existing.description = preset["description"]
+                    await existing.save(update_fields=["request_body", "description", "updated_at"])
+                    upgraded.append(code)
+                elif (
+                    code_suffix == PRD_MO_PRESET_CODE_SUFFIX
+                    and bill_open_preset_needs_upgrade(existing.request_body)
+                ):
+                    existing.request_body = build_prd_mo_query_preset_body()
+                    existing.description = preset["description"]
+                    await existing.save(update_fields=["request_body", "description", "updated_at"])
+                    upgraded.append(code)
                 if category_id is not None and existing.category_id is None:
                     existing.category_id = category_id
                     await existing.save(update_fields=["category_id", "updated_at"])
@@ -231,9 +330,11 @@ class APIService:
             "created_count": len(created),
             "skipped_count": len(skipped),
             "categorized_count": len(categorized),
+            "upgraded_count": len(upgraded),
             "created_codes": created,
             "skipped_codes": skipped,
             "categorized_codes": categorized,
+            "upgraded_codes": upgraded,
         }
 
     async def list_api_library(self) -> Dict[str, Any]:
@@ -295,6 +396,183 @@ class APIService:
             "category_uuid": str(category.uuid),
             **preset_result,
         }
+
+    async def list_official_api_library(self) -> Dict[str, Any]:
+        """获取官方接口库目录（固定地址 kuaigeyun.com）。"""
+        from infra.services.official_api_library_service import list_official_api_library
+
+        result = await list_official_api_library()
+        items = result.get("items") or []
+        for item in items:
+            item["source"] = "official"
+        return {"items": items}
+
+    async def install_official_api_library_pack(
+        self,
+        tenant_id: int,
+        pack_id: str,
+        connection_uuid: UUID,
+        item_keys: List[str],
+    ) -> Dict[str, Any]:
+        """从官方接口库安装接口包到当前租户。"""
+        from infra.services.official_api_library_service import (
+            get_official_api_library_pack,
+            normalize_official_api_item,
+        )
+        from core.services.integration.kingdee_galaxy_api_presets import resolve_preset_api_code
+
+        pack = await get_official_api_library_pack(pack_id)
+        connector_type = str(pack.get("connector_type") or "").strip()
+        if not connector_type:
+            raise ValidationError("官方接口包缺少连接器类型")
+
+        normalized_keys = [str(key).strip() for key in item_keys if str(key).strip()]
+        if not normalized_keys:
+            raise ValidationError("请至少选择一个接口")
+
+        raw_items = pack.get("items") or []
+        full_items = [
+            normalize_official_api_item(item)
+            for item in raw_items
+            if isinstance(item, dict)
+        ]
+        item_map = {item["item_key"]: item for item in full_items}
+        invalid_keys = sorted(set(normalized_keys) - set(item_map.keys()))
+        if invalid_keys:
+            raise ValidationError(f"接口条目不存在: {', '.join(invalid_keys)}")
+
+        integration = await self._resolve_business_connector(tenant_id, connection_uuid)
+        conn_type = str(integration.type or "").strip()
+        if conn_type != connector_type:
+            raise ValidationError(
+                f"接口包「{pack.get('name')}」需要 {connector_type} 类型连接器"
+            )
+
+        category_name = str(pack.get("category_name") or "官方库").strip() or "官方库"
+        category_code = str(pack.get("category_code") or "official").strip() or "official"
+        category_description = str(pack.get("category_description") or pack.get("description") or "").strip()
+        category = await ResourceCategoryService().ensure_category_by_code(
+            tenant_id,
+            RESOURCE_TYPE_API,
+            code=category_code[:50],
+            name=category_name[:50],
+            description=category_description or None,
+        )
+
+        created: List[str] = []
+        skipped: List[str] = []
+        categorized: List[str] = []
+        for key in normalized_keys:
+            item = item_map[key]
+            code = resolve_preset_api_code(integration.code, item["item_key"])
+            existing = await API.filter(
+                tenant_id=tenant_id,
+                code=code,
+                deleted_at__isnull=True,
+            ).first()
+            if existing:
+                if existing.category_id is None:
+                    existing.category_id = category.id
+                    await existing.save(update_fields=["category_id", "updated_at"])
+                    categorized.append(code)
+                skipped.append(code)
+                continue
+            await API.create(
+                tenant_id=tenant_id,
+                name=item["name"],
+                code=code,
+                description=item.get("description") or None,
+                path=item["path"],
+                method=item["method"],
+                request_headers=item.get("request_headers"),
+                request_params=item.get("request_params"),
+                request_body=item.get("request_body"),
+                response_format=item.get("response_format"),
+                response_example=item.get("response_example"),
+                is_active=True,
+                is_system=False,
+                integration_config_id=integration.id,
+                category_id=category.id,
+            )
+            created.append(code)
+
+        return {
+            "pack_id": str(pack.get("pack_id") or pack_id),
+            "connection_uuid": str(integration.uuid),
+            "connection_code": integration.code,
+            "connection_type": conn_type,
+            "category_uuid": str(category.uuid),
+            "created_count": len(created),
+            "skipped_count": len(skipped),
+            "categorized_count": len(categorized),
+            "created_codes": created,
+            "skipped_codes": skipped,
+            "categorized_codes": categorized,
+        }
+
+    async def submit_official_api_library(
+        self,
+        tenant_id: int,
+        *,
+        name: str,
+        description: str,
+        connector_type: str,
+        category_name: str,
+        category_code: Optional[str],
+        category_description: Optional[str],
+        api_uuids: List[UUID],
+        submitter_hint: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """将本组织接口打包提交到官方接口库。"""
+        from infra.services.official_api_library_service import submit_official_api_library_pack
+
+        if not api_uuids:
+            raise ValidationError("请至少选择一个接口")
+
+        apis = await API.filter(
+            tenant_id=tenant_id,
+            uuid__in=[str(u) for u in api_uuids],
+            deleted_at__isnull=True,
+        ).all()
+        if len(apis) != len(set(str(u) for u in api_uuids)):
+            raise ValidationError("部分接口不存在或不属于本组织")
+
+        items: List[Dict[str, Any]] = []
+        used_keys: set[str] = set()
+        for api in apis:
+            item_key = str(api.code or "").strip()
+            if not item_key:
+                raise ValidationError(f"接口「{api.name}」缺少代码，无法提交")
+            if item_key in used_keys:
+                raise ValidationError(f"接口代码重复，无法提交: {item_key}")
+            used_keys.add(item_key)
+            items.append(
+                {
+                    "item_key": item_key,
+                    "name": api.name,
+                    "description": api.description or "",
+                    "path": api.path,
+                    "method": api.method,
+                    "request_headers": api.request_headers,
+                    "request_params": api.request_params,
+                    "request_body": api.request_body,
+                    "response_format": api.response_format,
+                    "response_example": api.response_example,
+                }
+            )
+
+        return await submit_official_api_library_pack(
+            {
+                "name": name,
+                "description": description,
+                "connector_type": connector_type,
+                "category_name": category_name,
+                "category_code": category_code,
+                "category_description": category_description,
+                "items": items,
+                "submitter_hint": submitter_hint,
+            }
+        )
     
     async def get_api_by_uuid(
         self,
@@ -612,8 +890,13 @@ class APIService:
         """
         # 获取接口
         api = await self.get_api_by_uuid(tenant_id, api_uuid)
+        if not api.is_active:
+            raise ValidationError(f"数据接口「{api.name}」已停用，无法调用")
         await api.fetch_related("integration_config")
-        
+        if api.integration_config_id and api.integration_config and not api.integration_config.is_active:
+            raise ValidationError(
+                f"应用连接器「{api.integration_config.name}」已停用，无法调用"
+            )
         # 1. 合并请求头（测试请求头优先）
         request_headers = dict(api.request_headers or {})
         
@@ -622,8 +905,10 @@ class APIService:
         if test_request.params:
             request_params.update(test_request.params)
         
-        # 3. 合并请求体（测试请求体优先）
-        request_body = api.request_body or {}
+        # 3. 合并请求体（测试请求体优先；深拷贝避免污染 ORM 缓存）
+        import copy
+
+        request_body = copy.deepcopy(api.request_body) if api.request_body else {}
         if test_request.body:
             request_body.update(test_request.body)
         
@@ -759,6 +1044,140 @@ class APIService:
                 "status_code": 0,
                 "headers": {},
                 "body": {"error": f"未知错误: {str(e)}"},
+                "elapsed_time": round(elapsed_time, 3),
+            }
+
+    async def probe_api_draft(
+        self,
+        tenant_id: int,
+        *,
+        connection_uuid: UUID,
+        path: str,
+        method: str,
+        request_headers: Optional[Dict[str, Any]] = None,
+        request_params: Optional[Dict[str, Any]] = None,
+        request_body: Optional[Dict[str, Any]] = None,
+        timeout: float = 30.0,
+    ) -> Dict[str, Any]:
+        """编辑弹窗草稿探测：按连接器 + 路径 + 报文直接发请求。"""
+        integration = await self._resolve_business_connector(tenant_id, connection_uuid)
+        request_headers = dict(request_headers or {})
+        request_params = dict(request_params or {})
+        request_body = dict(request_body or {})
+        method_upper = str(method or "POST").upper()
+
+        try:
+            url, connector_headers = resolve_connector_request(
+                integration,
+                endpoint=path,
+                headers=request_headers,
+            )
+            request_headers = connector_headers
+            if str(integration.type or "").strip() == "kingdee_galaxy":
+                from core.services.integration.kingdee_galaxy_service import (
+                    apply_kingdee_galaxy_session_headers,
+                    login_kingdee_galaxy_session,
+                )
+
+                try:
+                    session = await login_kingdee_galaxy_session(integration.get_config())
+                    request_headers = apply_kingdee_galaxy_session_headers(
+                        request_headers,
+                        session_id=str(session["session_id"]),
+                    )
+                except ValueError as exc:
+                    return {
+                        "status_code": 0,
+                        "headers": {},
+                        "body": {"error": str(exc)},
+                        "elapsed_time": 0,
+                    }
+        except ValidationError as exc:
+            return {
+                "status_code": 0,
+                "headers": {},
+                "body": {"error": str(exc)},
+                "elapsed_time": 0,
+            }
+
+        start_time = time.time()
+        try:
+            client = get_http_client()
+            if method_upper == "GET":
+                response = await client.get(
+                    url,
+                    headers=request_headers,
+                    params=request_params,
+                    timeout=timeout,
+                )
+            elif method_upper == "POST":
+                response = await client.post(
+                    url,
+                    headers=request_headers,
+                    params=request_params,
+                    json=request_body,
+                    timeout=timeout,
+                )
+            elif method_upper == "PUT":
+                response = await client.put(
+                    url,
+                    headers=request_headers,
+                    params=request_params,
+                    json=request_body,
+                    timeout=timeout,
+                )
+            elif method_upper == "DELETE":
+                response = await client.delete(
+                    url,
+                    headers=request_headers,
+                    params=request_params,
+                    timeout=timeout,
+                )
+            elif method_upper == "PATCH":
+                response = await client.patch(
+                    url,
+                    headers=request_headers,
+                    params=request_params,
+                    json=request_body,
+                    timeout=timeout,
+                )
+            else:
+                raise ValueError(f"不支持的请求方法: {method}")
+
+            elapsed_time = time.time() - start_time
+            try:
+                response_body = response.json()
+            except Exception:
+                response_body = response.text
+
+            return {
+                "status_code": response.status_code,
+                "headers": dict(response.headers),
+                "body": response_body,
+                "elapsed_time": round(elapsed_time, 3),
+            }
+        except httpx.TimeoutException:
+            elapsed_time = time.time() - start_time
+            return {
+                "status_code": 0,
+                "headers": {},
+                "body": {"error": "请求超时"},
+                "elapsed_time": round(elapsed_time, 3),
+            }
+        except httpx.RequestError as exc:
+            elapsed_time = time.time() - start_time
+            return {
+                "status_code": 0,
+                "headers": {},
+                "body": {"error": f"请求失败: {str(exc)}"},
+                "elapsed_time": round(elapsed_time, 3),
+            }
+        except Exception as exc:
+            elapsed_time = time.time() - start_time
+            return {
+                "status_code": 0,
+                "headers": {},
+                "body": {"error": f"未知错误: {str(exc)}"},
                 "elapsed_time": round(elapsed_time, 3),
             }
 

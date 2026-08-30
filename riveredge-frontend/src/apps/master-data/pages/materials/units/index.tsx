@@ -30,7 +30,7 @@ import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulk
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 import { IMPORT_YES_NO_OPTIONS } from '../../../../../utils/loadImportDictionaryValues';
-import { materialUnitApi } from '../../../services/material-unit';
+import { materialUnitApi, getMaterialUnitSyncBinding } from '../../../services/material-unit';
 import type { MaterialUnit, MaterialUnitConversion } from '../../../types/material-unit';
 import { masterCrudCreatedUpdatedSnakeColumns } from '../../../utils/materialListCore';
 import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
@@ -40,6 +40,12 @@ import {
   renderMasterYesNoTag,
   renderMasterTypeMarker,
 } from '../../../utils/masterListPresentation';
+import UnitSyncFromSourceModal from '../../../components/UnitSyncFromSourceModal';
+import { SyncFreshnessBadge } from '../../../../../components/sync-from-source-modal/SyncFreshnessBadge';
+import {
+  ExternalSyncSourceIcon,
+  hasExternalSyncSource,
+} from '../../../../../components/external-sync-source/ExternalSyncSourceIcon';
 import { invalidateMaterialUnitDisplayMapCache } from '../../../../../utils/materialUnitDisplay';
 import {
   buildFactoryImportTemplate,
@@ -75,6 +81,9 @@ const UnitsPage: React.FC = () => {
   const [convEditingUuid, setConvEditingUuid] = useState<string | null>(null);
   const [unitOptions, setUnitOptions] = useState<{ label: string; value: string }[]>([]);
   const [presetLoading, setPresetLoading] = useState(false);
+  const [syncModalVisible, setSyncModalVisible] = useState(false);
+  const [syncFreshnessKey, setSyncFreshnessKey] = useState(0);
+  const loadUnitSyncBinding = useCallback(() => getMaterialUnitSyncBinding(), []);
 
   const loadUnitOptions = useCallback(async () => {
     const res = await materialUnitApi.list({ skip: 0, limit: 500, is_active: true });
@@ -638,6 +647,16 @@ const UnitsPage: React.FC = () => {
         ellipsis: true,
         sorter: true,
         fixed: 'left',
+        render: (_, record) => (
+          <span style={{ display: 'inline-flex', alignItems: 'center', maxWidth: '100%', minWidth: 0 }}>
+            <Typography.Text ellipsis style={{ minWidth: 0 }}>
+              {record.name}
+            </Typography.Text>
+            {hasExternalSyncSource(record as unknown as Record<string, unknown>) ? (
+              <ExternalSyncSourceIcon style={{ marginLeft: 4 }} />
+            ) : null}
+          </span>
+        ),
       },
       {
         title: t('app.master-data.units.sortOrder'),
@@ -879,6 +898,20 @@ const UnitsPage: React.FC = () => {
                 importTemplateName={t('common.unit')}
                 showExportButton
                 onExport={handleUnitExport}
+                showSyncButton={perms.canCreate}
+                onSync={() => setSyncModalVisible(true)}
+                syncToolbarExtra={
+                  perms.canCreate
+                    ? (syncButton) => (
+                        <SyncFreshnessBadge
+                          getBinding={loadUnitSyncBinding}
+                          refreshKey={syncFreshnessKey}
+                        >
+                          {syncButton}
+                        </SyncFreshnessBadge>
+                      )
+                    : undefined
+                }
                 request={async (params, sort) => {
                   try {
                     const sortKey = sort ? Object.keys(sort)[0] : undefined;
@@ -1107,6 +1140,16 @@ const UnitsPage: React.FC = () => {
         <ProFormSwitch name="is_active" label={t('common.status')} />
         <ProFormTextArea name="description" label={t('common.remark')} />
       </FormModalTemplate>
+
+      <UnitSyncFromSourceModal
+        open={syncModalVisible}
+        onClose={() => setSyncModalVisible(false)}
+        onComplete={() => {
+          setSyncFreshnessKey((key) => key + 1);
+          invalidateMaterialUnitDisplayMapCache();
+          unitActionRef.current?.reload();
+        }}
+      />
     </>
   );
 };

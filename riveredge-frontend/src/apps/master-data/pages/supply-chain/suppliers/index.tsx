@@ -4,9 +4,12 @@
  * 提供供应商的 CRUD 功能，包括列表展示、创建、编辑、删除等操作。
  */
 
-import React, { useRef, useState, useEffect, useMemo } from 'react';
+import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
+import { useLocation } from 'react-router-dom';
+import { usePagePermissionResource } from '../../../../../hooks/usePagePermissionResource';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, Descriptions, List, Modal, Popconfirm, Typography } from 'antd';
 import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
@@ -25,7 +28,7 @@ import {
   MASTER_DATA_DETAIL_BASIC_FIELD_RANK,
 } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 
-import { supplierApi, getUserOptions, getDictionaryOptions } from '../../../services/supply-chain';
+import { supplierApi, getSupplierSyncBinding, getUserOptions, getDictionaryOptions } from '../../../services/supply-chain';
 import { getDictionaryLabelMapSync } from '../../../../../services/dataDictionaryCache';
 import {
   buildMasterCrudActiveValueEnum,
@@ -37,6 +40,12 @@ import {
   resolveSupplierListParams,
 } from '../../../utils/supplyChainListCore';
 import { SupplierFormModal } from '../../../components/SupplierFormModal';
+import SupplierSyncFromSourceModal from '../../../components/SupplierSyncFromSourceModal';
+import { SyncFreshnessBadge } from '../../../../../components/sync-from-source-modal/SyncFreshnessBadge';
+import {
+  ExternalSyncSourceIcon,
+  hasExternalSyncSource,
+} from '../../../../../components/external-sync-source/ExternalSyncSourceIcon';
 import type { Supplier, SupplierCreate } from '../../../types/supply-chain';
 import {
   partnerEnterpriseTypeLabel,
@@ -90,6 +99,9 @@ import { buildListPageHelpViewConfig } from '../../../../../components/page-help
 const SuppliersPage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const location = useLocation();
+  const pagePermissionResource = usePagePermissionResource(location.pathname);
+  const { canCreate } = useResourcePermissions(pagePermissionResource);
   const actionRef = useRef<ActionType>(null);
   const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
@@ -109,6 +121,9 @@ const SuppliersPage: React.FC = () => {
   // Modal 相关状态（创建/编辑供应商）
   const [modalVisible, setModalVisible] = useState(false);
   const [editUuid, setEditUuid] = useState<string | null>(null);
+  const [syncModalVisible, setSyncModalVisible] = useState(false);
+  const [syncFreshnessKey, setSyncFreshnessKey] = useState(0);
+  const loadSupplierSyncBinding = useCallback(() => getSupplierSyncBinding(), []);
 
   const DICT_CODES = useMemo(
     () => ['INDUSTRY_SECTOR', 'PARTNER_SOURCE_CHANNEL', 'CUSTOMER_CATEGORY', 'CONTACT_TITLE'],
@@ -222,6 +237,11 @@ const SuppliersPage: React.FC = () => {
     setEditUuid(null);
     setModalVisible(true);
   };
+
+  const handleSyncComplete = useCallback(() => {
+    setSyncFreshnessKey((key) => key + 1);
+    actionRef.current?.reload();
+  }, []);
 
   useNewShortcut(handleCreate);
 
@@ -671,6 +691,16 @@ const SuppliersPage: React.FC = () => {
       ellipsis: true,
       sorter: true,
       hideInSearch: true,
+      render: (_, record) => (
+        <span style={{ display: 'inline-flex', alignItems: 'center', maxWidth: '100%', minWidth: 0 }}>
+          <Typography.Text ellipsis style={{ minWidth: 0 }}>
+            {record.name}
+          </Typography.Text>
+          {hasExternalSyncSource(record as unknown as Record<string, unknown>) ? (
+            <ExternalSyncSourceIcon style={{ marginLeft: 4 }} />
+          ) : null}
+        </span>
+      ),
     },
     {
       title: t('field.supplier.shortName'),
@@ -1048,6 +1078,20 @@ const SuppliersPage: React.FC = () => {
         onRowSelectionChange={setSelectedRowKeys}
         showImportButton={true}
         onImport={handleImport}
+        showSyncButton={canCreate}
+        onSync={() => setSyncModalVisible(true)}
+        syncToolbarExtra={
+          canCreate
+            ? (syncButton) => (
+                <SyncFreshnessBadge
+                  getBinding={loadSupplierSyncBinding}
+                  refreshKey={syncFreshnessKey}
+                >
+                  {syncButton}
+                </SyncFreshnessBadge>
+              )
+            : undefined
+        }
         importHeaders={supplierImportTemplate.importHeaders}
         importExampleRow={supplierImportTemplate.importExampleRow}
         importColumnOptions={supplierImportTemplate.importColumnOptions}
@@ -1120,6 +1164,12 @@ const SuppliersPage: React.FC = () => {
         onClose={() => { setModalVisible(false); setEditUuid(null); }}
         editUuid={editUuid}
         onSuccess={handleModalSuccess}
+      />
+
+      <SupplierSyncFromSourceModal
+        open={syncModalVisible}
+        onClose={() => setSyncModalVisible(false)}
+        onComplete={handleSyncComplete}
       />
     </>
   );

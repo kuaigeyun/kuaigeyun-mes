@@ -51,7 +51,9 @@ import {
   renderDocumentLineMaterialsPreview,
 } from '../../sales-management/shared/documentLineMaterialsPreview';
 import { UniAuditBatchMenuButton, UniCapabilityBatchButton } from '../../../../../components/uni-batch';
-import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
+import { SyncFreshnessBadge } from '../../../../../components/sync-from-source-modal/SyncFreshnessBadge';
+import { renderExternalSyncPrimaryExtra } from '../../../../../components/external-sync-source/ExternalSyncSourceIcon';
+import PurchaseOrderSyncFromSourceModal from './PurchaseOrderSyncFromSourceModal';
 import {
   ListPageTemplate,
   DetailDrawerActions,
@@ -116,6 +118,7 @@ import {
   pushPurchaseOrderToReceipt,
   pushPurchaseOrderToReceiptNotice, pushPurchaseOrderToReceiptNoticeFromPreview, pushPurchaseOrderToInvoice, pushPurchaseOrderToPurchaseReturn,
   getPurchaseOrderStatistics,
+  getPurchaseOrderSyncBinding,
   previewPushToReceiptNotice, previewPushToReceipt, previewPushToInvoice, previewPushToPurchaseReturn,
   type DocumentPushPreview,
   PurchaseOrder, PurchaseOrderItem
@@ -634,6 +637,8 @@ const PurchaseOrdersPage: React.FC = () => {
   const [usersLoading, setUsersLoading] = useState(false);
 
   const [syncModalVisible, setSyncModalVisible] = useState(false);
+  const [syncFreshnessKey, setSyncFreshnessKey] = useState(0);
+  const loadPurchaseOrderSyncBinding = useCallback(() => getPurchaseOrderSyncBinding(), []);
 
   // 下推退货 Modal
   const [pushToReturnVisible, setPushToReturnVisible] = useState(false);
@@ -890,6 +895,7 @@ const PurchaseOrdersPage: React.FC = () => {
         <UniTableStackedPrimaryCell
           primary={String(r.supplier_name ?? '')}
           secondary={String(r.order_code ?? '')}
+          primaryExtra={renderExternalSyncPrimaryExtra(r as unknown as Record<string, unknown>)}
         />
       ),
     },
@@ -1870,31 +1876,12 @@ const PurchaseOrdersPage: React.FC = () => {
     }
   };
 
-  const handleSyncConfirm = async (rows: Record<string, any>[]) => {
-    try {
-      let successCount = 0;
-      for (const row of rows) {
-        const payload: Partial<PurchaseOrder> = {
-          order_date: row.order_date || row.orderDate,
-          delivery_date: row.delivery_date || row.deliveryDate,
-          supplier_id: row.supplier_id ?? row.supplierId,
-          supplier_name: row.supplier_name || row.supplierName,
-          total_amount: row.total_amount ?? row.totalAmount,
-          status: row.status || '草稿',
-          items: Array.isArray(row.items) ? row.items : [],
-        };
-        await createPurchaseOrder(payload);
-        successCount += 1;
-      }
-      messageApi.success(t('app.kuaizhizao.purchaseOrder.syncSuccess', { count: successCount }));
-      invalidateStatistics();
-      invalidateMenuBadgeCounts();
-
-      actionRef.current?.reload();
-    } catch (error: any) {
-      messageApi.error(error?.message || t('app.kuaizhizao.purchaseOrder.syncFailed'));
-    }
-  };
+  const handleSyncComplete = useCallback(() => {
+    setSyncFreshnessKey((key) => key + 1);
+    invalidateStatistics();
+    invalidateMenuBadgeCounts();
+    actionRef.current?.reload();
+  }, [invalidateStatistics, invalidateMenuBadgeCounts]);
 
   const handleListImport = async (data: any[][]) => {
     if (!data || data.length < 2) {
@@ -3701,8 +3688,20 @@ const PurchaseOrdersPage: React.FC = () => {
               messageApi.error(error?.message || t('common.exportFailed'));
             }
           }}
-          showSyncButton={viewTypeState !== 'detailTable'}
+          showSyncButton={viewTypeState !== 'detailTable' && purchaseOrderPerms.canCreate}
           onSync={() => setSyncModalVisible(true)}
+          syncToolbarExtra={
+            viewTypeState !== 'detailTable' && purchaseOrderPerms.canCreate
+              ? (syncButton) => (
+                  <SyncFreshnessBadge
+                    getBinding={loadPurchaseOrderSyncBinding}
+                    refreshKey={syncFreshnessKey}
+                  >
+                    {syncButton}
+                  </SyncFreshnessBadge>
+                )
+              : undefined
+          }
           toolBarActionsEnd={[purchaseOrderHighlightOverdueToolbar]}
           request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
             try {
@@ -4251,11 +4250,10 @@ const PurchaseOrdersPage: React.FC = () => {
         }
       />
 
-      <SyncFromDatasetModal
+      <PurchaseOrderSyncFromSourceModal
         open={syncModalVisible}
         onClose={() => setSyncModalVisible(false)}
-        onConfirm={handleSyncConfirm}
-        title={t('app.kuaizhizao.purchaseOrder.syncFromDatasetTitle')}
+        onComplete={handleSyncComplete}
       />
 
       <Modal

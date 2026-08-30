@@ -18,6 +18,7 @@ import {
   ProFormTextArea,
   ProFormDigit,
   ProFormItem,
+  ProFormDependency,
   ProDescriptionsItemProps,
 } from '@ant-design/pro-components';
 import {
@@ -133,7 +134,7 @@ import {
   getQualityDefectTypeOptions,
   qualityInspectionUniAuditProps,
 } from '../components/qualityMeta';
-import { DowngradeDispositionFields } from '../components/DowngradeDispositionFields';
+import { DispositionConditionalFields } from '../components/DispositionConditionalFields';
 import {
   filterDeletableQualityInspectionRecords,
   filterRevokeConductQualityInspectionRecords,
@@ -679,6 +680,8 @@ const ProcessInspectionPage: React.FC = () => {
           defect_type: values.defect_type,
           defect_reason: values.defect_reason,
           disposition: values.disposition,
+          quarantine_warehouse_id: values.quarantine_warehouse_id,
+          stock_warehouse_id: values.stock_warehouse_id,
           downgrade_material_id: values.downgrade_material_id,
           downgrade_warehouse_id: values.downgrade_warehouse_id,
           remarks: values.remarks,
@@ -1457,13 +1460,27 @@ const ProcessInspectionPage: React.FC = () => {
             quickCreate={{ label: t('app.kuaizhizao.quality.common.form.dataDictionaryManage'), onClick: () => navigate('/system/data-dictionaries') }}
           />
         </ProFormItem>
-        <DowngradeDispositionFields />
-        <ProFormTextArea
-          name="remarks"
-          label={t('common.remark')}
-          placeholder={t('common.remark')}
-          fieldProps={{ rows: 2 }}
-        />
+        <DispositionConditionalFields />
+        <ProFormDependency name={['disposition']}>
+          {({ disposition }) => (
+            <ProFormTextArea
+              name="remarks"
+              label={t('common.remark')}
+              placeholder={t('common.remark')}
+              fieldProps={{ rows: 2 }}
+              rules={
+                disposition === 'other'
+                  ? [
+                      {
+                        required: true,
+                        message: t('app.kuaizhizao.quality.common.validation.requiredOtherRemarks'),
+                      },
+                    ]
+                  : undefined
+              }
+            />
+          )}
+        </ProFormDependency>
       </FormModalTemplate>
     </ListPageTemplate>
   );

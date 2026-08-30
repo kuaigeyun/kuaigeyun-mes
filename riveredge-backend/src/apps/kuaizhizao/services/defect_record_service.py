@@ -88,6 +88,10 @@ class DefectRecordService(AppBaseService[DefectRecord]):
             if defect_record.disposition != 'accept':
                 raise BusinessLogicError(f"只能审批处理方式为'让步接收'的不良品记录，当前处理方式：{defect_record.disposition}")
 
+            # 台账更新处置已闭环放行时幂等返回，避免双写库存
+            if defect_record.status == 'processed':
+                return DefectRecordResponse.model_validate(defect_record)
+
             # 验证状态
             if defect_record.status != 'draft':
                 raise BusinessLogicError(f"只能审批草稿状态的不良品记录，当前状态：{defect_record.status}")
@@ -107,6 +111,9 @@ class DefectRecordService(AppBaseService[DefectRecord]):
                     tenant_id=tenant_id,
                     defect_record=defect_record,
                     operator_id=approved_by,
+                )
+                await self._close_linked_quality_exceptions_after_disposition(
+                    defect_record, approved_by
                 )
 
                 # 获取工单和工序信息
@@ -505,12 +512,14 @@ class DefectRecordService(AppBaseService[DefectRecord]):
         disposition: str,
         status: Optional[str] = None,
         quarantine_location: Optional[str] = None,
+        quarantine_warehouse_id: Optional[int] = None,
+        stock_warehouse_id: Optional[int] = None,
         downgrade_material_id: Optional[int] = None,
         downgrade_warehouse_id: Optional[int] = None,
         remarks: Optional[str] = None,
         attachments: Optional[list] = None,
     ) -> DefectRecordResponse:
-        """更新不合格品台账处置信息。"""
+        """更新不合格品台账处置信息并执行闭环副作用。"""
         async with in_transaction():
             defect_record = await DefectRecord.get_or_none(
                 id=defect_id,
@@ -536,6 +545,8 @@ class DefectRecordService(AppBaseService[DefectRecord]):
                 has_linked_8d_report=has_8d,
             )
 
+            self._validate_disposition_choice(defect_record, disposition)
+
             if disposition == "downgrade":
                 resolved_material_id = downgrade_material_id or defect_record.downgrade_material_id
                 resolved_warehouse_id = downgrade_warehouse_id or defect_record.downgrade_warehouse_id
@@ -544,47 +555,206 @@ class DefectRecordService(AppBaseService[DefectRecord]):
                 downgrade_material_id = resolved_material_id
                 downgrade_warehouse_id = resolved_warehouse_id
 
+            if disposition == "other":
+                note = (remarks or "").strip() or (defect_record.remarks or "").strip()
+                if not note:
+                    raise ValidationError("处置为「其他」时必须填写备注")
+
+            if disposition == "scrap" and not stock_warehouse_id:
+                raise ValidationError("报废处置必须指定扣减库存的仓库")
+
+            if disposition == "accept" and not stock_warehouse_id:
+                raise ValidationError("让步接收必须指定放行仓库")
+
+            if disposition == "quarantine" and not quarantine_warehouse_id:
+                raise ValidationError("隔离处置必须指定隔离仓库")
+
             user_info = await self.get_user_info(updated_by)
-            previous_disposition = defect_record.disposition
             defect_record.disposition = disposition
             if downgrade_material_id is not None:
                 defect_record.downgrade_material_id = downgrade_material_id
             if downgrade_warehouse_id is not None:
                 defect_record.downgrade_warehouse_id = downgrade_warehouse_id
-            effective_status = status
-            if disposition == "downgrade" and not effective_status:
-                effective_status = "processed"
-            if effective_status:
-                defect_record.status = effective_status
-                if effective_status == "processed":
-                    defect_record.processed_at = resolve_business_datetime()
-                    defect_record.processed_by = updated_by
-                    defect_record.processed_by_name = user_info["name"]
             if quarantine_location is not None:
                 defect_record.quarantine_location = quarantine_location
             if remarks:
                 append_line = f"[处置更新 {to_api_isoformat(resolve_business_datetime())}] {remarks}"
-                defect_record.remarks = f"{defect_record.remarks}\n{append_line}".strip() if defect_record.remarks else append_line
+                defect_record.remarks = (
+                    f"{defect_record.remarks}\n{append_line}".strip()
+                    if defect_record.remarks
+                    else append_line
+                )
             if attachments is not None:
                 defect_record.attachments = attachments
+            # 客户端传入的 status 仅作参考；闭环成功后由副作用强制 processed
+            if status and status != "processed":
+                defect_record.status = status
             defect_record.updated_by = updated_by
             defect_record.updated_by_name = user_info["name"]
             await defect_record.save()
 
-            if (
-                disposition != previous_disposition
-                or effective_status == "processed"
-                or disposition == "downgrade"
-            ):
-                await self._execute_disposition_side_effects(
-                    tenant_id=tenant_id,
-                    defect_record=defect_record,
-                    updated_by=updated_by,
-                    quarantine_location=quarantine_location,
-                )
-                defect_record = await DefectRecord.get(id=defect_record.id)
+        defect_record = await self._apply_disposition_after_persist(
+            tenant_id=tenant_id,
+            defect_id=defect_id,
+            updated_by=updated_by,
+            quarantine_location=quarantine_location,
+            quarantine_warehouse_id=quarantine_warehouse_id,
+            stock_warehouse_id=stock_warehouse_id,
+        )
+        return DefectRecordResponse.model_validate(defect_record)
 
-            return DefectRecordResponse.model_validate(defect_record)
+    def _validate_disposition_choice(self, defect_record: DefectRecord, disposition: str) -> None:
+        allowed = {"return", "accept", "quarantine", "rework", "scrap", "downgrade", "other"}
+        if disposition not in allowed:
+            raise ValidationError(f"不支持的处置方式: {disposition}")
+        if disposition == "return" and not defect_record.incoming_inspection_id:
+            raise BusinessLogicError("退货处置仅适用于来料检验关联的不合格品，过程/成品请改用其他处置")
+        if disposition in ("rework", "scrap") and not defect_record.work_order_id:
+            raise BusinessLogicError("来料不合格品无法直接返工或报废，请选择退货、隔离、降级回用或其他处置")
+        if disposition == "scrap" and not defect_record.operation_id:
+            raise BusinessLogicError("报废处置需要工单与工序信息，来料不合格品请走退货流程")
+
+    @staticmethod
+    def _resolve_linked_inspection(defect_record: DefectRecord) -> Optional[tuple[str, int]]:
+        """解析不合格品台账关联的检验单（与质量异常 create_from_inspection 的 source 一致）。"""
+        if defect_record.incoming_inspection_id:
+            return "incoming_inspection", int(defect_record.incoming_inspection_id)
+        if defect_record.process_inspection_id:
+            return "process_inspection", int(defect_record.process_inspection_id)
+        if defect_record.finished_goods_inspection_id:
+            return "finished_goods_inspection", int(defect_record.finished_goods_inspection_id)
+        return None
+
+    async def _close_linked_quality_exceptions_after_disposition(
+        self,
+        defect_record: DefectRecord,
+        handled_by: int,
+    ) -> None:
+        """不合格品处置闭环后，同步关闭同检验单下未闭环的质量异常。"""
+        link = self._resolve_linked_inspection(defect_record)
+        if not link:
+            return
+        source_type, source_id = link
+        disposition = (defect_record.disposition or "").strip() or "-"
+        from apps.kuaizhizao.services.exception_service import ExceptionService
+
+        await ExceptionService().close_open_quality_exceptions_for_inspection(
+            tenant_id=int(defect_record.tenant_id),
+            inspection_source_type=source_type,
+            inspection_record_id=source_id,
+            handled_by=handled_by,
+            remarks=f"[不合格品处置闭环] {defect_record.code} disposition={disposition}",
+            verification_result=f"不合格品台账已处置完成（{disposition}）",
+        )
+
+    async def _mark_disposition_processed(
+        self,
+        defect_record: DefectRecord,
+        updated_by: int,
+    ) -> None:
+        if not (defect_record.status == "processed" and defect_record.processed_by):
+            user_info = await self.get_user_info(updated_by)
+            defect_record.status = "processed"
+            defect_record.processed_at = resolve_business_datetime()
+            defect_record.processed_by = updated_by
+            defect_record.processed_by_name = user_info["name"]
+            defect_record.updated_by = updated_by
+            defect_record.updated_by_name = user_info["name"]
+            await defect_record.save()
+        await self._close_linked_quality_exceptions_after_disposition(
+            defect_record, updated_by
+        )
+
+    async def _apply_disposition_after_persist(
+        self,
+        tenant_id: int,
+        defect_id: int,
+        updated_by: int,
+        *,
+        quarantine_location: Optional[str] = None,
+        quarantine_warehouse_id: Optional[int] = None,
+        stock_warehouse_id: Optional[int] = None,
+        downgrade_material_id: Optional[int] = None,
+        downgrade_warehouse_id: Optional[int] = None,
+    ) -> DefectRecord:
+        """
+        记录已持久化后执行处置闭环。退货下推禁止外层事务包裹，故单独分支。
+        """
+        defect_record = await DefectRecord.get(id=defect_id)
+        if downgrade_material_id is not None:
+            defect_record.downgrade_material_id = downgrade_material_id
+        if downgrade_warehouse_id is not None:
+            defect_record.downgrade_warehouse_id = downgrade_warehouse_id
+        if downgrade_material_id is not None or downgrade_warehouse_id is not None:
+            await defect_record.save()
+
+        disposition = defect_record.disposition
+        self._validate_disposition_choice(defect_record, disposition)
+
+        if disposition == "scrap" and not stock_warehouse_id:
+            raise ValidationError("报废处置必须指定扣减库存的仓库")
+        if disposition == "accept" and not stock_warehouse_id:
+            raise ValidationError("让步接收必须指定放行仓库")
+        if disposition == "quarantine" and not quarantine_warehouse_id:
+            raise ValidationError("隔离处置必须指定隔离仓库")
+
+        if disposition == "other":
+            if not (defect_record.remarks or "").strip():
+                raise ValidationError("处置为「其他」时必须填写备注")
+            await self._mark_disposition_processed(defect_record, updated_by)
+            return await DefectRecord.get(id=defect_id)
+
+        if disposition == "return":
+            await self._execute_return_disposition(
+                tenant_id=tenant_id,
+                defect_record=defect_record,
+                updated_by=updated_by,
+            )
+            defect_record = await DefectRecord.get(id=defect_id)
+            await self._mark_disposition_processed(defect_record, updated_by)
+            return await DefectRecord.get(id=defect_id)
+
+        async with in_transaction():
+            defect_record = await DefectRecord.get(id=defect_id)
+            await self._execute_disposition_side_effects(
+                tenant_id=tenant_id,
+                defect_record=defect_record,
+                updated_by=updated_by,
+                quarantine_location=quarantine_location,
+                quarantine_warehouse_id=quarantine_warehouse_id,
+                stock_warehouse_id=stock_warehouse_id,
+            )
+            defect_record = await DefectRecord.get(id=defect_id)
+            await self._mark_disposition_processed(defect_record, updated_by)
+        return await DefectRecord.get(id=defect_id)
+
+    async def _execute_return_disposition(
+        self,
+        tenant_id: int,
+        defect_record: DefectRecord,
+        updated_by: int,
+    ) -> None:
+        if defect_record.purchase_return_id:
+            return
+        if not defect_record.incoming_inspection_id:
+            raise BusinessLogicError("退货处置需要关联来料检验单")
+        from apps.kuaizhizao.services.quality_service import IncomingInspectionService
+
+        # 禁止外层 in_transaction：push_to_purchase_return 内部自管事务与编码锁
+        result = await IncomingInspectionService().push_to_purchase_return(
+            tenant_id=tenant_id,
+            inspection_id=int(defect_record.incoming_inspection_id),
+            created_by=updated_by,
+            quantity=float(defect_record.defect_quantity or 0),
+        )
+        return_id = result.get("return_id")
+        if not return_id:
+            raise BusinessLogicError("采购退货单创建失败，未返回单据ID")
+        defect_record.purchase_return_id = int(return_id)
+        await defect_record.save()
+        logger.info(
+            f"不合格品 {defect_record.code} 已下推采购退货单 {result.get('return_code')}"
+        )
 
     async def _resolve_downgrade_targets(
         self,
@@ -629,12 +799,23 @@ class DefectRecordService(AppBaseService[DefectRecord]):
         defect_record: DefectRecord,
         *,
         prefer_quarantine: bool = False,
+        warehouse_id_override: Optional[int] = None,
     ) -> tuple[int, str]:
         from apps.master_data.models.warehouse import Warehouse
         from apps.master_data.models.material import Material
         from apps.master_data.services.material_service import (
             resolve_primary_default_warehouse_from_material,
         )
+
+        if warehouse_id_override:
+            wh = await Warehouse.get_or_none(
+                tenant_id=tenant_id,
+                id=int(warehouse_id_override),
+                deleted_at__isnull=True,
+            )
+            if not wh:
+                raise NotFoundError(f"仓库不存在: {warehouse_id_override}")
+            return int(wh.id), str(wh.name or "")
 
         if prefer_quarantine:
             wh = await Warehouse.filter(
@@ -673,6 +854,8 @@ class DefectRecordService(AppBaseService[DefectRecord]):
         tenant_id: int,
         defect_record: DefectRecord,
         operator_id: int,
+        *,
+        warehouse_id_override: Optional[int] = None,
     ) -> None:
         from decimal import Decimal
         from apps.kuaizhizao.services.inventory_service import InventoryService
@@ -681,7 +864,11 @@ class DefectRecordService(AppBaseService[DefectRecord]):
         qty = Decimal(str(defect_record.defect_quantity or 0))
         if qty <= 0:
             return
-        wh_id, wh_name = await self._resolve_defect_stock_warehouse(tenant_id, defect_record)
+        wh_id, wh_name = await self._resolve_defect_stock_warehouse(
+            tenant_id,
+            defect_record,
+            warehouse_id_override=warehouse_id_override,
+        )
         await InventoryService.increase_stock(
             tenant_id=tenant_id,
             material_id=int(defect_record.product_id),
@@ -709,6 +896,7 @@ class DefectRecordService(AppBaseService[DefectRecord]):
         quality_status: str,
         operator_id: int,
         prefer_quarantine: bool = False,
+        warehouse_id_override: Optional[int] = None,
         movement_type: str,
         idempotency_suffix: str,
     ) -> None:
@@ -719,7 +907,10 @@ class DefectRecordService(AppBaseService[DefectRecord]):
         if qty <= 0:
             raise ValidationError("不合格品数量必须大于0")
         wh_id, wh_name = await self._resolve_defect_stock_warehouse(
-            tenant_id, defect_record, prefer_quarantine=prefer_quarantine
+            tenant_id,
+            defect_record,
+            prefer_quarantine=prefer_quarantine,
+            warehouse_id_override=warehouse_id_override,
         )
         await InventoryService.increase_stock(
             tenant_id=tenant_id,
@@ -867,8 +1058,10 @@ class DefectRecordService(AppBaseService[DefectRecord]):
         defect_record: DefectRecord,
         updated_by: int,
         quarantine_location: Optional[str] = None,
+        quarantine_warehouse_id: Optional[int] = None,
+        stock_warehouse_id: Optional[int] = None,
     ) -> None:
-        """处置为返工/报废/隔离时调用对应业务服务，失败则显式抛出。"""
+        """处置返工/报废/隔离/让步/降级时调用对应业务服务；退货请走 _execute_return_disposition。"""
         disposition = defect_record.disposition
 
         if disposition == "rework":
@@ -912,17 +1105,40 @@ class DefectRecordService(AppBaseService[DefectRecord]):
             if not defect_record.work_order_id or not defect_record.operation_id:
                 raise BusinessLogicError("报废处置需要工单与工序信息，来料不合格品请走退货流程")
             if defect_record.scrap_record_id:
+                # 已关联报废单：若仍为草稿则确认过账
+                from apps.kuaizhizao.models.scrap_record import ScrapRecord
+                from apps.kuaizhizao.services.scrap_record_service import ScrapRecordService
+
+                existing = await ScrapRecord.get_or_none(
+                    id=defect_record.scrap_record_id,
+                    tenant_id=tenant_id,
+                    deleted_at__isnull=True,
+                )
+                if existing and existing.status == "draft":
+                    await ScrapRecordService().approve_scrap_record(
+                        tenant_id=tenant_id,
+                        scrap_id=existing.id,
+                        approved=True,
+                        approved_by=updated_by,
+                    )
                 return
             import uuid
             from decimal import Decimal
             from apps.kuaizhizao.models.scrap_record import ScrapRecord
+            from apps.kuaizhizao.services.scrap_record_service import ScrapRecordService
 
+            wh_id, _ = await self._resolve_defect_stock_warehouse(
+                tenant_id,
+                defect_record,
+                warehouse_id_override=stock_warehouse_id,
+            )
             today = today_site_str()
             code = await self.generate_code(
                 tenant_id=tenant_id,
                 code_type="SCRAP_RECORD_CODE",
                 prefix=f"SC{today}",
             )
+            user_info = await self.get_user_info(updated_by)
             scrap_record = await ScrapRecord.create(
                 tenant_id=tenant_id,
                 uuid=str(uuid.uuid4()),
@@ -940,19 +1156,38 @@ class DefectRecordService(AppBaseService[DefectRecord]):
                 total_cost=Decimal("0"),
                 scrap_reason=f"不合格品报废：{defect_record.defect_reason}",
                 scrap_type="quality",
+                warehouse_id=wh_id,
                 status="draft",
                 remarks=f"从不合格品台账 {defect_record.code} 创建",
                 created_by=updated_by,
-                created_by_name=(await self.get_user_info(updated_by))["name"],
+                created_by_name=user_info["name"],
                 updated_by=updated_by,
-                updated_by_name=(await self.get_user_info(updated_by))["name"],
+                updated_by_name=user_info["name"],
             )
             defect_record.scrap_record_id = scrap_record.id
             await defect_record.save()
-            logger.info(f"不合格品 {defect_record.code} 已创建报废记录 {scrap_record.code}")
+            await ScrapRecordService().approve_scrap_record(
+                tenant_id=tenant_id,
+                scrap_id=scrap_record.id,
+                approved=True,
+                approved_by=updated_by,
+            )
+            logger.info(f"不合格品 {defect_record.code} 已创建并确认报废记录 {scrap_record.code}")
 
         elif disposition == "quarantine":
             location = quarantine_location or defect_record.quarantine_location
+            wh_override = quarantine_warehouse_id
+            if wh_override:
+                from apps.master_data.models.warehouse import Warehouse
+
+                wh = await Warehouse.get_or_none(
+                    tenant_id=tenant_id,
+                    id=int(wh_override),
+                    deleted_at__isnull=True,
+                )
+                if not wh:
+                    raise NotFoundError(f"隔离仓库不存在: {wh_override}")
+                location = location or str(wh.name or "")
             if not location:
                 from apps.master_data.models.warehouse import Warehouse
 
@@ -964,8 +1199,9 @@ class DefectRecordService(AppBaseService[DefectRecord]):
                 ).order_by("id").first()
                 if wh:
                     location = wh.name
+                    wh_override = int(wh.id)
                 else:
-                    raise BusinessLogicError("未配置待检仓（quarantine）且未指定隔离库位")
+                    raise BusinessLogicError("未配置待检仓（quarantine）且未指定隔离仓库")
             defect_record.quarantine_location = location
             await defect_record.save()
             from apps.master_data.constants.batch_quality_status import QUARANTINE
@@ -976,10 +1212,22 @@ class DefectRecordService(AppBaseService[DefectRecord]):
                 quality_status=QUARANTINE,
                 operator_id=updated_by,
                 prefer_quarantine=True,
+                warehouse_id_override=wh_override,
                 movement_type="defect_quarantine",
                 idempotency_suffix="quarantine",
             )
             logger.info(f"不合格品 {defect_record.code} 已隔离至 {location}")
+
+        elif disposition == "accept":
+            if not stock_warehouse_id:
+                raise ValidationError("让步接收必须指定放行仓库")
+            await self._release_defect_quantity_as_qualified(
+                tenant_id=tenant_id,
+                defect_record=defect_record,
+                operator_id=updated_by,
+                warehouse_id_override=stock_warehouse_id,
+            )
+            logger.info(f"不合格品 {defect_record.code} 已让步接收放行")
 
         elif disposition == "downgrade":
             await self._execute_downgrade_reuse(
@@ -995,20 +1243,21 @@ class DefectRecordService(AppBaseService[DefectRecord]):
         created_by: int,
         downgrade_material_id: Optional[int],
         downgrade_warehouse_id: Optional[int],
+        quarantine_location: Optional[str] = None,
+        quarantine_warehouse_id: Optional[int] = None,
+        stock_warehouse_id: Optional[int] = None,
     ) -> DefectRecord:
-        if defect_record.disposition != "downgrade":
-            return defect_record
-        if not downgrade_material_id or not downgrade_warehouse_id:
-            raise ValidationError("降级回用必须指定目标原料物料与入库仓库")
-        defect_record.downgrade_material_id = downgrade_material_id
-        defect_record.downgrade_warehouse_id = downgrade_warehouse_id
-        await defect_record.save()
-        await self._execute_downgrade_reuse(
+        """创建后统一执行处置闭环（兼容旧名）。"""
+        return await self._apply_disposition_after_persist(
             tenant_id=tenant_id,
-            defect_record=defect_record,
+            defect_id=int(defect_record.id),
             updated_by=created_by,
+            quarantine_location=quarantine_location,
+            quarantine_warehouse_id=quarantine_warehouse_id,
+            stock_warehouse_id=stock_warehouse_id,
+            downgrade_material_id=downgrade_material_id,
+            downgrade_warehouse_id=downgrade_warehouse_id,
         )
-        return await DefectRecord.get(id=defect_record.id)
 
     async def create_defect_from_incoming_inspection(
         self,
@@ -1060,6 +1309,15 @@ class DefectRecordService(AppBaseService[DefectRecord]):
                     f"不合格品数量({defect_data.defect_quantity})不能超过检验单的不合格数量({inspection.unqualified_quantity})"
                 )
 
+            if defect_data.disposition in ("rework", "scrap"):
+                raise BusinessLogicError("来料不合格品无法直接返工或报废，请选择退货、隔离、降级回用或其他处置")
+            if defect_data.disposition == "other" and not (defect_data.remarks or "").strip():
+                raise ValidationError("处置为「其他」时必须填写备注")
+            if defect_data.disposition == "downgrade" and (
+                not defect_data.downgrade_material_id or not defect_data.downgrade_warehouse_id
+            ):
+                raise ValidationError("降级回用必须指定目标原料物料与入库仓库")
+
             # 生成不良品记录编码
             today = today_site_str()
             code = await self.generate_code(
@@ -1103,15 +1361,19 @@ class DefectRecordService(AppBaseService[DefectRecord]):
                 created_by=created_by,
                 problem_description=defect_data.defect_reason,
             )
+            created_id = int(defect_record.id)
 
-            defect_record = await self._maybe_execute_downgrade_after_create(
-                tenant_id=tenant_id,
-                defect_record=defect_record,
-                created_by=created_by,
-                downgrade_material_id=defect_data.downgrade_material_id,
-                downgrade_warehouse_id=defect_data.downgrade_warehouse_id,
-            )
-            return DefectRecordResponse.model_validate(defect_record)
+        defect_record = await self._maybe_execute_downgrade_after_create(
+            tenant_id=tenant_id,
+            defect_record=await DefectRecord.get(id=created_id),
+            created_by=created_by,
+            downgrade_material_id=defect_data.downgrade_material_id,
+            downgrade_warehouse_id=defect_data.downgrade_warehouse_id,
+            quarantine_location=getattr(defect_data, "quarantine_location", None),
+            quarantine_warehouse_id=getattr(defect_data, "quarantine_warehouse_id", None),
+            stock_warehouse_id=getattr(defect_data, "stock_warehouse_id", None),
+        )
+        return DefectRecordResponse.model_validate(defect_record)
 
     async def create_defect_from_process_inspection(
         self,
@@ -1163,6 +1425,15 @@ class DefectRecordService(AppBaseService[DefectRecord]):
                     f"不合格品数量({defect_data.defect_quantity})不能超过检验单的不合格数量({inspection.unqualified_quantity})"
                 )
 
+            if defect_data.disposition == "return":
+                raise BusinessLogicError("过程检验不合格品不能使用退货处置，请选择返工、报废、隔离等")
+            if defect_data.disposition == "other" and not (defect_data.remarks or "").strip():
+                raise ValidationError("处置为「其他」时必须填写备注")
+            if defect_data.disposition == "downgrade" and (
+                not defect_data.downgrade_material_id or not defect_data.downgrade_warehouse_id
+            ):
+                raise ValidationError("降级回用必须指定目标原料物料与入库仓库")
+
             # 生成不良品记录编码
             today = today_site_str()
             code = await self.generate_code(
@@ -1211,15 +1482,19 @@ class DefectRecordService(AppBaseService[DefectRecord]):
                 created_by=created_by,
                 problem_description=defect_data.defect_reason,
             )
+            created_id = int(defect_record.id)
 
-            defect_record = await self._maybe_execute_downgrade_after_create(
-                tenant_id=tenant_id,
-                defect_record=defect_record,
-                created_by=created_by,
-                downgrade_material_id=defect_data.downgrade_material_id,
-                downgrade_warehouse_id=defect_data.downgrade_warehouse_id,
-            )
-            return DefectRecordResponse.model_validate(defect_record)
+        defect_record = await self._maybe_execute_downgrade_after_create(
+            tenant_id=tenant_id,
+            defect_record=await DefectRecord.get(id=created_id),
+            created_by=created_by,
+            downgrade_material_id=defect_data.downgrade_material_id,
+            downgrade_warehouse_id=defect_data.downgrade_warehouse_id,
+            quarantine_location=getattr(defect_data, "quarantine_location", None),
+            quarantine_warehouse_id=getattr(defect_data, "quarantine_warehouse_id", None),
+            stock_warehouse_id=getattr(defect_data, "stock_warehouse_id", None),
+        )
+        return DefectRecordResponse.model_validate(defect_record)
 
     async def create_defect_from_finished_goods_inspection(
         self,
@@ -1271,6 +1546,15 @@ class DefectRecordService(AppBaseService[DefectRecord]):
                     f"不合格品数量({defect_data.defect_quantity})不能超过检验单的不合格数量({inspection.unqualified_quantity})"
                 )
 
+            if defect_data.disposition == "return":
+                raise BusinessLogicError("成品检验不合格品不能使用退货处置，请选择返工、报废、隔离等")
+            if defect_data.disposition == "other" and not (defect_data.remarks or "").strip():
+                raise ValidationError("处置为「其他」时必须填写备注")
+            if defect_data.disposition == "downgrade" and (
+                not defect_data.downgrade_material_id or not defect_data.downgrade_warehouse_id
+            ):
+                raise ValidationError("降级回用必须指定目标原料物料与入库仓库")
+
             # 生成不良品记录编码
             today = today_site_str()
             code = await self.generate_code(
@@ -1316,12 +1600,16 @@ class DefectRecordService(AppBaseService[DefectRecord]):
                 created_by=created_by,
                 problem_description=defect_data.defect_reason,
             )
+            created_id = int(defect_record.id)
 
-            defect_record = await self._maybe_execute_downgrade_after_create(
-                tenant_id=tenant_id,
-                defect_record=defect_record,
-                created_by=created_by,
-                downgrade_material_id=defect_data.downgrade_material_id,
-                downgrade_warehouse_id=defect_data.downgrade_warehouse_id,
-            )
-            return DefectRecordResponse.model_validate(defect_record)
+        defect_record = await self._maybe_execute_downgrade_after_create(
+            tenant_id=tenant_id,
+            defect_record=await DefectRecord.get(id=created_id),
+            created_by=created_by,
+            downgrade_material_id=defect_data.downgrade_material_id,
+            downgrade_warehouse_id=defect_data.downgrade_warehouse_id,
+            quarantine_location=getattr(defect_data, "quarantine_location", None),
+            quarantine_warehouse_id=getattr(defect_data, "quarantine_warehouse_id", None),
+            stock_warehouse_id=getattr(defect_data, "stock_warehouse_id", None),
+        )
+        return DefectRecordResponse.model_validate(defect_record)

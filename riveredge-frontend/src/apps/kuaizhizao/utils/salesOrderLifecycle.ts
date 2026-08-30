@@ -80,10 +80,13 @@ function isConfirmed(status: string | undefined): boolean {
   return s === 'CONFIRMED' || s === '已确认' || s === '已生效';
 }
 
-/** 已生效：已审核且（已确认或已下推） */
+/** 已生效：已审核通过且业务态已入主轴（已审核/已确认/已下推） */
 function isEffective(record: SalesOrder): boolean {
   if (!isApproved(record.review_status)) return false;
-  return isConfirmed(record.status) || !!record.pushed_to_computation;
+  if (isConfirmed(record.status) || isAudited(record.status)) return true;
+  if (record.pushed_to_computation) return true;
+  const s = norm(record.status);
+  return s === 'IN_PROGRESS' || s === '执行中' || s === '进行中';
 }
 
 function deliveryProgress(record: SalesOrder): number {

@@ -49,7 +49,41 @@ def test_seal_overlay_legacy_px_preserved():
     assert "height:100px" in html
 
 
-def test_seal_overlay_with_content_preserves_text_flow():
+def test_image_logo_block_empty_url_with_logo_id():
+    html = _compile_seal(
+        {
+            "blocks": [
+                {
+                    "id": "logo-1",
+                    "type": "image",
+                    "url": "",
+                    "width": 100,
+                    "height": 60,
+                }
+            ]
+        }
+    )
+    assert 'src="{{ company_logo }}"' in html
+
+
+def test_image_logo_block_company_logo_variable():
+    html = _compile_seal(
+        {
+            "blocks": [
+                {
+                    "id": "img-1",
+                    "type": "image",
+                    "url": "{{ company_logo }}",
+                    "width": 80,
+                    "height": 40,
+                    "keepRatio": True,
+                }
+            ]
+        }
+    )
+    assert 'src="{{ company_logo }}"' in html
+    assert "height:auto" in html
+
     html = _compile_seal(
         {
             "blocks": [

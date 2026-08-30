@@ -368,12 +368,15 @@ class ExceptionProcessService(AppBaseService[ExceptionProcessRecord]):
             process_record.remarks = data.comment
         await process_record.save()
 
-        # 更新异常记录状态
+        # 更新异常记录状态（质量异常终态为 closed，与报表/处置闭环一致）
+        exception_status = (
+            "closed" if process_record.exception_type == "quality" else "resolved"
+        )
         await self._update_exception_status(
             tenant_id=tenant_id,
             exception_type=process_record.exception_type,
             exception_id=process_record.exception_id,
-            status="resolved",
+            status=exception_status,
         )
 
         # 创建历史记录

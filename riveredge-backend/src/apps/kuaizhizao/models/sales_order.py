@@ -89,6 +89,7 @@ class SalesOrder(BaseModel):
     planning_computation_pushed_at = fields.DatetimeField(null=True, description="下推需求计算时间")
 
     is_active = fields.BooleanField(default=True, description="是否有效")
+    external_sync_at = fields.DatetimeField(null=True, description="最近从外部接口/数据集同步时间")
     deleted_at = fields.DatetimeField(null=True, description="删除时间")
 
     class Meta:

@@ -27,6 +27,12 @@ from apps.master_data.schemas.supply_chain_schemas import (
     SupplierListResponse,
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from apps.master_data.schemas.master_data_sync import (
+    MasterDataSyncBindingOut,
+    MasterDataSyncBindingUpsert,
+    MasterDataSyncFromSourceOut,
+    MasterDataSyncFromSourceRequest,
+)
 
 router = APIRouter(prefix="/supply-chain", tags=["App - Master Data - Supply Chain"])
 
@@ -113,6 +119,69 @@ async def bulk_create_customers(
         )
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+customer_sync_service = None  # lazy below
+
+
+def _customer_sync_service():
+    from apps.master_data.services.customer_sync_service import CustomerSyncService
+    global customer_sync_service
+    if customer_sync_service is None:
+        customer_sync_service = CustomerSyncService()
+    return customer_sync_service
+
+
+@router.get(
+    "/customers/sync-binding",
+    response_model=MasterDataSyncBindingOut,
+    summary="客户同步绑定配置",
+    dependencies=[Depends(require_master_data_module_access("supply-chain:customer"))],
+)
+async def get_customer_sync_binding(
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    return await _customer_sync_service().get_binding(tenant_id)
+
+
+@router.put(
+    "/customers/sync-binding",
+    response_model=MasterDataSyncBindingOut,
+    summary="保存客户同步绑定配置",
+    dependencies=[Depends(require_master_data_module_access("supply-chain:customer"))],
+)
+async def put_customer_sync_binding(
+    body: MasterDataSyncBindingUpsert,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    try:
+        return await _customer_sync_service().upsert_binding(tenant_id, body)
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.post(
+    "/customers/sync-from-source",
+    response_model=MasterDataSyncFromSourceOut,
+    summary="从数据接口或数据集同步客户",
+    dependencies=[Depends(require_master_data_module_access("supply-chain:customer"))],
+)
+async def sync_customers_from_source(
+    body: MasterDataSyncFromSourceRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    stream: bool = Query(False, description="为 true 时以 NDJSON 流式返回进度"),
+):
+    try:
+        if stream:
+            from core.services.data.sync_progress_stream import stream_sync_ndjson
+
+            return await stream_sync_ndjson(
+                lambda: _customer_sync_service().sync_from_source(tenant_id, current_user, body)
+            )
+        return await _customer_sync_service().sync_from_source(tenant_id, current_user, body)
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
 
 
 def _is_missing_db_column_error(exc: BaseException) -> bool:
@@ -270,6 +339,62 @@ async def delete_customer(
 
 
 # ==================== 供应商相关接口 ====================
+
+supplier_sync_service = None
+
+
+def _supplier_sync_service():
+    from apps.master_data.services.supplier_sync_service import SupplierSyncService
+    global supplier_sync_service
+    if supplier_sync_service is None:
+        supplier_sync_service = SupplierSyncService()
+    return supplier_sync_service
+
+
+@router.get(
+    "/suppliers/sync-binding",
+    response_model=MasterDataSyncBindingOut,
+    summary="供应商同步绑定配置",
+    dependencies=[Depends(require_master_data_module_access("supply-chain:supplier"))],
+)
+async def get_supplier_sync_binding(
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    return await _supplier_sync_service().get_binding(tenant_id)
+
+
+@router.put(
+    "/suppliers/sync-binding",
+    response_model=MasterDataSyncBindingOut,
+    summary="保存供应商同步绑定配置",
+    dependencies=[Depends(require_master_data_module_access("supply-chain:supplier"))],
+)
+async def put_supplier_sync_binding(
+    body: MasterDataSyncBindingUpsert,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    try:
+        return await _supplier_sync_service().upsert_binding(tenant_id, body)
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.post(
+    "/suppliers/sync-from-source",
+    response_model=MasterDataSyncFromSourceOut,
+    summary="从数据接口或数据集同步供应商",
+    dependencies=[Depends(require_master_data_module_access("supply-chain:supplier"))],
+)
+async def sync_suppliers_from_source(
+    body: MasterDataSyncFromSourceRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    try:
+        return await _supplier_sync_service().sync_from_source(tenant_id, current_user, body)
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
 
 @router.post(
     "/suppliers",

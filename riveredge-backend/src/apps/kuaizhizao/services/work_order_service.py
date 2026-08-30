@@ -2348,6 +2348,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         assigned_worker_id: Optional[int] = None,
         keyword: Optional[str] = None,
         sales_order_code: Optional[str] = None,
+        customer_name: Optional[str] = None,
         planned_start_from: Optional[str] = None,
         planned_start_to: Optional[str] = None,
         planned_end_from: Optional[str] = None,
@@ -2375,6 +2376,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             work_center_id: 工作中心ID
             keyword: 关键词搜索（工单编码、名称、产品、来源订单号等）
             sales_order_code: 来源订单号（销售订单编码，模糊）
+            customer_name: 客户名称（按关联销售订单客户名模糊）
             planned_start_from/to: 计划开始日期范围
             planned_end_from/to: 计划结束日期范围
             order_by: 排序，如 code、-created_at
@@ -2437,9 +2439,26 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 query = query.filter(id__in=[])  # 无匹配
         if sales_order_code and str(sales_order_code).strip():
             query = query.filter(sales_order_code__icontains=str(sales_order_code).strip())
+        if customer_name and str(customer_name).strip():
+            so_ids_by_customer = await SalesOrder.filter(
+                tenant_id=tenant_id,
+                customer_name__icontains=str(customer_name).strip(),
+                deleted_at__isnull=True,
+            ).values_list("id", flat=True)
+            so_id_list = list(so_ids_by_customer)
+            if so_id_list:
+                query = query.filter(sales_order_id__in=so_id_list)
+            else:
+                query = query.filter(id__in=[])
         if keyword and str(keyword).strip():
             kw = keyword.strip()
-            query = query.filter(
+            so_ids_by_kw_customer = await SalesOrder.filter(
+                tenant_id=tenant_id,
+                customer_name__icontains=kw,
+                deleted_at__isnull=True,
+            ).values_list("id", flat=True)
+            kw_customer_so_ids = list(so_ids_by_kw_customer)
+            keyword_q = (
                 Q(code__icontains=kw)
                 | Q(name__icontains=kw)
                 | Q(product_name__icontains=kw)
@@ -2447,6 +2466,9 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 | Q(sales_order_code__icontains=kw)
                 | Q(sales_order_name__icontains=kw)
             )
+            if kw_customer_so_ids:
+                keyword_q = keyword_q | Q(sales_order_id__in=kw_customer_so_ids)
+            query = query.filter(keyword_q)
         if planned_start_from:
             try:
                 dt = datetime.strptime(planned_start_from[:10], "%Y-%m-%d").date()
@@ -2506,25 +2528,31 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 if spec:
                     material_spec_by_product[m.id] = spec
 
-        # 列表展示：仅有 sales_order_id、缺编号/名称时，批量补全销售订单快照（历史数据或下推未写冗余字段）
-        so_ids_missing_label = list(
+        # 列表展示：批量补全销售订单编号/名称与客户（按 sales_order_id）
+        so_ids_all = list(
             {
                 wo.sales_order_id
                 for wo in work_orders
-                if wo.sales_order_id and not getattr(wo, "sales_order_code", None)
+                if wo.sales_order_id
             }
         )
         so_snapshot_map: dict[int, tuple[str, str]] = {}
-        if so_ids_missing_label:
+        so_customer_map: dict[int, tuple[Optional[int], str]] = {}
+        if so_ids_all:
             sos = await SalesOrder.filter(
                 tenant_id=tenant_id,
-                id__in=so_ids_missing_label,
+                id__in=so_ids_all,
                 deleted_at__isnull=True,
-            ).only("id", "order_code", "customer_name")
+            ).only("id", "order_code", "customer_id", "customer_name")
             for so in sos:
+                cust_name = (so.customer_name or "").strip()
                 so_snapshot_map[so.id] = (
                     so.order_code,
-                    f"{so.order_code} - {so.customer_name}" if so.customer_name else so.order_code,
+                    f"{so.order_code} - {cust_name}" if cust_name else so.order_code,
+                )
+                so_customer_map[so.id] = (
+                    int(so.customer_id) if so.customer_id else None,
+                    cust_name,
                 )
 
         # 批量预取工序（include_operations 时消除 N+1）
@@ -2680,11 +2708,15 @@ class WorkOrderService(AppBaseService[WorkOrder]):
 
                     item_dict.update(build_work_order_unit_fields(material_by_product[wo.product_id], wo))
 
-                if wo.sales_order_id and not item_dict.get("sales_order_code"):
+                if wo.sales_order_id:
                     snap = so_snapshot_map.get(wo.sales_order_id)
-                    if snap:
+                    if snap and not item_dict.get("sales_order_code"):
                         item_dict["sales_order_code"] = snap[0]
                         item_dict["sales_order_name"] = snap[1]
+                    cust = so_customer_map.get(wo.sales_order_id)
+                    if cust:
+                        item_dict["customer_id"] = cust[0]
+                        item_dict["customer_name"] = cust[1] or None
 
                 if wo.work_order_group_id:
                     gid = wo.work_order_group_id

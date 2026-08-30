@@ -287,6 +287,7 @@ export interface MaterialStackedCellProps {
   material_code?: string | null;
   material_spec?: string | null;
   secondaryCopyable?: boolean;
+  primaryExtra?: React.ReactNode;
 }
 
 /** 物料主从堆叠单元格：名称 / 编号·规格 */
@@ -295,12 +296,14 @@ export function MaterialStackedCell({
   material_code,
   material_spec,
   secondaryCopyable = true,
+  primaryExtra,
 }: MaterialStackedCellProps) {
   return (
     <UniTableStackedPrimaryCell
       primary={String(material_name ?? '')}
       secondary={formatMaterialCodeSpecLine(material_code, material_spec)}
       secondaryCopyable={secondaryCopyable}
+      primaryExtra={primaryExtra}
     />
   );
 }

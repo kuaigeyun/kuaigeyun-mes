@@ -20,8 +20,10 @@ resolve_connector_request = _connector_request.resolve_connector_request
 
 
 class _FakeIntegrationConfig:
-    def __init__(self, config: dict):
+    def __init__(self, config: dict, *, is_active: bool = True, name: str = "测试连接器"):
         self.config = config
+        self.is_active = is_active
+        self.name = name
 
     def get_config(self) -> dict:
         return self.config
@@ -61,3 +63,13 @@ def test_resolve_connector_request_missing_base_url_raises():
     ic = _FakeIntegrationConfig({})
     with pytest.raises(ValidationError, match="base_url"):
         resolve_connector_request(ic, endpoint="/api/orders")
+
+
+def test_resolve_connector_request_inactive_raises():
+    ic = _FakeIntegrationConfig(
+        {"base_url": "https://erp.example.com"},
+        is_active=False,
+        name="金蝶云星空",
+    )
+    with pytest.raises(ValidationError, match="已停用"):
+        resolve_connector_request(ic, endpoint="/k3cloud/Kingdee.BOS.WebApi.ServicesStub")

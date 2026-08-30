@@ -85,6 +85,9 @@ class PurchaseOrderResponse(PurchaseOrderBase):
     created_by_name: Optional[str] = Field(None, description="创建人姓名")
     updated_by: Optional[int] = Field(None, description="更新人ID")
     updated_by_name: Optional[str] = Field(None, description="更新人姓名")
+    external_sync_at: Optional[datetime] = Field(
+        None, description="最近从外部接口/数据集同步时间", serialization_alias="externalSyncAt"
+    )
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
     items: List["PurchaseOrderItemResponse"] = Field(default_factory=list, description="订单明细")

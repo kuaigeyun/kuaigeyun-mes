@@ -136,6 +136,9 @@ class WarehouseResponse(WarehouseBase):
     updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
     created_by_name: Optional[str] = Field(None, alias="createdByName", description="创建人姓名")
     updated_by_name: Optional[str] = Field(None, alias="updatedByName", description="更新人姓名")
+    external_sync_at: Optional[datetime] = Field(
+        None, alias="externalSyncAt", description="最近从外部接口/数据集同步时间"
+    )
     deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
     is_active: bool = Field(True, alias="isActive", description="是否启用")
     workshop_name: Optional[str] = Field(None, alias="workshopName", description="关联车间名称")

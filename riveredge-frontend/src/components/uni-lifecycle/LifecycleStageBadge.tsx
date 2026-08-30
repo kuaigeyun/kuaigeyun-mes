@@ -116,7 +116,7 @@ export function LifecycleStageBadge({
   subPercent,
   showTooltip = false,
 }: LifecycleStageBadgeProps) {
-  if (!stageName || stageName === '-') {
+  if (!stageName || stageName === '-' || stageName === '—' || stageName === '--') {
     return <span>—</span>;
   }
 

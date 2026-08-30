@@ -103,6 +103,7 @@ import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
+import { DispositionConditionalFields } from '../../quality-management/components/DispositionConditionalFields';
 import {formatDateTime, formatQuantity} from '../../../../../utils/format';
 import {
   convertBaseQtyToProductionDisplay,
@@ -2239,21 +2240,31 @@ const ReportingPage: React.FC = () => {
                 { label: t('app.kuaizhizao.workReporting.dispositionRework'), value: 'rework' },
                 { label: t('app.kuaizhizao.workReporting.dispositionScrap'), value: 'scrap' },
                 { label: t('app.kuaizhizao.workReporting.dispositionAccept'), value: 'accept' },
+                { label: t('app.kuaizhizao.quality.common.disposal.downgrade'), value: 'downgrade' },
                 { label: t('app.kuaizhizao.workReporting.dispositionOther'), value: 'other' },
               ]}
             />
-            <ProFormTextArea
-              name="quarantine_location"
-              label={t('app.kuaizhizao.workReporting.quarantineLocation')}
-              placeholder={t('app.kuaizhizao.workReporting.quarantineLocationPlaceholder')}
-              fieldProps={{ rows: 2 }}
-            />
-            <ProFormTextArea
-              name="remarks"
-              label={t('app.kuaizhizao.workReporting.remarksOptional')}
-              placeholder={t('app.kuaizhizao.workReporting.formRemarksPlaceholder')}
-              fieldProps={{ rows: 2 }}
-            />
+            <DispositionConditionalFields />
+            <ProFormDependency name={['disposition']}>
+              {({ disposition }) => (
+                <ProFormTextArea
+                  name="remarks"
+                  label={t('app.kuaizhizao.workReporting.remarksOptional')}
+                  placeholder={t('app.kuaizhizao.workReporting.formRemarksPlaceholder')}
+                  fieldProps={{ rows: 2 }}
+                  rules={
+                    disposition === 'other'
+                      ? [
+                          {
+                            required: true,
+                            message: t('app.kuaizhizao.quality.common.validation.requiredOtherRemarks'),
+                          },
+                        ]
+                      : undefined
+                  }
+                />
+              )}
+            </ProFormDependency>
           </>
         )}
       </FormModalTemplate>

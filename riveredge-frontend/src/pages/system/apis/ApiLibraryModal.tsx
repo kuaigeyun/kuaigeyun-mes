@@ -1,5 +1,5 @@
 /**
- * 接口库加载弹窗（主从布局：搜索筛选 + 包列表 + 详情）
+ * 接口库加载弹窗（系统预置 + 官方库）
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -11,24 +11,29 @@ import {
   Empty,
   Input,
   Modal,
+  Segmented,
   Select,
   Space,
   Spin,
   Tag,
   Typography,
 } from 'antd';
-import { DatabaseOutlined } from '@ant-design/icons';
+import { CloudUploadOutlined, DatabaseOutlined } from '@ant-design/icons';
 import {
   installApiLibraryPack,
+  installOfficialApiLibraryPack,
   listApiLibrary,
+  listOfficialApiLibrary,
   type ApiLibraryPack,
 } from '../../../services/apiManagement';
 import { getBusinessSystemConnectionsForApi, type IntegrationConfig } from '../../../services/integrationConfig';
+import { ApiLibrarySubmitModal } from './ApiLibrarySubmitModal';
 import './apiLibraryModal.css';
 
 const { Text, Paragraph } = Typography;
 
 const ALL_CATEGORY_KEY = '__all__';
+type LibrarySource = 'system' | 'official';
 
 function normalizeSearchText(value: string): string {
   return value.trim().toLowerCase();
@@ -62,6 +67,7 @@ export const ApiLibraryModal: React.FC<ApiLibraryModalProps> = ({
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
 
+  const [librarySource, setLibrarySource] = useState<LibrarySource>('system');
   const [loading, setLoading] = useState(false);
   const [installing, setInstalling] = useState(false);
   const [packs, setPacks] = useState<ApiLibraryPack[]>([]);
@@ -71,6 +77,7 @@ export const ApiLibraryModal: React.FC<ApiLibraryModalProps> = ({
   const [connectionUuid, setConnectionUuid] = useState<string | undefined>();
   const [searchValue, setSearchValue] = useState('');
   const [categoryFilter, setCategoryFilter] = useState(ALL_CATEGORY_KEY);
+  const [submitModalOpen, setSubmitModalOpen] = useState(false);
 
   const selectedPack = useMemo(
     () => packs.find((pack) => pack.pack_id === selectedPackId) ?? null,
@@ -117,7 +124,7 @@ export const ApiLibraryModal: React.FC<ApiLibraryModalProps> = ({
     try {
       setLoading(true);
       const [libraryResult, connectionsResult] = await Promise.all([
-        listApiLibrary(),
+        librarySource === 'official' ? listOfficialApiLibrary() : listApiLibrary(),
         getBusinessSystemConnectionsForApi(),
       ]);
       setPacks(libraryResult.items);
@@ -127,11 +134,18 @@ export const ApiLibraryModal: React.FC<ApiLibraryModalProps> = ({
       setCategoryFilter(ALL_CATEGORY_KEY);
     } catch (error: unknown) {
       const err = error as { message?: string };
-      messageApi.error(err?.message || t('pages.system.apis.libraryLoadFailed'));
+      messageApi.error(
+        err?.message
+          || (librarySource === 'official'
+            ? t('pages.system.apis.libraryOfficialLoadFailed')
+            : t('pages.system.apis.libraryLoadFailed')),
+      );
+      setPacks([]);
+      setSelectedPackId(null);
     } finally {
       setLoading(false);
     }
-  }, [messageApi, t]);
+  }, [librarySource, messageApi, t]);
 
   useEffect(() => {
     if (!open) {
@@ -139,6 +153,13 @@ export const ApiLibraryModal: React.FC<ApiLibraryModalProps> = ({
     }
     void loadCatalog();
   }, [loadCatalog, open]);
+
+  useEffect(() => {
+    if (!open) {
+      setLibrarySource('system');
+      setSubmitModalOpen(false);
+    }
+  }, [open]);
 
   useEffect(() => {
     if (!open || filteredPacks.length === 0) {
@@ -194,11 +215,9 @@ export const ApiLibraryModal: React.FC<ApiLibraryModalProps> = ({
     }
     try {
       setInstalling(true);
-      const result = await installApiLibraryPack(
-        selectedPack.pack_id,
-        connectionUuid,
-        selectedItemKeys,
-      );
+      const installer =
+        librarySource === 'official' ? installOfficialApiLibraryPack : installApiLibraryPack;
+      const result = await installer(selectedPack.pack_id, connectionUuid, selectedItemKeys);
       messageApi.success(
         t('pages.system.apis.libraryInstallSuccess', {
           created: result.created_count,
@@ -210,7 +229,12 @@ export const ApiLibraryModal: React.FC<ApiLibraryModalProps> = ({
       onClose();
     } catch (error: unknown) {
       const err = error as { message?: string };
-      messageApi.error(err?.message || t('pages.system.apis.libraryInstallFailed'));
+      messageApi.error(
+        err?.message
+          || (librarySource === 'official'
+            ? t('pages.system.apis.libraryOfficialInstallFailed')
+            : t('pages.system.apis.libraryInstallFailed')),
+      );
     } finally {
       setInstalling(false);
     }
@@ -221,190 +245,236 @@ export const ApiLibraryModal: React.FC<ApiLibraryModalProps> = ({
   const someItemsSelected =
     selectedItemKeys.length > 0 && selectedItemKeys.length < allItemKeys.length;
 
+  const hintText =
+    librarySource === 'official'
+      ? t('pages.system.apis.libraryOfficialHint')
+      : t('pages.system.apis.libraryHint');
+
   return (
-    <Modal
-      title={t('pages.system.apis.libraryTitle')}
-      open={open}
-      onCancel={onClose}
-      destroyOnHidden
-      width={960}
-      footer={
-        <Space>
-          <Button onClick={onClose}>{t('common.cancel')}</Button>
-          <Button
-            type="primary"
-            loading={installing}
-            disabled={
-              !selectedPack || connectorOptions.length === 0 || selectedItemKeys.length === 0
-            }
-            onClick={() => void handleInstall()}
-          >
-            {t('pages.system.apis.libraryInstall')}
-          </Button>
-        </Space>
-      }
-    >
-      <Paragraph type="secondary" style={{ marginBottom: 12 }}>
-        {t('pages.system.apis.libraryHint')}
-      </Paragraph>
-
-      <div className="api-library-modal-toolbar">
-        <Input.Search
-          allowClear
-          className="api-library-search"
-          placeholder={t('pages.system.apis.librarySearchPlaceholder')}
-          value={searchValue}
-          onChange={(event) => setSearchValue(event.target.value)}
-        />
-        <Select
-          className="api-library-category"
-          value={categoryFilter}
-          options={categoryOptions}
-          onChange={setCategoryFilter}
-        />
-      </div>
-
-      <Spin spinning={loading}>
-        <div className="api-library-modal-body">
-          <div className="api-library-list-panel">
-            <div className="api-library-list-header">
-              {t('pages.system.apis.libraryPackListSummary', {
-                shown: filteredPacks.length,
-                total: packs.length,
-              })}
+    <>
+      <Modal
+        title={t('pages.system.apis.libraryTitle')}
+        open={open}
+        onCancel={onClose}
+        destroyOnHidden
+        width={960}
+        footer={
+          <div className="api-library-modal-footer">
+            <div className="api-library-modal-footer-left">
+              {librarySource === 'official' ? (
+                <Button icon={<CloudUploadOutlined />} onClick={() => setSubmitModalOpen(true)}>
+                  {t('pages.system.apis.librarySubmitButton')}
+                </Button>
+              ) : null}
             </div>
-            <div className="api-library-list-scroll">
-              {filteredPacks.length === 0 ? (
-                <div className="api-library-empty">
-                  <Empty
-                    image={Empty.PRESENTED_IMAGE_SIMPLE}
-                    description={t('pages.system.apis.libraryEmptySearch')}
-                  />
-                </div>
-              ) : (
-                filteredPacks.map((pack) => {
-                  const active = selectedPackId === pack.pack_id;
-                  return (
-                    <div
-                      key={pack.pack_id}
-                      className={`api-library-pack-item${active ? ' is-active' : ''}`}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => setSelectedPackId(pack.pack_id)}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter' || event.key === ' ') {
-                          event.preventDefault();
-                          setSelectedPackId(pack.pack_id);
-                        }
-                      }}
-                    >
-                      <div className="api-library-pack-item-title">{pack.name}</div>
-                      <div className="api-library-pack-item-meta">
-                        <span>{t('pages.system.apis.libraryApiCount', { count: pack.api_count })}</span>
-                        <Tag variant="filled">{pack.category_name}</Tag>
+            <Space>
+              <Button onClick={onClose}>{t('common.cancel')}</Button>
+              <Button
+                type="primary"
+                loading={installing}
+                disabled={
+                  !selectedPack || connectorOptions.length === 0 || selectedItemKeys.length === 0
+                }
+                onClick={() => void handleInstall()}
+              >
+                {t('pages.system.apis.libraryInstall')}
+              </Button>
+            </Space>
+          </div>
+        }
+      >
+        <div className="api-library-source-bar">
+          <Segmented
+            value={librarySource}
+            onChange={(value) => setLibrarySource(value as LibrarySource)}
+            options={[
+              { label: t('pages.system.apis.librarySourceSystem'), value: 'system' },
+              { label: t('pages.system.apis.librarySourceOfficial'), value: 'official' },
+            ]}
+          />
+          {librarySource === 'official' ? (
+            <Text type="secondary" className="api-library-official-host">
+              {t('pages.system.apis.libraryOfficialHost')}
+            </Text>
+          ) : null}
+        </div>
+
+        <Paragraph type="secondary" style={{ marginBottom: 12 }}>
+          {hintText}
+        </Paragraph>
+
+        <div className="api-library-modal-toolbar">
+          <Input.Search
+            allowClear
+            className="api-library-search"
+            placeholder={t('pages.system.apis.librarySearchPlaceholder')}
+            value={searchValue}
+            onChange={(event) => setSearchValue(event.target.value)}
+          />
+          <Select
+            className="api-library-category"
+            value={categoryFilter}
+            options={categoryOptions}
+            onChange={setCategoryFilter}
+          />
+        </div>
+
+        <Spin spinning={loading}>
+          <div className="api-library-modal-body">
+            <div className="api-library-list-panel">
+              <div className="api-library-list-header">
+                {t('pages.system.apis.libraryPackListSummary', {
+                  shown: filteredPacks.length,
+                  total: packs.length,
+                })}
+              </div>
+              <div className="api-library-list-scroll">
+                {filteredPacks.length === 0 ? (
+                  <div className="api-library-empty">
+                    <Empty
+                      image={Empty.PRESENTED_IMAGE_SIMPLE}
+                      description={
+                        librarySource === 'official'
+                          ? t('pages.system.apis.libraryOfficialEmpty')
+                          : t('pages.system.apis.libraryEmptySearch')
+                      }
+                    />
+                  </div>
+                ) : (
+                  filteredPacks.map((pack) => {
+                    const active = selectedPackId === pack.pack_id;
+                    return (
+                      <div
+                        key={pack.pack_id}
+                        className={`api-library-pack-item${active ? ' is-active' : ''}`}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setSelectedPackId(pack.pack_id)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            setSelectedPackId(pack.pack_id);
+                          }
+                        }}
+                      >
+                        <div className="api-library-pack-item-title">{pack.name}</div>
+                        <div className="api-library-pack-item-meta">
+                          <span>{t('pages.system.apis.libraryApiCount', { count: pack.api_count })}</span>
+                          <Tag variant="filled">{pack.category_name}</Tag>
+                        </div>
                       </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            <div className="api-library-detail-panel">
+              {selectedPack ? (
+                <>
+                  <div className="api-library-detail-content">
+                    <Space align="start" size={12} style={{ marginBottom: 12 }}>
+                      <DatabaseOutlined style={{ fontSize: 22, marginTop: 2, color: 'var(--ant-color-primary)' }} />
+                      <div style={{ minWidth: 0 }}>
+                        <Text strong style={{ fontSize: 16 }}>
+                          {selectedPack.name}
+                        </Text>
+                        <Paragraph type="secondary" style={{ marginBottom: 8 }}>
+                          {selectedPack.description}
+                        </Paragraph>
+                        <Space wrap size={8}>
+                          <Tag>{selectedPack.category_name}</Tag>
+                          <Text type="secondary">
+                            {t('pages.system.apis.libraryConnectorType', {
+                              type: selectedPack.connector_type,
+                            })}
+                          </Text>
+                        </Space>
+                      </div>
+                    </Space>
+
+                    <div className="api-library-item-toolbar">
+                      <Checkbox
+                        indeterminate={someItemsSelected}
+                        checked={allItemsSelected}
+                        onChange={(event) => {
+                          if (event.target.checked) {
+                            handleSelectAllItems();
+                          } else {
+                            handleClearItemSelection();
+                          }
+                        }}
+                      >
+                        {t('pages.system.apis.librarySelectAll')}
+                      </Checkbox>
+                      <Text type="secondary">
+                        {t('pages.system.apis.librarySelectedCount', { count: selectedItemKeys.length })}
+                      </Text>
                     </div>
-                  );
-                })
+
+                    <div className="api-library-item-list">
+                      {selectedPack.items.map((item) => {
+                        const checked = selectedItemKeys.includes(item.item_key);
+                        return (
+                          <div
+                            key={item.item_key}
+                            className={`api-library-item-row${checked ? ' is-selected' : ''}`}
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => toggleItemKey(item.item_key)}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter' || event.key === ' ') {
+                                event.preventDefault();
+                                toggleItemKey(item.item_key);
+                              }
+                            }}
+                          >
+                            <Checkbox
+                              checked={checked}
+                              onClick={(event) => event.stopPropagation()}
+                              onChange={() => toggleItemKey(item.item_key)}
+                            />
+                            <div className="api-library-item-body">
+                              <div className="api-library-item-name">{item.name}</div>
+                              <div className="api-library-item-desc">{item.description}</div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="api-library-detail-footer">
+                    <Text>{t('pages.system.apis.libraryConnectorLabel')}</Text>
+                    <Select
+                      style={{ width: '100%', marginTop: 8 }}
+                      placeholder={t('pages.system.apis.libraryConnectorPlaceholderGeneric')}
+                      options={connectorOptions}
+                      value={connectionUuid}
+                      onChange={setConnectionUuid}
+                      notFoundContent={t('pages.system.apis.libraryNoConnectorGeneric')}
+                    />
+                  </div>
+                </>
+              ) : (
+                <div className="api-library-empty">
+                  <Empty description={t('pages.system.apis.librarySelectPack')} />
+                </div>
               )}
             </div>
           </div>
+        </Spin>
+      </Modal>
 
-          <div className="api-library-detail-panel">
-            {selectedPack ? (
-              <>
-                <div className="api-library-detail-content">
-                  <Space align="start" size={12} style={{ marginBottom: 12 }}>
-                    <DatabaseOutlined style={{ fontSize: 22, marginTop: 2, color: 'var(--ant-color-primary)' }} />
-                    <div style={{ minWidth: 0 }}>
-                      <Text strong style={{ fontSize: 16 }}>
-                        {selectedPack.name}
-                      </Text>
-                      <Paragraph type="secondary" style={{ marginBottom: 8 }}>
-                        {selectedPack.description}
-                      </Paragraph>
-                      <Space wrap size={8}>
-                        <Tag>{selectedPack.category_name}</Tag>
-                        <Text type="secondary">
-                          {t('pages.system.apis.libraryConnectorType', {
-                            type: selectedPack.connector_type,
-                          })}
-                        </Text>
-                      </Space>
-                    </div>
-                  </Space>
-
-                  <div className="api-library-item-toolbar">
-                    <Checkbox
-                      indeterminate={someItemsSelected}
-                      checked={allItemsSelected}
-                      onChange={(event) => {
-                        if (event.target.checked) {
-                          handleSelectAllItems();
-                        } else {
-                          handleClearItemSelection();
-                        }
-                      }}
-                    >
-                      {t('pages.system.apis.librarySelectAll')}
-                    </Checkbox>
-                    <Text type="secondary">
-                      {t('pages.system.apis.librarySelectedCount', { count: selectedItemKeys.length })}
-                    </Text>
-                  </div>
-
-                  <div className="api-library-item-list">
-                    {selectedPack.items.map((item) => {
-                      const checked = selectedItemKeys.includes(item.item_key);
-                      return (
-                        <div
-                          key={item.item_key}
-                          className={`api-library-item-row${checked ? ' is-selected' : ''}`}
-                          role="button"
-                          tabIndex={0}
-                          onClick={() => toggleItemKey(item.item_key)}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter' || event.key === ' ') {
-                              event.preventDefault();
-                              toggleItemKey(item.item_key);
-                            }
-                          }}
-                        >
-                          <Checkbox
-                            checked={checked}
-                            onClick={(event) => event.stopPropagation()}
-                            onChange={() => toggleItemKey(item.item_key)}
-                          />
-                          <div className="api-library-item-body">
-                            <div className="api-library-item-name">{item.name}</div>
-                            <div className="api-library-item-desc">{item.description}</div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="api-library-detail-footer">
-                  <Text>{t('pages.system.apis.libraryConnectorLabel')}</Text>
-                  <Select
-                    style={{ width: '100%', marginTop: 8 }}
-                    placeholder={t('pages.system.apis.libraryConnectorPlaceholderGeneric')}
-                    options={connectorOptions}
-                    value={connectionUuid}
-                    onChange={setConnectionUuid}
-                    notFoundContent={t('pages.system.apis.libraryNoConnectorGeneric')}
-                  />
-                </div>
-              </>
-            ) : (
-              <div className="api-library-empty">
-                <Empty description={t('pages.system.apis.librarySelectPack')} />
-              </div>
-            )}
-          </div>
-        </div>
-      </Spin>
-    </Modal>
+      <ApiLibrarySubmitModal
+        open={submitModalOpen}
+        onClose={() => setSubmitModalOpen(false)}
+        onSubmitted={() => {
+          if (librarySource === 'official') {
+            void loadCatalog();
+          }
+        }}
+      />
+    </>
   );
 };

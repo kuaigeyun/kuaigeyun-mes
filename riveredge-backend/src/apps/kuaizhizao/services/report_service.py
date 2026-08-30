@@ -4719,6 +4719,8 @@ class ReportService:
                     warehouse_id=warehouse_id,
                     material_id=material_id,
                     keyword=keyword,
+                    skip=sk,
+                    limit=lim,
                 )
             )
         elif report_type in ["outbound-summary", "outbound_summary"]:
@@ -4731,6 +4733,8 @@ class ReportService:
                     warehouse_id=warehouse_id,
                     material_id=material_id,
                     keyword=keyword,
+                    skip=sk,
+                    limit=lim,
                 )
             )
         return {"data": [], "success": True}

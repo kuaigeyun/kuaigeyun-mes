@@ -410,10 +410,13 @@ export function translateLifecycleResult(
   let stageName = (result.stageName ?? '').trim();
   const backendStageName = stageName;
   const isPreEffective =
-    !backendStageName || backendStageName === '-' || backendStageName === '—';
+    !backendStageName ||
+    backendStageName === '-' ||
+    backendStageName === '—' ||
+    backendStageName === '--';
 
   if (isPreEffective) {
-    stageName = backendStageName || '—';
+    stageName = '—';
   } else if (terminalKey && moduleStageLabelKeys?.[terminalKey]) {
     const translated = t(moduleStageLabelKeys[terminalKey]!);
     if (translated && translated !== moduleStageLabelKeys[terminalKey]) {

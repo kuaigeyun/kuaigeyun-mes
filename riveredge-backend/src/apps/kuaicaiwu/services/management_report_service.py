@@ -10,31 +10,22 @@ from tortoise.functions import Sum
 from apps.kuaicaiwu.models.receivable import Receivable
 from apps.kuaicaiwu.models.cost_calculation import CostCalculation
 from apps.kuaicaiwu.models.standard_cost import StandardCost
+from apps.kuaicaiwu.services.inventory_cost_service import InventoryCostService
 from apps.kuaizhizao.models.sales_delivery import SalesDelivery
 from apps.kuaizhizao.models.sales_delivery_item import SalesDeliveryItem
 from apps.kuaizhizao.models.sales_order import SalesOrder
 from apps.kuaizhizao.models.scrap_record import ScrapRecord
 from apps.kuaizhizao.models.reporting_record import ReportingRecord
 from apps.kuaizhizao.models.work_order import WorkOrder
-from apps.master_data.models.material import Material
+from apps.kuaizhizao.utils.bom_helper import (
+    bom_item_base_quantity,
+    bom_line_required_quantity_decimal,
+    get_bom_items_by_material_id,
+)
 from apps.master_data.models.material_batch import MaterialBatch
 from apps.kuaicaiwu.services.finance_service import ReceivableService
 from apps.kuaicaiwu.services.management_list_core import filter_sort_paginate_margin_report_items
 from core.utils.timezone_utils import to_api_isoformat
-
-
-def _unit_price_from_defaults(defaults: Any) -> Decimal:
-    if not defaults or not isinstance(defaults, dict):
-        return Decimal("0")
-    for key in ("standard_cost", "moving_average_cost", "purchase_price"):
-        v = defaults.get(key)
-        if v is None or v == "":
-            continue
-        try:
-            return Decimal(str(v))
-        except Exception:
-            continue
-    return Decimal("0")
 
 
 def _sum_from_aggregate(rows: List[Dict[str, Any]], key: str = "total") -> Decimal:
@@ -53,6 +44,7 @@ class ManagementReportService:
     
     def __init__(self):
         self.receivable_service = ReceivableService()
+        self._inventory_cost = InventoryCostService()
 
     async def _total_inventory_value(self, tenant_id: int) -> Decimal:
         batches = await MaterialBatch.filter(
@@ -69,17 +61,39 @@ class ManagementReportService:
             mid = int(batch.material_id)
             qty_by_material[mid] = qty_by_material.get(mid, Decimal("0")) + Decimal(str(batch.quantity or 0))
 
-        material_ids = list(qty_by_material.keys())
-        materials = await Material.filter(
-            tenant_id=tenant_id, id__in=material_ids, deleted_at__isnull=True
-        ).all()
-        mid_defaults = {m.id: m.defaults for m in materials}
-
         total = Decimal("0")
         for mid, qty in qty_by_material.items():
-            unit = _unit_price_from_defaults(mid_defaults.get(mid))
+            unit = await self._inventory_cost.get_material_unit_cost_or_zero(tenant_id, mid)
             total += qty * unit
         return total.quantize(Decimal("0.01"))
+
+    async def _bom_rolled_unit_cost(self, tenant_id: int, material_id: int) -> Decimal:
+        """成品无直接单价时，按已审核 BOM 一层汇总采购件/组件成本。"""
+        bom_items = await get_bom_items_by_material_id(
+            tenant_id=tenant_id,
+            material_id=material_id,
+            only_approved=True,
+        )
+        if not bom_items:
+            return Decimal("0")
+        total = Decimal("0")
+        for bom_item in bom_items:
+            component = await bom_item.component
+            if not component:
+                continue
+            component_qty = bom_line_required_quantity_decimal(
+                bom_item.quantity,
+                bom_item_base_quantity(bom_item),
+                Decimal("1"),
+                Decimal(str(bom_item.waste_rate or 0)),
+            )
+            if component_qty <= 0:
+                continue
+            unit = await self._inventory_cost.get_material_unit_cost_or_zero(
+                tenant_id, int(component.id)
+            )
+            total += component_qty * unit
+        return total.quantize(Decimal("0.0001")) if total > 0 else Decimal("0")
 
     async def _material_unit_cost(self, tenant_id: int, material_id: int) -> Decimal:
         sc = await StandardCost.filter(
@@ -91,7 +105,9 @@ class ManagementReportService:
             deleted_at__isnull=True,
         ).order_by("-effective_date", "-id").first()
         if sc:
-            return Decimal(str(sc.standard_value or 0))
+            sc_val = Decimal(str(sc.standard_value or 0))
+            if sc_val > 0:
+                return sc_val
 
         calc = await CostCalculation.filter(
             tenant_id=tenant_id,
@@ -100,12 +116,15 @@ class ManagementReportService:
             deleted_at__isnull=True,
         ).order_by("-calculation_date", "-id").first()
         if calc and calc.unit_cost:
-            return Decimal(str(calc.unit_cost))
+            calc_val = Decimal(str(calc.unit_cost))
+            if calc_val > 0:
+                return calc_val
 
-        material = await Material.get_or_none(tenant_id=tenant_id, id=material_id, deleted_at__isnull=True)
-        if material:
-            return _unit_price_from_defaults(material.defaults)
-        return Decimal("0")
+        direct = await self._inventory_cost.get_material_unit_cost(tenant_id, material_id)
+        if direct is not None and direct > 0:
+            return direct
+
+        return await self._bom_rolled_unit_cost(tenant_id, material_id)
 
     async def get_financial_kpis(self, tenant_id: int, days: int = 30) -> Dict[str, Any]:
         """获取关键财务指标"""
@@ -375,6 +394,7 @@ class ManagementReportService:
         ).all()
 
         buckets: Dict[Any, Dict[str, Decimal]] = {}
+        unit_cost_cache: Dict[int, Decimal] = {}
         for item in items:
             qty = Decimal(str(item.delivery_quantity or 0))
             if qty <= 0:
@@ -385,7 +405,10 @@ class ManagementReportService:
             revenue = qty * Decimal(str(item.unit_price or 0))
             unit_cost = Decimal(str(item.unit_cost or 0))
             if unit_cost <= 0:
-                unit_cost = await self._material_unit_cost(tenant_id, int(item.material_id))
+                mid = int(item.material_id)
+                if mid not in unit_cost_cache:
+                    unit_cost_cache[mid] = await self._material_unit_cost(tenant_id, mid)
+                unit_cost = unit_cost_cache[mid]
             cost = qty * unit_cost
 
             if group_by == "product":

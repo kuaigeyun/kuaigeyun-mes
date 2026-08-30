@@ -79,6 +79,7 @@ def list_api_library_catalog() -> List[Dict[str, Any]]:
                 "category_name": pack["category_name"],
                 "api_count": len(previews),
                 "items": previews,
+                "source": "system",
             }
         )
     return items

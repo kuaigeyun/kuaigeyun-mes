@@ -49,6 +49,7 @@ from infra.api.client_releases.client_releases import tenant_router as client_re
 from infra.api.platform_settings.version import router as platform_version_router
 from infra.api.platform_settings.provenance import router as platform_provenance_router
 from infra.api.platform_settings.install_register import router as install_register_router
+from infra.api.platform_settings.official_api_library import router as official_api_library_router
 from infra.api.business_config.business_config import router as business_config_router
 from infra.api.application_dedicated.application_dedicated import router as application_dedicated_router
 from infra.api.sensitive_word_blacklist.sensitive_word_blacklist import (
@@ -550,8 +551,9 @@ from core.middleware.docs_auth_middleware import DocsBasicAuthMiddleware
 app.add_middleware(DocsBasicAuthMiddleware)
 
 # 启用 GZip 压缩（Caddy 透明代理时也会压缩，直连后端时生效）
-from starlette.middleware.gzip import GZipMiddleware
-app.add_middleware(GZipMiddleware, minimum_size=500)
+# 同步流式进度（stream=true / NDJSON）必须跳过 GZip，否则小块会被攒到结束才刷出
+from core.middleware.selective_gzip_middleware import SelectiveGZipMiddleware
+app.add_middleware(SelectiveGZipMiddleware, minimum_size=500)
 
 # 敏感词拦截须在异常中间件内侧，便于统一包装；命中时中间件自身返回 422。
 from core.middleware.sensitive_word_middleware import SensitiveWordMiddleware
@@ -856,6 +858,7 @@ app.include_router(platform_settings_public_router, prefix="/api/v1/infra")
 app.include_router(platform_version_router, prefix="/api/v1/infra")
 app.include_router(platform_provenance_router, prefix="/api/v1/infra")
 app.include_router(install_register_router, prefix="/api/v1/infra")
+app.include_router(official_api_library_router, prefix="/api/v1/infra")
 # 公开的文件接口（不需要认证，用于平台LOGO等公开资源）
 app.include_router(files_public_router, prefix="/api/v1/core")
 

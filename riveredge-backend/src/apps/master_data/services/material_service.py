@@ -584,6 +584,7 @@ def _material_to_response_data(material) -> Dict[str, Any]:
         "created_at": material.created_at,
         "updated_at": material.updated_at,
         **audit_response_fields(material),
+        "external_sync_at": getattr(material, "external_sync_at", None),
         "deleted_at": getattr(material, "deleted_at", None),
     }
 

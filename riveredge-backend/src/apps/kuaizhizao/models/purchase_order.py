@@ -89,6 +89,8 @@ class PurchaseOrder(BaseModel):
     # 附件
     attachments = fields.JSONField(null=True, description="附件列表")
 
+    external_sync_at = fields.DatetimeField(null=True, description="最近从外部接口/数据集同步时间")
+
     deleted_at = fields.DatetimeField(null=True, description="删除时间")
 
     # 关联订单行

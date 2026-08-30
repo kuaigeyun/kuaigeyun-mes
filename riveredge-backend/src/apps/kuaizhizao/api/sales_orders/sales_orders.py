@@ -43,9 +43,17 @@ from apps.kuaizhizao.schemas.sales_order import (
 from apps.kuaizhizao.schemas.quote import QuoteBreakdownResponse
 from apps.kuaizhizao.schemas.sales_order_ocr import SalesOrderOcrParseTextRequest, SalesOrderOcrResult
 from apps.kuaizhizao.schemas.partner_material_price_trend import PartnerMaterialPriceTrendResponse
+from apps.kuaizhizao.schemas.sales_order_sync import (
+    SalesOrderSyncBindingOut,
+    SalesOrderSyncBindingUpsert,
+    SalesOrderSyncFromSourceOut,
+    SalesOrderSyncFromSourceRequest,
+)
+from apps.kuaizhizao.services.sales_order_sync_service import SalesOrderSyncService
 
 # 初始化服务实例
 sales_order_service = SalesOrderService()
+sales_order_sync_service = SalesOrderSyncService()
 milestone_billing_service = ContractMilestoneBillingService()
 document_relation_service = DocumentRelationNewService()
 
@@ -667,6 +675,56 @@ async def list_sales_orders(
     except Exception as e:
         logger.exception(f"获取销售订单列表失败: {e}")
         raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, f"获取销售订单列表失败: {str(e)}", "/sales-orders", tenant_id)
+
+
+@router.get("/sync-binding", response_model=SalesOrderSyncBindingOut, summary="销售订单同步绑定配置")
+async def get_sales_order_sync_binding(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_permission_codes("kuaizhizao:sales-order:read")),
+):
+    return await sales_order_sync_service.get_binding(tenant_id)
+
+
+@router.put("/sync-binding", response_model=SalesOrderSyncBindingOut, summary="保存销售订单同步绑定配置")
+async def put_sales_order_sync_binding(
+    body: SalesOrderSyncBindingUpsert,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_permission_codes("kuaizhizao:sales-order:update")),
+):
+    try:
+        return await sales_order_sync_service.upsert_binding(tenant_id, body)
+    except ValidationError as e:
+        raise _http_exception_with_trace(http_status.HTTP_422_UNPROCESSABLE_ENTITY, str(e), "/sales-orders/sync-binding", tenant_id)
+
+
+@router.post("/sync-from-source", response_model=SalesOrderSyncFromSourceOut, summary="从数据接口或数据集同步销售订单")
+async def sync_sales_orders_from_source(
+    body: SalesOrderSyncFromSourceRequest = Body(default_factory=SalesOrderSyncFromSourceRequest),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_permission_codes("kuaizhizao:sales-order:create")),
+    stream: bool = Query(False, description="为 true 时以 NDJSON 流式返回进度"),
+):
+    try:
+        if stream:
+            from core.services.data.sync_progress_stream import stream_sync_ndjson
+
+            return await stream_sync_ndjson(
+                lambda: sales_order_sync_service.sync_from_source(
+                    tenant_id=tenant_id,
+                    user_id=current_user.id,
+                    request=body,
+                )
+            )
+        return await sales_order_sync_service.sync_from_source(
+            tenant_id=tenant_id,
+            user_id=current_user.id,
+            request=body,
+        )
+    except ValidationError as e:
+        raise _http_exception_with_trace(http_status.HTTP_422_UNPROCESSABLE_ENTITY, str(e), "/sales-orders/sync-from-source", tenant_id)
 
 
 @router.get("/{sales_order_id}/print", summary="Print sales order")

@@ -5,6 +5,7 @@
  */
 
 import { clearLastActivity, updateLastActivity } from './activityUtils';
+import { clearAllSessionTabs } from '../stores/sessionTabsCache';
 
 /**
  * Token 存储键名
@@ -140,6 +141,8 @@ export function clearAuth(): void {
   removeTenantId();
   removeUserInfo();
   clearLastActivity();
+  // 会话标签是内存 Map，登出必须清掉；否则 SPA 内再登录会绕过「标签栏持久化」开关
+  clearAllSessionTabs();
 }
 
 /**

@@ -417,6 +417,15 @@ class DatasetService:
 
         # 系统默认数据源使用应用主库，视为始终可用，跳过 is_connected 检查
         is_system_default = (integration_config.get_config() or {}).get('_system_default')
+        if not is_system_default and not integration_config.is_active:
+            return ExecuteQueryResponse(
+                success=False,
+                data=[],
+                total=None,
+                columns=None,
+                elapsed_time=0.0,
+                error=f'应用连接器「{integration_config.name}」已停用，无法查询',
+            )
         if not is_system_default and not integration_config.is_connected:
             return ExecuteQueryResponse(
                 success=False,

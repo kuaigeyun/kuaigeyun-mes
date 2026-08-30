@@ -475,6 +475,7 @@ function buildWorkOrderListApiParams(
   if (statusFilter) apiParams.status = statusFilter
   if (s.keyword) apiParams.keyword = s.keyword
   if (s.sales_order_code) apiParams.sales_order_code = s.sales_order_code
+  if (s.customer_name) apiParams.customer_name = s.customer_name
   if (s.planned_start_date && Array.isArray(s.planned_start_date) && s.planned_start_date.length === 2) {
     const [start, end] = s.planned_start_date
     if (start) apiParams.planned_start_from = formatDateTime(start, 'YYYY-MM-DD')

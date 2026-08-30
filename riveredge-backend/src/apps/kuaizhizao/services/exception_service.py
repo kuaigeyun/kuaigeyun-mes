@@ -1177,6 +1177,96 @@ class ExceptionService:
 
         return QualityExceptionResponse.model_validate(exception)
 
+    async def close_open_quality_exceptions_for_inspection(
+        self,
+        tenant_id: int,
+        *,
+        inspection_source_type: str,
+        inspection_record_id: int,
+        handled_by: int,
+        remarks: Optional[str] = None,
+        verification_result: Optional[str] = None,
+    ) -> int:
+        """
+        关闭同检验单下仍未闭环的质量异常。
+
+        不合格品台账处置完成、8D 关闭等业务闭环时调用，避免报表长期停在「待处理」。
+        返回实际关闭条数（幂等：已 closed/cancelled 的不再改写）。
+        """
+        rows = await QualityException.filter(
+            tenant_id=tenant_id,
+            inspection_record_id=inspection_record_id,
+            inspection_source_type=inspection_source_type,
+            status__in=list(ACTIVE_QUALITY_EXCEPTION_STATUSES),
+            deleted_at__isnull=True,
+        ).all()
+        if not rows:
+            return 0
+
+        user_info = await self.work_order_service.get_user_info(handled_by)
+        now = resolve_business_datetime()
+        actor = await User.get_or_none(id=handled_by)
+        for exception in rows:
+            exception.status = "closed"
+            exception.actual_completion_date = now
+            exception.handled_by = handled_by
+            exception.handled_by_name = user_info["name"]
+            exception.handled_at = now
+            if verification_result:
+                exception.verification_result = verification_result
+            if remarks:
+                exception.remarks = (
+                    f"{exception.remarks}\n{remarks}".strip()
+                    if exception.remarks
+                    else remarks
+                )
+            apply_update_audit(exception, actor)
+            await exception.save()
+        logger.info(
+            "检验单闭环同步关闭质量异常: source=%s#%s closed=%s",
+            inspection_source_type,
+            inspection_record_id,
+            len(rows),
+        )
+        return len(rows)
+
+    async def close_open_quality_exception_by_id(
+        self,
+        tenant_id: int,
+        exception_id: int,
+        handled_by: int,
+        *,
+        remarks: Optional[str] = None,
+        verification_result: Optional[str] = None,
+    ) -> bool:
+        """按主键关闭仍未闭环的质量异常；已关闭则返回 False。"""
+        exception = await QualityException.get_or_none(
+            id=exception_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        )
+        if not exception or exception.status not in ACTIVE_QUALITY_EXCEPTION_STATUSES:
+            return False
+
+        user_info = await self.work_order_service.get_user_info(handled_by)
+        now = resolve_business_datetime()
+        exception.status = "closed"
+        exception.actual_completion_date = now
+        exception.handled_by = handled_by
+        exception.handled_by_name = user_info["name"]
+        exception.handled_at = now
+        if verification_result:
+            exception.verification_result = verification_result
+        if remarks:
+            exception.remarks = (
+                f"{exception.remarks}\n{remarks}".strip()
+                if exception.remarks
+                else remarks
+            )
+        apply_update_audit(exception, await User.get_or_none(id=handled_by))
+        await exception.save()
+        return True
+
     async def get_exception_statistics(
         self,
         tenant_id: int,

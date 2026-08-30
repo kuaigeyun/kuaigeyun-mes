@@ -30,6 +30,7 @@ class MaterialUnit(BaseModel):
     is_system = fields.BooleanField(default=False, description="系统内置（不可删除）")
     sort_order = fields.IntField(default=0, description="排序")
     description = fields.CharField(max_length=500, null=True, description="备注")
+    external_sync_at = fields.DatetimeField(null=True, description="最近从外部接口/数据集同步时间")
     deleted_at = fields.DatetimeField(null=True, description="软删除时间")
 
 

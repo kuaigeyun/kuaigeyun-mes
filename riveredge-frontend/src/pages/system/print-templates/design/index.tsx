@@ -6,18 +6,27 @@ import { ArrowLeftOutlined, SaveOutlined, EyeOutlined, QrcodeOutlined, DashOutli
 import { compilePrintTemplate, compilePreviewPrintTemplate, getPrintTemplateByUuid, updatePrintTemplate } from '../../../../services/printTemplate';
 import { getArrayTableTemplates, getTemplateVariableItems, type TemplateVariableItem } from '../../../../config/printTemplateSchemas';
 import {
-  createPartyBuyerComponent,
-  createPartyDualColumnsComponent,
-  createPartySellerComponent,
+  createPartyAComponent,
+  createPartyBComponent,
+  applyPartyConfigToColumnBlock,
+  isPartyColumnBlock,
+  normalizePartyColumnBlocks,
+  parsePartyConfigFromColumnBlock,
+  PARTY_CUSTOMER_VARS_BODY,
   PARTY_COMPONENT_DOCUMENT_TYPES,
 } from '../../../../config/printPartyComponentPresets';
 import {
-  createDefaultSealOverlayFields,
   resolveSealOverlayDimensionCss,
   resolveSealOverlaySizeUnit,
   SEAL_OVERLAY_DEFAULT_SIZE_MM,
   type SealOverlaySizeUnit,
 } from '../../../../config/printSealOverlayDefaults';
+import {
+  COMPANY_LOGO_TEMPLATE_URL,
+  createCompanyLogoImageBlockFields,
+  isCompanyLogoTemplateUrl,
+  normalizeDesignerLogoImageBlocks,
+} from '../../../../config/printLogoDefaults';
 import { useSiteLogoUrl } from '../../../../hooks/useSiteLogoUrl';
 import { QRCodeSVG } from 'qrcode.react';
 import {
@@ -276,6 +285,11 @@ type DesignerNodeSchema =
       gap?: number | string;
       /** 容器框线、内边距、背景等（会编译进打印 HTML） */
       style?: BlockStyle;
+      /** 合同主体组件（甲方/乙方） */
+      partyKind?: 'a' | 'b';
+      partyTitle?: string;
+      partyBody?: string;
+      partySealEnabled?: boolean;
       cols: Array<{
         id: string;
         width: string;
@@ -852,7 +866,7 @@ const ImageBlock: React.FC<{ block: DesignerNodeSchema & { type: 'image' }; sele
   // In the designer, we use the current site logo URL for a WYSIWYG experience.
   const siteLogoUrl = useSiteLogoUrl();
   const rawUrl = block.url || '';
-  const previewUrl = /\{\{\s*(logo|company_logo)\s*\}\}/i.test(rawUrl) ? siteLogoUrl : rawUrl;
+  const previewUrl = isCompanyLogoTemplateUrl(rawUrl) ? siteLogoUrl : rawUrl;
   return (
     <div
       style={{
@@ -1914,16 +1928,14 @@ const ComponentLibrary: React.FC<{
   onImage: () => void;
   onSpacer: (height: number) => void;
   onLogo: () => void;
-  onSealOverlay: () => void;
-  onPartySeller: () => void;
-  onPartyBuyer: () => void;
-  onPartyDual: () => void;
+  onPartyA: () => void;
+  onPartyB: () => void;
   onHeader: (style: number) => void;
   onFooter: () => void;
   templateType: string;
 }> = ({ 
   onInsertText, onDivider, onTable, onIf, onFor, onColumns, onQRCode, onBarcode, onImage, 
-  onSpacer, onLogo, onSealOverlay, onPartySeller, onPartyBuyer, onPartyDual, onHeader, onFooter,
+  onSpacer, onLogo, onPartyA, onPartyB, onHeader, onFooter,
   templateType 
 }) => {
   const { t } = useTranslation();
@@ -1943,8 +1955,7 @@ const ComponentLibrary: React.FC<{
         <DraggableSidebarItem type="qrcode" label={t('pages.system.printTemplatesDesign.typeQRCode')} icon={<QrcodeOutlined />} onClick={onQRCode} />
         <DraggableSidebarItem type="barcode" label={t('pages.system.printTemplatesDesign.typeBarcode')} icon={<BarcodeOutlined />} onClick={onBarcode} />
         <DraggableSidebarItem type="image" label={t('pages.system.printTemplatesDesign.compImage')} icon={<PictureOutlined />} onClick={onImage} />
-        <DraggableSidebarItem type="image" label={t('pages.system.printTemplatesDesign.compLogo')} icon={<PictureOutlined />} onClick={onLogo} />
-        <DraggableSidebarItem type="seal_overlay" label={t('pages.system.printTemplatesDesign.compSealOverlay')} icon={<SafetyCertificateOutlined />} onClick={onSealOverlay} />
+        <DraggableSidebarItem type="logo" label={t('pages.system.printTemplatesDesign.compLogo')} icon={<PictureOutlined />} onClick={onLogo} />
       </div>
 
       <div style={{ fontWeight: 600, fontSize: 13, color: '#8c8c8c', marginTop: 12, marginBottom: 4 }}>{t('pages.system.printTemplatesDesign.compPreset')}</div>
@@ -1957,9 +1968,8 @@ const ComponentLibrary: React.FC<{
         <>
           <div style={{ fontWeight: 600, fontSize: 13, color: '#8c8c8c', marginTop: 12, marginBottom: 4 }}>{t('pages.system.printTemplatesDesign.compContractParty')}</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            <DraggableSidebarItem type="party_a" label={t('pages.system.printTemplatesDesign.compPartyA')} icon={<TeamOutlined />} onClick={onPartySeller} />
-            <DraggableSidebarItem type="party_b" label={t('pages.system.printTemplatesDesign.compPartyB')} icon={<SafetyCertificateOutlined />} onClick={onPartyBuyer} />
-            <DraggableSidebarItem type="party_dual" label={t('pages.system.printTemplatesDesign.compPartyDual')} icon={<TeamOutlined />} onClick={onPartyDual} payload={{ kind: 'dual' }} />
+            <DraggableSidebarItem type="party_a" label={t('pages.system.printTemplatesDesign.compPartyA')} icon={<TeamOutlined />} onClick={onPartyA} />
+            <DraggableSidebarItem type="party_b" label={t('pages.system.printTemplatesDesign.compPartyB')} icon={<SafetyCertificateOutlined />} onClick={onPartyB} />
           </div>
         </>
       )}
@@ -2190,7 +2200,11 @@ const PrintTemplateDesignPage: React.FC = () => {
           setMargins(existingSchema.margins);
         }
         if (existingSchema.blocks?.length) {
-          setSchemaBlocks(existingSchema.blocks);
+          setSchemaBlocks(
+            normalizePartyColumnBlocks(
+              normalizeDesignerLogoImageBlocks(existingSchema.blocks),
+            ) as DesignerNodeSchema[],
+          );
           setSelectedBlockId(existingSchema.blocks[0]?.id ?? null);
         }
         if (existingSchema.itemSpacing !== undefined) {
@@ -2336,7 +2350,9 @@ const PrintTemplateDesignPage: React.FC = () => {
       setCompileMode(schema.compileMode || '');
       setAssetCard(schema.assetCard || null);
     }
-    const blocks = Array.isArray(schema.blocks) ? schema.blocks : [];
+    const blocks = normalizePartyColumnBlocks(
+      normalizeDesignerLogoImageBlocks(Array.isArray(schema.blocks) ? schema.blocks : []),
+    );
     setSchemaBlocks(blocks as DesignerNodeSchema[]);
     setSelectedBlockId(blocks.length ? (blocks[0] as DesignerNodeSchema).id : null);
   }, [applyPageSizeFromSchema]);
@@ -2647,42 +2663,22 @@ const PrintTemplateDesignPage: React.FC = () => {
   };
 
   const handleInsertLogo = () => {
-    const item: DesignerNodeSchema = { 
-      id: `logo-${Date.now()}`, 
-      type: 'image', 
-      url: siteLogoUrl || '{{ logo }}', 
-      width: 100, 
-      height: 60,
-      style: { textAlign: 'right' }
-    };
-    setSchemaBlocks((prev) => [...prev, item]);
-    setSelectedBlockId(item.id);
-  };
-
-  const handleInsertSealOverlay = () => {
     const item: DesignerNodeSchema = {
-      id: `seal-${Date.now()}`,
-      type: 'seal_overlay',
-      ...createDefaultSealOverlayFields(t('pages.system.printTemplatesDesign.sealOverlayDefaultContent')),
+      id: `logo-${Date.now()}`,
+      ...createCompanyLogoImageBlockFields(),
     };
     setSchemaBlocks((prev) => [...prev, item]);
     setSelectedBlockId(item.id);
   };
 
-  const handleInsertPartySeller = () => {
-    const item = createPartySellerComponent();
+  const handleInsertPartyA = () => {
+    const item = createPartyAComponent();
     setSchemaBlocks((prev) => [...prev, item]);
     setSelectedBlockId(item.id);
   };
 
-  const handleInsertPartyBuyer = () => {
-    const item = createPartyBuyerComponent();
-    setSchemaBlocks((prev) => [...prev, item]);
-    setSelectedBlockId(item.id);
-  };
-
-  const handleInsertPartyDual = () => {
-    const item = createPartyDualColumnsComponent();
+  const handleInsertPartyB = () => {
+    const item = createPartyBComponent();
     setSchemaBlocks((prev) => [...prev, item]);
     setSelectedBlockId(item.id);
   };
@@ -2698,7 +2694,7 @@ const PrintTemplateDesignPage: React.FC = () => {
         verticalAlign: 'top',
         cols: [
           { id: `c1-${Date.now()}`, width: '1', blocks: [{ id: `txt-${Date.now()}-1`, type: 'text', content: t('pages.system.printTemplatesDesign.companyNamePlaceholder'), tag: 'h3' }] },
-          { id: `c2-${Date.now()}`, width: '1', horizontalAlign: 'end', blocks: [{ id: `img-${Date.now()}-2`, type: 'image', url: siteLogoUrl || '{{ logo }}', width: 80, height: 40, style: { textAlign: 'right' } }] }
+          { id: `c2-${Date.now()}`, width: '1', horizontalAlign: 'end', blocks: [{ id: `img-${Date.now()}-2`, type: 'image', url: COMPANY_LOGO_TEMPLATE_URL, width: 80, height: 40, style: { textAlign: 'right' } }] }
         ]
       };
     } else {
@@ -2955,24 +2951,17 @@ const PrintTemplateDesignPage: React.FC = () => {
         case 'barcode':
           newBlock = { id, type: 'barcode', key: payload?.key || 'bc_key', format: 'CODE128', height: 40 };
           break;
+        case 'logo':
+          newBlock = { id: id.startsWith('logo-') ? id : `logo-${id}`, ...createCompanyLogoImageBlockFields() };
+          break;
         case 'image':
           newBlock = { id, type: 'image', url: payload?.url || '', width: 100, height: 60, keepRatio: true };
           break;
-        case 'seal_overlay':
-          newBlock = {
-            id,
-            type: 'seal_overlay',
-            ...createDefaultSealOverlayFields(t('pages.system.printTemplatesDesign.sealOverlayDefaultContent')),
-          };
-          break;
         case 'party_a':
-          newBlock = createPartySellerComponent();
+          newBlock = createPartyAComponent();
           break;
         case 'party_b':
-          newBlock = createPartyBuyerComponent();
-          break;
-        case 'party_dual':
-          newBlock = createPartyDualColumnsComponent();
+          newBlock = createPartyBComponent();
           break;
         case 'spacer':
           newBlock = { id, type: 'spacer', height: 20 };
@@ -3142,6 +3131,44 @@ const PrintTemplateDesignPage: React.FC = () => {
       return updateRecursively(prev);
     });
   };
+
+  const updateSelectedPartyBlock = (
+    patch: Partial<{ partyTitle: string; partyBody: string; partySealEnabled: boolean }>,
+  ) => {
+    if (!selectedBlockId) return;
+    setSchemaBlocks((prev) => {
+      const updateRecursively = (blocks: DesignerNodeSchema[]): DesignerNodeSchema[] =>
+        blocks.map((blk) => {
+          if (blk.id === selectedBlockId && blk.type === 'columns' && isPartyColumnBlock(blk)) {
+            return applyPartyConfigToColumnBlock(blk, patch);
+          }
+          if (blk.type === 'columns') {
+            return {
+              ...blk,
+              cols: blk.cols.map((col) => ({ ...col, blocks: updateRecursively(col.blocks) })),
+            };
+          }
+          return blk;
+        });
+      return updateRecursively(prev);
+    });
+  };
+
+  const selectedPartyBlock = useMemo(() => {
+    if (!selectedBlock || selectedBlock.type !== 'columns' || !isPartyColumnBlock(selectedBlock)) {
+      return null;
+    }
+    return selectedBlock;
+  }, [selectedBlock]);
+
+  const selectedPartyConfig = useMemo(() => {
+    if (!selectedPartyBlock) return null;
+    try {
+      return parsePartyConfigFromColumnBlock(selectedPartyBlock);
+    } catch {
+      return parsePartyConfigFromColumnBlock(null);
+    }
+  }, [selectedPartyBlock]);
 
   const moveSelected = (delta: -1 | 1) => {
     if (!selectedBlockId) return;
@@ -3322,10 +3349,8 @@ const PrintTemplateDesignPage: React.FC = () => {
                 onImage={handleInsertImage}
                 onSpacer={handleInsertSpacer}
                 onLogo={handleInsertLogo}
-                onSealOverlay={handleInsertSealOverlay}
-                onPartySeller={handleInsertPartySeller}
-                onPartyBuyer={handleInsertPartyBuyer}
-                onPartyDual={handleInsertPartyDual}
+                onPartyA={handleInsertPartyA}
+                onPartyB={handleInsertPartyB}
                 onHeader={handleInsertHeaderPreset}
                 onFooter={handleInsertFooterPreset}
                 templateType={templateType}
@@ -3666,9 +3691,22 @@ const PrintTemplateDesignPage: React.FC = () => {
                             word-break: break-word; 
                             min-height: 0 !important; 
                           }
-                          .print-preview-inner table { 
+                          .print-preview-inner table:not(.print-detail-table) { 
                             border-collapse: collapse; 
                             margin-bottom: ${itemSpacing}mm !important; 
+                          }
+                          .print-preview-inner .print-detail-table {
+                            width: 100%;
+                            max-width: 100%;
+                            table-layout: fixed;
+                            border-collapse: collapse;
+                            margin-bottom: ${itemSpacing}mm !important;
+                          }
+                          .print-preview-inner .print-detail-table th,
+                          .print-preview-inner .print-detail-table td {
+                            min-width: 0;
+                            overflow-wrap: anywhere;
+                            word-break: break-word;
                           }
                           .print-preview-inner table.eq-asset-card,
                           .print-preview-inner table.eq-asset-card th,
@@ -3729,7 +3767,11 @@ const PrintTemplateDesignPage: React.FC = () => {
                   <span style={{ fontWeight: 600, color: token.colorText }}>
                     {selectedBlock.type === 'text' && t('pages.system.printTemplatesDesign.compText')}
                     {selectedBlock.type === 'field' && t('pages.system.printTemplatesDesign.compVariables')}
-                    {selectedBlock.type === 'columns' && t('pages.system.printTemplatesDesign.compColumns')}
+                    {selectedBlock.type === 'columns' && (
+                      selectedPartyBlock
+                        ? t('pages.system.printTemplatesDesign.compPartyBlock')
+                        : t('pages.system.printTemplatesDesign.compColumns')
+                    )}
                     {selectedBlock.type === 'divider' && t('pages.system.printTemplatesDesign.compDivider')}
                     {selectedBlock.type === 'spacer' && t('pages.system.printTemplatesDesign.compSpacer')}
                     {selectedBlock.type === 'qrcode' && t('pages.system.printTemplatesDesign.typeQRCode')}
@@ -3822,6 +3864,47 @@ const PrintTemplateDesignPage: React.FC = () => {
                 )}
 
                 <Card size="small" title={t('pages.system.printTemplatesDesign.contentSettings')} styles={{ header: { border: 0, fontSize: 13, color: token.colorTextSecondary } }}>
+                  {selectedPartyBlock && selectedPartyConfig && (
+                    <Space orientation="vertical" style={{ width: '100%' }} size={12}>
+                      <div>
+                        <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.partyTitle')}</div>
+                        <Input
+                          value={selectedPartyConfig.partyTitle ?? ''}
+                          onChange={(e) => updateSelectedPartyBlock({ partyTitle: e.target.value })}
+                          placeholder={t('pages.system.printTemplatesDesign.partyTitlePlaceholder')}
+                        />
+                      </div>
+                      <div>
+                        <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.partyBody')}</div>
+                        <Input.TextArea
+                          rows={10}
+                          value={selectedPartyConfig.partyBody ?? ''}
+                          onChange={(e) => updateSelectedPartyBlock({ partyBody: e.target.value })}
+                          placeholder={t('pages.system.printTemplatesDesign.partyBodyPlaceholder')}
+                        />
+                        <div style={{ marginTop: 6, fontSize: 12, color: token.colorTextSecondary }}>
+                          {t('pages.system.printTemplatesDesign.partyBodyHint')}
+                        </div>
+                        <Button
+                          size="small"
+                          type="link"
+                          style={{ paddingInline: 0, marginTop: 4 }}
+                          onClick={() => updateSelectedPartyBlock({ partyBody: PARTY_CUSTOMER_VARS_BODY })}
+                        >
+                          {t('pages.system.printTemplatesDesign.partyInsertCustomerVars')}
+                        </Button>
+                      </div>
+                      <Checkbox
+                        checked={Boolean(selectedPartyConfig.partySealEnabled)}
+                        onChange={(e) => updateSelectedPartyBlock({ partySealEnabled: e.target.checked })}
+                      >
+                        {t('pages.system.printTemplatesDesign.partySealEnabled')}
+                      </Checkbox>
+                      <div style={{ fontSize: 12, color: token.colorTextSecondary }}>
+                        {t('pages.system.printTemplatesDesign.partySealEnabledHint')}
+                      </div>
+                    </Space>
+                  )}
                   {selectedBlock.type === 'text' && (
                     <Space orientation="vertical" style={{ width: '100%' }} size={12}>
                       <div>
@@ -3927,6 +4010,21 @@ const PrintTemplateDesignPage: React.FC = () => {
                       <div>
                         <div style={{ marginBottom: 4, fontSize: 12, color: '#8c8c8c' }}>{t('pages.system.printTemplatesDesign.imageUrl')}</div>
                         <Input.TextArea rows={3} value={selectedBlock.url} onChange={e => updateSelectedBlock({ url: e.target.value })} placeholder={t('pages.system.printTemplatesDesign.imageUrlPlaceholder')} />
+                        {isCompanyLogoTemplateUrl(selectedBlock.url) ? (
+                          <div style={{ marginTop: 6, fontSize: 12, color: token.colorTextSecondary }}>
+                            {t('pages.system.printTemplatesDesign.logoBindingHint')}
+                          </div>
+                        ) : null}
+                        {!isCompanyLogoTemplateUrl(selectedBlock.url) ? (
+                          <Button
+                            size="small"
+                            type="link"
+                            style={{ paddingInline: 0, marginTop: 4 }}
+                            onClick={() => updateSelectedBlock({ url: COMPANY_LOGO_TEMPLATE_URL })}
+                          >
+                            {t('pages.system.printTemplatesDesign.useCompanyLogo')}
+                          </Button>
+                        ) : null}
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                         <div>
@@ -4298,7 +4396,7 @@ const PrintTemplateDesignPage: React.FC = () => {
                       />
                     </Space>
                   )}
-                  {selectedBlock.type === 'columns' && (
+                  {selectedBlock.type === 'columns' && !selectedPartyBlock && (
                     <Space orientation="vertical" style={{ width: '100%' }}>
                       <div style={{ marginBottom: 8, fontWeight: 600 }}>{t('pages.system.printTemplatesDesign.columnConfig')}</div>
                       <Space orientation="vertical" style={{ width: '100%' }} size={12}>

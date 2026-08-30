@@ -4,7 +4,7 @@
  * 提供客户、供应商的 API 调用方法
  */
 
-import { api } from '../../../services/api';
+import { api, apiRequest } from '../../../services/api';
 import { searchUserIdOptions } from '../../../utils/userDisplay';
 import { getSessionCurrentUser } from '../../../utils/sessionCurrentUser';
 import {
@@ -102,6 +102,84 @@ export const customerApi = {
     return api.delete(`/apps/master-data/supply-chain/customers/${uuid}`);
   },
 };
+
+export type MasterDataSyncBinding = {
+  source_type?: 'api' | 'dataset' | null;
+  api_uuid?: string | null;
+  dataset_uuid?: string | null;
+  field_mapping: Record<string, string>;
+  match_key_field?: string;
+  sync_mode?: string;
+  schedule_interval_minutes?: number;
+  last_success_at?: string | null;
+  last_attempt_at?: string | null;
+  last_error?: string | null;
+};
+
+export type MasterDataSyncFromSourceResult = {
+  created: number;
+  updated: number;
+  skipped: number;
+  failed: number;
+  errors: string[];
+};
+
+export async function getCustomerSyncBinding(): Promise<MasterDataSyncBinding> {
+  return api.get('/apps/master-data/supply-chain/customers/sync-binding');
+}
+
+export async function syncCustomersFromSource(
+  payload: {
+    source_type?: 'api' | 'dataset';
+    api_uuid?: string;
+    dataset_uuid?: string;
+    field_mapping?: Record<string, string>;
+    save_binding?: boolean;
+    sync_mode?: string;
+    schedule_interval_minutes?: number;
+    incremental?: boolean;
+  active_only?: boolean;
+  },
+  onProgress?: (message: string) => void,
+): Promise<MasterDataSyncFromSourceResult> {
+  const { apiRequestSyncNdjson } = await import(
+    '../../../components/sync-from-source-modal/apiRequestSyncNdjson'
+  );
+  return apiRequestSyncNdjson<MasterDataSyncFromSourceResult>(
+    '/apps/master-data/supply-chain/customers/sync-from-source',
+    {
+      data: payload,
+      timeoutMs: 600_000,
+      onProgress,
+    },
+  );
+}
+
+export async function getSupplierSyncBinding(): Promise<MasterDataSyncBinding> {
+  return api.get('/apps/master-data/supply-chain/suppliers/sync-binding');
+}
+
+export async function syncSuppliersFromSource(payload: {
+  source_type?: 'api' | 'dataset';
+  api_uuid?: string;
+  dataset_uuid?: string;
+  field_mapping?: Record<string, string>;
+  save_binding?: boolean;
+  skip_prerequisite_syncs?: boolean;
+  sync_mode?: string;
+  schedule_interval_minutes?: number;
+  incremental?: boolean;
+  active_only?: boolean;
+}): Promise<MasterDataSyncFromSourceResult> {
+  return apiRequest<MasterDataSyncFromSourceResult>(
+    '/apps/master-data/supply-chain/suppliers/sync-from-source',
+    {
+      method: 'POST',
+      data: payload,
+      timeoutMs: 600_000,
+    },
+  );
+}
 
 /**
  * 供应商 API 服务

@@ -4,7 +4,8 @@
  * 提供物料分组、物料、BOM的 API 调用方法
  */
 
-import { api } from '../../../services/api';
+import { api, apiRequest } from '../../../services/api';
+import type { MasterDataSyncBinding, MasterDataSyncFromSourceResult } from './supply-chain';
 import type {
   MaterialGroup,
   MaterialGroupCreate,
@@ -94,6 +95,9 @@ function normalizeMaterialRow(item: Material): Material {
   }
   if (row.mainCodeLockReason === undefined && row.main_code_lock_reason !== undefined) {
     row.mainCodeLockReason = row.main_code_lock_reason
+  }
+  if (row.externalSyncAt === undefined && row.external_sync_at !== undefined) {
+    row.externalSyncAt = row.external_sync_at
   }
   return row as Material
 }
@@ -1478,3 +1482,60 @@ export const materialSourceApi = {
     return api.get(`/apps/master-data/materials/${materialUuid}/source/check-completeness`);
   },
 };
+
+export async function getMaterialSyncBinding(): Promise<MasterDataSyncBinding> {
+  return api.get('/apps/master-data/materials/sync-binding');
+}
+
+export async function syncMaterialsFromSource(
+  payload: {
+    source_type?: 'api' | 'dataset';
+    api_uuid?: string;
+    dataset_uuid?: string;
+    field_mapping?: Record<string, string>;
+    save_binding?: boolean;
+    skip_prerequisite_syncs?: boolean;
+    sync_mode?: string;
+    schedule_interval_minutes?: number;
+    incremental?: boolean;
+  active_only?: boolean;
+  },
+  onProgress?: (message: string) => void,
+): Promise<MasterDataSyncFromSourceResult> {
+  const { apiRequestSyncNdjson } = await import(
+    '../../../components/sync-from-source-modal/apiRequestSyncNdjson'
+  );
+  return apiRequestSyncNdjson<MasterDataSyncFromSourceResult>(
+    '/apps/master-data/materials/sync-from-source',
+    {
+      data: payload,
+      timeoutMs: 600_000,
+      onProgress,
+    },
+  );
+}
+
+export async function getMaterialGroupSyncBinding(): Promise<MasterDataSyncBinding> {
+  return api.get('/apps/master-data/materials/groups/sync-binding');
+}
+
+export async function syncMaterialGroupsFromSource(payload: {
+  source_type?: 'api' | 'dataset';
+  api_uuid?: string;
+  dataset_uuid?: string;
+  field_mapping?: Record<string, string>;
+  save_binding?: boolean;
+  sync_mode?: string;
+  schedule_interval_minutes?: number;
+  incremental?: boolean;
+  active_only?: boolean;
+}): Promise<MasterDataSyncFromSourceResult> {
+  return apiRequest<MasterDataSyncFromSourceResult>(
+    '/apps/master-data/materials/groups/sync-from-source',
+    {
+      method: 'POST',
+      data: payload,
+      timeoutMs: 600_000,
+    },
+  );
+}

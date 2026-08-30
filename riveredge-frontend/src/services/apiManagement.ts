@@ -110,6 +110,7 @@ export interface ApiLibraryPack {
   category_name: string;
   api_count: number;
   items: ApiLibraryItemPreview[];
+  source?: 'system' | 'official' | string;
 }
 
 export interface ApiLibraryListResponse {
@@ -128,6 +129,24 @@ export interface InstallApiLibraryPackResult {
   created_codes: string[];
   skipped_codes: string[];
   categorized_codes: string[];
+}
+
+export interface SubmitOfficialApiLibraryPayload {
+  name: string;
+  description?: string;
+  connector_type: string;
+  category_name: string;
+  category_code?: string;
+  category_description?: string;
+  api_uuids: string[];
+  submitter_hint?: string;
+}
+
+export interface SubmitOfficialApiLibraryResult {
+  pack_id: string;
+  name: string;
+  api_count: number;
+  status: string;
 }
 
 /**
@@ -223,6 +242,46 @@ export async function testAPI(
   });
 }
 
+export interface APIProbeRequest {
+  connection_uuid: string;
+  path: string;
+  method?: string;
+  request_headers?: Record<string, unknown>;
+  request_params?: Record<string, unknown>;
+  request_body?: Record<string, unknown>;
+}
+
+export interface KingdeeExecuteBillQueryCatalogItem {
+  form_id: string;
+  name: string;
+  default_field_keys: string[];
+  fields: Array<{ key: string; label: string }>;
+}
+
+/**
+ * 编辑弹窗草稿探测（无需已保存接口）
+ */
+export async function probeAPIDraft(
+  data: APIProbeRequest,
+  timeout?: number,
+): Promise<APITestResponse> {
+  return apiRequest<APITestResponse>('/core/apis/actions/probe-draft', {
+    method: 'POST',
+    data,
+    params: timeout ? { timeout } : undefined,
+  });
+}
+
+/**
+ * 金蝶 ExecuteBillQuery 字段目录
+ */
+export async function getKingdeeExecuteBillQueryCatalog(): Promise<KingdeeExecuteBillQueryCatalogItem[]> {
+  const res = await apiRequest<{ items: KingdeeExecuteBillQueryCatalogItem[] }>(
+    '/core/apis/integrations/kingdee-galaxy/execute-bill-query/catalog',
+  );
+  return res.items ?? [];
+}
+
 /**
  * 获取系统接口库目录
  */
@@ -231,7 +290,7 @@ export async function listApiLibrary(): Promise<ApiLibraryListResponse> {
 }
 
 /**
- * 将接口库包加载到当前组织
+ * 将系统预置接口库包加载到当前组织
  */
 export async function installApiLibraryPack(
   packId: string,
@@ -241,6 +300,39 @@ export async function installApiLibraryPack(
   return apiRequest<InstallApiLibraryPackResult>(`/core/apis/library/${packId}/install`, {
     method: 'POST',
     data: { connection_uuid: connectionUuid, item_keys: itemKeys },
+  });
+}
+
+/**
+ * 获取官方接口库目录（固定地址 kuaigeyun.com）
+ */
+export async function listOfficialApiLibrary(): Promise<ApiLibraryListResponse> {
+  return apiRequest<ApiLibraryListResponse>('/core/apis/library/official');
+}
+
+/**
+ * 将官方接口库包加载到当前组织
+ */
+export async function installOfficialApiLibraryPack(
+  packId: string,
+  connectionUuid: string,
+  itemKeys: string[],
+): Promise<InstallApiLibraryPackResult> {
+  return apiRequest<InstallApiLibraryPackResult>(`/core/apis/library/official/${packId}/install`, {
+    method: 'POST',
+    data: { connection_uuid: connectionUuid, item_keys: itemKeys },
+  });
+}
+
+/**
+ * 将本组织接口提交到官方接口库
+ */
+export async function submitOfficialApiLibrary(
+  payload: SubmitOfficialApiLibraryPayload,
+): Promise<SubmitOfficialApiLibraryResult> {
+  return apiRequest<SubmitOfficialApiLibraryResult>('/core/apis/library/official/submit', {
+    method: 'POST',
+    data: payload,
   });
 }
 

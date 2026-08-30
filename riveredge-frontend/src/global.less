@@ -2971,24 +2971,20 @@ code {
 [data-theme='dark'] .dashboard-wip-operation-card--skeleton .dashboard-wip-operation-card__head {
   background: rgba(255, 255, 255, 0.06);
 }
+/* 骨架进度条：满宽 + 轻呼吸，避免原先宽度来回跳 */
 .dashboard-wip-operation-card__head-fill--loading {
-  width: 24%;
-  opacity: 0.55;
+  width: 100%;
+  opacity: 0.4;
   background: var(--ant-color-primary, #1677ff);
-  animation: dashboard-wip-head-fill-loading 1.35s ease-in-out infinite;
+  animation: dashboard-wip-head-fill-loading 1.6s ease-in-out infinite;
 }
 @keyframes dashboard-wip-head-fill-loading {
-  0% {
-    width: 10%;
-    opacity: 0.35;
+  0%,
+  100% {
+    opacity: 0.28;
   }
   50% {
-    width: 72%;
-    opacity: 0.72;
-  }
-  100% {
-    width: 18%;
-    opacity: 0.35;
+    opacity: 0.52;
   }
 }
 .dashboard-wip-operation-card__skeleton-line {

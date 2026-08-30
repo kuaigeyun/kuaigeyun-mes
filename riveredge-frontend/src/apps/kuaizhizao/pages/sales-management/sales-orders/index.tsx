@@ -23,6 +23,7 @@ import {
   UNI_TABLE_STACKED_BADGE_DATE_COLUMN_DEFAULTS,
   MaterialStackedCell,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { renderExternalSyncPrimaryExtra } from '../../../../../components/external-sync-source/ExternalSyncSourceIcon';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { warehouseApi as masterWarehouseApi } from '../../../../master-data/services/warehouse';
@@ -104,7 +105,8 @@ import {
   isDraftStatus,
   isPendingReviewStatus,
 } from '../../../constants/documentStatus';
-import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
+import SalesOrderSyncFromSourceModal from './SalesOrderSyncFromSourceModal';
+import { SyncFreshnessBadge } from '../../../../../components/sync-from-source-modal/SyncFreshnessBadge';
 import { UniUserSelect } from '../../../../../components/uni-user-select';
 import { strokeColorWithAlpha } from '../../../../../components/common/StatCardTrendArea';
 import { useCustomFields } from '../../../../../hooks/useCustomFields';
@@ -194,6 +196,7 @@ import {
   bulkReopenSalesOrders,
   deleteSalesOrder,
   getSalesOrderStatistics,
+  getSalesOrderSyncBinding,
   SalesOrder,
   SalesOrderItem,
   SalesOrderStatus,
@@ -788,6 +791,8 @@ const SalesOrdersPage: React.FC = () => {
   /** 从 API 获取的编号规则代码（新建时使用，避免本地配置与后端不一致） */
   const [effectiveRuleCode, setEffectiveRuleCode] = useState<string | null>(null);
   const [syncModalVisible, setSyncModalVisible] = useState(false);
+  const [syncFreshnessKey, setSyncFreshnessKey] = useState(0);
+  const loadSalesOrderSyncBinding = useCallback(() => getSalesOrderSyncBinding(), []);
   const [followUpModalOpen, setFollowUpModalOpen] = useState(false);
   const [followUpPreset, setFollowUpPreset] = useState<CustomerFollowUpPreset | null>(null);
   /** 与客户跟进列表一致：交货逾期行浅色警示背景 */
@@ -1214,20 +1219,18 @@ const SalesOrdersPage: React.FC = () => {
         })),
         term_group_id: (data as any).term_group_id,
       };
-      window.setTimeout(() => {
-        formRef.current?.setFieldsValue(formData);
-        lastHeaderDeliveryRef.current = coerceFormDate(formData.delivery_date);
-        lastPriceTypeRef.current = normalizeSalesPriceType((formData as any)?.price_type);
-        void applyOrderTermGroupPreview(
-          (data as any).term_group_id,
-          (data as any).contract_terms as SalesContractTermSnapshot[] | undefined,
-        );
-        if (orderId != null) {
-          loadSalesOrderFormFieldValues(orderId).then((fieldFormValues) => {
-            formRef.current?.setFieldsValue(fieldFormValues);
-          });
-        }
-      }, 100);
+      formRef.current?.setFieldsValue(formData);
+      lastHeaderDeliveryRef.current = coerceFormDate(formData.delivery_date);
+      lastPriceTypeRef.current = normalizeSalesPriceType((formData as any)?.price_type);
+      void applyOrderTermGroupPreview(
+        (data as any).term_group_id,
+        (data as any).contract_terms as SalesContractTermSnapshot[] | undefined,
+      );
+      if (orderId != null) {
+        void loadSalesOrderFormFieldValues(orderId).then((fieldFormValues) => {
+          formRef.current?.setFieldsValue(fieldFormValues);
+        });
+      }
     } catch (error: any) {
       messageApi.error(t('app.kuaizhizao.salesOrder.detailFailed'));
       console.error('编辑销售订单错误:', error);
@@ -1408,31 +1411,12 @@ const SalesOrdersPage: React.FC = () => {
     });
   };
 
-  const handleSyncConfirm = async (rows: Record<string, any>[]) => {
-    try {
-      let successCount = 0;
-      for (const row of rows) {
-        const payload: Partial<SalesOrder> = {
-          order_date: row.order_date || row.orderDate,
-          delivery_date: row.delivery_date || row.deliveryDate,
-          customer_id: row.customer_id ?? row.customerId,
-          customer_name: row.customer_name || row.customerName,
-          total_amount: row.total_amount ?? row.totalAmount,
-          status: row.status || '草稿',
-          items: Array.isArray(row.items) ? row.items : [],
-        };
-        await createSalesOrder(payload);
-        successCount += 1;
-      }
-      messageApi.success(t('app.kuaizhizao.salesOrder.syncSuccess', { count: successCount }));
-      invalidateMenuBadge();
-      invalidateStatistics();
-
-          actionRef.current?.reload();
-    } catch (error: any) {
-      messageApi.error(error?.message || t('app.kuaizhizao.salesOrder.syncFailed'));
-    }
-  };
+  const handleSyncComplete = useCallback(() => {
+    setSyncFreshnessKey((key) => key + 1);
+    invalidateMenuBadge();
+    invalidateStatistics();
+    actionRef.current?.reload();
+  }, [invalidateMenuBadge, invalidateStatistics]);
 
   /**
    * 处理提交表单
@@ -3399,6 +3383,7 @@ const SalesOrdersPage: React.FC = () => {
         <UniTableStackedPrimaryCell
           primary={String(record.customer_name ?? '')}
           secondary={String(record.order_code ?? '')}
+          primaryExtra={renderExternalSyncPrimaryExtra(record as unknown as Record<string, unknown>)}
         />
       ),
     },
@@ -5203,8 +5188,20 @@ const SalesOrdersPage: React.FC = () => {
               messageApi.error(error?.message || t('common.exportFailed'));
             }
           }}
-          showSyncButton
+          showSyncButton={salesOrderPerms.canCreate}
           onSync={() => setSyncModalVisible(true)}
+          syncToolbarExtra={
+            salesOrderPerms.canCreate
+              ? (syncButton) => (
+                  <SyncFreshnessBadge
+                    getBinding={loadSalesOrderSyncBinding}
+                    refreshKey={syncFreshnessKey}
+                  >
+                    {syncButton}
+                  </SyncFreshnessBadge>
+                )
+              : undefined
+          }
           importHeaders={[
             t('app.kuaizhizao.salesOrder.orderCode'),
             t('app.kuaizhizao.salesOrder.orderDate'),
@@ -5529,12 +5526,11 @@ const SalesOrdersPage: React.FC = () => {
         }
       />
 
-      <SyncFromDatasetModal
+      <SalesOrderSyncFromSourceModal
         open={syncModalVisible}
         zIndex={elevatedModalZIndex}
         onClose={() => setSyncModalVisible(false)}
-        onConfirm={handleSyncConfirm}
-        title={t('app.kuaizhizao.salesOrder.syncFromDataset')}
+        onComplete={handleSyncComplete}
       />
 
       {/* 提醒弹窗 */}

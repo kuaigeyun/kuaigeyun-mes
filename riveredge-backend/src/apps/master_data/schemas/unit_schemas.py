@@ -28,7 +28,7 @@ class MaterialUnitUpdate(BaseModel):
 
 
 class MaterialUnitResponse(MaterialUnitBase):
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True, by_alias=True)
 
     id: int
     uuid: str
@@ -37,6 +37,9 @@ class MaterialUnitResponse(MaterialUnitBase):
     created_by_name: Optional[str] = None
     updated_by: Optional[int] = None
     updated_by_name: Optional[str] = None
+    external_sync_at: Optional[datetime] = Field(
+        None, alias="externalSyncAt", description="最近从外部接口/数据集同步时间"
+    )
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

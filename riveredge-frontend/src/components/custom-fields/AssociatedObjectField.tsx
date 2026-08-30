@@ -21,11 +21,13 @@ function LookupValueSync({
   value,
 }: {
   name: string;
-  value: string | number | undefined;
+  /** undefined = 尚未解析，勿覆盖表单已有值；null = 显式清空 */
+  value: string | number | null | undefined;
 }) {
   const form = Form.useFormInstance();
   useEffect(() => {
-    form?.setFieldValue(name, value);
+    if (value === undefined) return;
+    form?.setFieldValue(name, value === null ? undefined : value);
   }, [form, name, value]);
   return null;
 }
@@ -152,7 +154,7 @@ function AssociatedObjectLookupControl({
   sourceValue: unknown;
   displayMode: ReturnType<typeof resolveAssociatedDisplayMode>;
 }) {
-  const [resolvedValue, setResolvedValue] = useState<string | number | undefined>(undefined);
+  const [resolvedValue, setResolvedValue] = useState<string | number | null | undefined>(undefined);
   const isManualOverrideRef = useRef(false);
   const lastSourceSnapshotRef = useRef<string | null>(null);
 
@@ -165,7 +167,11 @@ function AssociatedObjectLookupControl({
 
   useEffect(() => {
     if (!tableName || sourceValue == null || String(sourceValue).trim() === '') {
-      setResolvedValue(undefined);
+      // 源字段尚未就绪时勿清空表单（编辑回填可能已写入）；源从有值变为空时才显式清空
+      if (lastSourceSnapshotRef.current !== null && lastSourceSnapshotRef.current !== sourceSnapshot) {
+        lastSourceSnapshotRef.current = sourceSnapshot;
+        setResolvedValue(null);
+      }
       return;
     }
 
@@ -177,7 +183,7 @@ function AssociatedObjectLookupControl({
         matchValue: sourceValue as string | number,
         returnField,
       }).then((res) => {
-        if (!cancelled) setResolvedValue(res.value ?? undefined);
+        if (!cancelled) setResolvedValue(res.value ?? null);
       });
       return () => {
         cancelled = true;

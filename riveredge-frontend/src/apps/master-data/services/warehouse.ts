@@ -229,3 +229,49 @@ export interface PresetWarehouseItem {
   warehouse_type?: string;
 }
 
+export type WarehouseSyncBinding = {
+  source_type?: 'api' | 'dataset' | null;
+  api_uuid?: string | null;
+  dataset_uuid?: string | null;
+  field_mapping: Record<string, string>;
+  match_key_field?: string;
+  sync_mode?: string;
+  schedule_interval_minutes?: number;
+  last_success_at?: string | null;
+  last_attempt_at?: string | null;
+  last_error?: string | null;
+};
+
+export type WarehouseSyncFromSourceResult = {
+  created: number;
+  updated: number;
+  skipped: number;
+  failed: number;
+  errors: string[];
+};
+
+export async function getWarehouseSyncBinding(): Promise<WarehouseSyncBinding> {
+  return api.get('/apps/master-data/warehouse/warehouses/sync-binding');
+}
+
+export async function syncWarehousesFromSource(payload: {
+  source_type?: 'api' | 'dataset';
+  api_uuid?: string;
+  dataset_uuid?: string;
+  field_mapping?: Record<string, string>;
+  save_binding?: boolean;
+  sync_mode?: string;
+  schedule_interval_minutes?: number;
+  incremental?: boolean;
+  active_only?: boolean;
+}): Promise<WarehouseSyncFromSourceResult> {
+  return apiRequest<WarehouseSyncFromSourceResult>(
+    '/apps/master-data/warehouse/warehouses/sync-from-source',
+    {
+      method: 'POST',
+      data: payload,
+      timeoutMs: 600_000,
+    },
+  );
+}
+

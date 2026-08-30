@@ -1,4 +1,5 @@
 import { rowActionKind } from '../../../../components/uni-action';
+import { renderExternalSyncPrimaryExtra } from '../../../../components/external-sync-source/ExternalSyncSourceIcon';
 /**
  * 物料管理合并页面
  *
@@ -54,6 +55,7 @@ import {
   MenuUnfoldOutlined,
   FileOutlined,
   FilePdfOutlined,
+  SyncOutlined,
   SwapOutlined,
   RedoOutlined,
   NodeIndexOutlined,
@@ -116,6 +118,9 @@ import {
   DOCUMENT_DETAIL_PAGE_TITLE_STYLE,
 } from '../../../../components/layout-templates/constants'
 import { MaterialForm } from '../../components/MaterialForm'
+import MaterialSyncFromSourceModal from '../../components/MaterialSyncFromSourceModal'
+import MaterialGroupSyncFromSourceModal from '../../components/MaterialGroupSyncFromSourceModal'
+import { SyncFreshnessBadge } from '../../../../components/sync-from-source-modal/SyncFreshnessBadge'
 import { MaterialGroupFormModal } from '../../components/MaterialGroupFormModal'
 import { DEFAULT_MATERIAL_BASE_UNIT } from '../../constants/materialDefaults'
 import {
@@ -235,7 +240,7 @@ function MaterialListStackedCell({
     >
     const primary = formatVariantAttributesLine(attrs, variantAttrLabelMap)
     const code = getMaterialListMainCode(record) || '-'
-    return <UniTableStackedPrimaryCell primary={primary} secondary={code} />
+    return <UniTableStackedPrimaryCell primary={primary} secondary={code} primaryExtra={renderExternalSyncPrimaryExtra(record as unknown as Record<string, unknown>)} />
   }
 
   const brand = record.brand?.trim()
@@ -262,6 +267,7 @@ function MaterialListStackedCell({
         material_name={record.name}
         material_code={getMaterialListMainCode(record)}
         material_spec={record.specification}
+        primaryExtra={renderExternalSyncPrimaryExtra(record as unknown as Record<string, unknown>)}
       />
       {badges}
     </div>
@@ -269,7 +275,7 @@ function MaterialListStackedCell({
 }
 
 // 导入服务和类型
-import { materialApi, materialGroupApi } from '../../services/material'
+import { materialApi, materialGroupApi, getMaterialSyncBinding, getMaterialGroupSyncBinding } from '../../services/material'
 import { customerApi, unwrapSupplyPagedList } from '../../services/supply-chain'
 import type { Customer } from '../../types/supply-chain'
 import { drawingApi, type EngineeringDrawing } from '../../services/drawing'
@@ -606,7 +612,7 @@ const MaterialsManagementPage: React.FC = () => {
   const formPageInitializedRef = useRef(false)
   const [formPageError, setFormPageError] = useState<string | null>(null)
   const pagePermissionResource = usePagePermissionResource(location.pathname)
-  const { canImport } = useResourcePermissions(pagePermissionResource)
+  const { canImport, canCreate } = useResourcePermissions(pagePermissionResource)
 
   // 左侧分组树状态
   const [groupTreeData, setGroupTreeData] = useState<DataNode[]>([])
@@ -621,6 +627,17 @@ const MaterialsManagementPage: React.FC = () => {
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
   const [activeImportKind, setActiveImportKind] = useState<MaterialSplitImportKind | null>(null)
   const [importModalVisible, setImportModalVisible] = useState(false)
+  const [syncModalVisible, setSyncModalVisible] = useState(false)
+  const [groupSyncModalVisible, setGroupSyncModalVisible] = useState(false)
+  const [syncFreshnessKey, setSyncFreshnessKey] = useState(0)
+  const [groupSyncFreshnessKey, setGroupSyncFreshnessKey] = useState(0)
+  const loadMaterialSyncBinding = useCallback(() => getMaterialSyncBinding(), [])
+  const loadMaterialGroupSyncBinding = useCallback(() => getMaterialGroupSyncBinding(), [])
+
+  const handleSyncComplete = useCallback(() => {
+    setSyncFreshnessKey((key) => key + 1)
+    actionRef.current?.reload()
+  }, [])
 
   const materialActiveValueEnum = useMemo(
     () => buildMasterCrudActiveValueEnum(t, 'common.enabled', 'common.disabled'),
@@ -1115,6 +1132,12 @@ const MaterialsManagementPage: React.FC = () => {
       setMaterialGroupsLoading(false)
     }
   }, [messageApi, convertToTreeData, collectAllKeys, t])
+
+  const handleGroupSyncComplete = useCallback(() => {
+    setGroupSyncFreshnessKey((key) => key + 1)
+    void loadMaterialGroups()
+    actionRef.current?.reload()
+  }, [loadMaterialGroups])
 
   useEffect(() => {
     if (isFormPage) return
@@ -4203,6 +4226,21 @@ const MaterialsManagementPage: React.FC = () => {
                 onClick={handleToggleExpand}
                 title={expandedKeys.length > 1 ? t('app.master-data.materials.collapseAll') : t('app.master-data.materials.expandAll')}
               />
+              {canCreate ? (
+                <Space key="group-sync" size={4}>
+                  <SyncFreshnessBadge
+                    getBinding={loadMaterialGroupSyncBinding}
+                    refreshKey={groupSyncFreshnessKey}
+                    compact
+                  />
+                  <Tooltip title={t('app.master-data.materials.groupSyncFromSource')}>
+                    <Button
+                      icon={<SyncOutlined />}
+                      onClick={() => setGroupSyncModalVisible(true)}
+                    />
+                  </Tooltip>
+                </Space>
+              ) : null}
             </div>,
           ],
           tree: {
@@ -4388,6 +4426,20 @@ const MaterialsManagementPage: React.FC = () => {
                   onChange: setSelectedRowKeys,
                 }}
                 showImportButton={false}
+                showSyncButton={canCreate}
+                onSync={() => setSyncModalVisible(true)}
+                syncToolbarExtra={
+                  canCreate
+                    ? (syncButton) => (
+                        <SyncFreshnessBadge
+                          getBinding={loadMaterialSyncBinding}
+                          refreshKey={syncFreshnessKey}
+                        >
+                          {syncButton}
+                        </SyncFreshnessBadge>
+                      )
+                    : undefined
+                }
                 rightToolBarActionsBeforeExport={materialImportMenuButton ? [materialImportMenuButton] : undefined}
                 showExportButton={true}
                 onExport={handleMaterialExport}
@@ -5457,6 +5509,18 @@ const MaterialsManagementPage: React.FC = () => {
           />
         </Suspense>
       )}
+
+      <MaterialSyncFromSourceModal
+        open={syncModalVisible}
+        onClose={() => setSyncModalVisible(false)}
+        onComplete={handleSyncComplete}
+      />
+
+      <MaterialGroupSyncFromSourceModal
+        open={groupSyncModalVisible}
+        onClose={() => setGroupSyncModalVisible(false)}
+        onComplete={handleGroupSyncComplete}
+      />
 
     </>
   )

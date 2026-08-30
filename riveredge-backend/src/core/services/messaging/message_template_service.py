@@ -524,6 +524,21 @@ class MessageTemplateService:
             "is_active": True,
         },
         {
+            "name": "工序完成后通知下一工序",
+            "code": "KZ_WO_NEXT_OPERATION",
+            "type": "internal",
+            "description": "当前工序完成后提醒下一工序指派人",
+            "subject": "【工序交接】工单 {work_order_code} 可开工「{next_operation_name}」",
+            "content": "工单 {work_order_code} 的工序「{completed_operation_name}」已完成。\n产品：{product_name}\n下一工序：{next_operation_name}\n请及时安排开工或报工。",
+            "variables": {
+                "work_order_code": "工单号",
+                "product_name": "产品",
+                "completed_operation_name": "已完成工序",
+                "next_operation_name": "下一工序",
+            },
+            "is_active": True,
+        },
+        {
             "name": "工单转返工",
             "code": "KZ_WO_REWORKED",
             "type": "internal",

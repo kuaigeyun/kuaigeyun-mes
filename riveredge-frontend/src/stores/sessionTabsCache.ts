@@ -37,3 +37,9 @@ export function clearSessionTabs(tenantId: number): void {
   tabsByTenant.delete(tenantId);
   activeKeyByTenant.delete(tenantId);
 }
+
+/** 登出时清空全部租户的会话标签，避免开关关闭时「退出再登录」仍恢复标签 */
+export function clearAllSessionTabs(): void {
+  tabsByTenant.clear();
+  activeKeyByTenant.clear();
+}

@@ -1,7 +1,9 @@
 /**
  * 平台更新日志（工作台版本卡展示）
  *
- * 完成一项修复/优化后，在此追加一条记录，并补充 zh-CN i18n 文案（默认仅简体中文，见 i18n-zh-cn-only 规则）。
+ * 完成一项用户可见的修复/优化/功能后，必须在本数组头部追加一条，并同步 zh-CN
+ * `pages.dashboard.updateLog.entries.{id}.*`（默认仅简体中文，见 i18n-zh-cn-only）。
+ * 同一会话内连续多项修复：每项做完即计入，勿攒到最后或漏记。
  *
  * 不计入：定制应用 HaoliGO（好力 GO）相关变动，仅在该应用内交付，不写本日志。
  */
@@ -33,6 +35,249 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  * titleKey / descriptionKey 对应 pages.dashboard.updateLog.entries.{id}.*
  */
 export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
+  {
+    id: 'sync-sales-order-write-batch-speed',
+    date: '2026-08-30',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.sync-sales-order-write-batch-speed.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sync-sales-order-write-batch-speed.description',
+  },
+  {
+    id: 'sync-doc-prereq-stop-force-full',
+    date: '2026-08-30',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sync-doc-prereq-stop-force-full.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sync-doc-prereq-stop-force-full.description',
+  },
+  {
+    id: 'sync-sales-order-total-quantity-none-fix',
+    date: '2026-08-30',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sync-sales-order-total-quantity-none-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sync-sales-order-total-quantity-none-fix.description',
+  },
+  {
+    id: 'sync-material-group-empty-pull-fix',
+    date: '2026-08-30',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sync-material-group-empty-pull-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sync-material-group-empty-pull-fix.description',
+  },
+  {
+    id: 'sync-material-bulk-write',
+    date: '2026-08-30',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.sync-material-bulk-write.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.sync-material-bulk-write.description',
+  },
+  {
+    id: 'sync-material-prereq-full-not-incremental',
+    date: '2026-08-30',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sync-material-prereq-full-not-incremental.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sync-material-prereq-full-not-incremental.description',
+  },
+  {
+    id: 'sync-material-group-prereq-before-material',
+    date: '2026-08-30',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sync-material-group-prereq-before-material.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sync-material-group-prereq-before-material.description',
+  },
+  {
+    id: 'sync-active-only-switch',
+    date: '2026-08-30',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.sync-active-only-switch.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.sync-active-only-switch.description',
+  },
+  {
+    id: 'sync-customer-skip-invalid-kingdee',
+    date: '2026-08-30',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.sync-customer-skip-invalid-kingdee.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sync-customer-skip-invalid-kingdee.description',
+  },
+  {
+    id: 'sync-progress-gzip-buffer-fix',
+    date: '2026-08-30',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sync-progress-gzip-buffer-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sync-progress-gzip-buffer-fix.description',
+  },
+  {
+    id: 'sync-live-progress-transaction-display',
+    date: '2026-08-30',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.sync-live-progress-transaction-display.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sync-live-progress-transaction-display.description',
+  },
+  {
+    id: 'sync-kingdee-paginate-and-progress-stats',
+    date: '2026-08-30',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sync-kingdee-paginate-and-progress-stats.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sync-kingdee-paginate-and-progress-stats.description',
+  },
+  {
+    id: 'sync-prerequisite-incremental-fix',
+    date: '2026-08-30',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sync-prerequisite-incremental-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sync-prerequisite-incremental-fix.description',
+  },
+  {
+    id: 'sync-freshness-tooltip-overflow-fix',
+    date: '2026-08-30',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sync-freshness-tooltip-overflow-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sync-freshness-tooltip-overflow-fix.description',
+  },
+  {
+    id: 'tabs-persistence-logout-session-cache-fix',
+    date: '2026-08-30',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.tabs-persistence-logout-session-cache-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.tabs-persistence-logout-session-cache-fix.description',
+  },
+  {
+    id: 'quality-exception-status-sync-on-nc-close-fix',
+    date: '2026-08-30',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.quality-exception-status-sync-on-nc-close-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.quality-exception-status-sync-on-nc-close-fix.description',
+  },
+  {
+    id: 'inventory-report-perf-pagination-fix',
+    date: '2026-08-30',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.inventory-report-perf-pagination-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.inventory-report-perf-pagination-fix.description',
+  },
+  {
+    id: 'custom-field-date-utc-off-by-one-fix',
+    date: '2026-08-30',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.custom-field-date-utc-off-by-one-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.custom-field-date-utc-off-by-one-fix.description',
+  },
+  {
+    id: 'custom-field-edit-after-unaudit-fix',
+    date: '2026-08-30',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.custom-field-edit-after-unaudit-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.custom-field-edit-after-unaudit-fix.description',
+  },
+  {
+    id: 'external-erp-sync-platform',
+    date: '2026-08-30',
+    type: 'major',
+    titleKey: 'pages.dashboard.updateLog.entries.external-erp-sync-platform.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.external-erp-sync-platform.description',
+  },
+  {
+    id: 'sales-invoice-red-letter-receivable',
+    date: '2026-08-29',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-invoice-red-letter-receivable.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-invoice-red-letter-receivable.description',
+  },
+  {
+    id: 'doc-reconcil-chain-nested-index-fix',
+    date: '2026-08-29',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.doc-reconcil-chain-nested-index-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.doc-reconcil-chain-nested-index-fix.description',
+  },
+  {
+    id: 'partner-statement-refund-under-ar',
+    date: '2026-08-29',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.partner-statement-refund-under-ar.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.partner-statement-refund-under-ar.description',
+  },
+  {
+    id: 'finance-multi-source-refund',
+    date: '2026-08-29',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.finance-multi-source-refund.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.finance-multi-source-refund.description',
+  },
+  {
+    id: 'nc-disposition-closed-loop',
+    date: '2026-08-29',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.nc-disposition-closed-loop.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.nc-disposition-closed-loop.description',
+  },
+  {
+    id: 'detail-drawer-attachment-center-tab',
+    date: '2026-08-29',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.detail-drawer-attachment-center-tab.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.detail-drawer-attachment-center-tab.description',
+  },
+  {
+    id: 'work-order-show-customer-name-param',
+    date: '2026-08-29',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.work-order-show-customer-name-param.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.work-order-show-customer-name-param.description',
+  },
+  {
+    id: 'wo-next-operation-in-app-notify',
+    date: '2026-08-29',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.wo-next-operation-in-app-notify.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.wo-next-operation-in-app-notify.description',
+  },
+  {
+    id: 'sales-order-lifecycle-audited-shows-dash-fix',
+    date: '2026-08-29',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-order-lifecycle-audited-shows-dash-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-order-lifecycle-audited-shows-dash-fix.description',
+  },
+  {
+    id: 'margin-report-cost-from-purchase-and-bom-fix',
+    date: '2026-08-29',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.margin-report-cost-from-purchase-and-bom-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.margin-report-cost-from-purchase-and-bom-fix.description',
+  },
+  {
+    id: 'purchase-overdue-warning-customer-feedback-fix',
+    date: '2026-08-29',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-overdue-warning-customer-feedback-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-overdue-warning-customer-feedback-fix.description',
+  },
   {
     id: 'sales-contract-print-rmb-uppercase',
     date: '2026-08-28',

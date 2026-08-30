@@ -1219,11 +1219,39 @@ class DocumentRelationService:
             payable_id=payable_id,
             deleted_at__isnull=True,
         ).limit(20)
+        seen_pinv: set[int] = set()
         for inv in pinvs:
+            seen_pinv.add(int(inv.id))
             downstream.append({
                 "document_type": "purchase_invoice",
                 "document_id": inv.id,
                 "document_code": inv.invoice_code,
+                "document_name": inv.invoice_number,
+                "status": inv.status,
+                "created_at": to_api_isoformat(inv.created_at) if inv.created_at else None,
+            })
+
+        pinv_rels = await DocumentRelation.filter(
+            tenant_id=tenant_id,
+            source_type="payable",
+            source_id=payable_id,
+            target_type="purchase_invoice",
+        ).limit(30)
+        for rel in pinv_rels:
+            if not rel.target_id or int(rel.target_id) in seen_pinv:
+                continue
+            inv = await PurchaseInvoice.get_or_none(
+                tenant_id=tenant_id,
+                id=int(rel.target_id),
+                deleted_at__isnull=True,
+            )
+            if not inv:
+                continue
+            seen_pinv.add(int(inv.id))
+            downstream.append({
+                "document_type": "purchase_invoice",
+                "document_id": inv.id,
+                "document_code": inv.invoice_code or rel.target_code,
                 "document_name": inv.invoice_number,
                 "status": inv.status,
                 "created_at": to_api_isoformat(inv.created_at) if inv.created_at else None,
@@ -1680,12 +1708,43 @@ class DocumentRelationService:
             tenant_id=tenant_id,
             receivable_id=receivable_id,
             category="OUT",
+            deleted_at__isnull=True,
         ).limit(20)
+        seen_inv: set[int] = set()
         for inv in invoices:
+            seen_inv.add(int(inv.id))
             downstream.append({
                 "document_type": "sales_invoice",
                 "document_id": inv.id,
                 "document_code": inv.invoice_code,
+                "document_name": inv.invoice_number,
+                "status": inv.status,
+                "created_at": to_api_isoformat(inv.created_at) if inv.created_at else None,
+            })
+
+        # 从应收加载开票：DocumentRelation(source=receivable → target=sales_invoice)
+        inv_rels = await DocumentRelation.filter(
+            tenant_id=tenant_id,
+            source_type="receivable",
+            source_id=receivable_id,
+            target_type="sales_invoice",
+        ).limit(30)
+        for rel in inv_rels:
+            if not rel.target_id or int(rel.target_id) in seen_inv:
+                continue
+            inv = await Invoice.get_or_none(
+                tenant_id=tenant_id,
+                id=int(rel.target_id),
+                category="OUT",
+                deleted_at__isnull=True,
+            )
+            if not inv:
+                continue
+            seen_inv.add(int(inv.id))
+            downstream.append({
+                "document_type": "sales_invoice",
+                "document_id": inv.id,
+                "document_code": inv.invoice_code or rel.target_code,
                 "document_name": inv.invoice_number,
                 "status": inv.status,
                 "created_at": to_api_isoformat(inv.created_at) if inv.created_at else None,

@@ -14,6 +14,7 @@ import {
   uploadFileListToCustomFieldValue,
 } from '../components/custom-fields/customFieldFileUtils';
 import { normalizeJsonFieldValue } from '../components/custom-fields/customFieldJsonUtils';
+import { coerceFormDate, toApiDateString, toApiDateTimeString } from '../utils/formDate';
 
 const CUSTOM_PREFIX = 'custom_';
 
@@ -96,6 +97,10 @@ export function useCustomFields({
             });
             formValues[`${CUSTOM_PREFIX}${field.code}`] = files;
             displayValues[field.code] = files;
+          } else if (field.field_type === 'date' || field.field_type === 'datetime') {
+            const coerced = coerceFormDate(val);
+            formValues[`${CUSTOM_PREFIX}${field.code}`] = coerced ?? undefined;
+            displayValues[field.code] = coerced ?? val;
           } else {
             formValues[`${CUSTOM_PREFIX}${field.code}`] = val;
             displayValues[field.code] = val;
@@ -174,12 +179,38 @@ export function useCustomFields({
           value = uploadFileListToCustomFieldValue(value, field.field_type);
         } else if (field.field_type === 'json') {
           value = normalizeJsonFieldValue(value);
-        } else if (field.field_type === 'time' || field.field_type === 'datetime') {
+        } else if (field.field_type === 'date') {
           if (value != null && value !== '') {
-            const format = field.config?.format
-              || (field.field_type === 'time' ? 'HH:mm:ss' : 'YYYY-MM-DD HH:mm:ss');
+            const apiDate = toApiDateString(value);
+            // 必须是纯日历日字符串；禁止把 dayjs 对象交给 JSON（toJSON→ISO Z 会偏一天）
+            if (!apiDate || !/^\d{4}-\d{2}-\d{2}$/.test(apiDate)) {
+              throw new Error(
+                `自定义日期字段「${field.name || field.code}」无法格式化为 YYYY-MM-DD`,
+              );
+            }
+            value = apiDate;
+          } else {
+            value = null;
+          }
+        } else if (field.field_type === 'datetime') {
+          if (value != null && value !== '') {
+            value = toApiDateTimeString(value) ?? null;
+            if (value != null && typeof value !== 'string') {
+              throw new Error(
+                `自定义日期时间字段「${field.name || field.code}」格式无效`,
+              );
+            }
+          } else {
+            value = null;
+          }
+        } else if (field.field_type === 'time') {
+          if (value != null && value !== '') {
+            const format = field.config?.format || 'HH:mm:ss';
             if (dayjs.isDayjs(value)) {
               value = value.format(format);
+            } else if (typeof value !== 'string') {
+              const api = toApiDateTimeString(value);
+              value = api ? api.slice(11, 19) : null;
             }
           }
         } else if (field.field_type === 'formula') {

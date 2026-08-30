@@ -129,6 +129,29 @@ class DocumentTraceResponse(BaseModel):
     downstream_chain: List[DocumentTraceNode] = Field(default_factory=list, description="下游追溯链")
 
 
+class DocumentAttachmentCenterItem(BaseModel):
+    """附件中心条目"""
+    uid: str = Field(..., description="core_files UUID")
+    name: str = Field(..., description="文件名")
+    status: Optional[str] = Field("done", description="上传状态")
+
+
+class DocumentAttachmentCenterGroup(BaseModel):
+    """附件中心分组（按关联单据）"""
+    document_type: str = Field(..., description="单据类型")
+    document_id: int = Field(..., description="单据ID")
+    document_code: Optional[str] = Field(None, description="单据编码")
+    is_self: bool = Field(False, description="是否为本单")
+    attachments: List[DocumentAttachmentCenterItem] = Field(default_factory=list, description="附件列表")
+
+
+class DocumentAttachmentCenterResponse(BaseModel):
+    """附件中心响应"""
+    document_type: str = Field(..., description="根单据类型")
+    document_id: int = Field(..., description="根单据ID")
+    groups: List[DocumentAttachmentCenterGroup] = Field(default_factory=list, description="分组附件")
+
+
 # === 变更影响（排程管理增强） ===
 
 class ChangeImpactItem(BaseModel):

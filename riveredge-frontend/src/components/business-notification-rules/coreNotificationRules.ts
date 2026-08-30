@@ -133,6 +133,11 @@ export const CORE_NOTIFICATION_ACTION_OPTIONS: Record<
     },
     { value: 'released', labelKey: 'pages.system.configCenter.notification.action.work_order.released', fallback: '下达' },
     { value: 'started', labelKey: 'pages.system.configCenter.notification.action.work_order.started', fallback: '开工' },
+    {
+      value: 'operation_completed',
+      labelKey: 'pages.system.configCenter.notification.action.work_order.operation_completed',
+      fallback: '工序完成',
+    },
     { value: 'completed', labelKey: 'pages.system.configCenter.notification.action.work_order.completed', fallback: '完工' },
     { value: 'reworked', labelKey: 'pages.system.configCenter.notification.action.work_order.reworked', fallback: '转返工' },
   ],
@@ -191,6 +196,11 @@ export const CORE_NOTIFICATION_RECIPIENT_SCOPES = [
   { value: 'creator', labelKey: 'pages.system.configCenter.notification.scope.creator', fallback: '创建人/申请人' },
   { value: 'salesman', labelKey: 'pages.system.configCenter.notification.scope.salesman', fallback: '业务员' },
   { value: 'follower', labelKey: 'pages.system.configCenter.notification.scope.follower', fallback: '跟单员' },
+  {
+    value: 'next_operation_assignees',
+    labelKey: 'pages.system.configCenter.notification.scope.next_operation_assignees',
+    fallback: '下一工序指派人',
+  },
 ];
 
 /** 一期推荐节点（已接线）；其余动作可配但默认标为「更多」 */
@@ -206,6 +216,7 @@ export const CORE_RECOMMENDED_NOTIFICATION_ACTIONS: ReadonlySet<string> = new Se
   'purchase_order:arrival_overdue',
   'work_order:remind_batching',
   'work_order:released',
+  'work_order:operation_completed',
   'work_order:completed',
   'work_order:reworked',
   'quality_exception:created',

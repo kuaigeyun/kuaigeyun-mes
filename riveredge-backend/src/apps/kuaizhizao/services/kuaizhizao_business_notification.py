@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from loguru import logger
 
@@ -33,6 +33,7 @@ ACTION_SUBMITTED = "submitted"
 ACTION_PUSHED_TO_WORK_ORDER = "pushed_to_work_order"
 ACTION_RELEASED = "released"
 ACTION_COMPLETED = "completed"
+ACTION_OPERATION_COMPLETED = "operation_completed"
 ACTION_REWORKED = "reworked"
 ACTION_ASSIGNED = "assigned"
 ACTION_RESOLVED = "resolved"
@@ -132,4 +133,42 @@ async def notify_work_order_completed(
             "work_order_id": str(work_order_id),
         },
         context={"creator_user_id": creator_user_id},
+    )
+
+
+async def notify_work_order_next_operation(
+    tenant_id: int,
+    *,
+    work_order_id: int,
+    work_order_code: str,
+    product_name: str,
+    completed_operation_name: str,
+    next_operation_name: str,
+    next_operation_assignee_user_ids: List[int],
+    creator_user_id: Optional[int] = None,
+) -> int:
+    """当前工序完成后，通知下一工序指派人。"""
+    assignee_ids = [
+        int(uid)
+        for uid in (next_operation_assignee_user_ids or [])
+        if uid is not None and int(uid) > 0
+    ]
+    if not assignee_ids:
+        return 0
+    return await dispatch_kuaizhizao_notification(
+        tenant_id,
+        trigger_document=DOC_WORK_ORDER,
+        trigger_action=ACTION_OPERATION_COMPLETED,
+        variables={
+            "work_order_code": work_order_code or str(work_order_id),
+            "product_name": product_name or "—",
+            "completed_operation_name": completed_operation_name or "—",
+            "next_operation_name": next_operation_name or "—",
+            "detail_path": f"/apps/kuaizhizao/production-execution/work-orders?highlight={work_order_id}",
+            "work_order_id": str(work_order_id),
+        },
+        context={
+            "creator_user_id": creator_user_id,
+            "next_operation_assignee_user_ids": assignee_ids,
+        },
     )

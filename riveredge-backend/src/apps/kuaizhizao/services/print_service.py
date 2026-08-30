@@ -586,7 +586,10 @@ async def _resolve_customer_invoice_print_fields(
 def _format_sales_contract_terms_for_print(contract_terms: Any) -> str:
     """
     将销售合同条款快照格式化为可打印文本，避免直接渲染出 Python/JSON 结构。
+    大条款序号使用中文：一、二、三、…
     """
+    from core.utils.chinese_numeral import int_to_chinese_simple
+
     if contract_terms is None:
         return ""
 
@@ -617,7 +620,7 @@ def _format_sales_contract_terms_for_print(contract_terms: Any) -> str:
             continue
 
         if term_name:
-            chunks.append(f"{idx}. {term_name}\n{content}")
+            chunks.append(f"{int_to_chinese_simple(idx)}、{term_name}\n{content}")
         else:
             chunks.append(content)
 

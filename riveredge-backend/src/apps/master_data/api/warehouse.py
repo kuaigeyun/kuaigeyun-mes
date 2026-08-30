@@ -22,6 +22,12 @@ from apps.master_data.schemas.warehouse_schemas import (
     BatchDeleteStorageAreasRequest, BatchDeleteStorageLocationsRequest
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from apps.master_data.schemas.master_data_sync import (
+    MasterDataSyncBindingOut,
+    MasterDataSyncBindingUpsert,
+    MasterDataSyncFromSourceOut,
+    MasterDataSyncFromSourceRequest,
+)
 
 router = APIRouter(
     prefix="/warehouse",
@@ -57,6 +63,59 @@ def HTTPException(*, status_code: int, detail: Any, **kwargs) -> FastAPIHTTPExce
 
 
 # ==================== 仓库相关接口 ====================
+
+warehouse_sync_service = None
+
+
+def _warehouse_sync_service():
+    from apps.master_data.services.warehouse_sync_service import WarehouseSyncService
+    global warehouse_sync_service
+    if warehouse_sync_service is None:
+        warehouse_sync_service = WarehouseSyncService()
+    return warehouse_sync_service
+
+
+@router.get(
+    "/warehouses/sync-binding",
+    response_model=MasterDataSyncBindingOut,
+    summary="仓库同步绑定配置",
+)
+async def get_warehouse_sync_binding(
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    return await _warehouse_sync_service().get_binding(tenant_id)
+
+
+@router.put(
+    "/warehouses/sync-binding",
+    response_model=MasterDataSyncBindingOut,
+    summary="保存仓库同步绑定配置",
+)
+async def put_warehouse_sync_binding(
+    body: MasterDataSyncBindingUpsert,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    try:
+        return await _warehouse_sync_service().upsert_binding(tenant_id, body)
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.post(
+    "/warehouses/sync-from-source",
+    response_model=MasterDataSyncFromSourceOut,
+    summary="从数据接口或数据集同步仓库",
+)
+async def sync_warehouses_from_source(
+    body: MasterDataSyncFromSourceRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    try:
+        return await _warehouse_sync_service().sync_from_source(tenant_id, current_user, body)
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
 
 @router.post("/warehouses", response_model=WarehouseResponse, response_model_by_alias=True, summary="Create warehouse")
 async def create_warehouse(

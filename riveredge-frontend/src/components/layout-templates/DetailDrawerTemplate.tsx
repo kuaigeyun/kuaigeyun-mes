@@ -2,12 +2,12 @@
  * 详情 Drawer：优先使用结构化插槽（basic / collaboration / supplementary / lines / timeline）。
  * 未使用插槽时兼容原有 columns + dataSource、customContent / plainBody、children。
  *
- * 传入 traceDocument / historyTab 时：全链路、重算/下推历史独立为 Tab，
+ * 传入 traceDocument / historyTab / attachmentCenter 时：全链路、重算/下推历史、附件中心独立为 Tab，
  * 默认不挂载；用户切到该 Tab 后才开始加载，以加快抽屉首屏。
  */
 
 import type { CSSProperties } from 'react';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { Drawer, Descriptions, Spin, Tabs, theme } from 'antd';
 import type { DrawerProps } from 'antd';
 import type { ReactNode } from 'react';
@@ -25,6 +25,12 @@ import { DetailAuditPhaseTitleExtra } from '../uni-audit/DetailAuditPhaseRow';
 import type { AuditPhaseRecord } from '../uni-audit/AuditPhaseBadge';
 import { useDetailDrawerFeatures } from '../../hooks/useDetailDrawerFeatures';
 import './drawerSlideMotion.css';
+
+const LazyDocumentAttachmentCenterPane = lazy(() =>
+  import('../../apps/kuaizhizao/components/DocumentAttachmentCenterPane').then((m) => ({
+    default: m.DocumentAttachmentCenterPane,
+  })),
+);
 
 export interface DetailDrawerTemplateProps<T extends Record<string, any> = Record<string, unknown>> {
   title: ReactNode;
@@ -130,6 +136,15 @@ export interface DetailDrawerTemplateProps<T extends Record<string, any> = Recor
     /** 换单时重置 Tab 与懒挂载（与 traceDocument.documentId 同职责） */
     documentId?: number;
   } | null;
+
+  /**
+   * 附件中心：独立 Tab，默认不加载，切到该 Tab 后才请求聚合 API。
+   * 已传 traceDocument 时可省略（模板按同 type/id 自动派生）。
+   */
+  attachmentCenter?: {
+    documentType: string;
+    documentId: number;
+  } | null;
 }
 
 function stackCollaborationParts(...nodes: (ReactNode | undefined)[]): ReactNode {
@@ -169,6 +184,7 @@ function withBasicSideExtra(basic: ReactNode, extra: ReactNode | undefined): Rea
 const DETAIL_TAB_KEY = 'detail';
 const HISTORY_TAB_KEY = 'history';
 const FULL_CHAIN_TAB_KEY = 'fullChain';
+const ATTACHMENT_CENTER_TAB_KEY = 'attachmentCenter';
 
 export const DetailDrawerTemplate = <T extends Record<string, any> = Record<string, unknown>,>({
   title,
@@ -217,6 +233,7 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
   afterOpenChange,
   traceDocument,
   historyTab,
+  attachmentCenter,
 }: DetailDrawerTemplateProps<T>) => {
   const { t } = useTranslation();
   const { token } = theme.useToken();
@@ -267,16 +284,33 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
   const hasTraceDocument = fullChainEnabled && Boolean(traceDocument?.documentId);
   const hasHistoryTab = historyTab != null && historyTab.children != null && historyTab.children !== false;
 
+  const resolvedAttachmentCenter = useMemo(() => {
+    if (attachmentCenter?.documentId) {
+      return attachmentCenter;
+    }
+    if (traceDocument?.documentId) {
+      return {
+        documentType: traceDocument.documentType,
+        documentId: traceDocument.documentId,
+      };
+    }
+    return null;
+  }, [attachmentCenter, traceDocument?.documentId, traceDocument?.documentType]);
+
+  const hasAttachmentCenter = Boolean(resolvedAttachmentCenter?.documentId);
+
   const [activeTab, setActiveTab] = useState<string>(DETAIL_TAB_KEY);
-  /** 仅在用户首次切到对应 Tab 后挂载，避免抽屉打开即拉历史/全链路 */
+  /** 仅在用户首次切到对应 Tab 后挂载，避免抽屉打开即拉历史/全链路/附件中心 */
   const [historyMounted, setHistoryMounted] = useState(false);
   const [fullChainMounted, setFullChainMounted] = useState(false);
+  const [attachmentCenterMounted, setAttachmentCenterMounted] = useState(false);
 
   useEffect(() => {
     if (!isOpen) {
       setActiveTab(DETAIL_TAB_KEY);
       setHistoryMounted(false);
       setFullChainMounted(false);
+      setAttachmentCenterMounted(false);
     }
   }, [isOpen]);
 
@@ -284,7 +318,14 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
     setActiveTab(DETAIL_TAB_KEY);
     setHistoryMounted(false);
     setFullChainMounted(false);
-  }, [traceDocument?.documentType, traceDocument?.documentId, historyTab?.documentId]);
+    setAttachmentCenterMounted(false);
+  }, [
+    traceDocument?.documentType,
+    traceDocument?.documentId,
+    historyTab?.documentId,
+    resolvedAttachmentCenter?.documentType,
+    resolvedAttachmentCenter?.documentId,
+  ]);
 
   const handleTabChange = (key: string) => {
     setActiveTab(key);
@@ -293,6 +334,9 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
     }
     if (key === FULL_CHAIN_TAB_KEY) {
       setFullChainMounted(true);
+    }
+    if (key === ATTACHMENT_CENTER_TAB_KEY) {
+      setAttachmentCenterMounted(true);
     }
   };
 
@@ -404,7 +448,24 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
       />
     ) : null;
 
-  const showTabs = hasTraceDocument || hasHistoryTab;
+  const attachmentCenterPane =
+    hasAttachmentCenter && attachmentCenterMounted && resolvedAttachmentCenter ? (
+      <Suspense
+        fallback={
+          <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Spin />
+          </div>
+        }
+      >
+        <LazyDocumentAttachmentCenterPane
+          documentType={resolvedAttachmentCenter.documentType}
+          documentId={resolvedAttachmentCenter.documentId}
+          active={isOpen && activeTab === ATTACHMENT_CENTER_TAB_KEY}
+        />
+      </Suspense>
+    ) : null;
+
+  const showTabs = hasTraceDocument || hasHistoryTab || hasAttachmentCenter;
   const tabItems = [
     {
       key: DETAIL_TAB_KEY,
@@ -426,6 +487,15 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
             key: FULL_CHAIN_TAB_KEY,
             label: t('app.uniDetail.sectionFullChain'),
             children: fullChainPane ?? <div style={{ minHeight: 120 }} />,
+          },
+        ]
+      : []),
+    ...(hasAttachmentCenter
+      ? [
+          {
+            key: ATTACHMENT_CENTER_TAB_KEY,
+            label: t('app.uniDetail.tabAttachmentCenter'),
+            children: attachmentCenterPane ?? <div style={{ minHeight: 120 }} />,
           },
         ]
       : []),

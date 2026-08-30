@@ -16,6 +16,7 @@ import type { TFunction } from 'i18next';
 import { buildFutureDateShortcutFieldProps } from '../../../../../utils/futureDatePickerShortcuts';
 import { DOCUMENT_SUBLINE_TABLE_PROPS, DOCUMENT_SUBLINE_ADD_BUTTON_CLASS } from '../../../../../components/document-subline-table';
 import { ContractTermPreviewContent } from '../sales-contracts/ContractTermPreviewContent';
+import { formatContractTermHeading } from '../sales-contracts/contract-term-placeholders';
 import type { SalesContractTermSnapshot } from '../../../services/sales-contract-term';
 
 export type SalesOrderPaymentMilestonesFieldsProps = {
@@ -403,7 +404,7 @@ export function SalesOrderContractTermsFields({
               {termsPreview.map((term, idx) => (
                 <div key={`${term.term_item_id ?? idx}-${term.term_name}`} style={{ marginBottom: 12 }}>
                   <Typography.Text strong>
-                    {idx + 1}. {term.term_name}
+                    {formatContractTermHeading(idx, term.term_name)}
                   </Typography.Text>
                   <Typography.Paragraph style={{ marginBottom: 0, whiteSpace: 'pre-wrap' }}>
                     <ContractTermPreviewContent

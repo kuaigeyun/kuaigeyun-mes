@@ -241,6 +241,14 @@ async def kuaiiot_telemetry_pull_tick() -> dict:
 
 
 @task(schedule=[{"cron": "*/5 * * * *"}])
+async def external_master_data_sync_tick() -> dict:
+    """每 5 分钟扫描定时同步绑定（单位/分组/物料/客户/销售订单）。"""
+    from core.services.data.external_sync_scheduler import ExternalSyncSchedulerService
+
+    return await ExternalSyncSchedulerService.run_due_syncs()
+
+
+@task(schedule=[{"cron": "*/5 * * * *"}])
 async def kuaiiot_connection_health_tick() -> dict:
     """每 5 分钟探测启用连接源健康状态。"""
     from apps.kuaiiot.workflows.functions.connection_health_workflow import run_kuaiiot_connection_health_check

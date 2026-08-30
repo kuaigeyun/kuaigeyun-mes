@@ -985,3 +985,69 @@ export async function getSalesOrderPriceTrend(params: {
   });
 }
 
+export type SalesOrderSyncSourceType = 'api' | 'dataset';
+
+export interface SalesOrderSyncBinding {
+  source_type?: SalesOrderSyncSourceType | null;
+  api_uuid?: string | null;
+  dataset_uuid?: string | null;
+  field_mapping: Record<string, string>;
+  match_key_field: string;
+  sync_mode: string;
+  schedule_interval_minutes?: number;
+  last_success_at?: string | null;
+  last_attempt_at?: string | null;
+  last_error?: string | null;
+}
+
+export interface SalesOrderSyncFromSourcePayload {
+  source_type?: SalesOrderSyncSourceType;
+  api_uuid?: string;
+  dataset_uuid?: string;
+  field_mapping?: Record<string, string>;
+  save_binding?: boolean;
+  sync_mode?: string;
+  schedule_interval_minutes?: number;
+  incremental?: boolean;
+  active_only?: boolean;
+  skip_prerequisite_syncs?: boolean;
+}
+
+export interface SalesOrderSyncFromSourceResult {
+  created: number;
+  updated: number;
+  skipped: number;
+  failed: number;
+  errors: string[];
+}
+
+export async function getSalesOrderSyncBinding(): Promise<SalesOrderSyncBinding> {
+  return apiRequest<SalesOrderSyncBinding>('/apps/kuaizhizao/sales-orders/sync-binding');
+}
+
+export async function putSalesOrderSyncBinding(
+  payload: Partial<SalesOrderSyncBinding>,
+): Promise<SalesOrderSyncBinding> {
+  return apiRequest<SalesOrderSyncBinding>('/apps/kuaizhizao/sales-orders/sync-binding', {
+    method: 'PUT',
+    data: payload,
+  });
+}
+
+export async function syncSalesOrdersFromSource(
+  payload: SalesOrderSyncFromSourcePayload,
+  onProgress?: (message: string) => void,
+): Promise<SalesOrderSyncFromSourceResult> {
+  const { apiRequestSyncNdjson } = await import(
+    '../../../components/sync-from-source-modal/apiRequestSyncNdjson'
+  );
+  return apiRequestSyncNdjson<SalesOrderSyncFromSourceResult>(
+    '/apps/kuaizhizao/sales-orders/sync-from-source',
+    {
+      data: payload,
+      timeoutMs: 600_000,
+      onProgress,
+    },
+  );
+}
+

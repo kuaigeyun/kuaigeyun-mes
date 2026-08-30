@@ -767,6 +767,7 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   downgrade_material_name: 80.3,
   other_inbound_id: 81.4,
   sales_order_code: 81,
+  customer_name: 81.05,
   work_order_code: 81.1,
   source_order_code: 81.2,
   sales_delivery_code: 81.3,

@@ -1,7 +1,7 @@
 import { rowActionKind } from '../../../../../components/uni-action';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ActionType, ProColumns, ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormDependency, ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Empty, Space } from 'antd';
 import {
   renderUnqualifiedQuantity,
@@ -43,12 +43,14 @@ import {
   getQualityNcLedgerStatusValueEnum,
   renderNcLedgerStatusTag,
   renderQualityDispositionMarkerTag,
+  resolveNcDispositionSource,
 } from '../components/qualityMeta';
-import { DowngradeDispositionFields } from '../components/DowngradeDispositionFields';
+import { DispositionConditionalFields, getDispositionSuccessMessageKey } from '../components/DispositionConditionalFields';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { NonconformingLedgerDetailDrawer } from './components/NonconformingLedgerDetailDrawer';
 import { sourceInspectionLabel, sourceInspectionTypeText } from './ncLedgerSource';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
+import { ROUTES } from '../../../constants/routes';
 
 const NC_RESOURCE = 'kuaizhizao:quality-management-nonconforming-ledger';
 const EIGHT_D_RESOURCE = 'kuaizhizao:quality-management-eight-d-reports';
@@ -406,13 +408,81 @@ const NonconformingLedgerPage: React.FC = () => {
             : '-',
       },
       {
-        title: t('app.kuaizhizao.quality.nc.columns.otherInbound'),
-        dataIndex: 'other_inbound_id',
-        width: 100,
-        minWidth: 100,
+        title: t('app.kuaizhizao.quality.nc.columns.linkedDocs'),
+        key: 'linked_docs',
+        width: 180,
+        minWidth: 160,
         uniTableKeepWidth: true,
         hideInSearch: true,
-        render: (_, row) => (row.other_inbound_id ? `#${row.other_inbound_id}` : '-'),
+        ellipsis: true,
+        render: (_, row) => {
+          const links: React.ReactNode[] = [];
+          if (row.other_inbound_id) {
+            links.push(
+              <Button
+                key="oi"
+                type="link"
+                size="small"
+                style={{ paddingInline: 0 }}
+                onClick={() => navigate(`${ROUTES.WM_OTHER_INBOUND}?id=${row.other_inbound_id}`)}
+              >
+                {t('app.kuaizhizao.quality.nc.columns.otherInbound')}
+              </Button>,
+            );
+          }
+          if (row.purchase_return_id) {
+            links.push(
+              <Button
+                key="pr"
+                type="link"
+                size="small"
+                style={{ paddingInline: 0 }}
+                onClick={() => navigate(`${ROUTES.PURCHASE_RETURNS}?id=${row.purchase_return_id}`)}
+              >
+                {t('app.kuaizhizao.quality.nc.columns.purchaseReturn')}
+              </Button>,
+            );
+          }
+          if (row.rework_order_id) {
+            links.push(
+              <Button
+                key="rw"
+                type="link"
+                size="small"
+                style={{ paddingInline: 0 }}
+                onClick={() => navigate(`${ROUTES.REWORK_ORDERS}?id=${row.rework_order_id}`)}
+              >
+                {t('app.kuaizhizao.quality.nc.columns.reworkOrder')}
+              </Button>,
+            );
+          }
+          if (row.scrap_record_id) {
+            links.push(
+              <Button
+                key="sc"
+                type="link"
+                size="small"
+                style={{ paddingInline: 0 }}
+                onClick={() => navigate(`${ROUTES.REPORTING}?scrap_record_id=${row.scrap_record_id}`)}
+              >
+                {t('app.kuaizhizao.quality.nc.columns.scrapRecord')}
+              </Button>,
+            );
+          }
+          if (row.quarantine_location && row.disposition === 'quarantine') {
+            links.push(
+              <span key="ql">
+                {t('app.kuaizhizao.quality.nc.columns.quarantineLocation')}: {row.quarantine_location}
+              </span>,
+            );
+          }
+          if (!links.length) return '-';
+          return (
+            <Space size={4} wrap>
+              {links}
+            </Space>
+          );
+        },
       },
       ...buildDocumentAuditColumns<DefectLedgerItem>(t),
       {
@@ -553,10 +623,10 @@ const NonconformingLedgerPage: React.FC = () => {
             }
             await qualityImprovementApi.nonconformingLedger.updateDisposition(currentRow.id, {
               ...values,
-              status: values.disposition === 'downgrade' ? 'processed' : values.status,
+              status: 'processed',
               attachments: normalizeDocumentAttachments(values.attachments),
             });
-            messageApi.success(t('app.kuaizhizao.quality.nc.messages.updateDispositionSuccess'));
+            messageApi.success(t(getDispositionSuccessMessageKey(values.disposition)));
             setOpen(false);
             setCurrentRow(null);
             actionRef.current?.reload();
@@ -566,16 +636,37 @@ const NonconformingLedgerPage: React.FC = () => {
           <ProFormSelect
             name="disposition"
             label={t('app.kuaizhizao.quality.common.form.disposition')}
-            valueEnum={getQualityDispositionValueEnum(t)}
+            valueEnum={getQualityDispositionValueEnum(t, {
+              source: resolveNcDispositionSource(currentRow),
+            })}
             rules={[{ required: true }]}
           />
-          <DowngradeDispositionFields />
+          <DispositionConditionalFields />
           <ProFormSelect
             name="status"
             label={t('app.kuaizhizao.quality.nc.form.ledgerStatus')}
             valueEnum={getQualityNcLedgerStatusValueEnum(t)}
+            hidden
+            initialValue="processed"
           />
-          <ProFormTextArea name="remarks" label={t('common.remark')} />
+          <ProFormDependency name={['disposition']}>
+            {({ disposition }) => (
+              <ProFormTextArea
+                name="remarks"
+                label={t('common.remark')}
+                rules={
+                  disposition === 'other'
+                    ? [
+                        {
+                          required: true,
+                          message: t('app.kuaizhizao.quality.common.validation.requiredOtherRemarks'),
+                        },
+                      ]
+                    : undefined
+                }
+              />
+            )}
+          </ProFormDependency>
           <DocumentAttachmentsField category="nonconforming_ledger_attachments" />
         </FormModalTemplate>
 

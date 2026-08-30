@@ -296,7 +296,22 @@ async def compile_preview_print_template(
     编译可视化模板并使用样本数据返回预览 HTML。
     """
     try:
-        result = PrintTemplateService.compile_and_preview_designer_schema(data)
+        preview_data = dict(data.preview_data or {})
+        preview_data.setdefault("page_num", 1)
+        preview_data.setdefault("total_pages", 1)
+        if not preview_data.get("company_logo"):
+            from apps.kuaizhizao.services.print_service import _resolve_company_logo_for_print
+
+            preview_data["company_logo"] = await _resolve_company_logo_for_print(tenant_id)
+        if not preview_data.get("logo"):
+            preview_data["logo"] = preview_data.get("company_logo") or ""
+        if not preview_data.get("company_seal"):
+            from apps.kuaizhizao.services.print_service import _resolve_company_seal_for_print
+
+            preview_data["company_seal"] = await _resolve_company_seal_for_print(tenant_id)
+
+        enriched = data.model_copy(update={"preview_data": preview_data})
+        result = PrintTemplateService.compile_and_preview_designer_schema(enriched)
         return PrintTemplateCompilePreviewResponse(**result)
     except ValidationError as e:
         raise HTTPException(

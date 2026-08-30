@@ -119,6 +119,7 @@ const CONFIG = {
     cancel: receiptRefundService.cancel,
     listPullCandidates: receiptRefundService.listPullCandidates,
     previewPull: receiptRefundService.previewPull,
+    previewPullMulti: receiptRefundService.previewPullMulti,
     voucherKind: 'receipt' as const,
   },
   'payment-refund': {
@@ -141,6 +142,7 @@ const CONFIG = {
     cancel: paymentRefundService.cancel,
     listPullCandidates: paymentRefundService.listPullCandidates,
     previewPull: paymentRefundService.previewPull,
+    previewPullMulti: paymentRefundService.previewPullMulti,
     voucherKind: 'payment' as const,
   },
 };
@@ -173,7 +175,7 @@ const FinanceRefundVoucherPage: React.FC<Props> = ({ mode, columnPersistenceId }
   const [pullPreviewData, setPullPreviewData] = useState<
     ReceiptRefundPullPreview | PaymentRefundPullPreview | null
   >(null);
-  const [pullPreviewSourceId, setPullPreviewSourceId] = useState<number | null>(null);
+  const [pullPreviewSourceIds, setPullPreviewSourceIds] = useState<number[]>([]);
   const [pullSubmitting, setPullSubmitting] = useState(false);
   const [pullForm] = Form.useForm();
   const pullCloseRef = useRef<(() => void) | null>(null);
@@ -203,19 +205,34 @@ const FinanceRefundVoucherPage: React.FC<Props> = ({ mode, columnPersistenceId }
   const resetPull = () => {
     setPullPreviewOpen(false);
     setPullPreviewData(null);
-    setPullPreviewSourceId(null);
+    setPullPreviewSourceIds([]);
     pullForm.resetFields();
   };
 
-  const openPullPreview = async (sourceId: number) => {
+  const openPullPreview = async (sourceIdsInput: number | number[]) => {
+    const sourceIds = (Array.isArray(sourceIdsInput) ? sourceIdsInput : [sourceIdsInput])
+      .map((id) => Number(id))
+      .filter((id) => Number.isFinite(id) && id > 0);
+    if (!sourceIds.length) return;
+
     setPullPreviewOpen(true);
     setPullPreviewLoading(true);
     setPullPreviewData(null);
-    setPullPreviewSourceId(sourceId);
+    setPullPreviewSourceIds(sourceIds);
     try {
-      const data = await cfg.previewPull(sourceId);
+      const data =
+        sourceIds.length === 1
+          ? await cfg.previewPull(sourceIds[0])
+          : await cfg.previewPullMulti(sourceIds);
       setPullPreviewData(data);
-      const maxPush = Number(data.items?.[0]?.max_push_quantity ?? 0);
+      const maxPush =
+        Number(
+          (data as { max_push_total?: number }).max_push_total ??
+            (data.items || []).reduce(
+              (sum, row) => sum + Number(row.max_push_quantity ?? 0),
+              0,
+            ),
+        ) || 0;
       const dateKey = cfg.dateField;
       pullForm.setFieldsValue({
         source_code: data.source_code,
@@ -235,9 +252,20 @@ const FinanceRefundVoucherPage: React.FC<Props> = ({ mode, columnPersistenceId }
   };
 
   useEffect(() => {
-    const pullSourceId = Number((location.state as { pullSourceId?: number } | null)?.pullSourceId ?? 0);
-    if (!pullSourceId) return;
-    void openPullPreview(pullSourceId);
+    const state = location.state as {
+      pullSourceId?: number;
+      pullSourceIds?: number[];
+    } | null;
+    const idsFromState = Array.isArray(state?.pullSourceIds)
+      ? state!.pullSourceIds!
+      : state?.pullSourceId
+        ? [Number(state.pullSourceId)]
+        : [];
+    const sourceIds = idsFromState
+      .map((id) => Number(id))
+      .filter((id) => Number.isFinite(id) && id > 0);
+    if (!sourceIds.length) return;
+    void openPullPreview(sourceIds);
     navigate(location.pathname, { replace: true, state: null });
   }, [location.pathname, location.state, navigate]);
 
@@ -263,7 +291,7 @@ const FinanceRefundVoucherPage: React.FC<Props> = ({ mode, columnPersistenceId }
 
   const pullQuery = useUniPullQuery<PullCandidate>({
     rowKey: 'id',
-    selectionType: 'radio',
+    selectionType: 'checkbox',
     scopeOptions: pullQueryScopeOptions,
     defaultScope: 'pullable',
     isRowDisabled: (record) => !isPullSelectable(record),
@@ -283,19 +311,33 @@ const FinanceRefundVoucherPage: React.FC<Props> = ({ mode, columnPersistenceId }
       }
     },
     onConfirm: async (keys, rows) => {
-      const selected = rows.find((x) => String(x.id) === String(keys[0]));
-      if (!selected?.id) {
+      const selectedIds = rows
+        .filter((x) => keys.some((k) => String(k) === String(x.id)))
+        .map((x) => Number(x.id))
+        .filter((id) => Number.isFinite(id) && id > 0);
+      if (!selectedIds.length) {
         messageApi.warning(t(`${NS}.selectSource`));
         return;
       }
+      const partnerField = cfg.partnerIdField;
+      const partnerIds = new Set(
+        rows
+          .filter((x) => selectedIds.includes(Number(x.id)))
+          .map((x) => Number((x as Record<string, unknown>)[partnerField] ?? 0))
+          .filter((id) => id > 0),
+      );
+      if (partnerIds.size > 1) {
+        messageApi.warning(t(`${NS}.samePartnerRequired`));
+        return;
+      }
       pullCloseRef.current?.();
-      await openPullPreview(selected.id);
+      await openPullPreview(selectedIds);
     },
   });
   pullCloseRef.current = pullQuery.closeModal;
 
   const handlePullSubmit = async (values: Record<string, unknown>) => {
-    if (!pullPreviewData || !pullPreviewSourceId) return false;
+    if (!pullPreviewData || !pullPreviewSourceIds.length) return false;
     if (pullPreviewData.has_blocking_issues) return false;
     try {
       assertBankAccountForPaymentMethod(values.payment_method as string, values.bank_account_id, t);
@@ -303,7 +345,14 @@ const FinanceRefundVoucherPage: React.FC<Props> = ({ mode, columnPersistenceId }
       messageApi.warning((e as Error).message);
       return false;
     }
-    const maxPush = Number(pullPreviewData.items?.[0]?.max_push_quantity ?? 0);
+    const maxPush =
+      Number(
+        (pullPreviewData as { max_push_total?: number }).max_push_total ??
+          (pullPreviewData.items || []).reduce(
+            (sum, row) => sum + Number(row.max_push_quantity ?? 0),
+            0,
+          ),
+      ) || 0;
     const totalAmount = Number(values.total_amount) || 0;
     if (totalAmount <= 0 || totalAmount > maxPush) {
       messageApi.warning(t(`${NS}.amountExceedMax`, { max: maxPush.toFixed(2) }));
@@ -335,7 +384,8 @@ const FinanceRefundVoucherPage: React.FC<Props> = ({ mode, columnPersistenceId }
         notes: String(values.notes ?? '').trim(),
         attachments: normalizeDocumentAttachments(values.attachments),
         source_type: mode === 'receipt-refund' ? 'receipt' : 'payment',
-        source_id: pullPreviewSourceId,
+        source_id: pullPreviewSourceIds[0],
+        source_ids: pullPreviewSourceIds,
       };
       await cfg.create(payload as never);
       messageApi.success(t(`${NS}.createSuccess`));
@@ -398,7 +448,14 @@ const FinanceRefundVoucherPage: React.FC<Props> = ({ mode, columnPersistenceId }
     });
   };
 
-  const pullPreviewMaxPush = Number(pullPreviewData?.items?.[0]?.max_push_quantity ?? 0);
+  const pullPreviewMaxPush =
+    Number(
+      (pullPreviewData as { max_push_total?: number } | null)?.max_push_total ??
+        (pullPreviewData?.items || []).reduce(
+          (sum, row) => sum + Number(row.max_push_quantity ?? 0),
+          0,
+        ),
+    ) || 0;
   const formatPullMoney = (v: number) =>
     formatCurrencyAmount(v || 0);
 
@@ -781,7 +838,7 @@ const FinanceRefundVoucherPage: React.FC<Props> = ({ mode, columnPersistenceId }
             )}
             {!pullPreviewData.has_blocking_issues && pullPreviewMaxPush > 0 ? (
               <ProForm
-                key={`pull-refund-${pullPreviewSourceId}`}
+                key={`pull-refund-${pullPreviewSourceIds.join('-')}`}
                 form={pullForm}
                 submitter={false}
                 onFinish={handlePullSubmit}

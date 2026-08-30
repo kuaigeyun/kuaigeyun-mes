@@ -71,6 +71,7 @@ class Warehouse(BaseModel):
     
     # 状态信息
     is_active = fields.BooleanField(default=True, description="是否启用")
+    external_sync_at = fields.DatetimeField(null=True, description="最近从外部接口/数据集同步时间")
     
     # 软删除字段
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")

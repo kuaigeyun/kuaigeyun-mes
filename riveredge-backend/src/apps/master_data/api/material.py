@@ -68,6 +68,12 @@ from apps.master_data.schemas.material_dedup_schemas import (
     MaterialDedupCheckRequest,
     MaterialDedupCheckResponse,
 )
+from apps.master_data.schemas.master_data_sync import (
+    MasterDataSyncBindingOut,
+    MasterDataSyncBindingUpsert,
+    MasterDataSyncFromSourceOut,
+    MasterDataSyncFromSourceRequest,
+)
 from apps.master_data.services.material_dedup_service import MaterialDedupService
 from apps.master_data.services.bom_change_service import BOMChangeService
 from apps.master_data.schemas.bom_change_schemas import (
@@ -171,6 +177,62 @@ async def get_material_group_tree(
     另含 ungroupedMaterialCount / totalMaterialCount。
     """
     return await MaterialService.get_material_group_tree(tenant_id, is_active)
+
+
+material_group_sync_service = None
+
+
+def _material_group_sync_service():
+    global material_group_sync_service
+    if material_group_sync_service is None:
+        from apps.master_data.services.material_group_sync_service import MaterialGroupSyncService
+        material_group_sync_service = MaterialGroupSyncService()
+    return material_group_sync_service
+
+
+@router.get(
+    "/groups/sync-binding",
+    response_model=MasterDataSyncBindingOut,
+    summary="物料分组同步绑定配置",
+    dependencies=[Depends(require_master_data_module_access("master-data:material"))],
+)
+async def get_material_group_sync_binding(
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    return await _material_group_sync_service().get_binding(tenant_id)
+
+
+@router.put(
+    "/groups/sync-binding",
+    response_model=MasterDataSyncBindingOut,
+    summary="保存物料分组同步绑定配置",
+    dependencies=[Depends(require_master_data_module_access("master-data:material"))],
+)
+async def put_material_group_sync_binding(
+    body: MasterDataSyncBindingUpsert,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    try:
+        return await _material_group_sync_service().upsert_binding(tenant_id, body)
+    except ValidationError as e:
+        raise _http_error(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.post(
+    "/groups/sync-from-source",
+    response_model=MasterDataSyncFromSourceOut,
+    summary="从数据接口或数据集同步物料分组",
+    dependencies=[Depends(require_master_data_module_access("master-data:material"))],
+)
+async def sync_material_groups_from_source(
+    body: MasterDataSyncFromSourceRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    try:
+        return await _material_group_sync_service().sync_from_source(tenant_id, current_user, body)
+    except ValidationError as e:
+        raise _http_error(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
 
 
 @router.get("/groups/{group_uuid}", response_model=MaterialGroupResponse, summary="Get material group")
@@ -1622,6 +1684,69 @@ async def create_material(
         return await MaterialService.create_material(tenant_id, data, current_user=current_user)
     except ValidationError as e:
         raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+material_sync_service = None
+
+
+def _material_sync_service():
+    global material_sync_service
+    if material_sync_service is None:
+        from apps.master_data.services.material_sync_service import MaterialSyncService
+        material_sync_service = MaterialSyncService()
+    return material_sync_service
+
+
+@router.get(
+    "/sync-binding",
+    response_model=MasterDataSyncBindingOut,
+    summary="物料同步绑定配置",
+    dependencies=[Depends(require_master_data_module_access("master-data:material"))],
+)
+async def get_material_sync_binding(
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    return await _material_sync_service().get_binding(tenant_id)
+
+
+@router.put(
+    "/sync-binding",
+    response_model=MasterDataSyncBindingOut,
+    summary="保存物料同步绑定配置",
+    dependencies=[Depends(require_master_data_module_access("master-data:material"))],
+)
+async def put_material_sync_binding(
+    body: MasterDataSyncBindingUpsert,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    try:
+        return await _material_sync_service().upsert_binding(tenant_id, body)
+    except ValidationError as e:
+        raise _http_error(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.post(
+    "/sync-from-source",
+    response_model=MasterDataSyncFromSourceOut,
+    summary="从数据接口或数据集同步物料",
+    dependencies=[Depends(require_master_data_module_access("master-data:material"))],
+)
+async def sync_materials_from_source(
+    body: MasterDataSyncFromSourceRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    stream: bool = Query(False, description="为 true 时以 NDJSON 流式返回进度"),
+):
+    try:
+        if stream:
+            from core.services.data.sync_progress_stream import stream_sync_ndjson
+
+            return await stream_sync_ndjson(
+                lambda: _material_sync_service().sync_from_source(tenant_id, current_user, body)
+            )
+        return await _material_sync_service().sync_from_source(tenant_id, current_user, body)
+    except ValidationError as e:
+        raise _http_error(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
 
 
 @router.get("", response_model=MaterialListResponse, summary="List materials")

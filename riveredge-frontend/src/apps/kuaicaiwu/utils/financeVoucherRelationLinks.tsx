@@ -28,25 +28,38 @@ export function FinanceVoucherRelationLinks({
   const blocks: React.ReactNode[] = [];
   const prefix = 'app.kuaicaiwu.financeUi.voucher';
 
-  if (isRefund && record.source_voucher_id) {
-    blocks.push(
-      <div key="source">
-        <Typography.Text type="secondary">{t(`${prefix}.sourceVoucher`)}</Typography.Text>
-        <div>
-          <Typography.Link
-            onClick={() =>
-              linkHandlers.openVoucher({
-                kind,
-                id: Number(record.source_voucher_id),
-                isRefund: false,
-              })
-            }
-          >
-            {record.source_voucher_code || `#${record.source_voucher_id}`}
-          </Typography.Link>
-        </div>
-      </div>,
-    );
+  if (isRefund) {
+    const sources =
+      record.source_vouchers && record.source_vouchers.length > 0
+        ? record.source_vouchers
+        : record.source_voucher_id
+          ? [{ id: Number(record.source_voucher_id), code: String(record.source_voucher_code || record.source_voucher_id) }]
+          : [];
+    if (sources.length) {
+      blocks.push(
+        <div key="source">
+          <Typography.Text type="secondary">{t(`${prefix}.sourceVoucher`)}</Typography.Text>
+          <div>
+            <Space size={8} wrap>
+              {sources.map((src) => (
+                <Typography.Link
+                  key={src.id}
+                  onClick={() =>
+                    linkHandlers.openVoucher({
+                      kind,
+                      id: Number(src.id),
+                      isRefund: false,
+                    })
+                  }
+                >
+                  {src.code || `#${src.id}`}
+                </Typography.Link>
+              ))}
+            </Space>
+          </div>
+        </div>,
+      );
+    }
   }
 
   if (!isRefund && (record.linked_refund_vouchers?.length ?? 0) > 0) {

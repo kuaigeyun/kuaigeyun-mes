@@ -1,4 +1,4 @@
-import dayjs from 'dayjs';
+import dayjs from '../config/dayjs';
 import { getTimezoneFromSiteSetting } from './format';
 
 /** Excel 1900 日期系统起点（含 Lotus 闰年兼容：序列日 0 = 1899-12-30） */
@@ -83,16 +83,78 @@ export function coerceFormDate(value: unknown): dayjs.Dayjs | null {
   return parsed.isValid() ? parsed : null;
 }
 
+/**
+ * 从 Date 本地日历分量拼 YYYY-MM-DD（浏览器墙钟；禁止 toISOString）。
+ * 东八区选 12 号零点 → toJSON 为 `2026-05-11T16:00:00.000Z`，切前 10 位会错成 11 号。
+ */
+function localDatePartsString(value: Date): string | undefined {
+  if (Number.isNaN(value.getTime())) return undefined;
+  const y = value.getFullYear();
+  const m = String(value.getMonth() + 1).padStart(2, '0');
+  const d = String(value.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+/** 从 dayjs / dayjs-like 取底层 Date（跨 bundle 时 isDayjs 可能为 false） */
+function extractUnderlyingDate(value: unknown): Date | null {
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  if (value == null || typeof value !== 'object') return null;
+  const obj = value as { $d?: unknown; toDate?: () => Date };
+  if (obj.$d instanceof Date && !Number.isNaN(obj.$d.getTime())) return obj.$d;
+  if (typeof obj.toDate === 'function') {
+    try {
+      const d = obj.toDate();
+      if (d instanceof Date && !Number.isNaN(d.getTime())) return d;
+    } catch {
+      /* ignore */
+    }
+  }
+  return null;
+}
+
+/**
+ * 站点墙钟日历日。优先用底层 Date 的本地 getFullYear/getMonth/getDate
+ * （与 DatePicker 用户所见一致）；否则再经站点时区格式化。
+ */
+function wallCalendarDateString(value: dayjs.Dayjs | Date): string | undefined {
+  if (value instanceof Date) {
+    return localDatePartsString(value);
+  }
+  const underlying = extractUnderlyingDate(value);
+  if (underlying) {
+    return localDatePartsString(underlying);
+  }
+  if (!value.isValid()) return undefined;
+  const wall = value.tz(getTimezoneFromSiteSetting());
+  const y = wall.year();
+  const m = String(wall.month() + 1).padStart(2, '0');
+  const d = String(wall.date()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 /** 提交 API：YYYY-MM-DD（表单墙钟 / 站点日历日；禁止 toISOString） */
 export function toApiDateString(value: unknown): string | undefined {
   if (value == null || value === '') return undefined;
-  // DatePicker dayjs：已是墙钟，直接 format
-  if (dayjs.isDayjs(value)) {
-    return value.isValid() ? value.format('YYYY-MM-DD') : undefined;
+  if (typeof value === 'string') {
+    const text = value.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+    // 误传入带 Z 的 ISO：按站点时区还原业务日，禁止 slice(0,10)
+    if (/^\d{4}-\d{2}-\d{2}T/.test(text) || /Z|[+-]\d{2}:?\d{2}$/i.test(text)) {
+      const d = dayjs(text).tz(getTimezoneFromSiteSetting());
+      return d.isValid() ? d.format('YYYY-MM-DD') : undefined;
+    }
   }
+  const underlying = extractUnderlyingDate(value);
+  if (underlying) {
+    return localDatePartsString(underlying);
+  }
+  if (dayjs.isDayjs(value)) {
+    return wallCalendarDateString(value);
+  }
+  // 禁止对未知 dayjs-like 直接 .format：utc 模式下会偏一天
   const d = coerceFormDate(value);
   if (!d) return undefined;
-  return d.tz(getTimezoneFromSiteSetting()).format('YYYY-MM-DD');
+  return wallCalendarDateString(d);
 }
 
 /** 提交 API：站点墙钟 YYYY-MM-DD HH:mm:ss（禁止 toISOString） */

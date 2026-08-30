@@ -935,6 +935,7 @@ async def _purchase_order_pending_change_by_ids(tenant_id: int, order_ids: List[
         tenant_id=tenant_id,
         source_order_id__in=order_ids,
         deleted_at__isnull=True,
+        applied_at__isnull=True,
         status__in=[
             DocumentStatus.DRAFT.value,
             DocumentStatus.PENDING_REVIEW.value,

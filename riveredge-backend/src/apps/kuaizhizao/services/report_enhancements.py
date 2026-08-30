@@ -447,6 +447,8 @@ async def collect_inventory_movement_events(
             })
 
     async def _append_production_movements():
+        from tortoise.expressions import Q
+
         from apps.kuaizhizao.models.material_stock_movement import MaterialStockMovement
 
         type_labels = {
@@ -477,36 +479,57 @@ async def collect_inventory_movement_events(
         mq = mq.exclude(movement_type__in=["purchase_receipt", "sales_delivery"])
         if material_id:
             mq = mq.filter(material_id=material_id)
-        rows = await mq.order_by("created_at", "id").all()
+        # 仓库条件下推 SQL，避免先 .all() 再在 Python 里丢弃
+        if warehouse_id is not None:
+            mq = mq.filter(
+                Q(balance_warehouse_id=warehouse_id)
+                | Q(from_warehouse_id=warehouse_id)
+                | Q(to_warehouse_id=warehouse_id)
+            )
+        rows = await mq.order_by("created_at", "id").values(
+            "created_at",
+            "movement_type",
+            "source_doc_code",
+            "material_id",
+            "material_code",
+            "material_name",
+            "batch_no",
+            "quantity",
+            "balance_warehouse_id",
+            "from_warehouse_id",
+            "to_warehouse_id",
+            "from_warehouse_name",
+            "to_warehouse_name",
+            "operator_name",
+        )
         for r in rows:
-            qty = float(r.quantity or 0)
-            bal_wh = r.balance_warehouse_id
-            if warehouse_id is not None:
-                if bal_wh != warehouse_id and r.from_warehouse_id != warehouse_id and r.to_warehouse_id != warehouse_id:
-                    continue
-            wh_id = bal_wh or r.from_warehouse_id or r.to_warehouse_id
+            qty = float(r.get("quantity") or 0)
+            bal_wh = r.get("balance_warehouse_id")
+            from_wh = r.get("from_warehouse_id")
+            to_wh = r.get("to_warehouse_id")
+            wh_id = bal_wh or from_wh or to_wh
             wh_name = (
-                (r.from_warehouse_name if bal_wh == r.from_warehouse_id else None)
-                or (r.to_warehouse_name if bal_wh == r.to_warehouse_id else None)
-                or r.from_warehouse_name
-                or r.to_warehouse_name
+                (r.get("from_warehouse_name") if bal_wh == from_wh else None)
+                or (r.get("to_warehouse_name") if bal_wh == to_wh else None)
+                or r.get("from_warehouse_name")
+                or r.get("to_warehouse_name")
                 or ""
             )
             events.append({
-                "event_time": r.created_at,
-                "doc_type": type_labels.get(r.movement_type, r.movement_type or "库存移动"),
-                "doc_code": r.source_doc_code or "",
-                "material_id": r.material_id,
-                "material_code": r.material_code or "",
-                "material_name": r.material_name or "",
+                "event_time": r.get("created_at"),
+                "doc_type": type_labels.get(r.get("movement_type"), r.get("movement_type") or "库存移动"),
+                "doc_code": r.get("source_doc_code") or "",
+                "material_id": r.get("material_id"),
+                "material_code": r.get("material_code") or "",
+                "material_name": r.get("material_name") or "",
                 "material_spec": "",
                 "material_unit": "",
-                "batch_number": r.batch_no or "",
+                "batch_number": r.get("batch_no") or "",
                 "warehouse_id": wh_id,
                 "warehouse_name": wh_name,
                 "qty_in": qty if qty > 0 else 0.0,
                 "qty_out": abs(qty) if qty < 0 else 0.0,
-                "operator": r.operator_name or "",
+                "operator": r.get("operator_name") or "",
             })
 
     await _append_outbound_delivery()
@@ -532,10 +555,15 @@ async def build_inventory_summary(
     当前批次/线边为「此刻」结存，期间之后的流水回拨到截止日。
     """
     start_utc, end_exclusive = resolve_inventory_report_period(date_start, date_end)
+    # 仅取「期初～此刻」：历史期间回拨只需截止日之后到现在的流水，禁止 date_end=None 无上界扫全表
+    from core.utils.timezone_utils import resolve_business_datetime
+
+    now_utc = resolve_business_datetime()
+    collect_end = now_utc if now_utc > end_exclusive else end_exclusive
     events = await collect_inventory_movement_events(
         tenant_id,
         date_start=start_utc,
-        date_end=None,
+        date_end=collect_end,
         warehouse_id=warehouse_id,
     )
 
@@ -610,15 +638,20 @@ async def build_inventory_summary(
         ]
 
     items.sort(key=lambda it: (str(it.get("material_code") or ""), str(it.get("warehouse_name") or "")))
+    summary = {
+        "opening_qty": round(sum(it["opening_qty"] for it in items), 4),
+        "inbound_qty": round(sum(it["inbound_qty"] for it in items), 4),
+        "outbound_qty": round(sum(it["outbound_qty"] for it in items), 4),
+        "closing_qty": round(sum(it["closing_qty"] for it in items), 4),
+    }
+    total = len(items)
+    sk = max(0, int(skip or 0))
+    lim = max(1, min(int(limit or 100), REPORT_LIST_MAX_LIMIT))
     return {
-        "data": items,
+        "data": items[sk : sk + lim],
+        "total": total,
         "success": True,
-        "summary": {
-            "opening_qty": round(sum(it["opening_qty"] for it in items), 4),
-            "inbound_qty": round(sum(it["inbound_qty"] for it in items), 4),
-            "outbound_qty": round(sum(it["outbound_qty"] for it in items), 4),
-            "closing_qty": round(sum(it["closing_qty"] for it in items), 4),
-        },
+        "summary": summary,
     }
 
 
@@ -683,13 +716,21 @@ async def build_inventory_ledger(
 
     events.reverse()
 
+    total_in = sum(float(e.get("qty_in") or 0) for e in events)
+    total_out = sum(float(e.get("qty_out") or 0) for e in events)
+    total = len(events)
+    sk = max(0, int(skip or 0))
+    lim = max(1, min(int(limit or 100), REPORT_LIST_MAX_LIMIT))
+    page = events[sk : sk + lim]
+
     return {
-        "data": events,
+        "data": page,
+        "total": total,
         "success": True,
         "summary": {
-            "total_in": sum(e.get("qty_in") or 0 for e in events),
-            "total_out": sum(e.get("qty_out") or 0 for e in events),
-            "line_count": len(events),
+            "total_in": total_in,
+            "total_out": total_out,
+            "line_count": total,
         },
     }
 
@@ -703,6 +744,8 @@ async def build_warehouse_movement_detail(
     warehouse_id: Optional[int] = None,
     material_id: Optional[int] = None,
     keyword: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100,
 ) -> Dict[str, Any]:
     """入库/出库明细：一行一物料，默认按业务时间倒序。"""
     if direction not in {"inbound", "outbound"}:
@@ -761,12 +804,16 @@ async def build_warehouse_movement_detail(
 
     rows.sort(key=lambda row: row.get("event_time") or "", reverse=True)
     total_qty = round(sum(float(row.get("quantity") or 0) for row in rows), 4)
+    total = len(rows)
+    sk = max(0, int(skip or 0))
+    lim = max(1, min(int(limit or 100), REPORT_LIST_MAX_LIMIT))
     return {
-        "data": rows,
+        "data": rows[sk : sk + lim],
+        "total": total,
         "success": True,
         "summary": {
             "quantity": total_qty,
-            "line_count": len(rows),
+            "line_count": total,
         },
     }
 
@@ -779,6 +826,8 @@ async def build_inbound_detail(
     warehouse_id: Optional[int] = None,
     material_id: Optional[int] = None,
     keyword: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100,
 ) -> Dict[str, Any]:
     return await build_warehouse_movement_detail(
         tenant_id,
@@ -788,6 +837,8 @@ async def build_inbound_detail(
         warehouse_id=warehouse_id,
         material_id=material_id,
         keyword=keyword,
+        skip=skip,
+        limit=limit,
     )
 
 
@@ -799,6 +850,8 @@ async def build_outbound_detail(
     warehouse_id: Optional[int] = None,
     material_id: Optional[int] = None,
     keyword: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100,
 ) -> Dict[str, Any]:
     return await build_warehouse_movement_detail(
         tenant_id,
@@ -808,6 +861,8 @@ async def build_outbound_detail(
         warehouse_id=warehouse_id,
         material_id=material_id,
         keyword=keyword,
+        skip=skip,
+        limit=limit,
     )
 
 

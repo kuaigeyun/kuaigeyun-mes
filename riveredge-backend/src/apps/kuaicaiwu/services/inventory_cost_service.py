@@ -41,34 +41,71 @@ class InventoryCostService:
                 continue
             try:
                 val = Decimal(str(raw))
-                if val >= 0:
+                # 0 视为未维护，继续试下一候选（避免有采购价却被 0 的移动平均挡死）
+                if val > 0:
                     return val
             except Exception:
                 continue
         purchase = defaults.get("purchase") if isinstance(defaults.get("purchase"), dict) else {}
-        for key in ("standard_price", "purchase_price"):
+        for key in (
+            "standard_price",
+            "purchase_price",
+            "default_purchase_price",
+            "defaultPurchasePrice",
+        ):
             raw = purchase.get(key)
             if raw in (None, ""):
                 continue
             try:
-                return Decimal(str(raw))
+                val = Decimal(str(raw))
+                if val > 0:
+                    return val
+            except Exception:
+                continue
+        for key in ("default_purchase_price", "defaultPurchasePrice"):
+            raw = defaults.get(key)
+            if raw in (None, ""):
+                continue
+            try:
+                val = Decimal(str(raw))
+                if val > 0:
+                    return val
+            except Exception:
+                continue
+        return None
+
+    @staticmethod
+    def _read_source_config_purchase_price(source_config: Any) -> Optional[Decimal]:
+        if not isinstance(source_config, dict):
+            return None
+        for key in ("purchase_price", "standard_price", "default_purchase_price"):
+            raw = source_config.get(key)
+            if raw in (None, ""):
+                continue
+            try:
+                val = Decimal(str(raw))
+                if val > 0:
+                    return val
             except Exception:
                 continue
         return None
 
     async def get_material_unit_cost(self, tenant_id: int, material_id: int) -> Optional[Decimal]:
-        """移动加权 → 标准成本 → 采购价；全部缺失返回 None（不编造默认价）。"""
+        """移动加权 → 标准成本 → 采购价（含 defaults.purchase / source_config）；全部缺失返回 None。"""
         material = await Material.get_or_none(
             tenant_id=tenant_id, id=material_id, deleted_at__isnull=True
         )
         if not material:
             return None
-        return self._read_defaults_cost(
+        from_defaults = self._read_defaults_cost(
             material.defaults,
             "moving_average_cost",
             "standard_cost",
             "purchase_price",
         )
+        if from_defaults is not None:
+            return from_defaults
+        return self._read_source_config_purchase_price(getattr(material, "source_config", None))
 
     async def get_material_unit_cost_or_zero(self, tenant_id: int, material_id: int) -> Decimal:
         """库存计价内部使用：无单价时按 0 处理。"""

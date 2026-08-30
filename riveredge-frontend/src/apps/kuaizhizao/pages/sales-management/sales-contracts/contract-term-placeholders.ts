@@ -2,6 +2,28 @@ import type { SalesContractTermSnapshot } from '../../../services/sales-contract
 
 const PLACEHOLDER_RE = /\{([^{}]+)\}/g;
 
+const CN_DIGITS = '零一二三四五六七八九';
+
+/** 条款列表序号：1→一，10→十，11→十一（与打印 contract_terms 一致） */
+export function intToChineseSimple(n: number): string {
+  if (n <= 0 || !Number.isFinite(n)) return String(n);
+  const i = Math.floor(n);
+  if (i < 10) return CN_DIGITS[i]!;
+  if (i === 10) return '十';
+  if (i < 20) return `十${CN_DIGITS[i % 10]}`;
+  if (i < 100) {
+    const tens = Math.floor(i / 10);
+    const ones = i % 10;
+    return `${CN_DIGITS[tens]}十${ones ? CN_DIGITS[ones] : ''}`;
+  }
+  return String(i);
+}
+
+/** 合同条款大项序号展示：一、付款方式 */
+export function formatContractTermHeading(indexZeroBased: number, termName: string): string {
+  return `${intToChineseSimple(indexZeroBased + 1)}、${termName}`;
+}
+
 export function isFieldBindingKey(key: string): boolean {
   return key.startsWith('@');
 }

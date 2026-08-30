@@ -506,6 +506,39 @@ const PaymentsPage: React.FC = () => {
   const formatPullMoney = (v: number) =>
     formatCurrencyAmount(v || 0);
 
+  const tableRowsRef = useRef<PaymentVoucher[]>([]);
+
+  const handleBatchCreateRefund = async (keys: React.Key[]) => {
+    if (!paymentRefundPerms.canCreate) {
+      messageApi.warning(t('app.kuaicaiwu.payment.batchRefundNoPermission'));
+      return;
+    }
+    const ids = keys.map((k) => Number(k)).filter((id) => Number.isFinite(id) && id > 0);
+    if (ids.length < 1) {
+      messageApi.warning(t('app.kuaicaiwu.payment.batchRefundSelectRequired'));
+      return;
+    }
+    const rows = tableRowsRef.current.filter((r) => ids.includes(Number(r.id)));
+    if (!rows.length) {
+      messageApi.warning(t('app.kuaicaiwu.payment.batchRefundRowsMissing'));
+      return;
+    }
+    const supplierIds = new Set(rows.map((r) => Number(r.supplier_id || 0)).filter((id) => id > 0));
+    if (supplierIds.size > 1) {
+      messageApi.warning(t('app.kuaicaiwu.payment.batchRefundSameSupplier'));
+      return;
+    }
+    const ineligible = rows.filter((r) => !canCreateRefundFromVoucher(r, 'payment'));
+    if (ineligible.length) {
+      messageApi.warning(t('app.kuaicaiwu.payment.batchRefundIneligible'));
+      return;
+    }
+    navigate('/apps/kuaicaiwu/finance-management/payment-refunds', {
+      state: { pullSourceIds: ids },
+    });
+    setSelectedRowKeys([]);
+  };
+
   const batchMenuItems = useMemo(() => [
     {
       key: 'batch-confirm',
@@ -516,6 +549,11 @@ const PaymentsPage: React.FC = () => {
       onClick: handleBatchConfirm,
     },
     {
+      key: 'batch-create-refund',
+      label: t('app.kuaicaiwu.payment.batchCreateRefund'),
+      onClick: handleBatchCreateRefund,
+    },
+    {
       key: 'batch-cancel',
       label: t('app.kuaicaiwu.common.batchVoid'),
       requireConfirm: true,
@@ -523,7 +561,7 @@ const PaymentsPage: React.FC = () => {
       confirmDescription: t(`${P}.batchVoidDesc`),
       onClick: handleBatchCancel,
     },
-  ], [t]);
+  ], [t, paymentRefundPerms.canCreate]);
 
   const columns: ProColumns<PaymentVoucher>[] = useMemo(() => [
     ...financeDocCodePartnerSearchColumns({
@@ -744,7 +782,7 @@ const PaymentsPage: React.FC = () => {
               {...rowActionCreateRefund('create')}
               onClick={() =>
                 navigate('/apps/kuaicaiwu/finance-management/payment-refunds', {
-                  state: { pullSourceId: record.id },
+                  state: { pullSourceIds: [record.id] },
                 })
               }
             />,
@@ -772,6 +810,9 @@ const PaymentsPage: React.FC = () => {
         enableRowSelection
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
+        onTableDataChange={(rows) => {
+          tableRowsRef.current = rows;
+        }}
         rowKey="id"
         columnPersistenceId="apps.kuaicaiwu.pages.finance-management.payments.list-v2"
         showAdvancedSearch
@@ -1091,7 +1132,7 @@ const PaymentsPage: React.FC = () => {
                       {...rowActionKind('submit')}
                       onClick={() =>
                         navigate('/apps/kuaicaiwu/finance-management/payment-refunds', {
-                          state: { pullSourceId: detailRecord.id },
+                          state: { pullSourceIds: [detailRecord.id] },
                         })
                       }
                     >

@@ -234,6 +234,14 @@ export const DocumentTimingDetailDrawer: React.FC<DocumentTimingDetailDrawerProp
         ) : null
       }
       timelineTitle={t('app.kuaireport.analysis.timing.timeline', { defaultValue: '节点时间线' })}
+      attachmentCenter={
+        contentReady && record?.document_type && record.document_id
+          ? {
+              documentType: String(record.document_type),
+              documentId: Number(record.document_id),
+            }
+          : undefined
+      }
     />
   );
 };

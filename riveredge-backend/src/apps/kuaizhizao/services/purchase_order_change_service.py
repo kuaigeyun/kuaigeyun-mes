@@ -104,16 +104,22 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
         return await self.generate_code(tenant_id, "PURCHASE_ORDER_CHANGE_CODE", prefix="POC")
 
     @staticmethod
-    def _item_has_change_content(item: PurchaseOrderChangeItem) -> bool:
+    def _norm_change_date(value: Any) -> Optional[str]:
+        if value is None or value == "":
+            return None
+        return str(value)[:10]
+
+    @classmethod
+    def _item_has_change_content(cls, item: PurchaseOrderChangeItem) -> bool:
         if item.change_type in (OrderChangeLineType.LINE_ADD.value, OrderChangeLineType.LINE_CANCEL.value):
             return True
         if Decimal(str(item.delta_amount or 0)) != 0:
             return True
-        if item.after_quantity != item.before_quantity:
+        if Decimal(str(item.after_quantity or 0)) != Decimal(str(item.before_quantity or 0)):
             return True
-        if item.after_unit_price != item.before_unit_price:
+        if Decimal(str(item.after_unit_price or 0)) != Decimal(str(item.before_unit_price or 0)):
             return True
-        if item.after_delivery_date != item.before_delivery_date:
+        if cls._norm_change_date(item.after_delivery_date) != cls._norm_change_date(item.before_delivery_date):
             return True
         return False
 
@@ -124,6 +130,42 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
         if doc.header_changes:
             return True
         return any(self._item_has_change_content(i) for i in items)
+
+    async def _purge_noop_change_items(self, tenant_id: int, doc: PurchaseOrderChangeOrder) -> None:
+        """提交前剔除无实质变更的明细（整单拉取草稿时会带入未改行）。"""
+        items = await PurchaseOrderChangeItem.filter(
+            tenant_id=tenant_id, change_order_id=doc.id
+        ).order_by("line_no", "id").all()
+        kept = [i for i in items if self._item_has_change_content(i)]
+        if len(kept) == len(items):
+            return
+        kept_ids = {int(i.id) for i in kept if i.id is not None}
+        drop_ids = [int(i.id) for i in items if i.id is not None and int(i.id) not in kept_ids]
+        if drop_ids:
+            await PurchaseOrderChangeItem.filter(tenant_id=tenant_id, id__in=drop_ids).delete()
+        before_qty = Decimal("0")
+        after_qty = Decimal("0")
+        before_amt = Decimal("0")
+        after_amt = Decimal("0")
+        line_types: list[str] = []
+        for idx, item in enumerate(kept, start=1):
+            if int(item.line_no or 0) != idx:
+                item.line_no = idx
+                await item.save(update_fields=["line_no", "updated_at"])
+            before_qty += Decimal(str(item.before_quantity or 0))
+            after_qty += Decimal(str(item.after_quantity or 0))
+            before_amt += Decimal(str(item.before_amount or 0))
+            after_amt += Decimal(str(item.after_amount or 0))
+            if item.change_type:
+                line_types.append(str(item.change_type))
+        doc.before_total_quantity = before_qty
+        doc.after_total_quantity = after_qty
+        doc.before_total_amount = before_amt
+        doc.after_total_amount = after_amt
+        doc.delta_amount = after_amt - before_amt
+        if line_types:
+            doc.change_category = infer_change_category(line_types)
+        await doc.save()
 
     async def _next_version(self, tenant_id: int, source_order_id: int) -> int:
         count = await PurchaseOrderChangeOrder.filter(
@@ -136,6 +178,7 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
             tenant_id=tenant_id,
             source_order_id=source_order_id,
             deleted_at__isnull=True,
+            applied_at__isnull=True,
             status__in=[DocumentStatus.DRAFT.value, DocumentStatus.PENDING_REVIEW.value, DocumentStatus.AUDITED.value],
         ).count()
         if pending:
@@ -219,6 +262,7 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
             tenant_id=tenant_id,
             source_order_id=order_id,
             deleted_at__isnull=True,
+            applied_at__isnull=True,
             status__in=[
                 DocumentStatus.DRAFT.value,
                 DocumentStatus.PENDING_REVIEW.value,
@@ -640,19 +684,12 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
             if lifecycle_stage and lifecycle.get("current_stage_key") != lifecycle_stage:
                 continue
             doc_items = items_by_change.get(doc.id, [])
-            has_content = False
-            if Decimal(str(doc.delta_amount or 0)) != 0:
-                has_content = True
-            elif doc.header_changes:
-                has_content = True
-            else:
-                for i in doc_items:
-                    if i.change_type in (OrderChangeLineType.LINE_ADD.value, OrderChangeLineType.LINE_CANCEL.value):
-                        has_content = True
-                        break
-                    if Decimal(str(i.delta_amount or 0)) != 0:
-                        has_content = True
-                        break
+            content_items = [i for i in doc_items if self._item_has_change_content(i)]
+            has_content = (
+                Decimal(str(doc.delta_amount or 0)) != 0
+                or bool(doc.header_changes)
+                or bool(content_items)
+            )
             row = PurchaseOrderChangeListResponse(
                 id=doc.id,
                 change_code=doc.change_code,
@@ -683,7 +720,7 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
                         line_no=i.line_no,
                         change_type=i.change_type,
                     )
-                    for i in doc_items
+                    for i in content_items
                 ]
                 if include_items
                 else None,
@@ -804,15 +841,18 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
             raise NotFoundError(f"采购变更单不存在: {change_id}")
         has_content = await self._has_change_content(tenant_id, doc)
         assert_purchase_order_change_capability(doc, "submit", has_change_content=has_content)
+        await self._purge_noop_change_items(tenant_id, doc)
         audit_required = await self.business_config_service.check_audit_required(tenant_id, "purchase_order_change")
         user_info = await self.get_user_info(operator_id)
+        pending_approver_ids: List[int] = []
         if audit_required:
             doc.status = DocumentStatus.PENDING_REVIEW.value
             doc.review_status = ReviewStatus.PENDING.value
             try:
+                from core.models.approval_task import ApprovalTask
                 from core.services.approval.approval_instance_service import ApprovalInstanceService
 
-                await ApprovalInstanceService.start_approval_for_node(
+                instance = await ApprovalInstanceService.start_approval_for_node(
                     tenant_id=tenant_id,
                     user_id=operator_id,
                     node_key="purchase_order_change",
@@ -825,6 +865,18 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
                         f"供应商: {doc.supplier_name or '—'}"
                     ),
                 )
+                if instance:
+                    task_approver_ids = await ApprovalTask.filter(
+                        tenant_id=tenant_id,
+                        approval_instance_id=instance.id,
+                        status="pending",
+                    ).values_list("approver_id", flat=True)
+                    pending_approver_ids = [
+                        int(uid) for uid in task_approver_ids if uid is not None and int(uid) > 0
+                    ]
+                    if instance.current_approver_id and int(instance.current_approver_id) > 0:
+                        pending_approver_ids.append(int(instance.current_approver_id))
+                    pending_approver_ids = list(dict.fromkeys(pending_approver_ids))
             except Exception as exc:
                 from loguru import logger
 
@@ -863,7 +915,10 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
                         ),
                         "purchase_order_change_id": str(change_id),
                     },
-                    context={"creator_user_id": doc.created_by},
+                    context={
+                        "creator_user_id": doc.created_by,
+                        "submitted_notify_user_ids": pending_approver_ids,
+                    },
                 )
             except Exception as exc:
                 from loguru import logger
@@ -1065,6 +1120,8 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
                         setattr(order, field, val)
 
             for ch in items:
+                if not self._item_has_change_content(ch):
+                    continue
                 if ch.change_type == OrderChangeLineType.LINE_ADD.value:
                     qty = Decimal(str(ch.after_quantity or 0))
                     price = Decimal(str(ch.after_unit_price or 0))

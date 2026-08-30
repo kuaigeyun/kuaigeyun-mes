@@ -6,7 +6,7 @@
 
 from typing import List, Optional, Dict, Any
 from datetime import date, datetime
-from fastapi import APIRouter, Depends, Query, status as http_status, HTTPException
+from fastapi import APIRouter, Depends, Query, status as http_status, HTTPException, Body
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from loguru import logger
@@ -17,7 +17,14 @@ from core.api.deps.access import require_permission_codes
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, BusinessLogicError, ValidationError
 
+from apps.kuaizhizao.schemas.work_order_sync import (
+    WorkOrderSyncBindingOut,
+    WorkOrderSyncBindingUpsert,
+    WorkOrderSyncFromSourceOut,
+    WorkOrderSyncFromSourceRequest,
+)
 from apps.kuaizhizao.services.work_order_service import WorkOrderService
+from apps.kuaizhizao.services.work_order_sync_service import WorkOrderSyncService
 from apps.kuaizhizao.services.station_service import StationService
 from apps.kuaizhizao.schemas.station import (
     StationOperationDocumentsResponse,
@@ -110,6 +117,59 @@ router = APIRouter(
     tags=["App - Kuaige Zhizao - Production Execution"],
     dependencies=[Depends(require_kuaizhizao_work_order_access())],
 )
+
+work_order_sync_service = WorkOrderSyncService()
+
+
+@router.get(
+    "/work-orders/sync-binding",
+    response_model=WorkOrderSyncBindingOut,
+    summary="生产工单同步绑定配置",
+)
+async def get_work_order_sync_binding(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_permission_codes("kuaizhizao:work-order:read")),
+):
+    return await work_order_sync_service.get_binding(tenant_id)
+
+
+@router.put(
+    "/work-orders/sync-binding",
+    response_model=WorkOrderSyncBindingOut,
+    summary="保存生产工单同步绑定配置",
+)
+async def put_work_order_sync_binding(
+    body: WorkOrderSyncBindingUpsert,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_permission_codes("kuaizhizao:work-order:update")),
+):
+    try:
+        return await work_order_sync_service.upsert_binding(tenant_id, body)
+    except ValidationError as e:
+        raise HTTPException(status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.post(
+    "/work-orders/sync-from-source",
+    response_model=WorkOrderSyncFromSourceOut,
+    summary="从数据接口或数据集同步生产工单",
+)
+async def sync_work_orders_from_source(
+    body: WorkOrderSyncFromSourceRequest = Body(default_factory=WorkOrderSyncFromSourceRequest),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_permission_codes("kuaizhizao:work-order:create")),
+):
+    try:
+        return await work_order_sync_service.sync_from_source(
+            tenant_id=tenant_id,
+            user_id=current_user.id,
+            request=body,
+        )
+    except ValidationError as e:
+        raise HTTPException(status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
 
 
 # ============ 工单管理 API ============
@@ -490,6 +550,7 @@ async def list_work_orders(
         description="关键词搜索（工单编码、名称、产品、来源订单号等）",
     ),
     sales_order_code: Optional[str] = Query(None, description="来源订单号（销售订单编码，模糊）"),
+    customer_name: Optional[str] = Query(None, description="客户名称（关联销售订单客户，模糊）"),
     planned_start_from: Optional[str] = Query(None, description="计划开始日期起（YYYY-MM-DD）"),
     planned_start_to: Optional[str] = Query(None, description="计划开始日期止（YYYY-MM-DD）"),
     planned_end_from: Optional[str] = Query(None, description="计划结束日期起（YYYY-MM-DD）"),
@@ -545,6 +606,7 @@ async def list_work_orders(
             assigned_worker_id=assigned_worker_id,
             keyword=keyword,
             sales_order_code=sales_order_code,
+            customer_name=customer_name,
             planned_start_from=planned_start_from,
             planned_start_to=planned_start_to,
             planned_end_from=planned_end_from,
@@ -620,6 +682,12 @@ async def get_work_order_execution_config(
         "current_user_role_codes": sorted(role_codes),
         "current_user_functional_domains": sorted(functional_domains),
         "current_user_can_confirm_picking": can_confirm_picking,
+        "show_customer_name": bool(
+            (await BusinessConfigService().get_business_config(tenant_id))
+            .get("parameters", {})
+            .get("work_order", {})
+            .get("show_customer_name", False)
+        ),
     }
 
 

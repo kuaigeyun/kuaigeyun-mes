@@ -45,6 +45,31 @@ const PARAM_CARD_GRID_STYLE: React.CSSProperties = {
   gap: 16,
 };
 
+/** 标题+控件一行，说明独占第二行 */
+const PARAM_CARD_BODY_STYLE: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 4,
+  minWidth: 0,
+};
+const PARAM_CARD_TITLE_ROW_STYLE: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: 12,
+};
+const PARAM_CARD_TITLE_STYLE: React.CSSProperties = {
+  flex: 1,
+  minWidth: 0,
+};
+const PARAM_CARD_CONTROL_WRAP_STYLE: React.CSSProperties = {
+  flexShrink: 0,
+};
+const PARAM_CARD_DESC_STYLE: React.CSSProperties = {
+  fontSize: 12,
+  margin: 0,
+};
+
 export const PARAM_GUIDANCE_I18N_KEY_MAP: Record<string, string> = {
   'work_order.material_shortage_block_level': 'pages.system.configCenter.param.work_order_material_shortage_block_level_guide',
   'purchase.tolerance_percentage': 'pages.system.configCenter.param.purchase_tolerance_percentage_guide',
@@ -288,14 +313,14 @@ const ConfigCenterPage: React.FC = () => {
       >
         {param.type === 'boolean' ? <Switch disabled={disabled} /> :
          param.type === 'number' ? <InputNumber size="medium" min={param.min} max={param.max} style={{ width: 120 }} disabled={!implemented} /> :
-         param.type === 'select' ? <Select size="medium" options={param.selectOptions?.map(o => ({ value: o.value, label: renderText(o.labelKey, o.value) }))} style={{ minWidth: 160 }} disabled={!implemented} /> :
+         param.type === 'select' ? <Select size="medium" options={param.selectOptions?.map(o => ({ value: o.value, label: renderText(o.labelKey, o.value) }))} style={{ minWidth: 160, maxWidth: 280 }} disabled={!implemented} /> :
          param.type === 'multiselect' ? (
            <Select
              mode="multiple"
              size="medium"
              allowClear
              options={param.selectOptions?.map(o => ({ value: o.value, label: renderText(o.labelKey, o.value) }))}
-             style={{ minWidth: 220 }}
+             style={{ minWidth: 160, maxWidth: 280 }}
              disabled={!implemented}
            />
          ) :
@@ -304,12 +329,31 @@ const ConfigCenterPage: React.FC = () => {
              mode="tags"
              size="medium"
              tokenSeparators={[',', ' ']}
-             style={{ minWidth: 220 }}
+             style={{ minWidth: 160, maxWidth: 280 }}
              disabled={!implemented}
            />
          ) :
          param.type === 'color' ? <ColorPicker showText disabled={!implemented} /> : null}
       </Form.Item>
+    );
+  };
+
+  const renderParamBody = (param: ParamMeta, switchDisabled?: boolean) => {
+    const description = renderText(param.descriptionKey, '');
+    const guidance = getParamGuidance(param.key);
+    return (
+      <div style={PARAM_CARD_BODY_STYLE}>
+        <div style={PARAM_CARD_TITLE_ROW_STYLE}>
+          <Text strong style={PARAM_CARD_TITLE_STYLE}>{renderText(param.nameKey, param.key)}</Text>
+          <div style={PARAM_CARD_CONTROL_WRAP_STYLE}>{renderParamControl(param, switchDisabled)}</div>
+        </div>
+        {description ? (
+          <Paragraph type="secondary" style={PARAM_CARD_DESC_STYLE}>{description}</Paragraph>
+        ) : null}
+        {guidance ? (
+          <Paragraph type="secondary" style={PARAM_CARD_DESC_STYLE}>{guidance}</Paragraph>
+        ) : null}
+      </div>
     );
   };
 
@@ -469,22 +513,8 @@ const ConfigCenterPage: React.FC = () => {
                               >
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                                   {params.map((param) => (
-                                    <div
-                                      key={param.key}
-                                      style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-                                    >
-                                      <div style={{ flex: 1, marginRight: 16 }}>
-                                        <Text strong>{renderText(param.nameKey, param.key)}</Text>
-                                        <Paragraph type="secondary" style={{ fontSize: 12, margin: 0 }}>
-                                          {renderText(param.descriptionKey, '')}
-                                        </Paragraph>
-                                        {!!getParamGuidance(param.key) && (
-                                          <Paragraph type="secondary" style={{ fontSize: 12, marginTop: 4 }}>
-                                            {getParamGuidance(param.key)}
-                                          </Paragraph>
-                                        )}
-                                      </div>
-                                      {renderParamControl(param)}
+                                    <div key={param.key}>
+                                      {renderParamBody(param)}
                                     </div>
                                   ))}
                                 </div>
@@ -496,14 +526,7 @@ const ConfigCenterPage: React.FC = () => {
                         const param = block.param;
                         return (
                           <Card key={param.key} size="small">
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <div style={{ flex: 1, marginRight: 16 }}>
-                                <Text strong>{renderText(param.nameKey, param.key)}</Text>
-                                <Paragraph type="secondary" style={{ fontSize: 12, margin: 0 }}>{renderText(param.descriptionKey, '')}</Paragraph>
-                                {!!getParamGuidance(param.key) && <Paragraph type="secondary" style={{ fontSize: 12, marginTop: 4 }}>{getParamGuidance(param.key)}</Paragraph>}
-                              </div>
-                              {renderParamControl(param)}
-                            </div>
+                            {renderParamBody(param)}
                           </Card>
                         );
                       })}

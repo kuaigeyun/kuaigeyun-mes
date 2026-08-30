@@ -13,7 +13,12 @@ from typing import Dict, Any
 from core.api.deps import get_current_user, get_current_tenant
 from infra.models.user import User
 from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
-from apps.kuaizhizao.schemas.document_relation import DocumentRelationListResponse, DocumentTraceResponse
+from apps.kuaizhizao.services.document_attachment_center_service import DocumentAttachmentCenterService
+from apps.kuaizhizao.schemas.document_relation import (
+    DocumentAttachmentCenterResponse,
+    DocumentRelationListResponse,
+    DocumentTraceResponse,
+)
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 router = APIRouter(prefix="/document-relations", tags=["App - Kuaige Zhizao - Document Relations"])
@@ -50,6 +55,37 @@ async def get_document_relations(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"获取单据关联关系失败: {str(e)}")
+
+
+@router.get(
+    "/{document_type}/{document_id}/attachment-center",
+    response_model=DocumentAttachmentCenterResponse,
+    summary="Aggregate attachments across document chain",
+)
+async def get_document_attachment_center(
+    document_type: str,
+    document_id: int,
+    max_depth: int = Query(10, ge=1, le=20, description="最大追溯深度（默认10层）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> DocumentAttachmentCenterResponse:
+    """
+    聚合本单与全链路关联单据的 attachments JSON。
+    """
+    try:
+        service = DocumentAttachmentCenterService()
+        return await service.get_attachment_center(
+            tenant_id=tenant_id,
+            document_type=document_type,
+            document_id=document_id,
+            max_depth=max_depth,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取附件中心失败: {str(e)}")
 
 
 @router.get("/{document_type}/{document_id}/trace", response_model=DocumentTraceResponse, summary="Trace document relation chain")

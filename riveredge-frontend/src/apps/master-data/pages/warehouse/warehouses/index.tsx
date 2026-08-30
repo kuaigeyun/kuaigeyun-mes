@@ -5,8 +5,11 @@ import { rowActionKind } from '../../../../../components/uni-action';
  * 提供仓库的 CRUD 功能，包括列表展示、创建、编辑、删除等操作。
  */
 
-import React, { useRef, useState, useEffect, useMemo } from 'react';
+import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useLocation } from 'react-router-dom';
+import { usePagePermissionResource } from '../../../../../hooks/usePagePermissionResource';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, List, Modal, Popconfirm, Table, Tooltip, Typography } from 'antd';
 import { downloadFile } from '../../../../../utils';
@@ -17,7 +20,7 @@ import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { buildDetailDrawerEditExtra } from '../../../../kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
 import { MasterDataDetailDrawer } from '../../shared/masterDataDetailDrawer';
-import { warehouseApi, type PresetWarehouseItem } from '../../../services/warehouse';
+import { warehouseApi, getWarehouseSyncBinding, type PresetWarehouseItem } from '../../../services/warehouse';
 import {
   workshopApi,
   workCenterApi,
@@ -40,6 +43,12 @@ import {
 } from '../../../utils/masterListPresentation';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { WarehouseFormModal } from '../../../components/WarehouseFormModal';
+import WarehouseSyncFromSourceModal from '../../../components/WarehouseSyncFromSourceModal';
+import { SyncFreshnessBadge } from '../../../../../components/sync-from-source-modal/SyncFreshnessBadge';
+import {
+  ExternalSyncSourceIcon,
+  hasExternalSyncSource,
+} from '../../../../../components/external-sync-source/ExternalSyncSourceIcon';
 import { QRCodeGenerator } from '../../../../../components/qrcode';
 import type { Warehouse, WarehouseCreate } from '../../../types/warehouse';
 import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulkImport';
@@ -66,6 +75,9 @@ const WarehousesPage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const trialRunMode = useTrialRunMode();
   const { message: messageApi } = App.useApp();
+  const location = useLocation();
+  const pagePermissionResource = usePagePermissionResource(location.pathname);
+  const { canCreate } = useResourcePermissions(pagePermissionResource);
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
@@ -86,6 +98,9 @@ const WarehousesPage: React.FC = () => {
   const [presetList, setPresetList] = useState<PresetWarehouseItem[]>([]);
   const [selectedPresetNames, setSelectedPresetNames] = useState<string[]>([]);
   const [presetConfirmLoading, setPresetConfirmLoading] = useState(false);
+  const [syncModalVisible, setSyncModalVisible] = useState(false);
+  const [syncFreshnessKey, setSyncFreshnessKey] = useState(0);
+  const loadWarehouseSyncBinding = useCallback(() => getWarehouseSyncBinding(), []);
 
   const {
     customFields,
@@ -137,6 +152,11 @@ const WarehousesPage: React.FC = () => {
     setEditUuid(null);
     setModalVisible(true);
   };
+
+  const handleSyncComplete = useCallback(() => {
+    setSyncFreshnessKey((key) => key + 1);
+    actionRef.current?.reload();
+  }, []);
 
   useNewShortcut(handleCreate);
 
@@ -630,6 +650,16 @@ const WarehousesPage: React.FC = () => {
       ellipsis: true,
       sorter: true,
       hideInSearch: true,
+      render: (_, record) => (
+        <span style={{ display: 'inline-flex', alignItems: 'center', maxWidth: '100%', minWidth: 0 }}>
+          <Typography.Text ellipsis style={{ minWidth: 0 }}>
+            {record.name}
+          </Typography.Text>
+          {hasExternalSyncSource(record as unknown as Record<string, unknown>) ? (
+            <ExternalSyncSourceIcon style={{ marginLeft: 4 }} />
+          ) : null}
+        </span>
+      ),
     },
     {
       title: t('field.warehouse.warehouseType'),
@@ -819,6 +849,20 @@ const WarehousesPage: React.FC = () => {
         defaultViewType="table"
         showImportButton={true}
         onImport={handleImport}
+        showSyncButton={canCreate}
+        onSync={() => setSyncModalVisible(true)}
+        syncToolbarExtra={
+          canCreate
+            ? (syncButton) => (
+                <SyncFreshnessBadge
+                  getBinding={loadWarehouseSyncBinding}
+                  refreshKey={syncFreshnessKey}
+                >
+                  {syncButton}
+                </SyncFreshnessBadge>
+              )
+            : undefined
+        }
         importHeaders={warehouseImportTemplate.importHeaders}
         importExampleRow={warehouseImportTemplate.importExampleRow}
         importColumnOptions={warehouseImportTemplate.importColumnOptions}
@@ -940,6 +984,12 @@ const WarehousesPage: React.FC = () => {
         onClose={() => { setModalVisible(false); setEditUuid(null); }}
         editUuid={editUuid}
         onSuccess={handleModalSuccess}
+      />
+
+      <WarehouseSyncFromSourceModal
+        open={syncModalVisible}
+        onClose={() => setSyncModalVisible(false)}
+        onComplete={handleSyncComplete}
       />
 
       {/* 加载预设预览 Modal：可勾选子项后确认 */}

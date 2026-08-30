@@ -18,6 +18,7 @@ class MaterialStockMovement(BaseModel):
         indexes = [
             ("tenant_id", "work_order_id", "created_at"),
             ("tenant_id", "material_id", "created_at"),
+            ("tenant_id", "created_at"),
             ("tenant_id", "source_doc_type", "source_doc_id"),
             ("tenant_id", "idempotency_key"),
         ]

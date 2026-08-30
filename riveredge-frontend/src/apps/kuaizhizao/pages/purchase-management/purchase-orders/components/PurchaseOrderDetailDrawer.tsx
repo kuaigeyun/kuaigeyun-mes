@@ -37,11 +37,6 @@ import { useKuaizhizaoPrintModal } from '../../../../hooks/useKuaizhizaoPrintMod
 import { DocumentStatus, ReviewStatusEnum } from '../../../../constants/documentStatus';
 import type { CustomField } from '../../../../../../services/customField';
 import type { AuditPhaseRecord } from '../../../../../../components/uni-audit/AuditPhaseBadge';
-import {
-  DocumentAttachmentsReadonly,
-  documentAttachmentsFromRecord,
-  hasDocumentAttachments,
-} from '../../../../components/DocumentAttachmentsReadonly';
 
 const PURCHASE_ORDER_RESOURCE = 'kuaizhizao:purchase-order';
 const PLACEHOLDER: PurchaseOrder = { id: 0 };
@@ -218,8 +213,6 @@ export const PurchaseOrderDetailDrawer: React.FC<PurchaseOrderDetailDrawerProps>
   const showError = Boolean(error) && !contentReady && !loading;
   const showLoading = loading || (!contentReady && !showError);
   const effective = order ?? PLACEHOLDER;
-  const attachments = documentAttachmentsFromRecord(order);
-  const showAttachments = contentReady && hasDocumentAttachments(attachments);
 
   const tracking = useDocumentTracking(
     open && contentReady ? 'purchase_order' : undefined,
@@ -433,13 +426,6 @@ export const PurchaseOrderDetailDrawer: React.FC<PurchaseOrderDetailDrawerProps>
           />
         ) : null
       }
-      supplementary={
-        showAttachments ? <DocumentAttachmentsReadonly attachments={attachments} /> : undefined
-      }
-      supplementaryTitle={
-        showAttachments ? t('app.uniDetail.sectionAttachments') : undefined
-      }
-      supplementaryVisible={showAttachments}
       lines={
         contentReady ? (
           effective.items && effective.items.length > 0 ? (

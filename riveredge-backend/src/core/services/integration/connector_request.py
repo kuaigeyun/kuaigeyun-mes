@@ -20,7 +20,14 @@ def resolve_connector_request(
     根据连接器配置解析完整 URL 与鉴权请求头。
 
     base_url 缺失时直接报错，不回落本机 BASE_URL。
+    连接器已停用时拒绝发起请求。
     """
+    if not bool(getattr(integration_config, "is_active", True)):
+        name = str(getattr(integration_config, "name", "") or "").strip()
+        raise ValidationError(
+            f"应用连接器「{name}」已停用，无法调用" if name else "应用连接器已停用，无法调用"
+        )
+
     cfg = integration_config.get_config()
     base_url = (cfg.get("base_url") or cfg.get("url") or "").strip().rstrip("/")
     if not base_url:

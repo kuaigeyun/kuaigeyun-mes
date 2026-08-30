@@ -6,6 +6,8 @@ import {
   extractFieldBindings,
   extractPlaceholders,
   resolveContractTermFieldBindings,
+  formatContractTermHeading,
+  intToChineseSimple,
   resolveTermsWithPlaceholders,
   splitUnresolvedPlaceholderSegments,
 } from './contract-term-placeholders';
@@ -67,5 +69,12 @@ describe('contract-term-placeholders', () => {
       { type: 'text', value: '，交期 ' },
       { type: 'placeholder', value: '{交期}', filled: false },
     ]);
+  });
+
+  it('formats contract term heading with chinese index', () => {
+    expect(intToChineseSimple(1)).toBe('一');
+    expect(intToChineseSimple(11)).toBe('十一');
+    expect(formatContractTermHeading(0, '付款方式')).toBe('一、付款方式');
+    expect(formatContractTermHeading(1, '交货期限')).toBe('二、交货期限');
   });
 });
