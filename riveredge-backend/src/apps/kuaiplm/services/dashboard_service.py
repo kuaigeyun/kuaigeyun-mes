@@ -188,9 +188,7 @@ class DashboardService:
         project_rd_total = await RdProject.filter(
             tenant_id=tenant_id, deleted_at__isnull=True, project_type=RdProjectType.RD.value
         ).count()
-        project_delivery_total = await RdProject.filter(
-            tenant_id=tenant_id, deleted_at__isnull=True, project_type=RdProjectType.DELIVERY.value
-        ).count()
+        project_delivery_total = 0
         project_in_progress = await RdProject.filter(
             tenant_id=tenant_id, deleted_at__isnull=True, status=RdProjectStatus.IN_PROGRESS.value
         ).count()

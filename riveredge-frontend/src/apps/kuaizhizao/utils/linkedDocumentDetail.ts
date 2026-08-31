@@ -1,7 +1,7 @@
 /**
- * 关联单据类型登记（当前页嵌套详情抽屉）。
+ * 关联单据类型登记（当前页嵌套详情抽屉；交付项目改为应用 Tab 工作台）。
  * 打开入口：LinkedDocumentDetailProvider.openLinkedDocumentDetail。
- * 禁止再 navigate 到列表后再弹抽屉。
+ * 禁止再 navigate 到列表后再弹抽屉（交付项目除外：直接进工作台 Tab）。
  * 列表/详情自动挂链：见 linkedDocumentAutoLink（UniTable + detailDrawerDescriptionItems）。
  * 禁止用单号前缀猜测类型；须用约定字段（source_type/source_id 或 *_code + *_id）。
  */
@@ -29,6 +29,7 @@ export const LINKED_DOCUMENT_DETAIL_TYPES = new Set([
   'customer_return_visit',
   'reporting_record',
   'performance_summary',
+  'delivery_project',
 ]);
 
 export type LinkedDocumentType =
@@ -52,7 +53,8 @@ export type LinkedDocumentType =
   | 'service_settlement'
   | 'customer_return_visit'
   | 'reporting_record'
-  | 'performance_summary';
+  | 'performance_summary'
+  | 'delivery_project';
 
 /** 后端偶发别名 → 标准 snake */
 const LINKED_DOCUMENT_TYPE_ALIASES: Record<string, string> = {
@@ -75,6 +77,7 @@ const LINKED_DOCUMENT_TYPE_ALIASES: Record<string, string> = {
   customerreturnvisit: 'customer_return_visit',
   reportingrecord: 'reporting_record',
   performancesummary: 'performance_summary',
+  deliveryproject: 'delivery_project',
 };
 
 /**

@@ -16,3 +16,4 @@ export const WORK_ORDER_SYNC_TARGET_FIELDS: SyncTargetField[] = [
 ];
 
 export const WORK_ORDER_SYNC_REQUIRED_TARGETS = ['code', 'product_code', 'quantity'];
+export const WORK_ORDER_SYNC_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_work_orders';

@@ -43,6 +43,7 @@ from .delivery_delay_exception import DeliveryDelayException
 from .quality_exception import QualityException
 from .exception_process_record import ExceptionProcessRecord, ExceptionProcessHistory
 from .quality_8d_report import Quality8DReport
+from .quality_8d_stage_revision import Quality8DStageRevision
 from .oqc_inspection import OQCInspection
 from .fai_characteristic import FaiCharacteristic
 from .fai_order import FaiOrder
@@ -132,6 +133,17 @@ from .sales_review_item import SalesReviewItem
 from .sales_review_dept_opinion import SalesReviewDeptOpinion
 from .delivery_notice import DeliveryNotice
 from .delivery_notice_item import DeliveryNoticeItem
+from .delivery_project import (
+    DeliveryIssue,
+    DeliveryNodeReport,
+    DeliveryProcessTemplate,
+    DeliveryProcessTemplateNode,
+    DeliveryProcessTemplateNodeTask,
+    DeliveryProject,
+    DeliveryProjectMember,
+    DeliveryProjectNode,
+    DeliveryProjectNodeTask,
+)
 from .logistics import (
     Driver,
     FreightBill,
@@ -293,6 +305,7 @@ __all__ = [
     'ExceptionProcessRecord',
     'ExceptionProcessHistory',
     'Quality8DReport',
+    'Quality8DStageRevision',
     'OQCInspection',
     'FaiOrder',
     'FaiCharacteristic',
@@ -376,6 +389,15 @@ __all__ = [
     'SalesReviewDeptOpinion',
     'DeliveryNotice',
     'DeliveryNoticeItem',
+    'DeliveryProcessTemplate',
+    'DeliveryProcessTemplateNode',
+    'DeliveryProcessTemplateNodeTask',
+    'DeliveryProject',
+    'DeliveryProjectMember',
+    'DeliveryProjectNode',
+    'DeliveryProjectNodeTask',
+    'DeliveryNodeReport',
+    'DeliveryIssue',
     'LogisticsCarrier',
     'Vehicle',
     'Driver',

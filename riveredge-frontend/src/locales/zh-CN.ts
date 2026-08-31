@@ -223,6 +223,7 @@ export default {
   'menu.infra.tenantApplicationCenterPermissions': '应用中心权限',
   'menu.infra.packages': '套餐管理',
   'menu.infra.admin': '平台管理',
+  'menu.infra.official-api-library': '接口库管理',
   'menu.infra.scripts': '脚本管理',
   'menu.infra.scheduled-tasks': '定时任务',
   'menu.infra.client-releases': '客户端发布',
@@ -1766,6 +1767,7 @@ export default {
   'common.importFailed': '导入失败',
   'common.noDataToExport': '暂无数据可导出',
   'common.noData': '暂无数据',
+  'common.empty': '暂无',
   'common.copyRow': '复制',
   'common.bulkAddSelectRequired': '请至少选择一项',
   'common.bulkAddAllExist': '所选项目均已存在',
@@ -1786,6 +1788,8 @@ export default {
 
   // uni-action 行内操作列（文案唯一真源，与 permission_action_spec 对齐）
   'components.uniAction.read': '详情',
+  'components.uniAction.openWorkbench': '工作台',
+  'components.uniAction.withdrawProject': '撤回',
   'components.uniAction.display': '展示',
   'components.uniAction.create': '新建',
   'components.uniAction.update': '编辑',
@@ -2190,6 +2194,10 @@ export default {
   'components.syncFromSource.datasetBatchHintDefault': '数据集：确认同步时由服务端分页拉取并 upsert',
   'components.syncFromSource.fetching': '正在拉取数据…',
   'components.syncFromSource.fieldMapping': '字段映射',
+  'components.syncFromSource.addMappingField': '添加更多字段',
+  'components.syncFromSource.addMappingFieldPlaceholder': '选择要追加的系统字段或自定义字段',
+  'components.syncFromSource.removeMappingField': '移除此映射行',
+  'components.syncFromSource.customFieldTag': '自定义',
   'components.syncFromSource.targetField': '销售订单字段',
   'components.syncFromSource.targetFieldLabel': '目标字段',
   'components.syncFromSource.sourceColumn': '来源列',
@@ -2897,8 +2905,8 @@ export default {
   'app.kuaicaiwu.menu.gl-management.vouchers': '会计凭证',
   'app.kuaiplm.name': '快研发',
   'app.kuaiplm.menu.dashboard': '研发看板',
-  'app.kuaiplm.menu.group.project-center': '项目中心',
-  'app.kuaiplm.menu.rd-projects': '项目管理',
+  'app.kuaiplm.menu.group.project-center': '研发项目',
+  'app.kuaiplm.menu.rd-projects': '研发项目',
   'app.kuaiplm.menu.gate-templates': '阶段管理',
   'app.kuaiplm.menu.design-data': '设计数据',
   'app.kuaiplm.menu.process-data': '工艺数据',
@@ -3064,6 +3072,9 @@ export default {
   'app.kuaiplm.common.columns.productMaterial': '产品物料',
   'app.kuaiplm.common.columns.owner': '负责人',
   'app.kuaiplm.common.columns.currentGate': '阶段门',
+  'app.kuaiplm.common.columns.currentNode': '当前阶段',
+  'app.kuaiplm.common.columns.progress': '进度',
+  'app.kuaiplm.common.columns.nodeProgress': '阶段进度',
   'app.kuaiplm.common.gate.concept': '概念阶段',
   'app.kuaiplm.common.gate.design': '设计阶段',
   'app.kuaiplm.common.gate.prototype': '样机阶段',
@@ -3133,9 +3144,16 @@ export default {
   'app.kuaiplm.gantt.columns.plannedEnd': '计划完成',
   'app.kuaiplm.gantt.columns.durationDays': '工期(天)',
   'app.kuaiplm.gantt.columns.progressPercent': '进度%',
-  'app.kuaiplm.rdProjects.pageTitle': '项目管理',
-  'app.kuaiplm.rdProjects.createButton': '新建项目',
-  'app.kuaiplm.rdProjects.modal.createTitle': '新建项目',
+  'app.kuaiplm.rdProjects.pageTitle': '研发项目',
+  'app.kuaiplm.rdProjects.createButton': '新建研发项目',
+  'app.kuaiplm.rdProjects.modal.createTitle': '新建研发项目',
+  'app.kuaiplm.rdProjects.modal.editTitle': '编辑研发项目',
+  'app.kuaiplm.rdProjects.deleteConfirm': '确定删除该研发项目吗？',
+  'app.kuaiplm.rdProjects.withdrawConfirm': '撤回项目？',
+  'app.kuaiplm.rdProjects.withdrawConfirmContent': '项目尚未实际执行，撤回后将恢复为草稿，可再次编辑或删除。',
+  'app.kuaiplm.rdProjects.withdrawSuccess': '项目已撤回为草稿',
+  'app.kuaiplm.rdProjects.batchDeleteConfirm': '确定删除选中的 {{count}} 个研发项目吗？',
+  'app.kuaiplm.rdProjects.columns.progressPercent': '{{percent}}%',
   'app.kuaiplm.rdProjects.form.projectType': '项目类型',
   'app.kuaiplm.rdProjects.form.gateTemplate': '阶段模板',
   'app.kuaiplm.rdProjects.form.gateTemplatePlaceholder': '请选择阶段门模板',
@@ -3145,6 +3163,7 @@ export default {
   'app.kuaiplm.rdProjects.form.projectName': '项目名称',
   'app.kuaiplm.rdProjects.form.owner': '项目负责人',
   'app.kuaiplm.rdProjects.form.ownerPlaceholder': '请选择项目负责人',
+  'app.kuaiplm.rdProjects.form.members': '项目成员',
   'app.kuaiplm.rdProjects.form.plannedStart': '计划开始',
   'app.kuaiplm.rdProjects.form.plannedEnd': '计划完成',
   'app.kuaiplm.gateTemplates.tab.rd': '研发模板',
@@ -3154,6 +3173,7 @@ export default {
   'app.kuaiplm.gateTemplates.actions.addStage': '添加阶段',
   'app.kuaiplm.gateTemplates.actions.saveStages': '保存阶段配置',
   'app.kuaiplm.gateTemplates.actions.addDeliverable': '添加交付物',
+  'app.kuaiplm.gateTemplates.actions.addTask': '添加预置任务',
   'app.kuaiplm.gateTemplates.form.templateName': '模板名称',
   'app.kuaiplm.gateTemplates.columns.sortOrder': '序号',
   'app.kuaiplm.gateTemplates.columns.gateKey': '阶段标识',
@@ -3161,6 +3181,7 @@ export default {
   'app.kuaiplm.gateTemplates.columns.milestoneRole': '里程碑角色',
   'app.kuaiplm.gateTemplates.columns.deliverableName': '交付物名称',
   'app.kuaiplm.gateTemplates.columns.deliverableType': '交付物类型',
+  'app.kuaiplm.gateTemplates.columns.taskName': '任务名称',
   'app.kuaiplm.gateTemplates.milestoneRole.none': '无',
   'app.kuaiplm.gateTemplates.milestoneRole.spawnDelivery': '下推交付项目',
   'app.kuaiplm.gateTemplates.defaultBadge': '默认',
@@ -3169,8 +3190,10 @@ export default {
   'app.kuaiplm.gateTemplates.emptyTemplates': '暂无模板',
   'app.kuaiplm.gateTemplates.selectTemplate': '请选择左侧模板',
   'app.kuaiplm.gateTemplates.defaultDeliverables': '默认交付物',
+  'app.kuaiplm.gateTemplates.defaultTasks': '预置子任务',
   'app.kuaiplm.gateTemplates.newStageName': '阶段 {{order}}',
   'app.kuaiplm.gateTemplates.newDeliverable': '新交付物',
+  'app.kuaiplm.gateTemplates.newTask': '新任务',
   'app.kuaiplm.gateTemplates.stageCount': '{{count}} 个阶段',
   'app.kuaiplm.gateTemplates.confirmDelete': '确定删除该模板？',
   'app.kuaiplm.gateTemplates.messages.loadFailed': '加载模板列表失败',
@@ -3189,7 +3212,14 @@ export default {
   'app.kuaiplm.rdProjects.messages.pushDeliveryFailed': '批量下推交付项目失败',
   'app.kuaiplm.rdProjects.messages.pushTrialWoFailed': '批量下推试制工单失败',
   'app.kuaiplm.rdProjects.detail.loadFailed': '加载项目工作台失败',
+  'app.kuaiplm.rdProjects.detail.workbench.tabTitleSuffix': '工作台',
+  'app.kuaiplm.rdProjects.detail.workbench.tabs.overview': '概览',
+  'app.kuaiplm.rdProjects.detail.workbench.tabs.gates': '阶段任务',
+  'app.kuaiplm.rdProjects.detail.workbench.tabs.collab': '工程链接与协同',
+  'app.kuaiplm.rdProjects.detail.workbench.tabs.related': '关联',
+  'app.kuaiplm.rdProjects.detail.workbench.relatedEmpty': '暂无关联入口',
   'app.kuaiplm.rdProjects.detail.notFound': '项目不存在或无权访问',
+  'app.kuaiplm.rdProjects.detail.startProject': '启动项目',
   'app.kuaiplm.rdProjects.detail.startConfirmTitle': '启动项目？',
   'app.kuaiplm.rdProjects.detail.startConfirmContent': '启动后项目状态将变为「进行中」，可正式推进 NPI 阶段门、任务与交付物。此操作不可撤销为草稿。',
   'app.kuaiplm.rdProjects.detail.startSuccess': '项目已启动',
@@ -4500,6 +4530,172 @@ export default {
   'app.haoligo.menu.patrol.reports.patrol-records': '设备巡检',
 
   // 快制造应用菜单翻译
+  'app.kuaizhizao.menu.delivery-project': '交付项目',
+  'app.kuaizhizao.menu.delivery-project.dashboard': '交付中心',
+  'app.kuaizhizao.menu.delivery-project.projects': '交付项目',
+  'app.kuaizhizao.menu.delivery-project.process-templates': '流程模板',
+  'app.kuaizhizao.menu.delivery-project.node-reports': '节点汇报',
+  'app.kuaizhizao.menu.delivery-project.follow-up': '项目跟进表',
+  'app.kuaizhizao.menu.delivery-project.schedules': '流程排单',
+  'app.kuaizhizao.menu.delivery-project.issues': '问题跟踪',
+  'app.kuaizhizao.menu.delivery-project.reports': '交付报表',
+  'app.kuaizhizao.menu.delivery-project.reports.progress-summary': '进度汇总',
+  'app.kuaizhizao.menu.delivery-project.reports.process-progress': '项目流程进度表',
+  'app.kuaizhizao.menu.delivery-project.reports.issue-progress': '项目进度问题报表',
+  'app.kuaizhizao.deliveryProject.dashboard.activeProjects': '在制项目',
+  'app.kuaizhizao.deliveryProject.dashboard.overdueNodes': '逾期节点',
+  'app.kuaizhizao.deliveryProject.dashboard.atRiskProjects': '交期风险项目',
+  'app.kuaizhizao.deliveryProject.dashboard.openIssues': '待处理问题',
+  'app.kuaizhizao.deliveryProject.dashboard.recentProjects': '最近项目',
+  'app.kuaizhizao.deliveryProject.dashboard.noProjects': '暂无交付项目',
+  'app.kuaizhizao.deliveryProject.dashboard.overdueNodeList': '逾期节点清单',
+  'app.kuaizhizao.deliveryProject.dashboard.viewAll': '查看全部',
+  'app.kuaizhizao.deliveryProject.dashboard.ganttTitle': '项目进度甘特图',
+  'app.kuaizhizao.deliveryProject.dashboard.viewFollowUp': '项目跟进表',
+  'app.kuaizhizao.deliveryProject.gantt.scale.month': '%Y年%m月',
+  'app.kuaizhizao.deliveryProject.gantt.scale.week': '第%W周',
+  'app.kuaizhizao.deliveryProject.gantt.empty': '暂无在制交付项目，启动项目后将在此展示节点计划时间轴',
+  'app.kuaizhizao.deliveryProject.gantt.columns.projectNode': '项目 / 节点',
+  'app.kuaizhizao.deliveryProject.gantt.columns.plannedStart': '计划开始',
+  'app.kuaizhizao.deliveryProject.gantt.columns.plannedEnd': '计划完成',
+  'app.kuaizhizao.deliveryProject.gantt.columns.durationDays': '工期(天)',
+  'app.kuaizhizao.deliveryProject.gantt.columns.progressPercent': '进度%',
+  'app.kuaizhizao.deliveryProject.fields.projectCode': '项目编码',
+  'app.kuaizhizao.deliveryProject.fields.projectName': '项目名称',
+  'app.kuaizhizao.deliveryProject.fields.salesOrderCode': '销售订单',
+  'app.kuaizhizao.deliveryProject.fields.customerName': '客户',
+  'app.kuaizhizao.deliveryProject.fields.deliveryDate': '交期',
+  'app.kuaizhizao.deliveryProject.fields.ownerName': '负责人',
+  'app.kuaizhizao.deliveryProject.fields.members': '成员',
+  'app.kuaizhizao.deliveryProject.fields.taskKey': '任务标识',
+  'app.kuaizhizao.deliveryProject.fields.taskName': '任务名称',
+  'app.kuaizhizao.deliveryProject.fields.taskCount': '子任务数',
+  'app.kuaizhizao.deliveryProject.fields.material': '产品',
+  'app.kuaizhizao.deliveryProject.fields.currentNode': '当前节点',
+  'app.kuaizhizao.deliveryProject.fields.progress': '进度',
+  'app.kuaizhizao.deliveryProject.fields.status': '状态',
+  'app.kuaizhizao.deliveryProject.fields.nodeName': '节点名称',
+  'app.kuaizhizao.deliveryProject.fields.nodeKey': '节点标识',
+  'app.kuaizhizao.deliveryProject.fields.plannedEndDate': '计划完成',
+  'app.kuaizhizao.deliveryProject.fields.plannedStartDate': '计划开始',
+  'app.kuaizhizao.deliveryProject.fields.actualStartDate': '实际开始',
+  'app.kuaizhizao.deliveryProject.fields.actualEndDate': '实际完成',
+  'app.kuaizhizao.deliveryProject.fields.assigneeName': '责任人',
+  'app.kuaizhizao.deliveryProject.fields.durationDays': '工期(天)',
+  'app.kuaizhizao.deliveryProject.fields.isCritical': '关键卡',
+  'app.kuaizhizao.deliveryProject.fields.isMilestone': '里程碑',
+  'app.kuaizhizao.deliveryProject.fields.reportCode': '汇报单号',
+  'app.kuaizhizao.deliveryProject.fields.reporterName': '汇报人',
+  'app.kuaizhizao.deliveryProject.fields.reportDate': '汇报日期',
+  'app.kuaizhizao.deliveryProject.fields.reportContent': '完成说明',
+  'app.kuaizhizao.deliveryProject.fields.project': '交付项目',
+  'app.kuaizhizao.deliveryProject.fields.issueCode': '问题单号',
+  'app.kuaizhizao.deliveryProject.fields.title': '标题',
+  'app.kuaizhizao.deliveryProject.fields.issueType': '问题类型',
+  'app.kuaizhizao.deliveryProject.fields.priority': '优先级',
+  'app.kuaizhizao.deliveryProject.fields.dueDate': '期望解决',
+  'app.kuaizhizao.deliveryProject.fields.description': '描述',
+  'app.kuaizhizao.deliveryProject.fields.notes': '备注',
+  'app.kuaizhizao.deliveryProject.fields.processTemplate': '流程模板',
+  'app.kuaizhizao.deliveryProject.detailTitle': '交付项目详情',
+  'app.kuaizhizao.deliveryProject.processTimeline': '流程阶段',
+  'app.kuaizhizao.deliveryProject.nodeList': '节点明细',
+  'app.kuaizhizao.deliveryProject.nodeTasks': '节点子任务',
+  'app.kuaizhizao.deliveryProject.noNodeTasks': '暂无子任务',
+  'app.kuaizhizao.deliveryProject.addNodeTask': '添加子任务',
+  'app.kuaizhizao.deliveryProject.editNodeTask': '编辑子任务',
+  'app.kuaizhizao.deliveryProject.deleteNodeTaskConfirm': '确定删除该子任务？',
+  'app.kuaizhizao.deliveryProject.templateNodeTasks': '预置子任务',
+  'app.kuaizhizao.deliveryProject.addTemplateTask': '添加预置任务',
+  'app.kuaizhizao.deliveryProject.newTemplateTask': '新任务',
+  'app.kuaizhizao.deliveryProject.startProject': '启动项目',
+  'app.kuaizhizao.deliveryProject.pauseProject': '暂停项目',
+  'app.kuaizhizao.deliveryProject.resumeProject': '恢复项目',
+  'app.kuaizhizao.deliveryProject.cancelProject': '取消项目',
+  'app.kuaizhizao.deliveryProject.cancelProjectConfirm': '取消后项目不可再推进，是否继续？',
+  'app.kuaizhizao.deliveryProject.paused': '项目已暂停',
+  'app.kuaizhizao.deliveryProject.resumed': '项目已恢复',
+  'app.kuaizhizao.deliveryProject.cancelled': '项目已取消',
+  'app.kuaizhizao.deliveryProject.defaultTemplate': '默认',
+  'app.kuaizhizao.deliveryProject.recentReportsAndIssues': '最近汇报与问题',
+  'app.kuaizhizao.deliveryProject.recentReports': '最近节点汇报',
+  'app.kuaizhizao.deliveryProject.recentIssues': '最近问题',
+  'app.kuaizhizao.deliveryProject.reportRejected': '汇报已驳回',
+  'app.kuaizhizao.deliveryProject.issueResolved': '问题已解决',
+  'app.kuaizhizao.deliveryProject.issueClosed': '问题已关闭',
+  'app.kuaizhizao.deliveryProject.report.overdueNodes': '逾期节点',
+  'app.kuaizhizao.deliveryProject.report.openIssues': '待处理问题',
+  'app.kuaizhizao.deliveryProject.report.daysToDelivery': '距交期(天)',
+  'app.kuaizhizao.deliveryProject.report.nodeProgress': '节点进度',
+  'app.kuaizhizao.deliveryProject.report.issueCount': '问题数',
+  'app.kuaizhizao.deliveryProject.schedule.currentNode': '排单节点',
+  'app.kuaizhizao.deliveryProject.schedule.reportOverdue': '汇报逾期',
+  'app.kuaizhizao.deliveryProject.schedule.overdue': '逾期',
+  'app.kuaizhizao.deliveryProject.assignOwner': '指定负责人',
+  'app.kuaizhizao.deliveryProject.assignNodeOwner': '指定节点负责人：{{node}}',
+  'app.kuaizhizao.deliveryProject.started': '项目已启动',
+  'app.kuaizhizao.deliveryProject.updatedAt': '更新时间',
+  'app.kuaizhizao.deliveryProject.createFromSalesOrderHint': '请从销售订单下推创建交付项目',
+  'app.kuaizhizao.deliveryProject.createDeliveryProject': '新建交付项目',
+  'app.kuaizhizao.deliveryProject.createReport': '新建节点汇报',
+  'app.kuaizhizao.deliveryProject.createIssue': '新建问题',
+  'app.kuaizhizao.deliveryProject.workbench.tabTitleSuffix': '工作台',
+  'app.kuaizhizao.deliveryProject.workbench.backToList': '全部项目',
+  'app.kuaizhizao.deliveryProject.workbench.collabEmpty': '暂无汇报或待处理问题',
+  'app.kuaizhizao.deliveryProject.workbench.noSalesOrder': '未关联销售订单',
+  'app.kuaizhizao.deliveryProject.workbench.linkedRdProject': '来源研发项目',
+  'app.kuaizhizao.deliveryProject.workbench.openReportsList': '节点汇报列表',
+  'app.kuaizhizao.deliveryProject.workbench.openIssuesList': '问题跟踪列表',
+  'app.kuaizhizao.deliveryProject.workbench.nodeStepper.title': '交付流程节点',
+  'app.kuaizhizao.deliveryProject.workbench.nodeStepper.completedCount': '已完成 {{completed}} / {{total}}',
+  'app.kuaizhizao.deliveryProject.workbench.progressDetail.nodes': '流程节点',
+  'app.kuaizhizao.deliveryProject.workbench.progressDetail.tasks': '节点任务',
+  'app.kuaizhizao.deliveryProject.workbench.progressDetail.reports': '节点汇报',
+  'app.kuaizhizao.deliveryProject.workbench.section.nodeInfo': '节点信息',
+  'app.kuaizhizao.deliveryProject.workbench.section.collaboration': '协同事项',
+  'app.kuaizhizao.deliveryProject.workbench.section.downstream': '下游下推',
+  'app.kuaizhizao.deliveryProject.workbench.empty.nodes': '暂无流程节点',
+  'app.kuaizhizao.deliveryProject.workbench.tabs.overview': '概览',
+  'app.kuaizhizao.deliveryProject.workbench.tabs.nodes': '节点任务',
+  'app.kuaizhizao.deliveryProject.workbench.tabs.collab': '协同',
+  'app.kuaizhizao.deliveryProject.workbench.tabs.related': '关联',
+  'app.kuaizhizao.deliveryProject.workbench.tabs.chain': '全链路',
+  'app.kuaizhizao.deliveryProject.createProcessTemplate': '新建流程模板',
+  'app.kuaizhizao.deliveryProject.newTemplateName': '新建流程模板',
+  'app.kuaizhizao.deliveryProject.setDefaultTemplate': '设为默认',
+  'app.kuaizhizao.deliveryProject.addNode': '添加节点',
+  'app.kuaizhizao.deliveryProject.followUp.nodeProgress': '节点进度',
+  'app.kuaizhizao.deliveryProject.followUp.nodeIndex': '节点{{index}}',
+  'app.kuaizhizao.deliveryProject.reportsComingSoon': '报表功能即将上线',
+  'app.kuaizhizao.deliveryProject.pushFromSalesOrder': '下推交付项目',
+  'app.kuaizhizao.deliveryProject.pushConfirmTitle': '下推交付项目',
+  'app.kuaizhizao.deliveryProject.pushConfirmContent': '将为销售订单 {{order}} 创建交付项目并启动流程，是否继续？',
+  'app.kuaizhizao.deliveryProject.pushSuccess': '交付项目创建成功',
+  'app.kuaizhizao.deliveryProject.alreadyExists': '该订单已有交付项目 {{code}}',
+  'app.kuaizhizao.deliveryProject.editDeliveryProject': '编辑交付项目',
+  'app.kuaizhizao.deliveryProject.editReport': '编辑节点汇报',
+  'app.kuaizhizao.deliveryProject.editIssue': '编辑问题',
+  'app.kuaizhizao.deliveryProject.completeProject': '完成项目',
+  'app.kuaizhizao.deliveryProject.completeProjectConfirm': '确认将项目标记为已完成？',
+  'app.kuaizhizao.deliveryProject.changeTemplate': '更换流程模板',
+  'app.kuaizhizao.deliveryProject.templateChanged': '流程模板已更换',
+  'app.kuaizhizao.deliveryProject.completed': '项目已完成',
+  'app.kuaizhizao.deliveryProject.deleteProjectConfirm': '删除后不可恢复，是否继续？',
+  'app.kuaizhizao.deliveryProject.deleteReportConfirm': '删除后不可恢复，是否继续？',
+  'app.kuaizhizao.deliveryProject.deleteIssueConfirm': '删除后不可恢复，是否继续？',
+  'app.kuaizhizao.deliveryProject.batchDeleteProjectConfirm': '确定删除选中的 {{count}} 个交付项目吗？',
+  'app.kuaizhizao.deliveryProject.batchDeleteIssueConfirm': '确定删除选中的 {{count}} 个问题吗？',
+  'app.kuaizhizao.deliveryProject.batchDeleteReportConfirm': '确定删除选中的 {{count}} 条节点汇报吗？',
+  'app.kuaizhizao.deliveryProject.batchDeleteEmptyDraft': '所选记录中没有可删除的草稿项目',
+  'app.kuaizhizao.deliveryProject.batchDeleteEmptyOpenIssue': '所选记录中没有可删除的待处理问题',
+  'app.kuaizhizao.deliveryProject.batchDeleteEmptyDraftReport': '所选记录中没有可删除的草稿汇报',
+  'app.kuaizhizao.deliveryProject.resolveIssue': '标记已解决',
+  'app.kuaizhizao.deliveryProject.fields.reviewerName': '审核人',
+  'app.kuaizhizao.deliveryProject.fields.reviewNotes': '审核意见',
+  'app.kuaizhizao.deliveryProject.fields.resolution': '处理结果',
+  'app.kuaizhizao.salesOrder.capability.sales_order.push_delivery_project.not_allowed': '当前状态不可下推交付项目',
+  'app.kuaizhizao.salesOrder.capability.sales_order.push_delivery_project.already_pushed': '该销售订单已下推交付项目',
+  'app.kuaizhizao.salesOrder.capability.sales_order.push_delivery_project.no_items': '销售订单无明细，无法下推交付项目',
   'app.kuaizhizao.menu.plan-management': '计划管理',
   'app.kuaizhizao.menu.plan-management.demand-management': '需求计划',
   'app.kuaizhizao.menu.plan-management.demand-computation': '需求计算 (MRP)',
@@ -6186,12 +6382,14 @@ export default {
   'app.kuaizhizao.menu.quality-management.eight-d-reports': '8D报告',
   'app.kuaizhizao.eightD.noReadPermission': '暂无8D查看权限',
   'app.kuaizhizao.eightD.createTitle': '新建 8D 报告',
+  'app.kuaizhizao.eightD.editTitle': '编辑 8D 报告',
   'app.kuaizhizao.eightD.workbenchTitle': '8D 工作台',
   'app.kuaizhizao.eightD.sectionStageContent': '阶段内容',
   'app.kuaizhizao.eightD.createButton': '新建8D',
   'app.kuaizhizao.eightD.createSuccess': '8D 报告已创建',
   'app.kuaizhizao.eightD.loadDetailFailed': '加载 8D 详情失败',
   'app.kuaizhizao.eightD.saveSuccess': '8D 内容已保存',
+  'app.kuaizhizao.eightD.saveValidationFailed': '请先完善当前阶段正文后再保存',
   'app.kuaizhizao.eightD.transitionSuccessTo': '已推进到 {{status}}',
   'app.kuaizhizao.eightD.transitionFailed': '推进阶段失败',
   'app.kuaizhizao.eightD.transitionTo': '推进到 {{status}}',
@@ -6223,6 +6421,7 @@ export default {
   'app.kuaizhizao.eightD.severity.minor': '轻微',
   'app.kuaizhizao.eightD.severity.major': '严重',
   'app.kuaizhizao.eightD.severity.critical': '紧急',
+  'app.kuaizhizao.eightD.status.d0_prepare': 'D0 准备响应',
   'app.kuaizhizao.eightD.status.d1_team': 'D1 组建团队',
   'app.kuaizhizao.eightD.status.d2_problem': 'D2 问题描述',
   'app.kuaizhizao.eightD.status.d3_containment': 'D3 临时遏制',
@@ -6232,6 +6431,52 @@ export default {
   'app.kuaizhizao.eightD.status.d7_prevent_recurrence': 'D7 防再发',
   'app.kuaizhizao.eightD.status.d8_team_congratulation': 'D8 总结',
   'app.kuaizhizao.eightD.status.closed': '已关闭',
+  'app.kuaizhizao.eightD.workbench.tabTitleSuffix': '8D 工作台',
+  'app.kuaizhizao.eightD.workbench.backToList': '全部 8D 报告',
+  'app.kuaizhizao.eightD.workbench.currentStage': '流程阶段',
+  'app.kuaizhizao.eightD.workbench.closedReadonly': '报告已关闭，内容只读',
+  'app.kuaizhizao.eightD.workbench.stageLocked': '阶段 {{stage}} 尚未开放，请先推进流程',
+  'app.kuaizhizao.eightD.workbench.stageLockedCompleted': '阶段 {{stage}} 已完成并锁定，申请修改后可编辑',
+  'app.kuaizhizao.eightD.workbench.section.source': '来源单据',
+  'app.kuaizhizao.eightD.workbench.section.history': '历程',
+  'app.kuaizhizao.eightD.workbench.noSource': '暂无来源单据',
+  'app.kuaizhizao.eightD.workbench.stageStepper.title': '8D 流程节点',
+  'app.kuaizhizao.eightD.workbench.stageStepper.completedCount': '已完成 {{completed}} / {{total}}',
+  'app.kuaizhizao.eightD.workbench.stageStepper.inProgress': '进行中',
+  'app.kuaizhizao.eightD.workbench.stageStepper.closed': '已关闭',
+  'app.kuaizhizao.eightD.notFound': '8D 报告不存在或无权访问',
+  'app.kuaizhizao.eightD.stageHint.d0_prepare': '说明紧急响应动作、停线或围堵启动、资源投入与时限安排',
+  'app.kuaizhizao.eightD.stageHint.d1_team': '列出跨职能小组成员、角色分工与联系方式',
+  'app.kuaizhizao.eightD.stageHint.d2_problem': '用 5W2H 描述问题，明确发生场景、影响范围与量化指标',
+  'app.kuaizhizao.eightD.stageHint.d3_containment': '记录临时围堵措施、执行人与有效性验证',
+  'app.kuaizhizao.eightD.stageHint.d4_root_cause': '开展根因分析并说明验证过程，区分发生原因与流出原因',
+  'app.kuaizhizao.eightD.stageHint.d5_corrective_action': '选择永久纠正措施，说明验证方式与预期效果',
+  'app.kuaizhizao.eightD.stageHint.d6_implement_result': '记录措施实施过程、效果确认与证据',
+  'app.kuaizhizao.eightD.stageHint.d7_prevent_recurrence': '更新体系、工艺或标准，防止问题再发',
+  'app.kuaizhizao.eightD.stageHint.d8_team_congratulation': '总结团队贡献与经验固化，关单前填写验证结果',
+  'app.kuaizhizao.eightD.outline.helper': '可插入本阶段提纲模板后按需填写，也可完全手写正文',
+  'app.kuaizhizao.eightD.outline.insert': '插入提纲',
+  'app.kuaizhizao.eightD.outline.replaceConfirmTitle': '替换当前内容？',
+  'app.kuaizhizao.eightD.outline.replaceConfirmContent': '当前阶段已有正文，插入提纲将覆盖现有内容。',
+  'app.kuaizhizao.eightD.outline.replaceConfirmOk': '替换为提纲',
+  'app.kuaizhizao.eightD.outline.d0_prepare':
+    '<p><strong>1. 紧急响应</strong></p><ul><li>响应动作：</li><li>停线/围堵决策：</li><li>信息通报范围：</li></ul><p><strong>2. 资源与时限</strong></p><ul><li>投入人员/设备：</li><li>目标完成时间：</li><li>升级路径：</li></ul>',
+  'app.kuaizhizao.eightD.outline.d1_team':
+    '<p><strong>1. 小组组织</strong></p><ul><li>组长：</li><li>牵头部门：</li><li>会议频次：</li></ul><p><strong>2. 成员分工</strong></p><ul><li>成员姓名 / 角色 / 部门 / 联系方式</li><li>成员姓名 / 角色 / 部门 / 联系方式</li></ul><p><strong>3. 职责说明</strong></p><ul><li>数据收集：</li><li>现场协调：</li><li>客户沟通：</li></ul>',
+  'app.kuaizhizao.eightD.outline.d2_problem':
+    '<p><strong>1. 问题描述（5W2H）</strong></p><ul><li>Who 谁发现/谁受影响：</li><li>What 什么问题：</li><li>When 何时发生：</li><li>Where 发生地点/工序：</li><li>Why 初步判断：</li><li>How 如何发现：</li><li>How much 数量/比例：</li></ul><p><strong>2. 影响范围</strong></p><ul><li>在制品/库存：</li><li>已交付客户：</li><li>安全/法规：</li></ul>',
+  'app.kuaizhizao.eightD.outline.d3_containment':
+    '<p><strong>1. 临时围堵措施</strong></p><ul><li>措施内容：</li><li>执行人：</li><li>完成时间：</li><li>验证方式：</li></ul><p><strong>2. 标识与隔离</strong></p><ul><li>可疑品标识：</li><li>隔离库位：</li><li>追溯批次：</li></ul>',
+  'app.kuaizhizao.eightD.outline.d4_root_cause':
+    '<p><strong>1. 分析过程</strong></p><ul><li>使用工具（5Why/鱼骨/FTA 等）：</li><li>数据与证据：</li></ul><p><strong>2. 发生原因</strong></p><ul><li>直接原因：</li><li>根本原因：</li></ul><p><strong>3. 流出原因</strong></p><ul><li>检测/防错失效点：</li><li>根本原因：</li></ul><p><strong>4. 根因确认</strong></p><ul><li>验证方法：</li><li>结论：</li></ul>',
+  'app.kuaizhizao.eightD.outline.d5_corrective_action':
+    '<p><strong>1. 永久纠正措施</strong></p><ul><li>针对发生原因：</li><li>针对流出原因：</li></ul><p><strong>2. 措施验证</strong></p><ul><li>验证方式：</li><li>样本/周期：</li><li>预期效果：</li></ul><p><strong>3. 风险与备选</strong></p><ul><li>潜在风险：</li><li>备选方案：</li></ul>',
+  'app.kuaizhizao.eightD.outline.d6_implement_result':
+    '<p><strong>1. 实施记录</strong></p><ul><li>实施步骤：</li><li>完成日期：</li><li>责任人：</li></ul><p><strong>2. 效果确认</strong></p><ul><li>对比数据（实施前/后）：</li><li>客户/现场反馈：</li></ul><p><strong>3. 证据</strong></p><ul><li>检验记录/照片/报告编号：</li></ul>',
+  'app.kuaizhizao.eightD.outline.d7_prevent_recurrence':
+    '<p><strong>1. 体系更新</strong></p><ul><li>作业指导书/SOP：</li><li>检验标准：</li><li>FMEA/控制计划：</li></ul><p><strong>2. 横向展开</strong></p><ul><li>类似产品/产线：</li><li>展开措施：</li></ul><p><strong>3. 培训与稽核</strong></p><ul><li>培训对象与时间：</li><li>稽核频次：</li></ul>',
+  'app.kuaizhizao.eightD.outline.d8_team_congratulation':
+    '<p><strong>1. 项目总结</strong></p><ul><li>问题回顾：</li><li>关键措施：</li><li>达成效果：</li></ul><p><strong>2. 经验教训</strong></p><ul><li>做得好的：</li><li>待改进的：</li></ul><p><strong>3. 标准化成果</strong></p><ul><li>固化文件/流程：</li><li>团队致谢：</li></ul>',
   'app.kuaizhizao.eightD.currentStage': '当前阶段：{{stage}}',
   'app.kuaizhizao.eightD.currentStageHint': '建议优先完善当前阶段内容，再推进到下一阶段。',
   'app.kuaizhizao.eightD.currentStageRequired': '请填写当前阶段内容：{{stage}}',
@@ -6240,11 +6485,30 @@ export default {
   'app.kuaizhizao.eightD.placeholders.verificationResult': '关闭阶段前必须填写验证结果',
   'app.kuaizhizao.eightD.placeholders.remarks': '记录补充说明或协作信息',
   'app.kuaizhizao.eightD.saveHint': '保存后可在右侧时间线查看变更轨迹',
+  'app.kuaizhizao.eightD.history.title': '历程',
+  'app.kuaizhizao.eightD.history.reportTab': '报告历程',
+  'app.kuaizhizao.eightD.history.stageTab': '节点历史',
   'app.kuaizhizao.eightD.history.empty': '暂无历史记录',
   'app.kuaizhizao.eightD.history.created': '创建 8D 报告',
   'app.kuaizhizao.eightD.history.closed': '关闭 8D 报告',
   'app.kuaizhizao.eightD.history.transition': '阶段流转：{{from}} -> {{to}}',
   'app.kuaizhizao.eightD.history.default': '操作记录',
+  'app.kuaizhizao.eightD.stageUnlock.request': '申请修改',
+  'app.kuaizhizao.eightD.stageUnlock.modalTitle': '申请修改 {{stage}}',
+  'app.kuaizhizao.eightD.stageUnlock.modalHint': '请说明修改原因，提交后可编辑该节点；保存后节点将自动恢复为已完成锁定状态。',
+  'app.kuaizhizao.eightD.stageUnlock.reasonPlaceholder': '请输入修改原因',
+  'app.kuaizhizao.eightD.stageUnlock.reasonRequired': '请填写修改原因',
+  'app.kuaizhizao.eightD.stageUnlock.submit': '提交申请',
+  'app.kuaizhizao.eightD.stageUnlock.success': '节点已解锁，可开始修改',
+  'app.kuaizhizao.eightD.stageUnlock.saveComplete': '修改已保存，节点已恢复为已完成状态',
+  'app.kuaizhizao.eightD.stageUnlock.failed': '申请修改失败',
+  'app.kuaizhizao.eightD.stageRevision.unlockRequest': '申请修改 {{stage}}',
+  'app.kuaizhizao.eightD.stageRevision.transitionSnapshot': '阶段推进快照 {{stage}}',
+  'app.kuaizhizao.eightD.stageRevision.save': '保存 {{stage}}（第 {{revision}} 版）',
+  'app.kuaizhizao.eightD.stageRevision.editComplete': '修改完成 {{stage}}',
+  'app.kuaizhizao.eightD.stageRevision.reason': '原因',
+  'app.kuaizhizao.eightD.stageRevision.empty': '暂无节点修订记录',
+  'app.kuaizhizao.eightD.stageRevision.emptyStage': '当前节点暂无修订记录',
   'app.kuaizhizao.menu.quality-management.oqc-inspection': '出货检验 (OQC)',
   'app.kuaizhizao.menu.quality-management.spc-monitor': 'SPC监控',
   'app.kuaizhizao.menu.analysis-center': '效能中心',
@@ -16283,6 +16547,9 @@ export default {
   'app.master-data.units.syncDatasetHint': '确认同步后将按字段映射写入单位目录',
   'app.master-data.units.syncField.code': '单位编码',
   'app.master-data.units.syncField.name': '单位名称',
+  'app.master-data.units.syncField.description': '备注',
+  'app.master-data.units.syncField.isActive': '是否启用',
+  'app.master-data.units.syncField.sortOrder': '排序',
   'app.master-data.menu.materials.batch-rules': '批号规则',
   'app.master-data.menu.materials.batches': '批号记录',
   'app.master-data.menu.materials.serial-rules': '序列号规则',
@@ -16565,6 +16832,9 @@ export default {
   'app.master-data.warehouses.syncField.code': '仓库编码',
   'app.master-data.warehouses.syncField.name': '仓库名称',
   'app.master-data.warehouses.syncField.forbidStatus': '禁用状态',
+  'app.master-data.warehouses.syncField.description': '描述',
+  'app.master-data.warehouses.syncField.warehouseType': '仓库类型',
+  'app.master-data.warehouses.syncField.isActive': '是否启用',
   'app.master-data.storageAreas.getListFailed': '获取库区列表失败',
   'app.master-data.storageLocations.getListFailed': '获取库位列表失败',
   'app.master-data.workstations.getDetailFailed': '获取工位详情失败',
@@ -16660,6 +16930,29 @@ export default {
   'app.master-data.customers.syncField.phone': '电话',
   'app.master-data.customers.syncField.email': '邮箱',
   'app.master-data.customers.syncField.address': '地址',
+  'app.master-data.customers.syncField.category': '客户分类',
+  'app.master-data.customers.syncField.contactTitle': '联系人职位',
+  'app.master-data.customers.syncField.industryCode': '所属行业',
+  'app.master-data.customers.syncField.customerLevelCode': '客户级别',
+  'app.master-data.customers.syncField.estimatedAnnualPurchase': '预估年采购量',
+  'app.master-data.customers.syncField.leadSourceCode': '来源渠道',
+  'app.master-data.customers.syncField.creditLimit': '信用额度',
+  'app.master-data.customers.syncField.taxRegistrationNo': '纳税人识别号',
+  'app.master-data.customers.syncField.invoiceTitle': '发票抬头',
+  'app.master-data.customers.syncField.invoiceAddress': '开票地址',
+  'app.master-data.customers.syncField.invoicePhone': '开票电话',
+  'app.master-data.customers.syncField.invoiceBankName': '开票开户银行',
+  'app.master-data.customers.syncField.invoiceBankAccount': '开票银行账号',
+  'app.master-data.customers.syncField.legalRepresentative': '法定代表人',
+  'app.master-data.customers.syncField.paymentTermsDays': '付款账期',
+  'app.master-data.customers.syncField.settlementMethodCode': '结算方式',
+  'app.master-data.customers.syncField.financeContactName': '财务联系人',
+  'app.master-data.customers.syncField.financeContactPhone': '财务联系电话',
+  'app.master-data.customers.syncField.deliveryContactName': '收货联系人',
+  'app.master-data.customers.syncField.deliveryContactPhone': '收货联系电话',
+  'app.master-data.customers.syncField.deliveryAddress': '收货地址',
+  'app.master-data.customers.syncField.salesmanName': '业务员',
+  'app.master-data.customers.syncField.isActive': '是否启用',
   'app.master-data.suppliers.getDetailFailed': '获取供应商详情失败',
   'app.master-data.suppliers.syncFromSource': '同步供应商',
   'app.master-data.suppliers.syncHint': '从外部系统同步供应商到供应商管理',
@@ -16671,6 +16964,27 @@ export default {
   'app.master-data.suppliers.syncField.code': '供应商编码',
   'app.master-data.suppliers.syncField.name': '供应商名称',
   'app.master-data.suppliers.syncField.shortName': '简称',
+  'app.master-data.suppliers.syncField.contactPerson': '联系人',
+  'app.master-data.suppliers.syncField.phone': '电话',
+  'app.master-data.suppliers.syncField.email': '邮箱',
+  'app.master-data.suppliers.syncField.address': '地址',
+  'app.master-data.suppliers.syncField.category': '供应商分类',
+  'app.master-data.suppliers.syncField.contactTitle': '联系人职位',
+  'app.master-data.suppliers.syncField.industryCode': '所属行业',
+  'app.master-data.suppliers.syncField.estimatedAnnualPurchase': '预估年采购额',
+  'app.master-data.suppliers.syncField.sourceChannelCode': '来源渠道',
+  'app.master-data.suppliers.syncField.creditLimit': '授信额度',
+  'app.master-data.suppliers.syncField.taxRegistrationNo': '纳税人识别号',
+  'app.master-data.suppliers.syncField.invoiceTitle': '发票抬头',
+  'app.master-data.suppliers.syncField.invoiceAddress': '开票地址',
+  'app.master-data.suppliers.syncField.invoicePhone': '开票电话',
+  'app.master-data.suppliers.syncField.invoiceBankName': '开票开户银行',
+  'app.master-data.suppliers.syncField.invoiceBankAccount': '开票银行账号',
+  'app.master-data.suppliers.syncField.legalRepresentative': '法定代表人',
+  'app.master-data.suppliers.syncField.paymentTermsDays': '付款账期',
+  'app.master-data.suppliers.syncField.settlementMethodCode': '结算方式',
+  'app.master-data.suppliers.syncField.buyerName': '采购员',
+  'app.master-data.suppliers.syncField.isActive': '是否启用',
   'app.master-data.suppliers.detailTitle': '供应商详情',
   'app.master-data.suppliers.deleteConfirm': '确定要删除这个供应商吗？',
   'app.master-data.suppliers.create': '新建供应商',
@@ -17270,6 +17584,9 @@ export default {
   'app.master-data.materials.groupSyncField.code': '分组编码',
   'app.master-data.materials.groupSyncField.name': '分组名称',
   'app.master-data.materials.groupSyncField.parentCode': '父分组编码',
+  'app.master-data.materials.groupSyncField.alias': '分组代号',
+  'app.master-data.materials.groupSyncField.description': '描述',
+  'app.master-data.materials.groupSyncField.isActive': '是否启用',
   'app.master-data.materials.syncField.mainCode': '主编码',
   'app.master-data.materials.syncField.name': '物料名称',
   'app.master-data.materials.syncField.specification': '规格型号',
@@ -17277,6 +17594,27 @@ export default {
   'app.master-data.materials.syncField.baseUnitName': '基础单位名称',
   'app.master-data.materials.syncField.groupCode': '物料分组编码',
   'app.master-data.materials.syncField.groupName': '物料分组名称',
+  'app.master-data.materials.syncField.description': '描述',
+  'app.master-data.materials.syncField.brand': '品牌',
+  'app.master-data.materials.syncField.model': '型号',
+  'app.master-data.materials.syncField.texture': '材质',
+  'app.master-data.materials.syncField.barcode': '条码',
+  'app.master-data.materials.syncField.sourceType': '物料来源',
+  'app.master-data.materials.syncField.isActive': '是否启用',
+  'app.master-data.materials.syncField.batchManaged': '批号管理',
+  'app.master-data.materials.syncField.serialManaged': '序列号管理',
+  'app.master-data.materials.syncField.variantManaged': '属性管理',
+  'app.master-data.materials.syncField.weight': '重量',
+  'app.master-data.materials.syncField.volume': '体积',
+  'app.master-data.materials.syncField.shelfLifeManaged': '保质期管理',
+  'app.master-data.materials.syncField.shelfLifeDays': '保质期天数',
+  'app.master-data.materials.syncField.isGiftable': '可作赠品',
+  'app.master-data.materials.syncField.referenceCost': '参考成本',
+  'app.master-data.materials.syncField.countryOfOrigin': '原产国',
+  'app.master-data.materials.syncField.customsCode': '海关编码',
+  'app.master-data.materials.syncField.overReportMode': '超报模式',
+  'app.master-data.materials.syncField.overReportValue': '超报值',
+  'app.master-data.materials.syncField.inspectionMode': '质检模式',
   'app.master-data.materials.noGroup': '无分组',
   'app.master-data.materials.batchTrackingToolbar': '批量批号/序列号',
   'app.master-data.materials.batchTrackingTitle': '批量批号/序列号管理',
@@ -24398,6 +24736,250 @@ export default {
   'pages.dashboard.updateLogTypeSection.improvement': '优化',
   'pages.dashboard.updateLogTypeSection.fix': '修复',
   'pages.dashboard.updateLogTypeSection.security': '安全',
+  'pages.dashboard.updateLog.entries.eight-d-unlock-edit-relock.title':
+    '8D 申请修改保存后自动锁定',
+  'pages.dashboard.updateLog.entries.eight-d-unlock-edit-relock.description':
+    '8D 已完成节点申请修改并保存后，自动恢复为已完成锁定状态，无需靠推进流程节点。',
+  'pages.dashboard.updateLog.entries.eight-d-save-current-stage-only.title':
+    '8D 保存当前阶段误拦截修复',
+  'pages.dashboard.updateLog.entries.eight-d-save-current-stage-only.description':
+    '修复 8D 工作台保存或推进阶段时，因一并提交已完成阶段字段而被误判需申请修改的问题。',
+  'pages.dashboard.updateLog.entries.eight-d-stage-html-blank-fix.title':
+    '8D 阶段正文空白修复',
+  'pages.dashboard.updateLog.entries.eight-d-stage-html-blank-fix.description':
+    '修复 8D 工作台保存后阶段正文出现大块空白的问题，自动清理富文本空段落并收紧只读展示样式。',
+  'pages.dashboard.updateLog.entries.eight-d-stage-unlock-history.title':
+    '8D 已完成节点申请修改',
+  'pages.dashboard.updateLog.entries.eight-d-stage-unlock-history.description':
+    '8D 工作台已完成节点锁定后可申请修改并保留修订历史；右侧分报告历程与节点历史展示。',
+  'pages.dashboard.updateLog.entries.eight-d-stage-outline.title':
+    '8D 各阶段提纲模板',
+  'pages.dashboard.updateLog.entries.eight-d-stage-outline.description':
+    '8D 工作台 D0-D8 各阶段可一键插入提纲模板，也可不插入、完全手写阶段正文。',
+  'pages.dashboard.updateLog.entries.delivery-workbench-progress-detail.title':
+    '交付项目工作台进度详情说明',
+  'pages.dashboard.updateLog.entries.delivery-workbench-progress-detail.description':
+    '交付项目工作台概览进度条下方补充流程节点、节点任务、节点汇报权重说明，与研发项目进度展示一致。',
+  'pages.dashboard.updateLog.entries.project-workbench-overview-label.title':
+    '工作台概览字段标题加粗',
+  'pages.dashboard.updateLog.entries.project-workbench-overview-label.description':
+    '研发、交付、8D 三个工作台概览区 Descriptions 字段标题统一加粗，内容保持常规字重。',
+  'pages.dashboard.updateLog.entries.eight-d-workbench-overview.title':
+    '8D 工作台概览与项目工作台对齐',
+  'pages.dashboard.updateLog.entries.eight-d-workbench-overview.description':
+    '8D 工作台概览改为 Descriptions 只读展示严重度、负责人、交期等；表头编辑仍走列表「编辑」弹窗，右侧保留阶段推进按钮。',
+  'pages.dashboard.updateLog.entries.eight-d-list-edit-header.title':
+    '8D 列表编辑与工作台分离',
+  'pages.dashboard.updateLog.entries.eight-d-list-edit-header.description':
+    '8D 报告列表「工作台」进入阶段工作台；「编辑」打开表头弹窗修改标题、严重度、负责人、交期与附件。',
+  'pages.dashboard.updateLog.entries.workbench-row-action-label.title':
+    '项目与 8D 列表「工作台」行操作文案',
+  'pages.dashboard.updateLog.entries.workbench-row-action-label.description':
+    '研发项目、交付项目、8D 报告列表进入工作台的行内按钮统一显示「工作台」，不再误显示为「详情」。',
+  'pages.dashboard.updateLog.entries.eight-d-workbench-header.title':
+    '8D 工作台顶栏与项目工作台对齐',
+  'pages.dashboard.updateLog.entries.eight-d-workbench-header.description':
+    '8D 报告工作台保存与打印按钮右对齐，保存使用实心主按钮，与研发/交付项目顶栏一致。',
+  'pages.dashboard.updateLog.entries.project-workbench-shell-radius.title':
+    '项目与 8D 工作台底边留白统一',
+  'pages.dashboard.updateLog.entries.project-workbench-shell-radius.description':
+    '研发、交付、8D 三个工作台页底统一保留 16px 留白；节点/阶段步进条背景圆角跟随系统 borderRadiusLG。',
+  'pages.dashboard.updateLog.entries.project-workbench-toolbar.title':
+    '研发与交付项目工作台顶栏对齐',
+  'pages.dashboard.updateLog.entries.project-workbench-toolbar.description':
+    '研发项目工作台标题区与交付项目统一：左侧返回与标题状态，右侧简洁文字按钮；去掉图标与混排样式。',
+  'pages.dashboard.updateLog.entries.eight-d-stage-stepper.title':
+    '8D 流程节点对齐研发交付样式',
+  'pages.dashboard.updateLog.entries.eight-d-stage-stepper.description':
+    '8D 工作台步进条改为与研发 NPI、交付项目一致的节点样式：渐变底、完成进度、阶段图标与可点击切换。',
+  'pages.dashboard.updateLog.entries.eight-d-history-transition.title':
+    '8D 报告阶段推进写入历程',
+  'pages.dashboard.updateLog.entries.eight-d-history-transition.description':
+    '修复 8D 推进阶段后右侧历程不更新的问题，每次推进均记录阶段流转，保存备注时不再覆盖系统历程行。',
+  'pages.dashboard.updateLog.entries.eight-d-workbench-print.title':
+    '8D 报告工作台与打印升级',
+  'pages.dashboard.updateLog.entries.eight-d-workbench-print.description':
+    '8D 报告改为独立 UniTab 工作台，补齐 D0 阶段，正文使用富文本编辑器分步编辑推进，并接入系统打印模板输出标准 8D 报告。',
+  'pages.dashboard.updateLog.entries.delivery-workbench-align-rd.title':
+    '交付项目工作台对齐研发设计',
+  'pages.dashboard.updateLog.entries.delivery-workbench-align-rd.description':
+    '交付工作台改为与研发一致：顶部摘要卡、左侧可切换节点步进与节点任务、右侧关联与协同事项快捷入口及近期汇报问题。',
+  'pages.dashboard.updateLog.entries.delivery-workbench-no-full-chain.title':
+    '交付项目工作台去掉全链路',
+  'pages.dashboard.updateLog.entries.delivery-workbench-no-full-chain.description':
+    '交付项目工作台不再展示底部全链路区块，关联与协同仍保留在右侧栏。',
+  'pages.dashboard.updateLog.entries.project-workbench-split-layout.title':
+    '研发与交付项目工作台恢复左右分栏',
+  'pages.dashboard.updateLog.entries.project-workbench-split-layout.description':
+    '工作台改回左宽右窄：左侧直接展示阶段门/节点任务，右侧展示关联单据、协同汇报与工程链接，一屏可见作业与关联项。',
+  'pages.dashboard.updateLog.entries.rd-project-withdraw-not-executed.title':
+    '研发项目未执行可撤回删除',
+  'pages.dashboard.updateLog.entries.rd-project-withdraw-not-executed.description':
+    '误启动且阶段门、任务、交付物、工程链接均未推进的研发项目，列表与工作台可撤回为草稿或直接删除。',
+  'pages.dashboard.updateLog.entries.delivery-rd-project-workbench.title':
+    '交付与研发项目枢纽型工作台',
+  'pages.dashboard.updateLog.entries.delivery-rd-project-workbench.description':
+    '交付项目取消详情抽屉，列表与交付中心统一打开全页工作台（概览、节点任务、协同、关联、全链路）；研发项目列表行操作改为工作台，详情页同步 Tab 分区。',
+  'pages.dashboard.updateLog.entries.kuaiplm-rd-projects-hide-material-col.title':
+    '研发项目列表去掉产品物料列',
+  'pages.dashboard.updateLog.entries.kuaiplm-rd-projects-hide-material-col.description':
+    '研发项目列表不再展示产品物料，列集中到编号名称、负责人、计划完成与阶段进度。',
+  'pages.dashboard.updateLog.entries.kuaiplm-rd-projects-align-delivery.title':
+    '快研发菜单与列表对齐交付项目',
+  'pages.dashboard.updateLog.entries.kuaiplm-rd-projects-align-delivery.description':
+    '项目中心改为研发项目（研发看板、研发项目、阶段管理）；研发项目列表编号名称堆叠，去掉项目类型列，阶段进度改为与交付项目相同的色条节点样式。',
+  'pages.dashboard.updateLog.entries.delivery-schedules-menu-rename.title':
+    '交付菜单「流程排单」简称',
+  'pages.dashboard.updateLog.entries.delivery-schedules-menu-rename.description':
+    '原「项目流程排单表」菜单文案改为「流程排单」，侧栏更短，含义仍为按当前节点催办排期。',
+  'pages.dashboard.updateLog.entries.delivery-projects-column-order-v10.title':
+    '交付项目列表列序优化',
+  'pages.dashboard.updateLog.entries.delivery-projects-column-order-v10.description':
+    '客户与销售订单叠列为第二列，交期第三列，当前节点/进度/节点进度顺延；节点进度仍为余量列。',
+  'pages.dashboard.updateLog.entries.delivery-merge-follow-up-into-projects.title':
+    '项目进度表并入交付项目',
+  'pages.dashboard.updateLog.entries.delivery-merge-follow-up-into-projects.description':
+    '取消独立项目进度表菜单；交付项目列表增加节点进度余量列（色条、节点名、负责人），旧链接自动跳转交付项目。',
+  'pages.dashboard.updateLog.entries.delivery-follow-up-node-progress-text.title':
+    '项目跟进表节点进度改为三行文案',
+  'pages.dashboard.updateLog.entries.delivery-follow-up-node-progress-text.description':
+    '节点进度列每个节点三行：首行保留原状态色条，下两行小字展示节点名称与负责人。',
+  'pages.dashboard.updateLog.entries.delivery-list-audit-columns.title':
+    '交付列表补齐更新时间审计列',
+  'pages.dashboard.updateLog.entries.delivery-list-audit-columns.description':
+    '节点汇报、问题跟踪、项目跟进表、流程排单表对齐交付项目列表，增加更新时间叠列（优先更新人/时间，回落创建人/时间）。',
+  'pages.dashboard.updateLog.entries.delivery-issue-badge-colors.title':
+    '问题跟踪类型与优先级徽章配色',
+  'pages.dashboard.updateLog.entries.delivery-issue-badge-colors.description':
+    '问题类型、优先级改用语义色 MarkerTag：阻塞/紧急为红、质量/高为橙、交期/普通为蓝，便于扫读。',
+  'pages.dashboard.updateLog.entries.delivery-issue-title-remainder-flex.title':
+    '问题跟踪标题列吸收余量',
+  'pages.dashboard.updateLog.entries.delivery-issue-title-remainder-flex.description':
+    '问题跟踪列表 RemainderFlex 改挂标题列，随视口变宽；其它业务列保持 KeepWidth，状态与操作列之间不再留白。',
+  'pages.dashboard.updateLog.entries.delivery-status-tag-render-fix.title':
+    '交付项目状态列空白修复',
+  'pages.dashboard.updateLog.entries.delivery-status-tag-render-fix.description':
+    '交付模块误把 status/valueEnum 传给 StatusTag 导致无文案；已统一走 renderDocumentStatusTag，状态列恢复显示。',
+  'pages.dashboard.updateLog.entries.delivery-rd-project-tasks-members-v1.title':
+    '交付与研发：模板预置子任务、项目成员',
+  'pages.dashboard.updateLog.entries.delivery-rd-project-tasks-members-v1.description':
+    '流程/阶段模板可配置预置子任务，新建项目时自动派生；项目与子任务支持负责人+成员，详情可增删改实例任务。',
+  'pages.dashboard.updateLog.entries.delivery-issue-list-layout-v1.title':
+    '问题跟踪列表对齐三桶列布局',
+  'pages.dashboard.updateLog.entries.delivery-issue-list-layout-v1.description':
+    '问题跟踪为稀疏列表：问题单号与标题分列展示、类型与优先级用 MarkerTag，列序纳入全局 rank，尾余由 filler 吸收。',
+  'pages.dashboard.updateLog.entries.delivery-progress-column-unify.title':
+    '交付项目进度列对齐销售订单样式',
+  'pages.dashboard.updateLog.entries.delivery-progress-column-unify.description':
+    '交付项目、跟进、节点汇报等列表与详情中的进度列统一为与销售订单相同的进度条样式，完成态绿色、逾期红色，悬停显示百分比。',
+  'pages.dashboard.updateLog.entries.delivery-list-batch-selection.title':
+    '交付项目列表支持多选与批量操作',
+  'pages.dashboard.updateLog.entries.delivery-list-batch-selection.description':
+    '交付项目、节点汇报、问题及跟进排单等列表页开启行多选，工具栏提供批量删除与导出；详情、编辑、删除仅在操作列提供。',
+  'pages.dashboard.updateLog.entries.delivery-dashboard-gantt.title':
+    '交付中心新增项目进度甘特图',
+  'pages.dashboard.updateLog.entries.delivery-dashboard-gantt.description':
+    '交付中心看板展示在制项目各节点计划起止与完成进度，支持月周日缩放浏览，并可跳转项目跟进表。',
+  'pages.dashboard.updateLog.entries.delivery-follow-up-node-progress-flex.title':
+    '项目跟进表节点进度列吸收余量',
+  'pages.dashboard.updateLog.entries.delivery-follow-up-node-progress-flex.description':
+    '项目跟进表 RemainderFlex 改挂节点进度列，节点条随视口均分变宽，状态与操作列之间不再留白。',
+  'pages.dashboard.updateLog.entries.delivery-project-list-layout-v1.title':
+    '交付项目列表列宽对齐三桶规范',
+  'pages.dashboard.updateLog.entries.delivery-project-list-layout-v1.description':
+    '交付项目列表余量改由项目名称 RemainderFlex 吸收（与客户定宽 220px 分工），禁止 filler 挤入状态与操作列之间；状态列锁定 80px 定宽。',
+  'pages.dashboard.updateLog.entries.delivery-project-deferred-scope.title':
+    '交付项目延伸能力归属说明',
+  'pages.dashboard.updateLog.entries.delivery-project-deferred-scope.description':
+    '计效考核归入绩效管理、手机端汇报归入移动应用、工程 BOM 与项目库存通过 KuaiPLM 与仓储链接查看；交付项目聚焦厂内交机流程，现场安装统一走售后服务安装执行。',
+  'pages.dashboard.updateLog.entries.delivery-project-features-complete.title':
+    '交付项目前端能力补齐',
+  'pages.dashboard.updateLog.entries.delivery-project-features-complete.description':
+    '交付项目支持嵌套详情抽屉、列表编辑删除、节点汇报与问题详情抽屉、销售订单 capability 下推门控、发货与安装执行快捷入口，以及交付报表导出域修正。',
+  'pages.dashboard.updateLog.entries.delivery-project-install-boundary.title':
+    '交付项目与售后安装边界',
+  'pages.dashboard.updateLog.entries.delivery-project-install-boundary.description':
+    '移除交付项目下「调试项目」「设备调试报告」菜单，现场安装与调试统一走售后服务安装执行；流程模板保留「厂内验收」节点，由节点汇报跟踪。',
+  'pages.dashboard.updateLog.entries.delivery-project-backend-p1.title':
+    '交付项目后端能力补齐',
+  'pages.dashboard.updateLog.entries.delivery-project-backend-p1.description':
+    '销售订单可下推交付项目并校验业务态；交付项目支持结案、暂停换模板、明细 JSON 与单据关联；快研发可生成交付项目；节点汇报审核独立权限。',
+  'pages.dashboard.updateLog.entries.delivery-project-documents-complete.title':
+    '交付项目补齐参考 ERP 单据',
+  'pages.dashboard.updateLog.entries.delivery-project-documents-complete.description':
+    '新增项目流程排单表、流程进度表、进度问题报表；详情抽屉可指定节点负责人，问题登记支持责任人与关联节点。',
+  'pages.dashboard.updateLog.entries.delivery-project-form-modal-grid.title':
+    '交付项目新建弹窗栅格对齐',
+  'pages.dashboard.updateLog.entries.delivery-project-form-modal-grid.description':
+    '新建交付项目/节点汇报/问题登记弹窗改走 ProForm grid 与 colProps；移除破坏栅格的隐藏字段与裸 Form.Item。',
+  'pages.dashboard.updateLog.entries.two-column-layout-custom-pages-resizable.title':
+    '角色权限与消息页支持拖拽加宽',
+  'pages.dashboard.updateLog.entries.two-column-layout-custom-pages-resizable.description':
+    '角色权限左栏角色列表、我的消息左栏列表均接入与物料管理一致的拖拽挡位（240–560px），宽度独立记住。',
+  'pages.dashboard.updateLog.entries.two-column-layout-resizable-default.title':
+    '两栏布局统一支持拖拽加宽',
+  'pages.dashboard.updateLog.entries.two-column-layout-resizable-default.description':
+    'TwoColumnLayout 默认开启左栏拖拽（240–560px，默认 320），各页独立记住宽度；与物料管理分组树挡位一致。',
+  'pages.dashboard.updateLog.entries.kuaiplm-gate-templates-single-shell.title':
+    '阶段管理去掉多标签外框',
+  'pages.dashboard.updateLog.entries.kuaiplm-gate-templates-single-shell.description':
+    '项目管理阶段管理改为与交付流程模板相同的两栏直出布局，移除仅剩单 Tab 的多标签页壳。',
+  'pages.dashboard.updateLog.entries.kuaizhizao-delivery-process-template-stage-ui.title':
+    '流程模板对齐阶段管理样式',
+  'pages.dashboard.updateLog.entries.kuaizhizao-delivery-process-template-stage-ui.description':
+    '交付流程模板页复用项目管理阶段管理两栏布局：模板列表、复制删除、阶段表格编辑与保存阶段配置。',
+  'pages.dashboard.updateLog.entries.kuaizhizao-delivery-project-deepening.title':
+    '交付项目功能深化',
+  'pages.dashboard.updateLog.entries.kuaizhizao-delivery-project-deepening.description':
+    '新增详情抽屉、独立新建、暂停恢复取消、进度汇总报表、节点汇报驳回与问题闭环；修复销售订单下推交付项目权限码。',
+  'pages.dashboard.updateLog.entries.kuaizhizao-delivery-process-template-layout.title':
+    '修复流程模板页崩溃',
+  'pages.dashboard.updateLog.entries.kuaizhizao-delivery-process-template-layout.description':
+    '流程模板页对齐 TwoColumnLayout 的 leftPanel/rightPanel 契约，恢复左侧模板列表与右侧节点编辑。',
+  'pages.dashboard.updateLog.entries.kuaizhizao-delivery-dashboard-layout.title':
+    '修复交付中心工作台空白',
+  'pages.dashboard.updateLog.entries.kuaizhizao-delivery-dashboard-layout.description':
+    '交付中心对齐 ModuleCenterLayout 指标卡、快捷入口与瀑布流事项区契约，恢复 KPI、最近项目与逾期节点展示。',
+  'pages.dashboard.updateLog.entries.kuaizhizao-delivery-project-page-contract.title':
+    '交付项目页面对齐列表规范',
+  'pages.dashboard.updateLog.entries.kuaizhizao-delivery-project-page-contract.description':
+    '交付项目各列表页移除重复页头标题；新建按钮改为「新建XXX」并支持 Alt+N；列表改用操作列详情、叠列主标识、权限资源码与 FormModal 弹窗。',
+  'pages.dashboard.updateLog.entries.app-sort-order-2xx-3xx-repair.title':
+    '修复行业包与专业 APP 侧栏排序',
+  'pages.dashboard.updateLog.entries.app-sort-order-2xx-3xx-repair.description':
+    '行业包固定 290 段、专业 APP 固定 310–350 段；修复部分租户仍停留在 210–250 导致专业 APP 排在行业包之前的问题，扫描注册时强制对齐排序契约。',
+  'pages.dashboard.updateLog.entries.kuaizhizao-delivery-project-menu.title':
+    '快制造新增交付项目菜单（订单交机）',
+  'pages.dashboard.updateLog.entries.kuaizhizao-delivery-project-menu.description':
+    '销售管理与计划管理之间新增交付项目模块：交付中心、项目列表与详情、流程模板、节点汇报、项目跟进表与问题跟踪；销售订单可下推交付项目；快研发移除交付类型混用。',
+  'pages.dashboard.updateLog.entries.sync-mapping-add-more-fields.title':
+    '同步字段映射支持添加更多字段',
+  'pages.dashboard.updateLog.entries.sync-mapping-add-more-fields.description':
+    '物料/客商/供应商/仓库/单位/分组以及销售、采购、工单同步弹窗均可追加系统字段与自定义字段，并写入对应档案。',
+  'pages.dashboard.updateLog.entries.start-menu-license-meta-tenant-admin-only.title':
+    '开始菜单套餐信息仅管理员可见',
+  'pages.dashboard.updateLog.entries.start-menu-license-meta-tenant-admin-only.description':
+    '系统配置面板中的版本与到期时间仅对租户管理员显示，普通账号不再展示。',
+  'pages.dashboard.updateLog.entries.sync-freshness-hover-only.title':
+    '同步滞后提示改到按钮悬停',
+  'pages.dashboard.updateLog.entries.sync-freshness-hover-only.description':
+    '「数据可能滞后」等新鲜度提示不再以徽章占位，统一显示在同步按钮 hover 上（含物料分组同步）。',
+  'pages.dashboard.updateLog.entries.infra-official-api-library-toolbar-host.title':
+    '官方接口库页布局精简',
+  'pages.dashboard.updateLog.entries.infra-official-api-library-toolbar-host.description':
+    '去掉页标题、刷新与提示条；官方库域名设置移入 UniTable 左侧功能区，状态分段筛选仍在模糊搜索前。',
+  'pages.dashboard.updateLog.entries.infra-official-api-library-status-segmented.title':
+    '官方接口库状态改分段筛选',
+  'pages.dashboard.updateLog.entries.infra-official-api-library-status-segmented.description':
+    '「接口库管理」状态筛选改为分段选择器（全部/已发布/已下架），并置于模糊搜索之前。',
+  'pages.dashboard.updateLog.entries.infra-official-api-library-host-ui.title':
+    '官方接口库域名设置入口',
+  'pages.dashboard.updateLog.entries.infra-official-api-library-host-ui.description':
+    '「接口库管理」页补充官方库域名输入与保存；私有部署可在此配置拉取/提交目标域名。',
+  'pages.dashboard.updateLog.entries.infra-official-api-library-admin.title':
+    '平台级官方接口库管理',
+  'pages.dashboard.updateLog.entries.infra-official-api-library-admin.description':
+    '平台超管新增「接口库管理」：可设置官方库域名（默认 kuaigeyun.com）；仅在官方域名环境显示接口包管理表，支持修正、下架与删除。',
   'pages.dashboard.updateLog.entries.sync-sales-order-write-batch-speed.title':
     '加速销售订单同步写入',
   'pages.dashboard.updateLog.entries.sync-sales-order-write-batch-speed.description':
@@ -25542,6 +26124,57 @@ export default {
   'pages.infra.admin.tabAdmin': '管理员信息',
   'pages.infra.admin.tabSettings': '平台设置',
   'pages.infra.admin.tabProvenanceSummary': '构建来源汇总',
+  'pages.infra.officialApiLibrary.pageTitle': '官方接口库管理',
+  'pages.infra.officialApiLibrary.hostLabel': '官方库域名',
+  'pages.infra.officialApiLibrary.hostHint':
+    '私有部署拉取/提交接口库时指向此域名。留空或首次使用默认为 {{defaultHost}}。',
+  'pages.infra.officialApiLibrary.hostSave': '保存域名',
+  'pages.infra.officialApiLibrary.hostSaveSuccess': '官方库域名已保存',
+  'pages.infra.officialApiLibrary.hostSaveFailed': '保存官方库域名失败',
+  'pages.infra.officialApiLibrary.baseUrlTitle': '官方接口库地址',
+  'pages.infra.officialApiLibrary.baseUrlDesc':
+    '当前生效地址：{{url}}。仅当访问主机处于该官方域名（如 kuaigeyun.com）时，下方才显示接口包管理表。',
+  'pages.infra.officialApiLibrary.metaLoadFailed': '加载官方接口库配置失败',
+  'pages.infra.officialApiLibrary.readonlyTitle': '当前环境不可管理接口包',
+  'pages.infra.officialApiLibrary.readonlyDesc':
+    '管理表仅在官方域名环境（当前配置：{{host}}）或已开启官方库真源的开发/官方 SaaS 部署中显示。请到 {{host}} 使用平台超管管理接口包。',
+  'pages.infra.officialApiLibrary.filterStatus': '按状态筛选',
+  'pages.infra.officialApiLibrary.packName': '接口包名称',
+  'pages.infra.officialApiLibrary.packId': '接口包 ID',
+  'pages.infra.officialApiLibrary.packDescription': '接口包说明',
+  'pages.infra.officialApiLibrary.packNameRequired': '请填写接口包名称',
+  'pages.infra.officialApiLibrary.connectorType': '连接器类型',
+  'pages.infra.officialApiLibrary.connectorTypeRequired': '请填写连接器类型',
+  'pages.infra.officialApiLibrary.categoryName': '分类名称',
+  'pages.infra.officialApiLibrary.categoryNameRequired': '请填写分类名称',
+  'pages.infra.officialApiLibrary.categoryCode': '分类代码',
+  'pages.infra.officialApiLibrary.categoryDescription': '分类说明',
+  'pages.infra.officialApiLibrary.apiCount': '接口数',
+  'pages.infra.officialApiLibrary.status': '状态',
+  'pages.infra.officialApiLibrary.statusPublished': '已发布',
+  'pages.infra.officialApiLibrary.statusRejected': '已下架',
+  'pages.infra.officialApiLibrary.updatedAt': '更新时间',
+  'pages.infra.officialApiLibrary.actionEdit': '修正',
+  'pages.infra.officialApiLibrary.actionReject': '下架',
+  'pages.infra.officialApiLibrary.actionPublish': '发布',
+  'pages.infra.officialApiLibrary.editTitle': '修正接口包：{{name}}',
+  'pages.infra.officialApiLibrary.itemsTitle': '接口条目',
+  'pages.infra.officialApiLibrary.addItem': '添加接口',
+  'pages.infra.officialApiLibrary.itemKey': '条目键',
+  'pages.infra.officialApiLibrary.itemName': '接口名称',
+  'pages.infra.officialApiLibrary.itemMethod': '方法',
+  'pages.infra.officialApiLibrary.itemPath': '路径',
+  'pages.infra.officialApiLibrary.itemDescription': '说明',
+  'pages.infra.officialApiLibrary.loadPackFailed': '加载接口包失败',
+  'pages.infra.officialApiLibrary.updateSuccess': '接口包已保存',
+  'pages.infra.officialApiLibrary.updateFailed': '保存接口包失败',
+  'pages.infra.officialApiLibrary.publishSuccess': '接口包已发布',
+  'pages.infra.officialApiLibrary.rejectSuccess': '接口包已下架',
+  'pages.infra.officialApiLibrary.deleteConfirmTitle': '删除官方接口包？',
+  'pages.infra.officialApiLibrary.deleteConfirmContent':
+    '确定删除「{{name}}」（{{packId}}）？删除后各部署将无法再从官方库安装该包。',
+  'pages.infra.officialApiLibrary.deleteSuccess': '接口包已删除',
+  'pages.infra.officialApiLibrary.deleteFailed': '删除接口包失败',
   'pages.infra.admin.pageTitle': '平台管理员信息',
   'pages.infra.admin.editModalTitle': '编辑平台超级管理员',
   'pages.infra.admin.id': 'ID',

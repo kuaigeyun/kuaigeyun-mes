@@ -1,0 +1,54 @@
+@import '../../../../../../components/layout-templates/projectWorkbenchShell.less';
+
+.eight-d-workbench-overview-stage {
+  padding-left: 8px;
+  border-left: 1px solid var(--ant-color-border-secondary);
+
+  @media (max-width: 991px) {
+    padding-left: 0;
+    padding-top: 16px;
+    margin-top: 4px;
+    border-left: none;
+    border-top: 1px solid var(--ant-color-border-secondary);
+  }
+}
+
+.eight-d-workbench-main {
+  .eight-d-workbench-stage-panel {
+    margin-top: 16px;
+
+    .ant-form-item-label > label {
+      min-height: 24px;
+      height: auto;
+    }
+  }
+
+  .eight-d-stage-readonly {
+    min-height: 0;
+    padding: 12px;
+    border: 1px solid var(--ant-color-border-secondary);
+    border-radius: var(--ant-border-radius);
+    background: var(--ant-color-fill-alter);
+    line-height: 1.6;
+    word-break: break-word;
+
+    p,
+    ul,
+    ol {
+      margin: 0 0 8px;
+
+      &:last-child {
+        margin-bottom: 0;
+      }
+    }
+
+    ul,
+    ol {
+      padding-left: 1.5em;
+    }
+
+    p:empty {
+      display: none;
+    }
+  }
+}

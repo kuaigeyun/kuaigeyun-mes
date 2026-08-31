@@ -1399,10 +1399,9 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
         }
       `}</style>
       <TwoColumnLayout
+        layoutPersistenceId="apps.master-data.pages.process.drawings"
         leftPanel={{
           collapsed: leftPanelCollapsed,
-          width: 280,
-          minWidth: 220,
           search: {
             placeholder: t('app.master-data.drawings.tree.searchPlaceholder'),
             value: treeSearch,

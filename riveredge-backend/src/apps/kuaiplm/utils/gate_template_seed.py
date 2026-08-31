@@ -20,6 +20,7 @@ from apps.kuaiplm.models import (
     RdGateTemplate,
     RdGateTemplateDeliverable,
     RdGateTemplateStage,
+    RdGateTemplateTask,
 )
 from infra.models.user import User
 
@@ -90,10 +91,15 @@ async def load_template_gate_defs(
     tenant_id: int,
     project_type: str,
     gate_template_id: Optional[int] = None,
-) -> Tuple[Optional[RdGateTemplate], List[Dict[str, Any]], Dict[str, List[Dict[str, str]]]]:
+) -> Tuple[
+    Optional[RdGateTemplate],
+    List[Dict[str, Any]],
+    Dict[str, List[Dict[str, str]]],
+    Dict[str, List[Dict[str, Any]]],
+]:
     """
-    解析模板为创建项目所需的阶段与交付物定义。
-    返回 (template, gate_defs, deliverables_map)。
+    解析模板为创建项目所需的阶段、交付物与预置任务定义。
+    返回 (template, gate_defs, deliverables_map, tasks_map)。
     """
     await ensure_system_gate_templates(tenant_id)
 
@@ -119,13 +125,13 @@ async def load_template_gate_defs(
         )
 
     if not template:
-        return None, [], {}
+        return None, [], {}, {}
 
     stages = await RdGateTemplateStage.filter(
         tenant_id=tenant_id, template_id=template.id
     ).order_by("sort_order", "id").all()
     if not stages:
-        return template, [], {}
+        return template, [], {}, {}
 
     stage_ids = [s.id for s in stages]
     deliverables = await RdGateTemplateDeliverable.filter(
@@ -135,8 +141,16 @@ async def load_template_gate_defs(
     for d in deliverables:
         deliv_by_stage.setdefault(d.stage_id, []).append(d)
 
+    tpl_tasks = await RdGateTemplateTask.filter(
+        tenant_id=tenant_id, stage_id__in=stage_ids
+    ).order_by("sort_order", "id").all()
+    tasks_by_stage: Dict[int, List[RdGateTemplateTask]] = {}
+    for t in tpl_tasks:
+        tasks_by_stage.setdefault(t.stage_id, []).append(t)
+
     gate_defs: List[Dict[str, Any]] = []
     deliverables_map: Dict[str, List[Dict[str, str]]] = {}
+    tasks_map: Dict[str, List[Dict[str, Any]]] = {}
     for stage in stages:
         gate_defs.append({
             "gate_key": stage.gate_key,
@@ -148,5 +162,15 @@ async def load_template_gate_defs(
             {"name": d.name, "deliverable_type": d.deliverable_type}
             for d in deliv_by_stage.get(stage.id, [])
         ]
+        tasks_map[stage.gate_key] = [
+            {
+                "id": t.id,
+                "task_name": t.task_name,
+                "sort_order": t.sort_order,
+                "parent_template_task_id": t.parent_template_task_id,
+                "default_owner_role": t.default_owner_role,
+            }
+            for t in tasks_by_stage.get(stage.id, [])
+        ]
 
-    return template, gate_defs, deliverables_map
+    return template, gate_defs, deliverables_map, tasks_map

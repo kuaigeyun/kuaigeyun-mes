@@ -1,13 +1,12 @@
 /**
  * 列表工具栏旁：外部同步新鲜度。
- * 上次同步 / 可能滞后等信息挂在同步按钮（children）的 hover 上，不单独占位。
+ * 上次同步 / 可能滞后等信息只挂在同步按钮（children）的 hover 上，不单独占位、不出徽章。
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { HistoryOutlined } from '@ant-design/icons';
 import { Tooltip, theme } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { MarkerTag } from '../../constants/statusBadges';
 import dayjs from '../../config/dayjs';
 import { formatDateTimeBySiteSetting, getTimezoneFromSiteSetting } from '../../utils/format';
 
@@ -25,11 +24,16 @@ export interface SyncFreshnessBadgeProps {
   getBinding: () => Promise<SyncFreshnessBindingMeta>;
   /** 同步完成或弹窗关闭后递增，触发重新拉取水位 */
   refreshKey?: number;
-  /** 仅显示滞后徽章（左侧窄栏等，无同步按钮可挂时） */
+  /**
+   * @deprecated 不再单独占位展示徽章；请传入 children（同步按钮）把提示挂到 hover。
+   * 保留参数以免旧调用方类型报错，传入时忽略。
+   */
   compact?: boolean;
+  /** 无新鲜度信息时仍展示的说明（如「从外部系统同步…」），有滞后/上次同步时一并展示 */
+  baseTip?: React.ReactNode;
   /**
    * 若传入（如同步按钮），将新鲜度说明挂到该节点的 Tooltip 上；
-   * 未传入时用历史图标作为 hover 目标。
+   * 未传入时用历史图标作为 hover 目标（无同步按钮可挂的极窄场景）。
    */
   children?: React.ReactNode;
 }
@@ -68,7 +72,7 @@ function isLagging(binding: SyncFreshnessBindingMeta): boolean {
 export const SyncFreshnessBadge: React.FC<SyncFreshnessBadgeProps> = ({
   getBinding,
   refreshKey = 0,
-  compact = false,
+  baseTip,
   children,
 }) => {
   const { t } = useTranslation();
@@ -102,19 +106,21 @@ export const SyncFreshnessBadge: React.FC<SyncFreshnessBadgeProps> = ({
   }, [lastSuccessLabel, t]);
 
   const hoverTip = useMemo(() => {
-    if (!binding || !hasConfiguredSource(binding)) return null;
     const lines: React.ReactNode[] = [];
-    if (lastSyncTip) lines.push(<div key="last">{lastSyncTip}</div>);
-    if (lagging) {
-      lines.push(
-        <div key="lag">
-          {binding.last_error
-            ? t('components.syncFromSource.lastError', { error: binding.last_error })
-            : `${t('components.syncFromSource.freshnessLag')}：${t(
-                'components.syncFromSource.freshnessLagHint',
-              )}`}
-        </div>,
-      );
+    if (baseTip) lines.push(<div key="base">{baseTip}</div>);
+    if (binding && hasConfiguredSource(binding)) {
+      if (lastSyncTip) lines.push(<div key="last">{lastSyncTip}</div>);
+      if (lagging) {
+        lines.push(
+          <div key="lag">
+            {binding.last_error
+              ? t('components.syncFromSource.lastError', { error: binding.last_error })
+              : `${t('components.syncFromSource.freshnessLag')}：${t(
+                  'components.syncFromSource.freshnessLagHint',
+                )}`}
+          </div>,
+        );
+      }
     }
     if (lines.length === 0) return null;
     // 错误摘要可能很长：限高可滚，避免 Tooltip 盖住同步按钮本身
@@ -131,22 +137,7 @@ export const SyncFreshnessBadge: React.FC<SyncFreshnessBadgeProps> = ({
         {lines}
       </div>
     );
-  }, [binding, lagging, lastSyncTip, t]);
-
-  if (!binding || !hasConfiguredSource(binding)) {
-    return children ? <>{children}</> : null;
-  }
-
-  if (compact) {
-    if (!lagging) return null;
-    return (
-      <Tooltip title={hoverTip} placement="bottomLeft">
-        <span>
-          <MarkerTag color="warning">{t('components.syncFromSource.freshnessLag')}</MarkerTag>
-        </span>
-      </Tooltip>
-    );
-  }
+  }, [baseTip, binding, lagging, lastSyncTip, t]);
 
   if (children) {
     if (!hoverTip) return <>{children}</>;
@@ -157,7 +148,9 @@ export const SyncFreshnessBadge: React.FC<SyncFreshnessBadgeProps> = ({
     );
   }
 
-  if (!hoverTip) return null;
+  if (!binding || !hasConfiguredSource(binding) || !hoverTip) {
+    return null;
+  }
 
   return (
     <Tooltip title={hoverTip} placement="bottomLeft">

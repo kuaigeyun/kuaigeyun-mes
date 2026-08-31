@@ -18,3 +18,4 @@ export const PURCHASE_ORDER_SYNC_TARGET_FIELDS: SyncTargetField[] = [
 ];
 
 export const PURCHASE_ORDER_SYNC_REQUIRED_TARGETS = ['order_code', 'order_date', 'supplier_code'];
+export const PURCHASE_ORDER_SYNC_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_purchase_orders';

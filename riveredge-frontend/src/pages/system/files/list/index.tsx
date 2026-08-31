@@ -1359,6 +1359,7 @@ const FileListPage: React.FC = () => {
   return (
     <>
       <TwoColumnLayout
+        layoutPersistenceId="pages.system.files.list"
         leftPanel={{
           search: {
             placeholder: t('pages.system.files.searchFolder'),

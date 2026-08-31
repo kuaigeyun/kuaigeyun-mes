@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from infra.exceptions.exceptions import ValidationError
 from infra.models.user import User
@@ -18,9 +18,14 @@ from apps.master_data.schemas.master_data_sync import (
     MasterDataSyncFromSourceRequest,
 )
 from apps.master_data.services.master_data_sync_common import (
+    apply_mapped_custom_field_values,
     attach_sync_fetch_meta,
+    cell_optional_bool,
+    cell_optional_decimal,
+    cell_optional_int,
     cell_str,
     fetch_sync_rows,
+    load_custom_fields_by_code,
     map_sync_rows,
     mark_binding_failure,
     mark_binding_success,
@@ -41,6 +46,84 @@ from apps.master_data.services.sync_association_service import (
 )
 from core.services.data.sync_progress import emit_sync_progress
 from core.utils.timezone_utils import resolve_business_datetime
+
+MATERIAL_CUSTOM_FIELD_TABLE = "master_data_materials"
+
+# 映射目标中可直接写入 Material 标量列的字段（不含 main_code / name / 解析型辅助字段）
+MATERIAL_SYNC_EXTRA_SCALAR_FIELDS = frozenset(
+    {
+        "description",
+        "brand",
+        "model",
+        "texture",
+        "barcode",
+        "source_type",
+        "is_active",
+        "batch_managed",
+        "serial_managed",
+        "variant_managed",
+        "weight",
+        "volume",
+        "shelf_life_managed",
+        "shelf_life_days",
+        "is_giftable",
+        "reference_cost",
+        "country_of_origin",
+        "customs_code",
+        "over_report_mode",
+        "over_report_value",
+        "inspection_mode",
+    }
+)
+
+MATERIAL_SYNC_BOOL_FIELDS = frozenset(
+    {
+        "is_active",
+        "batch_managed",
+        "serial_managed",
+        "variant_managed",
+        "shelf_life_managed",
+        "is_giftable",
+    }
+)
+
+MATERIAL_SYNC_DECIMAL_FIELDS = frozenset({"weight", "volume", "reference_cost", "over_report_value"})
+MATERIAL_SYNC_INT_FIELDS = frozenset({"shelf_life_days"})
+
+
+def _coerce_material_extra_value(field_name: str, raw: Any) -> Any:
+    if field_name in MATERIAL_SYNC_BOOL_FIELDS:
+        return cell_optional_bool(raw)
+    if field_name in MATERIAL_SYNC_DECIMAL_FIELDS:
+        return cell_optional_decimal(raw)
+    if field_name in MATERIAL_SYNC_INT_FIELDS:
+        return cell_optional_int(raw)
+    if field_name == "source_type":
+        text = cell_str(raw)
+        if not text:
+            return None
+        return require_canonical_material_source_type(text)
+    text = cell_str(raw)
+    return text or None
+
+
+def _apply_material_extra_scalars(
+    material: Material,
+    row: Dict[str, Any],
+    update_fields: List[str],
+) -> None:
+    for field_name in MATERIAL_SYNC_EXTRA_SCALAR_FIELDS:
+        if field_name not in row:
+            continue
+        coerced = _coerce_material_extra_value(field_name, row.get(field_name))
+        if coerced is None and field_name in MATERIAL_SYNC_BOOL_FIELDS:
+            continue
+        if coerced is None and field_name in {"weight", "volume", "over_report_value"}:
+            # Decimal 列有 default；空映射跳过，避免清零
+            continue
+        setattr(material, field_name, coerced)
+        if field_name not in update_fields:
+            update_fields.append(field_name)
 
 
 class MaterialSyncService:
@@ -185,8 +268,21 @@ class MaterialSyncService:
         failed = 0
         errors: List[str] = []
         sync_at = resolve_business_datetime()
+        custom_fields_by_code = await load_custom_fields_by_code(
+            tenant_id, MATERIAL_CUSTOM_FIELD_TABLE
+        )
 
-        pending_rows: List[tuple[str, str, Optional[str], str, Optional[str], Optional[str], Optional[str]]] = []
+        PendingRow = Tuple[
+            str,
+            str,
+            Optional[str],
+            str,
+            Optional[str],
+            Optional[str],
+            Optional[str],
+            Dict[str, Any],
+        ]
+        pending_rows: List[PendingRow] = []
         for row in rows:
             main_code = cell_str(row.get(match_key) or row.get("main_code") or row.get("code"))
             name = cell_str(row.get("name"))
@@ -208,7 +304,16 @@ class MaterialSyncService:
                 continue
             specification = cell_str(row.get("specification")) or None
             pending_rows.append(
-                (main_code, name, specification, base_unit, base_unit_name, group_code, group_name)
+                (
+                    main_code,
+                    name,
+                    specification,
+                    base_unit,
+                    base_unit_name,
+                    group_code,
+                    group_name,
+                    row,
+                )
             )
 
         if not pending_rows:
@@ -226,7 +331,7 @@ class MaterialSyncService:
         group_by_code = await load_material_group_id_lookup(tenant_id)
         group_pairs = [
             (group_code, group_name or "")
-            for *_, group_code, group_name in pending_rows
+            for *_, group_code, group_name, _row in pending_rows
             if group_code
         ]
         if group_pairs:
@@ -253,6 +358,7 @@ class MaterialSyncService:
 
         to_update: List[Material] = []
         to_create: List[Material] = []
+        custom_payload_by_code: Dict[str, Dict[str, Any]] = {}
         update_fields = [
             "name",
             "specification",
@@ -264,9 +370,16 @@ class MaterialSyncService:
             "updated_by_name",
         ]
 
-        for index, (main_code, name, specification, base_unit, base_unit_name, group_code, group_name) in enumerate(
-            pending_rows, start=1
-        ):
+        for index, (
+            main_code,
+            name,
+            specification,
+            base_unit,
+            base_unit_name,
+            group_code,
+            group_name,
+            mapped_row,
+        ) in enumerate(pending_rows, start=1):
             if index == 1 or index == total or index % 500 == 0:
                 await emit_sync_progress(f"正在解析物料 {index}/{total}：{main_code}")
             try:
@@ -281,6 +394,7 @@ class MaterialSyncService:
                     if group_code
                     else None
                 )
+                custom_payload_by_code[main_code] = mapped_row
                 existing = existing_by_code.get(main_code)
                 if existing:
                     existing.name = name
@@ -288,13 +402,18 @@ class MaterialSyncService:
                     existing.base_unit = resolved_unit
                     if group_id is not None:
                         existing.group_id = group_id
+                    _apply_material_extra_scalars(existing, mapped_row, update_fields)
                     existing.external_sync_at = sync_at
                     existing.updated_at = sync_at
                     if current_user is not None:
                         apply_update_audit(existing, current_user)
                     to_update.append(existing)
                 else:
-                    source_type = require_canonical_material_source_type(
+                    source_type = (
+                        _coerce_material_extra_value("source_type", mapped_row.get("source_type"))
+                        if "source_type" in mapped_row
+                        else None
+                    ) or require_canonical_material_source_type(
                         "Buy",
                         material_code=main_code,
                         material_name=name,
@@ -315,12 +434,32 @@ class MaterialSyncService:
                         payload["group_id"] = group_id
                     if current_user is not None:
                         apply_create_audit(payload, current_user)
-                    to_create.append(Material(**payload))
+                    material = Material(**payload)
+                    _apply_material_extra_scalars(material, mapped_row, [])
+                    to_create.append(material)
             except Exception as exc:
                 failed += 1
                 errors.append(f"物料 {main_code}：{exc}")
 
         write_batch = 500
+
+        async def _write_custom_fields_for_materials(materials: List[Material]) -> None:
+            if not custom_fields_by_code or not materials:
+                return
+            for material in materials:
+                mapped = custom_payload_by_code.get(material.main_code)
+                if not mapped:
+                    continue
+                try:
+                    await apply_mapped_custom_field_values(
+                        tenant_id=tenant_id,
+                        record_table=MATERIAL_CUSTOM_FIELD_TABLE,
+                        record_id=int(material.id),
+                        mapped_row=mapped,
+                        fields_by_code=custom_fields_by_code,
+                    )
+                except Exception as cf_exc:
+                    errors.append(f"物料 {material.main_code} 自定义字段：{cf_exc}")
 
         async def _flush_updates(batch: List[Material], start_index: int) -> None:
             nonlocal updated, failed
@@ -333,11 +472,13 @@ class MaterialSyncService:
             try:
                 await Material.bulk_update(batch, fields=update_fields, batch_size=write_batch)
                 updated += len(batch)
+                await _write_custom_fields_for_materials(batch)
             except Exception:
                 for material in batch:
                     try:
                         await material.save(update_fields=update_fields)
                         updated += 1
+                        await _write_custom_fields_for_materials([material])
                     except Exception as row_exc:
                         failed += 1
                         errors.append(f"物料 {material.main_code}：{row_exc}")
@@ -353,11 +494,19 @@ class MaterialSyncService:
             try:
                 await Material.bulk_create(batch, batch_size=write_batch)
                 created += len(batch)
+                codes_created = [item.main_code for item in batch]
+                persisted = await Material.filter(
+                    tenant_id=tenant_id,
+                    main_code__in=codes_created,
+                    deleted_at__isnull=True,
+                ).all()
+                await _write_custom_fields_for_materials(persisted)
             except Exception:
                 for material in batch:
                     try:
                         await material.save()
                         created += 1
+                        await _write_custom_fields_for_materials([material])
                     except Exception as row_exc:
                         failed += 1
                         errors.append(f"物料 {material.main_code}：{row_exc}")

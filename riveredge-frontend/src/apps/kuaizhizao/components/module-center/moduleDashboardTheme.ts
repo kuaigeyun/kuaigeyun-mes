@@ -22,14 +22,14 @@ export type ModuleKpiVisualTokens = {
   plain: boolean;
 };
 
-function extractGradientAccentColor(vividGradient: string): string {
-  const match = vividGradient.match(/#[0-9a-fA-F]{3,8}/);
+function extractGradientAccentColor(vividGradient: string | undefined): string {
+  const match = String(vividGradient ?? '').match(/#[0-9a-fA-F]{3,8}/);
   return match?.[0] ?? '#1677ff';
 }
 
 /** 模块工作台 KPI：卡面与瀑布流同白底；语义色只落在数字 / 图标浅底（同右侧快捷入口） */
 export function resolveModuleKpiVisual(
-  vividGradient: string,
+  vividGradient: string | undefined,
   _vividBoxShadow: string | undefined,
   plain: boolean,
   token: GlobalToken,

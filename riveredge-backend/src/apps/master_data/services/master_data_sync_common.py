@@ -200,10 +200,175 @@ def map_sync_rows(
     return mapped_rows
 
 
+SYNC_CUSTOM_FIELD_TARGET_PREFIX = "custom:"
+
+
+def is_sync_custom_field_target(target_key: str) -> bool:
+    return str(target_key or "").startswith(SYNC_CUSTOM_FIELD_TARGET_PREFIX)
+
+
+def sync_custom_field_code_from_target(target_key: str) -> str:
+    return str(target_key)[len(SYNC_CUSTOM_FIELD_TARGET_PREFIX) :]
+
+
 def cell_str(value: Any) -> str:
     if value is None:
         return ""
     return str(value).strip()
+
+
+def cell_optional_bool(value: Any) -> Optional[bool]:
+    """解析同步源布尔；空值表示未映射不改写。"""
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    text = str(value).strip().lower()
+    if not text:
+        return None
+    if text in {"1", "true", "yes", "y", "是", "启用", "a", "on"}:
+        return True
+    if text in {"0", "false", "no", "n", "否", "禁用", "b", "off"}:
+        return False
+    raise ValidationError(f"无法解析布尔值：{value}")
+
+
+def cell_optional_decimal(value: Any):
+    if value is None or str(value).strip() == "":
+        return None
+    from decimal import Decimal, InvalidOperation
+
+    try:
+        return Decimal(str(value).strip())
+    except (InvalidOperation, ValueError) as exc:
+        raise ValidationError(f"无法解析数值：{value}") from exc
+
+
+def cell_optional_int(value: Any) -> Optional[int]:
+    if value is None or str(value).strip() == "":
+        return None
+    try:
+        return int(str(value).strip())
+    except ValueError as exc:
+        raise ValidationError(f"无法解析整数：{value}") from exc
+
+
+async def load_custom_fields_by_code(tenant_id: int, record_table: str) -> Dict[str, Any]:
+    from core.services.business.custom_field_service import CustomFieldService
+
+    fields = await CustomFieldService.get_fields_by_table(
+        tenant_id=tenant_id,
+        table_name=record_table,
+        is_active=True,
+    )
+    return {str(field.code): field for field in fields}
+
+
+async def apply_mapped_custom_field_values(
+    *,
+    tenant_id: int,
+    record_table: str,
+    record_id: int,
+    mapped_row: Dict[str, Any],
+    fields_by_code: Dict[str, Any],
+) -> None:
+    """将映射行中 custom:{code} 写入自定义字段值。"""
+    from core.services.business.custom_field_service import CustomFieldService
+
+    for target_key, raw_value in mapped_row.items():
+        if not is_sync_custom_field_target(target_key):
+            continue
+        code = sync_custom_field_code_from_target(target_key)
+        field = fields_by_code.get(code)
+        if field is None:
+            continue
+        await CustomFieldService.set_field_value(
+            tenant_id=tenant_id,
+            field_uuid=field.uuid,
+            record_table=record_table,
+            record_id=record_id,
+            value=raw_value,
+        )
+
+
+def apply_mapped_scalar_fields(
+    record: Any,
+    mapped_row: Dict[str, Any],
+    *,
+    string_fields: frozenset[str] = frozenset(),
+    bool_fields: frozenset[str] = frozenset(),
+    decimal_fields: frozenset[str] = frozenset(),
+    int_fields: frozenset[str] = frozenset(),
+) -> List[str]:
+    """
+    将映射行中的额外标量写入模型实例，返回实际改动的字段名列表。
+    仅处理 mapped_row 中出现的键；空字符串对可空字符列写 None。
+    """
+    touched: List[str] = []
+    for field_name in string_fields:
+        if field_name not in mapped_row:
+            continue
+        text = cell_str(mapped_row.get(field_name))
+        setattr(record, field_name, text or None)
+        touched.append(field_name)
+    for field_name in bool_fields:
+        if field_name not in mapped_row:
+            continue
+        coerced = cell_optional_bool(mapped_row.get(field_name))
+        if coerced is None:
+            continue
+        setattr(record, field_name, coerced)
+        touched.append(field_name)
+    for field_name in decimal_fields:
+        if field_name not in mapped_row:
+            continue
+        coerced = cell_optional_decimal(mapped_row.get(field_name))
+        if coerced is None:
+            continue
+        setattr(record, field_name, coerced)
+        touched.append(field_name)
+    for field_name in int_fields:
+        if field_name not in mapped_row:
+            continue
+        coerced = cell_optional_int(mapped_row.get(field_name))
+        if coerced is None:
+            continue
+        setattr(record, field_name, coerced)
+        touched.append(field_name)
+    return touched
+
+
+async def apply_sync_extras_after_write(
+    *,
+    tenant_id: int,
+    record: Any,
+    mapped_row: Dict[str, Any],
+    record_table: str,
+    fields_by_code: Dict[str, Any],
+    string_fields: frozenset[str] = frozenset(),
+    bool_fields: frozenset[str] = frozenset(),
+    decimal_fields: frozenset[str] = frozenset(),
+    int_fields: frozenset[str] = frozenset(),
+) -> None:
+    """写入额外系统字段并落自定义字段。"""
+    touched = apply_mapped_scalar_fields(
+        record,
+        mapped_row,
+        string_fields=string_fields,
+        bool_fields=bool_fields,
+        decimal_fields=decimal_fields,
+        int_fields=int_fields,
+    )
+    if touched:
+        await record.save(update_fields=[*touched, "updated_at"])
+    if fields_by_code:
+        await apply_mapped_custom_field_values(
+            tenant_id=tenant_id,
+            record_table=record_table,
+            record_id=int(record.id),
+            mapped_row=mapped_row,
+            fields_by_code=fields_by_code,
+        )
 
 
 def is_kingdee_approved_active_master_row(row: Dict[str, Any]) -> bool:

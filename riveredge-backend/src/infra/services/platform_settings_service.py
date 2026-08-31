@@ -114,6 +114,18 @@ class PlatformSettingsService:
         update_data = data.model_dump(exclude_unset=True)
         if "default_tenant_id" in update_data:
             await self._validate_default_tenant_id(update_data.get("default_tenant_id"))
+        if "official_api_library_host" in update_data:
+            from infra.constants.official_registry import (
+                normalize_official_api_library_host_input,
+            )
+
+            raw_host = update_data.get("official_api_library_host")
+            if raw_host is None or str(raw_host).strip() == "":
+                update_data["official_api_library_host"] = None
+            else:
+                update_data["official_api_library_host"] = normalize_official_api_library_host_input(
+                    str(raw_host)
+                )
 
         settings = await PlatformSettings.first()
         

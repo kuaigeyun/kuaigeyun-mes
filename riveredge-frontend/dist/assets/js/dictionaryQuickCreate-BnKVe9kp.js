@@ -1,1 +1,0 @@
-function i(n){return String(n??"").trim()}function c(n){const r=new Set,e=[];for(const t of n){const o=i(t.value);!o||r.has(o)||(r.add(o),e.push(t))}return e}function l(n,r){const e=i(r.label),t=i(r.value);if(!(!e&&!t))return n.find(o=>{const a=i(o.label),u=i(o.value);return t&&u===t||e&&a===e})}function s(n){return i(n)}export{s as a,c as d,l as f};

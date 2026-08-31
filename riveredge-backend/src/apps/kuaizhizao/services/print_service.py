@@ -1247,6 +1247,22 @@ class DocumentPrintService:
                 tenant_id, [str(mold.uuid)], loc
             )
 
+        elif document_type == "eight_d_report":
+            from apps.kuaizhizao.models.quality_8d_report import Quality8DReport
+            from apps.kuaizhizao.services.document_action_policy.eight_d_report import (
+                assert_eight_d_report_capability,
+            )
+
+            document = await Quality8DReport.get_or_none(
+                tenant_id=tenant_id, id=document_id, deleted_at__isnull=True
+            )
+            if not document:
+                raise NotFoundError(f"8D 报告不存在: {document_id}")
+            assert_eight_d_report_capability(document, "print")
+            return self._finalize_print_context(
+                document_type, document, self._format_eight_d_report_data(document, loc)
+            )
+
         else:
             raise ValidationError(f"不支持的单据类型: {document_type}")
 
@@ -2557,6 +2573,47 @@ class DocumentPrintService:
             "card_title": "模具卡",
             "items": items,
             "item": items[0] if items else {},
+        }
+
+    def _format_eight_d_report_data(
+        self, report: Any, i18n: PrintLocalization | None = None
+    ) -> Dict[str, Any]:
+        """格式化 8D 报告打印变量（阶段正文为 HTML，模板侧用 |safe）。"""
+        from apps.kuaizhizao.services.quality_improvement_service import _8D_STAGE_LABELS
+
+        def _stage_html(field: str) -> str:
+            raw = getattr(report, field, None)
+            return str(raw or "").strip()
+
+        status = str(getattr(report, "status", "") or "")
+        severity_map = {"minor": "轻微", "major": "严重", "critical": "紧急"}
+        severity = str(getattr(report, "severity", "") or "")
+        return {
+            "document_type": "eight_d_report",
+            "document_id": report.id,
+            "code": report.report_code,
+            "report_code": report.report_code,
+            "title": report.title,
+            "status": _8D_STAGE_LABELS.get(status, status),
+            "status_code": status,
+            "severity": severity_map.get(severity, severity),
+            "owner_name": report.owner_name,
+            "due_date": i18n.format_datetime(report.due_date) if i18n else report.due_date,
+            "verification_result": report.verification_result,
+            "remarks": report.remarks,
+            "created_by_name": report.created_by_name,
+            "created_at": i18n.format_datetime(report.created_at) if i18n else report.created_at,
+            "closed_at": i18n.format_datetime(report.closed_at) if i18n else report.closed_at,
+            "d0_prepare": _stage_html("d0_prepare"),
+            "d1_team": _stage_html("d1_team"),
+            "d2_problem": _stage_html("d2_problem"),
+            "d3_containment": _stage_html("d3_containment"),
+            "d4_root_cause": _stage_html("d4_root_cause"),
+            "d5_corrective_action": _stage_html("d5_corrective_action"),
+            "d6_implement_result": _stage_html("d6_implement_result"),
+            "d7_prevent_recurrence": _stage_html("d7_prevent_recurrence"),
+            "d8_team_congratulation": _stage_html("d8_team_congratulation"),
+            "items": [],
         }
 
     async def _generate_default_print(

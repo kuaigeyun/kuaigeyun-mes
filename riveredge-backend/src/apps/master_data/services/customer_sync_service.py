@@ -17,10 +17,12 @@ from apps.master_data.schemas.master_data_sync import (
 )
 from apps.master_data.schemas.supply_chain_schemas import CustomerCreate, CustomerUpdate
 from apps.master_data.services.master_data_sync_common import (
+    apply_sync_extras_after_write,
     attach_sync_fetch_meta,
     cell_str,
     fetch_sync_rows,
     filter_kingdee_approved_active_master_rows,
+    load_custom_fields_by_code,
     map_sync_rows,
     mark_binding_failure,
     mark_binding_success,
@@ -34,6 +36,38 @@ from apps.master_data.services.master_data_sync_common import (
 )
 from apps.master_data.services.supply_chain_service import SupplyChainService
 from core.services.data.sync_progress import emit_sync_progress
+
+CUSTOMER_CUSTOM_FIELD_TABLE = "master_data_customers"
+CUSTOMER_SYNC_STRING_FIELDS = frozenset(
+    {
+        "category",
+        "contact_title",
+        "industry_code",
+        "customer_level_code",
+        "lead_source_code",
+        "tax_registration_no",
+        "invoice_title",
+        "invoice_address",
+        "invoice_phone",
+        "invoice_bank_name",
+        "invoice_bank_account",
+        "invoice_type_code",
+        "taxpayer_type_code",
+        "legal_representative",
+        "enterprise_type_code",
+        "settlement_method_code",
+        "finance_contact_name",
+        "finance_contact_phone",
+        "finance_contact_email",
+        "delivery_contact_name",
+        "delivery_contact_phone",
+        "delivery_address",
+        "salesman_name",
+    }
+)
+CUSTOMER_SYNC_BOOL_FIELDS = frozenset({"is_active"})
+CUSTOMER_SYNC_DECIMAL_FIELDS = frozenset({"estimated_annual_purchase", "credit_limit"})
+CUSTOMER_SYNC_INT_FIELDS = frozenset({"payment_terms_days"})
 
 
 class CustomerSyncService:
@@ -176,6 +210,9 @@ class CustomerSyncService:
         failed = 0
         errors: List[str] = []
         total = len(rows)
+        custom_fields_by_code = await load_custom_fields_by_code(
+            tenant_id, CUSTOMER_CUSTOM_FIELD_TABLE
+        )
 
         for index, row in enumerate(rows, start=1):
             code = cell_str(row.get(match_key if match_key == "code" else "code") or row.get(match_key))
@@ -211,6 +248,18 @@ class CustomerSyncService:
                         update_data,
                         current_user,
                     )
+                    await existing.refresh_from_db()
+                    await apply_sync_extras_after_write(
+                        tenant_id=tenant_id,
+                        record=existing,
+                        mapped_row=row,
+                        record_table=CUSTOMER_CUSTOM_FIELD_TABLE,
+                        fields_by_code=custom_fields_by_code,
+                        string_fields=CUSTOMER_SYNC_STRING_FIELDS,
+                        bool_fields=CUSTOMER_SYNC_BOOL_FIELDS,
+                        decimal_fields=CUSTOMER_SYNC_DECIMAL_FIELDS,
+                        int_fields=CUSTOMER_SYNC_INT_FIELDS,
+                    )
                     await mark_external_sync_record(existing)
                     updated += 1
                 else:
@@ -232,6 +281,17 @@ class CustomerSyncService:
                         deleted_at__isnull=True,
                     ).first()
                     if customer_row:
+                        await apply_sync_extras_after_write(
+                            tenant_id=tenant_id,
+                            record=customer_row,
+                            mapped_row=row,
+                            record_table=CUSTOMER_CUSTOM_FIELD_TABLE,
+                            fields_by_code=custom_fields_by_code,
+                            string_fields=CUSTOMER_SYNC_STRING_FIELDS,
+                            bool_fields=CUSTOMER_SYNC_BOOL_FIELDS,
+                            decimal_fields=CUSTOMER_SYNC_DECIMAL_FIELDS,
+                            int_fields=CUSTOMER_SYNC_INT_FIELDS,
+                        )
                         await mark_external_sync_record(customer_row)
                     created += 1
             except Exception as exc:

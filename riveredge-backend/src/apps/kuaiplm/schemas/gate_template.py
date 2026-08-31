@@ -29,6 +29,30 @@ class GateTemplateDeliverableResponse(GateTemplateDeliverableInput):
     updated_at: datetime
 
 
+class GateTemplateTaskInput(BaseModel):
+    id: Optional[int] = None
+    task_name: str
+    sort_order: int = 0
+    default_owner_role: Optional[str] = None
+    parent_temp_key: Optional[str] = None
+    temp_key: Optional[str] = None
+
+
+class GateTemplateTaskResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    uuid: str
+    tenant_id: int
+    stage_id: int
+    parent_template_task_id: Optional[int] = None
+    task_name: str
+    sort_order: int = 0
+    default_owner_role: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+
 class GateTemplateStageInput(BaseModel):
     id: Optional[int] = None
     gate_key: str
@@ -36,6 +60,7 @@ class GateTemplateStageInput(BaseModel):
     sort_order: int = 0
     milestone_role: str = "none"
     deliverables: List[GateTemplateDeliverableInput] = Field(default_factory=list)
+    tasks: List[GateTemplateTaskInput] = Field(default_factory=list)
 
 
 class GateTemplateStageResponse(BaseModel):
@@ -52,6 +77,7 @@ class GateTemplateStageResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     deliverables: List[GateTemplateDeliverableResponse] = Field(default_factory=list)
+    tasks: List[GateTemplateTaskResponse] = Field(default_factory=list)
 
 
 class GateTemplateCreate(BaseModel):

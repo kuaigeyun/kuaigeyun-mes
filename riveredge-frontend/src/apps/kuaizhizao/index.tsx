@@ -77,6 +77,18 @@ const SalesReviewsPage = lazy(() => import('./pages/sales-management/sales-revie
 const AfterSalesTicketsPage = lazy(() => import('./pages/after-sales-service/tickets'));
 const SalesReturnsPage = lazy(() => import('./pages/sales-management/sales-returns'));
 
+// 交付项目（订单交机）
+const DeliveryProjectDashboardPage = lazy(() => import('./pages/delivery-project/dashboard'));
+const DeliveryProjectsPage = lazy(() => import('./pages/delivery-project/projects'));
+const DeliveryProjectDetailPage = lazy(() => import('./pages/delivery-project/projects/detail'));
+const DeliveryProcessTemplatesPage = lazy(() => import('./pages/delivery-project/process-templates'));
+const DeliveryNodeReportsPage = lazy(() => import('./pages/delivery-project/node-reports'));
+const DeliverySchedulesPage = lazy(() => import('./pages/delivery-project/schedules'));
+const DeliveryIssuesPage = lazy(() => import('./pages/delivery-project/issues'));
+const DeliveryProgressSummaryReportPage = lazy(() => import('./pages/delivery-project/reports/progress-summary'));
+const DeliveryProcessProgressReportPage = lazy(() => import('./pages/delivery-project/reports/process-progress'));
+const DeliveryIssueProgressReportPage = lazy(() => import('./pages/delivery-project/reports/issue-progress'));
+
 // 质量管理页面
 const InspectionCenterPage = lazy(() => import('./pages/quality-management/inspection-center'));
 const IncomingInspectionPage = lazy(() => import('./pages/quality-management/incoming-inspection'));
@@ -86,6 +98,7 @@ const TraceabilityPage = lazy(() => import('./pages/quality-management/traceabil
 const InspectionPlansPage = lazy(() => import('./pages/quality-management/inspection-plans'));
 const NonconformingLedgerPage = lazy(() => import('./pages/quality-management/nonconforming-ledger'));
 const EightDReportsPage = lazy(() => import('./pages/quality-management/eight-d-reports'));
+const EightDWorkbenchPage = lazy(() => import('./pages/quality-management/eight-d-reports/workbench/EightDWorkbench'));
 const OQCInspectionPage = lazy(() => import('./pages/quality-management/oqc-inspection'));
 const SPCMonitorPage = lazy(() => import('./pages/quality-management/spc-monitor'));
 const SystemDocumentsPage = lazy(() => import('./pages/quality-management/system-documents'));
@@ -315,6 +328,21 @@ const KuaizhizaoApp: React.FC = () => {
     <LinkedDocumentDetailProvider>
       <Routes>
       <Route path="analysis-center/*" element={<RedirectAnalysisCenterToKuaireport />} />
+      {/* 交付项目路由 */}
+      <Route path="delivery-project/dashboard" element={withPageSuspense(DeliveryProjectDashboardPage)} />
+      <Route path="delivery-project/projects/:id" element={withPageSuspense(DeliveryProjectDetailPage)} />
+      <Route path="delivery-project/projects" element={withPageSuspense(DeliveryProjectsPage)} />
+      <Route path="delivery-project/process-templates" element={withPageSuspense(DeliveryProcessTemplatesPage)} />
+      <Route path="delivery-project/node-reports" element={withPageSuspense(DeliveryNodeReportsPage)} />
+      <Route
+        path="delivery-project/follow-up"
+        element={<Navigate to="/apps/kuaizhizao/delivery-project/projects" replace />}
+      />
+      <Route path="delivery-project/schedules" element={withPageSuspense(DeliverySchedulesPage)} />
+      <Route path="delivery-project/issues" element={withPageSuspense(DeliveryIssuesPage)} />
+      <Route path="delivery-project/reports/progress-summary" element={withPageSuspense(DeliveryProgressSummaryReportPage)} />
+      <Route path="delivery-project/reports/process-progress" element={withPageSuspense(DeliveryProcessProgressReportPage)} />
+      <Route path="delivery-project/reports/issue-progress" element={withPageSuspense(DeliveryIssueProgressReportPage)} />
       {/* 计划管理路由 */}
       <Route path="plan-management/demand-management" element={withPageSuspense(DemandManagementPage)} />
       <Route path="plan-management/demand-computation" element={withPageSuspense(DemandComputationPage)} />
@@ -394,6 +422,7 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="quality-management/inspection-plans" element={withPageSuspense(InspectionPlansPage)} />
       <Route path="quality-management/nonconforming-ledger" element={withPageSuspense(NonconformingLedgerPage)} />
       <Route path="quality-management/eight-d-reports" element={withPageSuspense(EightDReportsPage)} />
+      <Route path="quality-management/eight-d-reports/:id" element={withPageSuspense(EightDWorkbenchPage)} />
       <Route path="quality-management/oqc-inspection" element={withPageSuspense(OQCInspectionPage)} />
       <Route path="quality-management/spc-monitor" element={withPageSuspense(SPCMonitorPage)} />
       <Route path="quality-management/iso-clauses" element={withPageSuspense(IsoClausesPage)} />

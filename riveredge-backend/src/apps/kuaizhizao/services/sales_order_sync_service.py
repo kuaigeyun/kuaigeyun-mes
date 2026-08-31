@@ -28,7 +28,9 @@ from apps.kuaizhizao.services.sales_order_service import (
 from apps.master_data.models.customer import Customer
 from apps.master_data.models.material import Material
 from apps.master_data.services.master_data_sync_common import (
+    apply_mapped_custom_field_values,
     attach_sync_fetch_meta,
+    load_custom_fields_by_code,
     mark_binding_failure,
     mark_binding_success,
     normalize_schedule_interval,
@@ -44,6 +46,8 @@ from core.services.data.sync_from_source_fetch import (
 )
 from core.services.data.sync_progress import emit_sync_progress
 from core.utils.timezone_utils import resolve_business_datetime
+
+SALES_ORDER_CUSTOM_FIELD_TABLE = "apps_kuaizhizao_sales_orders"
 
 _SYNC_WRITE_PROGRESS_EVERY = 25
 _LOOKUP_IN_CHUNK = 800
@@ -333,6 +337,9 @@ class SalesOrderSyncService:
 
         operator_name = await AppBaseService().get_user_name(user_id)
         caches = await self._prefetch_sync_caches(tenant_id, orders, match_key)
+        custom_fields_by_code = await load_custom_fields_by_code(
+            tenant_id, SALES_ORDER_CUSTOM_FIELD_TABLE
+        )
 
         created = 0
         updated = 0
@@ -376,6 +383,14 @@ class SalesOrderSyncService:
                         sync_at=sync_at,
                         sales_order_service=sales_order_service,
                     )
+                    if custom_fields_by_code:
+                        await apply_mapped_custom_field_values(
+                            tenant_id=tenant_id,
+                            record_table=SALES_ORDER_CUSTOM_FIELD_TABLE,
+                            record_id=int(existing.id),
+                            mapped_row=header,
+                            fields_by_code=custom_fields_by_code,
+                        )
                     updated += 1
                 else:
                     order = await self._sync_create_order(
@@ -389,6 +404,14 @@ class SalesOrderSyncService:
                         sales_order_service=sales_order_service,
                     )
                     caches["orders_by_code"][order_key] = order
+                    if custom_fields_by_code:
+                        await apply_mapped_custom_field_values(
+                            tenant_id=tenant_id,
+                            record_table=SALES_ORDER_CUSTOM_FIELD_TABLE,
+                            record_id=int(order.id),
+                            mapped_row=header,
+                            fields_by_code=custom_fields_by_code,
+                        )
                     created += 1
             except Exception as exc:
                 failed += 1

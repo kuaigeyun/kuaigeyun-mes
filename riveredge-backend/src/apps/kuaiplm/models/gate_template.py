@@ -74,3 +74,19 @@ class RdGateTemplateDeliverable(BaseModel):
         table = "apps_kuaiplm_rd_gate_template_deliverables"
         table_description = "快研发 - 阶段门模板默认交付物"
         indexes = [("tenant_id", "stage_id")]
+
+
+class RdGateTemplateTask(BaseModel):
+    """阶段门模板预置任务"""
+
+    tenant_id = fields.IntField(description="租户ID")
+    stage_id = fields.IntField(description="阶段ID")
+    parent_template_task_id = fields.IntField(null=True, description="同阶段父模板任务ID（仅一级）")
+    task_name = fields.CharField(max_length=200, description="任务名称")
+    sort_order = fields.IntField(default=0, description="排序")
+    default_owner_role = fields.CharField(max_length=50, null=True, description="默认负责人角色")
+
+    class Meta:
+        table = "apps_kuaiplm_rd_gate_template_tasks"
+        table_description = "快研发 - 阶段门模板预置任务"
+        indexes = [("tenant_id", "stage_id")]

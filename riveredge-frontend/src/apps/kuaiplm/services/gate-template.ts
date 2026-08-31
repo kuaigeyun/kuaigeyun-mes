@@ -18,6 +18,16 @@ export interface GateTemplateDeliverable {
   sort_order?: number;
 }
 
+export interface GateTemplateTask {
+  id?: number;
+  uuid?: string;
+  stage_id?: number;
+  parent_template_task_id?: number | null;
+  task_name: string;
+  sort_order?: number;
+  default_owner_role?: string | null;
+}
+
 export interface GateTemplateStage {
   id?: number;
   uuid?: string;
@@ -27,6 +37,7 @@ export interface GateTemplateStage {
   sort_order: number;
   milestone_role: GateMilestoneRole;
   deliverables?: GateTemplateDeliverable[];
+  tasks?: GateTemplateTask[];
 }
 
 export interface GateTemplateSummary {

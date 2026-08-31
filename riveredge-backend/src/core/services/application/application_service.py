@@ -16,6 +16,7 @@ import asyncpg
 from core.schemas.application import ApplicationCreate, ApplicationUpdate
 from core.config.industry_app_catalog import requires_pro_license_for_app
 from core.config.industry_pack import is_industry_module_app_code, is_industry_pack_shell_code
+from core.config.pro_app_catalog import resolve_application_sort_order
 from core.services.application.application_dedicated_binding_service import ApplicationDedicatedBindingService
 from core.utils.timezone_utils import now_utc
 from infra.models.tenant import Tenant
@@ -232,7 +233,7 @@ class ApplicationService:
             permission_code=manifest.get("permission_code") or f"app:{code}",
             is_system=False,
             is_active=False,
-            sort_order=int(manifest.get("sort_order") or 0),
+            sort_order=resolve_application_sort_order(code, manifest.get("sort_order")),
         )
         try:
             await ApplicationService.create_application(tenant_id=tenant_id, data=app_data)
@@ -1203,7 +1204,10 @@ class ApplicationService:
             app_name = manifest.get("name", app_name)
         app_sort_order = app.get("sort_order", 0)
         if not app.get("is_custom_sort"):
-            app_sort_order = manifest.get("sort_order", app_sort_order)
+            app_sort_order = resolve_application_sort_order(
+                app.get("code"),
+                manifest.get("sort_order", app_sort_order),
+            )
         return ApplicationUpdate(
             name=app_name,
             menu_config=menu_config,
@@ -1420,7 +1424,10 @@ class ApplicationService:
                     permission_code=manifest.get('permission_code') or f"app:{code}",
                     is_system=False,  # 插件应用不是系统应用
                     is_active=is_active,  # 保持现有状态；新注册默认为停用
-                    sort_order=manifest.get('sort_order', 0),
+                    sort_order=resolve_application_sort_order(
+                        code,
+                        manifest.get("sort_order"),
+                    ),
                 )
                 
                 if existing_app:

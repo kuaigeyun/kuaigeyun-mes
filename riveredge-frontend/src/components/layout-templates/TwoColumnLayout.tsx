@@ -11,6 +11,7 @@
  * @example
  * ```tsx
  * <TwoColumnLayout
+ *   layoutPersistenceId="app.module.page"
  *   leftPanel={{
  *     search: {
  *       placeholder: "搜索分组",
@@ -42,50 +43,16 @@
  * ```
  */
 
-import React, { ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import React, { ReactNode } from 'react';
 import { Input, Space, Spin, Tree, theme } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import type { DataNode, TreeProps } from 'antd/es/tree';
-import { TWO_COLUMN_LAYOUT, TWO_COLUMN_LEFT_PANEL_BACKGROUND } from './constants';
+import { TWO_COLUMN_LAYOUT, TWO_COLUMN_LEFT_PANEL_BACKGROUND, twoColumnLeftPanelWidthStorageKey } from './constants';
+import { resolvePercentPanelWidth, useResizableLeftPanelWidth } from './useResizableLeftPanelWidth';
+import { TwoColumnLayoutResizer } from './TwoColumnLayoutResizer';
 
 const { useToken } = theme;
-
-function parsePanelWidthPx(value: number | string | undefined, fallback: number): number {
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-    if (trimmed.endsWith('%')) return fallback;
-    const parsed = parseInt(trimmed, 10);
-    if (Number.isFinite(parsed)) return parsed;
-  }
-  return fallback;
-}
-
-function resolvePercentPanelWidth(value: number | string | undefined): string | null {
-  if (typeof value !== 'string') return null;
-  const trimmed = value.trim();
-  if (!trimmed.endsWith('%')) return null;
-  const parsed = parseFloat(trimmed.slice(0, -1));
-  if (!Number.isFinite(parsed) || parsed <= 0) return null;
-  return `${parsed}%`;
-}
-
-function clampPanelWidth(width: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, width));
-}
-
-function readStoredPanelWidth(storageKey: string | undefined, fallback: number): number {
-  if (!storageKey || typeof window === 'undefined') return fallback;
-  try {
-    const raw = window.localStorage.getItem(storageKey);
-    if (!raw) return fallback;
-    const parsed = parseInt(raw, 10);
-    return Number.isFinite(parsed) ? parsed : fallback;
-  } catch {
-    return fallback;
-  }
-}
 
 /**
  * 左侧面板配置
@@ -246,6 +213,10 @@ export interface TwoColumnLayoutProps {
    */
   rightPanel: RightPanelConfig;
   /**
+   * 左栏宽度持久化 id；未传 leftPanel.widthStorageKey 时写入 localStorage
+   */
+  layoutPersistenceId?: string;
+  /**
    * 自定义样式类名
    */
   className?: string;
@@ -255,17 +226,40 @@ export interface TwoColumnLayoutProps {
   style?: React.CSSProperties;
 }
 
+function resolveLeftPanelConfig(
+  leftPanel: LeftPanelConfig,
+  layoutPersistenceId?: string,
+): LeftPanelConfig {
+  const percentWidth = resolvePercentPanelWidth(leftPanel.width);
+  const usePercentWidth = percentWidth != null;
+  const widthStorageKey =
+    leftPanel.widthStorageKey ??
+    (layoutPersistenceId ? twoColumnLeftPanelWidthStorageKey(layoutPersistenceId) : undefined);
+  return {
+    width: TWO_COLUMN_LAYOUT.LEFT_PANEL_WIDTH,
+    minWidth: TWO_COLUMN_LAYOUT.LEFT_PANEL_MIN_WIDTH,
+    maxWidth: TWO_COLUMN_LAYOUT.LEFT_PANEL_MAX_WIDTH,
+    resizable: !usePercentWidth,
+    ...leftPanel,
+    widthStorageKey,
+    resizable: usePercentWidth ? false : leftPanel.resizable ?? true,
+  };
+}
+
 /**
  * 两栏布局组件
  */
 export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
   leftPanel,
   rightPanel,
+  layoutPersistenceId,
   className,
   style,
 }) => {
   const { t } = useTranslation();
   const { token } = useToken();
+
+  const resolvedLeftPanel = resolveLeftPanelConfig(leftPanel, layoutPersistenceId);
 
   const {
     search,
@@ -275,75 +269,26 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
     width = TWO_COLUMN_LAYOUT.LEFT_PANEL_WIDTH,
     minWidth = TWO_COLUMN_LAYOUT.LEFT_PANEL_MIN_WIDTH,
     maxWidth = TWO_COLUMN_LAYOUT.LEFT_PANEL_MAX_WIDTH,
-    resizable = false,
+    resizable = true,
     widthStorageKey,
     collapsed = false,
-  } = leftPanel;
+  } = resolvedLeftPanel;
 
-  const percentWidth = resolvePercentPanelWidth(width);
-  const usePercentWidth = percentWidth != null;
-
-  const initialWidth = parsePanelWidthPx(width, TWO_COLUMN_LAYOUT.LEFT_PANEL_WIDTH);
-  const minWidthPx = parsePanelWidthPx(minWidth, TWO_COLUMN_LAYOUT.LEFT_PANEL_MIN_WIDTH);
-  const maxWidthPx = parsePanelWidthPx(maxWidth, TWO_COLUMN_LAYOUT.LEFT_PANEL_MAX_WIDTH);
-  const [panelWidth, setPanelWidth] = useState(() =>
-    clampPanelWidth(readStoredPanelWidth(widthStorageKey, initialWidth), minWidthPx, maxWidthPx),
-  );
-  const panelWidthRef = useRef(panelWidth);
-  panelWidthRef.current = panelWidth;
-
-  useEffect(() => {
-    if (usePercentWidth) return;
-    const next = clampPanelWidth(
-      readStoredPanelWidth(widthStorageKey, parsePanelWidthPx(width, TWO_COLUMN_LAYOUT.LEFT_PANEL_WIDTH)),
-      minWidthPx,
-      maxWidthPx,
-    );
-    setPanelWidth(next);
-  }, [width, minWidthPx, maxWidthPx, widthStorageKey, usePercentWidth]);
-
-  const persistPanelWidth = useCallback(
-    (nextWidth: number) => {
-      if (!widthStorageKey || typeof window === 'undefined') return;
-      try {
-        window.localStorage.setItem(widthStorageKey, String(nextWidth));
-      } catch {
-        /* ignore quota / private mode */
-      }
-    },
-    [widthStorageKey],
-  );
-
-  const handleResizeStart = useCallback(
-    (event: React.MouseEvent<HTMLDivElement>) => {
-      if (collapsed || !resizable || usePercentWidth) return;
-      event.preventDefault();
-      const startX = event.clientX;
-      const startWidth = panelWidthRef.current;
-
-      const handleMove = (moveEvent: MouseEvent) => {
-        const delta = moveEvent.clientX - startX;
-        const next = clampPanelWidth(startWidth + delta, minWidthPx, maxWidthPx);
-        setPanelWidth(next);
-      };
-
-      const handleUp = () => {
-        document.removeEventListener('mousemove', handleMove);
-        document.removeEventListener('mouseup', handleUp);
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-        persistPanelWidth(panelWidthRef.current);
-      };
-
-      document.body.style.cursor = 'col-resize';
-      document.body.style.userSelect = 'none';
-      document.addEventListener('mousemove', handleMove);
-      document.addEventListener('mouseup', handleUp);
-    },
-    [collapsed, maxWidthPx, minWidthPx, persistPanelWidth, resizable, usePercentWidth],
-  );
-
-  const resolvedLeftWidth = collapsed ? 0 : usePercentWidth ? percentWidth : panelWidth;
+  const {
+    minWidthPx,
+    maxWidthPx,
+    usePercentWidth,
+    resizable: effectiveResizable,
+    handleResizeStart,
+    resolvedWidth: resolvedLeftWidth,
+  } = useResizableLeftPanelWidth({
+    width,
+    minWidth,
+    maxWidth,
+    widthStorageKey,
+    resizable,
+    collapsed,
+  });
 
   const {
     header,
@@ -419,7 +364,7 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
           borderBottom: `1px solid ${token.colorBorder}`,
           borderLeft: `1px solid ${token.colorBorder}`,
           borderRight:
-            collapsed || resizable ? 'none' : `1px solid ${token.colorBorder}`,
+            collapsed || effectiveResizable ? 'none' : `1px solid ${token.colorBorder}`,
           backgroundColor: TWO_COLUMN_LEFT_PANEL_BACKGROUND,
           display: 'flex',
           flexDirection: 'column',
@@ -530,23 +475,8 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
         ) : null}
       </div>
 
-      {!collapsed && resizable ? (
-        <div
-          className="two-column-layout-resizer"
-          role="separator"
-          aria-orientation="vertical"
-          aria-label={t('components.twoColumnLayout.resizeLeftPanel')}
-          onMouseDown={handleResizeStart}
-          style={{
-            width: 6,
-            flexShrink: 0,
-            cursor: 'col-resize',
-            position: 'relative',
-            zIndex: 2,
-            marginLeft: -3,
-            marginRight: -3,
-          }}
-        />
+      {!collapsed && effectiveResizable ? (
+        <TwoColumnLayoutResizer onMouseDown={handleResizeStart} />
       ) : null}
 
       {/* 右侧主内容区 */}

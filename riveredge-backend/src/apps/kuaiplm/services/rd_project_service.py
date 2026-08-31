@@ -36,12 +36,15 @@ from apps.kuaiplm.models import (
     RdProjectDeliverable,
     RdProjectGate,
     RdProjectLink,
+    RdProjectMember,
     RdProjectTask,
     RdRequirement,
 )
 from apps.kuaiplm.schemas.rd_project import (
     PushTrialWorkOrderRequest,
     PushTrialWorkOrderResponse,
+    SpawnDeliveryProjectRequest,
+    SpawnDeliveryProjectResponse,
     ProjectCollaborationSummary,
     RdProjectCreate,
     RdProjectDeliverableCreate,
@@ -51,6 +54,8 @@ from apps.kuaiplm.schemas.rd_project import (
     RdProjectGateUpdate,
     RdProjectLinkCreate,
     RdProjectLinkResponse,
+    RdProjectMemberInput,
+    RdProjectMemberResponse,
     RdProjectResponse,
     RdProjectTaskCreate,
     RdProjectTaskResponse,
@@ -65,8 +70,10 @@ from apps.kuaiplm.services.plm_list_core import (
 )
 from apps.kuaiplm.utils.gate_template_seed import load_template_gate_defs
 from apps.kuaiplm.utils.rd_project_progress import compute_project_progress
+from apps.kuaiplm.utils.rd_project_execution import gates_not_executed
 from apps.master_data.models.material import Material
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
+from infra.models.user import User
 from core.utils.timezone_utils import resolve_business_datetime, to_site_date, today_site_str
 
 
@@ -75,8 +82,8 @@ class RdProjectService(AppBaseService[RdProject]):
         super().__init__(RdProject)
 
     async def _generate_project_code(self, tenant_id: int, project_type: str = RdProjectType.RD.value) -> str:
-        if project_type == RdProjectType.DELIVERY.value:
-            return await self._generate_delivery_project_code(tenant_id)
+        if project_type != RdProjectType.RD.value:
+            raise BusinessLogicError("交付项目已迁移至快制造，请在交付项目菜单创建")
         try:
             return await self.generate_code(tenant_id, "RD_PROJECT_CODE", prefix="YFXM")
         except Exception:
@@ -149,6 +156,8 @@ class RdProjectService(AppBaseService[RdProject]):
         project: RdProject,
         source_codes: Optional[Dict[int, str]] = None,
         gates_by_project: Optional[Dict[int, List[RdProjectGate]]] = None,
+        members: Optional[List[RdProjectMemberResponse]] = None,
+        not_executed: Optional[bool] = None,
     ) -> RdProjectResponse:
         data = RdProjectResponse.model_validate(project)
         if project.source_project_id and source_codes:
@@ -157,7 +166,214 @@ class RdProjectService(AppBaseService[RdProject]):
         data.current_gate_name = self._resolve_current_gate_name(
             project.current_gate_key, gates
         )
+        if gates:
+            data.gates = [RdProjectGateResponse.model_validate(g) for g in gates]
+            data.progress = compute_project_progress(gates, [], [])
+        if members is not None:
+            data.members = members
+        if not_executed is not None:
+            data.not_executed = not_executed
+        elif gates is not None and project.status == RdProjectStatus.IN_PROGRESS.value:
+            data.not_executed = gates_not_executed(gates)
         return data
+
+    async def _load_not_executed_flags(
+        self, tenant_id: int, project_ids: List[int]
+    ) -> Dict[int, bool]:
+        if not project_ids:
+            return {}
+        gates_by_project = await self._load_gates_by_project(tenant_id, project_ids)
+        flags: Dict[int, bool] = {}
+        for project_id in project_ids:
+            if not gates_not_executed(gates_by_project.get(project_id, [])):
+                flags[project_id] = False
+
+        pending_ids = [pid for pid in project_ids if flags.get(pid) is not False]
+        if not pending_ids:
+            return flags
+
+        active_tasks = await RdProjectTask.filter(
+            tenant_id=tenant_id,
+            project_id__in=pending_ids,
+            deleted_at__isnull=True,
+            status__in=[RdTaskStatus.IN_PROGRESS.value, RdTaskStatus.DONE.value],
+        ).values_list("project_id", flat=True)
+        for project_id in set(active_tasks):
+            flags[int(project_id)] = False
+
+        pending_ids = [pid for pid in pending_ids if flags.get(pid) is not False]
+        if not pending_ids:
+            for pid in project_ids:
+                flags.setdefault(pid, True)
+            return flags
+
+        progressed_deliverables = await RdProjectDeliverable.filter(
+            tenant_id=tenant_id,
+            project_id__in=pending_ids,
+            deleted_at__isnull=True,
+            status__in=[
+                RdDeliverableStatus.SUBMITTED.value,
+                RdDeliverableStatus.APPROVED.value,
+            ],
+        ).values_list("project_id", flat=True)
+        for project_id in set(progressed_deliverables):
+            flags[int(project_id)] = False
+
+        pending_ids = [pid for pid in pending_ids if flags.get(pid) is not False]
+        if pending_ids:
+            linked = await RdProjectLink.filter(
+                tenant_id=tenant_id, project_id__in=pending_ids
+            ).values_list("project_id", flat=True)
+            for project_id in set(linked):
+                flags[int(project_id)] = False
+
+        pending_ids = [pid for pid in pending_ids if flags.get(pid) is not False]
+        if pending_ids:
+            from apps.kuaizhizao.models.delivery_project import DeliveryProject
+
+            delivery_linked = await DeliveryProject.filter(
+                tenant_id=tenant_id,
+                rd_project_id__in=pending_ids,
+                deleted_at__isnull=True,
+            ).values_list("rd_project_id", flat=True)
+            for project_id in set(delivery_linked):
+                if project_id is not None:
+                    flags[int(project_id)] = False
+
+        for pid in project_ids:
+            flags.setdefault(pid, True)
+        return flags
+
+    async def _assert_project_not_executed(self, tenant_id: int, project_id: int) -> None:
+        flags = await self._load_not_executed_flags(tenant_id, [project_id])
+        if not flags.get(project_id, False):
+            raise BusinessLogicError("项目已有实际执行记录，无法撤回或删除")
+
+    async def withdraw_project(
+        self, tenant_id: int, project_id: int, updated_by: int
+    ) -> RdProjectResponse:
+        project = await self._get_project_or_404(tenant_id, project_id)
+        if project.status != RdProjectStatus.IN_PROGRESS.value:
+            raise BusinessLogicError("仅进行中的项目可撤回")
+        await self._assert_project_not_executed(tenant_id, project_id)
+        user_info = await self.get_user_info(updated_by)
+        gates = await RdProjectGate.filter(
+            tenant_id=tenant_id, project_id=project_id
+        ).order_by("sort_order", "id").all()
+        first_gate_key = gates[0].gate_key if gates else project.current_gate_key
+        await project.update_from_dict({
+            "status": RdProjectStatus.DRAFT.value,
+            "actual_start_date": None,
+            "actual_end_date": None,
+            "current_gate_key": first_gate_key,
+            "updated_by": updated_by,
+            "updated_by_name": user_info["name"],
+        }).save()
+        source_codes = await self._load_source_project_codes(tenant_id, [project])
+        gates_by_project = await self._load_gates_by_project(tenant_id, [int(project.id)])
+        members = await self._load_project_members(tenant_id, int(project.id))
+        return self._to_project_response(
+            project,
+            source_codes,
+            gates_by_project,
+            members,
+            not_executed=False,
+        )
+
+    @staticmethod
+    def _parse_task_members(raw) -> List[RdProjectMemberResponse]:
+        if not raw:
+            return []
+        if isinstance(raw, str):
+            import json
+            raw = json.loads(raw)
+        if not isinstance(raw, list):
+            raise BusinessLogicError("任务 members_json 格式无效")
+        out: List[RdProjectMemberResponse] = []
+        for item in raw:
+            if not isinstance(item, dict) or item.get("user_id") is None:
+                raise BusinessLogicError("任务成员项缺少 user_id")
+            out.append(
+                RdProjectMemberResponse(
+                    user_id=int(item["user_id"]),
+                    user_name=str(item.get("user_name") or ""),
+                )
+            )
+        return out
+
+    def _to_task_response(self, task: RdProjectTask) -> RdProjectTaskResponse:
+        data = RdProjectTaskResponse.model_validate(task)
+        data.members = self._parse_task_members(task.members_json)
+        return data
+
+    async def _load_project_members(
+        self, tenant_id: int, project_id: int
+    ) -> List[RdProjectMemberResponse]:
+        rows = await RdProjectMember.filter(
+            tenant_id=tenant_id, project_id=project_id, deleted_at__isnull=True
+        ).order_by("id")
+        return [RdProjectMemberResponse(user_id=r.user_id, user_name=r.user_name) for r in rows]
+
+    async def _replace_project_members(
+        self,
+        tenant_id: int,
+        project_id: int,
+        members: List[RdProjectMemberInput],
+        *,
+        owner_id: Optional[int],
+        updated_by: int,
+    ) -> None:
+        seen = set()
+        resolved: List[Tuple[int, str]] = []
+        for item in members or []:
+            uid = int(item.user_id)
+            if owner_id and uid == owner_id:
+                continue
+            if uid in seen:
+                continue
+            name = (item.user_name or "").strip() or await self.get_user_name(uid)
+            resolved.append((uid, name))
+            seen.add(uid)
+        await RdProjectMember.filter(
+            tenant_id=tenant_id, project_id=project_id, deleted_at__isnull=True
+        ).update(deleted_at=resolve_business_datetime())
+        for uid, name in resolved:
+            row = await RdProjectMember.filter(
+                tenant_id=tenant_id, project_id=project_id, user_id=uid
+            ).first()
+            if row:
+                row.user_name = name
+                row.deleted_at = None
+                row.updated_by = updated_by
+                await row.save()
+            else:
+                await RdProjectMember.create(
+                    tenant_id=tenant_id,
+                    project_id=project_id,
+                    user_id=uid,
+                    user_name=name,
+                    created_by=updated_by,
+                    updated_by=updated_by,
+                )
+
+    async def _serialize_task_members(
+        self,
+        members: List[RdProjectMemberInput],
+        *,
+        owner_id: Optional[int],
+    ) -> List[Dict]:
+        seen = set()
+        out: List[Dict] = []
+        for item in members or []:
+            uid = int(item.user_id)
+            if owner_id and uid == owner_id:
+                continue
+            if uid in seen:
+                continue
+            name = (item.user_name or "").strip() or await self.get_user_name(uid)
+            out.append({"user_id": uid, "user_name": name})
+            seen.add(uid)
+        return out
 
     async def _resolve_gate_template(
         self,
@@ -166,11 +382,11 @@ class RdProjectService(AppBaseService[RdProject]):
         gate_template_id: Optional[int] = None,
     ):
         try:
-            template, gate_defs, deliverables_map = await load_template_gate_defs(
+            template, gate_defs, deliverables_map, tasks_map = await load_template_gate_defs(
                 tenant_id, project_type, gate_template_id
             )
             if template and gate_defs:
-                return template, gate_defs, deliverables_map
+                return template, gate_defs, deliverables_map, tasks_map
         except ValueError as e:
             raise BusinessLogicError(str(e))
 
@@ -178,7 +394,7 @@ class RdProjectService(AppBaseService[RdProject]):
             {**g, "milestone_role": GateMilestoneRole.NONE.value}
             for g in DEFAULT_NPI_GATES
         ]
-        return None, gate_defs, DEFAULT_GATE_DELIVERABLES
+        return None, gate_defs, DEFAULT_GATE_DELIVERABLES, {}
 
     async def _copy_inherit_links(
         self,
@@ -228,7 +444,7 @@ class RdProjectService(AppBaseService[RdProject]):
         inherit_links_from: Optional[RdProject] = None,
         gate_template_id: Optional[int] = None,
     ) -> RdProject:
-        template, gate_defs, deliverable_map = await self._resolve_gate_template(
+        template, gate_defs, deliverable_map, tasks_map = await self._resolve_gate_template(
             tenant_id, project_type, gate_template_id
         )
         first_gate = gate_defs[0]["gate_key"] if gate_defs else None
@@ -272,11 +488,68 @@ class RdProjectService(AppBaseService[RdProject]):
         await self._seed_gate_deliverables(
             tenant_id, project.id, created_gates, created_by, deliverable_map
         )
+        await self._seed_gate_tasks(
+            tenant_id, project.id, created_gates, created_by, tasks_map, owner_id=owner_id
+        )
         if inherit_links_from:
             await self._copy_inherit_links(
                 tenant_id, inherit_links_from.id, project.id, created_by
             )
         return project
+
+    async def _seed_gate_tasks(
+        self,
+        tenant_id: int,
+        project_id: int,
+        gates: List[RdProjectGate],
+        created_by: int,
+        tasks_map: Optional[Dict[str, List[Dict]]] = None,
+        *,
+        owner_id: Optional[int] = None,
+    ) -> None:
+        if not tasks_map:
+            return
+        gate_by_key = {g.gate_key: g for g in gates}
+        for gate_key, templates in tasks_map.items():
+            gate = gate_by_key.get(gate_key)
+            if not gate:
+                continue
+            id_map: Dict[int, int] = {}
+            roots = [t for t in templates if not t.get("parent_template_task_id")]
+            children = [t for t in templates if t.get("parent_template_task_id")]
+            for tpl in roots:
+                task = await RdProjectTask.create(
+                    tenant_id=tenant_id,
+                    project_id=project_id,
+                    gate_id=gate.id,
+                    task_name=tpl["task_name"],
+                    status=RdTaskStatus.TODO.value,
+                    assignee_id=owner_id,
+                    assignee_name=None,
+                    members_json=[],
+                    template_task_id=tpl.get("id"),
+                    sort_order=tpl.get("sort_order") or 0,
+                    created_by=created_by,
+                    updated_by=created_by,
+                )
+                if tpl.get("id"):
+                    id_map[int(tpl["id"])] = task.id
+            for tpl in children:
+                parent_id = id_map.get(int(tpl["parent_template_task_id"]))
+                await RdProjectTask.create(
+                    tenant_id=tenant_id,
+                    project_id=project_id,
+                    gate_id=gate.id,
+                    parent_task_id=parent_id,
+                    task_name=tpl["task_name"],
+                    status=RdTaskStatus.TODO.value,
+                    assignee_id=owner_id,
+                    members_json=[],
+                    template_task_id=tpl.get("id"),
+                    sort_order=tpl.get("sort_order") or 0,
+                    created_by=created_by,
+                    updated_by=created_by,
+                )
 
     async def _seed_gate_deliverables(
         self,
@@ -387,15 +660,32 @@ class RdProjectService(AppBaseService[RdProject]):
         gates_by_project = await self._load_gates_by_project(
             tenant_id, [int(r.id) for r in rows]
         )
+        not_executed_flags = await self._load_not_executed_flags(
+            tenant_id, [int(r.id) for r in rows]
+        )
         return [
-            self._to_project_response(r, source_codes, gates_by_project) for r in rows
+            self._to_project_response(
+                r,
+                source_codes,
+                gates_by_project,
+                not_executed=not_executed_flags.get(int(r.id), True),
+            )
+            for r in rows
         ], total
 
     async def get_project(self, tenant_id: int, project_id: int) -> RdProjectResponse:
         project = await self._get_project_or_404(tenant_id, project_id)
         source_codes = await self._load_source_project_codes(tenant_id, [project])
         gates_by_project = await self._load_gates_by_project(tenant_id, [int(project.id)])
-        return self._to_project_response(project, source_codes, gates_by_project)
+        members = await self._load_project_members(tenant_id, int(project.id))
+        not_executed_flags = await self._load_not_executed_flags(tenant_id, [project_id])
+        return self._to_project_response(
+            project,
+            source_codes,
+            gates_by_project,
+            members,
+            not_executed=not_executed_flags.get(project_id, True),
+        )
 
     async def get_workbench(self, tenant_id: int, project_id: int) -> RdProjectWorkbenchResponse:
         project = await self._get_project_or_404(tenant_id, project_id)
@@ -439,13 +729,19 @@ class RdProjectService(AppBaseService[RdProject]):
         ).count()
         progress = compute_project_progress(gates, tasks, deliverables)
         source_codes = await self._load_source_project_codes(tenant_id, [project])
+        members = await self._load_project_members(tenant_id, int(project.id))
+        not_executed_flags = await self._load_not_executed_flags(tenant_id, [project_id])
         base = self._to_project_response(
-            project, source_codes, {int(project.id): gates}
+            project,
+            source_codes,
+            {int(project.id): gates},
+            members,
+            not_executed=not_executed_flags.get(project_id, True),
         )
         return RdProjectWorkbenchResponse.model_validate({
             **base.model_dump(),
             "gates": [RdProjectGateResponse.model_validate(g) for g in gates],
-            "tasks": [RdProjectTaskResponse.model_validate(t) for t in tasks],
+            "tasks": [self._to_task_response(t) for t in tasks],
             "deliverables": [RdProjectDeliverableResponse.model_validate(d) for d in deliverables],
             "links": [RdProjectLinkResponse.model_validate(l) for l in links],
             "related_articles": related_articles,
@@ -503,11 +799,19 @@ class RdProjectService(AppBaseService[RdProject]):
                 inherit_links_from=None,
                 gate_template_id=data.gate_template_id,
             )
+            await self._replace_project_members(
+                tenant_id,
+                project.id,
+                data.members or [],
+                owner_id=owner_id,
+                updated_by=created_by,
+            )
             source_codes = await self._load_source_project_codes(tenant_id, [project])
             gates_by_project = await self._load_gates_by_project(
                 tenant_id, [int(project.id)]
             )
-            return self._to_project_response(project, source_codes, gates_by_project)
+            members = await self._load_project_members(tenant_id, int(project.id))
+            return self._to_project_response(project, source_codes, gates_by_project, members)
 
     async def update_project(
         self, tenant_id: int, project_id: int, data: RdProjectUpdate, updated_by: int
@@ -527,14 +831,25 @@ class RdProjectService(AppBaseService[RdProject]):
             if val is not None:
                 update_fields[field] = val
         await project.update_from_dict(update_fields).save()
+        if data.members is not None:
+            await self._replace_project_members(
+                tenant_id,
+                project.id,
+                data.members,
+                owner_id=project.owner_id,
+                updated_by=updated_by,
+            )
         source_codes = await self._load_source_project_codes(tenant_id, [project])
         gates_by_project = await self._load_gates_by_project(tenant_id, [int(project.id)])
-        return self._to_project_response(project, source_codes, gates_by_project)
+        members = await self._load_project_members(tenant_id, int(project.id))
+        return self._to_project_response(project, source_codes, gates_by_project, members)
 
     async def delete_project(self, tenant_id: int, project_id: int, deleted_by: int) -> None:
         project = await self._get_project_or_404(tenant_id, project_id)
-        if project.status not in (RdProjectStatus.DRAFT.value, RdProjectStatus.CANCELLED.value):
-            raise BusinessLogicError("仅草稿或已取消项目可删除")
+        if project.status == RdProjectStatus.IN_PROGRESS.value:
+            await self._assert_project_not_executed(tenant_id, project_id)
+        elif project.status not in (RdProjectStatus.DRAFT.value, RdProjectStatus.CANCELLED.value):
+            raise BusinessLogicError("仅草稿、未实际执行的进行中或已取消项目可删除")
         user_info = await self.get_user_info(deleted_by)
         await project.update_from_dict({
             "deleted_at": resolve_business_datetime(),
@@ -622,6 +937,9 @@ class RdProjectService(AppBaseService[RdProject]):
         if not gate:
             raise BusinessLogicError(f"阶段门不存在: {data.gate_id}")
         await self._validate_parent_task(tenant_id, project_id, data.parent_task_id)
+        members_json = await self._serialize_task_members(
+            data.members or [], owner_id=data.assignee_id
+        )
         task = await RdProjectTask.create(
             tenant_id=tenant_id,
             project_id=project_id,
@@ -632,13 +950,14 @@ class RdProjectService(AppBaseService[RdProject]):
             status=data.status,
             assignee_id=data.assignee_id,
             assignee_name=data.assignee_name,
+            members_json=members_json,
             due_date=data.due_date,
             sort_order=data.sort_order,
             priority=data.priority,
             created_by=created_by,
             updated_by=created_by,
         )
-        return RdProjectTaskResponse.model_validate(task)
+        return self._to_task_response(task)
 
     async def update_task(
         self, tenant_id: int, project_id: int, task_id: int, data: RdProjectTaskUpdate, updated_by: int
@@ -666,10 +985,15 @@ class RdProjectService(AppBaseService[RdProject]):
             val = getattr(data, field, None)
             if val is not None:
                 update_fields[field] = val
+        if data.members is not None:
+            owner_id = update_fields.get("assignee_id", task.assignee_id)
+            update_fields["members_json"] = await self._serialize_task_members(
+                data.members, owner_id=owner_id
+            )
         if data.status == RdTaskStatus.DONE.value:
             update_fields["completed_at"] = resolve_business_datetime()
         await task.update_from_dict(update_fields).save()
-        return RdProjectTaskResponse.model_validate(task)
+        return self._to_task_response(task)
 
     async def delete_task(self, tenant_id: int, project_id: int, task_id: int, deleted_by: int) -> None:
         task = await RdProjectTask.get_or_none(
@@ -838,5 +1162,64 @@ class RdProjectService(AppBaseService[RdProject]):
         return PushTrialWorkOrderResponse(
             work_order_id=wo.id,
             work_order_code=wo.code,
+            project_link_id=link.id,
+        )
+
+    async def spawn_delivery_project(
+        self,
+        tenant_id: int,
+        rd_project_id: int,
+        current_user: User,
+    ) -> SpawnDeliveryProjectResponse:
+        from apps.kuaizhizao.constants.delivery_project import DeliveryProjectStatus
+        from apps.kuaizhizao.models.delivery_project import DeliveryProject
+        from apps.kuaizhizao.schemas.delivery_project import DeliveryProjectCreate
+        from apps.kuaizhizao.services.delivery_project_service import DeliveryProjectService
+
+        project = await self._get_project_or_404(tenant_id, rd_project_id)
+        if project.project_type != RdProjectType.RD.value:
+            raise BusinessLogicError("仅研发项目可生成交付项目")
+
+        existing = await DeliveryProject.filter(
+            tenant_id=tenant_id,
+            rd_project_id=rd_project_id,
+            deleted_at__isnull=True,
+        ).exclude(status=DeliveryProjectStatus.CANCELLED.value).first()
+        if existing:
+            raise BusinessLogicError(f"已存在关联交付项目: {existing.project_code}")
+
+        delivery_svc = DeliveryProjectService()
+        default_template = await delivery_svc._template_service.ensure_default_template(
+            tenant_id, current_user
+        )
+        create_body = DeliveryProjectCreate(
+            project_name=f"{project.project_name} 交机项目",
+            process_template_id=default_template.id,
+            owner_id=project.owner_id,
+            material_id=project.material_id,
+            material_code=project.material_code,
+            material_name=project.material_name,
+            planned_start_date=project.planned_start_date,
+            planned_end_date=project.planned_end_date,
+        )
+        created = await delivery_svc.create_project(tenant_id, create_body, current_user)
+        row = await DeliveryProject.get(id=created.id)
+        row.rd_project_id = rd_project_id
+        await row.save(update_fields=["rd_project_id", "updated_at"])
+        started = await delivery_svc.start_project(tenant_id, created.id, current_user)
+        link = await RdProjectLink.create(
+            tenant_id=tenant_id,
+            project_id=rd_project_id,
+            link_type=RdProjectLinkType.OTHER.value,
+            target_type="delivery_project",
+            target_id=started.id,
+            target_code=started.project_code,
+            target_name=started.project_name,
+            notes="交付项目",
+            created_by=current_user.id,
+        )
+        return SpawnDeliveryProjectResponse(
+            delivery_project_id=started.id,
+            delivery_project_code=started.project_code,
             project_link_id=link.id,
         )

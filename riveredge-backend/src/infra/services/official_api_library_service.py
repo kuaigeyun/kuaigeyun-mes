@@ -16,8 +16,8 @@ from loguru import logger
 
 from infra.constants.official_registry import (
     OFFICIAL_API_LIBRARY_API_PREFIX,
-    OFFICIAL_API_LIBRARY_BASE_URL,
     is_local_official_api_library_host,
+    resolve_official_api_library_base_url,
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.infrastructure.http import get_http_client
@@ -114,9 +114,14 @@ def pack_to_preview(pack: OfficialApiLibraryPack, *, include_full_items: bool = 
         "category_name": pack.category_name,
         "category_code": pack.category_code,
         "category_description": pack.category_description or "",
+        "status": pack.status,
         "api_count": len(items),
         "items": items,
         "source": "official",
+        "submitter_hint": pack.submitter_hint or "",
+        "source_host_hint": pack.source_host_hint or "",
+        "created_at": pack.created_at.isoformat() if getattr(pack, "created_at", None) else None,
+        "updated_at": pack.updated_at.isoformat() if getattr(pack, "updated_at", None) else None,
     }
 
 
@@ -131,6 +136,21 @@ class OfficialApiLibraryService:
         )
         return {"items": [pack_to_preview(row) for row in rows]}
 
+    async def list_all_for_admin(self, *, status: Optional[str] = None) -> Dict[str, Any]:
+        """平台超管：列出全部接口包（可含未发布）。"""
+        query = OfficialApiLibraryPack.filter(tenant_id__isnull=True)
+        status_filter = str(status or "").strip().lower()
+        if status_filter:
+            if status_filter not in {"published", "rejected"}:
+                raise ValidationError("状态须为 published 或 rejected")
+            query = query.filter(status=status_filter)
+        rows = await query.order_by("-created_at").all()
+        return {
+            "base_url": await resolve_official_api_library_base_url(),
+            "local_writable": True,
+            "items": [pack_to_preview(row, include_full_items=False) for row in rows],
+        }
+
     async def get_published_pack(self, pack_id: str, *, full: bool = True) -> Dict[str, Any]:
         normalized = str(pack_id or "").strip()
         if not normalized:
@@ -143,6 +163,93 @@ class OfficialApiLibraryService:
         if not pack:
             raise NotFoundError(f"官方接口包不存在: {normalized}")
         return pack_to_preview(pack, include_full_items=full)
+
+    async def get_pack_for_admin(self, pack_id: str) -> Dict[str, Any]:
+        normalized = str(pack_id or "").strip()
+        if not normalized:
+            raise ValidationError("接口包 ID 无效")
+        pack = await OfficialApiLibraryPack.filter(
+            pack_id=normalized,
+            tenant_id__isnull=True,
+        ).first()
+        if not pack:
+            raise NotFoundError(f"官方接口包不存在: {normalized}")
+        return pack_to_preview(pack, include_full_items=True)
+
+    async def update_pack(
+        self,
+        pack_id: str,
+        *,
+        name: Optional[str] = None,
+        description: Optional[str] = None,
+        connector_type: Optional[str] = None,
+        category_name: Optional[str] = None,
+        category_code: Optional[str] = None,
+        category_description: Optional[str] = None,
+        status: Optional[str] = None,
+        items: Optional[List[Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
+        normalized = str(pack_id or "").strip()
+        if not normalized:
+            raise ValidationError("接口包 ID 无效")
+        pack = await OfficialApiLibraryPack.filter(
+            pack_id=normalized,
+            tenant_id__isnull=True,
+        ).first()
+        if not pack:
+            raise NotFoundError(f"官方接口包不存在: {normalized}")
+
+        if name is not None:
+            pack_name = str(name).strip()
+            if not pack_name:
+                raise ValidationError("请填写接口包名称")
+            pack.name = pack_name
+        if description is not None:
+            pack.description = str(description).strip() or None
+        if connector_type is not None:
+            conn_type = str(connector_type).strip()
+            if not conn_type:
+                raise ValidationError("请填写连接器类型")
+            pack.connector_type = conn_type
+        if category_name is not None:
+            cat_name = str(category_name).strip()
+            if not cat_name:
+                raise ValidationError("请填写分类名称")
+            pack.category_name = cat_name
+        if category_code is not None:
+            code = str(category_code).strip()
+            if code:
+                pack.category_code = code[:50]
+        if category_description is not None:
+            pack.category_description = str(category_description).strip() or None
+        if status is not None:
+            next_status = str(status).strip().lower()
+            if next_status not in {"published", "rejected"}:
+                raise ValidationError("状态须为 published 或 rejected")
+            pack.status = next_status
+        if items is not None:
+            if not items:
+                raise ValidationError("请至少保留一个接口")
+            normalized_items = [normalize_official_api_item(item) for item in items]
+            keys = [item["item_key"] for item in normalized_items]
+            if len(keys) != len(set(keys)):
+                raise ValidationError("接口条目 item_key 不可重复")
+            pack.items = normalized_items
+
+        await pack.save()
+        return pack_to_preview(pack, include_full_items=True)
+
+    async def delete_pack(self, pack_id: str) -> None:
+        normalized = str(pack_id or "").strip()
+        if not normalized:
+            raise ValidationError("接口包 ID 无效")
+        pack = await OfficialApiLibraryPack.filter(
+            pack_id=normalized,
+            tenant_id__isnull=True,
+        ).first()
+        if not pack:
+            raise NotFoundError(f"官方接口包不存在: {normalized}")
+        await pack.delete()
 
     async def submit_pack(
         self,
@@ -204,46 +311,54 @@ class OfficialApiLibraryService:
 
 
 class OfficialApiLibraryClient:
-    """私有部署 → 固定官方站点 HTTP 客户端。"""
+    """私有部署 → 官方站点 HTTP 客户端（域名可配置，默认 kuaigeyun.com）。"""
 
-    def __init__(self, base_url: str = OFFICIAL_API_LIBRARY_BASE_URL) -> None:
-        self.base_url = base_url.rstrip("/")
+    def __init__(self, base_url: Optional[str] = None) -> None:
+        self._base_url_override = (base_url or "").rstrip("/") or None
         self.api_prefix = OFFICIAL_API_LIBRARY_API_PREFIX
 
-    def _url(self, path: str) -> str:
-        return f"{self.base_url}{self.api_prefix}{path}"
+    async def _base_url(self) -> str:
+        if self._base_url_override:
+            return self._base_url_override
+        return (await resolve_official_api_library_base_url()).rstrip("/")
+
+    async def _url(self, path: str) -> str:
+        return f"{await self._base_url()}{self.api_prefix}{path}"
 
     async def list_catalog(self) -> Dict[str, Any]:
         client = get_http_client()
+        base = await self._base_url()
         try:
-            resp = await client.get(self._url("/packs"), timeout=15.0)
+            resp = await client.get(await self._url("/packs"), timeout=15.0)
         except httpx.HTTPError as exc:
             logger.warning("官方接口库目录请求失败 err={}", exc)
-            raise ValidationError("无法连接官方接口库（kuaigeyun.com），请检查网络后重试") from exc
+            raise ValidationError(f"无法连接官方接口库（{base}），请检查网络后重试") from exc
         if resp.status_code == 404:
-            raise ValidationError("官方接口库服务尚未在 kuaigeyun.com 开通，请稍后再试")
+            raise ValidationError(f"官方接口库服务尚未在 {base} 开通，请稍后再试")
         return self._parse_json(resp, "获取官方接口库失败")
 
     async def get_pack(self, pack_id: str) -> Dict[str, Any]:
         client = get_http_client()
+        base = await self._base_url()
         try:
-            resp = await client.get(self._url(f"/packs/{pack_id}"), timeout=15.0)
+            resp = await client.get(await self._url(f"/packs/{pack_id}"), timeout=15.0)
         except httpx.HTTPError as exc:
             logger.warning("官方接口包详情请求失败 pack_id={} err={}", pack_id, exc)
-            raise ValidationError("无法连接官方接口库（kuaigeyun.com），请检查网络后重试") from exc
+            raise ValidationError(f"无法连接官方接口库（{base}），请检查网络后重试") from exc
         if resp.status_code == 404:
             raise NotFoundError(f"官方接口包不存在: {pack_id}")
         return self._parse_json(resp, "获取官方接口包失败")
 
     async def submit_pack(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         client = get_http_client()
+        base = await self._base_url()
         try:
-            resp = await client.post(self._url("/submit"), json=payload, timeout=30.0)
+            resp = await client.post(await self._url("/submit"), json=payload, timeout=30.0)
         except httpx.HTTPError as exc:
             logger.warning("提交官方接口库失败 err={}", exc)
-            raise ValidationError("无法连接官方接口库（kuaigeyun.com），请检查网络后重试") from exc
+            raise ValidationError(f"无法连接官方接口库（{base}），请检查网络后重试") from exc
         if resp.status_code == 404:
-            raise ValidationError("官方接口库服务尚未在 kuaigeyun.com 开通，请稍后再试")
+            raise ValidationError(f"官方接口库服务尚未在 {base} 开通，请稍后再试")
         return self._parse_json(resp, "提交到官方接口库失败")
 
     @staticmethod

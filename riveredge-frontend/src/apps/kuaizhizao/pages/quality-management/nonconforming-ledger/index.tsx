@@ -115,7 +115,7 @@ const NonconformingLedgerPage: React.FC = () => {
         messageApi.success(t('app.kuaizhizao.quality.nc.messages.start8dSuccess', { code: report.report_code }));
         actionRef.current?.reload();
         setDetailRefreshNonce((n) => n + 1);
-        navigate(`/apps/kuaizhizao/quality-management/eight-d-reports?report_id=${report.id}`);
+        navigate(`/apps/kuaizhizao/quality-management/eight-d-reports/${report.id}`);
       },
     });
   }, [messageApi, navigate, t]);

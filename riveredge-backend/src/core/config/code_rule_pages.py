@@ -121,7 +121,10 @@ PAGE_CODE_TO_FIXED_TEXT_PRESET: Dict[str, str] = {
     "kuaicaiwu-cost-calculations": "CC",            # 成本核算
     "kuaicaiwu-cost-rules": "CR",                   # 成本核算规则
     "kuaiplm-rd-project": "YFXM",                   # 研发项目
-    "kuaiplm-delivery-project": "JFXM",             # 交付项目
+    "kuaizhizao-delivery-project": "JFXM",             # 交付项目
+    "kuaizhizao-delivery-process-template": "DPT",    # 交付流程模板
+    "kuaizhizao-delivery-node-report": "DNR",       # 交付节点汇报
+    "kuaizhizao-delivery-issue": "DPI",             # 交付问题
     "kuaiplm-rd-requirement": "YFXQ",               # 研发需求
     "kuaiplm-design-review": "SJPJ",                # 设计评审
     "kuaiplm-fmea": "FMEA",                         # 失效分析 FMEA
@@ -1676,15 +1679,51 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "allow_manual_edit": True,
     },
     {
-        "page_code": "kuaiplm-delivery-project",
+        "page_code": "kuaizhizao-delivery-project",
         "page_name": "交付项目",
-        "page_path": "/apps/kuaiplm/rd-projects",
+        "page_path": "/apps/kuaizhizao/delivery-project/projects",
         "code_field": "project_code",
         "code_field_label": "项目编码",
-        "module": "快研发",
-        "module_icon": "layers",
+        "module": "快制造",
+        "module_icon": "production",
         "auto_generate": True,
         "rule_code": "DELIVERY_PROJECT_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaizhizao-delivery-process-template",
+        "page_name": "交付流程模板",
+        "page_path": "/apps/kuaizhizao/delivery-project/process-templates",
+        "code_field": "template_code",
+        "code_field_label": "模板编码",
+        "module": "快制造",
+        "module_icon": "production",
+        "auto_generate": True,
+        "rule_code": "DELIVERY_PROCESS_TEMPLATE_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaizhizao-delivery-node-report",
+        "page_name": "节点汇报",
+        "page_path": "/apps/kuaizhizao/delivery-project/node-reports",
+        "code_field": "report_code",
+        "code_field_label": "汇报单号",
+        "module": "快制造",
+        "module_icon": "production",
+        "auto_generate": True,
+        "rule_code": "DELIVERY_NODE_REPORT_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaizhizao-delivery-issue",
+        "page_name": "交付问题",
+        "page_path": "/apps/kuaizhizao/delivery-project/issues",
+        "code_field": "issue_code",
+        "code_field_label": "问题单号",
+        "module": "快制造",
+        "module_icon": "production",
+        "auto_generate": True,
+        "rule_code": "DELIVERY_ISSUE_CODE",
         "allow_manual_edit": True,
     },
     {

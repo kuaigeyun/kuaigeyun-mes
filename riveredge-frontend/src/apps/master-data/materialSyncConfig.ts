@@ -1,4 +1,5 @@
-import type { SyncFromSourceConfig } from '../../../components/sync-from-source-modal/types';
+import type { SyncFromSourceConfig } from '../../components/sync-from-source-modal/types';
+import { loadSyncCustomTargetFields } from '../../components/sync-from-source-modal/loadSyncCustomTargetFields';
 import {
   getMaterialGroupSyncBinding,
   getMaterialSyncBinding,
@@ -10,6 +11,8 @@ import {
   syncMaterialUnitsFromSource,
 } from './services/material-unit';
 import {
+  MATERIAL_SYNC_AVAILABLE_TARGET_FIELDS,
+  MATERIAL_SYNC_CUSTOM_FIELD_TABLE,
   MATERIAL_SYNC_REQUIRED_TARGETS,
   MATERIAL_SYNC_TARGET_FIELDS,
 } from './pages/materials/materialSyncFields';
@@ -37,6 +40,9 @@ export function createMaterialSyncConfig(): SyncFromSourceConfig {
     ],
     skipBackendPrerequisites: true,
     targetFields: MATERIAL_SYNC_TARGET_FIELDS,
+    availableTargetFields: MATERIAL_SYNC_AVAILABLE_TARGET_FIELDS,
+    loadAvailableTargetFields: () => loadSyncCustomTargetFields(MATERIAL_SYNC_CUSTOM_FIELD_TABLE),
+    customFieldTableName: MATERIAL_SYNC_CUSTOM_FIELD_TABLE,
     requiredTargets: MATERIAL_SYNC_REQUIRED_TARGETS,
     getBinding: getMaterialSyncBinding,
     syncFromSource: syncMaterialsFromSource,

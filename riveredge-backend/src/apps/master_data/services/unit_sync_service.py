@@ -19,6 +19,7 @@ from apps.master_data.schemas.master_data_sync import (
     MasterDataSyncFromSourceRequest,
 )
 from apps.master_data.services.master_data_sync_common import (
+    apply_sync_extras_after_write,
     cell_str,
     fetch_sync_rows,
     map_sync_rows,
@@ -33,6 +34,10 @@ from apps.master_data.services.master_data_sync_common import (
     upsert_sync_binding,
 )
 from core.utils.timezone_utils import resolve_business_datetime
+
+UNIT_SYNC_STRING_FIELDS = frozenset({"description"})
+UNIT_SYNC_BOOL_FIELDS = frozenset({"is_active"})
+UNIT_SYNC_INT_FIELDS = frozenset({"sort_order"})
 
 
 class MaterialUnitSyncService:
@@ -165,7 +170,7 @@ class MaterialUnitSyncService:
         errors: List[str] = []
         sync_at = resolve_business_datetime()
 
-        pending: List[tuple[str, str, bool]] = []
+        pending: List[tuple[str, str, bool, Dict[str, Any]]] = []
         for row in rows:
             code = cell_str(row.get(match_key) or row.get("code"))
             name = cell_str(row.get("name"))
@@ -190,7 +195,7 @@ class MaterialUnitSyncService:
                     "inactive",
                     "disabled",
                 )
-            pending.append((code, name, is_active))
+            pending.append((code, name, is_active, row))
 
         if not pending:
             return MasterDataSyncFromSourceOut(
@@ -210,7 +215,7 @@ class MaterialUnitSyncService:
         existing_by_code = {item.code: item for item in existing_rows}
         existing_by_name = {item.name: item for item in existing_rows}
 
-        for code, name, is_active in pending:
+        for code, name, is_active, mapped_row in pending:
             try:
                 # 同名优先复用本地单位（如预设「吨」），避免金蝶 FNumber=001 另插一条
                 existing = existing_by_code.get(code) or existing_by_name.get(name)
@@ -227,6 +232,16 @@ class MaterialUnitSyncService:
                             "updated_by_name",
                         ],
                     )
+                    await apply_sync_extras_after_write(
+                        tenant_id=tenant_id,
+                        record=existing,
+                        mapped_row=mapped_row,
+                        record_table="",
+                        fields_by_code={},
+                        string_fields=UNIT_SYNC_STRING_FIELDS,
+                        bool_fields=UNIT_SYNC_BOOL_FIELDS,
+                        int_fields=UNIT_SYNC_INT_FIELDS,
+                    )
                     await mark_external_sync_record(existing)
                     existing_by_code[existing.code] = existing
                     existing_by_name[existing.name] = existing
@@ -242,6 +257,16 @@ class MaterialUnitSyncService:
                     }
                     apply_create_audit(payload, current_user)
                     unit = await MaterialUnit.create(tenant_id=tenant_id, **payload)
+                    await apply_sync_extras_after_write(
+                        tenant_id=tenant_id,
+                        record=unit,
+                        mapped_row=mapped_row,
+                        record_table="",
+                        fields_by_code={},
+                        string_fields=UNIT_SYNC_STRING_FIELDS,
+                        bool_fields=UNIT_SYNC_BOOL_FIELDS,
+                        int_fields=UNIT_SYNC_INT_FIELDS,
+                    )
                     existing_by_code[unit.code] = unit
                     existing_by_name[unit.name] = unit
                     created += 1

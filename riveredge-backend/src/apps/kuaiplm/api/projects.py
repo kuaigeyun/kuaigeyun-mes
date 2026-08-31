@@ -14,6 +14,7 @@ from loguru import logger
 from apps.kuaiplm.schemas.rd_project import (
     PushTrialWorkOrderRequest,
     PushTrialWorkOrderResponse,
+    SpawnDeliveryProjectResponse,
     RdProjectCreate,
     RdProjectDeliverableCreate,
     RdProjectDeliverableResponse,
@@ -132,6 +133,21 @@ async def update_project(
         return await service.update_project(tenant_id, project_id, data, current_user.id)
     except NotFoundError as e:
         raise _err(404, str(e), f"/rd-projects/{project_id}", tenant_id)
+
+
+@router.post("/{project_id}/withdraw", response_model=RdProjectResponse, summary="Withdraw RD project to draft")
+async def withdraw_project(
+    project_id: int = Path(...),
+    current_user: User = Depends(get_current_user),
+    _auth=Depends(require_access("kuaiplm.project", "update", required_permissions=["kuaiplm:project:update"])),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await service.withdraw_project(tenant_id, project_id, current_user.id)
+    except NotFoundError as e:
+        raise _err(404, str(e), f"/rd-projects/{project_id}/withdraw", tenant_id)
+    except BusinessLogicError as e:
+        raise _err(400, str(e), f"/rd-projects/{project_id}/withdraw", tenant_id)
 
 
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete RD project")
@@ -305,3 +321,20 @@ async def push_trial_work_order(
         return await service.push_trial_work_order(tenant_id, project_id, data, current_user.id)
     except (NotFoundError, BusinessLogicError) as e:
         raise _err(400, str(e), f"/rd-projects/{project_id}/push-trial-work-order", tenant_id)
+
+
+@router.post(
+    "/{project_id}/spawn-delivery-project",
+    response_model=SpawnDeliveryProjectResponse,
+    summary="Spawn delivery project in kuaizhizao",
+)
+async def spawn_delivery_project(
+    project_id: int = Path(...),
+    current_user: User = Depends(get_current_user),
+    _auth=Depends(require_access("kuaiplm.project", "create", required_permissions=["kuaiplm:project:create"])),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await service.spawn_delivery_project(tenant_id, project_id, current_user)
+    except (NotFoundError, BusinessLogicError) as e:
+        raise _err(400, str(e), f"/rd-projects/{project_id}/spawn-delivery-project", tenant_id)

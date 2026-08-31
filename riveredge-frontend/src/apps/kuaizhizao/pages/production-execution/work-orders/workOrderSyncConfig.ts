@@ -1,4 +1,5 @@
 import type { SyncFromSourceConfig } from '../../../../../components/sync-from-source-modal/types';
+import { loadSyncCustomTargetFields } from '../../../../../components/sync-from-source-modal/loadSyncCustomTargetFields';
 import {
   getMaterialGroupSyncBinding,
   getMaterialSyncBinding,
@@ -18,6 +19,7 @@ import {
   syncWorkOrdersFromSource,
 } from '../../../services/work-order';
 import {
+  WORK_ORDER_SYNC_CUSTOM_FIELD_TABLE,
   WORK_ORDER_SYNC_REQUIRED_TARGETS,
   WORK_ORDER_SYNC_TARGET_FIELDS,
 } from './workOrderSyncFields';
@@ -59,6 +61,8 @@ export function createWorkOrderSyncConfig(): SyncFromSourceConfig {
     ],
     skipBackendPrerequisites: true,
     targetFields: WORK_ORDER_SYNC_TARGET_FIELDS,
+    loadAvailableTargetFields: () => loadSyncCustomTargetFields(WORK_ORDER_SYNC_CUSTOM_FIELD_TABLE),
+    customFieldTableName: WORK_ORDER_SYNC_CUSTOM_FIELD_TABLE,
     requiredTargets: WORK_ORDER_SYNC_REQUIRED_TARGETS,
     getBinding: getWorkOrderSyncBinding,
     syncFromSource: syncWorkOrdersFromSource,

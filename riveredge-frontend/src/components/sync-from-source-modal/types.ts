@@ -4,8 +4,27 @@ export type SyncSourceType = 'api' | 'dataset';
 
 export interface SyncTargetField {
   value: string;
-  labelKey: string;
+  /** i18n key；与 label 二选一，优先 label */
+  labelKey?: string;
+  /** 直接展示名（自定义字段等无 i18n 时） */
+  label?: string;
   required?: boolean;
+  kind?: 'system' | 'custom' | 'helper';
+}
+
+/** 自定义字段映射目标键前缀：custom:{field_code} */
+export const SYNC_CUSTOM_FIELD_TARGET_PREFIX = 'custom:';
+
+export function syncCustomFieldTargetKey(code: string): string {
+  return `${SYNC_CUSTOM_FIELD_TARGET_PREFIX}${code}`;
+}
+
+export function isSyncCustomFieldTarget(value: string): boolean {
+  return value.startsWith(SYNC_CUSTOM_FIELD_TARGET_PREFIX);
+}
+
+export function syncCustomFieldCodeFromTarget(value: string): string {
+  return value.slice(SYNC_CUSTOM_FIELD_TARGET_PREFIX.length);
 }
 
 export interface SyncBinding {
@@ -74,7 +93,17 @@ export interface SyncFromSourceConfig {
   apiRealtimeHintKey?: string;
   datasetBatchHintKey?: string;
   targetFieldLabelKey?: string;
+  /** 默认展示的常用目标字段 */
   targetFields: SyncTargetField[];
+  /**
+   * 可通过「添加更多字段」追加的系统/辅助字段（不含 targetFields）。
+   * 与 loadAvailableTargetFields / customFieldTableName 合并去重。
+   */
+  availableTargetFields?: SyncTargetField[];
+  /** 异步加载额外目标字段（如自定义字段）；打开弹窗时调用 */
+  loadAvailableTargetFields?: () => Promise<SyncTargetField[]>;
+  /** 便捷：按表名拉取启用中的自定义字段并转为 custom:{code} 目标 */
+  customFieldTableName?: string;
   requiredTargets: string[];
   validateMapping?: (targetToSource: Record<string, string>, t: TFunction) => string | null;
   getBinding: () => Promise<SyncBinding>;

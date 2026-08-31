@@ -20,11 +20,12 @@ class Quality8DBase(BaseSchema):
     quality_exception_id: Optional[int] = Field(None, description="关联质量异常ID")
     defect_record_id: Optional[int] = Field(None, description="关联不合格品台账ID")
     title: str = Field(..., description="8D 标题")
-    status: str = Field("d1_team", description="8D 当前阶段")
+    status: str = Field("d0_prepare", description="8D 当前阶段")
     severity: str = Field("major", description="严重级别")
     owner_id: Optional[int] = Field(None, description="负责人ID")
     owner_name: Optional[str] = Field(None, description="负责人姓名")
     due_date: Optional[datetime] = Field(None, description="计划完成日期")
+    d0_prepare: Optional[str] = Field(None, description="D0 准备与紧急响应")
     d1_team: Optional[str] = Field(None, description="D1 团队组建")
     d2_problem: Optional[str] = Field(None, description="D2 问题描述")
     d3_containment: Optional[str] = Field(None, description="D3 临时遏制措施")
@@ -36,6 +37,7 @@ class Quality8DBase(BaseSchema):
     verification_result: Optional[str] = Field(None, description="验证结果")
     remarks: Optional[str] = Field(None, description="备注")
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
+    stage_unlocks: Optional[dict] = Field(None, description="已解锁阶段")
 
 
 class Quality8DCreate(Quality8DBase):
@@ -43,10 +45,13 @@ class Quality8DCreate(Quality8DBase):
 
 
 class Quality8DUpdate(BaseSchema):
+    title: Optional[str] = Field(None, description="8D 标题")
     status: Optional[str] = Field(None, description="8D 当前阶段")
+    severity: Optional[str] = Field(None, description="严重级别")
     owner_id: Optional[int] = Field(None, description="负责人ID")
     owner_name: Optional[str] = Field(None, description="负责人姓名")
     due_date: Optional[datetime] = Field(None, description="计划完成日期")
+    d0_prepare: Optional[str] = None
     d1_team: Optional[str] = None
     d2_problem: Optional[str] = None
     d3_containment: Optional[str] = None
@@ -79,6 +84,31 @@ class Quality8DHistoryEntry(BaseSchema):
     to_status: Optional[str] = None
     remarks: Optional[str] = None
     verification_result: Optional[str] = None
+
+
+class Quality8DStageUnlockInfo(BaseSchema):
+    unlocked_at: datetime
+    unlocked_by: Optional[int] = None
+    unlocked_by_name: Optional[str] = None
+    reason: Optional[str] = None
+
+
+class Quality8DStageRevisionEntry(BaseSchema):
+    id: int
+    report_id: int
+    stage_key: str
+    revision_no: int
+    action: str
+    content: Optional[str] = None
+    change_reason: Optional[str] = None
+    changed_by: Optional[int] = None
+    changed_by_name: Optional[str] = None
+    changed_at: datetime
+
+
+class Quality8DStageUnlockRequest(BaseSchema):
+    stage_key: str = Field(..., description="申请修改的阶段")
+    reason: str = Field(..., min_length=1, description="修改原因")
 
 
 class Quality8DResponse(Quality8DBase):

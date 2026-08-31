@@ -386,6 +386,7 @@ TORTOISE_ORM = {
                 "apps.kuaizhizao.models.batching_order",  # 备料单模型
                 "apps.kuaizhizao.models.customer_material_registration",  # 客户来料登记模型
                 "apps.kuaizhizao.models.delivery_delay_exception",  # 延期异常模型
+                "apps.kuaizhizao.models.delivery_project",  # 交付项目（订单交机）
                 "apps.kuaizhizao.models.delivery_notice",  # 送货通知模型
                 "apps.kuaizhizao.models.disassembly_order",  # 拆解单模型
                 "apps.kuaizhizao.models.document_node_timing",  # 单据节点耗时模型

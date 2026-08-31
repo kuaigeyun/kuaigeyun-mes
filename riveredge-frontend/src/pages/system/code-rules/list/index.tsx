@@ -611,9 +611,8 @@ const CodeRuleListPage: React.FC = () => {
 
   return (
     <TwoColumnLayout
+      layoutPersistenceId="pages.system.code-rules.list"
       leftPanel={{
-        width: 300,
-        minWidth: 300,
         search: {
           placeholder: t('pages.system.codeRules.searchPagePlaceholder'),
           value: pageSearchValue,

@@ -44,6 +44,14 @@ from .delivery_notices.delivery_notices import router as delivery_notice_router
 from .shipment_notices.shipment_notices import router as shipment_notice_router
 from .receipt_notices.receipt_notices import router as receipt_notice_router
 from .customer_follow_ups.customer_follow_ups import router as customer_follow_up_router
+from .delivery_projects.delivery_projects import router as delivery_project_router
+from .delivery_process_templates.delivery_process_templates import router as delivery_process_template_router
+from .delivery_node_reports.delivery_node_reports import router as delivery_node_report_router
+from .delivery_issues.delivery_issues import router as delivery_issue_router
+from .delivery_dashboard.delivery_dashboard import router as delivery_dashboard_router
+from .delivery_follow_up.delivery_follow_up import router as delivery_follow_up_router
+from .delivery_schedules.delivery_schedules import router as delivery_schedules_router
+from .delivery_reports.delivery_reports import router as delivery_reports_router
 from .after_sales_tickets.after_sales_tickets import router as after_sales_ticket_router
 from .after_sales.service_assets import router as service_asset_router
 from .after_sales.repair_orders import router as repair_order_router
@@ -118,6 +126,14 @@ router.include_router(config_router)  # 消息提醒规则预设等
 router.include_router(shipment_notice_router)  # 发货通知单管理
 router.include_router(receipt_notice_router)  # 收货通知单管理
 router.include_router(customer_follow_up_router)  # 客户跟进（销售极简 CRM）
+router.include_router(delivery_dashboard_router)  # 交付中心
+router.include_router(delivery_project_router)  # 交付项目
+router.include_router(delivery_process_template_router)  # 交付流程模板
+router.include_router(delivery_node_report_router)  # 交付节点汇报
+router.include_router(delivery_issue_router)  # 交付问题跟踪
+router.include_router(delivery_follow_up_router)  # 项目跟进表
+router.include_router(delivery_schedules_router)  # 项目流程排单表
+router.include_router(delivery_reports_router)  # 交付报表
 router.include_router(after_sales_ticket_router)  # 售后服务工单
 router.include_router(service_asset_router)  # 装机档案
 router.include_router(repair_order_router)  # 维修单

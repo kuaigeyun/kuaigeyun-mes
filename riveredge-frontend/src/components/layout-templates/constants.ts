@@ -233,17 +233,30 @@ export const DOCUMENT_DETAIL_PAGE_TITLE_STYLE: CSSProperties = {
  * 两栏布局配置
  */
 export const TWO_COLUMN_LAYOUT = {
-  /** 左侧面板默认宽度 */
-  LEFT_PANEL_WIDTH: 300,
-  /** 左侧面板最小宽度 */
-  LEFT_PANEL_MIN_WIDTH: 200,
-  /** 左侧面板最大宽度（拖拽上限） */
+  /** 左侧面板默认宽度（与物料管理一致） */
+  LEFT_PANEL_WIDTH: 320,
+  /** 左侧面板最小宽度（与物料管理一致） */
+  LEFT_PANEL_MIN_WIDTH: 240,
+  /** 左侧面板最大宽度（拖拽上限，与物料管理一致） */
   LEFT_PANEL_MAX_WIDTH: 560,
   /** 左/中栏顶部搜索区统一高度 */
   PANEL_HEADER_HEIGHT: 48,
   /** 两栏布局最小高度（确保初次渲染时容器有固定高度，避免表格一行一行加载） */
   MIN_HEIGHT: 500,
 } as const;
+
+/** 两栏左栏拖拽加宽默认配置（与物料管理一致） */
+export const TWO_COLUMN_LEFT_PANEL_RESIZABLE_DEFAULTS = {
+  width: TWO_COLUMN_LAYOUT.LEFT_PANEL_WIDTH,
+  minWidth: TWO_COLUMN_LAYOUT.LEFT_PANEL_MIN_WIDTH,
+  maxWidth: TWO_COLUMN_LAYOUT.LEFT_PANEL_MAX_WIDTH,
+  resizable: true as const,
+} as const;
+
+/** 两栏左栏宽度 localStorage 键 */
+export function twoColumnLeftPanelWidthStorageKey(persistenceId: string): string {
+  return `two-column-layout.${persistenceId}.leftPanelWidth`;
+}
 
 /**
  * 两栏左栏背景：在 layout 底色上略加深，与标签栏/内容区（常同 colorBgLayout）拉开层次。

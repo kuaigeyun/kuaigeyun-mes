@@ -139,6 +139,7 @@ export interface SalesOrderCapabilities {
   push_sales_delivery?: ActionCapability;
   push_invoice?: ActionCapability;
   push_sales_return?: ActionCapability;
+  push_delivery_project?: ActionCapability;
   create_change_order?: ActionCapability;
   backfill_sales_contract?: ActionCapability;
 }

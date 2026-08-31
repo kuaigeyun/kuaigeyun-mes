@@ -50,6 +50,11 @@ class PlatformSettingsBase(BaseSchema):
     login_client_android_enabled: Optional[bool] = Field(True, description="登录页是否显示 Android PDA 安装包下载")
     login_quick_enabled: Optional[bool] = Field(True, description="登录页是否显示快捷登录（社交账号登录）")
     enable_register: Optional[bool] = Field(True, description="是否启用公开注册（登录页注册链接）")
+    official_api_library_host: Optional[str] = Field(
+        None,
+        max_length=200,
+        description="官方接口库域名，默认 kuaigeyun.com",
+    )
 
 
 class PlatformSettingsCreate(PlatformSettingsBase):
@@ -93,6 +98,11 @@ class PlatformSettingsUpdate(BaseSchema):
     login_client_android_enabled: Optional[bool] = Field(None, description="登录页是否显示 Android PDA 安装包下载")
     login_quick_enabled: Optional[bool] = Field(None, description="登录页是否显示快捷登录（社交账号登录）")
     enable_register: Optional[bool] = Field(None, description="是否启用公开注册（登录页注册链接）")
+    official_api_library_host: Optional[str] = Field(
+        None,
+        max_length=200,
+        description="官方接口库域名；空或省略表示使用默认 kuaigeyun.com",
+    )
 
 
 class PlatformSettingsResponse(PlatformSettingsBase):

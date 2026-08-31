@@ -207,6 +207,13 @@ class PlatformSettings(Model):
         description="是否启用公开注册（登录页注册链接）"
     )
 
+    # 官方接口库域名（私有部署拉取/提交指向；缺省 kuaigeyun.com）
+    official_api_library_host = fields.CharField(
+        max_length=200,
+        null=True,
+        description="官方接口库域名，默认 kuaigeyun.com",
+    )
+
     # 时间字段
     created_at = fields.DatetimeField(
         default=now_utc,

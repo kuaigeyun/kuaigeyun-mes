@@ -137,6 +137,8 @@ import {
   resolvePermissionLabel,
 } from '../../../utils/permissionContract';
 import { TWO_COLUMN_LEFT_PANEL_BACKGROUND } from '../../../components/layout-templates/constants';
+import { TwoColumnLayoutResizer } from '../../../components/layout-templates/TwoColumnLayoutResizer';
+import { useResizableLeftPanelWidth } from '../../../components/layout-templates/useResizableLeftPanelWidth';
 
 const ROLE_FUNCTIONAL_DOMAIN_I18N: Record<string, string> = {
   sales: 'field.role.functionalDomainSales',
@@ -506,6 +508,15 @@ const RolesPermissionsPage: React.FC = () => {
   const { t } = useTranslation();
   const trialRunMode = useTrialRunMode();
   const [searchParams, setSearchParams] = useSearchParams();
+
+  const {
+    minWidthPx,
+    maxWidthPx,
+    handleResizeStart,
+    resolvedWidth: roleListPanelWidth,
+  } = useResizableLeftPanelWidth({
+    layoutPersistenceId: 'pages.system.roles-permissions',
+  });
 
   // 角色列表相关状态
   const [roles, setRoles] = useState<Role[]>([]);
@@ -1571,10 +1582,11 @@ const RolesPermissionsPage: React.FC = () => {
         <div
           className="two-column-layout-left"
           style={{
-            width: '300px',
-            minWidth: '300px',
+            width: `${roleListPanelWidth}px`,
+            minWidth: `${minWidthPx}px`,
+            maxWidth: `${maxWidthPx}px`,
             flexShrink: 0,
-            borderRight: `1px solid ${token.colorBorder}`,
+            borderRight: 'none',
             backgroundColor: TWO_COLUMN_LEFT_PANEL_BACKGROUND,
             display: 'flex',
             flexDirection: 'column',
@@ -1677,6 +1689,8 @@ const RolesPermissionsPage: React.FC = () => {
             )}
           </div>
         </div>
+
+        <TwoColumnLayoutResizer onMouseDown={handleResizeStart} />
 
         {/* 右侧配置区域：占据剩余空间，不足时可收缩并滚动 */}
         <div

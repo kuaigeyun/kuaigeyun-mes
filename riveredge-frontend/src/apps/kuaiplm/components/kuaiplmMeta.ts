@@ -1,6 +1,7 @@
 import React from 'react';
 import type { TFunction } from 'i18next';
 import { MarkerTag } from '../../../constants/statusBadges';
+import { renderDocumentStatusTag } from '../../../utils/documentLifecycleStatusTag';
 
 export const KUAIPLM_PROJECT_STATUS_I18N: Record<string, string> = {
   DRAFT: 'app.kuaiplm.common.projectStatus.draft',
@@ -132,6 +133,15 @@ export function getKuaiplmProjectStatusText(t: TFunction, status?: string | null
   if (!status) return '-';
   const key = KUAIPLM_PROJECT_STATUS_I18N[String(status).toUpperCase()];
   return key ? t(key) : status;
+}
+
+/** 项目流程状态：StatusTag solid（与交付项目工作台一致） */
+export function renderKuaiplmProjectStatusTag(t: TFunction, status?: string | null): React.ReactNode {
+  const code = String(status ?? '').trim();
+  if (!code) return null;
+  const label = getKuaiplmProjectStatusText(t, code);
+  if (label === '-') return '-';
+  return renderDocumentStatusTag(label, code);
 }
 
 export function getKuaiplmProjectTypeText(t: TFunction, type?: string | null): string {

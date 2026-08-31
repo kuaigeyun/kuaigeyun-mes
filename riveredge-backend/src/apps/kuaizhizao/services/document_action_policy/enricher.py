@@ -320,6 +320,7 @@ def enrich_sales_order_capabilities_on_response(
     computation_pushed_blocks_withdraw: bool = False,
     has_returnable_qty: bool = False,
     has_pushable_qty: bool = False,
+    has_existing_delivery_project: bool = False,
 ) -> T:
     caps = derive_sales_order_capabilities(
         order_model,
@@ -329,6 +330,7 @@ def enrich_sales_order_capabilities_on_response(
         computation_pushed_blocks_withdraw=computation_pushed_blocks_withdraw,
         has_returnable_qty=has_returnable_qty,
         has_pushable_qty=has_pushable_qty,
+        has_existing_delivery_project=has_existing_delivery_project,
     )
     if hasattr(response, "model_copy"):
         return _attach_capabilities_to_response(response, caps)
@@ -345,6 +347,7 @@ def enrich_sales_order_list_capabilities(
     computation_blocks_withdraw_by_id: Optional[dict[int, bool]] = None,
     has_returnable_qty_by_id: Optional[dict[int, bool]] = None,
     has_pushable_qty_by_id: Optional[dict[int, bool]] = None,
+    has_existing_delivery_project_by_id: Optional[dict[int, bool]] = None,
 ) -> List[T]:
     pushed_map = pushed_to_computation_by_id or {}
     items_map = has_items_by_id or {}
@@ -352,6 +355,7 @@ def enrich_sales_order_list_capabilities(
     blocks_map = computation_blocks_withdraw_by_id or {}
     returnable_map = has_returnable_qty_by_id or {}
     pushable_map = has_pushable_qty_by_id or {}
+    delivery_project_map = has_existing_delivery_project_by_id or {}
     out: List[T] = []
     for order_model, resp in zip(orders, responses):
         oid = int(getattr(order_model, "id", 0) or 0)
@@ -363,6 +367,7 @@ def enrich_sales_order_list_capabilities(
             computation_pushed_blocks_withdraw=blocks_map.get(oid, False),
             has_returnable_qty=returnable_map.get(oid, False),
             has_pushable_qty=pushable_map.get(oid, False),
+            has_existing_delivery_project=delivery_project_map.get(oid, False),
         )
         if hasattr(resp, "model_copy"):
             out.append(_attach_capabilities_to_response(resp, caps))
@@ -380,6 +385,7 @@ def get_sales_order_capabilities_from_record(
     computation_pushed_blocks_withdraw: bool = False,
     has_returnable_qty: bool = False,
     has_pushable_qty: bool = False,
+    has_existing_delivery_project: bool = False,
 ) -> SalesOrderCapabilities:
     return derive_sales_order_capabilities(
         order,
@@ -389,6 +395,7 @@ def get_sales_order_capabilities_from_record(
         computation_pushed_blocks_withdraw=computation_pushed_blocks_withdraw,
         has_returnable_qty=has_returnable_qty,
         has_pushable_qty=has_pushable_qty,
+        has_existing_delivery_project=has_existing_delivery_project,
     )
 
 

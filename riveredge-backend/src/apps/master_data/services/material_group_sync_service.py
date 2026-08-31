@@ -17,9 +17,11 @@ from apps.master_data.schemas.master_data_sync import (
     MasterDataSyncFromSourceRequest,
 )
 from apps.master_data.services.master_data_sync_common import (
+    apply_sync_extras_after_write,
     attach_sync_fetch_meta,
     cell_str,
     fetch_sync_rows,
+    load_custom_fields_by_code,
     map_sync_rows,
     mark_binding_failure,
     mark_binding_success,
@@ -30,6 +32,10 @@ from apps.master_data.services.master_data_sync_common import (
     serialize_binding_row,
     upsert_sync_binding,
 )
+
+MATERIAL_GROUP_CUSTOM_FIELD_TABLE = "master_data_material_groups"
+MATERIAL_GROUP_SYNC_STRING_FIELDS = frozenset({"alias", "description"})
+MATERIAL_GROUP_SYNC_BOOL_FIELDS = frozenset({"is_active"})
 
 
 class MaterialGroupSyncService:
@@ -172,7 +178,7 @@ class MaterialGroupSyncService:
         failed = 0
         errors: List[str] = []
 
-        pending: List[tuple[str, str, Optional[str]]] = []
+        pending: List[tuple[str, str, Optional[str], Dict[str, Any]]] = []
         for row in rows:
             code = cell_str(row.get(match_key) or row.get("code"))
             name = cell_str(row.get("name"))
@@ -185,7 +191,7 @@ class MaterialGroupSyncService:
                 skipped += 1
                 errors.append(f"物料分组 {code} 缺少名称，已跳过")
                 continue
-            pending.append((code, name, parent_code))
+            pending.append((code, name, parent_code, row))
 
         if not pending:
             return MasterDataSyncFromSourceOut(
@@ -214,7 +220,11 @@ class MaterialGroupSyncService:
         for group in all_groups:
             parent_id_by_code[group.code] = group.id
 
-        for code, name, parent_code in pending:
+        custom_fields_by_code = await load_custom_fields_by_code(
+            tenant_id, MATERIAL_GROUP_CUSTOM_FIELD_TABLE
+        )
+
+        for code, name, parent_code, mapped_row in pending:
             try:
                 parent_id = parent_id_by_code.get(parent_code) if parent_code else None
                 if parent_code and parent_id is None:
@@ -235,6 +245,15 @@ class MaterialGroupSyncService:
                     if parent_code is not None:
                         update_fields.append("parent_id")
                     await existing.save(update_fields=update_fields)
+                    await apply_sync_extras_after_write(
+                        tenant_id=tenant_id,
+                        record=existing,
+                        mapped_row=mapped_row,
+                        record_table=MATERIAL_GROUP_CUSTOM_FIELD_TABLE,
+                        fields_by_code=custom_fields_by_code,
+                        string_fields=MATERIAL_GROUP_SYNC_STRING_FIELDS,
+                        bool_fields=MATERIAL_GROUP_SYNC_BOOL_FIELDS,
+                    )
                     updated += 1
                 else:
                     payload: Dict[str, Any] = {
@@ -246,6 +265,15 @@ class MaterialGroupSyncService:
                         payload["parent_id"] = parent_id
                     apply_create_audit(payload, current_user)
                     group = await MaterialGroup.create(tenant_id=tenant_id, **payload)
+                    await apply_sync_extras_after_write(
+                        tenant_id=tenant_id,
+                        record=group,
+                        mapped_row=mapped_row,
+                        record_table=MATERIAL_GROUP_CUSTOM_FIELD_TABLE,
+                        fields_by_code=custom_fields_by_code,
+                        string_fields=MATERIAL_GROUP_SYNC_STRING_FIELDS,
+                        bool_fields=MATERIAL_GROUP_SYNC_BOOL_FIELDS,
+                    )
                     existing_by_code[code] = group
                     parent_id_by_code[code] = group.id
                     created += 1

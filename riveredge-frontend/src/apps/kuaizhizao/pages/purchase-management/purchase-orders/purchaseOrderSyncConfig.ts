@@ -1,5 +1,6 @@
 import type { TFunction } from 'i18next';
 import type { SyncFromSourceConfig } from '../../../../../components/sync-from-source-modal/types';
+import { loadSyncCustomTargetFields } from '../../../../../components/sync-from-source-modal/loadSyncCustomTargetFields';
 import {
   getMaterialGroupSyncBinding,
   getMaterialSyncBinding,
@@ -19,6 +20,7 @@ import {
   syncPurchaseOrdersFromSource,
 } from '../../../services/purchase';
 import {
+  PURCHASE_ORDER_SYNC_CUSTOM_FIELD_TABLE,
   PURCHASE_ORDER_SYNC_REQUIRED_TARGETS,
   PURCHASE_ORDER_SYNC_TARGET_FIELDS,
 } from './purchaseOrderSyncFields';
@@ -35,7 +37,6 @@ export function createPurchaseOrderSyncConfig(): SyncFromSourceConfig {
         id: 'supplier',
         titleKey: 'app.kuaizhizao.purchaseOrder.syncStep.supplier',
         getBinding: getSupplierSyncBinding,
-        // 透传弹窗 incremental（默认 true）：有成功水位只拉变更，勿每次全量重写
         syncFromSource: syncSuppliersFromSource,
       },
       {
@@ -60,6 +61,8 @@ export function createPurchaseOrderSyncConfig(): SyncFromSourceConfig {
     ],
     skipBackendPrerequisites: true,
     targetFields: PURCHASE_ORDER_SYNC_TARGET_FIELDS,
+    loadAvailableTargetFields: () => loadSyncCustomTargetFields(PURCHASE_ORDER_SYNC_CUSTOM_FIELD_TABLE),
+    customFieldTableName: PURCHASE_ORDER_SYNC_CUSTOM_FIELD_TABLE,
     requiredTargets: PURCHASE_ORDER_SYNC_REQUIRED_TARGETS,
     validateMapping: (targetToSource, t: TFunction) => {
       for (const required of PURCHASE_ORDER_SYNC_REQUIRED_TARGETS) {

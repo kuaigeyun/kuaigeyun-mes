@@ -6,6 +6,7 @@
 
 import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import { theme } from 'antd';
+import { useNavigate } from 'react-router-dom';
 import {
   canOpenLinkedDocumentDetail,
   normalizeLinkedDocumentType,
@@ -23,6 +24,7 @@ import { WorkOrderLinkedDetailDrawer } from './drawers/WorkOrderLinkedDetailDraw
 import { FreightOrderLinkedDetailDrawer } from './drawers/FreightOrderLinkedDetailDrawer';
 import { ReportingRecordLinkedDetailDrawer } from './drawers/ReportingRecordLinkedDetailDrawer';
 import { PerformanceSummaryLinkedDetailDrawer } from './drawers/PerformanceSummaryLinkedDetailDrawer';
+import { AfterSalesLinkedDetailDrawer } from './drawers/AfterSalesLinkedDetailDrawer';
 
 /** 高于列表详情抽屉与报价单内嵌关联抽屉（常见 base+50） */
 const LINKED_DRAWER_Z_OFFSET = 60;
@@ -206,15 +208,23 @@ function LinkedDocumentDetailHost({
 }
 
 export function LinkedDocumentDetailProvider({ children }: { children: React.ReactNode }) {
+  const navigate = useNavigate();
   const [target, setTarget] = useState<Target | null>(null);
 
-  const openLinkedDocumentDetail = useCallback<OpenFn>((documentType, documentId) => {
-    const type = normalizeLinkedDocumentType(documentType);
-    const id = Number(documentId);
-    if (!canOpenLinkedDocumentDetail(type) || !Number.isFinite(id) || id <= 0) return false;
-    setTarget({ documentType: type, documentId: id });
-    return true;
-  }, []);
+  const openLinkedDocumentDetail = useCallback<OpenFn>(
+    (documentType, documentId) => {
+      const type = normalizeLinkedDocumentType(documentType);
+      const id = Number(documentId);
+      if (!canOpenLinkedDocumentDetail(type) || !Number.isFinite(id) || id <= 0) return false;
+      if (type === 'delivery_project') {
+        navigate(`/apps/kuaizhizao/delivery-project/projects/${id}`);
+        return true;
+      }
+      setTarget({ documentType: type, documentId: id });
+      return true;
+    },
+    [navigate],
+  );
 
   const onClose = useCallback(() => setTarget(null), []);
 

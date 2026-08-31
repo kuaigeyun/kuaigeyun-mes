@@ -73,6 +73,34 @@ export type RowActionVisualProfile =
   | 'tax-certify'
   | 'tax-transfer-out'
   | 'tax-red-flush'
+  | 'open-workbench'
+  | 'withdraw-project'
+
+/** 项目工作台：行内双字「工作台」；RBAC 默认 read */
+export function rowActionOpenWorkbench(
+  permission: 'skip' | 'read' = 'read',
+): {
+  [ROW_ACTION_KIND_ATTR]: RowActionPermissionKind
+  [ROW_ACTION_VISUAL_PROFILE_ATTR]: RowActionVisualProfile
+} {
+  return {
+    [ROW_ACTION_KIND_ATTR]: permission,
+    [ROW_ACTION_VISUAL_PROFILE_ATTR]: 'open-workbench',
+  }
+}
+
+/** 未实际执行的项目撤回草稿：行内「撤回」；RBAC 默认 update */
+export function rowActionWithdrawProject(
+  permission: 'skip' | 'update' = 'update',
+): {
+  [ROW_ACTION_KIND_ATTR]: RowActionPermissionKind
+  [ROW_ACTION_VISUAL_PROFILE_ATTR]: RowActionVisualProfile
+} {
+  return {
+    [ROW_ACTION_KIND_ATTR]: permission,
+    [ROW_ACTION_VISUAL_PROFILE_ATTR]: 'withdraw-project',
+  }
+}
 
 export function rowActionKind(
   kind: RowActionPermissionKind,
@@ -405,7 +433,9 @@ export function readActionVisualProfile(node: React.ReactNode): RowActionVisualP
     raw === 'note-honor' ||
     raw === 'tax-certify' ||
     raw === 'tax-transfer-out' ||
-    raw === 'tax-red-flush'
+    raw === 'tax-red-flush' ||
+    raw === 'open-workbench' ||
+    raw === 'withdraw-project'
   ) {
     return raw
   }

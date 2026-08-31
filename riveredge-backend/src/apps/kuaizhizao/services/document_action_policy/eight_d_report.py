@@ -13,6 +13,7 @@ from apps.kuaizhizao.services.document_action_policy.types import (
 )
 
 _VALID_8D_STATUS_FLOW = [
+    "d0_prepare",
     "d1_team",
     "d2_problem",
     "d3_containment",
@@ -24,6 +25,7 @@ _VALID_8D_STATUS_FLOW = [
     "closed",
 ]
 _STAGE_REQUIRED_FIELD = {
+    "d0_prepare": "d0_prepare",
     "d1_team": "d1_team",
     "d2_problem": "d2_problem",
     "d3_containment": "d3_containment",

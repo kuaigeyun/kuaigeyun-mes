@@ -4227,19 +4227,17 @@ const MaterialsManagementPage: React.FC = () => {
                 title={expandedKeys.length > 1 ? t('app.master-data.materials.collapseAll') : t('app.master-data.materials.expandAll')}
               />
               {canCreate ? (
-                <Space key="group-sync" size={4}>
-                  <SyncFreshnessBadge
-                    getBinding={loadMaterialGroupSyncBinding}
-                    refreshKey={groupSyncFreshnessKey}
-                    compact
+                <SyncFreshnessBadge
+                  key="group-sync"
+                  getBinding={loadMaterialGroupSyncBinding}
+                  refreshKey={groupSyncFreshnessKey}
+                  baseTip={t('app.master-data.materials.groupSyncFromSource')}
+                >
+                  <Button
+                    icon={<SyncOutlined />}
+                    onClick={() => setGroupSyncModalVisible(true)}
                   />
-                  <Tooltip title={t('app.master-data.materials.groupSyncFromSource')}>
-                    <Button
-                      icon={<SyncOutlined />}
-                      onClick={() => setGroupSyncModalVisible(true)}
-                    />
-                  </Tooltip>
-                </Space>
+                </SyncFreshnessBadge>
               ) : null}
             </div>,
           ],
@@ -4277,10 +4275,6 @@ const MaterialsManagementPage: React.FC = () => {
               }
             },
           },
-          width: 320,
-          minWidth: 240,
-          maxWidth: 560,
-          resizable: true,
           widthStorageKey: 'master-data.materials.leftPanelWidth',
         }}
         rightPanel={{

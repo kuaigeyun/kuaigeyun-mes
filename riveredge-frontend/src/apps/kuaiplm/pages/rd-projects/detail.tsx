@@ -24,12 +24,9 @@ import {
   theme,
 } from 'antd';
 import {
-  ArrowLeftOutlined,
   EditOutlined,
   LinkOutlined,
   PlusOutlined,
-  PlayCircleOutlined,
-  RocketOutlined,
   DeleteOutlined,
   AuditOutlined,
   FileSearchOutlined,
@@ -47,10 +44,14 @@ import { formatDateTime } from '../../../../utils/format';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useLeaveFormTab } from '../../../../components/uni-tabs/navigateClosingTab';
 import { useTranslation } from 'react-i18next';
-import { ListPageTemplate, FormModalTemplate } from '../../../../components/layout-templates';
+import { useResourcePermissions } from '../../../../hooks/useResourcePermissions';
+import { ListPageTemplate, FormModalTemplate, ProjectWorkbenchToolbar } from '../../../../components/layout-templates';
+import { UniUserSelect } from '../../../../components/uni-user-select';
+import { resolveUserDisplay, type User } from '../../../../services/user';
 import {
   getRdProjectWorkbench,
   pushTrialWorkOrder,
+  spawnDeliveryProject,
   updateRdProject,
   createRdProjectLink,
   deleteRdProjectLink,
@@ -61,29 +62,29 @@ import {
   updateRdProjectDeliverable,
   deleteRdProjectDeliverable,
   updateRdProjectGate,
+  withdrawRdProject,
+  deleteRdProject,
   type RdProjectWorkbench,
   type RdProjectGate,
   type RdProjectTask,
   type RdProjectLink,
   type RdProjectDeliverable,
+  type RdProjectMember,
   type ProjectType,
 } from '../../services/rd-project';
 import { openMasterDataInNewTab, openProjectLinkInNewTab, type EngineeringLinkType } from '../../services/master-data-links';
 import { RdProjectGateStepper } from '../../components/RdProjectGateStepper';
 import EngineeringLinkTargetSelect from '../../components/EngineeringLinkTargetSelect';
-import { UniUserSelect } from '../../../../components/uni-user-select';
-import { resolveUserDisplay } from '../../../../services/user';
 import {
   getKuaiplmDeliverableStatusOptions,
   getKuaiplmDeliverableStatusText,
   getKuaiplmEngineeringLinkOptions,
   getKuaiplmEngineeringLinkText,
   getKuaiplmGateStatusText,
-  getKuaiplmProjectStatusText,
   getKuaiplmTaskStatusOptions,
   getKuaiplmTaskStatusText,
   renderKuaiplmCurrentGateMarker,
-  renderKuaiplmProjectTypeMarker,
+  renderKuaiplmProjectStatusTag,
 } from '../../components/kuaiplmMeta';
 import './detail.less';
 
@@ -168,6 +169,7 @@ const RdProjectDetailPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const leaveRdProjectDetail = useLeaveFormTab('/apps/kuaiplm/rd-projects');
+  const projectPerms = useResourcePermissions('kuaiplm:project');
   const { token } = theme.useToken();
   const { message: messageApi, modal: modalApi } = App.useApp();
   const [loading, setLoading] = useState(true);
@@ -189,6 +191,8 @@ const RdProjectDetailPage: React.FC = () => {
   const deliverableFormRef = React.useRef<any>(null);
   const gateFormRef = React.useRef<any>(null);
   const selectedReviewerRef = React.useRef<{ id: number; name: string } | null>(null);
+  const taskAssigneeRef = React.useRef<{ id: number; name: string } | null>(null);
+  const taskMembersRef = React.useRef<RdProjectMember[]>([]);
 
   const taskStatusOptions = useMemo(() => getKuaiplmTaskStatusOptions(t), [t]);
   const deliverableStatusOptions = useMemo(() => getKuaiplmDeliverableStatusOptions(t), [t]);
@@ -258,7 +262,10 @@ const RdProjectDetailPage: React.FC = () => {
     const tabKey = location.pathname + location.search;
     window.dispatchEvent(
       new CustomEvent('riveredge:update-tab-title', {
-        detail: { key: tabKey, title: code },
+        detail: {
+          key: tabKey,
+          title: `${code} ${t('app.kuaiplm.rdProjects.detail.workbench.tabTitleSuffix')}`,
+        },
       }),
     );
   }, [project?.project_code, location.pathname, location.search]);
@@ -287,6 +294,8 @@ const RdProjectDetailPage: React.FC = () => {
   const openCreateTask = (gate: RdProjectGate) => {
     setEditingTask(null);
     setActiveGateKey(gate.gate_key);
+    taskAssigneeRef.current = null;
+    taskMembersRef.current = [];
     setTaskModalOpen(true);
     setTimeout(() => {
       taskFormRef.current?.resetFields();
@@ -294,13 +303,40 @@ const RdProjectDetailPage: React.FC = () => {
     }, 0);
   };
 
-  const openEditTask = (task: RdProjectTask) => {
+  const openEditTask = async (task: RdProjectTask) => {
     setEditingTask(task);
+    taskAssigneeRef.current =
+      task.assignee_id != null
+        ? { id: task.assignee_id, name: task.assignee_name || '' }
+        : null;
+    taskMembersRef.current = task.members ?? [];
     setTaskModalOpen(true);
+    let assigneeUuid: string | undefined;
+    let memberUuids: string[] = [];
+    const ids = [
+      ...(task.assignee_id != null ? [task.assignee_id] : []),
+      ...(task.members ?? []).map((m) => m.user_id),
+    ];
+    if (ids.length > 0) {
+      try {
+        const resolved = await resolveUserDisplay({ user_ids: ids });
+        assigneeUuid = task.assignee_id
+          ? resolved.find((u) => u.id === task.assignee_id)?.uuid
+          : undefined;
+        memberUuids = resolved
+          .filter((u) => (task.members ?? []).some((m) => m.user_id === u.id))
+          .map((u) => u.uuid)
+          .filter(Boolean);
+      } catch {
+        /* ignore */
+      }
+    }
     setTimeout(() => {
       taskFormRef.current?.setFieldsValue({
         ...task,
         due_date: task.due_date ? dayjs(task.due_date) : undefined,
+        assignee_uuid: assigneeUuid,
+        member_uuids: memberUuids,
       });
     }, 0);
   };
@@ -522,6 +558,15 @@ const RdProjectDetailPage: React.FC = () => {
                   render: (v) => v || '—',
                 },
                 {
+                  title: t('app.kuaiplm.rdProjects.form.members'),
+                  dataIndex: 'members',
+                  width: 140,
+                  render: (members: RdProjectMember[] | undefined) =>
+                    members?.length
+                      ? members.map((m) => m.user_name || String(m.user_id)).join('、')
+                      : '—',
+                },
+                {
                   title: t('common.status'),
                   dataIndex: 'status',
                   width: 88,
@@ -540,7 +585,7 @@ const RdProjectDetailPage: React.FC = () => {
                   width: 120,
                   render: (_: unknown, row: RdProjectTask) => (
                     <Space size="small">
-                      <Button type="link" size="small" onClick={() => openEditTask(row)}>
+                      <Button type="link" size="small" onClick={() => void openEditTask(row)}>
                         {t('common.edit')}
                       </Button>
                       <Button
@@ -708,6 +753,92 @@ const RdProjectDetailPage: React.FC = () => {
   const projectType = (project.project_type ?? 'RD') as ProjectType;
   const isRdProject = projectType === 'RD';
 
+  const headerActions =
+    project.status === 'DRAFT' ||
+    (project.status === 'IN_PROGRESS' && project.not_executed) ||
+    isRdProject ||
+    gates.some((g) => g.milestone_role === 'spawn_delivery' && g.status === 'PASSED') ? (
+      <Space wrap>
+        {project.status === 'DRAFT' ? (
+          <Button
+            type="primary"
+            onClick={() => {
+              modalApi.confirm({
+                title: t('app.kuaiplm.rdProjects.detail.startConfirmTitle'),
+                content: t('app.kuaiplm.rdProjects.detail.startConfirmContent'),
+                onOk: async () => {
+                  await updateRdProject(id!, {
+                    status: 'IN_PROGRESS',
+                    actual_start_date: formatDateTime(dayjs(), 'YYYY-MM-DD'),
+                  });
+                  messageApi.success(t('app.kuaiplm.rdProjects.detail.startSuccess'));
+                  load();
+                },
+              });
+            }}
+          >
+            {t('app.kuaiplm.rdProjects.detail.startProject')}
+          </Button>
+        ) : null}
+        {project.status === 'IN_PROGRESS' && project.not_executed && projectPerms.canUpdate ? (
+          <Button
+            onClick={() => {
+              modalApi.confirm({
+                title: t('app.kuaiplm.rdProjects.withdrawConfirm'),
+                content: t('app.kuaiplm.rdProjects.withdrawConfirmContent'),
+                onOk: async () => {
+                  await withdrawRdProject(id!);
+                  messageApi.success(t('app.kuaiplm.rdProjects.withdrawSuccess'));
+                  load();
+                },
+              });
+            }}
+          >
+            {t('components.uniAction.withdrawProject')}
+          </Button>
+        ) : null}
+        {project.status === 'IN_PROGRESS' && project.not_executed && projectPerms.canDelete ? (
+          <Button
+            danger
+            onClick={() => {
+              modalApi.confirm({
+                title: t('app.kuaiplm.rdProjects.deleteConfirm'),
+                onOk: async () => {
+                  await deleteRdProject(id!);
+                  messageApi.success(t('common.deleteSuccess'));
+                  leaveRdProjectDetail();
+                },
+              });
+            }}
+          >
+            {t('common.delete')}
+          </Button>
+        ) : null}
+        {isRdProject ? (
+          <Button onClick={() => setPushModalOpen(true)}>
+            {t('app.kuaiplm.rdProjects.detail.trialWo.title')}
+          </Button>
+        ) : null}
+        {isRdProject && gates.some((g) => g.milestone_role === 'spawn_delivery' && g.status === 'PASSED') ? (
+          <Button
+            onClick={() => {
+              modalApi.confirm({
+                title: t('app.kuaiplm.rdProjects.detail.createDeliveryTitle'),
+                content: t('app.kuaiplm.rdProjects.detail.createDeliveryContent'),
+                onOk: async () => {
+                  const res = await spawnDeliveryProject(id!);
+                  messageApi.success(t('app.kuaiplm.rdProjects.detail.createDeliverySuccess'));
+                  navigate(`/apps/kuaizhizao/delivery-project/projects/${res.delivery_project_id}`);
+                },
+              });
+            }}
+          >
+            {t('app.kuaiplm.gateTemplates.milestoneRole.spawnDelivery')}
+          </Button>
+        ) : null}
+      </Space>
+    ) : null;
+
   const collaborationItems = isRdProject
     ? [
         {
@@ -736,62 +867,16 @@ const RdProjectDetailPage: React.FC = () => {
 
   return (
     <ListPageTemplate>
-      <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-        <Space wrap>
-          <Button icon={<ArrowLeftOutlined />} onClick={leaveRdProjectDetail}>
-            {t('app.kuaiplm.common.actions.allProjects')}
-          </Button>
-          <Typography.Title level={4} style={{ margin: 0 }}>
-            {project.project_code} - {project.project_name}
-          </Typography.Title>
-          {isRdProject ? renderKuaiplmProjectTypeMarker(t, projectType) : null}
-          {project.status ? (
-            <Tag color={project.status === 'DRAFT' ? 'default' : 'processing'}>
-              {getKuaiplmProjectStatusText(t, project.status)}
-            </Tag>
-          ) : null}
-          {projectType === 'DELIVERY' && project.source_project_id ? (
-            <Button
-              type="link"
-              size="small"
-              onClick={() =>
-                navigate(`/apps/kuaiplm/rd-projects/detail/${project.source_project_id}`)
-              }
-            >
-              {t('app.kuaiplm.rdProjects.form.sourceProject')}:{' '}
-              {project.source_project_code ?? `#${project.source_project_id}`}
-            </Button>
-          ) : null}
-          {project.status === 'DRAFT' ? (
-            <Button
-              type="primary"
-              icon={<PlayCircleOutlined />}
-              onClick={() => {
-                modalApi.confirm({
-                  title: t('app.kuaiplm.rdProjects.detail.startConfirmTitle'),
-                  content: t('app.kuaiplm.rdProjects.detail.startConfirmContent'),
-                  onOk: async () => {
-                    await updateRdProject(id!, {
-                      status: 'IN_PROGRESS',
-                      actual_start_date: formatDateTime(dayjs(), 'YYYY-MM-DD'),
-                    });
-                    messageApi.success(t('app.kuaiplm.rdProjects.detail.startSuccess'));
-                    load();
-                  },
-                });
-              }}
-            >
-              {t('app.kuaiplm.rdProjects.detail.startConfirmTitle').replace('?', '')}
-            </Button>
-          ) : null}
-          {isRdProject ? (
-            <Button icon={<RocketOutlined />} onClick={() => setPushModalOpen(true)}>
-              {t('app.kuaiplm.rdProjects.detail.trialWo.title')}
-            </Button>
-          ) : null}
-        </Space>
+      <Space direction="vertical" size="middle" className="project-workbench-shell">
+        <ProjectWorkbenchToolbar
+          backLabel={t('app.kuaiplm.common.actions.allProjects')}
+          onBack={leaveRdProjectDetail}
+          title={`${project.project_code} - ${project.project_name}`}
+          status={renderKuaiplmProjectStatusTag(t, project.status)}
+          actions={headerActions}
+        />
 
-        <Card size="small">
+        <Card size="small" className="project-workbench-overview">
           <Row gutter={[24, 16]} align="middle">
             <Col xs={24} md={16}>
               <Descriptions column={{ xs: 1, sm: 2 }} size="small">
@@ -800,6 +885,13 @@ const RdProjectDetailPage: React.FC = () => {
                 </Descriptions.Item>
                 <Descriptions.Item label={t('app.kuaiplm.common.columns.owner')}>
                   {project.owner_name || '—'}
+                </Descriptions.Item>
+                <Descriptions.Item label={t('app.kuaiplm.rdProjects.form.members')}>
+                  {(project.members ?? []).length
+                    ? (project.members ?? [])
+                        .map((m) => m.user_name || String(m.user_id))
+                        .join('、')
+                    : '—'}
                 </Descriptions.Item>
                 <Descriptions.Item label={t('app.kuaiplm.common.columns.currentGate')}>
                   {renderKuaiplmCurrentGateMarker(
@@ -820,7 +912,9 @@ const RdProjectDetailPage: React.FC = () => {
               </Descriptions>
             </Col>
             <Col xs={24} md={8}>
-              <Typography.Text type="secondary">{t('app.kuaiplm.common.columns.progress')}</Typography.Text>
+              <Typography.Text className="project-workbench-overview-side-title">
+                {t('app.kuaiplm.common.columns.progress')}
+              </Typography.Text>
               <Progress percent={Math.round(progress)} status="active" />
               <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                 {t('app.kuaiplm.common.columns.gate')} 40% - {t('app.kuaiplm.common.columns.task')} 30% 
@@ -1000,7 +1094,12 @@ const RdProjectDetailPage: React.FC = () => {
             gate_id: values.gate_id ?? activeGate?.id,
             due_date: values.due_date ? formatDateTime(values.due_date, 'YYYY-MM-DD') : undefined,
             parent_task_id: values.parent_task_id ?? null,
+            assignee_id: taskAssigneeRef.current?.id,
+            assignee_name: taskAssigneeRef.current?.name,
+            members: taskMembersRef.current,
           };
+          delete (payload as Record<string, unknown>).assignee_uuid;
+          delete (payload as Record<string, unknown>).member_uuids;
           if (!payload.gate_id) {
             messageApi.error(t('app.kuaiplm.rdProjects.detail.task.gateRequired'));
             return;
@@ -1035,7 +1134,35 @@ const RdProjectDetailPage: React.FC = () => {
           allowClear
           options={parentTaskOptions}
         />
-        <ProFormText name="assignee_name" label={t('app.kuaiplm.rdProjects.detail.task.assignee')} />
+        <UniUserSelect
+          name="assignee_uuid"
+          label={t('app.kuaiplm.rdProjects.detail.task.assignee')}
+          onChange={(_uuid, user) => {
+            if (user && !Array.isArray(user)) {
+              taskAssigneeRef.current = {
+                id: user.id,
+                name: user.full_name || user.username || '',
+              };
+              taskMembersRef.current = taskMembersRef.current.filter((m) => m.user_id !== user.id);
+            } else {
+              taskAssigneeRef.current = null;
+            }
+          }}
+        />
+        <UniUserSelect
+          name="member_uuids"
+          label={t('app.kuaiplm.rdProjects.form.members')}
+          mode="multiple"
+          onChange={(_uuids, users) => {
+            const list = (Array.isArray(users) ? users : users ? [users] : []) as User[];
+            taskMembersRef.current = list
+              .filter((u) => u?.id && u.id !== taskAssigneeRef.current?.id)
+              .map((u) => ({
+                user_id: u.id,
+                user_name: u.full_name || u.username || '',
+              }));
+          }}
+        />
         <ProFormSelect
           name="status"
           label={t('common.status')}

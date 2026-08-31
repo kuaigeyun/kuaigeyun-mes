@@ -173,7 +173,7 @@ const QualityExceptionsPage: React.FC = () => {
       setDetailDrawerVisible(false);
       setCurrentRecord(null);
       if (report?.id) {
-        navigate(`/apps/kuaizhizao/quality-management/eight-d-reports?report_id=${report.id}`);
+        navigate(`/apps/kuaizhizao/quality-management/eight-d-reports/${report.id}`);
       }
     } catch (error: any) {
       messageApi.error(error?.message || t(`${Q}.message.start8DFailed`));

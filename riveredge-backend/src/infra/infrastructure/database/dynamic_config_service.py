@@ -261,6 +261,7 @@ class DynamicDatabaseConfigService:
                 f"apps.{module_code}.models.material_binding",  # 物料绑定模型
                 f"apps.{module_code}.models.material_shortage_exception",  # 缺料异常模型
                 f"apps.{module_code}.models.delivery_delay_exception",  # 延期异常模型
+                f"apps.{module_code}.models.delivery_project",  # 交付项目（订单交机）
                 f"apps.{module_code}.models.quality_exception",  # 质量异常模型
                 f"apps.{module_code}.models.exception_process_record",  # 异常处理记录模型
                 # 仓储管理模块
@@ -485,6 +486,7 @@ class DynamicDatabaseConfigService:
                 f"apps.{module_code}.models.material_binding",  # 物料绑定模型
                 f"apps.{module_code}.models.material_shortage_exception",  # 缺料异常模型
                 f"apps.{module_code}.models.delivery_delay_exception",  # 延期异常模型
+                f"apps.{module_code}.models.delivery_project",  # 交付项目（订单交机）
                 f"apps.{module_code}.models.quality_exception",  # 质量异常模型
                 f"apps.{module_code}.models.exception_process_record",  # 异常处理记录模型
                 # 仓储管理模块

@@ -149,10 +149,12 @@ const SPCMonitorPage: React.FC = () => {
       <ListPageTemplate fillMain>
         <TwoColumnLayout
           style={{ flex: 1, minHeight: 0 }}
+          layoutPersistenceId="kuaizhizao.quality-management.spc-monitor"
           leftPanel={{
             width: '40%',
             minWidth: 480,
             maxWidth: 720,
+            resizable: false,
             leftContent: (
               <div
                 style={{

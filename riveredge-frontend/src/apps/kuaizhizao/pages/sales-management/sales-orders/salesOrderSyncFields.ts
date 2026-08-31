@@ -29,3 +29,4 @@ export const SALES_ORDER_SYNC_TARGET_FIELDS: SyncTargetField[] = [
 ];
 
 export const SALES_ORDER_SYNC_REQUIRED_TARGETS = ['order_code', 'order_date', 'delivery_date'];
+export const SALES_ORDER_SYNC_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_sales_orders';

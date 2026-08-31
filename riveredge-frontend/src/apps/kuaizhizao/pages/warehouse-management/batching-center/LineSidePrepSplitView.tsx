@@ -290,9 +290,8 @@ const LineSidePrepSplitView: React.FC<Props> = ({
     <>
       <TwoColumnLayout
       style={{ flex: 1, minHeight: 0, height: '100%' }}
+      layoutPersistenceId="kuaizhizao.batching-center.line-side-prep"
       leftPanel={{
-        width: 280,
-        minWidth: 220,
         search: {
           placeholder: t('app.kuaizhizao.batchingCenter.panel.searchPlaceholder'),
           value: keyword,

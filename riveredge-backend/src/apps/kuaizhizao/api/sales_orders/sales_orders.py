@@ -25,6 +25,12 @@ from infra.models.user import User
 from infra.exceptions.exceptions import ValidationError, NotFoundError, BusinessLogicError
 
 from apps.kuaizhizao.services.sales_order_service import SalesOrderService
+from apps.kuaizhizao.schemas.delivery_project import (
+    PushDeliveryProjectFromSalesOrderRequest,
+    PushDeliveryProjectPreviewResponse,
+    DeliveryProjectResponse,
+)
+from apps.kuaizhizao.services.delivery_project_service import DeliveryProjectService
 from apps.kuaizhizao.services.contract_milestone_billing_service import ContractMilestoneBillingService
 from apps.kuaizhizao.services.sales_order_ocr_service import SalesOrderOcrService
 from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
@@ -53,6 +59,7 @@ from apps.kuaizhizao.services.sales_order_sync_service import SalesOrderSyncServ
 
 # 初始化服务实例
 sales_order_service = SalesOrderService()
+delivery_project_service = DeliveryProjectService()
 sales_order_sync_service = SalesOrderSyncService()
 milestone_billing_service = ContractMilestoneBillingService()
 document_relation_service = DocumentRelationNewService()
@@ -1639,6 +1646,94 @@ async def push_sales_order_to_sales_return(
         logger.error(f"下推销售退货单失败: {e}")
         raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "下推销售退货单失败", "/sales-orders/{sales_order_id}/push-to-sales-return", tenant_id)
 
+
+@router.get(
+    "/{sales_order_id}/push-to-delivery-project/preview",
+    response_model=PushDeliveryProjectPreviewResponse,
+    summary="Push to delivery project preview",
+)
+async def preview_push_sales_order_to_delivery_project(
+    sales_order_id: int = Path(..., description="销售订单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await delivery_project_service.preview_push_from_sales_order(
+            tenant_id, sales_order_id, current_user
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(
+            http_status.HTTP_404_NOT_FOUND,
+            str(e),
+            "/sales-orders/{sales_order_id}/push-to-delivery-project/preview",
+            tenant_id,
+        )
+    except ValidationError as e:
+        raise _http_exception_with_trace(
+            http_status.HTTP_400_BAD_REQUEST,
+            str(e),
+            "/sales-orders/{sales_order_id}/push-to-delivery-project/preview",
+            tenant_id,
+        )
+
+
+@router.post(
+    "/{sales_order_id}/push-to-delivery-project",
+    response_model=DeliveryProjectResponse,
+    summary="Push to delivery project",
+)
+async def push_sales_order_to_delivery_project(
+    sales_order_id: int = Path(..., description="销售订单ID"),
+    body: Optional[PushDeliveryProjectFromSalesOrderRequest] = Body(default=None),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        from apps.kuaizhizao.models.sales_order import SalesOrder
+
+        order = await SalesOrder.get_or_none(
+            tenant_id=tenant_id, id=sales_order_id, deleted_at__isnull=True
+        )
+        if not order:
+            raise NotFoundError(f"销售订单不存在: {sales_order_id}")
+        await sales_order_service._assert_sales_order_capability_for_order(
+            tenant_id, order, "push_delivery_project"
+        )
+        return await delivery_project_service.push_from_sales_order(
+            tenant_id,
+            sales_order_id,
+            body or PushDeliveryProjectFromSalesOrderRequest(),
+            current_user,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(
+            http_status.HTTP_404_NOT_FOUND,
+            str(e),
+            "/sales-orders/{sales_order_id}/push-to-delivery-project",
+            tenant_id,
+        )
+    except BusinessLogicError as e:
+        raise _http_exception_with_trace(
+            http_status.HTTP_400_BAD_REQUEST,
+            str(e),
+            "/sales-orders/{sales_order_id}/push-to-delivery-project",
+            tenant_id,
+        )
+    except ValidationError as e:
+        raise _http_exception_with_trace(
+            http_status.HTTP_400_BAD_REQUEST,
+            str(e),
+            "/sales-orders/{sales_order_id}/push-to-delivery-project",
+            tenant_id,
+        )
+    except Exception as e:
+        logger.error(f"下推交付项目失败: {e}")
+        raise _http_exception_with_trace(
+            http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            "下推交付项目失败",
+            "/sales-orders/{sales_order_id}/push-to-delivery-project",
+            tenant_id,
+        )
 
 
 @router.post("/{sales_order_id}/withdraw", response_model=SalesOrderResponse, summary="Withdraw submitted sales order")

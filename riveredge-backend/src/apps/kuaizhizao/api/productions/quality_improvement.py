@@ -6,8 +6,11 @@
 
 from datetime import datetime
 from typing import Any, Dict, List, Optional
+import uuid
 
-from fastapi import APIRouter, Body, Depends, Path, Query, Request
+from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, Request
+from fastapi.responses import HTMLResponse, JSONResponse
+from loguru import logger
 
 from apps.kuaizhizao.schemas.defect_record import DefectRecordListResponse, DefectRecordResponse
 from apps.kuaizhizao.schemas.quality_improvement import (
@@ -19,6 +22,8 @@ from apps.kuaizhizao.schemas.quality_improvement import (
     Quality8DHistoryEntry,
     Quality8DListResponse,
     Quality8DResponse,
+    Quality8DStageRevisionEntry,
+    Quality8DStageUnlockRequest,
     Quality8DTransition,
     Quality8DUpdate,
     SPCChartResponse,
@@ -31,9 +36,33 @@ from apps.kuaizhizao.services.defect_record_service import DefectRecordService
 from apps.kuaizhizao.services.quality_improvement_service import OQCInspectionService, Quality8DService, SPCService
 from core.api.deps.access import require_access, get_auth_context, ensure_permission_codes, AuthContext
 from core.api.deps import get_current_tenant, get_current_user
+from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
 from infra.models.user import User
 
 router = APIRouter(tags=["App - Kuaige Zhizao - Quality Improvement"])
+
+
+def _http_exception_with_trace(
+    status_code: int,
+    message: str,
+    route: str,
+    tenant_id: Optional[int] = None,
+    trace_id: Optional[str] = None,
+) -> HTTPException:
+    tid = trace_id or uuid.uuid4().hex
+    logger.warning(
+        "quality_improvement_api_error trace_id={} tenant_id={} route={} status_code={} message={}",
+        tid,
+        tenant_id,
+        route,
+        status_code,
+        message,
+    )
+    return HTTPException(
+        status_code=status_code,
+        detail={"message": message, "trace_id": tid},
+    )
+
 
 quality_8d_service = Quality8DService()
 defect_record_service = DefectRecordService()
@@ -69,6 +98,13 @@ _8D_DELETE = Depends(
         "kuaizhizao.quality-management-eight-d-reports",
         "delete",
         required_permissions=["kuaizhizao:quality-management-eight-d-reports:delete"],
+    )
+)
+_8D_PRINT = Depends(
+    require_access(
+        "kuaizhizao.quality-management-eight-d-reports",
+        "print",
+        required_permissions=["kuaizhizao:quality-management-eight-d-reports:print"],
     )
 )
 _NC_READ = Depends(
@@ -262,6 +298,113 @@ async def get_quality_8d_report_history(
 ) -> List[Quality8DHistoryEntry]:
     _ = _auth
     return await quality_8d_service.get_history(tenant_id=tenant_id, report_id=report_id)
+
+
+@router.get(
+    "/quality-8d-reports/{report_id}/stage-revisions",
+    response_model=List[Quality8DStageRevisionEntry],
+    summary="List 8D stage revision history",
+)
+async def get_quality_8d_stage_revisions(
+    report_id: int = Path(..., description="8D 报告ID"),
+    stage_key: Optional[str] = Query(None, description="阶段键，空则返回全部"),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: AuthContext = _8D_READ,
+):
+    return await quality_8d_service.get_stage_revisions(
+        tenant_id=tenant_id,
+        report_id=report_id,
+        stage_key=stage_key,
+    )
+
+
+@router.post(
+    "/quality-8d-reports/{report_id}/stage-unlock",
+    response_model=Quality8DResponse,
+    summary="Request edit unlock for completed 8D stage",
+)
+async def request_quality_8d_stage_unlock(
+    report_id: int = Path(..., description="8D 报告ID"),
+    payload: Quality8DStageUnlockRequest = Body(...),
+    tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
+    _auth: AuthContext = _8D_UPDATE_OR_CLOSE,
+):
+    return await quality_8d_service.request_stage_unlock(
+        tenant_id=tenant_id,
+        report_id=report_id,
+        user_id=current_user.id,
+        payload=payload,
+    )
+
+
+@router.get("/quality-8d-reports/{report_id}/print", summary="Print 8D report")
+async def print_quality_8d_report(
+    report_id: int = Path(..., description="8D 报告ID"),
+    template_code: Optional[str] = Query(None, description="打印模板代码"),
+    template_uuid: Optional[str] = Query(None, description="打印模板UUID"),
+    output_format: str = Query("html", description="输出格式"),
+    response_format: str = Query("json", description="响应格式"),
+    _auth=_8D_PRINT,
+    tenant_id: int = Depends(get_current_tenant),
+):
+    from apps.kuaizhizao.services.print_service import DocumentPrintService
+
+    _ = _auth
+    try:
+        result = await DocumentPrintService().print_document(
+            tenant_id=tenant_id,
+            document_type="eight_d_report",
+            document_id=report_id,
+            template_code=template_code,
+            template_uuid=template_uuid,
+            output_format=output_format,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(
+            404, str(e), "/quality-8d-reports/{report_id}/print", tenant_id
+        )
+    except (ValidationError, BusinessLogicError) as e:
+        raise _http_exception_with_trace(
+            400, str(e), "/quality-8d-reports/{report_id}/print", tenant_id
+        )
+    if response_format == "html":
+        return HTMLResponse(content=result.get("content", ""), status_code=200)
+    return JSONResponse(content=result, status_code=200)
+
+
+@router.get(
+    "/quality-8d-reports/{report_id}/print-variables",
+    summary="8D report print variables",
+)
+async def get_quality_8d_report_print_variables(
+    report_id: int = Path(..., description="8D 报告ID"),
+    _auth=_8D_PRINT,
+    tenant_id: int = Depends(get_current_tenant),
+):
+    from apps.kuaizhizao.services.print_service import DocumentPrintService
+
+    _ = _auth
+    try:
+        return await DocumentPrintService().get_print_variables(
+            tenant_id=tenant_id,
+            document_type="eight_d_report",
+            document_id=report_id,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(
+            404,
+            str(e),
+            "/quality-8d-reports/{report_id}/print-variables",
+            tenant_id,
+        )
+    except (ValidationError, BusinessLogicError) as e:
+        raise _http_exception_with_trace(
+            400,
+            str(e),
+            "/quality-8d-reports/{report_id}/print-variables",
+            tenant_id,
+        )
 
 
 @router.delete("/quality-8d-reports/{report_id}", summary="Delete 8D report")

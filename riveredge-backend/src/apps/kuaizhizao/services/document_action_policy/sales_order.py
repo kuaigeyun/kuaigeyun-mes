@@ -137,6 +137,7 @@ def derive_sales_order_capabilities(
     computation_pushed_blocks_withdraw: bool = False,
     has_returnable_qty: bool = False,
     has_pushable_qty: bool = False,
+    has_existing_delivery_project: bool = False,
 ) -> SalesOrderCapabilities:
     status = getattr(order, "status", None)
     review_status = getattr(order, "review_status", None)
@@ -330,6 +331,21 @@ def derive_sales_order_capabilities(
         push_return_reason if not push_return_allowed else None,
     )
 
+    push_delivery_project_allowed = False
+    push_delivery_project_reason = push_reason or "sales_order.push_delivery_project.not_allowed"
+    if push_ok:
+        if not has_items:
+            push_delivery_project_reason = "sales_order.push_delivery_project.no_items"
+        elif has_existing_delivery_project:
+            push_delivery_project_reason = "sales_order.push_delivery_project.already_exists"
+        else:
+            push_delivery_project_allowed = True
+            push_delivery_project_reason = None
+    push_delivery_project_cap = _cap(
+        push_delivery_project_allowed,
+        push_delivery_project_reason if not push_delivery_project_allowed else None,
+    )
+
     # create_change_order — 不可直接改单且已审核可执行
     create_change_allowed = (
         not update_allowed
@@ -375,6 +391,7 @@ def derive_sales_order_capabilities(
         push_sales_delivery=push_delivery_cap,
         push_invoice=push_invoice_cap,
         push_sales_return=push_return_cap,
+        push_delivery_project=push_delivery_project_cap,
         create_change_order=create_change_cap,
         backfill_sales_contract=backfill_contract_cap,
     )
@@ -390,6 +407,7 @@ def assert_sales_order_capability(
     computation_pushed_blocks_withdraw: bool = False,
     has_returnable_qty: bool = False,
     has_pushable_qty: bool = False,
+    has_existing_delivery_project: bool = False,
 ) -> None:
     caps = derive_sales_order_capabilities(
         order,
@@ -399,6 +417,7 @@ def assert_sales_order_capability(
         computation_pushed_blocks_withdraw=computation_pushed_blocks_withdraw,
         has_returnable_qty=has_returnable_qty,
         has_pushable_qty=has_pushable_qty,
+        has_existing_delivery_project=has_existing_delivery_project,
     )
     cap_map = {
         "update": caps.update,
@@ -417,6 +436,7 @@ def assert_sales_order_capability(
         "push_sales_delivery": caps.push_sales_delivery,
         "push_invoice": caps.push_invoice,
         "push_sales_return": caps.push_sales_return,
+        "push_delivery_project": caps.push_delivery_project,
         "create_change_order": caps.create_change_order,
         "backfill_sales_contract": caps.backfill_sales_contract,
     }

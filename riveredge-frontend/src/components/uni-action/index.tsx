@@ -28,6 +28,8 @@ export {
 } from './actionCatalog'
 export {
   rowActionKind,
+  rowActionOpenWorkbench,
+  rowActionWithdrawProject,
   rowActionResetPassword,
   rowActionAddFollowUpFromDocument,
   rowActionTestConnection,

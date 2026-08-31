@@ -691,6 +691,7 @@ const DatasetListPage: React.FC = () => {
   return (
     <>
       <TwoColumnLayout
+        layoutPersistenceId="pages.system.datasets.list"
         style={{ height: '100%' }}
         leftPanel={categoryLeftPanel}
         rightPanel={{

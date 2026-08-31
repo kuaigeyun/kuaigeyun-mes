@@ -683,9 +683,8 @@ const DemandReplanDashboardPage: React.FC = () => {
       <ListPageTemplate statCards={stats} fillMain>
         <TwoColumnLayout
           style={{ flex: 1, minHeight: 0 }}
+          layoutPersistenceId="kuaizhizao.demand-replan-dashboard"
           leftPanel={{
-            width: 320,
-            minWidth: 260,
             search: {
               placeholder: t('app.kuaizhizao.demandReplan.searchPlaceholder'),
               value: eventKeyword,

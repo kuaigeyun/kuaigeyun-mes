@@ -9,6 +9,7 @@ import { DeleteOutlined, EditOutlined, FolderOutlined, PlusOutlined } from '@ant
 import type { DataNode, TreeProps } from 'antd/es/tree';
 import type { MenuProps } from 'antd';
 import type { LeftPanelConfig } from '../../../components/layout-templates/TwoColumnLayout';
+import { twoColumnLeftPanelWidthStorageKey } from '../../../components/layout-templates/constants';
 import {
   deleteResourceCategory,
   listResourceCategories,
@@ -212,10 +213,7 @@ export function useResourceCategoryPanel(
   );
 
   const leftPanel: LeftPanelConfig = {
-    width: 300,
-    minWidth: 260,
-    maxWidth: 420,
-    resizable: true,
+    widthStorageKey: twoColumnLeftPanelWidthStorageKey(`system.resource-category.${resourceType}`),
     search: {
       placeholder: t('pages.system.resourceCategory.searchPlaceholder'),
       value: searchValue,

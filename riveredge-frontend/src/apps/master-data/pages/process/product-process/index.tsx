@@ -254,9 +254,8 @@ const ProductProcessPage: React.FC = () => {
 
       <TwoColumnLayout
         style={{ flex: 1, minHeight: 0 }}
+        layoutPersistenceId="apps.master-data.pages.process.product-process"
         leftPanel={{
-          width: 280,
-          minWidth: 220,
           search: {
             placeholder: t('app.master-data.productProcess.searchMaterial'),
             value: keyword,

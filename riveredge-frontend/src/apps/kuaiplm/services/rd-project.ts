@@ -9,6 +9,11 @@ const BASE = '/apps/kuaiplm/rd-projects';
 
 export type ProjectType = 'RD' | 'DELIVERY';
 
+export interface RdProjectMember {
+  user_id: number;
+  user_name: string;
+}
+
 export interface RdProject {
   id?: number;
   uuid?: string;
@@ -21,7 +26,9 @@ export interface RdProject {
   material_id?: number | null;
   material_code?: string | null;
   material_name?: string | null;
+  owner_id?: number | null;
   owner_name?: string | null;
+  members?: RdProjectMember[];
   planned_start_date?: string | null;
   planned_end_date?: string | null;
   actual_start_date?: string | null;
@@ -29,6 +36,9 @@ export interface RdProject {
   current_gate_key?: string | null;
   current_gate_name?: string;
   gate_template_id?: number | null;
+  gates?: RdProjectGate[];
+  progress?: number;
+  not_executed?: boolean;
   notes?: string | null;
   created_at?: string;
   updated_at?: string;
@@ -61,9 +71,11 @@ export interface RdProjectTask {
   description?: string | null;
   assignee_name?: string | null;
   assignee_id?: number | null;
+  members?: RdProjectMember[];
   status?: string;
   due_date?: string | null;
   priority?: string | null;
+  template_task_id?: number | null;
 }
 
 export interface RdProjectDeliverable {
@@ -213,6 +225,10 @@ export async function deleteRdProject(id: number | string) {
   return apiRequest<void>(`${BASE}/${id}`, { method: 'DELETE' });
 }
 
+export async function withdrawRdProject(id: number | string) {
+  return apiRequest<RdProject>(`${BASE}/${id}/withdraw`, { method: 'POST' });
+}
+
 export async function pushTrialWorkOrder(
   projectId: number | string,
   data?: { quantity?: number; remarks?: string; notes?: string },
@@ -285,6 +301,18 @@ export async function updateRdProjectGate(
   data: Partial<RdProjectGate>,
 ) {
   return apiRequest<RdProjectGate>(`${BASE}/${projectId}/gates/${gateId}`, { method: 'PUT', data });
+}
+
+export interface SpawnDeliveryProjectResponse {
+  delivery_project_id: number;
+  delivery_project_code: string;
+  project_link_id: number;
+}
+
+export async function spawnDeliveryProject(projectId: number | string) {
+  return apiRequest<SpawnDeliveryProjectResponse>(`${BASE}/${projectId}/spawn-delivery-project`, {
+    method: 'POST',
+  });
 }
 
 export const PROJECT_TYPE_LABELS: Record<ProjectType, string> = {

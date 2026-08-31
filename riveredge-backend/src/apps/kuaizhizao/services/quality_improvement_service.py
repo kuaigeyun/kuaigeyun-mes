@@ -14,9 +14,12 @@ from tortoise.queryset import Q
 from apps.common.base_service import AppBaseService
 from apps.kuaizhizao.models.oqc_inspection import OQCInspection
 from apps.kuaizhizao.models.quality_8d_report import Quality8DReport
+from apps.kuaizhizao.models.quality_8d_stage_revision import Quality8DStageRevision
 from apps.kuaizhizao.models.spc_sample import SPCSample
 from apps.kuaizhizao.schemas.quality_improvement import (
     Quality8DHistoryEntry,
+    Quality8DStageRevisionEntry,
+    Quality8DStageUnlockRequest,
     OQCInspectionConduct,
     OQCInspectionCreate,
     OQCInspectionResponse,
@@ -40,6 +43,7 @@ from datetime import timezone
 from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
 
 VALID_8D_STATUS_FLOW = [
+    "d0_prepare",
     "d1_team",
     "d2_problem",
     "d3_containment",
@@ -51,6 +55,7 @@ VALID_8D_STATUS_FLOW = [
     "closed",
 ]
 _8D_STAGE_LABELS: Dict[str, str] = {
+    "d0_prepare": "D0 准备响应",
     "d1_team": "D1 组建团队",
     "d2_problem": "D2 问题描述",
     "d3_containment": "D3 临时遏制",
@@ -62,6 +67,7 @@ _8D_STAGE_LABELS: Dict[str, str] = {
     "closed": "已关闭",
 }
 _8D_STAGE_REQUIRED_FIELD: Dict[str, str] = {
+    "d0_prepare": "d0_prepare",
     "d1_team": "d1_team",
     "d2_problem": "d2_problem",
     "d3_containment": "d3_containment",
@@ -71,7 +77,11 @@ _8D_STAGE_REQUIRED_FIELD: Dict[str, str] = {
     "d7_prevent_recurrence": "d7_prevent_recurrence",
     "d8_team_congratulation": "d8_team_congratulation",
 }
-_HISTORY_LINE_PATTERN = re.compile(r"^\[(?P<ts>[^\]]+)\]\s*(?P<status>[a-z0-9_]+)\s*:\s*(?P<remarks>.+)$")
+_HISTORY_LINE_PATTERN = re.compile(
+    r"^\[(?P<ts>[^\]]+)\]\s*"
+    r"(?:(?P<from_status>[a-z0-9_]+)\s*->\s*)?"
+    r"(?P<status>[a-z0-9_]+)\s*:\s*(?P<remarks>.*)$"
+)
 
 def _build_quick_code(prefix: str) -> str:
     """仅用于无编码规则上下文的临时单号（如 8D）；OQC 须走 OQC_INSPECTION_CODE。"""
@@ -86,6 +96,52 @@ class Quality8DService(AppBaseService[Quality8DReport]):
     @staticmethod
     def _normalize_text(value: Optional[str]) -> str:
         return (value or "").strip()
+
+    @staticmethod
+    def _normalize_stage_html(value: Optional[str]) -> Optional[str]:
+        import re
+
+        text = (value or "").strip()
+        if not text or text == "<p><br></p>":
+            return None
+        empty_block = re.compile(r"<p(?:\s[^>]*)?>(?:\s|&nbsp;|<br\s*/?>)*</p>", re.I)
+        empty_li = re.compile(r"<li(?:\s[^>]*)?>(?:\s|&nbsp;|<br\s*/?>)*</li>", re.I)
+        prev = None
+        while prev != text:
+            prev = text
+            text = empty_block.sub("", text)
+            text = empty_li.sub("", text)
+        text = text.strip()
+        return text or None
+
+    @staticmethod
+    def _split_remarks(remarks_text: Optional[str]) -> tuple[str, List[str]]:
+        user_lines: List[str] = []
+        history_lines: List[str] = []
+        for line in (remarks_text or "").splitlines():
+            raw = line.strip()
+            if not raw:
+                continue
+            if _HISTORY_LINE_PATTERN.match(raw):
+                history_lines.append(raw)
+            else:
+                user_lines.append(raw)
+        return "\n".join(user_lines).strip(), history_lines
+
+    @staticmethod
+    def _join_remarks(user_remarks: str, history_lines: List[str]) -> Optional[str]:
+        parts: List[str] = []
+        if user_remarks.strip():
+            parts.append(user_remarks.strip())
+        parts.extend(history_lines)
+        return "\n".join(parts) if parts else None
+
+    def _infer_previous_status(self, to_status: str) -> Optional[str]:
+        try:
+            idx = VALID_8D_STATUS_FLOW.index(to_status)
+        except ValueError:
+            return None
+        return VALID_8D_STATUS_FLOW[idx - 1] if idx > 0 else None
 
     def _current_stage_index(self, status: str) -> int:
         try:
@@ -115,6 +171,138 @@ class Quality8DService(AppBaseService[Quality8DReport]):
                 )
             )
         return stages
+
+    def _stage_field_keys(self) -> List[str]:
+        return list(_8D_STAGE_REQUIRED_FIELD.values())
+
+    def _is_stage_unlocked(self, row: Quality8DReport, stage_key: str) -> bool:
+        unlocks = row.stage_unlocks if isinstance(row.stage_unlocks, dict) else {}
+        return stage_key in unlocks
+
+    def _can_edit_stage(self, row: Quality8DReport, stage_key: str) -> bool:
+        if stage_key not in _8D_STAGE_REQUIRED_FIELD:
+            return False
+        if row.status == "closed":
+            return self._is_stage_unlocked(row, stage_key)
+        current_idx = self._current_stage_index(row.status)
+        stage_idx = self._current_stage_index(stage_key)
+        if stage_idx < 0:
+            return False
+        if stage_idx == current_idx:
+            return True
+        if stage_idx < current_idx:
+            return self._is_stage_unlocked(row, stage_key)
+        return False
+
+    def _is_completed_stage(self, row: Quality8DReport, stage_key: str) -> bool:
+        if stage_key not in _8D_STAGE_REQUIRED_FIELD:
+            return False
+        if row.status == "closed":
+            return True
+        try:
+            stage_idx = self._current_stage_index(stage_key)
+            current_idx = self._current_stage_index(row.status)
+        except BusinessLogicError:
+            return False
+        return stage_idx < current_idx
+
+    async def _next_revision_no(self, tenant_id: int, report_id: int, stage_key: str) -> int:
+        latest = (
+            await Quality8DStageRevision.filter(
+                tenant_id=tenant_id,
+                report_id=report_id,
+                stage_key=stage_key,
+            )
+            .order_by("-revision_no")
+            .first()
+        )
+        return (latest.revision_no if latest else 0) + 1
+
+    async def _record_stage_revision(
+        self,
+        *,
+        tenant_id: int,
+        report_id: int,
+        stage_key: str,
+        action: str,
+        content: Optional[str],
+        change_reason: Optional[str],
+        user_id: int,
+        user_name: str,
+    ) -> Quality8DStageRevision:
+        revision_no = await self._next_revision_no(tenant_id, report_id, stage_key)
+        return await Quality8DStageRevision.create(
+            tenant_id=tenant_id,
+            report_id=report_id,
+            stage_key=stage_key,
+            revision_no=revision_no,
+            action=action,
+            content=content,
+            change_reason=change_reason,
+            changed_by=user_id,
+            changed_by_name=user_name,
+            changed_at=resolve_business_datetime(),
+            created_by=user_id,
+            created_by_name=user_name,
+            updated_by=user_id,
+            updated_by_name=user_name,
+        )
+
+    @staticmethod
+    def _strip_stage_plain_text(value: Optional[str]) -> str:
+        if not value:
+            return ""
+        text = re.sub(r"<style[\s\S]*?</style>", " ", value, flags=re.I)
+        text = re.sub(r"<script[\s\S]*?</script>", " ", text, flags=re.I)
+        text = re.sub(r"<[^>]+>", " ", text)
+        text = text.replace("&nbsp;", " ")
+        return " ".join(text.split()).strip()
+
+    def _prepare_stage_field_changes(
+        self, row: Quality8DReport, data: Dict[str, Any]
+    ) -> List[tuple[str, str, Optional[str]]]:
+        """对比规范化后的正文，仅保留真正有变更的阶段字段。"""
+        changes: List[tuple[str, str, Optional[str]]] = []
+        for stage_key in self._stage_field_keys():
+            if stage_key not in data:
+                continue
+            normalized_new = self._normalize_stage_html(data.get(stage_key))
+            new_value = self._normalize_text(normalized_new)
+            old_raw = getattr(row, stage_key, None)
+            old_value = self._normalize_text(self._normalize_stage_html(old_raw))
+            if new_value == old_value:
+                data.pop(stage_key)
+                continue
+            if self._strip_stage_plain_text(old_raw) == self._strip_stage_plain_text(normalized_new):
+                data.pop(stage_key)
+                continue
+            data[stage_key] = normalized_new
+            changes.append((stage_key, old_value, normalized_new))
+        return changes
+
+    def _validate_stage_field_updates(self, row: Quality8DReport, changed_stage_keys: List[str]) -> None:
+        if not changed_stage_keys:
+            return
+        for stage_key in changed_stage_keys:
+            if not self._can_edit_stage(row, stage_key):
+                label = _8D_STAGE_LABELS.get(stage_key, stage_key)
+                if self._is_completed_stage(row, stage_key):
+                    raise BusinessLogicError(f"阶段 {label} 已完成，请先申请修改后再编辑")
+                raise BusinessLogicError(f"阶段 {label} 尚未开放编辑")
+
+    def _validate_closed_report_update(
+        self,
+        row: Quality8DReport,
+        data: Dict[str, Any],
+        changed_stage_keys: List[str],
+    ) -> None:
+        if row.status != "closed":
+            return
+        allowed = set(self._stage_field_keys()) | {"remarks", "attachments", "verification_result"}
+        blocked = set(data.keys()) - allowed
+        if blocked:
+            raise BusinessLogicError("已关闭的 8D 报告仅可修改已申请解锁的阶段内容")
+        self._validate_stage_field_updates(row, changed_stage_keys)
 
     def _build_response(self, row: Quality8DReport) -> Quality8DResponse:
         base = Quality8DResponse.model_validate(row)
@@ -164,11 +352,24 @@ class Quality8DService(AppBaseService[Quality8DReport]):
             if not resolved_verification:
                 raise BusinessLogicError("关闭前必须填写验证结果")
 
-    def _append_transition_history_line(self, row: Quality8DReport, payload: Quality8DTransition) -> None:
-        if not payload.remarks:
-            return
-        history = f"[{to_api_isoformat(resolve_business_datetime())}] {payload.to_status}: {payload.remarks}"
-        row.remarks = f"{row.remarks}\n{history}".strip() if row.remarks else history
+    def _append_transition_history_line(
+        self,
+        row: Quality8DReport,
+        payload: Quality8DTransition,
+        old_status: str,
+        operator_name: str,
+    ) -> None:
+        detail = self._normalize_text(payload.remarks)
+        if not detail:
+            detail = (
+                f"{operator_name} 推进至 "
+                f"{_8D_STAGE_LABELS.get(payload.to_status, payload.to_status)}"
+            )
+        ts = to_api_isoformat(resolve_business_datetime())
+        line = f"[{ts}] {old_status} -> {payload.to_status}: {detail}"
+        user_part, history_lines = self._split_remarks(row.remarks)
+        history_lines.append(line)
+        row.remarks = self._join_remarks(user_part, history_lines)
 
     def _parse_history_from_remarks(self, row: Quality8DReport) -> List[Quality8DHistoryEntry]:
         base_tz = row.created_at.tzinfo or timezone.utc
@@ -188,12 +389,11 @@ class Quality8DService(AppBaseService[Quality8DReport]):
             Quality8DHistoryEntry(
                 timestamp=_normalize_ts(row.created_at),
                 action="created",
-                to_status="d1_team",
+                to_status=VALID_8D_STATUS_FLOW[0],
                 remarks="8D 报告创建",
             )
         ]
         remarks_text = row.remarks or ""
-        prev_status = "d1_team"
         for line in remarks_text.splitlines():
             raw = line.strip()
             if not raw:
@@ -204,6 +404,7 @@ class Quality8DService(AppBaseService[Quality8DReport]):
             ts_str = matched.group("ts")
             status = matched.group("status")
             detail = matched.group("remarks")
+            from_status = matched.group("from_status") or self._infer_previous_status(status)
             try:
                 ts = datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S")
             except ValueError:
@@ -213,12 +414,11 @@ class Quality8DService(AppBaseService[Quality8DReport]):
                 Quality8DHistoryEntry(
                     timestamp=ts,
                     action="transition",
-                    from_status=prev_status,
+                    from_status=from_status,
                     to_status=status,
-                    remarks=detail,
+                    remarks=detail or None,
                 )
             )
-            prev_status = status
         if row.closed_at:
             history.append(
                 Quality8DHistoryEntry(
@@ -312,6 +512,29 @@ class Quality8DService(AppBaseService[Quality8DReport]):
             raise NotFoundError("8D 报告不存在")
         return self._build_response(row)
 
+    def _relock_completed_stages(
+        self,
+        row: Quality8DReport,
+        stage_keys: List[str],
+        *,
+        user_id: int,
+        user_name: str,
+    ) -> None:
+        if not stage_keys:
+            return
+        unlocks = dict(row.stage_unlocks) if isinstance(row.stage_unlocks, dict) else {}
+        relocked: List[str] = []
+        for stage_key in stage_keys:
+            if stage_key not in unlocks:
+                continue
+            unlocks.pop(stage_key)
+            relocked.append(stage_key)
+        if not relocked:
+            return
+        row.stage_unlocks = unlocks or None
+        row.updated_by = user_id
+        row.updated_by_name = user_name
+
     async def update_report(self, tenant_id: int, report_id: int, user_id: int, payload: Quality8DUpdate) -> Quality8DResponse:
         from apps.kuaizhizao.services.document_action_policy.eight_d_report import (
             assert_eight_d_report_capability,
@@ -320,15 +543,64 @@ class Quality8DService(AppBaseService[Quality8DReport]):
         row = await Quality8DReport.get_or_none(id=report_id, tenant_id=tenant_id, deleted_at__isnull=True)
         if not row:
             raise NotFoundError("8D 报告不存在")
-        assert_eight_d_report_capability(row, "update")
         data = payload.model_dump(exclude_unset=True)
+        submitted_completed_unlocked = [
+            stage_key
+            for stage_key in self._stage_field_keys()
+            if stage_key in data
+            and self._is_completed_stage(row, stage_key)
+            and self._is_stage_unlocked(row, stage_key)
+        ]
+        stage_changes = self._prepare_stage_field_changes(row, data)
+        changed_stage_keys = [item[0] for item in stage_changes]
+        if row.status == "closed" and changed_stage_keys:
+            pass
+        else:
+            assert_eight_d_report_capability(row, "update")
         if "status" in data and data.get("status") not in (None, row.status):
             raise BusinessLogicError("请通过“推进阶段”接口更新 8D 阶段")
+        self._validate_closed_report_update(row, data, changed_stage_keys)
+        if row.status != "closed":
+            self._validate_stage_field_updates(row, changed_stage_keys)
+        user_info = await self.get_user_info(user_id)
+        if "remarks" in data:
+            user_part = self._normalize_text(data.get("remarks"))
+            _, history_lines = self._split_remarks(row.remarks)
+            data["remarks"] = self._join_remarks(user_part, history_lines)
         if data:
-            user_info = await self.get_user_info(user_id)
             data["updated_by"] = user_id
             data["updated_by_name"] = user_info["name"]
             await row.update_from_dict(data).save()
+            for stage_key, _old_value, new_value in stage_changes:
+                await self._record_stage_revision(
+                    tenant_id=tenant_id,
+                    report_id=report_id,
+                    stage_key=stage_key,
+                    action="save",
+                    content=new_value or None,
+                    change_reason=None,
+                    user_id=user_id,
+                    user_name=user_info["name"],
+                )
+        if submitted_completed_unlocked:
+            self._relock_completed_stages(
+                row,
+                submitted_completed_unlocked,
+                user_id=user_id,
+                user_name=user_info["name"],
+            )
+            await row.save(update_fields=["stage_unlocks", "updated_by", "updated_by_name", "updated_at"])
+            for stage_key in submitted_completed_unlocked:
+                await self._record_stage_revision(
+                    tenant_id=tenant_id,
+                    report_id=report_id,
+                    stage_key=stage_key,
+                    action="edit_complete",
+                    content=getattr(row, stage_key, None),
+                    change_reason=None,
+                    user_id=user_id,
+                    user_name=user_info["name"],
+                )
         return self._build_response(row)
 
     async def transition(self, tenant_id: int, report_id: int, user_id: int, payload: Quality8DTransition) -> Quality8DResponse:
@@ -345,12 +617,24 @@ class Quality8DService(AppBaseService[Quality8DReport]):
         assert_eight_d_report_capability(row, action)
         self._validate_stage_completion_before_transition(row, payload.to_status, payload.verification_result)
         old_status = row.status
+        user_info = await self.get_user_info(user_id)
+        required_field = _8D_STAGE_REQUIRED_FIELD.get(old_status)
+        if required_field:
+            await self._record_stage_revision(
+                tenant_id=tenant_id,
+                report_id=report_id,
+                stage_key=required_field,
+                action="transition_snapshot",
+                content=getattr(row, required_field, None),
+                change_reason=f"推进至 {_8D_STAGE_LABELS.get(payload.to_status, payload.to_status)}",
+                user_id=user_id,
+                user_name=user_info["name"],
+            )
         row.status = payload.to_status
         if payload.to_status == "closed":
             row.closed_at = resolve_business_datetime()
             row.verification_result = self._normalize_text(payload.verification_result) or row.verification_result
-        self._append_transition_history_line(row, payload)
-        user_info = await self.get_user_info(user_id)
+        self._append_transition_history_line(row, payload, old_status, user_info["name"])
         row.updated_by = user_id
         row.updated_by_name = user_info["name"]
         await row.save()
@@ -435,6 +719,74 @@ class Quality8DService(AppBaseService[Quality8DReport]):
         if not row:
             raise NotFoundError("8D 报告不存在")
         return self._parse_history_from_remarks(row)
+
+    async def request_stage_unlock(
+        self,
+        tenant_id: int,
+        report_id: int,
+        user_id: int,
+        payload: Quality8DStageUnlockRequest,
+    ) -> Quality8DResponse:
+        from apps.kuaizhizao.services.document_action_policy.eight_d_report import (
+            assert_eight_d_report_capability,
+        )
+
+        row = await Quality8DReport.get_or_none(id=report_id, tenant_id=tenant_id, deleted_at__isnull=True)
+        if not row:
+            raise NotFoundError("8D 报告不存在")
+        if row.status != "closed":
+            assert_eight_d_report_capability(row, "update")
+        stage_key = self._normalize_text(payload.stage_key)
+        reason = self._normalize_text(payload.reason)
+        if stage_key not in _8D_STAGE_REQUIRED_FIELD:
+            raise BusinessLogicError(f"非法 8D 阶段: {stage_key}")
+        if not reason:
+            raise BusinessLogicError("请填写修改原因")
+        if not self._is_completed_stage(row, stage_key):
+            label = _8D_STAGE_LABELS.get(stage_key, stage_key)
+            raise BusinessLogicError(f"阶段 {label} 尚未完成，无需申请修改")
+        if self._can_edit_stage(row, stage_key):
+            label = _8D_STAGE_LABELS.get(stage_key, stage_key)
+            raise BusinessLogicError(f"阶段 {label} 已处于可编辑状态")
+        user_info = await self.get_user_info(user_id)
+        now = resolve_business_datetime()
+        unlocks = dict(row.stage_unlocks) if isinstance(row.stage_unlocks, dict) else {}
+        unlocks[stage_key] = {
+            "unlocked_at": to_api_isoformat(now),
+            "unlocked_by": user_id,
+            "unlocked_by_name": user_info["name"],
+            "reason": reason,
+        }
+        row.stage_unlocks = unlocks
+        row.updated_by = user_id
+        row.updated_by_name = user_info["name"]
+        await row.save()
+        await self._record_stage_revision(
+            tenant_id=tenant_id,
+            report_id=report_id,
+            stage_key=stage_key,
+            action="unlock_request",
+            content=getattr(row, stage_key, None),
+            change_reason=reason,
+            user_id=user_id,
+            user_name=user_info["name"],
+        )
+        return self._build_response(row)
+
+    async def get_stage_revisions(
+        self,
+        tenant_id: int,
+        report_id: int,
+        stage_key: Optional[str] = None,
+    ) -> List[Quality8DStageRevisionEntry]:
+        row = await Quality8DReport.get_or_none(id=report_id, tenant_id=tenant_id, deleted_at__isnull=True)
+        if not row:
+            raise NotFoundError("8D 报告不存在")
+        query = Quality8DStageRevision.filter(tenant_id=tenant_id, report_id=report_id)
+        if stage_key:
+            query = query.filter(stage_key=stage_key)
+        rows = await query.order_by("-changed_at", "-revision_no")
+        return [Quality8DStageRevisionEntry.model_validate(item) for item in rows]
 
 
 class OQCInspectionService(AppBaseService[OQCInspection]):

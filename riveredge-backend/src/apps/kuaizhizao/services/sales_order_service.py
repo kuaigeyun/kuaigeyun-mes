@@ -926,6 +926,28 @@ class SalesOrderService:
         demand = await self._get_linked_demand(tenant_id, order.id)
         return bool(demand and demand.pushed_to_computation)
 
+    async def _batch_has_delivery_project_by_order(
+        self, tenant_id: int, order_ids: List[int]
+    ) -> Dict[int, bool]:
+        if not order_ids:
+            return {}
+        from apps.kuaizhizao.constants.delivery_project import DeliveryProjectStatus
+        from apps.kuaizhizao.models.delivery_project import DeliveryProject
+
+        rows = await DeliveryProject.filter(
+            tenant_id=tenant_id,
+            sales_order_id__in=order_ids,
+            deleted_at__isnull=True,
+        ).exclude(status=DeliveryProjectStatus.CANCELLED.value).values_list(
+            "sales_order_id", flat=True
+        )
+        linked = {int(sales_order_id) for sales_order_id in rows if sales_order_id}
+        return {order_id: order_id in linked for order_id in order_ids}
+
+    async def _order_has_delivery_project(self, tenant_id: int, order_id: int) -> bool:
+        mapping = await self._batch_has_delivery_project_by_order(tenant_id, [order_id])
+        return mapping.get(order_id, False)
+
     def _sales_order_capability_context(
         self,
         order: SalesOrder,
@@ -933,6 +955,7 @@ class SalesOrderService:
         demand: Optional[Demand],
         *,
         pushable_by_item: Optional[Dict[int, Decimal]] = None,
+        has_existing_delivery_project: bool = False,
     ) -> dict[str, bool]:
         item_list = items or []
         has_items = len(item_list) > 0
@@ -960,6 +983,7 @@ class SalesOrderService:
             "computation_pushed_blocks_withdraw": pushed,
             "has_returnable_qty": has_returnable_qty,
             "has_pushable_qty": has_pushable_qty,
+            "has_existing_delivery_project": has_existing_delivery_project,
         }
 
     async def _assert_sales_order_capability_for_order(
@@ -979,8 +1003,12 @@ class SalesOrderService:
         pushable_by_item = await get_pushable_qty_for_order_items(
             tenant_id, order.id, items
         )
+        has_existing_delivery_project = await self._order_has_delivery_project(
+            tenant_id, order.id
+        )
         ctx = self._sales_order_capability_context(
-            order, items, demand, pushable_by_item=pushable_by_item
+            order, items, demand, pushable_by_item=pushable_by_item,
+            has_existing_delivery_project=has_existing_delivery_project,
         )
         assert_sales_order_capability(order, action, **ctx)
 
@@ -1710,6 +1738,9 @@ class SalesOrderService:
         pushable_by_item = await get_pushable_qty_for_order_items(
             tenant_id, sales_order_id, items
         )
+        has_existing_delivery_project = await self._order_has_delivery_project(
+            tenant_id, sales_order_id
+        )
         from apps.kuaizhizao.services.sales_order_terms_service import SalesOrderTermsService
 
         payment_milestones = await SalesOrderTermsService.load_payment_milestones(
@@ -1734,7 +1765,8 @@ class SalesOrderService:
                 audit_enabled=audit_enabled,
             ),
             **self._sales_order_capability_context(
-                order, items, demand, pushable_by_item=pushable_by_item
+                order, items, demand, pushable_by_item=pushable_by_item,
+                has_existing_delivery_project=has_existing_delivery_project,
             ),
         )
         return resp
@@ -2278,6 +2310,9 @@ class SalesOrderService:
 
         all_list_items = [it for items in items_by_order.values() for it in items]
         pushable_by_order = await batch_pushable_qty_by_order_item(tenant_id, all_list_items)
+        delivery_project_by_order = await self._batch_has_delivery_project_by_order(
+            tenant_id, order_ids
+        )
 
         # 6. 组装响应
         sales_orders = []
@@ -2332,6 +2367,9 @@ class SalesOrderService:
                         items,
                         demand_by_order.get(order.id),
                         pushable_by_item=pushable_by_order.get(order.id),
+                        has_existing_delivery_project=delivery_project_by_order.get(
+                            order.id, False
+                        ),
                     ),
                 )
             )

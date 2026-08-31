@@ -1,1 +1,0 @@
-import{r as o}from"./vendor-BN_Q0Owf.js";import{e as s,I as r}from"./clientRelease-DRTuK97h.js";function c(a,e=""){return a+(e||"")}function i(a,e,n,t){a(e,{state:{closeTab:n,...t??{}}})}function p(a){const e=s(),n=r();return o.useCallback(()=>{i(e,a,c(n.pathname,n.search))},[e,a,n.pathname,n.search])}export{c as a,i as n,p as u};

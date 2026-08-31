@@ -29,6 +29,8 @@ import {
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { ListPageTemplate } from '../../../components/layout-templates';
+import { TwoColumnLayoutResizer } from '../../../components/layout-templates/TwoColumnLayoutResizer';
+import { useResizableLeftPanelWidth } from '../../../components/layout-templates/useResizableLeftPanelWidth';
 import { formatDateTime } from '../../../utils/format';
 import {
   getUserMessages,
@@ -66,8 +68,6 @@ function resolveDetailPath(record: UserMessage): string | null {
   if (!path.startsWith('/')) return null;
   return path;
 }
-
-const LIST_WIDTH = 380;
 
 type FilterBadgeVariant = 'all' | 'unread' | 'read' | 'failed';
 
@@ -157,6 +157,15 @@ const OutlookMessagesView: React.FC = () => {
   const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const { token } = theme.useToken();
+
+  const {
+    minWidthPx,
+    maxWidthPx,
+    handleResizeStart,
+    resolvedWidth: messageListPanelWidth,
+  } = useResizableLeftPanelWidth({
+    layoutPersistenceId: 'pages.personal.messages',
+  });
 
   /** 与自定义字段管理等双栏页一致，使用 colorBorder 而非更浅的 colorBorderSecondary */
   const paneBorderColor = token.colorBorder;
@@ -398,12 +407,13 @@ const OutlookMessagesView: React.FC = () => {
         <div
           className="two-column-layout-left"
           style={{
-            width: LIST_WIDTH,
-            minWidth: LIST_WIDTH,
+            width: `${messageListPanelWidth}px`,
+            minWidth: `${minWidthPx}px`,
+            maxWidth: `${maxWidthPx}px`,
             flexShrink: 0,
             display: 'flex',
             flexDirection: 'column',
-            borderRight: `1px solid ${paneBorderColor}`,
+            borderRight: 'none',
             background: leftPaneListBg,
           }}
         >
@@ -599,6 +609,8 @@ const OutlookMessagesView: React.FC = () => {
             />
           </div>
         </div>
+
+        <TwoColumnLayoutResizer onMouseDown={handleResizeStart} />
 
         {/* 右侧：消息详情 */}
         <div

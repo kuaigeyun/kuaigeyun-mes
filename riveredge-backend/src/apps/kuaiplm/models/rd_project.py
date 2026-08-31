@@ -68,6 +68,27 @@ class RdProject(BaseModel):
         exclude = ["deleted_at"]
 
 
+class RdProjectMember(BaseModel):
+    """研发项目成员（不含负责人）"""
+
+    tenant_id = fields.IntField(description="租户ID")
+    project_id = fields.IntField(description="项目ID")
+    user_id = fields.IntField(description="成员用户ID")
+    user_name = fields.CharField(max_length=100, description="成员姓名快照")
+    deleted_at = fields.DatetimeField(null=True, description="删除时间")
+
+    class Meta:
+        table = "apps_kuaiplm_rd_project_members"
+        table_description = "快研发 - 项目成员"
+        indexes = [
+            ("tenant_id", "project_id"),
+            ("tenant_id", "user_id"),
+        ]
+
+    class PydanticMeta:
+        exclude = ["deleted_at"]
+
+
 class RdProjectGate(BaseModel):
     """NPI 阶段门"""
 
@@ -115,8 +136,10 @@ class RdProjectTask(BaseModel):
         default=RdTaskStatus.TODO.value,
         description="任务状态",
     )
-    assignee_id = fields.IntField(null=True, description="执行人ID")
-    assignee_name = fields.CharField(max_length=100, null=True, description="执行人姓名")
+    assignee_id = fields.IntField(null=True, description="负责人ID")
+    assignee_name = fields.CharField(max_length=100, null=True, description="负责人姓名")
+    members_json = fields.JSONField(null=True, description="成员快照 [{user_id,user_name}]")
+    template_task_id = fields.IntField(null=True, description="来源模板任务ID")
     due_date = fields.DateField(null=True, description="截止日期")
     completed_at = fields.DatetimeField(null=True, description="完成时间")
     sort_order = fields.IntField(default=0, description="排序")

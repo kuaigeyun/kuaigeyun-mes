@@ -1,0 +1,24 @@
+/** 项目/8D 等工作台页壳：与 ListPageTemplate 底边留白一致 */
+.project-workbench-shell {
+  width: 100%;
+  padding-bottom: 16px;
+}
+
+/** 工作台概览 Card：Descriptions 标签粗体，内容保持常规字重 */
+.project-workbench-overview {
+  .ant-descriptions-item-label {
+    font-weight: 600;
+    color: var(--ant-color-text);
+  }
+
+  .ant-descriptions-item-content {
+    font-weight: 400;
+  }
+
+  .project-workbench-overview-side-title {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: var(--ant-color-text);
+  }
+}

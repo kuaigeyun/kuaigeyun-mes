@@ -3,6 +3,7 @@ import type { TFunction } from 'i18next';
 import type { WorkOrderOperationStep } from '../../../production-execution/work-orders/workOrderOperationSteps';
 
 export const EIGHT_D_STATUS_ORDER = [
+  'd0_prepare',
   'd1_team',
   'd2_problem',
   'd3_containment',
@@ -17,6 +18,7 @@ export const EIGHT_D_STATUS_ORDER = [
 export type EightDStatus = (typeof EIGHT_D_STATUS_ORDER)[number];
 
 export const EIGHT_D_STATUS_I18N_KEY: Record<EightDStatus, string> = {
+  d0_prepare: 'app.kuaizhizao.eightD.status.d0_prepare',
   d1_team: 'app.kuaizhizao.eightD.status.d1_team',
   d2_problem: 'app.kuaizhizao.eightD.status.d2_problem',
   d3_containment: 'app.kuaizhizao.eightD.status.d3_containment',
@@ -29,6 +31,7 @@ export const EIGHT_D_STATUS_I18N_KEY: Record<EightDStatus, string> = {
 };
 
 export const EIGHT_D_STAGE_FIELDS: Record<string, string> = {
+  d0_prepare: 'd0_prepare',
   d1_team: 'd1_team',
   d2_problem: 'd2_problem',
   d3_containment: 'd3_containment',
@@ -160,4 +163,119 @@ export function parseEightDStageLabel(text: string): { code: string; title: stri
   const matched = text.trim().match(/^(D\d+)\s*(.+)$/i);
   if (!matched) return null;
   return { code: matched[1].toUpperCase(), title: matched[2] };
+}
+
+export function getEightDStageHintKey(status: string): string {
+  return `app.kuaizhizao.eightD.stageHint.${status}`;
+}
+
+export function getEightDStageIndex(status?: string | null): number {
+  if (!status) return -1;
+  return EIGHT_D_STATUS_ORDER.indexOf(status as EightDStatus);
+}
+
+export type EightDStageUnlockMap = Record<
+  string,
+  {
+    unlocked_at?: string;
+    unlocked_by?: number;
+    unlocked_by_name?: string;
+    reason?: string;
+  }
+>;
+
+export function isEightDStageUnlocked(
+  stageUnlocks: EightDStageUnlockMap | null | undefined,
+  stageKey: string,
+): boolean {
+  return Boolean(stageUnlocks?.[stageKey]);
+}
+
+/** 已完成节点：当前阶段之前的节点，或报告已关闭时的全部 D 阶段 */
+export function isEightDCompletedStage(
+  reportStatus?: string | null,
+  stageKey?: string | null,
+): boolean {
+  if (!reportStatus || !stageKey || stageKey === 'closed') return false;
+  if (!EIGHT_D_STAGE_FIELDS[stageKey]) return false;
+  if (reportStatus === 'closed') return true;
+  const currentIdx = getEightDStageIndex(reportStatus);
+  const stageIdx = getEightDStageIndex(stageKey);
+  if (currentIdx < 0 || stageIdx < 0) return false;
+  return stageIdx < currentIdx;
+}
+
+/** 当前阶段可直接编辑；已完成节点须先申请修改解锁 */
+export function isEightDStageEditable(
+  reportStatus?: string | null,
+  stageKey?: string | null,
+  stageUnlocks?: EightDStageUnlockMap | null,
+): boolean {
+  if (!reportStatus || !stageKey || stageKey === 'closed') return false;
+  if (reportStatus === 'closed') {
+    return isEightDStageUnlocked(stageUnlocks, stageKey);
+  }
+  const currentIdx = getEightDStageIndex(reportStatus);
+  const stageIdx = getEightDStageIndex(stageKey);
+  if (currentIdx < 0 || stageIdx < 0) return false;
+  if (stageIdx === currentIdx) return true;
+  if (stageIdx < currentIdx) {
+    return isEightDStageUnlocked(stageUnlocks, stageKey);
+  }
+  return false;
+}
+
+export function canRequestEightDStageUnlock(
+  reportStatus?: string | null,
+  stageKey?: string | null,
+  stageUnlocks?: EightDStageUnlockMap | null,
+): boolean {
+  return (
+    isEightDCompletedStage(reportStatus, stageKey) &&
+    !isEightDStageEditable(reportStatus, stageKey, stageUnlocks)
+  );
+}
+
+/** 列表/摘要区 HTML 正文截断展示 */
+export function stripEightDHtml(html?: string | null, maxLength = 80): string {
+  if (!html) return '';
+  const text = html
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!text) return '';
+  return text.length > maxLength ? `${text.slice(0, maxLength)}…` : text;
+}
+
+const EIGHT_D_EMPTY_BLOCK_PATTERN = /<p(?:\s[^>]*)?>(?:\s|&nbsp;|<br\s*\/?>)*<\/p>/gi;
+const EIGHT_D_EMPTY_LIST_ITEM_PATTERN = /<li(?:\s[^>]*)?>(?:\s|&nbsp;|<br\s*\/?>)*<\/li>/gi;
+
+/** 去除 Quill 保存时产生的空段落/空列表项，避免只读区出现大块空白 */
+export function normalizeEightDStageHtml(html?: string | null): string {
+  const raw = (html ?? '').trim();
+  if (!raw || raw === '<p><br></p>') return '';
+  let normalized = raw;
+  let prev = '';
+  while (prev !== normalized) {
+    prev = normalized;
+    normalized = normalized.replace(EIGHT_D_EMPTY_BLOCK_PATTERN, '');
+    normalized = normalized.replace(EIGHT_D_EMPTY_LIST_ITEM_PATTERN, '');
+  }
+  return normalized.trim();
+}
+
+const EIGHT_D_HISTORY_LINE_PATTERN =
+  /^\[[^\]]+\]\s*(?:[a-z0-9_]+\s*->\s*)?[a-z0-9_]+\s*:/i;
+
+/** 备注字段中剥离系统写入的历程行，仅保留协作说明 */
+export function stripEightDHistoryRemarks(remarks?: string | null): string {
+  if (!remarks) return '';
+  return remarks
+    .split('\n')
+    .filter((line) => !EIGHT_D_HISTORY_LINE_PATTERN.test(line.trim()))
+    .join('\n')
+    .trim();
 }

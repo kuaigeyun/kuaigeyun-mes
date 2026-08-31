@@ -19,9 +19,10 @@ import {
   Table,
   Typography,
 } from 'antd';
-import { SyncOutlined } from '@ant-design/icons';
+import { DeleteOutlined, PlusOutlined, SyncOutlined } from '@ant-design/icons';
 import { ThemedSegmented } from '../themed-segmented/ThemedSegmented';
 import { getAPIList, getAPIByUuid, testAPI } from '../../services/apiManagement';
+import { getCustomFieldsByTable } from '../../services/customField';
 import { getDatasetList, executeDatasetQuery } from '../../services/dataset';
 import { formatDateTimeBySiteSetting } from '../../utils/format';
 import {
@@ -41,9 +42,17 @@ import type {
   SyncFromSourceResult,
   SyncProgressItem,
   SyncSourceType,
+  SyncTargetField,
 } from './types';
+import { syncCustomFieldTargetKey } from './types';
 
 export type { SyncFromSourceConfig, SyncFromSourceResult, SyncSourceType } from './types';
+
+function resolveSyncTargetLabel(field: SyncTargetField, t: (key: string) => string): string {
+  if (field.label?.trim()) return field.label.trim();
+  if (field.labelKey) return t(field.labelKey);
+  return field.value;
+}
 
 /**
  * 多行表单项共用一列标签宽：按本块最长标签自动撑开（4 字/5 字都齐），禁止换行。
@@ -111,6 +120,11 @@ export const SyncFromSourceModal: React.FC<SyncFromSourceModalProps> = ({
   const [targetToSource, setTargetToSource] = useState<Record<string, string>>({});
   const [hasSavedMapping, setHasSavedMapping] = useState(false);
   const [syncProgress, setSyncProgress] = useState<SyncProgressItem[]>([]);
+  /** 异步加载的可选字段（含自定义字段） */
+  const [loadedAvailableFields, setLoadedAvailableFields] = useState<SyncTargetField[]>([]);
+  /** 用户追加（或从已保存映射恢复）的目标字段 key */
+  const [addedTargetKeys, setAddedTargetKeys] = useState<string[]>([]);
+  const [pendingAddTargetKeys, setPendingAddTargetKeys] = useState<string[]>([]);
 
   useEffect(() => {
     if (!syncing) {
@@ -220,9 +234,75 @@ export const SyncFromSourceModal: React.FC<SyncFromSourceModalProps> = ({
     [t],
   );
 
-  const targetFieldValues = useMemo(
-    () => config.targetFields.map((field) => field.value),
+  const defaultTargetFieldValues = useMemo(
+    () => new Set(config.targetFields.map((field) => field.value)),
     [config.targetFields],
+  );
+
+  const fieldCatalogByValue = useMemo(() => {
+    const map = new Map<string, SyncTargetField>();
+    for (const field of config.targetFields) map.set(field.value, field);
+    for (const field of config.availableTargetFields ?? []) {
+      if (!map.has(field.value)) map.set(field.value, field);
+    }
+    for (const field of loadedAvailableFields) {
+      if (!map.has(field.value)) map.set(field.value, field);
+    }
+    return map;
+  }, [config.targetFields, config.availableTargetFields, loadedAvailableFields]);
+
+  const visibleTargetFields = useMemo(() => {
+    const fields = [...config.targetFields];
+    const seen = new Set(fields.map((field) => field.value));
+    for (const key of addedTargetKeys) {
+      if (seen.has(key)) continue;
+      const field = fieldCatalogByValue.get(key);
+      if (field) {
+        fields.push(field);
+        seen.add(key);
+      } else {
+        fields.push({ value: key, label: key });
+        seen.add(key);
+      }
+    }
+    return fields;
+  }, [config.targetFields, addedTargetKeys, fieldCatalogByValue]);
+
+  const targetFieldValues = useMemo(
+    () => visibleTargetFields.map((field) => field.value),
+    [visibleTargetFields],
+  );
+
+  const addableTargetOptions = useMemo(() => {
+    const visible = new Set(targetFieldValues);
+    return [...fieldCatalogByValue.values()]
+      .filter((field) => !visible.has(field.value))
+      .map((field) => ({
+        value: field.value,
+        label:
+          field.kind === 'custom'
+            ? `${resolveSyncTargetLabel(field, t)} (${t('components.syncFromSource.customFieldTag')})`
+            : resolveSyncTargetLabel(field, t),
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'zh-CN'));
+  }, [fieldCatalogByValue, targetFieldValues, t]);
+
+  const supportsAddMoreFields =
+    (config.availableTargetFields?.length ?? 0) > 0 ||
+    Boolean(config.loadAvailableTargetFields) ||
+    Boolean(config.customFieldTableName);
+
+  const mergeAddedKeysFromMapping = useCallback(
+    (mapping: Record<string, string>) => {
+      const extras = Object.keys(mapping).filter((key) => !defaultTargetFieldValues.has(key));
+      if (extras.length === 0) return;
+      setAddedTargetKeys((prev) => {
+        const next = new Set(prev);
+        extras.forEach((key) => next.add(key));
+        return [...next];
+      });
+    },
+    [defaultTargetFieldValues],
   );
 
   const resetPreview = useCallback(() => {
@@ -239,10 +319,14 @@ export const SyncFromSourceModal: React.FC<SyncFromSourceModalProps> = ({
       if (binding.api_uuid) setSelectedApiUuid(binding.api_uuid);
       if (binding.dataset_uuid) setSelectedDatasetUuid(binding.dataset_uuid);
       const fromBinding = mappingFromBinding(columns, binding.field_mapping || {});
-      const suggested = suggestTargetToSourceMapping(columns, targetFieldValues);
+      mergeAddedKeysFromMapping(fromBinding);
+      const suggested = suggestTargetToSourceMapping(columns, [
+        ...defaultTargetFieldValues,
+        ...Object.keys(fromBinding),
+      ]);
       setTargetToSource({ ...suggested, ...fromBinding });
     },
-    [targetFieldValues],
+    [defaultTargetFieldValues, mergeAddedKeysFromMapping],
   );
 
   const loadOptions = useCallback(async () => {
@@ -295,10 +379,43 @@ export const SyncFromSourceModal: React.FC<SyncFromSourceModalProps> = ({
     setScheduleIntervalMinutes(15);
     setBindingMeta(null);
     setHasSavedMapping(false);
+    setAddedTargetKeys([]);
+    setPendingAddTargetKeys([]);
+    setLoadedAvailableFields([]);
     void loadOptions();
+
+    let cancelled = false;
+    const loadExtraFields = async () => {
+      const extras: SyncTargetField[] = [];
+      if (config.loadAvailableTargetFields) {
+        try {
+          extras.push(...(await config.loadAvailableTargetFields()));
+        } catch {
+          // 自定义字段加载失败不阻断同步；可选字段列表可能不完整
+        }
+      } else if (config.customFieldTableName) {
+        try {
+          const customFields = await getCustomFieldsByTable(config.customFieldTableName, true);
+          extras.push(
+            ...customFields.map((field) => ({
+              value: syncCustomFieldTargetKey(field.code),
+              label: field.label || field.name,
+              kind: 'custom' as const,
+              required: field.is_required || undefined,
+            })),
+          );
+        } catch {
+          // ignore
+        }
+      }
+      if (!cancelled) setLoadedAvailableFields(extras);
+    };
+    void loadExtraFields();
+
     void config
       .getBinding()
       .then((binding) => {
+        if (cancelled) return;
         if (binding.source_type) setSourceType(binding.source_type);
         if (binding.api_uuid) setSelectedApiUuid(binding.api_uuid);
         if (binding.dataset_uuid) setSelectedDatasetUuid(binding.dataset_uuid);
@@ -313,12 +430,18 @@ export const SyncFromSourceModal: React.FC<SyncFromSourceModalProps> = ({
         });
         const saved = binding.field_mapping || {};
         if (Object.keys(saved).length > 0) {
-          setTargetToSource(mappingFromBinding([], saved));
+          const restored = mappingFromBinding([], saved);
+          mergeAddedKeysFromMapping(restored);
+          setTargetToSource(restored);
           setHasSavedMapping(true);
         }
       })
       .catch(() => undefined);
-  }, [open, loadOptions, resetPreview, config]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, loadOptions, resetPreview, config, mergeAddedKeysFromMapping]);
 
   const handlePreview = async () => {
     if (sourceType === 'api' && !selectedApiUuid) {
@@ -399,6 +522,7 @@ export const SyncFromSourceModal: React.FC<SyncFromSourceModalProps> = ({
       const saved = binding?.field_mapping || {};
       if (Object.keys(saved).length > 0) {
         effectiveTargetToSource = mappingFromBinding([], saved);
+        mergeAddedKeysFromMapping(effectiveTargetToSource);
         setTargetToSource(effectiveTargetToSource);
         setHasSavedMapping(true);
       }
@@ -409,9 +533,11 @@ export const SyncFromSourceModal: React.FC<SyncFromSourceModalProps> = ({
       : (() => {
           for (const required of config.requiredTargets) {
             if (!effectiveTargetToSource[required]) {
-              const label = config.targetFields.find((field) => field.value === required)?.labelKey;
+              const field =
+                fieldCatalogByValue.get(required) ||
+                config.targetFields.find((item) => item.value === required);
               return t('components.syncFromSource.mappingRequired', {
-                field: label ? t(label) : required,
+                field: field ? resolveSyncTargetLabel(field, t) : required,
               });
             }
           }
@@ -586,12 +712,38 @@ export const SyncFromSourceModal: React.FC<SyncFromSourceModalProps> = ({
     }
   };
 
-  const mappingRows = config.targetFields.map((field) => ({
+  const mappingRows = visibleTargetFields.map((field) => ({
     key: field.value,
     target: field.value,
-    label: t(field.labelKey),
+    label: resolveSyncTargetLabel(field, t),
     required: field.required ?? config.requiredTargets.includes(field.value),
+    removable: !defaultTargetFieldValues.has(field.value),
   }));
+
+  const handleConfirmAddTargets = () => {
+    if (pendingAddTargetKeys.length === 0) return;
+    setAddedTargetKeys((prev) => {
+      const next = new Set(prev);
+      pendingAddTargetKeys.forEach((key) => next.add(key));
+      return [...next];
+    });
+    if (previewColumns.length > 0) {
+      setTargetToSource((prev) => ({
+        ...suggestTargetToSourceMapping(previewColumns, pendingAddTargetKeys),
+        ...prev,
+      }));
+    }
+    setPendingAddTargetKeys([]);
+  };
+
+  const handleRemoveTarget = (target: string) => {
+    setAddedTargetKeys((prev) => prev.filter((key) => key !== target));
+    setTargetToSource((prev) => {
+      const next = { ...prev };
+      delete next[target];
+      return next;
+    });
+  };
 
   const previewTableColumns = previewColumns.map((col) => {
     const mappedTarget = Object.entries(targetToSource).find(([, source]) => source === col)?.[0];
@@ -892,7 +1044,7 @@ export const SyncFromSourceModal: React.FC<SyncFromSourceModalProps> = ({
                 {
                   title: t(config.targetFieldLabelKey ?? 'components.syncFromSource.targetFieldLabel'),
                   dataIndex: 'label',
-                  width: 180,
+                  width: 200,
                   render: (text, record) => (
                     <span>
                       {text}
@@ -925,8 +1077,52 @@ export const SyncFromSourceModal: React.FC<SyncFromSourceModalProps> = ({
                     />
                   ),
                 },
+                ...(supportsAddMoreFields
+                  ? [
+                      {
+                        title: '',
+                        key: 'actions',
+                        width: 48,
+                        render: (_: unknown, record: { target: string; removable: boolean }) =>
+                          record.removable ? (
+                            <Button
+                              type="text"
+                              size="small"
+                              danger
+                              icon={<DeleteOutlined />}
+                              onClick={() => handleRemoveTarget(record.target)}
+                              title={t('components.syncFromSource.removeMappingField')}
+                              aria-label={t('components.syncFromSource.removeMappingField')}
+                            />
+                          ) : null,
+                      },
+                    ]
+                  : []),
               ]}
             />
+            {supportsAddMoreFields ? (
+              <Space wrap style={{ width: '100%' }}>
+                <Select
+                  mode="multiple"
+                  allowClear
+                  showSearch
+                  optionFilterProp="label"
+                  style={{ minWidth: 280, flex: 1 }}
+                  placeholder={t('components.syncFromSource.addMappingFieldPlaceholder')}
+                  options={addableTargetOptions}
+                  value={pendingAddTargetKeys}
+                  onChange={(values) => setPendingAddTargetKeys(values)}
+                  disabled={addableTargetOptions.length === 0}
+                />
+                <Button
+                  icon={<PlusOutlined />}
+                  onClick={handleConfirmAddTargets}
+                  disabled={pendingAddTargetKeys.length === 0}
+                >
+                  {t('components.syncFromSource.addMappingField')}
+                </Button>
+              </Space>
+            ) : null}
 
             <Typography.Title level={5} style={{ margin: 0 }}>
               {t('components.syncFromSource.previewData', { count: previewRows.length })}

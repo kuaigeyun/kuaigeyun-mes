@@ -534,6 +534,7 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
       '/infra/scripts': ManufacturingIcons.fileCode, // 脚本管理
       '/infra/scheduled-tasks': ManufacturingIcons.clock, // 定时任务
       '/infra/admin': ManufacturingIcons.shield, // 平台管理 - 使用盾牌图标
+      '/infra/official-api-library': ManufacturingIcons.database, // 官方接口库
       '/infra/license-management': ManufacturingIcons.certificate, // 许可证管理
 
       // 应用菜单路径图标映射（使用前缀匹配，支持 /apps/{app-code}/... 格式）
@@ -830,6 +831,7 @@ const getMenuConfig = (
       { path: '/infra/packages', name: t('menu.infra.packages'), icon: getMenuIcon(t('menu.infra.packages'), '/infra/packages') },
       { path: '/infra/scripts', name: t('menu.infra.scripts'), icon: getMenuIcon(t('menu.infra.scripts'), '/infra/scripts') },
       { path: '/infra/scheduled-tasks', name: t('menu.infra.scheduled-tasks'), icon: getMenuIcon(t('menu.infra.scheduled-tasks'), '/infra/scheduled-tasks') },
+      { path: '/infra/official-api-library', name: t('menu.infra.official-api-library'), icon: getMenuIcon(t('menu.infra.official-api-library'), '/infra/official-api-library') },
       { path: '/infra/client-releases', name: t('menu.infra.client-releases'), icon: getMenuIcon(t('menu.infra.client-releases'), '/infra/client-releases') },
       { path: '/infra/license-management', name: t('menu.infra.license-management'), icon: getMenuIcon(t('menu.infra.license-management'), '/infra/license-management') },
       ...(options?.showSensitiveWordBlacklist
@@ -1478,10 +1480,15 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     staleTime: 60_000,
   });
 
+  /** 套餐版本/到期仅租户管理员（及平台超管进入组织时）可见，普通账号不展示 */
+  const showSystemSettingsTenantMeta =
+    !!currentUser?.tenant_id &&
+    (Boolean(currentUser?.is_tenant_admin) || isInfraSuperAdmin);
+
   const { data: systemPanelPackageConfigs } = useQuery({
     queryKey: ['systemPanelPackageConfigs'],
     queryFn: getPackageConfigs,
-    enabled: systemSettingsPanelMounted && !!currentUser?.tenant_id,
+    enabled: systemSettingsPanelMounted && showSystemSettingsTenantMeta,
     staleTime: 300_000,
   });
 
@@ -1498,8 +1505,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     if (!systemSettingsTenantExpiresAt) return '2099-12-31';
     return formatDateTime(systemSettingsTenantExpiresAt, 'YYYY-MM-DD HH:mm');
   }, [systemSettingsTenantExpiresAt]);
-
-  const showSystemSettingsTenantMeta = !!currentUser?.tenant_id;
 
   const systemSettingsPanelWidth = useMemo(() => {
     // 与现有 24 栅格视觉密度保持一致：按列数线性缩放面板宽度

@@ -294,6 +294,15 @@
   box-sizing: border-box;
 }
 
+/* 生命周期/状态列：SystemFixed 80px，禁止 table-layout:fixed 拉伸后在操作列前留白 */
+.uni-table-container .ant-table-thead > tr > th.uni-table-lifecycle-cell,
+.uni-table-container .ant-table-tbody > tr > td.uni-table-lifecycle-cell {
+  width: 80px;
+  min-width: 80px;
+  max-width: 80px;
+  box-sizing: border-box;
+}
+
 /* MarkerTag 窄列（启用/类型等）：与 lifecycle 同宽 80px，禁止被拉伸 */
 .uni-table-container .ant-table-thead > tr > th.uni-table-marker-badge-cell,
 .uni-table-container .ant-table-tbody > tr > td.uni-table-marker-badge-cell {

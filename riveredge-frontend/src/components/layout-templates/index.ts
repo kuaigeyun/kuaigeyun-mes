@@ -35,6 +35,8 @@ export { DocumentFormPageLayout } from './DocumentFormPageLayout'
 export type { DocumentFormPageLayoutProps } from './DocumentFormPageLayout'
 export { DocumentFormPageHeaderActions } from './DocumentFormPageHeaderActions'
 export type { DocumentFormPageHeaderActionsProps } from './DocumentFormPageHeaderActions'
+export { ProjectWorkbenchToolbar } from './ProjectWorkbenchToolbar'
+export type { ProjectWorkbenchToolbarProps } from './ProjectWorkbenchToolbar'
 
 // 详情 Drawer 模板
 export { DetailDrawerTemplate } from './DetailDrawerTemplate'
@@ -62,6 +64,10 @@ export type { DetailDrawerActionsProps, DetailDrawerActionItem } from './DetailD
 // 两栏布局模板
 export { TwoColumnLayout } from './TwoColumnLayout'
 export type { TwoColumnLayoutProps, LeftPanelConfig, RightPanelConfig } from './TwoColumnLayout'
+export { TwoColumnLayoutResizer } from './TwoColumnLayoutResizer'
+export type { TwoColumnLayoutResizerProps } from './TwoColumnLayoutResizer'
+export { useResizableLeftPanelWidth } from './useResizableLeftPanelWidth'
+export type { UseResizableLeftPanelWidthOptions } from './useResizableLeftPanelWidth'
 
 // 布局常量配置
 export * from './constants'

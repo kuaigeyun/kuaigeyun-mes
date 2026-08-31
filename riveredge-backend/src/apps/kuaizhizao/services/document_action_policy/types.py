@@ -50,6 +50,7 @@ class SalesOrderCapabilities(BaseModel):
     push_sales_delivery: ActionCapability
     push_invoice: ActionCapability
     push_sales_return: ActionCapability
+    push_delivery_project: ActionCapability
     create_change_order: ActionCapability
     backfill_sales_contract: ActionCapability
 
@@ -420,6 +421,9 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "sales_order.push_invoice.not_allowed": "当前状态不可下推销售发票",
     "sales_order.push_return.not_allowed": "当前状态不可下推销售退货单",
     "sales_order.push_return.no_delivered": "销售订单暂无可退货数量（已交货数量为 0）",
+    "sales_order.push_delivery_project.not_allowed": "当前状态不可下推交付项目",
+    "sales_order.push_delivery_project.no_items": "销售订单无明细，无法下推交付项目",
+    "sales_order.push_delivery_project.already_exists": "该销售订单已存在交付项目",
     "sales_order.create_change.not_allowed": "当前状态不可新建销售变更单",
     "sales_order.backfill_contract.not_allowed": "当前状态不可补签销售合同",
     "sales_order.backfill_contract.already_linked": "销售订单已关联销售合同",

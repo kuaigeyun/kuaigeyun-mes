@@ -1169,9 +1169,8 @@ const CustomFieldListPage: React.FC = () => {
       >
         <TwoColumnLayout
           style={{ flex: 1, minHeight: 0, width: '100%' }}
+          layoutPersistenceId="pages.system.custom-fields.list"
           leftPanel={{
-            width: 300,
-            minWidth: 300,
             search: {
               placeholder: t('field.customField.searchPagePlaceholder'),
               value: pageSearchValue,

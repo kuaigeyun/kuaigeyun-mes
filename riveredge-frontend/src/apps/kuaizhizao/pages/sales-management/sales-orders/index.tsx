@@ -204,6 +204,7 @@ import {
   type SalesOrderListParams,
   type PushPreviewResponse,
 } from '../../../services/sales-order';
+import { deliveryProjectApi } from '../../../services/delivery-project';
 import { listQuotations, type Quotation, type QuotationCapabilities } from '../../../services/quotation';
 import { salesContractApi, type SalesContract, type SalesContractCapabilities } from '../../../services/sales-contract';
 import { salesReviewApi, type SalesReviewListItem } from '../../../services/sales-review';
@@ -679,6 +680,7 @@ const SalesOrdersPage: React.FC = () => {
   const auditEnabled = useAuditRequired('sales_order', false);
   const salesOrderPerms = useResourcePermissions(SALES_ORDER_RESOURCE);
   const salesContractPerms = useResourcePermissions(SALES_CONTRACT_RESOURCE);
+  const deliveryProjectPerms = useResourcePermissions('kuaizhizao:delivery-project');
   const permDeniedTitle = t('common.noPermission');
   const auditEnabledRef = useRef(auditEnabled);
   useEffect(() => {
@@ -2125,6 +2127,39 @@ const SalesOrdersPage: React.FC = () => {
     );
   };
 
+  /** 处理下推到交付项目 */
+  const handlePushToDeliveryProject = async (id: number) => {
+    if (!deliveryProjectPerms.canCreate) {
+      messageApi.warning(permDeniedTitle);
+      return;
+    }
+    try {
+      const preview = await deliveryProjectApi.previewPushFromSalesOrder(id) as {
+        sales_order_code?: string;
+        existing_project_code?: string | null;
+      };
+      if (preview.existing_project_code) {
+        messageApi.warning(
+          t('app.kuaizhizao.deliveryProject.alreadyExists', { code: preview.existing_project_code }),
+        );
+        return;
+      }
+      modalApi.confirm({
+        title: t('app.kuaizhizao.deliveryProject.pushConfirmTitle'),
+        content: t('app.kuaizhizao.deliveryProject.pushConfirmContent', {
+          order: preview.sales_order_code ?? id,
+        }),
+        onOk: async () => {
+          const project = await deliveryProjectApi.pushFromSalesOrder(id, {});
+          messageApi.success(t('app.kuaizhizao.deliveryProject.pushSuccess'));
+          navigate(`/apps/kuaizhizao/delivery-project/projects/${project.id}`);
+        },
+      });
+    } catch (e: any) {
+      messageApi.error(e?.message ?? t('common.operationFailed'));
+    }
+  };
+
   /** 处理下推到发货通知单 */
   const handlePushToShipmentNotice = async (id: number) => {
     if (!salesNodeEnabled.shipment_notice) {
@@ -3190,6 +3225,11 @@ const SalesOrdersPage: React.FC = () => {
       { disabled: !salesOrderPerms.canUpdate, title: permDeniedTitle },
     );
     const canPushSalesReturn = !salesReturnDisabledReason;
+    const deliveryProjectDisabledReason = resolvePushReason(
+      record.capabilities?.push_delivery_project,
+      { disabled: !deliveryProjectPerms.canCreate, title: permDeniedTitle },
+    );
+    const canPushDeliveryProject = !deliveryProjectDisabledReason;
     const withdrawComputationDisabledReason = !salesOrderPerms.canUpdate
       ? permDeniedTitle
       : !record.capabilities?.withdraw_computation?.allowed
@@ -3216,6 +3256,13 @@ const SalesOrdersPage: React.FC = () => {
         disabled: !!workOrderDisabledReason,
         title: workOrderDisabledReason,
         onClick: () => canPushWorkOrder && handlePushToWorkOrder(record.id!, record),
+      },
+      {
+        key: 'delivery-project',
+        label: t('app.kuaizhizao.deliveryProject.pushFromSalesOrder'),
+        disabled: !!deliveryProjectDisabledReason,
+        title: deliveryProjectDisabledReason,
+        onClick: () => canPushDeliveryProject && handlePushToDeliveryProject(record.id!),
       },
       { type: 'divider' as const },
       {
@@ -3270,7 +3317,7 @@ const SalesOrdersPage: React.FC = () => {
         onClick: () => canWithdrawComputation && handleWithdrawFromComputation(record.id!),
       },
     ]);
-  }, [handleBackfillSalesContract, handlePushToComputation, handlePushToDelivery, handlePushToInvoice, handlePushToSalesOrderChange, handlePushToSalesReturn, handlePushToShipmentNotice, handlePushToWorkOrder, handleWithdrawFromComputation, permDeniedTitle, pushToBackfillSalesContractAction.label, pushToDemandComputationAction.label, pushToSalesDeliveryAction.label, pushToSalesInvoiceAction.label, pushToSalesOrderChangeAction.label, pushToSalesReturnAction.label, pushToShipmentNoticeAction.label, pushToWorkOrderAction.label, salesContractPerms.canCreate, salesNodeEnabled.demand_computation, salesNodeEnabled.invoice, salesNodeEnabled.shipment_notice, salesNodeEnabled.work_order, salesOrderPerms.canUpdate, t]);
+  }, [deliveryProjectPerms.canCreate, handleBackfillSalesContract, handlePushToComputation, handlePushToDelivery, handlePushToDeliveryProject, handlePushToInvoice, handlePushToSalesOrderChange, handlePushToSalesReturn, handlePushToShipmentNotice, handlePushToWorkOrder, handleWithdrawFromComputation, permDeniedTitle, pushToBackfillSalesContractAction.label, pushToDemandComputationAction.label, pushToSalesDeliveryAction.label, pushToSalesInvoiceAction.label, pushToSalesOrderChangeAction.label, pushToSalesReturnAction.label, pushToShipmentNoticeAction.label, pushToWorkOrderAction.label, salesContractPerms.canCreate, salesNodeEnabled.demand_computation, salesNodeEnabled.invoice, salesNodeEnabled.shipment_notice, salesNodeEnabled.work_order, salesOrderPerms.canUpdate, t]);
   const toolbarPushMenuItems = useMemo(
     () => (selectedOrderForToolbar ? buildToolbarPushMenuItems(selectedOrderForToolbar) : buildUniPushMenuItems([])),
     [buildToolbarPushMenuItems, selectedOrderForToolbar]

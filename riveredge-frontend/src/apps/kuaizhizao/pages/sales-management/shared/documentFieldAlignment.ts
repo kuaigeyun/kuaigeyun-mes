@@ -108,6 +108,9 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   return_code: 10,
   change_code: 10,
   project_code: 10,
+  /** 交付节点汇报 / 问题单号 */
+  report_code: 10,
+  issue_code: 10,
   /** 快研发项目：类型紧跟编号（编码 → 类型 → 名称） */
   project_type: 10.2,
   requirement_code: 10,
@@ -122,6 +125,8 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   license_code: 10,
   document_code: 10,
   document_type: 21,
+  /** 交付问题：问题类型（MarkerTag） */
+  issue_type: 21,
   demand_code: 10,
   computation_code: 10,
   /** 需求变更（重排任务）编码 */
@@ -185,10 +190,15 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   partnerMaterialName: 15.7,
   /** 订单评审等：项目名称紧跟客户，勿落 75+ 偶发段 */
   project_name: 16,
-  /** 快研发项目列表：物料 / 负责人 / 阶段门（勿用全局 material_name 79 / owner_name 76） */
+  /** 交付项目：客户（主）+ 销售订单（次）叠列，紧跟项目名 */
+  delivery_customer_sales_stacked: 16.5,
+  /** 交付项目：交期（勿用全局 delivery_date=62，否则会落到节点进度之后） */
+  delivery_project_date: 17,
+  /** 快研发项目列表：物料 / 负责人 / 计划完成（阶段门走 current_node_name，与交付对齐） */
   plm_rd_material_name: 16.5,
   plm_rd_owner_name: 17,
-  current_gate_name: 17.5,
+  plm_rd_planned_end: 17.5,
+  current_gate_name: 17.6,
 
   /**
    * 异常单据（缺料/延期/质量）：工单编号 → 第二业务列（物料叠列 / 计划结束）→ 类型/级别 → …
@@ -200,6 +210,8 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   /** 异常处理流程：类型（filled）→ 步骤节点轴 */
   exception_process_type: 11,
   exception_process_steps: 12,
+  /** 交付项目子实体：关联节点名（项目单号后） */
+  node_name: 12,
   /**
    * 检验四单据列表段位（以来料检验为准，四页共用同一 map，勿页面浅覆盖）：
    * inspection_code → quality_inspection_kind → supplierReceipt / quality_inspection_partner_stacked
@@ -646,6 +658,10 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   payment_push_progress: 50.06,
   delivery_progress: 51,
   receipt_progress: 51,
+  /** 交付项目：当前节点 → 整体进度 → 节点进度（余量列） */
+  current_node_name: 51.2,
+  progress_percent: 51.5,
+  nodes: 52,
 
   // —— 60 时间相关 ——
   order_date: 60,

@@ -12,6 +12,7 @@ export interface Quality8DReport {
   due_date?: string;
   quality_exception_id?: number;
   defect_record_id?: number;
+  d0_prepare?: string;
   d1_team?: string;
   d2_problem?: string;
   d3_containment?: string;
@@ -23,6 +24,15 @@ export interface Quality8DReport {
   verification_result?: string;
   remarks?: string;
   attachments?: Array<{ uid?: string; name?: string; url?: string; status?: string }>;
+  stage_unlocks?: Record<
+    string,
+    {
+      unlocked_at?: string;
+      unlocked_by?: number;
+      unlocked_by_name?: string;
+      reason?: string;
+    }
+  >;
   closed_at?: string;
   lifecycle_stages?: Array<{ key: string; label: string; status: 'done' | 'active' | 'pending' }>;
   next_status?: string | null;
@@ -34,6 +44,7 @@ export interface Quality8DReport {
     delete?: { allowed?: boolean; reason?: string };
     transition?: { allowed?: boolean; reason?: string };
     close?: { allowed?: boolean; reason?: string };
+    print?: { allowed?: boolean; reason?: string };
   };
 }
 
@@ -44,6 +55,19 @@ export interface Quality8DHistoryEntry {
   to_status?: string | null;
   remarks?: string | null;
   verification_result?: string | null;
+}
+
+export interface Quality8DStageRevisionEntry {
+  id: number;
+  report_id: number;
+  stage_key: string;
+  revision_no: number;
+  action: 'save' | 'unlock_request' | 'transition_snapshot' | string;
+  content?: string | null;
+  change_reason?: string | null;
+  changed_by?: number | null;
+  changed_by_name?: string | null;
+  changed_at: string;
 }
 
 export interface Quality8DListResponse {
@@ -175,6 +199,16 @@ export const qualityImprovementApi = {
     getHistory: async (id: number) =>
       apiRequest<Quality8DHistoryEntry[]>(`/apps/kuaizhizao/quality-8d-reports/${id}/history`, {
         method: 'GET',
+      }),
+    getStageRevisions: async (id: number, stageKey?: string) =>
+      apiRequest<Quality8DStageRevisionEntry[]>(
+        `/apps/kuaizhizao/quality-8d-reports/${id}/stage-revisions`,
+        { method: 'GET', params: stageKey ? { stage_key: stageKey } : undefined },
+      ),
+    requestStageUnlock: async (id: number, data: { stage_key: string; reason: string }) =>
+      apiRequest<Quality8DReport>(`/apps/kuaizhizao/quality-8d-reports/${id}/stage-unlock`, {
+        method: 'POST',
+        data,
       }),
     history: async (id: number) =>
       apiRequest<Quality8DHistoryEntry[]>(`/apps/kuaizhizao/quality-8d-reports/${id}/history`, {

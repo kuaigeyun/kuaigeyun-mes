@@ -19,6 +19,7 @@ from apps.kuaiplm.models import (
     RdGateTemplate,
     RdGateTemplateDeliverable,
     RdGateTemplateStage,
+    RdGateTemplateTask,
     RdProject,
 )
 from apps.kuaiplm.schemas.gate_template import (
@@ -64,12 +65,19 @@ class RdGateTemplateService(AppBaseService[RdGateTemplate]):
         deliv_by_stage = {}
         for d in deliverables:
             deliv_by_stage.setdefault(d.stage_id, []).append(d)
+        tasks = await RdGateTemplateTask.filter(
+            tenant_id=tenant_id, stage_id__in=stage_ids
+        ).order_by("sort_order", "id").all() if stage_ids else []
+        tasks_by_stage = {}
+        for t in tasks:
+            tasks_by_stage.setdefault(t.stage_id, []).append(t)
 
         stage_responses: List[GateTemplateStageResponse] = []
         for stage in stages:
             stage_responses.append(GateTemplateStageResponse.model_validate({
                 **{k: getattr(stage, k) for k in stage._meta.fields_map if hasattr(stage, k)},
                 "deliverables": deliv_by_stage.get(stage.id, []),
+                "tasks": tasks_by_stage.get(stage.id, []),
             }))
 
         return GateTemplateDetailResponse.model_validate({
@@ -142,12 +150,39 @@ class RdGateTemplateService(AppBaseService[RdGateTemplate]):
                     deliverable_type=d.deliverable_type,
                     sort_order=d.sort_order,
                 )
+            old_tasks = await RdGateTemplateTask.filter(
+                tenant_id=tenant_id, stage_id=stage.id
+            ).order_by("sort_order", "id").all()
+            id_map: dict[int, int] = {}
+            for t in old_tasks:
+                if t.parent_template_task_id:
+                    continue
+                created = await RdGateTemplateTask.create(
+                    tenant_id=tenant_id,
+                    stage_id=new_stage.id,
+                    task_name=t.task_name,
+                    sort_order=t.sort_order,
+                    default_owner_role=t.default_owner_role,
+                )
+                id_map[t.id] = created.id
+            for t in old_tasks:
+                if not t.parent_template_task_id:
+                    continue
+                parent_id = id_map.get(t.parent_template_task_id)
+                await RdGateTemplateTask.create(
+                    tenant_id=tenant_id,
+                    stage_id=new_stage.id,
+                    parent_template_task_id=parent_id,
+                    task_name=t.task_name,
+                    sort_order=t.sort_order,
+                    default_owner_role=t.default_owner_role,
+                )
 
     async def create_template(
         self, tenant_id: int, data: GateTemplateCreate, created_by: int
     ) -> GateTemplateDetailResponse:
-        if data.project_type not in (RdProjectType.RD.value, RdProjectType.DELIVERY.value):
-            raise BusinessLogicError(f"不支持的项目类型: {data.project_type}")
+        if data.project_type != RdProjectType.RD.value:
+            raise BusinessLogicError("阶段门模板仅支持研发项目类型")
 
         await ensure_system_gate_templates(tenant_id, created_by=created_by)
 
@@ -208,8 +243,8 @@ class RdGateTemplateService(AppBaseService[RdGateTemplate]):
         spawn_count = sum(
             1 for s in stages if s.milestone_role == GateMilestoneRole.SPAWN_DELIVERY.value
         )
-        if spawn_count > 1:
-            raise BusinessLogicError("同一模板内「下推交付」里程碑至多配置一个")
+        if spawn_count > 0:
+            raise BusinessLogicError("交付项目已迁移至快制造，阶段模板不再支持下推交付里程碑")
 
     async def save_stages(
         self,
@@ -228,6 +263,9 @@ class RdGateTemplateService(AppBaseService[RdGateTemplate]):
             old_stage_ids = [s.id for s in old_stages]
             if old_stage_ids:
                 await RdGateTemplateDeliverable.filter(
+                    tenant_id=tenant_id, stage_id__in=old_stage_ids
+                ).delete()
+                await RdGateTemplateTask.filter(
                     tenant_id=tenant_id, stage_id__in=old_stage_ids
                 ).delete()
                 await RdGateTemplateStage.filter(
@@ -251,6 +289,29 @@ class RdGateTemplateService(AppBaseService[RdGateTemplate]):
                         name=deliv.name,
                         deliverable_type=deliv.deliverable_type,
                         sort_order=deliv.sort_order or d_idx,
+                    )
+                temp_key_to_id: dict[str, int] = {}
+                root_tasks = [t for t in (stage_input.tasks or []) if not t.parent_temp_key]
+                child_tasks = [t for t in (stage_input.tasks or []) if t.parent_temp_key]
+                for t_idx, task_input in enumerate(root_tasks, start=1):
+                    created = await RdGateTemplateTask.create(
+                        tenant_id=tenant_id,
+                        stage_id=stage.id,
+                        task_name=task_input.task_name,
+                        sort_order=task_input.sort_order or t_idx,
+                        default_owner_role=task_input.default_owner_role,
+                    )
+                    if task_input.temp_key:
+                        temp_key_to_id[task_input.temp_key] = created.id
+                for t_idx, task_input in enumerate(child_tasks, start=1):
+                    parent_id = temp_key_to_id.get(task_input.parent_temp_key or "")
+                    await RdGateTemplateTask.create(
+                        tenant_id=tenant_id,
+                        stage_id=stage.id,
+                        parent_template_task_id=parent_id,
+                        task_name=task_input.task_name,
+                        sort_order=task_input.sort_order or t_idx,
+                        default_owner_role=task_input.default_owner_role,
                     )
 
             user = await User.filter(id=updated_by).first()
@@ -300,6 +361,9 @@ class RdGateTemplateService(AppBaseService[RdGateTemplate]):
             stage_ids = [s.id for s in stages]
             if stage_ids:
                 await RdGateTemplateDeliverable.filter(
+                    tenant_id=tenant_id, stage_id__in=stage_ids
+                ).delete()
+                await RdGateTemplateTask.filter(
                     tenant_id=tenant_id, stage_id__in=stage_ids
                 ).delete()
                 await RdGateTemplateStage.filter(

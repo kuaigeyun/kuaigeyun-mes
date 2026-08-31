@@ -571,6 +571,7 @@ const APIListPage: React.FC = () => {
     <>
       <TwoColumnLayout
         style={{ height: '100%' }}
+        layoutPersistenceId="pages.system.apis.list"
         leftPanel={categoryLeftPanel}
         rightPanel={{
           content: (

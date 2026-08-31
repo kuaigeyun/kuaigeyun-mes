@@ -1,23 +1,22 @@
-import { rowActionKind } from '../../../../../components/uni-action';
-import React, { useMemo, useRef, useState } from 'react';
+import { rowActionKind, rowActionLabelKeep, rowActionOpenWorkbench } from '../../../../../components/uni-action';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormDateTimePicker, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Empty, Space } from 'antd';
-import { EditOutlined, PlusOutlined } from '@ant-design/icons';
+import { PlusOutlined } from '@ant-design/icons';
+import dayjs from 'dayjs';
 import { stackedPrimarySecondaryColumn } from '../components/qualityTableColumns';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniUserSelect } from '../../../../../components/uni-user-select';
 import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import { qualityImprovementApi, Quality8DReport } from '../../../services/quality-improvement';
-import { useGlobalStore } from '../../../../../stores/globalStore';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { eightDReportRowGates } from '../../../../../hooks/useDocumentCapabilities';
 import { hasModulePermission } from '../../../../../utils/permissionContract';
 import PermissionGuard from '../../../../../components/permission/PermissionGuard';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
-import { EightDDetailDrawer } from './components/EightDDetailDrawer';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
-import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
+import { normalizeDocumentAttachments, mapAttachmentsToUploadList } from '../../../utils/documentAttachments';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import { WorkOrderOperationStepsStrip } from '../../production-execution/work-orders/components/WorkOrderOperationStepsStrip';
 import {
@@ -26,12 +25,14 @@ import {
   EIGHT_D_LIST_STEP_SLOT_PX,
   resolveEightDSeverityDisplay,
   resolveEightDSourceDisplay,
+  stripEightDHtml,
 } from './components/eightDMeta';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { buildFutureDateShortcutFieldProps } from '../../../../../utils/futureDatePickerShortcuts';
-import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { formDateRangeFormItemProps, toApiDateTimeString } from '../../../../../utils/formDate';
 import { formatDateTime } from '../../../../../utils/format';
+import { resolveUserDisplay } from '../../../../../services/user';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
@@ -41,51 +42,88 @@ import {
   EIGHT_D_PINNED_STATUS_FIELD,
   resolveEightDReportListParams,
 } from '../../../utils/qualityImprovementListCore';
+import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 
 const EIGHT_D_RESOURCE = 'kuaizhizao:quality-management-eight-d-reports';
+const WORKBENCH_PATH = '/apps/kuaizhizao/quality-management/eight-d-reports';
 
 const EightDReportsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi, modal: modalApi } = App.useApp();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const currentUser = useCurrentUser();
   const actionRef = useRef<ActionType>(null);
   const createFormRef = useRef<any>(null);
+  const editFormRef = useRef<any>(null);
+  const editOwnerRef = useRef<{ id?: number; name?: string }>({});
   const [createVisible, setCreateVisible] = useState(false);
-  const [detailVisible, setDetailVisible] = useState(false);
-  const [activeReportId, setActiveReportId] = useState<number | undefined>(undefined);
+  const [editVisible, setEditVisible] = useState(false);
+  const [editingReportId, setEditingReportId] = useState<number>();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  const { canCreate, canUpdate, canDelete } = useResourcePermissions(EIGHT_D_RESOURCE);
+  const { canCreate, canUpdate, canDelete, canPrint } = useResourcePermissions(EIGHT_D_RESOURCE);
   const canClose = hasModulePermission(currentUser ?? undefined, EIGHT_D_RESOURCE, 'close');
+  const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const eightDStatusValueEnum = useMemo(() => buildEightDStatusValueEnum(t), [t]);
   const eightDSeverityValueEnum = useMemo(() => buildEightDSeverityValueEnum(t), [t]);
-  const openDetail = (row: Quality8DReport) => {
+
+  const openWorkbench = (row: Quality8DReport) => {
     if (!row.id) return;
-    setActiveReportId(row.id);
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.set('report_id', String(row.id));
-      return next;
-    });
-    setDetailVisible(true);
+    navigate(`${WORKBENCH_PATH}/${row.id}`);
   };
-  const closeDetail = () => {
-    setDetailVisible(false);
-    setActiveReportId(undefined);
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.delete('report_id');
-      return next;
-    });
-  };
+
+  const openEdit = useCallback(async (row: Quality8DReport) => {
+    if (!row.id) return;
+    try {
+      const detail = await qualityImprovementApi.eightD.getById(row.id);
+      setEditingReportId(row.id);
+      editOwnerRef.current = {
+        id: detail.owner_id ?? undefined,
+        name: detail.owner_name ?? undefined,
+      };
+      setEditVisible(true);
+
+      let ownerUuid: string | undefined;
+      if (detail.owner_id) {
+        try {
+          const resolved = await resolveUserDisplay({ user_ids: [detail.owner_id] });
+          ownerUuid = resolved[0]?.uuid;
+          if (resolved[0]) {
+            editOwnerRef.current = {
+              id: resolved[0].id,
+              name: resolved[0].full_name || resolved[0].username || detail.owner_name || '',
+            };
+          }
+        } catch {
+          ownerUuid = undefined;
+        }
+      }
+
+      editFormRef.current?.setFieldsValue({
+        title: detail.title,
+        severity: detail.severity,
+        owner_uuid: ownerUuid,
+        owner_id: detail.owner_id ?? undefined,
+        owner_name: detail.owner_name ?? undefined,
+        due_date: detail.due_date ? dayjs(detail.due_date) : undefined,
+        attachments: mapAttachmentsToUploadList(detail.attachments),
+      });
+    } catch (e: unknown) {
+      messageApi.error((e as Error)?.message || t('common.loadFailed'));
+    }
+  }, [messageApi, t]);
 
   React.useEffect(() => {
     const reportId = Number(searchParams.get('report_id'));
     if (Number.isFinite(reportId) && reportId > 0) {
-      setActiveReportId(reportId);
-      setDetailVisible(true);
+      navigate(`${WORKBENCH_PATH}/${reportId}`, { replace: true });
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('report_id');
+        return next;
+      });
     }
-  }, [searchParams]);
+  }, [searchParams, navigate, setSearchParams]);
 
   const columns: ProColumns<Quality8DReport>[] = useMemo(
     () => alignProColumns<Quality8DReport>([
@@ -168,7 +206,6 @@ const EightDReportsPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.eightD.columns.stage'),
       key: 'eight_d_stages',
-      // 勿绑 dataIndex=status：与搜索列共用 ProTable key，会冲掉 width / 固定契约
       dataIndex: 'lifecycle_stages',
       width: EIGHT_D_LIST_STAGE_COLUMN_WIDTH,
       minWidth: EIGHT_D_LIST_STAGE_COLUMN_WIDTH,
@@ -223,17 +260,9 @@ const EightDReportsPage: React.FC = () => {
       hideInSearch: true,
       ellipsis: true,
       render: (_, row) => {
-        const raw = row.verification_result;
-        const display =
-          typeof raw === 'string'
-            ? raw.trim()
-            : raw && typeof raw === 'object'
-              ? String(
-                  (raw as { message?: unknown }).message ??
-                    (raw as { detail?: unknown }).detail ??
-                    '',
-                ).trim()
-              : '';
+        const display = stripEightDHtml(
+          typeof row.verification_result === 'string' ? row.verification_result : String(row.verification_result ?? ''),
+        );
         if (display) {
           return <span title={display}>{display}</span>;
         }
@@ -259,31 +288,31 @@ const EightDReportsPage: React.FC = () => {
       fixed: 'right',
       hideInSearch: true,
       render: (_, row) => {
-        const gates = eightDReportRowGates(row, canUpdate, canDelete, canClose, t);
+        const gates = eightDReportRowGates(row, canUpdate, canDelete, canClose, t, undefined, canPrint);
         return (
         <Space>
           <Button
             key="detail"
-            {...rowActionKind('read')}
-            onClick={() => {
-              openDetail(row);
-            }}
-          >
-            {t('common.detail')}
-          </Button>
+            {...rowActionOpenWorkbench()}
+            onClick={() => openWorkbench(row)}
+          />
           {gates.update.allowed && (
             <Button
               key="edit"
               {...rowActionKind('update')}
-              icon={<EditOutlined />}
               disabled={gates.update.disabled}
               title={gates.update.title}
-              onClick={() => {
-                openDetail(row);
-              }}
-            >
-              {t('common.edit')}
-            </Button>
+              onClick={() => void openEdit(row)}
+            />
+          )}
+          {gates.print.allowed && (
+            <Button
+              key="print"
+              {...rowActionKind('print')}
+              disabled={gates.print.disabled}
+              title={gates.print.title}
+              onClick={() => openPrint({ documentType: 'eight_d_report', documentId: row.id! })}
+            />
           )}
           {gates.delete.allowed && (
             <Button
@@ -305,19 +334,16 @@ const EightDReportsPage: React.FC = () => {
                   },
                 });
               }}
-            >
-              {t('common.delete')}
-            </Button>
+            />
           )}
           {gates.transition.allowed && (
             <Button
               key="execute"
               {...rowActionKind('execute')}
+              {...rowActionLabelKeep()}
               disabled={gates.transition.disabled}
               title={gates.transition.title}
-              onClick={() => {
-                openDetail(row);
-              }}
+              onClick={() => openWorkbench(row)}
             >
               {t('app.kuaizhizao.eightD.actions.transition')}
             </Button>
@@ -327,7 +353,7 @@ const EightDReportsPage: React.FC = () => {
       },
     },
   ], SALES_DOC_LIST_FIELD_RANK),
-    [t, canUpdate, canDelete, canClose, eightDStatusValueEnum, eightDSeverityValueEnum, messageApi, modalApi],
+    [t, canUpdate, canDelete, canClose, canPrint, eightDStatusValueEnum, eightDSeverityValueEnum, messageApi, modalApi, openPrint, openEdit],
   );
 
   return (
@@ -347,7 +373,7 @@ const EightDReportsPage: React.FC = () => {
           onRowSelectionChange={setSelectedRowKeys}
           permissionResource={EIGHT_D_RESOURCE}
           columns={columns}
-          columnPersistenceId="apps.kuaizhizao.pages.quality-management.eight-d-reports-width-v1"
+          columnPersistenceId="apps.kuaizhizao.pages.quality-management.eight-d-reports-width-v2"
           showAdvancedSearch
           pinnedTabsField={EIGHT_D_PINNED_STATUS_FIELD}
           skipFuzzyPinyinClientFilter
@@ -411,7 +437,7 @@ const EightDReportsPage: React.FC = () => {
           onFinish={async (values) => {
             const payload = {
               ...values,
-              status: 'd1_team',
+              status: 'd0_prepare',
               owner_id: values.owner_id ?? null,
               owner_name: values.owner_name ?? null,
               attachments: normalizeDocumentAttachments(values.attachments),
@@ -422,13 +448,7 @@ const EightDReportsPage: React.FC = () => {
             setCreateVisible(false);
             actionRef.current?.reload();
             if (created.id) {
-              setActiveReportId(created.id);
-              setDetailVisible(true);
-              setSearchParams((prev) => {
-                const next = new URLSearchParams(prev);
-                next.set('report_id', String(created.id));
-                return next;
-              });
+              navigate(`${WORKBENCH_PATH}/${created.id}`);
             }
           }}
         >
@@ -474,22 +494,91 @@ const EightDReportsPage: React.FC = () => {
           />
           <ProFormText name="owner_name" hidden />
           <ProFormText name="owner_id" hidden />
-          <ProFormText name="status" hidden initialValue="d1_team" />
+          <ProFormText name="status" hidden initialValue="d0_prepare" />
           <ProFormTextArea
-            name="d1_team"
-            label={t('app.kuaizhizao.eightD.status.d1_team')}
+            name="d0_prepare"
+            label={t('app.kuaizhizao.eightD.status.d0_prepare')}
             colProps={{ span: 24 }}
           />
           <DocumentAttachmentsField category="quality_8d_report_attachments" />
         </FormModalTemplate>
-        <EightDDetailDrawer
-          open={detailVisible}
-          reportId={activeReportId}
-          canUpdate={canUpdate}
-          canClose={canClose}
-          onClose={closeDetail}
-          onReloadList={() => actionRef.current?.reload()}
-        />
+
+        <FormModalTemplate
+          title={t('app.kuaizhizao.eightD.editTitle')}
+          open={editVisible}
+          width={MODAL_CONFIG.LARGE_WIDTH}
+          grid
+          onClose={() => {
+            setEditVisible(false);
+            setEditingReportId(undefined);
+            editFormRef.current?.resetFields();
+            editOwnerRef.current = {};
+          }}
+          formRef={editFormRef}
+          onFinish={async (values) => {
+            if (!editingReportId) return;
+            await qualityImprovementApi.eightD.update(editingReportId, {
+              title: values.title,
+              severity: values.severity,
+              owner_id: editOwnerRef.current.id ?? values.owner_id ?? null,
+              owner_name: editOwnerRef.current.name ?? values.owner_name ?? null,
+              due_date: values.due_date ? toApiDateTimeString(values.due_date) : null,
+              attachments: normalizeDocumentAttachments(values.attachments),
+            });
+            messageApi.success(t('common.saveSuccess'));
+            setEditVisible(false);
+            setEditingReportId(undefined);
+            actionRef.current?.reload();
+          }}
+        >
+          <ProFormText
+            name="title"
+            label={t('app.kuaizhizao.eightD.columns.title')}
+            rules={[{ required: true }]}
+            colProps={{ span: 24 }}
+          />
+          <ProFormSelect
+            name="severity"
+            label={t('app.kuaizhizao.eightD.columns.severity')}
+            valueEnum={{
+              minor: t('app.kuaizhizao.eightD.severity.minor'),
+              major: t('app.kuaizhizao.eightD.severity.major'),
+              critical: t('app.kuaizhizao.eightD.severity.critical'),
+            }}
+            colProps={{ span: 8 }}
+          />
+          <UniUserSelect
+            name="owner_uuid"
+            label={t('app.kuaizhizao.eightD.columns.owner')}
+            colProps={{ span: 8 }}
+            onChange={(_value, user) => {
+              const picked = Array.isArray(user) ? user[0] : user;
+              editOwnerRef.current = {
+                id: picked?.id,
+                name: picked?.full_name || picked?.username || '',
+              };
+              editFormRef.current?.setFieldsValue?.({
+                owner_id: picked?.id ?? undefined,
+                owner_name: picked?.full_name || picked?.username || undefined,
+              });
+            }}
+          />
+          <ProFormDateTimePicker
+            name="due_date"
+            label={t('app.kuaizhizao.eightD.columns.dueDate')}
+            colProps={{ span: 8 }}
+            fieldProps={buildFutureDateShortcutFieldProps({
+              getForm: () => editFormRef.current,
+              fieldName: 'due_date',
+              t,
+              fieldProps: { style: { width: '100%' } },
+            })}
+          />
+          <ProFormText name="owner_name" hidden />
+          <ProFormText name="owner_id" hidden />
+          <DocumentAttachmentsField category="quality_8d_report_attachments" />
+        </FormModalTemplate>
+        {PrintModal}
       </ListPageTemplate>
     </PermissionGuard>
   );

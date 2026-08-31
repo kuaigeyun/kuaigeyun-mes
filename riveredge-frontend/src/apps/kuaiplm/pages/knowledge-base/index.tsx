@@ -401,9 +401,8 @@ const KnowledgeBasePage: React.FC = () => {
     <ListPageTemplate fillMain>
       <TwoColumnLayout
         style={{ flex: 1, minHeight: 0 }}
+        layoutPersistenceId="kuaiplm.knowledge-base"
         leftPanel={{
-          width: 320,
-          minWidth: 260,
           search: {
             placeholder: t('app.kuaiplm.knowledgeBase.searchPlaceholder'),
             value: searchKeyword,

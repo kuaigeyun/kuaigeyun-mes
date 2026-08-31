@@ -28,7 +28,7 @@ class Quality8DReport(BaseModel):
     quality_exception_id = fields.IntField(null=True, description="关联质量异常ID")
     defect_record_id = fields.IntField(null=True, description="关联不合格品台账ID")
     title = fields.CharField(max_length=200, description="报告标题")
-    status = fields.CharField(max_length=30, default="d1_team", description="8D 阶段")
+    status = fields.CharField(max_length=30, default="d0_prepare", description="8D 阶段")
     severity = fields.CharField(max_length=20, default="major", description="严重程度")
 
     owner_id = fields.IntField(null=True, description="负责人ID")
@@ -36,6 +36,7 @@ class Quality8DReport(BaseModel):
     due_date = fields.DatetimeField(null=True, description="计划完成日期")
     closed_at = fields.DatetimeField(null=True, description="关闭时间")
 
+    d0_prepare = fields.TextField(null=True, description="D0 准备与紧急响应")
     d1_team = fields.TextField(null=True, description="D1 团队组建")
     d2_problem = fields.TextField(null=True, description="D2 问题描述")
     d3_containment = fields.TextField(null=True, description="D3 临时遏制措施")
@@ -47,4 +48,5 @@ class Quality8DReport(BaseModel):
     verification_result = fields.TextField(null=True, description="验证结果")
     remarks = fields.TextField(null=True, description="备注")
     attachments = fields.JSONField(null=True, description="附件列表")
+    stage_unlocks = fields.JSONField(null=True, description="已申请修改并解锁的阶段")
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")

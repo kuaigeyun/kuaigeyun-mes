@@ -1,5 +1,5 @@
 /**
- * 阶段门模板管理（多 Tab 页面模板）
+ * 阶段门模板管理（两栏布局，与交付流程模板一致）
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -30,7 +30,7 @@ import {
   StarOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import { MultiTabListPageTemplate, TwoColumnLayout } from '../../../../components/layout-templates';
+import { ListPageTemplate, TwoColumnLayout } from '../../../../components/layout-templates';
 import { useResourcePermissions } from '../../../../hooks/useResourcePermissions';
 import {
   createGateTemplate,
@@ -110,6 +110,7 @@ const GateTemplateTabPanel: React.FC<GateTemplateTabPanelProps> = ({ projectType
         (res.stages ?? []).map((stage) => ({
           ...stage,
           deliverables: stage.deliverables ?? [],
+          tasks: stage.tasks ?? [],
           _key: String(stage.id ?? newStageKey()),
         })),
       );
@@ -229,6 +230,7 @@ const GateTemplateTabPanel: React.FC<GateTemplateTabPanelProps> = ({ projectType
         sort_order: nextOrder,
         milestone_role: 'none',
         deliverables: [],
+        tasks: [],
       },
     ]);
   };
@@ -262,6 +264,11 @@ const GateTemplateTabPanel: React.FC<GateTemplateTabPanelProps> = ({ projectType
           deliverable_type: d.deliverable_type,
           sort_order: d.sort_order ?? dIdx + 1,
         })),
+        tasks: (stage.tasks ?? []).map((task, tIdx) => ({
+          task_name: task.task_name,
+          sort_order: task.sort_order ?? tIdx + 1,
+          default_owner_role: task.default_owner_role,
+        })),
       }));
       const updated = await saveGateTemplateStages(detail.id, payload);
       messageApi.success(t('common.updateSuccess'));
@@ -270,6 +277,7 @@ const GateTemplateTabPanel: React.FC<GateTemplateTabPanelProps> = ({ projectType
         (updated.stages ?? []).map((stage) => ({
           ...stage,
           deliverables: stage.deliverables ?? [],
+          tasks: stage.tasks ?? [],
           _key: String(stage.id ?? newStageKey()),
         })),
       );
@@ -497,6 +505,7 @@ const GateTemplateTabPanel: React.FC<GateTemplateTabPanelProps> = ({ projectType
           onExpandedRowsChange: (keys) => setExpandedRowKeys([...keys]),
           expandedRowRender: (record, index) => {
             const deliverables = record.deliverables ?? [];
+            const tasks = record.tasks ?? [];
             return (
               <div style={{ padding: '8px 0' }}>
                 <Space style={{ marginBottom: 8 }}>
@@ -599,6 +608,89 @@ const GateTemplateTabPanel: React.FC<GateTemplateTabPanelProps> = ({ projectType
                     },
                   ]}
                 />
+
+                <Space style={{ marginTop: 16, marginBottom: 8 }}>
+                  <Typography.Text strong>{t('app.kuaiplm.gateTemplates.defaultTasks')}</Typography.Text>
+                  {perms.canUpdate ? (
+                    <Button
+                      size="small"
+                      icon={<PlusOutlined />}
+                      onClick={() => {
+                        setStages((prev) =>
+                          prev.map((s, i) =>
+                            i === index
+                              ? {
+                                  ...s,
+                                  tasks: [
+                                    ...(s.tasks ?? []),
+                                    {
+                                      task_name: t('app.kuaiplm.gateTemplates.newTask'),
+                                      sort_order: (s.tasks?.length ?? 0) + 1,
+                                    },
+                                  ],
+                                }
+                              : s,
+                          ),
+                        );
+                      }}
+                    >
+                      {t('app.kuaiplm.gateTemplates.actions.addTask')}
+                    </Button>
+                  ) : null}
+                </Space>
+                <Table
+                  size="small"
+                  pagination={false}
+                  rowKey={(_, tIdx) => `${record._key}-t-${tIdx}`}
+                  dataSource={tasks}
+                  columns={[
+                    {
+                      title: t('app.kuaiplm.gateTemplates.columns.taskName'),
+                      render: (_, task, tIdx) => (
+                        <Input
+                          value={task.task_name}
+                          disabled={!perms.canUpdate}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setStages((prev) =>
+                              prev.map((s, i) => {
+                                if (i !== index) return s;
+                                const next = [...(s.tasks ?? [])];
+                                next[tIdx] = { ...next[tIdx], task_name: val };
+                                return { ...s, tasks: next };
+                              }),
+                            );
+                          }}
+                        />
+                      ),
+                    },
+                    {
+                      title: t('common.actions'),
+                      width: 80,
+                      render: (_, __, tIdx) =>
+                        perms.canUpdate ? (
+                          <Button
+                            type="link"
+                            danger
+                            size="small"
+                            onClick={() => {
+                              setStages((prev) =>
+                                prev.map((s, i) => {
+                                  if (i !== index) return s;
+                                  return {
+                                    ...s,
+                                    tasks: (s.tasks ?? []).filter((_, j) => j !== tIdx),
+                                  };
+                                }),
+                              );
+                            }}
+                          >
+                            {t('common.delete')}
+                          </Button>
+                        ) : null,
+                    },
+                  ]}
+                />
               </div>
             );
           },
@@ -611,41 +703,18 @@ const GateTemplateTabPanel: React.FC<GateTemplateTabPanelProps> = ({ projectType
     <div style={{ flex: 1, minHeight: 0, height: '100%', display: 'flex', flexDirection: 'column' }}>
       <TwoColumnLayout
         style={{ flex: 1, minHeight: 0, height: '100%' }}
-        leftPanel={{ width: 320, minWidth: 260, leftContent: leftPanel }}
+        layoutPersistenceId="kuaiplm.gate-templates"
+        leftPanel={{ leftContent: leftPanel }}
         rightPanel={{ content: rightPanel }}
       />
     </div>
   );
 };
 
-const GateTemplatesPage: React.FC = () => {
-  const { t } = useTranslation();
-  const [activeTabKey, setActiveTabKey] = useState<GateProjectType>('RD');
-
-  const tabs = useMemo(
-    () => [
-      {
-        key: 'RD',
-        label: t('app.kuaiplm.gateTemplates.tab.rd'),
-        children: <GateTemplateTabPanel projectType="RD" />,
-      },
-      {
-        key: 'DELIVERY',
-        label: t('app.kuaiplm.gateTemplates.tab.delivery'),
-        children: <GateTemplateTabPanel projectType="DELIVERY" />,
-      },
-    ],
-    [t],
-  );
-
-  return (
-    <MultiTabListPageTemplate
-      activeTabKey={activeTabKey}
-      onTabChange={(key) => setActiveTabKey(key as GateProjectType)}
-      preserveMounted
-      tabs={tabs}
-    />
-  );
-};
+const GateTemplatesPage: React.FC = () => (
+  <ListPageTemplate fillMain>
+    <GateTemplateTabPanel projectType="RD" />
+  </ListPageTemplate>
+);
 
 export default GateTemplatesPage;

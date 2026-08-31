@@ -56,6 +56,8 @@ from apps.kuaizhizao.models.receipt_notice import ReceiptNotice
 from apps.kuaizhizao.models.logistics import FreightOrder, FreightOrderSource
 from apps.kuaizhizao.models.after_sales_ticket import AfterSalesTicket
 from apps.kuaizhizao.models.install_execution_job import InstallExecutionJob
+from apps.kuaizhizao.models.delivery_project import DeliveryProject
+from apps.kuaizhizao.constants.delivery_project import DeliveryProjectStatus
 from apps.kuaizhizao.models.after_sales_service import (
     AfterSalesSparePartRequisition,
     CustomerReturnVisit,
@@ -125,6 +127,11 @@ class DocumentRelationService:
         "sales_order": {"model": SalesOrder, "code_field": "order_code", "name_field": None},
         "quotation": {"model": Quotation, "code_field": "quotation_code", "name_field": None},
         "sales_contract": {"model": SalesContract, "code_field": "contract_code", "name_field": None},
+        "delivery_project": {
+            "model": DeliveryProject,
+            "code_field": "project_code",
+            "name_field": "project_name",
+        },
         "material_borrow": {"model": MaterialBorrow, "code_field": "borrow_code", "name_field": None},
         "material_return": {"model": MaterialReturn, "code_field": "return_code", "name_field": None},
         "demand_computation": {"model": DemandComputation, "code_field": "computation_code", "name_field": None},
@@ -2313,6 +2320,80 @@ class DocumentRelationService:
 
         downstream.extend(await self._after_sales_for_sales_order(tenant_id, order_id))
 
+        delivery_projects = await DeliveryProject.filter(
+            tenant_id=tenant_id,
+            sales_order_id=order_id,
+            deleted_at__isnull=True,
+        ).exclude(status=DeliveryProjectStatus.CANCELLED.value).limit(20)
+        for project in delivery_projects:
+            downstream.append(
+                _rel_doc(
+                    "delivery_project",
+                    project,
+                    "project_code",
+                    project.project_name,
+                )
+            )
+
+        return _dedupe_relation_documents(downstream)
+
+    async def _get_delivery_project_upstream(
+        self, tenant_id: int, project_id: int
+    ) -> List[Dict[str, Any]]:
+        project = await DeliveryProject.get_or_none(
+            tenant_id=tenant_id, id=project_id, deleted_at__isnull=True
+        )
+        if not project or not project.sales_order_id:
+            return []
+        sales_order = await SalesOrder.get_or_none(
+            tenant_id=tenant_id,
+            id=project.sales_order_id,
+            deleted_at__isnull=True,
+        )
+        if not sales_order:
+            return []
+        return [
+            _rel_doc(
+                "sales_order",
+                sales_order,
+                "order_code",
+                _order_display_name(sales_order),
+            )
+        ]
+
+    async def _get_delivery_project_downstream(
+        self, tenant_id: int, project_id: int
+    ) -> List[Dict[str, Any]]:
+        project = await DeliveryProject.get_or_none(
+            tenant_id=tenant_id, id=project_id, deleted_at__isnull=True
+        )
+        if not project or not project.sales_order_id:
+            return []
+        order_id = project.sales_order_id
+        downstream: List[Dict[str, Any]] = []
+        shipment_notices = await ShipmentNotice.filter(
+            tenant_id=tenant_id,
+            sales_order_id=order_id,
+            deleted_at__isnull=True,
+        ).limit(20)
+        downstream.extend(
+            _rel_doc("shipment_notice", row, "notice_code") for row in shipment_notices
+        )
+        deliveries = await SalesDelivery.filter(
+            tenant_id=tenant_id,
+            sales_order_id=order_id,
+        ).limit(20)
+        downstream.extend(
+            _rel_doc("sales_delivery", row, "delivery_code") for row in deliveries
+        )
+        jobs = await InstallExecutionJob.filter(
+            tenant_id=tenant_id,
+            sales_order_id=order_id,
+            deleted_at__isnull=True,
+        ).limit(20)
+        downstream.extend(
+            _rel_doc("install_execution", row, "job_code") for row in jobs
+        )
         return _dedupe_relation_documents(downstream)
 
     async def _after_sales_for_sales_order(
@@ -3933,6 +4014,12 @@ def _build_document_relation_strategies() -> Dict[str, Any]:
             await svc._get_install_execution_downstream(tenant_id, document_id),
         )
 
+    async def strat_delivery_project(svc: DocumentRelationService, tenant_id: int, document_id: int):
+        return (
+            await svc._get_delivery_project_upstream(tenant_id, document_id),
+            await svc._get_delivery_project_downstream(tenant_id, document_id),
+        )
+
     async def strat_service_asset(svc: DocumentRelationService, tenant_id: int, document_id: int):
         return (
             await svc._get_service_asset_upstream(tenant_id, document_id),
@@ -4058,6 +4145,7 @@ def _build_document_relation_strategies() -> Dict[str, Any]:
         "freight_order": strat_freight_order,
         "after_sales_ticket": strat_after_sales_ticket,
         "install_execution": strat_install_execution,
+        "delivery_project": strat_delivery_project,
         "service_asset": strat_service_asset,
         "repair_order": strat_repair_order,
         "service_dispatch": strat_service_dispatch,

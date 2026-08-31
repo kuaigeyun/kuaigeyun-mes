@@ -31,6 +31,7 @@ import {
   ApiOutlined,
   HighlightOutlined,
   SwapOutlined,
+  AppstoreOutlined,
 } from '@ant-design/icons'
 import type { NormalizeActionContext } from './types'
 import {
@@ -113,6 +114,12 @@ function defaultIconForRowActionWithKind(
   node: React.ReactNode,
   inheritedExplicit?: RowActionPermissionKind | null,
 ): React.ReactNode | undefined {
+  if (readActionVisualProfile(node) === 'open-workbench') {
+    return <AppstoreOutlined />
+  }
+  if (readActionVisualProfile(node) === 'withdraw-project') {
+    return <RollbackOutlined />
+  }
   if (readActionVisualProfile(node) === 'add-follow-up-from-document') {
     return <CommentOutlined />
   }

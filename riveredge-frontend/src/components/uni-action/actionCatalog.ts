@@ -64,6 +64,8 @@ const VISUAL_PROFILE_LABEL_FALLBACK: Record<RowActionVisualProfile, string> = {
   'tax-certify': '认证',
   'tax-transfer-out': '转出',
   'tax-red-flush': '红冲',
+  'open-workbench': '工作台',
+  'withdraw-project': '撤回',
 }
 
 const ROW_ACTION_I18N_KEY: Partial<Record<RowActionPermissionKind, string>> = {
@@ -117,6 +119,8 @@ const VISUAL_PROFILE_I18N_KEY: Record<RowActionVisualProfile, string> = {
   'tax-certify': 'components.uniAction.taxCertify',
   'tax-transfer-out': 'components.uniAction.taxTransferOut',
   'tax-red-flush': 'components.uniAction.taxRedFlush',
+  'open-workbench': 'components.uniAction.openWorkbench',
+  'withdraw-project': 'components.uniAction.withdrawProject',
 }
 
 /** 行内操作排序（细于 detail/edit/delete 三分法；与 overflow 直出/折叠一致） */
@@ -172,6 +176,8 @@ const VISUAL_PROFILE_SORT_RANK: Record<RowActionVisualProfile, number> = {
   'tax-transfer-out': 201,
   'tax-red-flush': 202,
   'reset-password': 990,
+  'open-workbench': 10,
+  'withdraw-project': 45,
 }
 
 export function rowActionLabel(kind: RowActionPermissionKind): string {

@@ -55,6 +55,16 @@ class RdProjectGateResponse(RdProjectGateBase):
 
 # ---------- Tasks ----------
 
+class RdProjectMemberInput(BaseModel):
+    user_id: int
+    user_name: Optional[str] = None
+
+
+class RdProjectMemberResponse(BaseModel):
+    user_id: int
+    user_name: str
+
+
 class RdProjectTaskBase(BaseModel):
     task_name: str
     description: Optional[str] = None
@@ -63,6 +73,7 @@ class RdProjectTaskBase(BaseModel):
     status: str = "TODO"
     assignee_id: Optional[int] = None
     assignee_name: Optional[str] = None
+    members: List[RdProjectMemberInput] = Field(default_factory=list)
     due_date: Optional[date] = None
     sort_order: int = 0
     priority: str = "normal"
@@ -80,18 +91,31 @@ class RdProjectTaskUpdate(BaseModel):
     status: Optional[str] = None
     assignee_id: Optional[int] = None
     assignee_name: Optional[str] = None
+    members: Optional[List[RdProjectMemberInput]] = None
     due_date: Optional[date] = None
     sort_order: Optional[int] = None
     priority: Optional[str] = None
 
 
-class RdProjectTaskResponse(RdProjectTaskBase):
+class RdProjectTaskResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
     uuid: str
     tenant_id: int
     project_id: int
+    task_name: str
+    description: Optional[str] = None
+    gate_id: Optional[int] = None
+    parent_task_id: Optional[int] = None
+    status: str = "TODO"
+    assignee_id: Optional[int] = None
+    assignee_name: Optional[str] = None
+    members: List[RdProjectMemberResponse] = Field(default_factory=list)
+    template_task_id: Optional[int] = None
+    due_date: Optional[date] = None
+    sort_order: int = 0
+    priority: str = "normal"
     completed_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
@@ -177,6 +201,7 @@ class RdProjectCreate(BaseModel):
     material_name: Optional[str] = None
     owner_id: Optional[int] = None
     owner_name: Optional[str] = None
+    members: List[RdProjectMemberInput] = Field(default_factory=list)
     priority: str = "normal"
     planned_start_date: Optional[date] = None
     planned_end_date: Optional[date] = None
@@ -193,6 +218,7 @@ class RdProjectUpdate(BaseModel):
     current_gate_key: Optional[str] = None
     owner_id: Optional[int] = None
     owner_name: Optional[str] = None
+    members: Optional[List[RdProjectMemberInput]] = None
     priority: Optional[str] = None
     planned_start_date: Optional[date] = None
     planned_end_date: Optional[date] = None
@@ -222,6 +248,7 @@ class RdProjectResponse(BaseModel):
     current_gate_name: Optional[str] = None
     owner_id: Optional[int] = None
     owner_name: Optional[str] = None
+    members: List[RdProjectMemberResponse] = Field(default_factory=list)
     priority: str
     planned_start_date: Optional[date] = None
     planned_end_date: Optional[date] = None
@@ -232,6 +259,9 @@ class RdProjectResponse(BaseModel):
     updated_at: datetime
     created_by_name: Optional[str] = None
     updated_by_name: Optional[str] = None
+    gates: List[RdProjectGateResponse] = Field(default_factory=list)
+    progress: float = 0
+    not_executed: bool = False
 
 
 class RelatedArticleSummary(BaseModel):
@@ -248,12 +278,10 @@ class ProjectCollaborationSummary(BaseModel):
 
 
 class RdProjectWorkbenchResponse(RdProjectResponse):
-    gates: List[RdProjectGateResponse] = Field(default_factory=list)
     tasks: List[RdProjectTaskResponse] = Field(default_factory=list)
     deliverables: List[RdProjectDeliverableResponse] = Field(default_factory=list)
     links: List[RdProjectLinkResponse] = Field(default_factory=list)
     related_articles: List[RelatedArticleSummary] = Field(default_factory=list)
-    progress: float = 0
     collaboration: ProjectCollaborationSummary = Field(default_factory=ProjectCollaborationSummary)
 
 
@@ -275,3 +303,9 @@ class SpawnDeliveryProjectRequest(BaseModel):
     project_code: Optional[str] = None
     owner_id: Optional[int] = None
     owner_name: Optional[str] = None
+
+
+class SpawnDeliveryProjectResponse(BaseModel):
+    delivery_project_id: int
+    delivery_project_code: str
+    project_link_id: int

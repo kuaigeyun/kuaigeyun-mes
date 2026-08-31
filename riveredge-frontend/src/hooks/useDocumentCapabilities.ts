@@ -253,6 +253,9 @@ export const SALES_ORDER_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
   'sales_order.backfill_contract.already_linked': '销售订单已关联销售合同',
   'sales_order.backfill_contract.release_order': '框架合同释放单不可补签合同',
   'sales_order.backfill_contract.already_backfilled': '该销售订单已补签销售合同',
+  'sales_order.push_delivery_project.not_allowed': '当前状态不可下推交付项目',
+  'sales_order.push_delivery_project.already_exists': '该销售订单已存在交付项目',
+  'sales_order.push_delivery_project.no_items': '销售订单无明细，无法下推交付项目',
 };
 
 export function salesOrderCapabilityReasonMessage(
@@ -1547,6 +1550,7 @@ export function eightDReportRowGates(
       delete?: ActionCapability;
       transition?: ActionCapability;
       close?: ActionCapability;
+      print?: ActionCapability;
     };
   } | null | undefined,
   canUpdate: boolean,
@@ -1554,6 +1558,7 @@ export function eightDReportRowGates(
   canClose: boolean,
   t?: TFunction,
   permDeniedTitle?: string,
+  canPrint?: boolean,
 ) {
   const caps = record?.capabilities;
   return {
@@ -1582,6 +1587,14 @@ export function eightDReportRowGates(
       'app.kuaizhizao.eightD.capability',
     ),
     close: qualityCapView(caps?.close, canClose, permDeniedTitle, t, EIGHT_D_CAPABILITY_REASON_MESSAGES, 'app.kuaizhizao.eightD.capability'),
+    print: qualityCapView(
+      caps?.print,
+      Boolean(canPrint),
+      permDeniedTitle,
+      t,
+      EIGHT_D_CAPABILITY_REASON_MESSAGES,
+      'app.kuaizhizao.eightD.capability',
+    ),
   };
 }
 

@@ -29,7 +29,8 @@ export type KuaizhizaoReportDomain =
   | 'purchase'
   | 'plan'
   | 'equipment'
-  | 'performance';
+  | 'performance'
+  | 'delivery';
 
 export type ReportTypeRoute = {
   api: KuaizhizaoReportDomain;
@@ -99,6 +100,10 @@ export const REPORT_TYPE_ROUTES: Record<string, ReportTypeRoute> = {
 
   'employee-efficiency-ranking': { api: 'performance', backendType: 'employee-efficiency-ranking', templateId: 'queryTable' },
   'piece-rate-salary-summary': { api: 'performance', backendType: 'piece-rate-salary-summary', templateId: 'queryTable' },
+
+  'delivery-progress-summary': { api: 'delivery', backendType: 'progress-summary', templateId: 'queryTable' },
+  'delivery-process-progress': { api: 'delivery', backendType: 'process-progress', templateId: 'queryTable' },
+  'delivery-issue-progress': { api: 'delivery', backendType: 'issue-progress', templateId: 'queryTable' },
 };
 
 export function camelToKebab(name: string): string {
@@ -129,6 +134,7 @@ export function inferDomainFromPersistenceId(columnPersistenceId: string): Kuaiz
   if (s.includes('.plan-management.')) return 'plan';
   if (s.includes('.equipment-management.')) return 'equipment';
   if (s.includes('.performance.')) return 'performance';
+  if (s.includes('.delivery-project.')) return 'delivery';
   return 'sales';
 }
 
