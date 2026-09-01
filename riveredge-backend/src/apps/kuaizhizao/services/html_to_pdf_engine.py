@@ -133,9 +133,11 @@ async def html_to_pdf_bytes_playwright_async(html_string: str) -> bytes:
             if "sigtrap" in low or "signal=sigtrap" in low:
                 raise RuntimeError(
                     f"启动 Chromium 失败（进程被 SIGTRAP 杀掉）: {msg}。"
-                    "常见原因：打印子进程虚拟内存上限过低（已默认提高到 8GiB；"
-                    "可设 RIVEREDGE_PRINT_AS_LIMIT_GB=0 取消限制，或 12 再加大）；"
-                    "其次为缺系统库（uv run --extra pdf python -m playwright install-deps chromium）。"
+                    "常见原因：1) 打印子进程仍被 RLIMIT_AS 限制"
+                    "（确认已部署「默认不限制」版本，或显式设 RIVEREDGE_PRINT_AS_LIMIT_GB=0）；"
+                    "2) 缺系统库：cd riveredge-backend && "
+                    "uv run --extra pdf python -m playwright install-deps chromium；"
+                    "3) 宿主机物理内存不足导致崩溃。"
                 ) from e
             raise RuntimeError(
                 f"启动 Chromium 失败: {msg}。"

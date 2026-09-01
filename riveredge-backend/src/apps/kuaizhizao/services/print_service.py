@@ -226,23 +226,22 @@ _MAX_PRINT_HTML_BYTES = 12 * 1024 * 1024
 _PRINT_PDF_TIMEOUT_SEC = 90
 
 
-# Chromium 启动会预留约 8GiB 虚拟地址（非实际 RSS）；2GiB RLIMIT_AS 会导致 SIGTRAP。
-# 可用环境变量 RIVEREDGE_PRINT_AS_LIMIT_GB 覆盖（0=不限制）。
+# Chromium 启动会 mmap 约 8GiB 虚拟地址（≠ 实际占用 RSS）。对子进程设 RLIMIT_AS
+# 极易 SIGTRAP，故默认不限制；隔离靠独立进程 + 超时。
+# 若需硬顶：RIVEREDGE_PRINT_AS_LIMIT_GB=16（建议 ≥16；0 或不设=不限制）。
 def _print_child_as_limit_bytes() -> int | None:
     raw = os.environ.get("RIVEREDGE_PRINT_AS_LIMIT_GB", "").strip()
-    if raw == "0":
+    if not raw or raw == "0":
         return None
-    if raw:
-        try:
-            gb = float(raw)
-        except ValueError as e:
-            raise RuntimeError(
-                f"RIVEREDGE_PRINT_AS_LIMIT_GB 无效: {raw!r}（应为正数或 0）"
-            ) from e
-        if gb <= 0:
-            return None
-        return int(gb * 1024 * 1024 * 1024)
-    return 8 * 1024 * 1024 * 1024
+    try:
+        gb = float(raw)
+    except ValueError as e:
+        raise RuntimeError(
+            f"RIVEREDGE_PRINT_AS_LIMIT_GB 无效: {raw!r}（应为正数或 0）"
+        ) from e
+    if gb <= 0:
+        return None
+    return int(gb * 1024 * 1024 * 1024)
 
 
 def _limit_html_to_pdf_child() -> None:

@@ -24739,7 +24739,7 @@ export default {
   'pages.dashboard.updateLog.entries.print-pdf-sigtrap-as-limit.title':
     '修复打印 PDF 时 Chromium 被 SIGTRAP 杀掉',
   'pages.dashboard.updateLog.entries.print-pdf-sigtrap-as-limit.description':
-    '打印子进程虚拟内存上限过低会导致浏览器一启动即崩溃；默认提高到 8GiB，并可通过环境变量调整。',
+    '打印子进程不再默认限制虚拟内存（Chromium 启动需大块地址空间）；隔离仍靠独立进程与超时，必要时可用环境变量加硬顶。',
   'pages.dashboard.updateLog.entries.print-pdf-chromium-error-hint.title':
     '打印 PDF 失败时给出可操作提示',
   'pages.dashboard.updateLog.entries.print-pdf-chromium-error-hint.description':

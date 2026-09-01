@@ -59,16 +59,16 @@ def test_format_pdf_subprocess_failure_keeps_traceback_tail():
     assert "Traceback (most recent call last)" not in detail
 
 
-def test_print_child_as_limit_default_allows_chromium_va():
-    """Chromium 启动需约 8GiB 虚拟地址；默认不得再压到 2GiB。"""
+def test_print_child_as_limit_default_unlimited():
+    """默认不限制虚拟地址；Chromium 需大块 VA，RLIMIT_AS 易 SIGTRAP。"""
     import os
 
     os.environ.pop("RIVEREDGE_PRINT_AS_LIMIT_GB", None)
-    assert _print_child_as_limit_bytes() == 8 * 1024 * 1024 * 1024
+    assert _print_child_as_limit_bytes() is None
     os.environ["RIVEREDGE_PRINT_AS_LIMIT_GB"] = "0"
     assert _print_child_as_limit_bytes() is None
-    os.environ["RIVEREDGE_PRINT_AS_LIMIT_GB"] = "12"
-    assert _print_child_as_limit_bytes() == 12 * 1024 * 1024 * 1024
+    os.environ["RIVEREDGE_PRINT_AS_LIMIT_GB"] = "16"
+    assert _print_child_as_limit_bytes() == 16 * 1024 * 1024 * 1024
     os.environ.pop("RIVEREDGE_PRINT_AS_LIMIT_GB", None)
 
 
