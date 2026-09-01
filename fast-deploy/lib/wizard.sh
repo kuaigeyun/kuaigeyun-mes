@@ -1179,7 +1179,9 @@ wizard_report_component() {
         ok) wizard_say_ok "${name} — 就绪" ;;
         missing) wizard_say_warn "${name} — 未安装" ;;
         installing) wizard_say_warn "${name} — 后台补装进行中" ;;
-        skipped) wizard_say_ok "${name} — 已跳过 (PLAYWRIGHT_POSTINSTALL_ENABLE=0)" ;;
+        skipped) wizard_say_ok "${name} — 已禁用补装 (PLAYWRIGHT_POSTINSTALL_ENABLE=0)" ;;
+        disabled-present) wizard_say_ok "${name} — 补装已关，浏览器仍在" ;;
+        disabled-missing) wizard_say_warn "${name} — 补装已关且浏览器未装" ;;
         old:*) wizard_say_warn "${name} — 版本 ${status#old:}，需要升级" ;;
         *) wizard_say_warn "${name} — ${status}" ;;
     esac

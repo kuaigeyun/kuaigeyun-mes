@@ -73,7 +73,9 @@ special_deps_status_label() {
         ok) echo "就绪" ;;
         missing) echo "未安装" ;;
         installing) echo "补装中" ;;
-        skipped) echo "已跳过" ;;
+        skipped) echo "已禁用(关闭补装)" ;;
+        disabled-present) echo "补装已关 · 浏览器仍在" ;;
+        disabled-missing) echo "补装已关 · 浏览器未装" ;;
         pending) echo "待配置" ;;
         n/a|na) echo "不适用" ;;
         old:*) echo "需升级 (${1#old:})" ;;
@@ -2058,13 +2060,10 @@ cmd_configure() {
     print_configure_summary
 }
 
-# 后端 uv sync/run extras：ocr 始终开启（发票 PDF）；pdf 由 Playwright 开关控制
+# 后端 uv sync/run extras：ocr 始终开启（发票 PDF）；pdf（Playwright 包）始终保留。
+# Chromium 浏览器是否后台补装由 PLAYWRIGHT_POSTINSTALL_ENABLE 单独控制，勿与包安装混为一谈。
 backend_uv_extra_args() {
-    local extras=(--extra ocr)
-    if playwright_postinstall_enabled; then
-        extras+=(--extra pdf)
-    fi
-    printf '%s' "${extras[*]}"
+    printf '%s' "--extra ocr --extra pdf"
 }
 
 # 开发 API：reload exclude 在 Python 侧（server/dev_reload.py），避免 Windows Bash 通配展开
@@ -2078,7 +2077,7 @@ sync_backend_deps() {
     fi
     apply_cn_mirrors
     log_info "同步 Python 依赖..."
-    log_special "uv sync extras: $(backend_uv_extra_args)（发票 OCR 默认；Playwright 由开关控制）"
+    log_special "uv sync extras: $(backend_uv_extra_args)（OCR+Playwright 包；Chromium 补装见 PLAYWRIGHT_POSTINSTALL_ENABLE）"
     (
         cd "$BACKEND_DIR"
         export SETUPTOOLS_EGG_INFO_DIR="$LOGS_DIR"
@@ -2105,15 +2104,13 @@ resolve_playwright_browsers_path() {
 }
 
 playwright_export_env() {
-    if ! playwright_postinstall_enabled; then
-        return 0
-    fi
+    # 无论是否后台补装，运行时都要指向同一浏览器目录（低配关闭补装≠删除已装 Chromium）
     export PLAYWRIGHT_BROWSERS_PATH="$(resolve_playwright_browsers_path)"
     mkdir -p "$PLAYWRIGHT_BROWSERS_PATH"
 }
 
 playwright_uv_extra_args() {
-    # 兼容旧调用：与 backend_uv_extra_args 一致（含 ocr）
+    # 兼容旧调用：与 backend_uv_extra_args 一致
     backend_uv_extra_args
 }
 
@@ -2409,30 +2406,27 @@ ensure_linux_zbar_runtime() {
 }
 
 check_playwright() {
-    if ! playwright_postinstall_enabled; then
-        echo "skipped"
-        return
-    fi
     [ -d "$BACKEND_DIR" ] || { echo "missing"; return; }
     local uv_bin
     uv_bin="$(resolve_uv)"
     playwright_export_env
     if (cd "$BACKEND_DIR" && export PYTHONPATH="$BACKEND_DIR/src" && \
         "$uv_bin" run --extra pdf python -m playwright --version >/dev/null 2>&1); then
-        echo "ok"
+        if playwright_postinstall_enabled; then
+            echo "ok"
+        else
+            # 包仍在；仅后台补装开关关闭（常见于低配模式）
+            echo "skipped"
+        fi
     else
         echo "missing"
     fi
 }
 
 check_playwright_chromium() {
-    if ! playwright_postinstall_enabled; then
-        echo "skipped"
-        return
-    fi
     ensure_logs_dir
     local pidf="$LOGS_DIR/playwright-install.pid"
-    if [ -f "$pidf" ]; then
+    if playwright_postinstall_enabled && [ -f "$pidf" ]; then
         local pid
         pid="$(tr -d '[:space:]' < "$pidf" 2>/dev/null || true)"
         if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
@@ -2441,16 +2435,30 @@ check_playwright_chromium() {
         fi
     fi
 
-    local pw_st uv_bin
+    local uv_bin on_disk=0
+    uv_bin="$(resolve_uv)"
+    if _playwright_chromium_probe "$uv_bin"; then
+        on_disk=1
+    fi
+
+    if ! playwright_postinstall_enabled; then
+        if [ "$on_disk" -eq 1 ]; then
+            echo "disabled-present"
+        else
+            echo "disabled-missing"
+        fi
+        return
+    fi
+
+    local pw_st
     pw_st="$(check_playwright)"
     case "$pw_st" in
-        ok) ;;
-        installing|missing|skipped|old:*) echo "$pw_st"; return ;;
+        ok|skipped) ;;
+        installing|missing|old:*) echo "$pw_st"; return ;;
         *) echo "missing"; return ;;
     esac
 
-    uv_bin="$(resolve_uv)"
-    if _playwright_chromium_probe "$uv_bin"; then
+    if [ "$on_disk" -eq 1 ]; then
         if playwright_chromium_marker_stale; then
             playwright_write_chromium_marker
         fi
@@ -2470,7 +2478,7 @@ ensure_playwright_chromium_sync() {
     local st
     st="$(check_playwright_chromium)"
     case "$st" in
-        ok|skipped) return 0 ;;
+        ok|skipped|disabled-present) return 0 ;;
         installing)
             log_info "等待 Playwright Chromium 补装完成..."
             _wait_playwright_install_job 600 || true
@@ -3762,16 +3770,17 @@ print_special_deps_hint() {
     st_cr="$(check_playwright_chromium 2>/dev/null || echo missing)"
     st_pw="$(check_playwright 2>/dev/null || echo missing)"
     case "$st_cr" in
-        ok|skipped) ;;
+        ok|disabled-present) ;;
         installing)
             echo "  特殊依赖: Chromium 后台补装中 — 详情见菜单 [5] 或 ./fast-deploy/deploy.sh details"
             ;;
-        *)
-            if [ "$st_pw" = "skipped" ]; then
-                echo "  特殊依赖: Playwright 已跳过 — 详情见菜单 [5]"
-            else
-                echo "  特殊依赖: 部分能力可能未就绪 — 详情见菜单 [5] 或 ./fast-deploy/deploy.sh details"
+        disabled-missing|skipped)
+            if [ "$st_pw" = "skipped" ] || [ "$st_cr" = "disabled-missing" ]; then
+                echo "  特殊依赖: Chromium 补装已关闭 — 打印 PDF 需手动 install 或关闭低配后补装，见菜单 [5]"
             fi
+            ;;
+        *)
+            echo "  特殊依赖: 部分能力可能未就绪 — 详情见菜单 [5] 或 ./fast-deploy/deploy.sh details"
             ;;
     esac
 }
@@ -3837,7 +3846,14 @@ cmd_check_special() {
     st="$(check_playwright)"; print_dep_check_line "Playwright" "$st"
     case "$st" in ok|skipped) ;; *) failed=1 ;; esac
     st="$(check_playwright_chromium)"; print_dep_check_line "Chromium" "$st"
-    case "$st" in ok|skipped|installing) ;; *) failed=1 ;; esac
+    case "$st" in ok|skipped|installing|disabled-present) ;; *) failed=1 ;; esac
+    if [ "$st" = "disabled-missing" ] || [ "$st" = "disabled-present" ] || [ "$st" = "skipped" ]; then
+        if low_spec_mode_enabled 2>/dev/null; then
+            echo "  说明: 低配模式关闭了 Chromium 后台补装；已装的浏览器仍可用，打印 PDF 不自动补装。"
+        else
+            echo "  说明: PLAYWRIGHT_POSTINSTALL_ENABLE=0，仅关闭后台补装，不会删已有 Chromium。"
+        fi
+    fi
     st="$(check_invoice_parse_runtime)"; print_dep_check_line "发票系统库" "$st"; [ "$st" = "ok" ] || failed=1
     st="$(check_ocr)"; print_dep_check_line "发票OCR" "$st"; [ "$st" = "ok" ] || failed=1
     st="$(check_pgvector)"; print_dep_check_line "pgvector" "$st"

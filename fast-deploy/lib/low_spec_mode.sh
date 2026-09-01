@@ -79,6 +79,7 @@ low_spec_apply_profile() {
     set_deploy_env_value LOW_SPEC_MODE "1"
     set_deploy_env_value TASKIQ_WORKERS "1"
     set_deploy_env_value PLAYWRIGHT_POSTINSTALL_ENABLE "0"
+    # 仅关闭 Chromium 后台补装以省内存/带宽；Playwright 包与已装浏览器目录保留
     set_deploy_env_value NODE_BUILD_MEM "2048"
     set_deploy_env_value ALLOW_SERVER_BUILD "0"
     set_deploy_env_value TASKIQ_START_TIMEOUT "300"
@@ -185,7 +186,7 @@ cmd_low_spec_mode() {
     _low_spec_swap_hint
     echo ""
     echo "  开启后: Taskiq 单 worker、关闭 Playwright 后台补装、缩小 DB 连接池、"
-    echo "          禁用蓝绿双后端（更新固定传统部署）、延长启动等待；适合约 4GB 及以下内存。"
+    echo "          关闭 Chromium 后台补装（已装浏览器保留）、禁用蓝绿双后端（更新固定传统部署）、延长启动等待；适合约 4GB 及以下内存。"
     echo ""
     echo "  [1] 开启低配模式"
     echo "  [2] 恢复一般模式"
