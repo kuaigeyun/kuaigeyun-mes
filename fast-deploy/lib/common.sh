@@ -4919,7 +4919,7 @@ git_sync_status_hint() {
 sync_git_from_origin() {
     load_deploy_env
     local branch="${GIT_BRANCH:-develop}" remote="${GIT_REMOTE:-origin}"
-    local old_head old_ref new_head
+    local old_head old_ref new_head remote_url
 
     if ! command -v git >/dev/null 2>&1 || [ ! -d "$PROJECT_ROOT/.git" ]; then
         log_error "当前目录不是 Git 仓库: $PROJECT_ROOT"
@@ -4930,33 +4930,45 @@ sync_git_from_origin() {
         return 1
     fi
 
+    remote_url="$(git -C "$PROJECT_ROOT" remote get-url "$remote" 2>/dev/null || echo "?")"
     old_head="$(git -C "$PROJECT_ROOT" rev-parse --short HEAD 2>/dev/null || echo "?")"
     old_ref="$(git -C "$PROJECT_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "?")"
-    log_info "同步远程代码 (${remote}/${branch}，fetch + reset --hard，无需手动 git pull)..."
+    log_info "同步远程代码（等同手动: git fetch ${remote} && git reset --hard ${remote}/${branch}）"
+    log_info "远程: ${remote} → ${remote_url}"
     log_info "当前: ${old_ref} @ ${old_head}"
 
     (
-        cd "$PROJECT_ROOT"
-        git fetch "$remote" --prune --tags
-        git fetch "$remote" "$branch"
+        cd "$PROJECT_ROOT" || exit 1
+        # 1) 拉全量远程引用（含 prune），避免仅 fetch 单分支时 tracking 滞后
+        git fetch "$remote" --prune --tags || exit 1
+        # 2) 强制刷新 origin/<branch> 跟踪引用
+        git fetch "$remote" "+refs/heads/${branch}:refs/remotes/${remote}/${branch}" || exit 1
         if ! git rev-parse --verify "${remote}/${branch}" >/dev/null 2>&1; then
             log_error "远程分支 ${remote}/${branch} 不存在，请检查 GIT_BRANCH 或是否已 push"
             exit 1
         fi
-        # checkout 在 reset 之前会因本地改动失败；-B 直接对齐 origin/<branch>
-        git checkout -B "$branch" "${remote}/${branch}"
+        # 3) 切到目标分支并硬对齐远程（与手动 reset --hard 一致，覆盖本地已跟踪改动）
+        if git show-ref --verify --quiet "refs/heads/${branch}"; then
+            git checkout "$branch" || exit 1
+        else
+            git checkout -B "$branch" "${remote}/${branch}" || exit 1
+        fi
+        git reset --hard "${remote}/${branch}" || exit 1
         _git_clean_untracked_safe
     ) || {
         log_error "同步远程代码失败 (${remote}/${branch})"
-        log_error "排查: git remote -v · 网络 · ${remote} 凭据 · deploy.env 中 GIT_BRANCH"
+        log_error "可手动执行后重试更新:"
+        log_error "  cd ${PROJECT_ROOT}"
+        log_error "  git fetch ${remote} && git reset --hard ${remote}/${branch}"
+        log_error "排查: git remote -v · 网络 · ${remote} 凭据 · deploy.env 中 GIT_REMOTE / GIT_BRANCH"
         return 1
     }
 
     new_head="$(git -C "$PROJECT_ROOT" rev-parse --short HEAD 2>/dev/null || echo "?")"
     if [ "$old_head" = "$new_head" ]; then
-        log_ok "代码已是最新 (${new_head})"
+        log_ok "代码已是最新 (${new_head} = ${remote}/${branch})"
     else
-        log_ok "代码已更新: ${old_head} → ${new_head}"
+        log_ok "代码已更新: ${old_head} → ${new_head}（已 reset --hard ${remote}/${branch}）"
     fi
 }
 

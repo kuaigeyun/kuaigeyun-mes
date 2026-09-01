@@ -386,7 +386,7 @@ wizard_show_home_panel() {
     wizard_panel_section "DEPLOY 部署"
     wizard_panel_menu_item "1" "全新安装" "检测环境与依赖，完成配置后启动"
     wizard_panel_menu_item "2" "修改配置" "修改数据库、超管账号与访问地址"
-    wizard_panel_menu_item "3" "更新系统" "拉代码后更新；低配模式固定传统部署，否则可选传统/蓝绿"
+    wizard_panel_menu_item "3" "更新系统" "fetch+reset 拉最新 → 迁移重启（低配固定传统部署）"
     wizard_panel_menu_item "4" "扩展应用" "专业包 / 定制包 / 移动端 H5（私有仓，需凭证）"
     wizard_panel_section "OPS 运维"
     wizard_panel_menu_item "5" "详情" "服务状态 · 基线依赖 · 特殊依赖（PDF/OCR/向量/敏感词）"
@@ -1707,11 +1707,12 @@ wizard_update_app() {
     : >"$log"
 
     wizard_say "更新分支: ${GIT_REMOTE:-origin}/${branch}"
+    wizard_say "拉代码步骤等价于: git fetch ${GIT_REMOTE:-origin} && git reset --hard ${GIT_REMOTE:-origin}/${branch}"
     wizard_say "流程与 ./fast-deploy/deploy.sh update 一致（拉代码后会重新加载脚本，避免用内存旧逻辑）"
     wizard_say "详细日志: ${log}"
     echo ""
 
-    wizard_run_deploy_step pull "同步远程代码（fetch + reset --hard）" "$log" sync_git_from_origin || return 1
+    wizard_run_deploy_step pull "同步远程代码（git fetch + reset --hard）" "$log" sync_git_from_origin || return 1
 
     # reset 后磁盘脚本已变；必须重新 source，否则仍执行本次启动时装入的旧函数
     # shellcheck source=/dev/null
