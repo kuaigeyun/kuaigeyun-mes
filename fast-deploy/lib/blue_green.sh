@@ -6,6 +6,11 @@ BG_DEV_API_CADDYFILE="${CADDY_DIR}/Caddyfile.dev-api"
 BG_DEV_API_TEMPLATE="${FAST_DEPLOY_DIR}/templates/Caddyfile.dev-api.template"
 
 bg_enabled() {
+    # 低配模式强制单槽位，忽略并清除历史 blue-green.state / BLUE_GREEN_DEPLOY
+    if low_spec_mode_enabled; then
+        [ -f "$BG_STATE_FILE" ] && rm -f "$BG_STATE_FILE"
+        return 1
+    fi
     # 曾用蓝绿 update 后会留下 state；start/stop/status 据此继续走双槽位
     [ -f "$BG_STATE_FILE" ] && return 0
     [ "${BLUE_GREEN_DEPLOY:-0}" = "1" ] && return 0
@@ -15,6 +20,10 @@ bg_enabled() {
 # update 时是否走蓝绿（交互选择；非交互与传统模式默认 stop-start，UPDATE_BLUE_GREEN=1 启用蓝绿）
 update_use_blue_green() {
     load_deploy_env
+    if low_spec_mode_enabled; then
+        log_info "低配模式已开启：更新固定为传统 stop → migrate → start（跳过蓝绿选择）"
+        return 1
+    fi
     if [ -n "${UPDATE_BLUE_GREEN:-}" ]; then
         case "${UPDATE_BLUE_GREEN}" in
             1|yes|true|Y|y) return 0 ;;

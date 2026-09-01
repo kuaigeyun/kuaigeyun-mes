@@ -34,5 +34,5 @@ def discover_plugin_orm_modules() -> List[str]:
             if not isinstance(item, str) or not item.strip():
                 raise RuntimeError(f"{module_name}.ORM_MODEL_MODULES 含非法项: {item!r}")
             found.append(item.strip())
-        logger.debug(f"ORM 发现 {code}: {len(modules)} 个模块")
+        # 成功发现不打日志：migrate/启动在 LOG_LEVEL=DEBUG 时会刷屏；失败已走 error/raise
     return found

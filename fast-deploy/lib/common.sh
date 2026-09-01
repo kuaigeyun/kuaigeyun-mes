@@ -2608,6 +2608,10 @@ cmd_migrate() {
     (
         cd "$BACKEND_DIR"
         export PYTHONPATH="$BACKEND_DIR/src"
+        # 迁移控制台默认 INFO，避免插件 ORM 等 DEBUG 刷屏（DEPLOY_MIGRATE_VERBOSE=1 可保留原级别）
+        if [ "${DEPLOY_MIGRATE_VERBOSE:-0}" != "1" ]; then
+            export LOG_LEVEL=INFO
+        fi
         PYTHONUNBUFFERED=1 AERICH_MIGRATE=1 "$(resolve_uv)" run aerich upgrade
     ) || { log_error "数据库迁移失败"; DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"; exit 1; }
     DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"

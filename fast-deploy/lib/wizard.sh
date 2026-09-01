@@ -386,7 +386,7 @@ wizard_show_home_panel() {
     wizard_panel_section "DEPLOY 部署"
     wizard_panel_menu_item "1" "全新安装" "检测环境与依赖，完成配置后启动"
     wizard_panel_menu_item "2" "修改配置" "修改数据库、超管账号与访问地址"
-    wizard_panel_menu_item "3" "更新系统" "拉代码后选择传统/蓝绿更新（默认传统）"
+    wizard_panel_menu_item "3" "更新系统" "拉代码后更新；低配模式固定传统部署，否则可选传统/蓝绿"
     wizard_panel_menu_item "4" "扩展应用" "专业包 / 定制包 / 移动端 H5（私有仓，需凭证）"
     wizard_panel_section "OPS 运维"
     wizard_panel_menu_item "5" "详情" "服务状态 · 基线依赖 · 特殊依赖（PDF/OCR/向量/敏感词）"

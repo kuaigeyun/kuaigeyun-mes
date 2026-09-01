@@ -4,14 +4,32 @@ $script:BgStateFile = Join-Path $script:LogsDir 'blue-green.state'
 $script:BgDevApiCaddyfile = Join-Path $script:CaddyDir 'Caddyfile.dev-api'
 $script:BgDevApiTemplate = Join-Path $script:FastDeployDir 'templates\Caddyfile.dev-api.template'
 
+function Test-LowSpecModeEnabled {
+    Load-DeployEnv
+    switch ("$($script:LOW_SPEC_MODE)") {
+        { $_ -in '1','yes','true','Y','y','on','ON' } { return $true }
+        default { return $false }
+    }
+}
+
 function Test-BgEnabled {
     Load-DeployEnv
+    if (Test-LowSpecModeEnabled) {
+        if (Test-Path $script:BgStateFile) {
+            Remove-Item -Force $script:BgStateFile -ErrorAction SilentlyContinue
+        }
+        return $false
+    }
     if (Test-Path $script:BgStateFile) { return $true }
     return ($script:BLUE_GREEN_DEPLOY -eq '1')
 }
 
 function Test-UpdateUseBlueGreen {
     Load-DeployEnv
+    if (Test-LowSpecModeEnabled) {
+        Write-LogInfo '低配模式已开启：更新固定为传统 stop → migrate → start（跳过蓝绿选择）'
+        return $false
+    }
     if ($env:UPDATE_BLUE_GREEN) {
         switch ($env:UPDATE_BLUE_GREEN) {
             { $_ -in '1','yes','true','Y','y' } { return $true }

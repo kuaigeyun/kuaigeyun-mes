@@ -91,6 +91,12 @@ low_spec_apply_profile() {
     set_env_value RIVEREDGE_TASKIQ_POOL_MIN "1"
     set_env_value RIVEREDGE_TASKIQ_POOL_MAX "2"
 
+    # 清除蓝绿状态，避免 start/update 仍走双槽位
+    if [ -f "${LOGS_DIR}/blue-green.state" ]; then
+        rm -f "${LOGS_DIR}/blue-green.state"
+        log_info "已清除蓝绿状态文件，低配模式固定传统单槽位部署"
+    fi
+
     load_deploy_env
 }
 
@@ -179,7 +185,7 @@ cmd_low_spec_mode() {
     _low_spec_swap_hint
     echo ""
     echo "  开启后: Taskiq 单 worker、关闭 Playwright 后台补装、缩小 DB 连接池、"
-    echo "          禁用蓝绿双后端、延长启动等待；适合约 4GB 及以下内存。"
+    echo "          禁用蓝绿双后端（更新固定传统部署）、延长启动等待；适合约 4GB 及以下内存。"
     echo ""
     echo "  [1] 开启低配模式"
     echo "  [2] 恢复一般模式"

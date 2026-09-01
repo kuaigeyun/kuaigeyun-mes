@@ -92,6 +92,7 @@ function Load-DeployEnv {
     if (-not $script:TASKIQ_START_TIMEOUT) { $script:TASKIQ_START_TIMEOUT = 180 }
     if (-not $script:GIT_BRANCH) { $script:GIT_BRANCH = 'develop' }
     if (-not $script:GIT_REMOTE) { $script:GIT_REMOTE = 'origin' }
+    if (-not $script:LOW_SPEC_MODE) { $script:LOW_SPEC_MODE = '0' }
     Initialize-BgDefaults
 }
 
