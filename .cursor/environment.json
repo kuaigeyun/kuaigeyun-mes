@@ -1,0 +1,20 @@
+{
+  "name": "快格云制造 (RiverEdge MES)",
+  "install": "bash ./.cursor/install.sh",
+  "start": "bash ./.cursor/start.sh",
+  "terminals": [
+    {
+      "name": "backend-api",
+      "command": "cd riveredge-backend && export PATH=\"$HOME/.local/bin:$PATH\" UV_LINK_MODE=copy PYTHONPATH=src && uv run aerich upgrade && uv run --extra ocr --extra pdf python scripts/run_dev_server.py"
+    },
+    {
+      "name": "taskiq-worker",
+      "command": "cd riveredge-backend && export PATH=\"$HOME/.local/bin:$PATH\" UV_LINK_MODE=copy PYTHONPATH=src RIVEREDGE_TASKIQ_POOL_MIN=1 RIVEREDGE_TASKIQ_POOL_MAX=2 && uv run --extra ocr --extra pdf taskiq worker --app-dir src --workers 1 core.tasks.taskiq_app:broker core.tasks.taskiq_app core.tasks.ai_tasks core.tasks.worker_bootstrap core.tasks.data_backup_handlers"
+    },
+    {
+      "name": "frontend",
+      "command": "cd riveredge-frontend && export VITE_BACKEND_HOST=127.0.0.1 VITE_BACKEND_PORT=8200 && npx vite --port 8100 --host 0.0.0.0"
+    }
+  ],
+  "ports": [8100, 8200]
+}
