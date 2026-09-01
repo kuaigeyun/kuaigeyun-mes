@@ -287,6 +287,16 @@ def _limit_html_to_pdf_child() -> None:
     resource.setrlimit(resource.RLIMIT_AS, (_PRINT_CHILD_AS_LIMIT, _PRINT_CHILD_AS_LIMIT))
 
 
+def _format_pdf_subprocess_failure(err: str, out: str, returncode: int) -> str:
+    """子进程失败信息：优先取 stderr 尾部（Playwright 根因在 Traceback 末尾）。"""
+    detail = (err or out or f"exit {returncode}").strip()
+    if not detail:
+        return f"exit {returncode}"
+    if len(detail) > 2000:
+        return "…" + detail[-1999:]
+    return detail
+
+
 def _run_html_to_pdf_subprocess(html_string: str) -> bytes:
     encoded = html_string.encode("utf-8")
     if len(encoded) > _MAX_PRINT_HTML_BYTES:
@@ -326,8 +336,8 @@ def _run_html_to_pdf_subprocess(html_string: str) -> bytes:
         if proc.returncode != 0:
             err = (proc.stderr or b"").decode("utf-8", errors="replace").strip()
             out = (proc.stdout or b"").decode("utf-8", errors="replace").strip()
-            detail = err or out or f"exit {proc.returncode}"
-            raise BusinessLogicError(f"打印 PDF 失败：{detail[:2000]}")
+            detail = _format_pdf_subprocess_failure(err, out, proc.returncode)
+            raise BusinessLogicError(f"打印 PDF 失败：{detail}")
         if not pdf_path.is_file() or pdf_path.stat().st_size <= 0:
             raise BusinessLogicError("打印 PDF 未生成文件")
         return pdf_path.read_bytes()

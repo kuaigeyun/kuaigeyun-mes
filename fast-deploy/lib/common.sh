@@ -50,6 +50,37 @@ log_warn()  { printf '\033[1;33m[%s] WARN: %s\033[0m\n' "$(date +'%H:%M:%S')" "$
 log_ok()    { printf '\033[0;32m[%s] OK: %s\033[0m\n' "$(date +'%H:%M:%S')" "$*"; }
 log_error() { printf '\033[0;31m[%s] ERROR: %s\033[0m\n' "$(date +'%H:%M:%S')" "$*" >&2; }
 
+# 特殊依赖日志：主流程（migrate/start）默认静默；详情菜单 / DEPLOY_SPECIAL_DEPS_VERBOSE=1 时完整输出。
+# 错误仍走 log_error，不受静默影响。
+special_deps_verbose() {
+    [ "${DEPLOY_SPECIAL_DEPS_VERBOSE:-0}" = "1" ] && return 0
+    [ "${DEPLOY_SPECIAL_DEPS_QUIET:-0}" != "1" ]
+}
+log_special() {
+    special_deps_verbose || return 0
+    log_info "$@"
+}
+log_special_ok() {
+    special_deps_verbose || return 0
+    log_ok "$@"
+}
+log_special_warn() {
+    special_deps_verbose || return 0
+    log_warn "$@"
+}
+special_deps_status_label() {
+    case "$1" in
+        ok) echo "就绪" ;;
+        missing) echo "未安装" ;;
+        installing) echo "补装中" ;;
+        skipped) echo "已跳过" ;;
+        pending) echo "待配置" ;;
+        n/a|na) echo "不适用" ;;
+        old:*) echo "需升级 (${1#old:})" ;;
+        *) echo "$1" ;;
+    esac
+}
+
 print_support_contact() {
     echo "  联系反馈: WeChat lu_dingjie"
 }
@@ -2046,7 +2077,8 @@ sync_backend_deps() {
         return 0
     fi
     apply_cn_mirrors
-    log_info "同步 Python 依赖（含发票 OCR：pymupdf + rapidocr）..."
+    log_info "同步 Python 依赖..."
+    log_special "uv sync extras: $(backend_uv_extra_args)（发票 OCR 默认；Playwright 由开关控制）"
     (
         cd "$BACKEND_DIR"
         export SETUPTOOLS_EGG_INFO_DIR="$LOGS_DIR"
@@ -2300,7 +2332,7 @@ install_invoice_parse_runtime() {
         return 0
     fi
     if [ "$(check_invoice_parse_runtime)" = "ok" ]; then
-        log_ok "发票解析系统库已就绪（zbar + libgomp）"
+        log_special_ok "发票解析系统库已就绪（zbar + libgomp）"
         return 0
     fi
     log_info "安装发票解析系统库（zbar + libgomp + libGL）..."
@@ -2480,6 +2512,7 @@ ensure_playwright_chromium_sync() {
 ensure_playwright_chromium_postinstall() {
     # 后台补装 Chromium，不阻塞 start / deploy 主流程（PDF 打印就绪前可能短暂不可用）
     if ! playwright_postinstall_enabled; then
+        log_special "Playwright Chromium 已跳过 (PLAYWRIGHT_POSTINSTALL_ENABLE=0)"
         return 0
     fi
     ensure_logs_dir
@@ -2494,6 +2527,7 @@ ensure_playwright_chromium_postinstall() {
         if playwright_chromium_marker_stale; then
             playwright_write_chromium_marker
         fi
+        log_special_ok "Playwright Chromium 已就绪"
         return 0
     fi
 
@@ -2501,7 +2535,7 @@ ensure_playwright_chromium_postinstall() {
         local pid
         pid="$(tr -d '[:space:]' < "$pidf" 2>/dev/null || true)"
         if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
-            log_info "Playwright Chromium 后台补装进行中（PID $pid），详见 $logf"
+            log_special "Playwright Chromium 后台补装进行中（PID $pid），详见 $logf"
             return 0
         fi
         rm -f "$pidf"
@@ -2510,7 +2544,7 @@ ensure_playwright_chromium_postinstall() {
     rm -f "$marker"
     playwright_export_env
 
-    log_info "补装 Playwright Chromium 运行时（后台执行，不阻塞启动）..."
+    log_special "补装 Playwright Chromium 运行时（后台执行）..."
     # 整个子 shell 必须自带重定向：只给内部命令重定向会让子 shell 继承调用方的 stdout，
     # 向导的 `cmd | tee` 因此收不到 EOF，收尾的完成面板永远打不出来
     (
@@ -2531,7 +2565,7 @@ ensure_playwright_chromium_postinstall() {
         rm -f "$pidf"
     ) >>"$logf" 2>&1 </dev/null &
     echo $! > "$pidf"
-    log_info "Playwright 补装已在后台运行（PID $(cat "$pidf")），详见 $logf"
+    log_special "Playwright 补装已在后台运行（PID $(cat "$pidf")），详见 $logf"
     return 0
 }
 
@@ -2539,10 +2573,14 @@ ensure_playwright_chromium_postinstall() {
 ensure_sensitive_lexicon_pack() {
     local pack="$BACKEND_DIR/src/core/data/sensitive_words/lexicon.pack"
     if [ "${FORCE_LEXICON_REPACK:-0}" != "1" ] && [ -f "$pack" ] && [ -s "$pack" ]; then
-        log_info "敏感词 lexicon.pack 已存在"
+        log_special "敏感词 lexicon.pack 已存在"
         return 0
     fi
-    log_info "生成敏感词 lexicon.pack（未入库，须部署机生成）..."
+    if [ "${DEPLOY_SPECIAL_DEPS_QUIET:-0}" = "1" ]; then
+        log_info "准备敏感词词库..."
+    else
+        log_info "生成敏感词 lexicon.pack（未入库，须部署机生成）..."
+    fi
     (
         cd "$BACKEND_DIR"
         export PYTHONPATH="$BACKEND_DIR/src"
@@ -2555,21 +2593,24 @@ ensure_sensitive_lexicon_pack() {
         log_error "lexicon.pack 未生成: $pack"
         return 1
     fi
-    log_ok "敏感词 lexicon.pack 已就绪"
+    log_special_ok "敏感词 lexicon.pack 已就绪"
 }
 
 cmd_migrate() {
+    local _prev_quiet="${DEPLOY_SPECIAL_DEPS_QUIET:-}"
+    DEPLOY_SPECIAL_DEPS_QUIET=1
     sync_backend_deps
     ensure_timezone_env
-    ensure_postgresql_pgvector || { log_error "pgvector 未就绪，无法执行依赖 vector 的迁移"; exit 1; }
-    ensure_vector_extension_created || { log_error "无法在应用库创建 vector 扩展（需要超级用户）"; exit 1; }
-    ensure_sensitive_lexicon_pack || { log_error "敏感词 lexicon.pack 未就绪，后端无法启动"; exit 1; }
+    ensure_postgresql_pgvector || { log_error "pgvector 未就绪，无法执行依赖 vector 的迁移"; DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"; exit 1; }
+    ensure_vector_extension_created || { log_error "无法在应用库创建 vector 扩展（需要超级用户）"; DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"; exit 1; }
+    ensure_sensitive_lexicon_pack || { log_error "敏感词 lexicon.pack 未就绪，后端无法启动"; DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"; exit 1; }
     log_info "执行数据库迁移..."
     (
         cd "$BACKEND_DIR"
         export PYTHONPATH="$BACKEND_DIR/src"
         PYTHONUNBUFFERED=1 AERICH_MIGRATE=1 "$(resolve_uv)" run aerich upgrade
-    ) || { log_error "数据库迁移失败"; exit 1; }
+    ) || { log_error "数据库迁移失败"; DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"; exit 1; }
+    DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"
     log_ok "迁移完成"
 }
 
@@ -3149,6 +3190,8 @@ verify_caddy_serving() {
 }
 
 cmd_start_dev() {
+    local _prev_quiet="${DEPLOY_SPECIAL_DEPS_QUIET:-}"
+    DEPLOY_SPECIAL_DEPS_QUIET=1
     ensure_logs_dir
     load_deploy_env
     cmd_migrate
@@ -3156,7 +3199,9 @@ cmd_start_dev() {
     start_worker_dev
     start_frontend_dev
     ensure_playwright_chromium_postinstall
+    DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"
     log_ok "RiverEdge 开发环境已就绪"
+    print_special_deps_hint
     local lan_ip
     lan_ip="$(detect_server_ip)"
     echo "  Web:  http://127.0.0.1:${FRONTEND_PORT}  |  http://localhost:${FRONTEND_PORT}"
@@ -3169,15 +3214,18 @@ cmd_start_dev() {
 }
 
 cmd_start_prod() {
+    local _prev_quiet="${DEPLOY_SPECIAL_DEPS_QUIET:-}"
+    DEPLOY_SPECIAL_DEPS_QUIET=1
     ensure_logs_dir
     load_deploy_env
-    [ -f "$FRONTEND_DIR/dist/index.html" ] || { log_error "缺少前端 dist，请先运行 build"; exit 1; }
+    [ -f "$FRONTEND_DIR/dist/index.html" ] || { log_error "缺少前端 dist，请先运行 build"; DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"; exit 1; }
     if [ "${RIVEREDGE_SYSTEMD:-0}" = "1" ]; then
-        wait_for_local_postgres_ready 120 || exit 1
-        ensure_logs_dir_writable "$(id -un)" || exit 1
+        wait_for_local_postgres_ready 120 || { DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"; exit 1; }
+        ensure_logs_dir_writable "$(id -un)" || { DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"; exit 1; }
         if [ -f "$ENV_FILE" ] && [ ! -r "$ENV_FILE" ]; then
             log_error "无法读取 ${ENV_FILE}（可能被 root 占用）"
             log_error "请执行: sudo chown \$(whoami):\$(whoami) ${ENV_FILE} ${LOGS_DIR}"
+            DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"
             exit 1
         fi
     fi
@@ -3187,10 +3235,13 @@ cmd_start_prod() {
     start_worker_prod
     if ! start_caddy_prod; then
         rollback_partial_prod_start
+        DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"
         exit 1
     fi
     ensure_playwright_chromium_postinstall
+    DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"
     log_ok "RiverEdge 生产环境已就绪"
+    print_special_deps_hint
     local access_ip="${SERVER_IP:-127.0.0.1}"
     local web_url
     web_url="$(resolve_prod_web_url "$access_ip")"
@@ -3684,8 +3735,13 @@ cmd_details() {
     load_deploy_env
     cmd_status
     echo ""
-    echo "=== 环境依赖 ==="
-    cmd_check || true
+    echo "=== 基线依赖 ==="
+    cmd_check_baseline || true
+    echo ""
+    echo "=== 特殊依赖（打印 PDF / 发票 OCR / 向量库 / 敏感词）==="
+    echo "  状态可在此查看；安装/更新主流程默认少刷这些日志（仍会装）。"
+    echo "  完整特殊日志: DEPLOY_SPECIAL_DEPS_VERBOSE=1 ./fast-deploy/deploy.sh start"
+    cmd_check_special || true
     if [ "$DEPLOY_MODE" = "prod" ]; then
         echo ""
         echo "=== 开机自启 ==="
@@ -3695,6 +3751,95 @@ cmd_details() {
             echo "  riveredge.service: $(boot_service_status_label)"
         fi
     fi
+}
+
+print_special_deps_hint() {
+    local st_cr st_pw
+    st_cr="$(check_playwright_chromium 2>/dev/null || echo missing)"
+    st_pw="$(check_playwright 2>/dev/null || echo missing)"
+    case "$st_cr" in
+        ok|skipped) ;;
+        installing)
+            echo "  特殊依赖: Chromium 后台补装中 — 详情见菜单 [5] 或 ./fast-deploy/deploy.sh details"
+            ;;
+        *)
+            if [ "$st_pw" = "skipped" ]; then
+                echo "  特殊依赖: Playwright 已跳过 — 详情见菜单 [5]"
+            else
+                echo "  特殊依赖: 部分能力可能未就绪 — 详情见菜单 [5] 或 ./fast-deploy/deploy.sh details"
+            fi
+            ;;
+    esac
+}
+
+check_sensitive_lexicon() {
+    local pack="$BACKEND_DIR/src/core/data/sensitive_words/lexicon.pack"
+    if [ -f "$pack" ] && [ -s "$pack" ]; then
+        echo "ok"
+    else
+        echo "missing"
+    fi
+}
+
+check_pgvector() {
+    if [ ! -f "$ENV_FILE" ]; then
+        echo "pending"
+        return
+    fi
+    local psql_bin
+    psql_bin="$(resolve_psql 2>/dev/null || true)"
+    if [ -z "$psql_bin" ]; then
+        echo "pending"
+        return
+    fi
+    if pgvector_available_in_app_db 2>/dev/null; then
+        if vector_extension_installed_in_app_db 2>/dev/null; then
+            echo "ok"
+        else
+            echo "missing"
+        fi
+    else
+        echo "missing"
+    fi
+}
+
+print_dep_check_line() {
+    local name=$1 status=$2
+    printf '  %-18s %s\n' "$name" "$(special_deps_status_label "$status")"
+}
+
+cmd_check_baseline() {
+    is_windows_gitbash && refresh_windows_path
+    local need_caddy=0 failed=0 st
+    [ "$DEPLOY_MODE" = "prod" ] && need_caddy=1
+
+    st="$(check_node)"; print_dep_check_line "Node.js" "$st"; [ "$st" = "ok" ] || failed=1
+    st="$(check_python)"; print_dep_check_line "Python" "$st"; [ "$st" = "ok" ] || failed=1
+    st="$(check_uv)"; print_dep_check_line "uv" "$st"; [ "$st" = "ok" ] || failed=1
+    st="$(check_npm)"; print_dep_check_line "npm" "$st"; [ "$st" = "ok" ] || failed=1
+    if db_target_is_remote; then
+        st="$(check_postgres_deploy)"; print_dep_check_line "PostgreSQL(远程)" "$st"; [ "$st" = "ok" ] || failed=1
+    else
+        st="$(check_postgres)"; print_dep_check_line "PostgreSQL" "$st"; [ "$st" = "ok" ] || failed=1
+    fi
+    if [ "$need_caddy" -eq 1 ]; then
+        st="$(check_caddy)"; print_dep_check_line "Caddy" "$st"; [ "$st" = "ok" ] || failed=1
+    fi
+    return $failed
+}
+
+cmd_check_special() {
+    local failed=0 st
+    st="$(check_playwright)"; print_dep_check_line "Playwright" "$st"
+    case "$st" in ok|skipped) ;; *) failed=1 ;; esac
+    st="$(check_playwright_chromium)"; print_dep_check_line "Chromium" "$st"
+    case "$st" in ok|skipped|installing) ;; *) failed=1 ;; esac
+    st="$(check_invoice_parse_runtime)"; print_dep_check_line "发票系统库" "$st"; [ "$st" = "ok" ] || failed=1
+    st="$(check_ocr)"; print_dep_check_line "发票OCR" "$st"; [ "$st" = "ok" ] || failed=1
+    st="$(check_pgvector)"; print_dep_check_line "pgvector" "$st"
+    case "$st" in ok|pending) ;; *) failed=1 ;; esac
+    st="$(check_sensitive_lexicon)"; print_dep_check_line "敏感词词库" "$st"; [ "$st" = "ok" ] || failed=1
+    return $failed
 }
 
 cmd_status() {
@@ -3999,7 +4144,7 @@ ensure_postgresql_pgvector() {
     local major pg_config sharedir control host
     if is_windows_gitbash; then
         if pgvector_available_in_app_db; then
-            log_ok "应用库已具备 pgvector（pg_available_extensions）"
+            log_special_ok "应用库已具备 pgvector（pg_available_extensions）"
             return 0
         fi
         host="$(read_env_value DB_HOST 2>/dev/null || echo localhost)"
@@ -4008,25 +4153,25 @@ ensure_postgresql_pgvector() {
             log_error "请在 PostgreSQL 所在机器安装 vector 扩展后重试迁移"
             return 1
         fi
-        log_info "Windows: 安装 pgvector 扩展文件..."
+        log_info "安装数据库向量扩展（pgvector）..."
         if ! powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$FAST_DEPLOY_DIR/windows/install-pgvector.ps1" -FastDeployDir "$FAST_DEPLOY_DIR" -UseMirror "${USE_MIRROR:-1}"; then
             log_error "Windows pgvector 安装失败（需管理员权限写入 PostgreSQL 目录）"
             return 1
         fi
         if pgvector_available_in_app_db; then
-            log_ok "pgvector 已对应用库可用"
+            log_special_ok "pgvector 已对应用库可用"
             return 0
         fi
         log_error "pgvector 安装后应用库仍无 vector（请重启 PostgreSQL 后重试 migrate）"
         return 1
     fi
     if [[ "$(uname -s)" == "Darwin" ]]; then
-        log_warn "macOS 请自行安装 pgvector（如 brew install pgvector）后再迁移"
+        log_special_warn "macOS 请自行安装 pgvector（如 brew install pgvector）后再迁移"
         return 0
     fi
 
     if pgvector_available_in_app_db; then
-        log_ok "应用库已具备 pgvector（pg_available_extensions）"
+        log_special_ok "应用库已具备 pgvector（pg_available_extensions）"
         return 0
     fi
 
@@ -4048,7 +4193,8 @@ ensure_postgresql_pgvector() {
         return 1
     fi
     sharedir="$("$pg_config" --sharedir 2>/dev/null || true)"
-    log_info "安装 pgvector（PostgreSQL ${major}, pg_config=${pg_config}, sharedir=${sharedir:-?}）..."
+    log_info "安装数据库向量扩展（pgvector，PostgreSQL ${major}）..."
+    log_special "pg_config=${pg_config}, sharedir=${sharedir:-?}"
 
     # 系统包路径的 PG：优先 apt/yum；宝塔或 sharedir 已是自定义前缀则走源码
     if [[ "$pg_config" == /www/server/pgsql/* ]] || [[ "${sharedir}" == /www/server/pgsql* ]]; then
@@ -4152,7 +4298,7 @@ postgres_superuser_sql_on_app_db() {
 ensure_vector_extension_created() {
     if is_windows_gitbash || [[ "$(uname -s)" == "Darwin" ]]; then
         if vector_extension_installed_in_app_db; then
-            log_ok "应用库已启用 vector 扩展"
+            log_special_ok "应用库已启用 vector 扩展"
             return 0
         fi
         if ! pgvector_available_in_app_db; then
@@ -4163,14 +4309,14 @@ ensure_vector_extension_created() {
             log_error "远程库需超级用户执行: CREATE EXTENSION IF NOT EXISTS vector;"
             return 1
         fi
-        log_info "以超级用户在应用库创建 vector 扩展..."
+        log_info "启用数据库向量扩展..."
         if ! postgres_superuser_sql_on_app_db "CREATE EXTENSION IF NOT EXISTS vector;"; then
             log_error "超级用户 CREATE EXTENSION vector 失败"
             log_error "请手动以 postgres 连接应用库执行: CREATE EXTENSION IF NOT EXISTS vector;"
             return 1
         fi
         if vector_extension_installed_in_app_db; then
-            log_ok "已在应用库创建 vector 扩展"
+            log_special_ok "已在应用库创建 vector 扩展"
             return 0
         fi
         log_error "CREATE EXTENSION 后应用库仍无 vector"
@@ -4178,7 +4324,7 @@ ensure_vector_extension_created() {
     fi
 
     if vector_extension_installed_in_app_db; then
-        log_ok "应用库已启用 vector 扩展"
+        log_special_ok "应用库已启用 vector 扩展"
         return 0
     fi
 
@@ -4192,7 +4338,7 @@ ensure_vector_extension_created() {
         return 1
     fi
 
-    log_info "以超级用户在应用库创建 vector 扩展..."
+    log_info "启用数据库向量扩展..."
     if ! postgres_superuser_sql_on_app_db "CREATE EXTENSION IF NOT EXISTS vector;"; then
         log_error "超级用户 CREATE EXTENSION vector 失败"
         log_error "请手动以 postgres 连接应用库执行: CREATE EXTENSION IF NOT EXISTS vector;"
@@ -4200,7 +4346,7 @@ ensure_vector_extension_created() {
     fi
 
     if vector_extension_installed_in_app_db; then
-        log_ok "已在应用库创建 vector 扩展"
+        log_special_ok "已在应用库创建 vector 扩展"
         return 0
     fi
     log_error "CREATE EXTENSION 后应用库仍无 vector"
@@ -4586,51 +4732,16 @@ run_install_component() {
 
 cmd_check() {
     is_windows_gitbash && refresh_windows_path
-    local need_caddy=0
-    [ "$DEPLOY_MODE" = "prod" ] && need_caddy=1
     local failed=0
 
-    local st
-    st="$(check_node)"; [ "$st" = "ok" ] && log_ok "Node.js" || { log_warn "Node.js: $st"; failed=1; }
-    st="$(check_python)"; [ "$st" = "ok" ] && log_ok "Python" || { log_warn "Python: $st"; failed=1; }
-    st="$(check_uv)"; [ "$st" = "ok" ] && log_ok "uv" || { log_warn "uv: $st"; failed=1; }
-    st="$(check_npm)"; [ "$st" = "ok" ] && log_ok "npm" || { log_warn "npm: $st"; failed=1; }
-    if db_target_is_remote; then
-        st="$(check_postgres_deploy)"; [ "$st" = "ok" ] && log_ok "PostgreSQL (远程)" || { log_warn "PostgreSQL (远程): $st"; failed=1; }
-    else
-        st="$(check_postgres)"; [ "$st" = "ok" ] && log_ok "PostgreSQL" || { log_warn "PostgreSQL: $st"; failed=1; }
-    fi
-    if [ "$need_caddy" -eq 1 ]; then
-        st="$(check_caddy)"; [ "$st" = "ok" ] && log_ok "Caddy" || { log_warn "Caddy: $st"; failed=1; }
-    fi
-    st="$(check_playwright)"
-    case "$st" in
-        ok) log_ok "Playwright" ;;
-        skipped) log_ok "Playwright — 已跳过 (PLAYWRIGHT_POSTINSTALL_ENABLE=0)" ;;
-        *) log_warn "Playwright: $st（需 uv sync --extra pdf）"; failed=1 ;;
-    esac
-    st="$(check_playwright_chromium)"
-    case "$st" in
-        ok) log_ok "Chromium (Playwright)" ;;
-        skipped) log_ok "Chromium — 已跳过 (PLAYWRIGHT_POSTINSTALL_ENABLE=0)" ;;
-        installing) log_warn "Chromium — 后台补装进行中（见 .logs/playwright-install.log）" ;;
-        missing) log_warn "Chromium — 未安装（生产 start 会同步安装）" ;;
-        *) log_warn "Chromium: $st" ;;
-    esac
-    st="$(check_invoice_parse_runtime)"
-    if [ "$st" = "ok" ]; then
-        log_ok "发票解析系统库 (zbar + libgomp)"
-    else
-        log_warn "发票解析系统库: $st（需 libzbar0/zbar + libgomp1/libgomp）"
+    echo "=== 基线依赖 ==="
+    if ! cmd_check_baseline; then
         failed=1
     fi
-    st="$(check_ocr)"
-    if [ "$st" = "ok" ]; then
-        log_ok "发票 OCR (pymupdf + rapidocr)"
-    else
-        log_warn "发票 OCR: $st（需 uv sync --extra ocr，执行 migrate 会自动同步）"
-        failed=1
-    fi
+    echo ""
+    echo "=== 特殊依赖 ==="
+    # 特殊依赖不计入 check 失败：未装 Chromium 不应阻断 install 复核；状态见 details
+    cmd_check_special || true
     return $failed
 }
 
@@ -4664,7 +4775,7 @@ cmd_install() {
     # 发票 PDF：系统库 zbar+libgomp；Python OCR 包在 migrate/sync_backend_deps 中 --extra ocr
     run_install_component invoice-runtime "$(check_invoice_parse_runtime)" || true
     log_warn "若刚安装系统软件，请重新打开终端或刷新 PATH 后再次 check"
-    cmd_check || exit 1
+    cmd_check_baseline || exit 1
 }
 
 _git_clean_untracked_safe() {

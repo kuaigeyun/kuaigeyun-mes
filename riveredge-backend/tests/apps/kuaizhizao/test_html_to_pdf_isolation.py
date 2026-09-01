@@ -14,6 +14,7 @@ from apps.kuaizhizao.services.html_to_pdf_engine import (
 from apps.kuaizhizao.services.print_service import (
     _MAX_PRINT_HTML_BYTES,
     _MAX_PRINT_INLINE_IMAGES,
+    _format_pdf_subprocess_failure,
     _inline_local_file_images_in_html,
     _run_html_to_pdf_subprocess,
 )
@@ -46,6 +47,15 @@ def test_print_subprocess_nonzero_raises():
     with patch("apps.kuaizhizao.services.print_service.subprocess.run", return_value=fake):
         with pytest.raises(BusinessLogicError, match="打印 PDF 失败"):
             _run_html_to_pdf_subprocess(html)
+
+
+def test_format_pdf_subprocess_failure_keeps_traceback_tail():
+    head = "Traceback (most recent call last):\n" + ("x" * 2500) + "\n"
+    tail = "Error: BrowserType.launch: Executable doesn't exist at /opt/chrome"
+    detail = _format_pdf_subprocess_failure(head + tail, "", 1)
+    assert "Executable doesn't exist" in detail
+    assert detail.startswith("…")
+    assert "Traceback (most recent call last)" not in detail
 
 
 def test_print_subprocess_timeout_raises():

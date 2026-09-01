@@ -86,13 +86,24 @@ def parse_css_page_size(html_string: str) -> Optional[Tuple[str, str]]:
     return f"{w_mm}mm", f"{h_mm}mm"
 
 
+def _playwright_chromium_missing_hint(executable_path: str | None) -> str:
+    browsers_path = os.environ.get("PLAYWRIGHT_BROWSERS_PATH") or "(未设置，默认 ~/.cache/ms-playwright)"
+    return (
+        f"未找到 Playwright Chromium（期望: {executable_path!r}）。"
+        f"PLAYWRIGHT_BROWSERS_PATH={browsers_path}。"
+        "请在后端目录执行：uv run --extra pdf python -m playwright install chromium；"
+        "Linux 若仍启动失败再执行：uv run --extra pdf python -m playwright install-deps chromium。"
+        "并确认 deploy.env 未关闭 PLAYWRIGHT_POSTINSTALL_ENABLE，且 API 进程带有同一 PLAYWRIGHT_BROWSERS_PATH。"
+    )
+
+
 async def html_to_pdf_bytes_playwright_async(html_string: str) -> bytes:
     try:
         from playwright.async_api import async_playwright
     except Exception as e:
         raise RuntimeError(
-            "Playwright 不可用，请先安装依赖：pip install playwright "
-            "并执行：playwright install chromium。"
+            "Playwright 不可用，请先安装依赖：uv sync --extra pdf "
+            "并执行：uv run --extra pdf python -m playwright install chromium。"
         ) from e
 
     launch_args: list[str] = []
@@ -109,7 +120,20 @@ async def html_to_pdf_bytes_playwright_async(html_string: str) -> bytes:
     page_size = parse_css_page_size(html_for_playwright)
 
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True, args=launch_args)
+        exe = p.chromium.executable_path
+        if not exe or not os.path.isfile(exe):
+            raise RuntimeError(_playwright_chromium_missing_hint(exe))
+        try:
+            browser = await p.chromium.launch(headless=True, args=launch_args)
+        except Exception as e:
+            msg = str(e)
+            if "Executable doesn't exist" in msg or "executable doesn't exist" in msg.lower():
+                raise RuntimeError(_playwright_chromium_missing_hint(exe)) from e
+            raise RuntimeError(
+                f"启动 Chromium 失败: {msg}。"
+                "常见原因：PLAYWRIGHT_BROWSERS_PATH 与安装目录不一致、缺系统库（install-deps）、"
+                "或低配模式关闭了 PLAYWRIGHT_POSTINSTALL_ENABLE。"
+            ) from e
         try:
             page = await browser.new_page()
             if os.environ.get("RIVEREDGE_PRINT_DEBUG", "").strip().lower() in ("1", "true", "yes"):

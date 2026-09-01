@@ -24736,6 +24736,10 @@ export default {
   'pages.dashboard.updateLogTypeSection.improvement': '优化',
   'pages.dashboard.updateLogTypeSection.fix': '修复',
   'pages.dashboard.updateLogTypeSection.security': '安全',
+  'pages.dashboard.updateLog.entries.print-pdf-chromium-error-hint.title':
+    '打印 PDF 失败时给出可操作提示',
+  'pages.dashboard.updateLog.entries.print-pdf-chromium-error-hint.description':
+    '保存/打印 PDF 时若 Chromium 未安装或启动失败，错误信息保留 Traceback 尾部根因，并提示检查 Playwright 浏览器目录与安装命令。',
   'pages.dashboard.updateLog.entries.deploy-low-spec-mode-menu.title':
     '部署向导新增低配模式切换',
   'pages.dashboard.updateLog.entries.deploy-low-spec-mode-menu.description':

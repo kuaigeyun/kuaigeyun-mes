@@ -36,6 +36,13 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
   {
+    id: 'print-pdf-chromium-error-hint',
+    date: '2026-09-01',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.print-pdf-chromium-error-hint.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.print-pdf-chromium-error-hint.description',
+  },
+  {
     id: 'deploy-low-spec-mode-menu',
     date: '2026-09-01',
     type: 'improvement',

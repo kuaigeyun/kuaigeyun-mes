@@ -389,7 +389,8 @@ wizard_show_home_panel() {
     wizard_panel_menu_item "3" "更新系统" "拉代码后选择传统/蓝绿更新（默认传统）"
     wizard_panel_menu_item "4" "扩展应用" "专业包 / 定制包 / 移动端 H5（私有仓，需凭证）"
     wizard_panel_section "OPS 运维"
-    wizard_panel_menu_short "${WIZARD_CYAN}[5]${WIZARD_RESET} 详情  ${WIZARD_CYAN}[6]${WIZARD_RESET} 服务  ${WIZARD_CYAN}[7]${WIZARD_RESET} 开机自启  ${WIZARD_CYAN}[8]${WIZARD_RESET} 数据库迁移  ${WIZARD_CYAN}[9]${WIZARD_RESET} 低配模式  ${WIZARD_CYAN}[0]${WIZARD_RESET} 退出"
+    wizard_panel_menu_item "5" "详情" "服务状态 · 基线依赖 · 特殊依赖（PDF/OCR/向量/敏感词）"
+    wizard_panel_menu_short "${WIZARD_CYAN}[6]${WIZARD_RESET} 服务  ${WIZARD_CYAN}[7]${WIZARD_RESET} 开机自启  ${WIZARD_CYAN}[8]${WIZARD_RESET} 数据库迁移  ${WIZARD_CYAN}[9]${WIZARD_RESET} 低配模式  ${WIZARD_CYAN}[0]${WIZARD_RESET} 退出"
     wizard_panel_bot
     echo ""
 }
@@ -1186,7 +1187,7 @@ wizard_report_component() {
 
 wizard_env_scan() {
     local failed=0 st
-    wizard_say "正在扫描依赖组件..."
+    wizard_say "正在扫描基线依赖..."
     st="$(check_node)"; wizard_report_component "Node.js 22+" "$st"; [ "$st" = "ok" ] || failed=1
     st="$(check_python)"; wizard_report_component "Python 3.12+" "$st"; [ "$st" = "ok" ] || failed=1
     st="$(check_uv)"; wizard_report_component "uv" "$st"; [ "$st" = "ok" ] || failed=1
@@ -1206,15 +1207,12 @@ wizard_env_scan() {
     if [ "$DEPLOY_MODE" = "prod" ]; then
         st="$(check_caddy)"; wizard_report_component "Caddy" "$st"; [ "$st" = "ok" ] || failed=1
     fi
-    st="$(check_playwright)"; wizard_report_component "Playwright" "$st"; [ "$st" = "ok" ] || [ "$st" = "skipped" ] || failed=1
-    st="$(check_playwright_chromium)"; wizard_report_component "Chromium" "$st"
-    st="$(check_invoice_parse_runtime)"; wizard_report_component "发票解析系统库" "$st"; [ "$st" = "ok" ] || failed=1
-    st="$(check_ocr)"; wizard_report_component "发票 OCR" "$st"; [ "$st" = "ok" ] || failed=1
     if [ "$failed" -eq 0 ]; then
-        wizard_say_ok "环境检测通过，所有依赖已满足"
+        wizard_say_ok "基线依赖检测通过"
     else
-        wizard_say "部分依赖尚未就绪，下一阶段将自动安装"
+        wizard_say "部分基线依赖尚未就绪，下一阶段将自动安装"
     fi
+    wizard_say "特殊依赖（Playwright / 发票 OCR / pgvector / 敏感词）安装时仍会处理，状态见菜单 [5] 详情"
     return $failed
 }
 
@@ -1603,10 +1601,11 @@ wizard_install_deps() {
         fi
     done
 
-    wizard_say "正在复核环境，确认所有依赖就绪..."
-    if cmd_check >>"$log" 2>&1; then
+    wizard_say "正在复核基线依赖..."
+    if cmd_check_baseline >>"$log" 2>&1; then
         wizard_finalize_local_database || return 1
         wizard_say_ok "环境软件安装全部完成"
+        wizard_say "特殊依赖将在迁移/启动时处理，状态见菜单 [5] 详情"
         return 0
     fi
     wizard_say_fail "环境复核未通过"
@@ -1729,7 +1728,7 @@ wizard_update_app() {
     fi
 
     wizard_run_deploy_step release_meta_final "确认发版信息与运行 commit 一致" "$log" record_deploy_release_metadata || return 1
-    wizard_say_ok "系统更新已全部完成（Playwright 补装若在后台运行，不影响访问）"
+    wizard_say_ok "系统更新已全部完成（特殊依赖状态见菜单 [5] 详情）"
 }
 
 wizard_show_summary() {
@@ -1807,12 +1806,12 @@ cmd_wizard_fresh() {
     wizard_stage 4 "环境准备"
     wizard_prepare_env
 
-    if [ "$need_install" -eq 1 ] || ! cmd_check >/dev/null 2>&1; then
+    if [ "$need_install" -eq 1 ] || ! cmd_check_baseline >/dev/null 2>&1; then
         wizard_stage 5 "环境软件安装"
         wizard_install_deps || exit 1
     else
         wizard_stage 5 "环境软件安装"
-        wizard_say_ok "依赖已齐全，跳过安装"
+        wizard_say_ok "基线依赖已齐全，跳过安装"
         wizard_finalize_local_database || exit 1
     fi
 
