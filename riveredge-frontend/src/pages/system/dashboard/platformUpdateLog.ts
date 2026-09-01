@@ -36,6 +36,13 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
   {
+    id: 'deploy-low-spec-mode-menu',
+    date: '2026-09-01',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.deploy-low-spec-mode-menu.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.deploy-low-spec-mode-menu.description',
+  },
+  {
     id: 'eight-d-unlock-edit-relock',
     date: '2026-09-01',
     type: 'improvement',

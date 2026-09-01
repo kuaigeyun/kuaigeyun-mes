@@ -123,6 +123,9 @@ docs/feedback/
 .custom/
 riveredge-adapt/
 
+# ===== 本地单据产生工具（整目录不入库） =====
+.gen/
+
 # ===== fast-deploy 本地生成物 =====
 fast-deploy/caddy/
 fast-deploy/.tools/

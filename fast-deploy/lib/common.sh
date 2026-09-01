@@ -145,8 +145,11 @@ load_deploy_env() {
     BLUE_GREEN_HEALTH_TIMEOUT="${BLUE_GREEN_HEALTH_TIMEOUT:-120}"
     # Taskiq worker/scheduler 就绪等待（低内存机 import 慢，sleep 也会因 swap 被拉长）
     TASKIQ_START_TIMEOUT="${TASKIQ_START_TIMEOUT:-180}"
+    LOW_SPEC_MODE="${LOW_SPEC_MODE:-0}"
 }
 
+# shellcheck source=lib/low_spec_mode.sh
+source "$FAST_DEPLOY_DIR/lib/low_spec_mode.sh"
 # shellcheck source=lib/blue_green.sh
 source "$FAST_DEPLOY_DIR/lib/blue_green.sh"
 
@@ -3698,6 +3701,7 @@ cmd_status() {
     load_deploy_env
     local server_ip web_url
     echo "=== RiverEdge ${DEPLOY_MODE} 状态 ==="
+    echo "  低配模式: $(low_spec_mode_status_label)"
     for name in backend frontend worker scheduler caddy; do
         local pidf="$LOGS_DIR/${name}.pid"
         if [ -f "$pidf" ] && kill -0 "$(cat "$pidf")" 2>/dev/null; then
@@ -5328,6 +5332,7 @@ fd_dispatch() {
         configure) cmd_configure ;;
         migrate)   cmd_migrate ;;
         free-memory|free_memory) cmd_free_memory ;;
+        low-spec-mode|low_spec_mode|lowspec) cmd_low_spec_mode_cli "${1:-status}" ;;
         build)     cmd_build ;;
         start)
             if [ "$DEPLOY_MODE" = "dev" ]; then cmd_start_dev; else cmd_start_prod; fi
@@ -5356,7 +5361,7 @@ fd_dispatch() {
         wizard|""|deploy) cmd_wizard ;;
         *)
             log_error "未知命令: $cmd"
-            echo "用法: wizard | check | install | configure | migrate | free-memory | build | start | stop | status | update | pro-apps [pro|custom|all] | install-custom | install-service | uninstall-service"
+            echo "用法: wizard | check | install | configure | migrate | low-spec-mode [on|off|status] | free-memory | build | start | stop | status | update | pro-apps [pro|custom|all] | install-custom | install-service | uninstall-service"
             exit 1
             ;;
     esac

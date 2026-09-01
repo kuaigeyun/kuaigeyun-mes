@@ -10,7 +10,7 @@
 #   ./fast-deploy/deploy.sh install-custom             # 仅定制包 kuaigeyun-custom
 #   ./fast-deploy/deploy.sh install-h5                 # 移动端 H5（拉 kuaigeyun-client → web-dist）
 #   ./fast-deploy/deploy.sh install-client             # 同上（兼容旧名）
-#   ./fast-deploy/deploy.sh stop|status|update|free-memory|...
+#   ./fast-deploy/deploy.sh stop|status|update|low-spec-mode|free-memory|...
 #
 # 环境变量:
 #   USE_MIRROR=0  禁用国内镜像（默认 1 启用）
@@ -51,7 +51,7 @@ case "$SUBCMD" in
 esac
 export DEPLOY_MODE="${DEPLOY_MODE:-prod}"
 
-KNOWN_CMDS="wizard check install configure migrate free-memory build start stop status update install-service uninstall-service deploy pro-apps install-pro install-custom install-client install-h5 ext-apps pro-apps-status ext-apps-status"
+KNOWN_CMDS="wizard check install configure migrate low-spec-mode low_spec_mode lowspec free-memory build start stop status update install-service uninstall-service deploy pro-apps install-pro install-custom install-client install-h5 ext-apps pro-apps-status ext-apps-status"
 is_known_cmd() {
     case " ${KNOWN_CMDS} " in
         *" $1 "*) return 0 ;;

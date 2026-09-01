@@ -370,6 +370,7 @@ wizard_show_home_panel() {
     wizard_panel_heading "SYSTEM 系统"
     wizard_panel_line "${WIZARD_DIM}Host${WIZARD_RESET}  ${os_label} · ${arch}  ${WIZARD_DIM}Mode${WIZARD_RESET}  ${mode_label} · ${mirror_label}"
     wizard_panel_line "${WIZARD_DIM}Memory${WIZARD_RESET}  ${WIZARD_HOME_MEM:-—}  ${WIZARD_DIM}Disk${WIZARD_RESET}  ${WIZARD_HOME_DISK:-—}  ${WIZARD_DIM}Git${WIZARD_RESET}  ${WIZARD_HOME_GIT:-—}"
+    wizard_panel_line "${WIZARD_DIM}LowSpec${WIZARD_RESET}  $(low_spec_mode_status_label)"
 
     wizard_panel_heading "SERVICES 服务"
     wizard_panel_line "${WIZARD_DIM}用户登录${WIZARD_RESET}  ${WIZARD_ACCESS_WEB:-—}  ${WIZARD_DIM}平台超管登录${WIZARD_RESET}  ${WIZARD_ACCESS_PLATFORM:-—}"
@@ -388,7 +389,7 @@ wizard_show_home_panel() {
     wizard_panel_menu_item "3" "更新系统" "拉代码后选择传统/蓝绿更新（默认传统）"
     wizard_panel_menu_item "4" "扩展应用" "专业包 / 定制包 / 移动端 H5（私有仓，需凭证）"
     wizard_panel_section "OPS 运维"
-    wizard_panel_menu_short "${WIZARD_CYAN}[5]${WIZARD_RESET} 详情  ${WIZARD_CYAN}[6]${WIZARD_RESET} 服务  ${WIZARD_CYAN}[7]${WIZARD_RESET} 开机自启  ${WIZARD_CYAN}[8]${WIZARD_RESET} 数据库迁移  ${WIZARD_CYAN}[9]${WIZARD_RESET} 释放内存  ${WIZARD_CYAN}[0]${WIZARD_RESET} 退出"
+    wizard_panel_menu_short "${WIZARD_CYAN}[5]${WIZARD_RESET} 详情  ${WIZARD_CYAN}[6]${WIZARD_RESET} 服务  ${WIZARD_CYAN}[7]${WIZARD_RESET} 开机自启  ${WIZARD_CYAN}[8]${WIZARD_RESET} 数据库迁移  ${WIZARD_CYAN}[9]${WIZARD_RESET} 低配模式  ${WIZARD_CYAN}[0]${WIZARD_RESET} 退出"
     wizard_panel_bot
     echo ""
 }
@@ -428,6 +429,7 @@ wizard_run_quick_action() {
         check) cmd_check ;;
         migrate) cmd_migrate ;;
         free-memory|free_memory) cmd_free_memory ;;
+        low-spec-mode|low_spec_mode|lowspec) cmd_low_spec_mode_cli "${2:-}" ;;
         *) wizard_say_fail "未知快捷操作: $1"; return 1 ;;
     esac
 }
@@ -1098,9 +1100,9 @@ wizard_ask_intent() {
             wizard_pause_return_menu
             return 2
             ;;
-        9|free-memory|free_memory|mem)
+        9|low-spec-mode|low_spec_mode|lowspec|mem)
             echo ""
-            wizard_run_quick_action free-memory || true
+            cmd_low_spec_mode || true
             wizard_pause_return_menu
             return 2
             ;;

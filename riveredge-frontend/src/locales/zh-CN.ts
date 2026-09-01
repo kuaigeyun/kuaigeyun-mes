@@ -24736,6 +24736,10 @@ export default {
   'pages.dashboard.updateLogTypeSection.improvement': '优化',
   'pages.dashboard.updateLogTypeSection.fix': '修复',
   'pages.dashboard.updateLogTypeSection.security': '安全',
+  'pages.dashboard.updateLog.entries.deploy-low-spec-mode-menu.title':
+    '部署向导新增低配模式切换',
+  'pages.dashboard.updateLog.entries.deploy-low-spec-mode-menu.description':
+    '运维菜单 [9] 改为低配模式：一键缩小 Taskiq 与数据库连接池、关闭 Playwright 后台补装并禁用蓝绿双后端，适合小内存服务器；可随时恢复一般模式。',
   'pages.dashboard.updateLog.entries.eight-d-unlock-edit-relock.title':
     '8D 申请修改保存后自动锁定',
   'pages.dashboard.updateLog.entries.eight-d-unlock-edit-relock.description':

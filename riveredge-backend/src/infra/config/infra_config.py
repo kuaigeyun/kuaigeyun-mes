@@ -4,9 +4,24 @@
 提供平台级配置的单独管理，独立于系统级配置
 """
 
+from pathlib import Path
 from typing import List, Union
 from pydantic import Field, AliasChoices, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# src/infra/config/infra_config.py → riveredge-backend/
+_BACKEND_ROOT = Path(__file__).resolve().parents[3]
+
+
+def _resolve_dir_against_backend_root(value: str) -> str:
+    """相对路径钉在后端根目录，不随进程 cwd 漂到 src/uploads。"""
+    raw = (value or "").strip()
+    if not raw:
+        return ""
+    path = Path(raw)
+    if path.is_absolute():
+        return str(path)
+    return str((_BACKEND_ROOT / path).resolve())
 
 
 class InfraSettings(BaseSettings):
@@ -297,15 +312,23 @@ class InfraSettings(BaseSettings):
     SMS_TEMPLATE_CODE: str = Field(default="SMS_123456789", description="短信模板CODE")
     
     # 文件管理配置（第三阶段）
-    FILE_UPLOAD_DIR: str = Field(default="./uploads", description="文件上传目录")
+    FILE_UPLOAD_DIR: str = Field(
+        default="./uploads",
+        description="文件上传目录；相对路径相对后端根目录，不依赖进程 cwd",
+    )
     HAOLIGO_MOBILE_RELEASE_DIR: str = Field(
         default="",
         description="已废弃，请使用 CLIENT_RELEASE_DIR",
     )
     CLIENT_RELEASE_DIR: str = Field(
         default="",
-        description="客户端安装包/OTA 存储根目录；空则使用 FILE_UPLOAD_DIR",
+        description="客户端安装包/OTA 存储根目录；空则使用 FILE_UPLOAD_DIR/clients",
     )
+
+    @field_validator("FILE_UPLOAD_DIR", "CLIENT_RELEASE_DIR", mode="after")
+    @classmethod
+    def resolve_upload_dirs(cls, v: str) -> str:
+        return _resolve_dir_against_backend_root(v)
     DATA_BACKUP_DIR: str = Field(
         default="",
         description="数据备份 zip 目录；留空则使用 {WORKDIR 或后端根目录}/backups",
