@@ -16,6 +16,7 @@ from apps.kuaizhizao.services.print_service import (
     _MAX_PRINT_INLINE_IMAGES,
     _format_pdf_subprocess_failure,
     _inline_local_file_images_in_html,
+    _print_child_as_limit_bytes,
     _run_html_to_pdf_subprocess,
 )
 from infra.exceptions.exceptions import BusinessLogicError, ValidationError
@@ -56,6 +57,19 @@ def test_format_pdf_subprocess_failure_keeps_traceback_tail():
     assert "Executable doesn't exist" in detail
     assert detail.startswith("…")
     assert "Traceback (most recent call last)" not in detail
+
+
+def test_print_child_as_limit_default_allows_chromium_va():
+    """Chromium 启动需约 8GiB 虚拟地址；默认不得再压到 2GiB。"""
+    import os
+
+    os.environ.pop("RIVEREDGE_PRINT_AS_LIMIT_GB", None)
+    assert _print_child_as_limit_bytes() == 8 * 1024 * 1024 * 1024
+    os.environ["RIVEREDGE_PRINT_AS_LIMIT_GB"] = "0"
+    assert _print_child_as_limit_bytes() is None
+    os.environ["RIVEREDGE_PRINT_AS_LIMIT_GB"] = "12"
+    assert _print_child_as_limit_bytes() == 12 * 1024 * 1024 * 1024
+    os.environ.pop("RIVEREDGE_PRINT_AS_LIMIT_GB", None)
 
 
 def test_print_subprocess_timeout_raises():

@@ -36,6 +36,13 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
   {
+    id: 'print-pdf-sigtrap-as-limit',
+    date: '2026-09-01',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.print-pdf-sigtrap-as-limit.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.print-pdf-sigtrap-as-limit.description',
+  },
+  {
     id: 'print-pdf-chromium-error-hint',
     date: '2026-09-01',
     type: 'fix',

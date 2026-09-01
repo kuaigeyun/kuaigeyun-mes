@@ -224,7 +224,50 @@ _HTML_IMG_TAG_RE = re.compile(
 _MAX_PRINT_INLINE_IMAGES = 48
 _MAX_PRINT_HTML_BYTES = 12 * 1024 * 1024
 _PRINT_PDF_TIMEOUT_SEC = 90
-_PRINT_CHILD_AS_LIMIT = 2 * 1024 * 1024 * 1024
+
+
+# Chromium 启动会预留约 8GiB 虚拟地址（非实际 RSS）；2GiB RLIMIT_AS 会导致 SIGTRAP。
+# 可用环境变量 RIVEREDGE_PRINT_AS_LIMIT_GB 覆盖（0=不限制）。
+def _print_child_as_limit_bytes() -> int | None:
+    raw = os.environ.get("RIVEREDGE_PRINT_AS_LIMIT_GB", "").strip()
+    if raw == "0":
+        return None
+    if raw:
+        try:
+            gb = float(raw)
+        except ValueError as e:
+            raise RuntimeError(
+                f"RIVEREDGE_PRINT_AS_LIMIT_GB 无效: {raw!r}（应为正数或 0）"
+            ) from e
+        if gb <= 0:
+            return None
+        return int(gb * 1024 * 1024 * 1024)
+    return 8 * 1024 * 1024 * 1024
+
+
+def _limit_html_to_pdf_child() -> None:
+    if os.name != "posix":
+        return
+    import resource
+
+    limit = _print_child_as_limit_bytes()
+    if limit is None:
+        return
+    resource.setrlimit(resource.RLIMIT_AS, (limit, limit))
+
+
+def _format_pdf_subprocess_failure(err: str, out: str, returncode: int) -> str:
+    """子进程失败信息：优先取 stderr 尾部（Playwright 根因在 Traceback 末尾）。"""
+    detail = (err or out or f"exit {returncode}").strip()
+    if not detail:
+        return f"exit {returncode}"
+    if len(detail) > 2000:
+        return "…" + detail[-1999:]
+    return detail
+
+
+def _print_src_root() -> Path:
+    return Path(__file__).resolve().parents[3]
 
 
 async def _inline_local_file_images_in_html(tenant_id: int, html_string: str) -> str:
@@ -273,28 +316,6 @@ async def _inline_local_file_images_in_html(tenant_id: int, html_string: str) ->
         return html_string
     pieces.append(html_string[cursor:])
     return "".join(pieces)
-
-
-def _print_src_root() -> Path:
-    return Path(__file__).resolve().parents[3]
-
-
-def _limit_html_to_pdf_child() -> None:
-    if os.name != "posix":
-        return
-    import resource
-
-    resource.setrlimit(resource.RLIMIT_AS, (_PRINT_CHILD_AS_LIMIT, _PRINT_CHILD_AS_LIMIT))
-
-
-def _format_pdf_subprocess_failure(err: str, out: str, returncode: int) -> str:
-    """子进程失败信息：优先取 stderr 尾部（Playwright 根因在 Traceback 末尾）。"""
-    detail = (err or out or f"exit {returncode}").strip()
-    if not detail:
-        return f"exit {returncode}"
-    if len(detail) > 2000:
-        return "…" + detail[-1999:]
-    return detail
 
 
 def _run_html_to_pdf_subprocess(html_string: str) -> bytes:

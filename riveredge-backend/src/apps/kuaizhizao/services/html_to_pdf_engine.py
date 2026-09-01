@@ -129,10 +129,18 @@ async def html_to_pdf_bytes_playwright_async(html_string: str) -> bytes:
             msg = str(e)
             if "Executable doesn't exist" in msg or "executable doesn't exist" in msg.lower():
                 raise RuntimeError(_playwright_chromium_missing_hint(exe)) from e
+            low = msg.lower()
+            if "sigtrap" in low or "signal=sigtrap" in low:
+                raise RuntimeError(
+                    f"启动 Chromium 失败（进程被 SIGTRAP 杀掉）: {msg}。"
+                    "常见原因：打印子进程虚拟内存上限过低（已默认提高到 8GiB；"
+                    "可设 RIVEREDGE_PRINT_AS_LIMIT_GB=0 取消限制，或 12 再加大）；"
+                    "其次为缺系统库（uv run --extra pdf python -m playwright install-deps chromium）。"
+                ) from e
             raise RuntimeError(
                 f"启动 Chromium 失败: {msg}。"
-                "常见原因：PLAYWRIGHT_BROWSERS_PATH 与安装目录不一致、缺系统库（install-deps）、"
-                "或低配模式关闭了 PLAYWRIGHT_POSTINSTALL_ENABLE。"
+                "常见原因：缺系统库（install-deps）、PLAYWRIGHT_BROWSERS_PATH 不一致、"
+                "或机器内存不足。"
             ) from e
         try:
             page = await browser.new_page()
