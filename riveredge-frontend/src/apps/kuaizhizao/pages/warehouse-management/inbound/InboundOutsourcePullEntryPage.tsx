@@ -292,10 +292,10 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
           if (whId != null) setWarehouseId(whId);
           if (draft.receiptTime) setReceiptTime(draftDayjs(draft.receiptTime));
           if (typeof draft.notes === 'string') setNotes(draft.notes);
-          receiverHook.restoreReceiver(
-            typeof draft.receiverUuid === 'string' ? draft.receiverUuid : undefined,
-            typeof draft.receiverName === 'string' ? draft.receiverName : undefined,
-          );
+          receiverHook.restoreReceiver({
+            uuid: typeof draft.receiverUuid === 'string' ? draft.receiverUuid : undefined,
+            name: typeof draft.receiverName === 'string' ? draft.receiverName : undefined,
+          });
           if (pullType === 'outsource_receipt' && draft.receiptLine) {
             setReceiptLine((prev) => (prev ? { ...prev, ...(draft.receiptLine as Partial<OutsourceReceiptLine>) } : prev));
           } else if (draft.previewQtyByKey) {

@@ -292,8 +292,11 @@ export const outsourceMaterialReceiptApi = {
   },
 
   // 完成委外收货
-  complete: async (id: string) => {
-    return apiRequest(`/apps/kuaizhizao/outsource-material-receipts/${id}/complete`, { method: 'POST' });
+  complete: async (id: string, data?: unknown) => {
+    return apiRequest(`/apps/kuaizhizao/outsource-material-receipts/${id}/complete`, {
+      method: 'POST',
+      data: data ?? {},
+    });
   },
 
   receiptPreview: async (outsourceWorkOrderId: number | string) => {

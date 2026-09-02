@@ -1437,6 +1437,11 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 raise ValidationError("必须提供 product_id 或 product_code")
 
             # 物料来源验证（核心功能，新增）
+            relax_bom_requirements = (
+                False
+                if allow_draft
+                else await BusinessConfigService().allow_work_order_without_bom(tenant_id)
+            )
             # 1. 获取物料来源类型
             source_type = await get_material_source_type(tenant_id, product_id)
             
@@ -1445,7 +1450,8 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 validation_passed, validation_errors = await validate_material_source_config(
                     tenant_id=tenant_id,
                     material_id=product_id,
-                    source_type=source_type
+                    source_type=source_type,
+                    relax_bom_requirements=relax_bom_requirements,
                 )
                 
                 # 3. 根据物料来源类型验证是否可以创建工单（allow_draft 时跳过验证，生成草稿由下游补全）

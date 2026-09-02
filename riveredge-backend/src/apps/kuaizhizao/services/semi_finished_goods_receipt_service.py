@@ -337,7 +337,13 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
             )
 
             # 确认未传入库时间时保留建单所选业务时刻，禁止一律写成「此刻」
-            confirmer_name = await self.get_user_name(confirmed_by)
+            from apps.kuaizhizao.utils.inbound_confirm_helper import resolve_inbound_confirm_receiver
+
+            receiver_id, receiver_name = await resolve_inbound_confirm_receiver(
+                confirmed_by=confirmed_by,
+                confirmation_data=confirmation_data,
+                get_user_name=self.get_user_name,
+            )
             confirm_receipt_time = (
                 confirmation_data.receipt_time
                 if confirmation_data and confirmation_data.receipt_time
@@ -348,8 +354,8 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
             )
             await SemiFinishedGoodsReceipt.filter(tenant_id=tenant_id, id=receipt_id).update(
                 status="已入库",
-                receiver_id=confirmed_by,
-                receiver_name=confirmer_name,
+                receiver_id=receiver_id,
+                receiver_name=receiver_name,
                 receipt_time=receipt_time,
                 updated_by=confirmed_by,
             )
@@ -406,8 +412,8 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
                         to_warehouse_id=wh_id,
                         idempotency_key=f"semi_finished_goods_receipt:{receipt_id}:inc:{item.id}",
                         quality_status="qualified",
-                    operator_id=confirmed_by,
-                    operator_name=confirmer_name,
+                    operator_id=receiver_id,
+                    operator_name=receiver_name,
                 )
             except Exception as inv_e:
                 logger.error("半成品入库确认-更新库存失败: %s", inv_e)

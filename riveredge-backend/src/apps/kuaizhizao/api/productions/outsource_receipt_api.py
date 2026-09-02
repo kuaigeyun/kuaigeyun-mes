@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Body
 from loguru import logger
 
 from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_module_access
@@ -19,6 +19,7 @@ from apps.kuaizhizao.schemas.outsource_work_order import (
     OutsourceMaterialReceiptPreviewResponse,
     OutsourceMaterialReceiptResponse,
 )
+from apps.kuaizhizao.schemas.warehouse import InboundConfirmationRequest
 from apps.kuaizhizao.services.outsource_material_receipt_service import OutsourceMaterialReceiptService
 
 outsource_material_receipt_service = OutsourceMaterialReceiptService()
@@ -120,6 +121,7 @@ async def get_outsource_material_receipt(
 @router.post("/outsource-material-receipts/{receipt_id}/complete", response_model=OutsourceMaterialReceiptResponse, summary="Complete subcontract receipt")
 async def complete_outsource_material_receipt(
     receipt_id: int = Path(..., description="委外收货单ID"),
+    confirmation_data: Optional[InboundConfirmationRequest] = Body(None),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> OutsourceMaterialReceiptResponse:
@@ -128,6 +130,7 @@ async def complete_outsource_material_receipt(
             tenant_id=tenant_id,
             receipt_id=receipt_id,
             completed_by=current_user.id,
+            confirmation_data=confirmation_data,
         )
     except NotFoundError as e:
         raise _http_exception_with_trace(404, str(e), "/outsource-material-receipts/{receipt_id}/complete", tenant_id)

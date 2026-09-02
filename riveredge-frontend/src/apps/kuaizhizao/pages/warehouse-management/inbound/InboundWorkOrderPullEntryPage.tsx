@@ -183,10 +183,10 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
           if (whId != null) setWarehouseId(whId);
           if (draft.receiptTime) setReceiptTime(draftDayjs(draft.receiptTime));
           if (typeof draft.receiptNotes === 'string') setReceiptNotes(draft.receiptNotes);
-          receiverHook.restoreReceiver(
-            typeof draft.receiverUuid === 'string' ? draft.receiverUuid : undefined,
-            typeof draft.receiverName === 'string' ? draft.receiverName : undefined,
-          );
+          receiverHook.restoreReceiver({
+            uuid: typeof draft.receiverUuid === 'string' ? draft.receiverUuid : undefined,
+            name: typeof draft.receiverName === 'string' ? draft.receiverName : undefined,
+          });
         });
       } catch (e: unknown) {
         messageApi.error((e as Error)?.message || t('app.kuaizhizao.warehouseInbound.entry.workOrder.loadFailed'));

@@ -235,10 +235,10 @@ const InboundProductionReturnPullEntryPage: React.FC = () => {
           if (whId != null) setWarehouseId(whId);
           if (draft.returnTime) setReturnTime(draftDayjs(draft.returnTime));
           if (typeof draft.returnNotes === 'string') setReturnNotes(draft.returnNotes);
-          receiverHook.restoreReceiver(
-            typeof draft.receiverUuid === 'string' ? draft.receiverUuid : undefined,
-            typeof draft.receiverName === 'string' ? draft.receiverName : undefined,
-          );
+          receiverHook.restoreReceiver({
+            uuid: typeof draft.receiverUuid === 'string' ? draft.receiverUuid : undefined,
+            name: typeof draft.receiverName === 'string' ? draft.receiverName : undefined,
+          });
           const draftPickingId = draftOptionalNumber(draft.pickingId);
           const qtyByItemId = draft.lineReturnQty as Record<number, number> | undefined;
           if (draftPickingId != null) {

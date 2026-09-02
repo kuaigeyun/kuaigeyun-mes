@@ -53,12 +53,39 @@ function displayItemToUser(item: UserDisplayItem): User {
   };
 }
 
-function userOptionFromUser(user: User) {
+type InboundReceiverOption = { label: string; value: string; name: string; id?: number };
+
+function userOptionFromUser(user: User): InboundReceiverOption {
   return {
     label: formatUserDisplayLabel(user),
     value: user.uuid,
     name: String(user.full_name || user.username || '').trim(),
+    id: user.id,
   };
+}
+
+export function buildInboundConfirmReceiverPayload(hook: {
+  receiverId?: number;
+  receiverName: string;
+}): { receiver_id?: number; receiver_name?: string } {
+  const name = String(hook.receiverName ?? '').trim();
+  const id = hook.receiverId;
+  if (id != null && id > 0) {
+    return { receiver_id: id, receiver_name: name || undefined };
+  }
+  return name ? { receiver_name: name } : {};
+}
+
+export function resolveInboundConfirmReceiverFromDetail(detail: Record<string, unknown> | null | undefined): {
+  id?: number;
+  name?: string;
+} {
+  if (!detail) return {};
+  const rawId = detail.receiver_id ?? detail.returner_id ?? detail.received_by;
+  const rawName = detail.receiver_name ?? detail.returner_name ?? detail.received_by_name;
+  const id = rawId != null && Number(rawId) > 0 ? Number(rawId) : undefined;
+  const name = String(rawName ?? '').trim() || undefined;
+  return { id, name };
 }
 
 export function useInboundReceiverSelect() {
@@ -68,8 +95,9 @@ export function useInboundReceiverSelect() {
   const useFullUserList = canReadUserDirectory(currentUser);
 
   const [receiverUuid, setReceiverUuid] = useState<string | undefined>();
+  const [receiverId, setReceiverId] = useState<number | undefined>();
   const [receiverName, setReceiverName] = useState('');
-  const [receiverOptions, setReceiverOptions] = useState<Array<{ label: string; value: string; name: string }>>([]);
+  const [receiverOptions, setReceiverOptions] = useState<InboundReceiverOption[]>([]);
   const [receiverLoading, setReceiverLoading] = useState(false);
 
   const loadReceiverOptions = useCallback(
@@ -113,12 +141,22 @@ export function useInboundReceiverSelect() {
   );
 
   const receiverSelectOptions = useMemo(() => {
-    if (!receiverUuid || receiverOptions.some((opt) => opt.value === receiverUuid)) {
-      return receiverOptions;
+    if (receiverUuid && !receiverOptions.some((opt) => opt.value === receiverUuid)) {
+      if (receiverName) {
+        return [{ label: receiverName, value: receiverUuid, name: receiverName, id: receiverId }, ...receiverOptions];
+      }
     }
-    if (!receiverName) return receiverOptions;
-    return [{ label: receiverName, value: receiverUuid, name: receiverName }, ...receiverOptions];
-  }, [receiverName, receiverOptions, receiverUuid]);
+    if (
+      receiverId != null &&
+      receiverId > 0 &&
+      receiverName &&
+      !receiverOptions.some((opt) => opt.id === receiverId)
+    ) {
+      const syntheticValue = `__uid:${receiverId}`;
+      return [{ label: receiverName, value: syntheticValue, name: receiverName, id: receiverId }, ...receiverOptions];
+    }
+    return receiverOptions;
+  }, [receiverId, receiverName, receiverOptions, receiverUuid]);
 
   useEffect(() => {
     if (!currentUser || receiverUuid) return;
@@ -127,6 +165,7 @@ export function useInboundReceiverSelect() {
     if (uuid) {
       setReceiverUuid(uuid);
       if (name) setReceiverName(name);
+      if (currentUser.id != null && currentUser.id > 0) setReceiverId(currentUser.id);
     } else if (name) {
       setReceiverName(name);
     }
@@ -142,18 +181,24 @@ export function useInboundReceiverSelect() {
       setReceiverUuid(uuid);
       const picked = receiverSelectOptions.find((opt) => opt.value === uuid);
       setReceiverName(picked?.name || '');
+      setReceiverId(picked?.id);
     },
     [receiverSelectOptions],
   );
 
-  const restoreReceiver = useCallback((uuid?: string, name?: string) => {
-    if (uuid) setReceiverUuid(uuid);
-    if (name !== undefined) setReceiverName(name);
+  const restoreReceiver = useCallback((opts?: { uuid?: string; id?: number; name?: string }) => {
+    if (opts?.uuid) setReceiverUuid(opts.uuid);
+    if (opts?.id != null && opts.id > 0) {
+      setReceiverId(opts.id);
+      if (!opts.uuid) setReceiverUuid(`__uid:${opts.id}`);
+    }
+    if (opts?.name !== undefined) setReceiverName(opts.name);
   }, []);
 
   return {
     currentUser,
     receiverUuid,
+    receiverId,
     receiverName,
     receiverLoading,
     receiverSelectOptions,

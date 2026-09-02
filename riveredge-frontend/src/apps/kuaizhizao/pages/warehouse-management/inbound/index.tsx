@@ -148,6 +148,12 @@ import {
 } from '../../../utils/warehouseListCore';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
+import {
+  buildInboundConfirmReceiverPayload,
+  InboundEntryReceiverField,
+  resolveInboundConfirmReceiverFromDetail,
+  useInboundReceiverSelect,
+} from './inboundEntryShared';
 
 interface InboundOrder extends InboundHubOrder {
   workshop_name?: string;
@@ -606,6 +612,9 @@ const InboundPage: React.FC = () => {
       purchaseConfirmPreviewDetail?.receipt_type === 'production_return',
   });
 
+  const purchaseConfirmReceiverHook = useInboundReceiverSelect();
+  const simpleConfirmReceiverHook = useInboundReceiverSelect();
+
   const inboundDocTrackingType = currentOrder
     ? inboundDocumentTrackingType(currentOrder)
     : undefined;
@@ -707,6 +716,7 @@ const InboundPage: React.FC = () => {
     setLocOptionsByWarehouse({});
     productionReturnConfirmFormRef.current?.resetFields();
     resetProductionReturnFormFieldValues();
+    purchaseConfirmReceiverHook.restoreReceiver({});
   };
 
   /** 打开采购入库确认预览（加载最新详情，合并抽屉内未保存的实际数量） */
@@ -827,6 +837,9 @@ const InboundPage: React.FC = () => {
         }
       });
       setPurchaseConfirmPreviewDetail({ ...detailData, receipt_type: record.receipt_type });
+      purchaseConfirmReceiverHook.restoreReceiver(
+        resolveInboundConfirmReceiverFromDetail(detailData as Record<string, unknown>),
+      );
       setPurchaseConfirmLineWh(lineWh);
       setPurchaseConfirmLineLoc(lineLoc);
       setPurchaseConfirmLineLocCode(lineLocLb);
@@ -1169,6 +1182,11 @@ const InboundPage: React.FC = () => {
     const headerWh = Number(mappedItems[0]?.warehouse_id || order.warehouse_id || 0);
     const headerWhName =
       purchaseConfirmWarehouseOptions.find((o) => o.value === headerWh)?.name ?? order.warehouse_name ?? '';
+    const receiverPayload = buildInboundConfirmReceiverPayload(purchaseConfirmReceiverHook);
+    if (!receiverPayload.receiver_id && !receiverPayload.receiver_name) {
+      messageApi.warning(t('app.kuaizhizao.warehouseInbound.msg.selectReceiverRequired'));
+      return;
+    }
 
     setPurchaseConfirmPreviewSubmitting(true);
     try {
@@ -1204,24 +1222,28 @@ const InboundPage: React.FC = () => {
           warehouse_id: headerWh,
           warehouse_name: headerWhName,
           items: confirmItems,
+          ...receiverPayload,
         });
       } else if (order.receipt_type === 'finished_goods') {
         await warehouseApi.finishedGoodsReceipt.confirm(String(order.id), {
            warehouse_id: headerWh,
            warehouse_name: headerWhName,
            items: mappedItems,
+           ...receiverPayload,
         });
       } else if (order.receipt_type === 'semi_finished_goods') {
         await warehouseApi.semiFinishedGoodsReceipt.confirm(String(order.id), {
           warehouse_id: headerWh,
           warehouse_name: headerWhName,
           items: mappedItems,
+          ...receiverPayload,
         });
       } else if (order.receipt_type === 'production_return') {
         await warehouseApi.productionReturn.confirm(String(order.id), {
            warehouse_id: headerWh,
            warehouse_name: headerWhName,
            items: mappedItems,
+           ...receiverPayload,
         });
         if (Object.keys(productionReturnCustomData).length > 0) {
           await saveProductionReturnCustomFieldValues(order.id, productionReturnCustomData);
@@ -1280,7 +1302,8 @@ const InboundPage: React.FC = () => {
     setSimpleConfirmPreviewDetail(null);
     setSimpleConfirmPreviewLoading(false);
     setSimpleConfirmPreviewSubmitting(false);
-  }, []);
+    simpleConfirmReceiverHook.restoreReceiver({});
+  }, [simpleConfirmReceiverHook]);
 
   const openSimpleConfirmPreview = useCallback(
     async (record: InboundOrder) => {
@@ -1296,6 +1319,7 @@ const InboundPage: React.FC = () => {
           throw new Error(t('app.kuaizhizao.warehouseInbound.msg.loadConfirmPreviewFailed'));
         }
         setSimpleConfirmPreviewDetail(detail);
+        simpleConfirmReceiverHook.restoreReceiver(resolveInboundConfirmReceiverFromDetail(detail));
       } catch (error: unknown) {
         const err = error as { message?: string };
         messageApi.error(err?.message || t('app.kuaizhizao.warehouseInbound.msg.loadConfirmPreviewFailed'));
@@ -1304,26 +1328,31 @@ const InboundPage: React.FC = () => {
         setSimpleConfirmPreviewLoading(false);
       }
     },
-    [messageApi, resetSimpleConfirmPreview, t],
+    [messageApi, resetSimpleConfirmPreview, simpleConfirmReceiverHook, t],
   );
 
   const submitSimpleConfirmPreview = useCallback(async () => {
     const record = simpleConfirmPreviewTarget;
     if (!record?.id || !simpleConfirmPreviewDetail) return;
+    const receiverPayload = buildInboundConfirmReceiverPayload(simpleConfirmReceiverHook);
+    if (!receiverPayload.receiver_id && !receiverPayload.receiver_name) {
+      messageApi.warning(t('app.kuaizhizao.warehouseInbound.msg.selectReceiverRequired'));
+      return;
+    }
     setSimpleConfirmPreviewSubmitting(true);
     try {
       const id = String(record.id);
       if (record.receipt_type === 'sales_return') {
-        await warehouseApi.salesReturn.confirm(id);
+        await warehouseApi.salesReturn.confirm(id, receiverPayload);
         messageApi.success(t('app.kuaizhizao.warehouseInbound.msg.salesReturnConfirmed'));
       } else if (record.receipt_type === 'other_inbound') {
-        await warehouseApi.otherInbound.confirm(id);
+        await warehouseApi.otherInbound.confirm(id, receiverPayload);
         messageApi.success(t('app.kuaizhizao.warehouseInbound.msg.otherInboundConfirmed'));
       } else if (record.receipt_type === 'material_return') {
-        await warehouseApi.materialReturn.confirm(id);
+        await warehouseApi.materialReturn.confirm(id, receiverPayload);
         messageApi.success(t('app.kuaizhizao.warehouseInbound.msg.materialReturnConfirmed'));
       } else if (record.receipt_type === 'outsource_receipt') {
-        await outsourceMaterialReceiptApi.complete(id);
+        await outsourceMaterialReceiptApi.complete(id, receiverPayload);
         messageApi.success(t('app.kuaizhizao.warehouseInbound.msg.outsourceReceiptConfirmed'));
       } else {
         throw new Error(t('app.kuaizhizao.warehouseInbound.msg.unsupportedReceiptType'));
@@ -1354,6 +1383,7 @@ const InboundPage: React.FC = () => {
     resetSimpleConfirmPreview,
     simpleConfirmPreviewDetail,
     simpleConfirmPreviewTarget,
+    simpleConfirmReceiverHook,
     t,
   ]);
 
@@ -2293,6 +2323,16 @@ const InboundPage: React.FC = () => {
           <p style={{ marginBottom: 12, color: '#666' }}>
             {t('app.kuaizhizao.warehouseInbound.confirmPreview.description')}
           </p>
+          <Form layout="vertical" style={{ marginBottom: 16 }}>
+            <InboundEntryReceiverField
+              hook={purchaseConfirmReceiverHook}
+              label={
+                purchaseConfirmPreviewDetail?.receipt_type === 'production_return'
+                  ? t('app.kuaizhizao.warehouseInbound.field.returner')
+                  : t('app.kuaizhizao.warehouseInbound.field.receiver')
+              }
+            />
+          </Form>
           <Table
             size="small"
             pagination={false}
@@ -2519,6 +2559,17 @@ const InboundPage: React.FC = () => {
           <p style={{ marginBottom: 12, color: '#666' }}>
             {t('app.kuaizhizao.warehouseInbound.simpleConfirmPreview.description')}
           </p>
+          <Form layout="vertical" style={{ marginBottom: 16 }}>
+            <InboundEntryReceiverField
+              hook={simpleConfirmReceiverHook}
+              label={
+                simpleConfirmPreviewTarget?.receipt_type === 'sales_return' ||
+                simpleConfirmPreviewTarget?.receipt_type === 'material_return'
+                  ? t('app.kuaizhizao.warehouseInbound.field.returner')
+                  : t('app.kuaizhizao.warehouseInbound.field.receiver')
+              }
+            />
+          </Form>
           {simpleConfirmPreviewTarget?.receipt_type === 'outsource_receipt' ? (
             <Descriptions
               size="small"

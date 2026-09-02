@@ -36,6 +36,27 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
   {
+    id: 'document-push-progress-numeric-restore',
+    date: '2026-09-02',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.document-push-progress-numeric-restore.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.document-push-progress-numeric-restore.description',
+  },
+  {
+    id: 'work-order-without-bom-when-no-material',
+    date: '2026-09-02',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.work-order-without-bom-when-no-material.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.work-order-without-bom-when-no-material.description',
+  },
+  {
+    id: 'warehouse-inbound-confirm-receiver-select',
+    date: '2026-09-02',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.warehouse-inbound-confirm-receiver-select.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.warehouse-inbound-confirm-receiver-select.description',
+  },
+  {
     id: 'config-center-material-shortage-block-level',
     date: '2026-09-02',
     type: 'fix',

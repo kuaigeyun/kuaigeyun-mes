@@ -196,10 +196,10 @@ const InboundSalesReturnPullEntryPage: React.FC = () => {
           }
           if (draft.returnTime) setReturnTime(draftDayjs(draft.returnTime));
           if (typeof draft.returnNotes === 'string') setReturnNotes(draft.returnNotes);
-          receiverHook.restoreReceiver(
-            typeof draft.receiverUuid === 'string' ? draft.receiverUuid : undefined,
-            typeof draft.receiverName === 'string' ? draft.receiverName : undefined,
-          );
+          receiverHook.restoreReceiver({
+            uuid: typeof draft.receiverUuid === 'string' ? draft.receiverUuid : undefined,
+            name: typeof draft.receiverName === 'string' ? draft.receiverName : undefined,
+          });
         });
       } catch (e: unknown) {
         messageApi.error((e as Error)?.message || t('app.kuaizhizao.warehouseInbound.entry.salesReturn.loadFailed'));

@@ -268,10 +268,17 @@ async def get_material_mrp_supply_source_type(
     return resolve_mrp_supply_source_type(material)
 
 
+def _is_bom_requirement_error(message: str) -> bool:
+    """物料来源校验中与 BOM 维护相关的错误（不含工艺路线等）。"""
+    return "BOM" in (message or "")
+
+
 async def validate_material_source_config(
     tenant_id: int,
     material_id: int,
-    source_type: str
+    source_type: str,
+    *,
+    relax_bom_requirements: bool = False,
 ) -> Tuple[bool, List[str]]:
     """
     验证物料来源配置的完整性
@@ -398,6 +405,9 @@ async def validate_material_source_config(
     elif source_type == SOURCE_TYPE_SERVICE:
         # 服务类物料无需额外配置
         pass
+
+    if relax_bom_requirements:
+        errors = [msg for msg in errors if not _is_bom_requirement_error(msg)]
 
     return len(errors) == 0, errors
 

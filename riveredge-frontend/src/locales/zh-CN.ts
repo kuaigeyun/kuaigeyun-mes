@@ -1119,6 +1119,9 @@ export default {
     '开启后，工单列表展示客户名称列，并支持按客户名称筛选（取自关联销售订单；默认关闭）',
   'pages.system.businessConfig.param.work_order.allow_production_without_material.name': '允许不带料生产',
   'pages.system.businessConfig.param.work_order.allow_production_without_material.description': '开启时，工单下达不检查缺料，只管制造过程；关闭时，缺料则禁止下达。',
+  'pages.system.businessConfig.param.work_order.allow_work_order_without_bom.name': '不带料时允许无 BOM 开工单',
+  'pages.system.businessConfig.param.work_order.allow_work_order_without_bom.description':
+    '需配合「缺料拦截级别」为不拦截。开启后，自制件未维护 BOM 也可创建并下达工单；工艺路线等其它校验仍生效。',
   'pages.system.businessConfig.param.work_order.last_operation_auto_inbound_mode.name': '末道工序自动入库',
   'pages.system.businessConfig.param.work_order.last_operation_auto_inbound_mode.description':
     '末道工序每笔已审核报工按合格数量各建一张待入库单。开启成品检验时须检验合格并在入库管理中确认入库后，库存才会增加；「入库通知」仅建待入库单，「直接入库」将尝试自动确认。',
@@ -11309,6 +11312,7 @@ export default {
   'app.kuaizhizao.warehouseInbound.msg.loadListPartialFailed': '部分入库单来源加载失败，列表可能不完整',
   'app.kuaizhizao.warehouseInbound.msg.batchDeleteSuccess': '成功删除 {{count}} 条记录',
   'app.kuaizhizao.warehouseInbound.msg.loadUsersFailed': '加载人员列表失败，请稍后重试',
+  'app.kuaizhizao.warehouseInbound.msg.selectReceiverRequired': '请选择入库人',
   'app.kuaizhizao.warehouseInbound.msg.noLinesToSetWarehouse': '没有可设置的明细行',
   'app.kuaizhizao.warehouseInbound.msg.batchWarehouseApplied': '已将 {{count}} 行入库仓库设置为同一仓库',
   'app.kuaizhizao.warehouseInbound.batchConfirm.loadDetailFailed': '加载单据详情失败',
@@ -20444,6 +20448,9 @@ export default {
     '生产工单、报工、委外、库存等 15 条出厂操作问答',
   'pages.system.configCenter.param.work_order_allow_production_without_material': '允许不带料生产',
   'pages.system.configCenter.param.work_order_allow_production_without_material_desc': '开启时，工单下达不检查缺料，只管制造过程；关闭时，缺料则禁止下达。',
+  'pages.system.configCenter.param.work_order_allow_work_order_without_bom': '不带料时允许无 BOM 开工单',
+  'pages.system.configCenter.param.work_order_allow_work_order_without_bom_desc':
+    '需先将「缺料拦截级别」设为不拦截（不带料生产）。开启后，自制件未维护 BOM 也可创建并下达工单；工艺路线等其它校验仍生效。',
   'pages.system.configCenter.param.work_order_material_shortage_block_level': '缺料拦截级别',
   'pages.system.configCenter.param.work_order_material_shortage_block_level_desc': '控制工单在缺料时能否下达、开工、报工；选「不拦截」即允许不带料生产。',
   'pages.system.configCenter.param.work_order_material_shortage_block_level_opt_0': '不拦截（允许不带料下达/开工/报工）',
@@ -24762,6 +24769,18 @@ export default {
   'pages.dashboard.updateLogTypeSection.improvement': '优化',
   'pages.dashboard.updateLogTypeSection.fix': '修复',
   'pages.dashboard.updateLogTypeSection.security': '安全',
+  'pages.dashboard.updateLog.entries.document-push-progress-numeric-restore.title':
+    '下推进度 100% 恢复显示百分比',
+  'pages.dashboard.updateLog.entries.document-push-progress-numeric-restore.description':
+    '列表下推进度、交货进度等进度列在 100% 完成态时重新显示百分比数字，绿色满条不再空白。',
+  'pages.dashboard.updateLog.entries.work-order-without-bom-when-no-material.title':
+    '配置中心：不带料生产时可无 BOM 开工单',
+  'pages.dashboard.updateLog.entries.work-order-without-bom-when-no-material.description':
+    '生产模块新增「不带料时允许无 BOM 开工单」；需缺料拦截级别为不拦截，开启后自制件未维护 BOM 也可创建并下达工单。',
+  'pages.dashboard.updateLog.entries.warehouse-inbound-confirm-receiver-select.title':
+    '入库确认时可重新选择入库人',
+  'pages.dashboard.updateLog.entries.warehouse-inbound-confirm-receiver-select.description':
+    '入库管理确认入库弹窗增加入库人下拉，支持代入库场景；所选人员会写入单据并在列表入库人列展示。',
   'pages.dashboard.updateLog.entries.config-center-material-shortage-block-level.title':
     '配置中心恢复缺料拦截级别',
   'pages.dashboard.updateLog.entries.config-center-material-shortage-block-level.description':

@@ -1,1 +1,0 @@
-import{j as a}from"./vendor-BmBt7UY6.js";import{aU as r,N as t}from"./clientRelease-CXyv4uk9.js";const p=()=>{const{id:e}=r();return e?a.jsx(t,{to:`/apps/kuaiplm/knowledge-base?articleId=${e}`,replace:!0}):a.jsx(t,{to:"/apps/kuaiplm/knowledge-base",replace:!0})};export{p as default};

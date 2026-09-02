@@ -15,6 +15,8 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
+from apps.kuaizhizao.schemas.warehouse import InboundConfirmationRequest
+
 from tortoise.queryset import Q
 from tortoise.transactions import in_transaction
 from tortoise import Tortoise
@@ -692,7 +694,8 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
         self,
         tenant_id: int,
         receipt_id: int,
-        completed_by: int
+        completed_by: int,
+        confirmation_data: Optional[InboundConfirmationRequest] = None,
     ) -> OutsourceMaterialReceiptResponse:
         """
         完成委外收货（更新状态为completed，记录收货时间和收货人）
@@ -727,16 +730,22 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
 
         assert_inbound_hub_capability(receipt, "confirm", receipt_type="outsource_receipt")
 
-        # 获取完成人信息
-        user_info = await self.get_user_info(completed_by)
+        from apps.kuaizhizao.utils.inbound_confirm_helper import resolve_inbound_confirm_receiver
+
+        confirmer_name = (await self.get_user_info(completed_by))["name"]
+        receiver_id, receiver_name = await resolve_inbound_confirm_receiver(
+            confirmed_by=completed_by,
+            confirmation_data=confirmation_data,
+            get_user_name=self.get_user_name,
+        )
 
         # 更新状态
         receipt.status = "completed"
         receipt.received_at = resolve_business_datetime()
-        receipt.received_by = completed_by
-        receipt.received_by_name = user_info["name"]
+        receipt.received_by = receiver_id
+        receipt.received_by_name = receiver_name
         receipt.updated_by = completed_by
-        receipt.updated_by_name = user_info["name"]
+        receipt.updated_by_name = confirmer_name
         await receipt.save()
 
         logger.info(f"完成委外收货单: {receipt.code}")

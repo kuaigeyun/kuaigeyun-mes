@@ -1725,6 +1725,8 @@ class InboundConfirmationRequest(BaseSchema):
     warehouse_name: Optional[str] = Field(None, description="入库仓库名称")
     receipt_time: Optional[datetime] = Field(None, description="入库时间")
     notes: Optional[str] = Field(None, description="确认备注")
+    receiver_id: Optional[int] = Field(None, description="入库人/退料人/收货人用户ID（确认时可二次选择）")
+    receiver_name: Optional[str] = Field(None, description="入库人/退料人/收货人姓名")
     items: Optional[List[InboundConfirmationItem]] = Field(None, description="明细更新（可选，用于补全批号/序列号等）")
 
 

@@ -3806,18 +3806,25 @@ class ProductionReturnService(AppBaseService[ProductionReturn]):
                         setattr(item, "serial_numbers", json.dumps(serial_nos))
                         await item.save()
 
-            returner_name = await self.get_user_name(confirmed_by)
+            confirmer_name = await self.get_user_name(confirmed_by)
+            from apps.kuaizhizao.utils.inbound_confirm_helper import resolve_inbound_confirm_receiver
+
+            returner_id, returner_name = await resolve_inbound_confirm_receiver(
+                confirmed_by=confirmed_by,
+                confirmation_data=confirmation_data,
+                get_user_name=self.get_user_name,
+            )
             receipt_time = resolve_business_datetime(
                 confirmation_data.receipt_time if confirmation_data and confirmation_data.receipt_time else None
             )
 
             await ProductionReturn.filter(tenant_id=tenant_id, id=return_id).update(
                 status="已退料",
-                returner_id=confirmed_by,
+                returner_id=returner_id,
                 returner_name=returner_name,
                 return_time=receipt_time,
                 updated_by=confirmed_by,
-                updated_by_name=returner_name,
+                updated_by_name=confirmer_name,
             )
             await ProductionReturnItem.filter(tenant_id=tenant_id, return_id=return_id).update(
                 status="已退料", 
@@ -3856,7 +3863,7 @@ class ProductionReturnService(AppBaseService[ProductionReturn]):
                         movement_type="production_return",
                         to_warehouse_id=wh_id,
                         idempotency_key=f"production_return:{return_id}:inc:{item.id}",
-                    operator_id=confirmed_by,
+                    operator_id=returner_id,
                     operator_name=returner_name,
                 )
             except Exception as inv_e:
@@ -4349,6 +4356,13 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
             # 3. 执行入库确认（更新状态和时间）
             # 确认未传入库时间时保留建单所选业务时刻，禁止一律写成「此刻」
             confirmer_name = await self.get_user_name(confirmed_by)
+            from apps.kuaizhizao.utils.inbound_confirm_helper import resolve_inbound_confirm_receiver
+
+            receiver_id, receiver_name = await resolve_inbound_confirm_receiver(
+                confirmed_by=confirmed_by,
+                confirmation_data=confirmation_data,
+                get_user_name=self.get_user_name,
+            )
             confirm_receipt_time = (
                 confirmation_data.receipt_time
                 if confirmation_data and confirmation_data.receipt_time
@@ -4360,8 +4374,8 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
 
             await FinishedGoodsReceipt.filter(tenant_id=tenant_id, id=receipt_id).update(
                 status='已入库',
-                receiver_id=confirmed_by,
-                receiver_name=confirmer_name,
+                receiver_id=receiver_id,
+                receiver_name=receiver_name,
                 receipt_time=receipt_time,
                 updated_by=confirmed_by
             )
@@ -4423,8 +4437,8 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
                         to_warehouse_id=wh_id,
                         idempotency_key=f"finished_goods_receipt:{receipt_id}:inc:{item.id}",
                         quality_status="qualified",
-                    operator_id=confirmed_by,
-                    operator_name=confirmer_name,
+                    operator_id=receiver_id,
+                    operator_name=receiver_name,
                 )
                 from apps.kuaicaiwu.services.inventory_cost_service import InventoryCostService
                 await InventoryCostService().apply_finished_goods_receipt_cost(
@@ -8957,6 +8971,13 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
 
             # 先过账库存，成功后再改单据状态，避免库存失败时单据已显示「已入库」
             confirmer_name = await self.get_user_name(confirmed_by)
+            from apps.kuaizhizao.utils.inbound_confirm_helper import resolve_inbound_confirm_receiver
+
+            receiver_id, receiver_name = await resolve_inbound_confirm_receiver(
+                confirmed_by=confirmed_by,
+                confirmation_data=confirmation_data,
+                get_user_name=self.get_user_name,
+            )
             receipt_time = resolve_business_datetime(
                 confirmation_data.receipt_time if confirmation_data and confirmation_data.receipt_time else None
             )
@@ -9021,8 +9042,8 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                         movement_type="purchase_receipt",
                         to_warehouse_id=line_wh,
                         idempotency_key=f"purchase_receipt:{receipt_id}:inc:{item.id}",
-                    operator_id=confirmed_by,
-                    operator_name=confirmer_name,
+                    operator_id=receiver_id,
+                    operator_name=receiver_name,
                 )
                 from apps.kuaicaiwu.services.inventory_cost_service import InventoryCostService
                 await InventoryCostService().on_purchase_receipt_confirmed(tenant_id, receipt_id)
@@ -9055,8 +9076,8 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
 
             _hdr_upd_rows = await PurchaseReceipt.filter(tenant_id=tenant_id, id=receipt_id).update(
                 status='已入库',
-                receiver_id=confirmed_by,
-                receiver_name=confirmer_name,
+                receiver_id=receiver_id,
+                receiver_name=receiver_name,
                 receipt_time=receipt_time,
                 updated_by=confirmed_by,
                 updated_by_name=confirmer_name,
@@ -11355,18 +11376,25 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                             item.serial_numbers = json.dumps(serial_nos)
                             await item.save()
 
-            returner_name = await self.get_user_name(confirmed_by)
+            confirmer_name = await self.get_user_name(confirmed_by)
+            from apps.kuaizhizao.utils.inbound_confirm_helper import resolve_inbound_confirm_receiver
+
+            returner_id, returner_name = await resolve_inbound_confirm_receiver(
+                confirmed_by=confirmed_by,
+                confirmation_data=confirmation_data,
+                get_user_name=self.get_user_name,
+            )
             receipt_time = resolve_business_datetime(
                 confirmation_data.receipt_time if confirmation_data and confirmation_data.receipt_time else None
             )
 
             await SalesReturn.filter(tenant_id=tenant_id, id=return_id).update(
                 status='已退货',
-                returner_id=confirmed_by,
+                returner_id=returner_id,
                 returner_name=returner_name,
                 return_time=receipt_time,
                 updated_by=confirmed_by,
-                updated_by_name=returner_name,
+                updated_by_name=confirmer_name,
             )
             await SalesReturnItem.filter(tenant_id=tenant_id, return_id=return_id).update(
                 status='已退货', 
@@ -11402,8 +11430,8 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                         source_doc_code=return_obj.return_code,
                         ledger_production_date=to_site_date(receipt_time),
                     movement_type="other_inbound",
-                    operator_id=confirmed_by,
-                    operator_name=None,
+                    operator_id=returner_id,
+                    operator_name=returner_name,
                 )
             except Exception as inv_e:
                 logger.error("销售退货确认-更新库存失败: %s", inv_e)
@@ -13477,18 +13505,25 @@ class OtherInboundService(AppBaseService[OtherInbound]):
                     if serial_nos:
                         serial_nos_by_item_id[int(item.id)] = serial_nos
 
-            receiver_name = await self.get_user_name(confirmed_by)
+            confirmer_name = await self.get_user_name(confirmed_by)
+            from apps.kuaizhizao.utils.inbound_confirm_helper import resolve_inbound_confirm_receiver
+
+            receiver_id, receiver_name = await resolve_inbound_confirm_receiver(
+                confirmed_by=confirmed_by,
+                confirmation_data=confirmation_data,
+                get_user_name=self.get_user_name,
+            )
             receipt_time = resolve_business_datetime(
                 confirmation_data.receipt_time if confirmation_data and confirmation_data.receipt_time else None
             )
 
             await OtherInbound.filter(tenant_id=tenant_id, id=inbound_id).update(
                 status="已入库",
-                receiver_id=confirmed_by,
+                receiver_id=receiver_id,
                 receiver_name=receiver_name,
                 receipt_time=receipt_time,
                 updated_by=confirmed_by,
-                updated_by_name=receiver_name,
+                updated_by_name=confirmer_name,
             )
             await OtherInboundItem.filter(tenant_id=tenant_id, inbound_id=inbound_id).update(
                 status="已入库", 
@@ -13525,8 +13560,8 @@ class OtherInboundService(AppBaseService[OtherInbound]):
                         ledger_production_date=to_site_date(receipt_time),
                         ledger_expiry_date=getattr(item, "expiry_date", None),
                     movement_type="other_inbound",
-                    operator_id=confirmed_by,
-                    operator_name=None,
+                    operator_id=receiver_id,
+                    operator_name=receiver_name,
                 )
             except Exception as inv_e:
                 logger.error("其他入库确认-更新库存失败: %s", inv_e)
@@ -14689,9 +14724,12 @@ class MaterialReturnService(AppBaseService[MaterialReturn]):
         self,
         tenant_id: int,
         return_id: int,
-        confirmed_by: int
+        confirmed_by: int,
+        confirmation_data: Optional[InboundConfirmationRequest] = None,
     ) -> MaterialReturnResponse:
         """确认归还"""
+        from apps.kuaizhizao.utils.inbound_confirm_helper import resolve_inbound_confirm_receiver
+
         async with in_transaction():
             return_obj = await self.get_material_return_by_id(tenant_id, return_id)
 
@@ -14703,17 +14741,29 @@ class MaterialReturnService(AppBaseService[MaterialReturn]):
 
             confirmer_name = await self.get_user_name(confirmed_by)
             return_time = resolve_business_datetime()
-            # 归还人以单据上已选为准；未填写时才回填为确认操作人
-            keep_returner = bool(getattr(return_obj, "returner_id", None) or getattr(return_obj, "returner_name", None))
+            if confirmation_data is not None and confirmation_data.receiver_id:
+                returner_id, returner_name = await resolve_inbound_confirm_receiver(
+                    confirmed_by=confirmed_by,
+                    confirmation_data=confirmation_data,
+                    get_user_name=self.get_user_name,
+                )
+            else:
+                keep_returner = bool(
+                    getattr(return_obj, "returner_id", None) or getattr(return_obj, "returner_name", None)
+                )
+                if keep_returner:
+                    returner_id = int(getattr(return_obj, "returner_id", None) or confirmed_by)
+                    returner_name = str(getattr(return_obj, "returner_name", None) or confirmer_name).strip()
+                else:
+                    returner_id, returner_name = confirmed_by, confirmer_name
             update_fields: dict = {
                 "status": "已归还",
                 "return_time": return_time,
                 "updated_by": confirmed_by,
                 "updated_by_name": confirmer_name,
+                "returner_id": returner_id,
+                "returner_name": returner_name,
             }
-            if not keep_returner:
-                update_fields["returner_id"] = confirmed_by
-                update_fields["returner_name"] = confirmer_name
             await MaterialReturn.filter(tenant_id=tenant_id, id=return_id).update(**update_fields)
             for item in return_obj.items:
                 await MaterialReturnItem.filter(
@@ -14762,8 +14812,8 @@ class MaterialReturnService(AppBaseService[MaterialReturn]):
                         source_doc_code=return_entity.return_code,
                         ledger_production_date=to_site_date(return_time),
                     movement_type="other_inbound",
-                    operator_id=confirmed_by,
-                    operator_name=confirmer_name,
+                    operator_id=returner_id,
+                    operator_name=returner_name,
                 )
             except Exception as inv_e:
                 logger.error("还料确认-更新库存失败: %s", inv_e)

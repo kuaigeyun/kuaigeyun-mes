@@ -313,6 +313,7 @@ PARAMETER_KEYS = {
     "parameters.common.price_decimal_places",
     "parameters.common.amount_decimal_places",
     "parameters.work_order.allow_production_without_material",
+    "parameters.work_order.allow_work_order_without_bom",
     "parameters.work_order.auto_generate",
     "parameters.work_order.priority",
     "parameters.work_order.split",
@@ -389,6 +390,7 @@ IMPLEMENTED_PARAMETER_KEYS = {
     "parameters.work_order.require_confirmed_picking_before_operation_start",
     "parameters.work_order.require_confirmed_picking_before_reporting",
     "parameters.work_order.allow_production_without_material",
+    "parameters.work_order.allow_work_order_without_bom",
     "parameters.work_order.auto_generate",
     "parameters.work_order.priority",
     "parameters.work_order.split",
@@ -530,6 +532,7 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
         "split": True,
         "merge": True,
         "allow_production_without_material": False,
+        "allow_work_order_without_bom": False,
         "material_shortage_block_level": 1,
         "picking_issue_strategy": "after_release",
         "picking_confirm_warehouse_only": True,
@@ -938,6 +941,15 @@ class BusinessConfigService:
 
     async def allow_production_without_material(self, tenant_id: int) -> bool:
         return (await self.get_material_shortage_block_level(tenant_id)) <= 0
+
+    async def allow_work_order_without_bom(self, tenant_id: int) -> bool:
+        """不带料生产模式下，是否允许无 BOM 创建/下达工单。"""
+        if not await self.allow_production_without_material(tenant_id):
+            return False
+        config = await self.get_business_config(tenant_id)
+        return bool(
+            config["parameters"].get("work_order", {}).get("allow_work_order_without_bom", False)
+        )
 
     async def get_material_shortage_block_level(self, tenant_id: int) -> int:
         config = await self.get_business_config(tenant_id)

@@ -1918,6 +1918,7 @@ async def delete_material_return(
 @router.post("/material-returns/{return_id}/confirm", response_model=MaterialReturnResponse, summary="Confirm borrow return")
 async def confirm_material_return(
     return_id: int,
+    confirmation_data: Optional[InboundConfirmationRequest] = Body(None),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -1930,7 +1931,8 @@ async def confirm_material_return(
     return await MaterialReturnService().confirm_return(
         tenant_id=tenant_id,
         return_id=return_id,
-        confirmed_by=current_user.id
+        confirmed_by=current_user.id,
+        confirmation_data=confirmation_data,
     )
 
 

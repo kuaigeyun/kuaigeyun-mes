@@ -417,7 +417,8 @@ export const warehouseApi = {
     update: async (id: string, data: any) => apiRequest(`/apps/kuaizhizao/material-returns/${id}`, { method: 'PUT', data }),
     delete: async (id: string) => apiRequest(`/apps/kuaizhizao/material-returns/${id}`, { method: 'DELETE' }),
     get: async (id: string) => apiRequest(`/apps/kuaizhizao/material-returns/${id}`, { method: 'GET' }),
-    confirm: async (id: string) => apiRequest(`/apps/kuaizhizao/material-returns/${id}/confirm`, { method: 'POST' }),
+    confirm: async (id: string, data?: unknown) =>
+      apiRequest(`/apps/kuaizhizao/material-returns/${id}/confirm`, { method: 'POST', data: data ?? {} }),
     print: async (id: string, templateUuid?: string) =>
       apiRequest(`/apps/kuaizhizao/material-returns/${id}/print`, {
         method: 'GET',
