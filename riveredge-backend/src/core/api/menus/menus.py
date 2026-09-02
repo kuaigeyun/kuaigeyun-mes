@@ -154,11 +154,15 @@ async def get_navigation_menu_tree(
 
 @router.get("/custom-layout", response_model=CustomMenuLayoutResponse)
 async def get_custom_menu_layout(
-    _auth: object = Depends(require_access("system.menu", "read")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    """获取租户级自组菜单布局配置。"""
+    """
+    获取租户级自组菜单布局配置。
+
+    任意登录用户可读（与 navigation-tree 一致），供侧栏/工作台应用租户级菜单映射；
+    写入仍须 system.menu:update。
+    """
     return await MenuService.get_custom_menu_layout(tenant_id=tenant_id)
 
 

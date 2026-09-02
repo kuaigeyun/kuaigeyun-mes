@@ -470,7 +470,7 @@ const RdProjectDetailPage: React.FC = () => {
       const gateStatus = gate.status ?? 'PENDING';
 
       return (
-        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+        <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
           <Card
             size="small"
             className="rd-project-gate-section-card"
@@ -867,7 +867,7 @@ const RdProjectDetailPage: React.FC = () => {
 
   return (
     <ListPageTemplate>
-      <Space direction="vertical" size="middle" className="project-workbench-shell">
+      <Space orientation="vertical" size="medium" className="project-workbench-shell">
         <ProjectWorkbenchToolbar
           backLabel={t('app.kuaiplm.common.actions.allProjects')}
           onBack={leaveRdProjectDetail}
@@ -1018,7 +1018,7 @@ const RdProjectDetailPage: React.FC = () => {
 
             <Card size="small" title={t('app.kuaiplm.rdProjects.detail.section.relatedKnowledge')}>
               {articles.length > 0 ? (
-                <Space direction="vertical" style={{ width: '100%' }}>
+                <Space orientation="vertical" style={{ width: '100%' }}>
                   {articles.map((a) => (
                     <div key={a.id}>
                       <a onClick={() => navigate(`/apps/kuaiplm/knowledge-base/detail/${a.id}`)}>
@@ -1338,7 +1338,7 @@ const RdProjectDetailPage: React.FC = () => {
           }
         }}
       >
-        <Space direction="vertical" style={{ width: '100%' }}>
+        <Space orientation="vertical" style={{ width: '100%' }}>
           <Alert type="info" showIcon title={t('app.kuaiplm.rdProjects.detail.trialWo.hint')} />
           <div>
             <Typography.Text>{t('common.quantity')}</Typography.Text>

@@ -135,6 +135,20 @@ export const PARAMETER_CATEGORIES: ConfigCategory[] = createCategories({
     { key: 'work_order.score_stale_minutes', nameKey: 'pages.system.configCenter.param.work_order_score_stale_minutes', descriptionKey: 'pages.system.configCenter.param.work_order_score_stale_minutes_desc', source: 'business_config', sourcePath: 'parameters.work_order.score_stale_minutes', type: 'number', min: 5, max: 1440 },
   ],
   production: [
+    {
+      key: 'work_order.material_shortage_block_level',
+      nameKey: 'pages.system.configCenter.param.work_order_material_shortage_block_level',
+      descriptionKey: 'pages.system.configCenter.param.work_order_material_shortage_block_level_desc',
+      source: 'business_config',
+      sourcePath: 'parameters.work_order.material_shortage_block_level',
+      type: 'select',
+      selectOptions: [
+        { value: 0, labelKey: 'pages.system.configCenter.param.work_order_material_shortage_block_level_opt_0' },
+        { value: 1, labelKey: 'pages.system.configCenter.param.work_order_material_shortage_block_level_opt_1' },
+        { value: 2, labelKey: 'pages.system.configCenter.param.work_order_material_shortage_block_level_opt_2' },
+        { value: 3, labelKey: 'pages.system.configCenter.param.work_order_material_shortage_block_level_opt_3' },
+      ],
+    },
     { key: 'work_order.priority', nameKey: 'pages.system.configCenter.param.work_order_priority', descriptionKey: 'pages.system.configCenter.param.work_order_priority_desc', source: 'business_config', sourcePath: 'parameters.work_order.priority', type: 'boolean' },
     { key: 'work_order.split', nameKey: 'pages.system.configCenter.param.work_order_split', descriptionKey: 'pages.system.configCenter.param.work_order_split_desc', source: 'business_config', sourcePath: 'parameters.work_order.split', type: 'boolean' },
     { key: 'work_order.merge', nameKey: 'pages.system.configCenter.param.work_order_merge', descriptionKey: 'pages.system.configCenter.param.work_order_merge_desc', source: 'business_config', sourcePath: 'parameters.work_order.merge', type: 'boolean' },

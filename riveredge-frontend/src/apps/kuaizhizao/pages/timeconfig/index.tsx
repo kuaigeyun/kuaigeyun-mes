@@ -123,7 +123,7 @@ export default function TimeconfigPage() {
       />
 
       <Card title={t('app.kuaizhizao.timeconfig.sectionDrawer')} style={{ marginBottom: 16 }}>
-        <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+        <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
           <div>
             <Typography.Text strong>{t('pages.system.configCenter.param.common_detail_full_chain_mode')}</Typography.Text>
             <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>

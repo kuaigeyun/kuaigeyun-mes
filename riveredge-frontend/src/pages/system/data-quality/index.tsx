@@ -253,7 +253,7 @@ const DataQualityPage: React.FC = () => {
       >
         {importData.length > 0 ? (
           <Alert
-            message={t('pages.system.dataQuality.importedInfo', { count: importData.length - 1 })}
+            title={t('pages.system.dataQuality.importedInfo', { count: importData.length - 1 })}
             type="info"
             showIcon
           />
@@ -362,7 +362,7 @@ const DataQualityPage: React.FC = () => {
                   <div>
                     <Text strong>{t('pages.system.dataQuality.qualityMetrics')}</Text>
                     <div style={{ marginTop: 16 }}>
-                      <Space orientation="vertical" style={{ width: '100%' }} size="middle">
+                      <Space orientation="vertical" style={{ width: '100%' }} size="medium">
                         <div>
                           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                             <Text>{t('pages.system.dataQuality.completeness')}</Text>

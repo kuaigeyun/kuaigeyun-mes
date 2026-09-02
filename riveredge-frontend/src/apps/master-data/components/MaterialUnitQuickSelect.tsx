@@ -10,10 +10,10 @@ import { UniDropdown, QuickCreateModal } from '../../../components/uni-dropdown'
 import { MODAL_NESTED_ABOVE_PARENT_OFFSET } from '../../../components/layout-templates/constants';
 import { useResourcePermissions } from '../../../hooks/useResourcePermissions';
 import { invalidateMaterialUnitDisplayMapCache } from '../../../utils/materialUnitDisplay';
-import { useMaterialUnitOptions } from '../hooks/useMaterialUnitOptions';
+import { useMaterialUnitOptions, MATERIAL_UNIT_OPTIONS_QUERY_KEY, invalidateMaterialUnitOptionsQuery } from '../hooks/useMaterialUnitOptions';
 import { materialUnitApi } from '../services/material-unit';
 
-export const MATERIAL_UNIT_OPTIONS_QUERY_KEY = ['master-data', 'material-units', 'active'] as const;
+export { MATERIAL_UNIT_OPTIONS_QUERY_KEY } from '../hooks/useMaterialUnitOptions';
 
 export interface MaterialUnitQuickSelectProps {
   value?: string;
@@ -58,7 +58,7 @@ export const MaterialUnitQuickSelect: React.FC<MaterialUnitQuickSelectProps> = (
         sort_order: 999,
       });
       invalidateMaterialUnitDisplayMapCache();
-      await queryClient.invalidateQueries({ queryKey: [...MATERIAL_UNIT_OPTIONS_QUERY_KEY] });
+      invalidateMaterialUnitOptionsQuery(queryClient);
       onChange?.(name);
       setCreateOpen(false);
       createForm.resetFields();

@@ -418,7 +418,7 @@ const ReportingKioskPage: React.FC = () => {
               {/* 工单信息显示 */}
               {currentWorkOrder && (
                 <Card size="small" style={{ backgroundColor: '#f5f5f5' }}>
-                  <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+                  <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
                     <div>
                       <strong>工单编号：</strong>
                       <span>{currentWorkOrder.code}</span>
@@ -483,7 +483,7 @@ const ReportingKioskPage: React.FC = () => {
               {/* 跳转规则错误提示 */}
               {jumpRuleError && (
                 <Alert
-                  message={jumpRuleError}
+                  title={jumpRuleError}
                   type="error"
                   showIcon
                   style={{ marginTop: 16 }}
@@ -498,7 +498,7 @@ const ReportingKioskPage: React.FC = () => {
               <Space orientation="vertical" size="large" style={{ width: '100%' }}>
                 {/* 工序信息显示 */}
                 <Card size="small" style={{ backgroundColor: '#f5f5f5' }}>
-                  <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+                  <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
                     <div>
                       <strong>工序编号：</strong>
                       <span>{currentOperation.operation_code}</span>

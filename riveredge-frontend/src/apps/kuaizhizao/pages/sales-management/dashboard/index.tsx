@@ -25,7 +25,7 @@ import { customerFollowUpApi } from '../../../services/customer-follow-up';
 import { isCustomerFollowUpRevisitOverdue } from '../../../utils/customerFollowUpLifecycle';
 import { getSalesTop10 } from '../../../../../services/dashboard';
 import { getSalesReport } from '../../../services/reports';
-import salesContractApi from '../../../services/sales-contract';
+import salesContractApi, { salesContractAlertFeedId } from '../../../services/sales-contract';
 import { useDashboardRequest } from '../../../utils/dashboardRequestOptions';
 import { AmountDisplay } from '../../../../../components/permission';
 import { KUAIZHIZAO_SALES_ORDER_FIELD_RESOURCE as SO } from '../../../constants/fieldPermissionResources';
@@ -511,7 +511,7 @@ const SalesDashboard: React.FC = () => {
   const contractAlertFeedItems = useMemo(
     () =>
       contractAlerts.slice(0, 4).map((item) => ({
-        id: `${item.alert_type}-${item.contract_id}`,
+        id: salesContractAlertFeedId(item),
         title: item.contract_code,
         subtitle: (
           <>

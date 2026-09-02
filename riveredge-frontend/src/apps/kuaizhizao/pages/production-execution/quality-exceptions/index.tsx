@@ -463,7 +463,7 @@ const QualityExceptionsPage: React.FC = () => {
           setDetailDrawerVisible(false);
           setCurrentRecord(null);
         }}
-        width={DRAWER_CONFIG.HALF_WIDTH}
+        size={DRAWER_CONFIG.HALF_WIDTH}
         extra={
           currentRecord
             ? renderQualityExceptionWorkbenchExtra({

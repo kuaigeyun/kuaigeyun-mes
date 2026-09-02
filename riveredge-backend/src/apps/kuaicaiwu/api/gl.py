@@ -353,7 +353,7 @@ async def list_vouchers(
         period_month=period_month,
         keyword=keyword,
     )
-    return [posting_service.voucher_to_dict(r) for r in rows]
+    return await posting_service.vouchers_to_list_dicts(current_user.tenant_id, rows)
 
 
 @router.get("/vouchers/export/csv", response_class=PlainTextResponse)

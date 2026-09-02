@@ -1,29 +1,14 @@
 [Unit]
 Description=RiverEdge Production (API + Taskiq + Caddy)
-After=network-online.target network.target postgresql.service
-Wants=network-online.target postgresql.service
+Wants=riveredge-backend.service riveredge-taskiq-worker.service riveredge-taskiq-scheduler.service riveredge-caddy.service
+After=network-online.target postgresql.service
 Conflicts=caddy.service
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-User={{SERVICE_USER}}
-Group={{SERVICE_GROUP}}
-WorkingDirectory={{PROJECT_ROOT}}
-Environment=HOME={{SERVICE_HOME}}
-Environment=XDG_DATA_HOME={{CADDY_DATA_DIR}}
-Environment=XDG_CONFIG_HOME={{CADDY_CONFIG_DIR}}
-Environment=PLAYWRIGHT_BROWSERS_PATH={{PLAYWRIGHT_BROWSERS_PATH}}
-Environment=RIVEREDGE_SYSTEMD=1
-Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin:{{SERVICE_HOME}}/.local/bin:{{SERVICE_HOME}}/.cargo/bin
-Environment=RIVEREDGE_UV={{UV_BIN}}
-Environment=RIVEREDGE_CADDY={{CADDY_BIN}}
-StandardOutput=journal
-StandardError=journal
-ExecStart={{SERVICE_SCRIPT}} start
-ExecStop={{SERVICE_SCRIPT}} stop
-TimeoutStartSec=600
-TimeoutStopSec=120
+ExecStart=/bin/true
+ExecStop=/bin/systemctl stop riveredge-caddy.service riveredge-taskiq-scheduler.service riveredge-taskiq-worker.service riveredge-backend.service
 
 [Install]
 WantedBy=multi-user.target

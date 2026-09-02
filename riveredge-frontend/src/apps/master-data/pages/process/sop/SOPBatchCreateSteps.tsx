@@ -491,7 +491,7 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
 
       {currentStep === 0 && (
         <Card title={t('app.master-data.sop.batchStep1Card')} size="small">
-          <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+          <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
             <div>
               <div style={{ marginBottom: 8, fontWeight: 500 }}>{t('app.master-data.sop.selectType')}</div>
               <Segmented<'material_group' | 'material'>
@@ -566,7 +566,7 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
       {currentStep === 1 && (
         <Card title={t('app.master-data.sop.batchStep2Card')} size="small">
           {route ? (
-            <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+            <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
               <div>
                 <strong>{t('app.master-data.sop.routeLabel')}</strong>{route.code} - {route.name}
               </div>
@@ -644,11 +644,11 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
               </div>
             </Space>
           ) : (
-            <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+            <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
               <Alert
                 type="info"
                 showIcon
-                message={t('app.master-data.sop.noBoundRouteTitle')}
+                title={t('app.master-data.sop.noBoundRouteTitle')}
                 description={t('app.master-data.sop.noBoundRouteDesc')}
               />
               <div>
@@ -692,11 +692,11 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
 
       {currentStep === 2 && (
         <Card title={t('app.master-data.sop.batchStep3Card')} size="small">
-          <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+          <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
             <Alert
               type="info"
               showIcon
-              message={t('app.master-data.sop.batchRulesTitle')}
+              title={t('app.master-data.sop.batchRulesTitle')}
               description={
                 type === 'material'
                   ? t('app.master-data.sop.batchRulesMaterialDesc', {
@@ -713,7 +713,7 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
               <Alert
                 type="warning"
                 showIcon
-                message={t('app.master-data.sop.batchBindingDuplicateTitle')}
+                title={t('app.master-data.sop.batchBindingDuplicateTitle')}
                 description={t('app.master-data.sop.batchBindingDuplicateHint', {
                   count: batchBindingConflictLabels.length,
                   details: batchBindingConflictLabels.join('；'),
@@ -753,7 +753,7 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
 
       {currentStep === 3 && (
         <Card title={t('app.master-data.sop.batchStep4Card')} size="small">
-          <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+          <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
             <div>
               {t('app.master-data.sop.batchCreatedHint', { count: createdSops.length })}
             </div>

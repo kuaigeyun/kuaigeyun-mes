@@ -138,7 +138,7 @@ const WorkOrderKittingPanel: React.FC<{ workOrderId?: number }> = ({ workOrderId
   if (isLoading)
     return (
       <div style={{ padding: '40px 0', textAlign: 'center' }}>
-        <Spin tip={t('app.kuaizhizao.workOrder.msgComputingKitting')}>
+        <Spin description={t('app.kuaizhizao.workOrder.msgComputingKitting')}>
           <div style={{ minHeight: 24 }} />
         </Spin>
       </div>

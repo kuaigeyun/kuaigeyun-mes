@@ -372,6 +372,13 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
                     deleted_at__isnull=True,
                 ).all() if material_ids else []
                 material_by_id = {int(m.id): m for m in materials}
+                from apps.master_data.services.material_batch_service import MaterialBatchService
+
+                await MaterialBatchService.enrich_receipt_items_expiry_dates(
+                    items,
+                    material_by_id,
+                    to_site_date(receipt_time),
+                )
                 for item in items:
                     qty = item.receipt_quantity or item.qualified_quantity or Decimal(0)
                     if qty <= 0:
@@ -791,6 +798,15 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
                     supplier_code=None,
                 )
             material_unit = (getattr(material, "base_unit", None) or "个") if material else "个"
+            from apps.master_data.services.material_batch_service import MaterialBatchService
+
+            item_expiry_date = None
+            if material:
+                item_expiry_date = MaterialBatchService.resolve_inbound_item_expiry_date(
+                    material=material,
+                    production_date=to_site_date(resolve_business_datetime()),
+                    explicit_expiry=None,
+                )
             await SemiFinishedGoodsReceiptItem.create(
                 tenant_id=tenant_id,
                 receipt_id=receipt.id,
@@ -802,6 +818,7 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
                 qualified_quantity=Decimal(str(receipt_quantity)),
                 unqualified_quantity=Decimal("0"),
                 batch_number=batch_number,
+                expiry_date=item_expiry_date,
                 status="待入库",
             )
             try:

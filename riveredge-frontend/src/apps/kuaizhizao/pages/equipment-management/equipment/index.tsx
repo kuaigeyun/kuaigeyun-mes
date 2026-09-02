@@ -667,7 +667,7 @@ const EquipmentPage: React.FC = () => {
     () => (
       <ThemedSegmented<EquipmentLedgerGroupMode>
         surfaceBackground
-        size="middle"
+        size="medium"
         value={ledgerGroupMode}
         onChange={(v) => handleLedgerGroupModeChange(v as EquipmentLedgerGroupMode)}
         options={[

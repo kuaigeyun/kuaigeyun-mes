@@ -70,6 +70,7 @@ class InventoryAlertRule(BaseModel):
 
     # 物料信息（可选）
     material_id = fields.IntField(null=True, description="物料ID（可选，如果为空则适用于所有物料）")
+    material_ids = fields.JSONField(null=True, description="物料ID列表（多选范围，JSON数组）")
     material_code = fields.CharField(max_length=50, null=True, description="物料编码（可选）")
     material_name = fields.CharField(max_length=200, null=True, description="物料名称（可选）")
     material_group_id = fields.IntField(null=True, description="物料分组ID（可选，如果为空则不限分组）")

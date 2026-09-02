@@ -105,7 +105,7 @@ const LandingCostAllocationModal: React.FC<LandingCostAllocationModalProps> = ({
                       min={0}
                       precision={amountDecimals}
                       style={{ width: 140 }}
-                      addonAfter="￥"
+                      suffix="￥"
                     />
                   </Form.Item>
                   {fields.length > 1 && (

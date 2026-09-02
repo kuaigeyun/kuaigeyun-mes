@@ -485,7 +485,7 @@ const ChartOfAccountsPage: React.FC = () => {
             onChange={(e) => setSelectedTemplateKey(String(e.target.value))}
             style={{ width: '100%' }}
           >
-            <Space orientation="vertical" style={{ width: '100%' }} size="middle">
+            <Space orientation="vertical" style={{ width: '100%' }} size="medium">
               {seedTemplates.map((tpl) => (
                 <Radio key={tpl.key} value={tpl.key} style={{ width: '100%', alignItems: 'flex-start' }}>
                   <div>

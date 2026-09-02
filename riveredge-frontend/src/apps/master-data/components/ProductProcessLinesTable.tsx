@@ -772,7 +772,7 @@ export const ProductProcessLinesTable: React.FC<ProductProcessLinesTableProps> =
   );
 
   return (
-    <Space direction="vertical" style={{ width: '100%' }} size="middle">
+    <Space orientation="vertical" style={{ width: '100%' }} size="medium">
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <span>{t('field.route.allowOperationJump')}</span>
         <Switch

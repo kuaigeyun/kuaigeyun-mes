@@ -413,7 +413,7 @@ const BankAccountsPage: React.FC = () => {
           : t(`${BA}.transactionsTitle`)}
         open={txDrawerOpen}
         onClose={() => setTxDrawerOpen(false)}
-        width={DRAWER_CONFIG.HALF_WIDTH}
+        size={DRAWER_CONFIG.HALF_WIDTH}
         plainBody={
           <UniTable<BankTx>
             actionRef={txRef}

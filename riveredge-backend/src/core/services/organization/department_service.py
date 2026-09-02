@@ -787,6 +787,18 @@ class DepartmentService:
         {"name": "行政人事部", "code": "HR", "sort_order": 80},
     ]
 
+    # 预设部门 code → 预设经理角色 code（用于补齐部门负责人，供审批流部门节点解析）
+    PRESET_DEPT_MANAGER_ROLE: dict[str, str] = {
+        "EXEC": "ADMIN_OFFICE",
+        "PROD": "PRODUCTION_MANAGER",
+        "PURCH": "PURCHASE_MANAGER",
+        "SALES": "SALES_MANAGER",
+        "WH": "WAREHOUSE_MANAGER",
+        "QC": "QUALITY_MANAGER",
+        "FIN": "FINANCE_MANAGER",
+        "HR": "ADMIN_OFFICE",
+    }
+
     @staticmethod
     async def load_preset_sme(
         tenant_id: int,
@@ -821,7 +833,54 @@ class DepartmentService:
                     updated_at=now,
                 )
                 created += 1
+        linked = await DepartmentService.link_preset_department_managers(tenant_id)
+        if linked:
+            logger.info("预设部门已关联负责人: tenant_id={} linked={}", tenant_id, linked)
         return created
+
+    @staticmethod
+    async def link_preset_department_managers(tenant_id: int) -> int:
+        """
+        按预设映射，将尚未配置负责人的部门与其经理角色下的首个启用用户关联。
+        供审批流「部门负责人」节点解析 manager_id。
+        """
+        from core.models.role import Role
+        from core.models.user_role import UserRole
+        from infra.models.user import User
+
+        updated = 0
+        for dept_code, role_code in DepartmentService.PRESET_DEPT_MANAGER_ROLE.items():
+            dept = await Department.filter(
+                tenant_id=tenant_id,
+                code=dept_code,
+                deleted_at__isnull=True,
+            ).first()
+            if not dept or dept.manager_id:
+                continue
+            role = await Role.filter(
+                tenant_id=tenant_id,
+                code=role_code,
+                deleted_at__isnull=True,
+                is_active=True,
+            ).first()
+            if not role:
+                continue
+            user_ids = await UserRole.filter(role_id=role.id).values_list("user_id", flat=True)
+            for uid in user_ids:
+                if uid is None:
+                    continue
+                user = await User.filter(
+                    id=int(uid),
+                    tenant_id=tenant_id,
+                    deleted_at__isnull=True,
+                    is_active=True,
+                ).first()
+                if user:
+                    dept.manager_id = user.id
+                    await dept.save(update_fields=["manager_id", "updated_at"])
+                    updated += 1
+                    break
+        return updated
 
     @staticmethod
     async def sync_departments_from_dataset(

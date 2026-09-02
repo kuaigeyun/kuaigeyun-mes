@@ -300,6 +300,20 @@ class DataScopeService:
         combined = q_parts[0]
         for part in q_parts[1:]:
             combined |= part
+
+        from core.config.audit_registry import entry_by_resource
+        from core.services.approval.approval_data_scope import list_pending_approver_entity_ids
+
+        audit_entry = entry_by_resource(resource_key)
+        if audit_entry and model_has_field(queryset.model, "id"):
+            pending_entity_ids = await list_pending_approver_entity_ids(
+                tenant_id,
+                user.id,
+                audit_entry.entity_type,
+            )
+            if pending_entity_ids:
+                combined |= Q(id__in=sorted(pending_entity_ids))
+
         return queryset.filter(combined)
 
     @classmethod
@@ -325,7 +339,21 @@ class DataScopeService:
         if model_has_field(model, "deleted_at"):
             qs = qs.filter(deleted_at__isnull=True)
         scoped = await cls.apply(qs, tenant_id=tenant_id, user=user, resource=resource)
-        return await scoped.exists()
+        if await scoped.exists():
+            return True
+
+        from core.config.audit_registry import entry_by_resource
+        from core.services.approval.approval_data_scope import user_is_pending_approver_for_entity
+
+        audit_entry = entry_by_resource(resource)
+        if audit_entry:
+            return await user_is_pending_approver_for_entity(
+                tenant_id,
+                user.id,
+                audit_entry.entity_type,
+                int(pk),
+            )
+        return False
 
     @classmethod
     async def assert_row_visible(

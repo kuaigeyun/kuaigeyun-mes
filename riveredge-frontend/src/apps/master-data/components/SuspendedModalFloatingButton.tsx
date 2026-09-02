@@ -28,7 +28,7 @@ const SuspendedModalFloatingButton: React.FC = () => {
     queryFn: getPlatformSettingsPublic,
     staleTime: 0,
   });
-  const iterationButtonEnabled = settings?.float_button_enabled !== false;
+  const iterationButtonEnabled = settings?.float_button_enabled === true;
 
   useEffect(() => {
     const state = getSuspendedModal();

@@ -136,7 +136,7 @@ export function ReportingRecordLinkedDetailDrawer({
       title={title}
       open={open}
       onClose={onClose}
-      width={DRAWER_CONFIG.HALF_WIDTH}
+      size={DRAWER_CONFIG.HALF_WIDTH}
       zIndex={zIndex}
       loading={loading}
       plainBody={

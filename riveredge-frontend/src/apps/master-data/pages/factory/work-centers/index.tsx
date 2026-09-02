@@ -578,7 +578,7 @@ const WorkCentersPage: React.FC = () => {
           showIcon
           closable
           style={{ marginBottom: 12 }}
-          message={t('app.master-data.workCenters.dimensionHint')}
+          title={t('app.master-data.workCenters.dimensionHint')}
         />
         <UniTable<WorkCenter>
           columnPersistenceId="apps.master-data.pages.factory.work-centers.list-v3"

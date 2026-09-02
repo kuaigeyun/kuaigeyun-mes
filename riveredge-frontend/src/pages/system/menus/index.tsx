@@ -61,6 +61,7 @@ import {
 import CustomMenuLayoutEditor, {
   buildCustomLayoutPayload,
   collectMenuUuidsFromSourceTree,
+  customLayoutNodesHaveMenuRefs,
   parseCustomLayoutEditorState,
   pruneStaleMenuRefsFromEditorState,
   sanitizeCustomLayoutNodes,
@@ -345,8 +346,14 @@ const MenuListPage: React.FC = () => {
       };
       walk(sourceTree);
       const payload = buildCustomLayoutPayload(prunedState, menuLookup);
+      const layoutEnabled =
+        prunedState.enabled || customLayoutNodesHaveMenuRefs(payload.nodes);
+      if (layoutEnabled !== prunedState.enabled) {
+        setCustomLayoutEditorState({ ...prunedState, enabled: true });
+      }
       await updateMenuCustomLayout({
         ...payload,
+        enabled: layoutEnabled,
         show_app_names: showAppMenuNames,
       });
       patchShowAppMenuNamesConfig(showAppMenuNames);

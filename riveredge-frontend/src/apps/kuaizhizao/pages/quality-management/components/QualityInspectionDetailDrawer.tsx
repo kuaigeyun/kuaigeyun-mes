@@ -86,7 +86,7 @@ export function QualityInspectionDetailDrawer<T extends QualityInspectionDetailR
       title={title}
       open={open}
       onClose={onClose}
-      width={DRAWER_CONFIG.HALF_WIDTH}
+      size={DRAWER_CONFIG.HALF_WIDTH}
       zIndex={zIndex}
       extra={contentReady ? extra : null}
       banner={contentReady ? banner : undefined}

@@ -669,7 +669,7 @@ const ExceptionProcessPage: React.FC = () => {
                 batch: t(`${PROC}.batch.cancel`),
               }}
               icon={<RollbackOutlined />}
-              size="middle"
+              size="medium"
               onSuccess={handleExceptionProcessBatchSuccess}
             />,
           ]}
@@ -706,7 +706,7 @@ const ExceptionProcessPage: React.FC = () => {
           setDetailDrawerVisible(false);
           setCurrentRecord(null);
         }}
-        width={DRAWER_CONFIG.HALF_WIDTH}
+        size={DRAWER_CONFIG.HALF_WIDTH}
         extra={
           currentRecord && ['pending', 'processing'].includes(currentRecord.process_status || '') ? (
             <Space>

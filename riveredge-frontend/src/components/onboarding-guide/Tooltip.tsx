@@ -86,7 +86,7 @@ export const GuideTooltip: React.FC<TooltipRenderProps> = ({
             size="small" 
             showInfo={false} 
             strokeColor={token.colorPrimary}
-            trailColor={isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'}
+            railColor={isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'}
           />
           <Text type="secondary" style={{ fontSize: 12 }}>
             步骤 {index + 1} / {size}

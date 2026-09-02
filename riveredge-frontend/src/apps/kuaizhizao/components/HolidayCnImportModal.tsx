@@ -110,7 +110,7 @@ export const HolidayCnImportModal: React.FC<HolidayCnImportModalProps> = ({
       confirmLoading={submitting}
       okText={t('app.kuaizhizao.performance.holidays.importCn.ok')}
       cancelText={t('common.cancel')}
-      destroyOnClose
+      destroyOnHidden
       width={520}
     >
       <Typography.Paragraph type="secondary" style={{ marginBottom: 16 }}>
@@ -147,7 +147,7 @@ export const HolidayCnImportModal: React.FC<HolidayCnImportModalProps> = ({
             </Typography.Text>
           ) : null}
         </Form.Item>
-        <Space direction="vertical" size={0}>
+        <Space orientation="vertical" size={0}>
           <Typography.Text type="secondary">
             {t('app.kuaizhizao.performance.holidays.importCn.rules.legal')}
           </Typography.Text>

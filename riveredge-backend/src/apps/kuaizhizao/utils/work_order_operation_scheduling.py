@@ -102,6 +102,56 @@ def build_operation_time_slots(
     return slots
 
 
+def build_operation_time_slots_in_planned_window(
+    durations_hours: Sequence[float],
+    *,
+    planned_start: Any,
+    planned_end: Any,
+) -> List[Tuple[datetime, datetime]]:
+    """
+    在工单计划起止窗口内按工时比例分配工序时段。
+    用于来源单据锚定起止时，避免工作日历倒排产生错位的小时时刻。
+    """
+    if not durations_hours:
+        return []
+    start = normalize_schedule_anchor(planned_start, end_of_day=False)
+    end = normalize_schedule_anchor(planned_end, end_of_day=True)
+    if end <= start:
+        return build_operation_time_slots(
+            durations_hours,
+            planned_start=start,
+            planned_end=None,
+        )
+
+    total_hours = sum(max(float(h), 0.0) for h in durations_hours)
+    window_hours = max((end - start).total_seconds() / 3600.0, 0.01)
+    if total_hours <= 0:
+        span = window_hours / len(durations_hours)
+        slots: List[Tuple[datetime, datetime]] = []
+        current = start
+        for _ in durations_hours:
+            op_end = min(current + timedelta(hours=span), end)
+            slots.append((current, op_end))
+            current = op_end
+        if slots:
+            ls, _ = slots[-1]
+            slots[-1] = (ls, end)
+        return slots
+
+    scale = min(1.0, window_hours / total_hours)
+    current = start
+    slots = []
+    for hours in durations_hours:
+        eff_h = max(float(hours), 0.0) * scale
+        op_end = min(current + timedelta(hours=eff_h), end)
+        slots.append((current, op_end))
+        current = op_end
+    if slots:
+        ls, _ = slots[-1]
+        slots[-1] = (ls, end)
+    return slots
+
+
 def _build_slots_working_time(
     durations_hours: Sequence[float],
     *,

@@ -1908,17 +1908,25 @@ async def get_production_broadcast(
         return ProductionBroadcastResponse(items=[])
 
 
+@cache_by_kwargs(namespace="dashboard:badges", ttl=45, include_kwargs=["user_id"])
+async def _cached_menu_badge_counts(*, tenant_id: int, user_id: int, user: User) -> dict:
+    return await fetch_menu_badge_counts(tenant_id, user)
+
+
 @router.get("/menu-badge-counts", summary="Menu badge open-document counts")
-@cache_by_kwargs(namespace="dashboard:badges", ttl=45)
 async def get_menu_badge_counts(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> dict:
     """
     返回各业务单据的「未完成」数量，key 与前端菜单 path 映射一致。
-    用于左侧菜单业务类单据显示数量小徽标。
+    用于左侧菜单业务类单据显示数量小徽标；COUNT 与列表相同的数据权限（本人/部门/全部）。
     """
-    return await fetch_menu_badge_counts(tenant_id)
+    return await _cached_menu_badge_counts(
+        tenant_id=tenant_id,
+        user_id=current_user.id,
+        user=current_user,
+    )
 
 
 # ==========================================

@@ -1638,7 +1638,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   }, [systemSettingsPanelMounted, closeSystemSettingsPanelAnimated]);
 
   const { data: menuBadgeCounts = {} } = useQuery({
-    queryKey: [...MENU_BADGE_COUNTS_QUERY_KEY, currentUser?.tenant_id],
+    queryKey: [...MENU_BADGE_COUNTS_QUERY_KEY, currentUser?.tenant_id, currentUser?.id],
     queryFn: getMenuBadgeCounts,
     enabled: !!currentUser?.id && documentVisible,
     ...layoutShellQueryOptions,

@@ -2385,7 +2385,7 @@ const DemandComputationPage: React.FC = () => {
             {t('common.detail')}
           </Button>,
         ]
-        if (canExecute && canExecuteByCapability && (computationPerms.canAction?.('submit') ?? false)) {
+        if (canExecute && canExecuteByCapability && computationPerms.canUpdate) {
           parts.push(
             <Button {...rowActionKind('execute')} key="ex" onClick={() => handleExecute(record)}>
               {t('app.kuaizhizao.demandComputation.actionExecute')}
@@ -2403,7 +2403,7 @@ const DemandComputationPage: React.FC = () => {
       },
     },
     ], SALES_DOC_LIST_FIELD_RANK),
-    [computationPerms.canAction, computationPerms.canDelete, computationPerms.canUpdate, handleDelete, handleDetail, handleExecute, messageApi, demandComputationLifecycleValueEnum, monitorSummaries, monitorSummariesLoading, t],
+    [computationPerms.canDelete, computationPerms.canUpdate, handleDelete, handleDetail, handleExecute, messageApi, demandComputationLifecycleValueEnum, monitorSummaries, monitorSummariesLoading, t],
   )
 
   const canUseToolbarPush = selectedComputationForToolbar
@@ -3209,7 +3209,7 @@ const DemandComputationPage: React.FC = () => {
                   <Alert
                     type="warning"
                     showIcon
-                    message={
+                    title={
                       demandComputationCapabilityReasonMessage(
                         pushPreviewData.blocking_reason,
                         t,
@@ -3293,7 +3293,7 @@ const DemandComputationPage: React.FC = () => {
                   <Alert
                     type="warning"
                     showIcon
-                    message={t('app.kuaizhizao.demandComputation.validationFailedMaterials')}
+                    title={t('app.kuaizhizao.demandComputation.validationFailedMaterials')}
                     description={
                       <ul style={{ margin: '8px 0 0', paddingLeft: 20 }}>
                         {pushPreviewData.validation_failures.map((v, i) => (
@@ -3411,7 +3411,7 @@ const DemandComputationPage: React.FC = () => {
                       type="info"
                       showIcon
                       style={{ marginBottom: token.marginSM }}
-                      message={t('app.kuaizhizao.demandComputation.analysisResultsHint', {
+                      title={t('app.kuaizhizao.demandComputation.analysisResultsHint', {
                         count: analysisItems.length,
                       })}
                     />
@@ -3568,7 +3568,7 @@ const DemandComputationPage: React.FC = () => {
                       type="info"
                       showIcon
                       style={{ marginBottom: token.marginMD }}
-                      message={
+                      title={
                         readinessGaps.length > 0
                           ? t('app.kuaizhizao.demandComputation.analysisHint', {
                               count: readinessGaps.length,
@@ -3581,7 +3581,7 @@ const DemandComputationPage: React.FC = () => {
                         type="warning"
                         showIcon
                         style={{ marginBottom: token.marginMD }}
-                        message={t('app.kuaizhizao.demandComputation.analysisBlockingHint')}
+                        title={t('app.kuaizhizao.demandComputation.analysisBlockingHint')}
                       />
                     ) : null}
                     {!materialPerms.canUpdate ? (
@@ -3589,7 +3589,7 @@ const DemandComputationPage: React.FC = () => {
                         type="warning"
                         showIcon
                         style={{ marginBottom: token.marginMD }}
-                        message={t('app.kuaizhizao.demandComputation.readinessNoMaterialUpdatePerm')}
+                        title={t('app.kuaizhizao.demandComputation.readinessNoMaterialUpdatePerm')}
                       />
                     ) : null}
                     {readinessGaps.length === 0 ? (
@@ -3610,7 +3610,7 @@ const DemandComputationPage: React.FC = () => {
                                 type="info"
                                 showIcon
                                 style={{ marginBottom: token.marginSM }}
-                                message={getReadinessFieldHelp(group.field)}
+                                title={getReadinessFieldHelp(group.field)}
                               />
                               <Table
                                 size="small"
@@ -3636,7 +3636,7 @@ const DemandComputationPage: React.FC = () => {
               type="info"
               showIcon
               style={{ marginBottom: token.marginMD }}
-              message={t('app.kuaizhizao.demandComputation.readinessHint', {
+              title={t('app.kuaizhizao.demandComputation.readinessHint', {
                 count: readinessGaps.length,
               })}
             />
@@ -3645,7 +3645,7 @@ const DemandComputationPage: React.FC = () => {
                 type="warning"
                 showIcon
                 style={{ marginBottom: token.marginMD }}
-                message={t('app.kuaizhizao.demandComputation.readinessBlockingHint')}
+                title={t('app.kuaizhizao.demandComputation.readinessBlockingHint')}
               />
             ) : null}
             {!materialPerms.canUpdate ? (
@@ -3653,7 +3653,7 @@ const DemandComputationPage: React.FC = () => {
                 type="warning"
                 showIcon
                 style={{ marginBottom: token.marginMD }}
-                message={t('app.kuaizhizao.demandComputation.readinessNoMaterialUpdatePerm')}
+                title={t('app.kuaizhizao.demandComputation.readinessNoMaterialUpdatePerm')}
               />
             ) : null}
             <Tabs
@@ -3668,7 +3668,7 @@ const DemandComputationPage: React.FC = () => {
                       type="info"
                       showIcon
                       style={{ marginBottom: token.marginSM }}
-                      message={getReadinessFieldHelp(group.field)}
+                      title={getReadinessFieldHelp(group.field)}
                     />
                     <Table
                       size="small"

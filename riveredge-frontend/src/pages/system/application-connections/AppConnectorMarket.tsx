@@ -209,12 +209,12 @@ const AppConnectorMarket: React.FC<AppConnectorMarketProps> = ({
       width={MODAL_CONFIG.CONNECTOR_MARKET_WIDTH}
       destroyOnHidden
     >
-      <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+      <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
         <Radio.Group
           value={category}
           onChange={(e) => setCategory(e.target.value)}
           optionType="button"
-          size="middle"
+          size="medium"
         >
           {categories.map((c) => (
             <Radio.Button key={c.key} value={c.key}>

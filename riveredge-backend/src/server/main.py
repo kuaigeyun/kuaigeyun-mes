@@ -195,31 +195,20 @@ async def lifespan(app: FastAPI):
     )
 
     from core.services.authorization.data_scope_bootstrap import ensure_data_scope_framework
-    from apps.kuaizhizao.authorization.data_scope_setup import (
-        register_kuaizhizao_data_scope_profiles,
-    )
-    from apps.master_data.authorization.data_scope_setup import (
-        register_master_data_data_scope_profiles,
-    )
+    from core.services.application.enabled_apps import resolve_enabled_app_codes
     from core.services.application.plugin_bootstrap import register_plugin_bootstraps
 
     ensure_data_scope_framework()
-    register_kuaizhizao_data_scope_profiles()
-    register_master_data_data_scope_profiles()
-    from apps.master_data.reference_display.setup import register_master_data_reference_display_providers
-    from apps.kuaizhizao.reference_display.setup import register_kuaizhizao_reference_display_providers
-
-    register_master_data_reference_display_providers()
-    register_kuaizhizao_reference_display_providers()
-    # 可选应用（haoligo 等）：仅当 compose 进 src/apps 时执行其 bootstrap
-    register_plugin_bootstraps()
+    enabled_codes = await resolve_enabled_app_codes()
+    if enabled_codes:
+        register_plugin_bootstraps(enabled_codes)
     logger.info("✅ 引用资源 DisplayProvider 已注册")
     logger.info("✅ 数据权限框架（DataScopeService）已注册")
 
-    # 需求计算启动对账：上次进程被强杀时滞留在「计算中」的计算单回正为失败，供计划员重试
-    from apps.kuaizhizao.services.demand_computation_service import DemandComputationService
+    if "kuaizhizao" in enabled_codes:
+        from apps.kuaizhizao.services.demand_computation_service import DemandComputationService
 
-    await DemandComputationService.reconcile_interrupted_computations()
+        await DemandComputationService.reconcile_interrupted_computations()
 
     # 确保平台超级管理员存在（表为空时从 .env 创建；未登录过的账号可与 .env 同步密码）
     try:
@@ -342,23 +331,26 @@ async def lifespan(app: FastAPI):
         logger.warning(f"⚠️ Taskiq broker 启动失败，异步任务投递将不可用: {e}")
 
     # OpenAPI schema 较大（约 MB 级）：后台预热，不得阻塞 lifespan yield（否则 /health 无法响应，部署脚本会超时）
-    async def _warmup_openapi() -> None:
-        try:
-            import time as _time
+    if infra_settings.DOCS_ENABLED:
+        async def _warmup_openapi() -> None:
+            try:
+                import time as _time
 
-            _t0 = _time.perf_counter()
-            await asyncio.to_thread(app.openapi)
-            logger.info(
-                "✅ OpenAPI schema 已预热（ReDoc 首次打开更快）：{:.2f}s",
-                _time.perf_counter() - _t0,
-            )
-        except asyncio.CancelledError:
-            raise
-        except Exception as e:
-            logger.warning("⚠️ OpenAPI 预热失败，首次 /openapi.json 仍将按需生成: {}", e)
+                _t0 = _time.perf_counter()
+                await asyncio.to_thread(app.openapi)
+                logger.info(
+                    "✅ OpenAPI schema 已预热（ReDoc 首次打开更快）：{:.2f}s",
+                    _time.perf_counter() - _t0,
+                )
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                logger.warning("⚠️ OpenAPI 预热失败，首次 /openapi.json 仍将按需生成: {}", e)
 
-    app.state._openapi_warmup_task = asyncio.create_task(_warmup_openapi())
-    logger.info("✅ OpenAPI schema 预热任务已启动（后台执行，不阻塞 /health）")
+        app.state._openapi_warmup_task = asyncio.create_task(_warmup_openapi())
+        logger.info("✅ OpenAPI schema 预热任务已启动（后台执行，不阻塞 /health）")
+    else:
+        logger.info("DOCS_ENABLED=false，跳过 OpenAPI schema 预热与 ReDoc 路由")
 
     # 验证路由注册情况
     from core.services.application.application_route_manager import get_route_manager
@@ -442,31 +434,34 @@ app = FastAPI(
     version="1.0.2",
     lifespan=lifespan,
     docs_url=None,  # 禁用默认docs，使用修复版本
-    redoc_url=None,  # 使用下方自定义 /redoc（关闭 Google Fonts、可配置 JS CDN）
+    redoc_url=None,
+    openapi_url="/openapi.json" if infra_settings.DOCS_ENABLED else None,
     default_response_class=SiteTimezoneJSONResponse,
 )
 
 
-@app.get("/redoc", include_in_schema=False)
-async def redoc_documentation(request: Request):
-    """ReDoc：默认不加载 Google Fonts，避免国内首屏长时间空白；见 REDOC_* 环境变量。"""
-    from fastapi.openapi.docs import get_redoc_html
+if infra_settings.DOCS_ENABLED:
 
-    root_path = request.scope.get("root_path", "").rstrip("/")
-    openapi_url = root_path + app.openapi_url
-    js = (infra_settings.REDOC_JS_URL or "").strip()
-    if not js:
-        js = "/static/redoc/redoc.standalone.js"
-    return get_redoc_html(
-        openapi_url=openapi_url,
-        title=f"{app.title} - ReDoc",
-        redoc_js_url=js,
-        with_google_fonts=infra_settings.REDOC_USE_GOOGLE_FONTS,
-    )
+    @app.get("/redoc", include_in_schema=False)
+    async def redoc_documentation(request: Request):
+        """ReDoc：默认不加载 Google Fonts，避免国内首屏长时间空白；见 REDOC_* 环境变量。"""
+        from fastapi.openapi.docs import get_redoc_html
+
+        root_path = request.scope.get("root_path", "").rstrip("/")
+        openapi_url = root_path + app.openapi_url
+        js = (infra_settings.REDOC_JS_URL or "").strip()
+        if not js:
+            js = "/static/redoc/redoc.standalone.js"
+        return get_redoc_html(
+            openapi_url=openapi_url,
+            title=f"{app.title} - ReDoc",
+            redoc_js_url=js,
+            with_google_fonts=infra_settings.REDOC_USE_GOOGLE_FONTS,
+        )
 
 
 _REDOC_STATIC_DIR = Path(__file__).resolve().parent / "doc_assets" / "redoc"
-if (_REDOC_STATIC_DIR / "redoc.standalone.js").is_file():
+if infra_settings.DOCS_ENABLED and (_REDOC_STATIC_DIR / "redoc.standalone.js").is_file():
     from starlette.staticfiles import StaticFiles
 
     app.mount(
@@ -474,7 +469,7 @@ if (_REDOC_STATIC_DIR / "redoc.standalone.js").is_file():
         StaticFiles(directory=str(_REDOC_STATIC_DIR)),
         name="redoc_standalone",
     )
-else:
+elif infra_settings.DOCS_ENABLED:
     logger.warning(
         "未找到 ReDoc 静态资源 {} ，请放置文件或设置 REDOC_JS_URL 为 CDN",
         _REDOC_STATIC_DIR / "redoc.standalone.js",

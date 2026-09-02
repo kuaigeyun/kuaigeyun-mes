@@ -872,12 +872,11 @@ const PayableList: React.FC = () => {
                 <Alert
                     type="info"
                     showIcon
-                    closable
+                    closable={{ onClose: () => setSearchParams({}) }}
                     style={{ marginBottom: 16 }}
                     title={t('app.kuaicaiwu.financeUi.aging.listFilterActive', {
                         filter: agingFilterDescription,
                     })}
-                    onClose={() => setSearchParams({})}
                 />
             ) : null}
             <UniTable<Payable>
@@ -1156,7 +1155,7 @@ const PayableList: React.FC = () => {
                         : pullFromPurchaseOrderAction.label
                 }
                 open={pullPreviewOpen}
-                destroyOnClose
+                destroyOnHidden
                 width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
                 onCancel={resetPullPreview}
                 okText={pullPreviewTargetLabel}
@@ -1186,7 +1185,7 @@ const PayableList: React.FC = () => {
                                 type="warning"
                                 showIcon
                                 style={{ marginBottom: 12 }}
-                                message={payableCapabilityReasonMessage(pullPreviewData.blocking_reason, t)}
+                                title={payableCapabilityReasonMessage(pullPreviewData.blocking_reason, t)}
                             />
                         ) : null}
                         {pullPreviewData.items?.length > 0 ? (

@@ -701,7 +701,7 @@ const CodeRuleListPage: React.FC = () => {
             <>
               {pageConfigs.length < 10 && (
                 <Alert
-                  message={t('pages.system.codeRules.tip')}
+                  title={t('pages.system.codeRules.tip')}
                   description={
                     <div style={{ fontSize: '12px' }}>
                       <p style={{ margin: 0, marginBottom: '6px' }}>

@@ -25,7 +25,8 @@ class InventoryAlertRuleBase(BaseModel):
 
     name: str = Field(..., description="预警规则名称")
     alert_type: str = Field(..., description="预警类型（low_stock/high_stock/expired）")
-    material_id: Optional[int] = Field(None, description="物料ID（可选）")
+    material_id: Optional[int] = Field(None, description="物料ID（可选，单物料兼容）")
+    material_ids: Optional[List[int]] = Field(None, description="物料ID列表（多选）")
     material_code: Optional[str] = Field(None, description="物料编码（可选）")
     material_name: Optional[str] = Field(None, description="物料名称（可选）")
     material_group_id: Optional[int] = Field(None, description="物料分组ID（可选）")

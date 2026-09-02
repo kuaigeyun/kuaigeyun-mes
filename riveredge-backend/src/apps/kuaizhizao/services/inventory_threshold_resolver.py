@@ -60,6 +60,27 @@ def material_stock_thresholds(material: Any) -> Tuple[Optional[Decimal], Optiona
     return safety, max_stock
 
 
+def _normalize_rule_material_ids(rule: Any) -> List[int]:
+    """规则绑定的物料 ID 列表（material_ids 优先，兼容单 material_id）。"""
+    raw = getattr(rule, "material_ids", None)
+    ids: List[int] = []
+    if isinstance(raw, list):
+        for item in raw:
+            try:
+                mid = int(item)
+            except (TypeError, ValueError):
+                continue
+            if mid > 0:
+                ids.append(mid)
+    rule_mid = getattr(rule, "material_id", None)
+    if not ids and rule_mid is not None:
+        try:
+            ids = [int(rule_mid)]
+        except (TypeError, ValueError):
+            ids = []
+    return ids
+
+
 def _rule_specificity(
     rule: Any,
     *,
@@ -68,11 +89,11 @@ def _rule_specificity(
     material_group_id: Optional[int],
 ) -> Optional[int]:
     """不匹配返回 None；匹配返回特异度（越大越优先）。"""
-    rule_mid = getattr(rule, "material_id", None)
+    rule_mids = _normalize_rule_material_ids(rule)
     rule_gid = getattr(rule, "material_group_id", None)
     rule_wid = getattr(rule, "warehouse_id", None)
 
-    if rule_mid is not None and int(rule_mid) != int(material_id):
+    if rule_mids and int(material_id) not in rule_mids:
         return None
     if rule_gid is not None:
         if material_group_id is None or int(rule_gid) != int(material_group_id):
@@ -82,7 +103,7 @@ def _rule_specificity(
             return None
 
     score = 0
-    if rule_mid is not None:
+    if rule_mids:
         score += 4
     elif rule_gid is not None:
         score += 2

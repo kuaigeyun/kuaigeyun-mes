@@ -193,7 +193,7 @@ export const DeliveryIssueDetailDrawer: React.FC<DeliveryIssueDetailDrawerProps>
   return (
     <DetailDrawerTemplate
       title={
-        <Space direction="vertical" size={0}>
+        <Space orientation="vertical" size={0}>
           <Typography.Text strong>{effective.title || '-'}</Typography.Text>
           <Typography.Text type="secondary" copyable={contentReady ? { text: effective.issue_code } : false}>
             {effective.issue_code}
@@ -202,7 +202,7 @@ export const DeliveryIssueDetailDrawer: React.FC<DeliveryIssueDetailDrawerProps>
       }
       open={open}
       onClose={onClose}
-      width={DRAWER_CONFIG.STANDARD_WIDTH}
+      size={DRAWER_CONFIG.STANDARD_WIDTH}
       zIndex={zIndex}
       loading={showLoading}
       extra={extra}

@@ -66,7 +66,7 @@ export const InstallExecutionAdvanceStageModal: React.FC<Props> = ({
       }}
     >
       <InstallExecutionStageSteps stages={job?.stages} style={{ marginBottom: 16 }} />
-      <Alert type="info" showIcon message={stageHint} style={{ marginBottom: 16 }} />
+      <Alert type="info" showIcon title={stageHint} style={{ marginBottom: 16 }} />
       <ProFormTextArea
         name="notes"
         label={t('app.kuaizhizao.installExecution.advanceNotes')}

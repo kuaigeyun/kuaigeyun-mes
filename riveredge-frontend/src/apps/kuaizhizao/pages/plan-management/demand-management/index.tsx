@@ -1437,7 +1437,7 @@ const DemandManagementPage: React.FC = () => {
                 type="warning"
                 showIcon
                 style={{ marginBottom: 12 }}
-                message={
+                title={
                   demandPushCapabilityReasonMessage(pushPreviewData.blocking_reason, t) ||
                   t('app.kuaizhizao.demandManagement.pushBlockedStatus')
                 }

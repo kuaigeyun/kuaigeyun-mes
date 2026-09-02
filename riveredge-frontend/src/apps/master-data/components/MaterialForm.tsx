@@ -63,8 +63,8 @@ import {
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../utils/codeRulePage';
 import { testGenerateCode } from '../../../services/codeRule';
 
-import DictionarySelect from '../../../components/dictionary-select';
-import { getDataDictionaryByCode, getDictionaryItemList } from '../../../services/dataDictionary';
+import { MaterialUnitQuickSelect } from './MaterialUnitQuickSelect';
+import { useMaterialUnitOptions } from '../hooks/useMaterialUnitOptions';
 import PriceTypeSwitch, { type PriceTypeValue } from '../../../components/price-type-switch/PriceTypeSwitch';
 import { convertUnitPriceByPriceType } from '../utils/resolve-partner-material-price';
 import {
@@ -780,18 +780,18 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
     }
   }, [open, activeTab]);
 
-  // 自定义字段数据回填与重置
+  // 自定义字段数据回填与重置（须等字段定义加载后再 setFieldsValue，避免控件未挂载时写入丢失）
   useEffect(() => {
     if (!open) {
       resetFieldValues();
       return;
     }
-    if (isEdit && material?.id) {
+    if (isEdit && material?.id && customFields.length > 0) {
       loadFieldValues(material.id).then((values) => {
         formRef.current?.setFieldsValue(values);
       });
     }
-  }, [open, isEdit, material?.id, loadFieldValues, resetFieldValues]);
+  }, [open, isEdit, material?.id, customFields.length, loadFieldValues, resetFieldValues]);
 
   /**
    * 编辑时：工艺路线列表加载完成后，用物料的 process_route_id 回填「默认工艺路线」
@@ -1240,10 +1240,10 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         }
       });
 
-      // extractFormValues 返回 { customData, standardValues }（与 PlantFormModal 等一致）；勿用不存在的 coreData
-      const { customData: cfValues, standardValues: coreData } = extractFormValues(submitData);
+      // 自定义字段须从 onFinish 的 values / 表单实例读取；submitData 仅含标准字段蛇形键，不含 custom_*
+      const { customData: cfValues } = extractFormValues(values, formRef.current ?? undefined);
 
-      const result = await onFinish(coreData as any);
+      const result = await onFinish(submitData as any);
 
       if (
         !isEdit &&
@@ -1805,9 +1805,8 @@ const MaterialUnitsEditor: React.FC<MaterialUnitsEditorProps> = ({ value, onChan
   const form = Form.useFormInstance();
   const units = value?.units ?? [];
   const scenarios = value?.scenarios ?? {};
-  const [unitOptions, setUnitOptions] = useState<Array<{ label: string; value: string }>>([]);
-  const [loadingUnits, setLoadingUnits] = useState(false);
-  const [unitValueToLabel, setUnitValueToLabel] = useState<Record<string, string>>({});
+  const { options: unitOptions, valueToLabel: unitValueToLabel, isLoading: loadingUnits } =
+    useMaterialUnitOptions();
 
   const baseUnit = (Form.useWatch('baseUnit', form) ?? '') as string;
 
@@ -1817,35 +1816,6 @@ const MaterialUnitsEditor: React.FC<MaterialUnitsEditorProps> = ({ value, onChan
   ) => {
     onChange?.({ units: nextUnits, scenarios: nextScenarios });
   };
-
-  useEffect(() => {
-    const loadUnitOptions = async () => {
-      try {
-        setLoadingUnits(true);
-        const dictionary = await getDataDictionaryByCode('MATERIAL_UNIT');
-        const items = await getDictionaryItemList(dictionary.uuid, true);
-        const options = items
-          .sort((a, b) => a.sort_order - b.sort_order)
-          .map(item => ({
-            label: item.label,
-            value: item.value,
-          }));
-        setUnitOptions(options);
-
-        const valueToLabelMap: Record<string, string> = {};
-        items.forEach(item => {
-          valueToLabelMap[item.value] = item.label;
-        });
-        setUnitValueToLabel(valueToLabelMap);
-      } catch (error: any) {
-        console.error('加载单位选项失败:', error);
-      } finally {
-        setLoadingUnits(false);
-      }
-    };
-
-    loadUnitOptions();
-  }, []);
 
   const handleAddUnit = () => {
     commitUnits([
@@ -2329,15 +2299,15 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
           </ProFormItem>
         </div>
         <div className="material-form-basic-grid__cell">
-          <DictionarySelect
-            dictionaryCode="MATERIAL_UNIT"
+          <ProFormItem
             name="baseUnit"
             label={t('app.master-data.materialForm.baseUnit')}
-            placeholder={t('app.master-data.materialForm.baseUnitPlaceholder')}
-            required
-            formRef={formRef}
-            valueEqualsLabel
-          />
+            rules={[{ required: true, message: t('app.master-data.materialForm.baseUnitPlaceholder') }]}
+          >
+            <MaterialUnitQuickSelect
+              placeholder={t('app.master-data.materialForm.baseUnitPlaceholder')}
+            />
+          </ProFormItem>
         </div>
         <div className="material-form-basic-grid__cell">
           <ProFormText
@@ -2378,10 +2348,10 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
         gridColumns={4}
       />
       <Collapse
-        bordered={false}
+        variant="borderless"
         defaultActiveKey={[]}
         className="material-form-more-collapse"
-        expandIconPosition="start"
+        expandIconPlacement="start"
       >
         {moreFieldsPanel}
       </Collapse>
@@ -3208,29 +3178,12 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
   const { t } = useTranslation();
   const navigate = useNavigate();
   const defaultsForm = Form.useFormInstance();
-  const [unitOptions, setUnitOptions] = useState<Array<{ label: string; value: string }>>([]);
-  const [unitOptionsLoading, setUnitOptionsLoading] = useState(false);
+  const { options: unitOptions, isLoading: unitOptionsLoading } = useMaterialUnitOptions();
   const [storageLocations, setStorageLocations] = useState<StorageLocation[]>([]);
   const [storageLocationsLoading, setStorageLocationsLoading] = useState(false);
   const [storageAreas, setStorageAreas] = useState<StorageArea[]>([]);
 
   useEffect(() => {
-    const loadUnitOptions = async () => {
-      try {
-        setUnitOptionsLoading(true);
-        const dictionary = await getDataDictionaryByCode('MATERIAL_UNIT');
-        const items = await getDictionaryItemList(dictionary.uuid, true);
-        setUnitOptions(
-          items
-            .sort((a, b) => a.sort_order - b.sort_order)
-            .map((item) => ({ label: item.label, value: item.value })),
-        );
-      } catch (error) {
-        console.error('加载单位选项失败:', error);
-      } finally {
-        setUnitOptionsLoading(false);
-      }
-    };
     const loadStorageMaster = async () => {
       try {
         setStorageLocationsLoading(true);
@@ -3246,7 +3199,6 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
         setStorageLocationsLoading(false);
       }
     };
-    loadUnitOptions();
     loadStorageMaster();
   }, []);
 
@@ -4239,7 +4191,7 @@ const MaterialSourceTab: React.FC<MaterialSourceTabProps> = ({
                   <Row gutter={16} style={{ marginTop: 0 }}>
                     <Col span={24}>
                       <Alert
-                        message={t('app.master-data.source.phantomTip')}
+                        title={t('app.master-data.source.phantomTip')}
                         description={t('app.master-data.source.phantomTipDesc')}
                         type="info"
                         showIcon
@@ -4255,7 +4207,7 @@ const MaterialSourceTab: React.FC<MaterialSourceTabProps> = ({
                   <Row gutter={16} style={{ marginTop: 0 }}>
                     <Col span={24}>
                       <Alert
-                        message={t('app.master-data.source.serviceTip')}
+                        title={t('app.master-data.source.serviceTip')}
                         description={t('app.master-data.source.serviceTipDesc')}
                         type="info"
                         showIcon

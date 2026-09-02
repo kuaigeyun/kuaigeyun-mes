@@ -309,8 +309,8 @@ const KanbanView: React.FC = () => {
     }
 
     return (
-      <Timeline>
-        {approvalHistory.map((item, index) => {
+      <Timeline
+        items={approvalHistory.map((item, index) => {
           let color = 'blue';
           let icon = <ClockCircleOutlined />;
           
@@ -328,8 +328,11 @@ const KanbanView: React.FC = () => {
             icon = <SwapOutlined />;
           }
 
-          return (
-            <Timeline.Item key={index} color={color} dot={icon}>
+          return {
+            key: index,
+            color,
+            dot: icon,
+            children: (
               <div>
                 <div style={{ marginBottom: 4 }}>
                   <Text strong>
@@ -358,10 +361,10 @@ const KanbanView: React.FC = () => {
                   </Text>
                 </div>
               </div>
-            </Timeline.Item>
-          );
+            ),
+          };
         })}
-      </Timeline>
+      />
     );
   };
 

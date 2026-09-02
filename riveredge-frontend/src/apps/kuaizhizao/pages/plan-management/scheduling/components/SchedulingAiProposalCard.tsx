@@ -108,21 +108,21 @@ export function SchedulingAiProposalCard({
   }));
 
   return (
-    <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+    <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
       {proposal.summary ? (
         <Typography.Paragraph style={{ marginBottom: 0 }}>{proposal.summary}</Typography.Paragraph>
       ) : null}
       {proposal.confidenceNotes ? (
-        <Alert type="info" showIcon message={t(`${I18N}.confidenceNotes`)} description={proposal.confidenceNotes} />
+        <Alert type="info" showIcon title={t(`${I18N}.confidenceNotes`)} description={proposal.confidenceNotes} />
       ) : null}
       {(proposal.warnings ?? []).map((w, i) => (
-        <Alert key={`${i}-${w}`} type="warning" showIcon message={w} />
+        <Alert key={`${i}-${w}`} type="warning" showIcon title={w} />
       ))}
       {proposal.validationPreview ? (
         <Alert
           type={proposal.validationPreview.valid ? 'success' : 'error'}
           showIcon
-          message={
+          title={
             proposal.validationPreview.valid
               ? t(`${I18N}.validationPassed`)
               : t(`${I18N}.validationFailed`, { count: proposal.validationPreview.conflictCount })
@@ -133,7 +133,7 @@ export function SchedulingAiProposalCard({
         <Descriptions size="small" column={1} bordered title={t(`${I18N}.workOrderAdjustments`)}>
           {woRows.map((row) => (
             <Descriptions.Item key={row.key} label={row.code}>
-              <Space direction="vertical" size={4}>
+              <Space orientation="vertical" size={4}>
                 <Typography.Text delete type="secondary">
                   {row.before}
                 </Typography.Text>

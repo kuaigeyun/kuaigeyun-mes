@@ -198,7 +198,7 @@ const UniWiki: React.FC<UniWikiProps> = ({
             {/* 反馈组件 */}
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginBottom: 64, gap: 24 }}>
               <Text type="secondary" style={{ fontSize: 15 }}>{feedbackQuestion}</Text>
-              <Space size="middle">
+              <Space size="medium">
                 <Button 
                   type={feedback === 'like' ? 'primary' : 'default'} 
                   shape="round" 

@@ -133,7 +133,7 @@ export function PurchaseOrderAiCreateDrawer({ open, onClose, formRef, onApplied 
       <Alert
         type="info"
         showIcon
-        message="上传采购单/询价单图片，或粘贴文字描述；确认后仅填入表单，不会自动保存。"
+        title="上传采购单/询价单图片，或粘贴文字描述；确认后仅填入表单，不会自动保存。"
         style={{ marginBottom: 16 }}
       />
       <Upload beforeUpload={handleUpload} showUploadList={false} accept="image/*">

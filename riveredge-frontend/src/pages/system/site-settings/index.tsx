@@ -269,6 +269,8 @@ const SiteSettingsPage: React.FC = () => {
   const loginBackgroundValue = Form.useWatch('login_background_image', form);
   const loginDecorationEnabledValue = Form.useWatch('login_decoration_enabled', form);
   const loginBackgroundEnabledValue = Form.useWatch('login_background_enabled', form);
+  const hasSiteLogoConfigured = Boolean(String(siteLogoValue ?? '').trim());
+  const siteLogoPreviewMissing = hasSiteLogoConfigured && !logoUrl;
   const platformNameValue = Form.useWatch('platform_name', form);
   const platformNameEnValue = Form.useWatch('platform_name_en', form);
   const loginTitleValue = Form.useWatch('login_title', form);
@@ -306,7 +308,9 @@ const SiteSettingsPage: React.FC = () => {
 
     // 如果是UUID格式，获取文件预览URL
     if (isUUID(logoValue.trim())) {
-      const previewInfo = await getSiteLogoPreview(logoValue.trim());
+      const previewInfo = await getSiteLogoPreview(logoValue.trim(), {
+        brandingCategory: 'site-logo',
+      });
       if (!previewInfo?.preview_url) {
         setLogoUrl(undefined);
         setLogoFileList([]);
@@ -339,7 +343,9 @@ const SiteSettingsPage: React.FC = () => {
       return;
     }
     if (isUUID(imageValue.trim())) {
-      const previewInfo = await getSiteLogoPreview(imageValue.trim());
+        const previewInfo = await getSiteLogoPreview(imageValue.trim(), {
+          brandingCategory: 'site-logo',
+        });
       if (!previewInfo?.preview_url) {
         setDecorationImageUrl(undefined);
         setDecorationFileList([]);
@@ -372,7 +378,9 @@ const SiteSettingsPage: React.FC = () => {
       return;
     }
     if (isUUID(imageValue.trim())) {
-      const previewInfo = await getSiteLogoPreview(imageValue.trim());
+        const previewInfo = await getSiteLogoPreview(imageValue.trim(), {
+          brandingCategory: 'site-logo',
+        });
       if (!previewInfo?.preview_url) {
         setBackgroundImageUrl(undefined);
         setBackgroundFileList([]);
@@ -405,7 +413,9 @@ const SiteSettingsPage: React.FC = () => {
       return;
     }
     if (isUUID(logoValue.trim())) {
-      const previewInfo = await getSiteLogoPreview(logoValue.trim());
+      const previewInfo = await getSiteLogoPreview(logoValue.trim(), {
+        brandingCategory: 'site-logo',
+      });
       if (!previewInfo?.preview_url) {
         setLoginLogoUrl(undefined);
         setLoginLogoFileList([]);
@@ -834,7 +844,9 @@ const SiteSettingsPage: React.FC = () => {
 
         let previewUrl: string | undefined;
         try {
-          const previewInfo = await getSiteLogoPreview(response.uuid);
+          const previewInfo = await getSiteLogoPreview(response.uuid, {
+            brandingCategory: 'site-logo',
+          });
           if (previewInfo?.preview_url) {
             previewUrl = toRelativeIfLocalhost(previewInfo.preview_url);
             URL.revokeObjectURL(localPreviewUrl);
@@ -1367,12 +1379,17 @@ const SiteSettingsPage: React.FC = () => {
                   {t('pages.system.siteSettings.logoThemeColorFromLogo')}
                 </Button>
               )}
-              {logoUrl && (
-                <Button icon={<DeleteOutlined />} danger onClick={handleClearLogo}>
+              {hasSiteLogoConfigured && (
+                <Button icon={<DeleteOutlined />} danger onClick={handleClearLogo} loading={saving}>
                   {t('pages.system.siteSettings.clearLogo')}
                 </Button>
               )}
             </Space>
+            {siteLogoPreviewMissing && (
+              <Typography.Text type="warning">
+                {t('pages.infra.platform.brandingPreviewMissing')}
+              </Typography.Text>
+            )}
           </Space>
         </Form.Item>
       </Col>
@@ -1896,7 +1913,7 @@ const SiteSettingsPage: React.FC = () => {
   ];
 
   const branchOrganizationsTabContent = (
-    <Space direction="vertical" style={{ width: '100%' }} size={16}>
+    <Space orientation="vertical" style={{ width: '100%' }} size={16}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Space size={12}>
           <span>{t('pages.system.siteSettings.branchOrgTitle')}</span>
@@ -1995,7 +2012,7 @@ const SiteSettingsPage: React.FC = () => {
         onCancel={closeBranchOrgModal}
         onOk={handleBranchOrgModalOk}
         okButtonProps={{ loading: creatingBranchOrg || updatingBranchOrg }}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={branchOrgForm} layout="vertical">
           <Form.Item name="name" label={t('pages.system.siteSettings.branchOrgNameLabel')} rules={[{ required: true, message: t('pages.system.siteSettings.branchOrgNameRequired') }]}>
@@ -2030,7 +2047,7 @@ const SiteSettingsPage: React.FC = () => {
           {branchOrgModalMode === 'create' && (
             <>
               <Form.Item label={t('pages.system.siteSettings.branchOrgAdminDefaultLabel')}>
-                <Space direction="vertical" style={{ width: '100%' }}>
+                <Space orientation="vertical" style={{ width: '100%' }}>
                   <Typography.Text type="secondary">
                     {t('pages.system.siteSettings.branchOrgAdminDefaultHint')}
                   </Typography.Text>

@@ -89,7 +89,7 @@ export const MaterialMarketPriceTrendModal: React.FC<MaterialMarketPriceTrendMod
       ) : (
         <>
           <Space
-            split={<div style={{ width: 1, height: 14, background: 'var(--river-divider-color)' }} />}
+            separator={<div style={{ width: 1, height: 14, background: 'var(--river-divider-color)' }} />}
             style={{ marginBottom: 16, width: '100%', justifyContent: 'space-around' }}
           >
             <div style={{ textAlign: 'center' }}>

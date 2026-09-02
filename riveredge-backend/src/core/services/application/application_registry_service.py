@@ -108,180 +108,27 @@ class ApplicationRegistryService:
 
             logger.debug(f"从数据库发现 {len(apps)} 个活跃应用")
 
-            # 如果数据库中没有应用，回退到文件系统扫描
             if not apps:
-                logger.warning("⚠️ 数据库中没有已安装的应用，尝试从文件系统扫描应用")
-                raise Exception("数据库中没有应用，回退到文件系统扫描")
+                total = await conn.fetchval(
+                    "SELECT COUNT(*) FROM core_applications WHERE deleted_at IS NULL"
+                )
+                if int(total or 0) == 0:
+                    logger.warning("应用中心尚无记录（首次安装），跳过应用路由注册")
+                    return []
+                raise RuntimeError(
+                    "应用中心无已启用应用，无法注册路由。"
+                    "请先在应用中心安装并启用至少一个应用。"
+                )
 
-            # 合并磁盘上已有 router 但 DB 未列出的应用（如 kuaizhizao 未写入 core_applications）
-            apps = cls._append_filesystem_apps_for_missing_codes(apps)
-            apps = cls._append_router_package_dirs_for_missing_codes(apps)
             return apps
 
         except Exception as e:
-            logger.warning(f"⚠️ 数据库查询失败或没有应用，尝试从文件系统扫描应用: {e}")
-
-            # 回退方案：从文件系统扫描应用目录，自动发现应用
-            # 不再硬编码应用列表，而是动态扫描 apps 目录
-            apps = []
-            try:
-                # 使用 ApplicationService 的扫描方法
-                from core.services.application.application_service import ApplicationService
-                discovered_plugins = ApplicationService._scan_plugin_manifests()
-                
-                for manifest in discovered_plugins:
-                    app_code = manifest.get('code')
-                    if not app_code:
-                        continue
-                    if app_code in cls._placeholder_app_codes:
-                        continue
-                    
-                    # 构建应用数据（从 manifest.json 读取）
-                    # 注意：manifest.json 中的 entry_point 是前端路径，需要转换为后端路由模块路径
-                    backend_entry_point = f"apps.{app_code.replace('-', '_')}.api.router"
-                    apps.append({
-                        "uuid": f"{app_code}-fallback-uuid",
-                        "code": app_code,
-                        "name": manifest.get('name', app_code),
-                        "description": manifest.get('description', ''),
-                        "version": manifest.get('version', '1.0.0'),
-                        "route_path": manifest.get('route_path', f"/apps/{app_code}"),
-                        "entry_point": backend_entry_point,  # 使用后端路由模块路径
-                        "menu_config": manifest.get('menu_config'),
-                        "is_system": False,
-                        "is_active": True,
-                        "is_installed": True,
-                        "created_at": None,
-                        "updated_at": None
-                    })
-                
-                logger.info(f"📋 从文件系统扫描到 {len(apps)} 个应用: {[app['name'] for app in apps]}")
-            except Exception as scan_error:
-                logger.error(f"❌ 从文件系统扫描应用失败: {scan_error}")
-                # 最后的回退：返回空列表，避免系统崩溃
-                apps = []
-                logger.warning("⚠️ 无法发现任何应用，系统可能无法正常工作")
-
-            apps = cls._append_filesystem_apps_for_missing_codes(apps)
-            apps = cls._append_router_package_dirs_for_missing_codes(apps)
-            return apps
+            logger.error(f"应用中心查询失败: {e}")
+            raise RuntimeError(f"无法从应用中心加载启用应用: {e}") from e
 
         finally:
             if conn:
                 await conn.close()
-
-    @classmethod
-    def _append_filesystem_apps_for_missing_codes(cls, apps: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """
-        将「磁盘上存在 manifest + apps.<code>.api.router」但不在当前 DB 应用列表中的应用并入列表。
-
-        典型场景：首个租户的 core_applications 未写入 kuaizhizao，但代码已部署，此前会导致 /api/v1/apps/kuaizhizao/* 全部 404。
-        """
-        existing_codes = {a.get("code") for a in apps if a.get("code")}
-        try:
-            from core.services.application.application_service import ApplicationService
-
-            discovered_plugins = ApplicationService._scan_plugin_manifests()
-        except Exception as e:
-            logger.warning(f"合并磁盘应用路由：扫描 manifest 失败，跳过: {e}")
-            return apps
-
-        out = list(apps)
-        added_codes: List[str] = []
-        for manifest in discovered_plugins:
-            app_code = manifest.get("code")
-            if not app_code or app_code in existing_codes:
-                continue
-            if app_code in cls._placeholder_app_codes:
-                continue
-            module_code = app_code.replace("-", "_")
-            route_module_path = f"apps.{module_code}.api.router"
-            if not cls._module_exists(route_module_path):
-                continue
-            out.append(
-                {
-                    "uuid": f"{app_code}-filesystem-merge-uuid",
-                    "code": app_code,
-                    "name": manifest.get("name", app_code),
-                    "description": manifest.get("description", ""),
-                    "version": manifest.get("version", "1.0.0"),
-                    "route_path": manifest.get("route_path", f"/apps/{app_code}"),
-                    "entry_point": route_module_path,
-                    "menu_config": manifest.get("menu_config"),
-                    "is_system": False,
-                    "is_active": True,
-                    "is_installed": True,
-                    "created_at": None,
-                    "updated_at": None,
-                }
-            )
-            existing_codes.add(app_code)
-            added_codes.append(app_code)
-
-        if added_codes:
-            logger.info(
-                "📎 已合并磁盘应用（首租户 DB 列表缺失但有后端 router）: {}",
-                added_codes,
-            )
-        return out
-
-    @classmethod
-    def _append_router_package_dirs_for_missing_codes(cls, apps: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """
-        按源码树合并应用：凡存在 ``src/apps/<package>/api/router.py`` 且不在当前列表中的应用。
-
-        解决 ``APPS_MANIFEST_DIR`` 指向空目录/错误路径时 ``_scan_plugin_manifests`` 返回空、导致无法通过 manifest 合并的问题。
-        应用 code 由目录名推导：包名中的下划线转为连字符（如 ``master_data`` -> ``master-data``）。
-        """
-        existing_codes = {a.get("code") for a in apps if a.get("code")}
-        current_file = Path(__file__).resolve()
-        src_dir = current_file.parent.parent.parent.parent
-        apps_root = src_dir / "apps"
-        if not apps_root.is_dir():
-            return apps
-
-        out = list(apps)
-        added_codes: List[str] = []
-        for sub in sorted(apps_root.iterdir()):
-            if not sub.is_dir() or sub.name.startswith("."):
-                continue
-            if not (sub / "api" / "router.py").is_file():
-                continue
-            package_name = sub.name
-            app_code = package_name.replace("_", "-")
-            if app_code in existing_codes:
-                continue
-            if app_code in cls._placeholder_app_codes:
-                continue
-            route_module_path = f"apps.{package_name}.api.router"
-            if not cls._module_exists(route_module_path):
-                continue
-            out.append(
-                {
-                    "uuid": f"{app_code}-router-pkg-merge-uuid",
-                    "code": app_code,
-                    "name": app_code,
-                    "description": "",
-                    "version": "1.0.0",
-                    "route_path": f"/apps/{app_code}",
-                    "entry_point": route_module_path,
-                    "menu_config": None,
-                    "is_system": False,
-                    "is_active": True,
-                    "is_installed": True,
-                    "created_at": None,
-                    "updated_at": None,
-                }
-            )
-            existing_codes.add(app_code)
-            added_codes.append(app_code)
-
-        if added_codes:
-            logger.info(
-                "📎 已合并 src/apps/*/api/router 包（DB/manifest 未列出）: {}",
-                added_codes,
-            )
-        return out
 
     @classmethod
     async def _register_app_models(cls, apps: List[Dict[str, Any]]) -> None:

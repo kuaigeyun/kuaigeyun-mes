@@ -43,7 +43,7 @@ export function LogisticsMasterDetailDrawer<T extends object>({
       title={title}
       open={open}
       onClose={onClose}
-      width={DRAWER_CONFIG.STANDARD_WIDTH}
+      size={DRAWER_CONFIG.STANDARD_WIDTH}
       extra={contentReady ? extra ?? null : null}
       basic={
         contentReady && record ? (

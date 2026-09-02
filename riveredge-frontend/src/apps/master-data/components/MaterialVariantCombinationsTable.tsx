@@ -758,7 +758,7 @@ export const MaterialVariantCombinationsTable: React.FC<MaterialVariantCombinati
           type="warning"
           showIcon
           style={{ marginBottom: 12 }}
-          message={t('app.master-data.materials.legacyScopeTitle', '检测到旧版属性范围数据')}
+          title={t('app.master-data.materials.legacyScopeTitle', '检测到旧版属性范围数据')}
           description={
             legacySplitAllowed
               ? t('app.master-data.materials.legacyScopeDesc', {

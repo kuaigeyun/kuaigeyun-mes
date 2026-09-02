@@ -62,7 +62,7 @@ export const SupplierContactsFormTable: React.FC<SupplierContactsFormTableProps>
                 showSearch
                 optionFilterProp="label"
                 options={contactTitleOptions}
-                dropdownRender={(menu) => (
+                popupRender={(menu) => (
                   <>
                     {menu}
                     {onQuickCreateContactTitle ? (

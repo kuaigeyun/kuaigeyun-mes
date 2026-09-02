@@ -184,9 +184,10 @@ import {
 
 import type { Material } from '../../../../master-data/types/material';
 
-import { customerApi } from '../../../../master-data/services/supply-chain';
-
-import { materialApi } from '../../../../master-data/services/material';
+import {
+  KUAIZHIZAO_DOC_HOST,
+  loadMaterialFormReferenceList,
+} from '../../../../../utils/documentFormReferenceLoad';
 
 import {
   buildSalesContractLifecycleValueEnum,
@@ -514,28 +515,15 @@ const SalesContractsPage: React.FC = () => {
 
 
   useEffect(() => {
-
-    customerApi
-
-      .list({ limit: 1000, isActive: true })
-
-      .then((cust) => {
-
-        setCustomerList(Array.isArray(cust) ? cust : (cust as any)?.data || (cust as any)?.items || []);
-
-      })
-
-      .catch((e) => console.error('加载客户失败', e));
-
-    materialApi
-
-      .list({ limit: 500, isActive: true })
-
-      .then((res) => setMaterialList(res?.items ?? []))
-
-      .catch((e) => console.error('加载产品失败', e));
-
-  }, []);
+    if (!isFormPage) return;
+    let cancelled = false;
+    void loadMaterialFormReferenceList(KUAIZHIZAO_DOC_HOST.salesContract).then((list) => {
+      if (!cancelled) setMaterialList(list);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isFormPage]);
 
   useEffect(() => {
     if (!isFormPage) return;
@@ -1289,11 +1277,10 @@ const SalesContractsPage: React.FC = () => {
                   rules={[{ required: true, message: t('app.kuaizhizao.salesContract.selectCustomerRequired') }]}
                 >
                   <CustomerSelectDropdown
+                    hostResource={KUAIZHIZAO_DOC_HOST.salesContract}
                     placeholder={t('app.kuaizhizao.salesContract.selectCustomer')}
                     style={{ width: '100%' }}
-                    customers={customerList}
                     onCustomersChange={setCustomerList}
-                    autoLoad={false}
                     onCustomerPick={(cust) => {
                       applyCustomerFormFields(formRef, cust as Record<string, unknown> | null, {
                         customerList,
@@ -1419,7 +1406,7 @@ const SalesContractsPage: React.FC = () => {
           </div>
         </div>
         <ProFormText name="customer_name" hidden />
-        <ProFormText name="price_type" hidden initialValue={DEFAULT_SALES_PRICE_TYPE} />
+        <ProFormText name="price_type" hidden />
       </DetailDrawerSection>
 
       <ProFormDependency name={['enter_line_items']}>
@@ -2580,7 +2567,7 @@ const SalesContractsPage: React.FC = () => {
                     batch: t('components.uniAction.print'),
                   }}
                   icon={<PrinterOutlined />}
-                  size="middle"
+                  size="medium"
                 />,
               ]
             : []
@@ -2733,7 +2720,7 @@ const SalesContractsPage: React.FC = () => {
 
         }}
 
-        width={DRAWER_CONFIG.HALF_WIDTH}
+        size={DRAWER_CONFIG.HALF_WIDTH}
 
         loading={detailLoading}
 
@@ -3095,7 +3082,7 @@ const SalesContractsPage: React.FC = () => {
                 type="warning"
                 showIcon
                 style={{ marginBottom: 12 }}
-                message={
+                title={
                   salesContractCapabilityReasonMessage(pushPreviewData.blocking_reason, t) ||
                   t('app.kuaizhizao.salesContract.pushOrderStatusRequired')
                 }

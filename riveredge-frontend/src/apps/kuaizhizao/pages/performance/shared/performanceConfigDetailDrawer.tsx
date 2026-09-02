@@ -74,7 +74,7 @@ export function PerformanceConfigDetailDrawer<T extends Record<string, any>>({
       open={open}
       zIndex={zIndex}
       onClose={onClose}
-      width={DRAWER_CONFIG.STANDARD_WIDTH}
+      size={DRAWER_CONFIG.STANDARD_WIDTH}
       loading={showLoading}
       extra={contentReady ? extra ?? null : null}
       plainBody={

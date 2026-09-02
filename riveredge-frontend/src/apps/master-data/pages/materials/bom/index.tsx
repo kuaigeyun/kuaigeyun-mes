@@ -2716,7 +2716,7 @@ const BOMPage: React.FC = () => {
           return (
             <Select
               value={r.selectedVersion?.groupKey}
-              size="middle"
+              size="medium"
               style={{ width: '100%', minWidth: 100 }}
               options={versionOptions}
               optionRender={(option, info) => {
@@ -4586,7 +4586,7 @@ const BOMPage: React.FC = () => {
               {t('app.master-data.bom.noVersionHistory')}
             </div>
           ) : (
-            <Space orientation="vertical" style={{ width: '100%' }} size="middle">
+            <Space orientation="vertical" style={{ width: '100%' }} size="medium">
               {versionList.map((row, index) => (
                 <div
                   key={`${row.materialId}-${row.version}`}
@@ -4923,7 +4923,7 @@ const BOMPage: React.FC = () => {
             
             {quantityResult.components && quantityResult.components.length > 0 ? (
               <div style={{ maxHeight: '500px', overflowY: 'auto' }}>
-                <Space orientation="vertical" style={{ width: '100%' }} size="middle">
+                <Space orientation="vertical" style={{ width: '100%' }} size="medium">
                   {quantityResult.components
                     .sort((a, b) => a.level - b.level || a.componentCode.localeCompare(b.componentCode))
                     .map((component, index) => {

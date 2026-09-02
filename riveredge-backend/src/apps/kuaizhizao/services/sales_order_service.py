@@ -56,7 +56,7 @@ from apps.kuaizhizao.constants import (
     REVIEW_STATUS_ALIASES,
     normalize_status,
 )
-from apps.kuaizhizao.constants.price_type import DEFAULT_SALES_PRICE_TYPE
+from apps.kuaizhizao.constants.price_type import DEFAULT_SALES_PRICE_TYPE, normalize_price_type
 from core.services.authorization.data_scope_service import DataScopeService
 from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat, today_site_str
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
@@ -103,6 +103,7 @@ class SalesOrderService:
         *,
         money_fn,
         partner_settlement_method: Optional[str] = None,
+        price_type: Optional[str] = None,
     ) -> Dict[str, Any]:
         from apps.kuaicaiwu.utils.price_settlement_helpers import (
             derive_price_settlement_status,
@@ -138,12 +139,14 @@ class SalesOrderService:
             line_amount=item_data.item_amount,
         )
         if not is_gift:
-            excl_amt = req_qty * unit_pr
-            item_amt = (
-                item_data.item_amount
-                if item_data.item_amount is not None
-                else (excl_amt * (Decimal("1") + tax_r / Decimal("100")))
-            )
+            if item_data.item_amount is not None:
+                item_amt = item_data.item_amount
+            else:
+                from apps.kuaizhizao.utils.sales_price_amount import calc_sales_line_amounts
+
+                pt = normalize_price_type(price_type)
+                excl_amt, _, incl_amt = calc_sales_line_amounts(req_qty, unit_pr, tax_r, pt)
+                item_amt = incl_amt if pt == "tax_inclusive" else excl_amt
             item_amt = money_fn(item_amt)
         SalesOrderService._validate_sales_item_non_negative(
             required_quantity=req_qty,
@@ -337,6 +340,34 @@ class SalesOrderService:
 
     _EXCLUDED_SALES_INVOICE_STATUSES = ("已作废", "已红冲")
 
+    @staticmethod
+    def _resolve_order_finance_amount(
+        order: SalesOrder,
+        items: List[SalesOrderItem],
+    ) -> Decimal:
+        """发票/收款进度分母：始终按价税合计 + 折让 + 客户直付费用。"""
+        from apps.kuaizhizao.utils.sales_price_amount import calc_sales_line_amounts
+
+        price_type = normalize_price_type(getattr(order, "price_type", None))
+        incl_goods = Decimal("0")
+        for it in items:
+            _, _, incl = calc_sales_line_amounts(
+                it.order_quantity or Decimal("0"),
+                it.unit_price or Decimal("0"),
+                it.tax_rate or Decimal("0"),
+                price_type,
+            )
+            incl_goods += incl
+        discount = Decimal(str(order.discount_amount or 0))
+        if discount > incl_goods:
+            discount = incl_goods
+        goods_after = incl_goods - discount
+        customer_fees = Decimal("0")
+        for fee in order.fee_details or []:
+            if isinstance(fee, dict) and fee.get("bearer") == "other_side":
+                customer_fees += Decimal(str(fee.get("amount") or 0))
+        return max(Decimal("0"), goods_after + customer_fees)
+
     async def _batch_finance_progress_by_order(
         self,
         tenant_id: int,
@@ -416,8 +447,23 @@ class SalesOrderService:
                 received_by_order[oid] += received
 
         result: Dict[int, Dict[str, float]] = {}
+        order_ids = [int(o.id) for o in orders if o.id]
+        items_by_order: Dict[int, List[SalesOrderItem]] = defaultdict(list)
+        if order_ids:
+            item_rows = await SalesOrderItem.filter(
+                tenant_id=tenant_id,
+                sales_order_id__in=order_ids,
+            )
+            for it in item_rows:
+                items_by_order[int(it.sales_order_id)].append(it)
+
         for order in orders:
-            order_amount = Decimal(str(order.total_amount or 0))
+            items = items_by_order.get(int(order.id), [])
+            order_amount = (
+                self._resolve_order_finance_amount(order, items)
+                if items
+                else Decimal(str(order.total_amount or 0))
+            )
             if order_amount <= 0:
                 result[order.id] = {
                     "invoice_progress": 0.0,
@@ -1513,12 +1559,14 @@ class SalesOrderService:
                 tenant_id,
                 [item_data.material_id for item_data in sales_order_data.items],
             )
+            order_price_type = getattr(sales_order_data, "price_type", None) or DEFAULT_SALES_PRICE_TYPE
             for item_data in sales_order_data.items:
                 row = self._process_sales_order_item_pricing(
                     item_data,
                     material_map,
                     money_fn=self._money,
                     partner_settlement_method=partner_settlement_method,
+                    price_type=order_price_type,
                 )
                 total_qty += row["order_quantity"]
                 subtotal += row["_item_amount"]
@@ -2486,11 +2534,17 @@ class SalesOrderService:
                     tenant_id,
                     [item_data.material_id for item_data in sales_order_data.items],
                 )
+                update_price_type = (
+                    getattr(sales_order_data, "price_type", None)
+                    or getattr(existing, "price_type", None)
+                    or DEFAULT_SALES_PRICE_TYPE
+                )
                 for item_data in sales_order_data.items:
                     row = self._process_sales_order_item_pricing(
                         item_data,
                         material_map,
                         money_fn=self._money,
+                        price_type=update_price_type,
                     )
                     total_qty += row["order_quantity"]
                     subtotal += row["_item_amount"]

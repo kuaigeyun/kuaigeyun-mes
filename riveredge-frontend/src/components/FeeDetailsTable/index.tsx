@@ -101,7 +101,7 @@ const FeeDetailsTable: React.FC<FeeDetailsTableProps> = ({
         <Form.Item name={[index, 'bearer']} initialValue="our_side" style={{ margin: 0 }}>
           <ThemedSegmented
             className="form-field-segmented"
-            size="middle"
+            size="medium"
             options={[
               { label: t('app.kuaizhizao.salesOrder.feeBearerOurSide'), value: 'our_side' },
               { label: t('app.kuaizhizao.salesOrder.feeBearerCounterparty'), value: 'other_side' },

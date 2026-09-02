@@ -14,6 +14,7 @@ const SESSION_QUERY_ROOTS: readonly string[] = [
   'userPreference',
   'languageListActive',
   'navigationMenuTree',
+  'menuCustomLayout',
   'applicationMenus',
   'dashboard-menu-tree',
   'businessConfig',

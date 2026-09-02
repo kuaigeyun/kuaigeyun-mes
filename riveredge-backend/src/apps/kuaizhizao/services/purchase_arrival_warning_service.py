@@ -277,23 +277,33 @@ class PurchaseArrivalWarningService(AppBaseService[PurchaseOrder]):
     def _empty_summary(self) -> dict:
         return {"normal": 0, "imminent": 0, "overdue": 0, "total_open_lines": 0}
 
-    async def count_overdue_open_lines(self, tenant_id: int) -> int:
+    async def count_overdue_open_lines(
+        self,
+        tenant_id: int,
+        *,
+        current_user: Optional[CurrentUser] = None,
+    ) -> int:
         result = await self.list_warnings(
             tenant_id,
             skip=0,
             limit=1_000_000,
             warning_level="overdue",
-            current_user=None,
+            current_user=current_user,
         )
         return int(result.get("total") or 0)
 
-    async def count_imminent_open_lines(self, tenant_id: int) -> int:
+    async def count_imminent_open_lines(
+        self,
+        tenant_id: int,
+        *,
+        current_user: Optional[CurrentUser] = None,
+    ) -> int:
         result = await self.list_warnings(
             tenant_id,
             skip=0,
             limit=1_000_000,
             warning_level="imminent",
-            current_user=None,
+            current_user=current_user,
         )
         return int(result.get("total") or 0)
 

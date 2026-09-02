@@ -324,7 +324,7 @@ export function ClientReleaseUploadModal({
           type="info"
           showIcon
           style={{ marginBottom: 16 }}
-          message={t('pages.infra.clientReleases.packageDetectedTitle')}
+          title={t('pages.infra.clientReleases.packageDetectedTitle')}
           description={t('pages.infra.clientReleases.packageDetectedDesc', {
             version: detectedMeta.app_version,
             code: detectedMeta.version_code,
@@ -445,7 +445,7 @@ export function ClientReleaseUploadModal({
               type="info"
               showIcon
               style={{ marginBottom: 16 }}
-              message={t('pages.infra.clientReleases.editIdentityHint', {
+              title={t('pages.infra.clientReleases.editIdentityHint', {
                 client: productLabel ?? existingRelease?.client_key,
                 platform: existingRelease?.platform,
                 version: existingRelease?.app_version,

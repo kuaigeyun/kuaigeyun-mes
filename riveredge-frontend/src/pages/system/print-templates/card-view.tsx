@@ -640,7 +640,7 @@ const CardView: React.FC = () => {
         {currentTemplate && (
           <div>
             <Alert
-              message={t('pages.system.printTemplates.previewAlertTitle')}
+              title={t('pages.system.printTemplates.previewAlertTitle')}
               description={t('pages.system.printTemplates.previewAlertDesc')}
               type="info"
               showIcon
@@ -684,7 +684,7 @@ const CardView: React.FC = () => {
         {currentTemplate && (
           <div>
             <Alert
-              message={t('pages.system.printTemplates.variablesAlertTitle')}
+              title={t('pages.system.printTemplates.variablesAlertTitle')}
               description={t('pages.system.printTemplates.variablesAlertDesc')}
               type="info"
               showIcon
@@ -758,7 +758,7 @@ const CardView: React.FC = () => {
         {currentTemplate && (
           <div>
             <Alert
-              message={t('pages.system.printTemplates.renderModalTitle')}
+              title={t('pages.system.printTemplates.renderModalTitle')}
               description={t('pages.system.printTemplates.renderAlertDesc')}
               type="info"
               showIcon
@@ -796,7 +796,7 @@ const CardView: React.FC = () => {
               <div style={{ marginTop: 16 }}>
                 <Divider />
                 <Alert
-                  message={renderResult.success ? t('pages.system.printTemplates.resultSuccess') : t('pages.system.printTemplates.resultFailed')}
+                  title={renderResult.success ? t('pages.system.printTemplates.resultSuccess') : t('pages.system.printTemplates.resultFailed')}
                   description={renderResult.success ? t('pages.system.printTemplates.templateRenderedSuccess') : renderResult.error}
                   type={renderResult.success ? 'success' : 'error'}
                   showIcon

@@ -2479,7 +2479,8 @@
         "sales-order": [
             "master-data:supply-chain:customer",
             "master-data:material",
-            "master-data:warehouse:warehouse"
+            "master-data:warehouse:warehouse",
+            "kuaicaiwu:bank-account"
         ],
         "sales-order-change": [
             "master-data:supply-chain:customer",
@@ -2492,7 +2493,8 @@
         "purchase-order": [
             "master-data:supply-chain:supplier",
             "master-data:material",
-            "master-data:warehouse:warehouse"
+            "master-data:warehouse:warehouse",
+            "kuaicaiwu:bank-account"
         ],
         "purchase-order-change": [
             "master-data:supply-chain:supplier",
@@ -4499,6 +4501,9 @@
         "riveredge-backend": ">=1.0.0",
         "riveredge-frontend": ">=1.0.0"
     },
+    "requires_apps": [
+        "master-data"
+    ],
     "code_rule_pages": [
         {
             "page_code": "kuaizhizao-production-work-order",

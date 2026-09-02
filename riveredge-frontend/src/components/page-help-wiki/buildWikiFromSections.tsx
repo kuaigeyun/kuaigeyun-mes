@@ -117,7 +117,7 @@ export function buildWikiFromSections(
       content: (
         <>
           <Title level={2}>{t(faqTitleKey)}</Title>
-          <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+          <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
             {faqs.map((faq, index) => (
               <Card key={`${faq.qKey}-${index}`} size="small" title={t(faq.qKey)}>
                 <Text>{t(faq.aKey)}</Text>

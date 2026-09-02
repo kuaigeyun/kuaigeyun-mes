@@ -699,7 +699,7 @@ const InspectionPlansPage: React.FC = () => {
           setDetailPlanId(null);
         }}
         loading={detailLoading && !planDetail}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
+        size={DRAWER_CONFIG.STANDARD_WIDTH}
         extra={
           planDetail
             ? (

@@ -151,7 +151,7 @@ const ConnectionWizard: React.FC<ConnectionWizardProps> = ({ open, onClose, onSu
         }}
         style={{ width: '100%' }}
       >
-        <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+        <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
           <Card size="small" style={{ width: 280 }}>
             <Radio value="API">
               <Space>

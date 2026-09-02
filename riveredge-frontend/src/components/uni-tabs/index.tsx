@@ -2297,8 +2297,8 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
                   placement="bottomLeft"
                   trigger="hover"
                   arrow={false}
-                  overlayClassName="uni-tabs-nav-popover-menu"
-                  overlayStyle={{ width: 240, padding: 0 }}
+                  classNames={{ root: "uni-tabs-nav-popover-menu" }}
+                  styles={{ root: { width: 240, padding: 0 } }}
                   content={
                     <Menu
                       mode="inline"

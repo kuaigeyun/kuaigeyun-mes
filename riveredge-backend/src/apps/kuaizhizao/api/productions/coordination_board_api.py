@@ -19,7 +19,7 @@ from infra.models.user import User
 router = APIRouter(
     prefix="/coordination-board",
     tags=["App - Kuaige Zhizao - Coordination Board"],
-    dependencies=[Depends(require_kuaizhizao_module_access("demand"))],
+    dependencies=[Depends(require_kuaizhizao_module_access("plan-management-demand-computation"))],
 )
 service = CoordinationBoardService()
 

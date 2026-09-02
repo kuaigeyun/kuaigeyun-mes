@@ -400,7 +400,7 @@ export const StepBomImportWizard: React.FC<StepBomImportWizardProps> = ({
       {step === 0 && (
         <div style={{ minHeight: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           {parsing ? (
-            <Spin tip={t('app.master-data.drawings.stepBomWizard.parsing')} size="large">
+            <Spin description={t('app.master-data.drawings.stepBomWizard.parsing')} size="large">
               <div style={{ minHeight: 24 }} />
             </Spin>
           ) : parseError ? (
@@ -414,7 +414,7 @@ export const StepBomImportWizard: React.FC<StepBomImportWizardProps> = ({
           <Alert
             type="info"
             showIcon
-            message={t('app.master-data.drawings.stepBomWizard.parseSummary', {
+            title={t('app.master-data.drawings.stepBomWizard.parseSummary', {
               name: assembly.rootName,
               count: bomEdges.length,
             })}

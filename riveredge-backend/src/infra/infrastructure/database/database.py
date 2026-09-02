@@ -68,40 +68,40 @@ else:
 # 使用 127.0.0.1 而不是 localhost，避免 DNS 解析问题
 db_host = "127.0.0.1" if settings.DB_HOST == "localhost" else settings.DB_HOST
 
-# 运行时 Tortoise 配置：静态 TORTOISE_ORM（随代码部署 / aerich 真源）并入动态发现的可选应用。
-# 禁止仅按 core_applications.is_installed 加载，否则首次安装或应用表未写入时
-# DemandComputation 等模型 default_connection=None，lifespan 对账会把整个 API 拉垮。
-async def get_dynamic_tortoise_config() -> dict:
+# 运行时 Tortoise 配置：按应用中心启用状态加载 ORM（见 dynamic_config_service）。
+# 静态 TORTOISE_ORM 仅供 aerich 迁移真源，运行时不与其求并集。
+async def get_dynamic_tortoise_config(
+    *,
+    enabled_codes: frozenset[str] | None = None,
+) -> dict:
     """生成运行时 Tortoise ORM 配置。
 
-    以静态 TORTOISE_ORM 的模型清单为真源（磁盘上存在的模块），再并入
-    动态配置里按已安装应用 / 插件声明发现的模块。
+    enabled_codes 为 None：仅平台基线（启动引导阶段）。
+    传入 frozenset：基线 + 对应启用应用的 ORM 声明。
     """
     logger.info("🔧 生成动态 Tortoise ORM 配置...")
 
-    # 延迟导入，避免循环依赖
     from .dynamic_config_service import DynamicDatabaseConfigService
 
-    # 获取动态配置
-    dynamic_config = await DynamicDatabaseConfigService.generate_tortoise_config()
+    dynamic_config = await DynamicDatabaseConfigService.generate_tortoise_config(
+        enabled_codes
+    )
 
-    static_models = list(TORTOISE_ORM["apps"]["models"]["models"])
-    dyn_models = list(dynamic_config["apps"]["models"]["models"])
-    merged: list = []
+    runtime_models: list = []
     seen: set = set()
     skipped_missing = 0
-    for path in static_models + dyn_models:
+    for path in dynamic_config["apps"]["models"]["models"]:
         if path in seen:
             continue
         if not DynamicDatabaseConfigService._module_exists(path):
             skipped_missing += 1
             continue
         seen.add(path)
-        merged.append(path)
-    dynamic_config["apps"]["models"]["models"] = merged
+        runtime_models.append(path)
+    dynamic_config["apps"]["models"]["models"] = runtime_models
     logger.info(
-        f"📋 运行时 ORM 模型 {len(merged)} 个"
-        f"（静态 {len(static_models)} + 动态 {len(dyn_models)}，缺模块跳过 {skipped_missing}）"
+        f"📋 运行时 ORM 模型 {len(runtime_models)} 个"
+        f"（缺模块跳过 {skipped_missing}）"
     )
 
     # 合并连接配置
@@ -471,48 +471,75 @@ DB_CONFIG = {
     "user": settings.DB_USER,
     "password": settings.DB_PASSWORD,
     "database": settings.DB_NAME,
-    "ssl": False,  # 禁用 SSL 连接
-    "command_timeout": 30,  # 命令超时（秒）
+    "ssl": False,
+    "timeout": 15,
+    "command_timeout": 30,
     "server_settings": {
         'application_name': 'riveredge_asyncpg',
-        'timezone': settings.TIMEZONE  # 使用与Tortoise ORM相同的时区
+        'timezone': settings.TIMEZONE
     }
 }
+
+
+async def _finalize_tortoise_config(config: dict) -> dict:
+    if "routers" not in config or config["routers"] is None:
+        config["routers"] = []
+    if "use_tz" not in config:
+        config["use_tz"] = settings.USE_TZ if hasattr(settings, "USE_TZ") else False
+    if "timezone" not in config:
+        config["timezone"] = settings.TIMEZONE if hasattr(settings, "TIMEZONE") else "UTC"
+    return config
+
+
+async def _reset_tortoise_for_reinit() -> None:
+    await Tortoise.close_connections()
+    Tortoise._inited = False
+    if hasattr(Tortoise, "_apps") and isinstance(Tortoise._apps, dict):
+        Tortoise._apps.clear()
 
 
 async def init_tortoise_dynamic() -> None:
     """
     使用动态配置初始化 Tortoise（API 与 Taskiq worker 共用）。
 
-    若已初始化则直接返回，避免重复 init。
+    两阶段：先以平台基线模型连库并查应用中心，再按启用集加载完整 ORM。
     """
     if Tortoise._inited:
         return
 
-    # Tortoise get_use_tz/get_timezone 读环境变量；须与 settings 同步后再 init
     from infra.config.infra_config import setup_tortoise_timezone_env
 
     setup_tortoise_timezone_env()
 
-    # 使用动态配置生成器获取配置
-    config = await get_dynamic_tortoise_config()
+    bootstrap_config = await get_dynamic_tortoise_config(enabled_codes=None)
+    bootstrap_config = await _finalize_tortoise_config(bootstrap_config)
+    logger.info("🔧 Tortoise 启动引导（平台基线模型）...")
+    await Tortoise.init(config=bootstrap_config)
 
-    # 确保 routers 字段存在且是列表（不能是 None）
-    if "routers" not in config or config["routers"] is None:
-        config["routers"] = []
+    from core.services.application.enabled_apps import resolve_enabled_app_codes
 
-    # 确保 use_tz 和 timezone 字段存在
-    if "use_tz" not in config:
-        config["use_tz"] = settings.USE_TZ if hasattr(settings, "USE_TZ") else False
-    if "timezone" not in config:
-        config["timezone"] = settings.TIMEZONE if hasattr(settings, "TIMEZONE") else "UTC"
+    enabled_codes = await resolve_enabled_app_codes()
+
+    runtime_config = await get_dynamic_tortoise_config(enabled_codes=enabled_codes)
+    runtime_config = await _finalize_tortoise_config(runtime_config)
+
+    bootstrap_models = bootstrap_config["apps"]["models"]["models"]
+    runtime_models = runtime_config["apps"]["models"]["models"]
+    if runtime_models != bootstrap_models:
+        logger.info(
+            "🔧 按应用中心启用集重建 Tortoise ORM（{} → {} 个模型模块）",
+            len(bootstrap_models),
+            len(runtime_models),
+        )
+        await _reset_tortoise_for_reinit()
+        await Tortoise.init(config=runtime_config)
+    else:
+        logger.info("🔧 启用集无额外应用 ORM，保持平台基线 Tortoise 配置")
 
     logger.debug(
-        f"Tortoise ORM 配置: routers={config.get('routers')}, "
-        f"use_tz={config.get('use_tz')}, timezone={config.get('timezone')}"
+        f"Tortoise ORM 配置: routers={runtime_config.get('routers')}, "
+        f"use_tz={runtime_config.get('use_tz')}, timezone={runtime_config.get('timezone')}"
     )
-
-    await Tortoise.init(config=config)
     logger.info("Tortoise ORM 初始化完成")
 
     from tortoise import connections
@@ -628,7 +655,10 @@ async def get_db_connection():
         return await asyncpg.connect(**DB_CONFIG)
     except Exception as e:
         logger.error(f"获取数据库连接失败: {e}")
-        raise OperationalError(f"数据库连接失败: {e}")
+        raise OperationalError(
+            f"数据库连接失败: {e}。"
+            f"请确认 PostgreSQL 已启动且 {db_host}:{settings.DB_PORT} 可访问。"
+        ) from e
 
 
 async def check_db_connection() -> bool:

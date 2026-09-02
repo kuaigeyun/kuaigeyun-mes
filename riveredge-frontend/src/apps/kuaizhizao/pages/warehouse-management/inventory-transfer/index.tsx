@@ -1323,7 +1323,7 @@ const InventoryTransferPage: React.FC = () => {
           setDetailDrawerVisible(false);
           setCurrentTransfer(null);
         }}
-        width={DRAWER_CONFIG.HALF_WIDTH}
+        size={DRAWER_CONFIG.HALF_WIDTH}
         basic={
           currentTransfer ? (
             <Descriptions

@@ -11,7 +11,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ProFormText, ProFormInstance } from '@ant-design/pro-components';
-import { App, Button, Space, Modal, Upload, Breadcrumb, Table, Menu, Input, Tooltip, Select, Checkbox, theme } from 'antd';
+import { App, Button, Space, Modal, Upload, Breadcrumb, Table, Menu, Input, Tooltip, Select, Checkbox, theme, Dropdown } from 'antd';
 import { ThemedSegmented } from '../../../../components/themed-segmented';
 import { TwoColumnLayout, FormModalTemplate } from '../../../../components/layout-templates';
 import {
@@ -1356,6 +1356,50 @@ const FileListPage: React.FC = () => {
     return total + (file?.file_size || 0);
   }, 0);
 
+  const fileSettingsMenuItems: MenuProps['items'] = useMemo(
+    () => [
+      {
+        key: 'storage',
+        label: t('pages.system.files.storageSettingsTitle'),
+        icon: <SettingOutlined />,
+        onClick: () => setStorageSettingsVisible(true),
+      },
+      {
+        key: 'vault',
+        label: t('pages.system.files.privateVault.settingsButton'),
+        icon: <LockOutlined />,
+        onClick: () => setVaultSettingsVisible(true),
+      },
+    ],
+    [t],
+  );
+
+  const fileSortSelect = (
+    <Space size={4}>
+      <span style={{ color: token.colorTextSecondary, fontSize: 12 }}>{t('pages.system.files.sortLabel')}</span>
+      <Select
+        value={`${sortField}-${sortOrder ?? 'ascend'}`}
+        onChange={(v) => {
+          const [f, o] = v.split('-') as [SortField, 'ascend' | 'descend'];
+          setSortField(f);
+          setSortOrder(o);
+        }}
+        options={[
+          { value: 'original_name-ascend', label: t('pages.system.files.sortNameAsc') },
+          { value: 'original_name-descend', label: t('pages.system.files.sortNameDesc') },
+          { value: 'file_size-ascend', label: t('pages.system.files.sortSizeAsc') },
+          { value: 'file_size-descend', label: t('pages.system.files.sortSizeDesc') },
+          { value: 'file_type-ascend', label: t('pages.system.files.sortTypeAsc') },
+          { value: 'file_type-descend', label: t('pages.system.files.sortTypeDesc') },
+          { value: 'updated_at-descend', label: t('pages.system.files.sortModifiedDesc') },
+          { value: 'updated_at-ascend', label: t('pages.system.files.sortModifiedAsc') },
+        ]}
+        style={{ width: 160 }}
+        size="medium"
+      />
+    </Space>
+  );
+
   return (
     <>
       <TwoColumnLayout
@@ -1422,6 +1466,8 @@ const FileListPage: React.FC = () => {
             ),
             right: (
               <Space>
+                {fileSortSelect}
+                <div style={{ width: 1, height: 16, backgroundColor: token.colorSplit }} />
                 <Tooltip title={t('pages.system.files.viewIcons')}>
                   <Button
                     type={viewType === 'icons' ? 'primary' : 'default'}
@@ -1489,48 +1535,15 @@ const FileListPage: React.FC = () => {
                 >
                   {t('common.delete')}
                 </Button>
-                <Button
-                  icon={<SettingOutlined />}
-                  onClick={() => setStorageSettingsVisible(true)}
-                >
-                  {t('pages.system.files.storageSettingsButton')}
-                </Button>
-                <Button
-                  icon={<LockOutlined />}
-                  onClick={() => setVaultSettingsVisible(true)}
-                >
-                  {t('pages.system.files.privateVault.settingsButton')}
-                </Button>
-                <div style={{ width: 1, height: 16, backgroundColor: token.colorSplit, margin: '0 8px' }} />
-                <Space>
-                  <span style={{ color: token.colorTextSecondary, fontSize: 12 }}>{t('pages.system.files.sortLabel')}</span>
-                  <Select
-                    value={`${sortField}-${sortOrder ?? 'ascend'}`}
-                    onChange={(v) => {
-                      const [f, o] = v.split('-') as [SortField, 'ascend' | 'descend'];
-                      setSortField(f);
-                      setSortOrder(o);
-                    }}
-                    options={[
-                      { value: 'original_name-ascend', label: t('pages.system.files.sortNameAsc') },
-                      { value: 'original_name-descend', label: t('pages.system.files.sortNameDesc') },
-                      { value: 'file_size-ascend', label: t('pages.system.files.sortSizeAsc') },
-                      { value: 'file_size-descend', label: t('pages.system.files.sortSizeDesc') },
-                      { value: 'file_type-ascend', label: t('pages.system.files.sortTypeAsc') },
-                      { value: 'file_type-descend', label: t('pages.system.files.sortTypeDesc') },
-                      { value: 'updated_at-descend', label: t('pages.system.files.sortModifiedDesc') },
-                      { value: 'updated_at-ascend', label: t('pages.system.files.sortModifiedAsc') },
-                    ]}
-                    style={{ width: 160 }}
-                    size="middle"
-                  />
-                </Space>
+                <Dropdown menu={{ items: fileSettingsMenuItems }} trigger={['click']}>
+                  <Button icon={<SettingOutlined />}>{t('pages.system.files.storageSettingsButton')}</Button>
+                </Dropdown>
                 <div style={{ width: 1, height: 16, backgroundColor: token.colorSplit, margin: '0 8px' }} />
                 <Space>
                   <span style={{ color: token.colorTextSecondary, fontSize: 12 }}>{t('pages.system.files.fileTypeLabel')}</span>
                   <ThemedSegmented
                     surfaceBackground
-                    size="middle"
+                    size="medium"
                     value={fileTypeFilter}
                     options={[
                       { label: t('pages.system.files.fileType.all'), value: 'all' },

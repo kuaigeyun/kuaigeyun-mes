@@ -810,7 +810,7 @@ const LanguageListPage: React.FC = () => {
         rootClassName="drawer-slide-motion"
         styles={translationDrawerStyles}
         extra={
-          <Space size="middle">
+          <Space size="medium">
             <Button
               icon={<TranslationOutlined />}
               onClick={handleSyncFromLocale}

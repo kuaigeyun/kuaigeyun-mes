@@ -1,0 +1,29 @@
+[Unit]
+Description=RiverEdge API (uvicorn)
+After=network-online.target postgresql.service
+Wants=network-online.target postgresql.service
+PartOf=riveredge.service
+
+[Service]
+Type=simple
+User={{SERVICE_USER}}
+Group={{SERVICE_GROUP}}
+WorkingDirectory={{PROJECT_ROOT}}
+Environment=HOME={{SERVICE_HOME}}
+Environment=XDG_DATA_HOME={{CADDY_DATA_DIR}}
+Environment=XDG_CONFIG_HOME={{CADDY_CONFIG_DIR}}
+Environment=PLAYWRIGHT_BROWSERS_PATH={{PLAYWRIGHT_BROWSERS_PATH}}
+Environment=RIVEREDGE_SYSTEMD=1
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin:{{SERVICE_HOME}}/.local/bin:{{SERVICE_HOME}}/.cargo/bin
+Environment=RIVEREDGE_UV={{UV_BIN}}
+Environment=MALLOC_ARENA_MAX=2
+Environment=MALLOC_TRIM_THRESHOLD_=131072
+StandardOutput=journal
+StandardError=journal
+ExecStart={{BACKEND_EXEC_SCRIPT}}
+Restart=always
+RestartSec=5
+TimeoutStopSec=60
+
+[Install]
+WantedBy=riveredge.service

@@ -23,7 +23,6 @@ import {
 import { HMI_DESIGN_TOKENS } from '../../../../../../components/layout-templates';
 import { CODE_FONT_FAMILY } from '../../../../../../constants/fonts';
 
-const { TabPane } = Tabs;
 const { Title, Text, Paragraph } = Typography;
 
 export type DocumentCenterTabKey = 'sop' | 'drawings' | 'cnc' | 'attachments';
@@ -158,6 +157,29 @@ const DocumentCenter: React.FC<DocumentCenterProps> = ({
     );
   }
 
+  const documentTabItems = [
+    {
+      key: 'sop',
+      label: <Space style={tabStyle}><FileProtectOutlined />SOP 指导</Space>,
+      children: renderSOP(),
+    },
+    {
+      key: 'drawings',
+      label: <Space style={tabStyle}><FileImageOutlined />{t('app.kuaizhizao.workOrder.kioskDocDrawing')}</Space>,
+      children: renderDrawings(),
+    },
+    {
+      key: 'cnc',
+      label: <Space style={tabStyle}><CodeOutlined />CNC 代码</Space>,
+      children: renderCNCCode(),
+    },
+    {
+      key: 'attachments',
+      label: <Space style={tabStyle}><PaperClipOutlined />{t('app.kuaizhizao.workOrder.kioskDocAttachments')}</Space>,
+      children: renderAttachments(),
+    },
+  ];
+
   return (
     <div className="document-center-hmi" style={{ 
       height: '100%', 
@@ -176,34 +198,10 @@ const DocumentCenter: React.FC<DocumentCenterProps> = ({
         activeKey={effectiveTab} 
         onChange={setActiveTab}
         centered
+        items={documentTabItems}
         tabBarStyle={{ marginBottom: 0, borderBottom: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}
         style={{ height: '100%' }}
-      >
-        <TabPane 
-          tab={<Space style={tabStyle}><FileProtectOutlined />SOP 指导</Space>} 
-          key="sop"
-        >
-          {renderSOP()}
-        </TabPane>
-        <TabPane 
-          tab={<Space style={tabStyle}><FileImageOutlined />{t('app.kuaizhizao.workOrder.kioskDocDrawing')}</Space>} 
-          key="drawings"
-        >
-          {renderDrawings()}
-        </TabPane>
-        <TabPane 
-          tab={<Space style={tabStyle}><CodeOutlined />CNC 代码</Space>} 
-          key="cnc"
-        >
-          {renderCNCCode()}
-        </TabPane>
-        <TabPane 
-          tab={<Space style={tabStyle}><PaperClipOutlined />{t('app.kuaizhizao.workOrder.kioskDocAttachments')}</Space>} 
-          key="attachments"
-        >
-          {renderAttachments()}
-        </TabPane>
-      </Tabs>
+      />
     </div>
   );
 };

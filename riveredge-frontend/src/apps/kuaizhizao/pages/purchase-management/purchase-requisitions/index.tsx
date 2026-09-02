@@ -120,7 +120,10 @@ import {
   PurchaseRequisitionDetailDrawer,
   PURCHASE_REQUISITION_WORKFLOW_PROPS,
 } from './components/PurchaseRequisitionDetailDrawer';
-import { supplierApi } from '../../../../master-data/services/supply-chain';
+import {
+  KUAIZHIZAO_DOC_HOST,
+  loadSupplierFormReferenceList,
+} from '../../../../../utils/documentFormReferenceLoad';
 import { ROUTES } from '../../../constants/routes';
 import { useTranslation } from 'react-i18next';
 import { useGlobalStore } from '../../../../../stores';
@@ -321,15 +324,9 @@ const PurchaseRequisitionsPage: React.FC = () => {
 
   const ensureSupplierList = useCallback(async (): Promise<Array<{ id: number; code?: string; name: string }>> => {
     if (supplierList.length > 0) return supplierList;
-    try {
-      const res: any = await supplierApi.list?.({ isActive: true, limit: 500 } as any);
-      const list = Array.isArray(res) ? res : res?.data || res?.results || res?.items || [];
-      setSupplierList(list);
-      return list;
-    } catch {
-      setSupplierList([]);
-      return [];
-    }
+    const list = await loadSupplierFormReferenceList(KUAIZHIZAO_DOC_HOST.purchaseRequisition);
+    setSupplierList(list);
+    return list;
   }, [supplierList]);
 
 
@@ -2364,7 +2361,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
                 batch: t('components.uniAction.print'),
               }}
               icon={<PrinterOutlined />}
-              size="middle"
+              size="medium"
             />,
           ]}
           showExportButton
@@ -2562,7 +2559,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
                 type="warning"
                 showIcon
                 style={{ marginBottom: 12 }}
-                message={
+                title={
                   purchaseRequisitionCapabilityReasonMessage(pushPoPreviewData.blocking_reason, t) ||
                   t('app.kuaizhizao.purchaseRequisition.pushFailed')
                 }
@@ -2617,7 +2614,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
                 type="warning"
                 showIcon
                 style={{ marginBottom: 12 }}
-                message={
+                title={
                   purchaseRequisitionCapabilityReasonMessage(pushInquiryPreviewData.blocking_reason, t) ||
                   t('app.kuaizhizao.purchaseRequisition.inquiryCreateFailed')
                 }

@@ -493,7 +493,7 @@ const FinanceNotesPage: React.FC<Props> = ({ direction, resource, columnPersiste
           setDetailOpen(false);
           setDetail(null);
         }}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
+        size={DRAWER_CONFIG.STANDARD_WIDTH}
         title={detail?.note_code}
         loading={false}
         plainBody={

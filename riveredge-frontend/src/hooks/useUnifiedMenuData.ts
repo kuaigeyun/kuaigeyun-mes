@@ -7,7 +7,8 @@
  *
  * 菜单显示层级（蓝图设置已下线）：
  * 1. 菜单管理：navigation-tree（任意登录用户可读），未入库或禁用则不返回（= 功能关闭）
- * 2. 权限管理：filterMenuItemsByPermission，用户无权限则隐藏
+ * 2. 自组菜单：custom-layout（任意登录用户可读；写入须 system.menu:update）
+ * 3. 权限管理：filterMenuItemsByPermission，用户无权限则隐藏
  *
  * 使用场景：BasicLayout（侧边栏、UniTabs、面包屑、页面标题）、Dashboard 快捷入口等
  */

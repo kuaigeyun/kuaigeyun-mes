@@ -187,6 +187,7 @@ export type OutsourceInboundPullLine = {
 type PullCreateResult = {
   success: boolean;
   message: string;
+  pickings?: Array<{ picking_id: number; picking_code: string; work_order_id: number }>;
 };
 
 export type SalesReturnDeliveryPullLine = {

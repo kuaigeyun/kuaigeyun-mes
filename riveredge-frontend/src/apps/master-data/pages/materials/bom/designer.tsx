@@ -3367,7 +3367,7 @@ const BOMDesignerPage: React.FC = () => {
                   type="info"
                   showIcon
                   style={{ marginTop: 16 }}
-                  message={t('app.master-data.fabricationWizard.introTitle')}
+                  title={t('app.master-data.fabricationWizard.introTitle')}
                   description={
                     <Space orientation="vertical" size={8}>
                       <span>{t('app.master-data.fabricationWizard.promptAfterCreate')}</span>
@@ -3618,8 +3618,10 @@ const BOMDesignerPage: React.FC = () => {
                                 size="small"
                                 column={1}
                                 bordered
-                                labelStyle={{ width: 100, background: '#f8fafc', fontSize: 12 }}
-                                contentStyle={{ fontSize: 12 }}
+                                styles={{
+                                  label: { width: 100, background: '#f8fafc', fontSize: 12 },
+                                  content: { fontSize: 12 },
+                                }}
                               >
                                 {entries.map(([key, val]) => (
                                   <Descriptions.Item key={key} label={key}>
@@ -4063,7 +4065,7 @@ const BOMDesignerPage: React.FC = () => {
       destroyOnHidden
     >
       {!versionCompareResult ? (
-        <Space orientation="vertical" style={{ width: '100%' }} size="middle">
+        <Space orientation="vertical" style={{ width: '100%' }} size="medium">
           <Form.Item label={t('app.master-data.bom.versionCompareSelectHint')}>
             <Space wrap>
               <Select
@@ -4327,8 +4329,8 @@ const BOMDesignerPage: React.FC = () => {
       onOk={() => void handleSubmitEcn()}
       destroyOnHidden
     >
-      <Space direction="vertical" style={{ width: '100%' }} size="middle">
-        <Alert type="info" showIcon message={t('app.master-data.bom.ecnSubmitHint')} />
+      <Space orientation="vertical" style={{ width: '100%' }} size="medium">
+        <Alert type="info" showIcon title={t('app.master-data.bom.ecnSubmitHint')} />
         <div>
           <div style={{ marginBottom: 8 }}>{t('app.master-data.bom.ecnFromVersion')}</div>
           <Input

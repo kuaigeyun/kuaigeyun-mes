@@ -780,7 +780,7 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
           setDetailDrawerVisible(false);
           setSuggestionDetail(null);
         }}
-        width={DRAWER_CONFIG.HALF_WIDTH}
+        size={DRAWER_CONFIG.HALF_WIDTH}
         basic={
           suggestionDetail ? (
             <Descriptions column={2} size="small" items={timeconfigBasicItems} />

@@ -440,7 +440,7 @@ const WorkOrdersKioskPage: React.FC = () => {
                     ]}
                     style={{ width: '100%', marginBottom: 12 }}
                     className="kiosk-work-order-filter-select"
-                    popupClassName="kiosk-work-order-filter-dropdown"
+                    classNames={{ popup: "kiosk-work-order-filter-dropdown" }}
                 />
                 <Search
                     placeholder="搜索编号或产品"
@@ -1086,8 +1086,7 @@ const WorkOrdersKioskPage: React.FC = () => {
                         type="error"
                         title={loadError}
                         showIcon
-                        closable
-                        onClose={() => setLoadError(null)}
+                        closable={{ onClose: () => setLoadError(null) }}
                         style={{ flexShrink: 0 }}
                     />
                 )}

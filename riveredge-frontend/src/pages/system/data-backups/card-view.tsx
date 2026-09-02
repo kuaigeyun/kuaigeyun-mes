@@ -412,7 +412,7 @@ const CardView: React.FC = () => {
                           
                           {backup.error_message && (
                             <Alert
-                              message={backup.error_message}
+                              title={backup.error_message}
                               type="error"
                               showIcon
                               style={{ fontSize: 11, marginTop: 8 }}
@@ -486,7 +486,7 @@ const CardView: React.FC = () => {
             {currentBackup.error_message && (
               <Descriptions.Item label={t('pages.system.dataBackups.columnError')}>
                 <Alert
-                  message={currentBackup.error_message}
+                  title={currentBackup.error_message}
                   type="error"
                   showIcon
                   style={{ fontSize: 12 }}

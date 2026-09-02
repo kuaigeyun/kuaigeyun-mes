@@ -1163,18 +1163,31 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 "default_outsource_supplier_name": outsource_meta["default_outsource_supplier_name"],
             })
 
-        from apps.kuaizhizao.utils.working_time import load_scheduling_work_context
-        _anchor = work_order.planned_start_date or work_order.planned_end_date
-        _around = to_site_date(_anchor) if _anchor else None
-        _holidays, _work_hours, _overtime = await load_scheduling_work_context(tenant_id, around=_around)
-        time_slots = build_operation_time_slots(
-            [row["total_hours"] for row in prepared_ops],
-            planned_start=work_order.planned_start_date,
-            planned_end=work_order.planned_end_date,
-            holidays=_holidays,
-            work_hours=_work_hours,
-            overtime=_overtime,
+        from apps.kuaizhizao.utils.work_order_operation_scheduling import (
+            build_operation_time_slots,
+            build_operation_time_slots_in_planned_window,
         )
+        if work_order.planned_start_date and work_order.planned_end_date:
+            time_slots = build_operation_time_slots_in_planned_window(
+                [row["total_hours"] for row in prepared_ops],
+                planned_start=work_order.planned_start_date,
+                planned_end=work_order.planned_end_date,
+            )
+        else:
+            from apps.kuaizhizao.utils.working_time import load_scheduling_work_context
+            _anchor = work_order.planned_start_date or work_order.planned_end_date
+            _around = to_site_date(_anchor) if _anchor else None
+            _holidays, _work_hours, _overtime = await load_scheduling_work_context(
+                tenant_id, around=_around
+            )
+            time_slots = build_operation_time_slots(
+                [row["total_hours"] for row in prepared_ops],
+                planned_start=work_order.planned_start_date,
+                planned_end=work_order.planned_end_date,
+                holidays=_holidays,
+                work_hours=_work_hours,
+                overtime=_overtime,
+            )
 
         work_order_operations = []
         for idx, row in enumerate(prepared_ops):
@@ -1224,12 +1237,13 @@ class WorkOrderService(AppBaseService[WorkOrder]):
 
             work_order_operations.append(work_order_op)
         
-        # 更新工单计划时间：有交期锚点时保持 planned_end 不后移
+        # 更新工单计划时间：双端锚定时保留头表；否则由工序推算
         if work_order_operations and time_slots:
-            work_order.planned_start_date = resolve_business_datetime(time_slots[0][0])
-            if work_order.planned_end_date is None:
-                work_order.planned_end_date = resolve_business_datetime(time_slots[-1][1])
-            await work_order.save()
+            if not (work_order.planned_start_date and work_order.planned_end_date):
+                work_order.planned_start_date = resolve_business_datetime(time_slots[0][0])
+                if work_order.planned_end_date is None:
+                    work_order.planned_end_date = resolve_business_datetime(time_slots[-1][1])
+                await work_order.save()
         
         logger.info(f"为工单 {work_order.code} 自动生成了 {len(work_order_operations)} 个工序单")
         return work_order_operations
@@ -1254,6 +1268,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             return
         from apps.kuaizhizao.utils.work_order_operation_scheduling import (
             build_operation_time_slots,
+            build_operation_time_slots_in_planned_window,
             operation_total_hours,
         )
 
@@ -1262,18 +1277,27 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             operation_total_hours(op.setup_time, op.standard_time, work_order.quantity)
             for op in sorted_ops
         ]
-        from apps.kuaizhizao.utils.working_time import load_scheduling_work_context
-        _anchor = work_order.planned_start_date or work_order.planned_end_date
-        _around = to_site_date(_anchor) if _anchor else None
-        _holidays, _work_hours, _overtime = await load_scheduling_work_context(tenant_id, around=_around)
-        time_slots = build_operation_time_slots(
-            durations,
-            planned_start=work_order.planned_start_date,
-            planned_end=work_order.planned_end_date,
-            holidays=_holidays,
-            work_hours=_work_hours,
-            overtime=_overtime,
-        )
+        if work_order.planned_start_date and work_order.planned_end_date:
+            time_slots = build_operation_time_slots_in_planned_window(
+                durations,
+                planned_start=work_order.planned_start_date,
+                planned_end=work_order.planned_end_date,
+            )
+        else:
+            from apps.kuaizhizao.utils.working_time import load_scheduling_work_context
+            _anchor = work_order.planned_start_date or work_order.planned_end_date
+            _around = to_site_date(_anchor) if _anchor else None
+            _holidays, _work_hours, _overtime = await load_scheduling_work_context(
+                tenant_id, around=_around
+            )
+            time_slots = build_operation_time_slots(
+                durations,
+                planned_start=work_order.planned_start_date,
+                planned_end=work_order.planned_end_date,
+                holidays=_holidays,
+                work_hours=_work_hours,
+                overtime=_overtime,
+            )
 
         for idx, op in enumerate(sorted_ops):
             if idx >= len(time_slots):
@@ -1289,11 +1313,12 @@ class WorkOrderService(AppBaseService[WorkOrder]):
 
         if time_slots:
             wo_updates: Dict[str, Any] = {
-                "planned_start_date": resolve_business_datetime(time_slots[0][0]),
                 "updated_by": updated_by,
             }
-            if work_order.planned_end_date is None:
-                wo_updates["planned_end_date"] = resolve_business_datetime(time_slots[-1][1])
+            if not (work_order.planned_start_date and work_order.planned_end_date):
+                wo_updates["planned_start_date"] = resolve_business_datetime(time_slots[0][0])
+                if work_order.planned_end_date is None:
+                    wo_updates["planned_end_date"] = resolve_business_datetime(time_slots[-1][1])
             await WorkOrder.filter(tenant_id=tenant_id, id=work_order.id).update(**wo_updates)
 
     async def create_work_order(

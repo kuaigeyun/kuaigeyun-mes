@@ -473,7 +473,7 @@ const WorkOrderMaterialCallModal: React.FC<{
       /** 高于 Popover 浮层，避免被遮挡导致无法点击关闭 */
       zIndex={1200}
       styles={{ body: { paddingBottom: 12 } }}
-      maskClosable={false}
+      mask={{ closable: false }}
       centered
       maskProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
       wrapProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
@@ -1361,7 +1361,7 @@ const WorkOrderReadinessPopoverContent: React.FC<{
                     if (owo?.id) {
                       const statusLabel = translateOutsourceWorkOrderLifecycleStatus(t, owo.status)
                       return (
-                        <Space direction="vertical" size={2} style={{ width: '100%' }}>
+                        <Space orientation="vertical" size={2} style={{ width: '100%' }}>
                           {statusWithEta(
                             <Tag
                               style={{ margin: 0 }}
@@ -1382,7 +1382,7 @@ const WorkOrderReadinessPopoverContent: React.FC<{
                     if (wo?.code) {
                       const statusLabel = translateWorkOrderLifecycleStatus(t, wo.status)
                       return (
-                        <Space direction="vertical" size={2} style={{ width: '100%' }}>
+                        <Space orientation="vertical" size={2} style={{ width: '100%' }}>
                           {statusWithEta(
                             <Tag style={{ margin: 0 }} color={resolveWorkOrderStatusTagColor(wo.status)}>
                               {statusLabel}
@@ -1417,7 +1417,7 @@ const WorkOrderReadinessPopoverContent: React.FC<{
                         : `${formatQuantity(sp.receivedQuantity)}/${formatQuantity(sp.orderedQuantity)}`
                       : null
                     return (
-                      <Space direction="vertical" size={2} style={{ width: '100%' }}>
+                      <Space orientation="vertical" size={2} style={{ width: '100%' }}>
                         {statusWithEta(
                           <Tag style={{ margin: 0 }} color={resolveSupplyProgressTagColor(sp.status)}>
                             {supplyProgressLabel(sp.status)}

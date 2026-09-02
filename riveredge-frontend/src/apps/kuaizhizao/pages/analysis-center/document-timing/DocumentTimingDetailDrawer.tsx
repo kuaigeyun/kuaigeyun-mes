@@ -156,7 +156,7 @@ export const DocumentTimingDetailDrawer: React.FC<DocumentTimingDetailDrawerProp
       }
       open={open}
       onClose={onClose}
-      width={DRAWER_CONFIG.HALF_WIDTH}
+      size={DRAWER_CONFIG.HALF_WIDTH}
       loading={showLoading}
       plainBody={
         showError ? (

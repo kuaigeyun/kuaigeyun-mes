@@ -1189,7 +1189,7 @@ const MaintenancePlansPage: React.FC = () => {
         loading={detailLoading}
         zIndex={planDetailDrawerZIndex}
         onClose={closeDetail}
-        width={DRAWER_CONFIG.HALF_WIDTH}
+        size={DRAWER_CONFIG.HALF_WIDTH}
         basic={
           planDetail ? (
             <Descriptions

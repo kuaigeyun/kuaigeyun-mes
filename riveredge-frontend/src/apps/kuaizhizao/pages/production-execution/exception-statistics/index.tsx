@@ -165,7 +165,7 @@ const ExceptionStatisticsPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <Spin spinning={loading || detecting}>
-        <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+        <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
           <Card>
             <Space wrap>
               <span>{t(`${P}.statistics.dateRange`)}</span>

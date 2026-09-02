@@ -799,7 +799,7 @@ const DemandReplanDashboardPage: React.FC = () => {
         ) : !impactDetail ? (
           <Typography.Text type="secondary">{t('app.kuaizhizao.demandReplan.impactModal.noDetail')}</Typography.Text>
         ) : (
-          <Space direction="vertical" style={{ width: '100%' }} size={16}>
+          <Space orientation="vertical" style={{ width: '100%' }} size={16}>
             <Typography.Text>
               {t('app.kuaizhizao.demandReplan.impactModal.event', {
                 code: impactDetail.event.event_code,
@@ -911,7 +911,7 @@ const DemandReplanDashboardPage: React.FC = () => {
         }
       >
         {failureTask && (
-          <Space direction="vertical" style={{ width: '100%' }} size={12}>
+          <Space orientation="vertical" style={{ width: '100%' }} size={12}>
             <Typography.Paragraph type="danger" style={{ whiteSpace: 'pre-wrap', marginBottom: 0 }}>
               {formatReplanTaskError(failureTask, t) || t('app.kuaizhizao.demandReplan.failureModal.noDetail')}
             </Typography.Paragraph>

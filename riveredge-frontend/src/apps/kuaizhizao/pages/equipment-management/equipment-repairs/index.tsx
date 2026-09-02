@@ -385,7 +385,7 @@ const EquipmentRepairsPage: React.FC = () => {
         open={drawerVisible}
         loading={detailLoading}
         onClose={closeDetail}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
+        size={DRAWER_CONFIG.STANDARD_WIDTH}
         extra={
           detail && perms.canUpdate && detail.status === '进行中' ? (
             <Button type="primary" icon={<CheckOutlined />} onClick={() => openComplete(detail)}>

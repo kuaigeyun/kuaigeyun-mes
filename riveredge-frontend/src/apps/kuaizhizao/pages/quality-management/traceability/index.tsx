@@ -610,7 +610,7 @@ const TraceabilityPage: React.FC<TraceabilityPageProps> = ({
             setDetailVisible(false);
             setSelectedNode(null);
           }}
-          width={DRAWER_CONFIG.HALF_WIDTH}
+          size={DRAWER_CONFIG.HALF_WIDTH}
           basic={
             nodeDetail ? (
               <Descriptions

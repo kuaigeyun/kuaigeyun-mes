@@ -111,7 +111,7 @@ import {
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { isManualAuditEnabled } from '../../../../../utils/auditMode';
 import { useWarehouseLocationOptions } from '../../../hooks/useWarehouseLocationOptions';
-import { supplierApi, getDictionaryOptions } from '../../../../master-data/services/supply-chain';
+import { getDictionaryOptions } from '../../../../master-data/services/supply-chain';
 import { initializeSystemDictionaries } from '../../../../../services/dataDictionary';
 import {
   buildPurchaseReturnLifecycleValueEnum,
@@ -130,7 +130,6 @@ import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { useImportDictionaryOptions } from '../../../../../hooks/useImportDictionaryOptions';
 import { pickImportExampleValue } from '../../../../../utils/loadImportDictionaryValues';
 import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulkImport';
-import { materialApi } from '../../../../master-data/services/material';
 import { warehouseApi as masterWarehouseApi } from '../../../../master-data/services/warehouse';
 import { useImportMaterialUnitOptions } from '../../../../master-data/hooks/useImportMaterialUnitOptions';
 import {
@@ -356,10 +355,7 @@ const PurchaseReturnsPage: React.FC = () => {
   const [supplierList, setSupplierList] = useState<Array<{ id: number; name?: string; code?: string }>>([]);
 
   useEffect(() => {
-    supplierApi.list({ limit: 1000, isActive: true }).then((res) => {
-      const list = Array.isArray(res) ? res : (res as { data?: typeof supplierList })?.data ?? [];
-      setSupplierList(Array.isArray(list) ? list : []);
-    }).catch(() => setSupplierList([]));
+    void loadSupplierFormReferenceList(KUAIZHIZAO_DOC_HOST.purchaseReturn).then(setSupplierList);
   }, []);
 
   const purchaseReturnSupplierSearchOptions = useMemo(
@@ -948,10 +944,10 @@ const PurchaseReturnsPage: React.FC = () => {
 
     try {
       const [materialsRes, warehousesRes] = await Promise.all([
-        materialApi.list({ limit: 1000, isActive: true }),
+        loadMaterialFormReferenceList(KUAIZHIZAO_DOC_HOST.purchaseReturn),
         masterWarehouseApi.list({ limit: 1000, is_active: true }),
       ]);
-      const materials = materialsRes?.items ?? [];
+      const materials = materialsRes ?? [];
       const warehouses = (warehousesRes as any)?.items ?? (Array.isArray(warehousesRes) ? warehousesRes : []);
 
       const { errors, items: toImport } = parseDocumentReturnListImport(data, {
@@ -2063,7 +2059,7 @@ const PurchaseReturnsPage: React.FC = () => {
                 singleConfirmTitle: t('app.kuaizhizao.purchaseReturn.confirmTitle'),
               }}
               icon={<CheckCircleOutlined />}
-              size="middle"
+              size="medium"
               color="green"
               variant="solid"
             />,
@@ -2088,7 +2084,7 @@ const PurchaseReturnsPage: React.FC = () => {
                 batch: t('app.kuaizhizao.purchaseReturn.batchWithdraw'),
               }}
               icon={<EditOutlined />}
-              size="middle"
+              size="medium"
               color="orange"
               variant="solid"
             />,
@@ -2130,11 +2126,10 @@ const PurchaseReturnsPage: React.FC = () => {
               placeholder={t('app.kuaizhizao.purchaseReturn.selectSupplier')}
               required
               request={async () => {
-                const res = await supplierApi.list({ limit: 1000, isActive: true });
-                const list = Array.isArray(res) ? res : (res as any)?.data || (res as any)?.items || [];
-                return list.map((s: any) => ({
-                  label: s.name || s.supplier_name || s.code || t('app.kuaizhizao.purchaseReturn.supplierFallback', { id: s.id }),
-                  value: s.id ?? s.supplier_id,
+                const list = await loadSupplierFormReferenceList(KUAIZHIZAO_DOC_HOST.purchaseReturn);
+                return list.map((s) => ({
+                  label: s.name || s.code || t('app.kuaizhizao.purchaseReturn.supplierFallback', { id: s.id }),
+                  value: s.id,
                 }));
               }}
               fieldProps={{
@@ -2383,7 +2378,7 @@ const PurchaseReturnsPage: React.FC = () => {
           setReturnDetail(null);
           resetPurchaseReturnDetailFieldValues();
         }}
-        width={DRAWER_CONFIG.HALF_WIDTH}
+        size={DRAWER_CONFIG.HALF_WIDTH}
         extra={
           returnDetail ? (
             <Space size="small">

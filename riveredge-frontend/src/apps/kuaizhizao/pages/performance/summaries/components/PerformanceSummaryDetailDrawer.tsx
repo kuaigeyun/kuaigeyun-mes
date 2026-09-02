@@ -143,7 +143,7 @@ export const PerformanceSummaryDetailDrawer: React.FC<PerformanceSummaryDetailDr
       title={title}
       open={open}
       onClose={onClose}
-      width={DRAWER_CONFIG.HALF_WIDTH}
+      size={DRAWER_CONFIG.HALF_WIDTH}
       zIndex={zIndex}
       loading={showLoading}
       extra={contentReady ? extra ?? null : null}

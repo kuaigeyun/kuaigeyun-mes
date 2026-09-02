@@ -4382,6 +4382,14 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
                 ).all()
                 material_ids = list({int(it.material_id) for it in items if getattr(it, "material_id", None)})
                 material_by_id = await _load_materials_by_ids(tenant_id, material_ids)
+
+                from apps.master_data.services.material_batch_service import MaterialBatchService
+
+                await MaterialBatchService.enrich_receipt_items_expiry_dates(
+                    items,
+                    material_by_id,
+                    to_site_date(receipt_time),
+                )
                 
                 for item in items:
                     qty = item.receipt_quantity or item.qualified_quantity or Decimal(0)
@@ -5109,6 +5117,15 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
                         count=1,
                     )
             material_unit = (getattr(material, "base_unit", None) or "个") if material else "个"
+            from apps.master_data.services.material_batch_service import MaterialBatchService
+
+            item_expiry_date = None
+            if material:
+                item_expiry_date = MaterialBatchService.resolve_inbound_item_expiry_date(
+                    material=material,
+                    production_date=to_site_date(resolve_business_datetime()),
+                    explicit_expiry=None,
+                )
             await FinishedGoodsReceiptItem.create(
                 tenant_id=tenant_id,
                 receipt_id=receipt.id,
@@ -5121,6 +5138,7 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
                 unqualified_quantity=Decimal('0'),
                 batch_number=batch_number,
                 serial_numbers=serial_numbers,
+                expiry_date=item_expiry_date,
                 status='待入库'
             )
 
@@ -6342,7 +6360,7 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                     "suggested_quantity": qty,
                     "pushed_quantity": pushed,
                     "remaining_quantity": remaining,
-                    "required_date": str(item.required_date) if getattr(item, "required_date", None) else None,
+                    "required_date": str(item.delivery_date) if getattr(item, "delivery_date", None) else None,
                 }
             )
         lines.sort(
@@ -10567,6 +10585,8 @@ class SalesReturnService(AppBaseService[SalesReturn]):
         pullable_only: bool = True,
     ) -> Dict[str, Any]:
         """开口销售出库行：已出库且未退完的明细。"""
+        from apps.kuaizhizao.utils.sales_delivery_helper import sales_delivery_reference_date_str
+
         delivery_query = SalesDelivery.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if sales_delivery_id is not None:
             delivery_query = delivery_query.filter(id=int(sales_delivery_id))
@@ -10576,7 +10596,7 @@ class SalesReturnService(AppBaseService[SalesReturn]):
             "status",
             "customer_id",
             "customer_name",
-            "delivery_date",
+            "delivery_time",
             "sales_order_id",
             "sales_order_code",
         )
@@ -10636,7 +10656,7 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                     "suggested_quantity": delivered,
                     "pushed_quantity": pushed,
                     "remaining_quantity": remaining,
-                    "required_date": str(delivery.delivery_date) if delivery.delivery_date else None,
+                    "required_date": sales_delivery_reference_date_str(delivery),
                 }
             )
         lines.sort(

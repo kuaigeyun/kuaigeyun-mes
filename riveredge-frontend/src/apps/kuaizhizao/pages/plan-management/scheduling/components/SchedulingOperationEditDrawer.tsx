@@ -321,7 +321,7 @@ const SchedulingOperationEditDrawer: React.FC<SchedulingOperationEditDrawerProps
       open={open}
       width={MODAL_CONFIG.LARGE_WIDTH}
       onCancel={onClose}
-      destroyOnClose
+      destroyOnHidden
       okText={t('common.save')}
       cancelText={t('common.cancel')}
       onOk={() => void handleSubmit()}

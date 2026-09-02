@@ -247,6 +247,103 @@ async def sync_departments_from_dataset(
         )
 
 
+class DepartmentImportRequestSchema(BaseModel):
+    """部门导入请求 Schema（API层）"""
+
+    data: List[List[Any]] = Field(
+        ...,
+        description="二维数组数据（第一行为表头，第二行为示例数据，从第三行开始为实际数据）",
+    )
+
+
+@router.post("/batch-import")
+async def import_departments(
+    request: DepartmentImportRequestSchema,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_department_import),
+):
+    """
+    批量导入部门
+
+    接收前端 uni_import 组件传递的二维数组数据，批量创建部门。
+    数据格式：第一行为表头，第二行为示例数据（跳过），从第三行开始为实际数据。
+    """
+    try:
+        result = await DepartmentService.import_departments_from_data(
+            tenant_id=tenant_id,
+            data=request.data,
+            current_user_id=current_user.id,
+        )
+        return result
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"导入失败: {str(e)}",
+        )
+
+
+@router.post("/load-preset")
+async def load_preset_departments(
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    body: Optional[LoadDepartmentPresetRequest] = Body(None),
+    _auth: object = Depends(require_department_create),
+):
+    """
+    加载中国中小制造业极简部门预设数据。
+    仅创建不存在的部门（按 code 去重）。
+    请求体可传 codes，仅创建选中项；不传则创建全部预设。
+    """
+    codes = body.codes if body else None
+    count = await DepartmentService.load_preset_sme(
+        tenant_id=tenant_id,
+        current_user_id=current_user.id,
+        codes=codes,
+    )
+    return {"created": count, "message": f"已加载 {count} 个部门"}
+
+
+@router.post("/link-preset-managers")
+async def link_preset_department_managers(
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_department_update),
+):
+    """按预设映射补齐部门负责人（销售经理→销售部等），供审批流部门节点使用。"""
+    linked = await DepartmentService.link_preset_department_managers(tenant_id)
+    return {
+        "managers_linked": linked,
+        "message": f"已关联 {linked} 个部门负责人" if linked else "无需更新，部门负责人已配置或缺少对应角色用户",
+    }
+
+
+@router.put("/sort", status_code=status.HTTP_200_OK)
+async def update_department_order(
+    department_orders: List[Dict[str, Any]] = Body(..., description="部门排序列表"),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_department_update),
+):
+    """批量更新部门排序（拖拽排序后保存）。"""
+    try:
+        await DepartmentService.update_department_order(
+            tenant_id=tenant_id,
+            department_orders=department_orders,
+        )
+        return {"success": True, "message": "排序更新成功"}
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
+        )
+
+
 @router.get("/{department_uuid}", response_model=DepartmentResponse)
 async def get_department(
     department_uuid: str,
@@ -376,109 +473,3 @@ async def delete_department(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=str(e)
         )
-
-
-@router.put("/sort", status_code=status.HTTP_200_OK)
-async def update_department_order(
-    department_orders: List[Dict[str, Any]] = Body(..., description="部门排序列表"),
-    current_user: User = Depends(soil_get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-    _auth: object = Depends(require_department_update),
-):
-    """
-    批量更新部门排序
-    
-    用于前端拖拽排序后批量更新多个部门的排序顺序。
-    
-    Args:
-        department_orders: 部门排序列表，格式：[{"uuid": "...", "sort_order": 1}, ...]
-        current_user: 当前用户（依赖注入）
-        tenant_id: 当前组织ID（依赖注入）
-        
-    Returns:
-        dict: 成功响应
-        
-    Raises:
-        HTTPException: 当数据验证失败时抛出
-    """
-    try:
-        await DepartmentService.update_department_order(
-            tenant_id=tenant_id,
-            department_orders=department_orders
-        )
-        return {"success": True, "message": "排序更新成功"}
-    except ValidationError as e:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(e)
-        )
-
-
-class DepartmentImportRequestSchema(BaseModel):
-    """部门导入请求 Schema（API层）"""
-    data: List[List[Any]] = Field(..., description="二维数组数据（第一行为表头，第二行为示例数据，从第三行开始为实际数据）")
-
-
-@router.post("/batch-import")
-async def import_departments(
-    request: DepartmentImportRequestSchema,
-    current_user: User = Depends(soil_get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-    _auth: object = Depends(require_department_import),
-):
-    """
-    批量导入部门
-    
-    接收前端 uni_import 组件传递的二维数组数据，批量创建部门。
-    数据格式：第一行为表头，第二行为示例数据（跳过），从第三行开始为实际数据。
-    
-    Args:
-        request: 导入请求数据（包含二维数组）
-        current_user: 当前用户（依赖注入）
-        tenant_id: 当前组织ID（依赖注入）
-        
-    Returns:
-        dict: 导入结果（成功数、失败数、错误列表）
-        
-    Raises:
-        HTTPException: 当数据格式错误或导入失败时抛出
-    """
-    try:
-        result = await DepartmentService.import_departments_from_data(
-            tenant_id=tenant_id,
-            data=request.data,
-            current_user_id=current_user.id
-        )
-        return result
-    except ValidationError as e:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(e)
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"导入失败: {str(e)}"
-        )
-
-
-@router.post("/load-preset")
-async def load_preset_departments(
-    current_user: User = Depends(soil_get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-    body: Optional[LoadDepartmentPresetRequest] = Body(None),
-    _auth: object = Depends(require_department_create),
-):
-    """
-    加载中国中小制造业极简部门预设数据。
-    仅创建不存在的部门（按 code 去重）。
-    请求体可传 codes，仅创建选中项；不传则创建全部预设。
-    """
-    codes = body.codes if body else None
-    count = await DepartmentService.load_preset_sme(
-        tenant_id=tenant_id,
-        current_user_id=current_user.id,
-        codes=codes,
-    )
-    return {"created": count, "message": f"已加载 {count} 个部门"}
-

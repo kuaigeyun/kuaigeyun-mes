@@ -47,6 +47,10 @@ class InfraSettings(BaseSettings):
     APP_NAME: str = Field(default="RiverEdge SaaS Framework", description="应用名称")
     APP_VERSION: str = Field(default="1.0.0", description="应用版本")
     DEBUG: bool = Field(default=False, description="调试模式")
+    DOCS_ENABLED: bool = Field(
+        default=True,
+        description="是否启用 ReDoc 与 OpenAPI schema（生产小内存可关闭以省约 MB 级常驻内存）",
+    )
     ENVIRONMENT: str = Field(default="development", description="运行环境")
     GIT_SHA: str = Field(
         default="",

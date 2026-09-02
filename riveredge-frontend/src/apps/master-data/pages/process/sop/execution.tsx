@@ -297,7 +297,7 @@ const SOPExecutionPage: React.FC = () => {
           style={{ width: 300, flexShrink: 0 }}
         >
           <Steps
-            direction="vertical"
+            orientation="vertical"
             current={currentStepIndex}
             size="small"
             items={flowSteps.map((step, index) => ({

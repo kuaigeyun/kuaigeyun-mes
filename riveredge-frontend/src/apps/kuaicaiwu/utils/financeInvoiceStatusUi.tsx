@@ -90,7 +90,7 @@ export function FinanceArApInvoiceStatusDetail({
       : renderPayableInvoiceStatusTag(invoiceStatus, t);
 
   return (
-    <Space direction="vertical" size={4}>
+    <Space orientation="vertical" size={4}>
       {statusTag}
       {invoicedAmount != null || remainingInvoiceAmount != null ? (
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>

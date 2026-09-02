@@ -1229,7 +1229,7 @@ export const OutsourceOrdersTable: React.FC = () => {
               type="info"
               showIcon
               style={{ marginBottom: 16 }}
-              message={t('app.kuaizhizao.outsourceOrder.formSourceLocked')}
+              title={t('app.kuaizhizao.outsourceOrder.formSourceLocked')}
             />
             <Card size="small" style={{ marginBottom: 16 }}>
               <Descriptions column={2} size="small">
@@ -1448,7 +1448,7 @@ export const OutsourceOrdersTable: React.FC = () => {
           setOutsourceOrderDetail(null);
           resetOutsourceDetailFieldValues();
         }}
-        width={DRAWER_CONFIG.HALF_WIDTH}
+        size={DRAWER_CONFIG.HALF_WIDTH}
         extra={
           outsourceOrderDetail ? (
             <Space>

@@ -158,6 +158,13 @@ const BatchesPage: React.FC = () => {
     return formatBusinessDateOnly(String(value));
   };
 
+  const readBatchDateField = (record: MaterialBatch, field: 'productionDate' | 'expiryDate') => {
+    const camel = record[field];
+    if (camel != null && camel !== '') return camel;
+    const snake = field === 'productionDate' ? 'production_date' : 'expiry_date';
+    return (record as Record<string, unknown>)[snake];
+  };
+
   const columns: ProColumns<MaterialBatch>[] = useMemo(() => [
     batchSerialLedgerNoSearchColumn(t('app.master-data.batches.batchNo'), 'batchNo'),
     {
@@ -258,7 +265,7 @@ const BatchesPage: React.FC = () => {
       valueType: 'date',
       sorter: true,
       hideInSearch: true,
-      render: (_, r) => formatBatchDateCell(r.productionDate),
+      render: (_, r) => formatBatchDateCell(readBatchDateField(r, 'productionDate')),
     },
     {
       title: t('app.master-data.batches.expiryDate'),
@@ -270,7 +277,7 @@ const BatchesPage: React.FC = () => {
       valueType: 'date',
       sorter: true,
       hideInSearch: true,
-      render: (_, r) => formatBatchDateCell(r.expiryDate),
+      render: (_, r) => formatBatchDateCell(readBatchDateField(r, 'expiryDate')),
     },
     ...masterCrudCreatedUpdatedColumns<MaterialBatch>(t),
     {

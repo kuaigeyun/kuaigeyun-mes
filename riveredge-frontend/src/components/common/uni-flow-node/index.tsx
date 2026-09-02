@@ -69,8 +69,13 @@ const UniFlowNode: React.FC<UniFlowNodeProps> = ({ type, data, selected }) => {
     if (type === 'approval') {
       parts.push(data.approvalType === 'AND' ? '会签' : '或签');
       if (data.allowEditDuringApproval) parts.push('可改单');
-      if (data.approverType === 'department') parts.push('部门负责人');
-      else if (data.approverType === 'manager') parts.push('直属主管');
+      if (data.approverType === 'department') {
+        if (data.departmentScope === 'specified') {
+          parts.push(`指定部门×${(data.approverIds as string[] | undefined)?.length || 0}`);
+        } else {
+          parts.push('发起人部门负责人');
+        }
+      } else if (data.approverType === 'manager') parts.push('直属主管');
       else if (data.approverType === 'role') parts.push(`角色×${(data.approverIds as string[] | undefined)?.length || 0}`);
       else if (data.approverType === 'user') parts.push(`指定×${(data.approverIds as string[] | undefined)?.length || 0}`);
     }

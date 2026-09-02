@@ -313,7 +313,7 @@ const GlCashierPage: React.FC = () => {
           precision={0}
           value={year}
           onChange={(v) => setYear(Number(v) || now.getFullYear())}
-          addonBefore={t(`${NS}.year`, { defaultValue: '年' })}
+          prefix={t(`${NS}.year`, { defaultValue: '年' })}
           style={{ width: 140 }}
         />
         <InputNumber
@@ -323,7 +323,7 @@ const GlCashierPage: React.FC = () => {
           precision={0}
           value={month}
           onChange={(v) => setMonth(Number(v) || 1)}
-          addonBefore={t(`${NS}.month`, { defaultValue: '月' })}
+          prefix={t(`${NS}.month`, { defaultValue: '月' })}
           style={{ width: 120 }}
         />
       </Space.Compact>
@@ -445,7 +445,7 @@ const GlCashierPage: React.FC = () => {
                 precision={amountDecimals}
                 value={bankBalance}
                 onChange={(v) => setBankBalance(Number(v || 0))}
-                addonBefore={t(`${NS}.bankBalance`, { defaultValue: '银行余额' })}
+                prefix={t(`${NS}.bankBalance`, { defaultValue: '银行余额' })}
                 style={{ width: 220 }}
               />
               <Button type="primary" loading={loading} onClick={() => void loadAdjustment()}>

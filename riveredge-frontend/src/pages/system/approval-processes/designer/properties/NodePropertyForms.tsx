@@ -6,13 +6,28 @@ import {
   ProFormDigit,
   ProFormList,
   ProFormText,
+  ProFormTreeSelect,
 } from '@ant-design/pro-components';
 import { theme } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { searchUserDisplay } from '../../../../../services/user';
 import { formatUserDisplayLabel } from '../../../../../utils/userDisplay';
 import { getRoleList } from '../../../../../services/role';
+import { getDepartmentTree, type DepartmentTreeItem } from '../../../../../services/department';
+import { resolvePresetDepartmentName } from '../../../../../utils/presetEntityI18n';
 import type { ConditionItem } from '../../../../../types/approvalFlowSchema';
+
+function departmentTreeSelectData(
+  items: DepartmentTreeItem[],
+  t: (key: string) => string,
+): Array<{ title: string; value: string; key: string; children?: ReturnType<typeof departmentTreeSelectData> }> {
+  return items.map((item) => ({
+    title: resolvePresetDepartmentName(item, t),
+    value: item.uuid,
+    key: item.uuid,
+    children: item.children?.length ? departmentTreeSelectData(item.children, t) : undefined,
+  }));
+}
 
 const APPROVER_OPTIONS = (t: (k: string) => string) => [
   { label: t('pages.approval.designer.approverTypeUser'), value: 'user' },
@@ -70,6 +85,53 @@ export const ApprovalNodeForm: React.FC<ApprovalNodeFormProps> = () => {
                 request={async () => (await getRoleList({})).items.map((r) => ({ label: r.name, value: r.uuid }))}
                 mode="multiple"
               />
+            );
+          }
+          if (approverType === 'department') {
+            return (
+              <>
+                <ProFormSelect
+                  name="departmentScope"
+                  label={t('pages.approval.designer.departmentScope')}
+                  options={[
+                    {
+                      label: t('pages.approval.designer.departmentScopeSubmitter'),
+                      value: 'submitter',
+                    },
+                    {
+                      label: t('pages.approval.designer.departmentScopeSpecified'),
+                      value: 'specified',
+                    },
+                  ]}
+                  initialValue="submitter"
+                />
+                <ProFormDependency name={['departmentScope']}>
+                  {({ departmentScope }) =>
+                    departmentScope === 'specified' ? (
+                      <ProFormTreeSelect
+                        name="departments"
+                        label={t('pages.approval.designer.selectDepartment')}
+                        request={async () => {
+                          const res = await getDepartmentTree({ is_active: true });
+                          return departmentTreeSelectData(res.items || [], t);
+                        }}
+                        fieldProps={{
+                          treeCheckable: true,
+                          showCheckedStrategy: 'SHOW_PARENT',
+                          treeDefaultExpandAll: true,
+                          multiple: true,
+                        }}
+                        rules={[
+                          {
+                            required: true,
+                            message: t('pages.approval.designer.selectDepartmentRequired'),
+                          },
+                        ]}
+                      />
+                    ) : null
+                  }
+                </ProFormDependency>
+              </>
             );
           }
           return null;
@@ -232,6 +294,15 @@ export function mergeFormToNodeData(
     const approverType = v.approverType as string;
     if (approverType === 'user' && v.approvers) v.approverIds = v.approvers;
     if (approverType === 'role' && v.roles) v.approverIds = v.roles;
+    if (approverType === 'department') {
+      if (v.departmentScope === 'specified' && v.departments) {
+        v.approverIds = v.departments;
+      } else {
+        v.departmentScope = 'submitter';
+        delete v.approverIds;
+      }
+      delete v.departments;
+    }
     delete v.approvers;
     delete v.roles;
   }

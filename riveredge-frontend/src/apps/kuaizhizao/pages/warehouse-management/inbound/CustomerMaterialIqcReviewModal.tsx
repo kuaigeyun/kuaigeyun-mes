@@ -141,11 +141,11 @@ export const CustomerMaterialIqcReviewModal: React.FC<Props> = ({
           <Alert
             type="info"
             showIcon
-            message={t('app.kuaizhizao.warehouseInbound.iqc.autoCreated', { count: ensure.created_count })}
+            title={t('app.kuaizhizao.warehouseInbound.iqc.autoCreated', { count: ensure.created_count })}
           />
         ) : null}
         {!canConfirm && ensure?.message ? (
-          <Alert type="warning" showIcon message={ensure.message} />
+          <Alert type="warning" showIcon title={ensure.message} />
         ) : null}
         <Descriptions size="small" column={2} bordered>
           {ensure?.registration_code ? (

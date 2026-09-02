@@ -137,11 +137,11 @@ export const TenantInitDataPanel: React.FC = () => {
 
   return (
     <Spin spinning={isLoading}>
-      <Space direction="vertical" size={16} style={{ width: '100%' }}>
+      <Space orientation="vertical" size={16} style={{ width: '100%' }}>
         <Alert
           type="info"
           showIcon
-          message={t('pages.system.configCenter.tenantInit.alertTitle')}
+          title={t('pages.system.configCenter.tenantInit.alertTitle')}
           description={t('pages.system.configCenter.tenantInit.alertDesc')}
         />
 

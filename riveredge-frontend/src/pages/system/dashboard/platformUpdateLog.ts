@@ -36,6 +36,301 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
   {
+    id: 'config-center-material-shortage-block-level',
+    date: '2026-09-02',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.config-center-material-shortage-block-level.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.config-center-material-shortage-block-level.description',
+  },
+  {
+    id: 'inventory-alert-rule-material-multi-filter',
+    date: '2026-09-02',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.inventory-alert-rule-material-multi-filter.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.inventory-alert-rule-material-multi-filter.description',
+  },
+  {
+    id: 'custom-menu-layout-sidebar-persist',
+    date: '2026-09-02',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.custom-menu-layout-sidebar-persist.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.custom-menu-layout-sidebar-persist.description',
+  },
+  {
+    id: 'eight-d-d8-verification-result-save',
+    date: '2026-09-02',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.eight-d-d8-verification-result-save.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.eight-d-d8-verification-result-save.description',
+  },
+  {
+    id: 'material-form-custom-field-save',
+    date: '2026-09-02',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.material-form-custom-field-save.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.material-form-custom-field-save.description',
+  },
+  {
+    id: 'material-form-unit-master-data-select',
+    date: '2026-09-02',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.material-form-unit-master-data-select.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.material-form-unit-master-data-select.description',
+  },
+  {
+    id: 'hub-custom-field-column-dedupe',
+    date: '2026-09-02',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.hub-custom-field-column-dedupe.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.hub-custom-field-column-dedupe.description',
+  },
+  {
+    id: 'warehouse-in-out-operator-column-no-time',
+    date: '2026-09-02',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.warehouse-in-out-operator-column-no-time.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.warehouse-in-out-operator-column-no-time.description',
+  },
+  {
+    id: 'unitable-column-preference-bump-migration',
+    date: '2026-09-02',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.unitable-column-preference-bump-migration.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.unitable-column-preference-bump-migration.description',
+  },
+  {
+    id: 'material-management-restore-group-after-edit',
+    date: '2026-09-02',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.material-management-restore-group-after-edit.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.material-management-restore-group-after-edit.description',
+  },
+  {
+    id: 'mrp-work-order-source-planned-dates',
+    date: '2026-09-02',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.mrp-work-order-source-planned-dates.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mrp-work-order-source-planned-dates.description',
+  },
+  {
+    id: 'material-batch-expiry-history-backfill',
+    date: '2026-09-02',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.material-batch-expiry-history-backfill.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.material-batch-expiry-history-backfill.description',
+  },
+  {
+    id: 'material-batch-expiry-after-production-inbound',
+    date: '2026-09-02',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.material-batch-expiry-after-production-inbound.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.material-batch-expiry-after-production-inbound.description',
+  },
+  {
+    id: 'batch-production-picking-ux',
+    date: '2026-09-02',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.batch-production-picking-ux.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.batch-production-picking-ux.description',
+  },
+  {
+    id: 'document-push-progress-complete-no-numeric',
+    date: '2026-09-02',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.document-push-progress-complete-no-numeric.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.document-push-progress-complete-no-numeric.description',
+  },
+  {
+    id: 'menu-badge-data-scope',
+    date: '2026-09-02',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.menu-badge-data-scope.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.menu-badge-data-scope.description',
+  },
+  {
+    id: 'receivable-negative-invoiced-amount',
+    date: '2026-09-02',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.receivable-negative-invoiced-amount.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.receivable-negative-invoiced-amount.description',
+  },
+  {
+    id: 'gl-voucher-list-account-columns',
+    date: '2026-09-02',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.gl-voucher-list-account-columns.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.gl-voucher-list-account-columns.description',
+  },
+  {
+    id: 'sales-contract-alert-feed-key',
+    date: '2026-09-02',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-contract-alert-feed-key.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.sales-contract-alert-feed-key.description',
+  },
+  {
+    id: 'remove-unused-link-preload',
+    date: '2026-09-02',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.remove-unused-link-preload.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.remove-unused-link-preload.description',
+  },
+  {
+    id: 'sales-order-detail-descriptions-span',
+    date: '2026-09-02',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-order-detail-descriptions-span.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-order-detail-descriptions-span.description',
+  },
+  {
+    id: 'antd6-api-migration',
+    date: '2026-09-02',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.antd6-api-migration.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.antd6-api-migration.description',
+  },
+  {
+    id: 'float-button-opt-in-display',
+    date: '2026-09-02',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.float-button-opt-in-display.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.float-button-opt-in-display.description',
+  },
+  {
+    id: 'platform-branding-clear-button',
+    date: '2026-09-02',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.platform-branding-clear-button.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.platform-branding-clear-button.description',
+  },
+  {
+    id: 'kuaizhizao-orm-models-complete',
+    date: '2026-09-02',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaizhizao-orm-models-complete.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.kuaizhizao-orm-models-complete.description',
+  },
+  {
+    id: 'tortoise-bootstrap-two-phase',
+    date: '2026-09-02',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.tortoise-bootstrap-two-phase.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.tortoise-bootstrap-two-phase.description',
+  },
+  {
+    id: 'prod-memory-dynamic-trim',
+    date: '2026-09-02',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.prod-memory-dynamic-trim.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.prod-memory-dynamic-trim.description',
+  },
+  {
+    id: 'outbound-pull-delivery-note-from-sales-delivery',
+    date: '2026-09-02',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.outbound-pull-delivery-note-from-sales-delivery.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.outbound-pull-delivery-note-from-sales-delivery.description',
+  },
+  {
+    id: 'warehouse-pull-invalid-only-fields',
+    date: '2026-09-02',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.warehouse-pull-invalid-only-fields.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.warehouse-pull-invalid-only-fields.description',
+  },
+  {
+    id: 'sales-order-tax-exclusive-decimal-amount',
+    date: '2026-09-02',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-order-tax-exclusive-decimal-amount.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-order-tax-exclusive-decimal-amount.description',
+  },
+  {
+    id: 'stocktaking-bulk-save-entries',
+    date: '2026-09-02',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.stocktaking-bulk-save-entries.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.stocktaking-bulk-save-entries.description',
+  },
+  {
+    id: 'stocktaking-start-button-permission',
+    date: '2026-09-02',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.stocktaking-start-button-permission.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.stocktaking-start-button-permission.description',
+  },
+  {
+    id: 'demand-computation-permission-align',
+    date: '2026-09-02',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.demand-computation-permission-align.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.demand-computation-permission-align.description',
+  },
+  {
+    id: 'file-manager-toolbar-layout',
+    date: '2026-09-02',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.file-manager-toolbar-layout.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.file-manager-toolbar-layout.description',
+  },
+  {
+    id: 'department-link-preset-managers-405-fix',
+    date: '2026-09-02',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.department-link-preset-managers-405-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.department-link-preset-managers-405-fix.description',
+  },
+  {
+    id: 'approval-department-manager-setup',
+    date: '2026-09-02',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.approval-department-manager-setup.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.approval-department-manager-setup.description',
+  },
+  {
+    id: 'approval-multi-approver-fix',
+    date: '2026-09-02',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.approval-multi-approver-fix.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.approval-multi-approver-fix.description',
+  },
+  {
+    id: 'kuaizhizao-doc-form-reference-display',
+    date: '2026-09-02',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaizhizao-doc-form-reference-display.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaizhizao-doc-form-reference-display.description',
+  },
+  {
+    id: 'sales-order-form-reference-display',
+    date: '2026-09-02',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-order-form-reference-display.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.sales-order-form-reference-display.description',
+  },
+  {
     id: 'print-pdf-sigtrap-as-limit',
     date: '2026-09-01',
     type: 'fix',

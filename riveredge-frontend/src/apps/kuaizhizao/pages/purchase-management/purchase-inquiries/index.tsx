@@ -99,7 +99,10 @@ import {
   type PurchaseRequisitionPullLine,
   type DocumentPushPreview,
 } from '../../../services/purchase-requisition';
-import { supplierApi } from '../../../../master-data/services/supply-chain';
+import {
+  KUAIZHIZAO_DOC_HOST,
+  loadSupplierFormReferenceList,
+} from '../../../../../utils/documentFormReferenceLoad';
 import { formatBusinessDateOnly, formatDateTime, formatDateBySiteSetting, formatNumber, formatQuantity, formatCurrencyAmount } from '../../../../../utils/format';;
 import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
@@ -215,10 +218,9 @@ const PurchaseInquiriesPage: React.FC = () => {
   );
 
   useEffect(() => {
-    void supplierApi.list?.({ isActive: true, limit: 500 } as never).then((res: unknown) => {
-      const list = Array.isArray(res) ? res : (res as { data?: Array<{ id: number; name: string; code?: string }> })?.data ?? [];
-      setSupplierOptions(list.map((s) => ({ id: s.id, name: s.name, code: s.code })));
-    }).catch(() => {});
+    void loadSupplierFormReferenceList(KUAIZHIZAO_DOC_HOST.purchaseInquiry).then((list) =>
+      setSupplierOptions(list.map((s) => ({ id: s.id!, name: s.name ?? '', code: s.code }))),
+    );
   }, []);
 
   const openDetail = async (record: PurchaseInquiry) => {
@@ -1808,7 +1810,7 @@ const PurchaseInquiriesPage: React.FC = () => {
         title={t('app.kuaizhizao.purchaseInquiry.detailTitle', { code: detail?.inquiry_code ?? '' })}
         open={detailOpen}
         onClose={() => setDetailOpen(false)}
-        width={DRAWER_CONFIG.HALF_WIDTH}
+        size={DRAWER_CONFIG.HALF_WIDTH}
         extra={
           detail ? (
             <Space size="small" wrap>

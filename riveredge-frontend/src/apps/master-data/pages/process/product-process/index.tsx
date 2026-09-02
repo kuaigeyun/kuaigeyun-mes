@@ -240,7 +240,7 @@ const ProductProcessPage: React.FC = () => {
           type="info"
           showIcon
           style={{ marginBottom: 8, flexShrink: 0 }}
-          message={t('app.master-data.productProcess.filteredByRoute', {
+          title={t('app.master-data.productProcess.filteredByRoute', {
             code: filterRoute.code,
             name: filterRoute.name,
           })}

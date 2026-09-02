@@ -64,7 +64,7 @@ export const CostCalculationFactorsPanel: React.FC<CostCalculationFactorsPanelPr
         type="info"
         showIcon
         style={{ marginBottom: 16 }}
-        message={t('app.kuaicaiwu.costCalculation.factorsSelectTarget')}
+        title={t('app.kuaicaiwu.costCalculation.factorsSelectTarget')}
       />
     );
   }
@@ -82,7 +82,7 @@ export const CostCalculationFactorsPanel: React.FC<CostCalculationFactorsPanelPr
       <Alert
         type={alertType}
         showIcon
-        message={summary}
+        title={summary}
         description={
           readiness.target_label ? (
             <Typography.Text type="secondary">{readiness.target_label}</Typography.Text>

@@ -338,7 +338,7 @@ const EquipmentDetailPage: React.FC = () => {
                     image={Empty.PRESENTED_IMAGE_SIMPLE}
                     description={t('app.kuaizhizao.equipment.noPhoto')}
                     style={{ margin: 0 }}
-                    imageStyle={{ height: 48 }}
+                    styles={{ image: { height: 48 } }}
                   />
                 )}
               </div>

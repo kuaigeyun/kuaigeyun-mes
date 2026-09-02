@@ -2370,6 +2370,7 @@ class SalesContractService(AppBaseService[SalesContract]):
                     message=f"里程碑「{m.milestone_name}」已逾期",
                     severity="high",
                     due_date=m.planned_date,
+                    milestone_id=m.id,
                 )
             )
         return alerts

@@ -172,7 +172,7 @@ class ApprovalInstanceService:
         从起始节点同步推进实例到首个待办节点并创建 ApprovalTask。
 
         创建审批实例时必须调用；Worker 未运行时也能产生待办任务。
-        已存在 pending 任务时幂等跳过。
+        已存在 pending 任务时补齐缺失审批人任务（多指定用户/角色）。
         """
         if approval_instance.status != "pending":
             return False
@@ -189,8 +189,6 @@ class ApprovalInstanceService:
             approval_instance_id=approval_instance.id,
             status="pending",
         ).count()
-        if pending_count > 0:
-            return False
 
         nodes = ApprovalInstanceService._normalize_process_graph(process.nodes)
         node_list = nodes.get("nodes") or []
@@ -207,10 +205,18 @@ class ApprovalInstanceService:
             if current_node:
                 node_type = current_node.get("type") or (current_node.get("data") or {}).get("type")
                 if node_type not in ("start", "end", None):
+                    if pending_count > 0:
+                        await ApprovalInstanceService._sync_node_approver_tasks(
+                            tenant_id, approval_instance, current_node
+                        )
+                        return True
                     await ApprovalInstanceService._create_node_tasks(
                         tenant_id, approval_instance, current_node
                     )
                     return True
+
+        if pending_count > 0:
+            return False
 
         start_node = ApprovalInstanceService._get_start_node(nodes)
         if not start_node:
@@ -1158,19 +1164,9 @@ class ApprovalInstanceService:
             return await ApprovalInstanceService._create_node_tasks(tenant_id, instance, next_node)
 
         approvers = await ApprovalInstanceService._resolve_node_approvers(node, instance)
-        tasks = []
-        for approver_id in approvers:
-            task = await ApprovalTask.create(
-                tenant_id=tenant_id,
-                approval_instance=instance,
-                node_id=node_id,
-                approver_id=approver_id,
-                status="pending",
-            )
-            from core.services.approval.approval_advanced_actions import ApprovalAdvancedActions
-
-            await ApprovalAdvancedActions.apply_task_due_at(task, node)
-            tasks.append(task)
+        tasks = await ApprovalInstanceService._sync_node_approver_tasks(
+            tenant_id, instance, node, approvers
+        )
 
         if approvers:
             instance.current_approver_id = approvers[0]
@@ -1179,14 +1175,60 @@ class ApprovalInstanceService:
         return tasks
 
     @staticmethod
+    async def _sync_node_approver_tasks(
+        tenant_id: int,
+        instance: ApprovalInstance,
+        node: dict,
+        approvers: List[int] | None = None,
+    ) -> List[ApprovalTask]:
+        """为节点补齐缺失的 pending 审批任务（多指定用户/角色场景）。"""
+        node_id = node.get("id")
+        if not node_id:
+            return []
+        expected = approvers
+        if expected is None:
+            expected = await ApprovalInstanceService._resolve_node_approvers(node, instance)
+        if not expected:
+            return []
+
+        existing = await ApprovalTask.filter(
+            tenant_id=tenant_id,
+            approval_instance_id=instance.id,
+            node_id=node_id,
+            status="pending",
+        ).all()
+        existing_ids = {int(t.approver_id) for t in existing if t.approver_id is not None}
+        tasks = list(existing)
+        from core.services.approval.approval_advanced_actions import ApprovalAdvancedActions
+
+        for approver_id in expected:
+            if int(approver_id) in existing_ids:
+                continue
+            task = await ApprovalTask.create(
+                tenant_id=tenant_id,
+                approval_instance=instance,
+                node_id=node_id,
+                approver_id=int(approver_id),
+                status="pending",
+            )
+            await ApprovalAdvancedActions.apply_task_due_at(task, node)
+            tasks.append(task)
+        return tasks
+
+    @staticmethod
+    def _identifier_looks_like_uuid(value: Union[str, int]) -> bool:
+        s = str(value).strip()
+        return len(s) >= 32 and "-" in s
+
+    @staticmethod
     async def _resolve_approver_ids_from_identifiers(
         tenant_id: int,
         identifiers: List[Union[str, int]],
-        by_uuid: bool,
+        by_uuid: bool | None = None,
     ) -> List[int]:
         """
         将审批人标识（UUID 或 user id）解析为 User.id 列表。
-        by_uuid=True 时 identifiers 为 UUID 字符串，否则为 int user id。
+        by_uuid=None 时对每个标识分别判定 UUID / 数值 id。
         """
         if not identifiers:
             return []
@@ -1194,7 +1236,12 @@ class ApprovalInstanceService:
         for x in identifiers:
             if x is None:
                 continue
-            if by_uuid:
+            use_uuid = (
+                ApprovalInstanceService._identifier_looks_like_uuid(x)
+                if by_uuid is None
+                else by_uuid
+            )
+            if use_uuid:
                 try:
                     u = await User.filter(
                         tenant_id=tenant_id,
@@ -1216,6 +1263,77 @@ class ApprovalInstanceService:
         return list(dict.fromkeys(ids))  # 去重保持顺序
 
     @staticmethod
+    async def _filter_active_user_ids(tenant_id: int, user_ids: List[int]) -> List[int]:
+        if not user_ids:
+            return []
+        active_ids = await User.filter(
+            tenant_id=tenant_id,
+            id__in=user_ids,
+            deleted_at__isnull=True,
+            is_active=True,
+        ).values_list("id", flat=True)
+        return list(dict.fromkeys(int(uid) for uid in active_ids if uid is not None))
+
+    @staticmethod
+    async def _resolve_managers_for_department_uuids(
+        tenant_id: int,
+        department_uuids: List[str],
+    ) -> List[int]:
+        uuids = [str(x).strip() for x in department_uuids if str(x).strip()]
+        if not uuids:
+            return []
+        depts = await Department.filter(
+            tenant_id=tenant_id,
+            uuid__in=uuids,
+            deleted_at__isnull=True,
+            is_active=True,
+        ).all()
+        manager_ids = list(
+            dict.fromkeys(
+                int(d.manager_id)
+                for d in depts
+                if getattr(d, "manager_id", None) and int(d.manager_id) > 0
+            )
+        )
+        return await ApprovalInstanceService._filter_active_user_ids(tenant_id, manager_ids)
+
+    @staticmethod
+    async def _resolve_submitter_department_manager_ids(
+        tenant_id: int,
+        submitter_id: int,
+        *,
+        walk_parent: bool = True,
+    ) -> List[int]:
+        """发起人所属部门负责人；无负责人时可沿父部门向上查找。"""
+        submitter = await User.filter(
+            id=submitter_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).first()
+        dept_id = getattr(submitter, "department_id", None) if submitter else None
+        visited: set[int] = set()
+        while dept_id and int(dept_id) not in visited:
+            visited.add(int(dept_id))
+            dept = await Department.filter(
+                id=int(dept_id),
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+                is_active=True,
+            ).first()
+            if not dept:
+                break
+            if getattr(dept, "manager_id", None) and int(dept.manager_id) > 0:
+                active = await ApprovalInstanceService._filter_active_user_ids(
+                    tenant_id, [int(dept.manager_id)]
+                )
+                if active:
+                    return active
+            if not walk_parent:
+                break
+            dept_id = getattr(dept, "parent_id", None)
+        return []
+
+    @staticmethod
     async def _resolve_node_approvers(node: dict, instance: ApprovalInstance) -> List[int]:
         """
         解析节点审批人。兼容前端 camelCase（approverType, approverIds）与后端 snake_case。
@@ -1232,6 +1350,7 @@ class ApprovalInstanceService:
             or node_data.get("approver_ids")
             or node_data.get("approvers")
             or node_data.get("roles")
+            or node_data.get("departments")
             or node_data.get("user_ids")
             or []
         )
@@ -1242,13 +1361,8 @@ class ApprovalInstanceService:
         submitter_id = instance.submitter_id
 
         if approver_type == "user":
-            # 支持 UUID 或 user id
-            is_uuid = all(
-                isinstance(x, str) and len(str(x).strip()) >= 32
-                for x in approver_ids_raw if x is not None
-            )
             ids = await ApprovalInstanceService._resolve_approver_ids_from_identifiers(
-                tenant_id, approver_ids_raw or [], by_uuid=is_uuid
+                tenant_id, approver_ids_raw or [], by_uuid=None
             )
             if ids:
                 return ids
@@ -1271,49 +1385,55 @@ class ApprovalInstanceService:
                     return [submitter_id]
                 role_ids = [r.id for r in roles]
                 ur = await UserRole.filter(role_id__in=role_ids).values_list("user_id", flat=True)
-                user_ids = list(dict.fromkeys(ur))
+                user_ids = list(dict.fromkeys(int(uid) for uid in ur if uid is not None))
                 if user_ids:
-                    return user_ids
+                    active_ids = await User.filter(
+                        tenant_id=tenant_id,
+                        id__in=user_ids,
+                        deleted_at__isnull=True,
+                        is_active=True,
+                    ).values_list("id", flat=True)
+                    active = list(dict.fromkeys(int(uid) for uid in active_ids if uid is not None))
+                    if active:
+                        return active
             except Exception as e:
                 logger.warning("解析角色审批人失败: %s，回退到提交人", e)
             return [submitter_id]
 
         if approver_type == "department":
-            # 提交人所在部门的负责人
             try:
-                submitter = await User.filter(
-                    id=submitter_id,
-                    tenant_id=tenant_id,
-                    deleted_at__isnull=True,
-                ).first()
-                if submitter and getattr(submitter, "department_id", None):
-                    dept = await Department.filter(
-                        id=submitter.department_id,
-                        tenant_id=tenant_id,
-                        deleted_at__isnull=True,
-                    ).first()
-                    if dept and getattr(dept, "manager_id", None):
-                        return [dept.manager_id]
+                department_scope = str(
+                    node_data.get("departmentScope")
+                    or node_data.get("department_scope")
+                    or "submitter"
+                ).strip().lower()
+                dept_uuids = [str(x).strip() for x in approver_ids_raw if str(x).strip()]
+                if department_scope == "specified" and dept_uuids:
+                    managers = await ApprovalInstanceService._resolve_managers_for_department_uuids(
+                        tenant_id, dept_uuids
+                    )
+                    if managers:
+                        return managers
+                    logger.warning(
+                        "审批节点指定部门未配置负责人或负责人不可用，回退到提交人"
+                    )
+                    return [submitter_id]
+                managers = await ApprovalInstanceService._resolve_submitter_department_manager_ids(
+                    tenant_id, submitter_id, walk_parent=True
+                )
+                if managers:
+                    return managers
             except Exception as e:
                 logger.warning("解析部门负责人失败: %s，回退到提交人", e)
             return [submitter_id]
 
         if approver_type == "manager":
-            # 直属上级：中小企业实践用部门负责人
             try:
-                submitter = await User.filter(
-                    id=submitter_id,
-                    tenant_id=tenant_id,
-                    deleted_at__isnull=True,
-                ).first()
-                if submitter and getattr(submitter, "department_id", None):
-                    dept = await Department.filter(
-                        id=submitter.department_id,
-                        tenant_id=tenant_id,
-                        deleted_at__isnull=True,
-                    ).first()
-                    if dept and getattr(dept, "manager_id", None):
-                        return [dept.manager_id]
+                managers = await ApprovalInstanceService._resolve_submitter_department_manager_ids(
+                    tenant_id, submitter_id, walk_parent=False
+                )
+                if managers:
+                    return managers
             except Exception as e:
                 logger.warning("解析直属上级失败: %s，回退到提交人", e)
             return [submitter_id]

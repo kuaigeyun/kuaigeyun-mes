@@ -327,7 +327,7 @@ export function MaterialCenterDetailDrawer({
       open={open}
       loading={loading}
       onClose={onClose}
-      width={DRAWER_CONFIG.HALF_WIDTH}
+      size={DRAWER_CONFIG.HALF_WIDTH}
       basic={
         detail ? (
           <Descriptions

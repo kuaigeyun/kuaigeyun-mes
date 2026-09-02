@@ -734,7 +734,7 @@ const ProductionLinesPage: React.FC = () => {
           showIcon
           closable
           style={{ marginBottom: 12 }}
-          message={t('app.master-data.productionLines.dimensionHint')}
+          title={t('app.master-data.productionLines.dimensionHint')}
         />
         <UniTable<ProductionLine>
         columnPersistenceId="apps.master-data.pages.factory.production-lines.list-v3"

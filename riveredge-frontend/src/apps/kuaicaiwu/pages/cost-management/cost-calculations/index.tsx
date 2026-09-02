@@ -1329,7 +1329,7 @@ const CostCalculationPage: React.FC = () => {
 
                     <Card title={t('app.kuaicaiwu.costCalculation.costDifference')} style={{ marginBottom: 16 }}>
                       <Alert
-                        message={formatVarianceType(materialCompareResult.cost_variance.variance_type, t)}
+                        title={formatVarianceType(materialCompareResult.cost_variance.variance_type, t)}
                         description={
                           <div>
                             <p>{t('app.kuaicaiwu.costComparison.totalVariance', { amount: materialCompareResult.cost_variance.total_cost_variance.toFixed(2) })}</p>

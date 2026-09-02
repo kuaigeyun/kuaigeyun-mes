@@ -657,7 +657,7 @@ async def quick_pick_from_work_order(
     )
 
 
-@router.post("/production-pickings/batch-pick", response_model=List[ProductionPickingResponse], summary="Batch picking (multiple work orders)")
+@router.post("/production-pickings/batch-pick", response_model=List[ProductionPickingResponse], summary="Batch picking (multiple work orders)", dependencies=[Depends(require_permission_codes("kuaizhizao:outbound:create"))])
 async def batch_pick_from_work_orders(
     work_order_ids: List[int] = Query(..., description="工单ID列表"),
     warehouse_id: Optional[int] = Query(None, description="仓库ID（可选）"),

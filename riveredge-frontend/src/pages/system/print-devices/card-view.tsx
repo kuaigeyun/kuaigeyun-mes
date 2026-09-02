@@ -545,7 +545,7 @@ const CardView: React.FC = () => {
         {testResult && (
           <div>
             <Alert
-              message={testResult.success ? t('pages.system.printDevices.testSuccess') : t('pages.system.printDevices.testFailed')}
+              title={testResult.success ? t('pages.system.printDevices.testSuccess') : t('pages.system.printDevices.testFailed')}
               description={testResult.message || testResult.error}
               type={testResult.success ? 'success' : 'error'}
               showIcon
@@ -565,7 +565,7 @@ const CardView: React.FC = () => {
               {testResult.error && (
                 <Descriptions.Item label={t('pages.system.printDevices.errorInfo')}>
                   <Alert
-                    message={testResult.error}
+                    title={testResult.error}
                     type="error"
                     showIcon
                     style={{ fontSize: 12 }}

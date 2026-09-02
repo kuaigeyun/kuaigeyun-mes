@@ -143,6 +143,22 @@ export function pruneStaleMenuRefsFromEditorState(
   };
 }
 
+/** 布局中是否包含至少一条 menu_ref（有则侧栏才应启用自组映射） */
+export function customLayoutNodesHaveMenuRefs(nodes: CustomMenuLayoutNode[]): boolean {
+  const walk = (items: CustomMenuLayoutNode[]): boolean => {
+    for (const node of items) {
+      if (node.type === 'menu_ref' && String(node.menu_uuid || '').trim()) {
+        return true;
+      }
+      if (node.children?.length && walk(node.children)) {
+        return true;
+      }
+    }
+    return false;
+  };
+  return walk(nodes);
+}
+
 export function sanitizeCustomLayoutNodes(
   nodes: CustomMenuLayoutNode[],
   validMenuUuids: Set<string>,
@@ -711,7 +727,7 @@ const CustomMenuLayoutEditor: React.FC<CustomMenuLayoutEditorProps> = ({
 
     return (
       <Space
-        direction="vertical"
+        orientation="vertical"
         style={{ width: '100%', marginTop: CUSTOM_LAYOUT_INLINE_GAP, minWidth: 0 }}
         size={CUSTOM_LAYOUT_INLINE_GAP}
       >
@@ -1014,13 +1030,16 @@ const CustomMenuLayoutEditor: React.FC<CustomMenuLayoutEditorProps> = ({
   };
 
   return (
-    <Space direction="vertical" style={{ width: '100%' }} size={12}>
+    <Space orientation="vertical" style={{ width: '100%' }} size={12}>
       <Space align="center" size={12} wrap>
         <Typography.Text>{t('common.enabled')}</Typography.Text>
         <Switch
           checked={state.enabled}
           onChange={(enabled) => onStateChange({ enabled })}
         />
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          {t('pages.system.menus.customLayoutAutoEnabledHint')}
+        </Typography.Text>
         <Button onClick={handleLoadSystemDefault}>
           {t('pages.system.menus.customLayoutLoadDefault')}
         </Button>
@@ -1049,7 +1068,7 @@ const CustomMenuLayoutEditor: React.FC<CustomMenuLayoutEditorProps> = ({
               {t('pages.system.menus.customLayoutAppMenuHint')}
             </Typography.Text>
             <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
-              <Space direction="vertical" style={{ width: '100%' }} size={6}>
+              <Space orientation="vertical" style={{ width: '100%' }} size={6}>
                 {availableAppMenus.length === 0 ? (
                   <Empty
                     image={Empty.PRESENTED_IMAGE_SIMPLE}

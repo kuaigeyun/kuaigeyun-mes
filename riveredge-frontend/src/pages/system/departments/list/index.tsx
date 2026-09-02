@@ -40,6 +40,7 @@ import {
   deleteDepartment,
   importDepartments,
   loadPresetDepartments,
+  linkPresetDepartmentManagers,
   getDepartmentPresetPreview,
   getDepartmentDatasetBinding,
   putDepartmentDatasetBinding,
@@ -713,6 +714,22 @@ const DepartmentListPage: React.FC = () => {
             {t('field.department.loadPreset')}
           </Button>
           ),
+          (
+          <Button
+            key="linkPresetManagers"
+            onClick={async () => {
+              try {
+                const res = await linkPresetDepartmentManagers();
+                messageApi.success(res.message);
+                actionRef.current?.reload();
+              } catch (e: any) {
+                messageApi.error(e?.message || t('common.operationFailed'));
+              }
+            }}
+          >
+            {t('field.department.linkPresetManagers')}
+          </Button>
+          ),
           <Button {...rowActionKind('skip')}
             key="toggleExpand"
             onClick={() => {
@@ -866,7 +883,7 @@ const DepartmentListPage: React.FC = () => {
           </Button>,
         ]}
       >
-        <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+        <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
           <div>{t('field.department.syncIntroBody')}</div>
           <Alert type="warning" showIcon title={t('field.department.syncIntroWarning')} />
         </Space>

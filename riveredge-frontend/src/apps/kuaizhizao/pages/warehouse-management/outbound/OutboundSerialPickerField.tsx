@@ -123,7 +123,7 @@ const OutboundSerialPickerField: React.FC<OutboundSerialPickerFieldProps> = ({
           </Typography.Text>
         ) : null}
 
-        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={12} style={{ width: '100%' }}>
           <Input.Search
             allowClear
             placeholder={t('app.kuaizhizao.warehouseOutbound.confirm.serialPicker.searchPlaceholder')}
@@ -178,7 +178,7 @@ const OutboundSerialPickerField: React.FC<OutboundSerialPickerFieldProps> = ({
                   }
                 />
               ) : (
-                <Space direction="vertical" size={4} style={{ width: '100%' }}>
+                <Space orientation="vertical" size={4} style={{ width: '100%' }}>
                   {filteredOptions.map((opt) => {
                     const checked = draft.includes(opt.value);
                     const disableUnchecked = !checked && atMax;

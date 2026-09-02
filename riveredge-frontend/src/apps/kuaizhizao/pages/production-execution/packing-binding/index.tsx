@@ -1190,7 +1190,7 @@ const PackingBindingPage: React.FC = () => {
           type="info"
           showIcon
           style={{ marginBottom: 12 }}
-          message={t('app.kuaizhizao.packingBinding.scopeAlert')}
+          title={t('app.kuaizhizao.packingBinding.scopeAlert')}
         />
         <UniTable<PackingBinding>
           headerTitle={t('app.kuaizhizao.packingBinding.title')}
@@ -1223,7 +1223,7 @@ const PackingBindingPage: React.FC = () => {
             <UniBatchButton
               key="packing-binding-batch-qrcode"
               selectedRowKeys={selectedRowKeys}
-              size="middle"
+              size="medium"
               icon={<QrcodeOutlined />}
               disabled={
                 selectedBindingsForBatch.length > 0 &&
@@ -1256,7 +1256,7 @@ const PackingBindingPage: React.FC = () => {
           type="info"
           showIcon
           style={{ marginBottom: 12 }}
-          message={t('app.kuaizhizao.packingBinding.sourceHint', {
+          title={t('app.kuaizhizao.packingBinding.sourceHint', {
             source: createSourceType === 'sales_delivery'
               ? t('app.kuaizhizao.packingBinding.sourceSalesDelivery')
               : t('app.kuaizhizao.packingBinding.sourceFinishedGoodsReceipt'),
@@ -1360,7 +1360,7 @@ const PackingBindingPage: React.FC = () => {
         title={`${t('app.kuaizhizao.packingBinding.detailTitle')}${currentBinding?.box_no ? ` - ${currentBinding.box_no}` : ''}`}
         open={detailDrawerVisible}
         zIndex={packingBindingDetailDrawerZIndex}
-        width={DRAWER_CONFIG.HALF_WIDTH}
+        size={DRAWER_CONFIG.HALF_WIDTH}
         onClose={() => {
           setDetailDrawerVisible(false);
           setCurrentBinding(null);
@@ -1455,7 +1455,7 @@ const PackingBindingPage: React.FC = () => {
         <Alert
           showIcon
           type="info"
-          message={t('app.kuaizhizao.packingBinding.taskPoolSummary', {
+          title={t('app.kuaizhizao.packingBinding.taskPoolSummary', {
             pendingReview: taskPool.pending_review,
             pendingOutbound: taskPool.pending_outbound,
             total: taskPool.total,

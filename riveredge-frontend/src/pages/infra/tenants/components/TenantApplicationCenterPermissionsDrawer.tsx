@@ -181,7 +181,7 @@ export function TenantApplicationCenterPermissionsDrawer({
       }
       open={open}
       onClose={onClose}
-      width={DRAWER_CONFIG.STANDARD_WIDTH}
+      size={DRAWER_CONFIG.STANDARD_WIDTH}
       loading={loading}
       extra={
         <Button type="primary" loading={saving} disabled={!draft || loading} onClick={() => void handleSave()}>

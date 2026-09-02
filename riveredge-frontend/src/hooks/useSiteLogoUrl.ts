@@ -91,7 +91,10 @@ export function useSiteLogoUrl(): string {
         if (cached) {
           setSiteLogoUrl(cached);
         }
-        const previewInfo = await getSiteLogoPreview(logoValue, { size: FILE_IMAGE_SIZE_LOGO });
+        const previewInfo = await getSiteLogoPreview(logoValue, {
+          size: FILE_IMAGE_SIZE_LOGO,
+          brandingCategory: 'site-logo',
+        });
         if (cancelled) return;
         if (!previewInfo?.preview_url) {
           clearCachedSiteLogoUrl(logoValue);

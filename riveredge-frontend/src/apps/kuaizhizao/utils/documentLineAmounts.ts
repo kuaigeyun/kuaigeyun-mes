@@ -144,6 +144,67 @@ export function computeDocumentTotalsWithDiscount(
   return { ...goods, ...discount };
 }
 
+/** 销售订单明细行数量（表单 required_quantity / 列表 order_quantity） */
+function readSalesOrderLineQuantity(row: Record<string, unknown>): unknown {
+  return row.required_quantity ?? row.order_quantity;
+}
+
+/** 按价类落库/展示的整单金额（不含税单存未税货值，含税单存预计应收） */
+export function resolveSalesDocumentStoredTotalAmount(
+  totals: SalesDocumentTotals,
+  priceType: string | undefined,
+): number {
+  const pt = priceType ?? 'tax_exclusive';
+  if (pt === 'tax_inclusive') {
+    return totals.estimatedReceivable;
+  }
+  const discountCents = Math.min(toCents(totals.discountAmount), toCents(totals.goodsIncl));
+  const inclCents = toCents(totals.goodsIncl);
+  const exclCents = toCents(totals.goodsExcl);
+  const exclAfterDiscountCents =
+    inclCents > 0
+      ? Math.round((exclCents * (inclCents - discountCents)) / inclCents)
+      : exclCents;
+  return fromCents(exclAfterDiscountCents + toCents(totals.customerFees));
+}
+
+/** 按价类落库/展示的行金额 */
+export function resolveSalesDocumentStoredLineAmount(
+  line: { excl: number; incl: number },
+  priceType: string | undefined,
+): number {
+  return (priceType ?? 'tax_exclusive') === 'tax_inclusive' ? line.incl : line.excl;
+}
+
+/** 列表/详情展示用总金额（不含税单按明细重算，兼容历史误存含税合计） */
+export function resolveSalesOrderDisplayTotalAmount(order: {
+  total_amount?: number | null;
+  price_type?: string | null;
+  discount_amount?: number | null;
+  fee_details?: unknown;
+  items?: Array<Record<string, unknown>> | null;
+}): number {
+  const priceType = order.price_type ?? 'tax_exclusive';
+  const items = normalizeFormListItems<Record<string, unknown>>(order.items);
+  if (priceType === 'tax_inclusive' || items.length === 0) {
+    return toSafeNumber(order.total_amount);
+  }
+  const normalizedItems = items.map((row) => ({
+    ...row,
+    required_quantity: readSalesOrderLineQuantity(row),
+  }));
+  return resolveSalesDocumentStoredTotalAmount(
+    computeSalesDocumentTotals(
+      normalizedItems,
+      order.fee_details,
+      priceType,
+      'required_quantity',
+      order.discount_amount ?? 0,
+    ),
+    priceType,
+  );
+}
+
 /** 销售类单据：优惠后货值 + 对方承担费用 = 预计应收 */
 export function computeSalesDocumentTotals(
   items: unknown[] | undefined,

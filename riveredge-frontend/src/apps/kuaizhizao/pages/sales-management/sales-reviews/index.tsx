@@ -1263,7 +1263,7 @@ const SalesReviewsPage: React.FC = () => {
         })}
         open={detailOpen}
         onClose={closeDetail}
-        width={DRAWER_CONFIG.HALF_WIDTH}
+        size={DRAWER_CONFIG.HALF_WIDTH}
         loading={showLoading}
         extra={contentReady ? detailExtra : undefined}
         basic={

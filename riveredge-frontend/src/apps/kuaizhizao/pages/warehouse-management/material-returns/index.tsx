@@ -700,7 +700,7 @@ const MaterialReturnsPage: React.FC = () => {
         open={detailDrawerVisible}
         loading={detailLoading}
         onClose={() => { setDetailDrawerVisible(false); setReturnDetail(null); }}
-        width={DRAWER_CONFIG.HALF_WIDTH}
+        size={DRAWER_CONFIG.HALF_WIDTH}
         basic={
           returnDetail ? (
             <Descriptions column={detailDrawerBasicColumn(false)} size="small" items={timeconfigBasicItems} />

@@ -8993,6 +8993,16 @@ export default {
   'app.kuaizhizao.workOrder.msgWithdrawManualCompleteFailed': '撤回指定结束失败',
   'app.kuaizhizao.workOrder.actionScanFeed': '扫描投料',
   'app.kuaizhizao.workOrder.actionBatchRelease': '批量下达',
+  'app.kuaizhizao.workOrder.batchPicking.action': '批量下推领料',
+  'app.kuaizhizao.workOrder.batchPicking.title': '批量下推生产领料',
+  'app.kuaizhizao.workOrder.batchPicking.summary': '已选 {{count}} 张工单，将按 BOM 成套生成生产领料单（每张工单一张）。',
+  'app.kuaizhizao.workOrder.batchPicking.confirm': '下推领料',
+  'app.kuaizhizao.workOrder.batchPicking.selectWorkOrdersFirst': '请至少选择一张生产工单',
+  'app.kuaizhizao.workOrder.batchPicking.warehouseRequired': '请选择出库仓库',
+  'app.kuaizhizao.workOrder.batchPicking.noneCreated': '未能创建领料单，请检查工单状态与 BOM',
+  'app.kuaizhizao.workOrder.batchPicking.partialSuccess':
+    '部分工单下推成功：已创建 {{created}} 张领料单，共选择 {{total}} 张工单',
+  'app.kuaizhizao.workOrder.batchPicking.failed': '批量下推领料失败',
   'app.kuaizhizao.workOrder.actionMergeIntoGroup': '合并为组工单',
   'app.kuaizhizao.workOrder.actionSmartRelease': '齐套自动下达',
   'app.kuaizhizao.workOrder.actionSplit': '拆分工单',
@@ -10819,6 +10829,8 @@ export default {
   'app.kuaizhizao.warehouseOutbound.pull.wo.selectLinesFirst': '请至少选择一条可领料明细',
   'app.kuaizhizao.warehouseOutbound.pull.wo.sourceDocPlaceholder': '按工单筛选',
   'app.kuaizhizao.warehouseOutbound.pull.wo.loadSourceFailed': '加载工单失败',
+  'app.kuaizhizao.warehouseOutbound.pull.wo.batchHint':
+    '可跨工单勾选明细，系统将按工单分别生成生产领料单；上方工单筛选可选，不选则展示全部可领料行。',
   'app.kuaizhizao.warehouseOutbound.pull.so.ok': '创建销售出库单',
   'app.kuaizhizao.warehouseOutbound.pull.so.sourceDocPlaceholder': '按销售订单筛选',
   'app.kuaizhizao.warehouseOutbound.pull.sn.ok': '创建销售出库单',
@@ -12145,6 +12157,8 @@ export default {
   'app.kuaizhizao.inventoryAlert.inheritPreviewSafetyStock': '物料最低库存',
   'app.kuaizhizao.inventoryAlert.inheritPreviewMaxStock': '物料最高库存',
   'app.kuaizhizao.inventoryAlert.inheritPreviewMaterialEmpty': '该物料未配置最低/最高库存，请先在物料主数据维护',
+  'app.kuaizhizao.inventoryAlert.formMaterialMultiPlaceholder': '请选择物料（可多选，支持名称/编号搜索）',
+  'app.kuaizhizao.inventoryAlert.inheritPreviewByMaterials': '已选 {{count}} 个物料，将分别继承各自最低/最高库存',
   'app.kuaizhizao.inventoryAlert.inheritPreviewByGroup': '未选具体物料时，按组内各物料各自的最低/最高库存生效',
   'app.kuaizhizao.inventoryAlert.runCheckButton': '立即检查',
   'app.kuaizhizao.inventoryAlert.msgCheckSuccess':
@@ -12255,6 +12269,11 @@ export default {
   'app.kuaizhizao.stocktaking.actionAddItem': '添加明细',
   'app.kuaizhizao.stocktaking.actionComplete': '完成盘点',
   'app.kuaizhizao.stocktaking.actionWithdraw': '撤回',
+  'app.kuaizhizao.stocktaking.actionBulkSaveEntries': '保存盘点录入 ({{count}})',
+  'app.kuaizhizao.stocktaking.msgBulkSaveNoPending': '没有待保存的盘点明细',
+  'app.kuaizhizao.stocktaking.msgBulkSaveSuccess': '已保存 {{count}} 条盘点录入',
+  'app.kuaizhizao.stocktaking.msgBulkSavePartial': '已保存 {{success}} 条，{{failed}} 条失败，请检查失败行后重试',
+  'app.kuaizhizao.stocktaking.msgBulkSaveFailed': '批量保存盘点录入失败',
   'app.kuaizhizao.stocktaking.modalCreate': '创建盘点单',
   'app.kuaizhizao.stocktaking.modalAddItem': '添加盘点明细',
   'app.kuaizhizao.stocktaking.modalInventoryPicker': '从仓库库存选择',
@@ -19275,6 +19294,7 @@ export default {
   'field.department.descriptionPlaceholder': '请输入备注',
   'field.department.createTitle': '新建部门',
   'field.department.loadPreset': '加载预设',
+  'field.department.linkPresetManagers': '补齐部门负责人',
   'field.approvalProcess.loadPreset': '加载预设',
   'field.messageTemplate.loadPreset': '加载预设',
   'field.department.editTitle': '编辑部门',
@@ -20425,7 +20445,11 @@ export default {
   'pages.system.configCenter.param.work_order_allow_production_without_material': '允许不带料生产',
   'pages.system.configCenter.param.work_order_allow_production_without_material_desc': '开启时，工单下达不检查缺料，只管制造过程；关闭时，缺料则禁止下达。',
   'pages.system.configCenter.param.work_order_material_shortage_block_level': '缺料拦截级别',
-  'pages.system.configCenter.param.work_order_material_shortage_block_level_desc': '0=不拦截，1=下达拦截，2=下达+开工拦截，3=下达+开工+报工拦截。',
+  'pages.system.configCenter.param.work_order_material_shortage_block_level_desc': '控制工单在缺料时能否下达、开工、报工；选「不拦截」即允许不带料生产。',
+  'pages.system.configCenter.param.work_order_material_shortage_block_level_opt_0': '不拦截（允许不带料下达/开工/报工）',
+  'pages.system.configCenter.param.work_order_material_shortage_block_level_opt_1': '下达时检查缺料',
+  'pages.system.configCenter.param.work_order_material_shortage_block_level_opt_2': '下达与开工时检查缺料',
+  'pages.system.configCenter.param.work_order_material_shortage_block_level_opt_3': '下达、开工与报工时检查缺料',
   'pages.system.configCenter.param.work_order_material_shortage_block_level_guide': '建议：常规生产用 1；对线边库存严格控制可用 2；必须先齐套再报工可用 3。',
   'pages.system.configCenter.param.work_order_auto_generate': '自动生成工单',
   'pages.system.configCenter.param.work_order_auto_generate_desc': '是否自动根据需求生成工单',
@@ -24466,6 +24490,8 @@ export default {
   'pages.system.menus.customLayoutDefaultGroup': '自定义分组',
   'pages.system.menus.customLayoutLoadFailed': '加载自组菜单配置失败',
   'pages.system.menus.customLayoutSaveSuccess': '自组菜单配置已保存',
+  'pages.system.menus.customLayoutAutoEnabledHint':
+    '已加入菜单项时将自动启用自组映射；关闭启用并保存空布局可恢复系统默认侧栏。',
   'pages.system.menus.customLayoutSaveFailed': '保存自组菜单配置失败',
   'pages.system.menus.customLayoutStaleRefsRemoved':
     '已自动移除 {{count}} 个失效菜单引用（菜单已禁用、删除或应用已变更）',
@@ -24736,6 +24762,160 @@ export default {
   'pages.dashboard.updateLogTypeSection.improvement': '优化',
   'pages.dashboard.updateLogTypeSection.fix': '修复',
   'pages.dashboard.updateLogTypeSection.security': '安全',
+  'pages.dashboard.updateLog.entries.config-center-material-shortage-block-level.title':
+    '配置中心恢复缺料拦截级别',
+  'pages.dashboard.updateLog.entries.config-center-material-shortage-block-level.description':
+    '配置中心生产模块补回「缺料拦截级别」，可选不拦截以允许不带料下达/开工/报工。',
+  'pages.dashboard.updateLog.entries.inventory-alert-rule-material-multi-filter.title':
+    '库存预警规则物料选择修复',
+  'pages.dashboard.updateLog.entries.inventory-alert-rule-material-multi-filter.description':
+    '新建预警规则时，选择物料分组后物料下拉仅展示该分组内物料；物料字段支持多选，一次可为多个物料配置同一预警规则。',
+  'pages.dashboard.updateLog.entries.custom-menu-layout-sidebar-persist.title':
+    '自组菜单刷新后仍生效',
+  'pages.dashboard.updateLog.entries.custom-menu-layout-sidebar-persist.description':
+    '修复自组菜单保存后退出登录或刷新仍回到 manifest 默认分组的问题：全体登录用户可读布局配置；保存时若已加入菜单项则自动启用自组映射；登出时清理布局缓存避免陈旧数据。',
+  'pages.dashboard.updateLog.entries.eight-d-d8-verification-result-save.title':
+    '8D 第 8 步验证结果可正常保存',
+  'pages.dashboard.updateLog.entries.eight-d-d8-verification-result-save.description':
+    '修复 8D 工作台 D8 阶段点击保存时未提交「验证结果」字段，导致填写后刷新或再次进入仍为空；保存改为校验后读取完整表单值。',
+  'pages.dashboard.updateLog.entries.material-form-custom-field-save.title':
+    '物料编辑保存自定义字段不再丢失',
+  'pages.dashboard.updateLog.entries.material-form-custom-field-save.description':
+    '修复物料新建/编辑表单保存时未读取制单日期等自定义字段，导致再次编辑需重新录入；编辑回填亦改为等字段定义加载后再写入表单。',
+  'pages.dashboard.updateLog.entries.material-form-unit-master-data-select.title':
+    '新建物料可选单位管理中的单位',
+  'pages.dashboard.updateLog.entries.material-form-unit-master-data-select.description':
+    '物料新建与编辑表单的基础单位、多单位与默认单位下拉改为读取单位管理主数据，不再使用旧数据字典；在单位管理中新建或修改单位后会同步刷新物料表单选项。',
+  'pages.dashboard.updateLog.entries.hub-custom-field-column-dedupe.title':
+    '入库出库 Hub 列表自定义字段去重',
+  'pages.dashboard.updateLog.entries.hub-custom-field-column-dedupe.description':
+    '入库管理与出库管理聚合列表中，多张底层单据表上同名的自定义字段（如制单日期）合并为一列，按单据类型读取对应值；单表列表亦按 label 去重，避免列设置里出现两个同名字段。',
+  'pages.dashboard.updateLog.entries.warehouse-in-out-operator-column-no-time.title':
+    '入库出库列表操作人列去掉重复时间',
+  'pages.dashboard.updateLog.entries.warehouse-in-out-operator-column-no-time.description':
+    '入库管理与出库管理列表的入库人/出库人列仅显示姓名，不再叠加入库或出库时刻；更新时间仍由右侧审计列展示。',
+  'pages.dashboard.updateLog.entries.unitable-column-preference-bump-migration.title':
+    '列表列设置升级后自动继承',
+  'pages.dashboard.updateLog.entries.unitable-column-preference-bump-migration.description':
+    '系统发版 bump 列表 columnPersistenceId（如 list-v2 升为 list-v3）时，自动从旧版 key 迁移您已隐藏的列、列序与视图类型至新版并写回云端偏好，避免每次升级后列设置被重置。',
+  'pages.dashboard.updateLog.entries.material-management-restore-group-after-edit.title':
+    '物料编辑保存后保留分组筛选',
+  'pages.dashboard.updateLog.entries.material-management-restore-group-after-edit.description':
+    '在某一物料分组下新建或编辑物料并保存、取消返回后，列表仍停留在进入前的左侧分组，不再跳回「全部物料」；若编辑时修改了所属分组则定位到新分组。',
+  'pages.dashboard.updateLog.entries.mrp-work-order-source-planned-dates.title':
+    'MRP 下推工单计划时间对齐来源单据',
+  'pages.dashboard.updateLog.entries.mrp-work-order-source-planned-dates.description':
+    '需求计算下推生产/委外工单时，成品优先采用来源需求或销售订单的开始与交期作为计划起止；工序计划在窗口内分配，避免工作日历倒排产生错位时刻。BOM 子件仍保留 MRP 挂接日期。',
+  'pages.dashboard.updateLog.entries.material-batch-expiry-history-backfill.title':
+    '历史批号有效期回填迁移',
+  'pages.dashboard.updateLog.entries.material-batch-expiry-history-backfill.description':
+    '部署时自动按物料保质期（生产日期 + 天数）回填批号记录缺失的有效期至；仍为空则继承同批号已维护值。可另用 scripts/backfill_material_batch_expiry.py 按租户补跑。',
+  'pages.dashboard.updateLog.entries.material-batch-expiry-after-production-inbound.title':
+    '生产入库后批号记录补齐有效期至',
+  'pages.dashboard.updateLog.entries.material-batch-expiry-after-production-inbound.description':
+    '成品/半成品工单入库确认时，按物料保质期或已维护批号有效期写入明细与批号台账；修复生产完成后批号记录「有效期至」为空的问题。',
+  'pages.dashboard.updateLog.entries.batch-production-picking-ux.title':
+    '生产领料支持批量下推',
+  'pages.dashboard.updateLog.entries.batch-production-picking-ux.description':
+    '出库管理「从工单取单」可跨工单勾选明细批量创建领料单；工单列表批量菜单新增「批量下推领料」，按 BOM 成套生成后跳转出库管理待确认。',
+  'pages.dashboard.updateLog.entries.document-push-progress-complete-no-numeric.title':
+    '已完成单据进度条不再显示数字',
+  'pages.dashboard.updateLog.entries.document-push-progress-complete-no-numeric.description':
+    '列表下推/交货/收款等进度列在 100% 或完成态时仅保留绿色满条，不再叠加 100% 数字；悬停 tooltip 仍可查看明细。',
+  'pages.dashboard.updateLog.entries.menu-badge-data-scope.title':
+    '左侧菜单徽章按数据权限计数',
+  'pages.dashboard.updateLog.entries.menu-badge-data-scope.description':
+    '菜单待办数字徽章与列表一致：角色配置为本人或部门时，仅统计当前用户可见单据；缓存按用户隔离。',
+  'pages.dashboard.updateLog.entries.receivable-negative-invoiced-amount.title':
+    '应收账款红字开票列表报错修复',
+  'pages.dashboard.updateLog.entries.receivable-negative-invoiced-amount.description':
+    '已开票金额聚合含红字销项时为负值，移除响应 schema 非负约束并完善开票状态推导，避免列表 Pydantic 校验 500。',
+  'pages.dashboard.updateLog.entries.gl-voucher-list-account-columns.title':
+    '会计凭证列表展示借贷科目',
+  'pages.dashboard.updateLog.entries.gl-voucher-list-account-columns.description':
+    '凭证列表接口批量返回借方/贷方科目摘要，列表新增「借方科目」「贷方科目」列，不再仅显示借贷合计金额。',
+  'pages.dashboard.updateLog.entries.sales-contract-alert-feed-key.title':
+    '销售中心合同预警列表 key 重复修复',
+  'pages.dashboard.updateLog.entries.sales-contract-alert-feed-key.description':
+    '同一合同多条里程碑逾期时，预警 feed 行 key 纳入 milestone_id，消除 React 重复 key 控制台告警。',
+  'pages.dashboard.updateLog.entries.remove-unused-link-preload.title':
+    '移除未消费的静态资源 preload',
+  'pages.dashboard.updateLog.entries.remove-unused-link-preload.description':
+    '删除 index 与登录页对 Logo/favicon 的 link preload，避免自定义 Logo 或首屏延迟触发浏览器「预加载但未使用」控制台告警；Logo 仍由 img fetchpriority 高优先级加载。',
+  'pages.dashboard.updateLog.entries.sales-order-detail-descriptions-span.title':
+    '销售订单详情 Descriptions 列宽告警修复',
+  'pages.dashboard.updateLog.entries.sales-order-detail-descriptions-span.description':
+    '关联合同与费用合计字段改为整行 span，消除详情抽屉基本信息区 antd Descriptions 列 span 不匹配控制台告警。',
+  'pages.dashboard.updateLog.entries.antd6-api-migration.title':
+    '前端 Ant Design 6 API 全量迁移',
+  'pages.dashboard.updateLog.entries.antd6-api-migration.description':
+    '批量替换 Space direction、Alert message、Modal destroyOnClose、InputNumber addon 等 v5 废弃写法；TabPane 与 Timeline.Item 改为 items API；全站 Drawer 与详情抽屉统一 width 改为 size，扫描脚本零遗留。',
+  'pages.dashboard.updateLog.entries.float-button-opt-in-display.title':
+    '右下角悬浮按钮改为默认隐藏',
+  'pages.dashboard.updateLog.entries.float-button-opt-in-display.description':
+    '仅当平台设置显式开启「显示右下角悬浮按钮」且接口返回成功时才展示；加载中或后端不可达时不再先显示再隐藏。',
+  'pages.dashboard.updateLog.entries.platform-branding-clear-button.title':
+    '平台 Logo 与 Favicon 支持清除恢复默认',
+  'pages.dashboard.updateLog.entries.platform-branding-clear-button.description':
+    '平台设置中文件已删除或预览失败时仍显示清除按钮，清除后立即保存并回退默认图标，避免无效文件 UUID 反复请求预览 404。',
+  'pages.dashboard.updateLog.entries.kuaizhizao-orm-models-complete.title':
+    '修复销售合同条款等接口 500',
+  'pages.dashboard.updateLog.entries.kuaizhizao-orm-models-complete.description':
+    '补全快制造 orm_models 声明，销售合同条款组、销售评审、采购询价等新增模型纳入运行时 Tortoise 加载，避免 default_connection 为空导致接口报错。',
+  'pages.dashboard.updateLog.entries.tortoise-bootstrap-two-phase.title':
+    '修复按应用裁剪 ORM 后后端无法启动',
+  'pages.dashboard.updateLog.entries.tortoise-bootstrap-two-phase.description':
+    'Tortoise 改为两阶段初始化：先用平台基线模型连库查应用中心，再按启用集加载完整 ORM，避免启动前查库超时；数据库不可达时错误提示更明确。',
+  'pages.dashboard.updateLog.entries.prod-memory-dynamic-trim.title':
+    '生产环境内存按应用中心启用状态动态裁剪',
+  'pages.dashboard.updateLog.entries.prod-memory-dynamic-trim.description':
+    '后端运行时仅加载已启用应用的 ORM 与路由；禁用应用不再被静态清单拉回内存。低配模式可关闭 API 文档预热，systemd 子进程 OOM 后自动重启，并支持 glibc arena 与 PostgreSQL 小内存调优。',
+  'pages.dashboard.updateLog.entries.outbound-pull-delivery-note-from-sales-delivery.title':
+    '出库管理支持从销售出库单创建送货单',
+  'pages.dashboard.updateLog.entries.outbound-pull-delivery-note-from-sales-delivery.description':
+    '出库管理「从单据加载」新增「从销售出库单创建送货单」，可在出库业务内直接选取销售出库明细生成送货单。',
+  'pages.dashboard.updateLog.entries.warehouse-pull-invalid-only-fields.title':
+    '仓储取单加载修复',
+  'pages.dashboard.updateLog.entries.warehouse-pull-invalid-only-fields.description':
+    '修复从工单创建成品入库、从销售出库创建送货单等取单弹窗因字段名不匹配报服务器内部错误的问题。',
+  'pages.dashboard.updateLog.entries.sales-order-tax-exclusive-decimal-amount.title':
+    '销售订单不含税保存金额修复',
+  'pages.dashboard.updateLog.entries.sales-order-tax-exclusive-decimal-amount.description':
+    '勾选不含税且数量为小数时，保存后列表与详情总金额与录入一致，不再误按含税合计展示。',
+  'pages.dashboard.updateLog.entries.stocktaking-bulk-save-entries.title': '盘点单详情支持批量保存实盘',
+  'pages.dashboard.updateLog.entries.stocktaking-bulk-save-entries.description':
+    '盘点中详情抽屉右上角新增「保存盘点录入」，可一次提交全部待盘点行的实盘数量，无需逐行点保存。',
+  'pages.dashboard.updateLog.entries.stocktaking-start-button-permission.title':
+    '修复盘点单仅有新建权限时无开始盘点按钮',
+  'pages.dashboard.updateLog.entries.stocktaking-start-button-permission.description':
+    '草稿态「开始盘点」在具备新建或编辑权限时均可显示；开始盘点接口同步接受 create/update，避免库管员只勾新建无法启动盘点。',
+  'pages.dashboard.updateLog.entries.demand-computation-permission-align.title':
+    '修复新建用户需求计算权限不一致',
+  'pages.dashboard.updateLog.entries.demand-computation-permission-align.description':
+    '需求 API 与菜单统一使用 plan-management-demand-management 权限码；执行计算按钮与接口对齐 update 权限；销售经理预设角色补齐计划模块权限。',
+  'pages.dashboard.updateLog.entries.file-manager-toolbar-layout.title': '文件管理顶栏布局调整',
+  'pages.dashboard.updateLog.entries.file-manager-toolbar-layout.description':
+    '文件排序移至顶栏视图切换前；保密文件密码收入设置下拉菜单，与文件存储设置并列。',
+  'pages.dashboard.updateLog.entries.department-link-preset-managers-405-fix.title':
+    '修复部门补齐负责人接口 Method Not Allowed',
+  'pages.dashboard.updateLog.entries.department-link-preset-managers-405-fix.description':
+    '将 link-preset-managers 等固定路径注册在部门 UUID 路由之前，避免 POST 被 GET /{uuid} 误匹配返回 405。',
+  'pages.dashboard.updateLog.entries.approval-department-manager-setup.title':
+    '审批流部门负责人节点与组织负责人补齐',
+  'pages.dashboard.updateLog.entries.approval-department-manager-setup.description':
+    '审批设计器支持发起人部门或指定部门的负责人；解析时沿父部门查找负责人。加载预设部门后按经理角色自动关联部门负责人，并提供手动补齐接口。',
+  'pages.dashboard.updateLog.entries.approval-multi-approver-fix.title':
+    '修复审批流多审批人仅首人可审',
+  'pages.dashboard.updateLog.entries.approval-multi-approver-fix.description':
+    '指定多个用户或角色时，为每位待办人补齐审批任务，并在数据权限层对待审单据只读放行，避免非首位审批人无法打开单据或执行审核。',
+  'pages.dashboard.updateLog.entries.kuaizhizao-doc-form-reference-display.title':
+    '快智造单据表单引用数据统一走隐式授权',
+  'pages.dashboard.updateLog.entries.kuaizhizao-doc-form-reference-display.description':
+    '销售、采购、生产、仓储等单据新建编辑页的客户、供应商、物料与银行账户下拉改走引用展示接口，按单据宿主权限加载，不再因缺少主数据或财务菜单读权限而阻断建单。',
+  'pages.dashboard.updateLog.entries.sales-order-form-reference-display.title':
+    '修复销售/采购建单无财务菜单权限时误报权限不足',
+  'pages.dashboard.updateLog.entries.sales-order-form-reference-display.description':
+    '预收/预付银行账户与客户、物料等引用数据改走单据宿主隐式引用展示，不再调用财务模块列表接口并在页面加载时弹出全局权限不足。',
   'pages.dashboard.updateLog.entries.print-pdf-sigtrap-as-limit.title':
     '修复打印 PDF 时 Chromium 被 SIGTRAP 杀掉',
   'pages.dashboard.updateLog.entries.print-pdf-sigtrap-as-limit.description':
@@ -26544,6 +26724,7 @@ export default {
   'pages.infra.platform.platformLogoTooltip': '上传图片作为平台Logo，支持UUID和URL两种格式',
   'pages.infra.platform.uploadLogo': '上传Logo',
   'pages.infra.platform.clearLogo': '清除Logo',
+  'pages.infra.platform.brandingPreviewMissing': '文件已不存在，请点击清除恢复默认图标',
   'pages.infra.platform.logoUrlPlaceholder': '或直接输入Logo URL',
   'pages.infra.platform.selectImage': '请选择图片文件',
   'pages.infra.platform.logoUploadSuccess': 'LOGO上传成功',
@@ -26949,7 +27130,12 @@ export default {
   'pages.approval.designer.approverTypeUser': '指定用户 (从用户列表中选择)',
   'pages.approval.designer.approverTypeRole': '指定角色 (该角色下所有用户均可审批)',
   'pages.approval.designer.approverTypeManager': '直属主管 (发起人的直接领导)',
-  'pages.approval.designer.approverTypeDept': '部门负责人 (发起人所属部门负责人)',
+  'pages.approval.designer.approverTypeDept': '部门负责人',
+  'pages.approval.designer.departmentScope': '部门负责人范围',
+  'pages.approval.designer.departmentScopeSubmitter': '发起人所属部门负责人（沿父部门向上查找）',
+  'pages.approval.designer.departmentScopeSpecified': '指定部门负责人',
+  'pages.approval.designer.selectDepartment': '选择部门',
+  'pages.approval.designer.selectDepartmentRequired': '请选择至少一个部门',
   'pages.approval.designer.approverTypeOptional': '发起人自选 (流程发起时由发起人指定)',
   'pages.approval.designer.functionalTitle': '审批流设计',
   'pages.approval.designer.nodeLabel': '节点名称',
@@ -28320,7 +28506,9 @@ export default {
   'app.kuaicaiwu.gl.vouchers.action.unreview': '反审核',
   'app.kuaicaiwu.gl.vouchers.addLine': '增行',
   'app.kuaicaiwu.gl.vouchers.col.credit': '贷方合计',
+  'app.kuaicaiwu.gl.vouchers.col.creditAccounts': '贷方科目',
   'app.kuaicaiwu.gl.vouchers.col.debit': '借方合计',
+  'app.kuaicaiwu.gl.vouchers.col.debitAccounts': '借方科目',
   'app.kuaicaiwu.gl.vouchers.col.keyword': '关键词',
   'app.kuaicaiwu.gl.vouchers.col.period': '期间',
   'app.kuaicaiwu.gl.vouchers.col.source': '来源单据',

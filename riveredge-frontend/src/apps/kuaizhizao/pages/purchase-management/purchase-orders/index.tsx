@@ -140,24 +140,27 @@ import {
   purchaseOrderCapabilityReasonMessage,
 } from '../../../../../hooks/useDocumentCapabilities';
 import LandingCostAllocationModal from './LandingCostAllocationModal';
-import { bankAccountService, type BankAccount } from '../../../../kuaicaiwu/services/finance/bank-account';
-import { formatBankAccountOptionLabel } from '../../../../kuaicaiwu/utils/financeSharedOptions';
 import { formatApiErrorDetail } from '../../../../../services/api';
-import { supplierApi } from '../../../../master-data/services/supply-chain';
 import {
   applyPurchaseDocumentLineMaterialPricing,
   resolvePurchaseDocumentMaterialLinesPricing,
 } from '../../../../master-data/utils/resolve-partner-material-price';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
-
-const LazyUniImport = lazy(() =>
-  import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport })),
-);
+import { SupplierSelectDropdown } from '../../../../master-data/components/SupplierSelectDropdown';
 import { searchUserDisplay, type User } from '../../../../../services/user';
 import {
   referenceDisplayToIdOptions,
   searchReferenceDisplay,
 } from '../../../../../utils/referenceDisplay';
+import {
+  KUAIZHIZAO_DOC_HOST,
+  loadBankAccountFormOptions,
+} from '../../../../../utils/documentFormReferenceLoad';
+
+const LazyUniImport = lazy(() =>
+  import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport })),
+);
+
 import { useGlobalStore } from '../../../../../stores';
 import { displayItemsToUsers, normalizeUserDisplayName } from '../../../../../utils/userDisplay';
 import {
@@ -198,7 +201,6 @@ import {
   purchaseOrderBatchPushReceiptNoticeAllowed,
 } from '../../../../../hooks/useDocumentCapabilities';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
-import { SupplierSelectDropdown } from '../../../../master-data/components/SupplierSelectDropdown';
 import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulkImport';
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { warehouseApi as masterWarehouseApi } from '../../../../master-data/services/warehouse';
@@ -616,22 +618,13 @@ const PurchaseOrdersPage: React.FC = () => {
 
   // 供应商列表、订单类型、币种
   const [supplierList, setSupplierList] = useState<any[]>([]);
-  const [suppliersLoading, setSuppliersLoading] = useState(false);
   const [orderTypeOptions, setOrderTypeOptions] = useState<Array<{ label: string; value: string }>>(() =>
     mapSystemDictionaryItemOptions('ORDER_TYPE', ORDER_TYPE_FALLBACK_ITEMS as DictionaryItem[], t),
   );
   const [orderTypeLoading, setOrderTypeLoading] = useState(false);
   const [currencyOptions, setCurrencyOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [currencyLoading, setCurrencyLoading] = useState(false);
-  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
-  const bankAccountOptions = useMemo(
-    () =>
-      bankAccounts.map((a) => ({
-        label: formatBankAccountOptionLabel(a),
-        value: a.id,
-      })),
-    [bankAccounts],
-  );
+  const [bankAccountOptions, setBankAccountOptions] = useState<Array<{ label: string; value: number }>>([]);
   const [users, setUsers] = useState<User[]>([]);
   const currentUser = useCurrentUser();
   const [usersLoading, setUsersLoading] = useState(false);
@@ -650,20 +643,6 @@ const PurchaseOrdersPage: React.FC = () => {
 
   useEffect(() => {
     if (!isFormPage) return;
-    const loadSuppliers = async () => {
-      setSuppliersLoading(true);
-      try {
-        const res = await apiRequest<unknown>('/apps/master-data/supply-chain/suppliers', {
-          params: { limit: 200, is_active: true },
-        });
-        const list = Array.isArray(res) ? res : (res as any)?.data ?? (res as any)?.items ?? [];
-        setSupplierList(Array.isArray(list) ? list : []);
-      } catch {
-        setSupplierList([]);
-      } finally {
-        setSuppliersLoading(false);
-      }
-    };
     const loadUsers = async () => {
       setUsersLoading(true);
       try {
@@ -676,23 +655,12 @@ const PurchaseOrdersPage: React.FC = () => {
       }
     };
     const loadBankAccounts = async () => {
-      try {
-        const res = await bankAccountService.list({ limit: 200, is_active: true });
-        setBankAccounts(res.data || []);
-      } catch (e: unknown) {
-        setBankAccounts([]);
-        const err = e as { response?: { data?: { detail?: unknown } }; message?: string };
-        messageApi.error(
-          formatApiErrorDetail(err?.response?.data?.detail) ||
-            err?.message ||
-            t('app.kuaizhizao.purchaseOrder.loadBankAccountsFailed'),
-        );
-      }
+      const options = await loadBankAccountFormOptions(KUAIZHIZAO_DOC_HOST.purchaseOrder);
+      setBankAccountOptions(options);
     };
-    loadSuppliers();
-    loadUsers();
-    loadBankAccounts();
-  }, [currentUser, messageApi, t, isFormPage]);
+    void loadUsers();
+    void loadBankAccounts();
+  }, [currentUser, isFormPage]);
 
   const purchaseOrderSupplierSearchOptions = useMemo(
     () =>
@@ -2814,12 +2782,10 @@ const PurchaseOrdersPage: React.FC = () => {
                   rules={[{ required: true, message: t('app.kuaizhizao.purchaseOrder.form.supplierRequired') }]}
                 >
                   <SupplierSelectDropdown
+                    hostResource={KUAIZHIZAO_DOC_HOST.purchaseOrder}
                     placeholder={t('app.kuaizhizao.purchaseOrder.form.supplierRequired')}
                     style={{ width: '100%' }}
-                    suppliers={supplierList}
-                    loading={suppliersLoading}
                     onSuppliersChange={setSupplierList}
-                    autoLoad={false}
                     onSupplierPick={(s) => {
                       if (s) {
                         const bIdRaw = (s as any).buyerId ?? (s as any).buyer_id;
@@ -2965,7 +2931,7 @@ const PurchaseOrdersPage: React.FC = () => {
                     max={100}
                     precision={2}
                     style={{ width: '100%' }}
-                    addonAfter="%"
+                    suffix="%"
                     placeholder={t('app.kuaizhizao.purchaseOrder.form.taxRatePercent')}
                     onChange={(val) => {
                       const num = Number(val) || 0;
@@ -3026,7 +2992,7 @@ const PurchaseOrdersPage: React.FC = () => {
           />
         </div>
         <ProFormText name="supplier_name" hidden />
-        <ProFormText name="price_type" hidden initialValue="tax_exclusive" />
+        <ProFormText name="price_type" hidden />
       </DetailDrawerSection>
 
       <DetailDrawerSection titleAccent title={t('app.uniDetail.sectionLines')}>
@@ -3582,7 +3548,7 @@ const PurchaseOrdersPage: React.FC = () => {
                 batch: t('app.kuaizhizao.purchaseOrder.batchPushNotice'),
               }}
               icon={<FileTextOutlined />}
-              size="middle"
+              size="medium"
             />,
           ]}
           rightToolBarActionsBeforeExport={[
@@ -3604,7 +3570,7 @@ const PurchaseOrdersPage: React.FC = () => {
                 batch: t('components.uniAction.print'),
               }}
               icon={<PrinterOutlined />}
-              size="middle"
+              size="medium"
             />,
           ]}
           showImportButton={viewTypeState !== 'detailTable'}
@@ -3971,7 +3937,7 @@ const PurchaseOrdersPage: React.FC = () => {
                 type="warning"
                 showIcon
                 style={{ marginBottom: 12 }}
-                message={purchaseOrderCapabilityReasonMessage(pushPreviewData.blocking_reason, t) || t('app.kuaizhizao.purchaseOrder.push.previewFailed')}
+                title={purchaseOrderCapabilityReasonMessage(pushPreviewData.blocking_reason, t) || t('app.kuaizhizao.purchaseOrder.push.previewFailed')}
               />
             ) : null}
             {pushPreviewKind !== 'invoice' && pushPreviewData.items?.length > 0 ? (

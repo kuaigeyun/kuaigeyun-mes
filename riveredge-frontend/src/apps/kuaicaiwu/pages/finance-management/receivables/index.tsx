@@ -874,12 +874,11 @@ const ReceivableList: React.FC = () => {
                 <Alert
                     type="info"
                     showIcon
-                    closable
+                    closable={{ onClose: () => setSearchParams({}) }}
                     style={{ marginBottom: 16 }}
                     title={t('app.kuaicaiwu.financeUi.aging.listFilterActive', {
                         filter: agingFilterDescription,
                     })}
-                    onClose={() => setSearchParams({})}
                 />
             ) : null}
             <UniTable<Receivable>
@@ -1158,7 +1157,7 @@ const ReceivableList: React.FC = () => {
                         : pullFromSalesOrderAction.label
                 }
                 open={pullPreviewOpen}
-                destroyOnClose
+                destroyOnHidden
                 width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
                 onCancel={resetPullPreview}
                 okText={pullPreviewTargetLabel}

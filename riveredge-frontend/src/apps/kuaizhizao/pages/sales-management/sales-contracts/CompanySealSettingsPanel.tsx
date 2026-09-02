@@ -187,7 +187,7 @@ export function useCompanySealSettings(options?: { enabled?: boolean }) {
   );
 
   const panel = (
-    <Space orientation="vertical" size="middle" style={{ width: '100%', paddingTop: 8 }}>
+    <Space orientation="vertical" size="medium" style={{ width: '100%', paddingTop: 8 }}>
       <Alert
         type="info"
         showIcon

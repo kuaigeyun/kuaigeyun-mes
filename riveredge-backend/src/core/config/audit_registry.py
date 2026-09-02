@@ -153,6 +153,19 @@ def _entity_type_index() -> Dict[str, AuditEntry]:
     return {e.entity_type: e for e in _load_entries()}
 
 
+@lru_cache(maxsize=1)
+def _resource_index() -> Dict[str, AuditEntry]:
+    return {normalize_audit_resource_key(e.resource): e for e in _load_entries()}
+
+
+def normalize_audit_resource_key(resource: str) -> str:
+    return (resource or "").strip().lower()
+
+
+def entry_by_resource(resource: str) -> Optional[AuditEntry]:
+    return _resource_index().get(normalize_audit_resource_key(resource))
+
+
 def entry_by_node_key(node_key: str) -> Optional[AuditEntry]:
     return _node_key_index().get(str(node_key or "").strip())
 

@@ -935,6 +935,17 @@ class ApplicationService:
         """
         application = await ApplicationService.get_application_by_uuid(tenant_id, uuid)
         
+        app_code = str(application.get("code") or "")
+        from core.services.application.enabled_apps import list_active_dependents
+
+        dependents = await list_active_dependents(tenant_id, app_code)
+        if dependents:
+            names = "、".join(name for _, name in dependents)
+            raise ValidationError(
+                f"应用「{application.get('name') or app_code}」仍被以下已启用应用依赖：{names}。"
+                f"请先禁用上述应用后再停用本应用。"
+            )
+
         # 更新数据库
         conn = await get_db_connection()
         try:
@@ -950,7 +961,6 @@ class ApplicationService:
         # 更新本地字典
         application['is_active'] = False
 
-        app_code = str(application.get("code") or "")
         from core.services.system.menu_service import MenuService
         from core.services.system.menu_takeover_service import MenuTakeoverService
 

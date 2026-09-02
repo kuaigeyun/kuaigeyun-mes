@@ -996,7 +996,7 @@ export const UniImport: React.FC<UniImportProps> = ({
         open={open ?? visible}
         onCancel={onCancel}
         keyboard={false}
-        maskClosable={false}
+        mask={{ closable: false }}
         width={width}
         afterOpenChange={(opened) => {
           if (!opened || !univerInstanceRef.current) return;

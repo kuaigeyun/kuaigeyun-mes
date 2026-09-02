@@ -525,7 +525,7 @@ const DataBackupsPage: React.FC = () => {
             
             {backup.error_message && (
               <Alert
-                message={backup.error_message}
+                title={backup.error_message}
                 type="error"
                 showIcon
                 style={{ fontSize: 11, marginTop: 8 }}
@@ -535,7 +535,7 @@ const DataBackupsPage: React.FC = () => {
 
             {backup.restore_error_message && (
               <Alert
-                message={backup.restore_error_message}
+                title={backup.restore_error_message}
                 type="error"
                 showIcon
                 style={{ fontSize: 11, marginTop: 8 }}
@@ -817,10 +817,10 @@ const DataBackupsPage: React.FC = () => {
           createButtonText={t('pages.system.dataBackups.createButton')}
           onCreate={() => setCreateModalVisible(true)}
           toolBarRender={() => [
-            <Space key="worker-status" size="middle">
+            <Space key="worker-status" size="medium">
               <Tooltip
                 title={
-                  <Space direction="vertical" size={2}>
+                  <Space orientation="vertical" size={2}>
                     <Text style={{ color: '#fff' }}>{t('pages.system.dataBackups.workerStatusTitle')}: {workerHealthMeta.label}</Text>
                     <Text style={{ color: '#fff' }}>{t('pages.system.dataBackups.workerStatusPending')}: {workerHealth?.pending_total ?? '-'}</Text>
                     <Text style={{ color: '#fff' }}>{t('pages.system.dataBackups.workerStatusStalledPending')}: {workerHealth?.pending_stalled ?? '-'}</Text>
@@ -970,7 +970,7 @@ const DataBackupsPage: React.FC = () => {
             type="warning"
             showIcon
             style={{ marginBottom: 16 }}
-            message={t('pages.system.dataBackups.restoreDataOnlyHint')}
+            title={t('pages.system.dataBackups.restoreDataOnlyHint')}
           />
         )}
 
@@ -980,7 +980,7 @@ const DataBackupsPage: React.FC = () => {
               type="info"
               showIcon
               style={{ marginBottom: 16 }}
-              message={t('pages.system.dataBackups.restoreTenantMappingTitle')}
+              title={t('pages.system.dataBackups.restoreTenantMappingTitle')}
               description={t('pages.system.dataBackups.restorePlatformSafeHint')}
             />
 
@@ -1018,7 +1018,7 @@ const DataBackupsPage: React.FC = () => {
                 type="warning"
                 showIcon
                 style={{ marginTop: 12 }}
-                message={t('pages.system.dataBackups.restoreMigrationHint', {
+                title={t('pages.system.dataBackups.restoreMigrationHint', {
                   source: restoreSourceTenantId,
                   target: restoreTargetTenantId,
                 })}
@@ -1030,7 +1030,7 @@ const DataBackupsPage: React.FC = () => {
                 type="info"
                 showIcon
                 style={{ marginTop: 12 }}
-                message={t('pages.system.dataBackups.restoreSameTenantHint')}
+                title={t('pages.system.dataBackups.restoreSameTenantHint')}
               />
             )}
           </>

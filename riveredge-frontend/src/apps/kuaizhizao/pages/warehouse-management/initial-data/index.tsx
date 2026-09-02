@@ -520,7 +520,7 @@ const InitialDataImportPage: React.FC = () => {
               <Paragraph type="secondary" style={{ marginBottom: 12 }}>
                 {t('app.kuaizhizao.initialData.checklistHint')}
               </Paragraph>
-              <Space wrap size="middle">
+              <Space wrap size="medium">
                 <Button type="link" icon={<LinkOutlined />} onClick={() => navigate('/apps/master-data/materials')}>
                   {t('app.kuaizhizao.initialData.linkMaterials')}
                 </Button>
@@ -568,7 +568,7 @@ const InitialDataImportPage: React.FC = () => {
                   </Button>
                   <DatePicker
                     showTime
-                    size="middle"
+                    size="medium"
                     format="YYYY-MM-DD HH:mm:ss"
                     placeholder={t('app.kuaizhizao.initialData.snapshotPlaceholder')}
                     value={snapshotTime}
@@ -685,7 +685,7 @@ const InitialDataImportPage: React.FC = () => {
         <Alert
           style={{ maxWidth: 560, margin: '24px auto', textAlign: 'left' }}
           type="info"
-          message={t('app.kuaizhizao.initialData.finishHint')}
+          title={t('app.kuaizhizao.initialData.finishHint')}
         />
       </div>
     );

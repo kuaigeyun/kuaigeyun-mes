@@ -1248,7 +1248,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
           setDetailDrawerVisible(false);
           setCurrentRegistration(null);
         }}
-        width={DRAWER_CONFIG.HALF_WIDTH}
+        size={DRAWER_CONFIG.HALF_WIDTH}
         basic={
           currentRegistration ? (
             <Descriptions

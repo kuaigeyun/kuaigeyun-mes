@@ -125,7 +125,7 @@ export const MaterialUnitSelect: React.FC<MaterialUnitSelectProps> = ({
   materialId,
   value,
   onChange,
-  size = 'middle',
+  size='medium',
   disabled = false,
   placeholder = '单位',
   noStyle = false,
@@ -245,7 +245,7 @@ export const MaterialUnitSelect: React.FC<MaterialUnitSelectProps> = ({
       placeholder={placeholder}
       style={{ width: '100%', minWidth: 60, fontSize: 'inherit' }}
       variant={noStyle ? 'borderless' : 'outlined'}
-      dropdownMatchSelectWidth={false}
+      popupMatchSelectWidth={false}
       options={selectOptions}
       optionFilterProp="label"
     />

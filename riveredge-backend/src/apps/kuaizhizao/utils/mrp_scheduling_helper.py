@@ -151,6 +151,129 @@ def planning_date_to_work_order_end(value: Any) -> Optional[datetime]:
     return datetime.combine(d, datetime.max.time().replace(microsecond=0))
 
 
+def should_prefer_source_document_planned_dates(
+    item: Any,
+    *,
+    source_end: Optional[date],
+) -> bool:
+    """
+    成品/顶层需求：用来源单据起止替代 MRP 分桶 release/receipt。
+    BOM 子件（完工日早于需求交期）：保留 MRP 挂接结果。
+    """
+    if source_end is None:
+        return False
+    mrp_end = normalize_planning_date(getattr(item, "production_completion_date", None))
+    item_delivery = normalize_planning_date(getattr(item, "delivery_date", None))
+    if mrp_end and item_delivery and mrp_end < item_delivery:
+        return False
+    return True
+
+
+def resolve_work_order_planned_dates_for_push(
+    *,
+    source_start: Optional[date],
+    source_end: Optional[date],
+    mrp_start: Optional[date],
+    mrp_end: Optional[date],
+    schedule_direction: Any = "backward",
+    prefer_source: bool = False,
+) -> tuple[Optional[datetime], Optional[datetime]]:
+    """MRP 下推工单计划时间：来源单据优先，否则回落 MRP production 日期。"""
+    if prefer_source and (source_start or source_end):
+        use_start = source_start or mrp_start
+        use_end = source_end or mrp_end
+    else:
+        use_start = mrp_start or source_start
+        use_end = mrp_end or source_end
+
+    if use_start and use_end and use_start > use_end:
+        use_start, use_end = use_end, use_start
+
+    planned_start = planning_date_to_work_order_start(use_start) if use_start else None
+    if normalize_schedule_direction(schedule_direction) == "forward":
+        planned_end = None
+    else:
+        planned_end = planning_date_to_work_order_end(use_end) if use_end else None
+    return planned_start, planned_end
+
+
+async def resolve_source_production_window(
+    tenant_id: int,
+    *,
+    computation: Any,
+    item: Any,
+) -> tuple[Optional[date], Optional[date]]:
+    """解析来源需求/销售订单的计划窗口（start/end 日历日）。"""
+    from apps.kuaizhizao.models.demand import Demand
+    from apps.kuaizhizao.models.demand_item import DemandItem
+
+    start_dates: list[date] = []
+    end_dates: list[date] = []
+
+    raw_ids = getattr(item, "demand_item_ids", None) or []
+    demand_item_id = getattr(item, "demand_item_id", None)
+    demand_item_ids: list[int] = []
+    if demand_item_id is not None:
+        try:
+            demand_item_ids.append(int(demand_item_id))
+        except (TypeError, ValueError):
+            pass
+    if isinstance(raw_ids, list):
+        for raw in raw_ids:
+            try:
+                demand_item_ids.append(int(raw))
+            except (TypeError, ValueError):
+                continue
+
+    if demand_item_ids:
+        demand_items = await DemandItem.filter(
+            tenant_id=tenant_id, id__in=list(set(demand_item_ids))
+        ).all()
+        demand_hdr_ids = {int(di.demand_id) for di in demand_items if di.demand_id}
+        demands = {
+            d.id: d
+            for d in await Demand.filter(tenant_id=tenant_id, id__in=list(demand_hdr_ids)).all()
+        }
+        for di in demand_items:
+            dd = resolve_demand_item_delivery_date(di, demands)
+            nd = normalize_planning_date(dd)
+            if nd:
+                end_dates.append(nd)
+            hdr = demands.get(int(di.demand_id)) if di.demand_id else None
+            if hdr:
+                ns = normalize_planning_date(getattr(hdr, "start_date", None))
+                if ns:
+                    start_dates.append(ns)
+                for attr in ("end_date", "delivery_date"):
+                    ne = normalize_planning_date(getattr(hdr, attr, None))
+                    if ne:
+                        end_dates.append(ne)
+                        break
+
+    demand_id = getattr(computation, "demand_id", None)
+    if demand_id and not start_dates and not end_dates:
+        demand = await Demand.get_or_none(tenant_id=tenant_id, id=int(demand_id))
+        if demand:
+            ns = normalize_planning_date(getattr(demand, "start_date", None))
+            if ns:
+                start_dates.append(ns)
+            for attr in ("end_date", "delivery_date"):
+                ne = normalize_planning_date(getattr(demand, attr, None))
+                if ne:
+                    end_dates.append(ne)
+                    break
+
+    item_dd = normalize_planning_date(getattr(item, "delivery_date", None))
+    if item_dd:
+        end_dates.append(item_dd)
+
+    start = min(start_dates) if start_dates else None
+    end = max(end_dates) if end_dates else None
+    if start and end and start > end:
+        start, end = end, start
+    return start, end
+
+
 def apply_bom_pegged_production_schedules(
     rows: Dict[int, Dict[str, Any]],
     *,

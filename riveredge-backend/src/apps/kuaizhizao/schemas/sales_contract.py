@@ -269,6 +269,7 @@ class SalesContractAlertItem(BaseModel):
     message: str
     severity: str = "medium"
     due_date: Optional[date] = None
+    milestone_id: Optional[int] = None
 
 
 class SalesContractExecutionSummary(BaseModel):

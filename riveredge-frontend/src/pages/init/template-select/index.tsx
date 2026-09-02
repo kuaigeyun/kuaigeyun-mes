@@ -142,7 +142,7 @@ const TemplateSelectPage: React.FC = () => {
           </Button>,
         ]}
       >
-        <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+        <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div style={{ flex: 1 }}>
               <Title level={5} style={{ margin: 0, marginBottom: 8 }}>

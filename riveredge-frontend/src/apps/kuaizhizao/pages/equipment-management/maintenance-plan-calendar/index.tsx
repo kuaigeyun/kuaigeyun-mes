@@ -58,7 +58,7 @@ const MaintenancePlanCalendarPage: React.FC = () => {
 
   const selectedPlans = plansByDate.get(selectedDate.format('YYYY-MM-DD')) ?? [];
 
-  const dateCellRender = (value: Dayjs) => {
+  const renderCalendarDateCell = (value: Dayjs) => {
     const key = value.format('YYYY-MM-DD');
     const dayPlans = plansByDate.get(key) ?? [];
     if (dayPlans.length === 0) return null;
@@ -103,7 +103,7 @@ const MaintenancePlanCalendarPage: React.FC = () => {
             <Calendar
               value={selectedDate}
               onSelect={setSelectedDate}
-              cellRender={(current, info) => (info.type === 'date' ? dateCellRender(current) : info.originNode)}
+              cellRender={(current, info) => (info.type === 'date' ? renderCalendarDateCell(current) : info.originNode)}
             />
           </div>
           <div

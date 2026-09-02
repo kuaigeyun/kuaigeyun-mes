@@ -31,6 +31,7 @@ import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
+import { buildHubMergedCustomFieldColumns } from '../../../../../components/custom-fields/hubCustomFieldListColumns';
 import { ListPageTemplate, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { UniPullLoadButton } from '../../../../../components/uni-pull';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
@@ -60,7 +61,7 @@ import {
 } from './inboundItemTracking';
 import { buildKuaizhizaoPullCreateMenuItems } from '../../../constants/documentActionRegistry';
 import { customerMaterialRegistrationApi } from '../../../services/customer-material-registration';
-import {formatDateBySiteSetting, formatDateTimeBySiteSetting, formatQuantity} from '../../../../../utils/format';
+import {formatQuantity} from '../../../../../utils/format';
 import { renderWarehouseLineQuantity } from '../shared/warehouseListQuantity';
 import { formatApiErrorDetail } from '../../../../../services/api';
 import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
@@ -205,16 +206,6 @@ function renderInboundDetailUnitCell(row: InboundOrderItem): React.ReactNode {
     );
   }
   return formatInboundMaterialUnit(row.material_unit ?? row.unit);
-}
-
-/** 列表「时间」列：优先完整业务时刻，无时刻再回落业务日 */
-function formatInboundDateTimeDisplay(record: InboundOrder): string {
-  const timeValue =
-    record.receipt_time ?? record.return_time ?? record.received_at ?? record.returned_at;
-  if (timeValue) return formatDateTimeBySiteSetting(timeValue);
-  const dateOnly = record.receipt_date ?? record.registration_date;
-  if (dateOnly) return formatDateBySiteSetting(dateOnly);
-  return '-';
 }
 
 /**
@@ -515,7 +506,6 @@ const InboundPage: React.FC = () => {
 
   const {
     customFields: purchaseReceiptListCustomFields,
-    generateCustomFieldColumns: generatePurchaseReceiptCustomFieldColumns,
     enrichRecordsWithCustomFields: enrichPurchaseReceiptRecordsWithCustomFields,
     customFieldValues: purchaseReceiptDetailCustomFieldValues,
     loadFieldValuesForDetail: loadPurchaseReceiptFieldValuesForDetail,
@@ -524,7 +514,6 @@ const InboundPage: React.FC = () => {
 
   const {
     customFields: productionReturnListCustomFields,
-    generateCustomFieldColumns: generateProductionReturnCustomFieldColumns,
     enrichRecordsWithCustomFields: enrichProductionReturnRecordsWithCustomFields,
     customFieldValues: productionReturnDetailCustomFieldValues,
     loadFieldValuesForDetail: loadProductionReturnFieldValuesForDetail,
@@ -533,12 +522,28 @@ const InboundPage: React.FC = () => {
 
   const {
     customFields: finishedGoodsReceiptListCustomFields,
-    generateCustomFieldColumns: generateFinishedGoodsReceiptCustomFieldColumns,
     enrichRecordsWithCustomFields: enrichFinishedGoodsReceiptRecordsWithCustomFields,
     customFieldValues: finishedGoodsReceiptDetailCustomFieldValues,
     loadFieldValuesForDetail: loadFinishedGoodsReceiptFieldValuesForDetail,
     resetDetailFieldValues: resetFinishedGoodsReceiptDetailFieldValues,
   } = useCustomFieldsForList<InboundOrder>({ tableName: FINISHED_GOODS_RECEIPT_CUSTOM_FIELD_TABLE });
+
+  const inboundHubCustomFieldColumns = useMemo(
+    () =>
+      buildHubMergedCustomFieldColumns<InboundOrder>(
+        [
+          { docTypes: ['purchase'], customFields: purchaseReceiptListCustomFields },
+          { docTypes: ['production_return'], customFields: productionReturnListCustomFields },
+          { docTypes: ['finished_goods'], customFields: finishedGoodsReceiptListCustomFields },
+        ],
+        'receipt_type',
+      ),
+    [
+      purchaseReceiptListCustomFields,
+      productionReturnListCustomFields,
+      finishedGoodsReceiptListCustomFields,
+    ],
+  );
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
@@ -1568,9 +1573,6 @@ const InboundPage: React.FC = () => {
     return t('app.kuaizhizao.warehouseInbound.fallbackDoc');
   };
 
-  const purchaseReceiptCustomFieldColumns = generatePurchaseReceiptCustomFieldColumns();
-  const productionReturnCustomFieldColumns = generateProductionReturnCustomFieldColumns();
-  const finishedGoodsReceiptCustomFieldColumns = generateFinishedGoodsReceiptCustomFieldColumns();
   const columns: ProColumns<InboundOrder>[] = useMemo(
   () => alignProColumns<InboundOrder>([
     {
@@ -1694,20 +1696,14 @@ const InboundPage: React.FC = () => {
       title: t('app.kuaizhizao.warehouseInbound.col.receiver'),
       key: 'biz_time_operator',
       dataIndex: 'biz_time_operator',
-      width: 148,
-      minWidth: 148,
+      width: 100,
+      minWidth: 100,
       uniTableKeepWidth: true,
       resizable: false,
+      ellipsis: true,
       hideInSearch: true,
       sorter: true,
-      render: (_, record) => (
-        <UniTableStackedPrimaryCell
-          primary={resolveInboundHubOperator(record) || '-'}
-          secondary={formatInboundDateTimeDisplay(record)}
-          secondaryCopyable={false}
-          primaryBold={false}
-        />
-      ),
+      render: (_, record) => resolveInboundHubOperator(record) || '-',
     },
     ...buildDocumentAuditColumns<Record<string, unknown>>(t),
     {
@@ -1730,9 +1726,7 @@ const InboundPage: React.FC = () => {
         );
       },
     },
-    ...purchaseReceiptCustomFieldColumns,
-    ...productionReturnCustomFieldColumns,
-    ...finishedGoodsReceiptCustomFieldColumns,
+    ...inboundHubCustomFieldColumns,
     {
       title: t('common.actions'),
       key: 'option',
@@ -1838,9 +1832,7 @@ const InboundPage: React.FC = () => {
   [
     t,
     navigate,
-    purchaseReceiptCustomFieldColumns,
-    productionReturnCustomFieldColumns,
-    finishedGoodsReceiptCustomFieldColumns,
+    inboundHubCustomFieldColumns,
     inboundPerms,
     packingBindingPerms.canRead,
     showAmount,
@@ -2137,7 +2129,7 @@ const InboundPage: React.FC = () => {
         headerTitle={t('app.kuaizhizao.warehouseInbound.title')}
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.purchaseReceipt)}
-        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.inbound-width-v3"
+        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.inbound-width-v5"
         actionRef={actionRef}
         formRef={searchFormRef}
         rowKey={inboundRowKey}
@@ -2365,7 +2357,7 @@ const InboundPage: React.FC = () => {
                       optionFilterProp="label"
                       value={locVal}
                       options={locOpts}
-                      onDropdownVisibleChange={(open) => {
+                      onOpenChange={(open) => {
                         if (open && wh != null && !locOptionsByWarehouse[wh]?.length) {
                           void fetchStorageLocationsForWarehouse(wh).then((opts) =>
                             setLocOptionsByWarehouse((p) => ({ ...p, [wh]: opts }))

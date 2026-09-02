@@ -4,9 +4,9 @@ import { resolveMaterialUnitLabel } from '../../utils/materialUnitDisplay';
 export function unitAddonFieldProps(
   unitCode: unknown,
   unitLabelMap?: Record<string, string>,
-): { addonAfter?: string } {
+): { suffix?: string } {
   const raw = String(unitCode ?? '').trim();
   if (!raw) return {};
   const label = unitLabelMap ? resolveMaterialUnitLabel(raw, unitLabelMap) : raw;
-  return { addonAfter: label || raw };
+  return { suffix: label || raw };
 }

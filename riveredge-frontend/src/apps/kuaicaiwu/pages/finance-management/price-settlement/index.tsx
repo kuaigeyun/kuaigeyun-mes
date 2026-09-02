@@ -579,7 +579,7 @@ const PriceSettlementPanel: React.FC<SettlementPanelProps> = ({
         destroyOnHidden
       >
         {applyResult ? (
-          <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+          <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
             <div>
               {t(`${P}.resultBatch`)}: {applyResult.batch.batch_code}
             </div>

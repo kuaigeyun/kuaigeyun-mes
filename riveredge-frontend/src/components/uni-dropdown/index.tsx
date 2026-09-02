@@ -14,7 +14,7 @@ import type { QuickCreateConfig, QuickEditConfig, AdvancedSearchConfig } from '.
 import { AdvancedSearchModal } from './AdvancedSearchModal';
 import { ensurePinyinMatchLoaded } from '../../utils/pinyin';
 
-export interface UniDropdownProps extends Omit<SelectProps, 'dropdownRender' | 'popupRender' | 'optionRender'> {
+export interface UniDropdownProps extends Omit<SelectProps, 'popupRender' | 'popupRender' | 'optionRender'> {
   /** 快速新建配置，不传则不显示 */
   quickCreate?: QuickCreateConfig;
   /** 多个快速新建入口（与 quickCreate 可同时存在，均会展示） */

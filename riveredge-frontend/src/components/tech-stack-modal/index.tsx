@@ -736,7 +736,7 @@ const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
           <Paragraph>
             {t('components.techStackModal.overview.intro')}
           </Paragraph>
-          <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+          <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
             <div>
               <Text strong>FastAPI</Text>：{t('components.techStackModal.overview.fastapi')}
             </div>
@@ -783,7 +783,7 @@ const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
       children: (
         <div style={tabContentStyle}>
           <Alert
-            message={t('components.techStackModal.copyright.important')}
+            title={t('components.techStackModal.copyright.important')}
             description={t('components.techStackModal.copyright.importantDesc')}
             type="info"
             showIcon
@@ -932,7 +932,7 @@ const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
           <Paragraph>
             {t('components.techStackModal.aiAssist.intro')}
           </Paragraph>
-          <Space orientation="vertical" size="middle" style={{ width: '100%', marginTop: 16 }}>
+          <Space orientation="vertical" size="medium" style={{ width: '100%', marginTop: 16 }}>
             <div>
               {t('components.techStackModal.aiAssist.cursor')}
             </div>
@@ -1052,7 +1052,7 @@ const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
         className="tech-stack-modal-tabs"
         defaultActiveKey="overview"
         items={tabItems}
-        size="middle"
+        size="medium"
         tabBarStyle={{ marginBottom: token.marginMD, flexShrink: 0 }}
       />
     </Modal>

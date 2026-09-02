@@ -32,7 +32,7 @@ const BINDING_KEYS = [
 ] as const;
 
 const percentFieldProps = {
-  addonAfter: '%',
+  suffix: '%',
   style: { width: '100%', maxWidth: 160 },
 };
 
@@ -164,7 +164,7 @@ const TaxSettingsPage: React.FC = () => {
         }
         onFinish={onSave}
       >
-        <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+        <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
           <Card
             loading={loading}
             title={t(`${NS}.taxpayerType`, { defaultValue: '纳税人类型' })}

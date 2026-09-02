@@ -65,7 +65,10 @@ import { formatOrderChangeCategory, ORDER_CHANGE_CATEGORY_LABELS } from '../../.
 import { formatAmount, formatDateTime, formatNumber } from '../../../../../utils/format';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
-import { supplierApi } from '../../../../master-data/services/supply-chain';
+import {
+  KUAIZHIZAO_DOC_HOST,
+  loadSupplierFormReferenceList,
+} from '../../../../../utils/documentFormReferenceLoad';
 import { OrderChangeItemsTable } from '../../../components/order-change/OrderChangeItemsTable';
 import { OrderChangeImpactModal } from '../../../components/order-change/OrderChangeImpactModal';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
@@ -372,25 +375,11 @@ const PurchaseOrderChangesPage: React.FC = () => {
     [t],
   );
   const [suppliers, setSuppliers] = useState<Array<{ id: number; name?: string; code?: string }>>([]);
-  const [suppliersLoading, setSuppliersLoading] = useState(false);
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setSuppliersLoading(true);
-      try {
-        const res = await supplierApi.list({ limit: 1000, isActive: true });
-        const list = Array.isArray(res) ? res : (res as { data?: typeof suppliers })?.data ?? [];
-        if (!cancelled) setSuppliers(Array.isArray(list) ? list : []);
-      } catch {
-        if (!cancelled) setSuppliers([]);
-      } finally {
-        if (!cancelled) setSuppliersLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+    void loadSupplierFormReferenceList(KUAIZHIZAO_DOC_HOST.purchaseOrderChange).then((list) =>
+      setSuppliers(list as Array<{ id: number; name?: string; code?: string }>),
+    );
   }, []);
 
   const changeSupplierSearchOptions = useMemo(
@@ -956,7 +945,7 @@ const PurchaseOrderChangesPage: React.FC = () => {
         title={t('app.kuaizhizao.purchaseOrderChange.detailTitle', { code: detail?.change_code ?? '' })}
         open={detailOpen}
         onClose={() => setDetailOpen(false)}
-        width={DRAWER_CONFIG.HALF_WIDTH}
+        size={DRAWER_CONFIG.HALF_WIDTH}
         extra={
           detail ? (
             <Space size="small">

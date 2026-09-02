@@ -134,7 +134,7 @@ const AppLoadError: React.FC<{ error: Error; onRetry: () => void }> = ({ error, 
       }}
     >
       <Alert
-        message={t('appRoutes.loadFailed')}
+        title={t('appRoutes.loadFailed')}
         description={
           <div>
             <p>{t('appRoutes.loadFailedDesc')}</p>

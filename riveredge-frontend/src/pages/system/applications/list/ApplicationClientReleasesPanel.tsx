@@ -29,7 +29,7 @@ export function ApplicationClientReleasesPanel({ appCode }: Props) {
   }
 
   return (
-    <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+    <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
       <Typography.Text strong>{t('pages.system.applications.clientReleasesLinkedTitle')}</Typography.Text>
       {data.map((r: ClientRelease) => (
         <Descriptions key={r.id} column={1} size="small" bordered>

@@ -1601,7 +1601,7 @@ const RolesPermissionsPage: React.FC = () => {
               value={roleSearchKeyword}
               onChange={(e) => setRoleSearchKeyword(e.target.value)}
               allowClear
-              size="middle"
+              size="medium"
               style={{ width: '100%' }}
             />
           </div>
@@ -1819,7 +1819,7 @@ const RolesPermissionsPage: React.FC = () => {
                   <Flex gap={8} wrap="wrap" align="center">
                     <ThemedSegmented
                       surfaceBackground
-                      size="middle"
+                      size="medium"
                       value={functionFilterMode}
                       options={[
                         {
@@ -1869,7 +1869,7 @@ const RolesPermissionsPage: React.FC = () => {
                         style={{ width: 168, flex: '0 0 auto' }}
                       />
                     ) : null}
-                    <Divider type="vertical" style={{ margin: 0, height: 32 }} />
+                    <Divider orientation="vertical" style={{ margin: 0, height: 32 }} />
                     <Button type="primary" onClick={selectAllVisibleFunctionPermissions}>
                       {t('pages.system.roles.selectAllVisible', { defaultValue: '全选' })}
                     </Button>
@@ -1932,7 +1932,7 @@ const RolesPermissionsPage: React.FC = () => {
                   <Flex gap={8} wrap="wrap" align="center">
                     <ThemedSegmented
                       surfaceBackground
-                      size="middle"
+                      size="medium"
                       value={dataFilterMode}
                       options={[
                         {
@@ -1984,7 +1984,7 @@ const RolesPermissionsPage: React.FC = () => {
                         style={{ width: 168, flex: '0 0 auto' }}
                       />
                     ) : null}
-                    <Divider type="vertical" style={{ margin: 0, height: 32 }} />
+                    <Divider orientation="vertical" style={{ margin: 0, height: 32 }} />
                     <Button type="primary" onClick={selectAllVisibleDataResources}>
                       {t('pages.system.roles.selectAllVisible', { defaultValue: '全选' })}
                     </Button>
@@ -2083,7 +2083,7 @@ const RolesPermissionsPage: React.FC = () => {
                   <Flex gap={8} wrap="wrap" align="center">
                     <ThemedSegmented
                       surfaceBackground
-                      size="middle"
+                      size="medium"
                       value={fieldFilterMode}
                       options={[
                         {
@@ -2135,7 +2135,7 @@ const RolesPermissionsPage: React.FC = () => {
                         style={{ width: 168, flex: '0 0 auto' }}
                       />
                     ) : null}
-                    <Divider type="vertical" style={{ margin: 0, height: 32 }} />
+                    <Divider orientation="vertical" style={{ margin: 0, height: 32 }} />
                     <Button type="primary" onClick={selectAllVisibleFieldPolicies}>
                       {t('pages.system.roles.selectAllVisible', { defaultValue: '全选' })}
                     </Button>

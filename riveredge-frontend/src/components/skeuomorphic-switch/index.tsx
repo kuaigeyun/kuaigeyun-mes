@@ -30,7 +30,7 @@ const SkeuomorphicSwitch: React.FC<SkeuomorphicSwitchProps> = ({
   checked = false,
   onChange,
   disabled = false,
-  size = 'default',
+  size='medium',
   className = '',
 }) => {
   const { width, height, knob } = sizeMap[size];

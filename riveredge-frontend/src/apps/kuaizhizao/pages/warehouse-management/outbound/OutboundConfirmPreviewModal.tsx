@@ -913,13 +913,13 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
           type="info"
           showIcon
           style={{ marginBottom: 12 }}
-          message={t('app.kuaizhizao.warehouseOutbound.oqcReview.autoCreated', {
+          title={t('app.kuaizhizao.warehouseOutbound.oqcReview.autoCreated', {
             count: oqcEnsure.created_count,
           })}
         />
       ) : null}
       {outboundType === 'sales_delivery' && oqcBlocksConfirm && oqcEnsure?.message ? (
-        <Alert type="warning" showIcon style={{ marginBottom: 12 }} message={oqcEnsure.message} />
+        <Alert type="warning" showIcon style={{ marginBottom: 12 }} title={oqcEnsure.message} />
       ) : null}
       {record ? (
         <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>

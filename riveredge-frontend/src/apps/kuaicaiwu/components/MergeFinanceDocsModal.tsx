@@ -396,7 +396,7 @@ export const MergeFinanceDocsModal: React.FC<Props> = ({
                 label={t('app.kuaicaiwu.mergeFinance.taxRate')}
                 min={0}
                 max={100}
-                fieldProps={{ precision: 2, addonAfter: '%' }}
+                fieldProps={{ precision: 2, suffix: '%' }}
                 rules={[{ required: true }]}
               />
             </Col>

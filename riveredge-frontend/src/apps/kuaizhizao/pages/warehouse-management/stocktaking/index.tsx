@@ -15,7 +15,7 @@ import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidate
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormDigit, ProFormSwitch } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Row, Col, InputNumber, Descriptions, Typography } from 'antd';
-import { PlusOutlined, EyeOutlined, PlayCircleOutlined, CheckCircleOutlined, DatabaseOutlined, RollbackOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, PlayCircleOutlined, CheckCircleOutlined, DatabaseOutlined, RollbackOutlined, SaveOutlined } from '@ant-design/icons';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
@@ -115,6 +115,8 @@ const StocktakingPage: React.FC = () => {
   const deepLinkFilterRef = useRef<{ id?: number; uuid?: string }>({});
   const { canCreate, canUpdate, canDelete, canAction } = useResourcePermissions(STOCKTAKING_RESOURCE);
   const canRevoke = canAction?.('revoke') ?? false;
+  /** 开始盘点：后端 create/update 任一即可；仅 create 时也应能启动刚建的单据 */
+  const canStartStocktaking = canUpdate || canCreate;
 
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   // Modal 相关状态
@@ -129,6 +131,7 @@ const StocktakingPage: React.FC = () => {
   const [detailLoading, setDetailLoading] = useState(false);
   const [currentStocktaking, setCurrentStocktaking] = useState<Stocktaking | null>(null);
   const [savingItemId, setSavingItemId] = useState<number | null>(null);
+  const [bulkSaving, setBulkSaving] = useState(false);
   const [editingActualQty, setEditingActualQty] = useState<Record<number, number>>({});
 
   const [currentStocktakingForItem, setCurrentStocktakingForItem] = useState<Stocktaking | null>(null);
@@ -188,14 +191,33 @@ const StocktakingPage: React.FC = () => {
   const refreshCurrentDetail = useCallback(async (stocktakingId: number) => {
     const detail = await stocktakingApi.get(stocktakingId.toString());
     setCurrentStocktaking(detail);
+    setEditingActualQty({});
     return detail;
   }, []);
+
+  const resolveItemActualQty = useCallback(
+    (item: StocktakingItem): number => {
+      if (!item.id) return 0;
+      const raw = editingActualQty[item.id] ?? item.actual_quantity ?? item.book_quantity ?? 0;
+      return Number(raw);
+    },
+    [editingActualQty],
+  );
+
+  const pendingStocktakingItems = useMemo(() => {
+    if (currentStocktaking?.status !== 'in_progress') return [];
+    return (currentStocktaking.items ?? []).filter(
+      (item): item is StocktakingItem & { id: number } =>
+        item.status === 'pending' && typeof item.id === 'number',
+    );
+  }, [currentStocktaking]);
 
   const handleDetail = useCallback(async (record: Stocktaking) => {
     if (record.id == null) return;
     setDetailDrawerVisible(true);
     setDetailLoading(true);
     setCurrentStocktaking(null);
+    setEditingActualQty({});
     try {
       await refreshCurrentDetail(record.id);
     } catch (error: any) {
@@ -395,13 +417,13 @@ const StocktakingPage: React.FC = () => {
 
   const handleSaveActualQuantity = async (item: StocktakingItem) => {
     if (!currentStocktaking?.id || !item.id) return;
-    const actualQty = editingActualQty[item.id] ?? item.actual_quantity ?? item.book_quantity ?? 0;
+    const actualQty = resolveItemActualQty(item);
     setSavingItemId(item.id);
     try {
       await stocktakingApi.executeItem(
         currentStocktaking.id.toString(),
         item.id.toString(),
-        Number(actualQty),
+        actualQty,
         item.remarks,
       );
       messageApi.success(t('app.kuaizhizao.stocktaking.msgSaveActualSuccess'));
@@ -412,6 +434,55 @@ const StocktakingPage: React.FC = () => {
       messageApi.error(error.message || t('app.kuaizhizao.stocktaking.msgSaveActualFailed'));
     } finally {
       setSavingItemId(null);
+    }
+  };
+
+  const handleBulkSaveActualQuantities = async () => {
+    if (!currentStocktaking?.id || !canUpdate) return;
+    const pending = pendingStocktakingItems;
+    if (pending.length === 0) {
+      messageApi.info(t('app.kuaizhizao.stocktaking.msgBulkSaveNoPending'));
+      return;
+    }
+    const stocktakingId = currentStocktaking.id;
+    setBulkSaving(true);
+    let successCount = 0;
+    let failCount = 0;
+    try {
+      for (const item of pending) {
+        try {
+          await stocktakingApi.executeItem(
+            stocktakingId.toString(),
+            item.id.toString(),
+            resolveItemActualQty(item),
+            item.remarks,
+          );
+          successCount += 1;
+        } catch {
+          failCount += 1;
+        }
+      }
+      if (successCount > 0) {
+        invalidateMenuBadgeCounts();
+        actionRef.current?.reload();
+        await refreshCurrentDetail(stocktakingId);
+      }
+      if (failCount === 0) {
+        messageApi.success(
+          t('app.kuaizhizao.stocktaking.msgBulkSaveSuccess', { count: successCount }),
+        );
+      } else if (successCount > 0) {
+        messageApi.warning(
+          t('app.kuaizhizao.stocktaking.msgBulkSavePartial', {
+            success: successCount,
+            failed: failCount,
+          }),
+        );
+      } else {
+        messageApi.error(t('app.kuaizhizao.stocktaking.msgBulkSaveFailed'));
+      }
+    } finally {
+      setBulkSaving(false);
     }
   };
 
@@ -633,7 +704,7 @@ const StocktakingPage: React.FC = () => {
       render: (_, record) => (
         <Space wrap>
           <Button {...rowActionKind('read')} onClick={() => handleDetail(record)} />
-          {record.status === 'draft' && canUpdate && (
+          {record.status === 'draft' && canStartStocktaking && (
             <Button {...rowActionKind('execute')} {...rowActionLabelKeep()} onClick={() => handleStart(record)}>
               {t('app.kuaizhizao.stocktaking.actionStart')}
             </Button>
@@ -661,7 +732,7 @@ const StocktakingPage: React.FC = () => {
         </Space>
       ),
     },
-  ], WAREHOUSE_DOC_LIST_FIELD_RANK), [t, canUpdate, canCreate, canRevoke, workflowStatusValueEnum, stocktakingTypeValueEnum]);
+  ], WAREHOUSE_DOC_LIST_FIELD_RANK), [t, canUpdate, canCreate, canStartStocktaking, canRevoke, workflowStatusValueEnum, stocktakingTypeValueEnum]);
 
   const detailColumns = useMemo(() => alignDescriptionColumns([
     {
@@ -839,6 +910,7 @@ const StocktakingPage: React.FC = () => {
             type="link"
             size="small"
             loading={savingItemId === item.id}
+            disabled={bulkSaving}
             onClick={() => handleSaveActualQuantity(item)}
           >
             {t('common.save')}
@@ -846,7 +918,7 @@ const StocktakingPage: React.FC = () => {
         ) : null
       ),
     },
-  ], [t, currentStocktaking, editingActualQty, savingItemId, canUpdate]);
+  ], [t, currentStocktaking, editingActualQty, savingItemId, bulkSaving, canUpdate, resolveItemActualQty, quantityDecimals]);
 
   const detailCollaboration = useMemo(() => {
     if (!currentStocktaking) return undefined;
@@ -1089,11 +1161,26 @@ const StocktakingPage: React.FC = () => {
         onClose={() => {
           setDetailDrawerVisible(false);
           setCurrentStocktaking(null);
+          setEditingActualQty({});
+          setBulkSaving(false);
         }}
-        width={DRAWER_CONFIG.HALF_WIDTH}
+        size={DRAWER_CONFIG.HALF_WIDTH}
         extra={
           currentStocktaking?.status === 'in_progress' ? (
-            <Space>
+            <Space wrap>
+              {canUpdate && pendingStocktakingItems.length > 0 && (
+                <Button
+                  type="primary"
+                  icon={<SaveOutlined />}
+                  loading={bulkSaving}
+                  disabled={Boolean(savingItemId)}
+                  onClick={() => void handleBulkSaveActualQuantities()}
+                >
+                  {t('app.kuaizhizao.stocktaking.actionBulkSaveEntries', {
+                    count: pendingStocktakingItems.length,
+                  })}
+                </Button>
+              )}
               {isPartialType(currentStocktaking) && canCreate && (
                 <>
                   <Button

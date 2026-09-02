@@ -34,10 +34,29 @@ export function uniMaterialSelectValueFromEvent(val: unknown): number | undefine
   return Number.isFinite(n) ? n : undefined;
 }
 
+/** 多选：规范为数字 ID 数组 */
+export function uniMaterialSelectMultipleValueFromEvent(val: unknown): number[] {
+  if (val == null) return [];
+  const raw = Array.isArray(val) ? val : [val];
+  return raw
+    .map((item) => Number(item))
+    .filter((n) => Number.isFinite(n) && n > 0);
+}
+
 export function uniMaterialSelectGetValueProps(v: unknown): { value: number | undefined } {
   if (v == null || v === '') return { value: undefined };
   const n = Number(v);
   return { value: Number.isFinite(n) ? n : undefined };
+}
+
+export function uniMaterialSelectMultipleGetValueProps(v: unknown): { value: number[] } {
+  if (v == null) return { value: [] };
+  const raw = Array.isArray(v) ? v : [v];
+  return {
+    value: raw
+      .map((item) => Number(item))
+      .filter((n) => Number.isFinite(n) && n > 0),
+  };
 }
 
 /** 单层字段名：兼容 camelCase 与 snake_case（如 defaults 内 default_sale_price） */
@@ -96,7 +115,12 @@ interface UniMaterialSelectProps {
   fallbackOption?: { value: number; label: string };
   /** 按物料来源类型过滤（如 Make 仅自制件） */
   sourceType?: string;
-  onChange?: (value: number | undefined, material: Material | undefined) => void;
+  /** 按物料分组过滤（仅展示该分组内物料） */
+  groupId?: number;
+  onChange?: (
+    value: number | number[] | undefined,
+    material: Material | Material[] | undefined,
+  ) => void;
 }
 
 /**
@@ -125,12 +149,13 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
   mastersOnly = true,
   listFieldKey,
   listFieldName,
-  size = 'middle',
+  size='medium',
   showQuickCreate = true,
   quickCreate: quickCreateProp,
   showAdvancedSearch = true,
   fallbackOption,
   sourceType,
+  groupId,
   onChange,
   formItemProps,
   fieldProps,
@@ -160,6 +185,11 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
   const dataIdsRef = useRef<Set<number>>(new Set());
   const resolvingIdsRef = useRef<Set<number>>(new Set());
   const selectedIdRef = useRef<number | undefined>(undefined);
+  const selectedIdsRef = useRef<number[]>([]);
+
+  const isMultiple =
+    (fieldProps as SelectProps | undefined)?.mode === 'multiple' ||
+    (restFieldProps as SelectProps | undefined)?.mode === 'multiple';
 
   /** Form.List 内 name 为相对路径，需拼出完整字段路径才能 watch 到当前值 */
   const watchedName = useMemo(() => {
@@ -171,10 +201,14 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
   }, [listFieldName, listFieldKey, name]);
 
   const currentValue = Form.useWatch(watchedName, form);
-  selectedIdRef.current = (() => {
-    const id = Number(currentValue);
-    return Number.isFinite(id) && id > 0 ? id : undefined;
-  })();
+  if (isMultiple) {
+    selectedIdsRef.current = uniMaterialSelectMultipleValueFromEvent(currentValue);
+  } else {
+    selectedIdRef.current = (() => {
+      const id = Number(currentValue);
+      return Number.isFinite(id) && id > 0 ? id : undefined;
+    })();
+  }
 
   const mergeMaterialsIntoData = (items: Material[]) => {
     if (!items.length) return;
@@ -198,21 +232,22 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
         isActive: activeOnly ? true : undefined,
         mastersOnly: mastersOnly ? true : undefined,
         sourceType: sourceType || undefined,
+        groupId: groupId || undefined,
         limit: 200,
       });
       const raw = response?.data || response?.items || response || [];
       const rows = Array.isArray(raw) ? raw : [];
       const next = filterSelectableMaterials(rows, mastersOnly);
       setData((prev) => {
-        const selectedId = selectedIdRef.current;
-        if (
-          selectedId &&
-          !next.some((m) => Number((m as any).id) === selectedId)
-        ) {
-          const keep = prev.find((m) => Number((m as any).id) === selectedId);
-          if (keep) return [keep, ...next];
-        }
-        return next;
+        const selectedIds = isMultiple
+          ? selectedIdsRef.current
+          : selectedIdRef.current
+            ? [selectedIdRef.current]
+            : [];
+        if (!selectedIds.length) return next;
+        const keep = prev.filter((m) => selectedIds.includes(Number((m as any).id)));
+        const missingKeep = keep.filter((m) => !next.some((n) => Number((n as any).id) === Number((m as any).id)));
+        return missingKeep.length ? [...missingKeep, ...next] : next;
       });
     } catch (error) {
       console.error('Failed to fetch materials:', error);
@@ -229,7 +264,7 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
 
   useEffect(() => {
     fetchMaterials();
-  }, [activeOnly, mastersOnly, sourceType]);
+  }, [activeOnly, mastersOnly, sourceType, groupId]);
 
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
@@ -245,35 +280,51 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
    * 按主键精确补齐选项，避免 Select 只显示裸 ID。
    */
   useEffect(() => {
-    const id = Number(currentValue);
-    if (!Number.isFinite(id) || id <= 0) return;
-    if (dataIdsRef.current.has(id)) return;
-    if (fallbackOption && Number(fallbackOption.value) === id) return;
-    if (resolvingIdsRef.current.has(id)) return;
+    const ids = isMultiple
+      ? uniMaterialSelectMultipleValueFromEvent(currentValue)
+      : (() => {
+          const id = Number(currentValue);
+          return Number.isFinite(id) && id > 0 ? [id] : [];
+        })();
+    if (!ids.length) return;
 
-    resolvingIdsRef.current.add(id);
+    const missing = ids.filter(
+      (id) =>
+        !dataIdsRef.current.has(id) &&
+        !(fallbackOption && Number(fallbackOption.value) === id) &&
+        !resolvingIdsRef.current.has(id),
+    );
+    if (!missing.length) return;
+
+    for (const id of missing) {
+      resolvingIdsRef.current.add(id);
+    }
     let cancelled = false;
     void (async () => {
       try {
-        const result = await materialApi.list({ ids: [id], limit: 1 });
+        const result = await materialApi.list({ ids: missing, limit: missing.length });
         if (cancelled) return;
-        const found = (result.items ?? []).find((m) => Number((m as any).id) === id);
-        if (found) {
-          mergeMaterialsIntoData([found]);
-        } else {
-          console.error('[UniMaterialSelect] selected material not found by id', id);
+        const found = (result.items ?? []).filter((m) =>
+          missing.includes(Number((m as any).id)),
+        );
+        if (found.length) {
+          mergeMaterialsIntoData(found);
+        } else if (!isMultiple) {
+          console.error('[UniMaterialSelect] selected material not found by id', missing[0]);
         }
       } catch (error) {
-        console.error('[UniMaterialSelect] failed to resolve selected material', id, error);
+        console.error('[UniMaterialSelect] failed to resolve selected material(s)', missing, error);
       } finally {
-        resolvingIdsRef.current.delete(id);
+        for (const id of missing) {
+          resolvingIdsRef.current.delete(id);
+        }
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [currentValue, fallbackOption]);
+  }, [currentValue, fallbackOption, isMultiple]);
 
   const resolveSelectedMaterial = async (
     val: number,
@@ -295,6 +346,7 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
         isActive: activeOnly ? true : undefined,
         mastersOnly: mastersOnly ? true : undefined,
         sourceType: sourceType || undefined,
+        groupId: groupId || undefined,
       });
       selected = list.items.find((m) => Number((m as any).id) === Number(val));
       if (selected) {
@@ -307,9 +359,21 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
     }
   };
 
-  const handleChange = async (val: number | undefined, opt: any) => {
+  const handleChange = async (val: number | number[] | undefined, opt: any) => {
+    if (isMultiple) {
+      const ids = uniMaterialSelectMultipleValueFromEvent(val);
+      const selectedMaterials = ids
+        .map((id) => data.find((m) => Number((m as any).id) === Number(id)))
+        .filter((m): m is Material => m != null);
+      if (onChangeRef.current) {
+        onChangeRef.current(ids, selectedMaterials);
+      }
+      return;
+    }
+
+    const singleVal = typeof val === 'number' ? val : uniMaterialSelectValueFromEvent(val);
     const selectedMaterial =
-      val != null ? await resolveSelectedMaterial(val, opt, data) : undefined;
+      singleVal != null ? await resolveSelectedMaterial(singleVal, opt, data) : undefined;
 
     if (selectedMaterial && fillMapping && form) {
       const isListContext = listFieldKey !== undefined && listFieldKey !== null;
@@ -331,13 +395,22 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
     }
 
     if (onChangeRef.current) {
-      onChangeRef.current(val, selectedMaterial);
+      onChangeRef.current(singleVal, selectedMaterial);
     }
   };
 
   // Form.Item 会合并子组件的 onChange（先 trigger 再 child.onChange），因此 mergedOnChange 会被调用
-  // 不再在此处 setFieldValue，由 Form.Item 的 trigger 负责更新表单；getValueFromEvent 负责规范化存储为 number
-  const mergedOnChange = (val: number | undefined, opt: any) => {
+  // 不再在此处 setFieldValue，由 Form.Item 的 trigger 负责更新表单；getValueFromEvent 负责规范化存储
+  const mergedOnChange = (val: number | number[] | undefined, opt: any) => {
+    if (isMultiple) {
+      const ids = uniMaterialSelectMultipleValueFromEvent(val);
+      void handleChange(ids, opt);
+      if (typeof fieldPropsOnChange === 'function') {
+        fieldPropsOnChange(ids as any, opt as any);
+      }
+      return;
+    }
+
     let numVal: number | undefined;
     if ((val as any) != null && (val as any) !== '') {
       const n = Number(val);
@@ -425,6 +498,7 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
                   isActive: activeOnly ? true : undefined,
                   mastersOnly: mastersOnly ? true : undefined,
                   sourceType: sourceType || undefined,
+                  groupId: groupId || undefined,
                   ...(kw && { keyword: kw }),
                 });
                 const raw = list as { items?: Material[]; data?: Material[] } | Material[];
@@ -473,8 +547,12 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
         label={label || undefined}
         rules={required ? [{ required: true, message: `请选择${label || '物料'}` }] : undefined}
         validateTrigger={['onChange', 'onBlur']}
-        getValueFromEvent={(val: unknown) => uniMaterialSelectValueFromEvent(val)}
-        getValueProps={(v: any) => uniMaterialSelectGetValueProps(v)}
+        getValueFromEvent={(val: unknown) =>
+          isMultiple ? uniMaterialSelectMultipleValueFromEvent(val) : uniMaterialSelectValueFromEvent(val)
+        }
+        getValueProps={(v: any) =>
+          isMultiple ? uniMaterialSelectMultipleGetValueProps(v) : uniMaterialSelectGetValueProps(v)
+        }
         /** 勿用 margin:0，会吃掉 ant-form-item 默认 margin-bottom，导致与下一表单项贴死 */
         style={{ marginTop: 0, marginInline: 0, ...formItemStyle }}
         {...restFormItemProps}

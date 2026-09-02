@@ -129,7 +129,7 @@ const DatasetQueryBuilder: React.FC<DatasetQueryBuilderProps> = ({
   }
 
   return (
-    <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+    <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
       <Form.Item label="表">
         <Select
           placeholder="选择表"

@@ -2,7 +2,7 @@
  * 右下角悬浮按钮
  *
  * 展示系统迭代提示、版本信息、构建来源及意见反馈入口。
- * 是否显示由平台设置 float_button_enabled 控制。
+ * 是否显示由平台设置 float_button_enabled 控制（仅显式为 true 时展示；加载中或接口失败默认隐藏）。
  */
 
 import React, { useState, useMemo } from 'react';
@@ -51,7 +51,7 @@ export default function IterationFloatButton() {
     staleTime: 60 * 1000,
   });
 
-  const enabled = settings?.float_button_enabled !== false;
+  const enabled = settings?.float_button_enabled === true;
 
   const { data: version, isLoading: versionLoading } = useQuery({
     queryKey: ['platformVersion'],
@@ -152,7 +152,7 @@ export default function IterationFloatButton() {
                   type="warning"
                   showIcon
                   style={{ marginTop: 8 }}
-                  message={t('components.iterationFloatButton.unverifiedAlert')}
+                  title={t('components.iterationFloatButton.unverifiedAlert')}
                   description={
                     <Link onClick={() => window.open(provenance.official_site || OFFICIAL_SITE, '_blank')}>
                       {t('components.iterationFloatButton.viewOfficialSite')}

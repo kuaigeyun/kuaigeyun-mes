@@ -205,7 +205,7 @@ const WorkOrderPrintModal: React.FC<WorkOrderPrintModalProps> = ({
             <Empty description={t('app.kuaizhizao.workOrder.msgWorkOrderIdMissingPreview')} style={{ paddingTop: 100 }} />
           ) : printLoading && !previewHtml ? (
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', minHeight: 400 }}>
-              <Spin tip={t('app.kuaizhizao.workOrder.msgLoadingPreview')}>
+              <Spin description={t('app.kuaizhizao.workOrder.msgLoadingPreview')}>
                 <div style={{ minHeight: 24 }} />
               </Spin>
             </div>

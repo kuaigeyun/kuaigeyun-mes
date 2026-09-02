@@ -236,7 +236,7 @@ const CardView: React.FC = () => {
     return (
       <div>
         <Alert
-          message={title}
+          title={title}
           description={tr.message}
           type={alertType}
           showIcon
@@ -268,7 +268,7 @@ const CardView: React.FC = () => {
           {tr.error && (
             <Descriptions.Item label={t('pages.system.integrationConfigs.errorInfo')}>
               <Alert
-                message={tr.error}
+                title={tr.error}
                 type="error"
                 showIcon
                 style={{ fontSize: 12 }}
@@ -478,7 +478,7 @@ const CardView: React.FC = () => {
                                   
                                   {integration.last_error && (
                                     <Alert
-                                      message={integration.last_error}
+                                      title={integration.last_error}
                                       type="error"
                                       showIcon
                                       style={{ fontSize: 11, marginTop: 8 }}
@@ -561,7 +561,7 @@ const CardView: React.FC = () => {
             {currentIntegration.last_error && (
               <Descriptions.Item label={t('pages.system.integrationConfigs.lastError')}>
                 <Alert
-                  message={currentIntegration.last_error}
+                  title={currentIntegration.last_error}
                   type="error"
                   showIcon
                   style={{ fontSize: 12 }}

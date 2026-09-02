@@ -27,7 +27,10 @@ import {
 } from '../services/install-execution';
 import { listSalesOrders } from '../services/sales-order';
 import { warehouseApi } from '../services/warehouse-execution';
-import { customerApi, unwrapSupplyPagedList } from '../../master-data/services/supply-chain';
+import {
+  KUAIZHIZAO_DOC_HOST,
+  loadCustomerFormReferenceList,
+} from '../../../utils/documentFormReferenceLoad';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../services/dataDictionary';
 import { mapSystemDictionaryItemOptions } from '../../../utils/systemDictionaryI18n';
 
@@ -171,15 +174,14 @@ export const InstallExecutionFormModal: React.FC<Props> = ({
 
   useEffect(() => {
     if (!open) return;
-    void customerApi.list({ limit: 500, isActive: true }).then((res) => {
-      const rows = unwrapSupplyPagedList(res);
+    void loadCustomerFormReferenceList(KUAIZHIZAO_DOC_HOST.afterSalesInstall).then((rows) => {
       setCustomers(
         rows
-          .map((c: any) => {
-            const id = Number(c?.id ?? c?.customer_id);
+          .map((c) => {
+            const id = Number(c?.id);
             if (!Number.isFinite(id)) return null;
-            const code = String(c?.code ?? c?.customer_code ?? '').trim();
-            const name = String(c?.name ?? c?.customer_name ?? '').trim();
+            const code = String(c?.code ?? '').trim();
+            const name = String(c?.name ?? '').trim();
             return { id, label: [code, name].filter(Boolean).join(' ') || String(id) };
           })
           .filter(Boolean) as { id: number; label: string }[],

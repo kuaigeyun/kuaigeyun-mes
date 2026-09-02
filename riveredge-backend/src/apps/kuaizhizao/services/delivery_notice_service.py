@@ -121,6 +121,8 @@ class DeliveryNoticeService(AppBaseService[DeliveryNotice]):
             _CANCELLED,
         )
 
+        from apps.kuaizhizao.utils.sales_delivery_helper import sales_delivery_reference_date_str
+
         delivery_query = SalesDelivery.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if sales_delivery_id is not None:
             delivery_query = delivery_query.filter(id=int(sales_delivery_id))
@@ -130,7 +132,7 @@ class DeliveryNoticeService(AppBaseService[DeliveryNotice]):
             "status",
             "customer_id",
             "customer_name",
-            "delivery_date",
+            "delivery_time",
         )
         delivery_by_id = {int(row.id): row for row in deliveries}
         if not delivery_by_id:
@@ -185,7 +187,7 @@ class DeliveryNoticeService(AppBaseService[DeliveryNotice]):
                     "suggested_quantity": qty,
                     "pushed_quantity": pushed,
                     "remaining_quantity": remaining,
-                    "required_date": str(delivery.delivery_date) if delivery.delivery_date else None,
+                    "required_date": sales_delivery_reference_date_str(delivery),
                 }
             )
         lines.sort(
@@ -207,6 +209,7 @@ class DeliveryNoticeService(AppBaseService[DeliveryNotice]):
         from apps.kuaizhizao.services.document_action_policy.sales_delivery import (
             _CANCELLED,
         )
+        from apps.kuaizhizao.utils.sales_delivery_helper import sales_delivery_reference_date
 
         selected_ids = [int(v) for v in item_ids if v is not None]
         if not selected_ids:
@@ -269,7 +272,7 @@ class DeliveryNoticeService(AppBaseService[DeliveryNotice]):
             if not notice_items:
                 raise BusinessLogicError("所选明细已全部通知，无法创建送货单")
             primary = delivery_by_id[int(remaining_items[0].delivery_id)]
-            planned = getattr(primary, "delivery_date", None) or to_site_date(resolve_business_datetime())
+            planned = sales_delivery_reference_date(primary) or to_site_date(resolve_business_datetime())
             created = await self.create_delivery_notice(
                 tenant_id,
                 DeliveryNoticeCreate(
@@ -313,6 +316,8 @@ class DeliveryNoticeService(AppBaseService[DeliveryNotice]):
             derive_sales_delivery_pull_capabilities,
         )
 
+        from apps.kuaizhizao.utils.sales_delivery_helper import sales_delivery_reference_date
+
         query = SalesDelivery.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if keyword:
             kw = keyword.strip()
@@ -348,7 +353,7 @@ class DeliveryNoticeService(AppBaseService[DeliveryNotice]):
                     customer_id=int(delivery.customer_id),
                     customer_name=str(delivery.customer_name or ""),
                     status=str(delivery.status or ""),
-                    delivery_date=getattr(delivery, "delivery_date", None),
+                    delivery_date=sales_delivery_reference_date(delivery),
                     updated_at=delivery.updated_at,
                     pullable=pullable,
                     capabilities=caps,
@@ -368,6 +373,8 @@ class DeliveryNoticeService(AppBaseService[DeliveryNotice]):
         from apps.kuaizhizao.services.document_action_policy.sales_delivery import (
             assert_sales_delivery_pull_capability,
         )
+
+        from apps.kuaizhizao.utils.sales_delivery_helper import sales_delivery_reference_date
 
         delivery = await SalesDelivery.get_or_none(
             tenant_id=tenant_id,
@@ -429,7 +436,7 @@ class DeliveryNoticeService(AppBaseService[DeliveryNotice]):
             customer_phone=getattr(delivery, "customer_phone", None),
             sales_order_id=delivery.sales_order_id,
             sales_order_code=delivery.sales_order_code,
-            planned_delivery_date=getattr(delivery, "delivery_date", None),
+            planned_delivery_date=sales_delivery_reference_date(delivery),
             shipping_address=getattr(delivery, "shipping_address", None),
             items=preview_lines,
             message=message,

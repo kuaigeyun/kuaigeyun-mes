@@ -19,6 +19,19 @@ from apps.kuaizhizao.services.menu_badge_counts_service import (
     _gather_counts,
     _safe_section,
 )
+from apps.kuaizhizao.services.menu_badge_scope import (
+    RES_AFTER_SALES_INSTALL,
+    RES_AFTER_SALES_SPARE,
+    RES_AFTER_SALES_TICKET,
+    RES_PURCHASE_ORDER,
+    RES_REPAIR_ORDER,
+    RES_SALES_CONTRACT,
+    RES_SALES_ORDER_CHANGE,
+    RES_SERVICE_DISPATCH,
+    RES_SERVICE_SETTLEMENT,
+    BadgeScopeCtx,
+    badge_count,
+)
 
 BadgeFragment = Dict[str, Any]
 
@@ -60,14 +73,15 @@ def _tri(overdue: int = 0, pending: int = 0, in_progress: int = 0) -> Dict[str, 
     return {"overdue": overdue, "pending": pending, "in_progress": in_progress}
 
 
-async def _section_contracts_and_changes(tenant_id: int, now_date) -> BadgeFragment:
+async def _section_contracts_and_changes(ctx: BadgeScopeCtx, now_date) -> BadgeFragment:
     from apps.kuaizhizao.models.purchase_order_change_order import PurchaseOrderChangeOrder
     from apps.kuaizhizao.models.sales_contract import SalesContract
     from apps.kuaizhizao.models.sales_order_change_order import SalesOrderChangeOrder
 
-    sc = SalesContract.filter(tenant_id=tenant_id, deleted_at__isnull=True, is_active=True)
-    soc = SalesOrderChangeOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True, is_active=True)
-    poc = PurchaseOrderChangeOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True, is_active=True)
+    tid = ctx.tenant_id
+    sc = SalesContract.filter(tenant_id=tid, deleted_at__isnull=True, is_active=True)
+    soc = SalesOrderChangeOrder.filter(tenant_id=tid, deleted_at__isnull=True, is_active=True)
+    poc = PurchaseOrderChangeOrder.filter(tenant_id=tid, deleted_at__isnull=True, is_active=True)
 
     change_pending_q = {"review_status__in": _RV_PENDING, "status__in": ["PENDING_REVIEW", "待审核"]}
     change_prog_q = {
@@ -86,19 +100,51 @@ async def _section_contracts_and_changes(tenant_id: int, now_date) -> BadgeFragm
         poc_p,
         poc_x,
     ) = await _gather_counts(
-        sc.filter(valid_to__lt=now_date, valid_to__isnull=False).exclude(status__in=_CONTRACT_TERMINAL).count(),
-        sc.filter(review_status__in=_RV_PENDING).exclude(status__in=[*_CONTRACT_TERMINAL, "草稿", "DRAFT"]).count(),
-        sc.filter(status__in=_CONTRACT_IN_PROGRESS).exclude(status__in=_CONTRACT_TERMINAL).count(),
-        soc.filter(effective_date__lt=now_date, effective_date__isnull=False)
-        .exclude(status__in=_CHANGE_TERMINAL)
-        .count(),
-        soc.filter(**change_pending_q).exclude(status__in=_CHANGE_TERMINAL).count(),
-        soc.filter(**change_prog_q).exclude(status__in=_CHANGE_TERMINAL).count(),
-        poc.filter(effective_date__lt=now_date, effective_date__isnull=False)
-        .exclude(status__in=_CHANGE_TERMINAL)
-        .count(),
-        poc.filter(**change_pending_q).exclude(status__in=_CHANGE_TERMINAL).count(),
-        poc.filter(**change_prog_q).exclude(status__in=_CHANGE_TERMINAL).count(),
+        badge_count(
+            sc.filter(valid_to__lt=now_date, valid_to__isnull=False).exclude(status__in=_CONTRACT_TERMINAL),
+            ctx,
+            RES_SALES_CONTRACT,
+        ),
+        badge_count(
+            sc.filter(review_status__in=_RV_PENDING).exclude(status__in=[*_CONTRACT_TERMINAL, "草稿", "DRAFT"]),
+            ctx,
+            RES_SALES_CONTRACT,
+        ),
+        badge_count(
+            sc.filter(status__in=_CONTRACT_IN_PROGRESS).exclude(status__in=_CONTRACT_TERMINAL),
+            ctx,
+            RES_SALES_CONTRACT,
+        ),
+        badge_count(
+            soc.filter(effective_date__lt=now_date, effective_date__isnull=False).exclude(status__in=_CHANGE_TERMINAL),
+            ctx,
+            RES_SALES_ORDER_CHANGE,
+        ),
+        badge_count(
+            soc.filter(**change_pending_q).exclude(status__in=_CHANGE_TERMINAL),
+            ctx,
+            RES_SALES_ORDER_CHANGE,
+        ),
+        badge_count(
+            soc.filter(**change_prog_q).exclude(status__in=_CHANGE_TERMINAL),
+            ctx,
+            RES_SALES_ORDER_CHANGE,
+        ),
+        badge_count(
+            poc.filter(effective_date__lt=now_date, effective_date__isnull=False).exclude(status__in=_CHANGE_TERMINAL),
+            ctx,
+            RES_PURCHASE_ORDER,
+        ),
+        badge_count(
+            poc.filter(**change_pending_q).exclude(status__in=_CHANGE_TERMINAL),
+            ctx,
+            RES_PURCHASE_ORDER,
+        ),
+        badge_count(
+            poc.filter(**change_prog_q).exclude(status__in=_CHANGE_TERMINAL),
+            ctx,
+            RES_PURCHASE_ORDER,
+        ),
     )
     return {
         "sales_contract": _tri(sc_od, sc_p, sc_x),
@@ -281,7 +327,7 @@ async def _section_finance_menus(tenant_id: int, now_date) -> BadgeFragment:
     }
 
 
-async def _section_after_sales(tenant_id: int, now: datetime) -> BadgeFragment:
+async def _section_after_sales(ctx: BadgeScopeCtx, now: datetime) -> BadgeFragment:
     from apps.kuaizhizao.models.after_sales_service import (
         AfterSalesSparePartRequisition,
         RepairOrder,
@@ -291,33 +337,72 @@ async def _section_after_sales(tenant_id: int, now: datetime) -> BadgeFragment:
     from apps.kuaizhizao.models.after_sales_ticket import AfterSalesTicket
     from apps.kuaizhizao.models.install_execution_job import InstallExecutionJob
 
+    tid = ctx.tenant_id
     ticket_p, ticket_x, install_p, install_x, repair_p, repair_x = await _gather_counts(
-        AfterSalesTicket.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="待处理").count(),
-        AfterSalesTicket.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="处理中").count(),
-        InstallExecutionJob.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="待派工").count(),
-        InstallExecutionJob.filter(tenant_id=tenant_id, deleted_at__isnull=True, status__in=["进行中", "待验收"]).count(),
-        RepairOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="待派工").count(),
-        RepairOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True, status__in=["维修中", "待验收"]).count(),
+        badge_count(
+            AfterSalesTicket.filter(tenant_id=tid, deleted_at__isnull=True, status="待处理"),
+            ctx,
+            RES_AFTER_SALES_TICKET,
+        ),
+        badge_count(
+            AfterSalesTicket.filter(tenant_id=tid, deleted_at__isnull=True, status="处理中"),
+            ctx,
+            RES_AFTER_SALES_TICKET,
+        ),
+        badge_count(
+            InstallExecutionJob.filter(tenant_id=tid, deleted_at__isnull=True, status="待派工"),
+            ctx,
+            RES_AFTER_SALES_INSTALL,
+        ),
+        badge_count(
+            InstallExecutionJob.filter(tenant_id=tid, deleted_at__isnull=True, status__in=["进行中", "待验收"]),
+            ctx,
+            RES_AFTER_SALES_INSTALL,
+        ),
+        badge_count(
+            RepairOrder.filter(tenant_id=tid, deleted_at__isnull=True, status="待派工"),
+            ctx,
+            RES_REPAIR_ORDER,
+        ),
+        badge_count(
+            RepairOrder.filter(tenant_id=tid, deleted_at__isnull=True, status__in=["维修中", "待验收"]),
+            ctx,
+            RES_REPAIR_ORDER,
+        ),
     )
     dispatch_od, dispatch_p, dispatch_x = await _gather_counts(
-        ServiceDispatchOrder.filter(
-            tenant_id=tenant_id,
-            deleted_at__isnull=True,
-            planned_end_at__lt=now,
-            planned_end_at__isnull=False,
-        )
-        .exclude(status__in=["完工", "已取消"])
-        .count(),
-        ServiceDispatchOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="待接单").count(),
-        ServiceDispatchOrder.filter(
-            tenant_id=tenant_id, deleted_at__isnull=True, status__in=["已接单", "到场"]
-        ).count(),
+        badge_count(
+            ServiceDispatchOrder.filter(
+                tenant_id=tid,
+                deleted_at__isnull=True,
+                planned_end_at__lt=now,
+                planned_end_at__isnull=False,
+            ).exclude(status__in=["完工", "已取消"]),
+            ctx,
+            RES_SERVICE_DISPATCH,
+        ),
+        badge_count(
+            ServiceDispatchOrder.filter(tenant_id=tid, deleted_at__isnull=True, status="待接单"),
+            ctx,
+            RES_SERVICE_DISPATCH,
+        ),
+        badge_count(
+            ServiceDispatchOrder.filter(tenant_id=tid, deleted_at__isnull=True, status__in=["已接单", "到场"]),
+            ctx,
+            RES_SERVICE_DISPATCH,
+        ),
     )
     as_spare_p, settle_p = await _gather_counts(
-        AfterSalesSparePartRequisition.filter(
-            tenant_id=tenant_id, deleted_at__isnull=True, status="待审核"
-        ).count(),
-        ServiceSettlement.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="待审核").count(),
+        badge_count(
+            AfterSalesSparePartRequisition.filter(tenant_id=tid, deleted_at__isnull=True, status="待审核"),
+            ctx,
+            RES_AFTER_SALES_SPARE,
+        ),
+        badge_count(
+            ServiceSettlement.filter(tenant_id=tid, deleted_at__isnull=True, status="待审核"),
+            ctx,
+            RES_SERVICE_SETTLEMENT,
+        ),
     )
     return {
         "after_sales_ticket": _tri(pending=ticket_p, in_progress=ticket_x),
@@ -504,17 +589,17 @@ async def _section_warehouse_extra(tenant_id: int, now_date) -> BadgeFragment:
     }
 
 
-async def fetch_extended_menu_badge_counts(tenant_id: int, now: datetime, now_date) -> BadgeFragment:
+async def fetch_extended_menu_badge_counts(ctx: BadgeScopeCtx, now: datetime, now_date) -> BadgeFragment:
     sections = await asyncio.gather(
-        _safe_section("contracts_changes", lambda: _section_contracts_and_changes(tenant_id, now_date)),
-        _safe_section("purchase_inquiry", lambda: _section_purchase_inquiry(tenant_id, now_date)),
-        _safe_section("demand_reporting", lambda: _section_demand_and_reporting(tenant_id, now_date)),
-        _safe_section("oqc", lambda: _section_oqc(tenant_id)),
-        _safe_section("finance_menus", lambda: _section_finance_menus(tenant_id, now_date)),
-        _safe_section("after_sales", lambda: _section_after_sales(tenant_id, now)),
-        _safe_section("logistics", lambda: _section_logistics(tenant_id, now)),
-        _safe_section("equipment_documents", lambda: _section_equipment_documents(tenant_id, now, now_date)),
-        _safe_section("warehouse_extra", lambda: _section_warehouse_extra(tenant_id, now_date)),
+        _safe_section("contracts_changes", lambda: _section_contracts_and_changes(ctx, now_date)),
+        _safe_section("purchase_inquiry", lambda: _section_purchase_inquiry(ctx.tenant_id, now_date)),
+        _safe_section("demand_reporting", lambda: _section_demand_and_reporting(ctx.tenant_id, now_date)),
+        _safe_section("oqc", lambda: _section_oqc(ctx.tenant_id)),
+        _safe_section("finance_menus", lambda: _section_finance_menus(ctx.tenant_id, now_date)),
+        _safe_section("after_sales", lambda: _section_after_sales(ctx, now)),
+        _safe_section("logistics", lambda: _section_logistics(ctx.tenant_id, now)),
+        _safe_section("equipment_documents", lambda: _section_equipment_documents(ctx.tenant_id, now, now_date)),
+        _safe_section("warehouse_extra", lambda: _section_warehouse_extra(ctx.tenant_id, now_date)),
     )
     counts: BadgeFragment = {}
     for fragment in sections:

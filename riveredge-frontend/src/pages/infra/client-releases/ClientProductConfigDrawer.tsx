@@ -51,7 +51,7 @@ export function ClientProductConfigDrawer({ open, onClose }: Props) {
       title: t('pages.infra.clientReleases.columnClient'),
       key: 'client',
       render: (_, record) => (
-        <Space direction="vertical" size={0}>
+        <Space orientation="vertical" size={0}>
           <Typography.Text strong>{record.display_name}</Typography.Text>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
             {record.client_key}
@@ -153,12 +153,12 @@ export function ClientProductConfigDrawer({ open, onClose }: Props) {
         title={t('pages.infra.clientReleases.configDrawerTitle')}
         open={open}
         onClose={onClose}
-        width={DRAWER_CONFIG.LARGE_WIDTH}
+        size={DRAWER_CONFIG.LARGE_WIDTH}
         loading={loading}
         plainBody={
           <Table<ClientProductConfig>
             rowKey="client_key"
-            size="middle"
+            size="medium"
             pagination={false}
             scroll={{ x: 960 }}
             dataSource={rows}

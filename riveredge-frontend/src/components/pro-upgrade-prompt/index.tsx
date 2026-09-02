@@ -30,7 +30,7 @@ const ProUpgradePrompt: React.FC<ProUpgradePromptProps> = ({ appName = '', appCo
     <div style={{ padding: 48, display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 360 }}>
       <Card
         style={{ maxWidth: 480, textAlign: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}
-        bordered={false}
+        variant="borderless"
       >
         <div style={{ marginBottom: 24, fontSize: 64, color: '#d9d9d9' }}>
           <LockOutlined />

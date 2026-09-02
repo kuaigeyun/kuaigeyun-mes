@@ -33,7 +33,7 @@ const MenuIconPicker: React.FC<MenuIconPickerProps> = ({
   searchPlaceholder = '搜索图标',
   clearText = '清除',
   emptyText = '无匹配图标',
-  size = 'middle',
+  size='medium',
   style,
 }) => {
   const [open, setOpen] = useState(false);
@@ -133,7 +133,7 @@ const MenuIconPicker: React.FC<MenuIconPickerProps> = ({
       onOpenChange={setOpen}
       trigger="click"
       placement="bottomLeft"
-      overlayStyle={{ minWidth: 520 }}
+      styles={{ root: { minWidth: 520 } }}
       content={pickerPanel}
     >
       <Input

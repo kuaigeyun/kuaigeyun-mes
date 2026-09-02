@@ -212,14 +212,14 @@ export const DeliveryNodeReportDetailDrawer: React.FC<DeliveryNodeReportDetailDr
   return (
     <DetailDrawerTemplate
       title={
-        <Space direction="vertical" size={0}>
+        <Space orientation="vertical" size={0}>
           <Typography.Text strong>{effective.report_code || '-'}</Typography.Text>
           <Typography.Text type="secondary">{effective.node_name || '-'}</Typography.Text>
         </Space>
       }
       open={open}
       onClose={onClose}
-      width={DRAWER_CONFIG.STANDARD_WIDTH}
+      size={DRAWER_CONFIG.STANDARD_WIDTH}
       zIndex={zIndex}
       loading={showLoading}
       extra={extra}

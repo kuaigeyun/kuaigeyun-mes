@@ -42,7 +42,7 @@ document_relation_service = DocumentRelationNewService()
 router = APIRouter(
     prefix="/demands",
     tags=["App - Kuaige Zhizao - Demand Management"],
-    dependencies=[Depends(require_kuaizhizao_module_access("demand"))],
+    dependencies=[Depends(require_kuaizhizao_module_access("plan-management-demand-management"))],
 )
 
 

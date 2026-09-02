@@ -93,7 +93,7 @@ export default function TenantSelectionModal({
       footer={null}
       width={500}
       closable={false}
-      maskClosable={false}
+      mask={{ closable: false }}
     >
       <div style={{ marginBottom: 16 }}>
         <Text type="secondary">

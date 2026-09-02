@@ -37,6 +37,10 @@ def normalize_node_data(node_type: str, data: Optional[Dict[str, Any]]) -> Dict[
         if node_type == "approval":
             out.setdefault("approvalType", out.pop("approval_type", None) or "OR")
             out.setdefault("approverType", out.pop("approver_type", None) or "user")
+            if (out.get("approverType") or "") == "department":
+                scope = str(out.get("departmentScope") or out.get("department_scope") or "submitter").strip().lower()
+                out["departmentScope"] = "specified" if scope == "specified" else "submitter"
+                out.pop("department_scope", None)
             out.setdefault("allowEditDuringApproval", bool(out.get("allowEditDuringApproval", False)))
             out.setdefault("refreshContextOnEdit", bool(out.get("refreshContextOnEdit", True)))
             out.setdefault("allowTransfer", bool(out.get("allowTransfer", False)))
@@ -124,7 +128,11 @@ def validate_flow_graph(graph: Dict[str, Any]) -> None:
         if node_type == "approval":
             approver_type = data.get("approverType") or "user"
             approver_ids = data.get("approverIds") or []
-            if approver_type not in MANAGER_APPROVER_TYPES and not approver_ids:
+            if approver_type == "department":
+                scope = str(data.get("departmentScope") or "submitter").strip().lower()
+                if scope == "specified" and not approver_ids:
+                    raise ValidationError(f"审批节点 {node_id} 已选择指定部门但未选择部门")
+            elif approver_type not in MANAGER_APPROVER_TYPES and not approver_ids:
                 raise ValidationError(f"审批节点 {node_id} 未配置审批人")
         if node_type == "condition":
             out_edges = [e for e in edges if e.get("source") == node_id]

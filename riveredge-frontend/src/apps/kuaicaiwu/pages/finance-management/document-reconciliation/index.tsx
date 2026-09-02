@@ -486,7 +486,7 @@ const DocumentReconciliationPage: React.FC = () => {
 
   const gapPanel = (
     <>
-      <Alert type="info" showIcon style={{ marginBottom: 16 }} message={t(`${D}.queryHint`)} />
+      <Alert type="info" showIcon style={{ marginBottom: 16 }} title={t(`${D}.queryHint`)} />
       {gapSummary.gap_count != null ? (
         <Card size="small" style={{ marginBottom: 16 }}>
           {t(`${D}.summary`, {
@@ -569,7 +569,7 @@ const DocumentReconciliationPage: React.FC = () => {
             options={chainDocOptions}
             loading={chainDocSearching}
             onSearch={handleChainDocSearch}
-            onDropdownVisibleChange={(open) => {
+            onOpenChange={(open) => {
               if (open && chainDocumentType && chainDocOptions.length === 0) {
                 void fetchChainDocOptions(chainDocumentType);
               }

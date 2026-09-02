@@ -45,7 +45,10 @@ import {
   type SalesOrder,
   type SalesOrderItem,
 } from '../services/sales-order';
-import { customerApi, unwrapSupplyPagedList } from '../../master-data/services/supply-chain';
+import {
+  KUAIZHIZAO_DOC_HOST,
+  loadCustomerFormReferenceList,
+} from '../../../utils/documentFormReferenceLoad';
 import type { Customer } from '../../master-data/types/supply-chain';
 import { formatApiErrorDetail } from '../../../services/api';
 import { formatDateTimeBySiteSetting } from '../../../utils/format';
@@ -159,10 +162,7 @@ export const AfterSalesTicketFormModal: React.FC<AfterSalesTicketFormModalProps>
 
   useEffect(() => {
     if (!open) return;
-    void customerApi
-      .list({ limit: 1000, isActive: true })
-      .then((res) => setCustomers(unwrapSupplyPagedList(res)))
-      .catch(() => setCustomers([]));
+    void loadCustomerFormReferenceList(KUAIZHIZAO_DOC_HOST.afterSalesTicket).then(setCustomers);
   }, [open]);
 
   useEffect(() => {
@@ -681,7 +681,7 @@ export const AfterSalesTicketFormModal: React.FC<AfterSalesTicketFormModalProps>
         onOk={confirmSalesOrderItemPicker}
         okButtonProps={{ disabled: selectedSourceItemKeys.length === 0 }}
         width={860}
-        destroyOnClose
+        destroyOnHidden
         zIndex={1100}
       >
         <Table<SalesOrderItem>

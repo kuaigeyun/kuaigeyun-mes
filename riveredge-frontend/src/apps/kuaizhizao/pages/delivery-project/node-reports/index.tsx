@@ -729,7 +729,7 @@ const NodeReportsPage: React.FC = () => {
 
           max={100}
 
-          fieldProps={{ style: { width: '100%' }, addonAfter: '%' }}
+          fieldProps={{ style: { width: '100%' }, suffix: '%' }}
 
         />
 

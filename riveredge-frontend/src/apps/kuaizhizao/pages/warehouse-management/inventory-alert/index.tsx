@@ -77,6 +77,7 @@ interface InventoryAlert {
   alert_rule_id?: number;
   alert_type?: string;
   material_id?: number;
+  material_ids?: number[];
   material_code?: string;
   material_name?: string;
   warehouse_id?: number;
@@ -107,6 +108,7 @@ interface InventoryAlertRule {
   name?: string;
   alert_type?: string;
   material_id?: number;
+  material_ids?: number[];
   material_code?: string;
   material_name?: string;
   material_group_id?: number;
@@ -304,8 +306,14 @@ const InventoryAlertPage: React.FC = () => {
   );
 
   const ruleMaterialFallbackOption = useMemo(() => {
-    const materialId = pendingRuleFormValues?.material_id;
-    if (!materialId) return undefined;
+    const materialIds =
+      pendingRuleFormValues?.material_ids?.length
+        ? pendingRuleFormValues.material_ids
+        : pendingRuleFormValues?.material_id
+          ? [pendingRuleFormValues.material_id]
+          : [];
+    if (materialIds.length !== 1) return undefined;
+    const materialId = materialIds[0];
     const code = pendingRuleFormValues?.material_code ?? '';
     const name = pendingRuleFormValues?.material_name ?? '';
     const label = [code, name].filter(Boolean).join(' - ') || String(materialId);
@@ -326,6 +334,12 @@ const InventoryAlertPage: React.FC = () => {
         alert_type: detail.alert_type,
         material_group_id: detail.material_group_id,
         material_group_name: detail.material_group_name,
+        material_ids:
+          detail.material_ids?.length
+            ? detail.material_ids
+            : detail.material_id
+              ? [detail.material_id]
+              : undefined,
         material_id: detail.material_id,
         material_code: detail.material_code,
         material_name: detail.material_name,
@@ -339,8 +353,12 @@ const InventoryAlertPage: React.FC = () => {
         notify_roles: detail.notify_roles,
         remarks: detail.remarks,
       });
-      if (detail.material_id) {
-        void loadMaterialThresholdPreview({ id: Number(detail.material_id) } as Material);
+      const previewMaterialId =
+        detail.material_ids?.length === 1
+          ? detail.material_ids[0]
+          : detail.material_id;
+      if (previewMaterialId) {
+        void loadMaterialThresholdPreview({ id: Number(previewMaterialId) } as Material);
       }
     } catch (error: any) {
       messageApi.error(error.message || t('app.kuaizhizao.inventoryAlert.msgGetRuleFailed'));
@@ -374,9 +392,9 @@ const InventoryAlertPage: React.FC = () => {
           alert_type: values.alert_type,
           material_group_id: values.material_group_id,
           material_group_name: values.material_group_name,
-          material_id: values.material_id,
-          material_code: values.material_code,
-          material_name: values.material_name,
+          material_ids: values.material_ids?.length ? values.material_ids : undefined,
+          material_id:
+            values.material_ids?.length === 1 ? values.material_ids[0] : undefined,
           warehouse_id: values.warehouse_id,
           warehouse_name: values.warehouse_name,
           ...thresholdPayload,
@@ -1072,45 +1090,54 @@ const InventoryAlertPage: React.FC = () => {
                 onChange: (value: number | undefined, option: { label?: string } | undefined) => {
                   formRef.current?.setFieldsValue({
                     material_group_name: value ? (option?.label ?? undefined) : undefined,
+                    material_ids: undefined,
+                    material_id: undefined,
                   });
+                  setSelectedMaterialThresholds(null);
                 },
               }}
             />
           </Col>
         </Row>
-        <Row gutter={16}>
-          <Col span={12}>
-            <UniMaterialSelect
-              name="material_id"
-              label={t('app.kuaizhizao.warehouseCommon.colMaterial')}
-              placeholder={t('app.kuaizhizao.warehouseCommon.selectMaterial')}
-              disabled={!!currentRuleId}
-              showQuickCreate
-              showAdvancedSearch
-              fillMapping={{
-                material_code: 'mainCode',
-                material_name: 'name',
-              }}
-              fallbackOption={ruleMaterialFallbackOption}
-              onChange={(_value, material) => {
-                void loadMaterialThresholdPreview(material);
-              }}
-            />
-          </Col>
-          <Col span={12}>
-            <UniWarehouseSelect
-              name="warehouse_id"
-              label={t('app.kuaizhizao.warehouseReports.colWarehouse')}
-              placeholder={t('app.kuaizhizao.warehouseCommon.selectWarehouse')}
-              disabled={!!currentRuleId}
-              onChange={(_value, warehouse) => {
-                formRef.current?.setFieldsValue({ warehouse_name: warehouse?.name ?? undefined });
-              }}
-            />
-          </Col>
-        </Row>
-        <ProFormText name="material_code" hidden />
-        <ProFormText name="material_name" hidden />
+        <ProFormDependency name={['material_group_id']}>
+          {({ material_group_id }) => (
+            <Row gutter={16}>
+              <Col span={12}>
+                <UniMaterialSelect
+                  name="material_ids"
+                  label={t('app.kuaizhizao.warehouseCommon.colMaterial')}
+                  placeholder={t('app.kuaizhizao.inventoryAlert.formMaterialMultiPlaceholder')}
+                  disabled={!!currentRuleId}
+                  showQuickCreate={!material_group_id}
+                  showAdvancedSearch
+                  groupId={material_group_id}
+                  fallbackOption={ruleMaterialFallbackOption}
+                  fieldProps={{ mode: 'multiple' }}
+                  onChange={(value, materials) => {
+                    const ids = Array.isArray(value) ? value : [];
+                    if (ids.length === 1) {
+                      const material = Array.isArray(materials) ? materials[0] : materials;
+                      void loadMaterialThresholdPreview(material);
+                      return;
+                    }
+                    setSelectedMaterialThresholds(null);
+                  }}
+                />
+              </Col>
+              <Col span={12}>
+                <UniWarehouseSelect
+                  name="warehouse_id"
+                  label={t('app.kuaizhizao.warehouseReports.colWarehouse')}
+                  placeholder={t('app.kuaizhizao.warehouseCommon.selectWarehouse')}
+                  disabled={!!currentRuleId}
+                  onChange={(_value, warehouse) => {
+                    formRef.current?.setFieldsValue({ warehouse_name: warehouse?.name ?? undefined });
+                  }}
+                />
+              </Col>
+            </Row>
+          )}
+        </ProFormDependency>
         <ProFormText name="material_group_name" hidden />
         <ProFormText name="warehouse_name" hidden />
         <ProFormDependency name={['alert_type']}>
@@ -1134,9 +1161,14 @@ const InventoryAlertPage: React.FC = () => {
             )
           }
         </ProFormDependency>
-        <ProFormDependency name={['alert_type', 'inherit_material_threshold', 'material_id']}>
-          {({ alert_type, inherit_material_threshold, material_id }) => {
+        <ProFormDependency name={['alert_type', 'inherit_material_threshold', 'material_ids']}>
+          {({ alert_type, inherit_material_threshold, material_ids }) => {
             const inherit = alert_type !== 'expired' && Boolean(inherit_material_threshold);
+            const selectedMaterialIds = Array.isArray(material_ids)
+              ? material_ids.filter((id) => Number(id) > 0)
+              : [];
+            const singleMaterialId =
+              selectedMaterialIds.length === 1 ? selectedMaterialIds[0] : undefined;
             const typeOptions =
               alert_type === 'expired'
                 ? [{ label: t('app.kuaizhizao.inventoryAlert.thresholdTypeDays'), value: 'days' }]
@@ -1173,7 +1205,7 @@ const InventoryAlertPage: React.FC = () => {
                       <div style={{ marginBottom: 8 }}>
                         {t('app.kuaizhizao.inventoryAlert.formThresholdValue')}
                       </div>
-                      {material_id ? (
+                      {singleMaterialId ? (
                         previewValue != null ? (
                           <Typography.Text>
                             {previewLabel}: <Typography.Text strong>{formatQuantity(previewValue)}</Typography.Text>
@@ -1186,6 +1218,12 @@ const InventoryAlertPage: React.FC = () => {
                             {t('app.kuaizhizao.inventoryAlert.inheritPreviewMaterialEmpty')}
                           </Typography.Text>
                         )
+                      ) : selectedMaterialIds.length > 1 ? (
+                        <Typography.Text type="secondary">
+                          {t('app.kuaizhizao.inventoryAlert.inheritPreviewByMaterials', {
+                            count: selectedMaterialIds.length,
+                          })}
+                        </Typography.Text>
                       ) : (
                         <Typography.Text type="secondary">
                           {t('app.kuaizhizao.inventoryAlert.inheritPreviewByGroup')}
@@ -1272,7 +1310,7 @@ const InventoryAlertPage: React.FC = () => {
           setDetailDrawerVisible(false);
           setCurrentAlert(null);
         }}
-        width={DRAWER_CONFIG.HALF_WIDTH}
+        size={DRAWER_CONFIG.HALF_WIDTH}
         basic={
           currentAlert ? (
             <Descriptions

@@ -11,6 +11,7 @@ import { CopyOutlined, PrinterOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import type { NavigateFunction } from 'react-router-dom';
+import { resolveSalesOrderDisplayTotalAmount } from '../../../../utils/documentLineAmounts';
 import { AmountDisplay } from '../../../../../../components/permission';
 import { KUAIZHIZAO_SALES_ORDER_FIELD_RESOURCE as SO } from '../../../../constants/fieldPermissionResources';
 import { MaterialUnitLabel } from '../../../../../../components/material-unit-label';
@@ -318,6 +319,7 @@ export const SalesOrderDetailBasicPane: React.FC = () => {
           title: t('app.kuaizhizao.salesContract.linkedContract'),
           dataIndex: 'contract_code',
           key: 'linked_contract_code',
+          span: 3,
         },
         { title: t('app.kuaizhizao.salesOrder.shippingAddress'), dataIndex: 'shipping_address', span: 3 },
         { title: t('app.kuaizhizao.salesOrder.salesman'), dataIndex: 'salesman_name' },
@@ -359,12 +361,17 @@ export const SalesOrderDetailBasicPane: React.FC = () => {
           title: t('app.kuaizhizao.salesOrder.totalAmountLabel'),
           dataIndex: 'total_amount',
           render: (_, record) => (
-            <AmountDisplay resource={SO} fieldName="total_amount" value={record.total_amount ?? 0} />
+            <AmountDisplay
+              resource={SO}
+              fieldName="total_amount"
+              value={resolveSalesOrderDisplayTotalAmount(record)}
+            />
           ),
         },
         {
           title: t('app.kuaizhizao.salesOrder.totalFeeAmount'),
           dataIndex: 'total_fee_amount',
+          span: 3,
           render: (_, record) => (
             <AmountDisplay resource={SO} fieldName="amount" value={record.total_fee_amount ?? 0} />
           ),

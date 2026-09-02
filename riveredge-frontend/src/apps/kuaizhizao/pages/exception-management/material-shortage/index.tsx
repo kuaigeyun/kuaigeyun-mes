@@ -334,7 +334,7 @@ const MaterialShortageExceptionPage: React.FC = () => {
           setDetailDrawerVisible(false);
           setCurrentException(null);
         }}
-        width={DRAWER_CONFIG.HALF_WIDTH}
+        size={DRAWER_CONFIG.HALF_WIDTH}
         dataSource={currentException || {}}
         columns={[
           {

@@ -949,7 +949,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
           setDetailDrawerVisible(false);
           setCurrentOrder(null);
         }}
-        width={DRAWER_CONFIG.HALF_WIDTH}
+        size={DRAWER_CONFIG.HALF_WIDTH}
         extra={
           currentOrder?.status === 'draft' ? (
             <Space>

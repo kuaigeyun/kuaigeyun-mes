@@ -535,6 +535,7 @@ export type KuaizhizaoPullCreateMenuItemSpec = {
   actionKey: KuaizhizaoDocumentActionKey;
   onClick: () => void;
   key?: string;
+  label?: string;
 };
 
 export const buildKuaizhizaoPullCreateMenuItems = (
@@ -543,6 +544,6 @@ export const buildKuaizhizaoPullCreateMenuItems = (
 ) =>
   specs.map((spec) => ({
     key: spec.key ?? spec.actionKey,
-    label: resolveKuaizhizaoDocumentAction(t, spec.actionKey).label,
+    label: spec.label ?? resolveKuaizhizaoDocumentAction(t, spec.actionKey).label,
     onClick: spec.onClick,
   }));

@@ -28,9 +28,9 @@ export function SchedulingAiPriorityCard({
   const order = result.suggestedPoolOrder ?? [];
 
   return (
-    <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+    <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
       {result.confidenceNotes ? (
-        <Alert type="info" showIcon message={t(`${I18N}.confidenceNotes`)} description={result.confidenceNotes} />
+        <Alert type="info" showIcon title={t(`${I18N}.confidenceNotes`)} description={result.confidenceNotes} />
       ) : null}
       <Typography.Paragraph style={{ marginBottom: 0 }}>{result.rationale}</Typography.Paragraph>
       {order.length > 0 ? (
@@ -48,7 +48,7 @@ export function SchedulingAiPriorityCard({
           </div>
         </div>
       ) : (
-        <Alert type="warning" showIcon message={t(`${I18N}.emptyPriority`)} />
+        <Alert type="warning" showIcon title={t(`${I18N}.emptyPriority`)} />
       )}
       {canSelectSuggested && order.length > 0 && onSelectSuggested ? (
         <Button type="primary" loading={applying} onClick={() => onSelectSuggested(order)}>

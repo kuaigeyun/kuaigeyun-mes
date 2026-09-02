@@ -69,16 +69,27 @@ def derive_invoice_amount_status(
     status_partial: str,
     status_full: str,
 ) -> tuple[Decimal, Decimal, str]:
-    """按已开票/收票合计与单据总额推导开票状态与未开/未收余额。"""
+    """按已开票/收票合计（蓝字+红字净值）与单据总额推导开票状态与未开/未收余额。"""
     invoiced = Decimal(invoiced_amount or 0).quantize(Decimal("0.01"))
     total = Decimal(total_amount or 0).quantize(Decimal("0.01"))
-    remaining = max(Decimal("0"), (total - invoiced).quantize(Decimal("0.01")))
-    if invoiced <= Decimal("0"):
-        status = status_none
-    elif remaining <= Decimal("0.00"):
-        status = status_full
+    tolerance = Decimal("0.00")
+
+    if total >= Decimal("0"):
+        remaining = max(Decimal("0"), (total - invoiced).quantize(Decimal("0.01")))
+        if invoiced <= Decimal("0"):
+            status = status_none
+        elif remaining <= tolerance:
+            status = status_full
+        else:
+            status = status_partial
     else:
-        status = status_partial
+        remaining = max(Decimal("0"), (invoiced - total).quantize(Decimal("0.01")))
+        if invoiced >= Decimal("0"):
+            status = status_none
+        elif remaining <= tolerance:
+            status = status_full
+        else:
+            status = status_partial
     return invoiced, remaining, status
 
 

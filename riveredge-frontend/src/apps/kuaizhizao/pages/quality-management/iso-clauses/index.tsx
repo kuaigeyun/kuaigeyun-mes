@@ -482,7 +482,7 @@ const IsoClausesPage: React.FC = () => {
         title={detail ? `${detail.clause_code} ${detail.title}` : t('common.detail')}
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
+        size={DRAWER_CONFIG.STANDARD_WIDTH}
         loading={detailLoading && !detail}
         extra={
           detail && canUpdate

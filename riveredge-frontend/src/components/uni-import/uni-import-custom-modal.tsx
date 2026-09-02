@@ -319,7 +319,7 @@ export const UniImportCustomModal: React.FC<UniImportCustomModalProps> = ({
       {enableRelationImport && (
         <>
           <Divider style={{ margin: '12px 0' }} />
-          <Space direction="vertical" size={10} style={{ width: '100%' }}>
+          <Space orientation="vertical" size={10} style={{ width: '100%' }}>
             <Typography.Text strong>{t('components.uniImport.relationEntityTitle')}</Typography.Text>
             <Checkbox.Group
               options={relationEntityOptions}

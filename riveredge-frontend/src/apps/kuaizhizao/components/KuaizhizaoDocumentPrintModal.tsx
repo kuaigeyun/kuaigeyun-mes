@@ -291,7 +291,7 @@ const KuaizhizaoDocumentPrintModal: React.FC<KuaizhizaoDocumentPrintModalProps> 
       }
     >
       <Spin spinning={loading || printLoading || pdfLoading}>
-        <Space orientation="vertical" style={{ width: '100%' }} size="middle">
+        <Space orientation="vertical" style={{ width: '100%' }} size="medium">
           <Select
             style={{ width: '100%' }}
             placeholder="选择打印模板"

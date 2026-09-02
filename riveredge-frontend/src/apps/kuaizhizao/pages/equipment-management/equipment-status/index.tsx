@@ -559,7 +559,7 @@ const EquipmentStatusPage: React.FC = () => {
         loading={detailLoading}
         zIndex={equipmentStatusDrawerZIndex}
         onClose={closeDetail}
-        width={DRAWER_CONFIG.HALF_WIDTH}
+        size={DRAWER_CONFIG.HALF_WIDTH}
         collaborationTitle={t(`${P}.section.lifecycle`)}
         traceDocument={
           currentEquipment?.equipment?.id != null

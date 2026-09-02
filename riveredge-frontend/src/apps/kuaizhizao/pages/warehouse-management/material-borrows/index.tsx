@@ -744,7 +744,7 @@ const MaterialBorrowsPage: React.FC = () => {
         open={detailDrawerVisible}
         loading={detailLoading}
         onClose={() => { setDetailDrawerVisible(false); setBorrowDetail(null); }}
-        width={DRAWER_CONFIG.HALF_WIDTH}
+        size={DRAWER_CONFIG.HALF_WIDTH}
         basic={
           borrowDetail ? (
             <Descriptions column={detailDrawerBasicColumn(false)} size="small" items={timeconfigBasicItems} />

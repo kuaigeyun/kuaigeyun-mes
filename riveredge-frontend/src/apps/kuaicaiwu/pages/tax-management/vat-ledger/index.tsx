@@ -112,8 +112,8 @@ const VatLedgerPage: React.FC = () => {
       toolbarExtra={
         <div style={{ display: 'flex', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 8 }}>
           <Space wrap>
-            <InputNumber min={2000} max={2100} value={year} onChange={(v) => v && setYear(v)} addonBefore={t(`${NS}.year`, { defaultValue: '年' })} />
-            <InputNumber min={1} max={12} value={month} onChange={(v) => v && setMonth(v)} addonBefore={t(`${NS}.month`, { defaultValue: '月' })} />
+            <InputNumber min={2000} max={2100} value={year} onChange={(v) => v && setYear(v)} prefix={t(`${NS}.year`, { defaultValue: '年' })} />
+            <InputNumber min={1} max={12} value={month} onChange={(v) => v && setMonth(v)} prefix={t(`${NS}.month`, { defaultValue: '月' })} />
             <Button onClick={() => void load()}>{t('common.refresh', { defaultValue: '刷新' })}</Button>
             {canExport && (
               <Button onClick={() => setPrintOpen(true)}>

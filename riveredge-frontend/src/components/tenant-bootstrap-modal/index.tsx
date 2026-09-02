@@ -130,7 +130,7 @@ const TenantBootstrapModal: React.FC = () => {
       open
       title={t('components.tenantBootstrap.title')}
       closable={false}
-      maskClosable={false}
+      mask={{ closable: false }}
       keyboard={false}
       footer={finished ? undefined : null}
       okText={t('components.tenantBootstrap.enterSystem')}

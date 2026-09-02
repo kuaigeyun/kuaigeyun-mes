@@ -215,7 +215,7 @@ const MonthlySettlementPage: React.FC = () => {
       title: t('app.kuaicaiwu.monthlySettlement.step.preview'),
       content: (
         <DetailDrawerSection title={t('app.kuaicaiwu.monthlySettlement.section.preview')}>
-          <Alert message={t('app.kuaicaiwu.monthlySettlement.previewHint')} type="warning" showIcon style={{ marginBottom: 24 }} />
+          <Alert title={t('app.kuaicaiwu.monthlySettlement.previewHint')} type="warning" showIcon style={{ marginBottom: 24 }} />
           <div style={{ overflowX: 'auto', overflowY: 'hidden' }}>
             <Table
               dataSource={settlementData.productionData.map((item) => {

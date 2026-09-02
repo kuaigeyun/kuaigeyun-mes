@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import uuid
+from collections import defaultdict
 from datetime import date
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
@@ -404,6 +405,41 @@ class PostingService:
         if keyword:
             q = q.filter(voucher_code__icontains=keyword)
         return await q.offset(skip).limit(limit).order_by("-voucher_date", "-id")
+
+    @staticmethod
+    def _account_side_labels(lines: List[VoucherLine], *, side: str) -> str:
+        labels: List[str] = []
+        for line in lines:
+            amount = line.debit_amount if side == "debit" else line.credit_amount
+            if _d(amount) <= 0:
+                continue
+            code = str(line.account_code or "").strip()
+            name = str(line.account_name or "").strip()
+            label = f"{code} {name}".strip() if code or name else ""
+            if label:
+                labels.append(label)
+        return "、".join(labels)
+
+    async def vouchers_to_list_dicts(
+        self, tenant_id: int, vouchers: List[Voucher]
+    ) -> List[Dict[str, Any]]:
+        if not vouchers:
+            return []
+        voucher_ids = [v.id for v in vouchers]
+        lines = await VoucherLine.filter(
+            tenant_id=tenant_id, voucher_id__in=voucher_ids
+        ).order_by("voucher_id", "line_no")
+        lines_by_voucher: Dict[int, List[VoucherLine]] = defaultdict(list)
+        for line in lines:
+            lines_by_voucher[line.voucher_id].append(line)
+        result: List[Dict[str, Any]] = []
+        for voucher in vouchers:
+            payload = self.voucher_to_dict(voucher)
+            voucher_lines = lines_by_voucher.get(voucher.id, [])
+            payload["debit_accounts"] = self._account_side_labels(voucher_lines, side="debit")
+            payload["credit_accounts"] = self._account_side_labels(voucher_lines, side="credit")
+            result.append(payload)
+        return result
 
     async def get_voucher_detail(self, tenant_id: int, voucher_id: int) -> Dict[str, Any]:
         voucher = await self._get(tenant_id, voucher_id)

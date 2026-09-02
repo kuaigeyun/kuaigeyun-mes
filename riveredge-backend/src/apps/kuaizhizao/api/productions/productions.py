@@ -1293,7 +1293,14 @@ async def update_stocktaking(
     "/stocktakings/{stocktaking_id}/start",
     response_model=StocktakingResponse,
     summary="Start stocktaking",
-    dependencies=[Depends(require_permission_codes("kuaizhizao:warehouse-management-stocktaking:update"))],
+    dependencies=[
+        Depends(
+            require_permission_codes(
+                "kuaizhizao:warehouse-management-stocktaking:update",
+                "kuaizhizao:warehouse-management-stocktaking:create",
+            )
+        )
+    ],
 )
 async def start_stocktaking(
     stocktaking_id: int,

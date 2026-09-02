@@ -69,7 +69,7 @@ export const MobileQRCode: React.FC = () => {
                             children: (
                                 <div style={{ marginTop: -8 }}>
                                     <Input
-                                        addonBefore={<span style={{ fontSize: 12, color: '#666' }}>IP</span>}
+                                        prefix={<span style={{ fontSize: 12, color: '#666' }}>IP</span>}
                                         size="small"
                                         value={ip}
                                         onChange={e => handleIpChange(e.target.value)}

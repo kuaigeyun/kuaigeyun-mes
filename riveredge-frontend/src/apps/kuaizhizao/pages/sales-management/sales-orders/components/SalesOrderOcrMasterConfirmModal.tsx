@@ -248,7 +248,7 @@ export function SalesOrderOcrMasterConfirmModal({
           </Space>
         }
       >
-        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+        <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
           <Text type="secondary">{t(`${I18N}.confirmMasterDesc`)}</Text>
           <Form form={form} layout="vertical" disabled={preparing || submitting}>
             {basePlan?.customer ? (
@@ -307,7 +307,7 @@ export function SalesOrderOcrMasterConfirmModal({
               <Divider orientation="left" plain>
                 {t(`${I18N}.confirmMasterMaterial`)}
               </Divider>
-              <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+              <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
                 {basePlan.materials.map((draft, index) => {
                   const created = createdMaterialsByDedupeKey.get(draft.dedupeKey);
                   const summary = [draft.name, draft.specification, draft.baseUnit].filter(Boolean).join(' - ');

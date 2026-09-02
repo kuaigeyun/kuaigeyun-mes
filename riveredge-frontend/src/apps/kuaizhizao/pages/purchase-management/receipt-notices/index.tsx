@@ -97,7 +97,10 @@ import {
 } from '../../sales-management/shared/pushProgress';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { flattenDocumentDetailRows, resolveDetailTableViewMode } from '../../shared/detailTableFlatRows';
-import { supplierApi } from '../../../../master-data/services/supply-chain';
+import {
+  KUAIZHIZAO_DOC_HOST,
+  loadSupplierFormReferenceList,
+} from '../../../../../utils/documentFormReferenceLoad';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import type { ReceiptNoticeListParams } from '../../../services/receipt-notice';
@@ -219,10 +222,7 @@ const ReceiptNoticesPage: React.FC = () => {
   const [supplierList, setSupplierList] = useState<Array<{ id: number; name?: string; code?: string }>>([]);
 
   useEffect(() => {
-    supplierApi.list({ limit: 1000, isActive: true }).then((res) => {
-      const list = Array.isArray(res) ? res : (res as { data?: typeof supplierList })?.data ?? [];
-      setSupplierList(Array.isArray(list) ? list : []);
-    }).catch(() => setSupplierList([]));
+    void loadSupplierFormReferenceList(KUAIZHIZAO_DOC_HOST.receiptNotice).then(setSupplierList);
   }, []);
 
   const receiptNoticeSupplierSearchOptions = useMemo(
@@ -1702,7 +1702,7 @@ const ReceiptNoticesPage: React.FC = () => {
                 batch: t('app.kuaizhizao.shipmentNotice.batchNotifyWarehouse'),
               }}
               icon={<SendOutlined />}
-              size="middle"
+              size="medium"
               color="green"
               variant="solid"
             />,
@@ -1727,7 +1727,7 @@ const ReceiptNoticesPage: React.FC = () => {
                 batch: t('app.kuaizhizao.shipmentNotice.batchWithdrawNotify'),
               }}
               icon={<RollbackOutlined />}
-              size="middle"
+              size="medium"
               color="orange"
               variant="solid"
             />,
@@ -1895,7 +1895,7 @@ const ReceiptNoticesPage: React.FC = () => {
           setDetailDrawerVisible(false);
           setNoticeDetail(null);
         }}
-        width={DRAWER_CONFIG.HALF_WIDTH}
+        size={DRAWER_CONFIG.HALF_WIDTH}
         extra={
           noticeDetail ? (
             <DetailDrawerActions
@@ -2102,7 +2102,7 @@ const ReceiptNoticesPage: React.FC = () => {
                 type="warning"
                 showIcon
                 style={{ marginBottom: 12 }}
-                message={
+                title={
                   (notifyPreviewData.line_blocking_issues && notifyPreviewData.line_blocking_issues.length > 0
                     ? notifyPreviewData.line_blocking_issues.join('；')
                     : null) ||

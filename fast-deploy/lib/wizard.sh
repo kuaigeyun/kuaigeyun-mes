@@ -430,6 +430,7 @@ wizard_run_quick_action() {
         check) cmd_check ;;
         migrate) cmd_migrate ;;
         free-memory|free_memory) cmd_free_memory ;;
+        setup-swap|setup_swap|swap) cmd_setup_swap ;;
         low-spec-mode|low_spec_mode|lowspec) cmd_low_spec_mode_cli "${2:-}" ;;
         *) wizard_say_fail "未知快捷操作: $1"; return 1 ;;
     esac

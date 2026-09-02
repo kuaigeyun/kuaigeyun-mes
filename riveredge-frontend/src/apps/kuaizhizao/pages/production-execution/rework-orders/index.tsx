@@ -1529,7 +1529,7 @@ const ReworkOrdersPage: React.FC = () => {
       <Modal
         title={pullFromFinishedGoodsInspectionAction.label}
         open={pullPreviewOpen}
-        destroyOnClose
+        destroyOnHidden
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
         onCancel={resetPullPreviewModal}
         okText={t('app.kuaizhizao.salesOrder.confirmPush')}
@@ -1554,7 +1554,7 @@ const ReworkOrdersPage: React.FC = () => {
           <div>
             <p style={{ marginBottom: 12, fontWeight: 500 }}>{pullPreviewData.summary}</p>
             {pullPreviewData.has_blocking_issues ? (
-              <Alert type="warning" showIcon style={{ marginBottom: 12 }} message={pullPreviewData.summary} />
+              <Alert type="warning" showIcon style={{ marginBottom: 12 }} title={pullPreviewData.summary} />
             ) : null}
             {pullPreviewData.items?.length > 0 ? (
               <Table
@@ -1860,7 +1860,7 @@ const ReworkOrdersPage: React.FC = () => {
           setDetailDrawerVisible(false);
           resetReworkDetailFieldValues();
         }}
-        width={DRAWER_CONFIG.HALF_WIDTH}
+        size={DRAWER_CONFIG.HALF_WIDTH}
         extra={
           reworkOrderDetail && (() => {
             const detail = reworkOrderDetail;

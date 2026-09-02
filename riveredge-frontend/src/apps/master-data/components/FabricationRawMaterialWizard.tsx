@@ -236,7 +236,7 @@ const FabricationRawMaterialWizard: React.FC<FabricationRawMaterialWizardProps> 
             <Alert
               type="info"
               showIcon
-              message={t('app.master-data.fabricationWizard.introTitle')}
+              title={t('app.master-data.fabricationWizard.introTitle')}
               description={t('app.master-data.fabricationWizard.introDesc')}
             />
             <Descriptions column={1} size="small" bordered>
@@ -326,7 +326,7 @@ const FabricationRawMaterialWizard: React.FC<FabricationRawMaterialWizardProps> 
                     type="success"
                     showIcon
                     style={{ marginBottom: 16 }}
-                    message={t('app.master-data.fabricationWizard.summaryTitle')}
+                    title={t('app.master-data.fabricationWizard.summaryTitle')}
                     description={
                       <span>
                         {fabricationCode} - {fabricationMaterial?.name}
@@ -346,7 +346,7 @@ const FabricationRawMaterialWizard: React.FC<FabricationRawMaterialWizardProps> 
               <InputNumber min={0.0001} precision={4} style={{ width: '100%' }} />
             </Form.Item>
             <Form.Item name="wasteRate" label={t('app.master-data.bom.wasteRate')}>
-              <InputNumber min={0} max={100} precision={2} addonAfter="%" style={{ width: '100%' }} />
+              <InputNumber min={0} max={100} precision={2} suffix="%" style={{ width: '100%' }} />
             </Form.Item>
             <Form.Item name="issueMethod" label={t('app.master-data.bom.issueMethod')}>
               <Select

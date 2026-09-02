@@ -128,7 +128,7 @@ export function EquipmentMasterDetailDrawer<T extends Record<string, unknown>>({
       open={open}
       loading={loading}
       onClose={onClose}
-      width={DRAWER_CONFIG.STANDARD_WIDTH}
+      size={DRAWER_CONFIG.STANDARD_WIDTH}
       extra={extra}
       basic={
         detail ? (

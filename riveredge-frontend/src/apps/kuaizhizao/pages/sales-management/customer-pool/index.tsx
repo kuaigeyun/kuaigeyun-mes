@@ -368,7 +368,7 @@ const CustomerPoolPage: React.FC = () => {
         key: `${log.action}-${log.created_at}-${index}`,
         label: formatCustomerPoolDateTimeCell(log.created_at),
         children: (
-          <Space direction="vertical" size={4}>
+          <Space orientation="vertical" size={4}>
             <Typography.Text strong>{formatPoolLogAction(log.action)}</Typography.Text>
             <Typography.Text type="secondary">{buildPoolLogDescription(log)}</Typography.Text>
           </Space>
@@ -1400,7 +1400,7 @@ const CustomerPoolPage: React.FC = () => {
       <UniDetail
         title={t('app.kuaizhizao.customerPool.rulesTitle')}
         open={rulesOpen}
-        width={420}
+        size={420}
         onClose={() => setRulesOpen(false)}
         extra={
           <Button

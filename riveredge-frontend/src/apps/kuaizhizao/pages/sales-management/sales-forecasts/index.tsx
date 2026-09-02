@@ -2216,7 +2216,7 @@ export default function SalesForecastsPage() {
                 batch: t('components.uniAction.print'),
               }}
               icon={<PrinterOutlined />}
-              size="middle"
+              size="medium"
             />,
           ]}
           showImportButton={true}
@@ -2345,7 +2345,7 @@ export default function SalesForecastsPage() {
                 type="warning"
                 showIcon
                 style={{ marginBottom: 12 }}
-                message={
+                title={
                   salesForecastCapabilityReasonMessage(pushPreviewData.blocking_reason, t) ||
                   t('app.kuaizhizao.salesForecast.pushBlockedStatus')
                 }

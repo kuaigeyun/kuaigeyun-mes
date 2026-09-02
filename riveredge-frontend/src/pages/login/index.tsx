@@ -326,17 +326,6 @@ export default function LoginPage() {
     setLogoBroken(true);
   }, [logoUrl]);
 
-  // 预加载 LOGO 图片，提高首屏加载成功率
-  useEffect(() => {
-    if (!logoUrl || logoUrl.startsWith('blob:') || logoUrl.startsWith('data:')) return;
-    const link = document.createElement('link');
-    link.rel = 'preload';
-    link.as = 'image';
-    link.href = logoUrl;
-    document.head.appendChild(link);
-    return () => link.remove();
-  }, [logoUrl]);
-
   // 社交图标延后加载，减小登录 chunk 体积；空闲时再拉，避免抢首屏主线程
   const [socialIcons, setSocialIcons] = useState<Record<string, string>>({});
   useEffect(() => {

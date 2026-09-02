@@ -13,6 +13,8 @@ export interface ApprovalNodeData {
   label?: string;
   approvalType?: 'AND' | 'OR';
   approverType?: 'user' | 'role' | 'department' | 'manager' | 'multi_level_manager' | 'initiator_select';
+  /** department 节点：submitter=发起人部门负责人，specified=指定部门负责人 */
+  departmentScope?: 'submitter' | 'specified';
   approverIds?: string[];
   allowEditDuringApproval?: boolean;
   refreshContextOnEdit?: boolean;
@@ -52,6 +54,11 @@ export function normalizeNodeData(nodeType: string, data: ApprovalNodeData = {})
     if (nodeType === 'approval') {
       out.approvalType = (out.approvalType || out.approval_type || 'OR') as 'AND' | 'OR';
       out.approverType = (out.approverType || out.approver_type || 'user') as ApprovalNodeData['approverType'];
+      if (out.approverType === 'department') {
+        const scope = String(out.departmentScope || out.department_scope || 'submitter').toLowerCase();
+        out.departmentScope = scope === 'specified' ? 'specified' : 'submitter';
+        delete out.department_scope;
+      }
       out.allowEditDuringApproval = Boolean(out.allowEditDuringApproval);
       out.refreshContextOnEdit = out.refreshContextOnEdit !== false;
       out.allowTransfer = Boolean(out.allowTransfer);
@@ -107,7 +114,11 @@ export function validateFlowGraph(graph: FlowGraph): string[] {
     if (node.type === 'approval') {
       const t = node.data.approverType || 'user';
       const idsLen = node.data.approverIds?.length || 0;
-      if (!MANAGER_TYPES.has(t) && idsLen === 0) {
+      if (t === 'department') {
+        if (node.data.departmentScope === 'specified' && idsLen === 0) {
+          errors.push(`审批节点「${node.data.label || node.id}」未选择部门`);
+        }
+      } else if (!MANAGER_TYPES.has(t) && idsLen === 0) {
         errors.push(`审批节点「${node.data.label || node.id}」未配置审批人`);
       }
     }
@@ -127,6 +138,10 @@ export function nodeDataToFormValues(data: ApprovalNodeData): ApprovalNodeData {
   const v = { ...data };
   if (v.approverType === 'user') v.approvers = v.approverIds;
   if (v.approverType === 'role') v.roles = v.approverIds;
+  if (v.approverType === 'department') {
+    v.departmentScope = v.departmentScope || 'submitter';
+    if (v.departmentScope === 'specified') v.departments = v.approverIds;
+  }
   return v;
 }
 
@@ -134,6 +149,15 @@ export function formValuesToNodeData(values: ApprovalNodeData): ApprovalNodeData
   const v = { ...values };
   if (v.approverType === 'user' && v.approvers) v.approverIds = v.approvers as string[];
   if (v.approverType === 'role' && v.roles) v.approverIds = v.roles as string[];
+  if (v.approverType === 'department') {
+    if (v.departmentScope === 'specified' && v.departments) {
+      v.approverIds = v.departments as string[];
+    } else {
+      v.departmentScope = 'submitter';
+      delete v.approverIds;
+    }
+    delete v.departments;
+  }
   delete v.approvers;
   delete v.roles;
   return normalizeNodeData('approval', v);

@@ -222,6 +222,10 @@ import {
   uniTableColumnsPreferenceField,
 } from './uniTableColumnPreference'
 import {
+  ensureUniTablePreferenceMigrated,
+  readAccountViewTypeWithMigration,
+} from './uniTablePreferenceMigration'
+import {
   TABLE_ZEBRA_STRIPE_PREFERENCE_PATH,
   readPersistedTableZebraStripe,
   writePersistedTableZebraStripe,
@@ -1334,16 +1338,25 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
 
   const viewTypePersistenceId = columnPersistenceId || undefined
 
+  const isAllowedPersistedViewType = useCallback(
+    (viewType: string, allowed?: readonly string[]) => {
+      if (!viewType || viewType === UNI_TABLE_VIEW_TYPE_HELP) return false
+      if (allowed && allowed.length > 0 && !allowed.includes(viewType)) return false
+      return true
+    },
+    [],
+  )
+
   // 视图类型状态（支持内置类型及 customViews 的 key）；恢复用户上次非 help 视图
   const [currentViewType, setCurrentViewType] = useState<string>(() => {
     if (!viewTypePersistenceId) return defaultViewType
-    const fromPref = useUserPreferenceStore
-      .getState()
-      .getPreference<string | undefined>(uniTableViewTypePreferencePath(viewTypePersistenceId), undefined)
-    if (fromPref && fromPref !== UNI_TABLE_VIEW_TYPE_HELP && viewTypes.includes(fromPref)) {
-      return fromPref
-    }
-    return readPersistedUniTableViewType(viewTypePersistenceId, defaultViewType, viewTypes)
+    return readAccountViewTypeWithMigration(
+      viewTypePersistenceId,
+      defaultViewType,
+      viewTypes,
+      useUserPreferenceStore.getState().getPreference,
+      isAllowedPersistedViewType,
+    )
   })
   const viewTypeSyncDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // 表格数据状态（用于其他视图）
@@ -1829,6 +1842,11 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   // 全项目统一策略：结构化列保留页面 width；主文本列由布局引擎分配 primary flex；
   // 不启用拖拽改宽与本地列宽持久化，避免「代码 width」与 localStorage 双控制源竞争。
   const tableId = columnPersistenceId ?? headerTitle
+
+  React.useEffect(() => {
+    if (typeof tableId !== 'string' || !tableId.trim()) return
+    void ensureUniTablePreferenceMigrated(tableId)
+  }, [tableId])
 
   // 操作列：不换行；列宽与 scroll 由布局引擎统一产出
   const effectiveTableColumns = React.useMemo(() => {
@@ -4445,8 +4463,10 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                         column={1} 
                         size="small" 
                         colon={false}
-                        labelStyle={{ color: token.colorTextSecondary, width: 80 }}
-                        contentStyle={{ color: token.colorText }}
+                        styles={{
+                          label: { color: token.colorTextSecondary, width: 80 },
+                          content: { color: token.colorText },
+                        }}
                       >
                         {otherCols.map((col, idx) => (
                           <Descriptions.Item key={idx} label={col.title as string}>

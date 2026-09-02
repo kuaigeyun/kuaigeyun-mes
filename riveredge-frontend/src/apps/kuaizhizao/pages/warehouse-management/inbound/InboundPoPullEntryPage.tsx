@@ -590,7 +590,7 @@ const InboundPoPullEntryPage: React.FC = () => {
               optionFilterProp="label"
               value={lineLoc[rid]}
               options={locOpts}
-              onDropdownVisibleChange={(open) => {
+              onOpenChange={(open) => {
                 if (open && wh != null && !locOptionsByWh[wh]?.length) {
                   void fetchStorageLocationsForWarehouse(wh).then((opts) =>
                     setLocOptionsByWh((p) => ({ ...p, [wh]: opts })),

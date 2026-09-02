@@ -839,7 +839,7 @@ const OtherOutboundPage: React.FC = () => {
           setOutboundDetail(null);
           resetOtherOutboundDetailFieldValues();
         }}
-        width={DRAWER_CONFIG.HALF_WIDTH}
+        size={DRAWER_CONFIG.HALF_WIDTH}
         basic={
           outboundDetail ? (
             <Descriptions column={detailDrawerBasicColumn(false)} size="small" items={timeconfigBasicItems1} />

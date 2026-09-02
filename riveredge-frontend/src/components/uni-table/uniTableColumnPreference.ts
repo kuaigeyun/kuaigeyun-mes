@@ -5,7 +5,7 @@
 
 import type { ColumnsState } from '@ant-design/pro-components'
 import { useUserPreferenceStore } from '../../stores/userPreferenceStore'
-import { readPersistedColumnsState } from './uniTableLayoutEngine'
+import { readAccountColumnsStateWithMigration } from './uniTablePreferenceMigration'
 
 export type UniTableColumnsPreferenceField = 'columns' | 'columnsDetailTable'
 
@@ -22,24 +22,18 @@ export function uniTableColumnsLocalStorageKey(tableId: string, isDetailTable: b
   return isDetailTable ? `${base}::detailTable` : base
 }
 
-/** 从账号偏好读取列状态；无则回落 localStorage */
+/** 从账号偏好读取列状态；无则回落旧版 key / localStorage */
 export function readAccountColumnsState(
   tableId: string | undefined | null,
   persistenceKey: string | undefined,
   isDetailTable: boolean,
 ): Record<string, Partial<ColumnsState>> | undefined {
-  if (tableId) {
-    const fromPref = useUserPreferenceStore
-      .getState()
-      .getPreference<Record<string, Partial<ColumnsState>> | undefined>(
-        uniTableColumnsPreferencePath(tableId, isDetailTable),
-        undefined,
-      )
-    if (fromPref && typeof fromPref === 'object' && Object.keys(fromPref).length > 0) {
-      return fromPref
-    }
-  }
-  return readPersistedColumnsState(persistenceKey)
+  return readAccountColumnsStateWithMigration(
+    tableId,
+    persistenceKey,
+    isDetailTable,
+    useUserPreferenceStore.getState().getPreference,
+  )
 }
 
 export function columnsStatePreferenceSignature(

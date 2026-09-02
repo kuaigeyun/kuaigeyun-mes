@@ -429,7 +429,7 @@ export function SalesOrderAiCreateDrawer({
           <Alert
             type="error"
             showIcon
-            message={msg.text}
+            title={msg.text}
             description={msg.errorDetail}
           />
         );
@@ -500,7 +500,7 @@ export function SalesOrderAiCreateDrawer({
       }
       open={open}
       onClose={onClose}
-      width={DRAWER_CONFIG.STANDARD_WIDTH}
+      size={DRAWER_CONFIG.STANDARD_WIDTH}
       className="sales-order-ai-create-drawer"
       styles={{
         body: {

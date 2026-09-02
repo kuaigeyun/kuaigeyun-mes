@@ -1,1 +1,0 @@
-import{E as t}from"./clientRelease-DV2kFnwE.js";const a={get:async s=>t.get(`/apps/master-data/process/materials/${s}/product-process`),save:async(s,r)=>t.put(`/apps/master-data/process/materials/${s}/product-process`,r),listRouteAssignments:async()=>(await t.get("/apps/master-data/process/product-process/route-assignments"))?.items??[]};export{a as p};

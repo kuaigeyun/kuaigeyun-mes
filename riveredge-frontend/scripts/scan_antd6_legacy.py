@@ -94,6 +94,13 @@ PATTERNS: list[tuple[str, str, object | None, str, str]] = [
     ("filterDropdownOpen", r"\bfilterDropdownOpen\b", None, "high", "Table"),
     ("v5-patch-for-react-19", r"v5-patch-for-react-19", None, "high", "deps"),
     ("Drawer width= (prefer size)", r"<Drawer\b[^>]*\bwidth\s*=", None, "low", "Drawer"),
+    (
+        "DetailDrawer width= (prefer size)",
+        r"<(?:DetailDrawerTemplate|UniDetail)\b[^>]*\bwidth\s*=",
+        None,
+        "low",
+        "Drawer",
+    ),
     ("iconPosition → iconPlacement", r"\biconPosition\s*=", None, "high", "Button"),
     ("dotPosition → dotPlacement", r"\bdotPosition\b", None, "high", "Carousel"),
     ("Spin wrapperClassName", r"\bwrapperClassName\s*=", near("Spin"), "med", "Spin"),

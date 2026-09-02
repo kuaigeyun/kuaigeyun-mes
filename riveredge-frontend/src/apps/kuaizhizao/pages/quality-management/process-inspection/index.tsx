@@ -1248,7 +1248,7 @@ const ProcessInspectionPage: React.FC = () => {
       <Modal
         title={t('app.kuaizhizao.salesOrder.pushPreviewTitle')}
         open={pullPreviewOpen}
-        destroyOnClose
+        destroyOnHidden
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
         onCancel={resetPullPreview}
         okText={pullFromWorkOrderAction.label}
@@ -1281,7 +1281,7 @@ const ProcessInspectionPage: React.FC = () => {
                 type="warning"
                 showIcon
                 style={{ marginBottom: 12 }}
-                message={qualityInspectionCapabilityReasonMessage(pullPreviewData.blocking_reason, t)}
+                title={qualityInspectionCapabilityReasonMessage(pullPreviewData.blocking_reason, t)}
               />
             ) : null}
             {pullPreviewData.items?.length > 0 ? (

@@ -324,7 +324,7 @@ const ComputationHistoryPage: React.FC = () => {
                 batch: t('app.kuaizhizao.computationHistory.action.compareSelected'),
               }}
               icon={<DiffOutlined />}
-              size="middle"
+              size="medium"
             />,
             <UniCapabilityBatchButton
               key="computation-history-export"
@@ -357,7 +357,7 @@ const ComputationHistoryPage: React.FC = () => {
                 batch: t('app.kuaizhizao.computationHistory.action.exportSelected'),
               }}
               icon={<DownloadOutlined />}
-              size="middle"
+              size="medium"
             />,
           ]}
         />

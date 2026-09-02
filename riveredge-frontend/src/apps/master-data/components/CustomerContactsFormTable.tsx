@@ -77,7 +77,7 @@ export const CustomerContactsFormTable: React.FC<CustomerContactsFormTableProps>
                 showSearch
                 optionFilterProp="label"
                 options={contactTitleOptions}
-                dropdownRender={(menu) => (
+                popupRender={(menu) => (
                   <>
                     {menu}
                     {onQuickCreateContactTitle ? (

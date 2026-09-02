@@ -816,7 +816,7 @@ const OnboardingWizardPage: React.FC = () => {
           {/* List Section */}
           <div style={{ padding: '24px' }}>
             <Steps
-              direction="vertical"
+              orientation="vertical"
               size="small"
               className="onboarding-steps"
               current={activeStep}
@@ -1062,7 +1062,7 @@ const OnboardingWizardPage: React.FC = () => {
       return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <Alert
-            message={t('pages.system.onboardingWizard.alertInitTitle')}
+            title={t('pages.system.onboardingWizard.alertInitTitle')}
             description={
               <div>
                 <Paragraph style={{ marginBottom: 8 }}>
@@ -1155,7 +1155,7 @@ const OnboardingWizardPage: React.FC = () => {
           {/* 清单部分 */}
           <div style={{ padding: '24px' }}>
             <Steps
-              direction="vertical"
+              orientation="vertical"
               size="small"
               className="onboarding-steps"
               current={activeStep}
@@ -1605,7 +1605,7 @@ const OnboardingWizardPage: React.FC = () => {
                           {item.jump_path && (
                             <Button
                               type={isCompleted ? 'default' : 'primary'}
-                              size="middle"
+                              size="medium"
                               shape="round"
                               icon={
                                 isCompleted
@@ -1813,7 +1813,7 @@ const OnboardingWizardPage: React.FC = () => {
           <Table
             dataSource={currentDetailItem?.subItems || []}
             pagination={false}
-            size="middle"
+            size="medium"
             rowKey="name"
             scroll={{ x: 'max-content' }}
             columns={[

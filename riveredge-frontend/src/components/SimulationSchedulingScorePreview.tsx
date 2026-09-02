@@ -27,7 +27,7 @@ export const SimulationSchedulingScorePreview: React.FC<SimulationSchedulingScor
 
   const body = (
     <Space orientation="vertical" size={8} style={{ width: '100%' }}>
-      <Space wrap size="middle">
+      <Space wrap size="medium">
         <Space size={4}>
           <Typography.Text type="secondary">权重分</Typography.Text>
           <WorkOrderScoreCell

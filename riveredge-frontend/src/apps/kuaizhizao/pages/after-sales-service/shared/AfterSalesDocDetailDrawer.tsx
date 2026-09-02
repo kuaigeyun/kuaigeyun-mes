@@ -86,7 +86,7 @@ export function AfterSalesDocDetailDrawer<T extends Record<string, any>>({
       title={title}
       open={open}
       onClose={onClose}
-      width={DRAWER_CONFIG.HALF_WIDTH}
+      size={DRAWER_CONFIG.HALF_WIDTH}
       zIndex={zIndex}
       loading={showLoading}
       footer={contentReady ? footer : undefined}

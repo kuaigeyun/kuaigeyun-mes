@@ -217,14 +217,14 @@ export function MaterialDedupConfigTrigger({ customFields = [] }: MaterialDedupC
           type="info"
           showIcon
           style={{ marginBottom: 16 }}
-          message={t(`${I18N}.configHint`)}
+          title={t(`${I18N}.configHint`)}
         />
         <Checkbox.Group
           style={{ width: '100%' }}
           value={draft}
           onChange={(v) => setDraft(v.map(String))}
         >
-          <Space direction="vertical" style={{ width: '100%' }}>
+          <Space orientation="vertical" style={{ width: '100%' }}>
             {options.map((opt) => (
               <Checkbox key={opt.value} value={opt.value}>
                 {opt.label}

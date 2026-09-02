@@ -150,7 +150,12 @@ import {
   TaxRateDetailCell,
 } from '../../../components/document-detail-table/documentDetailTable';
 import { DocumentAmountSummary } from '../../../components/document-amount-summary/DocumentAmountSummary';
-import { computeSalesDocumentTotals } from '../../../utils/documentLineAmounts';
+import {
+  computeSalesDocumentTotals,
+  resolveSalesDocumentStoredLineAmount,
+  resolveSalesDocumentStoredTotalAmount,
+  resolveSalesOrderDisplayTotalAmount,
+} from '../../../utils/documentLineAmounts';
 import { LineUnitPriceWithTrendTrigger } from '../../../components/partner-material-price-trend';
 import {
   applyGiftToggleToLine,
@@ -208,8 +213,6 @@ import { deliveryProjectApi } from '../../../services/delivery-project';
 import { listQuotations, type Quotation, type QuotationCapabilities } from '../../../services/quotation';
 import { salesContractApi, type SalesContract, type SalesContractCapabilities } from '../../../services/sales-contract';
 import { salesReviewApi, type SalesReviewListItem } from '../../../services/sales-review';
-import { bankAccountService, type BankAccount } from '../../../../kuaicaiwu/services/finance/bank-account';
-import { formatBankAccountOptionLabel } from '../../../../kuaicaiwu/utils/financeSharedOptions';
 import { formatApiErrorDetail } from '../../../../../services/api';
 import {
   quotationCapabilityAllowed,
@@ -222,9 +225,7 @@ import {
 } from '../../../../../hooks/useDocumentCapabilities';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 
-import { materialApi } from '../../../../master-data/services/material';
 import type { Material } from '../../../../master-data/types/material';
-import { customerApi } from '../../../../master-data/services/supply-chain';
 import { workCenterApi, factoryListItems } from '../../../../master-data/services/factory';
 import type { WorkCenter } from '../../../../master-data/types/factory';
 import { WorkCenterSelectDropdown } from '../../../../master-data/components/WorkCenterSelectDropdown';
@@ -254,6 +255,10 @@ import {
   referenceDisplayToIdOptions,
   searchReferenceDisplay,
 } from '../../../../../utils/referenceDisplay';
+import {
+  loadBankAccountFormOptions,
+  loadMaterialFormReferenceList,
+} from '../../../../../utils/documentFormReferenceLoad';
 import { useConfigStore } from '../../../../../stores/configStore';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
@@ -776,7 +781,6 @@ const SalesOrdersPage: React.FC = () => {
   const [productScope, setProductScope] = useState<'make' | 'all'>('make');
   // 客户列表（对接技术数据管理-供应链-客户）
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [customersLoading, setCustomersLoading] = useState(false);
   const salesOrderCustomerSearchOptions = useMemo(
     () =>
       customers.map((c) => ({
@@ -811,49 +815,18 @@ const SalesOrdersPage: React.FC = () => {
 
   /** 付款条件字典选项（数据字典 PAYMENT_TERMS） */
   const [paymentTermsOptions, setPaymentTermsOptions] = useState<Array<{ label: string; value: string }>>([]);
-  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
-  const bankAccountOptions = useMemo(
-    () =>
-      bankAccounts.map((a) => ({
-        label: formatBankAccountOptionLabel(a),
-        value: a.id,
-      })),
-    [bankAccounts],
-  );
+  const [bankAccountOptions, setBankAccountOptions] = useState<Array<{ label: string; value: number }>>([]);
 
-  /**
-   * 加载产品列表（仅表单页需要，避免列表首屏并发请求）
-   */
+  /** 表单引用数据：走 reference display + sales-order 宿主隐式授权，避免跨模块 read 403 */
   React.useEffect(() => {
     if (!isFormPage) return;
-    const loadMaterials = async () => {
-      try {
-        const result = await materialApi.list({ limit: 1000, isActive: true });
-        setMaterials(Array.isArray(result) ? result : (result as any)?.data ?? (result as any)?.items ?? []);
-      } catch {
-        setMaterials([]);
-      }
+    let cancelled = false;
+    void loadMaterialFormReferenceList('kuaizhizao:sales-order').then((rows) => {
+      if (!cancelled) setMaterials(rows);
+    });
+    return () => {
+      cancelled = true;
     };
-    loadMaterials();
-  }, [isFormPage]);
-
-  /**
-   * 客户/用户仅表单页需要；列表筛选用远程搜索，避免首屏 limit=1000
-   */
-  React.useEffect(() => {
-    if (!isFormPage) return;
-    const loadCustomers = async () => {
-      try {
-        setCustomersLoading(true);
-        const result = await customerApi.list({ limit: 200, isActive: true });
-        setCustomers(Array.isArray(result) ? result : (result as any)?.data ?? (result as any)?.items ?? []);
-      } catch {
-        setCustomers([]);
-      } finally {
-        setCustomersLoading(false);
-      }
-    };
-    loadCustomers();
   }, [isFormPage]);
 
   const currentUser = useCurrentUser();
@@ -877,25 +850,13 @@ const SalesOrdersPage: React.FC = () => {
   React.useEffect(() => {
     if (!isFormPage) return;
     let cancelled = false;
-    bankAccountService
-      .list({ limit: 500, is_active: true })
-      .then((res) => {
-        if (!cancelled) setBankAccounts(res.data || []);
-      })
-      .catch((e: unknown) => {
-        if (cancelled) return;
-        setBankAccounts([]);
-        const err = e as { response?: { data?: { detail?: unknown } }; message?: string };
-        messageApi.error(
-          formatApiErrorDetail(err?.response?.data?.detail) ||
-            err?.message ||
-            t('app.kuaizhizao.salesOrder.loadBankAccountsFailed'),
-        );
-      });
+    void loadBankAccountFormOptions('kuaizhizao:sales-order').then((options) => {
+      if (!cancelled) setBankAccountOptions(options);
+    });
     return () => {
       cancelled = true;
     };
-  }, [isFormPage, messageApi, t]);
+  }, [isFormPage]);
 
   /**
    * 加载发货方式、付款条件数据字典
@@ -1468,7 +1429,7 @@ const SalesOrdersPage: React.FC = () => {
         'required_quantity',
         values.discount_amount ?? 0,
       );
-      values.total_amount = sums.estimatedReceivable;
+      values.total_amount = resolveSalesDocumentStoredTotalAmount(sums, values.price_type);
       values.discount_amount = sums.discountAmount;
       values.total_fee_amount = sums.ourFees + sums.customerFees;
 
@@ -1503,7 +1464,7 @@ const SalesOrdersPage: React.FC = () => {
           delivery_date: deliveryDateStr ?? mainDeliveryStr,
           unit_price: giftFields.unit_price,
           tax_rate: taxR(it),
-          item_amount: isGift ? 0 : line.incl,
+          item_amount: isGift ? 0 : resolveSalesDocumentStoredLineAmount(line, values.price_type),
           is_gift: giftFields.is_gift,
           gift_ref_unit_price: giftFields.gift_ref_unit_price,
           notes: (it as any).notes,
@@ -3588,7 +3549,11 @@ const SalesOrdersPage: React.FC = () => {
       align: 'right' as const,
       sorter: true,
       render: (_: unknown, r: SalesOrder) => (
-        <AmountDisplay resource={SO} fieldName="total_amount" value={r.total_amount} />
+        <AmountDisplay
+          resource={SO}
+          fieldName="total_amount"
+          value={resolveSalesOrderDisplayTotalAmount(r)}
+        />
       ),
     },
     {
@@ -4126,10 +4091,7 @@ const SalesOrdersPage: React.FC = () => {
               hostResource="kuaizhizao:sales-order"
               placeholder={t('app.kuaizhizao.salesOrder.selectCustomer')}
               style={{ width: '100%' }}
-              customers={customers}
-              loading={customersLoading}
               onCustomersChange={setCustomers}
-              autoLoad={false}
               modalZIndex={nestedElevatedPopupZIndex}
               onCustomerPick={(c) => {
                 applyCustomerFormFields(formRef, c as Record<string, unknown> | null, {
@@ -4243,7 +4205,7 @@ const SalesOrdersPage: React.FC = () => {
           />
         </div>
       <ProFormText name="customer_name" hidden />
-      <ProFormText name="price_type" hidden initialValue={DEFAULT_SALES_PRICE_TYPE} />
+      <ProFormText name="price_type" hidden />
       </DetailDrawerSection>
 
       <DetailDrawerSection titleAccent title={t('app.uniDetail.sectionLines')}>
@@ -5145,7 +5107,7 @@ const SalesOrdersPage: React.FC = () => {
                   openFollowUpFromSalesOrder(selectedOrderForToolbar);
                 }
               }}
-              size="middle"
+              size="medium"
             >
               {t('components.uniAction.addFollowUpFromDocument')}
             </UniBatchButton>,
@@ -5171,7 +5133,7 @@ const SalesOrdersPage: React.FC = () => {
                 batch: t('components.uniAction.print'),
               }}
               icon={<PrinterOutlined />}
-              size="middle"
+              size="medium"
             />,
           ]}
           // 表头固定；scroll.y 由 UniTable 全局常量模板自动计算（统一行为）
@@ -5423,7 +5385,7 @@ const SalesOrdersPage: React.FC = () => {
               <Alert
                 type="warning"
                 showIcon
-                message={
+                title={
                   selectedPullQuotation.status === '已转订单' || selectedPullQuotation.sales_order_id
                     ? t('app.kuaizhizao.salesOrder.pullDuplicateAlert', {
                         source: pullFromQuotationAction.sourceLabel,
@@ -5550,7 +5512,7 @@ const SalesOrdersPage: React.FC = () => {
               <Alert
                 type="warning"
                 showIcon
-                message={
+                title={
                   selectedPullSalesReview.sales_order_code
                     ? t('app.kuaizhizao.salesOrder.pullDuplicateAlert', {
                         source: pullFromSalesReviewAction.sourceLabel,
@@ -5672,7 +5634,7 @@ const SalesOrdersPage: React.FC = () => {
                 type="warning"
                 showIcon
                 style={{ marginBottom: 12 }}
-                message={
+                title={
                   salesOrderCapabilityReasonMessage(pushPreviewData.blocking_reason, t) ||
                   t('app.kuaizhizao.salesOrder.pushFailed')
                 }
@@ -5683,7 +5645,7 @@ const SalesOrdersPage: React.FC = () => {
                 <Space>
                   <span>{t('app.kuaizhizao.salesOrder.pushModeLabel')}</span>
                   <Segmented
-                    size="middle"
+                    size="medium"
                     value={workOrderPushMode}
                     onChange={(val) => setWorkOrderPushMode(val as 'draft' | 'confirm')}
                     options={[
@@ -5693,7 +5655,7 @@ const SalesOrdersPage: React.FC = () => {
                   />
                   <span>{t('app.kuaizhizao.salesOrder.workOrderTypeLabel')}</span>
                   <Segmented
-                    size="middle"
+                    size="medium"
                     value={workOrderGranularity}
                     onChange={(val) => setWorkOrderGranularity(val as 'grouped' | 'peer_group')}
                     options={[
@@ -5714,7 +5676,7 @@ const SalesOrdersPage: React.FC = () => {
                 type="warning"
                 showIcon
                 style={{ marginBottom: 8 }}
-                message={t('app.kuaizhizao.salesOrder.masterDataMissingAlert')}
+                title={t('app.kuaizhizao.salesOrder.masterDataMissingAlert')}
               />
             ) : null}
             {pushPreviewData.target_type === 'work_order' && pushPreviewData.items?.length > 0 ? (

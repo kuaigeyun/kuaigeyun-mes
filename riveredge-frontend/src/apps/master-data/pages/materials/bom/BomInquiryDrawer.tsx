@@ -131,7 +131,7 @@ const BomInquiryDrawer: React.FC<BomInquiryDrawerProps> = ({ open, onClose }) =>
       title={t('app.master-data.bom.inquiryTitle')}
       open={open}
       onClose={onClose}
-      width={DRAWER_CONFIG.HALF_WIDTH}
+      size={DRAWER_CONFIG.HALF_WIDTH}
       destroyOnHidden
       extra={
         <Button type="primary" icon={<SearchOutlined />} onClick={() => void runQuery()}>

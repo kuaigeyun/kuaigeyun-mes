@@ -2125,7 +2125,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
           setWorkOrderDetail(null);
           resetOwoDetailFieldValues();
         }}
-        width={DRAWER_CONFIG.HALF_WIDTH}
+        size={DRAWER_CONFIG.HALF_WIDTH}
         extra={
           workOrderDetail ? (
             <Space>
@@ -2233,7 +2233,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       <Modal
         title={pushPreviewTitle}
         open={pushPreviewOpen}
-        destroyOnClose
+        destroyOnHidden
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
         onCancel={resetPushPreview}
         okText={t('common.next')}
@@ -2260,7 +2260,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
                 type="warning"
                 showIcon
                 style={{ marginBottom: 12 }}
-                message={
+                title={
                   outsourceWorkOrderCapabilityReasonMessage(pushPreviewData.blocking_reason, t) ||
                   pushPreviewData.blocking_reason
                 }
@@ -2318,7 +2318,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       <Modal
         title={t('app.kuaizhizao.outsourceWorkOrder.actionClose')}
         open={closeModalOpen}
-        destroyOnClose
+        destroyOnHidden
         confirmLoading={closeSubmitting}
         okText={t('app.kuaizhizao.outsourceWorkOrder.actionClose')}
         cancelText={t('common.cancel')}

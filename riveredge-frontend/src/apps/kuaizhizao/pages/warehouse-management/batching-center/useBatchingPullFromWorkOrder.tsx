@@ -162,14 +162,14 @@ export function useBatchingPullFromWorkOrder(options: Options = {}) {
       <Alert
         type="info"
         showIcon
-        message={t('app.kuaizhizao.batchingCenter.lineSideWarehousePickModalHint')}
+        title={t('app.kuaizhizao.batchingCenter.lineSideWarehousePickModalHint')}
         style={{ marginBottom: 16 }}
       />
       {showAllWarehousesHint ? (
         <Alert
           type="warning"
           showIcon
-          message={t('app.kuaizhizao.batchingCenter.lineSideWarehousePickModalFallbackHint')}
+          title={t('app.kuaizhizao.batchingCenter.lineSideWarehousePickModalFallbackHint')}
           style={{ marginBottom: 16 }}
         />
       ) : null}

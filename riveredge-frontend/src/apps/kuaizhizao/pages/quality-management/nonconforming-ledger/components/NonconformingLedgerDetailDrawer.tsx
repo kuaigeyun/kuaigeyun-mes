@@ -195,7 +195,7 @@ export const NonconformingLedgerDetailDrawer: React.FC<NonconformingLedgerDetail
   return (
     <DetailDrawerTemplate
       title={`${t('app.kuaizhizao.quality.nc.pageTitle')} ${record?.code || ''}`}
-      width={DRAWER_CONFIG.HALF_WIDTH}
+      size={DRAWER_CONFIG.HALF_WIDTH}
       open={open}
       onClose={onClose}
       loading={loading && !contentReady}

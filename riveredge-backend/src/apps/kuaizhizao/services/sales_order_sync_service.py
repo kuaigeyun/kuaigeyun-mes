@@ -738,6 +738,7 @@ class SalesOrderSyncService:
             if "total_amount" in create_data.model_fields_set
             else None,
             discount_amount=Decimal(str(getattr(create_data, "discount_amount", None) or 0)),
+            price_type=order_dict.get("price_type"),
         )
         order_dict["total_quantity"] = total_qty
         order_dict["total_amount"] = total_amt
@@ -834,6 +835,7 @@ class SalesOrderSyncService:
                     or 0
                 )
             ),
+            price_type=upd.get("price_type") or getattr(existing, "price_type", None),
         )
         upd["total_quantity"] = total_qty
         upd["total_amount"] = total_amt
@@ -883,6 +885,7 @@ class SalesOrderSyncService:
         sales_order_service: SalesOrderService,
         provided_total: Optional[Decimal],
         discount_amount: Decimal,
+        price_type: Optional[str] = None,
     ) -> Tuple[List[Dict[str, Any]], Decimal, Decimal]:
         material_map = {
             int(item.material_id): material_by_id[int(item.material_id)]
@@ -898,6 +901,7 @@ class SalesOrderSyncService:
                 material_map,
                 money_fn=sales_order_service._money,
                 partner_settlement_method=partner_settlement_method,
+                price_type=price_type,
             )
             total_qty += row["order_quantity"]
             subtotal += row["_item_amount"]

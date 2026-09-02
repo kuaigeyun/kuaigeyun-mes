@@ -163,6 +163,15 @@ function resolvePushBarFillColor(
   return 'var(--ant-color-primary)';
 }
 
+/** 已完成（100% / success）不叠加条内数字，避免完结单据仍像待办提示。 */
+function shouldShowPushProgressNumericLabel(
+  status: DocumentPushProgressBarProps['status'],
+  displayPercent: number,
+): boolean {
+  if (status === 'success' || displayPercent >= 100) return false;
+  return true;
+}
+
 /**
  * 进度条列的整套列属性：宽度真源 `UNI_TABLE_PROGRESS_COLUMN_WIDTH`（80）。
  *
@@ -210,8 +219,12 @@ export const DocumentPushProgressBar: React.FC<DocumentPushProgressBarProps> = R
   const barHeight = resolveListBadgeHeight(token);
   const displayPercent = clampPushProgressPercent(percent);
   const fillColor = resolvePushBarFillColor(status, displayPercent);
+  const showNumericLabel = shouldShowPushProgressNumericLabel(status, displayPercent);
   const bar = (
-    <div style={{ position: 'relative', width, minWidth: 56, height: barHeight, cursor: 'default' }}>
+    <div
+      style={{ position: 'relative', width, minWidth: 56, height: barHeight, cursor: 'default' }}
+      aria-label={showNumericLabel ? undefined : `${displayPercent}%`}
+    >
       <div
         style={{
           width: '100%',
@@ -231,25 +244,27 @@ export const DocumentPushProgressBar: React.FC<DocumentPushProgressBarProps> = R
           }}
         />
       </div>
-      <span
-        style={{
-          position: 'absolute',
-          inset: 0,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          height: barHeight,
-          fontSize: BAR_FONT_SIZE,
-          lineHeight: `${barHeight}px`,
-          fontWeight: 500,
-          fontVariantNumeric: 'tabular-nums',
-          color: displayPercent >= 50 ? '#fff' : 'var(--ant-color-text)',
-          textShadow: displayPercent >= 50 ? '0 0 2px rgba(0, 0, 0, 0.45)' : undefined,
-          pointerEvents: 'none',
-        }}
-      >
-        {displayPercent}%
-      </span>
+      {showNumericLabel ? (
+        <span
+          style={{
+            position: 'absolute',
+            inset: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            height: barHeight,
+            fontSize: BAR_FONT_SIZE,
+            lineHeight: `${barHeight}px`,
+            fontWeight: 500,
+            fontVariantNumeric: 'tabular-nums',
+            color: displayPercent >= 50 ? '#fff' : 'var(--ant-color-text)',
+            textShadow: displayPercent >= 50 ? '0 0 2px rgba(0, 0, 0, 0.45)' : undefined,
+            pointerEvents: 'none',
+          }}
+        >
+          {displayPercent}%
+        </span>
+      ) : null}
     </div>
   );
 

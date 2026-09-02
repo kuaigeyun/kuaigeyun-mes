@@ -51,7 +51,10 @@ import {
   type SalesOrderChangeListParams,
 } from '../../../services/sales-order-change';
 import { getSalesOrder, listSalesOrders, type SalesOrder } from '../../../services/sales-order';
-import { customerApi } from '../../../../master-data/services/supply-chain';
+import {
+  KUAIZHIZAO_DOC_HOST,
+  loadCustomerFormReferenceList,
+} from '../../../../../utils/documentFormReferenceLoad';
 import type { Customer } from '../../../../master-data/types/supply-chain';
 import {
   buildOrderChangeLifecycleValueEnum,
@@ -148,17 +151,9 @@ const SalesOrderChangesPage: React.FC = () => {
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const tableRowsRef = useRef<SalesOrderChange[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [customersLoading, setCustomersLoading] = useState(false);
 
   useEffect(() => {
-    setCustomersLoading(true);
-    customerApi
-      .list({ limit: 1000, isActive: true })
-      .then((result) => {
-        setCustomers(Array.isArray(result) ? result : (result as { data?: Customer[]; items?: Customer[] })?.data ?? (result as { items?: Customer[] })?.items ?? []);
-      })
-      .catch(() => setCustomers([]))
-      .finally(() => setCustomersLoading(false));
+    void loadCustomerFormReferenceList(KUAIZHIZAO_DOC_HOST.salesOrderChange).then(setCustomers);
   }, []);
 
   const changeCustomerSearchOptions = useMemo(
@@ -574,7 +569,6 @@ const SalesOrderChangesPage: React.FC = () => {
       fieldProps: {
         showSearch: true,
         optionFilterProp: 'label',
-        loading: customersLoading,
         options: changeCustomerSearchOptions,
         placeholder: t('app.kuaizhizao.customerFollowUp.colCustomer'),
       },
@@ -745,7 +739,6 @@ const SalesOrderChangesPage: React.FC = () => {
       changePerms.canDelete,
       changePerms.canUpdate,
       changePerms.canAction,
-      customersLoading,
       modal,
       message,
       orderChangeAuditColumn,
@@ -920,7 +913,7 @@ const SalesOrderChangesPage: React.FC = () => {
               batch: t('components.uniAction.print'),
             }}
             icon={<PrinterOutlined />}
-            size="middle"
+            size="medium"
           />,
         ]}
       />
@@ -1002,7 +995,7 @@ const SalesOrderChangesPage: React.FC = () => {
         title={t('app.kuaizhizao.salesOrderChange.detailTitle', { code: detail?.change_code ?? '' })}
         open={detailOpen}
         onClose={() => setDetailOpen(false)}
-        width={DRAWER_CONFIG.HALF_WIDTH}
+        size={DRAWER_CONFIG.HALF_WIDTH}
         extra={
           detail ? (
             <Space size="small">

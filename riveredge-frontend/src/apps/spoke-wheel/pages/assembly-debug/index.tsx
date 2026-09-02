@@ -176,14 +176,19 @@ export default function AssemblyDebugPage() {
             <>
               <Card size="small" title={`总装 ${selected.code}`} style={{ marginBottom: 16 }}>
                 <Row gutter={16}>
-                  <Col span={6}><Statistic title="状态" value={selected.status} valueStyle={{ fontSize: 14 }} /></Col>
+                  <Col span={6}><Statistic title="状态" value={selected.status} styles={{ content: { fontSize: 14 } }} /></Col>
                   <Col span={6}><Statistic title="百分表数" value={selected.fixture_dial_count} /></Col>
                   <Col span={6}><Statistic title="最终极差" value={selected.final_max_deviation_mm ?? '-'} suffix={selected.final_max_deviation_mm ? 'mm' : ''} /></Col>
                   <Col span={6}>
                     <Statistic
                       title="判定"
                       value={selected.final_qc_passed == null ? '待测' : (selected.final_qc_passed ? '合格' : '不合格')}
-                      valueStyle={{ color: selected.final_qc_passed ? '#3f8600' : selected.final_qc_passed === false ? '#cf1322' : undefined, fontSize: 18 }}
+                      styles={{
+                        content: {
+                          color: selected.final_qc_passed ? '#3f8600' : selected.final_qc_passed === false ? '#cf1322' : undefined,
+                          fontSize: 18,
+                        },
+                      }}
                       prefix={selected.final_qc_passed ? <CheckCircleOutlined /> : selected.final_qc_passed === false ? <CloseCircleOutlined /> : null}
                     />
                   </Col>
@@ -233,7 +238,7 @@ export default function AssemblyDebugPage() {
                           <Statistic
                             title="预览判定"
                             value={livePreview.qualified ? '合格' : '不合格'}
-                            valueStyle={{ color: livePreview.qualified ? '#3f8600' : '#cf1322' }}
+                            styles={{ content: { color: livePreview.qualified ? '#3f8600' : '#cf1322' } }}
                             prefix={livePreview.qualified ? <CheckCircleOutlined /> : <CloseCircleOutlined />}
                           />
                         </Col>

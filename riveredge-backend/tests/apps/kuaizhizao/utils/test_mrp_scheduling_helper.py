@@ -11,9 +11,12 @@ from apps.kuaizhizao.utils.mrp_scheduling_helper import (
     planning_date_to_work_order_end,
     planning_date_to_work_order_start,
     resolve_demand_item_delivery_date,
+    resolve_work_order_planned_dates_for_push,
+    should_prefer_source_document_planned_dates,
 )
 from apps.kuaizhizao.utils.work_order_operation_scheduling import (
     build_operation_time_slots,
+    build_operation_time_slots_in_planned_window,
     operation_total_hours,
 )
 
@@ -184,3 +187,42 @@ def test_build_operation_time_slots_forward_from_start():
     assert len(slots) == 2
     assert slots[0][0].date() == date(2026, 7, 10)
     assert slots[-1][1] > slots[0][0]
+
+
+def test_should_prefer_source_for_finished_good_not_subassembly():
+    fg = type("_Item", (), {
+        "production_completion_date": date(2026, 7, 31),
+        "delivery_date": date(2026, 7, 31),
+    })()
+    sub = type("_Item", (), {
+        "production_completion_date": date(2026, 7, 24),
+        "delivery_date": date(2026, 7, 31),
+    })()
+    assert should_prefer_source_document_planned_dates(fg, source_end=date(2026, 7, 31))
+    assert not should_prefer_source_document_planned_dates(sub, source_end=date(2026, 7, 31))
+
+
+def test_resolve_work_order_planned_dates_prefers_source_window():
+    start, end = resolve_work_order_planned_dates_for_push(
+        source_start=date(2026, 7, 1),
+        source_end=date(2026, 7, 31),
+        mrp_start=date(2026, 7, 20),
+        mrp_end=date(2026, 7, 28),
+        prefer_source=True,
+    )
+    assert start.date() == date(2026, 7, 1)
+    assert end.date() == date(2026, 7, 31)
+
+
+def test_build_operation_time_slots_in_planned_window_stays_in_range():
+    start = planning_date_to_work_order_start(date(2026, 7, 1))
+    end = planning_date_to_work_order_end(date(2026, 7, 31))
+    slots = build_operation_time_slots_in_planned_window(
+        [8.0, 16.0, 24.0],
+        planned_start=start,
+        planned_end=end,
+    )
+    assert len(slots) == 3
+    assert slots[0][0] >= start
+    assert slots[-1][1] <= end
+    assert slots[-1][1].date() == date(2026, 7, 31)

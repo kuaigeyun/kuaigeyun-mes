@@ -73,6 +73,67 @@ def _normalize_rule_threshold_fields(
     return tt, threshold_value, False
 
 
+async def _resolve_rule_material_scope(
+    tenant_id: int,
+    *,
+    material_id: Optional[int],
+    material_ids: Optional[List[int]],
+    material_group_id: Optional[int],
+    material_code: Optional[str],
+    material_name: Optional[str],
+) -> Tuple[Optional[int], Optional[List[int]], Optional[str], Optional[str]]:
+    """解析规则物料范围，校验分组归属并生成列表展示字段。"""
+    from apps.master_data.models.material import Material
+
+    ids: List[int] = []
+    if material_ids:
+        for raw in material_ids:
+            try:
+                mid = int(raw)
+            except (TypeError, ValueError):
+                continue
+            if mid > 0 and mid not in ids:
+                ids.append(mid)
+    if material_id is not None:
+        mid = int(material_id)
+        if mid > 0 and mid not in ids:
+            ids.insert(0, mid)
+
+    if not ids:
+        return None, None, material_code, material_name
+
+    materials = await Material.filter(
+        tenant_id=tenant_id, id__in=ids, deleted_at__isnull=True
+    ).all()
+    found_ids = {int(m.id) for m in materials}
+    missing = [mid for mid in ids if mid not in found_ids]
+    if missing:
+        raise ValidationError(f"物料不存在: {missing[0]}")
+
+    if material_group_id is not None:
+        gid = int(material_group_id)
+        for material in materials:
+            group_id = getattr(material, "group_id", None)
+            if group_id is None or int(group_id) != gid:
+                code = getattr(material, "main_code", None) or material.id
+                raise ValidationError(f"物料 {code} 不属于所选物料分组")
+
+    ids = [mid for mid in ids if mid in found_ids]
+    if len(ids) == 1:
+        material = next(m for m in materials if int(m.id) == ids[0])
+        code = getattr(material, "main_code", None) or material_code
+        name = getattr(material, "name", None) or material_name
+        return ids[0], ids, code, name
+
+    name_by_id = {int(m.id): str(getattr(m, "name", "") or "") for m in materials}
+    ordered_names = [name_by_id[mid] for mid in ids if name_by_id.get(mid)]
+    if len(ordered_names) <= 2:
+        display_name = "、".join(ordered_names) if ordered_names else None
+    else:
+        display_name = f"{ordered_names[0]} 等{len(ids)}个物料"
+    return None, ids, None, display_name
+
+
 class InventoryAlertRuleService(AppBaseService[InventoryAlertRule]):
     """
     库存预警规则服务类
@@ -120,6 +181,17 @@ class InventoryAlertRuleService(AppBaseService[InventoryAlertRule]):
             # 获取创建人信息
             user_info = await self.get_user_info(created_by)
 
+            resolved_material_id, resolved_material_ids, resolved_code, resolved_name = (
+                await _resolve_rule_material_scope(
+                    tenant_id,
+                    material_id=rule_data.material_id,
+                    material_ids=rule_data.material_ids,
+                    material_group_id=rule_data.material_group_id,
+                    material_code=rule_data.material_code,
+                    material_name=rule_data.material_name,
+                )
+            )
+
             # 创建预警规则
             alert_rule = await InventoryAlertRule.create(
                 tenant_id=tenant_id,
@@ -127,9 +199,10 @@ class InventoryAlertRuleService(AppBaseService[InventoryAlertRule]):
                 code=code,
                 name=rule_data.name,
                 alert_type=rule_data.alert_type,
-                material_id=rule_data.material_id,
-                material_code=rule_data.material_code,
-                material_name=rule_data.material_name,
+                material_id=resolved_material_id,
+                material_ids=resolved_material_ids,
+                material_code=resolved_code,
+                material_name=resolved_name,
                 material_group_id=rule_data.material_group_id,
                 material_group_name=rule_data.material_group_name,
                 warehouse_id=rule_data.warehouse_id,

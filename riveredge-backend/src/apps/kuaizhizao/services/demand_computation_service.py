@@ -61,9 +61,13 @@ from apps.kuaizhizao.utils.mrp_scheduling_helper import (
     compute_backward_production_schedule,
     merge_requirement_delivery_date,
     normalize_schedule_direction,
+    normalize_planning_date,
     planning_date_to_work_order_end,
     planning_date_to_work_order_start,
     resolve_demand_item_delivery_date,
+    resolve_source_production_window,
+    resolve_work_order_planned_dates_for_push,
+    should_prefer_source_document_planned_dates,
 )
 from apps.common.base_service import AppBaseService
 from apps.common.audit_actor import (
@@ -4527,6 +4531,11 @@ class DemandComputationService(AppBaseService):
                 return lines
         if remaining_qty <= 1e-9:
             return []
+        fallback_end = (
+            getattr(item, "production_completion_date", None)
+            or getattr(item, "delivery_date", None)
+        )
+        fallback_start = getattr(item, "production_start_date", None)
         if len(planned) == 1:
             po = planned[0]
             take = min(float(po.get("qty") or 0), remaining_qty)
@@ -4534,13 +4543,13 @@ class DemandComputationService(AppBaseService):
                 return []
             return [{
                 "qty": take,
-                "start_date": po.get("release_date") or getattr(item, "production_start_date", None),
-                "end_date": po.get("receipt_date") or getattr(item, "production_completion_date", None),
+                "start_date": po.get("release_date") or fallback_start,
+                "end_date": po.get("receipt_date") or fallback_end,
             }]
         return [{
             "qty": remaining_qty,
-            "start_date": getattr(item, "production_start_date", None),
-            "end_date": getattr(item, "production_completion_date", None),
+            "start_date": fallback_start,
+            "end_date": fallback_end,
         }]
 
     @staticmethod
@@ -4588,6 +4597,9 @@ class DemandComputationService(AppBaseService):
             "suggested_work_order_quantity": Decimal(str(line["qty"])),
             "production_start_date": line.get("start_date"),
             "production_completion_date": line.get("end_date"),
+            "delivery_date": getattr(base, "delivery_date", None),
+            "demand_item_ids": getattr(base, "demand_item_ids", None),
+            "demand_item_id": getattr(base, "demand_item_id", None),
         })()
 
     @staticmethod
@@ -6152,15 +6164,27 @@ class DemandComputationService(AppBaseService):
                         f"{so.order_code} - {so.customer_name}" if so.customer_name else so.order_code
                     )
 
-            # 计划时间：倒排保留交期锚点供工序倒推；正排仅传开工，工序正推后写回结束
+            # 计划时间：顶层/成品优先来源单据起止；BOM 子件保留 MRP 挂接
             schedule_direction = normalize_schedule_direction(
                 (computation.computation_params or {}).get("schedule_direction")
             )
-            planned_start_date = planning_date_to_work_order_start(item.production_start_date)
-            if schedule_direction == "forward":
-                planned_end_date = None
-            else:
-                planned_end_date = planning_date_to_work_order_end(item.production_completion_date)
+            source_start, source_end = await resolve_source_production_window(
+                tenant_id,
+                computation=computation,
+                item=item,
+            )
+            prefer_source = should_prefer_source_document_planned_dates(
+                item,
+                source_end=source_end,
+            )
+            planned_start_date, planned_end_date = resolve_work_order_planned_dates_for_push(
+                source_start=source_start,
+                source_end=source_end,
+                mrp_start=normalize_planning_date(getattr(item, "production_start_date", None)),
+                mrp_end=normalize_planning_date(getattr(item, "production_completion_date", None)),
+                schedule_direction=schedule_direction,
+                prefer_source=prefer_source,
+            )
             
             # 创建工单（物料来源控制增强）
             remarks = f"从需求计算 {computation.computation_code} 自动生成"
@@ -6281,12 +6305,23 @@ class DemandComputationService(AppBaseService):
             schedule_direction = normalize_schedule_direction(
                 (computation.computation_params or {}).get("schedule_direction")
             )
-            planned_start_date = None
-            planned_end_date = None
-            if item.production_start_date:
-                planned_start_date = planning_date_to_work_order_start(item.production_start_date)
-            if schedule_direction != "forward" and item.production_completion_date:
-                planned_end_date = planning_date_to_work_order_end(item.production_completion_date)
+            source_start, source_end = await resolve_source_production_window(
+                tenant_id,
+                computation=computation,
+                item=item,
+            )
+            prefer_source = should_prefer_source_document_planned_dates(
+                item,
+                source_end=source_end,
+            )
+            planned_start_date, planned_end_date = resolve_work_order_planned_dates_for_push(
+                source_start=source_start,
+                source_end=source_end,
+                mrp_start=normalize_planning_date(getattr(item, "production_start_date", None)),
+                mrp_end=normalize_planning_date(getattr(item, "production_completion_date", None)),
+                schedule_direction=schedule_direction,
+                prefer_source=prefer_source,
+            )
             
             work_order_data = OutsourceWorkOrderCreate(
                 product_id=item.material_id,

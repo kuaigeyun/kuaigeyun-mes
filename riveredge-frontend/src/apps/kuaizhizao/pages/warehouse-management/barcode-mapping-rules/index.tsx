@@ -16,8 +16,11 @@ import { EditOutlined, DeleteOutlined, PlusOutlined, EyeOutlined } from '@ant-de
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate,   useDetailDrawerDescriptionItems, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
-import { customerApi, unwrapSupplyPagedList } from '../../../../master-data/services/supply-chain';
-import { materialApi } from '../../../../master-data/services/material';
+import {
+  KUAIZHIZAO_DOC_HOST,
+  loadCustomerFormReferenceList,
+  searchMaterialFormReferenceOptions,
+} from '../../../../../utils/documentFormReferenceLoad';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { rowActionKind } from '../../../../../components/uni-action';
@@ -454,12 +457,13 @@ const BarcodeMappingRulesPage: React.FC = () => {
           label={t('app.kuaizhizao.warehouseCommon.colCustomer')}
           placeholder={t('app.kuaizhizao.barcodeMapping.selectCustomerOptional')}
           request={async () => {
-            try {
-              const customers = unwrapSupplyPagedList(await customerApi.list());
-              return customers.map((c) => ({ label: c.name, value: c.id }));
-            } catch {
-              return [];
-            }
+            const customers = await loadCustomerFormReferenceList(
+              KUAIZHIZAO_DOC_HOST.barcodeMappingRules,
+            );
+            return customers.map((c) => ({
+              label: c.name ?? String(c.id),
+              value: c.id as number,
+            }));
           }}
           colProps={{ span: 12 }}
         />
@@ -487,22 +491,13 @@ const BarcodeMappingRulesPage: React.FC = () => {
           label={t('app.kuaizhizao.barcodeMapping.mappedMaterial')}
           placeholder={t('app.kuaizhizao.barcodeMapping.selectMappedMaterial')}
           rules={[{ required: true, message: t('app.kuaizhizao.barcodeMapping.selectMappedMaterial') }]}
-          request={async (params) => {
-            try {
-              const materials = await materialApi.list({
-                skip: 0,
-                limit: 100,
-                isActive: true,
-                keyword: params.keyWords,
-              });
-              return materials.map(m => ({
-                label: `${m.code} - ${m.name}`,
-                value: m.id,
-              }));
-            } catch {
-              return [];
-            }
-          }}
+          request={async (params) =>
+            searchMaterialFormReferenceOptions(
+              KUAIZHIZAO_DOC_HOST.barcodeMappingRules,
+              params.keyWords,
+              100,
+            )
+          }
           fieldProps={{
             showSearch: true,
             filterOption: false,
@@ -539,7 +534,7 @@ const BarcodeMappingRulesPage: React.FC = () => {
           setDetailDrawerVisible(false);
           setCurrentRecord(null);
         }}
-        width={DRAWER_CONFIG.HALF_WIDTH}
+        size={DRAWER_CONFIG.HALF_WIDTH}
         basic={
           currentRecord ? (
             <Descriptions

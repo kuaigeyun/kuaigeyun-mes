@@ -703,8 +703,14 @@ class MenuService:
             (settings_row.settings or {}).get(_CUSTOM_MENU_LAYOUT_KEY)
         )
         show_app_names = bool(data.show_app_names)
+        layout_enabled = bool(data.enabled)
+        if not layout_enabled and any(
+            node.type == "menu_ref" and (node.menu_uuid or "").strip()
+            for node in MenuService._iter_custom_layout_nodes(data.nodes)
+        ):
+            layout_enabled = True
         next_layout = {
-            "enabled": bool(data.enabled),
+            "enabled": layout_enabled,
             "show_app_names": show_app_names,
             "version": int(current.get("version", 0) or 0) + 1,
             "nodes": data.model_dump(mode="json").get("nodes", []),

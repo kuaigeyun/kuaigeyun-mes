@@ -107,7 +107,7 @@ import { usePagePermissionResource } from '../../../../hooks/usePagePermissionRe
 import { useResourcePermissions } from '../../../../hooks/useResourcePermissions'
 import { UniBatchSplitToolbar } from '../../../../components/uni-batch'
 import { TwoColumnLayout, DocumentFormPageLayout } from '../../../../components/layout-templates'
-import { useLeaveFormTab, navigateClosingTab, uniTabKey } from '../../../../components/uni-tabs/navigateClosingTab'
+import { navigateClosingTab, uniTabKey } from '../../../../components/uni-tabs/navigateClosingTab'
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../utils/customPageTitle'
 import { getApiErrorMessage } from '../../../../utils/errorHandler'
 import { buildDetailDrawerEditExtra } from '../../../kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail'
@@ -514,6 +514,56 @@ const MATERIAL_LIST_PATH = '/apps/master-data/materials'
 const MATERIAL_CREATE_PATH = `${MATERIAL_LIST_PATH}/new`
 const materialEditPath = (uuid: string) => `${MATERIAL_LIST_PATH}/${uuid}/edit`
 
+/** 列表左侧分组筛选：null=全部物料，-1=未分组，>0=具体分组 */
+type MaterialListGroupFilterId = number | null
+
+type MaterialListReturnState = {
+  reloadMaterials?: boolean
+  openFabricationWizard?: FabricationMaterialRef
+  restoreGroupId?: MaterialListGroupFilterId
+}
+
+function readMaterialListGroupFilterFromRef(
+  ref: React.MutableRefObject<number | null>,
+): MaterialListGroupFilterId {
+  const id = ref.current
+  if (id == null) return null
+  return id
+}
+
+function normalizeMaterialListGroupFilterId(value: unknown): MaterialListGroupFilterId | undefined {
+  if (value === undefined) return undefined
+  if (value === null) return null
+  if (value === 'no-group') return -1
+  const n = Number(value)
+  if (!Number.isFinite(n)) return undefined
+  if (n === -1) return -1
+  if (n > 0) return n
+  return undefined
+}
+
+function resolveRestoreGroupIdAfterMaterialSave(params: {
+  isCreatePage: boolean
+  entryGroupId: MaterialListGroupFilterId | undefined
+  previousGroupId?: number | null
+  savedGroupId?: number | null
+}): MaterialListGroupFilterId {
+  const saved =
+    params.savedGroupId != null && params.savedGroupId > 0 ? params.savedGroupId : null
+  const prev =
+    params.previousGroupId != null && params.previousGroupId > 0
+      ? params.previousGroupId
+      : null
+
+  if (params.isCreatePage) {
+    return saved ?? params.entryGroupId ?? null
+  }
+  if (saved != null && saved !== prev) {
+    return saved
+  }
+  return params.entryGroupId ?? null
+}
+
 function buildMaterialEditFormValues(material: Material): Record<string, unknown> {
   return {
     mainCode: material.mainCode ?? (material as any).main_code,
@@ -608,7 +658,8 @@ const MaterialsManagementPage: React.FC = () => {
   const editRouteUuid = editRouteMatch?.[1] ? decodeURIComponent(editRouteMatch[1]) : null
   const isEditPage = Boolean(editRouteUuid)
   const isFormPage = isCreatePage || isEditPage
-  const leaveMaterialFormPage = useLeaveFormTab(MATERIAL_LIST_PATH)
+  /** 进入新建/编辑页时的列表分组，用于保存或取消后恢复左侧树选中 */
+  const formEntryGroupIdRef = useRef<MaterialListGroupFilterId | undefined>(undefined)
   const formPageInitializedRef = useRef(false)
   const [formPageError, setFormPageError] = useState<string | null>(null)
   const pagePermissionResource = usePagePermissionResource(location.pathname)
@@ -954,12 +1005,50 @@ const MaterialsManagementPage: React.FC = () => {
     return filter(nodes)
   }, [])
 
+  const buildMaterialFormNavigationState = useCallback((): MaterialListReturnState => ({
+    restoreGroupId:
+      formEntryGroupIdRef.current !== undefined
+        ? formEntryGroupIdRef.current
+        : readMaterialListGroupFilterFromRef(selectedGroupIdRef),
+  }), [])
+
+  const applyMaterialGroupSelection = useCallback((groupId: MaterialListGroupFilterId) => {
+    if (groupId == null) {
+      selectedGroupIdRef.current = null
+      setSelectedGroupId(null)
+      setSelectedGroupKeys(['all'])
+      return
+    }
+    if (groupId === -1) {
+      selectedGroupIdRef.current = -1
+      setSelectedGroupId(-1)
+      setSelectedGroupKeys(['no-group'])
+      return
+    }
+    selectedGroupIdRef.current = groupId
+    setSelectedGroupId(groupId)
+    setSelectedGroupKeys([String(groupId)])
+  }, [])
+
+  const leaveMaterialFormPage = useCallback(() => {
+    const restoreGroupId =
+      formEntryGroupIdRef.current !== undefined
+        ? formEntryGroupIdRef.current
+        : readMaterialListGroupFilterFromRef(selectedGroupIdRef)
+    navigateClosingTab(
+      navigate,
+      MATERIAL_LIST_PATH,
+      uniTabKey(location.pathname, location.search),
+      { restoreGroupId },
+    )
+  }, [navigate, location.pathname, location.search])
+
   const handleEditMaterial = useCallback(
     (record: Material) => {
       if (!record.uuid) return
-      navigate(materialEditPath(record.uuid))
+      navigate(materialEditPath(record.uuid), { state: buildMaterialFormNavigationState() })
     },
-    [navigate],
+    [navigate, buildMaterialFormNavigationState],
   )
 
   const loadMaterialDetail = useCallback(
@@ -1000,9 +1089,9 @@ const MaterialsManagementPage: React.FC = () => {
 
   const handleOpenMaterialForEdit = useCallback(
     (uuid: string) => {
-      navigate(materialEditPath(uuid))
+      navigate(materialEditPath(uuid), { state: buildMaterialFormNavigationState() })
     },
-    [navigate],
+    [navigate, buildMaterialFormNavigationState],
   )
 
   const healthCheckGroupId = useMemo(() => {
@@ -1141,12 +1230,20 @@ const MaterialsManagementPage: React.FC = () => {
 
   useEffect(() => {
     if (isFormPage) return
-    const state = location.state as {
-      reloadMaterials?: boolean
-      openFabricationWizard?: FabricationMaterialRef
-    } | null
-    if (!state?.reloadMaterials && !state?.openFabricationWizard) return
-    if (state.reloadMaterials) {
+    const state = location.state as MaterialListReturnState | null
+    if (!state) return
+
+    const restoreGroupId = normalizeMaterialListGroupFilterId(state.restoreGroupId)
+    const hasRestore = restoreGroupId !== undefined
+    const hasReload = Boolean(state.reloadMaterials)
+    const hasWizard = Boolean(state.openFabricationWizard)
+
+    if (!hasRestore && !hasReload && !hasWizard) return
+
+    if (hasRestore) {
+      applyMaterialGroupSelection(restoreGroupId ?? null)
+    }
+    if (hasReload) {
       actionRef.current?.reload()
       void loadMaterialGroups()
     }
@@ -1155,7 +1252,36 @@ const MaterialsManagementPage: React.FC = () => {
       setFabricationWizardOpen(true)
     }
     navigate(`${location.pathname}${location.search}`, { replace: true, state: {} })
-  }, [isFormPage, location.state, location.pathname, location.search, navigate, loadMaterialGroups])
+  }, [
+    isFormPage,
+    location.state,
+    location.pathname,
+    location.search,
+    navigate,
+    loadMaterialGroups,
+    applyMaterialGroupSelection,
+  ])
+
+  useEffect(() => {
+    if (!isFormPage) {
+      formEntryGroupIdRef.current = undefined
+      return
+    }
+    const fromState = normalizeMaterialListGroupFilterId(
+      (location.state as MaterialListReturnState | null)?.restoreGroupId,
+    )
+    if (fromState !== undefined) {
+      formEntryGroupIdRef.current = fromState
+      return
+    }
+    if (isCreatePage) {
+      const raw = searchParams.get('groupId')
+      const n = raw != null ? Number(raw) : NaN
+      formEntryGroupIdRef.current = Number.isFinite(n) && n > 0 ? n : null
+      return
+    }
+    formEntryGroupIdRef.current = null
+  }, [isFormPage, isCreatePage, location.state, searchParams])
 
   /**
    * 加载基础单位选项（单位主数据）与属性定义
@@ -1389,8 +1515,8 @@ const MaterialsManagementPage: React.FC = () => {
   const handleCreateMaterial = useCallback(() => {
     const gid = selectedGroupIdRef.current
     const qs = gid != null && gid > 0 ? `?groupId=${gid}` : ''
-    navigate(`${MATERIAL_CREATE_PATH}${qs}`)
-  }, [navigate])
+    navigate(`${MATERIAL_CREATE_PATH}${qs}`, { state: buildMaterialFormNavigationState() })
+  }, [navigate, buildMaterialFormNavigationState])
 
   // Alt+N 绑定到新建物料（与新建分组区分，仅新建物料响应快捷键）
   useNewShortcut(isFormPage ? undefined : handleCreateMaterial)
@@ -3604,12 +3730,28 @@ const MaterialsManagementPage: React.FC = () => {
       }
 
       const wizardMaterial = await resolveFabricationWizardMaterial(saved, values)
+      const savedGroupIdRaw = saved.groupId ?? (saved as { group_id?: number }).group_id
+      const savedGroupId =
+        savedGroupIdRaw != null && Number(savedGroupIdRaw) > 0 ? Number(savedGroupIdRaw) : null
+      const previousGroupIdRaw =
+        currentMaterial?.groupId ?? (currentMaterial as { group_id?: number } | null)?.group_id
+      const previousGroupId =
+        previousGroupIdRaw != null && Number(previousGroupIdRaw) > 0
+          ? Number(previousGroupIdRaw)
+          : null
+      const restoreGroupId = resolveRestoreGroupIdAfterMaterialSave({
+        isCreatePage,
+        entryGroupId: formEntryGroupIdRef.current,
+        previousGroupId,
+        savedGroupId,
+      })
       navigateClosingTab(
         navigate,
         MATERIAL_LIST_PATH,
         uniTabKey(location.pathname, location.search),
         {
           reloadMaterials: true,
+          restoreGroupId,
           ...(wizardMaterial ? { openFabricationWizard: wizardMaterial } : {}),
         },
       )
@@ -4464,11 +4606,11 @@ const MaterialsManagementPage: React.FC = () => {
         destroyOnHidden
         width={MODAL_CONFIG.SMALL_WIDTH}
       >
-        <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+        <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
           <Alert
             type="warning"
             showIcon
-            message={
+            title={
               rewriteMainCodesScope === 'selected'
                 ? t('app.master-data.materials.rewriteMainCodesHintSelected', {
                     count: selectedRowKeys.length,
@@ -4504,11 +4646,11 @@ const MaterialsManagementPage: React.FC = () => {
         destroyOnHidden
         width={MODAL_CONFIG.SMALL_WIDTH}
       >
-        <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+        <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
           <Alert
             type="info"
             showIcon
-            message={t('app.master-data.materials.batchMoveGroupHint', {
+            title={t('app.master-data.materials.batchMoveGroupHint', {
               count: selectedRowKeys.length,
             })}
           />
@@ -4548,11 +4690,11 @@ const MaterialsManagementPage: React.FC = () => {
         destroyOnHidden
         width={MODAL_CONFIG.SMALL_WIDTH}
       >
-        <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+        <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
           <Alert
             type="info"
             showIcon
-            message={t('app.master-data.materials.batchProcessRouteHint', {
+            title={t('app.master-data.materials.batchProcessRouteHint', {
               count: selectedRowKeys.length,
             })}
           />
@@ -4594,11 +4736,11 @@ const MaterialsManagementPage: React.FC = () => {
         destroyOnHidden
         width={MODAL_CONFIG.SMALL_WIDTH}
       >
-        <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+        <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
           <Alert
             type="info"
             showIcon
-            message={t('app.master-data.materials.batchSourceTypeHint', {
+            title={t('app.master-data.materials.batchSourceTypeHint', {
               count: selectedRowKeys.length,
             })}
           />
@@ -4632,11 +4774,11 @@ const MaterialsManagementPage: React.FC = () => {
         destroyOnHidden
         width={MODAL_CONFIG.STANDARD_WIDTH}
       >
-        <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+        <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
           <Alert
             type="info"
             showIcon
-            message={t('app.master-data.materials.batchDefaultsHint', {
+            title={t('app.master-data.materials.batchDefaultsHint', {
               count: selectedRowKeys.length,
             })}
           />
@@ -4739,11 +4881,11 @@ const MaterialsManagementPage: React.FC = () => {
         destroyOnHidden
         width={MODAL_CONFIG.LARGE_WIDTH}
       >
-        <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+        <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
           <Alert
             type="info"
             showIcon
-            message={t('app.master-data.materials.batchInspectionHint', {
+            title={t('app.master-data.materials.batchInspectionHint', {
               count: selectedRowKeys.length,
             })}
           />
@@ -4820,11 +4962,11 @@ const MaterialsManagementPage: React.FC = () => {
         destroyOnHidden
         width={MODAL_CONFIG.LARGE_WIDTH}
       >
-        <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+        <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
           <Alert
             type="info"
             showIcon
-            message={t('app.master-data.materials.batchVariantHint', {
+            title={t('app.master-data.materials.batchVariantHint', {
               count: selectedRowKeys.length,
             })}
           />
@@ -4869,11 +5011,11 @@ const MaterialsManagementPage: React.FC = () => {
         destroyOnHidden
         width={MODAL_CONFIG.LARGE_WIDTH}
       >
-        <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+        <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
           <Alert
             type="info"
             showIcon
-            message={t('app.master-data.materials.batchTrackingAlertTitle', {
+            title={t('app.master-data.materials.batchTrackingAlertTitle', {
               count: selectedRowKeys.length,
             })}
             description={t('app.master-data.materials.batchTrackingHint')}
@@ -5070,14 +5212,14 @@ const MaterialsManagementPage: React.FC = () => {
           </Button>,
         ]}
       >
-        <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+        <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
           <div>
             <Typography.Title level={5} style={{ marginTop: 0, marginBottom: 12 }}>
               {t('app.master-data.materials.standardPresetSectionImportSettings')}
             </Typography.Title>
             <Card
               size="small"
-              bordered={false}
+              variant="borderless"
               style={{ background: token.colorFillAlter }}
               styles={{ body: { padding: '12px 16px' } }}
             >
@@ -5089,7 +5231,7 @@ const MaterialsManagementPage: React.FC = () => {
                   <Row gutter={[12, 12]} align="middle" wrap>
                     <Col flex="none">
                       <Segmented<'single' | 'preset_by_category'>
-                        size="middle"
+                        size="medium"
                         value={standardPresetGroupMode}
                         onChange={(v) => {
                           setStandardPresetGroupMode(v)
@@ -5154,7 +5296,7 @@ const MaterialsManagementPage: React.FC = () => {
                     {t('app.master-data.materials.standardPresetCodeMode')}
                   </Typography.Text>
                   <Segmented<'auto' | 'gb'>
-                    size="middle"
+                    size="medium"
                     value={standardPresetCodeMode}
                     onChange={(v) => setStandardPresetCodeMode(v)}
                     options={[

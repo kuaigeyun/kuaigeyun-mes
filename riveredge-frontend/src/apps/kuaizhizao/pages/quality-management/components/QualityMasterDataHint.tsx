@@ -60,7 +60,7 @@ export const QualityMasterDataHint: React.FC<QualityMasterDataHintProps> = ({ sc
       type="info"
       showIcon
       style={{ marginBottom: 12 }}
-      message={message}
+      title={message}
       action={
         <a onClick={() => navigate('/system/config-center?tab=parameters&module=quality')}>
           {t('app.kuaizhizao.quality.masterDataHint.gotoConfigCenter')}

@@ -68,6 +68,8 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
   const [loginPreviewLocale, setLoginPreviewLocale] = useState<'zh-CN' | 'en-US'>('zh-CN');
   const platformNameValue = Form.useWatch('platform_name', form);
   const platformNameEnValue = Form.useWatch('platform_name_en', form);
+  const platformLogoValue = Form.useWatch('platform_logo', form);
+  const faviconFieldValue = Form.useWatch('favicon', form);
   const loginTitleValue = Form.useWatch('login_title', form);
   const loginTitleEnValue = Form.useWatch('login_title_en', form);
   const loginContentValue = Form.useWatch('login_content', form);
@@ -77,8 +79,6 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
   const loginBackgroundValue = Form.useWatch('login_background_image', form);
   const loginDecorationEnabledValue = Form.useWatch('login_decoration_enabled', form);
   const loginBackgroundEnabledValue = Form.useWatch('login_background_enabled', form);
-  const decorationLayerEnabled = isLoginVisualLayerEnabled(loginDecorationEnabledValue);
-  const backgroundLayerEnabled = isLoginVisualLayerEnabled(loginBackgroundEnabledValue);
 
   const { data: settings, isLoading } = useQuery({
     queryKey: ['platformSettings'],
@@ -86,6 +86,17 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
     staleTime: 60_000,
     placeholderData: (prev) => prev,
   });
+
+  const decorationLayerEnabled = isLoginVisualLayerEnabled(loginDecorationEnabledValue);
+  const backgroundLayerEnabled = isLoginVisualLayerEnabled(loginBackgroundEnabledValue);
+  const hasPlatformLogoConfigured = Boolean(
+    String(platformLogoValue ?? settings?.platform_logo ?? '').trim(),
+  );
+  const hasFaviconConfigured = Boolean(
+    String(faviconFieldValue ?? settings?.favicon ?? '').trim(),
+  );
+  const platformLogoPreviewMissing = hasPlatformLogoConfigured && !logoUrl;
+  const faviconPreviewMissing = hasFaviconConfigured && !faviconUrl;
 
   // 更新平台设置
   const updateMutation = useMutation({
@@ -111,7 +122,7 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
         icp_license_en: data.icp_license_en,
         theme_color: data.theme_color || '#1890ff',
         tenant_auto_approve: data.tenant_auto_approve ?? false,
-        float_button_enabled: data.float_button_enabled ?? true,
+        float_button_enabled: data.float_button_enabled === true,
         copyright_menu_enabled: data.copyright_menu_enabled ?? true,
         custom_apps_contact_qr_enabled: data.custom_apps_contact_qr_enabled ?? false,
         login_guest_enabled: data.login_guest_enabled ?? true,
@@ -148,7 +159,9 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
       return;
     }
     if (isUUID(faviconValue.trim())) {
-      const previewInfo = await getSiteLogoPreview(faviconValue.trim());
+      const previewInfo = await getSiteLogoPreview(faviconValue.trim(), {
+        brandingCategory: 'platform-favicon',
+      });
       if (!previewInfo?.preview_url) {
         setFaviconUrl(undefined);
         setFaviconFileList([]);
@@ -184,7 +197,9 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
 
     // 如果是UUID格式，获取文件预览URL
     if (isUUID(logoValue.trim())) {
-      const previewInfo = await getSiteLogoPreview(logoValue.trim());
+      const previewInfo = await getSiteLogoPreview(logoValue.trim(), {
+        brandingCategory: 'platform-logo',
+      });
       if (!previewInfo?.preview_url) {
         setLogoUrl(undefined);
         setLogoFileList([]);
@@ -217,7 +232,9 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
     }
     if (isUUID(imageValue.trim())) {
       try {
-        const previewInfo = await getSiteLogoPreview(imageValue.trim());
+        const previewInfo = await getSiteLogoPreview(imageValue.trim(), {
+          brandingCategory: 'platform-logo',
+        });
         if (!previewInfo?.preview_url) {
           setDecorationUrl(undefined);
           setDecorationFileList([]);
@@ -253,7 +270,9 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
     }
     if (isUUID(imageValue.trim())) {
       try {
-        const previewInfo = await getSiteLogoPreview(imageValue.trim());
+        const previewInfo = await getSiteLogoPreview(imageValue.trim(), {
+          brandingCategory: 'platform-logo',
+        });
         if (!previewInfo?.preview_url) {
           setBackgroundUrl(undefined);
           setBackgroundFileList([]);
@@ -305,7 +324,7 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
         icp_license_en: settings.icp_license_en,
         theme_color: settings.theme_color || '#1890ff',
         tenant_auto_approve: settings.tenant_auto_approve ?? false,
-        float_button_enabled: settings.float_button_enabled ?? true,
+        float_button_enabled: settings.float_button_enabled === true,
         copyright_menu_enabled: settings.copyright_menu_enabled ?? true,
         custom_apps_contact_qr_enabled: settings.custom_apps_contact_qr_enabled ?? false,
         login_guest_enabled: settings.login_guest_enabled ?? true,
@@ -375,7 +394,9 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
         // 获取服务器预览URL
         let previewUrl: string | undefined = undefined;
         try {
-          const previewInfo = await getSiteLogoPreview(response.uuid);
+          const previewInfo = await getSiteLogoPreview(response.uuid, {
+            brandingCategory: 'platform-logo',
+          });
           previewUrl = previewInfo?.preview_url;
           // 释放本地预览URL
           URL.revokeObjectURL(localPreviewUrl);
@@ -417,15 +438,22 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
   };
 
   /**
-   * 清除LOGO
+   * 清除LOGO（立即保存，恢复默认图标）
    */
-  const handleClearLogo = () => {
-    form.setFieldsValue({
-      platform_logo: null,
-    });
-    setLogoUrl(undefined);
-    setLogoFileList([]);
-    messageApi.success(t('pages.infra.platform.logoCleared'));
+  const handleClearLogo = async () => {
+    const previous = String(form.getFieldValue('platform_logo') ?? '').trim();
+    try {
+      await updateMutation.mutateAsync({ platform_logo: null });
+      form.setFieldsValue({ platform_logo: null });
+      setLogoUrl(undefined);
+      setLogoFileList([]);
+      if (previous && isUUID(previous)) {
+        invalidateSiteLogoPreviewCache(previous);
+      }
+      messageApi.success(t('pages.infra.platform.logoCleared'));
+    } catch (error: any) {
+      messageApi.error(error?.message || t('pages.infra.platform.updateFailed'));
+    }
   };
 
   /**
@@ -463,7 +491,9 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
         form.setFieldsValue({ favicon: response.uuid });
         let previewUrl: string | undefined;
         try {
-          const previewInfo = await getSiteLogoPreview(response.uuid);
+          const previewInfo = await getSiteLogoPreview(response.uuid, {
+            brandingCategory: 'platform-favicon',
+          });
           URL.revokeObjectURL(localPreviewUrl);
           previewUrl = previewInfo?.preview_url;
         } catch {
@@ -498,13 +528,23 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
   };
 
   /**
-   * 清除 Favicon
+   * 清除 Favicon（立即保存，恢复默认图标）
    */
-  const handleClearFavicon = () => {
-    form.setFieldsValue({ favicon: null });
-    setFaviconUrl(undefined);
-    setFaviconFileList([]);
-    messageApi.success(t('pages.infra.platform.faviconCleared'));
+  const handleClearFavicon = async () => {
+    const previous = String(form.getFieldValue('favicon') ?? '').trim();
+    try {
+      await updateMutation.mutateAsync({ favicon: null });
+      form.setFieldsValue({ favicon: null });
+      setFaviconUrl(undefined);
+      setFaviconFileList([]);
+      if (previous && isUUID(previous)) {
+        invalidateSiteLogoPreviewCache(previous);
+      }
+      await applyFavicon(undefined);
+      messageApi.success(t('pages.infra.platform.faviconCleared'));
+    } catch (error: any) {
+      messageApi.error(error?.message || t('pages.infra.platform.updateFailed'));
+    }
   };
 
   const handleDecorationUpload: UploadProps['beforeUpload'] = async (file) => {
@@ -688,12 +728,11 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
                   />
                 </Col>
               </Row>
-              <ProForm.Item
-                name="platform_logo"
+              <Form.Item
                 label={t('pages.infra.platform.platformLogo')}
                 tooltip={t('pages.infra.platform.platformLogoTooltip')}
               >
-                <Space direction="vertical" style={{ width: '100%' }}>
+                <Space orientation="vertical" style={{ width: '100%' }}>
                   {logoUrl && (
                     <div style={{ marginBottom: 8 }}>
                       <img
@@ -710,7 +749,7 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
                       />
                     </div>
                   )}
-                  <Space>
+                  <Space wrap>
                     <Upload
                       beforeUpload={handleLogoFileSelect}
                       fileList={logoFileList}
@@ -720,12 +759,22 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
                     >
                       <Button icon={<UploadOutlined />}>{t('pages.infra.platform.uploadLogo')}</Button>
                     </Upload>
-                    {logoUrl && (
-                      <Button icon={<DeleteOutlined />} danger onClick={handleClearLogo}>
+                    {hasPlatformLogoConfigured && (
+                      <Button
+                        icon={<DeleteOutlined />}
+                        danger
+                        onClick={handleClearLogo}
+                        loading={updateMutation.isPending}
+                      >
                         {t('pages.infra.platform.clearLogo')}
                       </Button>
                     )}
                   </Space>
+                  {platformLogoPreviewMissing && (
+                    <Typography.Text type="warning">
+                      {t('pages.infra.platform.brandingPreviewMissing')}
+                    </Typography.Text>
+                  )}
                   <ProFormText
                     name="platform_logo"
                     placeholder={t('pages.infra.platform.logoUrlPlaceholder')}
@@ -733,13 +782,12 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
                     style={{ marginTop: 8 }}
                   />
                 </Space>
-              </ProForm.Item>
-              <ProForm.Item
-                name="favicon"
+              </Form.Item>
+              <Form.Item
                 label={t('pages.infra.platform.favicon')}
                 tooltip={t('pages.infra.platform.faviconTooltip')}
               >
-                <Space direction="vertical" style={{ width: '100%' }}>
+                <Space orientation="vertical" style={{ width: '100%' }}>
                   {faviconUrl && (
                     <div style={{ marginBottom: 8 }}>
                       <img
@@ -756,7 +804,7 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
                       />
                     </div>
                   )}
-                  <Space>
+                  <Space wrap>
                     <Upload
                       beforeUpload={handleFaviconFileSelect}
                       fileList={faviconFileList}
@@ -766,12 +814,22 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
                     >
                       <Button icon={<UploadOutlined />}>{t('pages.infra.platform.uploadFavicon')}</Button>
                     </Upload>
-                    {faviconUrl && (
-                      <Button icon={<DeleteOutlined />} danger onClick={handleClearFavicon}>
+                    {hasFaviconConfigured && (
+                      <Button
+                        icon={<DeleteOutlined />}
+                        danger
+                        onClick={handleClearFavicon}
+                        loading={updateMutation.isPending}
+                      >
                         {t('pages.infra.platform.clearFavicon')}
                       </Button>
                     )}
                   </Space>
+                  {faviconPreviewMissing && (
+                    <Typography.Text type="warning">
+                      {t('pages.infra.platform.brandingPreviewMissing')}
+                    </Typography.Text>
+                  )}
                   <ProFormText
                     name="favicon"
                     placeholder={t('pages.infra.platform.faviconUrlPlaceholder')}
@@ -779,7 +837,7 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
                     style={{ marginTop: 8 }}
                   />
                 </Space>
-              </ProForm.Item>
+              </Form.Item>
               <Row gutter={[16, 0]} style={{ marginTop: 4 }}>
                 <Col xs={24} sm={12}>
                   <Form.Item

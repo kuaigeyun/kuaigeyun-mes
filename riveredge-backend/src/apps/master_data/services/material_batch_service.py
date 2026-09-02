@@ -76,6 +76,71 @@ class MaterialBatchService:
         return prod + timedelta(days=days_int)
 
     @staticmethod
+    def resolve_inbound_item_expiry_date(
+        *,
+        material: Optional[Material],
+        production_date: Union[date, datetime, None],
+        explicit_expiry: Union[date, datetime, None] = None,
+    ) -> Optional[date]:
+        """入库明细/台账写入前解析有效期至：显式值优先，否则按物料保质期 + 生产日期。"""
+        explicit = MaterialBatchService.coerce_optional_date(explicit_expiry)
+        if explicit is not None:
+            return explicit
+        return MaterialBatchService.resolve_batch_expiry_date(
+            material=material,
+            production_date=production_date,
+            explicit_expiry=None,
+        )
+
+    @staticmethod
+    async def lookup_sibling_batch_expiry(
+        tenant_id: int,
+        material_id: int,
+        batch_no: str,
+        *,
+        exclude_batch_id: Optional[int] = None,
+    ) -> Optional[date]:
+        """同物料同批号其它仓/质量态行上已维护的有效期（生产前手工维护批号记录）。"""
+        bn = str(batch_no or "").strip()
+        if not bn or bn == "DEFAULT":
+            return None
+        q = MaterialBatch.filter(
+            tenant_id=tenant_id,
+            material_id=material_id,
+            batch_no=bn,
+            deleted_at__isnull=True,
+            expiry_date__isnull=False,
+        )
+        if exclude_batch_id:
+            q = q.exclude(id=exclude_batch_id)
+        row = await q.order_by("-updated_at").first()
+        return row.expiry_date if row else None
+
+    @staticmethod
+    async def enrich_receipt_items_expiry_dates(
+        items: List[Any],
+        material_by_id: Dict[int, Material],
+        production_date: Union[date, datetime, None],
+    ) -> None:
+        """入库确认前：为无有效期的明细行按物料保质期补齐 expiry_date 并落库。"""
+        prod = MaterialBatchService.coerce_optional_date(production_date)
+        if prod is None:
+            return
+        for item in items:
+            if MaterialBatchService.coerce_optional_date(getattr(item, "expiry_date", None)) is not None:
+                continue
+            material = material_by_id.get(int(getattr(item, "material_id", 0) or 0))
+            resolved = MaterialBatchService.resolve_inbound_item_expiry_date(
+                material=material,
+                production_date=prod,
+                explicit_expiry=None,
+            )
+            if resolved is None:
+                continue
+            item.expiry_date = resolved
+            await item.save(update_fields=["expiry_date"])
+
+    @staticmethod
     def _to_response(batch: MaterialBatch) -> MaterialBatchResponse:
         material = batch.material
         if not material:
@@ -331,11 +396,24 @@ class MaterialBatchService:
         if not batch:
             raise NotFoundError("物料批号", batch_uuid)
         
-        # 更新字段
-        update_data = data.dict(exclude_unset=True)
+        update_data = data.model_dump(by_alias=False, exclude_unset=True)
+        if "production_date" in update_data:
+            batch.production_date = MaterialBatchService.coerce_optional_date(
+                update_data["production_date"]
+            )
+        if "expiry_date" in update_data:
+            batch.expiry_date = MaterialBatchService.coerce_optional_date(update_data["expiry_date"])
+        elif "production_date" in update_data and batch.expiry_date is None:
+            batch.expiry_date = MaterialBatchService.resolve_batch_expiry_date(
+                material=batch.material,
+                production_date=batch.production_date,
+                explicit_expiry=None,
+            )
         for key, value in update_data.items():
+            if key in ("production_date", "expiry_date"):
+                continue
             setattr(batch, key, value)
-        
+
         apply_update_audit(batch, current_user)
         await batch.save()
         await batch.fetch_related("material")

@@ -899,7 +899,7 @@ const PaymentsPage: React.FC = () => {
       <Modal
         title={pullFromPayableAction.label}
         open={pullPreviewOpen}
-        destroyOnClose
+        destroyOnHidden
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
         onCancel={resetPullPreview}
         okText={pullFromPayableAction.targetLabel}
@@ -938,7 +938,7 @@ const PaymentsPage: React.FC = () => {
                 type="warning"
                 showIcon
                 style={{ marginBottom: 12 }}
-                message={paymentCapabilityReasonMessage(pullPreviewData.blocking_reason, t)}
+                title={paymentCapabilityReasonMessage(pullPreviewData.blocking_reason, t)}
               />
             ) : null}
             {pullPreviewData.items?.length > 0 ? (

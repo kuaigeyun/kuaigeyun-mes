@@ -37,7 +37,6 @@ export interface DetailDrawerTemplateProps<T extends Record<string, any> = Recor
   open?: boolean;
   visible?: boolean;
   onClose: () => void;
-  width?: number | string;
   size?: number | string;
   /**
    * 为 true 时在正文上方叠加载层（仍渲染 basic / children），便于滑入动画期间展示列表快照并并行拉详情。
@@ -191,8 +190,7 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
   open,
   visible,
   onClose,
-  width = DRAWER_CONFIG.HALF_WIDTH,
-  size,
+  size = DRAWER_CONFIG.HALF_WIDTH,
   loading = false,
   footer,
   extra,
@@ -239,7 +237,7 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
   const { token } = theme.useToken();
   const { fullChainEnabled, fullChainShowCreatedAt, operationLogEnabled, basicUpdatedAtEnabled } =
     useDetailDrawerFeatures();
-  const drawerSize = size ?? width;
+  const drawerSize = size;
   const isPresetDrawerSize = drawerSize === 'default' || drawerSize === 'large';
   const isNumericDrawerSize = typeof drawerSize === 'number';
   const resolvedPlacement = placement ?? 'right';

@@ -1080,6 +1080,18 @@ export function workOrderBatchPrintAllowed(
   return batchSomeCapabilityAllowed(records, canPrint, (r) => r.capabilities?.print);
 }
 
+export function workOrderBatchPushProductionPickingAllowed(
+  records: {
+    row_kind?: string;
+    capabilities?: { push_production_picking?: ActionCapability };
+  }[],
+  canCreateOutbound: boolean,
+): boolean {
+  if (!canCreateOutbound) return false;
+  const workOrders = records.filter((r) => (r.row_kind ?? 'work_order') === 'work_order');
+  return batchSomeCapabilityAllowed(workOrders, true, (r) => r.capabilities?.push_production_picking);
+}
+
 export function reportingRecordBatchRevokeApprovalAllowed(
   records: { capabilities?: { revoke_approval?: ActionCapability } }[],
   canRevoke: boolean,

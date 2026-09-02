@@ -80,7 +80,7 @@ const ServiceAssetFormModal: React.FC<ServiceAssetFormModalProps> = ({
       onCancel={onClose}
       onOk={() => void handleOk()}
       confirmLoading={submitting}
-      destroyOnClose
+      destroyOnHidden
       width={720}
     >
       <Form form={form} layout="vertical">

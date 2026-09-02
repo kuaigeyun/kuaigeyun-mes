@@ -202,7 +202,7 @@ export const OperationPickPanel: React.FC<OperationPickPanelProps> = ({
             onChange={(v) => handleMultipleChangeInView(v as string[])}
             style={{ width: '100%' }}
           >
-            <Space direction="vertical" style={{ width: '100%' }} size={6}>
+            <Space orientation="vertical" style={{ width: '100%' }} size={6}>
               {filtered.map((op) => (
                 <Checkbox key={op.uuid} value={op.uuid} style={{ width: '100%', marginInlineStart: 0 }}>
                   <span style={{ fontWeight: 500 }}>
@@ -223,7 +223,7 @@ export const OperationPickPanel: React.FC<OperationPickPanelProps> = ({
             onChange={(e) => onSingleChange?.(e.target.value)}
             style={{ width: '100%' }}
           >
-            <Space direction="vertical" style={{ width: '100%' }} size={6}>
+            <Space orientation="vertical" style={{ width: '100%' }} size={6}>
               {filtered.map((op) => (
                 <Radio key={op.uuid} value={op.uuid} style={{ width: '100%', marginInlineStart: 0 }}>
                   <span style={{ fontWeight: 500 }}>
@@ -605,7 +605,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
                   precision={0}
                   step={1}
                   style={{ width: '100%' }}
-                  addonAfter={t('app.master-data.manufacturing.minutePerPieceUnit')}
+                  suffix={t('app.master-data.manufacturing.minutePerPieceUnit')}
                   placeholder="0"
                   value={record.standardTime}
                   onChange={(v) => patchTime(record.uuid, { standardTime: v ?? undefined })}
@@ -623,7 +623,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
                   precision={0}
                   step={1}
                   style={{ width: '100%' }}
-                  addonAfter={t('app.master-data.manufacturing.minuteUnit')}
+                  suffix={t('app.master-data.manufacturing.minuteUnit')}
                   placeholder="0"
                   value={record.setupTime}
                   onChange={(v) => patchTime(record.uuid, { setupTime: v ?? undefined })}

@@ -940,7 +940,7 @@ const ReceiptsPage: React.FC = () => {
       <Modal
         title={pullFromReceivableAction.label}
         open={pullPreviewOpen}
-        destroyOnClose
+        destroyOnHidden
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
         onCancel={resetPullPreview}
         okText={pullFromReceivableAction.targetLabel}
@@ -979,7 +979,7 @@ const ReceiptsPage: React.FC = () => {
                 type="warning"
                 showIcon
                 style={{ marginBottom: 12 }}
-                message={receiptCapabilityReasonMessage(pullPreviewData.blocking_reason, t)}
+                title={receiptCapabilityReasonMessage(pullPreviewData.blocking_reason, t)}
               />
             ) : null}
             {pullPreviewData.items?.length > 0 ? (

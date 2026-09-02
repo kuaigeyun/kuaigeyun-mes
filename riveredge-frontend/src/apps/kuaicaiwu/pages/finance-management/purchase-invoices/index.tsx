@@ -988,7 +988,7 @@ const PurchaseInvoiceList: React.FC = () => {
               : pullFromPurchaseOrderAction.label
         }
         open={pullPreviewOpen}
-        destroyOnClose
+        destroyOnHidden
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
         onCancel={resetPullPreview}
         okText={pullPreviewTargetLabel}
@@ -1029,7 +1029,7 @@ const PurchaseInvoiceList: React.FC = () => {
                 type="warning"
                 showIcon
                 style={{ marginBottom: 12 }}
-                message={purchaseInvoiceCapabilityReasonMessage(pullPreviewData.blocking_reason, t)}
+                title={purchaseInvoiceCapabilityReasonMessage(pullPreviewData.blocking_reason, t)}
               />
             ) : null}
             {pullPreviewData.items?.length > 0 ? (

@@ -47,7 +47,10 @@ import { warehouseApi } from '../../../services/production';
 import { listSalesOrders, getSalesOrder } from '../../../services/sales-order';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
-import { customerApi } from '../../../../master-data/services/supply-chain';
+import {
+  KUAIZHIZAO_DOC_HOST,
+  loadCustomerFormReferenceList,
+} from '../../../../../utils/documentFormReferenceLoad';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import type { Material } from '../../../../master-data/types/material';
@@ -163,15 +166,7 @@ const DeliveryNotesPage: React.FC = () => {
   const defaultDeliveryItem = { material_id: undefined, material_code: '', material_name: '', material_unit: '', notice_quantity: 1, unit_price: 0 };
 
   useEffect(() => {
-    const load = async () => {
-      try {
-        const cust = await customerApi.list({ limit: 1000, isActive: true });
-        setCustomerList(Array.isArray(cust) ? cust : cust?.data ?? []);
-      } catch (e) {
-        console.error('加载客户失败', e);
-      }
-    };
-    load();
+    void loadCustomerFormReferenceList(KUAIZHIZAO_DOC_HOST.salesDelivery).then(setCustomerList);
   }, []);
 
   const appendDeliveryNoteItemsFromMaterials = useCallback(
@@ -1364,7 +1359,7 @@ const DeliveryNotesPage: React.FC = () => {
         open={detailDrawerVisible}
         loading={detailLoading}
         onClose={() => { setDetailDrawerVisible(false); setNoticeDetail(null); }}
-        width={DRAWER_CONFIG.HALF_WIDTH}
+        size={DRAWER_CONFIG.HALF_WIDTH}
         extra={
           noticeDetail?.id != null ? (
             <Button onClick={() => void openLinkedFreightTracking()}>

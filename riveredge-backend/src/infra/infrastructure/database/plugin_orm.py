@@ -7,21 +7,31 @@ from __future__ import annotations
 
 import importlib
 from pathlib import Path
-from typing import List
+from typing import FrozenSet, List, Optional
 
 from loguru import logger
 
 _APPS_ROOT = Path(__file__).resolve().parents[3] / "apps"
 
 
-def discover_plugin_orm_modules() -> List[str]:
-    """扫描已组装应用的 orm_models.py，返回 Tortoise 模型模块路径。"""
+def discover_plugin_orm_modules(
+    enabled_app_codes: Optional[FrozenSet[str]] = None,
+) -> List[str]:
+    """扫描 orm_models.py，返回 Tortoise 模型模块路径。
+
+    enabled_app_codes 为 None 时加载全部（aerich 静态 TORTOISE_ORM 合并用）；
+    否则仅加载启用集对应的应用包。
+    """
     found: List[str] = []
     if not _APPS_ROOT.is_dir():
         return found
     for orm_path in sorted(_APPS_ROOT.glob("*/orm_models.py")):
-        code = orm_path.parent.name
-        module_name = f"apps.{code}.orm_models"
+        package_name = orm_path.parent.name
+        if enabled_app_codes is not None:
+            app_code = package_name.replace("_", "-")
+            if app_code not in enabled_app_codes:
+                continue
+        module_name = f"apps.{package_name}.orm_models"
         try:
             mod = importlib.import_module(module_name)
         except Exception as exc:
@@ -34,5 +44,4 @@ def discover_plugin_orm_modules() -> List[str]:
             if not isinstance(item, str) or not item.strip():
                 raise RuntimeError(f"{module_name}.ORM_MODEL_MODULES 含非法项: {item!r}")
             found.append(item.strip())
-        # 成功发现不打日志：migrate/启动在 LOG_LEVEL=DEBUG 时会刷屏；失败已走 error/raise
     return found

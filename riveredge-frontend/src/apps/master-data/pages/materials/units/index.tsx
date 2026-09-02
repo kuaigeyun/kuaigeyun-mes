@@ -46,7 +46,9 @@ import {
   ExternalSyncSourceIcon,
   hasExternalSyncSource,
 } from '../../../../../components/external-sync-source/ExternalSyncSourceIcon';
+import { useQueryClient } from '@tanstack/react-query';
 import { invalidateMaterialUnitDisplayMapCache } from '../../../../../utils/materialUnitDisplay';
+import { invalidateMaterialUnitOptionsQuery } from '../../../hooks/useMaterialUnitOptions';
 import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
@@ -66,6 +68,7 @@ function parseImportActive(raw: string | undefined, defaultActive = true): boole
 const UnitsPage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const queryClient = useQueryClient();
   const perms = useResourcePermissions('master-data:material-unit');
   const unitActionRef = useRef<ActionType>(null);
   const convActionRef = useRef<ActionType>(null);
@@ -83,6 +86,10 @@ const UnitsPage: React.FC = () => {
   const [presetLoading, setPresetLoading] = useState(false);
   const [syncModalVisible, setSyncModalVisible] = useState(false);
   const [syncFreshnessKey, setSyncFreshnessKey] = useState(0);
+  const refreshMaterialUnitCaches = useCallback(() => {
+    invalidateMaterialUnitDisplayMapCache();
+    invalidateMaterialUnitOptionsQuery(queryClient);
+  }, [queryClient]);
   const loadUnitSyncBinding = useCallback(() => getMaterialUnitSyncBinding(), []);
 
   const loadUnitOptions = useCallback(async () => {
@@ -101,7 +108,7 @@ const UnitsPage: React.FC = () => {
           conversions: res.conversions_created,
         }),
       );
-      invalidateMaterialUnitDisplayMapCache();
+      refreshMaterialUnitCaches();
       unitActionRef.current?.reload();
       convActionRef.current?.reload();
       void loadUnitOptions();
@@ -373,7 +380,7 @@ const UnitsPage: React.FC = () => {
       } else {
         messageApi.success(t('app.master-data.units.importSuccess', { count: result.successCount }));
       }
-      invalidateMaterialUnitDisplayMapCache();
+      refreshMaterialUnitCaches();
       unitActionRef.current?.reload();
       void loadUnitOptions();
     } catch (e: any) {
@@ -732,7 +739,7 @@ const UnitsPage: React.FC = () => {
               onConfirm={async () => {
                 if (record.is_system) return;
                 await materialUnitApi.delete(record.uuid);
-                invalidateMaterialUnitDisplayMapCache();
+                refreshMaterialUnitCaches();
                 messageApi.success(t('common.deleteSuccess'));
                 unitActionRef.current?.reload();
               }}
@@ -1043,7 +1050,7 @@ const UnitsPage: React.FC = () => {
               });
             }
             messageApi.success(t('common.saveSuccess'));
-            invalidateMaterialUnitDisplayMapCache();
+            refreshMaterialUnitCaches();
             setUnitModalOpen(false);
             unitActionRef.current?.reload();
             void loadUnitOptions();
@@ -1146,7 +1153,7 @@ const UnitsPage: React.FC = () => {
         onClose={() => setSyncModalVisible(false)}
         onComplete={() => {
           setSyncFreshnessKey((key) => key + 1);
-          invalidateMaterialUnitDisplayMapCache();
+          refreshMaterialUnitCaches();
           unitActionRef.current?.reload();
         }}
       />

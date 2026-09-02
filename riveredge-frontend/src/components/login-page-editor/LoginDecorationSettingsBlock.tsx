@@ -70,7 +70,7 @@ const LoginDecorationSettingsBlock: React.FC<LoginDecorationSettingsBlockProps> 
       <Form.Item name="login_decoration_image" extra={sizeHint}>
         <Input placeholder={placeholder} maxLength={isSite ? undefined : 500} disabled={!enabled} />
       </Form.Item>
-      <Space direction="vertical" size={8} style={{ width: '100%' }}>
+      <Space orientation="vertical" size={8} style={{ width: '100%' }}>
         {decorationUrl && (
           <img
             src={decorationUrl}

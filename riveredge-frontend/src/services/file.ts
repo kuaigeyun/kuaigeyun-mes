@@ -336,11 +336,15 @@ const BRANDING_UPLOAD_CATEGORIES = new Set([
   'company-seal',
 ]);
 
+export type BrandingFileCategory = 'site-logo' | 'platform-logo' | 'platform-favicon';
+
 export type FilePreviewOptions = {
   /** @deprecated 请使用 size=FILE_IMAGE_SIZE_AVATAR */
   forAvatar?: boolean;
   /** 缩略图边长；不传则原图 URL */
   size?: number;
+  /** 品牌图预览分类；指定后仅请求该 category */
+  brandingCategory?: BrandingFileCategory;
 };
 
 function resolvePreviewSize(options?: FilePreviewOptions): number | undefined {
@@ -351,7 +355,8 @@ function resolvePreviewSize(options?: FilePreviewOptions): number | undefined {
 
 function previewCacheKey(fileUuid: string, options?: FilePreviewOptions): string {
   const size = resolvePreviewSize(options);
-  return `${fileUuid}_${size ?? 'original'}`;
+  const category = options?.brandingCategory ?? 'any';
+  return `${fileUuid}_${category}_${size ?? 'original'}`;
 }
 
 // 全局文件预览 URL 缓存，减少重复请求（每会话单次请求即可）
@@ -424,7 +429,10 @@ export async function getSiteLogoPreview(
   }
 
   const size = resolvePreviewSize(options);
-  for (const category of BRANDING_FILE_CATEGORIES) {
+  const categories: readonly BrandingFileCategory[] = options?.brandingCategory
+    ? [options.brandingCategory]
+    : BRANDING_FILE_CATEGORIES;
+  for (const category of categories) {
     try {
       const params = new URLSearchParams({ category });
       if (size != null) {

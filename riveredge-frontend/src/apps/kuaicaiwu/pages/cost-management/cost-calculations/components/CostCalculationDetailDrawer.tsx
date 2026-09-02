@@ -155,7 +155,7 @@ export const CostCalculationDetailDrawer: React.FC<CostCalculationDetailDrawerPr
       title={title}
       open={open}
       onClose={onClose}
-      width={DRAWER_CONFIG.HALF_WIDTH}
+      size={DRAWER_CONFIG.HALF_WIDTH}
       zIndex={zIndex}
       loading={showLoading}
       extra={contentReady ? extra ?? null : null}

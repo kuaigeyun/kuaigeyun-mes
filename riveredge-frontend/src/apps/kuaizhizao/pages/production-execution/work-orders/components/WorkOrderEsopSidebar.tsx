@@ -303,7 +303,7 @@ export const WorkOrderEsopSidebar: React.FC<WorkOrderEsopSidebarProps> = ({
       }
       open={open}
       onClose={onClose}
-      width={480}
+      size={480}
       zIndex={zIndex}
       destroyOnHidden
     >

@@ -784,7 +784,7 @@ export const SyncFromSourceModal: React.FC<SyncFromSourceModalProps> = ({
         </Button>,
       ]}
     >
-      <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+      <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
         {config.hintKey ? <Alert type="info" showIcon title={t(config.hintKey)} /> : null}
 
         <div
@@ -821,7 +821,7 @@ export const SyncFromSourceModal: React.FC<SyncFromSourceModalProps> = ({
             gap: 12,
           }}
         >
-          <Space size="middle" align="center">
+          <Space size="medium" align="center">
             <Typography.Text>{t('components.syncFromSource.activeOnly')}</Typography.Text>
             <Switch
               checked={activeOnly}

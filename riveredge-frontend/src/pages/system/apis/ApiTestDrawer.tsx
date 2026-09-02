@@ -169,7 +169,7 @@ export const ApiTestDrawer: React.FC<ApiTestDrawerProps> = ({ open, apiUuid, onC
       title={t('pages.system.apis.testDrawerTitle')}
       open={open}
       onClose={handleClose}
-      width={DRAWER_CONFIG.STANDARD_WIDTH}
+      size={DRAWER_CONFIG.STANDARD_WIDTH}
       loading={previewLoading}
       extra={
         contentReady ? (

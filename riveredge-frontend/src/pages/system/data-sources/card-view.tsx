@@ -197,7 +197,7 @@ const CardView: React.FC = () => {
     return (
       <div>
         <Alert
-          message={title}
+          title={title}
           description={tr.message}
           type={alertType}
           showIcon
@@ -383,7 +383,7 @@ const CardView: React.FC = () => {
                           
                           {dataSource.last_error && (
                             <Alert
-                              message={dataSource.last_error}
+                              title={dataSource.last_error}
                               type="error"
                               showIcon
                               style={{ fontSize: 11, marginTop: 8 }}
@@ -462,7 +462,7 @@ const CardView: React.FC = () => {
             {currentDataSource.last_error && (
               <Descriptions.Item label={t('pages.system.dataSources.detailColumnLastError')}>
                 <Alert
-                  message={currentDataSource.last_error}
+                  title={currentDataSource.last_error}
                   type="error"
                   showIcon
                   style={{ fontSize: 12 }}

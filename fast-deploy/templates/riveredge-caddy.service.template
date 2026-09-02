@@ -1,0 +1,26 @@
+[Unit]
+Description=RiverEdge Caddy Reverse Proxy
+After=network-online.target riveredge-backend.service
+PartOf=riveredge.service
+Conflicts=caddy.service
+
+[Service]
+Type=simple
+User={{SERVICE_USER}}
+Group={{SERVICE_GROUP}}
+WorkingDirectory={{PROJECT_ROOT}}
+Environment=HOME={{SERVICE_HOME}}
+Environment=XDG_DATA_HOME={{CADDY_DATA_DIR}}
+Environment=XDG_CONFIG_HOME={{CADDY_CONFIG_DIR}}
+Environment=RIVEREDGE_SYSTEMD=1
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin:{{SERVICE_HOME}}/.local/bin:{{SERVICE_HOME}}/.cargo/bin
+Environment=RIVEREDGE_CADDY={{CADDY_BIN}}
+StandardOutput=journal
+StandardError=journal
+ExecStart={{CADDY_EXEC_SCRIPT}}
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+
+[Install]
+WantedBy=riveredge.service

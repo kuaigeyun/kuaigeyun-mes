@@ -28,6 +28,7 @@ import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
+import { buildHubMergedCustomFieldColumns } from '../../../../../components/custom-fields/hubCustomFieldListColumns';
 
 import { ListPageTemplate, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { UniPullLoadButton } from '../../../../../components/uni-pull';
@@ -42,10 +43,13 @@ import { buildKuaizhizaoPullCreateMenuItems } from '../../../constants/documentA
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import { outboundTypeToPrintDocumentType } from '../../../utils/kuaizhizaoPrintConfig';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
-import OutboundQuickPullModals, { type OutboundQuickPullModalsRef } from './OutboundQuickPullModals';
+import OutboundQuickPullModals, {
+  type OutboundQuickPullModalsRef,
+  type OutboundQuickPullSuccessDetail,
+} from './OutboundQuickPullModals';
 import OutboundConfirmPreviewModal from './OutboundConfirmPreviewModal';
 import OutboundHubEditModal from './OutboundHubEditModal';
-import { formatDateTime, formatDateTimeBySiteSetting, formatQuantity } from '../../../../../utils/format';
+import { formatQuantity } from '../../../../../utils/format';
 import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
 import {
@@ -96,7 +100,6 @@ import {
   mapOutsourceIssueToOutbound,
   outboundDocumentCode,
   outboundSourceDocNo,
-  resolveOutboundHubDateRaw,
   resolveOutboundHubOperator,
   outboundDocumentTrackingType,
 } from './outboundHubTypes';
@@ -201,7 +204,6 @@ const OutboundPage: React.FC = () => {
 
   const {
     customFields: salesDeliveryListCustomFields,
-    generateCustomFieldColumns: generateSalesDeliveryCustomFieldColumns,
     enrichRecordsWithCustomFields: enrichSalesDeliveryRecordsWithCustomFields,
     customFieldValues: salesDeliveryDetailCustomFieldValues,
     loadFieldValuesForDetail: loadSalesDeliveryFieldValuesForDetail,
@@ -210,12 +212,23 @@ const OutboundPage: React.FC = () => {
 
   const {
     customFields: productionPickingListCustomFields,
-    generateCustomFieldColumns: generateProductionPickingCustomFieldColumns,
     enrichRecordsWithCustomFields: enrichProductionPickingRecordsWithCustomFields,
     customFieldValues: productionPickingDetailCustomFieldValues,
     loadFieldValuesForDetail: loadProductionPickingFieldValuesForDetail,
     resetDetailFieldValues: resetProductionPickingDetailFieldValues,
   } = useCustomFieldsForList<OutboundOrder>({ tableName: PRODUCTION_PICKING_CUSTOM_FIELD_TABLE });
+
+  const outboundHubCustomFieldColumns = useMemo(
+    () =>
+      buildHubMergedCustomFieldColumns<OutboundOrder>(
+        [
+          { docTypes: ['sales_delivery'], customFields: salesDeliveryListCustomFields },
+          { docTypes: ['production_picking'], customFields: productionPickingListCustomFields },
+        ],
+        'outbound_type',
+      ),
+    [salesDeliveryListCustomFields, productionPickingListCustomFields],
+  );
 
   // Drawer 相关状态（详情查看）
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
@@ -235,6 +248,7 @@ const OutboundPage: React.FC = () => {
   const [confirmPreviewOpen, setConfirmPreviewOpen] = useState(false);
   const [confirmPreviewRecord, setConfirmPreviewRecord] = useState<OutboundOrder | null>(null);
   const handledDirectConfirmKeyRef = useRef<string | null>(null);
+  const handledOutboundHubEntryKeyRef = useRef<string | null>(null);
   const outboundDeepLinkRef = useRef<OutboundHubDeepLinkFilter | null>(null);
   const outboundDeepLinkOpenedRef = useRef(false);
   const productionPickingAuditEnabled = useAuditRequired('production_picking', false);
@@ -345,6 +359,42 @@ const OutboundPage: React.FC = () => {
     navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
     openConfirmPreview({ id: dc.id, outbound_type: dc.outbound_type });
   }, [location.pathname, location.search, location.state, navigate, openConfirmPreview]);
+
+  useEffect(() => {
+    const entry = (location.state as OutboundPullEntryNavigationState | null)?.outboundHubEntry;
+    if (!entry) return;
+    const key = JSON.stringify(entry);
+    if (handledOutboundHubEntryKeyRef.current === key) return;
+    handledOutboundHubEntryKeyRef.current = key;
+    navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
+    if (entry.outboundTypeFilter && entry.outboundTypeFilter !== 'all') {
+      handleOutboundTypeFilterChange(entry.outboundTypeFilter);
+    }
+    if (entry.openPullModal) {
+      quickPullRef.current?.open(entry.openPullModal);
+    }
+    if (entry.toastMessage) {
+      messageApi.success(entry.toastMessage);
+    }
+  }, [
+    location.pathname,
+    location.search,
+    location.state,
+    navigate,
+    handleOutboundTypeFilterChange,
+    messageApi,
+  ]);
+
+  const handleQuickPullSuccess = useCallback(
+    (detail?: OutboundQuickPullSuccessDetail) => {
+      invalidateMenuBadgeCounts();
+      if (detail?.pullKey === 'work_order') {
+        handleOutboundTypeFilterChange('production_picking');
+      }
+      actionRef.current?.reload();
+    },
+    [handleOutboundTypeFilterChange, invalidateMenuBadgeCounts],
+  );
 
   const handleCreate = () => {
     quickPullRef.current?.open('work_order');
@@ -686,9 +736,6 @@ const OutboundPage: React.FC = () => {
     return t('app.kuaizhizao.warehouseOutbound.fallbackDoc');
   };
 
-  const salesDeliveryCustomFieldColumns = generateSalesDeliveryCustomFieldColumns();
-  const productionPickingCustomFieldColumns = generateProductionPickingCustomFieldColumns();
-
   const pickingDetailColumns = useMemo(
     () => [
       { title: t('app.kuaizhizao.warehouseOutbound.col.materialCode'), dataIndex: 'material_code', width: 120 },
@@ -895,23 +942,14 @@ const OutboundPage: React.FC = () => {
       title: t('app.kuaizhizao.warehouseOutbound.col.operatorPerson'),
       key: 'biz_time_operator',
       dataIndex: 'biz_time_operator',
-      width: 148,
-      minWidth: 148,
+      width: 100,
+      minWidth: 100,
       uniTableKeepWidth: true,
       resizable: false,
+      ellipsis: true,
       hideInSearch: true,
       sorter: true,
-      render: (_, record) => {
-        const raw = resolveOutboundHubDateRaw(record);
-        return (
-          <UniTableStackedPrimaryCell
-            primary={resolveOutboundHubOperator(record) || '-'}
-            secondary={raw ? formatDateTimeBySiteSetting(raw as string) : '-'}
-            secondaryCopyable={false}
-            primaryBold={false}
-          />
-        );
-      },
+      render: (_, record) => resolveOutboundHubOperator(record) || '-',
     },
     ...buildDocumentAuditColumns<Record<string, unknown>>(t),
     ...(outboundAuditColumnEnabled ? [outboundAuditColumn] : []),
@@ -935,8 +973,7 @@ const OutboundPage: React.FC = () => {
         );
       },
     },
-    ...salesDeliveryCustomFieldColumns,
-    ...productionPickingCustomFieldColumns,
+    ...outboundHubCustomFieldColumns,
     {
       title: t('common.actions'),
       key: 'option',
@@ -1073,8 +1110,7 @@ const OutboundPage: React.FC = () => {
       canRunOutboundConfirm,
       packingBindingPerms.canRead,
       currentUser,
-      salesDeliveryCustomFieldColumns,
-      productionPickingCustomFieldColumns,
+      outboundHubCustomFieldColumns,
       outboundAuditColumn,
       outboundAuditColumnEnabled,
       productionPickingAuditEnabled,
@@ -1170,7 +1206,7 @@ const OutboundPage: React.FC = () => {
         headerTitle={t('app.kuaizhizao.warehouseOutbound.title')}
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.salesDelivery)}
-        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.outbound-width-v4"
+        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.outbound-width-v6"
         actionRef={actionRef}
         formRef={searchFormRef}
         rowKey={outboundRowKey}
@@ -1257,13 +1293,14 @@ const OutboundPage: React.FC = () => {
             variant="solid"
             menuItems={buildKuaizhizaoPullCreateMenuItems(t, [
               {
-                actionKey: 'sales_delivery.pull_from_shipment_notice',
-                onClick: () => quickPullRef.current?.open('shipment_notice'),
-              },
-              {
                 key: 'pull-from-work-order',
                 actionKey: 'outbound.pull_from_work_order',
+                label: t('app.kuaizhizao.warehouseOutbound.pull.fromWorkOrder'),
                 onClick: () => quickPullRef.current?.open('work_order'),
+              },
+              {
+                actionKey: 'sales_delivery.pull_from_shipment_notice',
+                onClick: () => quickPullRef.current?.open('shipment_notice'),
               },
               {
                 key: 'pull-from-sales-order',
@@ -1273,6 +1310,11 @@ const OutboundPage: React.FC = () => {
               {
                 actionKey: 'outbound.pull_from_outsource_work_order',
                 onClick: () => quickPullRef.current?.open('outsource'),
+              },
+              {
+                key: 'pull-from-sales-delivery',
+                actionKey: 'delivery_note.pull_from_sales_delivery',
+                onClick: () => quickPullRef.current?.open('delivery_note'),
               },
             ])}
           />,
@@ -1308,7 +1350,7 @@ const OutboundPage: React.FC = () => {
         }}
       />
 
-      <OutboundQuickPullModals ref={quickPullRef} onSuccess={() => actionRef.current?.reload()} />
+      <OutboundQuickPullModals ref={quickPullRef} onSuccess={handleQuickPullSuccess} />
 
       <OutboundConfirmPreviewModal
         open={confirmPreviewOpen}

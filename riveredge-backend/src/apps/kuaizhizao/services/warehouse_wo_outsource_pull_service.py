@@ -86,7 +86,7 @@ class WarehouseWoOutsourcePullService:
             query = query.filter(id=int(work_order_id))
         orders = await query.only(
             "id", "code", "status", "is_frozen", "product_id", "product_code",
-            "product_name", "product_spec", "quantity",
+            "product_name", "quantity",
         )
         if not orders:
             return {"data": [], "total": 0}

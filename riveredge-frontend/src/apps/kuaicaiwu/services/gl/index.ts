@@ -48,6 +48,8 @@ export type GlVoucher = {
   summary?: string;
   total_debit: number;
   total_credit: number;
+  debit_accounts?: string;
+  credit_accounts?: string;
   source_doc_type?: string | null;
   source_doc_id?: number | null;
   lines?: GlVoucherLine[];

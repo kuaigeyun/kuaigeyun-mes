@@ -672,7 +672,7 @@ const MaintenanceRemindersPage: React.FC = () => {
         onClose={() => {
           closeDetail();
         }}
-        width={DRAWER_CONFIG.HALF_WIDTH}
+        size={DRAWER_CONFIG.HALF_WIDTH}
         basic={
           detail ? (
             <Descriptions

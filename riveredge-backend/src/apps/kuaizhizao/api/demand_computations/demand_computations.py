@@ -55,6 +55,7 @@ async def create_computation(
     computation_data: DemandComputationCreate,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_permission_codes("kuaizhizao:plan-management-demand-computation:create")),
 ):
     """
     创建需求计算
@@ -399,6 +400,7 @@ async def preview_execute_computation(
     body: Optional[ExecuteComputationRequest] = Body(None, description="可选临时覆盖参数"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_permission_codes("kuaizhizao:plan-management-demand-computation:update")),
 ):
     """
     预览执行计算结果，不持久化。
@@ -427,6 +429,7 @@ async def execute_computation(
     body: Optional[ExecuteComputationRequest] = Body(None, description="可选临时覆盖参数"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_permission_codes("kuaizhizao:plan-management-demand-computation:update")),
 ):
     """
     执行需求计算

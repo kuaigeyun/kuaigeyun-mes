@@ -59,7 +59,10 @@ import { formatDateTime, formatDateTimeBySiteSetting, formatAmount } from '../..
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
-import { customerApi, unwrapSupplyPagedList } from '../../../../master-data/services/supply-chain';
+import {
+  KUAIZHIZAO_DOC_HOST,
+  loadCustomerFormReferenceList,
+} from '../../../../../utils/documentFormReferenceLoad';
 import { listSalesOrders } from '../../../services/sales-order';
 import { warehouseApi } from '../../../services/warehouse-execution';
 import {
@@ -150,14 +153,9 @@ const AfterSalesTicketsPage: React.FC = () => {
 
   useEffect(() => {
     let cancelled = false;
-    void customerApi
-      .list({ limit: 1000, isActive: true })
-      .then((result) => {
-        if (!cancelled) setCustomerList(unwrapSupplyPagedList(result));
-      })
-      .catch(() => {
-        if (!cancelled) setCustomerList([]);
-      });
+    void loadCustomerFormReferenceList(KUAIZHIZAO_DOC_HOST.afterSalesTicket).then((list) => {
+      if (!cancelled) setCustomerList(list);
+    });
     return () => {
       cancelled = true;
     };
@@ -1276,7 +1274,7 @@ const AfterSalesTicketsPage: React.FC = () => {
           disabled: Boolean(pushPreview?.has_blocking_issues) || pushLoading,
         }}
         width={860}
-        destroyOnClose
+        destroyOnHidden
       >
         {pushPreview?.message ? (
           <Typography.Paragraph type="secondary">{pushPreview.message}</Typography.Paragraph>

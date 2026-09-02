@@ -274,7 +274,7 @@ const RollingSchedulingPage: React.FC = () => {
         minWidth: 128,
         onHeaderCell: nowrapHeaderCell,
         render: (_: unknown, row: RollingScheduleLine) => (
-          <Space direction="vertical" size={0}>
+          <Space orientation="vertical" size={0}>
             <Typography.Text strong>{row.work_order_code}</Typography.Text>
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
               {row.work_order_name}
@@ -442,7 +442,7 @@ const RollingSchedulingPage: React.FC = () => {
             extra={closePlan ? renderPlanStatusTag(closePlan.status) : null}
           >
             {closeSummary ? (
-              <Space direction="vertical" style={{ width: '100%' }} size="middle">
+              <Space orientation="vertical" style={{ width: '100%' }} size="medium">
                 <Row gutter={8}>
                   <Col span={12}>
                     <Statistic title={t('app.kuaizhizao.rollingScheduling.stat.plannedWorkOrders')} value={closeSummary.planned_count ?? 0} />
@@ -461,12 +461,12 @@ const RollingSchedulingPage: React.FC = () => {
                   <Alert
                     type="warning"
                     showIcon
-                    message={t('app.kuaizhizao.rollingScheduling.incompleteCarryForward', {
+                    title={t('app.kuaizhizao.rollingScheduling.incompleteCarryForward', {
                       count: closeSummary.incomplete_items?.length,
                     })}
                   />
                 ) : (
-                  <Alert type="success" showIcon icon={<CheckCircleOutlined />} message={t('app.kuaizhizao.rollingScheduling.allCompleted')} />
+                  <Alert type="success" showIcon icon={<CheckCircleOutlined />} title={t('app.kuaizhizao.rollingScheduling.allCompleted')} />
                 )}
               </Space>
             ) : (
@@ -511,7 +511,7 @@ const RollingSchedulingPage: React.FC = () => {
                 type="info"
                 showIcon
                 style={{ marginTop: 12 }}
-                message={t('app.kuaizhizao.rollingScheduling.poolEmptyTitle')}
+                title={t('app.kuaizhizao.rollingScheduling.poolEmptyTitle')}
                 description={t('app.kuaizhizao.rollingScheduling.poolEmptyDesc')}
               />
             ) : null}
@@ -521,7 +521,7 @@ const RollingSchedulingPage: React.FC = () => {
         <Col xs={24} lg={6}>
           <Card title={t('app.kuaizhizao.rollingScheduling.capacityTitle')} size="small">
             {capacity ? (
-              <Space direction="vertical" style={{ width: '100%' }}>
+              <Space orientation="vertical" style={{ width: '100%' }}>
                 <Progress
                   percent={Math.min(100, capacity.utilization_rate)}
                   status={capacity.overloaded ? 'exception' : 'normal'}

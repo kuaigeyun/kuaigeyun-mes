@@ -847,7 +847,7 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
   if (loading) {
     return (
       <div className="gantt-chart-wrapper gantt-chart-wrapper--visual" style={{ padding: '48px 0', textAlign: 'center' }}>
-        <Spin tip={t('app.kuaizhizao.scheduling.pool.loadingGantt')} />
+        <Spin description={t('app.kuaizhizao.scheduling.pool.loadingGantt')} />
       </div>
     );
   }

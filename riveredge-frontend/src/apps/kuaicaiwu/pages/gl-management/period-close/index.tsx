@@ -284,7 +284,7 @@ const PeriodClosePage: React.FC = () => {
 
   return (
     <ListPageTemplate>
-      <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+      <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
         <Card
           loading={loading}
           title={t(`${NS}.statusTitle`, { defaultValue: '账期状态' })}
@@ -314,15 +314,15 @@ const PeriodClosePage: React.FC = () => {
             </Button>
           }
         >
-          <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
-            <Space wrap size="middle">
+          <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
+            <Space wrap size="medium">
               <Space.Compact>
                 <InputNumber
                   size="medium"
                   precision={0}
                   value={year}
                   onChange={(v) => setYear(Number(v) || now.getFullYear())}
-                  addonBefore={t(`${NS}.year`, { defaultValue: '年' })}
+                  prefix={t(`${NS}.year`, { defaultValue: '年' })}
                   style={{ width: 140 }}
                 />
                 <InputNumber
@@ -332,7 +332,7 @@ const PeriodClosePage: React.FC = () => {
                   precision={0}
                   value={month}
                   onChange={(v) => setMonth(Number(v) || 1)}
-                  addonBefore={t(`${NS}.month`, { defaultValue: '月' })}
+                  prefix={t(`${NS}.month`, { defaultValue: '月' })}
                   style={{ width: 120 }}
                 />
               </Space.Compact>

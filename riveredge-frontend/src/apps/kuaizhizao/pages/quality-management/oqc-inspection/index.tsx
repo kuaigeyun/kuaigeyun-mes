@@ -802,7 +802,7 @@ const OQCInspectionPage: React.FC = () => {
         <Modal
           title={t('app.kuaizhizao.salesOrder.pushPreviewTitle')}
           open={pullPreviewOpen}
-          destroyOnClose
+          destroyOnHidden
           width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
           onCancel={resetPullPreview}
           okText={
@@ -837,7 +837,7 @@ const OQCInspectionPage: React.FC = () => {
                   type="warning"
                   showIcon
                   style={{ marginBottom: 12 }}
-                  message={oqcInspectionCapabilityReasonMessage(pullPreviewData.blocking_reason, t)}
+                  title={oqcInspectionCapabilityReasonMessage(pullPreviewData.blocking_reason, t)}
                 />
               ) : null}
               {pullPreviewData.items?.length > 0 ? (

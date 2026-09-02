@@ -612,7 +612,7 @@ const DataSourceListPage: React.FC = () => {
             
             {dataSource.last_error && (
               <Alert
-                message={dataSource.last_error}
+                title={dataSource.last_error}
                 type="error"
                 showIcon
                 style={{ fontSize: 11, marginTop: 8 }}

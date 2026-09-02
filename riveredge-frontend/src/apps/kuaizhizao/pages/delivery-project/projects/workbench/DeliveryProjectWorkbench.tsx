@@ -600,7 +600,7 @@ export const DeliveryProjectWorkbench: React.FC = () => {
   const renderNodePanel = (node: DeliveryProjectNode) => {
     const nodeTasks = node.tasks ?? [];
     return (
-      <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+      <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
         <Card
           size="small"
           className="delivery-project-node-section-card"
@@ -779,7 +779,7 @@ export const DeliveryProjectWorkbench: React.FC = () => {
   return (
     <>
     <ListPageTemplate>
-      <Space direction="vertical" size="middle" className="project-workbench-shell">
+      <Space orientation="vertical" size="medium" className="project-workbench-shell">
         <ProjectWorkbenchToolbar
           backLabel={t('app.kuaizhizao.deliveryProject.workbench.backToList')}
           onBack={leaveProjectsList}
@@ -1089,7 +1089,7 @@ export const DeliveryProjectWorkbench: React.FC = () => {
           <DatePicker style={{ width: '100%' }} />
         </Form.Item>
         <Form.Item name="progress_percent" label={t('app.kuaizhizao.deliveryProject.fields.progress')} rules={[{ required: true }]}>
-          <InputNumber min={0} max={100} style={{ width: '100%' }} addonAfter="%" />
+          <InputNumber min={0} max={100} style={{ width: '100%' }} suffix="%" />
         </Form.Item>
         <Form.Item name="content" label={t('app.kuaizhizao.deliveryProject.fields.reportContent')}>
           <Input.TextArea rows={3} />

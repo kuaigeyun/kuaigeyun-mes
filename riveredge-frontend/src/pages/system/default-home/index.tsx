@@ -19,7 +19,7 @@ const DefaultHomePage: React.FC = () => {
   return (
     <div style={{ padding: 24, maxWidth: 720, margin: '0 auto' }}>
       <Card>
-        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+        <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
           <Title level={4} style={{ margin: 0 }}>
             <HomeOutlined style={{ marginRight: 8 }} />
             {t('pages.system.defaultHome.title', { defaultValue: '欢迎使用' })}

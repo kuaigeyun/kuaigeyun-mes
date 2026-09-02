@@ -32,8 +32,8 @@ export function SchedulingAiExplainCard({
   const { t } = useTranslation();
 
   return (
-    <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-      <Alert type="success" showIcon message={t(`${I18N}.explainDone`)} />
+    <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
+      <Alert type="success" showIcon title={t(`${I18N}.explainDone`)} />
       <Typography.Paragraph className="scheduling-ai-chat-markdown" style={{ marginBottom: 0 }}>
         {answer}
       </Typography.Paragraph>

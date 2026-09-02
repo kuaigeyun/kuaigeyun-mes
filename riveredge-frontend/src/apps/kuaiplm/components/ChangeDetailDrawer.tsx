@@ -143,7 +143,7 @@ const ChangeDetailDrawer: React.FC<ChangeDetailDrawerProps> = ({ row, onClose })
       open={!!row}
       onClose={onClose}
       title={t('app.kuaiplm.change.detailTitle')}
-      width={640}
+      size={640}
       loading={loading}
       extra={
         row ? (

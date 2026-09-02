@@ -400,7 +400,7 @@ const ToolCalibrationsPage: React.FC = () => {
         open={drawerVisible}
         loading={detailLoading}
         onClose={closeDetail}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
+        size={DRAWER_CONFIG.STANDARD_WIDTH}
         basic={
           detail ? (
             <Descriptions

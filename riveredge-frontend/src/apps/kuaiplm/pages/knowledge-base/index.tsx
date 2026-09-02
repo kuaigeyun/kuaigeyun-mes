@@ -610,10 +610,10 @@ const KnowledgeBasePage: React.FC = () => {
           ) : !activeArticle ? (
             <Empty description={t('app.kuaiplm.knowledgeBase.empty.selectDocument')} />
           ) : (
-            <Space direction="vertical" size={14} style={{ width: '100%' }}>
+            <Space orientation="vertical" size={14} style={{ width: '100%' }}>
               <Input
                 size="large"
-                bordered={false}
+                variant="borderless"
                 value={activeArticle.title ?? ''}
                 onChange={(e) => setActiveArticle({ ...activeArticle, title: e.target.value })}
                 placeholder={t('app.kuaiplm.knowledgeBase.form.articleTitlePlaceholder')}

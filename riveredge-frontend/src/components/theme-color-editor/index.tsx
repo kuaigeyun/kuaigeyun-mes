@@ -221,7 +221,7 @@ const ThemeColorEditor: React.FC<ThemeColorEditorProps> = ({ children, onThemeUp
       content={content}
       trigger="click"
       placement="bottomRight"
-      overlayStyle={{ padding: 0 }}
+      styles={{ root: { padding: 0 } }}
     >
       {children}
     </Popover>

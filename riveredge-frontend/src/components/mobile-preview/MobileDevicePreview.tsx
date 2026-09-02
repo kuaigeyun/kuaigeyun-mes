@@ -115,7 +115,7 @@ export const MobileDevicePreview: React.FC<MobileDevicePreviewProps> = ({ open, 
                     />
                 </Space>
             }
-            maskClosable={false}
+            mask={{ closable: false }}
         >
             <div style={{
                 flex: 1,

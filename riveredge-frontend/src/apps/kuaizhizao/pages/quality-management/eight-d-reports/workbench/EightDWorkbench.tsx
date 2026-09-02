@@ -237,9 +237,15 @@ const EightDWorkbench: React.FC = () => {
         fieldsToValidate.push(currentField);
       }
     }
+    if (
+      activeStageKey === 'd8_team_congratulation' &&
+      (report.status === 'd8_team_congratulation' || report.status === 'closed')
+    ) {
+      fieldsToValidate.push('verification_result');
+    }
     form
       .validateFields(fieldsToValidate)
-      .then((values) => handleSave(values))
+      .then(() => handleSave(form.getFieldsValue()))
       .catch(() => {
         messageApi.warning(t('app.kuaizhizao.eightD.saveValidationFailed'));
       });
@@ -385,7 +391,7 @@ const EightDWorkbench: React.FC = () => {
             messageApi.warning(t('app.kuaizhizao.eightD.saveValidationFailed'));
           }}
         >
-          <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+          <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
             <ProjectWorkbenchToolbar
               backLabel={t('app.kuaizhizao.eightD.workbench.backToList')}
               onBack={leaveList}
@@ -479,7 +485,7 @@ const EightDWorkbench: React.FC = () => {
                 title={t('app.kuaizhizao.eightD.workbench.section.source')}
                 style={{ marginBottom: 16 }}
               >
-                <Space direction="vertical">
+                <Space orientation="vertical">
                   {report.quality_exception_id ? (
                     <Button
                       type="link"

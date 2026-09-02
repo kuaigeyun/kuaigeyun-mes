@@ -196,7 +196,7 @@ const SerialNumbersImportModal: React.FC<SerialNumbersImportModalProps> = ({
             key: 'paste',
             label: '粘贴文本',
             children: (
-              <Space direction="vertical" size={12} style={{ width: '100%' }}>
+              <Space orientation="vertical" size={12} style={{ width: '100%' }}>
                 <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                   每行一个序列号；也支持同一行用逗号、分号、Tab 分隔多个序列号。
                 </Typography.Text>
@@ -216,7 +216,7 @@ const SerialNumbersImportModal: React.FC<SerialNumbersImportModalProps> = ({
             key: 'file',
             label: '上传文件',
             children: (
-              <Space direction="vertical" size={12} style={{ width: '100%' }}>
+              <Space orientation="vertical" size={12} style={{ width: '100%' }}>
                 <Space wrap>
                   <Button size="small" icon={<DownloadOutlined />} onClick={() => void handleDownloadTemplate()}>
                     下载 Excel 模板
@@ -249,7 +249,7 @@ const SerialNumbersImportModal: React.FC<SerialNumbersImportModalProps> = ({
                   key: 'generate',
                   label: '规则生成',
                   children: (
-                    <Space direction="vertical" size={12}>
+                    <Space orientation="vertical" size={12}>
                       <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                         按物料默认序列号规则自动生成，数量与明细行入库数量一致。
                       </Typography.Text>

@@ -44,7 +44,7 @@ export const PartnerMasterDetailDrawer: React.FC<PartnerMasterDetailDrawerProps>
       open={open}
       onClose={onClose}
       zIndex={zIndex}
-      width={DRAWER_CONFIG.STANDARD_WIDTH}
+      size={DRAWER_CONFIG.STANDARD_WIDTH}
       loading={showLoading}
       extra={contentReady ? extra ?? null : null}
       plainBody={

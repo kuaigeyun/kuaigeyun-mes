@@ -93,7 +93,7 @@ const MESDashboard: React.FC = () => {
                 <Space>
                   <Text type="secondary">正在执行</Text>
                   <Text strong>{stats?.production?.in_progress || 0}</Text>
-                  <Divider type="vertical" />
+                  <Divider orientation="vertical" />
                   <Text type="secondary">本月已结</Text>
                   <Text strong>{stats?.production?.completed || 0}</Text>
                 </Space>
@@ -170,7 +170,7 @@ const MESDashboard: React.FC = () => {
                         <List.Item.Meta
                           title={<b>{item.process_name} <Text type="secondary" style={{ fontWeight: 'normal' }}>({item.process_id})</Text></b>}
                           description={
-                            <Space split={<Divider type="vertical" />}>
+                            <Space separator={<Divider orientation="vertical" />}>
                               <span>合格: <Text type="success">{item.qualified_quantity}</Text></span>
                               <span>异常: <Text type="danger">{item.unqualified_quantity}</Text></span>
                               <span>任务数: {item.task_count}</span>
@@ -250,7 +250,7 @@ const MESDashboard: React.FC = () => {
             <Divider dashed />
 
             {/* 快速入口 */}
-            <ProCard title="快速协同入口" bordered headStyle={{ borderBottom: 'none' }} style={dashboardCardStyle}>
+            <ProCard title="快速协同入口" bordered styles={{ header: { borderBottom: 'none' } }} style={dashboardCardStyle}>
                <Row gutter={[8, 8]}>
                   <Col span={12}>
                     <Card size="small" hoverable style={{ textAlign: 'center', background: '#e6f7ff', ...dashboardCardStyle }}>

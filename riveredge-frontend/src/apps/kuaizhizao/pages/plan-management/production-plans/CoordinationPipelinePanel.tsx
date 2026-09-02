@@ -742,7 +742,7 @@ const CoordinationPipelinePanel: React.FC<CoordinationPipelinePanelProps> = ({ o
               type="warning"
               showIcon
               style={{ marginBottom: 12 }}
-              message={t('app.kuaizhizao.coordinationPipeline.upstreamAlert')}
+              title={t('app.kuaizhizao.coordinationPipeline.upstreamAlert')}
               description={
                 <ul style={{ margin: 0, paddingLeft: 20 }}>
                   {p.dynamic_monitor_alerts.map((a, i) => (

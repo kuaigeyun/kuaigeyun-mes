@@ -191,7 +191,7 @@ const BlockBorderControls: React.FC<{
                 border: `${width}px ${bStyle} ${color}`,
               });
             }}
-            addonAfter="px"
+            suffix="px"
           />
           <ColorPicker
             size="small"
@@ -3592,7 +3592,7 @@ const PrintTemplateDesignPage: React.FC = () => {
                   }
                 }}
                 buttonStyle="solid"
-                size="middle"
+                size="medium"
                 style={{ whiteSpace: 'nowrap', display: 'inline-flex' }}
               >
                 <Radio.Button value="design" style={{ whiteSpace: 'nowrap' }}>{t('pages.system.printTemplatesDesign.modeDesign')}</Radio.Button>

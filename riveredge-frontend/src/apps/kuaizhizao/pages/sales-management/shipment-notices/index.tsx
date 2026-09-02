@@ -78,7 +78,10 @@ import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { flattenDocumentDetailRows, resolveDetailTableViewMode } from '../../shared/detailTableFlatRows';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
-import { customerApi } from '../../../../master-data/services/supply-chain';
+import {
+  KUAIZHIZAO_DOC_HOST,
+  loadCustomerFormReferenceList,
+} from '../../../../../utils/documentFormReferenceLoad';
 import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { useTranslation } from 'react-i18next';
@@ -301,7 +304,7 @@ const ShipmentNoticesPage: React.FC = () => {
     const load = async () => {
       try {
         const [cust, ordersRes] = await Promise.all([
-          customerApi.list({ limit: 200, isActive: true }),
+          loadCustomerFormReferenceList(KUAIZHIZAO_DOC_HOST.shipmentNotice),
           listSalesOrders({ limit: 200, view: 'options' }).catch(() => ({
             data: [],
             total: 0,
@@ -309,7 +312,7 @@ const ShipmentNoticesPage: React.FC = () => {
           })),
         ]);
         if (cancelled) return;
-        setCustomerList(Array.isArray(cust) ? cust : (cust as any)?.data || (cust as any)?.items || []);
+        setCustomerList(Array.isArray(cust) ? cust : []);
         setSalesOrderList(ordersRes?.data || []);
       } catch (e) {
         if (!cancelled) {
@@ -1727,7 +1730,7 @@ const ShipmentNoticesPage: React.FC = () => {
                 batch: t('app.kuaizhizao.shipmentNotice.batchWithdrawNotify'),
               }}
               icon={<AppstoreAddOutlined />}
-              size="middle"
+              size="medium"
               color="orange"
               variant="solid"
             />,
@@ -1751,7 +1754,7 @@ const ShipmentNoticesPage: React.FC = () => {
                 batch: t('components.uniAction.print'),
               }}
               icon={<PrinterOutlined />}
-              size="middle"
+              size="medium"
             />,
           ]}
           importHeaders={noticeItemImportTemplate.importHeaders}
@@ -1938,7 +1941,7 @@ const ShipmentNoticesPage: React.FC = () => {
           setDetailDrawerVisible(false);
           setNoticeDetail(null);
         }}
-        width={DRAWER_CONFIG.HALF_WIDTH}
+        size={DRAWER_CONFIG.HALF_WIDTH}
         extra={
           noticeDetail?.id != null ? (
             <Space size="small">
@@ -2153,7 +2156,7 @@ const ShipmentNoticesPage: React.FC = () => {
                 type="warning"
                 showIcon
                 style={{ marginBottom: 12 }}
-                message={
+                title={
                   (notifyPreviewData.line_blocking_issues && notifyPreviewData.line_blocking_issues.length > 0
                     ? notifyPreviewData.line_blocking_issues.join('；')
                     : null) ||

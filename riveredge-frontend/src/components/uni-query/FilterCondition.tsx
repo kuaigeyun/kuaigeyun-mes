@@ -162,7 +162,7 @@ export const FilterConditionItem: React.FC<FilterConditionProps> = ({
       case 'number':
         if (condition.operator === 'between') {
           return (
-            <Input.Group compact>
+            <Space.Compact>
               <InputNumber
                 value={Array.isArray(condition.value) ? condition.value[0] : undefined}
                 onChange={(value) => handleValueChange([value, Array.isArray(condition.value) ? condition.value[1] : undefined])}
@@ -175,7 +175,7 @@ export const FilterConditionItem: React.FC<FilterConditionProps> = ({
                 placeholder={t('components.uniQuery.maxValue')}
                 style={{ width: '50%' }}
               />
-            </Input.Group>
+            </Space.Compact>
           );
         }
         return (

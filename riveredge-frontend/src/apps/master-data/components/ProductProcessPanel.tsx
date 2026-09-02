@@ -396,11 +396,11 @@ export const ProductProcessPanel: React.FC<ProductProcessPanelProps> = ({
           type="info"
           showIcon
           style={{ marginBottom: 16 }}
-          message={t('app.master-data.productProcess.panelHint')}
+          title={t('app.master-data.productProcess.panelHint')}
         />
       )}
 
-      <Space direction="vertical" style={{ width: '100%', marginBottom: 16 }} size="middle">
+      <Space orientation="vertical" style={{ width: '100%', marginBottom: 16 }} size="medium">
         <div
           style={{
             display: 'flex',
@@ -410,7 +410,7 @@ export const ProductProcessPanel: React.FC<ProductProcessPanelProps> = ({
             flexWrap: 'wrap',
           }}
         >
-          <Space direction="vertical" size="middle" style={{ flex: 1, minWidth: 280 }}>
+          <Space orientation="vertical" size="medium" style={{ flex: 1, minWidth: 280 }}>
             <Typography.Text strong>{t('app.master-data.manufacturing.sectionRoute')}</Typography.Text>
             <Space wrap>
               <Select

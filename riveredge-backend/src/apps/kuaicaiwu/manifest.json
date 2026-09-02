@@ -276,6 +276,25 @@
       }
     ]
   },
+  "reference_resources": {
+    "bank-account": {
+      "permission_prefix": "kuaicaiwu:bank-account",
+      "display_fields": [
+        "id",
+        "code",
+        "name",
+        "label",
+        "account_code",
+        "account_name",
+        "account_type",
+        "bank_name",
+        "account_number",
+        "currency"
+      ],
+      "data_scope_key": null,
+      "sensitive": false
+    }
+  },
   "module_references": {
     "__all_modules__": [
       "*"

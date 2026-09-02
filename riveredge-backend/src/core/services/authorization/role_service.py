@@ -700,6 +700,8 @@ class RoleService:
             "kuaizhizao:pricing",
             "kuaizhizao:sales",
             "kuaizhizao:shipment",
+            "kuaizhizao:plan-management-demand-computation",
+            "kuaizhizao:plan-management-demand-management",
         ],
         "SALES_PERSON": [
             "sales_",
@@ -807,6 +809,7 @@ class RoleService:
             "outbound",
             "kuaizhizao:pricing",
             "kuaizhizao:warehouse",
+            "kuaizhizao:warehouse-management-stocktaking",
             "kuaizhizao:inbound",
             "kuaizhizao:outbound",
         ],

@@ -59,7 +59,11 @@ import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import type { Material } from '../../../../master-data/types/material';
 import { warehouseApi } from '../../../services/production';
 import type { SalesReturn, SalesReturnItem, SalesReturnListParams } from '../../../services/sales-return';
-import { customerApi } from '../../../../master-data/services/supply-chain';
+import {
+  KUAIZHIZAO_DOC_HOST,
+  loadCustomerFormReferenceList,
+  loadMaterialFormReferenceList,
+} from '../../../../../utils/documentFormReferenceLoad';
 import { useWarehouseLocationOptions } from '../../../hooks/useWarehouseLocationOptions';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import dayjs from 'dayjs';
@@ -109,7 +113,6 @@ import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { useImportDictionaryOptions } from '../../../../../hooks/useImportDictionaryOptions';
 import { pickImportExampleValue } from '../../../../../utils/loadImportDictionaryValues';
 import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulkImport';
-import { materialApi } from '../../../../master-data/services/material';
 import { warehouseApi as masterWarehouseApi } from '../../../../master-data/services/warehouse';
 import { useImportMaterialUnitOptions } from '../../../../master-data/hooks/useImportMaterialUnitOptions';
 import {
@@ -399,16 +402,9 @@ const SalesReturnsPage: React.FC = () => {
   useEffect(() => {
     if (!modalVisible) return;
     let cancelled = false;
-    customerApi
-      .list({ limit: 200, isActive: true })
-      .then((res) => {
-        if (!cancelled) {
-          setCustomerList(Array.isArray(res) ? res : (res as any)?.data || (res as any)?.items || []);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setCustomerList([]);
-      });
+    void loadCustomerFormReferenceList(KUAIZHIZAO_DOC_HOST.salesReturn).then((list) => {
+      if (!cancelled) setCustomerList(list);
+    });
     return () => {
       cancelled = true;
     };
@@ -1276,10 +1272,10 @@ const SalesReturnsPage: React.FC = () => {
 
     try {
       const [materialsRes, warehousesRes] = await Promise.all([
-        materialApi.list({ limit: 1000, isActive: true }),
+        loadMaterialFormReferenceList(KUAIZHIZAO_DOC_HOST.salesReturn),
         masterWarehouseApi.list({ limit: 1000, is_active: true }),
       ]);
-      const materials = materialsRes?.items ?? [];
+      const materials = materialsRes ?? [];
       const warehouses = (warehousesRes as any)?.items ?? (Array.isArray(warehousesRes) ? warehousesRes : []);
 
       const { errors, items: toImport } = parseDocumentReturnListImport(data, {
@@ -1941,7 +1937,7 @@ const SalesReturnsPage: React.FC = () => {
                 singleConfirmTitle: t('app.kuaizhizao.salesReturn.confirmTitle'),
               }}
               icon={<CheckCircleOutlined />}
-              size="middle"
+              size="medium"
               color="green"
               variant="solid"
             />,
@@ -1965,7 +1961,7 @@ const SalesReturnsPage: React.FC = () => {
                 batch: t('app.kuaizhizao.salesReturn.batchWithdraw'),
               }}
               icon={<CopyOutlined />}
-              size="middle"
+              size="medium"
               color="orange"
               variant="solid"
             />,
@@ -1989,7 +1985,7 @@ const SalesReturnsPage: React.FC = () => {
                 batch: t('components.uniAction.print'),
               }}
               icon={<PrinterOutlined />}
-              size="middle"
+              size="medium"
             />,
           ]}
         />
@@ -2427,7 +2423,7 @@ const SalesReturnsPage: React.FC = () => {
           setReturnDetail(null);
           resetSalesReturnDetailFieldValues();
         }}
-        width={DRAWER_CONFIG.HALF_WIDTH}
+        size={DRAWER_CONFIG.HALF_WIDTH}
         extra={
           returnDetail?.id != null ? (
             <Space size="small">

@@ -62,7 +62,6 @@ import { UniMaterialBatchPicker } from '../../../../../components/uni-material-b
 import { getMaterialField } from '../../../../../components/uni-material-batch-picker/utils';
 import type { Material } from '../../../../master-data/types/material';
 import { CustomerSelectDropdown } from '../../../../master-data/components/CustomerSelectDropdown';
-import { customerApi, unwrapSupplyPagedList } from '../../../../master-data/services/supply-chain';
 import {
   applySalesDocumentLineMaterialPricing,
   getMaterialDefaultTaxRate,
@@ -155,6 +154,10 @@ import {
   referenceDisplayToIdOptions,
   searchReferenceDisplay,
 } from '../../../../../utils/referenceDisplay';
+import {
+  KUAIZHIZAO_DOC_HOST,
+  loadMaterialFormReferenceList,
+} from '../../../../../utils/documentFormReferenceLoad';
 import { CustomerFollowUpFormModal, type CustomerFollowUpPreset } from '../../../components/CustomerFollowUpFormModal';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import {
@@ -859,7 +862,6 @@ const QuotationsPage: React.FC = () => {
   }, []);
 
   const [customerList, setCustomerList] = useState<any[]>([]);
-  const [customersLoading, setCustomersLoading] = useState(false);
   const [userList, setUserList] = useState<User[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const quotationSalesmanSearchOptions = useMemo(
@@ -940,19 +942,6 @@ const QuotationsPage: React.FC = () => {
   useEffect(() => {
     if (!isFormPage) return;
     let cancelled = false;
-    const loadCustomers = async () => {
-      setCustomersLoading(true);
-      try {
-        const result = await customerApi.list({ limit: 200, isActive: true });
-        if (!cancelled) {
-          setCustomerList(unwrapSupplyPagedList(result));
-        }
-      } catch {
-        if (!cancelled) setCustomerList([]);
-      } finally {
-        if (!cancelled) setCustomersLoading(false);
-      }
-    };
     const loadUsers = async () => {
       setUsersLoading(true);
       try {
@@ -966,7 +955,6 @@ const QuotationsPage: React.FC = () => {
         if (!cancelled) setUsersLoading(false);
       }
     };
-    void loadCustomers();
     void loadUsers();
     return () => {
       cancelled = true;
@@ -977,18 +965,10 @@ const QuotationsPage: React.FC = () => {
     if (!isFormPage) return;
     let cancelled = false;
     const loadMaterials = async () => {
-      try {
-        const matRes = await apiRequest<unknown>('/apps/master-data/materials', {
-          params: { limit: 1000, is_active: true },
-        });
-        if (cancelled) return;
-        const matList = Array.isArray(matRes) ? matRes : (matRes as any)?.data ?? (matRes as any)?.items ?? [];
-        const list = Array.isArray(matList) ? matList : [];
-        registerMaterialsForUnitSelect(list);
-        setMaterialList(list);
-      } catch {
-        if (!cancelled) setMaterialList([]);
-      }
+      const list = await loadMaterialFormReferenceList(KUAIZHIZAO_DOC_HOST.quotation);
+      if (cancelled) return;
+      registerMaterialsForUnitSelect(list);
+      setMaterialList(list);
     };
     void loadMaterials();
     return () => {
@@ -3165,13 +3145,10 @@ const QuotationsPage: React.FC = () => {
             <Col span={8}>
               <ProForm.Item name="customer_id" label={t('field.customer.name')} rules={[{ required: true, message: t('app.kuaizhizao.quotation.form.selectCustomer') }]}>
                 <CustomerSelectDropdown
-                  hostResource="kuaizhizao:quotation"
+                  hostResource={KUAIZHIZAO_DOC_HOST.quotation}
                   placeholder={t('app.kuaizhizao.quotation.form.selectCustomer')}
                   style={{ width: '100%' }}
-                  customers={customerList}
-                  loading={customersLoading}
                   onCustomersChange={setCustomerList}
-                  autoLoad={false}
                   modalZIndex={quotationNestedElevatedPopupZIndex}
                   onCustomerPick={(c) => {
                     applyCustomerToQuotationForm(c as Record<string, any> | null);
@@ -3293,7 +3270,7 @@ const QuotationsPage: React.FC = () => {
         />
       </div>
       <ProFormText name="customer_name" hidden />
-      <ProFormText name="price_type" hidden initialValue={DEFAULT_SALES_PRICE_TYPE} />
+      <ProFormText name="price_type" hidden />
       </DetailDrawerSection>
 
       <DetailDrawerSection titleAccent title={t('app.kuaizhizao.quotation.form.section.detailInfo')}>
@@ -3906,7 +3883,7 @@ const QuotationsPage: React.FC = () => {
             <ThemedSegmented
               key="quotation-list-scope"
               surfaceBackground
-              size="middle"
+              size="medium"
               value={listScopeFilter}
               onChange={(v) => handleListScopeFilterChange(v as QuotationListScope)}
               options={[
@@ -3961,7 +3938,7 @@ const QuotationsPage: React.FC = () => {
               onAction={handleBatchConfirmCustomer}
               disabled={!canToolbarConfirmCustomer}
               icon={<CommentOutlined />}
-              size="middle"
+              size="medium"
               color="green"
               variant="solid"
               requireConfirm
@@ -3986,7 +3963,7 @@ const QuotationsPage: React.FC = () => {
               onAction={handleBatchCancelCustomerConfirm}
               disabled={!canToolbarCancelCustomerConfirm}
               icon={<CloseCircleOutlined />}
-              size="middle"
+              size="medium"
               color="orange"
               variant="solid"
               requireConfirm
@@ -4193,7 +4170,7 @@ const QuotationsPage: React.FC = () => {
         open={detailDrawerVisible}
         zIndex={quotationDetailDrawerZIndex}
         onClose={closeQuotationDetailDrawer}
-        width={DRAWER_CONFIG.HALF_WIDTH}
+        size={DRAWER_CONFIG.HALF_WIDTH}
         extra={
           quotationDetail && (
             <Space size="small">
@@ -4507,7 +4484,7 @@ const QuotationsPage: React.FC = () => {
                 type="warning"
                 showIcon
                 style={{ marginBottom: 12 }}
-                message={
+                title={
                   quotationCapabilityReasonMessage(pushPreviewData.blocking_reason as any, t) ||
                   t('app.kuaizhizao.quotation.pushBlockedStatus', { status: quotationStatusNorm(pushPreviewRecord) || '-' })
                 }

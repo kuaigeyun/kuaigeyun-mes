@@ -53,12 +53,12 @@ export function SalesOrderOcrResultCard({
   const { t } = useTranslation();
 
   return (
-    <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+    <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
       {result.confidenceNotes ? (
         <Alert
           type="info"
           showIcon
-          message={t(`${I18N}.confidenceNotes`)}
+          title={t(`${I18N}.confidenceNotes`)}
           description={result.confidenceNotes}
         />
       ) : null}

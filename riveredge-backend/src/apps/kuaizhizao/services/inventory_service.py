@@ -337,23 +337,32 @@ class InventoryService:
         return None
 
     @staticmethod
-    def _apply_batch_ledger_dates(
+    async def _apply_batch_ledger_dates(
         batch,
         *,
         material,
         ledger_production_date: Optional[date],
         ledger_expiry_date: Optional[date],
     ) -> None:
-        """首次写入生产日/有效期至；已有值不覆盖。有效期按物料保质期或单据显式值解析。"""
+        """首次写入生产日/有效期至；已有值不覆盖。有效期按单据显式值、同批号已维护值或物料保质期解析。"""
         from apps.master_data.services.material_batch_service import MaterialBatchService
 
         if ledger_production_date is not None and batch.production_date is None:
             batch.production_date = ledger_production_date
         if batch.expiry_date is None:
-            resolved = MaterialBatchService.resolve_batch_expiry_date(
+            explicit_expiry = MaterialBatchService.coerce_optional_date(ledger_expiry_date)
+            if explicit_expiry is None and material is not None:
+                sibling = await MaterialBatchService.lookup_sibling_batch_expiry(
+                    int(batch.tenant_id),
+                    int(batch.material_id),
+                    str(batch.batch_no or ""),
+                    exclude_batch_id=int(batch.id) if getattr(batch, "id", None) else None,
+                )
+                explicit_expiry = sibling
+            resolved = MaterialBatchService.resolve_inbound_item_expiry_date(
                 material=material,
                 production_date=batch.production_date,
-                explicit_expiry=ledger_expiry_date,
+                explicit_expiry=explicit_expiry,
             )
             if resolved is not None:
                 batch.expiry_date = resolved
@@ -429,7 +438,7 @@ class InventoryService:
                 batch.source_doc_id = source_doc_id
             if source_doc_code:
                 batch.source_doc_code = source_doc_code
-            InventoryService._apply_batch_ledger_dates(
+            await InventoryService._apply_batch_ledger_dates(
                 batch,
                 material=material,
                 ledger_production_date=ledger_production_date,
@@ -438,10 +447,17 @@ class InventoryService:
             await batch.save()
             return
         create_production_date = ledger_production_date
-        create_expiry_date = MaterialBatchService.resolve_batch_expiry_date(
+        explicit_create_expiry = MaterialBatchService.coerce_optional_date(ledger_expiry_date)
+        if explicit_create_expiry is None and material is not None and bn:
+            explicit_create_expiry = await MaterialBatchService.lookup_sibling_batch_expiry(
+                tenant_id,
+                material_id,
+                bn,
+            )
+        create_expiry_date = MaterialBatchService.resolve_inbound_item_expiry_date(
             material=material,
             production_date=create_production_date,
-            explicit_expiry=ledger_expiry_date,
+            explicit_expiry=explicit_create_expiry,
         )
         try:
             await MaterialBatch.create(
@@ -499,7 +515,7 @@ class InventoryService:
             batch.status = "in_stock"
             if wh_name and not str(batch.warehouse_name or "").strip():
                 batch.warehouse_name = wh_name
-            InventoryService._apply_batch_ledger_dates(
+            await InventoryService._apply_batch_ledger_dates(
                 batch,
                 material=material,
                 ledger_production_date=ledger_production_date,

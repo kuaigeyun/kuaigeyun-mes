@@ -30,6 +30,18 @@ def test_calc_sales_line_amounts_tax_exclusive_adds_tax_once():
     assert tax == Decimal("7679.20")
 
 
+def test_calc_sales_line_amounts_tax_exclusive_decimal_qty():
+    excl, tax, incl = calc_sales_line_amounts(
+        Decimal("0.5"),
+        Decimal("1950"),
+        Decimal("13"),
+        "tax_exclusive",
+    )
+    assert excl == Decimal("975.00")
+    assert incl == Decimal("1101.75")
+    assert tax == Decimal("126.75")
+
+
 def test_compute_tax_from_including_reverses_excluding():
     excl, tax, total = compute_tax_from_including(Decimal("66750"), Decimal("13"))
     assert total == Decimal("66750.00")

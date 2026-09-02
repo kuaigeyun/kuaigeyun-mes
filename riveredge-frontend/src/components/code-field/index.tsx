@@ -251,7 +251,7 @@ const CodeField: React.FC<CodeFieldProps> = ({
   const mergedFieldProps = {
     ...fieldProps,
     ...(showGenerateButton ? {
-      addonAfter: (
+      suffix: (
         <Space>
           <Button
             type="link"

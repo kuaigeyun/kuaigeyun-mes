@@ -484,7 +484,7 @@ export default function OperationsDashboard() {
                   <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                     {registrationRegionData.map((item, index) => (
                       <li key={item.name} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: index < registrationRegionData.length - 1 ? '1px solid #f0f0f0' : 'none' }}>
-                        <Space size="middle">
+                        <Space size="medium">
                           <Text strong style={{ color: index < 3 ? '#ff4d4f' : '#8c8c8c' }}>{index + 1}</Text>
                           <Text>{item.name}</Text>
                         </Space>

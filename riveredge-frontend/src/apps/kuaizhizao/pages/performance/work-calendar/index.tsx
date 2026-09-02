@@ -584,7 +584,7 @@ const WorkCalendarPage: React.FC = () => {
         onCancel={() => setModalOpen(false)}
         onOk={() => void handleSaveOvertime()}
         confirmLoading={savingOt}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={otForm} layout="vertical">
           <Form.Item
@@ -623,7 +623,7 @@ const WorkCalendarPage: React.FC = () => {
         open={downtimeOpen}
         onCancel={() => setDowntimeOpen(false)}
         confirmLoading={savingDowntime}
-        destroyOnClose
+        destroyOnHidden
         onOk={async () => {
           try {
             const values = await downtimeForm.validateFields();

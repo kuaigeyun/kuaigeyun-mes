@@ -205,6 +205,21 @@ export interface SalesContractAlert {
 
   due_date?: string;
 
+  milestone_id?: number;
+
+}
+
+
+
+/** 合同预警 feed 行唯一 key（同一合同可有多条里程碑逾期） */
+export function salesContractAlertFeedId(alert: SalesContractAlert): string {
+  if (alert.milestone_id != null) {
+    return `${alert.alert_type}-${alert.contract_id}-${alert.milestone_id}`;
+  }
+  if (alert.alert_type === 'milestone_overdue') {
+    return `${alert.alert_type}-${alert.contract_id}-${alert.due_date ?? alert.message}`;
+  }
+  return `${alert.alert_type}-${alert.contract_id}`;
 }
 
 

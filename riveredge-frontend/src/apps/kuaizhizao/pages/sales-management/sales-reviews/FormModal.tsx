@@ -30,7 +30,10 @@ import {
   DOCUMENT_DETAIL_TEXT_COL,
   DocumentDetailTableStyles,
 } from '../../../components/document-detail-table/documentDetailTable';
-import { customerApi } from '../../../../master-data/services/supply-chain';
+import {
+  KUAIZHIZAO_DOC_HOST,
+  loadCustomerFormReferenceList,
+} from '../../../../../utils/documentFormReferenceLoad';
 import { toApiDateString } from '../../../../../utils/formDate';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { useOptionalLinkedDocumentDetail } from '../../../../../components/linked-document-detail';
@@ -113,18 +116,9 @@ export const SalesReviewFormModal: React.FC<SalesReviewFormModalProps> = ({
 
   useEffect(() => {
     let cancelled = false;
-    customerApi
-      .list({ limit: 1000, isActive: true } as any)
-      .then((res) => {
-        if (cancelled) return;
-        const list = Array.isArray(res)
-          ? res
-          : (res as any)?.items || (res as any)?.data || [];
-        setCustomers(list);
-      })
-      .catch(() => {
-        if (!cancelled) setCustomers([]);
-      });
+    void loadCustomerFormReferenceList(KUAIZHIZAO_DOC_HOST.salesReview).then((list) => {
+      if (!cancelled) setCustomers(list);
+    });
     return () => {
       cancelled = true;
     };

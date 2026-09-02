@@ -183,7 +183,7 @@ export const UniExport: React.FC<UniExportProps> = ({
         </Space>
       }
       destroyOnHidden
-      maskClosable={false}
+      mask={{ closable: false }}
     >
       <UniExportSheetHost
         isDark={isDark}

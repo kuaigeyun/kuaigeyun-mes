@@ -593,7 +593,7 @@ const PartnerStatementsPage: React.FC = () => {
         type="info"
         showIcon
         style={{ marginBottom: 16 }}
-        message={t(`${PS}.dataSourceNote`)}
+        title={t(`${PS}.dataSourceNote`)}
       />
       <MultiTabListPageTemplate
         activeTabKey={activeTab}

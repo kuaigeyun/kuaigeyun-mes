@@ -293,7 +293,7 @@ const LaunchProgressPage: React.FC = () => {
                       <Space orientation="vertical" size="large" style={{ width: '100%' }}>
                         {/* 倒计时和进度条 */}
                         <Card>
-                          <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+                          <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
                             <Statistic
                               title={t('pages.system.launchProgress.daysRemaining')}
                               value={progressTracking.days_remaining}
@@ -334,7 +334,7 @@ const LaunchProgressPage: React.FC = () => {
                     </div>
                   ) : (
                     <Alert
-                      message={t('pages.system.launchProgress.noCountdown')}
+                      title={t('pages.system.launchProgress.noCountdown')}
                       description={t('pages.system.launchProgress.noCountdownDesc')}
                       type="info"
                       showIcon
@@ -369,7 +369,7 @@ const LaunchProgressPage: React.FC = () => {
                             renderItem={(risk) => (
                               <List.Item>
                                 <Alert
-                                  message={risk.message}
+                                  title={risk.message}
                                   type={risk.level === 'high' ? 'error' : 'warning'}
                                   showIcon
                                 />

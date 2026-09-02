@@ -951,7 +951,7 @@ const OtherInboundPage: React.FC = () => {
           setInboundDetail(null);
           resetOtherInboundDetailFieldValues();
         }}
-        width={DRAWER_CONFIG.HALF_WIDTH}
+        size={DRAWER_CONFIG.HALF_WIDTH}
         basic={
           inboundDetail ? (
             <Descriptions column={detailDrawerBasicColumn(false)} size="small" items={timeconfigBasicItems1} />

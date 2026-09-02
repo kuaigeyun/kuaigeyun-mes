@@ -47,7 +47,7 @@ export default function BuildProvenanceSummaryTab() {
         type="info"
         showIcon
         style={{ marginBottom: 16 }}
-        message={t('pages.infra.provenanceSummary.noticeTitle')}
+        title={t('pages.infra.provenanceSummary.noticeTitle')}
         description={data?.disclaimer || t('pages.infra.provenanceSummary.disclaimerFallback')}
       />
 
@@ -60,7 +60,7 @@ export default function BuildProvenanceSummaryTab() {
       </Card>
 
       {isError ? (
-        <Alert type="error" message={t('pages.infra.provenanceSummary.loadFailed')} />
+        <Alert type="error" title={t('pages.infra.provenanceSummary.loadFailed')} />
       ) : (
         <>
           <Paragraph strong style={{ marginBottom: 12 }}>

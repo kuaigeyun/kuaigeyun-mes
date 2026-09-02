@@ -242,7 +242,7 @@ export const FormListDetailTable: React.FC<FormListDetailTableProps> = ({
                 title={bulkAdd.title}
                 open={pickOpen}
                 zIndex={modalZIndex}
-                destroyOnClose
+                destroyOnHidden
                 maskProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
                 wrapProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
                 onCancel={() => {

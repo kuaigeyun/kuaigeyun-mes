@@ -100,9 +100,17 @@ export function useCustomFieldsForList<T extends Record<string, any>>({
   }, []);
 
   const generateCustomFieldColumns = useCallback((): ProColumns<T>[] => {
-    return customFields
+    const activeFields = customFields
       .filter((f) => f.is_active)
-      .sort((a, b) => a.sort_order - b.sort_order)
+      .sort((a, b) => a.sort_order - b.sort_order || a.id - b.id)
+    const seenLabels = new Set<string>()
+    return activeFields
+      .filter((field) => {
+        const labelKey = (field.label || field.name || field.code).trim().toLowerCase()
+        if (!labelKey || seenLabels.has(labelKey)) return false
+        seenLabels.add(labelKey)
+        return true
+      })
       .map((field): ListColumn<T> => ({
         title: field.label || field.name,
         dataIndex: `custom_${field.code}`,

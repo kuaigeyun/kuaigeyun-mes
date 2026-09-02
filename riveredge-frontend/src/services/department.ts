@@ -209,6 +209,13 @@ export async function loadPresetDepartments(
   });
 }
 
+/** 按预设映射补齐部门负责人（销售经理→销售部等） */
+export async function linkPresetDepartmentManagers(): Promise<{ managers_linked: number; message: string }> {
+  return apiRequest<{ managers_linked: number; message: string }>('/core/departments/link-preset-managers', {
+    method: 'POST',
+  });
+}
+
 /** 部门管理 — 数据集关联（与后端 DepartmentDatasetBinding 一致） */
 export interface DepartmentDatasetBindingPayload {
   dataset_uuid?: string;

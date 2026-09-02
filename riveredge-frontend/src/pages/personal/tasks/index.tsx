@@ -704,7 +704,7 @@ const UserTasksPage: React.FC = () => {
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
+        size={DRAWER_CONFIG.STANDARD_WIDTH}
         dataSource={detailData as any || {}}
         columns={detailColumns as any}
         column={1}

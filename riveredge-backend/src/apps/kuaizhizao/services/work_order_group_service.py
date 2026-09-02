@@ -304,7 +304,7 @@ class WorkOrderGroupService(AppBaseService):
             )
             supply_mode = node.get("supply_mode") or "stocked"
 
-            agg_item = self._synthetic_item(comp_item, qty_dec)
+            agg_item = self._synthetic_item(comp_item, qty_dec, demand_item_id=demand_item_id)
             allow_draft_for_item = allow_draft and mid in failed_validation_material_ids
 
             if st == SOURCE_TYPE_OUTSOURCE:
@@ -365,7 +365,20 @@ class WorkOrderGroupService(AppBaseService):
         }
 
     @staticmethod
-    def _synthetic_item(item: DemandComputationItem, qty: Decimal) -> Any:
+    def _synthetic_item(
+        item: DemandComputationItem,
+        qty: Decimal,
+        *,
+        demand_item_id: Optional[int] = None,
+    ) -> Any:
+        demand_item_ids = list(getattr(item, "demand_item_ids", None) or [])
+        if demand_item_id is not None:
+            try:
+                did = int(demand_item_id)
+                if did not in demand_item_ids:
+                    demand_item_ids.append(did)
+            except (TypeError, ValueError):
+                pass
         return type("_SyntheticItem", (), {
             "material_id": item.material_id,
             "material_code": item.material_code,
@@ -377,6 +390,9 @@ class WorkOrderGroupService(AppBaseService):
             "suggested_work_order_quantity": qty,
             "production_start_date": item.production_start_date,
             "production_completion_date": item.production_completion_date,
+            "delivery_date": item.delivery_date,
+            "demand_item_ids": demand_item_ids,
+            "demand_item_id": demand_item_id,
         })()
 
     async def _resolve_sales_order_id(

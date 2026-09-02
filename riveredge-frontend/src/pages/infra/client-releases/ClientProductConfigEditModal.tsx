@@ -152,14 +152,14 @@ export function ClientProductConfigEditModal({ open, clientKey, onClose, onSaved
           type="success"
           showIcon
           style={{ marginBottom: 16 }}
-          message={t('pages.infra.clientReleases.configPushReady')}
+          title={t('pages.infra.clientReleases.configPushReady')}
         />
       ) : (
         <Alert
           type="warning"
           showIcon
           style={{ marginBottom: 16 }}
-          message={t('pages.infra.clientReleases.configPushNotReady')}
+          title={t('pages.infra.clientReleases.configPushNotReady')}
         />
       )}
 
@@ -168,7 +168,7 @@ export function ClientProductConfigEditModal({ open, clientKey, onClose, onSaved
           type="info"
           showIcon
           style={{ marginBottom: 16 }}
-          message={t('pages.infra.clientReleases.configEnvFallbackHint')}
+          title={t('pages.infra.clientReleases.configEnvFallbackHint')}
         />
       )}
 
@@ -208,7 +208,7 @@ export function ClientProductConfigEditModal({ open, clientKey, onClose, onSaved
             type="info"
             showIcon
             style={{ marginBottom: 16 }}
-            message={t('pages.infra.clientReleases.configPushTestHint')}
+            title={t('pages.infra.clientReleases.configPushTestHint')}
           />
           <SafeProFormSelect
             name="push_test_tenant_id"
@@ -303,7 +303,7 @@ export function ClientProductConfigEditModal({ open, clientKey, onClose, onSaved
               type={pushTestResult.success ? 'success' : 'warning'}
               showIcon
               style={{ marginBottom: 16 }}
-              message={
+              title={
                 pushTestResult.success
                   ? t('pages.infra.clientReleases.configPushTestOk', { alias: pushTestResult.alias })
                   : t('pages.infra.clientReleases.configPushTestFail', { alias: pushTestResult.alias })

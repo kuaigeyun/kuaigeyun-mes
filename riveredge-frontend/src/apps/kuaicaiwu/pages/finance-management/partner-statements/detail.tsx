@@ -399,12 +399,12 @@ const PartnerStatementDetailPage: React.FC = () => {
             ) : null}
           </Descriptions>
 
-          <Alert type="info" showIcon message={t(`${PS}.dataSourceNote`)} style={{ marginBottom: 12 }} />
+          <Alert type="info" showIcon title={t(`${PS}.dataSourceNote`)} style={{ marginBottom: 12 }} />
           {linesEditable && linesDirty ? (
             <Alert
               type="warning"
               showIcon
-              message={t(`${PS}.detail.unsavedLinesHint`)}
+              title={t(`${PS}.detail.unsavedLinesHint`)}
               style={{ marginBottom: 12 }}
             />
           ) : null}

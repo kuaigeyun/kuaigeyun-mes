@@ -1640,7 +1640,7 @@ const ApplicationListPage: React.FC = () => {
             <Space size={12} wrap>
               <ThemedSegmented
                 surfaceBackground
-                size="middle"
+                size="medium"
                 value={appCategoryFilter}
                 options={[
                   { label: t('pages.system.applications.categoryBasic'), value: 'basic' },
@@ -1751,7 +1751,7 @@ const ApplicationListPage: React.FC = () => {
               <p style={{ color: '#333', marginBottom: 24, fontWeight: 500 }}>
                 {t('pages.system.applications.resetWarn2', { defaultValue: '一旦点击下一步，数据将无法通过常规手段恢复。建议您确保当前没有正在进行的业务，并告知相关团队成员。' })}
               </p>
-              <Space orientation="vertical" style={{ width: '100%' }} size="middle">
+              <Space orientation="vertical" style={{ width: '100%' }} size="medium">
                 <Button 
                   type="primary" 
                   danger 
@@ -1890,7 +1890,7 @@ const ApplicationListPage: React.FC = () => {
         />
         <Divider />
         <div style={{ marginBottom: 8, fontWeight: 500 }}>{t('pages.system.applications.dedicatedBindingAddSection')}</div>
-        <Space orientation="vertical" style={{ width: '100%' }} size="middle">
+        <Space orientation="vertical" style={{ width: '100%' }} size="medium">
           <Select
             showSearch
             allowClear
@@ -1901,7 +1901,7 @@ const ApplicationListPage: React.FC = () => {
             value={tenantBindSelectValue}
             onChange={(v) => setTenantBindSelectValue(v ?? undefined)}
             onSearch={handleTenantBindSearch}
-            onDropdownVisibleChange={(open) => {
+            onOpenChange={(open) => {
               if (open && tenantBindOptions.length === 0) handleTenantBindSearch('');
             }}
             style={{ width: '100%' }}

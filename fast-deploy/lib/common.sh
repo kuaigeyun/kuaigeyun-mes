@@ -24,6 +24,22 @@ CADDY_DEV_API_ADMIN_ADDR="${CADDY_DEV_API_ADMIN_ADDR:-127.0.0.1:2017}"
 SYSTEMD_UNIT_NAME="riveredge.service"
 SYSTEMD_UNIT_PATH="/etc/systemd/system/${SYSTEMD_UNIT_NAME}"
 SYSTEMD_UNIT_TEMPLATE="$FAST_DEPLOY_DIR/templates/riveredge.service.template"
+SYSTEMD_BACKEND_UNIT_NAME="riveredge-backend.service"
+SYSTEMD_BACKEND_UNIT_PATH="/etc/systemd/system/${SYSTEMD_BACKEND_UNIT_NAME}"
+SYSTEMD_BACKEND_UNIT_TEMPLATE="$FAST_DEPLOY_DIR/templates/riveredge-backend.service.template"
+SYSTEMD_TASKIQ_WORKER_UNIT_NAME="riveredge-taskiq-worker.service"
+SYSTEMD_TASKIQ_WORKER_UNIT_PATH="/etc/systemd/system/${SYSTEMD_TASKIQ_WORKER_UNIT_NAME}"
+SYSTEMD_TASKIQ_WORKER_UNIT_TEMPLATE="$FAST_DEPLOY_DIR/templates/riveredge-taskiq-worker.service.template"
+SYSTEMD_TASKIQ_SCHEDULER_UNIT_NAME="riveredge-taskiq-scheduler.service"
+SYSTEMD_TASKIQ_SCHEDULER_UNIT_PATH="/etc/systemd/system/${SYSTEMD_TASKIQ_SCHEDULER_UNIT_NAME}"
+SYSTEMD_TASKIQ_SCHEDULER_UNIT_TEMPLATE="$FAST_DEPLOY_DIR/templates/riveredge-taskiq-scheduler.service.template"
+SYSTEMD_CADDY_UNIT_NAME="riveredge-caddy.service"
+SYSTEMD_CADDY_UNIT_PATH="/etc/systemd/system/${SYSTEMD_CADDY_UNIT_NAME}"
+SYSTEMD_CADDY_UNIT_TEMPLATE="$FAST_DEPLOY_DIR/templates/riveredge-caddy.service.template"
+SYSTEMD_BACKEND_EXEC_SCRIPT="$FAST_DEPLOY_DIR/linux/systemd-exec-backend.sh"
+SYSTEMD_TASKIQ_WORKER_EXEC_SCRIPT="$FAST_DEPLOY_DIR/linux/systemd-exec-taskiq-worker.sh"
+SYSTEMD_TASKIQ_SCHEDULER_EXEC_SCRIPT="$FAST_DEPLOY_DIR/linux/systemd-exec-taskiq-scheduler.sh"
+SYSTEMD_CADDY_EXEC_SCRIPT="$FAST_DEPLOY_DIR/linux/systemd-exec-caddy.sh"
 SYSTEMD_SERVICE_SCRIPT="$FAST_DEPLOY_DIR/linux/riveredge-service.sh"
 WINDOWS_BOOT_TASK_NAME="RiverEdge"
 WINDOWS_BOOT_TASK_STOP_NAME="RiverEdge-Stop"
@@ -2066,6 +2082,54 @@ backend_uv_extra_args() {
     printf '%s' "--extra ocr --extra pdf"
 }
 
+# glibc 多 arena 收敛：降低 CPython 多线程下 RSS 虚高（生产 API / Worker 启动路径唯一出口）
+export_production_malloc_tuning() {
+    export MALLOC_ARENA_MAX="${MALLOC_ARENA_MAX:-2}"
+    export MALLOC_TRIM_THRESHOLD_="${MALLOC_TRIM_THRESHOLD_:-131072}"
+}
+
+systemd_managed_prod_stack() {
+    [ -f "$SYSTEMD_BACKEND_UNIT_PATH" ]
+}
+
+start_prod_via_systemd() {
+    local unit
+    if ! command -v systemctl >/dev/null 2>&1; then
+        return 1
+    fi
+    log_info "通过 systemd 启动生产栈（子进程 OOM 后自动 Restart）..."
+    if [ "$(id -u)" -eq 0 ]; then
+        systemctl start "$SYSTEMD_UNIT_NAME"
+    elif sudo -n systemctl start "$SYSTEMD_UNIT_NAME" 2>/dev/null; then
+        :
+    else
+        log_error "需要 sudo 启动 systemd 单元: sudo systemctl start ${SYSTEMD_UNIT_NAME}"
+        return 1
+    fi
+    log_info "等待后端就绪（最多 ${BACKEND_START_TIMEOUT}s）..."
+    if ! wait_for_backend_health; then
+        log_error "后端启动超时，查看: journalctl -u ${SYSTEMD_BACKEND_UNIT_NAME} -n 50 --no-pager"
+        return 1
+    fi
+    if ! verify_caddy_serving; then
+        log_error "Caddy 未就绪，查看: journalctl -u ${SYSTEMD_CADDY_UNIT_NAME} -n 50 --no-pager"
+        return 1
+    fi
+    log_ok "systemd 生产栈已就绪"
+    return 0
+}
+
+stop_prod_via_systemd() {
+    if ! command -v systemctl >/dev/null 2>&1; then
+        return 1
+    fi
+    if [ "$(id -u)" -eq 0 ]; then
+        systemctl stop "$SYSTEMD_UNIT_NAME" 2>/dev/null || true
+    else
+        sudo systemctl stop "$SYSTEMD_UNIT_NAME" 2>/dev/null || true
+    fi
+}
+
 # 开发 API：reload exclude 在 Python 侧（server/dev_reload.py），避免 Windows Bash 通配展开
 backend_dev_server_entry() {
     printf '%s' "python scripts/run_dev_server.py"
@@ -2995,6 +3059,7 @@ start_backend_prod() {
         export SETUPTOOLS_EGG_INFO_DIR="$LOGS_DIR"
         export PYTHONPATH="$BACKEND_DIR/src"
         playwright_export_env
+        export_production_malloc_tuning
         nohup "$(resolve_uv)" run $(backend_uv_extra_args) uvicorn server.main:app \
             --host 127.0.0.1 --port "$BACKEND_PORT" --workers 1 \
             > "$LOGS_DIR/backend.log" 2>&1 &
@@ -3022,6 +3087,7 @@ start_worker_prod() {
             export SETUPTOOLS_EGG_INFO_DIR="$LOGS_DIR"
             export PYTHONPATH="$BACKEND_DIR/src"
             playwright_export_env
+            export_production_malloc_tuning
             nohup "$(resolve_uv)" run $(backend_uv_extra_args) taskiq worker --app-dir src \
                 --workers "$TASKIQ_WORKERS" \
                 core.tasks.taskiq_app:broker \
@@ -3043,6 +3109,7 @@ start_worker_prod() {
             export SETUPTOOLS_EGG_INFO_DIR="$LOGS_DIR"
             export PYTHONPATH="$BACKEND_DIR/src"
             playwright_export_env
+            export_production_malloc_tuning
             nohup "$(resolve_uv)" run $(backend_uv_extra_args) taskiq scheduler --app-dir src \
                 core.tasks.taskiq_app:scheduler \
                 core.tasks.taskiq_app \
@@ -3230,6 +3297,7 @@ cmd_start_prod() {
     DEPLOY_SPECIAL_DEPS_QUIET=1
     ensure_logs_dir
     load_deploy_env
+    ensure_production_swap || true
     [ -f "$FRONTEND_DIR/dist/index.html" ] || { log_error "缺少前端 dist，请先运行 build"; DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"; exit 1; }
     if [ "${RIVEREDGE_SYSTEMD:-0}" = "1" ]; then
         wait_for_local_postgres_ready 120 || { DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"; exit 1; }
@@ -3243,6 +3311,22 @@ cmd_start_prod() {
     fi
     cmd_migrate
     record_deploy_release_metadata
+    if systemd_managed_prod_stack; then
+        ensure_low_memory_kernel_tuning || true
+        if start_prod_via_systemd; then
+            ensure_playwright_chromium_postinstall
+            DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"
+            log_ok "RiverEdge 生产环境已就绪（systemd 托管）"
+            print_special_deps_hint
+            local access_ip="${SERVER_IP:-127.0.0.1}"
+            local web_url
+            web_url="$(resolve_prod_web_url "$access_ip")"
+            echo "  访问: ${web_url}"
+            print_support_contact
+            return 0
+        fi
+        log_warn "systemd 启动失败，回退传统 nohup 模式"
+    fi
     start_backend_prod
     start_worker_prod
     if ! start_caddy_prod; then
@@ -3282,6 +3366,9 @@ cmd_stop_dev() {
 
 cmd_stop_prod() {
     load_deploy_env
+    if systemd_managed_prod_stack; then
+        stop_prod_via_systemd
+    fi
     stop_service caddy
     stop_service worker
     stop_service scheduler
@@ -3437,7 +3524,12 @@ resolve_service_user() {
 }
 
 render_systemd_unit() {
-    local service_user=$1 uv_bin=$2 caddy_bin=$3
+    _render_systemd_unit_template "$SYSTEMD_UNIT_TEMPLATE" "$@"
+}
+
+_render_systemd_unit_template() {
+    local template_path=$1
+    local service_user=$2 uv_bin=$3 caddy_bin=$4
     local service_home service_group pw_path
     service_home="$(getent passwd "$service_user" | cut -d: -f6)"
     [ -n "$service_home" ] || { log_error "用户不存在: $service_user"; return 1; }
@@ -3457,7 +3549,33 @@ render_systemd_unit() {
         -e "s|{{PLAYWRIGHT_BROWSERS_PATH}}|${pw_path}|g" \
         -e "s|{{CADDY_DATA_DIR}}|${caddy_data}|g" \
         -e "s|{{CADDY_CONFIG_DIR}}|${caddy_config_dir}|g" \
-        "$SYSTEMD_UNIT_TEMPLATE"
+        -e "s|{{BACKEND_EXEC_SCRIPT}}|${SYSTEMD_BACKEND_EXEC_SCRIPT}|g" \
+        -e "s|{{TASKIQ_WORKER_EXEC_SCRIPT}}|${SYSTEMD_TASKIQ_WORKER_EXEC_SCRIPT}|g" \
+        -e "s|{{TASKIQ_SCHEDULER_EXEC_SCRIPT}}|${SYSTEMD_TASKIQ_SCHEDULER_EXEC_SCRIPT}|g" \
+        -e "s|{{CADDY_EXEC_SCRIPT}}|${SYSTEMD_CADDY_EXEC_SCRIPT}|g" \
+        "$template_path"
+}
+
+install_systemd_stack_units() {
+    local service_user=$1 uv_bin=$2 caddy_bin=$3
+    local templates=(
+        "$SYSTEMD_UNIT_TEMPLATE|$SYSTEMD_UNIT_PATH"
+        "$SYSTEMD_BACKEND_UNIT_TEMPLATE|$SYSTEMD_BACKEND_UNIT_PATH"
+        "$SYSTEMD_TASKIQ_WORKER_UNIT_TEMPLATE|$SYSTEMD_TASKIQ_WORKER_UNIT_PATH"
+        "$SYSTEMD_TASKIQ_SCHEDULER_UNIT_TEMPLATE|$SYSTEMD_TASKIQ_SCHEDULER_UNIT_PATH"
+        "$SYSTEMD_CADDY_UNIT_TEMPLATE|$SYSTEMD_CADDY_UNIT_PATH"
+    )
+    local pair template_path dest_path unit_content tmp
+    for pair in "${templates[@]}"; do
+        template_path="${pair%%|*}"
+        dest_path="${pair##*|}"
+        [ -f "$template_path" ] || { log_error "缺少模板 $template_path"; return 1; }
+        unit_content="$(_render_systemd_unit_template "$template_path" "$service_user" "$uv_bin" "$caddy_bin")" || return 1
+        tmp="$(mktemp)"
+        printf '%s\n' "$unit_content" > "$tmp"
+        sudo cp "$tmp" "$dest_path"
+        rm -f "$tmp"
+    done
 }
 
 show_systemd_start_failure() {
@@ -3542,7 +3660,9 @@ cmd_install_service() {
     is_linux_systemd || { log_error "install-service 仅支持 Linux (systemd) 或 Windows"; exit 1; }
     [ -f "$SYSTEMD_UNIT_TEMPLATE" ] || { log_error "缺少模板 $SYSTEMD_UNIT_TEMPLATE"; exit 1; }
     [ -f "$SYSTEMD_SERVICE_SCRIPT" ] || { log_error "缺少 $SYSTEMD_SERVICE_SCRIPT"; exit 1; }
-    chmod +x "$SYSTEMD_SERVICE_SCRIPT" "$FAST_DEPLOY_DIR/linux/prod.sh" 2>/dev/null || true
+    chmod +x "$SYSTEMD_SERVICE_SCRIPT" "$FAST_DEPLOY_DIR/linux/prod.sh" \
+        "$SYSTEMD_BACKEND_EXEC_SCRIPT" "$SYSTEMD_TASKIQ_WORKER_EXEC_SCRIPT" \
+        "$SYSTEMD_TASKIQ_SCHEDULER_EXEC_SCRIPT" "$SYSTEMD_CADDY_EXEC_SCRIPT" 2>/dev/null || true
 
     local service_user
     service_user="$(resolve_service_user)" || exit 1
@@ -3564,16 +3684,11 @@ cmd_install_service() {
     uv_bin="${prereq%%|*}"
     caddy_bin="${prereq#*|}"
 
-    log_info "注册 systemd 服务 (${SYSTEMD_UNIT_NAME})，运行用户: ${service_user}"
+    log_info "注册 systemd 生产栈 (${SYSTEMD_UNIT_NAME} + 子单元)，运行用户: ${service_user}"
     log_info "uv: ${uv_bin}"
     log_info "caddy: ${caddy_bin}"
-    local unit_content tmp
-    unit_content="$(render_systemd_unit "$service_user" "$uv_bin" "$caddy_bin")" || exit 1
-    tmp="$(mktemp)"
-    printf '%s\n' "$unit_content" > "$tmp"
+    install_systemd_stack_units "$service_user" "$uv_bin" "$caddy_bin" || exit 1
 
-    sudo cp "$tmp" "$SYSTEMD_UNIT_PATH"
-    rm -f "$tmp"
     sudo systemctl daemon-reload
     sudo systemctl enable "$SYSTEMD_UNIT_NAME"
     if ! sudo systemctl is-enabled --quiet "$SYSTEMD_UNIT_NAME" 2>/dev/null; then
@@ -3582,6 +3697,8 @@ cmd_install_service() {
     fi
     log_ok "开机自启已注册: $(systemctl is-enabled "$SYSTEMD_UNIT_NAME" 2>/dev/null || echo unknown)"
     fix_systemd_runtime_permissions "$service_user" || exit 1
+    ensure_low_memory_kernel_tuning || true
+    ensure_low_memory_postgresql || true
     if ! sudo systemctl is-active --quiet "$SYSTEMD_UNIT_NAME" 2>/dev/null; then
         log_info "正在启动 ${SYSTEMD_UNIT_NAME}..."
         if ! sudo systemctl start "$SYSTEMD_UNIT_NAME"; then
@@ -3592,11 +3709,12 @@ cmd_install_service() {
     fi
 
     log_ok "服务已运行: ${SYSTEMD_UNIT_NAME}"
+    echo "  子单元: ${SYSTEMD_BACKEND_UNIT_NAME} ${SYSTEMD_TASKIQ_WORKER_UNIT_NAME} ${SYSTEMD_TASKIQ_SCHEDULER_UNIT_NAME} ${SYSTEMD_CADDY_UNIT_NAME}"
     echo "  开机自启: sudo systemctl is-enabled riveredge"
     echo "  立即启动: sudo systemctl start riveredge"
-    echo "  查看状态: sudo systemctl status riveredge"
+    echo "  查看状态: sudo systemctl status riveredge-backend"
     echo "  停止服务: sudo systemctl stop riveredge"
-    echo "  本次启动日志: journalctl -b -u riveredge --no-pager"
+    echo "  后端日志: journalctl -u ${SYSTEMD_BACKEND_UNIT_NAME} -e"
     echo "  完整日志: journalctl -u riveredge -e"
     echo ""
     echo "  提示: 请勿使用 sudo ./fast-deploy/deploy.sh start（会导致 .logs/.env 归属 root）"
@@ -3615,14 +3733,16 @@ cmd_uninstall_service() {
         return 0
     fi
 
-    log_info "移除 systemd 服务 ${SYSTEMD_UNIT_NAME}..."
+    log_info "移除 systemd 生产栈..."
     if ! sudo -v; then
         log_error "需要 sudo 权限"
         exit 1
     fi
     sudo systemctl stop "$SYSTEMD_UNIT_NAME" 2>/dev/null || true
     sudo systemctl disable "$SYSTEMD_UNIT_NAME" 2>/dev/null || true
-    sudo rm -f "$SYSTEMD_UNIT_PATH"
+    sudo rm -f "$SYSTEMD_UNIT_PATH" "$SYSTEMD_BACKEND_UNIT_PATH" \
+        "$SYSTEMD_TASKIQ_WORKER_UNIT_PATH" "$SYSTEMD_TASKIQ_SCHEDULER_UNIT_PATH" \
+        "$SYSTEMD_CADDY_UNIT_PATH"
     sudo systemctl daemon-reload
     log_ok "已移除 ${SYSTEMD_UNIT_NAME} 开机自启"
 }
@@ -5475,6 +5595,7 @@ fd_dispatch() {
         configure) cmd_configure ;;
         migrate)   cmd_migrate ;;
         free-memory|free_memory) cmd_free_memory ;;
+        setup-swap|setup_swap|swap) cmd_setup_swap ;;
         low-spec-mode|low_spec_mode|lowspec) cmd_low_spec_mode_cli "${1:-status}" ;;
         build)     cmd_build ;;
         start)
@@ -5504,7 +5625,7 @@ fd_dispatch() {
         wizard|""|deploy) cmd_wizard ;;
         *)
             log_error "未知命令: $cmd"
-            echo "用法: wizard | check | install | configure | migrate | low-spec-mode [on|off|status] | free-memory | build | start | stop | status | update | pro-apps [pro|custom|all] | install-custom | install-service | uninstall-service"
+            echo "用法: wizard | check | install | configure | migrate | low-spec-mode [on|off|status] | setup-swap | free-memory | build | start | stop | status | update | pro-apps [pro|custom|all] | install-custom | install-service | uninstall-service"
             exit 1
             ;;
     esac

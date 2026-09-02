@@ -233,7 +233,7 @@ const TitleWithHint: React.FC<TitleWithHintProps> = ({
         title={null}
         trigger="click"
         placement="topLeft"
-        overlayStyle={{ maxWidth: 320 }}
+        styles={{ root: { maxWidth: 320 } }}
       >
         <Button
           type="text"

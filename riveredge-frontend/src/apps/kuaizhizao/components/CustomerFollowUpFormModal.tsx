@@ -17,7 +17,11 @@ import { customerFollowUpApi, type CustomerFollowUp } from '../services/customer
 import { salesOpportunityApi, type SalesOpportunity } from '../services/sales-opportunity';
 import { listQuotations, type Quotation } from '../services/quotation';
 import { listSalesOrders, type SalesOrder } from '../services/sales-order';
-import { customerApi, getDictionaryOptions, getDictionaryOptionsSync } from '../../master-data/services/supply-chain';
+import {
+  KUAIZHIZAO_DOC_HOST,
+  loadCustomerFormReferenceList,
+} from '../../../utils/documentFormReferenceLoad';
+import { getDictionaryOptions, getDictionaryOptionsSync } from '../../master-data/services/supply-chain';
 import { CustomerFormModal } from '../../master-data/components/CustomerFormModal';
 import type { Customer } from '../../master-data/types/supply-chain';
 import { formatDateTime } from '../../../utils/format';
@@ -132,27 +136,15 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
 
   const loadDictAndCustomers = async () => {
     const [custRes, dictRes] = await Promise.allSettled([
-      customerApi.list({ limit: 1000, isActive: true } as any),
+      loadCustomerFormReferenceList(KUAIZHIZAO_DOC_HOST.customerFollowUp),
       getDictionaryOptions(DICT_CODE),
     ]);
 
-    let custData: any[] = [];
     if (custRes.status === 'fulfilled') {
-      const val = custRes.value;
-      if (Array.isArray(val)) {
-        custData = val;
-      } else if (val && typeof val === 'object') {
-        custData = (val as any).items || (val as any).data || [];
-      }
+      setCustomers(custRes.value);
+    } else {
+      setCustomers([]);
     }
-
-    const uniq = new Map<number, any>();
-    for (const c of custData) {
-      const id = getCustomerId(c);
-      if (id == null) continue;
-      if (!uniq.has(id)) uniq.set(id, c);
-    }
-    setCustomers(Array.from(uniq.values()) as Customer[]);
 
     if (dictRes.status === 'fulfilled') {
       setActivityOptions(dictRes.value || []);

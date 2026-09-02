@@ -1664,7 +1664,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
       <Modal
         title={t('app.kuaizhizao.salesOrder.pushPreviewTitle')}
         open={pushReworkPreviewOpen}
-        destroyOnClose
+        destroyOnHidden
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
         onCancel={resetPushReworkPreview}
         okText={t('app.kuaizhizao.salesOrder.confirmPush')}
@@ -1693,7 +1693,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
                 type="warning"
                 showIcon
                 style={{ marginBottom: 12 }}
-                message={qualityInspectionCapabilityReasonMessage(
+                title={qualityInspectionCapabilityReasonMessage(
                   pushReworkPreviewData.blocking_reason,
                   t,
                 )}

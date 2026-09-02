@@ -581,8 +581,8 @@ const GroupedFormView: React.FC = () => {
         loading={historyLoading}
       >
         {historyData.length > 0 ? (
-          <Timeline>
-            {historyData.map((log, index) => {
+          <Timeline
+            items={historyData.map((log, index) => {
               let color = 'blue';
               let icon = <HistoryOutlined />;
               
@@ -594,8 +594,11 @@ const GroupedFormView: React.FC = () => {
                 color = 'red';
               }
               
-              return (
-                <Timeline.Item key={index} color={color} dot={icon}>
+              return {
+                key: index,
+                color,
+                dot: icon,
+                children: (
                   <div>
                     <div style={{ marginBottom: 4 }}>
                       <Text strong>
@@ -619,10 +622,10 @@ const GroupedFormView: React.FC = () => {
                       </Text>
                     </div>
                   </div>
-                </Timeline.Item>
-              );
+                ),
+              };
             })}
-          </Timeline>
+          />
         ) : (
           <Empty description={t('pages.system.parameters.grouped.noHistory')} />
         )}

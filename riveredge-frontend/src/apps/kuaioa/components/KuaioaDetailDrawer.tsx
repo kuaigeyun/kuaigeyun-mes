@@ -130,7 +130,7 @@ const KuaioaDetailDrawer: React.FC<Props> = ({
       open={open}
       onClose={onClose}
       loading={loading}
-      width={variant === 'approval' ? DRAWER_CONFIG.HALF_WIDTH : DRAWER_CONFIG.STANDARD_WIDTH}
+      size={variant === 'approval' ? DRAWER_CONFIG.HALF_WIDTH : DRAWER_CONFIG.STANDARD_WIDTH}
       title={
         titleName
           ? `${titleName}${titleCode ? ` (${titleCode})` : ''}`

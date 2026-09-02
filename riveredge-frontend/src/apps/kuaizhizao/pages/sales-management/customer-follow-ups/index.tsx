@@ -44,7 +44,10 @@ import { getCustomerFollowUpLifecycle, isCustomerFollowUpRevisitOverdue } from '
 import { formatDateTime } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
-import { customerApi, unwrapSupplyPagedList } from '../../../../master-data/services/supply-chain';
+import {
+  KUAIZHIZAO_DOC_HOST,
+  loadCustomerFormReferenceList,
+} from '../../../../../utils/documentFormReferenceLoad';
 import { alignProColumns, alignDescriptionColumns, SALES_DOC_LIST_FIELD_RANK } from '../shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
@@ -82,7 +85,6 @@ const CustomerFollowUpsPage: React.FC = () => {
   const [followUpPreset, setFollowUpPreset] = useState<CustomerFollowUpPreset | null>(null);
   const [pendingOnlyFilter, setPendingOnlyFilter] = useState(false);
   const [customerList, setCustomerList] = useState<any[]>([]);
-  const [customersLoading, setCustomersLoading] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [detailRecord, setDetailRecord] = useState<CustomerFollowUp | null>(null);
@@ -231,24 +233,7 @@ const CustomerFollowUpsPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    const loadCustomers = async () => {
-      setCustomersLoading(true);
-      try {
-        const result = await customerApi.list({ limit: 1000, isActive: true });
-        if (!cancelled) {
-          setCustomerList(unwrapSupplyPagedList(result));
-        }
-      } catch {
-        if (!cancelled) setCustomerList([]);
-      } finally {
-        if (!cancelled) setCustomersLoading(false);
-      }
-    };
-    void loadCustomers();
-    return () => {
-      cancelled = true;
-    };
+    void loadCustomerFormReferenceList(KUAIZHIZAO_DOC_HOST.customerFollowUp).then(setCustomerList);
   }, []);
 
   useEffect(() => {
@@ -401,7 +386,6 @@ const CustomerFollowUpsPage: React.FC = () => {
       fieldProps: {
         showSearch: true,
         optionFilterProp: 'label',
-        loading: customersLoading,
         options: customerSearchOptions,
         placeholder: t('field.customer.name'),
       },
@@ -645,7 +629,7 @@ const CustomerFollowUpsPage: React.FC = () => {
             <ThemedSegmented
               key="pending-scope"
               surfaceBackground
-              size="middle"
+              size="medium"
               value={pendingOnlyFilter ? 'pending' : 'all'}
               onChange={(v) => setPendingOnlyFilter(v === 'pending')}
               options={[
@@ -730,7 +714,7 @@ const CustomerFollowUpsPage: React.FC = () => {
         })}
         open={detailDrawerVisible}
         onClose={closeDetailDrawer}
-        width={DRAWER_CONFIG.HALF_WIDTH}
+        size={DRAWER_CONFIG.HALF_WIDTH}
         extra={
           detailRecord ? (
             <Space size="small">

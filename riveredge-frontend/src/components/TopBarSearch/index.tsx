@@ -210,7 +210,7 @@ const TopBarSearch: React.FC<TopBarSearchProps> = ({
                 justifyContent: 'center',
                 minWidth: 20,
                 height: 20,
-                padding: '0',
+                padding: '2px 0 0 0',
                 marginRight: 0,
                 boxSizing: 'border-box',
                 borderRadius: 4,

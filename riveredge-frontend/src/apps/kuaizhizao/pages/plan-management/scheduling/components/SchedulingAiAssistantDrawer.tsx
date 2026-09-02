@@ -485,7 +485,7 @@ export function SchedulingAiAssistantDrawer({
       if (!msg) return null;
       if (msg.status === 'loading') return msg.text;
       if (msg.errorDetail) {
-        return <Alert type="error" showIcon message={msg.text} description={msg.errorDetail} />;
+        return <Alert type="error" showIcon title={msg.text} description={msg.errorDetail} />;
       }
       if (msg.explainAnswer) {
         return (
@@ -600,7 +600,7 @@ export function SchedulingAiAssistantDrawer({
         }
         open={open}
         onClose={onClose}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
+        size={DRAWER_CONFIG.STANDARD_WIDTH}
         className="scheduling-ai-assistant-drawer"
         styles={{
           body: {

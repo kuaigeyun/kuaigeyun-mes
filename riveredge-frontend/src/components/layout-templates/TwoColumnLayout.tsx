@@ -397,7 +397,7 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
                 onChange={(e) => search.onChange?.(e.target.value)}
                 onSearch={(v) => search.onSearch?.(v)}
                 allowClear={search.allowClear !== false}
-                size="middle"
+                size="medium"
               />
             ) : (
               <Input
@@ -406,7 +406,7 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
                 value={search.value}
                 onChange={(e) => search.onChange?.(e.target.value)}
                 allowClear={search.allowClear !== false}
-                size="middle"
+                size="medium"
               />
             )}
           </div>

@@ -154,6 +154,7 @@ import {
   workOrderBatchPrintAllowed,
   workOrderBatchReleaseAllowed,
   workOrderBatchSetPriorityAllowed,
+  workOrderBatchPushProductionPickingAllowed,
 } from '../../../../../hooks/useDocumentCapabilities'
 
 const WORK_ORDER_RESOURCE = 'kuaizhizao:work-order'
@@ -193,7 +194,6 @@ import {
 } from '../../../services/demand-computation'
 import { operationApi, processRouteApi, unwrapProcessPagedList } from '../../../../master-data/services/process'
 import { productProcessApi } from '../../../../master-data/services/productProcess'
-import { supplierApi, unwrapSupplyPagedList } from '../../../../master-data/services/supply-chain'
 import {
   workshopApi,
   workCenterApi,
@@ -204,11 +204,19 @@ import {
 import type { Workshop, WorkCenter } from '../../../../master-data/types/factory'
 import { WorkCenterSelectDropdown } from '../../../../master-data/components/WorkCenterSelectDropdown'
 import { warehouseApi } from '../../../services/warehouse-execution'
-import { materialApi } from '../../../../master-data/services/material'
+import {
+  KUAIZHIZAO_DOC_HOST,
+  loadMaterialFormReferenceList,
+  loadSupplierFormReferenceList,
+  resolveMaterialFormReference,
+  searchMaterialFormReferenceOptions,
+} from '../../../../../utils/documentFormReferenceLoad'
 import { OperationPickPanel } from '../../../../master-data/components/OperationSequenceEditor'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { inboundProductionReturnEntryPath, inboundWorkOrderEntryPath } from '../../warehouse-management/inbound/inboundPaths'
 import { outboundWorkOrderEntryPath } from '../../warehouse-management/outbound/outboundPaths'
+import { navigateToOutboundHubAfterBatchPicking } from '../../warehouse-management/outbound/outboundHubNavigation'
+import { WorkOrderBatchPickingModal } from './WorkOrderBatchPickingModal'
 import { buildDocumentCreateDraftKey, setDocumentFormDraft } from '../../../../../utils/documentFormDraftCache'
 import {
   qualityInspectionCapabilityReasonMessage,
@@ -1385,6 +1393,7 @@ const WorkOrdersPage: React.FC = () => {
   const quantityDecimals = useNumericPrecisionPlaces('quantity')
   const { message: messageApi } = App.useApp()
   const workOrderPerms = useResourcePermissions(WORK_ORDER_RESOURCE)
+  const outboundPerms = useResourcePermissions('kuaizhizao:outbound')
   const workOrderAuditEnabled = useAuditRequired('work_order', false)
   const workOrderAuditColumn = useMemo(
     () => createListAuditPhaseColumn<WorkOrder>({ t, auditEnabled: workOrderAuditEnabled }),
@@ -2125,13 +2134,8 @@ const WorkOrdersPage: React.FC = () => {
     // 同步加载物料来源信息
     const selectedMaterial = productSourceData.materials.find((p: any) => p.id === first.productId)
     if (selectedMaterial) {
-      materialApi
-        .get(selectedMaterial.uuid)
-        .then((materialDetail: any) => {
-          const sourceType = materialDetail.sourceType || materialDetail.source_type
-          setSelectedMaterialSourceInfo(resolveMaterialSourceValidation(sourceType, t))
-        })
-        .catch(() => setSelectedMaterialSourceInfo(null))
+      const sourceType = selectedMaterial.sourceType || selectedMaterial.source_type
+      setSelectedMaterialSourceInfo(resolveMaterialSourceValidation(sourceType, t))
     } else {
       setSelectedMaterialSourceInfo(null)
     }
@@ -2153,7 +2157,7 @@ const WorkOrdersPage: React.FC = () => {
       try {
         const [products, operations, routes, usersRes, equipmentRes, moldsRes, toolsRes] =
           await Promise.all([
-            materialApi.list({ isActive: true, limit: 1000 }),
+            loadMaterialFormReferenceList(KUAIZHIZAO_DOC_HOST.workOrder),
             operationApi.list({ isActive: true, limit: 500 }).catch(() => ({ data: [], total: 0 })),
             processRouteApi.list({ isActive: true, limit: 500 }).catch(() => ({ data: [], total: 0 })),
             searchUserDisplay({ is_active: true, page_size: 100 }).catch(() => ({ items: [] })),
@@ -2162,7 +2166,7 @@ const WorkOrdersPage: React.FC = () => {
             toolApi.list({ limit: 100 }).catch(() => ({ items: [] })),
           ])
         if (cancelled) return
-        setProductList(Array.isArray(products) ? products : (products as any)?.data ?? (products as any)?.items ?? [])
+        setProductList(Array.isArray(products) ? products : [])
         setOperationList(unwrapProcessPagedList(operations))
         setProcessRouteList(unwrapProcessPagedList(routes))
         setWorkerList(displayItemsToUsers(usersRes?.items || []))
@@ -2294,6 +2298,9 @@ const WorkOrdersPage: React.FC = () => {
   const mergeFormRef = useRef<any>(null)
   const [mergeLoading, setMergeLoading] = useState(false)
   const [dissolveGroupLoading, setDissolveGroupLoading] = useState(false)
+
+  const [batchPickingModalOpen, setBatchPickingModalOpen] = useState(false)
+  const [batchPickingWorkOrderIds, setBatchPickingWorkOrderIds] = useState<number[]>([])
 
   // 拆分工单相关状态
   const [splitModalVisible, setSplitModalVisible] = useState(false)
@@ -3195,16 +3202,10 @@ const WorkOrdersPage: React.FC = () => {
       }
       // 编辑时 product_id 禁用，不加载物料来源（属性字段在编辑时也不展示）
       if (detail.product_id) {
-        try {
-          const mats = await materialApi.list({ ids: [detail.product_id], limit: 1 })
-          const mat = (mats.items ?? [])[0]
-          if (mat?.uuid) {
-            const materialDetail = await materialApi.get(mat.uuid)
-            setFormProductMaterial(materialDetail as Material)
-          }
-        } catch {
-          setFormProductMaterial(null)
-        }
+        const mats = await resolveMaterialFormReference(KUAIZHIZAO_DOC_HOST.workOrder, [
+          detail.product_id,
+        ])
+        setFormProductMaterial(mats[0] ?? null)
       } else {
         setFormProductMaterial(null)
       }
@@ -4609,7 +4610,7 @@ const WorkOrdersPage: React.FC = () => {
     }
 
     const [materials, workshopsRes] = await Promise.all([
-      materialApi.list({ limit: 5000, isActive: true }),
+      loadMaterialFormReferenceList(KUAIZHIZAO_DOC_HOST.workOrder),
       workshopApi.list({ limit: 1000 }),
     ])
     const workshops: Workshop[] = factoryListItems(workshopsRes as any)
@@ -5554,7 +5555,7 @@ const WorkOrdersPage: React.FC = () => {
 
       // 加载供应商列表
       try {
-        const suppliers = unwrapSupplyPagedList(await supplierApi.list({ isActive: true }))
+        const suppliers = await loadSupplierFormReferenceList(KUAIZHIZAO_DOC_HOST.workOrder)
         setSupplierList(suppliers || [])
       } catch (error) {
         console.error('加载供应商列表失败:', error)
@@ -6314,7 +6315,7 @@ const WorkOrdersPage: React.FC = () => {
             <UniBatchButton
               key="merge-into-group"
               selectedRowKeys={selectedRowKeys}
-              size="middle"
+              size="medium"
               icon={<GroupOutlined />}
               onAction={(keys) => {
                 const ids = resolveMergeableWorkOrderIdsFromRowKeys(
@@ -6338,7 +6339,7 @@ const WorkOrdersPage: React.FC = () => {
             <UniBatchButton
               key="dissolve-group"
               selectedRowKeys={selectedRowKeys}
-              size="middle"
+              size="medium"
               icon={dissolveWorkOrderGroupIcon}
               loading={dissolveGroupLoading}
               onAction={(keys) =>
@@ -6370,6 +6371,29 @@ const WorkOrdersPage: React.FC = () => {
                 workOrderPerms.canAction?.('submit') ?? false,
               ),
             onClick: () => void handleBatchRelease(),
+          },
+          {
+            key: 'batch-push-production-picking',
+            label: t('app.kuaizhizao.workOrder.batchPicking.action'),
+            icon: <ShoppingOutlined />,
+            disabled:
+              selectedWorkOrdersForBatch.length > 0 &&
+              !workOrderBatchPushProductionPickingAllowed(
+                selectedWorkOrdersForBatch,
+                outboundPerms.canCreate,
+              ),
+            onClick: () => {
+              const ids = resolveWorkOrderIdsFromListRowKeys(
+                selectedRowKeys,
+                workOrderRowByKeyRef.current,
+              )
+              if (!ids.length) {
+                messageApi.warning(t('app.kuaizhizao.workOrder.batchPicking.selectWorkOrdersFirst'))
+                return
+              }
+              setBatchPickingWorkOrderIds(ids)
+              setBatchPickingModalOpen(true)
+            },
           },
           {
             key: 'batch-qrcode',
@@ -6420,6 +6444,7 @@ const WorkOrdersPage: React.FC = () => {
       dissolvableWorkOrderGroupIds,
       dissolveGroupLoading,
       workOrderPerms,
+      outboundPerms,
       handleDissolveGroups,
       handleBatchGenerateQRCode,
       handleBatchSetPriority,
@@ -8054,7 +8079,7 @@ const WorkOrdersPage: React.FC = () => {
           toolBarActionsAfterBatch={[
             <Button {...rowActionKind('release')}
               key="smartRelease"
-              size="middle"
+              size="medium"
               style={{ backgroundColor: '#52c41a', color: '#fff', borderColor: '#52c41a' }}
               icon={<PlayCircleOutlined />}
               onClick={handleSmartReleaseKitted}
@@ -8087,7 +8112,7 @@ const WorkOrdersPage: React.FC = () => {
                       batch: t('components.uniAction.print'),
                     }}
                     icon={<PrinterOutlined />}
-                    size="middle"
+                    size="medium"
                   />,
                 ]
               : []
@@ -8333,7 +8358,7 @@ const WorkOrdersPage: React.FC = () => {
                   <Alert
                     type="warning"
                     showIcon
-                    message={
+                    title={
                       demandComputationCapabilityReasonMessage(
                         computationPullPreviewData.blocking_reason,
                         t,
@@ -8412,7 +8437,7 @@ const WorkOrdersPage: React.FC = () => {
                   <Alert
                     type="warning"
                     showIcon
-                    message={t('app.kuaizhizao.demandComputation.validationFailedMaterials')}
+                    title={t('app.kuaizhizao.demandComputation.validationFailedMaterials')}
                     description={
                       <ul style={{ margin: '8px 0 0', paddingLeft: 20 }}>
                         {computationPullPreviewData.validation_failures.map((v, i) => (
@@ -8464,7 +8489,7 @@ const WorkOrdersPage: React.FC = () => {
                 type="warning"
                 showIcon
                 style={{ marginBottom: 12 }}
-                message={
+                title={
                   salesOrderCapabilityReasonMessage(soPullPreviewData.blocking_reason, t) ||
                   t('app.kuaizhizao.salesOrder.pushFailed')
                 }
@@ -8637,7 +8662,7 @@ const WorkOrdersPage: React.FC = () => {
       <Modal
         title={toolbarPushPreviewTitle}
         open={toolbarPushPreviewOpen}
-        destroyOnClose
+        destroyOnHidden
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
         onCancel={resetToolbarPushPreview}
         okText={
@@ -8670,7 +8695,7 @@ const WorkOrdersPage: React.FC = () => {
                 type="warning"
                 showIcon
                 style={{ marginBottom: 12 }}
-                message={
+                title={
                   qualityInspectionCapabilityReasonMessage(toolbarPushPreviewData.blocking_reason, t) ||
                   workOrderCapabilityReasonMessage(toolbarPushPreviewData.blocking_reason, t) ||
                   toolbarPushPreviewData.blocking_reason
@@ -9079,15 +9104,11 @@ const WorkOrdersPage: React.FC = () => {
               onChange={async (value, material) => {
                 if (value) {
                   if (material) {
-                    try {
-                      const materialDetail = await materialApi.get(material.uuid)
-                      setFormProductMaterial(materialDetail as Material)
-                      const sourceType = materialDetail.sourceType || materialDetail.source_type
-                      setSelectedMaterialSourceInfo(resolveMaterialSourceValidation(sourceType, t))
+                    setFormProductMaterial(material as Material)
+                    const sourceType = material.sourceType || material.source_type
+                    setSelectedMaterialSourceInfo(resolveMaterialSourceValidation(sourceType, t))
+                    if (material.uuid) {
                       loadProcessRouteForMaterial(material.uuid)
-                    } catch (error) {
-                      console.error('获取物料详情失败:', error)
-                      setSelectedMaterialSourceInfo(null)
                     }
                   } else setSelectedMaterialSourceInfo(null)
                 } else {
@@ -9929,7 +9950,7 @@ const WorkOrdersPage: React.FC = () => {
       <Modal
         title={t('app.kuaizhizao.outsourceOrder.pullPreviewTitle')}
         open={outsourcePreviewOpen}
-        destroyOnClose
+        destroyOnHidden
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
         onCancel={resetOutsourcePreview}
         okText={t('common.next')}
@@ -9949,7 +9970,7 @@ const WorkOrdersPage: React.FC = () => {
           <div>
             <p style={{ marginBottom: 12, fontWeight: 500 }}>{outsourcePreviewData.summary}</p>
             {outsourcePreviewData.has_blocking_issues && outsourcePreviewData.blocking_reason ? (
-              <Alert type="warning" showIcon style={{ marginBottom: 12 }} message={outsourcePreviewData.blocking_reason} />
+              <Alert type="warning" showIcon style={{ marginBottom: 12 }} title={outsourcePreviewData.blocking_reason} />
             ) : null}
             {outsourcePreviewData.items?.length > 0 ? (
               <Table
@@ -10026,7 +10047,7 @@ const WorkOrdersPage: React.FC = () => {
                   type="info"
                   showIcon
                   style={{ marginBottom: 16 }}
-                  message={t('app.kuaizhizao.outsourceOrder.formSourceLocked')}
+                  title={t('app.kuaizhizao.outsourceOrder.formSourceLocked')}
                 />
                 <Card size="small" style={{ marginBottom: 16 }}>
                   {(() => {
@@ -10054,7 +10075,7 @@ const WorkOrdersPage: React.FC = () => {
                   <Alert
                     type={maxOutsourceQty > 0 ? 'info' : 'warning'}
                     showIcon
-                    message={`可委外数量：${maxOutsourceQty}`}
+                    title={`可委外数量：${maxOutsourceQty}`}
                     style={{ marginBottom: 16 }}
                   />
                 )
@@ -10845,7 +10866,7 @@ const WorkOrdersPage: React.FC = () => {
         <Spin spinning={batchReleaseLoading}>
           <div style={{ maxHeight: '60vh', overflowY: 'auto' }}>
             {batchReleaseCheckResults.length > 0 ? (
-              <Space orientation="vertical" style={{ width: '100%' }} size="middle">
+              <Space orientation="vertical" style={{ width: '100%' }} size="medium">
                 {batchReleaseCheckResults.map((result, index) => (
                   <Card
                     key={index}
@@ -11024,14 +11045,9 @@ const WorkOrdersPage: React.FC = () => {
                   name="product_id"
                   label="选择产品"
                   required
-                  request={async () => {
-                    const res: any = await materialApi.list({ limit: 100 } as any);
-                    const dataList = Array.isArray(res) ? res : res?.data || [];
-                    return dataList.map((item: any) => ({
-                      label: `[${item.code}] ${item.name}`,
-                      value: item.id,
-                    }));
-                  }}
+                  request={async () =>
+                    searchMaterialFormReferenceOptions(KUAIZHIZAO_DOC_HOST.workOrder, undefined, 100)
+                  }
                 />
                 <ProFormDigit name="quantity" label="计划数量" initialValue={1} min={1} required />
                 <ProFormDateRangePicker
@@ -11134,6 +11150,21 @@ const WorkOrdersPage: React.FC = () => {
           </Col>
         </Row>
       </Modal>
+
+      <WorkOrderBatchPickingModal
+        open={batchPickingModalOpen}
+        workOrderIds={batchPickingWorkOrderIds}
+        onClose={() => {
+          setBatchPickingModalOpen(false)
+          setBatchPickingWorkOrderIds([])
+        }}
+        onSuccess={() => {
+          setBatchPickingModalOpen(false)
+          setBatchPickingWorkOrderIds([])
+          setSelectedRowKeys([])
+          navigateToOutboundHubAfterBatchPicking(navigate)
+        }}
+      />
 
       <WorkOrderCompleteTrackingModal
         open={completeTrackingModalOpen}

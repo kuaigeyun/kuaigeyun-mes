@@ -81,7 +81,7 @@ export const InspectionStepValueSpecFields: React.FC<Props> = ({
 
   if (vt === 'boolean') {
     return (
-      <Space direction="vertical" style={{ width: '100%' }}>
+      <Space orientation="vertical" style={{ width: '100%' }}>
         <Form.Item label={t('app.kuaizhizao.quality.plans.stepSpec.passWhen')} style={{ marginBottom: 0 }}>
           <Select
             value={spec.pass_when === false ? 'false' : 'true'}
@@ -101,7 +101,7 @@ export const InspectionStepValueSpecFields: React.FC<Props> = ({
     const bounds = resolveNumericEffectiveLimits(spec);
     const rangePreview = formatAcceptanceCriteriaPreview('numeric', spec, t);
     return (
-      <Space direction="vertical" style={{ width: '100%' }} size={8}>
+      <Space orientation="vertical" style={{ width: '100%' }} size={8}>
         <Switch
           checked={isDerived}
           onChange={(checked) =>
@@ -266,7 +266,7 @@ export const InspectionStepValueSpecFields: React.FC<Props> = ({
 
   if (vt === 'text') {
     return (
-      <Space direction="vertical" style={{ width: '100%' }} size={8}>
+      <Space orientation="vertical" style={{ width: '100%' }} size={8}>
         <span>{t('app.kuaizhizao.quality.plans.stepSpec.textManualHint')}</span>
         <Switch
           checked={!!spec.multiline}

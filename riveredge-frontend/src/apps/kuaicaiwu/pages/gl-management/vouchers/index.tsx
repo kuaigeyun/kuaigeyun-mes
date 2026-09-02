@@ -276,13 +276,22 @@ const GlVouchersPage: React.FC = () => {
             uniTableKeepWidth: true,
             resizable: false,
             hideInSearch: true,
-            render: (_, r) => `${r.period_year}-${String(r.period_month).padStart(2, '0')}`,
+            render: (_, r) => {
+              if (r.period_year && r.period_month) {
+                return `${r.period_year}-${String(r.period_month).padStart(2, '0')}`;
+              }
+              if (r.voucher_date) {
+                const d = dayjs(r.voucher_date);
+                if (d.isValid()) return d.format('YYYY-MM');
+              }
+              return '—';
+            },
           },
           {
             // 摘要长短不一：唯一 RemainderFlex
             title: t(`${NS}.col.summary`),
             dataIndex: 'summary',
-            minWidth: 160,
+            minWidth: 140,
             uniTableRemainderFlex: true,
             uniTablePrimaryFlex: true,
             resizable: false,
@@ -293,8 +302,8 @@ const GlVouchersPage: React.FC = () => {
           {
             title: t(`${NS}.col.source`),
             key: 'gl_voucher_source',
-            width: 160,
-            minWidth: 160,
+            width: 140,
+            minWidth: 140,
             uniTableKeepWidth: true,
             resizable: false,
             hideInSearch: true,
@@ -317,6 +326,28 @@ const GlVouchersPage: React.FC = () => {
               }
               return label;
             },
+          },
+          {
+            title: t(`${NS}.col.debitAccounts`, { defaultValue: '借方科目' }),
+            dataIndex: 'debit_accounts',
+            width: 200,
+            minWidth: 180,
+            uniTableKeepWidth: true,
+            resizable: false,
+            hideInSearch: true,
+            ellipsis: true,
+            render: (_, r) => r.debit_accounts || '—',
+          },
+          {
+            title: t(`${NS}.col.creditAccounts`, { defaultValue: '贷方科目' }),
+            dataIndex: 'credit_accounts',
+            width: 200,
+            minWidth: 180,
+            uniTableKeepWidth: true,
+            resizable: false,
+            hideInSearch: true,
+            ellipsis: true,
+            render: (_, r) => r.credit_accounts || '—',
           },
           {
             title: t(`${NS}.col.debit`),
@@ -827,7 +858,7 @@ const GlVouchersPage: React.FC = () => {
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.voucher)}
         actionRef={actionRef}
         rowKey="id"
-        columnPersistenceId="apps.kuaicaiwu.pages.gl-management.vouchers.list-v2"
+        columnPersistenceId="apps.kuaicaiwu.pages.gl-management.vouchers.list-v3"
         columns={columns}
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
@@ -880,11 +911,12 @@ const GlVouchersPage: React.FC = () => {
               messageApi.warning(t('common.exportNoData', { defaultValue: '没有可导出的数据' }));
               return;
             }
-            const header = 'voucher_code,voucher_date,status,summary,total_debit,total_credit\n';
+            const header =
+              'voucher_code,voucher_date,status,summary,debit_accounts,credit_accounts,total_debit,total_credit\n';
             const body = rows
               .map(
                 (r) =>
-                  `${r.voucher_code},${r.voucher_date},${r.status},"${String(r.summary || '').replace(/"/g, '""')}",${r.total_debit},${r.total_credit}`,
+                  `${r.voucher_code},${r.voucher_date},${r.status},"${String(r.summary || '').replace(/"/g, '""')}","${String(r.debit_accounts || '').replace(/"/g, '""')}","${String(r.credit_accounts || '').replace(/"/g, '""')}",${r.total_debit},${r.total_credit}`,
               )
               .join('\n');
             const blob = new Blob([header + body], { type: 'text/csv;charset=utf-8;' });

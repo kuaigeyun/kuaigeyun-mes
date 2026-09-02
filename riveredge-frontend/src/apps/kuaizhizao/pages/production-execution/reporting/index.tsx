@@ -1791,7 +1791,7 @@ const ReportingPage: React.FC = () => {
       >
         {!!reportLastInboundHint && (
           <Col span={24} style={{ marginBottom: 12 }}>
-            <Alert type="info" showIcon message={reportLastInboundHint} />
+            <Alert type="info" showIcon title={reportLastInboundHint} />
           </Col>
         )}
         {reportSelectedWorkOrder && reportSelectedOperation ? (
@@ -1801,7 +1801,7 @@ const ReportingPage: React.FC = () => {
                 type="info"
                 showIcon
                 style={{ marginBottom: 12 }}
-                message={t('app.kuaizhizao.workReporting.formSourceLocked')}
+                title={t('app.kuaizhizao.workReporting.formSourceLocked')}
               />
             </Col>
             <Col span={24}>
@@ -2400,7 +2400,7 @@ const ReportingPage: React.FC = () => {
           setDetailMaterialBindings([]);
           resetReportingDetailFieldValues();
         }}
-        width={DRAWER_CONFIG.HALF_WIDTH}
+        size={DRAWER_CONFIG.HALF_WIDTH}
         extra={
           reportingDetail ? (
             <UniWorkflowActions

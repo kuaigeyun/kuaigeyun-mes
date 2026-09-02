@@ -9,8 +9,6 @@
 from typing import Dict, Any, List
 
 from infra.config.infra_config import infra_settings as settings
-import json
-import asyncpg
 from loguru import logger
 
 
@@ -22,24 +20,23 @@ class DynamicDatabaseConfigService:
     """
 
     @staticmethod
-    async def generate_tortoise_config() -> Dict[str, Any]:
+    async def generate_tortoise_config(
+        enabled_codes: frozenset[str] | None = None,
+    ) -> Dict[str, Any]:
         """
-        动态生成Tortoise ORM配置
+        动态生成 Tortoise ORM 配置。
 
-        查询数据库中所有活跃的应用，动态构建模型列表。
-
-        Returns:
-            Dict[str, Any]: Tortoise ORM配置字典
+        enabled_codes 为 None 时仅含平台基线模型（启动引导阶段，用于查应用中心）；
+        传入 frozenset 时并入对应应用的 ORM 声明。
         """
         logger.info("🔧 开始生成动态数据库配置...")
 
-        # 基础配置
         config = {
             "connections": {
                 "default": {
                     "engine": "tortoise.backends.asyncpg",
                     "credentials": {
-                        "host": None,  # 将在运行时设置
+                        "host": None,
                         "port": None,
                         "user": None,
                         "password": None,
@@ -49,7 +46,9 @@ class DynamicDatabaseConfigService:
             },
             "apps": {
                 "models": {
-                    "models": await DynamicDatabaseConfigService._get_active_models(),
+                    "models": await DynamicDatabaseConfigService._get_active_models(
+                        enabled_codes
+                    ),
                     "default_connection": "default",
                 }
             },
@@ -61,19 +60,9 @@ class DynamicDatabaseConfigService:
         return config
 
     @staticmethod
-    async def _get_active_models() -> List[str]:
-        """
-        获取所有活跃应用的模型模块列表
-
-        Returns:
-            List[str]: 模型模块路径列表
-        """
-        logger.info("📋 === _get_active_models 方法被调用 ===")
-        logger.debug("📋 获取活跃应用模型列表...")
-
-        # 基础模型（系统必须的）
+    async def _get_base_model_paths() -> List[str]:
+        """平台基线模型（core + infra + aerich），不含任何业务应用 ORM。"""
         base_models = [
-            # 核心系统模型
             "core.models.application",
             "core.models.menu",
             "core.models.tenant_backend_home",
@@ -93,9 +82,7 @@ class DynamicDatabaseConfigService:
             "core.models.operation_log",
             "core.models.login_log",
             "core.models.ai_audit_log",
-            # 在线用户 / 会话活动（中间件与 OnlineUserService 依赖；须与静态 TORTOISE_ORM 一致纳入动态 apps）
             "core.models.user_activity",
-            # PG 缓存（Cache 工具与登录/平台设置等依赖；缺注册会 default_connection=None）
             "core.models.cache_entry",
             "core.models.data_dictionary",
             "core.models.dictionary_item",
@@ -106,8 +93,8 @@ class DynamicDatabaseConfigService:
             "core.models.batch_rule_sequence",
             "core.models.serial_rule",
             "core.models.serial_rule_sequence",
-            "core.models.material_code_rule",  # 物料编码规则模型
-            "core.models.material_variant_attribute",  # 物料属性定义模型
+            "core.models.material_code_rule",
+            "core.models.material_variant_attribute",
             "core.models.custom_field",
             "core.models.custom_field_value",
             "core.models.site_setting",
@@ -117,7 +104,6 @@ class DynamicDatabaseConfigService:
             "core.models.client_release",
             "core.models.integration_config",
             "core.models.file",
-            # 预览批注（须与静态 TORTOISE_ORM 一致；缺注册会 default_connection=None → preview-markup 500）
             "core.models.file_preview_markup",
             "core.models.resource_category",
             "core.models.api",
@@ -128,9 +114,9 @@ class DynamicDatabaseConfigService:
             "core.models.message_log",
             "core.models.mobile_push_device",
             "core.models.scheduled_task",
-                "core.models.approval_process",
-                "core.models.audit_document_binding",
-                "core.models.approval_instance",
+            "core.models.approval_process",
+            "core.models.audit_document_binding",
+            "core.models.approval_instance",
             "core.models.approval_task",
             "core.models.data_backup",
             "core.models.approval_history",
@@ -140,8 +126,6 @@ class DynamicDatabaseConfigService:
             "core.models.department",
             "core.models.department_dataset_binding",
             "core.models.position",
-
-            # 平台模型
             "infra.models.base",
             "infra.models.tenant",
             "infra.models.tenant_config",
@@ -151,467 +135,59 @@ class DynamicDatabaseConfigService:
             "infra.models.package",
             "infra.models.sensitive_word_control",
             "infra.models.saved_search",
-            "infra.models.industry_template",  # 行业模板模型（平台级）
+            "infra.models.industry_template",
             "infra.models.platform_settings",
             "infra.models.install_registration",
             "infra.models.official_api_library",
             "infra.models.invitation_code",
             "infra.models.biometric",
             "infra.models.face_template",
-
-            # Aerich 模型（数据库迁移）
             "aerich.models",
-
-            # 快研发 (kuaiplm) — 随代码部署，与静态 TORTOISE_ORM 一致；
-            # 避免 API 路由可访问但 RdProject 等模型未注册导致 default_connection=None
-            "apps.kuaiplm.models.rd_project",
-            "apps.kuaiplm.models.gate_template",
-            "apps.kuaiplm.models.knowledge_base",
-            "apps.kuaiplm.models.phase2",
-            # 辐条轮毂 (spoke_wheel) — 行业免费版，显式注册到默认连接
-            "apps.spoke_wheel.models",
         ]
-
-        # 验证模型模块是否存在，只包含存在的模块
-        validated_base_models = []
+        validated: List[str] = []
         for model_path in base_models:
             if DynamicDatabaseConfigService._module_exists(model_path):
-                validated_base_models.append(model_path)
-                logger.debug(f"✅ 验证基础模型存在: {model_path}")
+                validated.append(model_path)
             else:
                 logger.warning(f"⚠️ 基础模型不存在，跳过: {model_path}")
+        return validated
 
-        # 获取活跃应用的模型
-        logger.info("📋 === 开始获取活跃应用模型列表 ===")
+    @staticmethod
+    async def _get_active_models(
+        enabled_codes: frozenset[str] | None = None,
+    ) -> List[str]:
+        """
+        获取运行时模型模块列表。
 
-        try:
-            # 尝试从数据库查询活跃应用
-            logger.info("📋 尝试连接数据库查询活跃应用...")
-            from infra.infrastructure.database.database import get_db_connection
-            conn = await get_db_connection()
-            logger.info("📋 数据库连接成功")
+        enabled_codes 为 None：仅平台基线（启动引导）。
+        enabled_codes 为 frozenset：基线 + 启用集 ORM 声明。
+        """
+        validated_base_models = await DynamicDatabaseConfigService._get_base_model_paths()
 
-            try:
-                rows = await conn.fetch("""
-                    SELECT DISTINCT code
-                    FROM core_applications
-                    WHERE is_installed = TRUE
-                      AND is_active = TRUE
-                      AND deleted_at IS NULL
-                """)
+        if enabled_codes is None:
+            logger.info(
+                f"📋 启动引导：仅平台基线 {len(validated_base_models)} 个模型模块"
+            )
+            return validated_base_models
 
-                active_app_codes = [row['code'] for row in rows]
-                logger.info(f"📋 从数据库发现 {len(active_app_codes)} 个活跃应用: {active_app_codes}")
-
-            finally:
-                await conn.close()
-                logger.info("📋 数据库连接已关闭")
-
-        except Exception as e:
-            logger.error(f"从数据库查询活跃应用失败: {e}", exc_info=True)
-            # 回退方案：从文件系统扫描应用目录，自动发现应用
-            active_app_codes = []
-            try:
-                from core.services.application.application_service import ApplicationService
-                discovered_plugins = ApplicationService._scan_plugin_manifests()
-                active_app_codes = [plugin.get('code') for plugin in discovered_plugins if plugin.get('code')]
-                logger.info(f"📋 从文件系统扫描到 {len(active_app_codes)} 个应用: {active_app_codes}")
-            except Exception as scan_error:
-                logger.error(f"❌ 从文件系统扫描应用失败: {scan_error}")
-                # 最后的回退：返回空列表，避免系统崩溃
-                active_app_codes = []
-                logger.warning("⚠️ 无法发现任何应用，系统可能无法正常工作")
-
-        logger.info(f"📋 将处理的活跃应用代码: {active_app_codes}")
-
-        # 根据应用代码生成模型模块路径
-        active_app_models = []
-        for app_code in active_app_codes:
-            # 将连字符转换为下划线
-            module_code = app_code.replace('-', '_')
-            logger.info(f"📋 处理应用 {app_code} -> 模块代码 {module_code}")
-
-            # 常见的应用模型模块
-            potential_modules = [
-                f"apps.{module_code}.models",
-                f"apps.{module_code}.models.factory",
-                f"apps.{module_code}.models.warehouse",
-                f"apps.{module_code}.models.material",
-                f"apps.{module_code}.models.material_code_alias",
-                f"apps.{module_code}.models.material_code_mapping",
-                f"apps.{module_code}.models.material_batch",
-                f"apps.{module_code}.models.material_serial",
-                f"apps.{module_code}.models.unit",
-                f"apps.{module_code}.models.process",
-                f"apps.{module_code}.models.customer",
-                f"apps.{module_code}.models.supplier",
-                f"apps.{module_code}.models.partner_price_book",
-                f"apps.{module_code}.models.performance",
-                f"apps.{module_code}.models.employee_performance",
-                f"apps.{module_code}.models.product",
-                f"apps.{module_code}.models.work_order",
-                f"apps.{module_code}.models.work_order_operation",
-                f"apps.{module_code}.models.reporting_record",
-                f"apps.{module_code}.models.rework_order",  # 返工单模型
-                f"apps.{module_code}.models.rework_order_operation",  # 返工单关联工序
-                f"apps.{module_code}.models.outsource_order",  # 工序委外模型
-                f"apps.{module_code}.models.outsource_work_order",  # 工单委外模型
-                f"apps.{module_code}.models.scrap_record",  # 报废记录模型
-                f"apps.{module_code}.models.defect_record",  # 不良品记录模型
-                f"apps.{module_code}.models.material_binding",  # 物料绑定模型
-                f"apps.{module_code}.models.material_shortage_exception",  # 缺料异常模型
-                f"apps.{module_code}.models.delivery_delay_exception",  # 延期异常模型
-                f"apps.{module_code}.models.delivery_project",  # 交付项目（订单交机）
-                f"apps.{module_code}.models.quality_exception",  # 质量异常模型
-                f"apps.{module_code}.models.exception_process_record",  # 异常处理记录模型
-                # 仓储管理模块
-                f"apps.{module_code}.models.customer_material_registration",  # 客户来料登记模型（条码映射规则）
-                f"apps.{module_code}.models.production_picking",
-                f"apps.{module_code}.models.production_picking_item",
-                f"apps.{module_code}.models.finished_goods_receipt",
-                f"apps.{module_code}.models.finished_goods_receipt_item",
-                f"apps.{module_code}.models.sales_delivery",
-                f"apps.{module_code}.models.sales_delivery_item",
-                f"apps.{module_code}.models.sales_return",
-                f"apps.{module_code}.models.sales_return_item",
-                f"apps.{module_code}.models.purchase_receipt",
-                f"apps.{module_code}.models.purchase_receipt_item",
-                f"apps.{module_code}.models.purchase_return",
-                f"apps.{module_code}.models.purchase_return_item",
-                f"apps.{module_code}.models.purchase_order",
-                f"apps.{module_code}.models.purchase_order_item",
-                f"apps.{module_code}.models.purchase_arrival_delay_report",
-                f"apps.{module_code}.models.purchase_requisition",
-                f"apps.{module_code}.models.purchase_requisition_item",
-                # 质量管理模块
-                f"apps.{module_code}.models.incoming_inspection",
-                f"apps.{module_code}.models.process_inspection",
-                f"apps.{module_code}.models.finished_goods_inspection",
-                # 财务协同模块
-                f"apps.{module_code}.models.payable",
-                f"apps.{module_code}.models.purchase_invoice",
-                f"apps.{module_code}.models.receivable",
-                f"apps.{module_code}.models.invoice",  # 销项/进项发票（从快制造迁移至快财务）
-                f"apps.{module_code}.models.receipt",  # 收款单
-                f"apps.{module_code}.models.payment",  # 付款单
-                f"apps.{module_code}.models.settlement",  # 核销单
-                f"apps.{module_code}.models.partner_statement",  # 往来对账单
-                f"apps.{module_code}.models.standard_cost",  # 标准成本
-                # 销售管理模块
-                f"apps.{module_code}.models.sales_forecast",
-                f"apps.{module_code}.models.sales_forecast_item",
-                f"apps.{module_code}.models.sales_order",
-                f"apps.{module_code}.models.sales_order_item",
-                f"apps.{module_code}.models.sales_order_sync_binding",
-                f"apps.{module_code}.models.purchase_order_sync_binding",
-                f"apps.{module_code}.models.work_order_sync_binding",
-                f"apps.{module_code}.models.shipment_notice",
-                f"apps.{module_code}.models.shipment_notice_item",
-                f"apps.{module_code}.models.receipt_notice",
-                f"apps.{module_code}.models.receipt_notice_item",
-                # 统一需求管理模块（第一阶段重构）
-                f"apps.{module_code}.models.demand",
-                f"apps.{module_code}.models.demand_item",
-                f"apps.{module_code}.models.demand_computation",
-                f"apps.{module_code}.models.demand_computation_item",
-                f"apps.{module_code}.models.demand_snapshot",
-                f"apps.{module_code}.models.demand_recalc_history",
-                f"apps.{module_code}.models.demand_computation_snapshot",
-                f"apps.{module_code}.models.demand_computation_recalc_history",
-                f"apps.{module_code}.models.scheduling_config",  # 排程配置
-                f"apps.{module_code}.models.document_relation",  # 单据关联关系
-                f"apps.{module_code}.models.document_node_timing",  # 单据节点耗时记录
-                # BOM管理模块
-                # BOM管理已移至master_data APP，不再需要bill_of_materials模型
-                # f"apps.{module_code}.models.bill_of_materials",
-                # f"apps.{module_code}.models.bill_of_materials_item",
-                # 生产计划模块
-                f"apps.{module_code}.models.production_plan",
-                f"apps.{module_code}.models.production_plan_item",
-                f"apps.{module_code}.models.mrp_result",
-                f"apps.{module_code}.models.lrp_result",
-                # 状态流转模块（审核流程已统一至 core ApprovalInstance）
-                f"apps.{module_code}.models.state_transition",  # 状态流转
-                # 设备管理模块
-                f"apps.{module_code}.models.equipment",  # 设备模型
-                f"apps.{module_code}.models.equipment_fault",  # 设备故障
-                f"apps.{module_code}.models.equipment_point_inspection",  # 设备点检（旧）
-                f"apps.{module_code}.models.equipment_ops",  # 设备运营扩展（点检/巡检/保养）
-                f"apps.{module_code}.models.equipment_status_monitor",  # 设备状态监控
-                f"apps.{module_code}.models.maintenance_plan",  # 维护计划
-                f"apps.{module_code}.models.maintenance_reminder",  # 维护提醒
-                f"apps.{module_code}.models.mold",  # 模具模型
-                f"apps.{module_code}.models.mold_ops",  # 模具运营扩展
-                f"apps.{module_code}.models.spare_part",  # 备品备件
-                f"apps.{module_code}.models.tool",  # 工装台账
-                f"apps.{module_code}.models.tool_ops",  # 工装运营扩展
-                # 成本管理模块
-                f"apps.{module_code}.models.cost_calculation",  # 成本计算
-                f"apps.{module_code}.models.cost_rule",  # 成本规则
-                # 质量管理模块（补充）
-                f"apps.{module_code}.models.quality_standard",  # 质量标准
-                f"apps.{module_code}.models.inspection_plan",  # 质检方案
-                # 仓储管理模块（补充）
-                f"apps.{module_code}.models.inventory_transfer",  # 库存调拨
-                f"apps.{module_code}.models.inventory_alert",  # 库存预警
-                f"apps.{module_code}.models.stocktaking",  # 库存盘点
-                f"apps.{module_code}.models.packing_binding",  # 装箱绑定
-                f"apps.{module_code}.models.assembly_material_binding",  # 装配物料绑定
-                f"apps.{module_code}.models.replenishment_suggestion",  # 补货建议
-                # 线边仓与倒冲模块
-                f"apps.{module_code}.models.line_side_inventory",  # 线边仓库存
-                f"apps.{module_code}.models.backflush_record",  # 物料倒冲记录
-                # 上线倒计时模块
-                f"apps.{module_code}.models.launch_countdown",  # 上线倒计时
-                f"apps.{module_code}.models.report",  # 报表模型
-                f"apps.{module_code}.models.dashboard",  # 大屏模型
-            ]
-
-            # 只添加存在的模块
-            for module_path in potential_modules:
-                if DynamicDatabaseConfigService._module_exists(module_path):
-                    active_app_models.append(module_path)
-                    logger.debug(f"✅ 发现应用模型模块: {module_path}")
-
-        logger.info(f"📋 发现的总应用模型模块: {len(active_app_models)} 个")
-
-        # 可选应用（pro/custom）声明的 ORM 清单 — 补全 potential_modules 未枚举的模块
         from infra.infrastructure.database.plugin_orm import discover_plugin_orm_modules
 
-        plugin_orm = discover_plugin_orm_modules()
-        logger.info(f"📋 可选应用 ORM 声明: {len(plugin_orm)} 个模块")
+        plugin_orm = discover_plugin_orm_modules(enabled_codes)
+        logger.info(f"📋 启用应用（含依赖）: {sorted(enabled_codes)}")
+        logger.info(f"📋 启用应用 ORM 声明: {len(plugin_orm)} 个模块")
 
-        # 合并所有模型（去重保序）
         merged: List[str] = []
-        seen = set()
-        for path in validated_base_models + active_app_models + plugin_orm:
+        seen: set = set()
+        for path in validated_base_models + plugin_orm:
             if path in seen:
                 continue
             seen.add(path)
             merged.append(path)
         logger.info(
-            f"📋 合并后总共 {len(merged)} 个模型模块 "
-            f"(基础: {len(validated_base_models)}, 应用扫描: {len(active_app_models)}, "
-            f"插件声明: {len(plugin_orm)})"
+            f"📋 运行时 ORM 合并 {len(merged)} 个模块 "
+            f"(基线: {len(validated_base_models)}, 启用应用: {len(plugin_orm)})"
         )
-
-        final_models = merged
-        logger.info(f"📝 最终加载 {len(final_models)} 个验证通过的模型模块")
-        logger.info(f"📋 === 获取活跃应用模型列表结束，返回 {len(final_models)} 个模型 ===")
-        return final_models
-
-    @staticmethod
-    async def _get_active_app_models() -> List[str]:
-        """
-        获取活跃应用的模型模块列表
-
-        从数据库查询所有已安装且启用的应用，获取其模型模块路径。
-
-        Returns:
-            List[str]: 应用模型模块路径列表
-        """
-        logger.info("📋 === 开始获取活跃应用模型列表 ===")
-
-        try:
-            # 尝试从数据库查询活跃应用
-            from infra.infrastructure.database.database import get_db_connection
-            conn = await get_db_connection()
-
-            try:
-                rows = await conn.fetch("""
-                    SELECT DISTINCT code
-                    FROM core_applications
-                    WHERE is_installed = TRUE
-                      AND is_active = TRUE
-                      AND deleted_at IS NULL
-                """)
-
-                active_app_codes = [row['code'] for row in rows]
-                logger.info(f"📋 从数据库发现 {len(active_app_codes)} 个活跃应用: {active_app_codes}")
-
-            finally:
-                await conn.close()
-
-        except Exception as e:
-            logger.warning(f"从数据库查询活跃应用失败，尝试从文件系统扫描: {e}")
-            # 回退方案：从文件系统扫描应用目录，自动发现应用
-            active_app_codes = []
-            try:
-                from core.services.application.application_service import ApplicationService
-                discovered_plugins = ApplicationService._scan_plugin_manifests()
-                active_app_codes = [plugin.get('code') for plugin in discovered_plugins if plugin.get('code')]
-                logger.info(f"📋 从文件系统扫描到 {len(active_app_codes)} 个应用: {active_app_codes}")
-            except Exception as scan_error:
-                logger.error(f"❌ 从文件系统扫描应用失败: {scan_error}")
-                # 最后的回退：返回空列表，避免系统崩溃
-                active_app_codes = []
-                logger.warning("⚠️ 无法发现任何应用，系统可能无法正常工作")
-
-        logger.info(f"📋 将处理的活跃应用代码: {active_app_codes}")
-
-        # 根据应用代码生成模型模块路径
-        active_app_models = []
-        for app_code in active_app_codes:
-            # 将连字符转换为下划线
-            module_code = app_code.replace('-', '_')
-            logger.info(f"📋 处理应用 {app_code} -> 模块代码 {module_code}")
-
-            # 常见的应用模型模块
-            potential_modules = [
-                f"apps.{module_code}.models",
-                f"apps.{module_code}.models.factory",
-                f"apps.{module_code}.models.warehouse",
-                f"apps.{module_code}.models.material",
-                f"apps.{module_code}.models.material_code_alias",
-                f"apps.{module_code}.models.material_code_mapping",
-                f"apps.{module_code}.models.material_batch",
-                f"apps.{module_code}.models.material_serial",
-                f"apps.{module_code}.models.unit",
-                f"apps.{module_code}.models.process",
-                f"apps.{module_code}.models.customer",
-                f"apps.{module_code}.models.supplier",
-                f"apps.{module_code}.models.partner_price_book",
-                f"apps.{module_code}.models.performance",
-                f"apps.{module_code}.models.employee_performance",
-                f"apps.{module_code}.models.product",
-                f"apps.{module_code}.models.work_order",
-                f"apps.{module_code}.models.work_order_operation",
-                f"apps.{module_code}.models.reporting_record",
-                f"apps.{module_code}.models.rework_order",  # 返工单模型
-                f"apps.{module_code}.models.rework_order_operation",  # 返工单关联工序
-                f"apps.{module_code}.models.outsource_order",  # 工序委外模型
-                f"apps.{module_code}.models.outsource_work_order",  # 工单委外模型
-                f"apps.{module_code}.models.scrap_record",  # 报废记录模型
-                f"apps.{module_code}.models.defect_record",  # 不良品记录模型
-                f"apps.{module_code}.models.material_binding",  # 物料绑定模型
-                f"apps.{module_code}.models.material_shortage_exception",  # 缺料异常模型
-                f"apps.{module_code}.models.delivery_delay_exception",  # 延期异常模型
-                f"apps.{module_code}.models.delivery_project",  # 交付项目（订单交机）
-                f"apps.{module_code}.models.quality_exception",  # 质量异常模型
-                f"apps.{module_code}.models.exception_process_record",  # 异常处理记录模型
-                # 仓储管理模块
-                f"apps.{module_code}.models.customer_material_registration",  # 客户来料登记模型（条码映射规则）
-                f"apps.{module_code}.models.production_picking",
-                f"apps.{module_code}.models.production_picking_item",
-                f"apps.{module_code}.models.finished_goods_receipt",
-                f"apps.{module_code}.models.finished_goods_receipt_item",
-                f"apps.{module_code}.models.sales_delivery",
-                f"apps.{module_code}.models.sales_delivery_item",
-                f"apps.{module_code}.models.sales_return",
-                f"apps.{module_code}.models.sales_return_item",
-                f"apps.{module_code}.models.purchase_receipt",
-                f"apps.{module_code}.models.purchase_receipt_item",
-                f"apps.{module_code}.models.purchase_return",
-                f"apps.{module_code}.models.purchase_return_item",
-                f"apps.{module_code}.models.purchase_order",
-                f"apps.{module_code}.models.purchase_order_item",
-                f"apps.{module_code}.models.purchase_arrival_delay_report",
-                f"apps.{module_code}.models.purchase_requisition",
-                f"apps.{module_code}.models.purchase_requisition_item",
-                # 质量管理模块
-                f"apps.{module_code}.models.incoming_inspection",
-                f"apps.{module_code}.models.process_inspection",
-                f"apps.{module_code}.models.finished_goods_inspection",
-                # 财务协同模块
-                f"apps.{module_code}.models.payable",
-                f"apps.{module_code}.models.purchase_invoice",
-                f"apps.{module_code}.models.receivable",
-                f"apps.{module_code}.models.invoice",  # 销项/进项发票（从快制造迁移至快财务）
-                f"apps.{module_code}.models.receipt",  # 收款单
-                f"apps.{module_code}.models.payment",  # 付款单
-                f"apps.{module_code}.models.settlement",  # 核销单
-                f"apps.{module_code}.models.partner_statement",  # 往来对账单
-                f"apps.{module_code}.models.standard_cost",  # 标准成本
-                # 销售管理模块
-                f"apps.{module_code}.models.sales_forecast",
-                f"apps.{module_code}.models.sales_forecast_item",
-                f"apps.{module_code}.models.sales_order",
-                f"apps.{module_code}.models.sales_order_item",
-                f"apps.{module_code}.models.sales_order_sync_binding",
-                f"apps.{module_code}.models.purchase_order_sync_binding",
-                f"apps.{module_code}.models.work_order_sync_binding",
-                f"apps.{module_code}.models.shipment_notice",
-                f"apps.{module_code}.models.shipment_notice_item",
-                f"apps.{module_code}.models.receipt_notice",
-                f"apps.{module_code}.models.receipt_notice_item",
-                # 统一需求管理模块（第一阶段重构）
-                f"apps.{module_code}.models.demand",
-                f"apps.{module_code}.models.demand_item",
-                f"apps.{module_code}.models.demand_computation",
-                f"apps.{module_code}.models.demand_computation_item",
-                f"apps.{module_code}.models.demand_snapshot",
-                f"apps.{module_code}.models.demand_recalc_history",
-                f"apps.{module_code}.models.demand_computation_snapshot",
-                f"apps.{module_code}.models.demand_computation_recalc_history",
-                f"apps.{module_code}.models.scheduling_config",  # 排程配置
-                f"apps.{module_code}.models.document_relation",  # 单据关联关系
-                f"apps.{module_code}.models.document_node_timing",  # 单据节点耗时记录
-                # BOM管理模块
-                # BOM管理已移至master_data APP，不再需要bill_of_materials模型
-                # f"apps.{module_code}.models.bill_of_materials",
-                # f"apps.{module_code}.models.bill_of_materials_item",
-                # 生产计划模块
-                f"apps.{module_code}.models.production_plan",
-                f"apps.{module_code}.models.production_plan_item",
-                f"apps.{module_code}.models.mrp_result",
-                f"apps.{module_code}.models.lrp_result",
-                # 状态流转模块（审核流程已统一至 core ApprovalInstance）
-                f"apps.{module_code}.models.state_transition",  # 状态流转
-                # 设备管理模块
-                f"apps.{module_code}.models.equipment",  # 设备模型
-                f"apps.{module_code}.models.equipment_fault",  # 设备故障
-                f"apps.{module_code}.models.equipment_point_inspection",  # 设备点检（旧）
-                f"apps.{module_code}.models.equipment_ops",  # 设备运营扩展（点检/巡检/保养）
-                f"apps.{module_code}.models.equipment_status_monitor",  # 设备状态监控
-                f"apps.{module_code}.models.maintenance_plan",  # 维护计划
-                f"apps.{module_code}.models.maintenance_reminder",  # 维护提醒
-                f"apps.{module_code}.models.mold",  # 模具模型
-                f"apps.{module_code}.models.mold_ops",  # 模具运营扩展
-                f"apps.{module_code}.models.spare_part",  # 备品备件
-                f"apps.{module_code}.models.tool",  # 工装台账
-                f"apps.{module_code}.models.tool_ops",  # 工装运营扩展
-                # 成本管理模块
-                f"apps.{module_code}.models.cost_calculation",  # 成本计算
-                f"apps.{module_code}.models.cost_rule",  # 成本规则
-                # 质量管理模块（补充）
-                f"apps.{module_code}.models.quality_standard",  # 质量标准
-                f"apps.{module_code}.models.inspection_plan",  # 质检方案
-                # 仓储管理模块（补充）
-                f"apps.{module_code}.models.inventory_transfer",  # 库存调拨
-                f"apps.{module_code}.models.inventory_alert",  # 库存预警
-                f"apps.{module_code}.models.stocktaking",  # 库存盘点
-                f"apps.{module_code}.models.packing_binding",  # 装箱绑定
-                f"apps.{module_code}.models.assembly_material_binding",  # 装配物料绑定
-                f"apps.{module_code}.models.replenishment_suggestion",  # 补货建议
-                # 线边仓与倒冲模块
-                f"apps.{module_code}.models.line_side_inventory",  # 线边仓库存
-                f"apps.{module_code}.models.backflush_record",  # 物料倒冲记录
-                # 上线倒计时模块
-                f"apps.{module_code}.models.launch_countdown",  # 上线倒计时
-                f"apps.{module_code}.models.report",  # 报表模型
-                f"apps.{module_code}.models.dashboard",  # 大屏模型
-            ]
-
-            # 只添加存在的模块
-            for module_path in potential_modules:
-                if DynamicDatabaseConfigService._module_exists(module_path):
-                    active_app_models.append(module_path)
-                    logger.debug(f"✅ 发现应用模型模块: {module_path}")
-
-        logger.info(f"📋 发现的总应用模型模块: {len(active_app_models)} 个")
-
-        # 验证这些模块是否存在
-        validated_models = []
-        for module_path in active_app_models:
-            if DynamicDatabaseConfigService._module_exists(module_path):
-                validated_models.append(module_path)
-                logger.debug(f"✅ 验证应用模型存在: {module_path}")
-            else:
-                logger.warning(f"⚠️ 应用模型不存在: {module_path}")
-
-        logger.info(f"📦 验证通过的应用模型: {len(validated_models)} 个")
-        logger.info(f"📋 === 获取活跃应用模型列表结束，返回 {len(validated_models)} 个模型 ===")
-        return validated_models
+        return merged
 
     # 模块存在性缓存，避免重复 import 或 find_spec 调用
     _module_exists_cache: Dict[str, bool] = {}
