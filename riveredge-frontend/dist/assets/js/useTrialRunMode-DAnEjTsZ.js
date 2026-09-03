@@ -1,0 +1,1 @@
+import{d as r}from"./clientRelease-BUoa-ygO.js";import{m as s,n as u}from"./main-BYunu4b0.js";const i=["businessConfigTrialRunMode"];function o(){return r({queryKey:i,queryFn:u,staleTime:5*60*1e3})}function d(n=!1){const{data:e}=o();return e===void 0?n:s(e)}export{i as T,d as u};

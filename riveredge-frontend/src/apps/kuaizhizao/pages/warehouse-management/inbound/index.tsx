@@ -1772,6 +1772,11 @@ const InboundPage: React.FC = () => {
         // 确认入库与后端 /confirm → execute、出库确认一致；勿用 approve（审核）
         const hasConfirmPerm = inboundPerms.canAction?.('execute') ?? false;
         const canConfirm = confirmable && hasConfirmPerm;
+        const code = record.receipt_code || record.return_code || record.inbound_code || record.registration_code || '';
+        const isReturn = record.receipt_type === 'production_return';
+        const typeLabel = record.receipt_type
+          ? inboundReceiptTypeLabel(t, record.receipt_type)
+          : t('app.kuaizhizao.warehouseInbound.title');
         const nodes: React.ReactNode[] = [
           <Button {...rowActionKind('read')} key="detail" onClick={() => void handleDetail(record)} />,
         ];

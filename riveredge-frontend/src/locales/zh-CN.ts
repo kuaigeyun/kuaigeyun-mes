@@ -24817,6 +24817,10 @@ export default {
   'pages.dashboard.updateLogTypeSection.improvement': '优化',
   'pages.dashboard.updateLogTypeSection.fix': '修复',
   'pages.dashboard.updateLogTypeSection.security': '安全',
+  'pages.dashboard.updateLog.entries.inbound-hub-type-label-undefined.title':
+    '入库出库列表确认文案崩溃',
+  'pages.dashboard.updateLog.entries.inbound-hub-type-label-undefined.description':
+    '修复入库列表删除/撤回引用未定义的 typeLabel、code、isReturn，以及出库删除确认引用未定义 code 导致页面报错。',
   'pages.dashboard.updateLog.entries.sales-order-audit-permission-gate.title':
     '销售订单审核误报权限不足',
   'pages.dashboard.updateLog.entries.sales-order-audit-permission-gate.description':

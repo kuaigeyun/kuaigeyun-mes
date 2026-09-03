@@ -1,0 +1,1 @@
+import{j as p,$ as a}from"./vendor-DF57fAD-.js";function m({onConfirm:n,onCancel:r,children:i,...t}){return p.jsx(a,{...t,onConfirm:o=>{o?.stopPropagation(),n()},onCancel:o=>{o?.stopPropagation(),r?.(o)},children:i})}export{m as A};

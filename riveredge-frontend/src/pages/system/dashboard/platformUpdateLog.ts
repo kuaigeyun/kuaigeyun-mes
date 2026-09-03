@@ -36,6 +36,13 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
   {
+    id: 'inbound-hub-type-label-undefined',
+    date: '2026-09-03',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.inbound-hub-type-label-undefined.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.inbound-hub-type-label-undefined.description',
+  },
+  {
     id: 'sales-order-audit-permission-gate',
     date: '2026-09-03',
     type: 'fix',

@@ -1094,7 +1094,7 @@ const OutboundPage: React.FC = () => {
             </ActionConfirmPopconfirm>
           )}
           {isOutboundDeletable(record) && outboundPerms.canDelete && (
-            <ActionConfirmPopconfirm title={t('app.kuaizhizao.warehouseOutbound.msg.deleteConfirmOne')} description={t('app.kuaizhizao.warehouseOutbound.msg.withdrawConfirm', { code })} okType="danger" onConfirm={() => executeDelete(record)}>
+            <ActionConfirmPopconfirm title={t('app.kuaizhizao.warehouseOutbound.msg.deleteConfirmOne')} description={t('app.kuaizhizao.warehouseOutbound.msg.withdrawConfirm', { code: outboundDocumentCode(record) || '-' })} okType="danger" onConfirm={() => executeDelete(record)}>
               <Button {...rowActionKind('delete')} onClick={(e) => e.stopPropagation()} />
             </ActionConfirmPopconfirm>
           )}
