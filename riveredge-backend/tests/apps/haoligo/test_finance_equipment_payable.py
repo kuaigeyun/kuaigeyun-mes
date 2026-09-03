@@ -366,10 +366,32 @@ def test_equipment_payable_models_registered_in_orm_manifest():
 
 
 def test_norm_uuid_list_extracts_object_entries():
-    from apps.haoligo.services.finance_equipment_payable import _norm_uuid_list
+    from apps.haoligo.services.finance_equipment_payable import (
+        _norm_uuid_list,
+        contract_attachment_needs_reupload,
+    )
 
     assert _norm_uuid_list(["a1", "a1", ""]) == ["a1"]
     assert _norm_uuid_list([{"uid": "b2"}, {"uuid": "c3"}]) == ["b2", "c3"]
+    # Upload 落库对象：优先 response.uuid，忽略 rc-upload 临时号
+    assert _norm_uuid_list(
+        [
+            {
+                "uid": "rc-upload-1",
+                "name": "合同.pdf",
+                "response": {"uuid": "11111111-1111-1111-1111-111111111111"},
+            },
+            "rc-upload-orphan",
+            {"uid": "rc-upload-2", "response": [{"uuid": "22222222-2222-2222-2222-222222222222"}]},
+        ]
+    ) == [
+        "11111111-1111-1111-1111-111111111111",
+        "22222222-2222-2222-2222-222222222222",
+    ]
+    assert contract_attachment_needs_reupload(["rc-upload-only"]) is True
+    assert contract_attachment_needs_reupload([{"uid": "rc-upload-x"}]) is True
+    assert contract_attachment_needs_reupload([]) is False
+    assert contract_attachment_needs_reupload(["11111111-1111-1111-1111-111111111111"]) is False
 
 
 def test_route_access_maps_payments_to_execute():
