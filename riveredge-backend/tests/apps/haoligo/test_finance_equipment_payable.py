@@ -426,7 +426,6 @@ def test_apply_equipment_finance_contract_scope_external_requires_payable():
     scoped_qs = MagicMock()
     filtered_qs = MagicMock()
     scoped_qs.filter.return_value = filtered_qs
-    filtered_qs.distinct.return_value = filtered_qs
 
     async def run():
         with patch(
@@ -435,7 +434,10 @@ def test_apply_equipment_finance_contract_scope_external_requires_payable():
         ), patch(
             "apps.haoligo.api._data_scope.user_is_external_partner",
             new=AsyncMock(return_value=True),
-        ):
+        ), patch(
+            "apps.haoligo.models.finance_equipment_payable.HaoligoFinanceEquipmentPayable.filter",
+        ) as payable_filter:
+            payable_filter.return_value.values_list = AsyncMock(return_value=[3, 9])
             return await apply_equipment_finance_contract_scope(
                 base_qs,
                 tenant_id=1,
@@ -445,8 +447,9 @@ def test_apply_equipment_finance_contract_scope_external_requires_payable():
 
     result = asyncio.run(run())
     assert result is filtered_qs
-    scoped_qs.filter.assert_called_once_with(payables__deleted_at__isnull=True)
-    filtered_qs.distinct.assert_called_once_with()
+    scoped_qs.filter.assert_called_once_with(id__in=[3, 9])
+    payable_filter.assert_called_once()
+    payable_filter.return_value.values_list.assert_awaited_once_with("contract_id", flat=True)
 
 
 def test_assert_equipment_finance_contract_visible_external_requires_payable():
