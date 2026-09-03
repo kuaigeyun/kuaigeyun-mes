@@ -170,7 +170,7 @@ const InternalAuditsPage: React.FC = () => {
                   onClick={async () => {
                     await qualityQmsApi.internalAudits.delete(row.id);
                     messageApi.success(t('common.deleteSuccess'));
-                    actionRef.current?.reload();
+    actionRef.current?.reload();
                   }}
                 />
               ) : null,
@@ -251,7 +251,7 @@ const InternalAuditsPage: React.FC = () => {
               }
               messageApi.success(t('common.saveSuccess'));
               setOpen(false);
-              actionRef.current?.reload();
+    actionRef.current?.reload();
               return true;
             } catch (e: any) {
               messageApi.error(e?.message || t('common.saveFailed'));

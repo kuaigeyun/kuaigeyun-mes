@@ -12,9 +12,8 @@ import {
   useDetailDrawerDescriptionItems,
 } from '../../../../../components/layout-templates';
 import { rowActionKind } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { MarkerTag } from '../../../../../constants/statusBadges';
-import { getApiErrorMessage } from '../../../../../utils/errorHandler';
-import { getAntdModal } from '../../../../../utils/antdAppApis';
 export function renderIsActiveTag(t: TFunction, isActive?: boolean) {
   return (
     <MarkerTag color={isActive ? 'success' : 'default'}>
@@ -67,22 +66,17 @@ export function renderEquipmentMasterRowActions<T extends { id?: number }>({
       </Button>
     ) : null,
     canDelete ? (
-      <Button
+      <ActionConfirmPopconfirm
         key="delete"
-        {...rowActionKind('delete')}
-        onClick={() => {
-          getAntdModal().confirm({
-            title: t('common.deleteTitle'),
-            onOk: () => {
-              if (record.id != null) {
-                onDelete(record);
-              }
-            },
-          });
+        title={t('common.deleteTitle')}
+        onConfirm={() => {
+          if (record.id != null) onDelete(record);
         }}
       >
-        {t('common.delete')}
-      </Button>
+        <Button key="delete-btn" {...rowActionKind('delete')}>
+          {t('common.delete')}
+        </Button>
+      </ActionConfirmPopconfirm>
     ) : null,
   ];
 }

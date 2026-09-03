@@ -63,7 +63,7 @@ import {
 } from '../../../utils/equipmentListCore';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
-import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 const P = 'app.kuaizhizao.maintenancePlan';
 
@@ -265,7 +265,7 @@ const MaintenancePlansPage: React.FC = () => {
     }
     if (uuidFromUrl) {
       if (deepLinkOpenedRef.current) {
-        actionRef.current?.reload();
+    actionRef.current?.reload();
         return;
       }
       deepLinkOpenedRef.current = true;
@@ -279,7 +279,7 @@ const MaintenancePlansPage: React.FC = () => {
         } catch {
           messageApi.error(t(`${P}.listFailed`));
         }
-        actionRef.current?.reload();
+    actionRef.current?.reload();
       })();
       return;
     }
@@ -291,25 +291,19 @@ const MaintenancePlansPage: React.FC = () => {
    * 处理批量删除维护计划（keys 为 uuid 数组）
    */
   const handleDelete = async (keys: React.Key[]) => {
-    getAntdModal().confirm({
-      title: t(`${P}.batchDeleteTitle`),
-      content: t(`${P}.batchDeleteContent`, { count: keys.length }),
-      onOk: async () => {
-        try {
+    try {
           for (const uuid of keys) {
             await maintenancePlanApi.delete(String(uuid));
           }
-          messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
+    messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
           setSelectedRowKeys([]);
           if (planDetail?.uuid && keys.map(String).includes(String(planDetail.uuid))) {
             closeDetail();
           }
-          actionRef.current?.reload();
+    actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || t('common.deleteFailed'));
         }
-      },
-    });
   };
 
   /**
@@ -569,23 +563,23 @@ const MaintenancePlansPage: React.FC = () => {
       >
         {t('common.edit')}
       </Button>,
-      <Button {...rowActionKind('delete')}
+      <ActionConfirmPopconfirm
         key="del"
-        type="link"
-        size="small"
-        danger
-        icon={<DeleteOutlined />}
-        onClick={(e) => {
-          e.stopPropagation();
-          getAntdModal().confirm({
-            title: t(`${P}.deleteTitle`),
-            content: t(`${P}.deleteContent`, { name: record.plan_name }),
-            onOk: () => record.uuid && handleDelete([record.uuid]),
-          });
-        }}
+        title={t(`${P}.deleteTitle`)}
+        description={t(`${P}.deleteContent`, { name: record.plan_name })}
+        onConfirm={() => record.uuid && void handleDelete([record.uuid])}
       >
-        {t('common.delete')}
-      </Button>,
+        <Button
+          {...rowActionKind('delete')}
+          type="link"
+          size="small"
+          danger
+          icon={<DeleteOutlined />}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {t('common.delete')}
+        </Button>
+      </ActionConfirmPopconfirm>,
     ];
     if (record.status && EXECUTABLE_PLAN_STATUSES.has(record.status)) {
       nodes.push(
@@ -808,6 +802,9 @@ const MaintenancePlansPage: React.FC = () => {
             style: { cursor: 'pointer' },
           })}
           showDeleteButton={true}
+          deleteConfirmTitle={t(`${P}.batchDeleteTitle`)}
+          deleteConfirmDescription={(count) => t(`${P}.batchDeleteContent`, { count: count })}
+          
           onDelete={handleDelete}
           showCreateButton={true}
           createButtonText={createButtonLabel}

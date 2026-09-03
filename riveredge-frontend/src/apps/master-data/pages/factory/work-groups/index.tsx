@@ -365,7 +365,7 @@ const WorkGroupsPage: React.FC = () => {
       }
 
       if (result.successCount > 0) {
-        actionRef.current?.reload();
+    actionRef.current?.reload();
       }
     } catch (error: any) {
       messageApi.error(error.message || t('app.master-data.importFailed'));

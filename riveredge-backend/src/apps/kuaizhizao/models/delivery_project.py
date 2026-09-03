@@ -309,3 +309,47 @@ class DeliveryIssue(BaseModel):
 
     class PydanticMeta:
         exclude = ["deleted_at"]
+
+
+class DeliveryProjectNodeDocument(BaseModel):
+    """交付项目节点关联单据"""
+
+    id = fields.IntField(pk=True, description="主键ID")
+    tenant_id = fields.IntField(description="租户ID")
+    project_id = fields.IntField(description="项目ID")
+    node_id = fields.IntField(description="节点ID")
+    doc_type = fields.CharField(max_length=50, description="单据类型")
+    doc_id = fields.IntField(description="单据ID")
+    doc_code = fields.CharField(max_length=100, description="单据编码")
+    title = fields.CharField(max_length=200, null=True, description="展示标题")
+    linked_at = fields.DatetimeField(description="关联时间")
+    linked_by = fields.IntField(null=True, description="关联人ID")
+    linked_by_name = fields.CharField(max_length=100, null=True, description="关联人姓名")
+    deleted_at = fields.DatetimeField(null=True, description="删除时间")
+
+    class Meta:
+        table = "apps_kuaizhizao_delivery_project_node_documents"
+        table_description = "快制造 - 交付项目节点关联单据"
+        indexes = [
+            ("tenant_id", "project_id"),
+            ("tenant_id", "node_id"),
+            ("tenant_id", "doc_type", "doc_id"),
+        ]
+
+    class PydanticMeta:
+        exclude = ["deleted_at"]
+
+
+class DeliveryProjectNodeAlertSent(BaseModel):
+    """交付节点预警发送去重（同键不重复刷屏）"""
+
+    id = fields.IntField(pk=True, description="主键ID")
+    tenant_id = fields.IntField(description="租户ID")
+    dedup_key = fields.CharField(max_length=200, description="去重键")
+    sent_at = fields.DatetimeField(description="发送时间")
+
+    class Meta:
+        table = "apps_kuaizhizao_delivery_project_node_alert_sent"
+        table_description = "快制造 - 交付节点预警发送记录"
+        unique_together = (("tenant_id", "dedup_key"),)
+        indexes = [("tenant_id", "sent_at")]

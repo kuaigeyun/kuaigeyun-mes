@@ -50,7 +50,6 @@ import {
   IntegrationConfig,
 } from '../../../../services/integrationConfig';
 import { rowActionKind, rowActionLabelKeep, rowActionCopyCreate } from '../../../../components/uni-action';
-import { getAntdModal } from '../../../../utils/antdAppApis';
 import { todaySiteDateString } from '../../../../utils/format';
 import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
 import { useResourceCategoryPanel } from '../../shared/useResourceCategoryPanel';
@@ -364,21 +363,15 @@ const DatasetListPage: React.FC = () => {
   /**
    * 批量删除数据集
    */
-  const handleBatchDelete = () => {
-    if (selectedRowKeys.length === 0) {
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    if (keys.length === 0) {
       messageApi.warning(t('pages.system.datasets.selectToDelete'));
       return;
     }
-    getAntdModal().confirm({
-      title: t('pages.system.datasets.confirmBatchDelete', { count: selectedRowKeys.length }),
-      okText: t('common.confirm'),
-      cancelText: t('common.cancel'),
-      okType: 'danger',
-      onOk: async () => {
-        try {
+    try {
           let done = 0;
           let fail = 0;
-          for (const uuid of selectedRowKeys) {
+          for (const uuid of keys) {
             try {
               await deleteDataset(String(uuid));
               done++;
@@ -392,14 +385,12 @@ const DatasetListPage: React.FC = () => {
             messageApi.success(t('pages.system.datasets.batchDeleteSuccess', { count: done }));
           }
           setSelectedRowKeys([]);
-          actionRef.current?.reload();
+    actionRef.current?.reload();
           void reloadCategories();
         } catch (error: any) {
           messageApi.error(error?.message || t('pages.system.datasets.batchDeleteFailed'));
         }
-      },
-    });
-  };
+  };;
 
   /**
    * 处理复制数据集（创建副本后跳转设计器）
@@ -490,7 +481,7 @@ const DatasetListPage: React.FC = () => {
         messageApi.success(t('common.updateSuccess'));
         setModalVisible(false);
         setFormInitialValues(undefined);
-        actionRef.current?.reload();
+    actionRef.current?.reload();
         void reloadCategories();
       } else {
         const createData: CreateDatasetData = {
@@ -515,7 +506,7 @@ const DatasetListPage: React.FC = () => {
         messageApi.success(t('pages.system.datasets.createSuccess'));
         setModalVisible(false);
         setFormInitialValues(undefined);
-        actionRef.current?.reload();
+    actionRef.current?.reload();
         void reloadCategories();
         navigate(`/system/datasets/designer?uuid=${created.uuid}`);
       }
@@ -768,7 +759,8 @@ const DatasetListPage: React.FC = () => {
             selectedRowKeys,
             onChange: setSelectedRowKeys,
           }}
-          showDeleteButton
+          showDeleteButtondeleteConfirmTitle={t('pages.system.datasets.confirmBatchDelete', { count: selectedRowKeys.length })}
+          
           onDelete={handleBatchDelete}
           deleteButtonText={t('common.batchDelete')}
           toolBarRender={() =>
@@ -831,7 +823,7 @@ const DatasetListPage: React.FC = () => {
               }
             }
             messageApi.success(t('pages.system.datasets.importSuccess', { count: done }));
-            actionRef.current?.reload();
+    actionRef.current?.reload();
           }}
           importHeaders={datasetImportTemplate.importHeaders}
           importExampleRow={datasetImportTemplate.importExampleRow}

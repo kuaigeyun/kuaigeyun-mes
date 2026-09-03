@@ -131,8 +131,7 @@ const BarcodeMappingRulesPage: React.FC = () => {
         await warehouseApi.barcodeMappingRule.delete(record.id.toString());
         messageApi.success(t('app.kuaizhizao.warehouseCommon.deleteSuccess', { count: 1 }));
         invalidateMenuBadgeCounts();
-
-        actionRef.current?.reload();
+    actionRef.current?.reload();
       } catch (error) {
         messageApi.error(t('common.deleteFailed'));
       }
@@ -382,7 +381,7 @@ const BarcodeMappingRulesPage: React.FC = () => {
             }
             messageApi.success(t('app.kuaizhizao.warehouseCommon.deleteSuccess', { count: keys.length }));
             invalidateMenuBadgeCounts();
-            actionRef.current?.reload();
+    actionRef.current?.reload();
           } catch (error: any) {
             messageApi.error(error.message || t('common.deleteFailed'));
           }

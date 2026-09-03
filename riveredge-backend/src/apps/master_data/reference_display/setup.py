@@ -31,6 +31,42 @@ def _row(*, id: int, uuid: str | None, code: str | None, name: str | None, **ext
     return {"id": id, "uuid": uuid, "code": code, "name": name, "label": label, **extra}
 
 
+def _partner_uuid(entity: Any) -> str | None:
+    raw = getattr(entity, "uuid", None)
+    return str(raw) if raw is not None else None
+
+
+def _customer_display_row(entity: Any) -> dict[str, Any]:
+    """客户下拉回填：首条联系人快照 + 业务员/地址（供销售订单等表单自动带出）。"""
+    return _row(
+        id=int(entity.id),
+        uuid=_partner_uuid(entity),
+        code=getattr(entity, "code", None),
+        name=getattr(entity, "name", None),
+        contact_person=getattr(entity, "contact_person", None),
+        phone=getattr(entity, "phone", None),
+        address=getattr(entity, "address", None),
+        delivery_address=getattr(entity, "delivery_address", None),
+        salesman_id=getattr(entity, "salesman_id", None),
+        salesman_name=getattr(entity, "salesman_name", None),
+        payment_terms_days=getattr(entity, "payment_terms_days", None),
+    )
+
+
+def _supplier_display_row(entity: Any) -> dict[str, Any]:
+    """供应商下拉回填：首条联系人快照 + 采购员（供采购订单等表单自动带出）。"""
+    return _row(
+        id=int(entity.id),
+        uuid=_partner_uuid(entity),
+        code=getattr(entity, "code", None),
+        name=getattr(entity, "name", None),
+        contact_person=getattr(entity, "contact_person", None),
+        phone=getattr(entity, "phone", None),
+        buyer_id=getattr(entity, "buyer_id", None),
+        buyer_name=getattr(entity, "buyer_name", None),
+    )
+
+
 def _flatten_material_source_config(raw: Any) -> dict[str, Any]:
     """展平 material.source_config 中多余的嵌套 source_config 键（与业务页读取一致）。"""
     if not raw or not isinstance(raw, dict):
@@ -78,10 +114,7 @@ class _CustomerDisplayProvider:
             current_user=user,
         )
         return {
-            "items": [
-                _row(id=c.id, uuid=c.uuid, code=c.code, name=c.name)
-                for c in items
-            ],
+            "items": [_customer_display_row(c) for c in items],
             "total": total,
             "page": page,
             "page_size": page_size,
@@ -113,7 +146,7 @@ class _CustomerDisplayProvider:
             resource=RESOURCE_CUSTOMER,
         )
         rows = await query.all()
-        return [_row(id=r.id, uuid=r.uuid, code=r.code, name=r.name) for r in rows]
+        return [_customer_display_row(r) for r in rows]
 
 
 class _SupplierDisplayProvider:
@@ -140,10 +173,7 @@ class _SupplierDisplayProvider:
             current_user=user,
         )
         return {
-            "items": [
-                _row(id=s.id, uuid=s.uuid, code=s.code, name=s.name)
-                for s in items
-            ],
+            "items": [_supplier_display_row(s) for s in items],
             "total": total,
             "page": page,
             "page_size": page_size,
@@ -175,7 +205,7 @@ class _SupplierDisplayProvider:
             resource=RESOURCE_SUPPLIER,
         )
         rows = await query.all()
-        return [_row(id=r.id, uuid=r.uuid, code=r.code, name=r.name) for r in rows]
+        return [_supplier_display_row(r) for r in rows]
 
 
 class _MaterialDisplayProvider:

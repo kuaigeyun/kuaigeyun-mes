@@ -45,6 +45,7 @@ import { useWarehouseLocationOptions } from '../../../hooks/useWarehouseLocation
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { renderWarehouseReasonTypeMarkerTag } from '../shared/warehouseMarkerTags';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
@@ -65,7 +66,6 @@ import {
   normalizeWarehouseListResponse,
   resolveWarehouseDocListParams,
 } from '../../../utils/warehouseListCore';
-import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import { loadAvailableQtyByMaterialId } from '../outbound/outboundConfirmInventoryOptions';
 
@@ -453,24 +453,30 @@ const OtherOutboundPage: React.FC = () => {
         ];
         if (record.status === '待出库') {
           actions.push(
-            <Button
+            <ActionConfirmPopconfirm title={t('app.kuaizhizao.otherOutbound.msg.confirmTitle')} description={t('app.kuaizhizao.otherOutbound.msg.confirmContent', { code: record.outbound_code })} onConfirm={() => executeConfirm(record)}>
+              <Button
               key="confirm"
               {...rowActionKind('execute')}
               {...rowActionLabelKeep()}
-              onClick={() => handleConfirm(record)}
+              onClick={(e) => e.stopPropagation()}
             >
               {t('app.kuaizhizao.warehouseOutbound.action.confirmOutbound')}
-            </Button>,
+            </Button>
+            </ActionConfirmPopconfirm>,
           );
           actions.push(
-            <Button key="delete" {...rowActionKind('delete')} onClick={() => handleDelete(record)} />,
+            <ActionConfirmPopconfirm title={t('app.kuaizhizao.otherOutbound.msg.deleteTitle')} description={t('app.kuaizhizao.otherOutbound.msg.deleteContent', { code: record.outbound_code })} onConfirm={() => executeDelete(record)}>
+              <Button key="delete" {...rowActionKind('delete')} onClick={(e) => e.stopPropagation()} />
+            </ActionConfirmPopconfirm>,
           );
         }
         if (record.status === '已出库') {
           actions.push(
-            <Button key="withdraw" {...rowActionKind('revoke')} {...rowActionLabelKeep()} onClick={() => handleWithdraw(record)}>
+            <ActionConfirmPopconfirm title={t('app.kuaizhizao.otherOutbound.msg.withdrawTitle')} description={t('app.kuaizhizao.otherOutbound.msg.withdrawContent', { code: record.outbound_code })} onConfirm={() => executeWithdraw(record)}>
+              <Button key="withdraw" {...rowActionKind('revoke')} {...rowActionLabelKeep()} onClick={(e) => e.stopPropagation()}>
               {t('app.kuaizhizao.warehouseOutbound.action.withdraw')}
-            </Button>,
+            </Button>
+            </ActionConfirmPopconfirm>,
           );
         }
         return <Space>{actions}</Space>;
@@ -497,39 +503,26 @@ const OtherOutboundPage: React.FC = () => {
     }
   };
 
-  const handleConfirm = async (record: OtherOutbound) => {
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.otherOutbound.msg.confirmTitle'),
-      content: t('app.kuaizhizao.otherOutbound.msg.confirmContent', { code: record.outbound_code }),
-      onOk: async () => {
-        try {
-          await warehouseApi.otherOutbound.confirm(record.id!.toString());
-          messageApi.success(t('app.kuaizhizao.otherOutbound.msg.confirmSuccess'));
-          invalidateMenuBadgeCounts();
-
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error.message || t('app.kuaizhizao.otherOutbound.msg.confirmFailed'));
-        }
-      },
-    });
+  const executeConfirm = async (record: OtherOutbound) => {
+    try {
+      await warehouseApi.otherOutbound.confirm(record.id!.toString());
+      messageApi.success(t('app.kuaizhizao.otherOutbound.msg.confirmSuccess'));
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || t('app.kuaizhizao.otherOutbound.msg.confirmFailed'));
+    }
   };
 
-  const handleWithdraw = async (record: OtherOutbound) => {
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.otherOutbound.msg.withdrawTitle'),
-      content: t('app.kuaizhizao.otherOutbound.msg.withdrawContent', { code: record.outbound_code }),
-      onOk: async () => {
-        try {
-          await warehouseApi.otherOutbound.withdraw(record.id!.toString());
-          messageApi.success(t('app.kuaizhizao.otherOutbound.msg.withdrawSuccess'));
-          invalidateMenuBadgeCounts();
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error.message || t('app.kuaizhizao.otherOutbound.msg.withdrawFailed'));
-        }
-      },
-    });
+  const executeWithdraw = async (record: OtherOutbound) => {
+    try {
+      await warehouseApi.otherOutbound.withdraw(record.id!.toString());
+      messageApi.success(t('app.kuaizhizao.otherOutbound.msg.withdrawSuccess'));
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || t('app.kuaizhizao.otherOutbound.msg.withdrawFailed'));
+    }
   };
 
   const handlePrint = (record: OtherOutbound) => {
@@ -537,22 +530,15 @@ const OtherOutboundPage: React.FC = () => {
     openPrint({ documentType: 'other_outbound', documentId: record.id });
   };
 
-  const handleDelete = async (record: OtherOutbound) => {
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.otherOutbound.msg.deleteTitle'),
-      content: t('app.kuaizhizao.otherOutbound.msg.deleteContent', { code: record.outbound_code }),
-      onOk: async () => {
-        try {
-          await warehouseApi.otherOutbound.delete(record.id!.toString());
-          messageApi.success(t('common.deleteSuccess'));
-          invalidateMenuBadgeCounts();
-
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error.message || t('common.deleteFailed'));
-        }
-      },
-    });
+  const executeDelete = async (record: OtherOutbound) => {
+    try {
+      await warehouseApi.otherOutbound.delete(record.id!.toString());
+      messageApi.success(t('common.deleteSuccess'));
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || t('common.deleteFailed'));
+    }
   };
 
   const listRowsRef = useRef<Map<string, OtherOutbound>>(new Map());

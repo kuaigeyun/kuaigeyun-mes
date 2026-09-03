@@ -5,6 +5,7 @@
  */
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { rowActionKind, rowActionSettleVoucher, rowActionCreateRefund } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Modal, Typography, Spin, Alert, Table, Empty, Form } from 'antd';
 import { ModalForm, ProForm, ProFormDatePicker, ProFormDigit, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
@@ -78,7 +79,6 @@ import { MarkerTag } from '../../../../../constants/statusBadges';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { renderRefundExecutionMarker } from '../../../utils/financeUiLabels';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
-import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import {
   buildFinanceVoucherLinkHandlers,
@@ -404,44 +404,32 @@ const PaymentsPage: React.FC = () => {
     }
   };
 
-  const handleConfirm = async (record: PaymentVoucher) => {
-    getAntdModal().confirm({
-      title: t(`${P}.confirmTitle`),
-      content: t(`${P}.confirmContent`, { code: record.payment_code }),
-      onOk: async () => {
-        try {
+  const executeConfirm = async (record: PaymentVoucher) => {
+    try {
           await paymentService.confirmPayment(record.id);
           messageApi.success(t(`${P}.confirmSuccess`));
-          actionRef.current?.reload();
+    actionRef.current?.reload();
           refreshOpenDetail();
         } catch (e: any) {
           messageApi.error(e?.message || t('common.operationFailed'));
         }
-      },
-    });
   };
 
-  const handleCancelVoucher = async (record: PaymentVoucher) => {
-    getAntdModal().confirm({
-      title: t(`${P}.voidTitle`),
-      content: t(`${P}.voidContent`, { code: record.payment_code }),
-      onOk: async () => {
-        try {
+  const executeCancelVoucher = async (record: PaymentVoucher) => {
+    try {
           await paymentService.cancelPayment(record.id);
           messageApi.success(t(`${P}.voidSuccess`));
-          actionRef.current?.reload();
+    actionRef.current?.reload();
           refreshOpenDetail();
         } catch (e: any) {
           messageApi.error(e?.message || t('common.operationFailed'));
         }
-      },
-    });
   };
 
   const handleBatchConfirm = async (keys: React.Key[]) => {
     try {
       for (const key of keys) {
-        await paymentService.confirmPayment(Number(key));
+      await paymentService.confirmPayment(Number(key));
       }
       messageApi.success(t(`${P}.batchConfirmed`, { count: keys.length }));
       setSelectedRowKeys([]);
@@ -454,7 +442,7 @@ const PaymentsPage: React.FC = () => {
   const handleBatchCancel = async (keys: React.Key[]) => {
     try {
       for (const key of keys) {
-        await paymentService.cancelPayment(Number(key));
+      await paymentService.cancelPayment(Number(key));
       }
       messageApi.success(t(`${P}.batchVoided`, { count: keys.length }));
       setSelectedRowKeys([]);
@@ -754,7 +742,9 @@ const PaymentsPage: React.FC = () => {
         ];
         if (record.status === 'Draft' && paymentPerms.canAction?.('audit')) {
           acts.push(
-            <Button key="cf" {...rowActionKind('audit')} onClick={() => handleConfirm(record)} />,
+            <ActionConfirmPopconfirm title={t(`${P}.confirmTitle`)} description={t(`${P}.confirmContent`, { code: record.payment_code })} onConfirm={() => executeConfirm(record)}>
+              <Button key="cf" {...rowActionKind('audit')} onClick={(e) => e.stopPropagation()} />
+            </ActionConfirmPopconfirm>,
           );
         }
         if (record.status === 'Confirmed' && Number(record.unsettled_amount ?? 0) > 0) {
@@ -790,7 +780,9 @@ const PaymentsPage: React.FC = () => {
         }
         if (record.status !== 'Cancelled' && record.settled_amount === 0 && paymentPerms.canAction?.('revoke')) {
           acts.push(
-            <Button key="ca" {...rowActionKind('revoke')} onClick={() => handleCancelVoucher(record)} />,
+            <ActionConfirmPopconfirm title={t(`${P}.voidTitle`)} description={t(`${P}.voidContent`, { code: record.payment_code })} onConfirm={() => executeCancelVoucher(record)}>
+              <Button key="ca" {...rowActionKind('revoke')} onClick={(e) => e.stopPropagation()} />
+            </ActionConfirmPopconfirm>,
           );
         }
         return acts;

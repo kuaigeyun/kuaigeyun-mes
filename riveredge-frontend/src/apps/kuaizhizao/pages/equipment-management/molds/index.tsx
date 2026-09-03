@@ -65,7 +65,6 @@ import {
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { buildMoldDetailPath } from './moldPaths';
-import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { todaySiteDateString } from '../../../../../utils/format';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 const MOLD_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_molds';
@@ -291,21 +290,15 @@ const MoldsPage: React.FC = () => {
    * 处理批量删除模具（keys 为 uuid 数组）
    */
   const handleDelete = async (keys: React.Key[]) => {
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.mold.confirmBatchDeleteTitle'),
-      content: t('app.kuaizhizao.mold.confirmBatchDeleteContent', { count: keys.length }),
-      onOk: async () => {
-        try {
+    try {
           for (const uuid of keys) {
             await moldApi.delete(String(uuid));
           }
-          messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
-          actionRef.current?.reload();
+    messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
+    actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || t('common.deleteFailed'));
         }
-      },
-    });
   };
 
   /**
@@ -605,6 +598,9 @@ const MoldsPage: React.FC = () => {
           enableRowSelection={true}
           onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton={true}
+          deleteConfirmTitle={t('app.kuaizhizao.mold.confirmBatchDeleteTitle')}
+          deleteConfirmDescription={(count) => t('app.kuaizhizao.mold.confirmBatchDeleteContent', { count: count })}
+          
           onDelete={handleDelete}
           showCreateButton={true}
           createButtonText={createButtonLabel}
@@ -684,7 +680,7 @@ const MoldsPage: React.FC = () => {
             });
             if (result.successCount > 0) {
               messageApi.success(t('app.kuaizhizao.mold.importSuccess', { count: result.successCount }));
-              actionRef.current?.reload();
+    actionRef.current?.reload();
             }
             if (result.failureCount > 0) {
               messageApi.warning(t('app.kuaizhizao.mold.importPartialFail', { count: result.failureCount }));

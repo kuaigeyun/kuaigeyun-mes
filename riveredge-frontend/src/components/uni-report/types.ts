@@ -146,6 +146,8 @@ export type UniReportProps<T = Record<string, unknown>> = {
   skipFuzzyPinyinClientFilter?: boolean;
   /** 工具栏期间筛选（默认开启 page 模式） */
   periodFilter?: boolean;
+  /** 期间筛选左侧文案（如「按入库日」） */
+  periodFilterLabel?: ReactNode;
   /** 列头排序/筛选（默认开启 page 模式） */
   enableColumnQuery?: boolean;
 };

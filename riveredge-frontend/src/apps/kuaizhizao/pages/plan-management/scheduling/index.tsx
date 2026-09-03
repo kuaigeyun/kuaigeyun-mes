@@ -287,7 +287,7 @@ const SchedulingPage: React.FC = () => {
     new Map<number, { operation_id: number; assigned_station_id: number }>()
   );
   const undoStackRef = useRef<WorkOrderForGantt[][]>([]);
-  const schedulingPerms = useResourcePermissions('plan-management-scheduling');
+  const schedulingPerms = useResourcePermissions('kuaizhizao:plan-management-scheduling');
   const canScheduleUpdate = schedulingPerms.canUpdate;
 
   const syncDraftPendingCount = useCallback(() => {
@@ -759,7 +759,7 @@ const SchedulingPage: React.FC = () => {
             });
           }
         }
-        actionRef.current?.reload();
+    actionRef.current?.reload();
         refreshBoardScan();
         refreshPlanReliability();
       };
@@ -1082,31 +1082,12 @@ const SchedulingPage: React.FC = () => {
   const handleSchedulingQuickAction = useCallback(
     async (
       action: 'confirm_delay' | 'to_exception' | 'apply_unfreeze',
-      title: string,
+      _title: string,
       reason: string,
       successPrefix: string,
     ) => {
       if (!canScheduleUpdate || selectedWorkOrderIds.length === 0) return;
       const ids = selectedWorkOrderIds.slice(0, 50);
-      const overdueCount = selectedWorkOrders.filter(
-        (wo) => wo.planned_end_date && dayjs(wo.planned_end_date).isBefore(dayjs())
-      ).length;
-      await new Promise<void>((resolve, reject) => {
-        modal.confirm({
-          title,
-          content:
-            overdueCount > 0
-              ? t('app.kuaizhizao.scheduling.msg.quickActionConfirmOverdue', {
-                  count: ids.length,
-                  overdue: overdueCount,
-                })
-              : t('app.kuaizhizao.scheduling.msg.quickActionConfirm', { count: ids.length }),
-          okText: t('app.kuaizhizao.scheduling.common.confirm'),
-          cancelText: t('common.cancel'),
-          onOk: () => resolve(),
-          onCancel: () => reject(new Error('cancelled')),
-        });
-      });
       setQuickActionLoading(true);
       try {
         const result = await workOrderApi.schedulingQuickAction({
@@ -1135,16 +1116,14 @@ const SchedulingPage: React.FC = () => {
         );
         refreshGantt();
         refreshBoardScan();
-        actionRef.current?.reload();
+    actionRef.current?.reload();
       } catch (e: any) {
-        if (e?.message !== 'cancelled') {
-          messageApi.error(e?.message || t('app.kuaizhizao.scheduling.msg.quickActionFailed'));
-        }
+        messageApi.error(e?.message || t('app.kuaizhizao.scheduling.msg.quickActionFailed'));
       } finally {
         setQuickActionLoading(false);
       }
     },
-    [canScheduleUpdate, messageApi, modal, refreshBoardScan, refreshGantt, selectedWorkOrderIds, selectedWorkOrders, t]
+    [canScheduleUpdate, messageApi, refreshBoardScan, refreshGantt, selectedWorkOrderIds, t]
   );
 
   const handleConfirmDelay = useCallback(async () => {
@@ -1234,18 +1213,8 @@ const SchedulingPage: React.FC = () => {
       openMissingSettingsModal(relatedGaps, ids);
       return;
     }
-    await new Promise<void>((resolve, reject) => {
-      modal.confirm({
-        title: t('app.kuaizhizao.scheduling.msg.autoRescheduleTitle'),
-        content: t('app.kuaizhizao.scheduling.msg.autoRescheduleConfirm', { count: ids.length }),
-        okText: t('app.kuaizhizao.scheduling.common.confirm'),
-        cancelText: t('common.cancel'),
-        onOk: () => resolve(),
-        onCancel: () => reject(new Error('cancelled')),
-      });
-    });
     await applyEngineProposalToDraft('selected', ids);
-  }, [applyEngineProposalToDraft, boardScan?.missing_settings, modal, openMissingSettingsModal, selectedWorkOrderIds, t]);
+  }, [applyEngineProposalToDraft, boardScan?.missing_settings, openMissingSettingsModal, selectedWorkOrderIds]);
 
   const handleMissingSettingsBackfill = useCallback(async () => {
     if (!canScheduleUpdate) return;
@@ -1320,18 +1289,8 @@ const SchedulingPage: React.FC = () => {
   const handleRescheduleForward = useCallback(async () => {
     const ids = selectedWorkOrderIds.slice(0, 50);
     if (ids.length === 0) return;
-    await new Promise<void>((resolve, reject) => {
-      modal.confirm({
-        title: t('app.kuaizhizao.scheduling.msg.rescheduleForwardTitle'),
-        content: t('app.kuaizhizao.scheduling.msg.rescheduleForwardConfirm', { count: ids.length }),
-        okText: t('app.kuaizhizao.scheduling.common.confirm'),
-        cancelText: t('common.cancel'),
-        onOk: () => resolve(),
-        onCancel: () => reject(new Error('cancelled')),
-      });
-    });
     await applyEngineProposalToDraft('overdue', ids);
-  }, [applyEngineProposalToDraft, modal, selectedWorkOrderIds, t]);
+  }, [applyEngineProposalToDraft, selectedWorkOrderIds]);
 
   const handleGanttOperationSelect = useCallback(
     (operationId: number, workOrderId: number | null) => {
@@ -1657,7 +1616,7 @@ const SchedulingPage: React.FC = () => {
           })
         );
         refreshBoardScan();
-        actionRef.current?.reload();
+    actionRef.current?.reload();
         await refreshGanttPreservingWorkOrder(updatedWo);
 
         setPrepModalOpen(false);
@@ -1870,6 +1829,36 @@ const SchedulingPage: React.FC = () => {
     [aiSuggestedPoolRankById, t, workOrderDiagnosticsById]
   );
 
+  const discardDraftAndClose = useCallback(() => {
+    draftWoUpdatesRef.current.clear();
+    draftOpUpdatesRef.current.clear();
+    draftStationUpdatesRef.current.clear();
+    undoStackRef.current = [];
+    syncDraftPendingCount();
+    setDraftMode(false);
+    refreshGantt();
+  }, [refreshGantt, syncDraftPendingCount]);
+
+  const schedulingActionCount = Math.min(selectedWorkOrderIds.length, 50);
+  const schedulingOverdueCount = useMemo(
+    () =>
+      selectedWorkOrders.filter(
+        (wo) => wo.planned_end_date && dayjs(wo.planned_end_date).isBefore(dayjs()),
+      ).length,
+    [selectedWorkOrders],
+  );
+  const poolQuickActionDescription = useMemo(
+    () =>
+      schedulingOverdueCount > 0
+        ? t('app.kuaizhizao.scheduling.msg.quickActionConfirmOverdue', {
+            count: schedulingActionCount,
+            overdue: schedulingOverdueCount,
+          })
+        : t('app.kuaizhizao.scheduling.msg.quickActionConfirm', { count: schedulingActionCount }),
+    [schedulingActionCount, schedulingOverdueCount, t],
+  );
+  const schedulingConfirmOkText = t('app.kuaizhizao.scheduling.common.confirm');
+
   const ganttToolbarNodes = buildSchedulingGanttToolbar({
     t,
     ganttViewMode,
@@ -1879,26 +1868,12 @@ const SchedulingPage: React.FC = () => {
     canUpdate: canScheduleUpdate,
     draftMode,
     draftPendingCount,
-    onDraftModeChange: (on) => {
-      if (!on && draftPendingCount > 0) {
-        modal.confirm({
-          title: t('app.kuaizhizao.scheduling.draft.closeTitle'),
-          content: t('app.kuaizhizao.scheduling.draft.closeContent', { count: draftPendingCount }),
-          okText: t('app.kuaizhizao.scheduling.draft.discardAndClose'),
-          cancelText: t('common.cancel'),
-          onOk: () => {
-            draftWoUpdatesRef.current.clear();
-            draftOpUpdatesRef.current.clear();
-            draftStationUpdatesRef.current.clear();
-            undoStackRef.current = [];
-            syncDraftPendingCount();
-            setDraftMode(false);
-            refreshGantt();
-          },
-        });
-        return;
-      }
-      setDraftMode(on);
+    onDraftModeChange: setDraftMode,
+    draftCloseConfirm: {
+      title: t('app.kuaizhizao.scheduling.draft.closeTitle'),
+      description: t('app.kuaizhizao.scheduling.draft.closeContent', { count: draftPendingCount }),
+      okText: t('app.kuaizhizao.scheduling.draft.discardAndClose'),
+      onConfirm: discardDraftAndClose,
     },
     onApplyDraft: handleApplyDraft,
     onUndoDraft: handleUndoDraft,
@@ -1915,6 +1890,11 @@ const SchedulingPage: React.FC = () => {
     onScrollToToday: () => setScrollToTodayToken((n) => n + 1),
     aiTrigger: <SchedulingAiAssistantTrigger onOpen={() => setAiDrawerOpen(true)} />,
     onAutoReschedule: handleAutoReschedule,
+    autoRescheduleConfirm: {
+      title: t('app.kuaizhizao.scheduling.msg.autoRescheduleTitle'),
+      description: t('app.kuaizhizao.scheduling.msg.autoRescheduleConfirm', { count: schedulingActionCount }),
+      okText: schedulingConfirmOkText,
+    },
     onEditOperation: () => {
       if (!operationEditContext) return;
       setOperationEditOpen(true);
@@ -2094,6 +2074,28 @@ const SchedulingPage: React.FC = () => {
                       onToException={handleToException}
                       onApplyUnfreeze={handleApplyUnfreeze}
                       onRescheduleForward={handleRescheduleForward}
+                      confirmDelayConfirm={{
+                        title: t('app.kuaizhizao.scheduling.msg.confirmDelayTitle'),
+                        description: poolQuickActionDescription,
+                        okText: schedulingConfirmOkText,
+                      }}
+                      toExceptionConfirm={{
+                        title: t('app.kuaizhizao.scheduling.msg.toExceptionTitle'),
+                        description: poolQuickActionDescription,
+                        okText: schedulingConfirmOkText,
+                      }}
+                      applyUnfreezeConfirm={{
+                        title: t('app.kuaizhizao.scheduling.msg.applyUnfreezeTitle'),
+                        description: poolQuickActionDescription,
+                        okText: schedulingConfirmOkText,
+                      }}
+                      rescheduleForwardConfirm={{
+                        title: t('app.kuaizhizao.scheduling.msg.rescheduleForwardTitle'),
+                        description: t('app.kuaizhizao.scheduling.msg.rescheduleForwardConfirm', {
+                          count: schedulingActionCount,
+                        }),
+                        okText: schedulingConfirmOkText,
+                      }}
                       overdueOnly={poolOverdueOnly}
                       onOverdueOnlyChange={setPoolOverdueOnly}
                     />
@@ -2322,7 +2324,7 @@ const SchedulingPage: React.FC = () => {
         onSaved={() => {
           refreshGantt();
           refreshBoardScan();
-          actionRef.current?.reload();
+    actionRef.current?.reload();
         }}
       />
 

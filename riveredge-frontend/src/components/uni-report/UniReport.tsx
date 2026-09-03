@@ -2,7 +2,6 @@ import React, { useCallback, useMemo, useRef, useState } from 'react';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../uni-table';
-import { buildReportHelpViewConfig } from '../page-help-wiki/reportHelpViewConfig';
 import { ListPageTemplate, type StatCard } from '../layout-templates';
 import { UniReportMetaHeader } from './UniReportMetaHeader';
 import { buildUniReportSummaryFooter } from './UniReportSummaryFooter';
@@ -177,6 +176,7 @@ export function UniReport<T extends Record<string, unknown> = Record<string, unk
   showExportButton = true,
   skipFuzzyPinyinClientFilter,
   periodFilter: periodFilterProp,
+  periodFilterLabel,
   enableColumnQuery: enableColumnQueryProp,
 }: UniReportProps<T>) {
   const { t } = useTranslation();
@@ -245,10 +245,11 @@ export function UniReport<T extends Record<string, unknown> = Record<string, unk
         searchParamsRef={searchParamsRef}
         actionRef={actionRef}
         revision={periodRevision}
+        label={periodFilterLabel}
         onApplied={() => setPeriodRevision((e) => e + 1)}
       />
     );
-  }, [actionRef, periodFilter, periodRevision]);
+  }, [actionRef, periodFilter, periodFilterLabel, periodRevision]);
 
   const toolbarBeforeSearch = useMemo(() => {
     if (!periodFilterNode && !beforeSearchButtons) return undefined;
@@ -309,6 +310,10 @@ export function UniReport<T extends Record<string, unknown> = Record<string, unk
       const serialized = serializeReportColumnFilters([...fromAdvanced, ...columnFilters]);
       if (serialized) forRequest.column_filters = serialized;
       else delete forRequest.column_filters;
+      // ProTable params（如 period_basis）并入导出/筛选快照
+      if (typeof params.period_basis === 'string' && params.period_basis.trim()) {
+        forRequest.period_basis = params.period_basis.trim();
+      }
 
       const persistRef: Record<string, unknown> = { ...forRequest };
       const advancedSerialized = serializeReportColumnFilters(fromAdvanced);
@@ -426,8 +431,7 @@ export function UniReport<T extends Record<string, unknown> = Record<string, unk
           searchParamsRef={searchParamsRef}
           rowKey={rowKey as string}
           columns={columns}
-          viewTypes={['table', 'help']}
-          helpViewConfig={buildReportHelpViewConfig()}
+          viewTypes={['table']}
           reportLayout
           showAdvancedSearch
           searchPlacement="toolbarLeft"

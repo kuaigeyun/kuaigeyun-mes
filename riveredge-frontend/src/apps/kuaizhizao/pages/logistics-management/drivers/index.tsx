@@ -140,7 +140,7 @@ const DriversPage: React.FC = () => {
                   onClick={async () => {
                     await deleteDriver(row.id);
                     message.success(t('common.deleteSuccess'));
-                    actionRef.current?.reload();
+    actionRef.current?.reload();
                   }}
                 />,
               );
@@ -177,7 +177,7 @@ const DriversPage: React.FC = () => {
         onDelete={async (keys) => {
           await Promise.all(keys.map((key) => deleteDriver(Number(key))));
           message.success(t('common.batchDeleteSuccess', { count: keys.length }));
-          actionRef.current?.reload();
+    actionRef.current?.reload();
         }}
       />
       <LogisticsMasterDetailDrawer
@@ -201,7 +201,7 @@ const DriversPage: React.FC = () => {
           if (detail?.id === record.id) {
             setDetail(record);
           }
-          actionRef.current?.reload();
+    actionRef.current?.reload();
         }}
       />
     </ListPageTemplate>

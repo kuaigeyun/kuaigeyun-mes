@@ -10,6 +10,7 @@
 
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { LinkedDocumentCode } from '../../../../../components/linked-document-code';
@@ -133,7 +134,6 @@ import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../
 import { formatBusinessDateOnly, formatDateTime, formatQuantity } from '../../../../../utils/format';
 import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
-import { getAntdModal } from '../../../../../utils/antdAppApis';
 interface ReceiptNoticeDetail extends ReceiptNotice {
   items?: { id?: number; material_code: string; material_name: string; material_unit: string; notice_quantity: number; unit_price?: number; total_amount?: number }[];
 }
@@ -179,7 +179,7 @@ const ReceiptNoticesPage: React.FC = () => {
   const navigate = useNavigate();
   const { token } = theme.useToken();
   const receiptNoticeDetailDrawerZIndex = token.zIndexPopupBase;
-  const { message: messageApi } = App.useApp();
+  const { message: messageApi, modal: modalApi } = App.useApp();
   const pullFromPurchaseOrderAction = resolveKuaizhizaoDocumentAction(t, 'receipt_notice.pull_from_purchase_order');
   const pushToPurchaseReceiptAction = resolveKuaizhizaoDocumentAction(t, 'purchase_receipt.pull_from_receipt_notice');
   const defaultUnit = t('app.kuaizhizao.shipmentNotice.defaultUnit');
@@ -414,7 +414,7 @@ const ReceiptNoticesPage: React.FC = () => {
       } catch {
         messageApi.error(t('app.kuaizhizao.receiptNotice.detailFailed'));
       } finally {
-        actionRef.current?.reload();
+    actionRef.current?.reload();
       }
     })();
   }, [searchParams, messageApi, t]);
@@ -517,12 +517,8 @@ const ReceiptNoticesPage: React.FC = () => {
     }
   }, [executeNotify, messageApi, notifyPreviewData, notifyPreviewTarget, resetNotifyPreviewModal, t]);
 
-  const handleWithdraw = (record: ReceiptNotice) => {
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.shipmentNotice.withdrawNotify'),
-      content: t('app.kuaizhizao.receiptNotice.withdrawConfirmContent', { code: record.notice_code }),
-      onOk: async () => {
-        try {
+  const executeWithdraw = async (record: ReceiptNotice) => {
+    try {
           await receiptNoticeApi.withdraw(record.id!.toString());
           messageApi.success(t('app.kuaizhizao.receiptNotice.withdrawSuccess'));
           setStatsVersion((v) => v + 1);
@@ -531,11 +527,17 @@ const ReceiptNoticesPage: React.FC = () => {
             setNoticeDetail(fresh as ReceiptNoticeDetail);
           }
           invalidateMenuBadgeCounts();
-          actionRef.current?.reload();
+    actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || t('app.kuaizhizao.shipmentNotice.withdrawFailed'));
         }
-      },
+  };
+
+  const handleWithdraw = (record: ReceiptNotice) => {
+    modalApi.confirm({
+      title: t('app.kuaizhizao.shipmentNotice.withdrawNotify'),
+      content: t('app.kuaizhizao.receiptNotice.withdrawConfirmContent', { code: record.notice_code }),
+      onOk: () => executeWithdraw(record),
     });
   };
 
@@ -544,12 +546,8 @@ const ReceiptNoticesPage: React.FC = () => {
     navigate(inboundReceiptNoticeEntryPath(record.id));
   };
 
-  const handleDelete = (record: ReceiptNotice) => {
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.receiptNotice.deleteModalTitle'),
-      content: t('app.kuaizhizao.shipmentNotice.deleteConfirmContent', { code: record.notice_code }),
-      onOk: async () => {
-        try {
+  const executeDelete = async (record: ReceiptNotice) => {
+    try {
           await receiptNoticeApi.delete(record.id!.toString());
           messageApi.success(t('common.deleteSuccess'));
           if (noticeDetail?.id === record.id) {
@@ -558,12 +556,17 @@ const ReceiptNoticesPage: React.FC = () => {
           }
           setStatsVersion((v) => v + 1);
           invalidateMenuBadgeCounts();
-
-          actionRef.current?.reload();
+    actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || t('common.deleteFailed'));
         }
-      },
+  };
+
+  const handleDelete = (record: ReceiptNotice) => {
+    modalApi.confirm({
+      title: t('app.kuaizhizao.receiptNotice.deleteModalTitle'),
+      content: t('app.kuaizhizao.shipmentNotice.deleteConfirmContent', { code: record.notice_code }),
+      onOk: () => executeDelete(record),
     });
   };
 
@@ -1265,7 +1268,7 @@ const ReceiptNoticesPage: React.FC = () => {
         pullFromPurchaseOrderQuery.closeModal();
         setStatsVersion((v) => v + 1);
         invalidateMenuBadgeCounts();
-        actionRef.current?.reload();
+    actionRef.current?.reload();
       } catch (error: unknown) {
         messageApi.error(
           getApiErrorMessage(
@@ -1694,7 +1697,7 @@ const ReceiptNoticesPage: React.FC = () => {
                 setSelectedRowKeys([]);
                 setStatsVersion((v) => v + 1);
                 invalidateMenuBadgeCounts();
-                actionRef.current?.reload();
+    actionRef.current?.reload();
               }}
               requireConfirm
               labels={{
@@ -1719,7 +1722,7 @@ const ReceiptNoticesPage: React.FC = () => {
                 setSelectedRowKeys([]);
                 setStatsVersion((v) => v + 1);
                 invalidateMenuBadgeCounts();
-                actionRef.current?.reload();
+    actionRef.current?.reload();
               }}
               requireConfirm
               labels={{
@@ -1913,9 +1916,11 @@ const ReceiptNoticesPage: React.FC = () => {
                   key: 'withdraw',
                   visible: noticeDetail.capabilities?.withdraw?.allowed === true,
                   render: () => (
-                    <Button {...rowActionKind('revoke')} onClick={() => handleWithdraw(noticeDetail)}>
+                    <ActionConfirmPopconfirm title={t('app.kuaizhizao.shipmentNotice.withdrawNotify')} description={t('app.kuaizhizao.receiptNotice.withdrawConfirmContent', { code: record.notice_code })} onConfirm={() => executeWithdraw(noticeDetail)}>
+              <Button {...rowActionKind('revoke')} onClick={(e) => e.stopPropagation()}>
                       {t('app.kuaizhizao.shipmentNotice.withdrawNotify')}
                     </Button>
+            </ActionConfirmPopconfirm>
                   ),
                 },
                 {
@@ -1937,9 +1942,11 @@ const ReceiptNoticesPage: React.FC = () => {
                   key: 'delete',
                   visible: noticeDetail.capabilities?.delete?.allowed === true,
                   render: () => (
-                    <Button {...rowActionKind('delete')} onClick={() => handleDelete(noticeDetail)}>
+                    <ActionConfirmPopconfirm title={t('app.kuaizhizao.receiptNotice.deleteModalTitle')} description={t('app.kuaizhizao.shipmentNotice.deleteConfirmContent', { code: record.notice_code })} onConfirm={() => executeDelete(noticeDetail)}>
+              <Button {...rowActionKind('delete')} onClick={(e) => e.stopPropagation()}>
                       {t('common.delete')}
                     </Button>
+            </ActionConfirmPopconfirm>
                   ),
                 },
               ]}

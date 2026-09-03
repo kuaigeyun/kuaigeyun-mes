@@ -93,7 +93,7 @@ import {
   EQUIPMENT_LEDGER_GROUP_PINNED_FIELD,
   type EquipmentLedgerGroupMode,
 } from '../../../utils/equipmentListCore';
-import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 
 const EQUIPMENT_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_equipment';
@@ -437,22 +437,16 @@ const EquipmentPage: React.FC = () => {
    * 处理批量删除设备（keys 为 uuid 数组）
    */
   const handleDelete = async (keys: React.Key[]) => {
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.equipment.confirmBatchDeleteTitle'),
-      content: t('app.kuaizhizao.equipment.confirmBatchDeleteContent', { count: keys.length }),
-      onOk: async () => {
-        try {
+    try {
           for (const uuid of keys) {
             await equipmentApi.delete(String(uuid));
           }
-          messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
+    messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
           setSelectedRowKeys([]);
-          actionRef.current?.reload();
+    actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || t('common.deleteFailed'));
         }
-      },
-    });
   };
 
   /**
@@ -558,23 +552,22 @@ const EquipmentPage: React.FC = () => {
       >
         {t('common.edit')}
       </Button>,
-      <Button {...rowActionKind('delete')}
+      <ActionConfirmPopconfirm
         key="del"
-        type="link"
-        size="small"
-        danger
-        icon={<DeleteOutlined />}
-        onClick={(e) => {
-          e.stopPropagation();
-          getAntdModal().confirm({
-            title: t('app.kuaizhizao.equipment.confirmDeleteTitle'),
-            content: t('app.kuaizhizao.equipment.confirmDeleteContent', { name: record.name }),
-            onOk: () => record.uuid && handleDelete([record.uuid]),
-          });
-        }}
+        title={t('app.kuaizhizao.equipment.confirmDeleteTitle')}
+        description={t('app.kuaizhizao.equipment.confirmDeleteContent', { name: record.name })}
+        onConfirm={() => record.uuid && handleDelete([record.uuid])}
       >
-        {t('common.delete')}
-      </Button>,
+        <Button {...rowActionKind('delete')}
+          type="link"
+          size="small"
+          danger
+          icon={<DeleteOutlined />}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {t('common.delete')}
+        </Button>
+      </ActionConfirmPopconfirm>,
       <Button {...rowActionKind('read')}
         key="trace"
         type="link"
@@ -925,6 +918,9 @@ const EquipmentPage: React.FC = () => {
             style: { cursor: 'pointer' },
           })}
           showDeleteButton={true}
+          deleteConfirmTitle={t('app.kuaizhizao.equipment.confirmBatchDeleteTitle')}
+          deleteConfirmDescription={(count) => t('app.kuaizhizao.equipment.confirmBatchDeleteContent', { count: count })}
+          
           onDelete={handleDelete}
           showCreateButton={true}
           createButtonText={createButtonLabel}
@@ -1041,7 +1037,7 @@ const EquipmentPage: React.FC = () => {
             });
             if (result.successCount > 0) {
               messageApi.success(t('app.kuaizhizao.equipment.importSuccess', { count: result.successCount }));
-              actionRef.current?.reload();
+    actionRef.current?.reload();
             }
             if (result.failureCount > 0) {
               messageApi.warning(t('app.kuaizhizao.equipment.importPartialFail', { count: result.failureCount }));

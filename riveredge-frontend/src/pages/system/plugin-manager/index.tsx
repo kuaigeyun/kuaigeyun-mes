@@ -78,7 +78,7 @@ const PluginManagerPage: React.FC = () => {
         message.success(
           t('pages.system.pluginManager.discoverSuccess', { registered: response.data.registered, updated: response.data.updated })
         );
-        actionRef.current?.reload();
+    actionRef.current?.reload();
       } else {
         message.error(t('pages.system.pluginManager.discoverFailed'));
       }
@@ -97,7 +97,7 @@ const PluginManagerPage: React.FC = () => {
 
       if (response.success) {
         message.success(response.message);
-        actionRef.current?.reload();
+    actionRef.current?.reload();
       } else {
         message.error(response.message || t('pages.system.pluginManager.enableFailed'));
       }
@@ -114,7 +114,7 @@ const PluginManagerPage: React.FC = () => {
 
       if (response.success) {
         message.success(response.message);
-        actionRef.current?.reload();
+    actionRef.current?.reload();
       } else {
         message.error(response.message || t('pages.system.pluginManager.disableFailed'));
       }

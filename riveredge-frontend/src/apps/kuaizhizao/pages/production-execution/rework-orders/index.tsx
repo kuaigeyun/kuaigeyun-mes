@@ -10,6 +10,7 @@
 
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProFormItem, ProFormDependency } from '@ant-design/pro-components';
@@ -636,9 +637,11 @@ const ReworkOrdersPage: React.FC = () => {
           </Button>
         ) : null,
         reworkCapabilityAllowed(record, 'delete') ? (
-          <Button key="delete" {...rowActionKind('delete')} onClick={() => handleDelete(record)}>
+          <ActionConfirmPopconfirm title={t('app.kuaizhizao.reworkOrder.confirmDeleteTitle')} description={t('app.kuaizhizao.reworkOrder.confirmDeleteContent', { code: record.code })} onConfirm={() => executeDelete(record)}>
+              <Button key="delete" {...rowActionKind('delete')} onClick={(e) => e.stopPropagation()}>
             {t('common.delete')}
           </Button>
+            </ActionConfirmPopconfirm>
         ) : null,
       ],
     },
@@ -862,7 +865,7 @@ const ReworkOrdersPage: React.FC = () => {
             next_work_order_operation_id: nextOpId,
           });
           messageApi.success(t('app.kuaizhizao.reworkOrder.advanceNextSuccess'));
-          actionRef.current?.reload();
+    actionRef.current?.reload();
           if (reworkOrderDetail?.id === record.id) await refreshReworkDetail(record.id);
         },
       });
@@ -874,23 +877,24 @@ const ReworkOrdersPage: React.FC = () => {
   /**
    * 处理删除
    */
+  const executeDelete = async (record: ReworkOrder) => {
+    try {
+          await reworkOrderApi.delete(record.id!.toString());
+          messageApi.success(t('common.deleteSuccess'));
+          invalidateMenuBadgeCounts();
+    actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error.message || t('common.deleteFailed'));
+        }
+  };
+
   const handleDelete = async (record: ReworkOrder) => {
     getAntdModal().confirm({
       title: t('app.kuaizhizao.reworkOrder.confirmDeleteTitle'),
       content: t('app.kuaizhizao.reworkOrder.confirmDeleteContent', { code: record.code }),
       okText: t('common.confirm'),
       cancelText: t('common.cancel'),
-      onOk: async () => {
-        try {
-          await reworkOrderApi.delete(record.id!.toString());
-          messageApi.success(t('common.deleteSuccess'));
-          invalidateMenuBadgeCounts();
-
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error.message || t('common.deleteFailed'));
-        }
-      },
+      onOk: () => executeDelete(record),
     });
   };
 
@@ -1164,7 +1168,7 @@ const ReworkOrdersPage: React.FC = () => {
     }
     try {
       for (const key of keys) {
-        await reworkOrderApi.delete(key.toString());
+      await reworkOrderApi.delete(key.toString());
       }
       messageApi.success(t('common.deleteSuccess'));
       invalidateMenuBadgeCounts();

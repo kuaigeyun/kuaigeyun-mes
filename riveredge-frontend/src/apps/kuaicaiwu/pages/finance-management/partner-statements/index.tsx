@@ -3,6 +3,7 @@
  */
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import {
   App,
@@ -66,7 +67,6 @@ import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { buildReportHelpViewConfig } from '../../../../../components/page-help-wiki';
-import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 const money = (v: number | string | undefined) =>
   formatCurrencyAmount(v ?? 0);
@@ -222,18 +222,11 @@ const PartnerStatementsPage: React.FC = () => {
     }
   };
 
-  const handleDelete = (record: PartnerStatement) => {
-    getAntdModal().confirm({
-      title: t(`${PS}.deleteTitle`),
-      content: t(`${PS}.deleteConfirm`, { code: record.statement_code }),
-      okType: 'danger',
-      onOk: async () => {
-        await partnerStatementService.delete(record.id);
+  const executeDelete = async (record: PartnerStatement) => {
+    await partnerStatementService.delete(record.id);
         messageApi.success(t(`${PS}.deleted`));
         if (record.partner_type === 'Customer') customerActionRef.current?.reload();
         else supplierActionRef.current?.reload();
-      },
-    });
   };
 
   const handleBatchDelete = async (keys: React.Key[], type: 'Customer' | 'Supplier') => {
@@ -411,11 +404,13 @@ const PartnerStatementsPage: React.FC = () => {
           ];
           if (record.status === 'Draft' && statementPerms.canDelete) {
             acts.push(
+              <ActionConfirmPopconfirm title={t(`${PS}.deleteTitle`)} description={t(`${PS}.deleteConfirm`, { code: record.statement_code })} okType="danger" onConfirm={() => executeDelete(record)}>
               <Button
                 key="del"
                 {...rowActionKind('delete')}
-                onClick={() => handleDelete(record)}
-              />,
+                onClick={(e) => e.stopPropagation()}
+              />
+            </ActionConfirmPopconfirm>,
             );
           }
           return acts;

@@ -3,6 +3,7 @@ import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { rowActionKind } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { UniTable } from '../../../../../components/uni-table';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
@@ -23,7 +24,7 @@ const RESOURCE = 'kuaizhizao:service-asset';
 
 const ServiceAssetsPage: React.FC = () => {
   const { t } = useTranslation();
-  const { message: messageApi, modal } = App.useApp();
+  const { message: messageApi } = App.useApp();
   const perms = useResourcePermissions(RESOURCE);
   const actionRef = useRef<ActionType>();
   const [modalOpen, setModalOpen] = useState(false);
@@ -45,19 +46,14 @@ const ServiceAssetsPage: React.FC = () => {
     setModalOpen(true);
   };
 
-  const confirmDelete = (row: ServiceAsset) => {
-    modal.confirm({
-      title: t('common.confirmDelete'),
-      onOk: async () => {
-        await serviceAssetApi.delete(row.id);
+  const executeconfirmDelete = async (row: ServiceAsset) => {
+    await serviceAssetApi.delete(row.id);
         messageApi.success(t('common.deleteSuccess'));
         if (detail?.id === row.id) {
           setDetailOpen(false);
           setDetail(null);
         }
-        actionRef.current?.reload();
-      },
-    });
+    actionRef.current?.reload();
   };
 
   const loadDetail = useCallback(async (id: number) => {
@@ -180,7 +176,9 @@ const ServiceAssetsPage: React.FC = () => {
                 <Button {...rowActionKind('update')} key="edit" onClick={() => void openEdit(row)} />
               ) : null,
               perms.canDelete ? (
-                <Button {...rowActionKind('delete')} key="delete" onClick={() => confirmDelete(row)} />
+                <ActionConfirmPopconfirm title={t('common.confirmDelete')} onConfirm={() => executeconfirmDelete(row)}>
+              <Button {...rowActionKind('delete')} key="delete" onClick={(e) => e.stopPropagation()} />
+            </ActionConfirmPopconfirm>
               ) : null,
             ],
           },
@@ -216,8 +214,8 @@ const ServiceAssetsPage: React.FC = () => {
         showDeleteButton={perms.canDelete}
         onDelete={async (keys) => {
           await Promise.all(keys.map((key) => serviceAssetApi.delete(Number(key))));
-          messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
-          actionRef.current?.reload();
+    messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
+    actionRef.current?.reload();
         }}
       />
 
@@ -236,7 +234,7 @@ const ServiceAssetsPage: React.FC = () => {
             await serviceAssetApi.create(payload);
             messageApi.success(t('common.createSuccess'));
           }
-          actionRef.current?.reload();
+    actionRef.current?.reload();
         }}
       />
 

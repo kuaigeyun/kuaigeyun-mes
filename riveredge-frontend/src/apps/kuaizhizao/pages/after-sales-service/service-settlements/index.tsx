@@ -4,6 +4,7 @@ import { App, Button, Input, Modal } from 'antd';
 import { CheckOutlined, CloseOutlined, SendOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { rowActionKind } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { DetailDrawerActions, ListPageTemplate } from '../../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { UniTable } from '../../../../../components/uni-table';
@@ -29,7 +30,7 @@ const RESOURCE = 'kuaizhizao:service-settlement';
 
 const ServiceSettlementsPage: React.FC = () => {
   const { t } = useTranslation();
-  const { message: messageApi, modal } = App.useApp();
+  const { message: messageApi } = App.useApp();
   const perms = useResourcePermissions(RESOURCE);
   const currentUser = useCurrentUser();
   const canReview = hasReviewPermission(currentUser ?? undefined, RESOURCE);
@@ -75,19 +76,14 @@ const ServiceSettlementsPage: React.FC = () => {
     setModalOpen(true);
   };
 
-  const confirmDelete = (row: ServiceSettlement) => {
-    modal.confirm({
-      title: t('common.confirmDelete'),
-      onOk: async () => {
-        await serviceSettlementApi.delete(row.id);
+  const executeconfirmDelete = async (row: ServiceSettlement) => {
+    await serviceSettlementApi.delete(row.id);
         messageApi.success(t('common.deleteSuccess'));
         if (detail?.id === row.id) {
           setDetailOpen(false);
           setDetail(null);
         }
-        actionRef.current?.reload();
-      },
-    });
+    actionRef.current?.reload();
   };
 
   const columns: ProColumns<ServiceSettlement>[] = useMemo(
@@ -159,16 +155,18 @@ const ServiceSettlementsPage: React.FC = () => {
                   onClick={async () => {
                     await serviceSettlementApi.submit(row.id);
                     messageApi.success(t('app.kuaizhizao.afterSalesService.serviceSettlement.submitSuccess'));
-                    actionRef.current?.reload();
+    actionRef.current?.reload();
                   }}
                 />
               ) : null,
               perms.canDelete && row.status === '草稿' ? (
-                <Button
+                <ActionConfirmPopconfirm title={t('common.confirmDelete')} onConfirm={() => executeconfirmDelete(row)}>
+              <Button
                   {...rowActionKind('delete')}
                   key="delete"
-                  onClick={() => confirmDelete(row)}
+                  onClick={(e) => e.stopPropagation()}
                 />
+            </ActionConfirmPopconfirm>
               ) : null,
             ],
           },
@@ -207,8 +205,8 @@ const ServiceSettlementsPage: React.FC = () => {
         showDeleteButton={perms.canDelete}
         onDelete={async (keys) => {
           await Promise.all(keys.map((key) => serviceSettlementApi.delete(Number(key))));
-          messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
-          actionRef.current?.reload();
+    messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
+    actionRef.current?.reload();
         }}
       />
 
@@ -220,7 +218,7 @@ const ServiceSettlementsPage: React.FC = () => {
           setEditing(null);
         }}
         onSuccess={() => {
-          actionRef.current?.reload();
+    actionRef.current?.reload();
           if (editing && detail?.id === editing.id) {
             void refreshDetail(editing.id);
           }

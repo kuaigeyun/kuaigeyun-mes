@@ -358,6 +358,20 @@ def test_equipment_models_exported():
     assert hasattr(mod, "HaoligoFinanceEquipmentPayablePayment")
 
 
+def test_equipment_payable_models_registered_in_orm_manifest():
+    import importlib
+
+    orm = importlib.import_module("apps.haoligo.orm_models")
+    assert "apps.haoligo.models.finance_equipment_payable" in orm.ORM_MODEL_MODULES
+
+
+def test_norm_uuid_list_extracts_object_entries():
+    from apps.haoligo.services.finance_equipment_payable import _norm_uuid_list
+
+    assert _norm_uuid_list(["a1", "a1", ""]) == ["a1"]
+    assert _norm_uuid_list([{"uid": "b2"}, {"uuid": "c3"}]) == ["b2", "c3"]
+
+
 def test_route_access_maps_payments_to_execute():
     from apps.haoligo.api._haoligo_route_access import resolve_haoligo_module_action
 
@@ -379,3 +393,68 @@ def test_route_access_maps_payments_to_execute():
         )
         == "submit"
     )
+
+
+def test_apply_equipment_finance_contract_scope_external_requires_payable():
+    import asyncio
+
+    from apps.haoligo.api._data_scope import apply_equipment_finance_contract_scope
+
+    base_qs = MagicMock()
+    scoped_qs = MagicMock()
+    filtered_qs = MagicMock()
+    scoped_qs.filter.return_value = filtered_qs
+    filtered_qs.distinct.return_value = filtered_qs
+
+    async def run():
+        with patch(
+            "apps.haoligo.api._data_scope.DataScopeService.apply",
+            new=AsyncMock(return_value=scoped_qs),
+        ), patch(
+            "apps.haoligo.api._data_scope.user_is_external_partner",
+            new=AsyncMock(return_value=True),
+        ):
+            return await apply_equipment_finance_contract_scope(
+                base_qs,
+                tenant_id=1,
+                user=SimpleNamespace(id=9),
+                resource="haoligo:finance-equipment-contracts",
+            )
+
+    result = asyncio.run(run())
+    assert result is filtered_qs
+    scoped_qs.filter.assert_called_once_with(payables__deleted_at__isnull=True)
+    filtered_qs.distinct.assert_called_once_with()
+
+
+def test_assert_equipment_finance_contract_visible_external_requires_payable():
+    import asyncio
+
+    from apps.haoligo.api._data_scope import assert_equipment_finance_contract_visible
+
+    row = SimpleNamespace(id=7)
+
+    async def run():
+        with patch(
+            "apps.haoligo.api._data_scope.DataScopeService.assert_row_visible",
+            new=AsyncMock(),
+        ), patch(
+            "apps.haoligo.api._data_scope.user_is_external_partner",
+            new=AsyncMock(return_value=True),
+        ), patch(
+            "apps.haoligo.models.finance_equipment_payable.HaoligoFinanceEquipmentPayable.filter",
+        ) as payable_filter:
+            payable_filter.return_value.exists = AsyncMock(return_value=False)
+            with pytest.raises(HTTPException) as exc:
+                await assert_equipment_finance_contract_visible(
+                    row,
+                    tenant_id=1,
+                    user=SimpleNamespace(id=9),
+                    resource="haoligo:finance-equipment-contracts",
+                )
+            return exc
+
+    exc = asyncio.run(run())
+    assert exc.value.status_code == 403
+    assert exc.value.detail["details"]["reason"] == "equipment_finance_contract_payable_required"
+

@@ -1014,7 +1014,7 @@ const DataSourceListPage: React.FC = () => {
               }
             }
             messageApi.success(t('pages.system.dataSources.importSuccessCount', { count: done }));
-            actionRef.current?.reload();
+    actionRef.current?.reload();
           }}
           importHeaders={dataSourceImportTemplate.importHeaders}
           importExampleRow={dataSourceImportTemplate.importExampleRow}

@@ -31,6 +31,7 @@ import { useResourcePermissions } from '../../../../../hooks/useResourcePermissi
 import { resolveListLifecycleStageFromSearch } from '../../../../../utils/listLifecycleStage';
 import { assemblyTemplateApi } from '../../../services/assembly-template';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { StatusTag } from '../../../../../constants/statusBadges';
 import { renderDocumentStatusTag } from '../../../../../utils/documentLifecycleStatusTag';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
@@ -346,12 +347,8 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
     runApply(false);
   };
 
-  const confirmDeleteOrder = async (record: OrderLike) => {
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.warehouseCommon.deleteOrderTitle', { noun: config.actionNoun }),
-      content: t('app.kuaizhizao.warehouseCommon.deleteOrderConfirm', { noun: config.actionNoun, code: record.code }),
-      onOk: async () => {
-        try {
+  const executeconfirmDeleteOrder = async (record: OrderLike) => {
+    try {
           await api.delete(String(record.id));
           messageApi.success(t('app.kuaizhizao.warehouseCommon.deleteOrderSuccess', { noun: config.deleteSuccessNoun }));
           invalidateMenuBadgeCounts();
@@ -363,8 +360,6 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
         } catch (error: any) {
           messageApi.error(error?.message || t('common.deleteFailed'));
         }
-      },
-    });
   };
 
   const openItemModal = (record: OrderLike, item?: ItemLike) => {
@@ -423,14 +418,8 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
     }
   };
 
-  const confirmDeleteItem = (order: OrderLike, item: ItemLike) => {
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.warehouseCommon.deleteItemTitle'),
-      content: t('app.kuaizhizao.warehouseCommon.deleteItemConfirm', {
-        name: item.material_code || item.material_name || item.id,
-      }),
-      onOk: async () => {
-        try {
+  const executeconfirmDeleteItem = async (order: OrderLike, item: ItemLike) => {
+    try {
           if (!order.id || !item.id) return;
           await api.deleteItem(String(order.id), String(item.id));
           messageApi.success(t('app.kuaizhizao.warehouseCommon.deleteItemSuccess'));
@@ -440,24 +429,10 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
         } catch (error: any) {
           messageApi.error(error?.message || t('app.kuaizhizao.warehouseCommon.deleteItemFailed'));
         }
-      },
-    });
   };
 
-  const confirmExecuteOrder = (record: OrderLike) => {
-    const itemCount = Array.isArray(record.items) ? record.items.length : Number(record.total_items || 0);
-    if (itemCount <= 0) {
-      messageApi.warning(t('app.kuaizhizao.warehouseCommon.addItemBeforeExecute', { noun: config.actionNoun }));
-      return;
-    }
-    getAntdModal().confirm({
-      title: config.executeActionLabel,
-      content: t('app.kuaizhizao.warehouseCommon.executeConfirmContent', {
-        action: config.executeActionLabel,
-        code: record.code,
-      }),
-      onOk: async () => {
-        try {
+  const executeconfirmExecuteOrder = async (record: OrderLike) => {
+    try {
           await api.execute(String(record.id));
           messageApi.success(config.executeSuccessText);
           invalidateMenuBadgeCounts();
@@ -466,8 +441,6 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
         } catch (error: any) {
           messageApi.error(error?.message || t('app.kuaizhizao.warehouseCommon.executeFailed', { action: config.executeActionLabel }));
         }
-      },
-    });
   };
 
   const workflowStatusValueEnum = useMemo(() => buildWarehouseWorkflowStatusValueEnum(t), [t]);
@@ -606,14 +579,21 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
               <Button {...rowActionKind('create')} {...rowActionLabelKeep()} onClick={() => openItemModal(record)}>
                 {t('app.kuaizhizao.warehouseCommon.addItem')}
               </Button>
+              <ActionConfirmPopconfirm title={config.executeActionLabel} description={t('app.kuaizhizao.warehouseCommon.executeConfirmContent', {
+        action: config.executeActionLabel,
+        code: record.code,
+      })} onConfirm={() => executeconfirmExecuteOrder(record)}>
               <Button
                 {...rowActionKind('execute')}
                 {...rowActionLabelKeep()}
-                onClick={() => confirmExecuteOrder(record)}
+                onClick={(e) => e.stopPropagation()}
               >
                 {config.executeActionLabel}
               </Button>
-              <Button {...rowActionKind('delete')} onClick={() => confirmDeleteOrder(record)} />
+            </ActionConfirmPopconfirm>
+              <ActionConfirmPopconfirm title={t('app.kuaizhizao.warehouseCommon.deleteOrderTitle', { noun: config.actionNoun })} description={t('app.kuaizhizao.warehouseCommon.deleteOrderConfirm', { noun: config.actionNoun, code: record.code })} onConfirm={() => executeconfirmDeleteOrder(record)}>
+              <Button {...rowActionKind('delete')} onClick={(e) => e.stopPropagation()} />
+            </ActionConfirmPopconfirm>
             </>
           )}
         </Space>
@@ -754,9 +734,13 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
               <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openItemModal(currentOrder, item)}>
                 {t('common.edit')}
               </Button>
-              <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => confirmDeleteItem(currentOrder, item)}>
+              <ActionConfirmPopconfirm title={t('app.kuaizhizao.warehouseCommon.deleteItemTitle')} description={t('app.kuaizhizao.warehouseCommon.deleteItemConfirm', {
+        name: item.material_code || item.material_name || item.id,
+      })} onConfirm={() => executeconfirmDeleteItem(currentOrder, item)}>
+              <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={(e) => e.stopPropagation()}>
                 {t('common.delete')}
               </Button>
+            </ActionConfirmPopconfirm>
             </Space>
           ) : null,
       },
@@ -793,7 +777,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
             onOk: async () => {
               try {
                 for (const key of keys) {
-                  await api.delete(String(key));
+      await api.delete(String(key));
                 }
                 messageApi.success(t('app.kuaizhizao.warehouseCommon.deleteSuccess', { count: keys.length }));
                 invalidateMenuBadgeCounts();

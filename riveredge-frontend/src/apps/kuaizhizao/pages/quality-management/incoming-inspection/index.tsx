@@ -9,6 +9,7 @@
 
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import {
@@ -54,6 +55,7 @@ import {
   buildQualityInspectionListKindColumn,
   buildQualityInspectionListMaterialColumn,
   buildQualityInspectionListMaterialHiddenColumns,
+  buildQualityInspectionListNotesColumn,
   buildQualityInspectionListQuantityResultColumns,
   buildQualityInspectionListSearchColumns,
   stackedPrimarySecondaryColumn,
@@ -153,7 +155,6 @@ import {
   buildIncomingInspectionExportColumns,
   mapIncomingInspectionExportRows,
 } from '../components/qualityInspectionExport';
-import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { importExcelMatrixInChunks } from '../../../../../utils/chunkedBulkImport';
 import { todaySiteDateString } from '../../../../../utils/format';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
@@ -585,7 +586,7 @@ const IncomingInspectionPage: React.FC = () => {
         if (detail?.purchase_receipt_id != null) {
           urlListFiltersRef.current = { purchase_receipt_id: Number(detail.purchase_receipt_id) };
         }
-        actionRef.current?.reload();
+    actionRef.current?.reload();
       })();
       return;
     }
@@ -734,7 +735,7 @@ const IncomingInspectionPage: React.FC = () => {
         messageApi.success(t('app.kuaizhizao.quality.incoming.messages.createSuccess'));
         pullFromPurchaseReceiptQuery.closeModal();
         invalidateStats();
-        actionRef.current?.reload();
+    actionRef.current?.reload();
       } catch (error: unknown) {
         messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.quality.incoming.messages.createFailed')));
       }
@@ -866,7 +867,7 @@ const IncomingInspectionPage: React.FC = () => {
         if (ok) {
           pullFromPostedPurchaseReceiptQuery.closeModal();
           invalidateStats();
-          actionRef.current?.reload();
+    actionRef.current?.reload();
         }
       } catch (error: unknown) {
         messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.quality.incoming.messages.createFailed')));
@@ -891,7 +892,7 @@ const IncomingInspectionPage: React.FC = () => {
         setPostedRecheckReceiptIds([]);
         setPostedRecheckPlanId(null);
         invalidateStats();
-        actionRef.current?.reload();
+    actionRef.current?.reload();
       }
     } catch (error: unknown) {
       messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.quality.incoming.messages.createFailed')));
@@ -945,7 +946,7 @@ const IncomingInspectionPage: React.FC = () => {
         messageApi.success(t('app.kuaizhizao.quality.incoming.messages.createFromCustomerMaterialSuccess'));
         pullFromCustomerMaterialQuery.closeModal();
         invalidateStats();
-        actionRef.current?.reload();
+    actionRef.current?.reload();
       } catch (error: unknown) {
         messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.quality.incoming.messages.createFailed')));
       }
@@ -1111,83 +1112,56 @@ const IncomingInspectionPage: React.FC = () => {
 
   const inspectionCustomFieldColumns = generateInspectionCustomFieldColumns();
 
-  const handleDeleteRow = useCallback(
-    (record: IncomingInspection) => {
-      if (record.id == null) return;
-      getAntdModal().confirm({
-        title: t('app.kuaizhizao.quality.incoming.messages.deleteConfirm', { count: 1 }),
-        onOk: async () => {
-          await qualityApi.incomingInspection.delete(String(record.id));
+  const executeDeleteRow = useCallback(async (record: IncomingInspection) => {
+    await qualityApi.incomingInspection.delete(String(record.id));
           messageApi.success(t('app.kuaizhizao.quality.common.messages.deleteSuccess', { count: 1 }));
           if (inspectionDetail?.id === record.id) {
             setDetailVisible(false);
             setInspectionDetail(null);
           }
           invalidateStats();
-          actionRef.current?.reload();
-        },
-      });
-    },
-    [inspectionDetail?.id, messageApi, t],
-  );
+    actionRef.current?.reload();
+  }, [inspectionDetail?.id, messageApi, t]);
 
-  const handleRevokeConduct = useCallback(
-    (record: IncomingInspection) => {
-      if (record.id == null) return;
-      getAntdModal().confirm({
-        title: t('app.kuaizhizao.quality.common.actions.revokeConductConfirmTitle'),
-        content: t('app.kuaizhizao.quality.common.actions.revokeConductConfirmContent', {
-          code: record.inspection_code || record.id,
-        }),
-        onOk: async () => {
-          await qualityApi.incomingInspection.revokeConduct(String(record.id));
+  const executeRevokeConduct = useCallback(async (record: IncomingInspection) => {
+    await qualityApi.incomingInspection.revokeConduct(String(record.id));
           messageApi.success(t('app.kuaizhizao.quality.common.messages.revokeConductSuccess'));
           if (inspectionDetail?.id === record.id) {
             setDetailVisible(false);
             setInspectionDetail(null);
           }
           invalidateStats();
-          actionRef.current?.reload();
-        },
-      });
-    },
-    [inspectionDetail?.id, messageApi, t],
-  );
+    actionRef.current?.reload();
+  }, [inspectionDetail?.id, messageApi, t]);
 
-  const handleBatchRevokeConduct = useCallback(async () => {
+  const executeBatchRevokeConduct = useCallback(async () => {
     const targets = filterRevokeConductQualityInspectionRecords(selectedRecordsForBatch);
     if (!targets.length) {
       messageApi.warning(t('app.kuaizhizao.quality.common.messages.revokeConductBatchEmpty'));
       return;
     }
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.quality.common.actions.revokeConductConfirmTitle'),
-      content: t('app.kuaizhizao.quality.common.messages.revokeConductBatchConfirm', { count: targets.length }),
-      onOk: async () => {
-        try {
-          for (const row of targets) {
-            if (row.id == null) continue;
-            await qualityApi.incomingInspection.revokeConduct(String(row.id));
-          }
-          messageApi.success(
-            t('app.kuaizhizao.quality.common.messages.revokeConductBatchSuccess', { count: targets.length }),
-          );
-          setSelectedRowKeys([]);
-          if (inspectionDetail?.id != null && targets.some((row) => row.id === inspectionDetail.id)) {
-            setDetailVisible(false);
-            setInspectionDetail(null);
-          }
-          invalidateStats();
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(
-            qualityInspectionCapabilityReasonMessage(error?.message, t) ||
-              error?.message ||
-              t('app.kuaizhizao.quality.common.messages.revokeConductFailed'),
-          );
-        }
-      },
-    });
+    try {
+      for (const row of targets) {
+        if (row.id == null) continue;
+        await qualityApi.incomingInspection.revokeConduct(String(row.id));
+      }
+      messageApi.success(
+        t('app.kuaizhizao.quality.common.messages.revokeConductBatchSuccess', { count: targets.length }),
+      );
+      setSelectedRowKeys([]);
+      if (inspectionDetail?.id != null && targets.some((row) => row.id === inspectionDetail.id)) {
+        setDetailVisible(false);
+        setInspectionDetail(null);
+      }
+      invalidateStats();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(
+        qualityInspectionCapabilityReasonMessage(error?.message, t) ||
+          error?.message ||
+          t('app.kuaizhizao.quality.common.messages.revokeConductFailed'),
+      );
+    }
   }, [inspectionDetail?.id, messageApi, selectedRecordsForBatch, t]);
 
   const renderIncomingRowNodes = (record: IncomingInspection): React.ReactNode[] => {
@@ -1237,7 +1211,7 @@ const IncomingInspectionPage: React.FC = () => {
           resourcePrefix: INCOMING_RESOURCE,
           entityName: t('app.kuaizhizao.quality.common.entity.incomingInspection'),
           onSuccess: () => {
-            actionRef.current?.reload();
+    actionRef.current?.reload();
             invalidateStats();
             if (inspectionDetail?.id === record.id) {
               qualityApi.incomingInspection
@@ -1276,7 +1250,10 @@ const IncomingInspectionPage: React.FC = () => {
     }
     if (gates.revokeConduct.allowed) {
       nodes.push(
-        <Button
+        <ActionConfirmPopconfirm title={t('app.kuaizhizao.quality.common.actions.revokeConductConfirmTitle')} description={t('app.kuaizhizao.quality.common.actions.revokeConductConfirmContent', {
+          code: record.inspection_code || record.id,
+        })} onConfirm={() => executeRevokeConduct(record)}>
+              <Button
           {...rowActionKind('update')}
           key="revoke-conduct"
           size="small"
@@ -1284,18 +1261,17 @@ const IncomingInspectionPage: React.FC = () => {
           icon={<RollbackOutlined />}
           disabled={gates.revokeConduct.disabled}
           title={gates.revokeConduct.title}
-          onClick={(e) => {
-            e.stopPropagation();
-            handleRevokeConduct(record);
-          }}
+          onClick={(e) => e.stopPropagation()}
         >
           {t('app.kuaizhizao.quality.common.actions.revokeConduct')}
-        </Button>,
+        </Button>
+            </ActionConfirmPopconfirm>,
       );
     }
     if (gates.delete.allowed) {
       nodes.push(
-        <Button
+        <ActionConfirmPopconfirm title={t('app.kuaizhizao.quality.incoming.messages.deleteConfirm', { count: 1 })} onConfirm={() => executeDeleteRow(record)}>
+              <Button
           {...rowActionKind('delete')}
           key="delete"
           size="small"
@@ -1304,13 +1280,11 @@ const IncomingInspectionPage: React.FC = () => {
           icon={<DeleteOutlined />}
           disabled={gates.delete.disabled}
           title={gates.delete.title}
-          onClick={(e) => {
-            e.stopPropagation();
-            handleDeleteRow(record);
-          }}
+          onClick={(e) => e.stopPropagation()}
         >
           {t('common.delete')}
-        </Button>,
+        </Button>
+            </ActionConfirmPopconfirm>,
       );
     }
     return nodes;
@@ -1369,6 +1343,7 @@ const IncomingInspectionPage: React.FC = () => {
         },
       },
     ]),
+    buildQualityInspectionListNotesColumn<IncomingInspection>(t),
     ...buildDocumentAuditColumns<IncomingInspection>(t),
     ...inspectionCustomFieldColumns,
     ...(incomingAuditColumn ? [incomingAuditColumn] : []),
@@ -1436,7 +1411,7 @@ const IncomingInspectionPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.incomingInspection)}
         headerTitle={t('app.kuaizhizao.quality.incoming.pageTitle')}
-        columnPersistenceId="apps.kuaizhizao.pages.quality-management.incoming-inspection-width-v1"
+        columnPersistenceId="apps.kuaizhizao.pages.quality-management.incoming-inspection-width-v2"
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
@@ -1529,15 +1504,17 @@ const IncomingInspectionPage: React.FC = () => {
               setInspectionDetail(null);
             }
             invalidateStats();
-            actionRef.current?.reload();
+    actionRef.current?.reload();
           } catch (error: any) {
             messageApi.error(error.message || t('common.deleteFailed'));
           }
         }}
         toolBarActionsAfterDelete={[
-          <Button key="revoke-conduct-batch" icon={<RollbackOutlined />} onClick={() => void handleBatchRevokeConduct()}>
+          <ActionConfirmPopconfirm title={t('app.kuaizhizao.quality.common.actions.revokeConductConfirmTitle')} description={t('app.kuaizhizao.quality.common.messages.revokeConductBatchConfirm', { count: filterRevokeConductQualityInspectionRecords(selectedRecordsForBatch).length })} onConfirm={() => executeBatchRevokeConduct()}>
+              <Button key="revoke-conduct-batch" icon={<RollbackOutlined />} onClick={(e) => e.stopPropagation()}>
             {t('app.kuaizhizao.quality.common.actions.revokeConduct')}
-          </Button>,
+          </Button>
+            </ActionConfirmPopconfirm>,
           <UniAuditBatchMenuButton
             key="incoming-inspection-batch-menu"
             selectedRowKeys={selectedRowKeys}
@@ -1548,7 +1525,7 @@ const IncomingInspectionPage: React.FC = () => {
             onSuccess={() => {
               setSelectedRowKeys([]);
               invalidateStats();
-              actionRef.current?.reload();
+    actionRef.current?.reload();
             }}
             toolBarButtonSize="middle"
           />,
@@ -1671,7 +1648,7 @@ const IncomingInspectionPage: React.FC = () => {
                   entityName: t('app.kuaizhizao.quality.common.entity.incomingInspection'),
                   theme: 'default',
                   onSuccess: () => {
-                    actionRef.current?.reload();
+    actionRef.current?.reload();
                     invalidateStats();
                     if (inspectionDetail?.id) {
                       qualityApi.incomingInspection

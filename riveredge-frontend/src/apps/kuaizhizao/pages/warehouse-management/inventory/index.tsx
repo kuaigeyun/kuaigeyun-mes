@@ -274,7 +274,7 @@ const InventoryPage: React.FC = () => {
             const next = v === 'show';
             includeZeroStockRef.current = next;
             setIncludeZeroStock(next);
-            actionRef.current?.reload();
+    actionRef.current?.reload();
           }}
         />
         <Select
@@ -287,7 +287,7 @@ const InventoryPage: React.FC = () => {
             const next: 'all' | number = v === 'all' ? 'all' : Number(v);
             warehouseFilterRef.current = next;
             setWarehouseFilter(next);
-            actionRef.current?.reload();
+    actionRef.current?.reload();
           }}
         />
       </Space>

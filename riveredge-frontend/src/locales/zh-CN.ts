@@ -4554,6 +4554,10 @@ export default {
   'app.kuaizhizao.deliveryProject.dashboard.overdueNodeList': '逾期节点清单',
   'app.kuaizhizao.deliveryProject.dashboard.viewAll': '查看全部',
   'app.kuaizhizao.deliveryProject.dashboard.ganttTitle': '项目进度甘特图',
+  'app.kuaizhizao.deliveryProject.dashboard.alertCount': '临期逾期预警',
+  'app.kuaizhizao.deliveryProject.dashboard.nodeAlerts': '节点预警',
+  'app.kuaizhizao.deliveryProject.dashboard.alertList': '预警清单',
+  'app.kuaizhizao.deliveryProject.dashboard.alertKind': '预警类型',
   'app.kuaizhizao.deliveryProject.dashboard.viewFollowUp': '项目跟进表',
   'app.kuaizhizao.deliveryProject.gantt.scale.month': '%Y年%m月',
   'app.kuaizhizao.deliveryProject.gantt.scale.week': '第%W周',
@@ -4635,6 +4639,26 @@ export default {
   'app.kuaizhizao.deliveryProject.schedule.reportOverdue': '汇报逾期',
   'app.kuaizhizao.deliveryProject.schedule.overdue': '逾期',
   'app.kuaizhizao.deliveryProject.assignOwner': '指定负责人',
+  'app.kuaizhizao.deliveryProject.editNodeSchedule': '编辑节点计划',
+  'app.kuaizhizao.deliveryProject.startNode': '开始节点',
+  'app.kuaizhizao.deliveryProject.completeNode': '完成节点',
+  'app.kuaizhizao.deliveryProject.nodeStarted': '节点已开始',
+  'app.kuaizhizao.deliveryProject.nodeCompleted': '节点已完成',
+  'app.kuaizhizao.deliveryProject.completeNodeConfirm': '确认完成该节点？未完成子任务或未审汇报将无法通过。',
+  'app.kuaizhizao.deliveryProject.linkDocument': '关联单据',
+  'app.kuaizhizao.deliveryProject.unlinkDocument': '解绑',
+  'app.kuaizhizao.deliveryProject.unlinkDocumentConfirm': '确认解绑该关联单据？',
+  'app.kuaizhizao.deliveryProject.noLinkedDocuments': '暂无关联单据',
+  'app.kuaizhizao.deliveryProject.selectDocTypeFirst': '请先选择单据类型',
+  'app.kuaizhizao.deliveryProject.selectDocumentPlaceholder': '搜索并选择单据',
+  'app.kuaizhizao.deliveryProject.docTitleAutoHint': '可选，选择单据后自动带出',
+  'app.kuaizhizao.deliveryProject.fields.docType': '单据类型',
+  'app.kuaizhizao.deliveryProject.fields.docCode': '单据编码',
+  'app.kuaizhizao.deliveryProject.fields.docId': '单据ID',
+  'app.kuaizhizao.deliveryProject.fields.selectDocument': '选择单据',
+  'app.kuaizhizao.deliveryProject.fields.docTitle': '展示标题',
+  'app.kuaizhizao.deliveryProject.workbench.section.linkedDocuments': '关联单据',
+  'app.kuaizhizao.deliveryProject.workbench.section.allLinkedDocuments': '各节点关联',
   'app.kuaizhizao.deliveryProject.assignNodeOwner': '指定节点负责人：{{node}}',
   'app.kuaizhizao.deliveryProject.started': '项目已启动',
   'app.kuaizhizao.deliveryProject.updatedAt': '更新时间',
@@ -4822,6 +4846,15 @@ export default {
   'app.kuaizhizao.workReporting.colOperation': '工序',
   'app.kuaizhizao.workReporting.colWorker': '生产人员',
   'app.kuaizhizao.workReporting.colRecordedBy': '记录人员',
+  'app.kuaizhizao.workReporting.colClientChannel': '报工来源',
+  'app.kuaizhizao.workReporting.colReportMode': '报工方式',
+  'app.kuaizhizao.workReporting.clientChannel.miniprogram': '小程序',
+  'app.kuaizhizao.workReporting.clientChannel.app': 'App',
+  'app.kuaizhizao.workReporting.clientChannel.station': '终端',
+  'app.kuaizhizao.workReporting.clientChannel.pc': 'PC',
+  'app.kuaizhizao.workReporting.reportMode.self': '自报',
+  'app.kuaizhizao.workReporting.reportMode.proxy': '代报',
+  'app.kuaizhizao.workReporting.reportMode.team': '小组报工',
   'app.kuaizhizao.workReporting.colReportedQty': '报工数量',
   'app.kuaizhizao.workReporting.colQualifiedQty': '合格数量',
   'app.kuaizhizao.workReporting.colUnqualifiedQty': '不合格数量',
@@ -7272,6 +7305,9 @@ export default {
   'app.kuaizhizao.menu.warehouse-management.sales-outbound': '销售出库',
   // 销售订单页面
   'app.kuaizhizao.salesOrder.title': '销售订单',
+  'app.kuaizhizao.salesOrder.listScopeAll': '全部',
+  'app.kuaizhizao.salesOrder.listScopeMine': '我的',
+  'app.kuaizhizao.salesOrder.listScopeDepartment': '我的部门',
   'app.kuaizhizao.salesOrder.termsAndPaymentSection': '合同条款与收款计划',
   'app.kuaizhizao.salesOrder.paymentPlan': '收款计划',
   'app.kuaizhizao.salesOrder.termsSection': '合同条款',
@@ -8149,6 +8185,12 @@ export default {
   'app.kuaizhizao.purchaseReports.colPendingAmount': '未付',
   'app.kuaizhizao.purchaseReports.colDeliveryCode': '交货单号',
   'app.kuaizhizao.purchaseReports.colActualQty': '实交数量',
+  'app.kuaizhizao.purchaseReports.periodBasis.receipt_time': '按入库日',
+  'app.kuaizhizao.purchaseReports.periodBasis.required_date': '按要求到货日',
+  'app.kuaizhizao.purchaseReports.periodBasis.order_date': '按订单日',
+  'app.kuaizhizao.purchaseReports.periodBasis.receipt_time.periodLabel': '期间（入库日）',
+  'app.kuaizhizao.purchaseReports.periodBasis.required_date.periodLabel': '期间（要求到货日）',
+  'app.kuaizhizao.purchaseReports.periodBasis.order_date.periodLabel': '期间（订单日）',
   'app.kuaizhizao.purchaseReports.colOntimeRate': '及时率',
   'app.kuaizhizao.productionExecutionDashboard.kpi.pendingScheduling': '待排产工单',
   'app.kuaizhizao.productionExecutionDashboard.kpi.pendingSchedulingSubtitle': '草稿状态待排程下达',
@@ -11339,6 +11381,10 @@ export default {
   'app.kuaizhizao.warehouseInbound.pull.po.previewFailed': '加载入库预览失败',
   'app.kuaizhizao.warehouseInbound.pull.po.previewNoLines': '无可入库明细',
   'app.kuaizhizao.warehouseInbound.pull.po.selectLinesFirst': '请至少选择一条可入库明细',
+  'app.kuaizhizao.warehouseInbound.pull.po.loadWarehouseFailed': '加载仓库列表失败',
+  'app.kuaizhizao.warehouseInbound.pull.po.batchWarehousePlaceholder': '批量设入库仓',
+  'app.kuaizhizao.warehouseInbound.pull.po.batchWarehouseNoLines': '请先勾选明细或加载可入库行后再批量设仓',
+  'app.kuaizhizao.warehouseInbound.pull.po.warehouseHint': '物料无默认仓库时请在本表选择入库仓；也可上方批量设仓',
   'app.kuaizhizao.warehouseInbound.pull.receiptNotice.title': '从收货通知开入库单',
   'app.kuaizhizao.warehouseInbound.pull.receiptNotice.searchPlaceholder': '按通知单号/采购订单号/供应商搜索',
   'app.kuaizhizao.warehouseInbound.pull.receiptNotice.selectRequired': '请选择收货通知单',
@@ -20518,6 +20564,7 @@ export default {
   'pages.system.configCenter.param.purchase_tolerance_percentage_desc': '采购入库相对订单数量允许的超收百分比上限（0-100）。',
   'pages.system.configCenter.param.purchase_tolerance_percentage_guide': '建议：标准件 0-2%，委外来料可 3-5%；设置过大可能掩盖采购执行偏差。',
   'app.master-data.materialForm.inspectionStagesTitle': '分场景质检策略',
+  'app.master-data.materialForm.inspectionPlanFallback': '已绑定方案 #{{id}}',
   'app.master-data.materialForm.inspectionStagesHint': '按业务场景分别配置质检模式（无/简易/方案）及检验方案；过程检验（IPQC）请在工序资料中配置。',
   'app.master-data.materialForm.inspectionStageColumn': '场景',
   'app.master-data.materialForm.inspectionStageIqc': '来料 IQC',
@@ -24769,6 +24816,138 @@ export default {
   'pages.dashboard.updateLogTypeSection.improvement': '优化',
   'pages.dashboard.updateLogTypeSection.fix': '修复',
   'pages.dashboard.updateLogTypeSection.security': '安全',
+  'pages.dashboard.updateLog.entries.core-data-scope-all-fix.title':
+    '数据权限「全部」修复',
+  'pages.dashboard.updateLog.entries.core-data-scope-all-fix.description':
+    '修复多角色并集与改回「全部」未落库时，列表仍被本人/自定义策略收敛导致数据不全的问题。',
+  'pages.dashboard.updateLog.entries.popconfirm-migration-hotfix.title':
+    '确认框改造善后修复',
+  'pages.dashboard.updateLog.entries.popconfirm-migration-hotfix.description':
+    '修复 Popconfirm 批量改造后各应用页 handler 未定义、确认文案损坏、函数体截断与语法错误，涵盖轻财务、轻办公、快报表、快研发与快制造相关列表与抽屉操作。',
+  'pages.dashboard.updateLog.entries.uni-report-remove-view-switcher.title':
+    '系统报表移除右上角视图切换',
+  'pages.dashboard.updateLog.entries.uni-report-remove-view-switcher.description':
+    '快制造等 UniReport 报表页不再显示表格/帮助视图切换按钮，报表固定为表格视图。',
+  'pages.dashboard.updateLog.entries.pure-confirm-popconfirm.title':
+    '纯确认操作统一改用气泡确认',
+  'pages.dashboard.updateLog.entries.pure-confirm-popconfirm.description':
+    '快制造、快研发、轻财务、主数据与系统设置中，撤回、删除、发布、排产快捷操作等仅标题或纯文本说明的确认，统一改为 Popconfirm 气泡确认；含表单、预览列表或复杂内容的仍保留 Modal。',
+  'pages.dashboard.updateLog.entries.delivery-dashboard-masonry-balance.title':
+    '交付中心事项区恢复两列平衡',
+  'pages.dashboard.updateLog.entries.delivery-dashboard-masonry-balance.description':
+    '最近项目独占左列，预警清单与逾期节点清单叠放右列，不再用轮流装箱把逾期挤回左侧。',
+  'pages.dashboard.updateLog.entries.delivery-node-document-select.title':
+    '交付项目关联单据改为选择',
+  'pages.dashboard.updateLog.entries.delivery-node-document-select.description':
+    '节点关联单据弹窗支持按类型搜索选择，自动回填单号与展示标题，不再手输单据 ID。',
+  'pages.dashboard.updateLog.entries.module-center-panel-title-no-icon.title':
+    '模块中心卡片标题去掉重复图标',
+  'pages.dashboard.updateLog.entries.module-center-panel-title-no-icon.description':
+    '交付中心甘特图、快研发看板甘特图及瀑布流事项卡标题仅保留左侧竖条装饰，不再叠加 Outlined 图标。',
+  'pages.dashboard.updateLog.entries.delivery-dashboard-kpi-four.title':
+    '交付中心指标卡整合为四列',
+  'pages.dashboard.updateLog.entries.delivery-dashboard-kpi-four.description':
+    '交付中心顶部指标合并「逾期节点」与「临期逾期预警」为「节点预警」，一行四卡对齐其它模块中心。',
+  'pages.dashboard.updateLog.entries.delivery-project-deepening-ab.title':
+    '交付项目深化：节点计划运营、里程碑门禁、单据挂链与预警',
+  'pages.dashboard.updateLog.entries.delivery-project-deepening-ab.description':
+    '工作台可编辑节点与子任务计划时间及负责人，支持开始/完成节点与里程碑门禁；节点可挂销售/采购/工单等单据并打开详情；临期与逾期产生站内信，交付中心展示预警清单。',
+  'pages.dashboard.updateLog.entries.dashboard-broadcast-source-icon.title':
+    '工作台最新操作展示报工来源图标',
+  'pages.dashboard.updateLog.entries.dashboard-broadcast-source-icon.description':
+    '最新操作列表每条报工前增加来源圆形浅色图标（PC、小程序、App、终端），悬停可查看来源名称；无来源码时不显示。',
+  'pages.dashboard.updateLog.entries.demand-submit-asyncpg-race-fix.title':
+    '需求计划首次提交不再报服务器内部错误',
+  'pages.dashboard.updateLog.entries.demand-submit-asyncpg-race-fix.description':
+    '提交审核时先建审批实例再写单据状态，待办通知延后发送，并修正审核写回路径，避免数据库连接并发冲突导致第一次提交失败。',
+  'pages.dashboard.updateLog.entries.dashboard-approval-todo-orphan-clear.title':
+    '工作台待办：已审核单据不再残留审批任务',
+  'pages.dashboard.updateLog.entries.dashboard-approval-todo-orphan-clear.description':
+    '应付/应收/采购发票与销售出库等单据审核后同步关闭审批任务；打开待办时自动收敛历史孤儿项。点「处理」可跳转对应单据，不再提示未知类型。',
+  'pages.dashboard.updateLog.entries.purchase-return-confirm-modal-fix.title':
+    '采购退货确认退货现可正常弹出确认并反馈结果',
+  'pages.dashboard.updateLog.entries.purchase-return-confirm-modal-fix.description':
+    '列表与详情点「确认退货」改用页面内确认框；失败时展示明确原因。开启人工审核时未通过前不再露出确认按钮，须先提交审核。',
+  'pages.dashboard.updateLog.entries.mrp-warehouse-scope-main-batch.title':
+    'MRP 参与计算的仓库现同时约束主仓库存',
+  'pages.dashboard.updateLog.entries.mrp-warehouse-scope-main-batch.description':
+    '执行需求计算时，所选仓库会同时过滤主仓批次与线边库存；未勾选仓库的库存不再计入净需求可用量。',
+  'pages.dashboard.updateLog.entries.reporting-source-and-proxy-mode.title':
+    '报工列表展示来源渠道与代报方式',
+  'pages.dashboard.updateLog.entries.reporting-source-and-proxy-mode.description':
+    '新建报工按客户端渠道写入来源（小程序、App、终端、PC），并固化自报/代报/小组报工；列表与详情可直接查看与筛选，历史无值不伪造。',
+  'pages.dashboard.updateLog.entries.warehouse-hide-batch-serial-when-disabled.title':
+    '未启用批号/序列号时出入库制单不再显示对应录入项',
+  'pages.dashboard.updateLog.entries.warehouse-hide-batch-serial-when-disabled.description':
+    '仓储参数关闭批号管理或序列号管理后，入库确认、取单录入、其它入库、出库确认与领料、调拨、盘点与客供登记等制单界面隐藏批号/序列号列与自动生成，详情仍可查看历史数据。',
+  'pages.dashboard.updateLog.entries.quality-inspection-list-notes-remainder.title':
+    '检验列表可直接查看检验备注',
+  'pages.dashboard.updateLog.entries.quality-inspection-list-notes-remainder.description':
+    '来料、过程、成品、出货检验列表增加检验备注列，并作为余量列撑满剩余宽度，无需进入详情即可扫读备注。',
+  'pages.dashboard.updateLog.entries.sales-delivery-approval-task-sync.title':
+    '销售出库审核后我的任务不再残留待处理',
+  'pages.dashboard.updateLog.entries.sales-delivery-approval-task-sync.description':
+    '销售出库与生产领料在单据页审核时同步关闭审批流程任务；打开我的任务时自动收敛历史已审单据的孤儿待办，深链改到出库中心。',
+  'pages.dashboard.updateLog.entries.supplier-delivery-period-basis.title':
+    '供应商交货统计支持按入库日、要求到货日、订单日筛选',
+  'pages.dashboard.updateLog.entries.supplier-delivery-period-basis.description':
+    '统计期间可切换入库日、要求到货日或订单日，并标明当前维度；默认仍按入库日，及时率仍对比入库日与要求到货日。',
+  'pages.dashboard.updateLog.entries.work-order-detail-op-code-name-line.title':
+    '工单详情工序列表精简展示',
+  'pages.dashboard.updateLog.entries.work-order-detail-op-code-name-line.description':
+    '工序项去掉计划时间；编号与工序名称同一行展示，减少占高、更易扫读。',
+  'pages.dashboard.updateLog.entries.inspection-judgment-default-pass.title':
+    '检验判定默认合格会真正写入表单',
+  'pages.dashboard.updateLog.entries.inspection-judgment-default-pass.description':
+    '文本类及合格/不合格分段控件原先只视觉亮「合格」、表单未落判定值，提交被当成未选择；现默认写入合格，与界面一致。',
+  'pages.dashboard.updateLog.entries.mrp-push-confirm-after-row-select.title':
+    'MRP 创建下游单据勾选物料后确认按钮不再误置灰',
+  'pages.dashboard.updateLog.entries.mrp-push-confirm-after-row-select.description':
+    '下推预览表格行键与勾选状态曾混用复合键与物料明细 ID，点击行后选中 ID 失效导致「确认创建」不可用；现按明细 ID 同步勾选，与下推接口一致。',
+  'pages.dashboard.updateLog.entries.list-scope-segmented-reload-lag.title':
+    '报价单与销售订单「我的」按销售人员筛选',
+  'pages.dashboard.updateLog.entries.list-scope-segmented-reload-lag.description':
+    '列表分段「我的」仅保留销售人员为当前用户的单据，不再把代建给他人的单据算进「我的」；「我的部门」仍按部门销售人员范围。',
+  'pages.dashboard.updateLog.entries.sales-order-list-scope-filter.title':
+    '销售订单列表增加全部我的部门筛选',
+  'pages.dashboard.updateLog.entries.sales-order-list-scope-filter.description':
+    '与报价单一致，搜索区增加「全部 / 我的 / 我的部门」分段选择；列表与指标卡按销售员或创建人过滤，管理员选「我的」同样只看本人相关订单。',
+  'pages.dashboard.updateLog.entries.quotation-list-scope-mine.title':
+    '报价单「我的」筛选对管理员同样生效',
+  'pages.dashboard.updateLog.entries.quotation-list-scope-mine.description':
+    '列表「全部 / 我的 / 我的部门」为显式视图筛选；选「我的」时按销售员或创建人过滤，不再因租户管理员数据权限旁路而混入他人单据。',
+  'pages.dashboard.updateLog.entries.purchase-return-audit-setting.title':
+    '配置中心增加采购退货审核设置',
+  'pages.dashboard.updateLog.entries.purchase-return-audit-setting.description':
+    '审核设置采购管理下新增采购退货审核开关，默认关闭（提交后自动通过）；开启后可绑定审批流程进入人工审核。',
+  'pages.dashboard.updateLog.entries.material-inspection-plan-echo.title':
+    '物料质检方案重新编辑可正确回显',
+  'pages.dashboard.updateLog.entries.material-inspection-plan-echo.description':
+    '修复分场景质检策略读取时忽略 planId 导致方案 ID 被洗空；编辑页方案下拉同时加载停用方案，已绑定方案不再因不在选项中而显示空白。',
+  'pages.dashboard.updateLog.entries.po-pull-receipt-select-warehouse.title':
+    '从采购订单创建入库时可当场选仓',
+  'pages.dashboard.updateLog.entries.po-pull-receipt-select-warehouse.description':
+    '入库快捷取单不再因物料未维护默认仓库直接报错；弹窗内可按行或批量选择入库仓库后生成入库单。',
+  'pages.dashboard.updateLog.entries.partner-select-autofill-contact.title':
+    '采购订单选择供应商自动带出联系人',
+  'pages.dashboard.updateLog.entries.partner-select-autofill-contact.description':
+    '供应商/客户下拉引用展示带回联系人与电话快照，采购订单、销售订单等单据首次选择即可自动带出，无需二次操作。',
+  'pages.dashboard.updateLog.entries.tenant-switch-clear-tabs-cache.title':
+    '切换组织时清理标签缓存',
+  'pages.dashboard.updateLog.entries.tenant-switch-clear-tabs-cache.description':
+    '切换组织时同步清理标签栏会话与本地缓存，避免上一组织打开的业务页（如质检）残留在标签栏。',
+  'pages.dashboard.updateLog.entries.demand-computation-permission-resource-prefix.title':
+    '需求计算执行与删除权限生效',
+  'pages.dashboard.updateLog.entries.demand-computation-permission-resource-prefix.description':
+    '修复需求计算页权限资源前缀缺少应用码，导致已授权普通用户看不到「执行」「删除」、仅管理员可操作的问题。',
+  'pages.dashboard.updateLog.entries.demand-submit-approval-asyncpg-fix.title':
+    '需求计划提交审核报错修复',
+  'pages.dashboard.updateLog.entries.demand-submit-approval-asyncpg-fix.description':
+    '修复需求计划提交审核时因事务内启动审批并发访问数据库导致的「another operation is in progress」失败。',
+  'pages.dashboard.updateLog.entries.warehouse-inbound-form-import-fix.title':
+    '入库管理确认弹窗报错修复',
+  'pages.dashboard.updateLog.entries.warehouse-inbound-form-import-fix.description':
+    '修复入库管理打开确认入库弹窗时因未引入 Form 组件导致的「Form is not defined」错误。',
   'pages.dashboard.updateLog.entries.document-push-progress-numeric-restore.title':
     '下推进度 100% 恢复显示百分比',
   'pages.dashboard.updateLog.entries.document-push-progress-numeric-restore.description':
@@ -28002,6 +28181,8 @@ export default {
   'app.kuaizhizao.purchaseReturn.capability.purchase_return.confirm.no_items': '采购退货单无明细，无法确认退货',
   'app.kuaizhizao.purchaseReturn.capability.purchase_return.confirm.already_returned': '采购退货单已确认退货',
   'app.kuaizhizao.purchaseReturn.capability.purchase_return.confirm.cancelled': '已取消的采购退货单不能确认退货',
+  'app.kuaizhizao.purchaseReturn.capability.purchase_return.confirm.not_audited': '采购退货单须审核通过后才能确认退货',
+  'app.kuaizhizao.purchaseReturn.confirmNotAllowed': '当前单据不可确认退货，请先完成提交与审核（如已开启审核）',
   'app.kuaizhizao.purchaseReturn.capability.purchase_return.withdraw.not_returned': '只有已退货状态的采购退货单才能撤回',
   'app.kuaizhizao.quality.incomingInspection.capability.quality_inspection.push_purchase_return.not_allowed': '只有已检验或已审核且存在不合格数量的来料检验单才能下推采购退货单',
   'app.kuaizhizao.quality.incomingInspection.capability.quality_inspection.push_purchase_return.already_pushed': '不合格数量已全部下推采购退货，删除待退货单后可再次下推',

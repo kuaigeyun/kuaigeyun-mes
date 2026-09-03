@@ -9,6 +9,7 @@
 
 import React, { useRef, useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useLeaveFormTab } from '../../../../../components/uni-tabs/navigateClosingTab';
@@ -1069,9 +1070,11 @@ const PurchaseOrdersPage: React.FC = () => {
         }
         if (canDelete) {
           parts.push(
-            <Button {...rowActionKind('delete')} key="del" onClick={() => handleDelete(record)}>
+            <ActionConfirmPopconfirm title={t('app.kuaizhizao.purchaseOrder.deleteTitle')} description={t('app.kuaizhizao.purchaseOrder.deleteContent', { code: record.order_code })} okType="danger" onConfirm={() => executeDelete(record)}>
+              <Button {...rowActionKind('delete')} key="del" onClick={(e) => e.stopPropagation()}>
               {t('common.delete')}
-            </Button>,
+            </Button>
+            </ActionConfirmPopconfirm>,
           );
         }
         parts.push(
@@ -1094,7 +1097,7 @@ const PurchaseOrdersPage: React.FC = () => {
             onSuccess={() => {
               invalidateStatistics();
               invalidateMenuBadgeCounts();
-              actionRef.current?.reload();
+    actionRef.current?.reload();
               if (detailDrawerVisible && orderDetail?.id === record.id && record.id != null) {
                 void getPurchaseOrder(record.id).then((d) => {
                   setOrderDetail(d);
@@ -1545,7 +1548,7 @@ const PurchaseOrdersPage: React.FC = () => {
         resetPushPreviewModal();
         invalidateStatistics();
         invalidateMenuBadgeCounts();
-        actionRef.current?.reload();
+    actionRef.current?.reload();
         if (detailDrawerVisible && orderDetail?.id === target.id) {
           getPurchaseOrder(target.id!).then(setOrderDetail);
         }
@@ -1584,7 +1587,7 @@ const PurchaseOrdersPage: React.FC = () => {
         resetPushPreviewModal();
         invalidateStatistics();
         invalidateMenuBadgeCounts();
-        actionRef.current?.reload();
+    actionRef.current?.reload();
         if (detailDrawerVisible && orderDetail?.id === target.id) {
           getPurchaseOrder(target.id!).then(setOrderDetail);
         }
@@ -1803,13 +1806,8 @@ const PurchaseOrdersPage: React.FC = () => {
   }, [selectedOrderForToolbar, selectedRowKeys.length, t]);
 
   // 处理删除
-  const handleDelete = async (record: PurchaseOrder) => {
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.purchaseOrder.deleteTitle'),
-      content: t('app.kuaizhizao.purchaseOrder.deleteContent', { code: record.order_code }),
-      okType: 'danger',
-      onOk: async () => {
-        try {
+  const executeDelete = async (record: PurchaseOrder) => {
+    try {
           await deletePurchaseOrder(record.id!);
           messageApi.success(t('app.kuaizhizao.purchaseOrder.deleteSuccess'));
           if (orderDetail?.id === record.id) {
@@ -1819,12 +1817,18 @@ const PurchaseOrdersPage: React.FC = () => {
           }
           invalidateStatistics();
           invalidateMenuBadgeCounts();
-
-          actionRef.current?.reload();
+    actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || t('app.kuaizhizao.purchaseOrder.deleteFailed'));
         }
-      },
+  };
+
+  const handleDelete = async (record: PurchaseOrder) => {
+    getAntdModal().confirm({
+      title: t('app.kuaizhizao.purchaseOrder.deleteTitle'),
+      content: t('app.kuaizhizao.purchaseOrder.deleteContent', { code: record.order_code }),
+      okType: 'danger',
+      onOk: () => executeDelete(record),
     });
   };
 
@@ -2033,8 +2037,7 @@ const PurchaseOrdersPage: React.FC = () => {
       if (result.successCount > 0) {
         invalidateStatistics();
         invalidateMenuBadgeCounts();
-
-        actionRef.current?.reload();
+    actionRef.current?.reload();
       }
     } catch (error: any) {
       messageApi.error(error?.message || t('app.kuaizhizao.purchaseOrder.importFailed'));
@@ -2349,7 +2352,7 @@ const PurchaseOrdersPage: React.FC = () => {
         pullFromRequisitionQuery.closeModal();
         invalidateMenuBadgeCounts();
         invalidateStatistics();
-        actionRef.current?.reload();
+    actionRef.current?.reload();
       } catch (error: unknown) {
         messageApi.error(
           getApiErrorMessage(
@@ -2426,7 +2429,7 @@ const PurchaseOrdersPage: React.FC = () => {
         pullFromInquiryQuery.closeModal();
         invalidateMenuBadgeCounts();
         invalidateStatistics();
-        actionRef.current?.reload();
+    actionRef.current?.reload();
       } catch (error: unknown) {
         messageApi.error(
           getApiErrorMessage(
@@ -4104,8 +4107,7 @@ const PurchaseOrdersPage: React.FC = () => {
           setLandingCostModalVisible(false);
           setLandingCostOrder(null);
           invalidateMenuBadgeCounts();
-
-          actionRef.current?.reload();
+    actionRef.current?.reload();
         }}
         orderId={landingCostOrder?.id || 0}
         orderCode={landingCostOrder?.order_code || ''}
@@ -4186,7 +4188,7 @@ const PurchaseOrdersPage: React.FC = () => {
                       theme="default"
                       onSuccess={() => {
                         invalidateStatistics();
-                        actionRef.current?.reload();
+    actionRef.current?.reload();
                         setPoTrackingRefreshKey((k) => k + 1);
                         void getPurchaseOrder(orderDetail.id!)
                           .then(setOrderDetail)

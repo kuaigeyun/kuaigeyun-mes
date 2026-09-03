@@ -160,3 +160,20 @@ DEFAULT_DELIVERY_PROCESS_NODES: List[Dict[str, Any]] = [
         "is_milestone": True,
     },
 ]
+
+# 节点可关联单据类型（与前端 LinkedDocumentDetail 对齐；inbound/outbound 用入库/出库抽屉类型）
+DELIVERY_NODE_DOCUMENT_TYPES = frozenset({
+    "sales_order",
+    "purchase_order",
+    "work_order",
+    "purchase_receipt",
+    "sales_delivery",
+    "quality_inspection",
+    "rd_project",
+})
+
+DELIVERY_NODE_DUE_SOON_DAYS = 3
+
+DELIVERY_ALERT_KIND_DUE_SOON = "due_soon"
+DELIVERY_ALERT_KIND_OVERDUE = "overdue"
+DELIVERY_ALERT_KIND_MILESTONE_OVERDUE = "milestone_overdue"

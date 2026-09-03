@@ -5,10 +5,11 @@
 统一入口：start_approval、get_approval_status、execute_approval 供业务单据调用。
 
 审核生命周期（提交→建任务→通过/驳回→业务写回）均在 API 请求内同步完成，不依赖 Taskiq Worker。
-Worker 仅用于消息通知等可选后台任务（asyncio.create_task）。
+Worker 仅用于消息通知等可选后台任务（_spawn_background，空 context 以免继承事务连接）。
 """
 
 import asyncio
+import contextvars
 from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
 from datetime import datetime
 from typing import Optional, List, Dict, Any, Union
@@ -40,6 +41,38 @@ class ApprovalInstanceService:
     提供审批实例的 CRUD 操作和审批操作功能。
     """
 
+    @staticmethod
+    def _spawn_background(coro):
+        """
+        在空 contextvars 中创建 Task，避免继承当前 Tortoise 事务连接。
+
+        若在 in_transaction 内 asyncio.create_task 发站内信等 DB 操作，
+        子任务会共用同一 asyncpg 连接，触发
+        「cannot perform operation: another operation is in progress」。
+
+        Tortoise 的 `_conn_storage` 以可变 `{}` 作 ContextVar default，空 context
+        若直接 get 会与其它未 set 的上下文共享同一 dict；此处显式 set 新 storage，
+        并复用父上下文里的池客户端（剥掉 TransactionWrapper），避免再建池或撞事务连接。
+        """
+        from tortoise.connection import connections as tortoise_connections
+
+        parent_storage = tortoise_connections._copy_storage()
+        clean_storage: Dict[str, Any] = {}
+        for alias, client in parent_storage.items():
+            clean_storage[alias] = getattr(client, "_parent", client)
+
+        async def _isolated() -> None:
+            tortoise_connections._set_storage(dict(clean_storage))
+            try:
+                await coro
+            except Exception:
+                logger.exception("审批后台任务失败")
+
+        def _start():
+            tortoise_connections._set_storage(dict(clean_storage))
+            return asyncio.create_task(_isolated())
+
+        return contextvars.Context().run(_start)
     @staticmethod
     def _format_dt_for_api(value: Optional[datetime]) -> Optional[str]:
         """唯一出口：to_api_isoformat（与 BaseSchema / SiteTimezoneJSONResponse 同口径）。"""
@@ -95,19 +128,24 @@ class ApprovalInstanceService:
     async def create_approval_instance(
         tenant_id: int,
         user_id: int,
-        data: ApprovalInstanceCreate
+        data: ApprovalInstanceCreate,
+        *,
+        send_notification: bool = True,
     ) -> ApprovalInstance:
         """
         创建审批实例（提交审批）
-        
+
         Args:
             tenant_id: 组织ID
             user_id: 提交人ID
             data: 审批实例创建数据
-            
+            send_notification: 是否在创建后立即异步发待办通知。
+                业务若还需继续写库（如改单据状态），应传 False，待主链路结束后再
+                `notify_approval_submitted`，避免与主请求并发撞 asyncpg 连接。
+
         Returns:
             ApprovalInstance: 创建的审批实例对象
-            
+
         Raises:
             ValidationError: 当流程不存在时抛出
         """
@@ -118,10 +156,10 @@ class ApprovalInstanceService:
             deleted_at__isnull=True,
             is_active=True
         ).first()
-        
+
         if not process:
             raise NotFoundError("审批流程不存在或未启用")
-        
+
         try:
             approval_instance = ApprovalInstance(
                 tenant_id=tenant_id,
@@ -150,18 +188,32 @@ class ApprovalInstanceService:
                 to_node=approval_instance.current_node,
             )
 
-            # 异步发送消息通知（不阻塞审核主链路）
-            asyncio.create_task(
-                ApprovalInstanceService._send_approval_submitted_notification(
+            if send_notification:
+                ApprovalInstanceService.notify_approval_submitted(
                     tenant_id=tenant_id,
                     approval_instance=approval_instance,
-                    process=process
+                    process=process,
                 )
-            )
 
             return approval_instance
         except IntegrityError:
             raise ValidationError("创建审批实例失败")
+
+    @staticmethod
+    def notify_approval_submitted(
+        *,
+        tenant_id: int,
+        approval_instance: ApprovalInstance,
+        process: Optional[ApprovalProcess] = None,
+    ) -> None:
+        """提交审批后的待办通知（后台；须在业务主链路写库完成之后调用）。"""
+        ApprovalInstanceService._spawn_background(
+            ApprovalInstanceService._send_approval_submitted_notification(
+                tenant_id=tenant_id,
+                approval_instance=approval_instance,
+                process=process,
+            )
+        )
 
     @staticmethod
     async def bootstrap_instance_workflow(
@@ -273,6 +325,8 @@ class ApprovalInstanceService:
         entity_uuid: str,
         title: str,
         content: Optional[str] = None,
+        *,
+        send_notification: bool = True,
     ) -> Optional[ApprovalInstance]:
         """
         按 process_code 启动审批流程（统一入口）
@@ -288,6 +342,7 @@ class ApprovalInstanceService:
             entity_uuid: 实体UUID
             title: 审批标题
             content: 审批内容（可选）
+            send_notification: 见 create_approval_instance
 
         Returns:
             ApprovalInstance 或 None（流程不存在时）
@@ -318,7 +373,10 @@ class ApprovalInstanceService:
         if ctx:
             data.data.update(ctx)
         return await ApprovalInstanceService.create_approval_instance(
-            tenant_id=tenant_id, user_id=user_id, data=data
+            tenant_id=tenant_id,
+            user_id=user_id,
+            data=data,
+            send_notification=send_notification,
         )
 
     @staticmethod
@@ -331,6 +389,8 @@ class ApprovalInstanceService:
         entity_uuid: str,
         title: str,
         content: Optional[str] = None,
+        *,
+        send_notification: bool = True,
     ) -> Optional[ApprovalInstance]:
         """
         按 manifest node_key 解析审核绑定并启动审批（统一入口，避免业务层硬编码 process_code）。
@@ -349,6 +409,7 @@ class ApprovalInstanceService:
             entity_uuid=entity_uuid,
             title=title,
             content=content,
+            send_notification=send_notification,
         )
 
     @staticmethod
@@ -566,7 +627,9 @@ class ApprovalInstanceService:
         entity_instances: List[ApprovalInstance] = []
         for inst in instances:
             d = inst.data or {}
-            if d.get("entity_type") == entity_type and d.get("entity_id") == entity_id:
+            if d.get("entity_type") == entity_type and ApprovalInstanceService._entity_ids_equal(
+                d.get("entity_id"), entity_id
+            ):
                 entity_instances.append(inst)
 
         instance = await ApprovalInstanceService._resolve_active_instance(entity_instances)
@@ -733,7 +796,9 @@ class ApprovalInstanceService:
         instance = None
         for inst in instances:
             d = inst.data or {}
-            if d.get("entity_type") == entity_type and d.get("entity_id") == entity_id:
+            if d.get("entity_type") == entity_type and ApprovalInstanceService._entity_ids_equal(
+                d.get("entity_id"), entity_id
+            ):
                 instance = inst
                 break
 
@@ -778,6 +843,178 @@ class ApprovalInstanceService:
             "flow_rejected": updated.status == "rejected",
             "instance": updated,
         }
+
+    @staticmethod
+    def _entity_ids_equal(left: Any, right: Any) -> bool:
+        try:
+            return int(left) == int(right)
+        except (TypeError, ValueError):
+            return left == right
+
+    @staticmethod
+    async def _outbound_entity_decision(
+        tenant_id: int,
+        entity_type: str,
+        entity_id: int,
+    ) -> Optional[str]:
+        """
+        销售出库 / 生产领料是否已有业务审定结果。
+        返回 approved / rejected / None（仍待审或单据不存在）。
+        """
+        if entity_type == "sales_delivery":
+            from apps.kuaizhizao.models.sales_delivery import SalesDelivery
+
+            row = await SalesDelivery.get_or_none(
+                tenant_id=tenant_id, id=entity_id, deleted_at__isnull=True
+            )
+            if not row:
+                return None
+            status = str(row.status or "").strip()
+            review = str(row.review_status or "").strip()
+            if review == "已通过" or status in ("待出库", "已出库", "部分出库"):
+                return "approved"
+            if review == "已驳回":
+                return "rejected"
+            return None
+        if entity_type == "production_picking":
+            from apps.kuaizhizao.models.production_picking import ProductionPicking
+
+            row = await ProductionPicking.get_or_none(
+                tenant_id=tenant_id, id=entity_id, deleted_at__isnull=True
+            )
+            if not row:
+                return None
+            status = str(row.status or "").strip()
+            review = str(row.review_status or "").strip()
+            if review == "已通过" or status in ("待领料", "已领料", "部分领料"):
+                return "approved"
+            if review == "已驳回":
+                return "rejected"
+            return None
+        return None
+
+    @staticmethod
+    async def _entity_audit_decision(
+        tenant_id: int,
+        entity_type: str,
+        entity_id: int,
+    ) -> Optional[str]:
+        """
+        业务单据是否已有审定结果（与流程任务脱节时的收敛依据）。
+        返回 approved / rejected / None（仍待审或单据不存在）。
+        """
+        et = (entity_type or "").strip()
+        if et in ("sales_delivery", "production_picking"):
+            return await ApprovalInstanceService._outbound_entity_decision(
+                tenant_id, et, entity_id
+            )
+        if et == "payable":
+            from apps.kuaicaiwu.models.payable import Payable
+
+            row = await Payable.get_or_none(
+                tenant_id=tenant_id, id=entity_id, deleted_at__isnull=True
+            )
+            if not row:
+                return None
+            review = str(row.review_status or "").strip()
+            if review in ("已审核", "已通过", "approved"):
+                return "approved"
+            if review in ("驳回", "已驳回", "rejected"):
+                return "rejected"
+            return None
+        if et == "receivable":
+            from apps.kuaicaiwu.models.receivable import Receivable
+
+            row = await Receivable.get_or_none(
+                tenant_id=tenant_id, id=entity_id, deleted_at__isnull=True
+            )
+            if not row:
+                return None
+            review = str(row.review_status or "").strip()
+            if review in ("已审核", "已通过", "approved"):
+                return "approved"
+            if review in ("驳回", "已驳回", "rejected"):
+                return "rejected"
+            return None
+        if et == "purchase_invoice":
+            from apps.kuaicaiwu.models.purchase_invoice import PurchaseInvoice
+
+            row = await PurchaseInvoice.get_or_none(
+                tenant_id=tenant_id, id=entity_id, deleted_at__isnull=True
+            )
+            if not row:
+                return None
+            review = str(row.review_status or "").strip()
+            status = str(row.status or "").strip()
+            if review in ("已审核", "已通过", "approved") or status == "已审核":
+                return "approved"
+            if review in ("驳回", "已驳回", "rejected"):
+                return "rejected"
+            return None
+        return None
+
+    @staticmethod
+    async def reconcile_orphaned_outbound_approval_tasks(
+        tenant_id: int,
+        approver_id: int,
+    ) -> int:
+        """兼容旧名：收敛孤儿审批任务（出库/领料/应收应付等）。"""
+        return await ApprovalInstanceService.reconcile_orphaned_approval_tasks(
+            tenant_id, approver_id
+        )
+
+    @staticmethod
+    async def reconcile_orphaned_approval_tasks(
+        tenant_id: int,
+        approver_id: int,
+    ) -> int:
+        """
+        清理「单据已审核、流程任务仍 pending」的历史脏数据。
+        根因曾是业务审核未走 UniAuditService 关流程；正向路径已修复，此处仅收敛存量。
+        """
+        tasks = (
+            await ApprovalTask.filter(
+                tenant_id=tenant_id,
+                approver_id=approver_id,
+                status="pending",
+            )
+            .prefetch_related("approval_instance")
+            .all()
+        )
+        closed = 0
+        for task in tasks:
+            inst = task.approval_instance
+            if not inst or inst.status != "pending":
+                continue
+            data = inst.data if isinstance(inst.data, dict) else {}
+            entity_type = str(data.get("entity_type") or "").strip()
+            try:
+                entity_id = int(data.get("entity_id"))
+            except (TypeError, ValueError):
+                continue
+            decision = await ApprovalInstanceService._entity_audit_decision(
+                tenant_id, entity_type, entity_id
+            )
+            if decision is None:
+                continue
+            task_status = "approved" if decision == "approved" else "rejected"
+            await ApprovalTask.filter(
+                tenant_id=tenant_id,
+                approval_instance_id=inst.id,
+                status="pending",
+            ).update(status=task_status)
+            inst.status = "approved" if decision == "approved" else "rejected"
+            inst.completed_at = resolve_business_datetime()
+            await inst.save(update_fields=["status", "completed_at", "updated_at"])
+            closed += 1
+            logger.info(
+                "已收敛孤儿审批任务 instance={} entity={}:{} decision={}",
+                inst.id,
+                entity_type,
+                entity_id,
+                decision,
+            )
+        return closed
 
     @staticmethod
     async def cancel_approval(
@@ -839,7 +1076,9 @@ class ApprovalInstanceService:
         matched: List[ApprovalInstance] = []
         for inst in instances:
             d = inst.data or {}
-            if d.get("entity_type") == entity_type and d.get("entity_id") == entity_id:
+            if d.get("entity_type") == entity_type and ApprovalInstanceService._entity_ids_equal(
+                d.get("entity_id"), entity_id
+            ):
                 matched.append(inst)
         return matched
 
@@ -1131,7 +1370,7 @@ class ApprovalInstanceService:
             try:
                 approvers = await ApprovalInstanceService._resolve_node_approvers(node, instance)
                 if approvers:
-                    asyncio.create_task(
+                    ApprovalInstanceService._spawn_background(
                         ApprovalInstanceService._send_cc_notification(
                             tenant_id=tenant_id,
                             instance=instance,
@@ -1568,9 +1807,8 @@ class ApprovalInstanceService:
                 approval_instance=approval_instance
             )
         
-        # 异步发送消息通知
-        import asyncio
-        asyncio.create_task(
+        # 异步发送消息通知（须脱离事务 context，避免与主链路共用连接）
+        ApprovalInstanceService._spawn_background(
             ApprovalInstanceService._send_approval_action_notification(
                 tenant_id=tenant_id,
                 approval_instance=approval_instance,
@@ -1739,10 +1977,15 @@ class ApprovalInstanceService:
     async def _send_approval_submitted_notification(
         tenant_id: int,
         approval_instance: ApprovalInstance,
-        process: ApprovalProcess
+        process: Optional[ApprovalProcess] = None,
     ) -> None:
         """提交后仅通知当前审批人（待办）；不给提交人刷「已提交」以免打扰。"""
         try:
+            if process is None:
+                await approval_instance.fetch_related("process")
+                process = approval_instance.process
+            if not process:
+                return
             submitter = await User.filter(
                 id=approval_instance.submitter_id,
                 tenant_id=tenant_id,
@@ -2244,6 +2487,81 @@ class ApprovalInstanceService:
                 )
                 logger.info(f"固定资产采买 {entity_id} 审批回调完成: {approval_instance.status}")
 
+            async def _handle_sales_delivery() -> None:
+                from apps.kuaizhizao.services.warehouse_service import SalesDeliveryService
+
+                service = SalesDeliveryService()
+                if approval_instance.status == "approved":
+                    await service.approve_sales_delivery(tenant_id, int(entity_id), approver_id)
+                elif approval_instance.status == "rejected":
+                    await service.reject_sales_delivery(
+                        tenant_id,
+                        int(entity_id),
+                        approver_id,
+                        rejection_reason="审批驳回",
+                    )
+                logger.info(f"销售出库 {entity_id} 审批回调完成: {approval_instance.status}")
+
+            async def _handle_production_picking() -> None:
+                from apps.kuaizhizao.services.warehouse_service import ProductionPickingService
+
+                service = ProductionPickingService()
+                if approval_instance.status == "approved":
+                    await service.approve_production_picking(tenant_id, int(entity_id), approver_id)
+                elif approval_instance.status == "rejected":
+                    await service.reject_production_picking(
+                        tenant_id,
+                        int(entity_id),
+                        approver_id,
+                        rejection_reason="审批驳回",
+                    )
+                logger.info(f"生产领料 {entity_id} 审批回调完成: {approval_instance.status}")
+
+            async def _handle_payable() -> None:
+                from apps.kuaicaiwu.services.finance_service import FinanceService
+
+                service = FinanceService()
+                if approval_instance.status == "approved":
+                    await service.approve_payable(tenant_id, int(entity_id), approver_id)
+                elif approval_instance.status == "rejected":
+                    await service.approve_payable(
+                        tenant_id,
+                        int(entity_id),
+                        approver_id,
+                        rejection_reason="审批驳回",
+                    )
+                logger.info(f"应付单 {entity_id} 审批回调完成: {approval_instance.status}")
+
+            async def _handle_receivable() -> None:
+                from apps.kuaicaiwu.services.finance_service import FinanceService
+
+                service = FinanceService()
+                if approval_instance.status == "approved":
+                    await service.approve_receivable(tenant_id, int(entity_id), approver_id)
+                elif approval_instance.status == "rejected":
+                    await service.approve_receivable(
+                        tenant_id,
+                        int(entity_id),
+                        approver_id,
+                        rejection_reason="审批驳回",
+                    )
+                logger.info(f"应收单 {entity_id} 审批回调完成: {approval_instance.status}")
+
+            async def _handle_purchase_invoice() -> None:
+                from apps.kuaicaiwu.services.finance_service import FinanceService
+
+                service = FinanceService()
+                if approval_instance.status == "approved":
+                    await service.approve_invoice(tenant_id, int(entity_id), approver_id)
+                elif approval_instance.status == "rejected":
+                    await service.approve_invoice(
+                        tenant_id,
+                        int(entity_id),
+                        approver_id,
+                        rejection_reason="审批驳回",
+                    )
+                logger.info(f"采购发票 {entity_id} 审批回调完成: {approval_instance.status}")
+
             completion_handlers = {
                 "sales_order": _handle_sales_order,
                 "demand": _handle_demand,
@@ -2253,6 +2571,11 @@ class ApprovalInstanceService:
                 "quotation": _handle_quotation,
                 "kuaioa_form_request": _handle_kuaioa_form_request,
                 "kuaioa_asset_purchase": _handle_kuaioa_asset_purchase,
+                "sales_delivery": _handle_sales_delivery,
+                "production_picking": _handle_production_picking,
+                "payable": _handle_payable,
+                "receivable": _handle_receivable,
+                "purchase_invoice": _handle_purchase_invoice,
             }
             handler = completion_handlers.get(entity_type)
             if handler:

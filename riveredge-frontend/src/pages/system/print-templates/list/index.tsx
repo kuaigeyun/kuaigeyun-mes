@@ -251,8 +251,7 @@ const PrintTemplateListPage: React.FC = () => {
       } else {
         messageApi.error(result.error || t('pages.system.printTemplates.renderFailed'));
       }
-      
-      actionRef.current?.reload();
+    actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || t('pages.system.printTemplates.renderFailed'));
     } finally {

@@ -126,11 +126,11 @@ const PayableList: React.FC = () => {
     const [mergeSources, setMergeSources] = useState<MergeFinanceSourceRow[]>([]);
     const handlePayableAuditBatchSuccess = () => {
         setSelectedRowKeys([]);
-        actionRef.current?.reload();
+    actionRef.current?.reload();
     };
 
     useEffect(() => {
-        actionRef.current?.reload();
+    actionRef.current?.reload();
     }, [urlAgingFilters.aging_bucket, urlAgingFilters.overdue_only]);
 
     const agingFilterDescription = useMemo(() => {
@@ -263,7 +263,7 @@ const PayableList: React.FC = () => {
         const created = await payableService.createPayable(data);
         messageApi.success(t('common.createSuccess'));
         setCreateModalVisible(false);
-        actionRef.current?.reload();
+    actionRef.current?.reload();
         if (created?.id) {
             navigate(`/apps/kuaicaiwu/finance-management/payables/${created.id}`);
         }
@@ -436,7 +436,7 @@ const PayableList: React.FC = () => {
             });
             messageApi.success(t(`${P}.pullCreateSuccess`, { target: pullFromPurchaseOrderAction.targetLabel }));
             resetPullPreview();
-            actionRef.current?.reload();
+    actionRef.current?.reload();
             return true;
         } catch (e: any) {
             messageApi.error(
@@ -522,9 +522,9 @@ const PayableList: React.FC = () => {
             for (const id of keys) {
                 await payableService.deletePayable(Number(id));
             }
-            messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
+    messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
             setSelectedRowKeys([]);
-            actionRef.current?.reload();
+    actionRef.current?.reload();
         } catch (error: any) {
             messageApi.error(error?.message || t('common.deleteFailed'));
         }
@@ -1042,7 +1042,7 @@ const PayableList: React.FC = () => {
                     });
                     if (result.successCount > 0) {
                         messageApi.success(t(`${P}.importSuccess`, { count: result.successCount }));
-                        actionRef.current?.reload();
+    actionRef.current?.reload();
                     }
                     if (result.failureCount > 0) {
                         messageApi.warning(t('app.kuaicaiwu.common.importPartialFail', { count: result.failureCount }));
@@ -1328,7 +1328,7 @@ const PayableList: React.FC = () => {
                 onOpenChange={setMergeModalOpen}
                 onSuccess={() => {
                     setSelectedRowKeys([]);
-                    actionRef.current?.reload();
+    actionRef.current?.reload();
                 }}
             />
         </ListPageTemplate>

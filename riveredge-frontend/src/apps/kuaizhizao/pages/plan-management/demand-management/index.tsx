@@ -11,6 +11,7 @@
 
 import React, { useRef, useState, useCallback, useMemo } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -93,7 +94,6 @@ import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
-import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 const DEMAND_RESOURCE = 'kuaizhizao:demand';
 
@@ -142,7 +142,7 @@ function isDemandRejected(d: Demand): boolean {
 const DemandManagementPage: React.FC = () => {
   const { t } = useTranslation();
   const pushToComputationAction = resolveKuaizhizaoDocumentAction(t, 'demand_computation.pull_from_demand');
-  const { message: messageApi } = App.useApp();
+  const { message: messageApi, modal: modalApi } = App.useApp();
 
   const formatDemandTypeLabel = useCallback(
     (v: string | undefined | null) => translateDemandType(t, v),
@@ -446,27 +446,29 @@ const DemandManagementPage: React.FC = () => {
     [showDemandPushPreview],
   );
 
-  const handleWithdrawFromComputation = async (id: number) => {
-    getAntdModal().confirm({
+  const executeWithdrawFromComputation = async (id: number) => {
+    try {
+      await withdrawDemandFromComputation(id);
+      messageApi.success(t('app.kuaizhizao.salesOrder.withdrawSuccess'));
+      invalidateStatistics();
+      actionRef.current?.reload();
+      if (currentDemand?.id === id) {
+        void getDemand(id)
+          .then((updated) => setCurrentDemand(updated))
+          .catch(() => {});
+        setDemandTrackingRefreshKey((k) => k + 1);
+      }
+    } catch (error: any) {
+      messageApi.error(error.message || t('app.kuaizhizao.salesOrder.withdrawFailed'));
+      throw error;
+    }
+  };
+
+  const handleWithdrawFromComputation = (id: number) => {
+    modalApi.confirm({
       title: t('app.kuaizhizao.demandManagement.withdrawTitle'),
       content: t('app.kuaizhizao.demandManagement.withdrawConfirm'),
-      onOk: async () => {
-        try {
-          await withdrawDemandFromComputation(id);
-          messageApi.success(t('app.kuaizhizao.salesOrder.withdrawSuccess'));
-          invalidateStatistics();
-          actionRef.current?.reload();
-          if (currentDemand?.id === id) {
-            void getDemand(id)
-              .then((updated) => setCurrentDemand(updated))
-              .catch(() => {});
-            setDemandTrackingRefreshKey((k) => k + 1);
-          }
-        } catch (error: any) {
-          messageApi.error(error.message || t('app.kuaizhizao.salesOrder.withdrawFailed'));
-          throw error;
-        }
-      },
+      onOk: () => executeWithdrawFromComputation(id),
     });
   };
 
@@ -781,15 +783,17 @@ const DemandManagementPage: React.FC = () => {
         }
         if (demandCanWithdrawComputation(record)) {
           parts.push(
-            <Button {...rowActionKind('revoke')}
+            <ActionConfirmPopconfirm title={t('app.kuaizhizao.demandManagement.withdrawTitle')} description={t('app.kuaizhizao.demandManagement.withdrawConfirm')} onConfirm={() => executeWithdrawFromComputation(record.id!)}>
+              <Button {...rowActionKind('revoke')}
               key="withdraw-push"
               type="link"
               size="small"
               icon={<RollbackOutlined />}
-              onClick={() => void handleWithdrawFromComputation(record.id!)}
+              onClick={(e) => e.stopPropagation()}
             >
               {t('app.kuaizhizao.demandManagement.withdrawPush')}
             </Button>
+            </ActionConfirmPopconfirm>
           );
         }
         parts.push(
@@ -802,7 +806,7 @@ const DemandManagementPage: React.FC = () => {
             size="small"
             onSuccess={() => {
               invalidateStatistics();
-              actionRef.current?.reload();
+    actionRef.current?.reload();
               if (drawerVisible && currentDemand?.id === record.id && record.id != null) {
                 void getDemand(record.id, true, false)
                   .then((updated) => {
@@ -818,7 +822,7 @@ const DemandManagementPage: React.FC = () => {
       },
     },
   ], SALES_DOC_LIST_FIELD_RANK),
-    [t, formatDemandTypeLabel, handleDelete, handleDetail, handleEdit, demandCanWithdrawComputation, handleWithdrawFromComputation, demandAuditColumn, demandPlanLifecycleValueEnum, drawerVisible, currentDemand?.id]
+    [t, formatDemandTypeLabel, handleDelete, handleDetail, handleEdit, demandCanWithdrawComputation, executeWithdrawFromComputation, demandAuditColumn, demandPlanLifecycleValueEnum, drawerVisible, currentDemand?.id]
   );
 
   const statCards: StatCard[] = useMemo(
@@ -1343,12 +1347,15 @@ const DemandManagementPage: React.FC = () => {
           currentDemand && (
             <Space size="small">
               {demandCanWithdrawComputation(currentDemand) ? (
-                <Button
-                  icon={<RollbackOutlined />}
-                  onClick={() => void handleWithdrawFromComputation(currentDemand.id!)}
+                <ActionConfirmPopconfirm
+                  title={t('app.kuaizhizao.demandManagement.withdrawTitle')}
+                  description={t('app.kuaizhizao.demandManagement.withdrawConfirm')}
+                  onConfirm={() => executeWithdrawFromComputation(currentDemand.id!)}
                 >
-                  {t('app.kuaizhizao.demandManagement.withdrawPush')}
-                </Button>
+                  <Button icon={<RollbackOutlined />} onClick={(e) => e.stopPropagation()}>
+                    {t('app.kuaizhizao.demandManagement.withdrawPush')}
+                  </Button>
+                </ActionConfirmPopconfirm>
               ) : null}
               {(isDemandDraft(currentDemand) || isDemandPendingReview(currentDemand)) ? (
                 <Button
@@ -1382,7 +1389,7 @@ const DemandManagementPage: React.FC = () => {
                 theme="default"
                 onSuccess={async () => {
                   invalidateStatistics();
-                  actionRef.current?.reload();
+    actionRef.current?.reload();
                   setDemandTrackingRefreshKey((k) => k + 1);
                   if (currentDemand?.id) {
                     const updated = await getDemand(currentDemand.id, true, false);
@@ -1405,7 +1412,7 @@ const DemandManagementPage: React.FC = () => {
         )}
         onWorkflowSuccess={() => {
           invalidateStatistics();
-          actionRef.current?.reload();
+    actionRef.current?.reload();
           setDemandTrackingRefreshKey((k) => k + 1);
           if (currentDemand?.id) {
             void getDemand(currentDemand.id, true, false).then(setCurrentDemand);

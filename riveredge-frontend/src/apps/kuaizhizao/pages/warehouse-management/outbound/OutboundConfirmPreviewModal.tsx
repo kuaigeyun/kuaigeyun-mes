@@ -36,6 +36,12 @@ import OutboundSerialPickerField from './OutboundSerialPickerField';
 import { formatQuantity } from '../../../../../utils/format';
 import { useGlobalStore } from '../../../../../stores';
 import { isAdminBypass } from '../../../../../utils/permission';
+import {
+  filterWarehouseTrackingColumns,
+  isMaterialBatchEntryEnabled,
+  isMaterialSerialEntryEnabled,
+  useWarehouseTrackingFlags,
+} from '../shared/warehouseTrackingFlags';
 
 const OQC_INSPECTION_PATH = '/apps/kuaizhizao/quality-management/oqc-inspection';
 
@@ -128,6 +134,7 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
   onSuccess,
 }) => {
   const { t } = useTranslation();
+  const trackingFlags = useWarehouseTrackingFlags();
   const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const currentUser = useCurrentUser();
@@ -317,7 +324,9 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
     const batchMids = [
       ...new Set(
         activeLines
-          .filter((it) => materialMeta[Number(it.id)]?.batchManaged)
+          .filter((it) =>
+            isMaterialBatchEntryEnabled(trackingFlags, materialMeta[Number(it.id)]?.batchManaged),
+          )
           .map((x) => Number(x.material_id))
           .filter((mid) => Number.isFinite(mid) && mid > 0),
       ),
@@ -346,7 +355,7 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
               const whFilter = whFilterRaw > 0 ? whFilterRaw : undefined;
               const stock = await loadAvailableQtyByMaterialId([mid], whFilter);
               stockMap[lineId] = stock[mid] ?? 0;
-              if (materialMeta[lineId]?.batchManaged) {
+              if (isMaterialBatchEntryEnabled(trackingFlags, materialMeta[lineId]?.batchManaged)) {
                 const batchByMid = await loadBatchOptionsByMaterialId(
                   [mid],
                   whFilter,
@@ -407,7 +416,7 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
     return () => {
       cancelled = true;
     };
-  }, [open, activeLines, materialMeta, detail?.id, detail?.warehouse_id, record?.warehouse_id, outboundType, t]);
+  }, [open, activeLines, materialMeta, detail?.id, detail?.warehouse_id, record?.warehouse_id, outboundType, t, trackingFlags]);
 
   useEffect(() => {
     if (!open || batchOptionsLoading || !activeLines.length) return;
@@ -415,7 +424,7 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
     for (const it of activeLines) {
       const lineId = Number(it.id);
       const meta = materialMeta[lineId];
-      if (!meta?.batchManaged) continue;
+      if (!isMaterialBatchEntryEnabled(trackingFlags, meta?.batchManaged)) continue;
       const lookupKey = inventoryLookupKey(outboundType, it);
       const opts = batchOptionsByMaterialId[lookupKey] ?? [];
       if (!opts.length) continue;
@@ -428,7 +437,7 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
     if (Object.keys(patches).length) {
       form.setFieldsValue(patches);
     }
-  }, [open, activeLines, materialMeta, batchOptionsByMaterialId, batchOptionsLoading, form, outboundType]);
+  }, [open, activeLines, materialMeta, batchOptionsByMaterialId, batchOptionsLoading, form, outboundType, trackingFlags]);
 
   useEffect(() => {
     if (!open || !activeLines.length) {
@@ -437,7 +446,10 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
     }
     const serialLines = activeLines.filter((it) => {
       const lineId = Number(it.id);
-      return materialMeta[lineId]?.serialManaged && materialMeta[lineId]?.materialUuid;
+      return (
+        isMaterialSerialEntryEnabled(trackingFlags, materialMeta[lineId]?.serialManaged) &&
+        materialMeta[lineId]?.materialUuid
+      );
     });
     if (!serialLines.length) {
       setSerialOptionsByLineId({});
@@ -467,7 +479,7 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
     return () => {
       cancelled = true;
     };
-  }, [open, activeLines, materialMeta]);
+  }, [open, activeLines, materialMeta, trackingFlags]);
 
   const qtyColumn = (it: Record<string, unknown>) => {
     if (outboundType === 'sales_delivery') {
@@ -501,7 +513,9 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
   const locOptions = whId > 0 ? locationOptionsByWh[whId] ?? [] : [];
 
   const columns: ColumnsType<Record<string, unknown>> = useMemo(
-    () => [
+    () =>
+      filterWarehouseTrackingColumns(
+        [
       {
         title: t('app.kuaizhizao.warehouseOutbound.col.lineNo'),
         key: 'idx',
@@ -580,7 +594,7 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
         render: (_: unknown, it) => {
           const lineId = Number(it.id);
           const meta = materialMeta[lineId];
-          if (!meta?.batchManaged) return '—';
+          if (!isMaterialBatchEntryEnabled(trackingFlags, meta?.batchManaged)) return '—';
           const opts = batchOptionsByMaterialId[inventoryLookupKey(outboundType, it)] ?? [];
           return (
             <Form.Item name={`batch_${lineId}`} style={{ marginBottom: 0 }}>
@@ -609,7 +623,7 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
         render: (_: unknown, it) => {
           const lineId = Number(it.id);
           const meta = materialMeta[lineId];
-          if (!meta?.serialManaged) return '—';
+          if (!isMaterialSerialEntryEnabled(trackingFlags, meta?.serialManaged)) return '—';
           const qty = lineOutboundQty(it);
           const opts = serialOptionsByLineId[lineId] ?? [];
           const materialLabel = [it.material_code, it.material_name].filter(Boolean).join(' - ');
@@ -670,7 +684,9 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
             },
           ] as ColumnsType<Record<string, unknown>>)
         : []),
-    ],
+        ],
+        trackingFlags,
+      ),
     [
       batchOptionsByMaterialId,
       batchOptionsLoading,
@@ -688,6 +704,7 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
       stockQtyByMaterialId,
       stockQtyLoading,
       t,
+      trackingFlags,
       whId,
       whName,
     ],
@@ -711,7 +728,7 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
       const qty = lineOutboundQty(it);
       const opts = batchOptionsByMaterialId[lookupKey] ?? [];
 
-      if (!meta?.batchManaged) {
+      if (!isMaterialBatchEntryEnabled(trackingFlags, meta?.batchManaged)) {
         const available =
           opts.length > 0
             ? opts.reduce((sum, o) => sum + (Number(o.quantity) || 0), 0)

@@ -16,6 +16,7 @@ import {
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { DetailDrawerTemplate, ListPageTemplate,   useDetailDrawerDescriptionItems, detailDrawerBasicColumn, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { alignDescriptionColumns, alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
@@ -52,7 +53,7 @@ interface BackflushRecordItem {
 
 const BackflushRecordsPage: React.FC = () => {
   const { t } = useTranslation();
-  const { message, modal } = App.useApp();
+  const { message } = App.useApp();
   const actionRef = useRef<any>(null);
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -86,24 +87,18 @@ const BackflushRecordsPage: React.FC = () => {
     }
   };
 
-  const handleRetry = (record: BackflushRecordItem) => {
-    modal.confirm({
-      title: t('app.kuaizhizao.backflushRecords.retryTitle'),
-      content: t('app.kuaizhizao.backflushRecords.retryContent', { material: record.material_name }),
-      onOk: async () => {
-        try {
+  const executeRetry = async (record: BackflushRecordItem) => {
+    try {
           const res = await warehouseApi.backflushRecords.retry(String(record.id));
           if (res?.success) {
             message.success(res?.message || t('app.kuaizhizao.backflushRecords.retrySuccess'));
-            actionRef.current?.reload();
+    actionRef.current?.reload();
           } else {
             message.warning(res?.message || t('app.kuaizhizao.backflushRecords.retryFailed'));
           }
         } catch {
           message.error(t('app.kuaizhizao.backflushRecords.retryFailed'));
         }
-      },
-    });
   };
 
   const columns: ProColumns<BackflushRecordItem>[] = useMemo(
@@ -208,9 +203,11 @@ const BackflushRecordsPage: React.FC = () => {
           ];
           if (record.status === 'failed') {
             actions.push(
-              <Button key="retry" {...rowActionKind('execute')} {...rowActionLabelKeep()} onClick={() => handleRetry(record)}>
+              <ActionConfirmPopconfirm title={t('app.kuaizhizao.backflushRecords.retryTitle')} description={t('app.kuaizhizao.backflushRecords.retryContent', { material: record.material_name })} onConfirm={() => executeRetry(record)}>
+              <Button key="retry" {...rowActionKind('execute')} {...rowActionLabelKeep()} onClick={(e) => e.stopPropagation()}>
                 {t('app.kuaizhizao.backflushRecords.retry')}
-              </Button>,
+              </Button>
+            </ActionConfirmPopconfirm>,
             );
           }
           return actions;

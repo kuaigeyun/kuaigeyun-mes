@@ -331,7 +331,7 @@ const EmployeeConfigsPage: React.FC = () => {
                 await employeePerformanceApi.deleteConfig(Number(id));
               }
               messageApi.success(t('app.kuaizhizao.performance.common.messages.deleteBatchSuccess', { count: keys.length }));
-              actionRef.current?.reload();
+    actionRef.current?.reload();
             } catch (error: any) {
               messageApi.error(error?.message || t('common.deleteFailed'));
             }

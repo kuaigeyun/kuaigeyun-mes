@@ -24,6 +24,7 @@ import {
 } from '../../../../../components/layout-templates';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { rowActionKind, rowActionAddFollowUpFromDocument } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 
@@ -50,7 +51,6 @@ import {
 } from '../../../../../utils/documentFormReferenceLoad';
 import { alignProColumns, alignDescriptionColumns, SALES_DOC_LIST_FIELD_RANK } from '../shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
-import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 const DICT_CODE = 'SALES_FOLLOW_UP_TYPE';
 
@@ -71,7 +71,7 @@ function followUpPresetFromRecord(record: CustomerFollowUp): CustomerFollowUpPre
 
 const CustomerFollowUpsPage: React.FC = () => {
   const { t } = useTranslation();
-  const { message } = App.useApp();
+  const { message, modal } = App.useApp();
   const linkedDetail = useOptionalLinkedDocumentDetail();
   const actionRef = useRef<ActionType>(null);
   const detailIdRef = useRef<number | null>(null);
@@ -333,11 +333,8 @@ const CustomerFollowUpsPage: React.FC = () => {
     detailIdRef.current = null;
   };
 
-  const handleDelete = (record: CustomerFollowUp, options?: { closeDrawer?: boolean }) => {
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.customerFollowUp.deleteConfirm'),
-      onOk: async () => {
-        try {
+  const executeDelete = async (record: CustomerFollowUp, options?: { closeDrawer?: boolean }) => {
+    try {
           await customerFollowUpApi.delete(record.id);
           message.success(t('common.deleteSuccess'));
           if (options?.closeDrawer) {
@@ -348,7 +345,12 @@ const CustomerFollowUpsPage: React.FC = () => {
         } catch {
           message.error(t('common.deleteFailed'));
         }
-      },
+  };
+
+  const handleDelete = (record: CustomerFollowUp, options?: { closeDrawer?: boolean }) => {
+    modal.confirm({
+      title: t('app.kuaizhizao.customerFollowUp.deleteConfirm'),
+      onOk: () => executeDelete(record, options),
     });
   };
 
@@ -356,7 +358,7 @@ const CustomerFollowUpsPage: React.FC = () => {
     if (keys.length === 0) return;
     try {
       for (const key of keys) {
-        await customerFollowUpApi.delete(Number(key));
+      await customerFollowUpApi.delete(Number(key));
       }
       message.success(t('common.deleteSuccess'));
       setSelectedRowKeys([]);
@@ -584,7 +586,9 @@ const CustomerFollowUpsPage: React.FC = () => {
           <Button {...rowActionKind('read')} key="d" onClick={() => handleDetail(record.id)} />,
           <Button {...rowActionKind('update')} key="e" onClick={() => openEdit(record)} />,
           <Button {...rowActionAddFollowUpFromDocument('create')} key="nf" onClick={() => openCreateFromRow(record)} />,
-          <Button {...rowActionKind('delete')} key="del" onClick={() => handleDelete(record)} />,
+          <ActionConfirmPopconfirm title={t('app.kuaizhizao.customerFollowUp.deleteConfirm')} onConfirm={() => executeDelete(record)}>
+              <Button {...rowActionKind('delete')} key="del" onClick={(e) => e.stopPropagation()} />
+            </ActionConfirmPopconfirm>,
         ];
         return parts;
       },

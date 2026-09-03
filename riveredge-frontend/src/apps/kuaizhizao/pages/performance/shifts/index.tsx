@@ -82,7 +82,7 @@ const ShiftsPage: React.FC = () => {
     }
     try {
       for (const key of keys) {
-        await shiftApi.delete(String(key));
+      await shiftApi.delete(String(key));
       }
       messageApi.success(t('app.kuaizhizao.performance.common.messages.deleteBatchSuccess', { count: keys.length }));
       setSelectedRowKeys([]);
@@ -222,7 +222,7 @@ const ShiftsPage: React.FC = () => {
                   try {
                     await shiftApi.delete(record.uuid);
                     messageApi.success(t('common.deleteSuccess'));
-                    actionRef.current?.reload();
+    actionRef.current?.reload();
                   } catch (e: any) {
                     messageApi.error(e?.message || t('common.deleteFailed'));
                   }

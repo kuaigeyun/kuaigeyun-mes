@@ -11,6 +11,8 @@ from apps.kuaizhizao.schemas.delivery_project import (
     DeliveryProjectCompleteRequest,
     DeliveryProjectCreate,
     DeliveryProjectListEnvelope,
+    DeliveryProjectNodeDocumentCreate,
+    DeliveryProjectNodeDocumentResponse,
     DeliveryProjectNodeResponse,
     DeliveryProjectNodeTaskCreate,
     DeliveryProjectNodeTaskResponse,
@@ -252,6 +254,98 @@ async def update_project_node(
 ):
     try:
         return await _service.update_project_node(tenant_id, project_id, node_id, body, current_user)
+    except NotFoundError as e:
+        raise _http_exception(status.HTTP_404_NOT_FOUND, str(e))
+    except ValidationError as e:
+        raise _http_exception(status.HTTP_400_BAD_REQUEST, str(e))
+
+
+@router.post(
+    "/{project_id:int}/nodes/{node_id:int}/start",
+    response_model=DeliveryProjectNodeResponse,
+    summary="Start delivery project node",
+)
+async def start_project_node(
+    project_id: int = Path(...),
+    node_id: int = Path(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await _service.start_project_node(tenant_id, project_id, node_id, current_user)
+    except NotFoundError as e:
+        raise _http_exception(status.HTTP_404_NOT_FOUND, str(e))
+    except ValidationError as e:
+        raise _http_exception(status.HTTP_400_BAD_REQUEST, str(e))
+
+
+@router.post(
+    "/{project_id:int}/nodes/{node_id:int}/complete",
+    response_model=DeliveryProjectNodeResponse,
+    summary="Complete delivery project node",
+)
+async def complete_project_node(
+    project_id: int = Path(...),
+    node_id: int = Path(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await _service.complete_project_node(tenant_id, project_id, node_id, current_user)
+    except NotFoundError as e:
+        raise _http_exception(status.HTTP_404_NOT_FOUND, str(e))
+    except ValidationError as e:
+        raise _http_exception(status.HTTP_400_BAD_REQUEST, str(e))
+
+
+@router.get(
+    "/{project_id:int}/node-documents",
+    response_model=list[DeliveryProjectNodeDocumentResponse],
+    summary="List delivery project node linked documents",
+)
+async def list_node_documents(
+    project_id: int = Path(...),
+    node_id: Optional[int] = Query(None),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await _service.list_node_documents(tenant_id, project_id, node_id=node_id)
+    except NotFoundError as e:
+        raise _http_exception(status.HTTP_404_NOT_FOUND, str(e))
+
+
+@router.post(
+    "/{project_id:int}/node-documents",
+    response_model=DeliveryProjectNodeDocumentResponse,
+    summary="Link document to delivery project node",
+)
+async def link_node_document(
+    body: DeliveryProjectNodeDocumentCreate,
+    project_id: int = Path(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await _service.link_node_document(tenant_id, project_id, body, current_user)
+    except NotFoundError as e:
+        raise _http_exception(status.HTTP_404_NOT_FOUND, str(e))
+    except ValidationError as e:
+        raise _http_exception(status.HTTP_400_BAD_REQUEST, str(e))
+
+
+@router.delete(
+    "/{project_id:int}/node-documents/{link_id:int}",
+    summary="Unlink document from delivery project node",
+)
+async def unlink_node_document(
+    project_id: int = Path(...),
+    link_id: int = Path(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        await _service.unlink_node_document(tenant_id, project_id, link_id, current_user)
+        return {"success": True}
     except NotFoundError as e:
         raise _http_exception(status.HTTP_404_NOT_FOUND, str(e))
     except ValidationError as e:

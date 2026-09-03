@@ -10,6 +10,7 @@
 
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -65,6 +66,7 @@ import { SimpleSparkline } from '../../../../../components';
 import CodeField from '../../../../../components/code-field';
 import { outsourceOrderApi, workOrderApi } from '../../../services/production';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { getOutsourceOrderLifecycle, buildOutsourceOrderLifecycleValueEnum, resolveOutsourceOrderListLifecycleParams } from '../../../utils/outsourceOrderLifecycle';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
@@ -90,7 +92,6 @@ import {
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
-import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 const OUTSOURCE_ORDER_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_outsource_orders';
 const OUTSOURCE_ORDER_HOST_RESOURCE = 'kuaizhizao:outsource-order';
@@ -635,14 +636,8 @@ export const OutsourceOrdersTable: React.FC = () => {
   /**
    * 处理删除（从记录）
    */
-  const handleDeleteFromRecord = async (record: OutsourceOrder) => {
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.outsourceOrder.confirmDeleteTitle'),
-      content: t('app.kuaizhizao.outsourceOrder.confirmDeleteContent', { code: record.code }),
-      okText: t('common.confirm'),
-      cancelText: t('common.cancel'),
-      onOk: async () => {
-        try {
+  const executeDeleteFromRecord = async (record: OutsourceOrder) => {
+    try {
           await outsourceOrderApi.delete(record.id!.toString());
           messageApi.success(t('common.deleteSuccess'));
           if (outsourceOrderDetail?.id === record.id) {
@@ -651,12 +646,19 @@ export const OutsourceOrdersTable: React.FC = () => {
           }
           setStatsVersion((v) => v + 1);
           invalidateMenuBadgeCounts();
-
-          actionRef.current?.reload();
+    actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || t('common.deleteFailed'));
         }
-      },
+  };
+
+  const handleDeleteFromRecord = async (record: OutsourceOrder) => {
+    getAntdModal().confirm({
+      title: t('app.kuaizhizao.outsourceOrder.confirmDeleteTitle'),
+      content: t('app.kuaizhizao.outsourceOrder.confirmDeleteContent', { code: record.code }),
+      okText: t('common.confirm'),
+      cancelText: t('common.cancel'),
+      onOk: () => executeDeleteFromRecord(record),
     });
   };
 
@@ -1459,14 +1461,16 @@ export const OutsourceOrdersTable: React.FC = () => {
               >
                 {t('common.edit')}
               </Button>
+              <ActionConfirmPopconfirm title={t('app.kuaizhizao.outsourceOrder.confirmDeleteTitle')} description={t('app.kuaizhizao.outsourceOrder.confirmDeleteContent', { code: record.code })} onConfirm={() => executeDeleteFromRecord(outsourceOrderDetail)}>
               <Button
                 danger
                 icon={<DeleteOutlined />}
                 disabled={outsourceOrderDetail.status === 'completed' || outsourceOrderDetail.status === 'in_progress'}
-                onClick={() => handleDeleteFromRecord(outsourceOrderDetail)}
+                onClick={(e) => e.stopPropagation()}
               >
                 {t('common.delete')}
               </Button>
+            </ActionConfirmPopconfirm>
             </Space>
           ) : null
         }

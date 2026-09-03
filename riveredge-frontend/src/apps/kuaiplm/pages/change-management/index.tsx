@@ -9,6 +9,7 @@ import { App, Button, Space } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../components/uni-table';
 import { rowActionKind } from '../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../components/action-confirm';
 import { UniBatchMenuButton } from '../../../../components/uni-batch';
 import { UniWorkflowActions } from '../../../../components/uni-workflow-actions';
 import { ListPageTemplate } from '../../../../components/layout-templates';
@@ -105,21 +106,13 @@ const ChangeManagementPage: React.FC = () => {
     return listUnifiedChanges({ ...base, change_category: undefined });
   };
 
-  const handleExecute = useCallback(
-    (row: UnifiedChangeRow) => {
-      const uuid = row.uuid;
-      if (!uuid || !row.change_category) return;
-      modalApi.confirm({
-        title: t('app.kuaiplm.change.executeConfirm'),
-        onOk: async () => {
-          await executeChange(row.change_category as ChangeDeskCategory, uuid);
-          messageApi.success(t('app.kuaiplm.common.messages.executeSuccess'));
-          actionRef.current?.reload();
-        },
-      });
-    },
-    [modalApi, messageApi, t],
-  );
+  const executeExecute = useCallback(async (row: UnifiedChangeRow) => {
+    const uuid = row.uuid;
+    if (!uuid || !row.change_category) return;
+    await executeChange(row.change_category as ChangeDeskCategory, uuid);
+    messageApi.success(t('app.kuaiplm.common.messages.executeSuccess'));
+    actionRef.current?.reload();
+  }, [messageApi, t]);
 
   const selectedBatchItems = selectedRowKeys
     .map((key) => rowsByUuid[String(key)])
@@ -179,7 +172,7 @@ const ChangeManagementPage: React.FC = () => {
       if (successCount > 0) {
         messageApi.success(t('app.kuaiplm.common.messages.batchDeleteSuccess', { count: successCount }));
         setSelectedRowKeys([]);
-        actionRef.current?.reload();
+    actionRef.current?.reload();
         return;
       }
       messageApi.error(t('app.kuaiplm.common.messages.batchDeleteFailed'));
@@ -289,18 +282,20 @@ const ChangeManagementPage: React.FC = () => {
         ];
         if (status === 'approved' || row.status === '已审批') {
           parts.push(
-            <Button
+            <ActionConfirmPopconfirm title={t('app.kuaiplm.change.executeConfirm')} onConfirm={() => executeExecute(row)}>
+              <Button
               key="execute"
               {...rowActionKind('execute')}
               disabled={!changePerms.canUpdate}
-              onClick={() => handleExecute(row)}
-            />,
+              onClick={(e) => e.stopPropagation()}
+            />
+            </ActionConfirmPopconfirm>,
           );
         }
         return parts;
       }),
     ],
-    [handleExecute, t, changePerms.canUpdate],
+    [executeExecute, t, changePerms.canUpdate],
   );
 
   const toolbarMenuItems = useMemo(
@@ -392,7 +387,7 @@ const ChangeManagementPage: React.FC = () => {
             onChange: (key) => {
               setActiveTab((key as TabKey) || 'all');
               setSelectedRowKeys([]);
-              actionRef.current?.reload();
+    actionRef.current?.reload();
             },
           },
         }}

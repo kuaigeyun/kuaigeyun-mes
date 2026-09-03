@@ -20,6 +20,7 @@ import {
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import {   useDetailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, ListPageTemplate } from '../../../../../components/layout-templates';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { UniBatchMenuButton, runCapabilityBatchLoop } from '../../../../../components/uni-batch';
 import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
 import { MarkerTag } from '../../../../../constants/statusBadges';
@@ -475,21 +476,15 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
     );
   };
 
-  const handleGenerateFromAlerts = async () => {
-    modal.confirm({
-      title: t('app.kuaizhizao.replenishmentSuggestions.msgGenerateTitle'),
-      content: t('app.kuaizhizao.replenishmentSuggestions.msgGenerateContent'),
-      onOk: async () => {
-        try {
+  const executeGenerateFromAlerts = async () => {
+    try {
           const result = await warehouseApi.replenishmentSuggestion.generateFromAlerts();
           showGenerateSummary(result || {});
           invalidateMenuBadgeCounts();
-          actionRef.current?.reload();
+    actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || t('app.kuaizhizao.replenishmentSuggestions.msgGenerateFailed'));
         }
-      },
-    });
   };
 
   const openDemandGenerateModal = async () => {
@@ -698,14 +693,16 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
           toolBarRender={() => [
             ...(replenishmentPerms.canCreate
               ? [
-                  <Button
+                  <ActionConfirmPopconfirm title={t('app.kuaizhizao.replenishmentSuggestions.msgGenerateTitle')} description={t('app.kuaizhizao.replenishmentSuggestions.msgGenerateContent')} onConfirm={() => executeGenerateFromAlerts()}>
+              <Button
                     key="generate-alerts"
                     type="primary"
                     icon={<ReloadOutlined />}
-                    onClick={() => void handleGenerateFromAlerts()}
+                    onClick={(e) => e.stopPropagation()}
                   >
                     {t('app.kuaizhizao.replenishmentSuggestions.actionGenerateFromAlerts')}
-                  </Button>,
+                  </Button>
+            </ActionConfirmPopconfirm>,
                   <Button
                     key="generate-demand"
                     icon={<CalculatorOutlined />}

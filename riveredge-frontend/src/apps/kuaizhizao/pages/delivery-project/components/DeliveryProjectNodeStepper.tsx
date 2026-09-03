@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   ClipboardList,
   Factory,
+  Flag,
   Headphones,
   Package,
   Truck,
@@ -16,7 +17,9 @@ import {
 } from 'lucide-react';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle/UniLifecycleStepper';
 import type { SubStage, SubStageStatus } from '../../../../../components/uni-lifecycle/types';
+import { MarkerTag } from '../../../../../constants/statusBadges';
 import { DELIVERY_NODE_STATUS, type DeliveryProjectNode } from '../../../services/delivery-project';
+import { formatBusinessDateOnly } from '../../../../../utils/format';
 import './DeliveryProjectNodeStepper.less';
 
 const NODE_ICON_SIZE = 17;
@@ -47,8 +50,12 @@ function buildDeliveryNodeSteps(nodes: DeliveryProjectNode[], activeNodeKey?: st
         key,
         label: node.node_name ?? key,
         status: nodeToSubStageStatus(node, activeNodeKey),
-        icon: NODE_ICONS[node.node_key ?? ''] ?? (
-          <CheckCircle2 size={NODE_ICON_SIZE} strokeWidth={2} aria-hidden />
+        icon: node.is_milestone ? (
+          <Flag size={NODE_ICON_SIZE} strokeWidth={2} aria-hidden />
+        ) : (
+          NODE_ICONS[node.node_key ?? ''] ?? (
+            <CheckCircle2 size={NODE_ICON_SIZE} strokeWidth={2} aria-hidden />
+          )
         ),
       };
     });
@@ -95,9 +102,25 @@ export const DeliveryProjectNodeStepper: React.FC<DeliveryProjectNodeStepperProp
             })}
           </Typography.Text>
           {activeNode ? (
-            <Tag color={resolveNodeStatusColor(activeStatus)}>
-              {activeNode.node_name} - {DELIVERY_NODE_STATUS[activeStatus] ?? activeStatus}
-            </Tag>
+            <>
+              {activeNode.is_milestone ? (
+                <MarkerTag variant="filled" color="gold">
+                  {t('app.kuaizhizao.deliveryProject.fields.isMilestone')}
+                </MarkerTag>
+              ) : null}
+              <Tag color={resolveNodeStatusColor(activeStatus)}>
+                {activeNode.node_name} - {DELIVERY_NODE_STATUS[activeStatus] ?? activeStatus}
+              </Tag>
+              {activeNode.planned_end_date ? (
+                <Typography.Text
+                  type={activeStatus === 'overdue' ? 'danger' : 'secondary'}
+                  className="delivery-project-node-stepper__meta"
+                >
+                  {t('app.kuaizhizao.deliveryProject.fields.plannedEndDate')}{' '}
+                  {formatBusinessDateOnly(activeNode.planned_end_date)}
+                </Typography.Text>
+              ) : null}
+            </>
           ) : null}
         </div>
       </div>

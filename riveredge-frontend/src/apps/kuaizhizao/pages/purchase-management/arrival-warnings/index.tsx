@@ -271,7 +271,7 @@ const PurchaseArrivalWarningsPage: React.FC = () => {
               messageApi.success(t('app.kuaizhizao.purchaseArrival.delaySubmitted'));
             }
             setDelayOpen(false);
-            actionRef.current?.reload();
+    actionRef.current?.reload();
             return true;
           } catch (e: unknown) {
             messageApi.error(getApiErrorMessage(e, t('common.operationFailed')));

@@ -27,6 +27,7 @@ import { getMaterialReturnLifecycle } from '../../../utils/materialReturnLifecyc
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import {formatDateTime, formatQuantity} from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
@@ -46,7 +47,6 @@ import {
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { SUBMIT_SHORTCUT_HINT } from '../../../../../utils/globalSubmitShortcut';
-import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { ROUTES } from '../../../constants/routes';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 interface MaterialReturn {
@@ -197,40 +197,26 @@ const MaterialReturnsPage: React.FC = () => {
     }
   };
 
-  const handleConfirm = async (record: MaterialReturn) => {
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.warehouseMaterialReturn.confirm.title'),
-      content: t('app.kuaizhizao.warehouseMaterialReturn.confirm.content', { code: record.return_code }),
-      onOk: async () => {
-        try {
+  const executeConfirm = async (record: MaterialReturn) => {
+    try {
           await warehouseApi.materialReturn.confirm(record.id!.toString());
           messageApi.success(t('app.kuaizhizao.warehouseMaterialReturn.msg.confirmSuccess'));
           invalidateMenuBadgeCounts();
-
-          actionRef.current?.reload();
+    actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || t('app.kuaizhizao.warehouseMaterialReturn.msg.confirmFailed'));
         }
-      },
-    });
   };
 
-  const handleDelete = async (record: MaterialReturn) => {
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.warehouseMaterialReturn.confirm.deleteTitle'),
-      content: t('app.kuaizhizao.warehouseMaterialReturn.confirm.deleteContent', { code: record.return_code }),
-      onOk: async () => {
-        try {
+  const executeDelete = async (record: MaterialReturn) => {
+    try {
           await warehouseApi.materialReturn.delete(record.id!.toString());
           messageApi.success(t('common.deleteSuccess'));
           invalidateMenuBadgeCounts();
-
-          actionRef.current?.reload();
+    actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || t('common.deleteFailed'));
         }
-      },
-    });
   };
 
   const listRowsRef = useRef<Map<string, MaterialReturn>>(new Map());
@@ -529,15 +515,19 @@ const MaterialReturnsPage: React.FC = () => {
           ];
           if (record.status === '待归还') {
             actions.push(
+              <ActionConfirmPopconfirm title={t('app.kuaizhizao.warehouseMaterialReturn.confirm.title')} description={t('app.kuaizhizao.warehouseMaterialReturn.confirm.content', { code: record.return_code })} onConfirm={() => executeConfirm(record)}>
               <Button
                 {...rowActionKind('execute')}
                 {...rowActionLabelKeep()}
                 key="confirm"
-                onClick={() => handleConfirm(record)}
+                onClick={(e) => e.stopPropagation()}
               >
                 {t('app.kuaizhizao.warehouseMaterialReturn.action.confirmInbound')}
-              </Button>,
-              <Button {...rowActionKind('delete')} key="delete" onClick={() => handleDelete(record)} />,
+              </Button>
+            </ActionConfirmPopconfirm>,
+              <ActionConfirmPopconfirm title={t('app.kuaizhizao.warehouseMaterialReturn.confirm.deleteTitle')} description={t('app.kuaizhizao.warehouseMaterialReturn.confirm.deleteContent', { code: record.return_code })} onConfirm={() => executeDelete(record)}>
+              <Button {...rowActionKind('delete')} key="delete" onClick={(e) => e.stopPropagation()} />
+            </ActionConfirmPopconfirm>,
             );
           }
           return actions;

@@ -117,7 +117,7 @@ const OnlineUsersPage: React.FC = () => {
         if (statCardsVisible) {
           loadStats();
         }
-        actionRef.current?.reload();
+    actionRef.current?.reload();
       }, 30000);
       
       return () => {

@@ -1,4 +1,5 @@
 import { rowActionKind } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 /**
  * 工单委外管理页面
  *
@@ -793,6 +794,16 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
     }
   };
 
+  const executeCancel = async (record: OutsourceWorkOrder) => {
+    try {
+          const updated = await outsourceWorkOrderApi.cancel(String(record.id));
+          messageApi.success(t('app.kuaizhizao.outsourceWorkOrder.cancelSuccess'));
+          refreshAfterStatusChange(updated, record.id);
+        } catch (error: unknown) {
+          messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.outsourceWorkOrder.cancelFailed')));
+        }
+  };
+
   const handleCancel = (record: OutsourceWorkOrder) => {
     if (record.id == null) return;
     if (record.capabilities?.cancel?.allowed !== true) {
@@ -804,15 +815,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       title: t('common.cancel'),
       content: t('app.kuaizhizao.outsourceWorkOrder.confirmCancel'),
       okType: 'danger',
-      onOk: async () => {
-        try {
-          const updated = await outsourceWorkOrderApi.cancel(String(record.id));
-          messageApi.success(t('app.kuaizhizao.outsourceWorkOrder.cancelSuccess'));
-          refreshAfterStatusChange(updated, record.id);
-        } catch (error: unknown) {
-          messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.outsourceWorkOrder.cancelFailed')));
-        }
-      },
+      onOk: () => executeCancel(record),
     });
   };
 
@@ -2135,9 +2138,11 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
                 </Button>
               ) : null}
               {workOrderDetail.capabilities?.cancel?.allowed === true ? (
-                <Button danger icon={<CloseCircleOutlined />} onClick={() => handleCancel(workOrderDetail)}>
+                <ActionConfirmPopconfirm title={t('common.cancel')} description={t('app.kuaizhizao.outsourceWorkOrder.confirmCancel')} okType="danger" onConfirm={() => executeCancel(workOrderDetail)}>
+              <Button danger icon={<CloseCircleOutlined />} onClick={(e) => e.stopPropagation()}>
                   {t('common.cancel')}
                 </Button>
+            </ActionConfirmPopconfirm>
               ) : null}
               {workOrderDetail.capabilities?.close?.allowed === true ? (
                 <Button icon={<StopOutlined />} onClick={() => openCloseModal(workOrderDetail)}>

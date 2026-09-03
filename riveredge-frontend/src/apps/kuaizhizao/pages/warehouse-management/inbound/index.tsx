@@ -6,11 +6,12 @@
 
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNumericPrecisionPlaces } from '../../../../../hooks/useNumericPrecision';
 import { ActionType, ProColumns, ProForm, ProFormItem, type ProFormInstance } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table, InputNumber, Input, Typography, Select, Spin, Descriptions, Empty, Upload, theme as AntdTheme } from 'antd';
+import { App, Button, Form, Tag, Space, Modal, Table, InputNumber, Input, Typography, Select, Spin, Descriptions, Empty, Upload, theme as AntdTheme } from 'antd';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import {
   EyeOutlined,
@@ -59,9 +60,16 @@ import {
   loadConfirmPreviewMaterialMeta,
   type ConfirmPreviewMaterialMeta,
 } from './inboundItemTracking';
+import {
+  fetchWarehouseTrackingFlags,
+  filterWarehouseTrackingColumns,
+  isMaterialSerialEntryEnabled,
+  useWarehouseTrackingFlags,
+} from '../shared/warehouseTrackingFlags';
 import { buildKuaizhizaoPullCreateMenuItems } from '../../../constants/documentActionRegistry';
 import { customerMaterialRegistrationApi } from '../../../services/customer-material-registration';
 import {formatQuantity} from '../../../../../utils/format';
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { renderWarehouseLineQuantity } from '../shared/warehouseListQuantity';
 import { formatApiErrorDetail } from '../../../../../services/api';
 import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
@@ -146,7 +154,6 @@ import {
   buildInboundHubStatusValueEnum,
   resolveInboundHubListParams,
 } from '../../../utils/warehouseListCore';
-import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import {
   buildInboundConfirmReceiverPayload,
@@ -222,6 +229,8 @@ async function prefetchPurchasePreviewBatchNumbers(
   initialBatch: Record<number, string>
 ): Promise<Record<number, string>> {
   const out: Record<number, string> = { ...initialBatch };
+  const { batchManagement } = await fetchWarehouseTrackingFlags();
+  if (!batchManagement) return out;
   const rowsNeed = (items || []).filter((it) => {
     if (it?.id == null) return false;
     const id = Number(it.id);
@@ -298,6 +307,8 @@ async function prefetchPurchasePreviewSerialNumbers(
   qtyMap: Record<number, number>,
 ): Promise<Record<number, string[]>> {
   const out: Record<number, string[]> = { ...initialSerial };
+  const { serialManagement } = await fetchWarehouseTrackingFlags();
+  if (!serialManagement) return out;
   const rowsNeed = (items || []).filter((it) => {
     if (it?.id == null) return false;
     const id = Number(it.id);
@@ -462,6 +473,7 @@ const InboundPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const { t } = useTranslation();
   const quantityDecimals = useNumericPrecisionPlaces('quantity');
+  const trackingFlags = useWarehouseTrackingFlags();
   const { token } = AntdTheme.useToken();
   const inboundDetailDrawerZIndex = token.zIndexPopupBase;
   const actionRef = useRef<ActionType>(null);
@@ -722,7 +734,7 @@ const InboundPage: React.FC = () => {
   /** 打开采购入库确认预览（加载最新详情，合并抽屉内未保存的实际数量） */
   const handleConfirmPreviewGenerateSerial = async (rowId: number, qty: number): Promise<string[] | void> => {
     const meta = purchaseConfirmMaterialMeta[rowId];
-    if (!meta?.serialManaged || !meta.materialUuid) return;
+    if (!isMaterialSerialEntryEnabled(trackingFlags, meta?.serialManaged) || !meta?.materialUuid) return;
     const count = Math.max(1, Math.floor(Number(qty) || 1));
     if (count > 100) {
       messageApi.warning(t('app.kuaizhizao.warehouseInbound.msg.serialMax100'));
@@ -1136,7 +1148,7 @@ const InboundPage: React.FC = () => {
           const batchStr = (purchaseConfirmPreviewBatch[rowId] ?? it.batch_number ?? '').trim();
           const serialList = purchaseConfirmPreviewSerial[rowId];
           const lineMeta = purchaseConfirmMaterialMeta[rowId];
-          if (lineMeta?.serialManaged) {
+          if (isMaterialSerialEntryEnabled(trackingFlags, lineMeta?.serialManaged)) {
             const expected = Math.floor(qty);
             const actual = serialList?.length ?? 0;
             if (actual !== expected) {
@@ -1429,16 +1441,9 @@ const InboundPage: React.FC = () => {
   /**
    * 撤回已入库/已退料：后端按明细冲减即时库存
    */
-  const handleWithdrawInbound = async (record: InboundOrder) => {
-    const code = record.receipt_code || record.return_code || '';
+  const executeWithdrawInbound = async (record: InboundOrder) => {
     const isReturn = record.receipt_type === 'production_return';
-    getAntdModal().confirm({
-      title: isReturn ? t('app.kuaizhizao.warehouseInbound.confirm.withdrawReturn.title') : t('app.kuaizhizao.warehouseInbound.confirm.withdrawInbound.title'),
-      content: t('app.kuaizhizao.warehouseInbound.confirm.withdraw.content', { code }),
-      okText: t('app.kuaizhizao.warehouseInbound.action.withdraw'),
-      okType: 'danger',
-      onOk: async () => {
-        try {
+    try {
           if (record.receipt_type === 'finished_goods') {
             await warehouseApi.finishedGoodsReceipt.withdraw(String(record.id));
           } else if (record.receipt_type === 'semi_finished_goods') {
@@ -1490,7 +1495,17 @@ const InboundPage: React.FC = () => {
         } catch (error: any) {
           messageApi.error(error?.message || error?.response?.data?.detail || t('app.kuaizhizao.warehouseInbound.msg.withdrawFailed'));
         }
-      },
+  };
+
+  const handleWithdrawInbound = async (record: InboundOrder) => {
+    const code = record.receipt_code || record.return_code || '';
+    const isReturn = record.receipt_type === 'production_return';
+    getAntdModal().confirm({
+      title: isReturn ? t('app.kuaizhizao.warehouseInbound.confirm.withdrawReturn.title') : t('app.kuaizhizao.warehouseInbound.confirm.withdrawInbound.title'),
+      content: t('app.kuaizhizao.warehouseInbound.confirm.withdraw.content', { code }),
+      okText: t('app.kuaizhizao.warehouseInbound.action.withdraw'),
+      okType: 'danger',
+      onOk: () => executeWithdrawInbound(record),
     });
   };
 
@@ -1531,18 +1546,8 @@ const InboundPage: React.FC = () => {
     openPrint({ documentType: printDocType, documentId: record.id });
   };
 
-  const handleDelete = async (record: InboundOrder) => {
-    const code = String(record.receipt_code || record.return_code || '');
-    const typeLabel =
-      (record.receipt_type
-        ? inboundReceiptTypeLabel(t, record.receipt_type as InboundReceiptType)
-        : t('app.kuaizhizao.warehouseInbound.fallbackDoc'));
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.warehouseInbound.confirm.delete.title', { type: typeLabel }),
-      content: t('app.kuaizhizao.warehouseInbound.confirm.delete.content', { code: code || '-' }),
-      okType: 'danger',
-      onOk: async () => {
-        try {
+  const executeDelete = async (record: InboundOrder) => {
+    try {
           await deleteInboundDocument(record);
           messageApi.success(t('common.deleteSuccess'));
           invalidateMenuBadgeCounts();
@@ -1556,8 +1561,6 @@ const InboundPage: React.FC = () => {
             t('common.deleteFailed');
           messageApi.error(typeof msg === 'string' ? msg : t('common.deleteFailed'));
         }
-      },
-    });
   };
 
   const handleBatchDelete = async (keys: React.Key[]) => {
@@ -1840,19 +1843,23 @@ const InboundPage: React.FC = () => {
         }
         if (inboundPerms.canDelete && isInboundDeletable(record)) {
           nodes.push(
-            <Button {...rowActionKind('delete')} key="delete" onClick={() => handleDelete(record)} />
+            <ActionConfirmPopconfirm title={t('app.kuaizhizao.warehouseInbound.confirm.delete.title', { type: typeLabel })} description={t('app.kuaizhizao.warehouseInbound.confirm.delete.content', { code: code || '-' })} okType="danger" onConfirm={() => executeDelete(record)}>
+              <Button {...rowActionKind('delete')} key="delete" onClick={(e) => e.stopPropagation()} />
+            </ActionConfirmPopconfirm>
           );
         }
         if (isInboundWithdrawable(record) && (inboundPerms.canAction?.('revoke') ?? false)) {
           nodes.push(
-            <Button
+            <ActionConfirmPopconfirm title={isReturn ? t('app.kuaizhizao.warehouseInbound.confirm.withdrawReturn.title') : t('app.kuaizhizao.warehouseInbound.confirm.withdrawInbound.title')} description={t('app.kuaizhizao.warehouseInbound.confirm.withdraw.content', { code })} okType="danger" onConfirm={() => executeWithdrawInbound(record)}>
+              <Button
               {...rowActionKind('revoke')}
               {...rowActionLabelKeep()}
               key="withdraw"
-              onClick={() => handleWithdrawInbound(record)}
+              onClick={(e) => e.stopPropagation()}
             >
               {record.receipt_type === 'production_return' ? t('app.kuaizhizao.warehouseInbound.action.withdrawReturn') : t('app.kuaizhizao.warehouseInbound.action.withdrawInbound')}
             </Button>
+            </ActionConfirmPopconfirm>
           );
         }
         return nodes;
@@ -2296,7 +2303,7 @@ const InboundPage: React.FC = () => {
         ref={quickPullRef}
         onSuccess={() => {
           invalidateMenuBadgeCounts();
-          actionRef.current?.reload();
+    actionRef.current?.reload();
         }}
       />
 
@@ -2339,7 +2346,8 @@ const InboundPage: React.FC = () => {
             scroll={{ x: 1000 }}
             rowKey={(r) => (r.id != null ? String(r.id) : `m-${r.material_id}`)}
             dataSource={(purchaseConfirmPreviewDetail?.items || []) as InboundOrderItem[]}
-            columns={[
+            columns={filterWarehouseTrackingColumns(
+              [
               { title: t('app.kuaizhizao.warehouseInbound.col.materialCode'), dataIndex: 'material_code', width: 100, ellipsis: true },
               { title: t('app.kuaizhizao.warehouseInbound.col.materialName'), dataIndex: 'material_name', width: 150, ellipsis: true },
               {
@@ -2460,6 +2468,7 @@ const InboundPage: React.FC = () => {
               },
               {
                 title: t('app.kuaizhizao.warehouseInbound.col.batchNo'),
+                key: 'batch_number',
                 dataIndex: 'batch_number',
                 width: 138,
                 render: (_: unknown, row: InboundOrderItem) => {
@@ -2479,13 +2488,14 @@ const InboundPage: React.FC = () => {
               },
               {
                 title: t('app.kuaizhizao.warehouseInbound.col.serialNo'),
+                key: 'serial_numbers',
                 dataIndex: 'serial_numbers',
                 width: 150,
                 render: (_: unknown, row: InboundOrderItem) => {
                   if (row.id == null) return '-';
                   const rid = Number(row.id);
                   const meta = purchaseConfirmMaterialMeta[rid];
-                  if (!meta?.serialManaged) return '—';
+                  if (!isMaterialSerialEntryEnabled(trackingFlags, meta?.serialManaged)) return '—';
                   const qty = Number(
                     purchaseConfirmPreviewQty[rid] ?? row.receipt_quantity ?? row.return_quantity ?? 0,
                   );
@@ -2508,7 +2518,9 @@ const InboundPage: React.FC = () => {
                   );
                 },
               },
-            ]}
+            ],
+              trackingFlags,
+            )}
           />
           {purchaseConfirmPreviewDetail?.receipt_type === 'production_return' ? (
             <ProForm

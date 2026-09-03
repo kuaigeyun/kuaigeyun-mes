@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Button, Table } from 'antd';
-import { ProjectOutlined, AlertOutlined, ClockCircleOutlined, ExclamationCircleOutlined, FileTextOutlined, FormOutlined, AuditOutlined, CalendarOutlined, BugOutlined, BarChartOutlined, FundProjectionScreenOutlined } from '@ant-design/icons';
+import { ProjectOutlined, ClockCircleOutlined, ExclamationCircleOutlined, FileTextOutlined, FormOutlined, AuditOutlined, CalendarOutlined, BugOutlined, BarChartOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -11,12 +11,13 @@ import {
   ModuleFeedList,
   ModuleKpiRow,
   ModuleShortcutGrid,
+  masonryWeightFromRows,
   type ModuleFeedItem,
   type ModuleKpiDef,
   type ModuleShortcutDef,
 } from '../../../components/module-center';
 import { useDashboardRequest } from '../../../utils/dashboardRequestOptions';
-import { deliveryProjectApi, DELIVERY_PROJECT_STATUS } from '../../../services/delivery-project';
+import { deliveryProjectApi, DELIVERY_ALERT_KIND, DELIVERY_PROJECT_STATUS } from '../../../services/delivery-project';
 import { renderDeliveryStatusTag } from '../shared/deliveryListPresentation';
 import DeliveryProjectGanttChart from '../components/DeliveryProjectGanttChart';
 
@@ -42,13 +43,12 @@ const DeliveryProjectDashboard: React.FC = () => {
       onClick: () => navigate('/apps/kuaizhizao/delivery-project/projects'),
     },
     {
-      key: 'overdue',
-      title: t('app.kuaizhizao.deliveryProject.dashboard.overdueNodes'),
-      value: data?.kpis.overdue_nodes ?? 0,
+      key: 'alerts',
+      title: t('app.kuaizhizao.deliveryProject.dashboard.nodeAlerts'),
+      value: data?.kpis.alert_count ?? 0,
       icon: <ClockCircleOutlined style={{ fontSize: 24, color: '#fff' }} />,
       gradient: 'linear-gradient(135deg, #ff4d4f 0%, #ff7875 100%)',
       boxShadow: '0 4px 12px rgba(255, 77, 79, 0.15)',
-      onClick: () => navigate('/apps/kuaizhizao/delivery-project/projects'),
     },
     {
       key: 'risk',
@@ -63,7 +63,7 @@ const DeliveryProjectDashboard: React.FC = () => {
       key: 'issues',
       title: t('app.kuaizhizao.deliveryProject.dashboard.openIssues'),
       value: data?.kpis.open_issues ?? 0,
-      icon: <AlertOutlined style={{ fontSize: 24, color: '#fff' }} />,
+      icon: <BugOutlined style={{ fontSize: 24, color: '#fff' }} />,
       gradient: 'linear-gradient(135deg, #722ed1 0%, #b37feb 100%)',
       boxShadow: '0 4px 12px rgba(114, 46, 209, 0.15)',
       onClick: () => navigate('/apps/kuaizhizao/delivery-project/issues'),
@@ -122,6 +122,58 @@ const DeliveryProjectDashboard: React.FC = () => {
   );
 
   const overdueNodes = data?.overdue_nodes ?? [];
+  const alertRows = data?.alerts ?? [];
+
+  const alertListPanel = (
+    <ModuleActionPanel
+      layout="masonry"
+      title={t('app.kuaizhizao.deliveryProject.dashboard.alertList')}
+      loading={loading}
+      masonryWeight={2}
+    >
+      <Table
+        size="small"
+        tableLayout="fixed"
+        pagination={false}
+        rowKey={(r) => `${r.project_id}-${r.node_id}-${r.alert_kind}`}
+        dataSource={alertRows}
+        locale={{ emptyText: t('common.noData') }}
+        columns={[
+          {
+            title: t('app.kuaizhizao.deliveryProject.dashboard.alertKind'),
+            dataIndex: 'alert_kind',
+            width: 96,
+            render: (v: string) => DELIVERY_ALERT_KIND[v] ?? v,
+          },
+          {
+            title: t('app.kuaizhizao.deliveryProject.fields.projectCode'),
+            dataIndex: 'project_code',
+            ellipsis: true,
+          },
+          {
+            title: t('app.kuaizhizao.deliveryProject.fields.nodeName'),
+            dataIndex: 'node_name',
+            ellipsis: true,
+          },
+          {
+            title: t('app.kuaizhizao.deliveryProject.fields.plannedEndDate'),
+            dataIndex: 'planned_end_date',
+            width: 110,
+            render: (v) => formatBusinessDateOnly(v),
+          },
+          {
+            title: t('common.action'),
+            width: 72,
+            render: (_, r) => (
+              <Button type="link" size="small" onClick={() => openWorkbench(r.project_id)}>
+                {t('common.view')}
+              </Button>
+            ),
+          },
+        ]}
+      />
+    </ModuleActionPanel>
+  );
 
   return (
     <>
@@ -131,12 +183,7 @@ const DeliveryProjectDashboard: React.FC = () => {
       shortcutRow={<ModuleShortcutGrid items={shortcuts} />}
       fullWidthRow={
         <ModuleChartPanel
-          title={
-            <span>
-              <FundProjectionScreenOutlined style={{ marginRight: 8 }} />
-              {t('app.kuaizhizao.deliveryProject.dashboard.ganttTitle')}
-            </span>
-          }
+          title={t('app.kuaizhizao.deliveryProject.dashboard.ganttTitle')}
           extra={
             <a onClick={() => navigate('/apps/kuaizhizao/delivery-project/projects')}>
               {t('app.kuaizhizao.deliveryProject.dashboard.viewAll')}
@@ -155,6 +202,7 @@ const DeliveryProjectDashboard: React.FC = () => {
             layout="masonry"
             title={t('app.kuaizhizao.deliveryProject.dashboard.recentProjects')}
             loading={loading}
+            masonryWeight={masonryWeightFromRows(recentProjectItems.length)}
             extra={
               <a onClick={() => navigate('/apps/kuaizhizao/delivery-project/projects')}>
                 {t('app.kuaizhizao.deliveryProject.dashboard.viewAll')}
@@ -167,10 +215,13 @@ const DeliveryProjectDashboard: React.FC = () => {
             />
           </ModuleActionPanel>
 
+          {alertListPanel}
+
           <ModuleActionPanel
             layout="masonry"
             title={t('app.kuaizhizao.deliveryProject.dashboard.overdueNodeList')}
             loading={loading}
+            masonryWeight={2}
             extra={
               overdueNodes.length > 0 ? (
                 <a onClick={() => navigate('/apps/kuaizhizao/delivery-project/projects')}>

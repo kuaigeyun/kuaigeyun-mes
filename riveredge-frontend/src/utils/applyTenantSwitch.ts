@@ -7,6 +7,8 @@ import type { QueryClient } from '@tanstack/react-query';
 import type { NavigateFunction } from 'react-router-dom';
 import { useGlobalStore } from '../stores/globalStore';
 import { useUserPreferenceStore } from '../stores/userPreferenceStore';
+import { clearAllSessionTabs } from '../stores/sessionTabsCache';
+import { clearTabsData } from '../stores/tabsStorage';
 import { applyAppShellFromLocalCache, abandonAppShellRefreshInFlight, refreshAppShellFromApi } from './appShellSessionInit';
 import {
   getImmediatePostLoginHomePath,
@@ -39,6 +41,9 @@ export async function applyTenantSwitchSideEffects(
 
   abandonAppShellRefreshInFlight();
   queryClient.clear();
+  // 标签会话/本地标签缓存按租户隔离；切换时清掉，避免上一组织打开的质检等页签残留
+  clearAllSessionTabs();
+  clearTabsData();
 
   for (const [queryKey, data] of preservedTenantSelectorOptions) {
     queryClient.setQueryData(queryKey, data);

@@ -1,4 +1,5 @@
 import { rowActionKind } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 /**
  * 统一需求计算页面
  *
@@ -175,7 +176,7 @@ import { useNewShortcut } from '../../../../../hooks/useNewShortcut'
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut'
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
-const DEMAND_COMPUTATION_RESOURCE = 'plan-management-demand-computation'
+const DEMAND_COMPUTATION_RESOURCE = 'kuaizhizao:plan-management-demand-computation'
 const MATERIAL_RESOURCE = 'master-data:material'
 
 function getMrpSuggestionSegmentedOptions(t: TFunction) {
@@ -365,6 +366,11 @@ function isDemandPushPreviewLineSelectable(
     return true
   }
   return false
+}
+
+/** Table 行身份（可重复 item_id 时仍唯一）；勾选状态真源仍是 item_id（下推 API 契约） */
+function demandPushPreviewRowKey(row: ComputationPushPreviewItem): string {
+  return `${row.item_id}-${row.target_document ?? 'line'}-${row.push_line_index ?? 0}-${row.planned_receipt_date ?? ''}`
 }
 
 function demandPushPreviewNeedsLineSelection(pushConfig: {
@@ -1067,7 +1073,7 @@ const DemandComputationPage: React.FC = () => {
   const handleCreateByShortcut = useCallback(() => {
     void handleCreate()
   }, [handleCreate])
-  useNewShortcut(handleCreateByShortcut)
+  useNewShortcut(computationPerms.canCreate ? handleCreateByShortcut : undefined)
   const createComputationButtonLabel = useMemo(
     () => withSingleNewShortcutHint(t('app.kuaizhizao.demandComputation.create')),
     [t],
@@ -1826,25 +1832,8 @@ const DemandComputationPage: React.FC = () => {
     }
   }
 
-  const handleAnalysisRecompute = async () => {
-    if (!analysisRecord?.id) return
-    const canRecomputeByCapability = analysisRecord.capabilities?.recompute?.allowed !== false
-    if (!canRecomputeByCapability || !computationPerms.canUpdate) {
-      messageApi.warning(
-        demandComputationCapabilityReasonMessage(
-          analysisRecord.capabilities?.recompute?.reason,
-          t,
-        ) || t('app.kuaizhizao.demandComputation.recomputeFailed'),
-      )
-      return
-    }
-    modalApi.confirm({
-      title: t('app.kuaizhizao.demandComputation.recomputeTitle'),
-      content: t('app.kuaizhizao.demandComputation.recomputeConfirm', {
-        code: analysisRecord.computation_code,
-      }),
-      onOk: async () => {
-        setReadinessSubmitting(true)
+  const executeAnalysisRecompute = async () => {
+    setReadinessSubmitting(true)
         try {
           await recomputeDemandComputation(analysisRecord.id!)
           messageApi.success(t('app.kuaizhizao.demandComputation.recomputeSubmitted'))
@@ -1864,9 +1853,7 @@ const DemandComputationPage: React.FC = () => {
         } finally {
           setReadinessSubmitting(false)
         }
-      },
-    })
-  }
+  };
 
   const analysisItems = analysisRecord?.items || []
   const analysisSourceTabItems = useMemo(
@@ -1956,23 +1943,15 @@ const DemandComputationPage: React.FC = () => {
   /**
    * 处理删除需求计算
    */
-  const handleDelete = async (record: DemandComputation) => {
-    modalApi.confirm({
-      title: t('app.kuaizhizao.demandComputation.deleteTitle'),
-      content: t('app.kuaizhizao.demandComputation.deleteConfirm', { code: record.computation_code }),
-      okText: t('common.delete'),
-      okType: 'danger',
-      onOk: async () => {
-        try {
+  const executeDelete = async (record: DemandComputation) => {
+    try {
           await deleteDemandComputation(record.id!)
           messageApi.success(t('common.deleteSuccess'))
           invalidateStatistics(); actionRef.current?.reload()
         } catch (error: any) {
           messageApi.error(error?.response?.data?.detail || t('common.deleteFailed'))
         }
-      },
-    })
-  }
+  };
 
   /** 打开下推面板（可选预设生产/采购路径） */
   const handleOpenPushPanel = useCallback((record: DemandComputation, preset?: PushPanelPreset) => {
@@ -2394,16 +2373,18 @@ const DemandComputationPage: React.FC = () => {
         }
         if (computationPerms.canDelete) {
           parts.push(
-            <Button {...rowActionKind('delete')} key="del" onClick={() => handleDelete(record)}>
+            <ActionConfirmPopconfirm title={t('app.kuaizhizao.demandComputation.deleteTitle')} description={t('app.kuaizhizao.demandComputation.deleteConfirm', { code: record.computation_code })} okType="danger" onConfirm={() => executeDelete(record)}>
+              <Button {...rowActionKind('delete')} key="del" onClick={(e) => e.stopPropagation()}>
               {t('common.delete')}
             </Button>
+            </ActionConfirmPopconfirm>
           )
         }
         return parts
       },
     },
     ], SALES_DOC_LIST_FIELD_RANK),
-    [computationPerms.canDelete, computationPerms.canUpdate, handleDelete, handleDetail, handleExecute, messageApi, demandComputationLifecycleValueEnum, monitorSummaries, monitorSummariesLoading, t],
+    [computationPerms.canDelete, computationPerms.canUpdate, executeDelete, handleDetail, handleExecute, messageApi, demandComputationLifecycleValueEnum, monitorSummaries, monitorSummariesLoading, t],
   )
 
   const canUseToolbarPush = selectedComputationForToolbar
@@ -2670,38 +2651,44 @@ const DemandComputationPage: React.FC = () => {
               disabledReason={toolbarPushDisabledReason}
             />
           )
-          return [
-            <UniPullCreateToolbar
-              compactKey="create-demand-computation-with-pull"
-              createIcon={<PlayCircleOutlined />}
-              createLabel={createComputationButtonLabel}
-              onCreate={() => {
-                void handleCreate()
-              }}
-              menuItems={buildKuaizhizaoPullCreateMenuItems(t, [
-                {
-                  key: 'pull-from-demand',
-                  actionKey: 'demand_computation.pull_from_demand',
-                  onClick: () => {
-                    pullFromDemandQuery.openModal()
+          const items: React.ReactNode[] = []
+          if (computationPerms.canCreate) {
+            items.push(
+              <UniPullCreateToolbar
+                key="create-demand-computation-with-pull"
+                compactKey="create-demand-computation-with-pull"
+                createIcon={<PlayCircleOutlined />}
+                createLabel={createComputationButtonLabel}
+                onCreate={() => {
+                  void handleCreate()
+                }}
+                menuItems={buildKuaizhizaoPullCreateMenuItems(t, [
+                  {
+                    key: 'pull-from-demand',
+                    actionKey: 'demand_computation.pull_from_demand',
+                    onClick: () => {
+                      pullFromDemandQuery.openModal()
+                    },
                   },
-                },
-                {
-                  key: 'pull-from-sales-order',
-                  actionKey: 'demand_computation.pull_from_sales_order',
-                  onClick: () => {
-                    pullFromSalesOrderQuery.openModal()
+                  {
+                    key: 'pull-from-sales-order',
+                    actionKey: 'demand_computation.pull_from_sales_order',
+                    onClick: () => {
+                      pullFromSalesOrderQuery.openModal()
+                    },
                   },
-                },
-                {
-                  key: 'pull-from-sales-forecast',
-                  actionKey: 'demand_computation.pull_from_sales_forecast',
-                  onClick: () => {
-                    pullFromSalesForecastQuery.openModal()
+                  {
+                    key: 'pull-from-sales-forecast',
+                    actionKey: 'demand_computation.pull_from_sales_forecast',
+                    onClick: () => {
+                      pullFromSalesForecastQuery.openModal()
+                    },
                   },
-                },
-              ])}
-            />,
+                ])}
+              />,
+            )
+          }
+          items.push(
             toolbarPushDisabledReason ? (
               <Tooltip key="computation-push-tooltip" title={toolbarPushDisabledReason}>
                 <span style={{ display: 'inline-block' }}>{pushButton}</span>
@@ -2709,7 +2696,8 @@ const DemandComputationPage: React.FC = () => {
             ) : (
               pushButton
             ),
-          ]
+          )
+          return items
         }}
         toolBarActionsAfterDelete={[]}
         toolBarActionsAfterBatch={[
@@ -3221,16 +3209,26 @@ const DemandComputationPage: React.FC = () => {
                   <Table
                     size="small"
                     dataSource={pushPreviewData.items}
-                    rowKey={(row) =>
-                      `${row.item_id}-${row.target_document ?? 'line'}-${row.push_line_index ?? 0}-${row.planned_receipt_date ?? ''}`
-                    }
+                    rowKey={demandPushPreviewRowKey}
                     pagination={false}
                     scroll={{ x: 1000 }}
                     rowSelection={
                       demandPushPreviewNeedsLineSelection(pushConfig)
                         ? {
-                            selectedRowKeys: pushSelectedItemIds.map(String),
-                            onChange: (keys) => setPushSelectedItemIds(keys.map((k) => Number(k))),
+                            selectedRowKeys: (pushPreviewData.items || [])
+                              .filter((row) =>
+                                pushSelectedItemIds.includes(Number(row.item_id)),
+                              )
+                              .map(demandPushPreviewRowKey),
+                            onChange: (_keys, selectedRows) => {
+                              setPushSelectedItemIds(
+                                Array.from(
+                                  new Set(
+                                    selectedRows.map((row) => Number(row.item_id)),
+                                  ),
+                                ),
+                              )
+                            },
                             getCheckboxProps: (row) => ({
                               disabled: !isDemandPushPreviewLineSelectable(row, pushConfig),
                             }),
@@ -3356,16 +3354,20 @@ const DemandComputationPage: React.FC = () => {
                 >
                   {t('app.kuaizhizao.demandComputation.analysisBackfill')}
                 </Button>,
-                <Button
+                <ActionConfirmPopconfirm title={t('app.kuaizhizao.demandComputation.recomputeTitle')} description={t('app.kuaizhizao.demandComputation.recomputeConfirm', {
+        code: analysisRecord.computation_code,
+      })} onConfirm={() => executeAnalysisRecompute()}>
+              <Button
                   key="recompute"
                   type="primary"
                   icon={<ReloadOutlined />}
                   loading={readinessSubmitting}
                   disabled={!computationPerms.canUpdate}
-                  onClick={() => void handleAnalysisRecompute()}
+                  onClick={(e) => e.stopPropagation()}
                 >
                   {t('app.kuaizhizao.demandComputation.actionRecompute')}
-                </Button>,
+                </Button>
+            </ActionConfirmPopconfirm>,
               ]
             : [
                 <Button key="cancel" onClick={() => setReadinessModalVisible(false)}>

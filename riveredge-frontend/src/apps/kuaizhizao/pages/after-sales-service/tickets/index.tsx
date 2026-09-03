@@ -24,6 +24,7 @@ import { UniTable } from '../../../../../components/uni-table';
 import { DetailDrawerActions, ListPageTemplate } from '../../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { rowActionKind } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import {
   UniPullQueryModal,
@@ -240,11 +241,8 @@ const AfterSalesTicketsPage: React.FC = () => {
     setDetailError(null);
   };
 
-  const handleDelete = (record: AfterSalesTicket, opts?: { closeDrawer?: boolean }) => {
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.afterSalesTicket.deleteConfirm'),
-      onOk: async () => {
-        try {
+  const executeDelete = async (record: AfterSalesTicket, opts?: { closeDrawer?: boolean }) => {
+    try {
           await afterSalesTicketApi.delete(record.id);
           message.success(t('common.deleteSuccess'));
           if (opts?.closeDrawer) closeDetailDrawer();
@@ -252,8 +250,6 @@ const AfterSalesTicketsPage: React.FC = () => {
         } catch (e: any) {
           message.error(e?.message || t('common.operationFailed'));
         }
-      },
-    });
   };
 
   const handleCloseTicket = (record: AfterSalesTicket) => {
@@ -338,20 +334,8 @@ const AfterSalesTicketsPage: React.FC = () => {
     [permDeniedTitle, perms.canUpdate, repairOrderPerms.canCreate, t],
   );
 
-  const handlePushRepair = useCallback(
-    (record: AfterSalesTicket) => {
-      const blocked = pushRepairDisabledReason(record);
-      if (blocked) {
-        message.warning(blocked);
-        return;
-      }
-      getAntdModal().confirm({
-        title: t('app.kuaizhizao.afterSalesTicket.actionPushRepairOrder'),
-        content: t('app.kuaizhizao.afterSalesTicket.pushRepairConfirm', {
-          code: record.ticket_code,
-        }),
-        onOk: async () => {
-          try {
+  const executePushRepair = useCallback(async (record: AfterSalesTicket) => {
+    try {
             const res = await afterSalesTicketApi.pushToRepairOrder(record.id);
             message.success(
               res?.repair_order_code
@@ -364,11 +348,32 @@ const AfterSalesTicketsPage: React.FC = () => {
             message.error(e?.message || t('app.kuaizhizao.afterSalesTicket.pushRepairFailed'));
             throw e;
           }
-        },
+  }, [message, pushRepairDisabledReason, refreshOpenDetail, t]);
+
+  const handlePushRepair = useCallback(
+    (record: AfterSalesTicket) => {
+      const blocked = pushRepairDisabledReason(record);
+      if (blocked) {
+        message.warning(blocked);
+        return;
+      }
+      getAntdModal().confirm({
+        title: t('app.kuaizhizao.afterSalesTicket.actionPushRepairOrder'),
+        content: t('app.kuaizhizao.afterSalesTicket.pushRepairConfirm', {
+          code: record.ticket_code,
+        }),
+        onOk: () => executePushRepair(record),
       });
     },
-    [message, pushRepairDisabledReason, refreshOpenDetail, t],
+    [executePushRepair, message, pushRepairDisabledReason, t],
   );
+
+  const handleDelete = (record: AfterSalesTicket, opts?: { closeDrawer?: boolean }) => {
+    getAntdModal().confirm({
+      title: t('app.kuaizhizao.afterSalesTicket.deleteConfirm'),
+      onOk: () => executeDelete(record, opts),
+    });
+  };
 
   const selectedTicketForToolbar = useMemo(() => {
     if (selectedRowKeys.length !== 1) return null;
@@ -985,7 +990,9 @@ const AfterSalesTicketsPage: React.FC = () => {
           }
           if (perms.canDelete) {
             parts.push(
-              <Button {...rowActionKind('delete')} key="del" onClick={() => handleDelete(record)} />,
+              <ActionConfirmPopconfirm title={t('app.kuaizhizao.afterSalesTicket.deleteConfirm')} onConfirm={() => executeDelete(record)}>
+              <Button {...rowActionKind('delete')} key="del" onClick={(e) => e.stopPropagation()} />
+            </ActionConfirmPopconfirm>,
             );
           }
           return parts;
@@ -1147,14 +1154,18 @@ const AfterSalesTicketsPage: React.FC = () => {
                     detailRecord.status !== '已关闭',
                 ),
                 render: () => (
-                  <Button
+                  <ActionConfirmPopconfirm title={t('app.kuaizhizao.afterSalesTicket.actionPushRepairOrder')} description={t('app.kuaizhizao.afterSalesTicket.pushRepairConfirm', {
+          code: record.ticket_code,
+        })} onConfirm={() => executePushRepair(detailRecord!)}>
+              <Button
                     icon={<ToolOutlined />}
                     disabled={Boolean(pushRepairDisabledReason(detailRecord))}
                     title={pushRepairDisabledReason(detailRecord)}
-                    onClick={() => handlePushRepair(detailRecord!)}
+                    onClick={(e) => e.stopPropagation()}
                   >
                     {t('app.kuaizhizao.afterSalesTicket.actionPushRepairOrder')}
                   </Button>
+            </ActionConfirmPopconfirm>
                 ),
               },
               {
@@ -1174,13 +1185,18 @@ const AfterSalesTicketsPage: React.FC = () => {
                 key: 'delete',
                 visible: Boolean(perms.canDelete && detailRecord),
                 render: () => (
-                  <Button
-                    danger
-                    icon={<DeleteOutlined />}
-                    onClick={() => handleDelete(detailRecord!, { closeDrawer: true })}
+                  <ActionConfirmPopconfirm
+                    title={t('app.kuaizhizao.afterSalesTicket.deleteConfirm')}
+                    onConfirm={() => executeDelete(detailRecord!, { closeDrawer: true })}
                   >
-                    {t('common.delete')}
-                  </Button>
+                    <Button
+                      danger
+                      icon={<DeleteOutlined />}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {t('common.delete')}
+                    </Button>
+                  </ActionConfirmPopconfirm>
                 ),
               },
             ]}

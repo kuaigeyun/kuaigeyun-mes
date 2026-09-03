@@ -221,7 +221,7 @@ const BankAccountsPage: React.FC = () => {
             onConfirm={async () => {
               await bankAccountService.delete(record.id);
               messageApi.success(t('common.deleteSuccess'));
-              actionRef.current?.reload();
+    actionRef.current?.reload();
             }}
           >
             <Button type="link" size="small" {...rowActionKind('delete')} />
@@ -461,7 +461,7 @@ const BankAccountsPage: React.FC = () => {
             balance: result.current_balance,
           }));
           setImportOpen(false);
-          actionRef.current?.reload();
+    actionRef.current?.reload();
         }}
       >
         <p style={{ color: 'var(--ant-color-text-secondary)', marginBottom: 8 }}>
@@ -500,7 +500,7 @@ const BankAccountsPage: React.FC = () => {
             messageApi.success(t('common.createSuccess'));
           }
           setModalVisible(false);
-          actionRef.current?.reload();
+    actionRef.current?.reload();
         }}
         initialValues={
           editing

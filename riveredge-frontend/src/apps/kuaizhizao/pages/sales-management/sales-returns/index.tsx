@@ -1039,7 +1039,7 @@ const SalesReturnsPage: React.FC = () => {
         messageApi.success(res.message || t('app.kuaizhizao.salesReturn.pullSuccess'));
         pullFromSalesOrderQuery.closeModal();
         invalidateMenuBadgeCounts();
-        actionRef.current?.reload();
+    actionRef.current?.reload();
       } catch (error: unknown) {
         messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.salesReturn.pullFailed')));
       }
@@ -1098,7 +1098,7 @@ const SalesReturnsPage: React.FC = () => {
         messageApi.success(res.message || t('app.kuaizhizao.salesReturn.pullSuccess'));
         pullFromSalesDeliveryQuery.closeModal();
         invalidateMenuBadgeCounts();
-        actionRef.current?.reload();
+    actionRef.current?.reload();
       } catch (error: unknown) {
         messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.salesReturn.pullFailed')));
       }
@@ -1383,7 +1383,7 @@ const SalesReturnsPage: React.FC = () => {
       }
       if (result.successCount > 0) {
         invalidateMenuBadgeCounts();
-        actionRef.current?.reload();
+    actionRef.current?.reload();
       }
     } catch (error: any) {
       messageApi.error(error?.message || t('common.importFailed'));
@@ -1928,7 +1928,7 @@ const SalesReturnsPage: React.FC = () => {
               onSuccess={() => {
                 setSelectedRowKeys([]);
                 invalidateMenuBadgeCounts();
-                actionRef.current?.reload();
+    actionRef.current?.reload();
               }}
               requireConfirm
               labels={{
@@ -1953,7 +1953,7 @@ const SalesReturnsPage: React.FC = () => {
               onSuccess={() => {
                 setSelectedRowKeys([]);
                 invalidateMenuBadgeCounts();
-                actionRef.current?.reload();
+    actionRef.current?.reload();
               }}
               requireConfirm
               labels={{

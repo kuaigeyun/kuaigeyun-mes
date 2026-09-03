@@ -1279,16 +1279,53 @@ class QuotationService:
         return await enrich_record(tenant_id, "quotation", result)
 
     @staticmethod
-    async def _apply_quotation_list_scope(query, tenant_id: int, current_user: Optional[User], list_scope: Optional[str] = None):
-        """统一按角色数据策略过滤报价列表。"""
+    async def _apply_quotation_list_scope(
+        query,
+        tenant_id: int,
+        current_user: Optional[User],
+        list_scope: Optional[str] = None,
+    ):
+        """RBAC 数据范围 + 列表「全部/我的/我的部门」视图筛选。
+
+        DataScope 是权限天花板（管理员可看全部）；list_scope 是用户显式视图偏好。
+        「我的」= 销售人员是当前用户（与列表销售人员列一致）。
+        """
         if not current_user:
             return query
-        return await DataScopeService.apply(
+        query = await DataScopeService.apply(
             query,
             tenant_id=tenant_id,
             user=current_user,
             resource="kuaizhizao:quotation",
         )
+        scope = (list_scope or "").strip().lower()
+        if scope in ("", "all"):
+            return query
+
+        from core.services.authorization.data_scope_resolver_registry import ScopeResolveContext
+        from core.services.authorization.data_scope_resolvers import resolve_scope_department
+        from core.services.authorization.data_scope_resource_registry import get_resource_profile
+
+        profile = get_resource_profile("kuaizhizao:quotation")
+        dept_uuid, dept_user_ids = await DataScopeService._department_context(
+            tenant_id, current_user
+        )
+        ctx = ScopeResolveContext(
+            tenant_id=tenant_id,
+            user_id=current_user.id,
+            resource="kuaizhizao:quotation",
+            profile=profile,
+            scope_payload=None,
+            department_uuid=dept_uuid,
+            department_user_ids=dept_user_ids,
+        )
+        if scope == "mine":
+            # 「我的」= 销售人员是我（与列表「销售人员」列一致）；不含代建他人单据
+            field = profile.applicant_user_id_field
+            return query.filter(**{field: current_user.id})
+        if scope == "department":
+            return query.filter(await resolve_scope_department(ctx))
+        return query
 
     async def _batch_quotation_downstream_missing(
         self,

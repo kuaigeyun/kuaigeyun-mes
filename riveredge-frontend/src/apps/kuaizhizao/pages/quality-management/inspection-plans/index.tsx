@@ -580,7 +580,7 @@ const InspectionPlansPage: React.FC = () => {
               setDetailError(null);
               setDetailPlanId(null);
             }
-            actionRef.current?.reload();
+    actionRef.current?.reload();
           } catch (error: any) {
             messageApi.error(error.message || t('common.deleteFailed'));
           }

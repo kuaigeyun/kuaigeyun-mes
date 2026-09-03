@@ -48,6 +48,13 @@ import { useWarehouseLocationOptions } from '../../../hooks/useWarehouseLocation
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
+import {
+  filterWarehouseTrackingColumns,
+  isMaterialBatchEntryEnabled,
+  isMaterialSerialEntryEnabled,
+  useWarehouseTrackingFlags,
+} from '../shared/warehouseTrackingFlags';
 import { renderWarehouseReasonTypeMarkerTag } from '../shared/warehouseMarkerTags';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
@@ -68,7 +75,6 @@ import {
   normalizeWarehouseListResponse,
   resolveWarehouseDocListParams,
 } from '../../../utils/warehouseListCore';
-import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 const REASON_TYPES_FALLBACK = [
@@ -168,6 +174,7 @@ const OTHER_INBOUND_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_other_inbounds';
 
 const OtherInboundPage: React.FC = () => {
   const { t } = useTranslation();
+  const trackingFlags = useWarehouseTrackingFlags();
   const { quantity: quantityDecimals, price: priceDecimals } = useNumericPrecision();
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const navigate = useNavigate();
@@ -424,29 +431,35 @@ const OtherInboundPage: React.FC = () => {
           ];
           if (record.status === '待入库') {
             actions.push(
+              <ActionConfirmPopconfirm title={t('app.kuaizhizao.warehouseOtherInbound.confirm.title')} description={t('app.kuaizhizao.warehouseOtherInbound.confirm.content', { code: record.inbound_code })} onConfirm={() => executeConfirm(record)}>
               <Button
                 key="confirm"
                 {...rowActionKind('execute')}
                 {...rowActionLabelKeep()}
-                onClick={() => handleConfirm(record)}
+                onClick={(e) => e.stopPropagation()}
               >
                 {t('app.kuaizhizao.warehouseOtherInbound.action.confirmInbound')}
-              </Button>,
+              </Button>
+            </ActionConfirmPopconfirm>,
             );
             actions.push(
-              <Button key="delete" {...rowActionKind('delete')} onClick={() => handleDelete(record)} />,
+              <ActionConfirmPopconfirm title={t('app.kuaizhizao.warehouseOtherInbound.confirm.deleteTitle')} description={t('app.kuaizhizao.warehouseOtherInbound.confirm.deleteContent', { code: record.inbound_code })} onConfirm={() => executeDelete(record)}>
+              <Button key="delete" {...rowActionKind('delete')} onClick={(e) => e.stopPropagation()} />
+            </ActionConfirmPopconfirm>,
             );
           }
           if (record.status === '已入库') {
             actions.push(
+              <ActionConfirmPopconfirm title={t('app.kuaizhizao.warehouseOtherInbound.confirm.withdrawTitle')} description={t('app.kuaizhizao.warehouseOtherInbound.confirm.withdrawContent', { code: record.inbound_code })} onConfirm={() => executeWithdraw(record)}>
               <Button
                 key="withdraw"
                 {...rowActionKind('revoke')}
                 {...rowActionLabelKeep()}
-                onClick={() => handleWithdraw(record)}
+                onClick={(e) => e.stopPropagation()}
               >
                 {t('app.kuaizhizao.warehouseOtherInbound.action.withdraw')}
-              </Button>,
+              </Button>
+            </ActionConfirmPopconfirm>,
             );
           }
           return <Space>{actions}</Space>;
@@ -475,40 +488,26 @@ const OtherInboundPage: React.FC = () => {
     }
   };
 
-  const handleConfirm = async (record: OtherInbound) => {
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.warehouseOtherInbound.confirm.title'),
-      content: t('app.kuaizhizao.warehouseOtherInbound.confirm.content', { code: record.inbound_code }),
-      onOk: async () => {
-        try {
-          await warehouseApi.otherInbound.confirm(record.id!.toString());
-          messageApi.success(t('app.kuaizhizao.warehouseOtherInbound.msg.confirmSuccess'));
-          invalidateMenuBadgeCounts();
-
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error.message || t('app.kuaizhizao.warehouseOtherInbound.msg.confirmFailed'));
-        }
-      },
-    });
+  const executeConfirm = async (record: OtherInbound) => {
+    try {
+      await warehouseApi.otherInbound.confirm(record.id!.toString());
+      messageApi.success(t('app.kuaizhizao.warehouseOtherInbound.msg.confirmSuccess'));
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || t('app.kuaizhizao.warehouseOtherInbound.msg.confirmFailed'));
+    }
   };
 
-  const handleDelete = async (record: OtherInbound) => {
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.warehouseOtherInbound.confirm.deleteTitle'),
-      content: t('app.kuaizhizao.warehouseOtherInbound.confirm.deleteContent', { code: record.inbound_code }),
-      onOk: async () => {
-        try {
-          await warehouseApi.otherInbound.delete(record.id!.toString());
-          messageApi.success(t('common.deleteSuccess'));
-          invalidateMenuBadgeCounts();
-
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error.message || t('common.deleteFailed'));
-        }
-      },
-    });
+  const executeDelete = async (record: OtherInbound) => {
+    try {
+      await warehouseApi.otherInbound.delete(record.id!.toString());
+      messageApi.success(t('common.deleteSuccess'));
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || t('common.deleteFailed'));
+    }
   };
 
   const listRowsRef = useRef<Map<string, OtherInbound>>(new Map());
@@ -554,22 +553,15 @@ const OtherInboundPage: React.FC = () => {
     }
   };
 
-  const handleWithdraw = async (record: OtherInbound) => {
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.warehouseOtherInbound.confirm.withdrawTitle'),
-      content: t('app.kuaizhizao.warehouseOtherInbound.confirm.withdrawContent', { code: record.inbound_code }),
-      onOk: async () => {
-        try {
-          await warehouseApi.otherInbound.withdraw(record.id!.toString());
-          messageApi.success(t('app.kuaizhizao.warehouseOtherInbound.msg.withdrawSuccess'));
-          invalidateMenuBadgeCounts();
-
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error.message || t('app.kuaizhizao.warehouseOtherInbound.msg.withdrawFailed'));
-        }
-      },
-    });
+  const executeWithdraw = async (record: OtherInbound) => {
+    try {
+      await warehouseApi.otherInbound.withdraw(record.id!.toString());
+      messageApi.success(t('app.kuaizhizao.warehouseOtherInbound.msg.withdrawSuccess'));
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || t('app.kuaizhizao.warehouseOtherInbound.msg.withdrawFailed'));
+    }
   };
 
   const appendOtherInboundItemsFromMaterials = useCallback(
@@ -584,8 +576,8 @@ const OtherInboundPage: React.FC = () => {
             material_name: m.name ?? '',
             material_unit: m.baseUnit ?? '',
             material_uuid: m.uuid,
-            batch_managed: m.batchManaged ?? false,
-            serial_managed: m.serialManaged ?? false,
+            batch_managed: isMaterialBatchEntryEnabled(trackingFlags, m.batchManaged ?? false),
+            serial_managed: isMaterialSerialEntryEnabled(trackingFlags, m.serialManaged ?? false),
             default_batch_rule_id: m.defaultBatchRuleId,
             default_serial_rule_id: m.defaultSerialRuleId,
           };
@@ -594,8 +586,8 @@ const OtherInboundPage: React.FC = () => {
               const full = await materialApi.get(m.uuid);
               return {
                 ...row,
-                batch_managed: full.batchManaged ?? false,
-                serial_managed: full.serialManaged ?? false,
+                batch_managed: isMaterialBatchEntryEnabled(trackingFlags, full.batchManaged ?? false),
+                serial_managed: isMaterialSerialEntryEnabled(trackingFlags, full.serialManaged ?? false),
                 default_batch_rule_id: full.defaultBatchRuleId,
                 default_serial_rule_id: full.defaultSerialRuleId,
               };
@@ -609,7 +601,7 @@ const OtherInboundPage: React.FC = () => {
       formRef.current?.setFieldsValue({ items: [...current, ...newRows] });
       messageApi.success(t('app.kuaizhizao.common.materialBatchAdded', { count: selected.length }));
     },
-    [messageApi, t],
+    [messageApi, t, trackingFlags],
   );
 
   /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编号 */
@@ -678,9 +670,10 @@ const OtherInboundPage: React.FC = () => {
   };
 
   const handleGenerateBatch = async (idx: number) => {
+    if (!trackingFlags.batchManagement) return;
     const items = formRef.current?.getFieldValue('items') ?? [];
     const row = items[idx];
-    if (!row?.material_uuid) {
+    if (!row?.material_uuid || !row?.batch_managed) {
       messageApi.warning(t('app.kuaizhizao.warehouseOtherInbound.msg.selectMaterialFirst'));
       return;
     }
@@ -699,9 +692,10 @@ const OtherInboundPage: React.FC = () => {
   };
 
   const handleGenerateSerials = async (idx: number): Promise<string[]> => {
+    if (!trackingFlags.serialManagement) return [];
     const items = formRef.current?.getFieldValue('items') ?? [];
     const row = items[idx];
-    if (!row?.material_uuid) {
+    if (!row?.material_uuid || !row?.serial_managed) {
       messageApi.warning(t('app.kuaizhizao.warehouseOtherInbound.msg.selectMaterialFirst'));
       return [];
     }
@@ -746,8 +740,14 @@ const OtherInboundPage: React.FC = () => {
       }
     }
     formRef.current?.setFieldValue(['items', idx, 'material_uuid'], uuid);
-    formRef.current?.setFieldValue(['items', idx, 'batch_managed'], batchManaged);
-    formRef.current?.setFieldValue(['items', idx, 'serial_managed'], serialManaged);
+    formRef.current?.setFieldValue(
+      ['items', idx, 'batch_managed'],
+      isMaterialBatchEntryEnabled(trackingFlags, batchManaged),
+    );
+    formRef.current?.setFieldValue(
+      ['items', idx, 'serial_managed'],
+      isMaterialSerialEntryEnabled(trackingFlags, serialManaged),
+    );
     formRef.current?.setFieldValue(['items', idx, 'default_batch_rule_id'], defaultBatchRuleId);
     formRef.current?.setFieldValue(['items', idx, 'default_serial_rule_id'], defaultSerialRuleId);
   };
@@ -1050,7 +1050,8 @@ const OtherInboundPage: React.FC = () => {
           <UniTableDetailHeader title={t('app.kuaizhizao.warehouseOtherInbound.field.lines')} required />
           <AntForm.List name="items">
               {(fields, { add, remove }) => {
-                const cols = [
+                const cols = filterWarehouseTrackingColumns(
+                  [
                   {
                     title: t('app.kuaizhizao.warehouseOtherInbound.col.material'),
                     dataIndex: 'material_id',
@@ -1077,18 +1078,19 @@ const OtherInboundPage: React.FC = () => {
                                   material_code: 'mainCode',
                                   material_name: 'name',
                                 }}
-                                onChange={(_val, material) => {
-                                  if (!material) return;
-                                  formRef.current?.setFieldValue(
-                                    ['items', index, 'material_unit'],
-                                    resolveMaterialScenarioUnit(material, 'purchase'),
-                                  );
+                                onChange={(v, material) => {
+                                  if (material) {
+                                    formRef.current?.setFieldValue(
+                                      ['items', index, 'material_unit'],
+                                      resolveMaterialScenarioUnit(material, 'purchase'),
+                                    );
+                                  }
+                                  void onMaterialSelectForBatchSerial(index, v, material);
                                 }}
                                 fallbackOption={fallback}
                                 formItemProps={{ style: { margin: 0 } }}
                                 showQuickCreate
                                 showAdvancedSearch
-                                onChange={(v, m) => onMaterialSelectForBatchSerial(index, v, m)}
                               />
                             </div>
                           );
@@ -1231,7 +1233,9 @@ const OtherInboundPage: React.FC = () => {
                       <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => remove(index)} disabled={fields.length <= 1} />
                     ),
                   },
-                ];
+                ],
+                  trackingFlags,
+                );
                 const totalWidth = cols.reduce((s, c) => s + (c.width as number || 0), 0);
                 return (
                   <div style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }}>

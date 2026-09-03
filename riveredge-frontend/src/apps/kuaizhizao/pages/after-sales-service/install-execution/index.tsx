@@ -7,6 +7,7 @@ import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Modal } from 'antd';
 import { EditOutlined, CheckOutlined, DeleteOutlined, PlusOutlined, StopOutlined } from '@ant-design/icons';
 import { rowActionKind } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import {
   UniPullQueryModal,
@@ -91,7 +92,7 @@ function installExecutionBatchCloseAllowed(
 
 const InstallExecutionPage: React.FC = () => {
   const { t } = useTranslation();
-  const { message: messageApi, modal } = App.useApp();
+  const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>();
   const perms = useResourcePermissions(RESOURCE);
   const [formOpen, setFormOpen] = useState(false);
@@ -453,34 +454,21 @@ const InstallExecutionPage: React.FC = () => {
     void loadDetail(row.id);
   };
 
-  const handleClose = (row: InstallExecution) => {
-    modal.confirm({
-      title: t('app.kuaizhizao.installExecution.closeConfirmTitle'),
-      content: t('app.kuaizhizao.installExecution.closeConfirmContent', { code: row.job_code }),
-      onOk: async () => {
-        await installExecutionApi.close(row.id);
+  const executeClose = async (row: InstallExecution) => {
+    await installExecutionApi.close(row.id);
         messageApi.success(t('app.kuaizhizao.installExecution.closeSuccess'));
         reload();
         if (detailRow?.id === row.id) {
           setDetailRow(await installExecutionApi.get(row.id));
         }
-      },
-    });
   };
 
-  const handleDelete = (row: InstallExecution) => {
-    modal.confirm({
-      title: t('app.kuaizhizao.installExecution.deleteConfirmTitle'),
-      content: t('app.kuaizhizao.installExecution.deleteConfirmContent', { code: row.job_code }),
-      okType: 'danger',
-      onOk: async () => {
-        await installExecutionApi.delete(row.id);
+  const executeDelete = async (row: InstallExecution) => {
+    await installExecutionApi.delete(row.id);
         messageApi.success(t('app.kuaizhizao.installExecution.deleteSuccess'));
         setDetailOpen(false);
         setDetailRow(null);
         reload();
-      },
-    });
   };
 
   const columns: ProColumns<InstallExecution>[] = useMemo(
@@ -609,26 +597,33 @@ const InstallExecutionPage: React.FC = () => {
                 row.status !== '已关闭'
               ) {
                 parts.push(
-                  <Button
-                    {...rowActionKind('close')}
-                    key="close"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleClose(row);
-                    }}
-                  />,
+                  <ActionConfirmPopconfirm
+                    title={t('app.kuaizhizao.installExecution.closeConfirmTitle')}
+                    description={t('app.kuaizhizao.installExecution.closeConfirmContent', { code: row.job_code })}
+                    onConfirm={() => executeClose(row)}
+                  >
+                    <Button
+                      {...rowActionKind('close')}
+                      key="close"
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  </ActionConfirmPopconfirm>,
                 );
               }
               if (caps?.delete?.allowed !== false && perms.canDelete) {
                 parts.push(
-                  <Button
-                    {...rowActionKind('delete')}
-                    key="delete"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDelete(row);
-                    }}
-                  />,
+                  <ActionConfirmPopconfirm
+                    title={t('app.kuaizhizao.installExecution.deleteConfirmTitle')}
+                    description={t('app.kuaizhizao.installExecution.deleteConfirmContent', { code: row.job_code })}
+                    okType="danger"
+                    onConfirm={() => executeDelete(row)}
+                  >
+                    <Button
+                      {...rowActionKind('delete')}
+                      key="delete"
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  </ActionConfirmPopconfirm>,
                 );
               }
               return parts;
@@ -637,7 +632,7 @@ const InstallExecutionPage: React.FC = () => {
         ],
         SALES_DOC_LIST_FIELD_RANK,
       ),
-    [t, perms, messageApi, modal],
+    [t, perms, messageApi],
   );
 
   return (
@@ -799,9 +794,11 @@ const InstallExecutionPage: React.FC = () => {
                     canBatchClose,
                 ),
                 render: () => (
-                  <Button icon={<CheckOutlined />} onClick={() => handleClose(detailRow!)}>
+                  <ActionConfirmPopconfirm title={t('app.kuaizhizao.installExecution.closeConfirmTitle')} description={t('app.kuaizhizao.installExecution.closeConfirmContent', { code: row.job_code })} onConfirm={() => executeClose(detailRow!)}>
+              <Button icon={<CheckOutlined />} onClick={(e) => e.stopPropagation()}>
                     {t('common.close')}
                   </Button>
+            </ActionConfirmPopconfirm>
                 ),
               },
               {
@@ -812,9 +809,11 @@ const InstallExecutionPage: React.FC = () => {
                     perms.canDelete,
                 ),
                 render: () => (
-                  <Button danger icon={<DeleteOutlined />} onClick={() => handleDelete(detailRow!)}>
+                  <ActionConfirmPopconfirm title={t('app.kuaizhizao.installExecution.deleteConfirmTitle')} description={t('app.kuaizhizao.installExecution.deleteConfirmContent', { code: row.job_code })} okType="danger" onConfirm={() => executeDelete(detailRow!)}>
+              <Button danger icon={<DeleteOutlined />} onClick={(e) => e.stopPropagation()}>
                     {t('common.delete')}
                   </Button>
+            </ActionConfirmPopconfirm>
                 ),
               },
             ]}

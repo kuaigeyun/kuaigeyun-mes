@@ -232,7 +232,7 @@ const BatchInventoryQuery: React.FC = () => {
             const next = v === 'show';
             includeExpiredRef.current = next;
             setIncludeExpired(next);
-            actionRef.current?.reload();
+    actionRef.current?.reload();
           }}
         />
         <ThemedSegmented
@@ -246,7 +246,7 @@ const BatchInventoryQuery: React.FC = () => {
             const next = v === 'show';
             includeZeroStockRef.current = next;
             setIncludeZeroStock(next);
-            actionRef.current?.reload();
+    actionRef.current?.reload();
           }}
         />
         <Select
@@ -259,7 +259,7 @@ const BatchInventoryQuery: React.FC = () => {
             const next: 'all' | number = v === 'all' ? 'all' : Number(v);
             warehouseFilterRef.current = next;
             setWarehouseFilter(next);
-            actionRef.current?.reload();
+    actionRef.current?.reload();
           }}
         />
         <Select
@@ -275,7 +275,7 @@ const BatchInventoryQuery: React.FC = () => {
           onChange={(v) => {
             agingBucketRef.current = v;
             setAgingBucket(v);
-            actionRef.current?.reload();
+    actionRef.current?.reload();
           }}
         />
       </Space>

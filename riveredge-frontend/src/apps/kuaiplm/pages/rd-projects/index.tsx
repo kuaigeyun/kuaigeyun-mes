@@ -4,7 +4,7 @@
 
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { ActionType, ProColumns, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormSelect } from '@ant-design/pro-components';
-import { App, Button, Modal } from 'antd';
+import { App, Button, Popconfirm } from 'antd';
 import dayjs from 'dayjs';
 import { useResourcePermissions } from '../../../../hooks/useResourcePermissions';
 import { useTranslation } from 'react-i18next';
@@ -185,33 +185,22 @@ const RdProjectsListPage: React.FC = () => {
   const toProjectIds = (keys: React.Key[]) =>
     keys.map((key) => Number(key)).filter((id) => Number.isFinite(id) && id > 0);
 
-  const handleWithdrawRow = useCallback(
-    (record: RdProject) => {
+  const confirmWithdrawRow = useCallback(
+    async (record: RdProject) => {
       if (!record.id) return;
-      Modal.confirm({
-        title: t('app.kuaiplm.rdProjects.withdrawConfirm'),
-        content: t('app.kuaiplm.rdProjects.withdrawConfirmContent'),
-        onOk: async () => {
-          await withdrawRdProject(record.id!);
-          messageApi.success(t('app.kuaiplm.rdProjects.withdrawSuccess'));
-          actionRef.current?.reload();
-        },
-      });
+      await withdrawRdProject(record.id);
+      messageApi.success(t('app.kuaiplm.rdProjects.withdrawSuccess'));
+      actionRef.current?.reload();
     },
     [messageApi, t],
   );
 
-  const handleDeleteRow = useCallback(
-    (record: RdProject) => {
+  const confirmDeleteRow = useCallback(
+    async (record: RdProject) => {
       if (!record.id) return;
-      Modal.confirm({
-        title: t('app.kuaiplm.rdProjects.deleteConfirm'),
-        onOk: async () => {
-          await deleteRdProject(record.id!);
-          messageApi.success(t('common.deleteSuccess'));
-          actionRef.current?.reload();
-        },
-      });
+      await deleteRdProject(record.id);
+      messageApi.success(t('common.deleteSuccess'));
+      actionRef.current?.reload();
     },
     [messageApi, t],
   );
@@ -409,14 +398,21 @@ const RdProjectsListPage: React.FC = () => {
         }
         if (record.status === 'IN_PROGRESS' && record.not_executed && projectPerms.canUpdate) {
           parts.push(
-            <Button
+            <Popconfirm
               key="withdraw"
-              {...rowActionWithdrawProject()}
-              onClick={(e) => {
-                e.stopPropagation();
-                handleWithdrawRow(record);
+              title={t('app.kuaiplm.rdProjects.withdrawConfirm')}
+              description={t('app.kuaiplm.rdProjects.withdrawConfirmContent')}
+              onConfirm={(e) => {
+                e?.stopPropagation();
+                void confirmWithdrawRow(record);
               }}
-            />,
+              onCancel={(e) => e?.stopPropagation()}
+            >
+              <Button
+                {...rowActionWithdrawProject()}
+                onClick={(e) => e.stopPropagation()}
+              />
+            </Popconfirm>,
           );
         }
         if (
@@ -424,14 +420,20 @@ const RdProjectsListPage: React.FC = () => {
           && projectPerms.canDelete
         ) {
           parts.push(
-            <Button
+            <Popconfirm
               key="delete"
-              {...rowActionKind('delete')}
-              onClick={(e) => {
-                e.stopPropagation();
-                handleDeleteRow(record);
+              title={t('app.kuaiplm.rdProjects.deleteConfirm')}
+              onConfirm={(e) => {
+                e?.stopPropagation();
+                void confirmDeleteRow(record);
               }}
-            />,
+              onCancel={(e) => e?.stopPropagation()}
+            >
+              <Button
+                {...rowActionKind('delete')}
+                onClick={(e) => e.stopPropagation()}
+              />
+            </Popconfirm>,
           );
         }
         return parts;
@@ -442,8 +444,8 @@ const RdProjectsListPage: React.FC = () => {
       lifecycleValueEnum,
       openDetail,
       openEdit,
-      handleWithdrawRow,
-      handleDeleteRow,
+      confirmWithdrawRow,
+      confirmDeleteRow,
       projectPerms.canUpdate,
       projectPerms.canDelete,
     ],
@@ -648,7 +650,7 @@ const RdProjectsListPage: React.FC = () => {
           messageApi.success(t('common.createSuccess'));
           setCreateOpen(false);
           resetFormActors();
-          actionRef.current?.reload();
+    actionRef.current?.reload();
         }}
       >
         {projectFormFields}
@@ -683,7 +685,7 @@ const RdProjectsListPage: React.FC = () => {
           setEditOpen(false);
           setEditingProject(null);
           resetFormActors();
-          actionRef.current?.reload();
+    actionRef.current?.reload();
         }}
       >
         {projectFormFields}

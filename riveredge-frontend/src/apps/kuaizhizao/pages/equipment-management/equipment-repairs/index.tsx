@@ -32,7 +32,6 @@ import { ROUTES } from '../../../constants/routes';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import LineAttachmentsUpload from '../../../components/LineAttachmentsUpload';
 import { useEquipmentDetailDrawer } from '../shared/equipmentMasterDataDetail';
-import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 const P = 'app.kuaizhizao.equipmentRepair';
 const RESOURCE = 'kuaizhizao:equipment-fault';
@@ -81,17 +80,11 @@ const EquipmentRepairsPage: React.FC = () => {
   };
 
   const handleDelete = async (keys: React.Key[]) => {
-    getAntdModal().confirm({
-      title: t('common.batchDeleteTitle'),
-      content: t('common.batchDeleteContent', { count: keys.length }),
-      onOk: async () => {
-        for (const key of keys) {
-          await equipmentFaultApi.deleteRepair(String(key));
+    for (const key of keys) {
+      await equipmentFaultApi.deleteRepair(String(key));
         }
-        messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
-        actionRef.current?.reload();
-      },
-    });
+    messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
+    actionRef.current?.reload();
   };
 
   const openComplete = (record: EquipmentRepair) => {
@@ -359,6 +352,9 @@ const EquipmentRepairsPage: React.FC = () => {
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton={perms.canDelete}
+          deleteConfirmTitle={t('common.batchDeleteTitle')}
+          deleteConfirmDescription={(count) => t('common.batchDeleteContent', { count: count })}
+          
           onDelete={handleDelete}
           columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
           showAdvancedSearch

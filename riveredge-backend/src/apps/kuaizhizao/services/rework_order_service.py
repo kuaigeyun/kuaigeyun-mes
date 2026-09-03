@@ -1121,6 +1121,7 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
         rework_order_id: int,
         reporting_data: ReworkReportingCreate,
         reported_by: int,
+        client_channel: Optional[str] = None,
     ) -> ReportingRecordResponse:
         rework_order = await self.get_by_id(tenant_id, rework_order_id, raise_if_not_found=True)
         ctx = await compute_capability_context(tenant_id, rework_order)
@@ -1198,6 +1199,14 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
                 or (work_order.code or "").strip()
                 or f"WO-{work_order.id}"
             )
+            from core.utils.client_channel import normalize_client_channel, resolve_report_mode
+
+            channel_code = normalize_client_channel(client_channel)
+            report_mode = resolve_report_mode(
+                team_id=None,
+                worker_id=reporting_data.worker_id,
+                recorded_by=reported_by,
+            )
             reporting_record = await ReportingRecord.create(
                 tenant_id=tenant_id,
                 uuid=str(uuid.uuid4()),
@@ -1213,6 +1222,8 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
                 worker_name=reporting_data.worker_name,
                 recorded_by=int(reported_by),
                 recorded_by_name=recorder_name,
+                client_channel=channel_code,
+                report_mode=report_mode,
                 reported_quantity=reported_qty,
                 qualified_quantity=qualified_qty,
                 unqualified_quantity=unqualified_qty,

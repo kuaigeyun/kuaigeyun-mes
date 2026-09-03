@@ -1,4 +1,5 @@
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
 import { Alert, App, Button, Card, Col, Empty, Modal, Row, Space, Spin, Table, Typography } from 'antd';
@@ -20,6 +21,7 @@ import {
   buildQualityInspectionListKindColumn,
   buildQualityInspectionListMaterialColumn,
   buildQualityInspectionListMaterialHiddenColumns,
+  buildQualityInspectionListNotesColumn,
   buildQualityInspectionListQuantityResultColumns,
   buildQualityInspectionListSearchColumns,
   buildQualityInspectionPartnerStackedColumn,
@@ -96,7 +98,6 @@ import {
   buildOqcInspectionExportColumns,
   mapOqcInspectionExportRows,
 } from '../components/qualityInspectionExport';
-import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 const OQC_RESOURCE = 'kuaizhizao:quality-management-oqc-inspection';
 
@@ -234,7 +235,7 @@ const OQCInspectionPage: React.FC = () => {
       if (errMsg.includes('均已存在检验单')) {
         messageApi.warning(t('app.kuaizhizao.quality.oqc.messages.alreadyExists'));
         resetPullPreview();
-        actionRef.current?.reload();
+    actionRef.current?.reload();
       } else {
         messageApi.error(errMsg || t('common.createFailed'));
       }
@@ -347,69 +348,41 @@ const OQCInspectionPage: React.FC = () => {
     setDetailDrawerVisible(true);
   }, []);
 
-  const handleDeleteRow = useCallback(
-    (record: OQCInspection) => {
-      if (record.id == null) return;
-      getAntdModal().confirm({
-        title: t('app.kuaizhizao.quality.oqc.messages.deleteConfirm', { count: 1 }),
-        content: t('app.kuaizhizao.quality.oqc.messages.deleteConfirmDescription'),
-        onOk: async () => {
-          await qualityImprovementApi.oqc.delete(Number(record.id));
+  const executeDeleteRow = useCallback(async (record: OQCInspection) => {
+    await qualityImprovementApi.oqc.delete(Number(record.id));
           messageApi.success(t('app.kuaizhizao.quality.common.messages.deleteSuccess', { count: 1 }));
-          actionRef.current?.reload();
-        },
-      });
-    },
-    [messageApi, t],
-  );
+    actionRef.current?.reload();
+  }, [messageApi, t]);
 
-  const handleRevokeConduct = useCallback(
-    (record: OQCInspection) => {
-      if (record.id == null) return;
-      getAntdModal().confirm({
-        title: t('app.kuaizhizao.quality.common.actions.revokeConductConfirmTitle'),
-        content: t('app.kuaizhizao.quality.common.actions.revokeConductConfirmContent', {
-          code: record.inspection_code || record.id,
-        }),
-        onOk: async () => {
-          await qualityImprovementApi.oqc.revokeConduct(Number(record.id));
+  const executeRevokeConduct = useCallback(async (record: OQCInspection) => {
+    await qualityImprovementApi.oqc.revokeConduct(Number(record.id));
           messageApi.success(t('app.kuaizhizao.quality.common.messages.revokeConductSuccess'));
-          actionRef.current?.reload();
-        },
-      });
-    },
-    [messageApi, t],
-  );
+    actionRef.current?.reload();
+  }, [messageApi, t]);
 
-  const handleBatchRevokeConduct = useCallback(async () => {
+  const executeBatchRevokeConduct = useCallback(async () => {
     const targets = filterRevokeConductQualityInspectionRecords(selectedRecordsForBatch);
     if (!targets.length) {
       messageApi.warning(t('app.kuaizhizao.quality.common.messages.revokeConductBatchEmpty'));
       return;
     }
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.quality.common.actions.revokeConductConfirmTitle'),
-      content: t('app.kuaizhizao.quality.common.messages.revokeConductBatchConfirm', { count: targets.length }),
-      onOk: async () => {
-        try {
-          for (const row of targets) {
-            if (row.id == null) continue;
-            await qualityImprovementApi.oqc.revokeConduct(Number(row.id));
-          }
-          messageApi.success(
-            t('app.kuaizhizao.quality.common.messages.revokeConductBatchSuccess', { count: targets.length }),
-          );
-          setSelectedRowKeys([]);
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(
-            oqcInspectionCapabilityReasonMessage(error?.message, t) ||
-              error?.message ||
-              t('app.kuaizhizao.quality.common.messages.revokeConductFailed'),
-          );
-        }
-      },
-    });
+    try {
+      for (const row of targets) {
+        if (row.id == null) continue;
+        await qualityImprovementApi.oqc.revokeConduct(Number(row.id));
+      }
+      messageApi.success(
+        t('app.kuaizhizao.quality.common.messages.revokeConductBatchSuccess', { count: targets.length }),
+      );
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(
+        oqcInspectionCapabilityReasonMessage(error?.message, t) ||
+          error?.message ||
+          t('app.kuaizhizao.quality.common.messages.revokeConductFailed'),
+      );
+    }
   }, [messageApi, selectedRecordsForBatch, t]);
 
   const renderOqcRowNodes = useCallback(
@@ -466,46 +439,54 @@ const OQCInspectionPage: React.FC = () => {
       );
       if (gates.revokeConduct.allowed) {
         nodes.push(
-          <Button
-            {...rowActionKind('update')}
-            key="revoke-conduct"
-            size="small"
-            type="link"
-            icon={<RollbackOutlined />}
-            disabled={gates.revokeConduct.disabled}
-            title={gates.revokeConduct.title}
-            onClick={(e) => {
-              e.stopPropagation();
-              handleRevokeConduct(record);
-            }}
+          <ActionConfirmPopconfirm
+            title={t('app.kuaizhizao.quality.common.actions.revokeConductConfirmTitle')}
+            description={t('app.kuaizhizao.quality.common.actions.revokeConductConfirmContent', {
+              code: record.inspection_code || record.id,
+            })}
+            onConfirm={() => executeRevokeConduct(record)}
           >
-            {t('app.kuaizhizao.quality.common.actions.revokeConduct')}
-          </Button>,
+            <Button
+              {...rowActionKind('update')}
+              key="revoke-conduct"
+              size="small"
+              type="link"
+              icon={<RollbackOutlined />}
+              disabled={gates.revokeConduct.disabled}
+              title={gates.revokeConduct.title}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {t('app.kuaizhizao.quality.common.actions.revokeConduct')}
+            </Button>
+          </ActionConfirmPopconfirm>,
         );
       }
       if (gates.delete.allowed) {
         nodes.push(
-          <Button
-            {...rowActionKind('delete')}
-            key="delete"
-            size="small"
-            type="link"
-            danger
-            icon={<DeleteOutlined />}
-            disabled={gates.delete.disabled}
-            title={gates.delete.title}
-            onClick={(e) => {
-              e.stopPropagation();
-              handleDeleteRow(record);
-            }}
+          <ActionConfirmPopconfirm
+            title={t('app.kuaizhizao.quality.oqc.messages.deleteConfirm', { count: 1 })}
+            description={t('app.kuaizhizao.quality.oqc.messages.deleteConfirmDescription')}
+            onConfirm={() => executeDeleteRow(record)}
           >
-            {t('common.delete')}
-          </Button>,
+            <Button
+              {...rowActionKind('delete')}
+              key="delete"
+              size="small"
+              type="link"
+              danger
+              icon={<DeleteOutlined />}
+              disabled={gates.delete.disabled}
+              title={gates.delete.title}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {t('common.delete')}
+            </Button>
+          </ActionConfirmPopconfirm>,
         );
       }
       return nodes;
     },
-    [handleDeleteRow, handleDetail, handleRevokeConduct, oqcPerms, openConductModal, t],
+    [executeDeleteRow, executeRevokeConduct, handleDetail, oqcPerms, openConductModal, t],
   );
 
   const detailBaseColumns: ProDescriptionsItemProps<OQCInspection>[] = useMemo(
@@ -565,6 +546,7 @@ const OQCInspectionPage: React.FC = () => {
           render: (_, row) => renderReleaseDecisionTag(t, row.release_decision),
         },
       ]),
+      buildQualityInspectionListNotesColumn<OQCInspection>(t),
       ...buildDocumentAuditColumns<OQCInspection>(t),
       ...(oqcAuditColumn ? [oqcAuditColumn] : []),
       {
@@ -616,7 +598,7 @@ const OQCInspectionPage: React.FC = () => {
           onRowSelectionChange={setSelectedRowKeys}
           permissionResource={OQC_RESOURCE}
           columns={columns}
-          columnPersistenceId="apps.kuaizhizao.pages.quality-management.oqc-inspection-width-v1"
+          columnPersistenceId="apps.kuaizhizao.pages.quality-management.oqc-inspection-width-v2"
           showAdvancedSearch
           pinnedTabsField={QUALITY_INSPECTION_PINNED_STATUS_FIELD}
           skipFuzzyPinyinClientFilter
@@ -655,7 +637,7 @@ const OQCInspectionPage: React.FC = () => {
                 t('app.kuaizhizao.quality.common.messages.deleteSuccess', { count: deletable.length }),
               );
               setSelectedRowKeys([]);
-              actionRef.current?.reload();
+    actionRef.current?.reload();
             } catch (e: any) {
               messageApi.error(e?.message || t('common.deleteFailed'));
             }
@@ -663,9 +645,17 @@ const OQCInspectionPage: React.FC = () => {
           deleteConfirmTitle={(count) => t('app.kuaizhizao.quality.oqc.messages.deleteConfirm', { count })}
           deleteConfirmDescription={t('app.kuaizhizao.quality.oqc.messages.deleteConfirmDescription')}
           toolBarActionsAfterDelete={[
-            <Button key="revoke-conduct-batch" icon={<RollbackOutlined />} onClick={() => void handleBatchRevokeConduct()}>
-              {t('app.kuaizhizao.quality.common.actions.revokeConduct')}
-            </Button>,
+            <ActionConfirmPopconfirm
+              title={t('app.kuaizhizao.quality.common.actions.revokeConductConfirmTitle')}
+              description={t('app.kuaizhizao.quality.common.messages.revokeConductBatchConfirm', {
+                count: filterRevokeConductQualityInspectionRecords(selectedRecordsForBatch).length,
+              })}
+              onConfirm={() => executeBatchRevokeConduct()}
+            >
+              <Button key="revoke-conduct-batch" icon={<RollbackOutlined />} onClick={(e) => e.stopPropagation()}>
+                {t('app.kuaizhizao.quality.common.actions.revokeConduct')}
+              </Button>
+            </ActionConfirmPopconfirm>,
             <UniAuditBatchMenuButton
               key="oqc-inspection-batch-menu"
               selectedRowKeys={selectedRowKeys}
@@ -675,7 +665,7 @@ const OQCInspectionPage: React.FC = () => {
               handlers={oqcAuditBatchHandlers}
               onSuccess={() => {
                 setSelectedRowKeys([]);
-                actionRef.current?.reload();
+    actionRef.current?.reload();
               }}
               toolBarButtonSize="middle"
             />,
@@ -905,7 +895,7 @@ const OQCInspectionPage: React.FC = () => {
                     entityName: t('app.kuaizhizao.quality.common.entity.oqcInspection'),
                     theme: 'default',
                     onSuccess: () => {
-                      actionRef.current?.reload();
+    actionRef.current?.reload();
                       setOqcTrackingRefreshKey((k) => k + 1);
                     },
                   })}
@@ -963,7 +953,7 @@ const OQCInspectionPage: React.FC = () => {
             messageApi.success(t('app.kuaizhizao.quality.oqc.messages.conductSuccess'));
             setConductVisible(false);
             setCurrentRow(null);
-            actionRef.current?.reload();
+    actionRef.current?.reload();
           }}
         >
           {currentRow ? (

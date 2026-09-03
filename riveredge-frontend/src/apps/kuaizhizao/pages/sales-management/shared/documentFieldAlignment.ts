@@ -216,7 +216,7 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
    * 检验四单据列表段位（以来料检验为准，四页共用同一 map，勿页面浅覆盖）：
    * inspection_code → quality_inspection_kind → supplierReceipt / quality_inspection_partner_stacked
    * → quality_inspection_material → 数量类 → quality_inspection_extra → downstream_push_progress
-   * → inspector_name → lifecycle
+   * → inspector_name → notes（余量列）→ lifecycle
    *
    * 不良处理：code → nc_source_inspection → operation_work_order_stacked → quality_inspection_material
    * → nc_defect_type → disposition → defect_quantity → defect_reason → 降级/回用关联 → lifecycle → action
@@ -535,11 +535,13 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   /** 班次/加班时间段：紧挨标准工时前（表单：时段 → 工时） */
   timeRange: 31.5,
   standardHours: 32,
-  /** 报工工时；生产人员紧随其后 */
+  /** 报工工时；生产人员紧随其后；来源/报工方式紧接生产人员 */
   work_hours: 32,
   /** 保养项：标准工时 */
   standard_hours: 32.05,
   worker_name: 32.5,
+  client_channel: 32.55,
+  report_mode: 32.6,
   total_pieces: 32.1,
   unit_price: 33,
   unitPrice: 33,

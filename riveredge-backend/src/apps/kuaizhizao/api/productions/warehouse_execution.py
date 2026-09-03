@@ -4778,6 +4778,17 @@ async def pull_purchase_receipts_from_purchase_order_items(
         selected_ids = [int(v) for v in raw_ids]
     except (TypeError, ValueError):
         raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail="明细ID格式无效")
+    line_warehouses: Dict[int, int] = {}
+    raw_line_wh = request.get("line_warehouses")
+    if isinstance(raw_line_wh, dict):
+        for k, v in raw_line_wh.items():
+            try:
+                item_key = int(k)
+                wh_val = int(v)
+            except (TypeError, ValueError):
+                continue
+            if item_key > 0 and wh_val > 0:
+                line_warehouses[item_key] = wh_val
     from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
 
     source_items = await PurchaseOrderItem.filter(tenant_id=tenant_id, id__in=selected_ids).only("order_id")
@@ -4792,6 +4803,7 @@ async def pull_purchase_receipts_from_purchase_order_items(
             tenant_id=tenant_id,
             item_ids=selected_ids,
             created_by=current_user.id,
+            line_warehouses=line_warehouses or None,
         )
     except NotFoundError as e:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))

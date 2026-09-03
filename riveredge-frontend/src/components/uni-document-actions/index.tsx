@@ -10,7 +10,7 @@ import { Button, Dropdown, Modal, Tooltip } from 'antd';
 import type { MenuProps } from 'antd';
 import type { RowActionPermissionKind } from '../uni-action';
 import { useTranslation } from 'react-i18next';
-import { getAntdModal } from '../../utils/antdAppApis';
+import { ActionConfirmPopconfirm } from '../action-confirm';
 /** 操作列标准配置（宽度由 UniTable / uniTableLayoutColumns 注入） */
 export const DOCUMENT_ACTION_COLUMN = {
   title: '操作',
@@ -78,21 +78,19 @@ export function DeleteButton({
   confirmContent?: string;
 }) {
   if (disabled) return null;
-  const handleClick = () => {
-    if (needConfirm) {
-      getAntdModal().confirm({
-        title: confirmTitle || '确定要删除吗？',
-        content: confirmContent,
-        okText: '确定',
-        cancelText: '取消',
-        okType: 'danger',
-        onOk: () => onClick(),
-      });
-    } else {
-      onClick();
-    }
-  };
-  return <RowActionButton kind="delete" onClick={handleClick} />;
+  if (needConfirm) {
+    return (
+      <ActionConfirmPopconfirm
+        title={confirmTitle || '确定要删除吗？'}
+        description={confirmContent}
+        okButtonProps={{ danger: true }}
+        onConfirm={onClick}
+      >
+        <RowActionButton kind="delete" onClick={(e) => e.stopPropagation()} />
+      </ActionConfirmPopconfirm>
+    );
+  }
+  return <RowActionButton kind="delete" onClick={onClick} />;
 }
 
 export interface MoreMenuItem {

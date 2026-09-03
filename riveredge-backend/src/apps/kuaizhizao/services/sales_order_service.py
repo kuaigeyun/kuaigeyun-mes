@@ -86,15 +86,46 @@ class SalesOrderService:
         current_user: Optional["User"],
         list_scope: Optional[str] = None,
     ):
-        """统一按角色数据策略过滤销售订单列表。"""
+        """RBAC 数据范围 + 列表「全部/我的/我的部门」视图筛选。
+
+        DataScope 是权限天花板；list_scope 是显式视图偏好。
+        「我的」= 销售人员是当前用户（与列表销售人员列一致）。
+        """
         if not current_user:
             return query
-        return await DataScopeService.apply(
+        query = await DataScopeService.apply(
             query,
             tenant_id=tenant_id,
             user=current_user,
             resource="kuaizhizao:sales-order",
         )
+        scope = (list_scope or "").strip().lower()
+        if scope in ("", "all"):
+            return query
+
+        from core.services.authorization.data_scope_resolver_registry import ScopeResolveContext
+        from core.services.authorization.data_scope_resolvers import resolve_scope_department
+        from core.services.authorization.data_scope_resource_registry import get_resource_profile
+
+        profile = get_resource_profile("kuaizhizao:sales-order")
+        dept_uuid, dept_user_ids = await DataScopeService._department_context(
+            tenant_id, current_user
+        )
+        ctx = ScopeResolveContext(
+            tenant_id=tenant_id,
+            user_id=current_user.id,
+            resource="kuaizhizao:sales-order",
+            profile=profile,
+            scope_payload=None,
+            department_uuid=dept_uuid,
+            department_user_ids=dept_user_ids,
+        )
+        if scope == "mine":
+            field = profile.applicant_user_id_field
+            return query.filter(**{field: current_user.id})
+        if scope == "department":
+            return query.filter(await resolve_scope_department(ctx))
+        return query
 
     @staticmethod
     def _process_sales_order_item_pricing(

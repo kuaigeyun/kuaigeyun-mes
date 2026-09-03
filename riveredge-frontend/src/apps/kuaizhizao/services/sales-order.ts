@@ -210,6 +210,8 @@ export interface SalesOrderListParams {
   view?: 'options';
   /** 高级搜索 / 列筛选 JSON */
   column_filters?: string;
+  /** 列表范围：all 全部 / mine 我的 / department 我的部门 */
+  list_scope?: 'all' | 'mine' | 'department';
 }
 
 /**
@@ -263,9 +265,12 @@ export interface SalesOrderStatistics {
 }
 
 /** 获取销售订单统计 */
-export async function getSalesOrderStatistics(): Promise<SalesOrderStatistics> {
+export async function getSalesOrderStatistics(
+  params: { list_scope?: 'all' | 'mine' | 'department' } = {},
+): Promise<SalesOrderStatistics> {
   return apiRequest<SalesOrderStatistics>('/apps/kuaizhizao/sales-orders/statistics', {
     method: 'GET',
+    params,
   });
 }
 

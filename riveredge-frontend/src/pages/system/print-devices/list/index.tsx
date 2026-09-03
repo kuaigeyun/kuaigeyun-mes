@@ -210,8 +210,7 @@ const PrintDeviceListPage: React.FC = () => {
       } else {
         messageApi.error(result.error || t('pages.system.printDevices.testFailed'));
       }
-      
-      actionRef.current?.reload();
+    actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || t('pages.system.printDevices.testFailed'));
     } finally {
@@ -256,8 +255,7 @@ const PrintDeviceListPage: React.FC = () => {
       } else {
         messageApi.error(result.error || t('pages.system.printDevices.printFailed'));
       }
-      
-      actionRef.current?.reload();
+    actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || t('pages.system.printDevices.printFailed'));
     } finally {

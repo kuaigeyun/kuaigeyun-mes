@@ -11,10 +11,11 @@
  */
 
 import React from 'react';
-import { App, Button, Dropdown, Popconfirm, Space } from 'antd';
+import { Button, Dropdown, Popconfirm, Space } from 'antd';
 import type { ButtonProps, MenuProps, PopconfirmProps } from 'antd';
 import { DeleteOutlined, DownOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import { ActionConfirmPopconfirm } from '../action-confirm';
 
 export type UniBatchButtonProps = Omit<ButtonProps, 'onClick' | 'disabled'> & {
   selectedRowKeys: React.Key[];
@@ -172,38 +173,37 @@ export const UniBatchMenuButton: React.FC<UniBatchMenuButtonProps> = ({
   disabled: disabledProp,
 }) => {
   const { t } = useTranslation();
-  const { modal } = App.useApp();
   const count = selectedRowKeys.length;
   const emptyDisabled = count === 0 || menuItems.length === 0;
   const disabled = disabledProp ?? emptyDisabled;
 
-  const runMenuItem = (item: UniBatchMenuItem) => {
-    const run = () => void item.onClick(selectedRowKeys);
-    if (item.requireConfirm) {
-      modal.confirm({
-        title:
-          typeof item.confirmTitle === 'function'
-            ? item.confirmTitle(count)
-            : item.confirmTitle,
-        content:
-          typeof item.confirmDescription === 'function'
-            ? item.confirmDescription(count)
-            : item.confirmDescription,
-        onOk: run,
-      });
-      return;
-    }
-    run();
-  };
-
   const dropdownMenu: MenuProps = {
-    items: menuItems.map((it) => ({
-      key: it.key,
-      label: it.label,
-      icon: it.icon,
-      disabled: it.disabled ?? disabled,
-      onClick: () => runMenuItem(it),
-    })),
+    items: menuItems.map((it) => {
+      const confirmTitle =
+        typeof it.confirmTitle === 'function' ? it.confirmTitle(count) : it.confirmTitle;
+      const confirmDescription =
+        typeof it.confirmDescription === 'function'
+          ? it.confirmDescription(count)
+          : it.confirmDescription;
+      const run = () => void it.onClick(selectedRowKeys);
+      return {
+        key: it.key,
+        icon: it.icon,
+        disabled: it.disabled ?? disabled,
+        label: it.requireConfirm ? (
+          <ActionConfirmPopconfirm
+            title={confirmTitle}
+            description={confirmDescription}
+            onConfirm={run}
+          >
+            <span onClick={(e) => e.stopPropagation()}>{it.label}</span>
+          </ActionConfirmPopconfirm>
+        ) : (
+          it.label
+        ),
+        onClick: it.requireConfirm ? undefined : () => run(),
+      };
+    }),
   };
 
   return (

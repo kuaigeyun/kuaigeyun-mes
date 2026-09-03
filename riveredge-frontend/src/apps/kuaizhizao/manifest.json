@@ -4457,6 +4457,14 @@
             "config_category": "procurement"
         },
         {
+            "node_key": "purchase_return",
+            "entity_type": "purchase_return",
+            "resource": "kuaizhizao:purchase-return",
+            "name": "采购退货审核",
+            "template": "simple",
+            "config_category": "procurement"
+        },
+        {
             "node_key": "reporting_record",
             "entity_type": "reporting_record",
             "resource": "kuaizhizao:reporting-record",

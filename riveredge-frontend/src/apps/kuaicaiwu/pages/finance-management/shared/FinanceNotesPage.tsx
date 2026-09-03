@@ -327,7 +327,7 @@ const FinanceNotesPage: React.FC<Props> = ({ direction, resource, columnPersiste
                       try {
                         await financeNoteService.delete(direction, r.id);
                         messageApi.success(t('common.deleteSuccess'));
-                        actionRef.current?.reload();
+    actionRef.current?.reload();
                       } catch (error) {
                         messageApi.error(getApiErrorMessage(error, t('common.deleteFailed')));
                       }
@@ -438,7 +438,7 @@ const FinanceNotesPage: React.FC<Props> = ({ direction, resource, columnPersiste
             }
             setModalOpen(false);
             setEditing(null);
-            actionRef.current?.reload();
+    actionRef.current?.reload();
             return true;
           } catch (error) {
             messageApi.error(getApiErrorMessage(error, t('common.saveFailed')));
@@ -565,7 +565,7 @@ const FinanceNotesPage: React.FC<Props> = ({ direction, resource, columnPersiste
                 });
                 messageApi.success(t('common.operationSuccess'));
                 setActionModal(null);
-                actionRef.current?.reload();
+    actionRef.current?.reload();
                 return true;
               } catch (error) {
                 messageApi.error(getApiErrorMessage(error, t('common.operationFailed')));

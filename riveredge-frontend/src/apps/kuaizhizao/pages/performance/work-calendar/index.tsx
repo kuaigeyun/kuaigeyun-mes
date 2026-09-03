@@ -283,7 +283,7 @@ const WorkCalendarPage: React.FC = () => {
                         messageApi.success(
                           t('app.kuaizhizao.performance.workCalendar.messages.overtimeDeleted'),
                         );
-                        actionRef.current?.reload();
+    actionRef.current?.reload();
                       } catch (e: any) {
                         messageApi.error(
                           e?.message ||

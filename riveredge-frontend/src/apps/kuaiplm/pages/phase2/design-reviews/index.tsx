@@ -17,6 +17,7 @@ import dayjs from 'dayjs';
 import { useSearchParams } from 'react-router-dom';
 import { App, Button, Alert } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { ListPageTemplate, FormModalTemplate } from '../../../../../components/layout-templates';
@@ -62,7 +63,7 @@ const reviewTypeOptions = (t: (key: string) => string) => [
 
 const DesignReviewsPage: React.FC = () => {
   const { t } = useTranslation();
-  const { message: messageApi, modal: modalApi } = App.useApp();
+  const { message: messageApi } = App.useApp();
   const perms = useResourcePermissions('kuaiplm.design-review');
   const [searchParams] = useSearchParams();
   const filterProjectId = searchParams.get('project_id')
@@ -252,23 +253,20 @@ const DesignReviewsPage: React.FC = () => {
           {...rowActionKind('update')}
           onClick={() => setEditingRecord(row)}
         />,
-        <Button
+        <ActionConfirmPopconfirm
           key="del"
-          {...rowActionKind('delete')}
-          onClick={() => {
-            modalApi.confirm({
-              title: t('app.kuaiplm.phase2.designReviews.deleteOneTitle'),
-              onOk: async () => {
-                await deleteDesignReview(row.id!);
-                messageApi.success(t('common.deleteSuccess'));
-                actionRef.current?.reload();
-              },
-            });
+          title={t('app.kuaiplm.phase2.designReviews.deleteOneTitle')}
+          onConfirm={async () => {
+            await deleteDesignReview(row.id!);
+            messageApi.success(t('common.deleteSuccess'));
+            actionRef.current?.reload();
           }}
-        />,
+        >
+          <Button {...rowActionKind('delete')} onClick={(e) => e.stopPropagation()} />
+        </ActionConfirmPopconfirm>,
       ]),
     ],
-    [designReviewStatusValueEnum, modalApi, messageApi, t],
+    [designReviewStatusValueEnum, messageApi, t],
   );
 
   return (
@@ -372,7 +370,7 @@ const DesignReviewsPage: React.FC = () => {
           messageApi.success(t('common.createSuccess'));
           setCreateOpen(false);
           setPreviewCode(null);
-          actionRef.current?.reload();
+    actionRef.current?.reload();
         }}
       >
         <ProFormText
@@ -458,7 +456,7 @@ const DesignReviewsPage: React.FC = () => {
           });
           messageApi.success(t('common.updateSuccess'));
           setEditingRecord(null);
-          actionRef.current?.reload();
+    actionRef.current?.reload();
         }}
       >
         <ProFormText name="title" label={t('app.kuaiplm.phase2.designReviews.form.title')} rules={[{ required: true }]} />

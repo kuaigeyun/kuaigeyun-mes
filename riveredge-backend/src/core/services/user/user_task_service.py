@@ -157,6 +157,9 @@ class UserTaskService:
                     ))
             else:
                 # 查询我的待办任务（基于任务表）
+                await ApprovalInstanceService.reconcile_orphaned_outbound_approval_tasks(
+                    tenant_id, user_id
+                )
                 query = Q(tenant_id=tenant_id, approver_id=user_id, status="pending")
                 total = await ApprovalTask.filter(query).count()
                 tasks = await ApprovalTask.filter(query).prefetch_related("approval_instance__process").order_by("-created_at").offset(offset).limit(page_size)

@@ -11,6 +11,7 @@ import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import {
   ReferenceDisplayAccessError,
   canReadReferenceResource,
+  mapPartnerReferenceDisplayItem,
   referenceDisplayToIdOptions,
   resolveReferenceDisplay,
   searchReferenceDisplay,
@@ -104,13 +105,7 @@ export const CustomerSelectDropdown: React.FC<CustomerSelectDropdownProps> = ({
         pageSize: 200,
       });
       const list = res.items.map(
-        (item) =>
-          ({
-            id: item.id,
-            uuid: item.uuid,
-            code: item.code,
-            name: item.name,
-          }) as Customer,
+        (item) => mapPartnerReferenceDisplayItem(item) as Customer,
       );
       if (customersProp == null) {
         setInternalCustomers(list);
@@ -154,12 +149,7 @@ export const CustomerSelectDropdown: React.FC<CustomerSelectDropdownProps> = ({
         setResolvedById((prev) => {
           if (prev.has(id)) return prev;
           const next = new Map(prev);
-          next.set(id, {
-            id,
-            uuid: item.uuid ?? undefined,
-            code: item.code ?? undefined,
-            name: item.name ?? undefined,
-          } as Customer);
+          next.set(id, mapPartnerReferenceDisplayItem(item) as Customer);
           return next;
         });
       })

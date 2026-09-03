@@ -254,7 +254,7 @@ const FreightOrdersPage: React.FC = () => {
         });
         messageApi.success(t('common.updateSuccess'));
         closeFormModal();
-        actionRef.current?.reload();
+    actionRef.current?.reload();
         if (detail?.id === next.id) {
           setDetail(next);
         }
@@ -536,8 +536,8 @@ const FreightOrdersPage: React.FC = () => {
         showDeleteButton={perms.canDelete}
         onDelete={async (keys) => {
           await Promise.all(keys.map((key) => deleteFreightOrder(Number(key))));
-          messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
-          actionRef.current?.reload();
+    messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
+    actionRef.current?.reload();
         }}
       />
 

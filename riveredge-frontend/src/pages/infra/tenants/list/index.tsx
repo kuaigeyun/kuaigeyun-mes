@@ -1204,7 +1204,7 @@ const SuperAdminTenantList: React.FC = () => {
               onConfirm={async () => {
                 const success = await approveTenant(record.id);
                 if (success) {
-                  actionRef.current?.reload();
+    actionRef.current?.reload();
                 }
               }}
             >
@@ -1218,7 +1218,7 @@ const SuperAdminTenantList: React.FC = () => {
               onConfirm={async () => {
                 const success = await rejectTenant(record.id);
                 if (success) {
-                  actionRef.current?.reload();
+    actionRef.current?.reload();
                 }
               }}
             >
@@ -1235,7 +1235,7 @@ const SuperAdminTenantList: React.FC = () => {
               onConfirm={async () => {
                 const success = await activateTenant(record.id);
                 if (success) {
-                  actionRef.current?.reload();
+    actionRef.current?.reload();
                 }
               }}
             >
@@ -1254,7 +1254,7 @@ const SuperAdminTenantList: React.FC = () => {
               onConfirm={async () => {
                 const success = await deactivateTenant(record.id);
                 if (success) {
-                  actionRef.current?.reload();
+    actionRef.current?.reload();
                 }
               }}
             >

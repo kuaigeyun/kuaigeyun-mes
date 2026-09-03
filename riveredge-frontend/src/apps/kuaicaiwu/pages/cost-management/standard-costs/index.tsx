@@ -238,7 +238,7 @@ const StandardCostsPage: React.FC = () => {
             onConfirm={async () => {
               await standardCostService.delete(record.id);
               messageApi.success(t('common.deleteSuccess'));
-              actionRef.current?.reload();
+    actionRef.current?.reload();
             }}
           >
             <Button type="link" size="small" {...rowActionKind('delete')} />
@@ -333,7 +333,7 @@ const StandardCostsPage: React.FC = () => {
             messageApi.success(t('common.createSuccess'));
           }
           setModalVisible(false);
-          actionRef.current?.reload();
+    actionRef.current?.reload();
         }}
         initialValues={editing ?? { currency: 'CNY', version: '1.0', is_active: true }}
       >

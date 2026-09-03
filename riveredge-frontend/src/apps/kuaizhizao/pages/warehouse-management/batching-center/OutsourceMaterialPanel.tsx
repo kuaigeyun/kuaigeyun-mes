@@ -1,4 +1,5 @@
 import { rowActionKind } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 /**
  * 物料中心 - 委外发料 / 收货 / 退料 / 退货列表与新建
  */
@@ -145,21 +146,14 @@ const OutsourceMaterialPanel: React.FC<OutsourceMaterialPanelProps> = ({ mode, o
         ? t('app.kuaizhizao.batchingCenter.createOutsourceMaterialReturn')
         : t('app.kuaizhizao.batchingCenter.createOutsourceProductReturn');
 
-  const handleComplete = (record: OutsourceMaterialRow) => {
-    if (!record.id || isMaterialReturn || isProductReturn) return;
-    modalApi.confirm({
-      title: isIssue ? t('app.kuaizhizao.batchingCenter.confirmCompleteIssue') : t('app.kuaizhizao.batchingCenter.confirmCompleteReceipt'),
-      content: t('app.kuaizhizao.batchingCenter.completeIssueReceiptHint'),
-      onOk: async () => {
-        if (isIssue) {
+  const executeComplete = async (record: OutsourceMaterialRow) => {
+    if (isIssue) {
           await outsourceMaterialIssueApi.complete(String(record.id));
         } else {
           await outsourceMaterialReceiptApi.complete(String(record.id));
         }
         messageApi.success(t('app.kuaizhizao.warehouseCommon.operationSuccess'));
-        actionRef.current?.reload();
-      },
-    });
+    actionRef.current?.reload();
   };
 
   const columns: ProColumns<OutsourceMaterialRow>[] = useMemo(
@@ -306,14 +300,16 @@ const OutsourceMaterialPanel: React.FC<OutsourceMaterialPanelProps> = ({ mode, o
               }
               if ((isReceipt || isIssue) && record.status === 'draft' && record.id) {
                 actions.push(
-                  <Button
+                  <ActionConfirmPopconfirm title={isIssue ? t('app.kuaizhizao.batchingCenter.confirmCompleteIssue') : t('app.kuaizhizao.batchingCenter.confirmCompleteReceipt')} description={t('app.kuaizhizao.batchingCenter.completeIssueReceiptHint')} onConfirm={() => executeComplete(record)}>
+              <Button
                     key="complete"
                     {...rowActionKind('complete')}
                     size="small"
-                    onClick={() => handleComplete(record)}
+                    onClick={(e) => e.stopPropagation()}
                   >
                     {t('app.kuaizhizao.warehouseCommon.complete')}
-                  </Button>,
+                  </Button>
+            </ActionConfirmPopconfirm>,
                 );
               }
               if (!actions.length) return '-';

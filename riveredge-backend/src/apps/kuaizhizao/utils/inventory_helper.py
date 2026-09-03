@@ -28,6 +28,67 @@ def _decimal_or_zero(v: Any) -> Decimal:
         return Decimal("0")
 
 
+def _normalize_inventory_warehouse_scope(
+    warehouse_id: Optional[int] = None,
+    warehouse_ids: Optional[List[int]] = None,
+) -> Optional[List[int]]:
+    """
+    库存汇总仓库范围。
+
+    Returns:
+        None: 不限仓库（全部计入）
+        []: 明确不计入任何仓库
+        非空列表: 仅这些仓库（warehouse_id 优先于 warehouse_ids）
+    """
+    if warehouse_id is not None:
+        return [int(warehouse_id)]
+    if warehouse_ids is not None:
+        return [int(x) for x in warehouse_ids]
+    return None
+
+
+async def _material_default_warehouse_ids(
+    tenant_id: int,
+    material_ids: List[int],
+) -> Dict[int, int]:
+    """物料主键 -> 主默认仓 ID（无默认仓则不入 dict）。"""
+    if not material_ids:
+        return {}
+    from apps.master_data.models.material import Material
+    from apps.master_data.services.material_service import (
+        resolve_primary_default_warehouse_from_material,
+    )
+
+    materials = await Material.filter(
+        tenant_id=tenant_id,
+        id__in=material_ids,
+        deleted_at__isnull=True,
+    ).all()
+    result: Dict[int, int] = {}
+    for material in materials:
+        primary = await resolve_primary_default_warehouse_from_material(
+            tenant_id, material=material
+        )
+        if primary:
+            result[int(material.id)] = int(primary[0])
+    return result
+
+
+def _apply_material_batch_warehouse_scope_q(
+    scope: List[int],
+    *,
+    include_unassigned: bool,
+) -> Q:
+    """
+    MaterialBatch 仓库范围：归属仓在范围内；
+    include_unassigned 为真时一并纳入历史 warehouse_id=0（调用方须再按物料默认仓裁剪）。
+    """
+    scoped = Q(warehouse_id__in=scope)
+    if include_unassigned:
+        return scoped | Q(warehouse_id=0)
+    return scoped
+
+
 from core.utils.timezone_utils import resolve_business_datetime, to_site_date
 
 
@@ -353,13 +414,15 @@ async def get_material_inventory_info(
     获取物料的库存信息（用于需求计算可供应量）
 
     数据来源：
-    - MaterialBatch：主仓批次库存（无 warehouse_id，按物料汇总）
+    - MaterialBatch：主仓批次库存（按 warehouse_id 收窄；历史 0 按物料默认仓归属）
     - LineSideInventory：线边仓库存（按 warehouse_id、material_id 汇总，available = quantity - reserved）
 
     Args:
         tenant_id: 租户ID
         material_id: 物料ID
-        warehouse_id: 仓库ID（可选，None 时查询所有仓库）
+        warehouse_id: 单仓（可选）
+        warehouse_ids: 多仓范围（可选；与 warehouse_id 互斥时 warehouse_id 优先）
+            None=全部仓；[]=不计入任何仓；非空=仅所选仓
 
     Returns:
         库存信息字典，包含：
@@ -372,35 +435,51 @@ async def get_material_inventory_info(
     on_hand = Decimal("0")
     reserved = Decimal("0")
     batch_qty = Decimal("0")
+    wh_scope = _normalize_inventory_warehouse_scope(warehouse_id, warehouse_ids)
 
     # 1. MaterialBatch：主仓批次库存（与报表「批次库存查询」口径对齐：quantity>0、未删除、未过期；
     #    排除明确已出库/报废/过期状态；避免仅 status=in_stock 时与即时库存页不一致）
     try:
         from apps.master_data.models.material_batch import MaterialBatch
 
-        batch_query = MaterialBatch.filter(
-            tenant_id=tenant_id,
-            material_id=material_id,
-            deleted_at__isnull=True,
-            quantity__gt=0,
-            quality_status=QUALIFIED,
-        ).filter(~Q(status__in=["out_stock", "scrapped", "expired"]))
-        if ownership_type:
-            batch_query = batch_query.filter(ownership_type=ownership_type)
-        if customer_id is not None:
-            batch_query = batch_query.filter(customer_id=customer_id)
-        today = date.today()
-        batch_query = batch_query.filter(
-            Q(expiry_date__isnull=True) | Q(expiry_date__gte=today)
-        )
+        if wh_scope is not None and len(wh_scope) == 0:
+            batch_qty = Decimal("0")
+        else:
+            batch_query = MaterialBatch.filter(
+                tenant_id=tenant_id,
+                material_id=material_id,
+                deleted_at__isnull=True,
+                quantity__gt=0,
+                quality_status=QUALIFIED,
+            ).filter(~Q(status__in=["out_stock", "scrapped", "expired"]))
+            if ownership_type:
+                batch_query = batch_query.filter(ownership_type=ownership_type)
+            if customer_id is not None:
+                batch_query = batch_query.filter(customer_id=customer_id)
+            today = date.today()
+            batch_query = batch_query.filter(
+                Q(expiry_date__isnull=True) | Q(expiry_date__gte=today)
+            )
 
-        batch_agg = (
-            await batch_query.group_by("material_id")
-            .annotate(qty=Sum("quantity"))
-            .values("material_id", "qty")
-        )
-        batch_qty = _decimal_or_zero(batch_agg[0]["qty"] if batch_agg else 0)
-        on_hand += batch_qty
+            if wh_scope is not None:
+                scope_set = set(wh_scope)
+                default_map = await _material_default_warehouse_ids(
+                    tenant_id, [material_id]
+                )
+                include_unassigned = default_map.get(material_id) in scope_set
+                batch_query = batch_query.filter(
+                    _apply_material_batch_warehouse_scope_q(
+                        wh_scope, include_unassigned=include_unassigned
+                    )
+                )
+
+            batch_agg = (
+                await batch_query.group_by("material_id")
+                .annotate(qty=Sum("quantity"))
+                .values("material_id", "qty")
+            )
+            batch_qty = _decimal_or_zero(batch_agg[0]["qty"] if batch_agg else 0)
+            on_hand += batch_qty
     except Exception as e:
         logger.warning(f"MaterialBatch 查询失败: {e}")
 
@@ -415,13 +494,11 @@ async def get_material_inventory_info(
             deleted_at__isnull=True,
             status="available",
         )
-        if warehouse_id is not None:
-            line_query = line_query.filter(warehouse_id=warehouse_id)
-        elif warehouse_ids is not None:
-            if len(warehouse_ids) == 0:
+        if wh_scope is not None:
+            if len(wh_scope) == 0:
                 line_query = None
             else:
-                line_query = line_query.filter(warehouse_id__in=warehouse_ids)
+                line_query = line_query.filter(warehouse_id__in=wh_scope)
 
         if line_query is not None:
             if with_breakdown:
@@ -502,22 +579,23 @@ async def get_material_inventory_info(
                     }
                 )
 
-        wh_scope = "全部线边仓"
-        if warehouse_id is not None:
-            wh_scope = f"单仓 ID={warehouse_id}"
-        elif warehouse_ids is not None:
-            if len(warehouse_ids) == 0:
-                wh_scope = "计算参数未选择仓库（线边仓不计入）"
-            else:
-                wh_scope = f"本次计算纳入的常态仓线边库存（共 {len(warehouse_ids)} 个仓库）"
+        if wh_scope is None:
+            line_scope_zh = "全部仓库"
+        elif len(wh_scope) == 0:
+            line_scope_zh = "计算参数未选择仓库（主仓批次与线边仓均不计入）"
+        else:
+            line_scope_zh = f"本次计算纳入的仓库（共 {len(wh_scope)} 个；主仓批次与线边同范围）"
 
         result["breakdown"] = {
             "main_batch": {
                 "label": "主仓批次库存",
                 "quantity": float(batch_qty),
-                "note_zh": "MaterialBatch：quantity>0、未删除、未过期，且状态非已出库/报废/过期（按 warehouse_id 拆分）",
+                "note_zh": (
+                    "MaterialBatch：quantity>0、未删除、未过期，且状态非已出库/报废/过期；"
+                    "按参与计算的仓库过滤 warehouse_id（历史未归属按物料默认仓计入）"
+                ),
             },
-            "line_side_scope_zh": wh_scope,
+            "line_side_scope_zh": line_scope_zh,
             "line_side_rows": line_rows,
             "formula_zh": [
                 "在库合计 = 主仓批次数量 + 各线边仓现存量之和",
@@ -779,9 +857,10 @@ async def batch_get_material_inventory(
     批量获取物料库存（SQL GROUP BY，减少数据库往返）。
 
     口径与 get_material_inventory_info（无 breakdown）一致：
-    - on_hand = 主仓批次 + 线边现存量
+    - on_hand = 主仓批次 + 线边现存量（均按 warehouse_id / warehouse_ids 收窄）
     - reserved_quantity = 线边预留
     - available_quantity = on_hand - reserved（下限 0）
+    - 仓库范围 None=全部；[]=不计入；非空=仅所选仓（主仓历史 warehouse_id=0 按物料默认仓归属）
 
     Returns:
         Dict[int, Dict[str, Decimal]]: material_id -> {
@@ -797,33 +876,71 @@ async def batch_get_material_inventory(
 
     on_hand_map: Dict[int, Decimal] = {mid: Decimal("0") for mid in unique_ids}
     reserved_map: Dict[int, Decimal] = {mid: Decimal("0") for mid in unique_ids}
+    wh_scope = _normalize_inventory_warehouse_scope(warehouse_id, warehouse_ids)
 
-    # 1. 批量查询 MaterialBatch（SQL GROUP BY，不拉全表行）
+    # 1. 批量查询 MaterialBatch（SQL GROUP BY，不拉全表行；与 get_material_inventory_info 同仓库范围）
     try:
         from apps.master_data.models.material_batch import MaterialBatch
 
-        today = date.today()
-        batch_q = MaterialBatch.filter(
-            tenant_id=tenant_id,
-            material_id__in=unique_ids,
-            deleted_at__isnull=True,
-            quantity__gt=0,
-        ).filter(~Q(status__in=["out_stock", "scrapped", "expired"])).filter(
-            Q(expiry_date__isnull=True) | Q(expiry_date__gte=today)
-        )
-        if ownership_type:
-            batch_q = batch_q.filter(ownership_type=ownership_type)
-        if customer_id is not None:
-            batch_q = batch_q.filter(customer_id=customer_id)
-        batch_rows = (
-            await batch_q.group_by("material_id")
-            .annotate(qty=Sum("quantity"))
-            .values("material_id", "qty")
-        )
-        for row in batch_rows:
-            mid = int(row["material_id"])
-            if mid in on_hand_map:
-                on_hand_map[mid] += _decimal_or_zero(row.get("qty"))
+        if wh_scope is not None and len(wh_scope) == 0:
+            pass
+        else:
+            today = date.today()
+            batch_q = MaterialBatch.filter(
+                tenant_id=tenant_id,
+                material_id__in=unique_ids,
+                deleted_at__isnull=True,
+                quantity__gt=0,
+            ).filter(~Q(status__in=["out_stock", "scrapped", "expired"])).filter(
+                Q(expiry_date__isnull=True) | Q(expiry_date__gte=today)
+            )
+            if ownership_type:
+                batch_q = batch_q.filter(ownership_type=ownership_type)
+            if customer_id is not None:
+                batch_q = batch_q.filter(customer_id=customer_id)
+
+            if wh_scope is None:
+                batch_rows = (
+                    await batch_q.group_by("material_id")
+                    .annotate(qty=Sum("quantity"))
+                    .values("material_id", "qty")
+                )
+                for row in batch_rows:
+                    mid = int(row["material_id"])
+                    if mid in on_hand_map:
+                        on_hand_map[mid] += _decimal_or_zero(row.get("qty"))
+            else:
+                scope_set = set(wh_scope)
+                # 已归属所选仓的批次
+                attributed_rows = (
+                    await batch_q.filter(warehouse_id__in=wh_scope)
+                    .group_by("material_id")
+                    .annotate(qty=Sum("quantity"))
+                    .values("material_id", "qty")
+                )
+                for row in attributed_rows:
+                    mid = int(row["material_id"])
+                    if mid in on_hand_map:
+                        on_hand_map[mid] += _decimal_or_zero(row.get("qty"))
+
+                # 历史未归属：仅当物料默认仓在所选范围内时计入（与出库可用量口径一致）
+                zero_rows = (
+                    await batch_q.filter(warehouse_id=0)
+                    .group_by("material_id")
+                    .annotate(qty=Sum("quantity"))
+                    .values("material_id", "qty")
+                )
+                if zero_rows:
+                    zero_mids = [int(r["material_id"]) for r in zero_rows]
+                    default_map = await _material_default_warehouse_ids(
+                        tenant_id, zero_mids
+                    )
+                    for row in zero_rows:
+                        mid = int(row["material_id"])
+                        if mid not in on_hand_map:
+                            continue
+                        if default_map.get(mid) in scope_set:
+                            on_hand_map[mid] += _decimal_or_zero(row.get("qty"))
     except Exception as e:
         logger.warning(f"MaterialBatch 批量查询失败: {e}")
 
@@ -837,13 +954,11 @@ async def batch_get_material_inventory(
             deleted_at__isnull=True,
             status="available",
         )
-        if warehouse_id is not None:
-            line_query = line_query.filter(warehouse_id=warehouse_id)
-        elif warehouse_ids is not None:
-            if len(warehouse_ids) == 0:
+        if wh_scope is not None:
+            if len(wh_scope) == 0:
                 line_query = None
             else:
-                line_query = line_query.filter(warehouse_id__in=warehouse_ids)
+                line_query = line_query.filter(warehouse_id__in=wh_scope)
 
         if line_query is not None:
             line_rows = (

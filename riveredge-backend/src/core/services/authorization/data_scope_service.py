@@ -225,6 +225,97 @@ class DataScopeService:
         return Q(id=-1)
 
     @classmethod
+    def _role_is_external_partner(cls, role: Any) -> bool:
+        return (
+            (getattr(role, "role_type", "") or "").strip().lower() == "external"
+            and bool((getattr(role, "external_partner_type", "") or "").strip())
+        )
+
+    @classmethod
+    async def _filter_roles_with_function_resource(
+        cls,
+        tenant_id: int,
+        roles: list[Any],
+        resource_key: str,
+    ) -> list[Any]:
+        from core.services.authorization.permission_policy_service import PermissionPolicyService
+
+        granted: list[Any] = []
+        for role in roles:
+            role_uuid = (getattr(role, "uuid", None) or "").strip()
+            if not role_uuid:
+                continue
+            role_resources = await PermissionPolicyService._collect_role_granted_function_resources(
+                tenant_id,
+                role_uuid,
+            )
+            if resource_key in role_resources:
+                granted.append(role)
+        return granted
+
+    @classmethod
+    async def _external_partner_q_for_role(
+        cls,
+        *,
+        tenant_id: int,
+        user: User,
+        profile: Any,
+        role: Any,
+    ) -> Q | None:
+        code_field = (getattr(profile, "partner_code_field", None) or "").strip()
+        if not code_field:
+            return None
+        dimension = (getattr(role, "external_partner_type", "") or "").strip().lower()
+        if not dimension:
+            return None
+        codes = await UserDataScopeBindingService.list_scope_codes(
+            tenant_id=tenant_id,
+            user_id=user.id,
+            dimension=dimension,
+        )
+        if not codes:
+            return Q(id=-1)
+        return Q(**{f"{code_field}__in": codes})
+
+    @classmethod
+    async def _apply_no_explicit_policies(
+        cls,
+        queryset,
+        *,
+        tenant_id: int,
+        user: User,
+        resource_key: str,
+        profile: Any,
+        roles: list[Any],
+    ):
+        default_external_q = await cls._default_external_partner_q(
+            tenant_id=tenant_id,
+            user=user,
+            profile=profile,
+            roles=roles,
+        )
+        if default_external_q is not None:
+            return queryset.filter(default_external_q)
+        default_resolver = (getattr(profile, "no_policy_default_resolver", None) or "").strip().lower()
+        if default_resolver:
+            custom = get_scope_resolver(default_resolver)
+            if custom is not None:
+                ctx = ScopeResolveContext(
+                    tenant_id=tenant_id,
+                    user_id=user.id,
+                    resource=resource_key,
+                    profile=profile,
+                    scope_payload=None,
+                    department_uuid=None,
+                    department_user_ids=[user.id],
+                )
+                part = await custom(ctx)
+                if part is not None:
+                    return queryset.filter(part)
+        # 默认数据权限为“全部”：只有显式配置策略时才收敛数据范围。
+        return queryset
+
+    @classmethod
     async def apply(
         cls,
         queryset,
@@ -240,59 +331,82 @@ class DataScopeService:
         resource_key = normalize_resource_key(resource)
         profile = get_resource_profile(resource_key)
         roles = await cls._load_active_roles(user.id, tenant_id)
-        role_uuids = [
+        granted_roles = await cls._filter_roles_with_function_resource(
+            tenant_id,
+            roles,
+            resource_key,
+        )
+        roles_for_scope = granted_roles if granted_roles else roles
+
+        granted_role_uuids = [
             (getattr(role, "uuid", None) or "").strip()
-            for role in roles
+            for role in roles_for_scope
             if (getattr(role, "uuid", None) or "").strip()
         ]
-        policies = await cls._load_policies(tenant_id, role_uuids, resource_key)
+        policies = await cls._load_policies(tenant_id, granted_role_uuids, resource_key)
+        policies_by_role: dict[str, list[DataPermissionPolicy]] = {}
+        for policy in policies:
+            role_uuid = (getattr(policy, "role_uuid", None) or "").strip()
+            if not role_uuid:
+                continue
+            policies_by_role.setdefault(role_uuid, []).append(policy)
 
         if not policies:
-            default_external_q = await cls._default_external_partner_q(
+            return await cls._apply_no_explicit_policies(
+                queryset,
                 tenant_id=tenant_id,
                 user=user,
+                resource_key=resource_key,
                 profile=profile,
-                roles=roles,
+                roles=roles_for_scope,
             )
-            if default_external_q is not None:
-                return queryset.filter(default_external_q)
-            default_resolver = (getattr(profile, "no_policy_default_resolver", None) or "").strip().lower()
-            if default_resolver:
-                custom = get_scope_resolver(default_resolver)
-                if custom is not None:
-                    ctx = ScopeResolveContext(
-                        tenant_id=tenant_id,
-                        user_id=user.id,
-                        resource=resource_key,
-                        profile=profile,
-                        scope_payload=None,
-                        department_uuid=None,
-                        department_user_ids=[user.id],
-                    )
-                    part = await custom(ctx)
-                    if part is not None:
-                        return queryset.filter(part)
-            # 默认数据权限为“全部”：只有显式配置策略时才收敛数据范围。
-            return queryset
-
-        if any((p.scope_type or "").strip().lower() == DataScopeType.ALL for p in policies):
-            return queryset
 
         dept_uuid, dept_user_ids = await cls._department_context(tenant_id, user)
+        any_unrestricted = False
         q_parts: list[Q] = []
-        for policy in policies:
-            part = await cls._policy_to_q(
-                policy,
-                tenant_id=tenant_id,
-                user=user,
-                resource=resource_key,
-                profile=profile,
-                dept_uuid=dept_uuid,
-                dept_user_ids=dept_user_ids,
-            )
-            if part is None:
-                return queryset
-            q_parts.append(part)
+        for role in roles_for_scope:
+            role_uuid = (getattr(role, "uuid", None) or "").strip()
+            if not role_uuid:
+                continue
+            role_policies = policies_by_role.get(role_uuid, [])
+            if not role_policies:
+                if cls._role_is_external_partner(role):
+                    part = await cls._external_partner_q_for_role(
+                        tenant_id=tenant_id,
+                        user=user,
+                        profile=profile,
+                        role=role,
+                    )
+                    if part is not None:
+                        q_parts.append(part)
+                else:
+                    any_unrestricted = True
+                    break
+                continue
+
+            if any((p.scope_type or "").strip().lower() == DataScopeType.ALL for p in role_policies):
+                any_unrestricted = True
+                break
+
+            for policy in role_policies:
+                part = await cls._policy_to_q(
+                    policy,
+                    tenant_id=tenant_id,
+                    user=user,
+                    resource=resource_key,
+                    profile=profile,
+                    dept_uuid=dept_uuid,
+                    dept_user_ids=dept_user_ids,
+                )
+                if part is None:
+                    any_unrestricted = True
+                    break
+                q_parts.append(part)
+            if any_unrestricted:
+                break
+
+        if any_unrestricted:
+            return queryset
 
         if not q_parts:
             return queryset.filter(id=-1)

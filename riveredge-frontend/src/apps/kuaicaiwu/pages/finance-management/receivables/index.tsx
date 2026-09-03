@@ -125,11 +125,11 @@ const ReceivableList: React.FC = () => {
     const [mergeSources, setMergeSources] = useState<MergeFinanceSourceRow[]>([]);
     const handleReceivableAuditBatchSuccess = () => {
         setSelectedRowKeys([]);
-        actionRef.current?.reload();
+    actionRef.current?.reload();
     };
 
     useEffect(() => {
-        actionRef.current?.reload();
+    actionRef.current?.reload();
     }, [urlAgingFilters.aging_bucket, urlAgingFilters.overdue_only]);
 
     const agingFilterDescription = useMemo(() => {
@@ -262,7 +262,7 @@ const ReceivableList: React.FC = () => {
         const created = await receivableService.createReceivable(data);
         messageApi.success(t('common.createSuccess'));
         setCreateModalVisible(false);
-        actionRef.current?.reload();
+    actionRef.current?.reload();
         if (created?.id) {
             navigate(`/apps/kuaicaiwu/finance-management/receivables/${created.id}`);
         }
@@ -436,7 +436,7 @@ const ReceivableList: React.FC = () => {
             });
             messageApi.success(t(`${P}.pullCreateSuccess`, { target: pullFromSalesOrderAction.targetLabel }));
             resetPullPreview();
-            actionRef.current?.reload();
+    actionRef.current?.reload();
             return true;
         } catch (e: any) {
             messageApi.error(
@@ -522,9 +522,9 @@ const ReceivableList: React.FC = () => {
             for (const id of keys) {
                 await receivableService.deleteReceivable(Number(id));
             }
-            messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
+    messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
             setSelectedRowKeys([]);
-            actionRef.current?.reload();
+    actionRef.current?.reload();
         } catch (error: any) {
             messageApi.error(error?.message || t('common.deleteFailed'));
         }
@@ -1044,7 +1044,7 @@ const ReceivableList: React.FC = () => {
                     });
                     if (result.successCount > 0) {
                         messageApi.success(t(`${P}.importSuccess`, { count: result.successCount }));
-                        actionRef.current?.reload();
+    actionRef.current?.reload();
                     }
                     if (result.failureCount > 0) {
                         messageApi.warning(t('app.kuaicaiwu.common.importPartialFail', { count: result.failureCount }));
@@ -1337,7 +1337,7 @@ const ReceivableList: React.FC = () => {
                 onOpenChange={setMergeModalOpen}
                 onSuccess={() => {
                     setSelectedRowKeys([]);
-                    actionRef.current?.reload();
+    actionRef.current?.reload();
                 }}
             />
         </ListPageTemplate>

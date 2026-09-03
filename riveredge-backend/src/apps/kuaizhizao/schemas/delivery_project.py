@@ -141,6 +141,8 @@ class DeliveryProjectNodeTaskCreate(BaseModel):
     members: List[DeliveryMemberInput] = Field(default_factory=list)
     planned_start_date: Optional[date] = None
     planned_end_date: Optional[date] = None
+    actual_start_date: Optional[date] = None
+    actual_end_date: Optional[date] = None
 
 
 class DeliveryProjectNodeTaskUpdate(BaseModel):
@@ -151,6 +153,8 @@ class DeliveryProjectNodeTaskUpdate(BaseModel):
     members: Optional[List[DeliveryMemberInput]] = None
     planned_start_date: Optional[date] = None
     planned_end_date: Optional[date] = None
+    actual_start_date: Optional[date] = None
+    actual_end_date: Optional[date] = None
     progress_percent: Optional[Decimal] = None
 
 
@@ -215,6 +219,51 @@ class DeliveryProjectChangeTemplateRequest(BaseModel):
 
 class DeliveryProjectNodeUpdate(BaseModel):
     owner_id: Optional[int] = None
+    planned_start_date: Optional[date] = None
+    planned_end_date: Optional[date] = None
+    actual_start_date: Optional[date] = None
+    actual_end_date: Optional[date] = None
+
+
+class DeliveryProjectNodeDocumentCreate(BaseModel):
+    node_id: int
+    doc_type: str
+    doc_id: int
+    doc_code: str
+    title: Optional[str] = None
+
+
+class DeliveryProjectNodeDocumentResponse(BaseModel):
+    id: int
+    project_id: int
+    node_id: int
+    node_name: Optional[str] = None
+    doc_type: str
+    doc_id: int
+    doc_code: str
+    title: Optional[str] = None
+    linked_at: Optional[datetime] = None
+    linked_by_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class DeliveryAlertRow(BaseModel):
+    """交付中心预警行（临期/逾期即时计算）"""
+
+    alert_kind: str
+    project_id: int
+    project_code: str
+    project_name: str
+    node_id: int
+    node_name: str
+    is_milestone: bool = False
+    planned_end_date: Optional[date] = None
+    days_remaining: Optional[int] = None
+    days_overdue: Optional[int] = None
+    owner_name: Optional[str] = None
+    project_owner_name: Optional[str] = None
 
 
 class DeliveryProjectResponse(BaseModel):
@@ -425,6 +474,7 @@ class DeliveryProjectWorkbenchResponse(DeliveryProjectResponse):
     recent_reports: List[DeliveryNodeReportResponse] = Field(default_factory=list)
     open_issues: List[DeliveryIssueResponse] = Field(default_factory=list)
     linked_rd_project: Optional[DeliveryLinkedRdProjectSummary] = None
+    node_documents: List[DeliveryProjectNodeDocumentResponse] = Field(default_factory=list)
 
 
 # --- 交付中心 / 跟进表 ---
@@ -434,6 +484,7 @@ class DeliveryDashboardKpi(BaseModel):
     overdue_nodes: int = 0
     at_risk_projects: int = 0
     open_issues: int = 0
+    alert_count: int = 0
 
 
 class DeliveryGanttItem(BaseModel):
@@ -456,6 +507,7 @@ class DeliveryDashboardResponse(BaseModel):
     kpis: DeliveryDashboardKpi
     recent_projects: List[DeliveryProjectListResponse] = Field(default_factory=list)
     overdue_nodes: List[Dict[str, Any]] = Field(default_factory=list)
+    alerts: List[DeliveryAlertRow] = Field(default_factory=list)
     project_gantt: List[DeliveryGanttItem] = Field(default_factory=list)
 
 

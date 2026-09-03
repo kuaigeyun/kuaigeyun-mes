@@ -1,1 +1,0 @@
-import{D as a}from"./clientRelease-DSoa8jw6.js";const e="/apps/master-data/materials";async function o(t){return a(`${e}/bom/changes`,{method:"POST",data:t})}async function m(t){return a(`${e}/bom/changes/${t}`,{method:"GET"})}async function c(t){const s=await a(`${e}/bom/changes`,{method:"GET",params:t});return{items:s.items??[],total:s.total??0}}export{o as c,m as g,c as l};

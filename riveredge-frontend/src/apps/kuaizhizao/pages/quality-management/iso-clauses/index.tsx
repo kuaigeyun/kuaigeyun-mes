@@ -15,6 +15,7 @@ import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
 import { rowActionKind } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import {
   DetailDrawerSection,
   DetailDrawerTemplate,
@@ -172,7 +173,7 @@ const IsoClausesPage: React.FC = () => {
         if (ok > 0) messageApi.success(t('common.deleteSuccess'));
         if (fail > 0) messageApi.error(t('common.deleteFailed'));
         setSelectedRowKeys([]);
-        actionRef.current?.reload();
+    actionRef.current?.reload();
       },
     });
   };
@@ -310,18 +311,18 @@ const IsoClausesPage: React.FC = () => {
                 </Button>
               ) : null,
               canDelete ? (
-                <Button
+                <ActionConfirmPopconfirm title={t('common.deleteTitle')} onConfirm={async () => {
+                void handleDelete(record)
+              }}
+            >
+              <Button
                   key="delete"
                   {...rowActionKind('delete')}
-                  onClick={() => {
-                    getAntdModal().confirm({
-                      title: t('common.deleteTitle'),
-                      onOk: () => handleDelete(record),
-                    });
-                  }}
+                  onClick={(e) => e.stopPropagation()}
                 >
                   {t('common.delete')}
                 </Button>
+            </ActionConfirmPopconfirm>
               ) : null,
             ],
           },
@@ -423,7 +424,7 @@ const IsoClausesPage: React.FC = () => {
             }
             setModalOpen(false);
             setEditing(null);
-            actionRef.current?.reload();
+    actionRef.current?.reload();
             if (detail?.id === editing?.id && editing) {
               void loadDrawerData({ ...detail, ...payload, id: editing.id });
             }

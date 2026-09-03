@@ -83,6 +83,12 @@ import {
 } from './outboundBatchAllocation';
 import OutboundBatchAllocationField from './OutboundBatchAllocationField';
 import OutboundSerialPickerField from './OutboundSerialPickerField';
+import {
+  filterWarehouseTrackingColumns,
+  isMaterialBatchEntryEnabled,
+  isMaterialSerialEntryEnabled,
+  useWarehouseTrackingFlags,
+} from '../shared/warehouseTrackingFlags';
 
 type PickLine = {
   key: number;
@@ -102,6 +108,7 @@ function lineBatchKey(materialId: number, warehouseId?: number): string {
 
 const OutboundWorkOrderPullEntryPage: React.FC = () => {
   const { t } = useTranslation();
+  const trackingFlags = useWarehouseTrackingFlags();
   const pullFromWorkOrderAction = resolveKuaizhizaoDocumentAction(t, 'outbound.pull_from_work_order');
   const { woId: woIdParam } = useParams<{ woId: string }>();
   const woId = Number(woIdParam);
@@ -296,7 +303,7 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
       const next = { ...prev };
       for (const line of pickLines) {
         const meta = materialMeta[line.materialId];
-        if (!meta?.batchManaged) continue;
+        if (!isMaterialBatchEntryEnabled(trackingFlags, meta?.batchManaged)) continue;
         const whId = lineWh[line.materialId];
         if (!(whId > 0)) continue;
         const opts = batchOptionsByKey[lineBatchKey(line.materialId, whId)] ?? [];
@@ -332,7 +339,9 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
   }, [batchOptionsByKey, lineWh, materialMeta, pickLines]);
 
   const lineColumns = useMemo(
-    () => [
+    () =>
+      filterWarehouseTrackingColumns(
+        [
       { title: t('app.kuaizhizao.warehouseOutbound.col.materialCode'), dataIndex: 'materialCode', width: 120 },
       { title: t('app.kuaizhizao.warehouseOutbound.col.materialName'), dataIndex: 'materialName', ellipsis: true },
       {
@@ -448,7 +457,7 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
         width: 220,
         render: (_: unknown, line: PickLine) => {
           const meta = materialMeta[line.materialId];
-          if (!meta?.batchManaged) return '—';
+          if (!isMaterialBatchEntryEnabled(trackingFlags, meta?.batchManaged)) return '—';
           const whId = lineWh[line.materialId];
           if (!(whId > 0)) return '—';
           const opts = batchOptionsByKey[lineBatchKey(line.materialId, whId)] ?? [];
@@ -476,7 +485,7 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
         width: 160,
         render: (_: unknown, line: PickLine) => {
           const meta = materialMeta[line.materialId];
-          if (!meta?.serialManaged) return '—';
+          if (!isMaterialSerialEntryEnabled(trackingFlags, meta?.serialManaged)) return '—';
           const qty = Number(line.issueQuantity || 0);
           const uuid = meta.materialUuid;
           const opts = uuid ? serialOptionsByUuid[uuid] ?? [] : [];
@@ -515,7 +524,9 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
         ),
       },
       { title: t('common.unit'), dataIndex: 'unit', width: 60 },
-    ],
+        ],
+        trackingFlags,
+      ),
     [
       applyLineWarehouse,
       batchAllocations,
@@ -527,6 +538,7 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
       serialOptionsLoading,
       serials,
       t,
+      trackingFlags,
       warehouseOptions,
     ],
   );
@@ -715,7 +727,7 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
         return;
       }
       const meta = materialMeta[line.materialId];
-      if (mode === 'confirm' && meta?.batchManaged) {
+      if (mode === 'confirm' && isMaterialBatchEntryEnabled(trackingFlags, meta?.batchManaged)) {
         const opts = batchOptionsByKey[lineBatchKey(line.materialId, wh)] ?? [];
         const allocs = batchAllocations[line.materialId] ?? [];
         if (!isValidOutboundBatchAllocations(allocs, opts, line.issueQuantity)) {
@@ -729,7 +741,7 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
           return;
         }
       }
-      if (mode === 'confirm' && meta?.serialManaged) {
+      if (mode === 'confirm' && isMaterialSerialEntryEnabled(trackingFlags, meta?.serialManaged)) {
         const pickedSerials = serials[line.materialId] ?? [];
         if (pickedSerials.length !== line.issueQuantity) {
           messageApi.error(
@@ -744,7 +756,7 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
       }
       // 序列号物料暂不支持同一次领料拆多批（序列归属批号需一一对应）
       if (
-        meta?.serialManaged &&
+        isMaterialSerialEntryEnabled(trackingFlags, meta?.serialManaged) &&
         (batchAllocations[line.materialId] ?? []).filter((a) => Number(a.quantity) > 0).length > 1
       ) {
         messageApi.error(
@@ -776,7 +788,7 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
           serial_numbers: lineSerials.length ? lineSerials : undefined,
         };
         // 批号管理：按批拆行（同物料多批 → 多条 ProductionPickingItem）
-        if (meta?.batchManaged && allocs.length > 0) {
+        if (isMaterialBatchEntryEnabled(trackingFlags, meta?.batchManaged) && allocs.length > 0) {
           return allocs.map((a) => ({
             ...base,
             issue_quantity: a.quantity,

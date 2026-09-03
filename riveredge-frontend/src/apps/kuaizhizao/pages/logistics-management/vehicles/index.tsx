@@ -173,7 +173,7 @@ const VehiclesPage: React.FC = () => {
                   onClick={async () => {
                     await deleteVehicle(row.id);
                     message.success(t('common.deleteSuccess'));
-                    actionRef.current?.reload();
+    actionRef.current?.reload();
                   }}
                 />,
               );
@@ -210,7 +210,7 @@ const VehiclesPage: React.FC = () => {
         onDelete={async (keys) => {
           await Promise.all(keys.map((key) => deleteVehicle(Number(key))));
           message.success(t('common.batchDeleteSuccess', { count: keys.length }));
-          actionRef.current?.reload();
+    actionRef.current?.reload();
         }}
         fuzzySearchPlaceholder={t('app.kuaizhizao.logistics.placeholder.searchVehicle')}
       />
@@ -237,7 +237,7 @@ const VehiclesPage: React.FC = () => {
           if (detail?.id === record.id) {
             setDetail(record);
           }
-          actionRef.current?.reload();
+    actionRef.current?.reload();
         }}
       />
     </ListPageTemplate>

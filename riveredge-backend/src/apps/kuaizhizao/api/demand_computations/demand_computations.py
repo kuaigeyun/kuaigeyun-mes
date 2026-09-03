@@ -786,6 +786,7 @@ async def delete_computation(
     computation_id: int = Path(..., description="计算ID"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_permission_codes("kuaizhizao:plan-management-demand-computation:delete")),
 ):
     """
     删除需求计算

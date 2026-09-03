@@ -2527,11 +2527,18 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         }
       }
 
-      // 竞态：旧请求结果到达时不写 state（仅最新 seq 落库），但仍把「本次实时算出的 result」返回给
-      // ProTable —— result 始终基于最新 requestRef 计算，故即便 ProTable 末位应用的是过期请求的返回值，
-      // 表格内容也仍是当前真值；切勿回退成空响应（会把已加载列表覆盖为「暂无数据」）。
+      // 竞态：仅最新 seq 可写 state / 交给 ProTable。
+      // 旧请求的 HTTP 响应已按发起时的筛选条件固定，绝不能再回传给 ProTable，
+      // 否则会出现「分段筛选要点第二次才对」（旧范围结果盖住新范围）。
+      // 无已提交结果时再回退本次 result，避免首屏空窗。
       if (requestSeqRef.current !== seq) {
-        return result
+        return (
+          lastCommittedRequestResultRef.current ?? {
+            data: [],
+            success: true,
+            total: 0,
+          }
+        )
       }
 
       // 仅在数据引用变化时 setState（forceFresh 或 TanStack 结构共享豁免）

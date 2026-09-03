@@ -499,7 +499,7 @@ const MessageTemplateListPage: React.FC = () => {
                 setLoadPresetLoading(true);
                 const res = await loadPresetMessageTemplates();
                 messageApi.success(res.message);
-                actionRef.current?.reload();
+    actionRef.current?.reload();
               } catch (e: any) {
                 messageApi.error(e?.message || t('common.operationFailed'));
               } finally {

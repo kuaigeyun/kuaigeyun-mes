@@ -10,6 +10,7 @@
 
 import React, { useRef, useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { createListAuditPhaseColumn } from '../shared/listAuditPhaseColumn';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
@@ -110,7 +111,6 @@ import {
   referenceDisplayToIdOptions,
   searchReferenceDisplay,
 } from '../../../../../utils/referenceDisplay';
-import { getAntdModal } from '../../../../../utils/antdAppApis';
 
 const SHIPMENT_NOTICE_RESOURCE = 'kuaizhizao:shipment-notice';
 
@@ -213,7 +213,7 @@ const ShipmentNoticesPage: React.FC = () => {
   useEffect(() => {
     dataViewModeRef.current = dataViewMode;
   }, [dataViewMode]);
-  const { message: messageApi } = App.useApp();
+  const { message: messageApi, modal: modalApi } = App.useApp();
   const { token } = AntdTheme.useToken();
   const noticeDetailDrawerZIndex = token.zIndexPopupBase;
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
@@ -564,10 +564,14 @@ const ShipmentNoticesPage: React.FC = () => {
           </Button>
         ) : null,
         record.capabilities?.delete?.allowed && shipmentNoticePerms.canDelete ? (
-          <Button {...rowActionKind('delete')} key="delete" onClick={() => handleDelete(record as ShipmentNotice)}>{t('common.delete')}</Button>
+          <ActionConfirmPopconfirm title={t('app.kuaizhizao.shipmentNotice.deleteModalTitle')} description={t('app.kuaizhizao.shipmentNotice.deleteConfirmContent', { code: record.notice_code })} onConfirm={() => executeDelete(record as ShipmentNotice)}>
+              <Button {...rowActionKind('delete')} key="delete" onClick={(e) => e.stopPropagation()}>{t('common.delete')}</Button>
+            </ActionConfirmPopconfirm>
         ) : null,
         record.capabilities?.withdraw?.allowed && shipmentNoticePerms.canAction?.('revoke') ? (
-          <Button {...rowActionKind('revoke')} key="withdraw" onClick={() => handleWithdraw(record as ShipmentNotice)}>{t('app.kuaizhizao.shipmentNotice.withdrawNotify')}</Button>
+          <ActionConfirmPopconfirm title={t('app.kuaizhizao.shipmentNotice.withdrawNotify')} description={t('app.kuaizhizao.shipmentNotice.withdrawConfirmContent', { code: record.notice_code })} onConfirm={() => executeWithdraw(record as ShipmentNotice)}>
+              <Button {...rowActionKind('revoke')} key="withdraw" onClick={(e) => e.stopPropagation()}>{t('app.kuaizhizao.shipmentNotice.withdrawNotify')}</Button>
+            </ActionConfirmPopconfirm>
         ) : null,
       ].filter(Boolean),
     },
@@ -884,40 +888,34 @@ const ShipmentNoticesPage: React.FC = () => {
     t,
   ]);
 
+  const executeWithdraw = async (record: ShipmentNotice) => {
+    try {
+      await shipmentNoticeApi.withdraw(record.id!.toString());
+      messageApi.success(t('app.kuaizhizao.shipmentNotice.withdrawSuccess'));
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || t('app.kuaizhizao.shipmentNotice.withdrawFailed'));
+    }
+  };
+
   const handleWithdraw = (record: ShipmentNotice) => {
-    getAntdModal().confirm({
+    modalApi.confirm({
       title: t('app.kuaizhizao.shipmentNotice.withdrawNotify'),
       content: t('app.kuaizhizao.shipmentNotice.withdrawConfirmContent', { code: record.notice_code }),
-      onOk: async () => {
-        try {
-          await shipmentNoticeApi.withdraw(record.id!.toString());
-          messageApi.success(t('app.kuaizhizao.shipmentNotice.withdrawSuccess'));
-          invalidateMenuBadgeCounts();
-
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error.message || t('app.kuaizhizao.shipmentNotice.withdrawFailed'));
-        }
-      },
+      onOk: () => executeWithdraw(record),
     });
   };
 
-  const handleDelete = (record: ShipmentNotice) => {
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.shipmentNotice.deleteModalTitle'),
-      content: t('app.kuaizhizao.shipmentNotice.deleteConfirmContent', { code: record.notice_code }),
-      onOk: async () => {
-        try {
-          await shipmentNoticeApi.delete(record.id!.toString());
-          messageApi.success(t('common.deleteSuccess'));
-          invalidateMenuBadgeCounts();
-
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error.message || t('common.deleteFailed'));
-        }
-      },
-    });
+  const executeDelete = async (record: ShipmentNotice) => {
+    try {
+      await shipmentNoticeApi.delete(record.id!.toString());
+      messageApi.success(t('common.deleteSuccess'));
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || t('common.deleteFailed'));
+    }
   };
 
   const handleBatchDelete = async (keys: React.Key[]) => {
@@ -1109,7 +1107,7 @@ const ShipmentNoticesPage: React.FC = () => {
         );
         pullFromSalesOrderQuery.closeModal();
         invalidateMenuBadgeCounts();
-        actionRef.current?.reload();
+    actionRef.current?.reload();
       } catch (error: unknown) {
         messageApi.error(
           getApiErrorMessage(
@@ -1722,7 +1720,7 @@ const ShipmentNoticesPage: React.FC = () => {
               onSuccess={() => {
                 setSelectedRowKeys([]);
                 invalidateMenuBadgeCounts();
-                actionRef.current?.reload();
+    actionRef.current?.reload();
               }}
               requireConfirm
               labels={{
@@ -1970,7 +1968,7 @@ const ShipmentNoticesPage: React.FC = () => {
                 approvedStatuses={['待发货', '已通知', '已出库']}
                 rejectedStatuses={['已驳回', 'rejected', 'REJECTED']}
                 onSuccess={async () => {
-                  actionRef.current?.reload();
+    actionRef.current?.reload();
                   invalidateMenuBadgeCounts();
                   setTrackingRefreshKey((k) => k + 1);
                   if (noticeDetail?.id) {

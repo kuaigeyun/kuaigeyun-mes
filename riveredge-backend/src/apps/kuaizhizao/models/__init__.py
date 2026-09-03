@@ -142,6 +142,8 @@ from .delivery_project import (
     DeliveryProject,
     DeliveryProjectMember,
     DeliveryProjectNode,
+    DeliveryProjectNodeAlertSent,
+    DeliveryProjectNodeDocument,
     DeliveryProjectNodeTask,
 )
 from .logistics import (
@@ -395,6 +397,8 @@ __all__ = [
     'DeliveryProject',
     'DeliveryProjectMember',
     'DeliveryProjectNode',
+    'DeliveryProjectNodeAlertSent',
+    'DeliveryProjectNodeDocument',
     'DeliveryProjectNodeTask',
     'DeliveryNodeReport',
     'DeliveryIssue',

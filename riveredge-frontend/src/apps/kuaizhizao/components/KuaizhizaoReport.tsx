@@ -32,6 +32,10 @@ export type KuaizhizaoReportProps<T extends Record<string, unknown> = Record<str
   children?: React.ReactNode;
   /** 功能区：模糊搜索之前（报表视图切换） */
   beforeSearchButtons?: React.ReactNode;
+  /** 并入 ProTable params；变更会重取 */
+  params?: Record<string, unknown>;
+  /** 期间筛选左侧文案 */
+  periodFilterLabel?: React.ReactNode;
   /** keyword 走后端时关闭客户端拼音过滤 */
   skipFuzzyPinyinClientFilter?: boolean;
   /** 完全自定义请求（须走 createKuaizhizaoCustomReportRequest 或等价参数） */
@@ -56,6 +60,8 @@ export function KuaizhizaoReport<T extends Record<string, unknown> = Record<stri
   statCards,
   children,
   beforeSearchButtons,
+  params: paramsProp,
+  periodFilterLabel,
   skipFuzzyPinyinClientFilter = true,
   request: requestOverride,
 }: KuaizhizaoReportProps<T>) {
@@ -64,6 +70,11 @@ export function KuaizhizaoReport<T extends Record<string, unknown> = Record<stri
   const permissionResource =
     permissionResourceProp ?? permissionResourceFromPersistenceId(columnPersistenceId);
   const templateId = templateIdProp ?? route.templateId ?? 'queryTable';
+
+  const tableParams = useMemo(
+    () => ({ reportType, ...(paramsProp || {}) }),
+    [paramsProp, reportType],
+  );
 
   const defaultRequest = useCallback(
     async (
@@ -97,7 +108,8 @@ export function KuaizhizaoReport<T extends Record<string, unknown> = Record<stri
       request={requestOverride ?? defaultRequest}
       skipFuzzyPinyinClientFilter={skipFuzzyPinyinClientFilter}
       beforeSearchButtons={beforeSearchButtons}
-      params={{ reportType }}
+      periodFilterLabel={periodFilterLabel}
+      params={tableParams}
     >
       {children}
     </UniReport>

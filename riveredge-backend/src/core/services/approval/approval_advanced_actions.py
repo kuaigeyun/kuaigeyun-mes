@@ -288,8 +288,7 @@ class ApprovalAdvancedActions:
 
         try:
             approver_ids = [t.approver_id for t in pending_tasks]
-            asyncio = __import__("asyncio")
-            asyncio.create_task(
+            ApprovalInstanceService._spawn_background(
                 ApprovalInstanceService._send_urge_notification(
                     tenant_id=tenant_id,
                     instance=instance,

@@ -9,6 +9,7 @@
 
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import {
@@ -52,6 +53,7 @@ import {
   buildQualityInspectionListKindColumn,
   buildQualityInspectionListMaterialColumn,
   buildQualityInspectionListMaterialHiddenColumns,
+  buildQualityInspectionListNotesColumn,
   buildQualityInspectionListQuantityResultColumns,
   buildQualityInspectionListSearchColumns,
   buildQualityInspectionPartnerStackedColumn,
@@ -146,7 +148,6 @@ import {
   buildProcessInspectionExportColumns,
   mapProcessInspectionExportRows,
 } from '../components/qualityInspectionExport';
-import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { importExcelMatrixInChunks } from '../../../../../utils/chunkedBulkImport';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 const PROCESS_RESOURCE = 'kuaizhizao:quality-management-process-inspection';
@@ -741,79 +742,52 @@ const ProcessInspectionPage: React.FC = () => {
 
   const inspectionCustomFieldColumns = generateInspectionCustomFieldColumns();
 
-  const handleDeleteRow = useCallback(
-    (record: ProcessInspection) => {
-      if (record.id == null) return;
-      getAntdModal().confirm({
-        title: t('app.kuaizhizao.quality.process.messages.deleteConfirm', { count: 1 }),
-        onOk: async () => {
-          await qualityApi.processInspection.delete(String(record.id));
+  const executeDeleteRow = useCallback(async (record: ProcessInspection) => {
+    await qualityApi.processInspection.delete(String(record.id));
           messageApi.success(t('app.kuaizhizao.quality.common.messages.deleteSuccess', { count: 1 }));
           if (inspectionDetail?.id === record.id) {
             setDetailDrawerVisible(false);
             setInspectionDetail(null);
           }
           invalidateStats();
-          actionRef.current?.reload();
-        },
-      });
-    },
-    [inspectionDetail?.id, messageApi, t],
-  );
+    actionRef.current?.reload();
+  }, [inspectionDetail?.id, messageApi, t]);
 
-  const handleRevokeConduct = useCallback(
-    (record: ProcessInspection) => {
-      if (record.id == null) return;
-      getAntdModal().confirm({
-        title: t('app.kuaizhizao.quality.common.actions.revokeConductConfirmTitle'),
-        content: t('app.kuaizhizao.quality.common.actions.revokeConductConfirmContent', {
-          code: record.inspection_code || record.id,
-        }),
-        onOk: async () => {
-          await qualityApi.processInspection.revokeConduct(String(record.id));
+  const executeRevokeConduct = useCallback(async (record: ProcessInspection) => {
+    await qualityApi.processInspection.revokeConduct(String(record.id));
           messageApi.success(t('app.kuaizhizao.quality.common.messages.revokeConductSuccess'));
           if (inspectionDetail?.id === record.id) {
             setDetailDrawerVisible(false);
             setInspectionDetail(null);
           }
           invalidateStats();
-          actionRef.current?.reload();
-        },
-      });
-    },
-    [inspectionDetail?.id, messageApi, t],
-  );
+    actionRef.current?.reload();
+  }, [inspectionDetail?.id, messageApi, t]);
 
-  const handleBatchRevokeConduct = useCallback(async () => {
+  const executeBatchRevokeConduct = useCallback(async () => {
     const targets = filterRevokeConductQualityInspectionRecords(selectedRecordsForBatch);
     if (!targets.length) {
       messageApi.warning(t('app.kuaizhizao.quality.common.messages.revokeConductBatchEmpty'));
       return;
     }
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.quality.common.actions.revokeConductConfirmTitle'),
-      content: t('app.kuaizhizao.quality.common.messages.revokeConductBatchConfirm', { count: targets.length }),
-      onOk: async () => {
-        try {
-          for (const row of targets) {
-            if (row.id == null) continue;
-            await qualityApi.processInspection.revokeConduct(String(row.id));
-          }
-          messageApi.success(
-            t('app.kuaizhizao.quality.common.messages.revokeConductBatchSuccess', { count: targets.length }),
-          );
-          setSelectedRowKeys([]);
-          invalidateStats();
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(
-            qualityInspectionCapabilityReasonMessage(error?.message, t) ||
-              error?.message ||
-              t('app.kuaizhizao.quality.common.messages.revokeConductFailed'),
-          );
-        }
-      },
-    });
+    try {
+      for (const row of targets) {
+        if (row.id == null) continue;
+        await qualityApi.processInspection.revokeConduct(String(row.id));
+      }
+      messageApi.success(
+        t('app.kuaizhizao.quality.common.messages.revokeConductBatchSuccess', { count: targets.length }),
+      );
+      setSelectedRowKeys([]);
+      invalidateStats();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(
+        qualityInspectionCapabilityReasonMessage(error?.message, t) ||
+          error?.message ||
+          t('app.kuaizhizao.quality.common.messages.revokeConductFailed'),
+      );
+    }
   }, [messageApi, selectedRecordsForBatch, t]);
 
   const renderProcessRowNodes = (record: ProcessInspection): React.ReactNode[] => {
@@ -863,7 +837,7 @@ const ProcessInspectionPage: React.FC = () => {
           resourcePrefix: PROCESS_RESOURCE,
           entityName: t('app.kuaizhizao.quality.common.entity.processInspection'),
           onSuccess: () => {
-            actionRef.current?.reload();
+    actionRef.current?.reload();
             if (inspectionDetail?.id === record.id) {
               qualityApi.processInspection
                 .get(record.id!.toString())
@@ -901,7 +875,10 @@ const ProcessInspectionPage: React.FC = () => {
     }
     if (gates.revokeConduct.allowed) {
       nodes.push(
-        <Button
+        <ActionConfirmPopconfirm title={t('app.kuaizhizao.quality.common.actions.revokeConductConfirmTitle')} description={t('app.kuaizhizao.quality.common.actions.revokeConductConfirmContent', {
+          code: record.inspection_code || record.id,
+        })} onConfirm={() => executeRevokeConduct(record)}>
+              <Button
           {...rowActionKind('update')}
           key="revoke-conduct"
           size="small"
@@ -909,18 +886,17 @@ const ProcessInspectionPage: React.FC = () => {
           icon={<RollbackOutlined />}
           disabled={gates.revokeConduct.disabled}
           title={gates.revokeConduct.title}
-          onClick={(e) => {
-            e.stopPropagation();
-            handleRevokeConduct(record);
-          }}
+          onClick={(e) => e.stopPropagation()}
         >
           {t('app.kuaizhizao.quality.common.actions.revokeConduct')}
-        </Button>,
+        </Button>
+            </ActionConfirmPopconfirm>,
       );
     }
     if (gates.delete.allowed) {
       nodes.push(
-        <Button
+        <ActionConfirmPopconfirm title={t('app.kuaizhizao.quality.process.messages.deleteConfirm', { count: 1 })} onConfirm={() => executeDeleteRow(record)}>
+              <Button
           {...rowActionKind('delete')}
           key="delete"
           size="small"
@@ -929,13 +905,11 @@ const ProcessInspectionPage: React.FC = () => {
           icon={<DeleteOutlined />}
           disabled={gates.delete.disabled}
           title={gates.delete.title}
-          onClick={(e) => {
-            e.stopPropagation();
-            handleDeleteRow(record);
-          }}
+          onClick={(e) => e.stopPropagation()}
         >
           {t('common.delete')}
-        </Button>,
+        </Button>
+            </ActionConfirmPopconfirm>,
       );
     }
     return nodes;
@@ -972,6 +946,7 @@ const ProcessInspectionPage: React.FC = () => {
     ...buildQualityInspectionListMaterialHiddenColumns<ProcessInspection>(t),
     buildInspectorNameColumn<ProcessInspection>(t('app.kuaizhizao.quality.common.columns.inspector')),
     ...buildQualityInspectionListQuantityResultColumns<ProcessInspection>(t),
+    buildQualityInspectionListNotesColumn<ProcessInspection>(t),
     ...buildDocumentAuditColumns<ProcessInspection>(t),
     ...inspectionCustomFieldColumns,
     ...(processAuditColumn ? [processAuditColumn] : []),
@@ -1039,7 +1014,7 @@ const ProcessInspectionPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.processInspection)}
         headerTitle={t('app.kuaizhizao.quality.process.pageTitle')}
-        columnPersistenceId="apps.kuaizhizao.pages.quality-management.process-inspection-width-v1"
+        columnPersistenceId="apps.kuaizhizao.pages.quality-management.process-inspection-width-v2"
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
@@ -1109,15 +1084,17 @@ const ProcessInspectionPage: React.FC = () => {
               setInspectionDetail(null);
             }
             invalidateStats();
-            actionRef.current?.reload();
+    actionRef.current?.reload();
           } catch (error: any) {
             messageApi.error(error.message || t('common.deleteFailed'));
           }
         }}
         toolBarActionsAfterDelete={[
-          <Button key="revoke-conduct-batch" icon={<RollbackOutlined />} onClick={() => void handleBatchRevokeConduct()}>
+          <ActionConfirmPopconfirm title={t('app.kuaizhizao.quality.common.actions.revokeConductConfirmTitle')} description={t('app.kuaizhizao.quality.common.messages.revokeConductBatchConfirm', { count: filterRevokeConductQualityInspectionRecords(selectedRecordsForBatch).length })} onConfirm={() => executeBatchRevokeConduct()}>
+              <Button key="revoke-conduct-batch" icon={<RollbackOutlined />} onClick={(e) => e.stopPropagation()}>
             {t('app.kuaizhizao.quality.common.actions.revokeConduct')}
-          </Button>,
+          </Button>
+            </ActionConfirmPopconfirm>,
           <UniAuditBatchMenuButton
             key="process-inspection-batch-menu"
             selectedRowKeys={selectedRowKeys}
@@ -1128,7 +1105,7 @@ const ProcessInspectionPage: React.FC = () => {
             onSuccess={() => {
               setSelectedRowKeys([]);
               invalidateStats();
-              actionRef.current?.reload();
+    actionRef.current?.reload();
             }}
             toolBarButtonSize="middle"
           />,
@@ -1362,7 +1339,7 @@ const ProcessInspectionPage: React.FC = () => {
                   entityName: t('app.kuaizhizao.quality.common.entity.processInspection'),
                   theme: 'default',
                   onSuccess: () => {
-                    actionRef.current?.reload();
+    actionRef.current?.reload();
                     if (inspectionDetail?.id) {
                       qualityApi.processInspection
                         .get(inspectionDetail.id.toString())

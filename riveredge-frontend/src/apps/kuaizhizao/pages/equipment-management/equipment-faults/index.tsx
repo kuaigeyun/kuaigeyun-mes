@@ -58,7 +58,7 @@ import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { ROUTES } from '../../../constants/routes';
-import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
@@ -285,25 +285,19 @@ const EquipmentFaultsPage: React.FC = () => {
    * 处理批量删除故障记录（keys 为 uuid 数组）
    */
   const handleDelete = async (keys: React.Key[]) => {
-    getAntdModal().confirm({
-      title: t(`${P}.batchDeleteTitle`),
-      content: t(`${P}.batchDeleteContent`, { count: keys.length }),
-      onOk: async () => {
-        try {
+    try {
           for (const uuid of keys) {
             await equipmentFaultApi.delete(String(uuid));
           }
-          messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
+    messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
           setSelectedRowKeys([]);
           if (faultDetail?.uuid && keys.map(String).includes(String(faultDetail.uuid))) {
             closeDetail();
           }
-          actionRef.current?.reload();
+    actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || t('common.deleteFailed'));
         }
-      },
-    });
   };
 
   /**
@@ -583,23 +577,23 @@ const EquipmentFaultsPage: React.FC = () => {
     }
     if (perms.canDelete) {
       nodes.push(
-        <Button {...rowActionKind('delete')}
+        <ActionConfirmPopconfirm
           key="del"
-          type="link"
-          size="small"
-          danger
-          icon={<DeleteOutlined />}
-          onClick={(e) => {
-            e.stopPropagation();
-            getAntdModal().confirm({
-              title: t(`${P}.deleteTitle`),
-              content: t(`${P}.deleteContent`, { code: record.fault_no }),
-              onOk: () => record.uuid && handleDelete([record.uuid]),
-            });
-          }}
+          title={t(`${P}.deleteTitle`)}
+          description={t(`${P}.deleteContent`, { code: record.fault_no })}
+          onConfirm={() => record.uuid && void handleDelete([record.uuid])}
         >
-          {t('common.delete')}
-        </Button>,
+          <Button
+            {...rowActionKind('delete')}
+            type="link"
+            size="small"
+            danger
+            icon={<DeleteOutlined />}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {t('common.delete')}
+          </Button>
+        </ActionConfirmPopconfirm>,
       );
     }
     if (canStartRepair(record)) {
@@ -815,6 +809,9 @@ const EquipmentFaultsPage: React.FC = () => {
             style: { cursor: 'pointer' },
           })}
           showDeleteButton={perms.canDelete}
+          deleteConfirmTitle={t(`${P}.batchDeleteTitle`)}
+          deleteConfirmDescription={(count) => t(`${P}.batchDeleteContent`, { count: count })}
+          
           onDelete={handleDelete}
           showCreateButton={perms.canCreate}
           createButtonText={createButtonLabel}

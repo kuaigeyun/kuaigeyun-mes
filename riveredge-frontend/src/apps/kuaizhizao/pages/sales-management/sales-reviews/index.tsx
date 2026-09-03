@@ -49,6 +49,7 @@ import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { formatDateTime, formatBusinessDateOnly, todaySiteDateString, formatAmount } from '../../../../../utils/format';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
@@ -454,11 +455,10 @@ const SalesReviewsPage: React.FC = () => {
 
   const handleWithdraw = () => {
     if (!detail) return;
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.salesReview.withdrawConfirm'),
-      onOk: () =>
-        runDetailAction(() => salesReviewApi.withdraw(detail.id), 'app.kuaizhizao.salesReview.withdrawSuccess'),
-    });
+    void runDetailAction(
+      () => salesReviewApi.withdraw(detail.id),
+      'app.kuaizhizao.salesReview.withdrawSuccess',
+    );
   };
 
   const handleReject = () => {
@@ -1045,9 +1045,14 @@ const SalesReviewsPage: React.FC = () => {
         </Button>
       ) : null}
       {canRevoke && detail.status === 'reviewing' ? (
-        <Button loading={actionLoading} onClick={handleWithdraw}>
-          {t('app.kuaizhizao.salesReview.actionWithdraw')}
-        </Button>
+        <ActionConfirmPopconfirm
+          title={t('app.kuaizhizao.salesReview.withdrawConfirm')}
+          onConfirm={handleWithdraw}
+        >
+          <Button loading={actionLoading} onClick={(e) => e.stopPropagation()}>
+            {t('app.kuaizhizao.salesReview.actionWithdraw')}
+          </Button>
+        </ActionConfirmPopconfirm>
       ) : null}
       {canReject && detail.status === 'reviewing' ? (
         <Button danger loading={actionLoading} onClick={handleReject}>

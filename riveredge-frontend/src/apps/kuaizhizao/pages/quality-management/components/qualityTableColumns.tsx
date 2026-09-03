@@ -2,8 +2,8 @@
  * 质量管理列表页：堆叠列与合格/不合格数量展示（Ant Design 语义色）
  *
  * 检验四单据列表列序：与 GLOBAL_DOC_LIST_FIELD_RANK 中 inspection_code /
- * quality_inspection_kind / quality_inspection_* / downstream_push_progress / inspector_name 对齐；
- * 本文件挂载 key，页面不得另起 key 或浅覆盖 rank。
+ * quality_inspection_kind / quality_inspection_* / downstream_push_progress / inspector_name / notes 对齐；
+ * 余量列仅 notes（buildQualityInspectionListNotesColumn）；本文件挂载 key，页面不得另起 key 或浅覆盖 rank。
  */
 
 import React from 'react';
@@ -424,10 +424,11 @@ export function buildQualityInspectionListMaterialColumn<T extends object>(t: TF
     // 与 GLOBAL_DOC_LIST_FIELD_RANK.quality_inspection_material 对齐（勿用 material_name）
     key: 'quality_inspection_material',
     dataIndex: 'material_name',
-    // 检验单据无行项目明细：物料叠列吃掉视口剩余（RemainderFlex）
+    // 余量列留给检验备注；物料叠列 ContentKeepWidth
+    width: 200,
     minWidth: 200,
-    uniTablePrimaryFlex: true,
-    uniTableRemainderFlex: true,
+    uniTableKeepWidth: true,
+    uniTablePrimaryFlex: false,
     resizable: false,
     ellipsis: false,
     render: (_, r) => {
@@ -439,6 +440,24 @@ export function buildQualityInspectionListMaterialColumn<T extends object>(t: TF
         />
       );
     },
+  };
+}
+
+/**
+ * 检验四单据：检验备注（唯一 RemainderFlex）。
+ * key 用 notes → GLOBAL_DOC_LIST_FIELD_RANK.notes（勿用 quality_inspection_extra，OQC 放行占用该 key）。
+ */
+export function buildQualityInspectionListNotesColumn<T extends object>(t: TFunction): ProColumns<T> {
+  return {
+    title: t('app.kuaizhizao.quality.common.columns.inspectionNotes'),
+    key: 'notes',
+    dataIndex: 'notes',
+    minWidth: 160,
+    uniTablePrimaryFlex: true,
+    uniTableRemainderFlex: true,
+    resizable: false,
+    ellipsis: true,
+    hideInSearch: true,
   };
 }
 

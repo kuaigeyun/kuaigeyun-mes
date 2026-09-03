@@ -5,6 +5,7 @@
  */
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { rowActionKind, rowActionSettleVoucher, rowActionCreateRefund } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Modal, Typography, Spin, Alert, Table, Empty, Form } from 'antd';
 import { ModalForm, ProForm, ProFormDatePicker, ProFormDigit, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
@@ -17,6 +18,7 @@ import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { DetailDrawerActions, ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { FinanceVoucherDetailDrawer } from '../shared/FinanceVoucherDetailDrawer';
 import {
   financeAmountDigitFieldProps,
@@ -78,7 +80,6 @@ import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { renderRefundExecutionMarker } from '../../../utils/financeUiLabels';
-import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import {
   buildFinanceVoucherLinkHandlers,
@@ -405,20 +406,44 @@ const ReceiptsPage: React.FC = () => {
     }
   };
 
-  const handleConfirm = async (record: ReceiptVoucher) => {
-    getAntdModal().confirm({
-      title: t(`${R}.confirmTitle`),
-      content: t(`${R}.confirmContent`, { code: record.receipt_code }),
-      onOk: async () => {
-        try {
+  const executeConfirm = async (record: ReceiptVoucher) => {
+    try {
           await receiptService.confirmReceipt(record.id);
           messageApi.success(t(`${R}.confirmSuccess`));
-          actionRef.current?.reload();
+    actionRef.current?.reload();
           refreshOpenDetail();
         } catch (e: any) {
           messageApi.error(e?.message || t('common.operationFailed'));
         }
-      },
+  };
+
+  const executeCancel = async (record: ReceiptVoucher) => {
+    try {
+          await receiptService.cancelReceipt(record.id);
+          messageApi.success(t(`${R}.voidSuccess`));
+    actionRef.current?.reload();
+          refreshOpenDetail();
+        } catch (e: any) {
+          messageApi.error(e?.message || t('common.operationFailed'));
+        }
+  };
+
+  const executeDelete = async (record: ReceiptVoucher) => {
+    try {
+          await receiptService.deleteReceipt(record.id);
+          messageApi.success(t('common.deleteSuccess'));
+    actionRef.current?.reload();
+          if (detailRetryIdRef.current === record.id) closeDetail();
+        } catch (e: any) {
+          messageApi.error(e?.message || t('common.operationFailed'));
+        }
+  };
+
+  const handleConfirm = async (record: ReceiptVoucher) => {
+    getAntdModal().confirm({
+      title: t(`${R}.confirmTitle`),
+      content: t(`${R}.confirmContent`, { code: record.receipt_code }),
+      onOk: () => executeConfirm(record),
     });
   };
 
@@ -426,16 +451,7 @@ const ReceiptsPage: React.FC = () => {
     getAntdModal().confirm({
       title: t(`${R}.voidTitle`),
       content: t(`${R}.voidContent`, { code: record.receipt_code }),
-      onOk: async () => {
-        try {
-          await receiptService.cancelReceipt(record.id);
-          messageApi.success(t(`${R}.voidSuccess`));
-          actionRef.current?.reload();
-          refreshOpenDetail();
-        } catch (e: any) {
-          messageApi.error(e?.message || t('common.operationFailed'));
-        }
-      },
+      onOk: () => executeCancel(record),
     });
   };
 
@@ -444,23 +460,14 @@ const ReceiptsPage: React.FC = () => {
       title: t(`${R}.deleteTitle`),
       content: t(`${R}.deleteContent`, { code: record.receipt_code }),
       okType: 'danger',
-      onOk: async () => {
-        try {
-          await receiptService.deleteReceipt(record.id);
-          messageApi.success(t('common.deleteSuccess'));
-          actionRef.current?.reload();
-          if (detailRetryIdRef.current === record.id) closeDetail();
-        } catch (e: any) {
-          messageApi.error(e?.message || t('common.operationFailed'));
-        }
-      },
+      onOk: () => executeDelete(record),
     });
   };
 
   const handleBatchDelete = async (keys: React.Key[]) => {
     try {
       for (const key of keys) {
-        await receiptService.deleteReceipt(Number(key));
+      await receiptService.deleteReceipt(Number(key));
       }
       messageApi.success(t(`${R}.batchDeleted`, { count: keys.length }));
       setSelectedRowKeys([]);
@@ -473,7 +480,7 @@ const ReceiptsPage: React.FC = () => {
   const handleBatchConfirm = async (keys: React.Key[]) => {
     try {
       for (const key of keys) {
-        await receiptService.confirmReceipt(Number(key));
+      await receiptService.confirmReceipt(Number(key));
       }
       messageApi.success(t(`${R}.batchConfirmed`, { count: keys.length }));
       setSelectedRowKeys([]);
@@ -486,7 +493,7 @@ const ReceiptsPage: React.FC = () => {
   const handleBatchCancel = async (keys: React.Key[]) => {
     try {
       for (const key of keys) {
-        await receiptService.cancelReceipt(Number(key));
+      await receiptService.cancelReceipt(Number(key));
       }
       messageApi.success(t(`${R}.batchVoided`, { count: keys.length }));
       setSelectedRowKeys([]);
@@ -786,7 +793,9 @@ const ReceiptsPage: React.FC = () => {
         ];
         if (record.status === 'Draft' && receiptPerms.canAction?.('audit')) {
           acts.push(
-            <Button key="cf" {...rowActionKind('audit')} onClick={() => handleConfirm(record)} />,
+            <ActionConfirmPopconfirm title={t(`${R}.confirmTitle`)} description={t(`${R}.confirmContent`, { code: record.receipt_code })} onConfirm={() => executeConfirm(record)}>
+              <Button key="cf" {...rowActionKind('audit')} onClick={(e) => e.stopPropagation()} />
+            </ActionConfirmPopconfirm>,
           );
         }
         if (record.status === 'Confirmed' && Number(record.unsettled_amount ?? 0) > 0) {
@@ -822,12 +831,16 @@ const ReceiptsPage: React.FC = () => {
         }
         if (record.status !== 'Cancelled' && record.settled_amount === 0 && receiptPerms.canAction?.('revoke')) {
           acts.push(
-            <Button key="ca" {...rowActionKind('revoke')} onClick={() => handleCancel(record)} />,
+            <ActionConfirmPopconfirm title={t(`${R}.voidTitle`)} description={t(`${R}.voidContent`, { code: record.receipt_code })} onConfirm={() => executeCancel(record)}>
+              <Button key="ca" {...rowActionKind('revoke')} onClick={(e) => e.stopPropagation()} />
+            </ActionConfirmPopconfirm>,
           );
         }
         if (record.status !== 'Confirmed' && receiptPerms.canDelete) {
           acts.push(
-            <Button key="del" {...rowActionKind('delete')} onClick={() => handleDelete(record)} />,
+            <ActionConfirmPopconfirm title={t(`${R}.deleteTitle`)} description={t(`${R}.deleteContent`, { code: record.receipt_code })} okType="danger" onConfirm={() => executeDelete(record)}>
+              <Button key="del" {...rowActionKind('delete')} onClick={(e) => e.stopPropagation()} />
+            </ActionConfirmPopconfirm>,
           );
         }
         return acts;

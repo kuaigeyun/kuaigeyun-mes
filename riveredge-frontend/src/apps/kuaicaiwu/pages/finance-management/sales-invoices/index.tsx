@@ -5,6 +5,7 @@
  */
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { rowActionKind, rowActionFillInvoiceNumber } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { ActionType, ProColumns, type ProFormInstance } from '@ant-design/pro-components';
 import { App, Button, Modal, Typography, Space, Dropdown, Alert, Spin, Table, Empty, Form } from 'antd';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -91,7 +92,6 @@ import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import { renderFinanceTypeMarker } from '../../../utils/financeListPresentation';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
-import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 type PullPreviewKind = 'sales_order' | 'sales_delivery' | 'receivable';
 
@@ -472,40 +472,24 @@ const SalesInvoicesPage: React.FC = () => {
     }
   };
 
-  const handleApprove = async (record: SalesInvoice) => {
-    getAntdModal().confirm({
-      title: t(`${P}.approveTitle`),
-      content: t(`${P}.approveContent`, {
-        number: record.invoice_number?.trim() || displaySalesInvoiceListCode(record),
-      }),
-      onOk: async () => {
-        try {
+  const executeApprove = async (record: SalesInvoice) => {
+    try {
           await apiRequest(`/apps/kuaicaiwu/sales-invoices/${record.id}/approve`, { method: 'POST' });
           messageApi.success(t(`${P}.approveSuccess`));
-          actionRef.current?.reload();
+    actionRef.current?.reload();
         } catch (e: any) {
           messageApi.error(e?.message || t('common.operationFailed'));
         }
-      },
-    });
   };
 
-  const handleDelete = async (record: SalesInvoice) => {
-    getAntdModal().confirm({
-      title: t(`${P}.deleteTitle`),
-      content: t(`${P}.deleteContent`, {
-        number: record.invoice_number?.trim() || displaySalesInvoiceListCode(record),
-      }),
-      onOk: async () => {
-        try {
+  const executeDelete = async (record: SalesInvoice) => {
+    try {
           await apiRequest(`/apps/kuaicaiwu/sales-invoices/${record.id}`, { method: 'DELETE' });
           messageApi.success(t('common.deleteSuccess'));
-          actionRef.current?.reload();
+    actionRef.current?.reload();
         } catch (e: any) {
           messageApi.error(e?.message || t('common.operationFailed'));
         }
-      },
-    });
   };
 
   const handleBatchDelete = async (keys: React.Key[]) => {
@@ -793,12 +777,20 @@ const SalesInvoicesPage: React.FC = () => {
           );
           if (record.review_status === '待审核' && salesInvoicePerms.canAction?.('audit')) {
             acts.push(
-              <Button key="ap" {...rowActionKind('audit')} onClick={() => handleApprove(record)} />,
+              <ActionConfirmPopconfirm title={t(`${P}.approveTitle`)} description={t(`${P}.approveContent`, {
+        number: record.invoice_number?.trim() || displaySalesInvoiceListCode(record),
+      })} onConfirm={() => executeApprove(record)}>
+              <Button key="ap" {...rowActionKind('audit')} onClick={(e) => e.stopPropagation()} />
+            </ActionConfirmPopconfirm>,
             );
           }
           if (canDeleteSalesInvoice(record) && salesInvoicePerms.canDelete) {
             acts.push(
-              <Button key="del" {...rowActionKind('delete')} onClick={() => handleDelete(record)} />,
+              <ActionConfirmPopconfirm title={t(`${P}.deleteTitle`)} description={t(`${P}.deleteContent`, {
+        number: record.invoice_number?.trim() || displaySalesInvoiceListCode(record),
+      })} onConfirm={() => executeDelete(record)}>
+              <Button key="del" {...rowActionKind('delete')} onClick={(e) => e.stopPropagation()} />
+            </ActionConfirmPopconfirm>,
             );
           }
           return acts;

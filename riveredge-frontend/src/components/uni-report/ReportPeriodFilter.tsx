@@ -20,6 +20,8 @@ export type ReportPeriodFilterProps = {
   actionRef: React.MutableRefObject<ActionType | undefined>;
   onApplied?: () => void;
   revision?: number;
+  /** 期间维度文案，如「按入库日」 */
+  label?: React.ReactNode;
 };
 
 function readRangeFromRef(
@@ -42,6 +44,7 @@ export const ReportPeriodFilter: React.FC<ReportPeriodFilterProps> = ({
   actionRef,
   onApplied,
   revision = 0,
+  label,
 }) => {
   const { t } = useTranslation();
   const { token } = theme.useToken();
@@ -104,6 +107,18 @@ export const ReportPeriodFilter: React.FC<ReportPeriodFilterProps> = ({
       className="uni-report-period-filter"
       style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}
     >
+      {label ? (
+        <span
+          style={{
+            color: token.colorTextSecondary,
+            fontSize: token.fontSizeSM,
+            whiteSpace: 'nowrap',
+            flexShrink: 0,
+          }}
+        >
+          {label}
+        </span>
+      ) : null}
       <Select<ReportPeriodPreset>
         size="small"
         value={preset}

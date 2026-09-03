@@ -13,6 +13,9 @@ export function defaultCustomPayloadForResource(
   if (/equipment-documents-acceptance|injection-documents-acceptance/.test(resource)) {
     return { resolver: 'partner', dimension: 'manufacturer', code_field: 'manufacturer_code' };
   }
+  if (/finance-equipment-contracts|finance-equipment-payables|finance-reports-equipment-payable/.test(resource)) {
+    return { resolver: 'partner', dimension: 'manufacturer', code_field: 'manufacturer_code' };
+  }
   return undefined;
 }
 
@@ -40,7 +43,15 @@ export function buildDataPolicySavePayload(params: {
   for (const p of dataPolicies) {
     const nk = normalizeResourceKey(p.resource);
     if (!nk || !grantedKeys.has(nk)) continue;
-    if (p.scope_type === 'scope_all') continue;
+    if (p.scope_type === 'scope_all') {
+      // 显式改回「全部」须进 payload，后端才会删除库内收敛策略
+      map.set(nk, {
+        resource: nk,
+        scope_type: 'scope_all',
+        scope_payload: undefined,
+      });
+      continue;
+    }
     map.set(nk, {
       resource: nk,
       scope_type: p.scope_type,

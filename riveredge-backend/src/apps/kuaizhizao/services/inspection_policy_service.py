@@ -154,11 +154,16 @@ def normalize_inspection_mode(raw: Any) -> str:
 
 
 def normalize_stage_policy(raw: Any) -> Dict[str, Any]:
-    """规范单场景策略 { mode, plan_id }。"""
+    """规范单场景策略 { mode, plan_id }。
+
+    同时认 plan_id / planId：JSON 主数据、API 别名、历史写入都可能是驼峰。
+    """
     if not isinstance(raw, dict):
         return {"mode": "none", "plan_id": None}
     mode = normalize_inspection_mode(raw.get("mode"))
     plan_id = raw.get("plan_id")
+    if plan_id is None:
+        plan_id = raw.get("planId")
     if mode != "plan":
         return {"mode": mode, "plan_id": None}
     if plan_id is None:

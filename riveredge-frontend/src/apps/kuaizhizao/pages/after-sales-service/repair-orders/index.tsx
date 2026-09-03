@@ -3,6 +3,7 @@ import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { rowActionKind } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { DetailDrawerActions, ListPageTemplate } from '../../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { UniTable } from '../../../../../components/uni-table';
@@ -25,7 +26,7 @@ const RESOURCE = 'kuaizhizao:repair-order';
 
 const RepairOrdersPage: React.FC = () => {
   const { t } = useTranslation();
-  const { message: messageApi, modal } = App.useApp();
+  const { message: messageApi } = App.useApp();
   const perms = useResourcePermissions(RESOURCE);
   const actionRef = useRef<ActionType>();
   const [modalOpen, setModalOpen] = useState(false);
@@ -62,19 +63,14 @@ const RepairOrdersPage: React.FC = () => {
     setModalOpen(true);
   };
 
-  const confirmDelete = (row: RepairOrder) => {
-    modal.confirm({
-      title: t('common.confirmDelete'),
-      onOk: async () => {
-        await repairOrderApi.delete(row.id);
+  const executeconfirmDelete = async (row: RepairOrder) => {
+    await repairOrderApi.delete(row.id);
         messageApi.success(t('common.deleteSuccess'));
         if (detail?.id === row.id) {
           setDetailOpen(false);
           setDetail(null);
         }
-        actionRef.current?.reload();
-      },
-    });
+    actionRef.current?.reload();
   };
 
   const columns: ProColumns<RepairOrder>[] = useMemo(
@@ -146,11 +142,13 @@ const RepairOrdersPage: React.FC = () => {
                 />
               ) : null,
               perms.canDelete && row.status === '待派工' ? (
-                <Button
+                <ActionConfirmPopconfirm title={t('common.confirmDelete')} onConfirm={() => executeconfirmDelete(row)}>
+              <Button
                   {...rowActionKind('delete')}
                   key="delete"
-                  onClick={() => confirmDelete(row)}
+                  onClick={(e) => e.stopPropagation()}
                 />
+            </ActionConfirmPopconfirm>
               ) : null,
             ],
           },
@@ -189,8 +187,8 @@ const RepairOrdersPage: React.FC = () => {
         showDeleteButton={perms.canDelete}
         onDelete={async (keys) => {
           await Promise.all(keys.map((key) => repairOrderApi.delete(Number(key))));
-          messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
-          actionRef.current?.reload();
+    messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
+    actionRef.current?.reload();
         }}
       />
 
@@ -209,7 +207,7 @@ const RepairOrdersPage: React.FC = () => {
             await repairOrderApi.create(payload);
             messageApi.success(t('common.createSuccess'));
           }
-          actionRef.current?.reload();
+    actionRef.current?.reload();
         }}
       />
 
@@ -254,7 +252,7 @@ const RepairOrdersPage: React.FC = () => {
                       if (!detail) return;
                       await repairOrderApi.close(detail.id);
                       setDetail(await repairOrderApi.get(detail.id));
-                      actionRef.current?.reload();
+    actionRef.current?.reload();
                       messageApi.success(t('app.kuaizhizao.afterSalesService.repairOrder.closeSuccess'));
                     }}
                   >

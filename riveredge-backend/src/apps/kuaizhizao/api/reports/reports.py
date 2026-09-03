@@ -469,6 +469,10 @@ async def get_purchase_report(
     column_filters: Optional[str] = Query(None, description="列筛选 JSON"),
     status: Optional[str] = Query(None, description="状态筛选"),
     supplier_name: Optional[str] = Query(None, description="供应商名称模糊筛选"),
+    period_basis: Optional[str] = Query(
+        None,
+        description="供应商交货统计期间维度：receipt_time / required_date / order_date",
+    ),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> dict:
@@ -494,6 +498,7 @@ async def get_purchase_report(
             limit=limit,
             status=status,
             supplier_name=supplier_name,
+            period_basis=period_basis,
             current_user=current_user,
         ),
         **_report_finalize_kwargs(
@@ -771,6 +776,7 @@ async def export_domain_report(
         customer_id=body.get("customer_id") or body.get("filters", {}).get("customer_id"),
         customer_keyword=body.get("customer_keyword"),
         material_id=body.get("material_id") or body.get("filters", {}).get("material_id"),
+        period_basis=body.get("period_basis"),
         current_user=current_user,
     )
     filename = file_path.rsplit("/", 1)[-1].rsplit("\\", 1)[-1]

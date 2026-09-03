@@ -401,6 +401,8 @@ REPORTING_SORTABLE_FIELDS = frozenset({
     "operation_name",
     "worker_name",
     "recorded_by_name",
+    "client_channel",
+    "report_mode",
     "reported_quantity",
     "qualified_quantity",
     "unqualified_quantity",
@@ -825,6 +827,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
         reporting_data: ReportingRecordCreate,
         reported_by: int,
         entry_mode: str = "manual",
+        client_channel: Optional[str] = None,
     ) -> ReportingRecordResponse:
         """
         创建报工记录
@@ -1137,6 +1140,15 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 inbound_warehouse_name=getattr(reporting_data, "inbound_warehouse_name", None),
             )
 
+            from core.utils.client_channel import normalize_client_channel, resolve_report_mode
+
+            channel_code = normalize_client_channel(client_channel)
+            report_mode = resolve_report_mode(
+                team_id=team_id_val,
+                worker_id=worker_id_int,
+                recorded_by=reported_by,
+            )
+
             # 创建报工记录
             reporting_record = await ReportingRecord.create(
                 tenant_id=tenant_id,
@@ -1153,6 +1165,8 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 team_name=(getattr(reporting_data, "team_name", None) or None),
                 recorded_by=int(reported_by),
                 recorded_by_name=recorder_name,
+                client_channel=channel_code,
+                report_mode=report_mode,
                 reported_quantity=reporting_data.reported_quantity,
                 qualified_quantity=reporting_data.qualified_quantity,
                 unqualified_quantity=reporting_data.unqualified_quantity,
@@ -1596,6 +1610,8 @@ class ReportingService(AppBaseService[ReportingRecord]):
         operation_name: Optional[str] = None,
         worker_name: Optional[str] = None,
         worker_id: Optional[int] = None,
+        client_channel: Optional[str] = None,
+        report_mode: Optional[str] = None,
         status: Optional[str] = None,
         reported_at_start: Optional[datetime] = None,
         reported_at_end: Optional[datetime] = None,
@@ -1646,6 +1662,16 @@ class ReportingService(AppBaseService[ReportingRecord]):
             query = query.filter(worker_name__icontains=worker_name)
         if worker_id is not None:
             query = query.filter(worker_id=int(worker_id))
+        if client_channel:
+            from core.utils.client_channel import normalize_client_channel
+
+            ch = normalize_client_channel(client_channel)
+            if ch:
+                query = query.filter(client_channel=ch)
+        if report_mode:
+            mode = str(report_mode).strip().lower()
+            if mode in ("self", "proxy", "team"):
+                query = query.filter(report_mode=mode)
         if status:
             query = query.filter(status=status)
         if reported_at_start:
@@ -2809,6 +2835,14 @@ class ReportingService(AppBaseService[ReportingRecord]):
                     update_data["worker_name"] = worker_name
                     update_data["team_id"] = None
                     update_data["team_name"] = None
+
+                from core.utils.client_channel import resolve_report_mode
+
+                update_data["report_mode"] = resolve_report_mode(
+                    team_id=update_data.get("team_id"),
+                    worker_id=update_data.get("worker_id"),
+                    recorded_by=reporting_record.recorded_by,
+                )
 
             # 与创建口径一致：工时允许为 0；不允许负数
             if "work_hours" in update_data:

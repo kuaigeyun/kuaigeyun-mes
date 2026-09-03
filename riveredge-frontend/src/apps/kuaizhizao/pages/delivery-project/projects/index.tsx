@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 
-import { App, Button, Modal } from 'antd';
+import { App, Button, Popconfirm } from 'antd';
 
 import type { ActionType, ProColumns, ProFormInstance } from '@ant-design/pro-components';
 
@@ -215,25 +215,15 @@ const DeliveryProjectsPage: React.FC = () => {
     [],
   );
 
-  const handleDeleteRow = useCallback(
+  const confirmDeleteRow = useCallback(
 
-    (record: DeliveryProject) => {
+    async (record: DeliveryProject) => {
 
-      Modal.confirm({
+      await deliveryProjectApi.delete(record.id);
 
-        title: t('app.kuaizhizao.deliveryProject.deleteProjectConfirm'),
+      message.success(t('common.deleted'));
 
-        onOk: async () => {
-
-          await deliveryProjectApi.delete(record.id);
-
-          message.success(t('common.deleted'));
-
-          actionRef.current?.reload();
-
-        },
-
-      });
+      actionRef.current?.reload();
 
     },
 
@@ -254,7 +244,7 @@ const DeliveryProjectsPage: React.FC = () => {
         }
         message.success(t('common.batchDeleteSuccess', { count: rows.length }));
         setSelectedRowKeys([]);
-        actionRef.current?.reload();
+    actionRef.current?.reload();
       } catch (error: unknown) {
         message.error((error as Error)?.message || t('common.batchDeleteFailed'));
       }
@@ -486,23 +476,20 @@ const DeliveryProjectsPage: React.FC = () => {
           if (r.status === 'draft' && perms.canDelete) {
 
             parts.push(
-
-              <Button
-
-                {...rowActionKind('delete')}
-
+              <Popconfirm
                 key="delete"
-
-                onClick={(e) => {
-
-                  e.stopPropagation();
-
-                  handleDeleteRow(r);
-
+                title={t('app.kuaizhizao.deliveryProject.deleteProjectConfirm')}
+                onConfirm={(e) => {
+                  e?.stopPropagation();
+                  void confirmDeleteRow(r);
                 }}
-
-              />,
-
+                onCancel={(e) => e?.stopPropagation()}
+              >
+                <Button
+                  {...rowActionKind('delete')}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </Popconfirm>,
             );
 
           }

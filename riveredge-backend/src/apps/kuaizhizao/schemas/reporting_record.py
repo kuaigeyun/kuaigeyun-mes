@@ -125,7 +125,12 @@ class ReportingRecordResponse(ReportingRecordBase):
     rework_order_id: Optional[int] = Field(None, description="返工单 ID（返工报工时有值）")
     recorded_by: Optional[int] = Field(None, description="记录人用户ID（提交报工者）")
     recorded_by_name: Optional[str] = Field(None, description="记录人姓名")
-    rework_order_id: Optional[int] = Field(None, description="返工单 ID（返工报工时有值）")
+    client_channel: Optional[str] = Field(
+        None, description="报工来源渠道码（pc/station/android/ios/mobile_h5/miniprogram）"
+    )
+    report_mode: Optional[str] = Field(
+        None, description="报工方式：self 自报 / proxy 代报 / team 小组报工"
+    )
     approved_at: Optional[datetime] = Field(None, description="审核时间")
     approved_by: Optional[int] = Field(None, description="审核人ID")
     approved_by_name: Optional[str] = Field(None, description="审核人姓名")
@@ -166,6 +171,8 @@ class ReportingRecordListResponse(BaseSchema):
     team_id: Optional[int] = Field(None, description="工作小组ID")
     team_name: Optional[str] = Field(None, description="工作小组名称")
     recorded_by_name: Optional[str] = Field(None, description="记录人姓名")
+    client_channel: Optional[str] = Field(None, description="报工来源渠道码")
+    report_mode: Optional[str] = Field(None, description="报工方式 self/proxy/team")
     reported_quantity: Decimal = Field(..., description="报工数量")
     qualified_quantity: Decimal = Field(..., description="合格数量")
     unqualified_quantity: Decimal = Field(..., description="不合格数量")

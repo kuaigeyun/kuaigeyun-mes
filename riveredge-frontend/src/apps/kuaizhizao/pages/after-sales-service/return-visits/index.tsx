@@ -4,6 +4,7 @@ import { App, Button, DatePicker, Form, Input, Modal, Rate, Select } from 'antd'
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { rowActionKind } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { UniTable } from '../../../../../components/uni-table';
 import { SourceDocumentCode } from '../../../../../components/linked-document-code/SourceDocumentCode';
@@ -42,7 +43,7 @@ const VISIT_METHODS = ['电话', '现场', '在线'];
 
 const ReturnVisitsPage: React.FC = () => {
   const { t } = useTranslation();
-  const { message, modal } = App.useApp();
+  const { message } = App.useApp();
   const perms = useResourcePermissions(RESOURCE);
   const actionRef = useRef<ActionType>();
   const [modalOpen, setModalOpen] = useState(false);
@@ -124,19 +125,14 @@ const ReturnVisitsPage: React.FC = () => {
     setModalOpen(true);
   };
 
-  const confirmDelete = (row: CustomerReturnVisit) => {
-    modal.confirm({
-      title: t('common.confirmDelete'),
-      onOk: async () => {
-        await customerReturnVisitApi.delete(row.id);
+  const executeconfirmDelete = async (row: CustomerReturnVisit) => {
+    await customerReturnVisitApi.delete(row.id);
         message.success(t('common.deleteSuccess'));
         if (detail?.id === row.id) {
           setDetailOpen(false);
           setDetail(null);
         }
-        actionRef.current?.reload();
-      },
-    });
+    actionRef.current?.reload();
   };
 
   const columns: ProColumns<CustomerReturnVisit>[] = useMemo(
@@ -233,7 +229,9 @@ const ReturnVisitsPage: React.FC = () => {
                 <Button {...rowActionKind('update')} key="edit" onClick={() => void openEdit(row)} />
               ) : null,
               perms.canDelete ? (
-                <Button {...rowActionKind('delete')} key="delete" onClick={() => confirmDelete(row)} />
+                <ActionConfirmPopconfirm title={t('common.confirmDelete')} onConfirm={() => executeconfirmDelete(row)}>
+              <Button {...rowActionKind('delete')} key="delete" onClick={(e) => e.stopPropagation()} />
+            </ActionConfirmPopconfirm>
               ) : null,
             ],
           },
@@ -269,7 +267,7 @@ const ReturnVisitsPage: React.FC = () => {
         onDelete={async (keys) => {
           await Promise.all(keys.map((key) => customerReturnVisitApi.delete(Number(key))));
           message.success(t('common.batchDeleteSuccess', { count: keys.length }));
-          actionRef.current?.reload();
+    actionRef.current?.reload();
         }}
       />
 
@@ -299,7 +297,7 @@ const ReturnVisitsPage: React.FC = () => {
               message.success(t('common.createSuccess'));
             }
             setModalOpen(false);
-            actionRef.current?.reload();
+    actionRef.current?.reload();
           } catch (error: unknown) {
             if (error && typeof error === 'object' && 'errorFields' in error) {
               return;

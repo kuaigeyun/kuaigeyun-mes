@@ -186,7 +186,7 @@ const CostRulePage: React.FC = () => {
   const handleBatchDelete = async (keys: React.Key[]) => {
     try {
       for (const key of keys) {
-        await costRuleApi.delete(String(key));
+      await costRuleApi.delete(String(key));
       }
       messageApi.success(t('app.kuaicaiwu.costRule.batchDeleteSuccess', { count: keys.length }));
       setSelectedRowKeys([]);
@@ -199,7 +199,7 @@ const CostRulePage: React.FC = () => {
   const handleBatchSetActive = async (keys: React.Key[], isActive: boolean) => {
     try {
       for (const key of keys) {
-        await costRuleApi.update(String(key), { is_active: isActive });
+      await costRuleApi.update(String(key), { is_active: isActive });
       }
       messageApi.success(
         isActive

@@ -1737,7 +1737,7 @@ const MaterialsManagementPage: React.FC = () => {
       const { deleted_count: deletedCount, failed_count: failCount, failed_items: failedItems } = res
 
       if (deletedCount > 0) {
-        messageApi.success(t('common.batchDeleteSuccess', { count: deletedCount }))
+    messageApi.success(t('common.batchDeleteSuccess', { count: deletedCount }))
       }
       if (failCount > 0) {
         const uniq = [...new Set((failedItems ?? []).map((f) => f.reason))]

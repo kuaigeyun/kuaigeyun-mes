@@ -9,6 +9,9 @@
 
 import React, { useRef, useState, useCallback, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import {
+  useWarehouseTrackingFlags,
+} from '../shared/warehouseTrackingFlags';
 import { useNumericPrecisionPlaces } from '../../../../../hooks/useNumericPrecision';
 import { useSearchParams } from 'react-router-dom';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
@@ -17,6 +20,7 @@ import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormSelect, ProFor
 import { App, Button, Tag, Space, Modal, Table, Row, Col, InputNumber, Descriptions, Typography } from 'antd';
 import { PlusOutlined, EyeOutlined, PlayCircleOutlined, CheckCircleOutlined, DatabaseOutlined, RollbackOutlined, SaveOutlined } from '@ant-design/icons';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { UniTable } from '../../../../../components/uni-table';
@@ -39,6 +43,7 @@ import DocumentAttachmentsField from '../../../components/DocumentAttachmentsFie
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { resolveListLifecycleStageFromSearch } from '../../../../../utils/listLifecycleStage';
 import { formatDateTime, formatQuantity } from '../../../../../utils/format';
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { formatQuantityWithUnit } from '../../../../../utils/materialUnitDisplay';
 import { formDateRangeFormItemProps, toApiDateTimeString, nowSiteDateTimeString } from '../../../../../utils/formDate';
 import { alignDescriptionColumns, alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
@@ -52,7 +57,6 @@ import {
   normalizeWarehouseListResponse,
   resolveStocktakingListParams,
 } from '../../../utils/warehouseListCore';
-import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 interface Stocktaking {
@@ -107,6 +111,7 @@ const granularityLabel = (value: string | undefined, t: (key: string) => string)
 
 const StocktakingPage: React.FC = () => {
   const { t } = useTranslation();
+  const trackingFlags = useWarehouseTrackingFlags();
   const quantityDecimals = useNumericPrecisionPlaces('quantity');
   const [searchParams] = useSearchParams();
   const { message: messageApi } = App.useApp();
@@ -265,7 +270,7 @@ const StocktakingPage: React.FC = () => {
       } catch {
         messageApi.error(t('app.kuaizhizao.stocktaking.msgGetDetailFailed'));
       } finally {
-        actionRef.current?.reload();
+    actionRef.current?.reload();
       }
     })();
   }, [searchParams, handleDetail, messageApi, t]);
@@ -273,34 +278,20 @@ const StocktakingPage: React.FC = () => {
   /**
    * 处理开始盘点
    */
-  const handleStart = async (record: Stocktaking) => {
-    const isFull = record.stocktaking_type === 'full';
-    const content = isFull
-      ? t('app.kuaizhizao.stocktaking.msgStartFullContent', {
-          granularity: granularityLabel(record.line_granularity, t),
-          warehouse: record.warehouse_name || '',
-        })
-      : t('app.kuaizhizao.stocktaking.msgStartPartialContent', { code: record.code });
-
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.stocktaking.msgStartTitle'),
-      content,
-      onOk: async () => {
-        try {
+  const executeStart = async (record: Stocktaking) => {
+    try {
           await stocktakingApi.start(record.id!.toString(), {
             line_granularity: record.line_granularity,
             include_zero_stock: record.include_zero_stock,
           });
           messageApi.success(t('app.kuaizhizao.stocktaking.msgStartSuccess'));
           invalidateMenuBadgeCounts();
-          actionRef.current?.reload();
+    actionRef.current?.reload();
           await refreshCurrentDetail(record.id!);
           setDetailDrawerVisible(true);
         } catch (error: any) {
           messageApi.error(error.message || t('app.kuaizhizao.stocktaking.msgStartFailed'));
         }
-      },
-    });
   };
 
   const isPartialType = (record?: Stocktaking | null) =>
@@ -464,7 +455,7 @@ const StocktakingPage: React.FC = () => {
       }
       if (successCount > 0) {
         invalidateMenuBadgeCounts();
-        actionRef.current?.reload();
+    actionRef.current?.reload();
         await refreshCurrentDetail(stocktakingId);
       }
       if (failCount === 0) {
@@ -491,6 +482,34 @@ const StocktakingPage: React.FC = () => {
     && (record.total_items ?? 0) > 0
     && record.counted_items === record.total_items;
 
+  const executeComplete = async (record: Stocktaking) => {
+    try {
+          await stocktakingApi.complete(record.id!.toString());
+          messageApi.success(t('app.kuaizhizao.stocktaking.msgCompleteSuccess'));
+          invalidateMenuBadgeCounts();
+    actionRef.current?.reload();
+          if (detailDrawerVisible && currentStocktaking?.id === record.id) {
+            await refreshCurrentDetail(record.id!);
+          }
+        } catch (error: any) {
+          messageApi.error(error.message || t('app.kuaizhizao.stocktaking.msgCompleteFailed'));
+        }
+  };
+
+  const executeWithdraw = async (record: Stocktaking) => {
+    try {
+          await stocktakingApi.withdraw(record.id!.toString());
+          messageApi.success(t('app.kuaizhizao.stocktaking.msgWithdrawSuccess'));
+          invalidateMenuBadgeCounts();
+    actionRef.current?.reload();
+          if (detailDrawerVisible && currentStocktaking?.id === record.id) {
+            await refreshCurrentDetail(record.id!);
+          }
+        } catch (error: any) {
+          messageApi.error(error.message || t('app.kuaizhizao.stocktaking.msgWithdrawFailed'));
+        }
+  };
+
   const handleComplete = async (record: Stocktaking) => {
     const hasDiff = (record.total_differences ?? 0) > 0;
     getAntdModal().confirm({
@@ -501,19 +520,7 @@ const StocktakingPage: React.FC = () => {
             count: record.total_differences,
           })
         : t('app.kuaizhizao.stocktaking.msgCompleteNoDiff', { code: record.code }),
-      onOk: async () => {
-        try {
-          await stocktakingApi.complete(record.id!.toString());
-          messageApi.success(t('app.kuaizhizao.stocktaking.msgCompleteSuccess'));
-          invalidateMenuBadgeCounts();
-          actionRef.current?.reload();
-          if (detailDrawerVisible && currentStocktaking?.id === record.id) {
-            await refreshCurrentDetail(record.id!);
-          }
-        } catch (error: any) {
-          messageApi.error(error.message || t('app.kuaizhizao.stocktaking.msgCompleteFailed'));
-        }
-      },
+      onOk: () => executeComplete(record),
     });
   };
 
@@ -522,19 +529,7 @@ const StocktakingPage: React.FC = () => {
       title: t('app.kuaizhizao.stocktaking.msgWithdrawTitle'),
       content: t('app.kuaizhizao.stocktaking.msgWithdrawContent', { code: record.code }),
       okText: t('app.kuaizhizao.stocktaking.actionWithdraw'),
-      onOk: async () => {
-        try {
-          await stocktakingApi.withdraw(record.id!.toString());
-          messageApi.success(t('app.kuaizhizao.stocktaking.msgWithdrawSuccess'));
-          invalidateMenuBadgeCounts();
-          actionRef.current?.reload();
-          if (detailDrawerVisible && currentStocktaking?.id === record.id) {
-            await refreshCurrentDetail(record.id!);
-          }
-        } catch (error: any) {
-          messageApi.error(error.message || t('app.kuaizhizao.stocktaking.msgWithdrawFailed'));
-        }
-      },
+      onOk: () => executeWithdraw(record),
     });
   };
 
@@ -705,9 +700,11 @@ const StocktakingPage: React.FC = () => {
         <Space wrap>
           <Button {...rowActionKind('read')} onClick={() => handleDetail(record)} />
           {record.status === 'draft' && canStartStocktaking && (
-            <Button {...rowActionKind('execute')} {...rowActionLabelKeep()} onClick={() => handleStart(record)}>
+            <ActionConfirmPopconfirm title={t('app.kuaizhizao.stocktaking.msgStartTitle')} onConfirm={() => executeStart(record)}>
+              <Button {...rowActionKind('execute')} {...rowActionLabelKeep()} onClick={(e) => e.stopPropagation()}>
               {t('app.kuaizhizao.stocktaking.actionStart')}
             </Button>
+            </ActionConfirmPopconfirm>
           )}
           {record.status === 'draft' && isPartialType(record) && canCreate && (
             <Button {...rowActionKind('create')} {...rowActionLabelKeep()} onClick={() => handleAddItem(record)}>
@@ -720,14 +717,23 @@ const StocktakingPage: React.FC = () => {
             </Button>
           )}
           {record.status === 'in_progress' && canComplete(record) && canUpdate && (
-            <Button {...rowActionKind('complete')} {...rowActionLabelKeep()} onClick={() => handleComplete(record)}>
+            <ActionConfirmPopconfirm title={t('app.kuaizhizao.stocktaking.msgCompleteTitle')} description={(record.total_differences ?? 0) > 0
+        ? t('app.kuaizhizao.stocktaking.msgCompleteWithDiff', {
+            code: record.code,
+            count: record.total_differences,
+          })
+        : t('app.kuaizhizao.stocktaking.msgCompleteNoDiff', { code: record.code })} onConfirm={() => executeComplete(record)}>
+              <Button {...rowActionKind('complete')} {...rowActionLabelKeep()} onClick={(e) => e.stopPropagation()}>
               {t('app.kuaizhizao.stocktaking.actionComplete')}
             </Button>
+            </ActionConfirmPopconfirm>
           )}
           {record.status === 'in_progress' && canRevoke && (
-            <Button {...rowActionKind('revoke')} {...rowActionLabelKeep()} onClick={() => handleWithdraw(record)}>
+            <ActionConfirmPopconfirm title={t('app.kuaizhizao.stocktaking.msgWithdrawTitle')} description={t('app.kuaizhizao.stocktaking.msgWithdrawContent', { code: record.code })} onConfirm={() => executeWithdraw(record)}>
+              <Button {...rowActionKind('revoke')} {...rowActionLabelKeep()} onClick={(e) => e.stopPropagation()}>
               {t('app.kuaizhizao.stocktaking.actionWithdraw')}
             </Button>
+            </ActionConfirmPopconfirm>
           )}
         </Space>
       ),
@@ -992,7 +998,7 @@ const StocktakingPage: React.FC = () => {
             }
             messageApi.success(t('app.kuaizhizao.warehouseCommon.deleteSuccess', { count: keys.length }));
             invalidateMenuBadgeCounts();
-            actionRef.current?.reload();
+    actionRef.current?.reload();
           } catch (error: any) {
             messageApi.error(error.message || t('common.deleteFailed'));
           }
@@ -1117,11 +1123,13 @@ const StocktakingPage: React.FC = () => {
           label={t('app.kuaizhizao.stocktaking.formLocationCodeOptional')}
           placeholder={t('app.kuaizhizao.stocktaking.formLocationCodePlaceholder')}
         />
-        <ProFormText
-          name="batch_no"
-          label={t('app.kuaizhizao.stocktaking.formBatchNoOptional')}
-          placeholder={t('app.kuaizhizao.stocktaking.formBatchNoPlaceholder')}
-        />
+        {trackingFlags.batchManagement ? (
+          <ProFormText
+            name="batch_no"
+            label={t('app.kuaizhizao.stocktaking.formBatchNoOptional')}
+            placeholder={t('app.kuaizhizao.stocktaking.formBatchNoPlaceholder')}
+          />
+        ) : null}
         <ProFormTextArea
           name="remarks"
           label={t('common.remark')}

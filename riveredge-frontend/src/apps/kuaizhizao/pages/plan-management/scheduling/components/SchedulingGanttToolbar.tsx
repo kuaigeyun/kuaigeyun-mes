@@ -1,5 +1,5 @@
-import React from 'react';
-import { Button, InputNumber, Space, Switch, Tooltip, Typography } from 'antd';
+import React, { useState } from 'react';
+import { Button, InputNumber, Popconfirm, Space, Switch, Tooltip, Typography } from 'antd';
 import {
   LockOutlined,
   QuestionCircleOutlined,
@@ -11,6 +11,13 @@ import {
 } from '@ant-design/icons';
 import type { TFunction } from 'i18next';
 import type { ViewMode } from '../../../../components/GanttSchedulingChart/types';
+import { ActionConfirmPopconfirm } from '../../../../../../components/action-confirm';
+
+export interface SchedulingActionConfirm {
+  title: string;
+  description?: string;
+  okText?: string;
+}
 
 interface SchedulingGanttToolbarProps {
   t: TFunction;
@@ -22,6 +29,7 @@ interface SchedulingGanttToolbarProps {
   draftMode?: boolean;
   draftPendingCount?: number;
   onDraftModeChange?: (enabled: boolean) => void;
+  draftCloseConfirm?: SchedulingActionConfirm & { onConfirm: () => void };
   onApplyDraft?: () => void;
   onUndoDraft?: () => void;
   onRefresh: () => void;
@@ -34,14 +42,59 @@ interface SchedulingGanttToolbarProps {
   onScrollToToday: () => void;
   aiTrigger?: React.ReactNode;
   onAutoReschedule?: () => void;
-  onEditOperation?: () => void;
+  autoRescheduleConfirm?: SchedulingActionConfirm;
   autoRescheduleLoading?: boolean;
+  onEditOperation?: () => void;
   canEditOperation?: boolean;
 }
 
 export interface SchedulingGanttToolbarNodes {
   title: React.ReactNode;
   extra: React.ReactNode;
+}
+
+function DraftModeSwitch({
+  t,
+  draftMode,
+  draftPendingCount,
+  draftCloseConfirm,
+  onDraftModeChange,
+}: {
+  t: TFunction;
+  draftMode: boolean;
+  draftPendingCount: number;
+  draftCloseConfirm?: SchedulingActionConfirm & { onConfirm: () => void };
+  onDraftModeChange?: (enabled: boolean) => void;
+}) {
+  const [draftCloseOpen, setDraftCloseOpen] = useState(false);
+
+  const handleDraftSwitch = (checked: boolean) => {
+    if (!checked && draftPendingCount > 0 && draftCloseConfirm) {
+      setDraftCloseOpen(true);
+      return;
+    }
+    onDraftModeChange?.(checked);
+  };
+
+  return (
+    <Space size={4} align="center">
+      <Popconfirm
+        open={draftCloseOpen}
+        title={draftCloseConfirm?.title}
+        description={draftCloseConfirm?.description}
+        okText={draftCloseConfirm?.okText ?? t('common.confirm')}
+        cancelText={t('common.cancel')}
+        onConfirm={() => {
+          draftCloseConfirm?.onConfirm();
+          setDraftCloseOpen(false);
+        }}
+        onCancel={() => setDraftCloseOpen(false)}
+      >
+        <Switch size="small" checked={draftMode} onChange={handleDraftSwitch} />
+      </Popconfirm>
+      <Typography.Text type="secondary">{t('app.kuaizhizao.scheduling.ganttToolbar.draft')}</Typography.Text>
+    </Space>
+  );
 }
 
 function buildSchedulingGanttToolbar({
@@ -54,6 +107,7 @@ function buildSchedulingGanttToolbar({
   draftMode = false,
   draftPendingCount = 0,
   onDraftModeChange,
+  draftCloseConfirm,
   onApplyDraft,
   onUndoDraft,
   onRefresh,
@@ -66,8 +120,9 @@ function buildSchedulingGanttToolbar({
   onScrollToToday,
   aiTrigger,
   onAutoReschedule,
-  onEditOperation,
+  autoRescheduleConfirm,
   autoRescheduleLoading = false,
+  onEditOperation,
   canEditOperation = false,
 }: SchedulingGanttToolbarProps): SchedulingGanttToolbarNodes {
   const title = (
@@ -80,10 +135,13 @@ function buildSchedulingGanttToolbar({
       {canUpdate ? (
         <>
           <Tooltip title={t('app.kuaizhizao.scheduling.ganttToolbar.draftTooltip')}>
-            <Space size={4} align="center">
-              <Switch size="small" checked={draftMode} onChange={onDraftModeChange} />
-              <Typography.Text type="secondary">{t('app.kuaizhizao.scheduling.ganttToolbar.draft')}</Typography.Text>
-            </Space>
+            <DraftModeSwitch
+              t={t}
+              draftMode={draftMode}
+              draftPendingCount={draftPendingCount}
+              draftCloseConfirm={draftCloseConfirm}
+              onDraftModeChange={onDraftModeChange}
+            />
           </Tooltip>
           {draftMode ? (
             <>
@@ -110,14 +168,32 @@ function buildSchedulingGanttToolbar({
               </Button>
             </>
           ) : null}
-          <Button
-            size="small"
-            disabled={selectedWorkOrderCount === 0}
-            loading={autoRescheduleLoading}
-            onClick={onAutoReschedule}
-          >
-            {t('app.kuaizhizao.scheduling.ganttToolbar.autoReschedule')}
-          </Button>
+          {autoRescheduleConfirm ? (
+            <ActionConfirmPopconfirm
+              title={autoRescheduleConfirm.title}
+              description={autoRescheduleConfirm.description}
+              okText={autoRescheduleConfirm.okText}
+              onConfirm={() => void onAutoReschedule?.()}
+            >
+              <Button
+                size="small"
+                disabled={selectedWorkOrderCount === 0}
+                loading={autoRescheduleLoading}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {t('app.kuaizhizao.scheduling.ganttToolbar.autoReschedule')}
+              </Button>
+            </ActionConfirmPopconfirm>
+          ) : (
+            <Button
+              size="small"
+              disabled={selectedWorkOrderCount === 0}
+              loading={autoRescheduleLoading}
+              onClick={onAutoReschedule}
+            >
+              {t('app.kuaizhizao.scheduling.ganttToolbar.autoReschedule')}
+            </Button>
+          )}
           {canEditOperation ? (
             <Button size="small" onClick={onEditOperation}>
               {t('app.kuaizhizao.scheduling.ganttToolbar.editOperation')}

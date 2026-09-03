@@ -52,6 +52,7 @@ import { customerApi, getUserOptions } from '../../../../master-data/services/su
 import { CustomerFormModal } from '../../../../master-data/components/CustomerFormModal';
 import { CustomerDetailDrawer } from '../../../../master-data/components/CustomerDetailDrawer';
 import { CustomerFollowUpFormModal } from '../../../components/CustomerFollowUpFormModal';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import {
   customerPoolApi,
   type CustomerPoolItem,
@@ -99,7 +100,7 @@ const CustomerPoolPage: React.FC = () => {
     'CONTACT_TITLE',
   ]);
   const parsePoolDict = poolDictOptions.parseDict;
-  const { message, modal } = App.useApp();
+  const { message } = App.useApp();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const actionRef = useRef<ActionType>(null);
@@ -107,15 +108,6 @@ const CustomerPoolPage: React.FC = () => {
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const tableRowsRef = useRef<CustomerPoolItem[]>([]);
   const lastListParamsRef = useRef<Record<string, string | number | undefined>>({});
-  const scopeRef = useRef(scope);
-  scopeRef.current = scope;
-
-  const handleScopeChange = useCallback((next: 'pool' | 'mine' | 'all') => {
-    if (next === scopeRef.current) return;
-    scopeRef.current = next;
-    setScope(next);
-    actionRef.current?.reload();
-  }, []);
   const {
     canClaim,
     canAssign,
@@ -377,26 +369,18 @@ const CustomerPoolPage: React.FC = () => {
     [buildPoolLogDescription, formatPoolLogAction, poolLogs],
   );
 
-  const confirmReleaseCustomer = useCallback(
-    (row: CustomerPoolItem) => {
-      modal.confirm({
-        title: t('app.kuaizhizao.customerPool.confirmReleaseTitle'),
-        content: t('app.kuaizhizao.customerPool.confirmReleaseContent', { name: row.name }),
-        okText: t('app.kuaizhizao.customerPool.confirmReleaseOk'),
-        cancelText: t('common.cancel'),
-        onOk: async () => {
-          try {
-            await customerPoolApi.release(row.id);
-            message.success(t('app.kuaizhizao.customerPool.releasedSuccess'));
-            actionRef.current?.reload();
-          } catch (error: any) {
-            message.error(error?.message || t('app.kuaizhizao.customerPool.releaseFailed'));
-            throw error;
-          }
-        },
-      });
+  const releaseCustomer = useCallback(
+    async (row: CustomerPoolItem) => {
+      try {
+        await customerPoolApi.release(row.id);
+        message.success(t('app.kuaizhizao.customerPool.releasedSuccess'));
+        actionRef.current?.reload();
+      } catch (error: any) {
+        message.error(error?.message || t('app.kuaizhizao.customerPool.releaseFailed'));
+        throw error;
+      }
     },
-    [message, modal, t],
+    [message, t],
   );
 
   const claimCustomers = async (rows: CustomerPoolItem[]) => {
@@ -428,11 +412,11 @@ const CustomerPoolPage: React.FC = () => {
   useEffect(() => {
     const customerId = searchParams.get('customerId');
     if (!customerId) return;
-    handleScopeChange('all');
+    setScope('all');
     const next = new URLSearchParams(searchParams);
     next.delete('customerId');
     setSearchParams(next, { replace: true });
-  }, [handleScopeChange, searchParams, setSearchParams]);
+  }, [searchParams, setSearchParams]);
 
   useEffect(() => {
     let cancelled = false;
@@ -771,18 +755,20 @@ const CustomerPoolPage: React.FC = () => {
 
           const makeItem = (
             key: string,
-            label: string,
-            onClick: () => void,
+            label: React.ReactNode,
+            onClick?: () => void,
             options?: { icon?: React.ReactNode; danger?: boolean },
           ): NonNullable<MenuProps['items']>[number] => ({
             key,
             icon: options?.icon,
             label,
             danger: options?.danger,
-            onClick: ({ domEvent }) => {
-              domEvent?.stopPropagation?.();
-              onClick();
-            },
+            onClick: onClick
+              ? ({ domEvent }) => {
+                  domEvent?.stopPropagation?.();
+                  onClick();
+                }
+              : undefined,
           });
 
           const followUpItems: NonNullable<MenuProps['items']> = [];
@@ -815,8 +801,17 @@ const CustomerPoolPage: React.FC = () => {
               ownershipItems.push(
                 makeItem(
                   'release',
-                  t('components.uniAction.release'),
-                  () => confirmReleaseCustomer(row),
+                  (
+                    <ActionConfirmPopconfirm
+                      title={t('app.kuaizhizao.customerPool.confirmReleaseTitle')}
+                      description={t('app.kuaizhizao.customerPool.confirmReleaseContent', { name: row.name })}
+                      okText={t('app.kuaizhizao.customerPool.confirmReleaseOk')}
+                      onConfirm={() => releaseCustomer(row)}
+                    >
+                      <span onClick={(e) => e.stopPropagation()}>{t('components.uniAction.release')}</span>
+                    </ActionConfirmPopconfirm>
+                  ),
+                  undefined,
                   { icon: <RollbackOutlined /> },
                 ),
               );
@@ -831,7 +826,7 @@ const CustomerPoolPage: React.FC = () => {
                       try {
                         await customerPoolApi.recycle(row.id);
                         message.success(t('app.kuaizhizao.customerPool.recycledSuccess'));
-                        actionRef.current?.reload();
+    actionRef.current?.reload();
                       } catch (error: any) {
                         message.error(error?.message || t('app.kuaizhizao.customerPool.recycleFailed'));
                       }
@@ -857,19 +852,19 @@ const CustomerPoolPage: React.FC = () => {
             dangerItems.push(
               makeItem(
                 'delete',
-                t('common.delete'),
-                () => {
-                  modal.confirm({
-                    title: t('app.kuaizhizao.customerPool.confirmDeleteCustomer'),
-                    content: t('app.kuaizhizao.customerPool.confirmDeleteCustomerDesc', {
+                (
+                  <ActionConfirmPopconfirm
+                    title={t('app.kuaizhizao.customerPool.confirmDeleteCustomer')}
+                    description={t('app.kuaizhizao.customerPool.confirmDeleteCustomerDesc', {
                       name: row.name || row.code || t('app.kuaizhizao.customerPool.customerFallback'),
-                    }),
-                    okText: t('common.confirm'),
-                    cancelText: t('common.cancel'),
-                    okButtonProps: { danger: true },
-                    onOk: () => handleDeleteCustomer(row),
-                  });
-                },
+                    })}
+                    okButtonProps={{ danger: true }}
+                    onConfirm={() => handleDeleteCustomer(row)}
+                  >
+                    <span onClick={(e) => e.stopPropagation()}>{t('common.delete')}</span>
+                  </ActionConfirmPopconfirm>
+                ),
+                undefined,
                 { icon: <DeleteOutlined />, danger: true },
               ),
             );
@@ -936,9 +931,8 @@ const CustomerPoolPage: React.FC = () => {
       canRecycle,
       canRelease,
       canUpdateCustomer,
-      confirmReleaseCustomer,
+      releaseCustomer,
       handleDeleteCustomer,
-      modal,
       openCollaboratorsModal,
       openPoolLogsModal,
       poolStatusValueEnum,
@@ -1114,7 +1108,7 @@ const CustomerPoolPage: React.FC = () => {
       let total = 0;
       do {
         const res = await customerPoolApi.list({
-          scope: scopeRef.current,
+          scope,
           skip,
           limit: pageSize,
           ...lastListParamsRef.current,
@@ -1191,7 +1185,7 @@ const CustomerPoolPage: React.FC = () => {
           columnPersistenceId="apps.kuaizhizao.pages.sales-management.customer-pool-width-v2"
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.customerPool')}
-          tanstackQuery={{ queryKeyPrefix: ['apps.kuaizhizao.pages.sales-management.customer-pool', scope] }}
+          params={{ scope }}
           onTableDataChange={(data) => {
             tableRowsRef.current = data || [];
           }}
@@ -1199,7 +1193,7 @@ const CustomerPoolPage: React.FC = () => {
             <ThemedSegmented
               surfaceBackground
               value={scope}
-              onChange={(v) => handleScopeChange(v as 'pool' | 'mine' | 'all')}
+              onChange={(v) => setScope(v as 'pool' | 'mine' | 'all')}
               options={[
                 { label: t('app.kuaizhizao.customerPool.scopePrivate'), value: 'mine' },
                 { label: t('app.kuaizhizao.customerPool.scopePublic'), value: 'pool' },
@@ -1223,7 +1217,7 @@ const CustomerPoolPage: React.FC = () => {
               const listParams = resolveCustomerPoolListParams(searchValues, sort);
               lastListParamsRef.current = listParams;
               const res = await customerPoolApi.list({
-                scope: scopeRef.current,
+                scope: params.scope,
                 skip: ((params.current || 1) - 1) * (params.pageSize || 20),
                 limit: params.pageSize || 20,
                 ...listParams,
@@ -1326,7 +1320,7 @@ const CustomerPoolPage: React.FC = () => {
             setAssignOpen(false);
             setAssignTargets([]);
             setSelectedRowKeys([]);
-            actionRef.current?.reload();
+    actionRef.current?.reload();
           } catch (error: any) {
             if (!error?.errorFields) message.error(error?.message || t('app.kuaizhizao.customerPool.assignFailed'));
           }
@@ -1461,7 +1455,7 @@ const CustomerPoolPage: React.FC = () => {
           setFollowUpCustomerId(null);
         }}
         onSuccess={() => {
-          actionRef.current?.reload();
+    actionRef.current?.reload();
         }}
       />
 
@@ -1475,7 +1469,7 @@ const CustomerPoolPage: React.FC = () => {
           setEditUuid(null);
         }}
         onSuccess={() => {
-          actionRef.current?.reload();
+    actionRef.current?.reload();
         }}
       />
 

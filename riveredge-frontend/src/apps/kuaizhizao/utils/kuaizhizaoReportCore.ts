@@ -253,6 +253,15 @@ export async function fetchKuaizhizaoReport(
   });
   const { skip, limit, date_start, date_end, order_by, column_filters, keyword, status, order_code, product_name, supplier_name, work_order_code } =
     query as Record<string, string | number | undefined>;
+  const period_basis_from_params =
+    typeof params?.period_basis === 'string' && params.period_basis.trim()
+      ? params.period_basis.trim()
+      : undefined;
+  const period_basis_from_search =
+    typeof searchFormValues?.period_basis === 'string' && searchFormValues.period_basis.trim()
+      ? searchFormValues.period_basis.trim()
+      : undefined;
+  const period_basis = period_basis_from_params || period_basis_from_search;
   const customerField = options?.customerKeywordField ?? 'customer_name';
   const customer_keyword = searchFormValues?.[customerField] as string | undefined;
   const formStatus =
@@ -302,6 +311,7 @@ export async function fetchKuaizhizaoReport(
     ...(product_name ? { product_name } : {}),
     ...(supplier_name || formSupplier ? { supplier_name: supplier_name ?? formSupplier } : {}),
     ...(work_order_code ? { work_order_code } : {}),
+    ...(period_basis ? { period_basis } : {}),
   };
 
   switch (route.api) {

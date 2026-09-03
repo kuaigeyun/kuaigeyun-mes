@@ -35,6 +35,11 @@ import {formatDateBySiteSetting, formatQuantity} from '../../../../../utils/form
 import { reportDocumentStatusText } from '../../../utils/reportPresentation';
 import { loadConfirmPreviewMaterialMeta, type ConfirmPreviewMaterialMeta } from './inboundItemTracking';
 import {
+  filterWarehouseTrackingColumns,
+  isMaterialSerialEntryEnabled,
+  useWarehouseTrackingFlags,
+} from '../shared/warehouseTrackingFlags';
+import {
   enrichPurchaseOrderItemsMaterial,
   fetchStorageLocationsForWarehouse,
   getOutstandingPoItems,
@@ -68,6 +73,7 @@ const InboundPoPullEntryPage: React.FC = () => {
   const location = useLocation();
   const { message: messageApi } = App.useApp();
   const { t } = useTranslation();
+  const trackingFlags = useWarehouseTrackingFlags();
   const pullFromPurchaseOrderAction = resolveKuaizhizaoDocumentAction(t, 'purchase_receipt.pull_from_purchase_order');
   const receiverHook = useInboundReceiverSelect();
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
@@ -355,7 +361,7 @@ const InboundPoPullEntryPage: React.FC = () => {
 
   const handleGenerateSerial = async (poItemId: number, qty: number) => {
     const meta = materialMeta[poItemId];
-    if (!meta?.serialManaged || !meta.materialUuid) return;
+    if (!isMaterialSerialEntryEnabled(trackingFlags, meta?.serialManaged) || !meta?.materialUuid) return;
     const count = Math.max(1, Math.floor(Number(qty) || 1));
     if (count > 100) {
       messageApi.warning(t('app.kuaizhizao.warehouseInbound.msg.serialMax100'));
@@ -522,7 +528,9 @@ const InboundPoPullEntryPage: React.FC = () => {
   };
 
   const entryColumns = useMemo(
-    () => [
+    () =>
+      filterWarehouseTrackingColumns(
+        [
       {
         title: t('app.kuaizhizao.warehouseInbound.col.materialCode'),
         dataIndex: 'material_code',
@@ -614,6 +622,7 @@ const InboundPoPullEntryPage: React.FC = () => {
       },
       {
         title: t('app.kuaizhizao.warehouseInbound.col.batchNo'),
+        key: 'batch_number',
         width: 130,
         render: (_: unknown, record: PurchaseOrderItem) => {
           if (record.id == null) return '—';
@@ -631,12 +640,13 @@ const InboundPoPullEntryPage: React.FC = () => {
       },
       {
         title: t('app.kuaizhizao.warehouseInbound.col.serialNo'),
+        key: 'serial_numbers',
         width: 150,
         render: (_: unknown, record: PurchaseOrderItem) => {
           if (record.id == null) return '—';
           const rid = record.id;
           const meta = materialMeta[rid];
-          if (!meta?.serialManaged) return '—';
+          if (!isMaterialSerialEntryEnabled(trackingFlags, meta?.serialManaged)) return '—';
           const qty = Number(quantities[rid] ?? 0);
           return (
             <SerialNumbersImportTrigger
@@ -668,9 +678,12 @@ const InboundPoPullEntryPage: React.FC = () => {
             />
           ) : null,
       },
-    ],
+        ],
+        trackingFlags,
+      ),
     [
       t,
+      trackingFlags,
       applyLineWarehouse,
       batchNumbers,
       generatingSerialId,

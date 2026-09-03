@@ -35,6 +35,8 @@ export interface ReportParams {
   work_order_code?: string;
   demand_type?: string;
   column_filters?: string;
+  /** 供应商交货统计：receipt_time / required_date / order_date */
+  period_basis?: string;
   filters?: Record<string, any>;
 }
 
@@ -277,6 +279,7 @@ function buildReportQueryParams(
   if (params.supplier_name) query.supplier_name = params.supplier_name;
   if (params.work_order_code) query.work_order_code = params.work_order_code;
   if (params.demand_type) query.demand_type = params.demand_type;
+  if (params.period_basis) query.period_basis = params.period_basis;
   if (params.customer_id != null) query.customer_id = params.customer_id;
   if (params.filters?.customer_id != null) query.customer_id = params.filters.customer_id;
   if (params.filters?.warehouse_id != null) query.warehouse_id = params.filters.warehouse_id;

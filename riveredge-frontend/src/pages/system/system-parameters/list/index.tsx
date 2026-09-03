@@ -41,7 +41,6 @@ import {
 } from '../../../../services/systemParameter';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 import { mergeListKeyword } from '../../../../utils/tableQueryKey';
-import { getAntdModal } from '../../../../utils/antdAppApis';
 import { todaySiteDateString } from '../../../../utils/format';
 import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
 /**
@@ -154,25 +153,17 @@ const SystemParameterListPage: React.FC = () => {
   /**
    * 处理批量删除参数
    */
-  const handleBatchDelete = () => {
-    if (selectedRowKeys.length === 0) {
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    if (keys.length === 0) {
       messageApi.warning(t('pages.system.selectFirst'));
       return;
     }
-
-    getAntdModal().confirm({
-      title: t('field.systemParameter.batchDeleteTitle'),
-      content: t('field.systemParameter.batchDeleteConfirm', { count: selectedRowKeys.length }),
-      okText: t('common.confirm'),
-      cancelText: t('common.cancel'),
-      okType: 'danger',
-      onOk: async () => {
-        try {
+    try {
           let successCount = 0;
           let failCount = 0;
           const errors: string[] = [];
 
-          for (const key of selectedRowKeys) {
+          for (const key of keys) {
             try {
               await deleteSystemParameter(key.toString());
               successCount++;
@@ -190,13 +181,11 @@ const SystemParameterListPage: React.FC = () => {
           }
 
           setSelectedRowKeys([]);
-          actionRef.current?.reload();
+    actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || t('common.deleteFailed'));
         }
-      },
-    });
-  };
+  };;
 
   /**
    * 处理提交表单（创建/更新参数）
@@ -674,7 +663,9 @@ const SystemParameterListPage: React.FC = () => {
           showCreateButton
           createButtonText={t('field.systemParameter.createButton')}
           onCreate={handleCreate}
-          showDeleteButton
+          showDeleteButtondeleteConfirmTitle={t('field.systemParameter.batchDeleteTitle')}
+          deleteConfirmDescription={(count) => t('field.systemParameter.batchDeleteConfirm', { count: selectedRowKeys.length })}
+          
           onDelete={handleBatchDelete}
           deleteButtonText={t('common.batchDelete')}
           showExportButton

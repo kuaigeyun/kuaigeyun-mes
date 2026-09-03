@@ -3,6 +3,7 @@ import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { rowActionKind } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { DetailDrawerActions, ListPageTemplate } from '../../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { UniTable } from '../../../../../components/uni-table';
@@ -24,7 +25,7 @@ const RESOURCE = 'kuaizhizao:service-dispatch';
 
 const DispatchOrdersPage: React.FC = () => {
   const { t } = useTranslation();
-  const { message: messageApi, modal } = App.useApp();
+  const { message: messageApi } = App.useApp();
   const perms = useResourcePermissions(RESOURCE);
   const actionRef = useRef<ActionType>();
   const [modalOpen, setModalOpen] = useState(false);
@@ -61,19 +62,14 @@ const DispatchOrdersPage: React.FC = () => {
     setModalOpen(true);
   };
 
-  const confirmDelete = (row: ServiceDispatchOrder) => {
-    modal.confirm({
-      title: t('common.confirmDelete'),
-      onOk: async () => {
-        await serviceDispatchApi.delete(row.id);
+  const executeconfirmDelete = async (row: ServiceDispatchOrder) => {
+    await serviceDispatchApi.delete(row.id);
         messageApi.success(t('common.deleteSuccess'));
         if (detail?.id === row.id) {
           setDetailOpen(false);
           setDetail(null);
         }
-        actionRef.current?.reload();
-      },
-    });
+    actionRef.current?.reload();
   };
 
   const columns: ProColumns<ServiceDispatchOrder>[] = useMemo(
@@ -163,11 +159,13 @@ const DispatchOrdersPage: React.FC = () => {
                 />
               ) : null,
               perms.canDelete && (row.status === '待接单' || row.status === '已取消') ? (
-                <Button
+                <ActionConfirmPopconfirm title={t('common.confirmDelete')} onConfirm={() => executeconfirmDelete(row)}>
+              <Button
                   {...rowActionKind('delete')}
                   key="delete"
-                  onClick={() => confirmDelete(row)}
+                  onClick={(e) => e.stopPropagation()}
                 />
+            </ActionConfirmPopconfirm>
               ) : null,
             ],
           },
@@ -206,8 +204,8 @@ const DispatchOrdersPage: React.FC = () => {
         showDeleteButton={perms.canDelete}
         onDelete={async (keys) => {
           await Promise.all(keys.map((key) => serviceDispatchApi.delete(Number(key))));
-          messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
-          actionRef.current?.reload();
+    messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
+    actionRef.current?.reload();
         }}
       />
 
@@ -226,7 +224,7 @@ const DispatchOrdersPage: React.FC = () => {
             await serviceDispatchApi.create(payload);
             messageApi.success(t('common.createSuccess'));
           }
-          actionRef.current?.reload();
+    actionRef.current?.reload();
         }}
       />
 
@@ -272,7 +270,7 @@ const DispatchOrdersPage: React.FC = () => {
                         engineer_name: detail.engineer_name ?? undefined,
                       });
                       setDetail(await serviceDispatchApi.get(detail.id));
-                      actionRef.current?.reload();
+    actionRef.current?.reload();
                       messageApi.success(t('app.kuaizhizao.afterSalesService.dispatchOrder.assignSuccess'));
                     }}
                   >
@@ -290,7 +288,7 @@ const DispatchOrdersPage: React.FC = () => {
                       if (!detail) return;
                       await serviceDispatchApi.close(detail.id);
                       setDetail(await serviceDispatchApi.get(detail.id));
-                      actionRef.current?.reload();
+    actionRef.current?.reload();
                       messageApi.success(t('app.kuaizhizao.afterSalesService.dispatchOrder.closeSuccess'));
                     }}
                   >

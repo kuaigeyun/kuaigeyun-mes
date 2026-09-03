@@ -17,6 +17,7 @@ import {
 import { App, Button, Alert } from 'antd';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { ListPageTemplate, FormModalTemplate } from '../../../../../components/layout-templates';
@@ -71,7 +72,7 @@ const PAGE_CODE = 'kuaiplm-rd-requirement';
 
 const RequirementsPage: React.FC = () => {
   const { t } = useTranslation();
-  const { message: messageApi, modal: modalApi } = App.useApp();
+  const { message: messageApi } = App.useApp();
   const perms = useResourcePermissions('kuaiplm.requirement');
   const [searchParams] = useSearchParams();
   const projectIdFilter = searchParams.get('project_id');
@@ -274,23 +275,20 @@ const RequirementsPage: React.FC = () => {
             setEditingRecord(row);
           }}
         />,
-        <Button
+        <ActionConfirmPopconfirm
           key="del"
-          {...rowActionKind('delete')}
-          onClick={() => {
-            modalApi.confirm({
-              title: t('app.kuaiplm.phase2.requirements.deleteOneTitle'),
-              onOk: async () => {
-                await deleteRequirement(row.id!);
-                messageApi.success(t('common.deleteSuccess'));
-                actionRef.current?.reload();
-              },
-            });
+          title={t('app.kuaiplm.phase2.requirements.deleteOneTitle')}
+          onConfirm={async () => {
+            await deleteRequirement(row.id!);
+            messageApi.success(t('common.deleteSuccess'));
+            actionRef.current?.reload();
           }}
-        />,
+        >
+          <Button {...rowActionKind('delete')} onClick={(e) => e.stopPropagation()} />
+        </ActionConfirmPopconfirm>,
       ]),
     ],
-    [messageApi, modalApi, priorityValueEnum, requirementStatusValueEnum, sourceTypeLabelMap, t],
+    [messageApi, priorityValueEnum, requirementStatusValueEnum, sourceTypeLabelMap, t],
   );
 
   return (
@@ -393,7 +391,7 @@ const RequirementsPage: React.FC = () => {
           messageApi.success(t('common.createSuccess'));
           setCreateOpen(false);
           setPreviewCode(null);
-          actionRef.current?.reload();
+    actionRef.current?.reload();
         }}
       >
         <ProFormText
@@ -464,7 +462,7 @@ const RequirementsPage: React.FC = () => {
           await updateRequirement(editingRecord.id, values);
           messageApi.success(t('common.updateSuccess'));
           setEditingRecord(null);
-          actionRef.current?.reload();
+    actionRef.current?.reload();
         }}
       >
         <ProFormText

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 
-import { App, Button, Modal } from 'antd';
+import { App, Button, Popconfirm } from 'antd';
 
 import type { ActionType, ProColumns, ProFormInstance } from '@ant-design/pro-components';
 
@@ -249,25 +249,15 @@ const IssuesPage: React.FC = () => {
     [],
   );
 
-  const handleDeleteRow = useCallback(
+  const confirmDeleteRow = useCallback(
 
-    (record: DeliveryIssue) => {
+    async (record: DeliveryIssue) => {
 
-      Modal.confirm({
+      await deliveryIssueApi.delete(record.id);
 
-        title: t('app.kuaizhizao.deliveryProject.deleteIssueConfirm'),
+      message.success(t('common.deleted'));
 
-        onOk: async () => {
-
-          await deliveryIssueApi.delete(record.id);
-
-          message.success(t('common.deleted'));
-
-          actionRef.current?.reload();
-
-        },
-
-      });
+      actionRef.current?.reload();
 
     },
 
@@ -292,7 +282,7 @@ const IssuesPage: React.FC = () => {
           setDetailOpen(false);
           setDetailId(undefined);
         }
-        actionRef.current?.reload();
+    actionRef.current?.reload();
       } catch (error: unknown) {
         message.error((error as Error)?.message || t('common.batchDeleteFailed'));
       }
@@ -516,23 +506,20 @@ const IssuesPage: React.FC = () => {
           if (r.status === 'open' && perms.canDelete) {
 
             parts.push(
-
-              <Button
-
-                {...rowActionKind('delete')}
-
+              <Popconfirm
                 key="delete"
-
-                onClick={(e) => {
-
-                  e.stopPropagation();
-
-                  handleDeleteRow(r);
-
+                title={t('app.kuaizhizao.deliveryProject.deleteIssueConfirm')}
+                onConfirm={(e) => {
+                  e?.stopPropagation();
+                  void confirmDeleteRow(r);
                 }}
-
-              />,
-
+                onCancel={(e) => e?.stopPropagation()}
+              >
+                <Button
+                  {...rowActionKind('delete')}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </Popconfirm>,
             );
 
           }
@@ -554,8 +541,7 @@ const IssuesPage: React.FC = () => {
                   await deliveryIssueApi.update(r.id, { status: 'in_progress' });
 
                   message.success(t('common.updated'));
-
-                  actionRef.current?.reload();
+    actionRef.current?.reload();
 
                 }}
 
@@ -582,8 +568,7 @@ const IssuesPage: React.FC = () => {
                   await deliveryIssueApi.update(r.id, { status: 'resolved' });
 
                   message.success(t('app.kuaizhizao.deliveryProject.issueResolved'));
-
-                  actionRef.current?.reload();
+    actionRef.current?.reload();
 
                 }}
 
@@ -610,8 +595,7 @@ const IssuesPage: React.FC = () => {
                   await deliveryIssueApi.update(r.id, { status: 'closed' });
 
                   message.success(t('app.kuaizhizao.deliveryProject.issueClosed'));
-
-                  actionRef.current?.reload();
+    actionRef.current?.reload();
 
                 }}
 

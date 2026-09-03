@@ -1,6 +1,23 @@
 @import '../../../../../../components/layout-templates/projectWorkbenchShell.less';
 
-.delivery-project-node-panel {  .delivery-project-node-section-card {
+.delivery-project-workbench-side-table {
+  .ant-table {
+    table-layout: fixed;
+  }
+
+  .ant-table-thead > tr > th,
+  .ant-table-tbody > tr > td {
+    white-space: nowrap;
+  }
+
+  .ant-table-cell-ellipsis {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+.delivery-project-node-panel {
+  .delivery-project-node-section-card {
     background: var(--ant-color-fill-alter);
     border-color: var(--ant-color-border-secondary);
 
@@ -11,6 +28,17 @@
 
     > .ant-card-body {
       background: var(--ant-color-fill-alter);
+    }
+  }
+
+  .delivery-project-workbench-node-table {
+    .ant-table {
+      table-layout: fixed;
+    }
+
+    .ant-table-thead > tr > th,
+    .ant-table-tbody > tr > td {
+      white-space: nowrap;
     }
   }
 }

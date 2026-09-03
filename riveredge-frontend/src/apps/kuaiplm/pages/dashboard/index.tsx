@@ -24,8 +24,6 @@ import {
 
   ClockCircleOutlined,
 
-  ExperimentOutlined,
-
   FileSearchOutlined,
 
   AuditOutlined,
@@ -374,12 +372,7 @@ const KuaiplmDashboard: React.FC = () => {
 
       fullWidthRow={
         <ModuleChartPanel
-          title={
-            <span>
-              <ExperimentOutlined style={{ marginRight: 8 }} />
-              {t('app.kuaiplm.dashboard.chart.ganttTitle')}
-            </span>
-          }
+          title={t('app.kuaiplm.dashboard.chart.ganttTitle')}
           extra={
             <a onClick={() => navigate('/apps/kuaiplm/rd-projects')}>
               {t('app.kuaiplm.common.actions.manageProjects')}

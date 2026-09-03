@@ -719,7 +719,7 @@ const MenuListPage: React.FC = () => {
         }
         setModalVisible(false);
         refreshLayoutMenus();
-        actionRef.current?.reload();
+    actionRef.current?.reload();
     } catch (error: any) {
         messageApi.error(error.message || t('common.operationFailed'));
     } finally {

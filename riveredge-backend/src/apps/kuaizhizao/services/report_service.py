@@ -3405,6 +3405,7 @@ class ReportService:
         limit: int = 100,
         status: Optional[str] = None,
         supplier_name: Optional[str] = None,
+        period_basis: Optional[str] = None,
         current_user: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """采购报表汇总"""
@@ -3419,6 +3420,7 @@ class ReportService:
         start = self._as_date(date_start)
         end = self._as_date(date_end)
         supplier_kw = str(supplier_name or "").strip()
+        period_basis_key = (period_basis or "receipt_time").strip().lower() or "receipt_time"
 
         if report_type in ["purchase-requisition-tracking", "req_tracking", "requisition_tracking"]:
             req_q = await self._scoped_purchase_requisition_query(
@@ -3667,6 +3669,12 @@ class ReportService:
                 },
             })
         elif report_type in ["supplier-delivery-summary", "supplier_delivery"]:
+            # 期间维度：入库日（默认）/ 要求到货日 / 订单日；及时率仍用入库日 vs 要求到货日
+            allowed_period_basis = {"receipt_time", "required_date", "order_date"}
+            if period_basis_key not in allowed_period_basis:
+                raise ValidationError(
+                    f"无效的期间维度: {period_basis}，允许值: receipt_time / required_date / order_date"
+                )
             if supplier_kw:
                 scoped_po_id_list = list(
                     await scoped_po_query.filter(
@@ -3675,35 +3683,110 @@ class ReportService:
                 )
                 if not scoped_po_id_list:
                     return self._wrap_report_payload({"data": [], "success": True, "total": 0})
-            rq = PurchaseReceipt.filter(
-                tenant_id=tenant_id,
-                deleted_at__isnull=True,
-                purchase_order_id__in=scoped_po_id_list,
-            )
-            if date_start:
-                rq = rq.filter(receipt_time__gte=coerce_business_datetime_to_utc(date_start))
-            if date_end:
-                rq = rq.filter(
-                    receipt_time__lt=coerce_business_datetime_to_utc(date_end + timedelta(days=1))
+
+            lines: List[Dict[str, Any]] = []
+            receipt_map: Dict[Any, Dict[str, Any]] = {}
+
+            if period_basis_key == "order_date":
+                po_period_q = PurchaseOrder.filter(
+                    id__in=scoped_po_id_list,
+                    deleted_at__isnull=True,
                 )
-            receipts = await rq.values(
-                "id", "receipt_code", "supplier_id", "supplier_name", "receipt_time",
-            )
-            if not receipts:
+                if start:
+                    po_period_q = po_period_q.filter(order_date__gte=start)
+                if end:
+                    po_period_q = po_period_q.filter(order_date__lte=end)
+                period_po_ids = list(await po_period_q.values_list("id", flat=True))
+                if not period_po_ids:
+                    return self._wrap_report_payload({"data": [], "success": True, "total": 0})
+                receipts = await PurchaseReceipt.filter(
+                    tenant_id=tenant_id,
+                    deleted_at__isnull=True,
+                    purchase_order_id__in=period_po_ids,
+                ).values(
+                    "id", "receipt_code", "supplier_id", "supplier_name", "receipt_time",
+                )
+                if not receipts:
+                    return self._wrap_report_payload({"data": [], "success": True, "total": 0})
+                receipt_map = {r["id"]: r for r in receipts}
+                lines = await PurchaseReceiptItem.filter(
+                    tenant_id=tenant_id,
+                    receipt_id__in=list(receipt_map.keys()),
+                    deleted_at__isnull=True,
+                ).values(
+                    "receipt_id",
+                    "receipt_quantity",
+                    "total_amount",
+                    "purchase_order_item_id",
+                    "receipt_time",
+                )
+            elif period_basis_key == "required_date":
+                poi_q = PurchaseOrderItem.filter(
+                    tenant_id=tenant_id,
+                    order_id__in=scoped_po_id_list,
+                    deleted_at__isnull=True,
+                )
+                if start:
+                    poi_q = poi_q.filter(required_date__gte=start)
+                if end:
+                    poi_q = poi_q.filter(required_date__lte=end)
+                period_poi_ids = list(await poi_q.values_list("id", flat=True))
+                if not period_poi_ids:
+                    return self._wrap_report_payload({"data": [], "success": True, "total": 0})
+                lines = await PurchaseReceiptItem.filter(
+                    tenant_id=tenant_id,
+                    purchase_order_item_id__in=period_poi_ids,
+                    deleted_at__isnull=True,
+                ).values(
+                    "receipt_id",
+                    "receipt_quantity",
+                    "total_amount",
+                    "purchase_order_item_id",
+                    "receipt_time",
+                )
+                receipt_ids = list({ln["receipt_id"] for ln in lines if ln.get("receipt_id") is not None})
+                if not receipt_ids:
+                    return self._wrap_report_payload({"data": [], "success": True, "total": 0})
+                receipts = await PurchaseReceipt.filter(
+                    tenant_id=tenant_id,
+                    id__in=receipt_ids,
+                    deleted_at__isnull=True,
+                ).values(
+                    "id", "receipt_code", "supplier_id", "supplier_name", "receipt_time",
+                )
+                receipt_map = {r["id"]: r for r in receipts}
+            else:
+                rq = PurchaseReceipt.filter(
+                    tenant_id=tenant_id,
+                    deleted_at__isnull=True,
+                    purchase_order_id__in=scoped_po_id_list,
+                )
+                if date_start:
+                    rq = rq.filter(receipt_time__gte=coerce_business_datetime_to_utc(date_start))
+                if date_end:
+                    rq = rq.filter(
+                        receipt_time__lt=coerce_business_datetime_to_utc(date_end + timedelta(days=1))
+                    )
+                receipts = await rq.values(
+                    "id", "receipt_code", "supplier_id", "supplier_name", "receipt_time",
+                )
+                if not receipts:
+                    return self._wrap_report_payload({"data": [], "success": True, "total": 0})
+                receipt_map = {r["id"]: r for r in receipts}
+                lines = await PurchaseReceiptItem.filter(
+                    tenant_id=tenant_id,
+                    receipt_id__in=list(receipt_map.keys()),
+                    deleted_at__isnull=True,
+                ).values(
+                    "receipt_id",
+                    "receipt_quantity",
+                    "total_amount",
+                    "purchase_order_item_id",
+                    "receipt_time",
+                )
+
+            if not lines:
                 return self._wrap_report_payload({"data": [], "success": True, "total": 0})
-            receipt_ids = [r["id"] for r in receipts]
-            receipt_map = {r["id"]: r for r in receipts}
-            lines = await PurchaseReceiptItem.filter(
-                tenant_id=tenant_id,
-                receipt_id__in=receipt_ids,
-                deleted_at__isnull=True,
-            ).values(
-                "receipt_id",
-                "receipt_quantity",
-                "total_amount",
-                "purchase_order_item_id",
-                "receipt_time",
-            )
             po_item_ids = [ln["purchase_order_item_id"] for ln in lines if ln.get("purchase_order_item_id")]
             required_map = {}
             if po_item_ids:
@@ -5091,6 +5174,7 @@ class ReportService:
         customer_id: Optional[int] = None,
         customer_keyword: Optional[str] = None,
         material_id: Optional[int] = None,
+        period_basis: Optional[str] = None,
         limit: int = 10000,
         current_user: Optional[Any] = None,
     ) -> str:
@@ -5157,6 +5241,7 @@ class ReportService:
                 report_type=report_type,
                 date_start=date_start,
                 date_end=date_end,
+                period_basis=period_basis,
                 current_user=current_user,
             )
         elif domain_key == "equipment":

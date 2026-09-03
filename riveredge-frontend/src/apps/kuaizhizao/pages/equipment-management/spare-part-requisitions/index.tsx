@@ -36,7 +36,6 @@ import {
   normalizeEquipmentListResponse,
   resolveApprovalDocListParams,
 } from '../../../utils/equipmentListCore';
-import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 const P = 'app.kuaizhizao.equipmentOps.sparePartRequisition';
@@ -149,17 +148,11 @@ const SparePartRequisitionsPage: React.FC = () => {
   };
 
   const handleDelete = async (keys: React.Key[]) => {
-    getAntdModal().confirm({
-      title: t('common.batchDeleteTitle'),
-      content: t('common.batchDeleteContent', { count: keys.length }),
-      onOk: async () => {
-        for (const id of keys) {
+    for (const id of keys) {
           await sparePartRequisitionsApi.delete(Number(id));
         }
-        messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
-        actionRef.current?.reload();
-      },
-    });
+    messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
+    actionRef.current?.reload();
   };
 
   const handleSubmit = async (values: Record<string, unknown>) => {
@@ -323,7 +316,7 @@ const SparePartRequisitionsPage: React.FC = () => {
                 try {
                   await sparePartRequisitionsApi.submit(record.id);
                   messageApi.success(t(`${P}.submitSuccess`));
-                  actionRef.current?.reload();
+    actionRef.current?.reload();
                 } catch (error: unknown) {
                   messageApi.error(
                     error instanceof Error ? error.message : t('common.operationFailed'),
@@ -343,7 +336,7 @@ const SparePartRequisitionsPage: React.FC = () => {
                 try {
                   await sparePartRequisitionsApi.approve(record.id);
                   messageApi.success(t(`${P}.approveSuccess`));
-                  actionRef.current?.reload();
+    actionRef.current?.reload();
                 } catch (error: unknown) {
                   messageApi.error(
                     error instanceof Error ? error.message : t('common.operationFailed'),
@@ -411,6 +404,9 @@ const SparePartRequisitionsPage: React.FC = () => {
           createButtonText={withSingleNewShortcutHint(t(`${P}.create`))}
           onCreate={handleCreate}
           showDeleteButton={perms.canDelete}
+          deleteConfirmTitle={t('common.batchDeleteTitle')}
+          deleteConfirmDescription={(count) => t('common.batchDeleteContent', { count: count })}
+          
           onDelete={handleDelete}
           enableRowSelection={perms.canDelete}
         />
@@ -536,7 +532,7 @@ const SparePartRequisitionsPage: React.FC = () => {
             await sparePartRequisitionsApi.reject(rejectTarget.id, { reject_reason: rejectReason });
             messageApi.success(t(`${P}.rejectSuccess`));
             setRejectModalVisible(false);
-            actionRef.current?.reload();
+    actionRef.current?.reload();
           } catch (error: unknown) {
             messageApi.error(
               error instanceof Error ? error.message : t('common.operationFailed'),

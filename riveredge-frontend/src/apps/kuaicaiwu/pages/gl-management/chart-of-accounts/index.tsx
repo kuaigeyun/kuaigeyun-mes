@@ -211,7 +211,7 @@ const ChartOfAccountsPage: React.FC = () => {
                   try {
                     await glService.deleteAccount(record.id);
                     messageApi.success(t('common.deleteSuccess'));
-                    actionRef.current?.reload();
+    actionRef.current?.reload();
                   } catch (error) {
                     messageApi.error(getApiErrorMessage(error, t('common.deleteFailed')));
                   }

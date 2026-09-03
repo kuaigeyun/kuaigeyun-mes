@@ -11,6 +11,7 @@ import { App, Button, Descriptions, Form, Space } from 'antd';
 import { CheckOutlined, DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined, PrinterOutlined, RollbackOutlined, SendOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { LinkedDocumentCode } from '../../../../../components/linked-document-code';
 import { UniAuditBatchMenuButton, UniCapabilityBatchButton } from '../../../../../components/uni-batch';
 import {
@@ -118,7 +119,7 @@ const isAppliedChangeStatus = (status?: string): boolean => {
 
 const SalesOrderChangesPage: React.FC = () => {
   const { t } = useTranslation();
-  const { message, modal } = App.useApp();
+  const { message } = App.useApp();
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const pullFromSalesOrderAction = resolveKuaizhizaoDocumentAction(
     t,
@@ -693,40 +694,34 @@ const SalesOrderChangesPage: React.FC = () => {
             </Button>
           ) : null,
           canRevoke ? (
-            <Button
-              {...rowActionKind('revoke')}
+            <ActionConfirmPopconfirm
               key="revoke"
-              onClick={() => {
-                modal.confirm({
-                  title: t('components.uniAction.revoke'),
-                  onOk: async () => {
-                    await withdrawSalesOrderChange(record.id!);
-                    message.success(t('common.updateSuccess'));
-                    reloadTable();
-                  },
-                });
+              title={t('components.uniAction.revoke')}
+              onConfirm={async () => {
+                await withdrawSalesOrderChange(record.id!);
+                message.success(t('common.updateSuccess'));
+                reloadTable();
               }}
             >
-              {t('components.uniAction.revoke')}
-            </Button>
+              <Button {...rowActionKind('revoke')} onClick={(e) => e.stopPropagation()}>
+                {t('components.uniAction.revoke')}
+              </Button>
+            </ActionConfirmPopconfirm>
           ) : null,
           canDelete ? (
-            <Button
-              {...rowActionKind('delete')}
+            <ActionConfirmPopconfirm
               key="del"
-              onClick={() => {
-                modal.confirm({
-                  title: t('app.kuaizhizao.salesOrderChange.confirmDelete'),
-                  onOk: async () => {
-                    await deleteSalesOrderChange(record.id!);
-                    message.success(t('app.kuaizhizao.salesOrderChange.deleted'));
-                    reloadTable();
-                  },
-                });
+              title={t('app.kuaizhizao.salesOrderChange.confirmDelete')}
+              onConfirm={async () => {
+                await deleteSalesOrderChange(record.id!);
+                message.success(t('app.kuaizhizao.salesOrderChange.deleted'));
+                reloadTable();
               }}
             >
-              {t('common.delete')}
-            </Button>
+              <Button {...rowActionKind('delete')} onClick={(e) => e.stopPropagation()}>
+                {t('common.delete')}
+              </Button>
+            </ActionConfirmPopconfirm>
           ) : null,
         ];
       },
@@ -739,7 +734,6 @@ const SalesOrderChangesPage: React.FC = () => {
       changePerms.canDelete,
       changePerms.canUpdate,
       changePerms.canAction,
-      modal,
       message,
       orderChangeAuditColumn,
       orderChangeLifecycleValueEnum,

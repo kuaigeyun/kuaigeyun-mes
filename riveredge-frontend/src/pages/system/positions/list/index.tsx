@@ -409,7 +409,7 @@ const PositionListPage: React.FC = () => {
                 const res = await loadPresetPositions(selectedPresetCodes);
                 messageApi.success(res.message);
                 setPresetModalVisible(false);
-                actionRef.current?.reload();
+    actionRef.current?.reload();
               } catch (e: any) {
                 messageApi.error(e?.message || t('common.operationFailed'));
               } finally {

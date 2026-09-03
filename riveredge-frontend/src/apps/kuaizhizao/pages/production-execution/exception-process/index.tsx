@@ -1,4 +1,5 @@
 import { rowActionKind } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 /**
  * 异常处理流程管理页面
  *
@@ -27,6 +28,7 @@ import { UniTable } from '../../../../../components/uni-table';
 import { UNI_TABLE_OPERATION_STEPS_COLUMN_MIN_WIDTH } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { MarkerTag, StatusTag } from '../../../../../constants/statusBadges';
 import { resolveUserDisplay } from '../../../../../services/user';
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { UniCapabilityBatchButton } from '../../../../../components/uni-batch';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG,   useDetailDrawerDescriptionItems } from '../../../../../components/layout-templates';
 import { exceptionApi } from '../../../services/production';
@@ -50,7 +52,6 @@ import { WorkOrderOperationStepsStrip } from '../work-orders/components/WorkOrde
 import type { WorkOrderOperationStep } from '../work-orders/workOrderOperationSteps';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import type { SubStage } from '../../../../../components/uni-lifecycle/types';
-import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 const EXCEPTION_PROCESS_RESOURCE = 'kuaizhizao:production-execution-exception-process';
 
@@ -383,22 +384,23 @@ const ExceptionProcessPage: React.FC = () => {
     }
   };
 
-  const handleCancel = async (record: ExceptionProcessRecord) => {
-    getAntdModal().confirm({
-      title: t(`${PROC}.confirm.cancelTitle`),
-      content: t(`${PROC}.confirm.cancelContent`),
-      onOk: async () => {
-        try {
+  const executeCancel = async (record: ExceptionProcessRecord) => {
+    try {
           await exceptionApi.process.cancel(String(record.id));
           messageApi.success(t(`${PROC}.message.cancelSuccess`));
           invalidateMenuBadgeCounts();
-
-          actionRef.current?.reload();
+    actionRef.current?.reload();
           setDetailDrawerVisible(false);
         } catch (error: any) {
           messageApi.error(error?.message || t(`${PROC}.message.cancelFailed`));
         }
-      },
+  };
+
+  const handleCancel = async (record: ExceptionProcessRecord) => {
+    getAntdModal().confirm({
+      title: t(`${PROC}.confirm.cancelTitle`),
+      content: t(`${PROC}.confirm.cancelContent`),
+      onOk: () => executeCancel(record),
     });
   };
 
@@ -532,9 +534,11 @@ const ExceptionProcessPage: React.FC = () => {
             </Button>
           ) : null,
           canCancel ? (
-            <Button key="cancel" {...rowActionKind('revoke')} onClick={() => handleCancel(record)}>
+            <ActionConfirmPopconfirm title={t(`${PROC}.confirm.cancelTitle`)} description={t(`${PROC}.confirm.cancelContent`)} onConfirm={() => executeCancel(record)}>
+              <Button key="cancel" {...rowActionKind('revoke')} onClick={(e) => e.stopPropagation()}>
               {t('common.cancel')}
             </Button>
+            </ActionConfirmPopconfirm>
           ) : null,
         ];
       },

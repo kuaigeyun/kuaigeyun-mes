@@ -13,6 +13,7 @@ from tortoise.transactions import in_transaction
 from apps.common.audit_actor import apply_create_audit, apply_update_audit, operator_name_from_user
 from apps.common.base_service import AppBaseService
 from apps.kuaizhizao.constants.delivery_project import (
+    DELIVERY_NODE_DOCUMENT_TYPES,
     DeliveryNodeStatus,
     DeliveryNodeTaskStatus,
     DeliveryProjectStatus,
@@ -24,6 +25,7 @@ from apps.kuaizhizao.models.delivery_project import (
     DeliveryProject,
     DeliveryProjectMember,
     DeliveryProjectNode,
+    DeliveryProjectNodeDocument,
     DeliveryProjectNodeTask,
 )
 from apps.kuaizhizao.models.sales_order import SalesOrder
@@ -51,6 +53,8 @@ from apps.kuaizhizao.schemas.delivery_project import (
     DeliveryProjectNodeTaskCreate,
     DeliveryProjectNodeTaskResponse,
     DeliveryProjectNodeTaskUpdate,
+    DeliveryProjectNodeDocumentCreate,
+    DeliveryProjectNodeDocumentResponse,
     DeliveryProjectNodeUpdate,
     DeliveryProjectResponse,
     DeliveryProjectWorkbenchResponse,
@@ -59,6 +63,7 @@ from apps.kuaizhizao.schemas.delivery_project import (
     PushDeliveryProjectPreviewResponse,
 )
 from apps.kuaizhizao.services.delivery_process_template_service import DeliveryProcessTemplateService
+from apps.kuaizhizao.services.delivery_project_alert_service import DeliveryProjectAlertService
 from apps.master_data.models.customer import Customer
 from core.utils.timezone_utils import resolve_business_datetime, today_site_str, to_site_date
 from infra.exceptions.exceptions import NotFoundError, ValidationError
@@ -89,6 +94,56 @@ class DeliveryProjectService(AppBaseService[DeliveryProject]):
     def __init__(self):
         super().__init__(DeliveryProject)
         self._template_service = DeliveryProcessTemplateService()
+        self._alert_service = DeliveryProjectAlertService()
+
+    @staticmethod
+    def _validate_date_range(
+        start: Optional[date],
+        end: Optional[date],
+        *,
+        label: str = "计划",
+    ) -> None:
+        if start and end and end < start:
+            raise ValidationError(f"{label}结束日期不能早于开始日期")
+
+    def _validate_task_planned_dates_against_node(
+        self,
+        node: DeliveryProjectNode,
+        planned_start: Optional[date],
+        planned_end: Optional[date],
+    ) -> None:
+        self._validate_date_range(planned_start, planned_end, label="任务计划")
+        if node.planned_end_date and planned_end and planned_end > node.planned_end_date:
+            raise ValidationError("子任务计划结束不能晚于节点计划结束")
+
+    async def _assert_node_complete_gate(self, tenant_id: int, project_id: int, node: DeliveryProjectNode) -> None:
+        if not node.is_milestone:
+            return
+        has_approved = await DeliveryNodeReport.filter(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            node_id=node.id,
+            status="approved",
+            deleted_at__isnull=True,
+        ).exists()
+        if has_approved:
+            return
+        tasks = await DeliveryProjectNodeTask.filter(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            node_id=node.id,
+            deleted_at__isnull=True,
+        )
+        open_tasks = [
+            t
+            for t in tasks
+            if t.status != DeliveryNodeTaskStatus.CANCELLED.value
+            and t.status != DeliveryNodeTaskStatus.DONE.value
+        ]
+        if open_tasks:
+            raise ValidationError(
+                "里程碑节点完成前，该节点下未取消的子任务须全部完成，或存在已通过的节点汇报"
+            )
 
     async def _generate_project_code(self, tenant_id: int) -> str:
         try:
@@ -630,6 +685,7 @@ class DeliveryProjectService(AppBaseService[DeliveryProject]):
                 ],
                 "open_issues": [DeliveryIssueResponse.model_validate(i) for i in issues],
                 "linked_rd_project": linked_rd_project,
+                "node_documents": await self.list_node_documents(tenant_id, project_id),
             }
         )
 
@@ -846,6 +902,17 @@ class DeliveryProjectService(AppBaseService[DeliveryProject]):
         )
         if not node:
             raise NotFoundError(f"节点不存在: {node_id}")
+        if node.status == DeliveryNodeStatus.COMPLETED.value:
+            if any(
+                v is not None
+                for v in (
+                    body.planned_start_date,
+                    body.planned_end_date,
+                    body.actual_start_date,
+                    body.actual_end_date,
+                )
+            ):
+                raise ValidationError("已完成节点不可修改计划或实际日期")
         if body.owner_id is not None:
             if body.owner_id:
                 owner_id, owner_name = await self._resolve_owner(tenant_id, body.owner_id)
@@ -854,9 +921,151 @@ class DeliveryProjectService(AppBaseService[DeliveryProject]):
             else:
                 node.owner_id = None
                 node.owner_name = None
-            await node.save()
+        planned_start = body.planned_start_date if body.planned_start_date is not None else node.planned_start_date
+        planned_end = body.planned_end_date if body.planned_end_date is not None else node.planned_end_date
+        if body.planned_start_date is not None or body.planned_end_date is not None:
+            self._validate_date_range(planned_start, planned_end, label="节点计划")
+            node.planned_start_date = body.planned_start_date
+            node.planned_end_date = body.planned_end_date
+        if body.actual_start_date is not None:
+            node.actual_start_date = body.actual_start_date
+        if body.actual_end_date is not None:
+            node.actual_end_date = body.actual_end_date
+        if body.actual_start_date is not None or body.actual_end_date is not None:
+            self._validate_date_range(node.actual_start_date, node.actual_end_date, label="节点实际")
+        await node.save()
         apply_update_audit(row, current_user)
         await row.save()
+        nodes = await self._load_nodes(tenant_id, project_id)
+        await self._refresh_node_overdue(tenant_id, nodes)
+        await self._sync_project_progress(row, nodes)
+        tasks = await DeliveryProjectNodeTask.filter(
+            tenant_id=tenant_id, project_id=project_id, node_id=node.id, deleted_at__isnull=True
+        ).order_by("sort_order", "id")
+        return DeliveryProjectNodeResponse(
+            id=node.id,
+            project_id=node.project_id,
+            node_key=node.node_key,
+            node_name=node.node_name,
+            sort_order=node.sort_order,
+            status=node.status,
+            progress_percent=node.progress_percent,
+            owner_id=node.owner_id,
+            owner_name=node.owner_name,
+            planned_start_date=node.planned_start_date,
+            planned_end_date=node.planned_end_date,
+            actual_start_date=node.actual_start_date,
+            actual_end_date=node.actual_end_date,
+            is_critical=node.is_critical,
+            is_milestone=node.is_milestone,
+            tasks=[self._to_node_task_response(t) for t in tasks],
+        )
+
+    async def start_project_node(
+        self,
+        tenant_id: int,
+        project_id: int,
+        node_id: int,
+        current_user: User,
+    ) -> DeliveryProjectNodeResponse:
+        row = await self._get_or_404(tenant_id, project_id)
+        if row.status not in (
+            DeliveryProjectStatus.IN_PROGRESS.value,
+            DeliveryProjectStatus.PAUSED.value,
+        ):
+            raise ValidationError("仅进行中或暂停的项目可开始节点")
+        node = await DeliveryProjectNode.get_or_none(
+            tenant_id=tenant_id, id=node_id, project_id=project_id
+        )
+        if not node:
+            raise NotFoundError(f"节点不存在: {node_id}")
+        if node.status == DeliveryNodeStatus.COMPLETED.value:
+            raise ValidationError("节点已完成")
+        node.status = DeliveryNodeStatus.IN_PROGRESS.value
+        if not node.actual_start_date:
+            node.actual_start_date = to_site_date(resolve_business_datetime())
+        await node.save()
+        apply_update_audit(row, current_user)
+        nodes = await self._load_nodes(tenant_id, project_id)
+        await self._sync_project_progress(row, nodes)
+        tasks = await DeliveryProjectNodeTask.filter(
+            tenant_id=tenant_id, project_id=project_id, node_id=node.id, deleted_at__isnull=True
+        ).order_by("sort_order", "id")
+        return DeliveryProjectNodeResponse(
+            id=node.id,
+            project_id=node.project_id,
+            node_key=node.node_key,
+            node_name=node.node_name,
+            sort_order=node.sort_order,
+            status=node.status,
+            progress_percent=node.progress_percent,
+            owner_id=node.owner_id,
+            owner_name=node.owner_name,
+            planned_start_date=node.planned_start_date,
+            planned_end_date=node.planned_end_date,
+            actual_start_date=node.actual_start_date,
+            actual_end_date=node.actual_end_date,
+            is_critical=node.is_critical,
+            is_milestone=node.is_milestone,
+            tasks=[self._to_node_task_response(t) for t in tasks],
+        )
+
+    async def complete_project_node(
+        self,
+        tenant_id: int,
+        project_id: int,
+        node_id: int,
+        current_user: User,
+    ) -> DeliveryProjectNodeResponse:
+        row = await self._get_or_404(tenant_id, project_id)
+        if row.status not in (
+            DeliveryProjectStatus.IN_PROGRESS.value,
+            DeliveryProjectStatus.PAUSED.value,
+        ):
+            raise ValidationError("仅进行中或暂停的项目可完成节点")
+        node = await DeliveryProjectNode.get_or_none(
+            tenant_id=tenant_id, id=node_id, project_id=project_id
+        )
+        if not node:
+            raise NotFoundError(f"节点不存在: {node_id}")
+        if node.status == DeliveryNodeStatus.COMPLETED.value:
+            raise ValidationError("节点已完成")
+        await self._assert_node_complete_gate(tenant_id, project_id, node)
+        if not node.is_milestone:
+            has_approved = await DeliveryNodeReport.filter(
+                tenant_id=tenant_id,
+                project_id=project_id,
+                node_id=node.id,
+                status="approved",
+                deleted_at__isnull=True,
+            ).exists()
+            if not has_approved:
+                tasks = await DeliveryProjectNodeTask.filter(
+                    tenant_id=tenant_id,
+                    project_id=project_id,
+                    node_id=node.id,
+                    deleted_at__isnull=True,
+                )
+                open_tasks = [
+                    t
+                    for t in tasks
+                    if t.status != DeliveryNodeTaskStatus.CANCELLED.value
+                    and t.status != DeliveryNodeTaskStatus.DONE.value
+                ]
+                if open_tasks:
+                    raise ValidationError(
+                        "完成节点前，该节点下未取消的子任务须全部完成，或存在已通过的节点汇报"
+                    )
+        node.status = DeliveryNodeStatus.COMPLETED.value
+        node.progress_percent = Decimal("100")
+        if not node.actual_end_date:
+            node.actual_end_date = to_site_date(resolve_business_datetime())
+        if not node.actual_start_date:
+            node.actual_start_date = to_site_date(resolve_business_datetime())
+        await node.save()
+        apply_update_audit(row, current_user)
+        nodes = await self._load_nodes(tenant_id, project_id)
+        await self._sync_project_progress(row, nodes)
         tasks = await DeliveryProjectNodeTask.filter(
             tenant_id=tenant_id, project_id=project_id, node_id=node.id, deleted_at__isnull=True
         ).order_by("sort_order", "id")
@@ -893,6 +1102,9 @@ class DeliveryProjectService(AppBaseService[DeliveryProject]):
         if not node:
             raise NotFoundError(f"节点不存在: {body.node_id}")
         owner_id, owner_name = await self._resolve_owner(tenant_id, body.owner_id)
+        planned_start = body.planned_start_date or node.planned_start_date
+        planned_end = body.planned_end_date or node.planned_end_date
+        self._validate_task_planned_dates_against_node(node, planned_start, planned_end)
         members_json = await self._serialize_task_members(
             tenant_id, body.members or [], owner_id=owner_id
         )
@@ -906,8 +1118,8 @@ class DeliveryProjectService(AppBaseService[DeliveryProject]):
             owner_id=owner_id,
             owner_name=owner_name,
             members_json=members_json,
-            planned_start_date=body.planned_start_date or node.planned_start_date,
-            planned_end_date=body.planned_end_date or node.planned_end_date,
+            planned_start_date=planned_start,
+            planned_end_date=planned_end,
             progress_percent=Decimal("0"),
         )
         apply_create_audit(task, current_user)
@@ -928,6 +1140,11 @@ class DeliveryProjectService(AppBaseService[DeliveryProject]):
         )
         if not task:
             raise NotFoundError(f"节点任务不存在: {task_id}")
+        node = await DeliveryProjectNode.get_or_none(
+            tenant_id=tenant_id, id=task.node_id, project_id=project_id
+        )
+        if not node:
+            raise NotFoundError(f"节点不存在: {task.node_id}")
         if body.task_name is not None:
             task.task_name = body.task_name.strip()
         if body.sort_order is not None:
@@ -949,6 +1166,16 @@ class DeliveryProjectService(AppBaseService[DeliveryProject]):
             task.planned_start_date = body.planned_start_date
         if body.planned_end_date is not None:
             task.planned_end_date = body.planned_end_date
+        if body.planned_start_date is not None or body.planned_end_date is not None:
+            self._validate_task_planned_dates_against_node(
+                node, task.planned_start_date, task.planned_end_date
+            )
+        if body.actual_start_date is not None:
+            task.actual_start_date = body.actual_start_date
+        if body.actual_end_date is not None:
+            task.actual_end_date = body.actual_end_date
+        if body.actual_start_date is not None or body.actual_end_date is not None:
+            self._validate_date_range(task.actual_start_date, task.actual_end_date, label="任务实际")
         if body.progress_percent is not None:
             task.progress_percent = body.progress_percent
         apply_update_audit(task, current_user)
@@ -974,6 +1201,120 @@ class DeliveryProjectService(AppBaseService[DeliveryProject]):
         apply_update_audit(task, current_user)
         await task.save()
         await self._maybe_sync_node_progress_from_tasks(tenant_id, project_id, node_id)
+
+    async def list_node_documents(
+        self, tenant_id: int, project_id: int, *, node_id: Optional[int] = None
+    ) -> List[DeliveryProjectNodeDocumentResponse]:
+        await self._get_or_404(tenant_id, project_id)
+        query = DeliveryProjectNodeDocument.filter(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            deleted_at__isnull=True,
+        )
+        if node_id is not None:
+            query = query.filter(node_id=node_id)
+        rows = await query.order_by("-linked_at", "-id")
+        node_name_map: Dict[int, str] = {}
+        if rows:
+            node_ids = {r.node_id for r in rows}
+            nodes = await DeliveryProjectNode.filter(
+                tenant_id=tenant_id, project_id=project_id, id__in=list(node_ids)
+            )
+            node_name_map = {n.id: n.node_name for n in nodes}
+        return [
+            DeliveryProjectNodeDocumentResponse(
+                id=r.id,
+                project_id=r.project_id,
+                node_id=r.node_id,
+                node_name=node_name_map.get(r.node_id),
+                doc_type=r.doc_type,
+                doc_id=r.doc_id,
+                doc_code=r.doc_code,
+                title=r.title,
+                linked_at=r.linked_at,
+                linked_by_name=r.linked_by_name,
+            )
+            for r in rows
+        ]
+
+    async def link_node_document(
+        self,
+        tenant_id: int,
+        project_id: int,
+        body: DeliveryProjectNodeDocumentCreate,
+        current_user: User,
+    ) -> DeliveryProjectNodeDocumentResponse:
+        row = await self._get_or_404(tenant_id, project_id)
+        node = await DeliveryProjectNode.get_or_none(
+            tenant_id=tenant_id, id=body.node_id, project_id=project_id
+        )
+        if not node:
+            raise NotFoundError(f"节点不存在: {body.node_id}")
+        doc_type = (body.doc_type or "").strip().lower()
+        if doc_type not in DELIVERY_NODE_DOCUMENT_TYPES:
+            raise ValidationError(f"不支持的单据类型: {body.doc_type}")
+        doc_code = body.doc_code.strip()
+        if not doc_code:
+            raise ValidationError("单据编码不能为空")
+        existing = await DeliveryProjectNodeDocument.filter(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            node_id=node.id,
+            doc_type=doc_type,
+            doc_id=body.doc_id,
+            deleted_at__isnull=True,
+        ).first()
+        if existing:
+            raise ValidationError("该单据已关联到此节点")
+        operator_name = operator_name_from_user(current_user)
+        linked = await DeliveryProjectNodeDocument.create(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            node_id=node.id,
+            doc_type=doc_type,
+            doc_id=body.doc_id,
+            doc_code=doc_code,
+            title=(body.title or doc_code).strip() or doc_code,
+            linked_at=resolve_business_datetime(),
+            linked_by=current_user.id,
+            linked_by_name=operator_name,
+        )
+        apply_update_audit(row, current_user)
+        await row.save()
+        return DeliveryProjectNodeDocumentResponse(
+            id=linked.id,
+            project_id=linked.project_id,
+            node_id=linked.node_id,
+            node_name=node.node_name,
+            doc_type=linked.doc_type,
+            doc_id=linked.doc_id,
+            doc_code=linked.doc_code,
+            title=linked.title,
+            linked_at=linked.linked_at,
+            linked_by_name=linked.linked_by_name,
+        )
+
+    async def unlink_node_document(
+        self,
+        tenant_id: int,
+        project_id: int,
+        link_id: int,
+        current_user: User,
+    ) -> None:
+        row = await self._get_or_404(tenant_id, project_id)
+        linked = await DeliveryProjectNodeDocument.get_or_none(
+            tenant_id=tenant_id,
+            id=link_id,
+            project_id=project_id,
+            deleted_at__isnull=True,
+        )
+        if not linked:
+            raise NotFoundError(f"关联单据不存在: {link_id}")
+        linked.deleted_at = resolve_business_datetime()
+        apply_update_audit(linked, current_user)
+        await linked.save()
+        apply_update_audit(row, current_user)
+        await row.save()
 
     async def _maybe_sync_node_progress_from_tasks(
         self, tenant_id: int, project_id: int, node_id: int
@@ -1251,15 +1592,24 @@ class DeliveryProjectService(AppBaseService[DeliveryProject]):
                     }
                 )
         project_gantt = await self._build_project_gantt_items(tenant_id)
+        alerts = await self._alert_service.compute_alerts(tenant_id, limit=20)
+        try:
+            await self._alert_service.scan_and_notify(tenant_id)
+        except Exception as exc:
+            from loguru import logger
+
+            logger.error("交付项目预警扫描失败 tenant={}: {}", tenant_id, exc)
         return DeliveryDashboardResponse(
             kpis=DeliveryDashboardKpi(
                 active_projects=active_projects,
                 overdue_nodes=overdue_nodes,
                 at_risk_projects=at_risk,
                 open_issues=open_issues,
+                alert_count=len(alerts),
             ),
             recent_projects=[await self._to_list_item(r) for r in recent],
             overdue_nodes=overdue_payload,
+            alerts=alerts,
             project_gantt=project_gantt,
         )
 

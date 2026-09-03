@@ -120,7 +120,7 @@ const WorkingHoursConfigsPage: React.FC = () => {
       try {
         await apiRequest(`/core/working-hours-configs/${record.id}`, { method: 'DELETE' });
         messageApi.success(t('common.deleteSuccess'));
-        actionRef.current?.reload();
+    actionRef.current?.reload();
       } catch (error) {
         messageApi.error(t('common.deleteFailed'));
       }

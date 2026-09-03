@@ -20,6 +20,7 @@ import {
 } from '@ant-design/icons';
 import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import {
   TwoColumnLayout,
@@ -429,7 +430,7 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
       treeFilterRef.current = {};
       startTransition(() => {
         setTreeFilter({});
-        actionRef.current?.reload();
+    actionRef.current?.reload();
       });
     }
   }, [selectedTreeKeys]);
@@ -443,7 +444,7 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
       treeFilterRef.current = {};
       startTransition(() => {
         setTreeFilter({});
-        actionRef.current?.reload();
+    actionRef.current?.reload();
       });
     }
   }, [selectedTreeKeys]);
@@ -522,7 +523,7 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
         if (inferredMode && inferredMode !== navMode) {
           setNavMode(inferredMode);
         }
-        actionRef.current?.reload();
+    actionRef.current?.reload();
       });
     },
     [navMode],
@@ -621,40 +622,22 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
     }
   };
 
-  const handleUndoCheckout = async (record: EngineeringDrawing) => {
-    getAntdModal().confirm({
-      title: t('app.master-data.drawings.undoCheckout'),
-      content: t('app.master-data.drawings.undoCheckoutConfirm'),
-      onOk: async () => {
-        await drawingApi.undoCheckout(record.uuid);
+  const executeUndoCheckout = async (record: EngineeringDrawing) => {
+    await drawingApi.undoCheckout(record.uuid);
         messageApi.success(t('app.master-data.drawings.undoCheckoutSuccess'));
         reloadAfterAction(record);
-      },
-    });
   };
 
-  const handleSubmit = async (record: EngineeringDrawing) => {
-    getAntdModal().confirm({
-      title: t('common.submit'),
-      content: t('app.master-data.drawings.submitConfirm'),
-      onOk: async () => {
-        await drawingApi.submit(record.uuid);
+  const executeSubmit = async (record: EngineeringDrawing) => {
+    await drawingApi.submit(record.uuid);
         messageApi.success(t('app.master-data.drawings.submitSuccess'));
         reloadAfterAction(record);
-      },
-    });
   };
 
-  const handleApprove = async (record: EngineeringDrawing) => {
-    getAntdModal().confirm({
-      title: t('app.master-data.drawings.approve'),
-      content: t('app.master-data.drawings.approveConfirm'),
-      onOk: async () => {
-        await drawingApi.approve(record.uuid);
+  const executeApprove = async (record: EngineeringDrawing) => {
+    await drawingApi.approve(record.uuid);
         messageApi.success(t('app.master-data.drawings.approveSuccess'));
         reloadAfterAction(record);
-      },
-    });
   };
 
   const handleReject = async (record: EngineeringDrawing) => {
@@ -678,16 +661,10 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
     });
   };
 
-  const handleRevoke = async (record: EngineeringDrawing) => {
-    getAntdModal().confirm({
-      title: t('app.master-data.drawings.revoke'),
-      content: t('app.master-data.drawings.revokeConfirm'),
-      onOk: async () => {
-        await drawingApi.revoke(record.uuid);
+  const executeRevoke = async (record: EngineeringDrawing) => {
+    await drawingApi.revoke(record.uuid);
         messageApi.success(t('app.master-data.drawings.revokeSuccess'));
         reloadAfterAction(record);
-      },
-    });
   };
 
   const handleObsolete = async (record: EngineeringDrawing) => {
@@ -706,7 +683,7 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
       onOk: async () => {
         await drawingApi.obsolete(record.uuid, reason);
         messageApi.success(t('app.master-data.drawings.obsoleteSuccess'));
-        actionRef.current?.reload();
+    actionRef.current?.reload();
         if (detail?.uuid === record.uuid) loadDetail(record.uuid);
       },
     });
@@ -810,9 +787,11 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
               </Button>
             ) : null}
             {canSubmit ? (
-              <Button key="submit" {...rowActionKind('submit')} {...rowActionLabelKeep()} onClick={() => handleSubmit(record)}>
+              <ActionConfirmPopconfirm title={t('common.submit')} description={t('app.master-data.drawings.submitConfirm')} onConfirm={() => executeSubmit(record)}>
+              <Button key="submit" {...rowActionKind('submit')} {...rowActionLabelKeep()} onClick={(e) => e.stopPropagation()}>
                 {t('common.submit')}
               </Button>
+            </ActionConfirmPopconfirm>
             ) : null}
             {canDelete ? (
               <Popconfirm
@@ -843,18 +822,22 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
               </Button>
             ) : null}
             {canUpdate ? (
-              <Button key="undoCheckout" {...rowActionKind('update')} {...rowActionLabelKeep()} onClick={() => handleUndoCheckout(record)}>
+              <ActionConfirmPopconfirm title={t('app.master-data.drawings.undoCheckout')} description={t('app.master-data.drawings.undoCheckoutConfirm')} onConfirm={() => executeUndoCheckout(record)}>
+              <Button key="undoCheckout" {...rowActionKind('update')} {...rowActionLabelKeep()} onClick={(e) => e.stopPropagation()}>
                 {t('app.master-data.drawings.undoCheckout')}
               </Button>
+            </ActionConfirmPopconfirm>
             ) : null}
           </>
         )}
         {record.status === 'Pending' && (
           <>
             {canApprove ? (
-              <Button key="approve" {...rowActionKind('approve')} {...rowActionLabelKeep()} onClick={() => handleApprove(record)}>
+              <ActionConfirmPopconfirm title={t('app.master-data.drawings.approve')} description={t('app.master-data.drawings.approveConfirm')} onConfirm={() => executeApprove(record)}>
+              <Button key="approve" {...rowActionKind('approve')} {...rowActionLabelKeep()} onClick={(e) => e.stopPropagation()}>
                 {t('app.master-data.drawings.approve')}
               </Button>
+            </ActionConfirmPopconfirm>
             ) : null}
             {canReject ? (
               <Button key="reject" {...rowActionKind('reject')} {...rowActionLabelKeep()} onClick={() => handleReject(record)}>
@@ -862,9 +845,11 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
               </Button>
             ) : null}
             {canRevoke ? (
-              <Button key="revoke" {...rowActionKind('revoke')} {...rowActionLabelKeep()} onClick={() => handleRevoke(record)}>
+              <ActionConfirmPopconfirm title={t('app.master-data.drawings.revoke')} description={t('app.master-data.drawings.revokeConfirm')} onConfirm={() => executeRevoke(record)}>
+              <Button key="revoke" {...rowActionKind('revoke')} {...rowActionLabelKeep()} onClick={(e) => e.stopPropagation()}>
                 {t('app.master-data.drawings.revoke')}
               </Button>
+            </ActionConfirmPopconfirm>
             ) : null}
           </>
         )}
@@ -1324,7 +1309,7 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
                 ]}
                 onChange={(value) => {
                   setListView(value as DrawingListView);
-                  actionRef.current?.reload();
+    actionRef.current?.reload();
                 }}
               />
             </>
@@ -1601,7 +1586,7 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
                         setSelectedTreeKeys([DRAWING_TREE_ALL_KEY]);
                         treeFilterRef.current = {};
                         setTreeFilter({});
-                        actionRef.current?.reload();
+    actionRef.current?.reload();
                       }
                       await loadFolders();
                     },
@@ -1635,7 +1620,7 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
         currentFolderUuid={moveFolder.currentFolderUuid}
         onClose={() => setMoveFolder({ open: false, drawingUuid: null })}
         onSuccess={() => {
-          actionRef.current?.reload();
+    actionRef.current?.reload();
           if (detail?.uuid && detail.uuid === moveFolder.drawingUuid) {
             void loadDetail(detail.uuid);
           }
@@ -1652,7 +1637,7 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
           setEditUuid(null);
         }}
         onSuccess={() => {
-          actionRef.current?.reload();
+    actionRef.current?.reload();
         }}
       />
 
@@ -1683,7 +1668,7 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
           setStepBomDrawing(null);
         }}
         onSuccess={(result) => {
-          actionRef.current?.reload();
+    actionRef.current?.reload();
           if (detail?.uuid === result.drawing.uuid) {
             setDetail(result.drawing);
           }

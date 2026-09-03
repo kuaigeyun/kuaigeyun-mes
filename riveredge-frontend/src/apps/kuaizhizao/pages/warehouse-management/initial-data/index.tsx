@@ -42,7 +42,7 @@ import {
 } from '../../../services/initial-data';
 import dayjs, { Dayjs } from 'dayjs';
 import { formatDateTime } from '../../../../../utils/format';
-import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { importExcelMatrixInChunks } from '../../../../../utils/chunkedBulkImport';
 /** 与后端 header_map 一致的默认列（CSV 模板同步） */
 const INV_HEADER_KEYS = [
@@ -411,50 +411,34 @@ const InitialDataImportPage: React.FC = () => {
     setCurrentStep(prev);
   };
 
-  const confirmSkipWip = () => {
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.initialData.skipWipTitle'),
-      content: t('app.kuaizhizao.initialData.skipWipBody'),
-      okText: t('app.kuaizhizao.initialData.skipConfirm'),
-      cancelText: t('common.cancel'),
-      onOk: async () => {
-        setWipSkipped(true);
-        setWipDone(false);
-        try {
-          await patchWizardCountdown({
-            stage: 'wip',
-            stage_status: 'skipped',
-            wizard_step: 1,
-          });
-        } catch {
-          /* ignore */
-        }
-        messageApi.info(t('app.kuaizhizao.initialData.skippedWip'));
-      },
-    });
+  const skipWip = async () => {
+    setWipSkipped(true);
+    setWipDone(false);
+    try {
+      await patchWizardCountdown({
+        stage: 'wip',
+        stage_status: 'skipped',
+        wizard_step: 1,
+      });
+    } catch {
+      /* ignore */
+    }
+    messageApi.info(t('app.kuaizhizao.initialData.skippedWip'));
   };
 
-  const confirmSkipAr = () => {
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.initialData.skipArTitle'),
-      content: t('app.kuaizhizao.initialData.skipArBody'),
-      okText: t('app.kuaizhizao.initialData.skipConfirm'),
-      cancelText: t('common.cancel'),
-      onOk: async () => {
-        setArSkipped(true);
-        setArDone(false);
-        try {
-          await patchWizardCountdown({
-            stage: 'receivables_payables',
-            stage_status: 'skipped',
-            wizard_step: 2,
-          });
-        } catch {
-          /* ignore */
-        }
-        messageApi.info(t('app.kuaizhizao.initialData.skippedAr'));
-      },
-    });
+  const skipAr = async () => {
+    setArSkipped(true);
+    setArDone(false);
+    try {
+      await patchWizardCountdown({
+        stage: 'receivables_payables',
+        stage_status: 'skipped',
+        wizard_step: 2,
+      });
+    } catch {
+      /* ignore */
+    }
+    messageApi.info(t('app.kuaizhizao.initialData.skippedAr'));
   };
 
   const copyErrors = () => {
@@ -633,9 +617,16 @@ const InitialDataImportPage: React.FC = () => {
             >
               {t('app.kuaizhizao.initialData.downloadTemplate')}
             </Button>
-            <Button danger type="default" onClick={confirmSkipWip}>
-              {t('app.kuaizhizao.initialData.skipStep')}
-            </Button>
+            <ActionConfirmPopconfirm
+              title={t('app.kuaizhizao.initialData.skipWipTitle')}
+              description={t('app.kuaizhizao.initialData.skipWipBody')}
+              okText={t('app.kuaizhizao.initialData.skipConfirm')}
+              onConfirm={skipWip}
+            >
+              <Button danger type="default" onClick={(e) => e.stopPropagation()}>
+                {t('app.kuaizhizao.initialData.skipStep')}
+              </Button>
+            </ActionConfirmPopconfirm>
           </Space>
           {wipDone ? (
             <Alert type="success" showIcon title={t('app.kuaizhizao.initialData.wipImported')} />
@@ -662,9 +653,16 @@ const InitialDataImportPage: React.FC = () => {
             >
               {t('app.kuaizhizao.initialData.downloadTemplate')}
             </Button>
-            <Button danger type="default" onClick={confirmSkipAr}>
-              {t('app.kuaizhizao.initialData.skipStep')}
-            </Button>
+            <ActionConfirmPopconfirm
+              title={t('app.kuaizhizao.initialData.skipArTitle')}
+              description={t('app.kuaizhizao.initialData.skipArBody')}
+              okText={t('app.kuaizhizao.initialData.skipConfirm')}
+              onConfirm={skipAr}
+            >
+              <Button danger type="default" onClick={(e) => e.stopPropagation()}>
+                {t('app.kuaizhizao.initialData.skipStep')}
+              </Button>
+            </ActionConfirmPopconfirm>
           </Space>
           {arDone ? (
             <Alert type="success" showIcon title={t('app.kuaizhizao.initialData.arImported')} />

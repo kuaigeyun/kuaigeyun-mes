@@ -39,7 +39,7 @@ import {
   renderIsActiveTag,
   useEquipmentDetailDrawer,
 } from '../shared/equipmentMasterDataDetail';
-import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
@@ -133,17 +133,11 @@ const SparePartsPage: React.FC = () => {
   );
 
   const handleDelete = async (keys: React.Key[]) => {
-    getAntdModal().confirm({
-      title: t('common.batchDeleteTitle'),
-      content: t('common.batchDeleteContent', { count: keys.length }),
-      onOk: async () => {
-        for (const id of keys) {
+    for (const id of keys) {
           await sparePartApi.delete(Number(id));
         }
-        messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
+    messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
         masterActionRef.current?.reload();
-      },
-    });
   };
 
   const handleSubmit = async (values: Record<string, unknown>) => {
@@ -317,22 +311,16 @@ const SparePartsPage: React.FC = () => {
             </Button>
           ) : null,
           perms.canDelete ? (
-            <Button
-              key="delete"
-              {...rowActionKind('delete')}
-              onClick={() => {
-                getAntdModal().confirm({
-                  title: t('common.deleteTitle'),
-                  onOk: () => {
-                    if (record.id != null) {
-                      void handleDelete([record.id]);
-                    }
-                  },
-                });
+            <ActionConfirmPopconfirm
+              title={t('common.deleteTitle')}
+              onConfirm={() => {
+                if (record.id != null) void handleDelete([record.id]);
               }}
             >
-              {t('common.delete')}
-            </Button>
+              <Button key="delete" {...rowActionKind('delete')} onClick={(e) => e.stopPropagation()}>
+                {t('common.delete')}
+              </Button>
+            </ActionConfirmPopconfirm>
           ) : null,
         ],
       },
@@ -510,6 +498,9 @@ const SparePartsPage: React.FC = () => {
                 createButtonText={withSingleNewShortcutHint(t(`${P}.create`))}
                 onCreate={handleCreate}
                 showDeleteButton={perms.canDelete}
+          deleteConfirmTitle={t('common.batchDeleteTitle')}
+          deleteConfirmDescription={(count) => t('common.batchDeleteContent', { count: count })}
+          
                 onDelete={handleDelete}
                 enableRowSelection={perms.canDelete}
               />

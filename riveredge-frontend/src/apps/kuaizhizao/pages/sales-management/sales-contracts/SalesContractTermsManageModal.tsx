@@ -15,6 +15,7 @@ import {
 import { App, Button, Modal, Tabs, Transfer } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
 import { rowActionKind } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { MODAL_CONFIG } from '../../../../../components/layout-templates/constants';
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
@@ -37,7 +38,7 @@ export const SalesContractTermsManageModal: React.FC<SalesContractTermsManageMod
   onClose,
 }) => {
   const { t } = useTranslation();
-  const { message, modal } = App.useApp();
+  const { message } = App.useApp();
   const itemActionRef = useRef<ActionType>();
   const groupActionRef = useRef<ActionType>();
   const [activeTab, setActiveTab] = useState('items');
@@ -64,11 +65,8 @@ export const SalesContractTermsManageModal: React.FC<SalesContractTermsManageMod
     }
   }, [open, loadAllItems]);
 
-  const handleDeleteItem = (record: SalesContractTermItem) => {
-    modal.confirm({
-      title: t('app.kuaizhizao.salesContract.terms.deleteItemConfirm'),
-      onOk: async () => {
-        try {
+  const executeDeleteItem = async (record: SalesContractTermItem) => {
+    try {
           await salesContractTermApi.deleteItem(record.id!);
           message.success(t('common.deleteSuccess'));
           itemActionRef.current?.reload();
@@ -76,23 +74,16 @@ export const SalesContractTermsManageModal: React.FC<SalesContractTermsManageMod
         } catch (e: any) {
           message.error(e?.message || t('common.deleteFailed'));
         }
-      },
-    });
   };
 
-  const handleDeleteGroup = (record: SalesContractTermGroup) => {
-    modal.confirm({
-      title: t('app.kuaizhizao.salesContract.terms.deleteGroupConfirm'),
-      onOk: async () => {
-        try {
+  const executeDeleteGroup = async (record: SalesContractTermGroup) => {
+    try {
           await salesContractTermApi.deleteGroup(record.id!);
           message.success(t('common.deleteSuccess'));
           groupActionRef.current?.reload();
         } catch (e: any) {
           message.error(e?.message || t('common.deleteFailed'));
         }
-      },
-    });
   };
 
   const itemColumns: ProColumns<SalesContractTermItem>[] = useMemo(
@@ -177,15 +168,17 @@ export const SalesContractTermsManageModal: React.FC<SalesContractTermsManageMod
               setItemFormOpen(true);
             }}
           />,
-          <Button
+          <ActionConfirmPopconfirm title={t('app.kuaizhizao.salesContract.terms.deleteItemConfirm')} onConfirm={() => executeDeleteItem(record)}>
+              <Button
             key="delete"
             {...rowActionKind('delete')}
-            onClick={() => handleDeleteItem(record)}
-          />,
+            onClick={(e) => e.stopPropagation()}
+          />
+            </ActionConfirmPopconfirm>,
         ],
       },
     ],
-    [t, modal, message],
+    [t, message],
   );
 
   const groupColumns: ProColumns<SalesContractTermGroup>[] = useMemo(
@@ -246,15 +239,17 @@ export const SalesContractTermsManageModal: React.FC<SalesContractTermsManageMod
               }
             }}
           />,
-          <Button
+          <ActionConfirmPopconfirm title={t('app.kuaizhizao.salesContract.terms.deleteGroupConfirm')} onConfirm={() => executeDeleteGroup(record)}>
+              <Button
             key="delete"
             {...rowActionKind('delete')}
-            onClick={() => handleDeleteGroup(record)}
-          />,
+            onClick={(e) => e.stopPropagation()}
+          />
+            </ActionConfirmPopconfirm>,
         ],
       },
     ],
-    [t, modal, message],
+    [t, message],
   );
 
   const transferDataSource = useMemo(

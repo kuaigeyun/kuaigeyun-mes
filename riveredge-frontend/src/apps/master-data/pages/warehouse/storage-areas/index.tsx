@@ -443,7 +443,7 @@ const StorageAreasPage: React.FC = () => {
 
       // 刷新列表
       if (result.successCount > 0) {
-        actionRef.current?.reload();
+    actionRef.current?.reload();
       }
     } catch (error: any) {
       messageApi.error(error.message || t('app.master-data.importFailed'));

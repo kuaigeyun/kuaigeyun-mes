@@ -34,6 +34,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useRequest } from 'ahooks';
 import { useTranslation } from 'react-i18next';
 import dayjs, { Dayjs } from 'dayjs';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { rowActionKind } from '../../../../../components/uni-action';
@@ -59,7 +60,7 @@ function formatDate(d: Dayjs | string | undefined | null): string {
 
 const RollingSchedulingPage: React.FC = () => {
   const { t } = useTranslation();
-  const { message, modal } = App.useApp();
+  const { message } = App.useApp();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const perms = useResourcePermissions(RESOURCE);
@@ -177,23 +178,17 @@ const RollingSchedulingPage: React.FC = () => {
     }
   }, [baseDate, message, refreshClosePlan, refreshTargetPlan, t]);
 
-  const handleCloseDay = useCallback(() => {
+  const executeCloseDay = useCallback(async () => {
     const closeDate = formatDate(baseDate);
-    modal.confirm({
-      title: t('app.kuaizhizao.rollingScheduling.closeDayTitle', { date: closeDate }),
-      content: t('app.kuaizhizao.rollingScheduling.closeDayContent'),
-      onOk: async () => {
-        try {
-          await rollingSchedulingApi.closeDay(closeDate);
-          message.success(t('app.kuaizhizao.rollingScheduling.closeDaySuccess'));
-          refreshClosePlan();
-          refreshTargetPlan();
-        } catch (e: unknown) {
-          message.error((e as Error)?.message || t('app.kuaizhizao.rollingScheduling.closeDayFailed'));
-        }
-      },
-    });
-  }, [baseDate, message, modal, refreshClosePlan, refreshTargetPlan, t]);
+    try {
+      await rollingSchedulingApi.closeDay(closeDate);
+      message.success(t('app.kuaizhizao.rollingScheduling.closeDaySuccess'));
+      refreshClosePlan();
+      refreshTargetPlan();
+    } catch (e: unknown) {
+      message.error((e as Error)?.message || t('app.kuaizhizao.rollingScheduling.closeDayFailed'));
+    }
+  }, [baseDate, message, refreshClosePlan, refreshTargetPlan, t]);
 
   const saveLines = useCallback(async () => {
     if (!targetPlan?.id) return;
@@ -216,28 +211,22 @@ const RollingSchedulingPage: React.FC = () => {
     }
   }, [lines, message, refreshTargetPlan, targetPlan?.id, t]);
 
-  const handlePublish = useCallback(() => {
+  const executePublish = useCallback(async () => {
     if (!targetPlan?.id) return;
-    modal.confirm({
-      title: t('app.kuaizhizao.rollingScheduling.publishTitle'),
-      content: t('app.kuaizhizao.rollingScheduling.publishContent', { date: nextWorkday }),
-      onOk: async () => {
-        try {
-          if (dirty) await saveLines();
-          const result = await rollingSchedulingApi.publish(targetPlan.id);
-          const updated = result.batch_update?.updated?.length ?? 0;
-          message.success(t('app.kuaizhizao.rollingScheduling.publishSuccess', { count: updated }));
-          refreshTargetPlan();
-          const woIds = (result.plan.lines ?? []).map((l) => l.work_order_id).join(',');
-          navigate(
-            `/apps/kuaizhizao/plan-management/scheduling?plan_date=${nextWorkday}&work_order_ids=${woIds}`,
-          );
-        } catch (e: unknown) {
-          message.error((e as Error)?.message || t('app.kuaizhizao.rollingScheduling.publishFailed'));
-        }
-      },
-    });
-  }, [dirty, message, modal, navigate, nextWorkday, refreshTargetPlan, saveLines, targetPlan?.id, t]);
+    try {
+      if (dirty) await saveLines();
+      const result = await rollingSchedulingApi.publish(targetPlan.id);
+      const updated = result.batch_update?.updated?.length ?? 0;
+      message.success(t('app.kuaizhizao.rollingScheduling.publishSuccess', { count: updated }));
+      refreshTargetPlan();
+      const woIds = (result.plan.lines ?? []).map((l) => l.work_order_id).join(',');
+      navigate(
+        `/apps/kuaizhizao/plan-management/scheduling?plan_date=${nextWorkday}&work_order_ids=${woIds}`,
+      );
+    } catch (e: unknown) {
+      message.error((e as Error)?.message || t('app.kuaizhizao.rollingScheduling.publishFailed'));
+    }
+  }, [dirty, message, navigate, nextWorkday, refreshTargetPlan, saveLines, targetPlan?.id, t]);
 
   const moveLine = useCallback((index: number, direction: -1 | 1) => {
     setLines((prev) => {
@@ -390,14 +379,20 @@ const RollingSchedulingPage: React.FC = () => {
           </Button>
         ) : null}
         {canPublish ? (
-          <Button
-            type="primary"
-            icon={<SendOutlined />}
-            disabled={!targetPlan || targetPlan.status !== 'draft' || lines.length === 0}
-            onClick={handlePublish}
+          <ActionConfirmPopconfirm
+            title={t('app.kuaizhizao.rollingScheduling.publishTitle')}
+            description={t('app.kuaizhizao.rollingScheduling.publishContent', { date: nextWorkday })}
+            onConfirm={executePublish}
           >
-            {t('app.kuaizhizao.rollingScheduling.publish')}
-          </Button>
+            <Button
+              type="primary"
+              icon={<SendOutlined />}
+              disabled={!targetPlan || targetPlan.status !== 'draft' || lines.length === 0}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {t('app.kuaizhizao.rollingScheduling.publish')}
+            </Button>
+          </ActionConfirmPopconfirm>
         ) : null}
         {perms.canUpdate && targetPlan?.status === 'draft' ? (
           <Button onClick={saveLines} disabled={!dirty}>
@@ -423,9 +418,15 @@ const RollingSchedulingPage: React.FC = () => {
           {t('common.refresh')}
         </Button>
         {canClose ? (
-          <Button onClick={handleCloseDay} disabled={closePlan?.status !== 'published'}>
-            {t('app.kuaizhizao.rollingScheduling.closeDay')}
-          </Button>
+          <ActionConfirmPopconfirm
+            title={t('app.kuaizhizao.rollingScheduling.closeDayTitle', { date: formatDate(baseDate) })}
+            description={t('app.kuaizhizao.rollingScheduling.closeDayContent')}
+            onConfirm={executeCloseDay}
+          >
+            <Button disabled={closePlan?.status !== 'published'} onClick={(e) => e.stopPropagation()}>
+              {t('app.kuaizhizao.rollingScheduling.closeDay')}
+            </Button>
+          </ActionConfirmPopconfirm>
         ) : null}
       </Space>
     </div>

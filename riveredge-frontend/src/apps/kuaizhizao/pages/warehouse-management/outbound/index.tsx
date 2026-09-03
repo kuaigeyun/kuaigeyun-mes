@@ -43,6 +43,7 @@ import { buildKuaizhizaoPullCreateMenuItems } from '../../../constants/documentA
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import { outboundTypeToPrintDocumentType } from '../../../utils/kuaizhizaoPrintConfig';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import OutboundQuickPullModals, {
   type OutboundQuickPullModalsRef,
   type OutboundQuickPullSuccessDetail,
@@ -50,6 +51,7 @@ import OutboundQuickPullModals, {
 import OutboundConfirmPreviewModal from './OutboundConfirmPreviewModal';
 import OutboundHubEditModal from './OutboundHubEditModal';
 import { formatQuantity } from '../../../../../utils/format';
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
 import {
@@ -107,7 +109,6 @@ import { outboundIssueTypeMarkerValueEnum, renderOutboundIssueTypeMarkerTag } fr
 import { StatusTag } from '../../../../../constants/statusBadges';
 import { renderDocumentStatusTag } from '../../../../../utils/documentLifecycleStatusTag';
 import type { OutboundPullEntryNavigationState } from './outboundPullEntryTypes';
-import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 interface OutboundOrder extends OutboundHubOrder {
   items?: OutboundOrderItem[];
@@ -533,6 +534,18 @@ const OutboundPage: React.FC = () => {
     setOutboundTrackingRefreshKey((k) => k + 1);
   };
 
+  const executeWithdraw = async (record: OutboundOrder) => {
+    try {
+          await withdrawOutboundDocument(record);
+          messageApi.success(t('app.kuaizhizao.warehouseOutbound.msg.withdrawSuccess'));
+          invalidateMenuBadgeCounts();
+          await refreshOrderAfterConfirm(record);
+        } catch (e: unknown) {
+          const err = e as { message?: string; response?: { data?: { detail?: string } } };
+          messageApi.error(err?.message || err?.response?.data?.detail || t('app.kuaizhizao.warehouseOutbound.msg.withdrawFailed'));
+        }
+  };
+
   const handleWithdraw = (record: OutboundOrder) => {
     if (!isOutboundWithdrawable(record)) {
       messageApi.warning(
@@ -544,17 +557,7 @@ const OutboundPage: React.FC = () => {
     getAntdModal().confirm({
       title: t('app.kuaizhizao.warehouseOutbound.msg.withdrawTitle'),
       content: t('app.kuaizhizao.warehouseOutbound.msg.withdrawConfirm', { code: outboundDocumentCode(record) }),
-      onOk: async () => {
-        try {
-          await withdrawOutboundDocument(record);
-          messageApi.success(t('app.kuaizhizao.warehouseOutbound.msg.withdrawSuccess'));
-          invalidateMenuBadgeCounts();
-          await refreshOrderAfterConfirm(record);
-        } catch (e: unknown) {
-          const err = e as { message?: string; response?: { data?: { detail?: string } } };
-          messageApi.error(err?.message || err?.response?.data?.detail || t('app.kuaizhizao.warehouseOutbound.msg.withdrawFailed'));
-        }
-      },
+      onOk: () => executeWithdraw(record),
     });
   };
 
@@ -667,18 +670,12 @@ const OutboundPage: React.FC = () => {
     parseOutboundRowKey,
   ]);
 
-  const handleDelete = (record: OutboundOrder) => {
-    const code = outboundDocumentCode(record);
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.warehouseOutbound.msg.deleteConfirmOne'),
-      content: t('app.kuaizhizao.warehouseOutbound.msg.withdrawConfirm', { code }),
-      okType: 'danger',
-      onOk: async () => {
-        try {
+  const executeDelete = async (record: OutboundOrder) => {
+    try {
           await deleteOutboundDocument(record);
           messageApi.success(t('common.deleteSuccess'));
           invalidateMenuBadgeCounts();
-          actionRef.current?.reload();
+    actionRef.current?.reload();
           if (currentOrder?.id === record.id && currentOrder?.outbound_type === record.outbound_type) {
             setDetailDrawerVisible(false);
             setCurrentOrder(null);
@@ -687,7 +684,15 @@ const OutboundPage: React.FC = () => {
           const err = e as { message?: string; response?: { data?: { detail?: string } } };
           messageApi.error(err?.message || err?.response?.data?.detail || t('common.deleteFailed'));
         }
-      },
+  };
+
+  const handleDelete = (record: OutboundOrder) => {
+    const code = outboundDocumentCode(record);
+    getAntdModal().confirm({
+      title: t('app.kuaizhizao.warehouseOutbound.msg.deleteConfirmOne'),
+      content: t('app.kuaizhizao.warehouseOutbound.msg.withdrawConfirm', { code }),
+      okType: 'danger',
+      onOk: () => executeDelete(record),
     });
   };
 
@@ -1082,12 +1087,16 @@ const OutboundPage: React.FC = () => {
             </Tooltip>
           )}
           {isOutboundWithdrawable(record) && record.outbound_type !== 'outsource_issue' && (
-            <Button {...rowActionKind('revoke')} {...rowActionLabelKeep()} onClick={() => handleWithdraw(record)}>
+            <ActionConfirmPopconfirm title={t('app.kuaizhizao.warehouseOutbound.msg.withdrawTitle')} description={t('app.kuaizhizao.warehouseOutbound.msg.withdrawConfirm', { code: outboundDocumentCode(record) })} onConfirm={() => executeWithdraw(record)}>
+              <Button {...rowActionKind('revoke')} {...rowActionLabelKeep()} onClick={(e) => e.stopPropagation()}>
               {t('app.kuaizhizao.warehouseOutbound.action.withdraw')}
             </Button>
+            </ActionConfirmPopconfirm>
           )}
           {isOutboundDeletable(record) && outboundPerms.canDelete && (
-            <Button {...rowActionKind('delete')} onClick={() => handleDelete(record)} />
+            <ActionConfirmPopconfirm title={t('app.kuaizhizao.warehouseOutbound.msg.deleteConfirmOne')} description={t('app.kuaizhizao.warehouseOutbound.msg.withdrawConfirm', { code })} okType="danger" onConfirm={() => executeDelete(record)}>
+              <Button {...rowActionKind('delete')} onClick={(e) => e.stopPropagation()} />
+            </ActionConfirmPopconfirm>
           )}
         </Space>
       ),

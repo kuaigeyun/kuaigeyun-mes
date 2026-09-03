@@ -23,6 +23,7 @@ import { UniTable } from '../../../components/uni-table';
 import { FormModalGridBlock, FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../components/layout-templates';
 import { useResourcePermissions } from '../../../hooks/useResourcePermissions';
 import { rowActionKind, rowActionLabelKeep } from '../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../components/action-confirm';
 import { UniWorkflowActions } from '../../../components/uni-workflow-actions';
 import {
   alignProColumns,
@@ -198,7 +199,7 @@ const KuaioaCrudListPage: React.FC<Props> = ({
   const [searchParams] = useSearchParams();
   const initialScope: KuaioaListScope =
     expiringListFn && searchParams.get('scope') === 'expiring' ? 'expiring' : 'all';
-  const { message: messageApi, modal } = App.useApp();
+  const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>();
   const tableRowsRef = useRef<Record<string, unknown>[]>([]);
   const perms = useResourcePermissions(resource);
@@ -357,31 +358,23 @@ const KuaioaCrudListPage: React.FC<Props> = ({
     }
   };
 
-  const handleDelete = useCallback(
-    (record: Record<string, unknown>) => {
-      modal.confirm({
-        title: t('app.kuaioa.common.confirmDelete'),
-        onOk: async () => {
-          try {
+  const executeDelete = useCallback(async (record: Record<string, unknown>) => {
+    try {
             await deleteFn?.(Number(record.id));
             messageApi.success(t('common.deleteSuccess'));
             reloadTable();
           } catch (error: any) {
             messageApi.error(error?.message || t('common.operationFailed'));
           }
-        },
-      });
-    },
-    [deleteFn, messageApi, modal, reloadTable, t],
-  );
+  }, [deleteFn, messageApi, reloadTable, t]);
 
   const handleBatchDelete = useCallback(
     async (keys: React.Key[]) => {
       try {
         for (const key of keys) {
-          await deleteFn?.(Number(key));
+      await deleteFn?.(Number(key));
         }
-        messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
+    messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
         setSelectedRowKeys([]);
         reloadTable();
       } catch (error: any) {
@@ -601,7 +594,9 @@ const KuaioaCrudListPage: React.FC<Props> = ({
         }
         if (perms.canDelete && deleteFn) {
           actions.push(
-            <Button key="delete" {...rowActionKind('delete')} onClick={() => handleDelete(record)} />,
+            <ActionConfirmPopconfirm title={t('app.kuaioa.common.confirmDelete')} onConfirm={() => executeDelete(record)}>
+              <Button key="delete" {...rowActionKind('delete')} onClick={(e) => e.stopPropagation()} />
+            </ActionConfirmPopconfirm>,
           );
         }
         return actions;
@@ -619,7 +614,7 @@ const KuaioaCrudListPage: React.FC<Props> = ({
     extraActions,
     expiringListFn,
     fields,
-    handleDelete,
+    executeDelete,
     listScope,
     messageApi,
     nameField,

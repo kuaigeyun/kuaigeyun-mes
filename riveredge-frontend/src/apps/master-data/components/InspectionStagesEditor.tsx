@@ -149,17 +149,26 @@ export const InspectionStagesEditor: React.FC<InspectionStagesEditorProps> = ({
   useEffect(() => {
     const load = async () => {
       try {
+        // 含停用方案：编辑回显时已绑定方案仍须在选项中，否则 Select 空白像「没保存」
         const plans = unwrapInspectionPlanList(
-          await inspectionPlanApi.list({ limit: 500, is_active: true }),
+          await inspectionPlanApi.list({ limit: 500 }),
         );
         const grouped: Record<string, { label: string; value: number }[]> = {};
-        for (const p of plans) {
-          const pt = p.plan_type || p.planType || '';
+        for (const p of plans as Array<Record<string, unknown>>) {
+          const pt = String(p.plan_type || p.planType || '');
           if (!pt) continue;
+          const id = Number(p.id);
+          if (!(Number.isFinite(id) && id > 0)) continue;
+          const active = p.is_active ?? p.isActive;
+          const inactiveHint =
+            active === false ? ` (${t('common.disabled', { defaultValue: '停用' })})` : '';
+          const baseLabel =
+            `${p.plan_code || p.planCode || ''} ${p.plan_name || p.planName || ''}`.trim() ||
+            String(id);
           grouped[pt] = grouped[pt] || [];
           grouped[pt].push({
-            label: `${p.plan_code || p.planCode || ''} ${p.plan_name || p.planName || ''}`.trim() || String(p.id),
-            value: p.id,
+            label: `${baseLabel}${inactiveHint}`,
+            value: id,
           });
         }
         setPlanOptionsByType(grouped);
@@ -168,7 +177,7 @@ export const InspectionStagesEditor: React.FC<InspectionStagesEditorProps> = ({
       }
     };
     void load();
-  }, []);
+  }, [t]);
 
   const orgStageEnabled = (key: StageKey): boolean => {
     if (!effectiveCfg) return true;
@@ -244,7 +253,26 @@ export const InspectionStagesEditor: React.FC<InspectionStagesEditorProps> = ({
                 style={{ width: '100%' }}
                 placeholder={t('field.operation.defaultInspectionPlanPlaceholder')}
                 value={stages.ipqc?.planId ?? undefined}
-                options={planOptionsByType.process || []}
+                options={(() => {
+                  const selectedId = stages.ipqc?.planId ?? null;
+                  const typedOpts = planOptionsByType.process || [];
+                  if (
+                    selectedId != null &&
+                    Number(selectedId) > 0 &&
+                    !typedOpts.some((o) => o.value === Number(selectedId))
+                  ) {
+                    return [
+                      {
+                        value: Number(selectedId),
+                        label: t('app.master-data.materialForm.inspectionPlanFallback', {
+                          id: selectedId,
+                        }),
+                      },
+                      ...typedOpts,
+                    ];
+                  }
+                  return typedOpts;
+                })()}
                 onChange={(planId) => patchStage('ipqc', { planId: planId ?? null })}
               />
             </div>
@@ -307,6 +335,22 @@ export const InspectionStagesEditor: React.FC<InspectionStagesEditorProps> = ({
               const mode = stages[stage]?.mode || 'none';
               if (mode !== 'plan') return '—';
               const planType = STAGE_PLAN_TYPE[stage];
+              const selectedId = stages[stage]?.planId ?? null;
+              const typedOpts = planOptionsByType[planType] || [];
+              const options =
+                selectedId != null &&
+                Number(selectedId) > 0 &&
+                !typedOpts.some((o) => o.value === Number(selectedId))
+                  ? [
+                      {
+                        value: Number(selectedId),
+                        label: t('app.master-data.materialForm.inspectionPlanFallback', {
+                          id: selectedId,
+                        }),
+                      },
+                      ...typedOpts,
+                    ]
+                  : typedOpts;
               return (
                 <Select
                   allowClear
@@ -314,8 +358,8 @@ export const InspectionStagesEditor: React.FC<InspectionStagesEditorProps> = ({
                   optionFilterProp="label"
                   style={{ width: '100%' }}
                   placeholder={t('common.pleaseSelect', { defaultValue: '请选择' })}
-                  value={stages[stage]?.planId ?? undefined}
-                  options={planOptionsByType[planType] || []}
+                  value={selectedId ?? undefined}
+                  options={options}
                   onChange={(planId) => patchStage(stage, { planId: planId ?? null })}
                 />
               );

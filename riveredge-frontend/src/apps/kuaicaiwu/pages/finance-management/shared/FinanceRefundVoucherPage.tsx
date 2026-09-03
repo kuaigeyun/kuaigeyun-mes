@@ -19,6 +19,7 @@ import { UniTable } from '../../../../../components/uni-table';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { FinanceVoucherDetailDrawer } from '../shared/FinanceVoucherDetailDrawer';
 import {
   financeAmountDigitFieldProps,
@@ -66,6 +67,7 @@ import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { rowActionKind } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { bankAccountService, type BankAccount } from '../../../services/finance/bank-account';
 import { apiRequest } from '../../../../../services/api';
@@ -83,7 +85,6 @@ import {
 } from '../../../services/finance/payment-refund';
 import type { ReceiptVoucher } from '../../../services/finance/receipt';
 import type { PaymentVoucher } from '../../../services/finance/payment';
-import { getAntdModal } from '../../../../../utils/antdAppApis';
 import {
   buildFinanceVoucherLinkHandlers,
   useFinanceVoucherDetail,
@@ -415,36 +416,44 @@ const FinanceRefundVoucherPage: React.FC<Props> = ({ mode, columnPersistenceId }
     }
   };
 
-  const handleConfirm = (record: RefundVoucher) => {
-    getAntdModal().confirm({
-      title: t(`${NS}.confirmTitle`),
-      content: t(`${NS}.confirmContent`, { code: (record as Record<string, string>)[cfg.codeField] }),
-      onOk: async () => {
-        try {
+  const executeConfirm = async (record: RefundVoucher) => {
+    try {
           await cfg.confirm(record.id);
           messageApi.success(t(`${NS}.confirmSuccess`));
-          actionRef.current?.reload();
+    actionRef.current?.reload();
           if (detailRecord?.id === record.id) void openDetail(record);
         } catch (e) {
           messageApi.error(getApiErrorMessage(e, t(`${NS}.confirmFailed`)));
         }
-      },
+  };
+
+  const executeCancel = async (record: RefundVoucher) => {
+    try {
+          await cfg.cancel(record.id);
+          messageApi.success(t(`${NS}.cancelSuccess`));
+    actionRef.current?.reload();
+        } catch (e) {
+          messageApi.error(getApiErrorMessage(e, t(`${NS}.cancelFailed`)));
+        }
+  };
+
+  const handleConfirm = (record: RefundVoucher) => {
+    getAntdModal().confirm({
+      title: t(`${NS}.confirmTitle`),
+      content: t(`${NS}.confirmContent`, {
+        code: (record as Record<string, string>)[cfg.codeField],
+      }),
+      onOk: () => executeConfirm(record),
     });
   };
 
   const handleCancel = (record: RefundVoucher) => {
     getAntdModal().confirm({
       title: t(`${NS}.cancelTitle`),
-      content: t(`${NS}.cancelContent`, { code: (record as Record<string, string>)[cfg.codeField] }),
-      onOk: async () => {
-        try {
-          await cfg.cancel(record.id);
-          messageApi.success(t(`${NS}.cancelSuccess`));
-          actionRef.current?.reload();
-        } catch (e) {
-          messageApi.error(getApiErrorMessage(e, t(`${NS}.cancelFailed`)));
-        }
-      },
+      content: t(`${NS}.cancelContent`, {
+        code: (record as Record<string, string>)[cfg.codeField],
+      }),
+      onOk: () => executeCancel(record),
     });
   };
 
@@ -658,12 +667,16 @@ const FinanceRefundVoucherPage: React.FC<Props> = ({ mode, columnPersistenceId }
               ];
               if (record.status === 'Draft' && perms.canAction?.('audit')) {
                 acts.push(
-                  <Button key="cf" {...rowActionKind('audit')} onClick={() => handleConfirm(record)} />,
+                  <ActionConfirmPopconfirm title={t(`${NS}.confirmTitle`)} description={t(`${NS}.confirmContent`, { code: (record as Record<string, string>)[cfg.codeField] })} onConfirm={() => executeConfirm(record)}>
+              <Button key="cf" {...rowActionKind('audit')} onClick={(e) => e.stopPropagation()} />
+            </ActionConfirmPopconfirm>,
                 );
               }
               if (record.status === 'Draft' && perms.canAction?.('revoke')) {
                 acts.push(
-                  <Button key="ca" {...rowActionKind('obsolete')} onClick={() => handleCancel(record)} />,
+                  <ActionConfirmPopconfirm title={t(`${NS}.cancelTitle`)} description={t(`${NS}.cancelContent`, { code: (record as Record<string, string>)[cfg.codeField] })} onConfirm={() => executeCancel(record)}>
+              <Button key="ca" {...rowActionKind('obsolete')} onClick={(e) => e.stopPropagation()} />
+            </ActionConfirmPopconfirm>,
                 );
               }
               return acts;

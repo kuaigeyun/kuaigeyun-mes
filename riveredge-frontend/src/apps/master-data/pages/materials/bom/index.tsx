@@ -83,6 +83,7 @@ import { isVariantSkuMaterial } from '../../../components/MaterialVariantCombina
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 import { flattenBomGroupsForExport, resolveBomExportGroup, loadBomExportNestedItems, collectBomExportMaterialIds, type BomExportGroupSummary } from './utils';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 const BOM_CUSTOM_FIELD_TABLE = 'master_data_boms';
@@ -990,7 +991,7 @@ const BOMPage: React.FC = () => {
         try {
           await bomApi.batchApprove(uuids, true, t('app.master-data.bom.unapproveComment'), recursiveUnapproveRef.current, true);
           messageApi.success(t('app.master-data.bom.unapproveSuccess'));
-          actionRef.current?.reload();
+    actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || t('app.master-data.bom.unapproveFailed'));
         }
@@ -1071,25 +1072,16 @@ const BOMPage: React.FC = () => {
   /**
    * 删除整份BOM（主件下全部子件）
    */
-  const handleDeleteGroup = (record: BOMGroupRow) => {
+  const executeDeleteGroup = async (record: BOMGroupRow) => {
     const uuids = record.items.map((i) => i.uuid);
     if (!uuids.length) return;
-    getAntdModal().confirm({
-      title: t('app.master-data.bom.deleteConfirmTitle'),
-      content: t('app.master-data.bom.deleteConfirmContent', { count: uuids.length }),
-      okText: t('common.confirm'),
-      cancelText: t('common.cancel'),
-      okType: 'danger',
-      onOk: async () => {
-        try {
-          for (const uuid of uuids) await bomApi.delete(uuid);
-          messageApi.success(t('common.deleteSuccess'));
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error?.message || t('common.deleteFailed'));
-        }
-      },
-    });
+    try {
+      for (const uuid of uuids) await bomApi.delete(uuid);
+      messageApi.success(t('common.deleteSuccess'));
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || t('common.deleteFailed'));
+    }
   };
 
   /**
@@ -1199,7 +1191,7 @@ const BOMPage: React.FC = () => {
           await bomApi.batchApprove(toProcess, true, t('app.master-data.bom.batchApproveComment'), recursiveApprovalRef.current, false);
           messageApi.success(t('app.master-data.bom.approveSuccess', { count }));
           setSelectedRowKeys([]);
-          actionRef.current?.reload();
+    actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || t('app.master-data.bom.batchApproveFailed'));
         }
@@ -1257,7 +1249,7 @@ const BOMPage: React.FC = () => {
           await bomApi.batchApprove(toProcess, true, t('app.master-data.bom.batchUnapproveComment'), recursiveApprovalRef.current, true);
           messageApi.success(t('app.master-data.bom.unapproveCountSuccess', { count }));
           setSelectedRowKeys([]);
-          actionRef.current?.reload();
+    actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || t('app.master-data.bom.batchUnapproveFailed'));
         }
@@ -2400,26 +2392,18 @@ const BOMPage: React.FC = () => {
   /**
    * 设为默认版本
    */
-  const handleSetAsDefault = async (record: BOM) => {
+  const executeSetAsDefault = async (record: BOM) => {
     if (record.isDefault) {
       messageApi.info(t('app.master-data.bom.alreadyDefaultVersion'));
       return;
     }
-    getAntdModal().confirm({
-      title: t('app.master-data.bom.setDefaultVersionTitle'),
-      content: t('app.master-data.bom.setDefaultVersionContent', { bomCode: record.bomCode, version: record.version }),
-      okText: t('common.confirm'),
-      cancelText: t('common.cancel'),
-      onOk: async () => {
-        try {
-          await bomApi.update(record.uuid, { isDefault: true });
-          messageApi.success(t('app.master-data.bom.setDefaultSuccess'));
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error.message || t('common.operationFailed'));
-        }
-      },
-    });
+    try {
+      await bomApi.update(record.uuid, { isDefault: true });
+      messageApi.success(t('app.master-data.bom.setDefaultSuccess'));
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || t('common.operationFailed'));
+    }
   };
 
   /**
@@ -2736,7 +2720,7 @@ const BOMPage: React.FC = () => {
               }}
               onChange={(groupKey) => {
                 setSelectedVersionByMaterial((prev) => ({ ...prev, [r.materialId]: groupKey }));
-                actionRef.current?.reload();
+    actionRef.current?.reload();
               }}
             />
           );
@@ -2901,7 +2885,23 @@ const BOMPage: React.FC = () => {
             type: 'group',
             label: t('app.master-data.bom.versionManage'),
             children: [
-              { key: 'setDefault', icon: <StarOutlined />, label: t('app.master-data.bom.setDefault'), onClick: () => handleSetAsDefault(r), disabled: r.isDefault },
+              {
+                key: 'setDefault',
+                icon: <StarOutlined />,
+                label: (
+                  <ActionConfirmPopconfirm
+                    title={t('app.master-data.bom.setDefaultVersionTitle')}
+                    description={t('app.master-data.bom.setDefaultVersionContent', {
+                      bomCode: r.bomCode,
+                      version: r.version,
+                    })}
+                    onConfirm={() => executeSetAsDefault(r)}
+                  >
+                    <span onClick={(e) => e.stopPropagation()}>{t('app.master-data.bom.setDefault')}</span>
+                  </ActionConfirmPopconfirm>
+                ),
+                disabled: r.isDefault,
+              },
               { key: 'createNewVersion', icon: <PlusOutlined />, label: t('app.master-data.bom.createNewVersion'), onClick: () => handleCreateVersion(r) },
               { key: 'versionHistory', icon: <HistoryOutlined />, label: t('app.master-data.bom.versionHistory'), onClick: () => handleViewVersionHistory(r) },
               { key: 'setObsolete', icon: <CloseCircleOutlined />, label: t('app.master-data.bom.setObsolete'), onClick: () => handleOpenSetObsolete(r), disabled: r.isObsolete },
@@ -2911,9 +2911,17 @@ const BOMPage: React.FC = () => {
           ...(bomPerms.canDelete ? [{
             key: 'delete',
             icon: <DeleteOutlined />,
-            label: t('common.delete'),
+            label: (
+              <ActionConfirmPopconfirm
+                title={t('app.master-data.bom.deleteConfirmTitle')}
+                description={t('app.master-data.bom.deleteConfirmContent', { count: record.items.length })}
+                okButtonProps={{ danger: true }}
+                onConfirm={() => executeDeleteGroup(record)}
+              >
+                <span onClick={(e) => e.stopPropagation()}>{t('common.delete')}</span>
+              </ActionConfirmPopconfirm>
+            ),
             danger: true,
-            onClick: () => handleDeleteGroup(record),
             disabled: isApproved,
           }] : []),
         ];
@@ -3290,7 +3298,7 @@ const BOMPage: React.FC = () => {
         onViewTypeChange={(key) => {
           if ((BOM_LIST_VIEW_TYPES as readonly string[]).includes(key)) {
             bomViewTypeRef.current = key as BomListViewType;
-            actionRef.current?.reload();
+    actionRef.current?.reload();
           }
         }}
         request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {

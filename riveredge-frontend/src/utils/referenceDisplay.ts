@@ -123,6 +123,63 @@ export function referenceDisplayToIdOptions(
     .map((i) => ({ label: formatReferenceDisplayLabel(i), value: i.id as number }));
 }
 
+function extraStr(extra: Record<string, unknown>, ...keys: string[]): string | undefined {
+  for (const key of keys) {
+    const raw = extra[key];
+    if (raw == null) continue;
+    const text = String(raw).trim();
+    if (text) return text;
+  }
+  return undefined;
+}
+
+function extraNum(extra: Record<string, unknown>, ...keys: string[]): number | undefined {
+  for (const key of keys) {
+    const raw = extra[key];
+    if (raw == null || raw === '') continue;
+    const n = Number(raw);
+    if (Number.isFinite(n)) return n;
+  }
+  return undefined;
+}
+
+/** 客商引用展示 → 下拉实体（含联系人快照等 extra，供单据表单自动带出） */
+export function mapPartnerReferenceDisplayItem(item: ReferenceDisplayItem): {
+  id: number;
+  uuid?: string;
+  code?: string;
+  name?: string;
+  contactPerson?: string;
+  phone?: string;
+  address?: string;
+  deliveryAddress?: string;
+  salesmanId?: number;
+  salesmanName?: string;
+  paymentTermsDays?: number;
+  buyerId?: number;
+  buyerName?: string;
+} {
+  const extra = (item.extra && typeof item.extra === 'object' ? item.extra : {}) as Record<
+    string,
+    unknown
+  >;
+  return {
+    id: Number(item.id),
+    uuid: item.uuid ?? undefined,
+    code: item.code ?? undefined,
+    name: item.name ?? undefined,
+    contactPerson: extraStr(extra, 'contact_person', 'contactPerson'),
+    phone: extraStr(extra, 'phone'),
+    address: extraStr(extra, 'address'),
+    deliveryAddress: extraStr(extra, 'delivery_address', 'deliveryAddress'),
+    salesmanId: extraNum(extra, 'salesman_id', 'salesmanId'),
+    salesmanName: extraStr(extra, 'salesman_name', 'salesmanName'),
+    paymentTermsDays: extraNum(extra, 'payment_terms_days', 'paymentTermsDays'),
+    buyerId: extraNum(extra, 'buyer_id', 'buyerId'),
+    buyerName: extraStr(extra, 'buyer_name', 'buyerName'),
+  };
+}
+
 /** 宿主模块 resource（{app}:{module}） */
 export function buildHostResource(app: string, module: string): string {
   return `${app.trim()}:${module.trim()}`.toLowerCase();

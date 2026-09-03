@@ -4,6 +4,7 @@ import { App, Button, Input, Modal } from 'antd';
 import { CheckOutlined, CloseOutlined, SendOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { rowActionKind } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { DetailDrawerActions, ListPageTemplate } from '../../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { UniTable } from '../../../../../components/uni-table';
@@ -32,7 +33,7 @@ const RESOURCE = 'kuaizhizao:after-sales-spare-part-requisition';
 
 const AfterSalesSparePartRequisitionsPage: React.FC = () => {
   const { t } = useTranslation();
-  const { message: messageApi, modal } = App.useApp();
+  const { message: messageApi } = App.useApp();
   const perms = useResourcePermissions(RESOURCE);
   const currentUser = useCurrentUser();
   const canReview = hasReviewPermission(currentUser ?? undefined, RESOURCE);
@@ -78,19 +79,14 @@ const AfterSalesSparePartRequisitionsPage: React.FC = () => {
     setModalOpen(true);
   };
 
-  const confirmDelete = (row: AfterSalesSparePartRequisition) => {
-    modal.confirm({
-      title: t('common.confirmDelete'),
-      onOk: async () => {
-        await afterSalesSparePartRequisitionApi.delete(row.id);
+  const executeconfirmDelete = async (row: AfterSalesSparePartRequisition) => {
+    await afterSalesSparePartRequisitionApi.delete(row.id);
         messageApi.success(t('common.deleteSuccess'));
         if (detail?.id === row.id) {
           setDetailOpen(false);
           setDetail(null);
         }
-        actionRef.current?.reload();
-      },
-    });
+    actionRef.current?.reload();
   };
 
   const canEditRow = (status?: string) => status === '草稿' || status === '已驳回';
@@ -171,16 +167,18 @@ const AfterSalesSparePartRequisitionsPage: React.FC = () => {
                     messageApi.success(
                       t('app.kuaizhizao.afterSalesService.sparePartRequisition.submitSuccess'),
                     );
-                    actionRef.current?.reload();
+    actionRef.current?.reload();
                   }}
                 />
               ) : null,
               perms.canDelete && canEditRow(row.status) ? (
-                <Button
+                <ActionConfirmPopconfirm title={t('common.confirmDelete')} onConfirm={() => executeconfirmDelete(row)}>
+              <Button
                   {...rowActionKind('delete')}
                   key="delete"
-                  onClick={() => confirmDelete(row)}
+                  onClick={(e) => e.stopPropagation()}
                 />
+            </ActionConfirmPopconfirm>
               ) : null,
             ],
           },
@@ -219,8 +217,8 @@ const AfterSalesSparePartRequisitionsPage: React.FC = () => {
         showDeleteButton={perms.canDelete}
         onDelete={async (keys) => {
           await Promise.all(keys.map((key) => afterSalesSparePartRequisitionApi.delete(Number(key))));
-          messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
-          actionRef.current?.reload();
+    messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
+    actionRef.current?.reload();
         }}
       />
 
@@ -232,7 +230,7 @@ const AfterSalesSparePartRequisitionsPage: React.FC = () => {
           setEditing(null);
         }}
         onSuccess={() => {
-          actionRef.current?.reload();
+    actionRef.current?.reload();
         }}
       />
 

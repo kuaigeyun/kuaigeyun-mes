@@ -28,7 +28,6 @@ import {
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 import { pickListSearchKeyword } from '../../../../utils/tableQueryKey';
-import { getAntdModal } from '../../../../utils/antdAppApis';
 import { todaySiteDateString } from '../../../../utils/format';
 import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
 const InvitationCodeListPage: React.FC = () => {
@@ -88,19 +87,12 @@ const InvitationCodeListPage: React.FC = () => {
     }
   };
 
-  const handleBatchDelete = (keys: React.Key[]) => {
+  const handleBatchDelete = async (keys: React.Key[]) => {
     if (keys.length === 0) {
       messageApi.warning(t('pages.system.selectFirst'));
       return;
     }
-    getAntdModal().confirm({
-      title: t('common.confirm'),
-      content: t('field.invitationCode.batchDeleteConfirm', { count: keys.length }),
-      okText: t('common.confirm'),
-      cancelText: t('common.cancel'),
-      okType: 'danger',
-      onOk: async () => {
-        try {
+    try {
           let successCount = 0;
           let failCount = 0;
           const errors: string[] = [];
@@ -119,13 +111,11 @@ const InvitationCodeListPage: React.FC = () => {
               `${t('common.deleteFailed')} ${failCount} ${errors.length > 0 ? '：' + errors.join('; ') : ''}`
             );
           }
-          actionRef.current?.reload();
+    actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || t('common.deleteFailed'));
         }
-      },
-    });
-  };
+  };;
 
   const handleCopy = useCallback(
     (code: string) => {
@@ -334,7 +324,9 @@ const InvitationCodeListPage: React.FC = () => {
           onCreate={handleCreate}
           enableRowSelection
           onRowSelectionChange={setSelectedRowKeys}
-          showDeleteButton
+          showDeleteButtondeleteConfirmTitle={t('common.confirm')}
+          deleteConfirmDescription={(count) => t('field.invitationCode.batchDeleteConfirm', { count: count })}
+          
           onDelete={handleBatchDelete}
           deleteButtonText={t('common.batchDelete')}
           showImportButton={false}

@@ -329,7 +329,7 @@ const OperationsPage: React.FC = () => {
       }
 
       if (successCount > 0) {
-        messageApi.success(t('common.batchDeleteSuccess', { count: successCount }));
+    messageApi.success(t('common.batchDeleteSuccess', { count: successCount }));
       }
       if (failCount > 0) {
         messageApi.error(
@@ -893,7 +893,7 @@ const OperationsPage: React.FC = () => {
                 const res = await operationApi.loadPreset(presetIndustryId, selectedPresetKeys);
                 messageApi.success(res.message);
                 setPresetModalVisible(false);
-                actionRef.current?.reload();
+    actionRef.current?.reload();
               } catch (e: any) {
                 messageApi.error(e?.message || t('common.operationFailed'));
               } finally {

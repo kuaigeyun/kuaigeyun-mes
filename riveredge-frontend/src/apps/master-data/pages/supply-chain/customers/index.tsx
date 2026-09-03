@@ -361,7 +361,7 @@ const CustomersPage: React.FC = () => {
       }
 
       if (successCount > 0) {
-        messageApi.success(t('common.batchDeleteSuccess', { count: successCount }));
+    messageApi.success(t('common.batchDeleteSuccess', { count: successCount }));
       }
       if (failCount > 0) {
         messageApi.error(
@@ -625,7 +625,7 @@ const CustomersPage: React.FC = () => {
       }
 
       if (result.successCount > 0) {
-        actionRef.current?.reload();
+    actionRef.current?.reload();
       }
     } catch (error: any) {
       messageApi.error(error.message || t('app.master-data.importFailed'));

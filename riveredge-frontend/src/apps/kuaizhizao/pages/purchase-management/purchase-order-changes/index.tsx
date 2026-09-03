@@ -10,6 +10,7 @@ import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormTextArea } fro
 import { App, Alert, Button, Descriptions, Form, Space, Typography } from 'antd';
 import { DeleteOutlined, EditOutlined, PlusOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { LinkedDocumentCode } from '../../../../../components/linked-document-code';
 import { UniAuditBatchMenuButton } from '../../../../../components/uni-batch';
 import {
@@ -114,7 +115,7 @@ function orderChangeItemsHaveContent(items: OrderChangeLineItem[] | undefined): 
 
 const PurchaseOrderChangesPage: React.FC = () => {
   const { t } = useTranslation();
-  const { message, modal } = App.useApp();
+  const { message } = App.useApp();
   const pullFromPurchaseOrderAction = resolveKuaizhizaoDocumentAction(t, 'purchase_order_change.pull_from_purchase_order');
   const [searchParams, setSearchParams] = useSearchParams();
   const actionRef = useRef<ActionType>();
@@ -375,11 +376,13 @@ const PurchaseOrderChangesPage: React.FC = () => {
     [t],
   );
   const [suppliers, setSuppliers] = useState<Array<{ id: number; name?: string; code?: string }>>([]);
+  const [suppliersLoading, setSuppliersLoading] = useState(true);
 
   useEffect(() => {
-    void loadSupplierFormReferenceList(KUAIZHIZAO_DOC_HOST.purchaseOrderChange).then((list) =>
-      setSuppliers(list as Array<{ id: number; name?: string; code?: string }>),
-    );
+    setSuppliersLoading(true);
+    void loadSupplierFormReferenceList(KUAIZHIZAO_DOC_HOST.purchaseOrderChange)
+      .then((list) => setSuppliers(list as Array<{ id: number; name?: string; code?: string }>))
+      .finally(() => setSuppliersLoading(false));
   }, []);
 
   const changeSupplierSearchOptions = useMemo(
@@ -683,49 +686,46 @@ const PurchaseOrderChangesPage: React.FC = () => {
               </Button>
             ) : null,
             canRevoke ? (
-              <Button
-                {...rowActionKind('revoke')}
+              <ActionConfirmPopconfirm
                 key="revoke"
-                onClick={() => {
-                  modal.confirm({
-                    title: t('components.uniAction.revoke'),
-                    onOk: async () => {
-                      await withdrawPurchaseOrderChange(record.id!);
-                      message.success(t('common.updateSuccess'));
-                      reloadTable();
-                    },
-                  });
+                title={t('components.uniAction.revoke')}
+                onConfirm={async () => {
+                  await withdrawPurchaseOrderChange(record.id!);
+                  message.success(t('common.updateSuccess'));
+                  reloadTable();
                 }}
               >
-                {t('components.uniAction.revoke')}
-              </Button>
+                <Button {...rowActionKind('revoke')} onClick={(e) => e.stopPropagation()}>
+                  {t('components.uniAction.revoke')}
+                </Button>
+              </ActionConfirmPopconfirm>
             ) : null,
             canDelete ? (
-              <Button {...rowActionKind('delete')}
+              <ActionConfirmPopconfirm
                 key="del"
-                type="link"
-                size="small"
-                danger
-                icon={<DeleteOutlined />}
-                onClick={() => {
-                  modal.confirm({
-                    title: t('app.kuaizhizao.purchaseOrderChange.confirmDelete'),
-                    onOk: async () => {
-                      await deletePurchaseOrderChange(record.id!);
-                      message.success(t('app.kuaizhizao.purchaseOrderChange.deleted'));
-                      reloadTable();
-                    },
-                  });
+                title={t('app.kuaizhizao.purchaseOrderChange.confirmDelete')}
+                onConfirm={async () => {
+                  await deletePurchaseOrderChange(record.id!);
+                  message.success(t('app.kuaizhizao.purchaseOrderChange.deleted'));
+                  reloadTable();
                 }}
               >
-                {t('common.delete')}
-              </Button>
+                <Button {...rowActionKind('delete')}
+                  type="link"
+                  size="small"
+                  danger
+                  icon={<DeleteOutlined />}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {t('common.delete')}
+                </Button>
+              </ActionConfirmPopconfirm>
             ) : null,
           ];
         },
       },
     ], SALES_DOC_LIST_FIELD_RANK),
-    [message, modal, orderChangeLifecycleValueEnum, purchaseOrderChangeAuditColumn, purchaseOrderChangePerms.canDelete, purchaseOrderChangePerms.canUpdate, purchaseOrderChangePerms.canAction, changeCategoryValueEnum, changeSupplierSearchOptions, suppliersLoading, t, renderDeltaAmount, reloadTable, runSubmitWithPreview],
+    [message, orderChangeLifecycleValueEnum, purchaseOrderChangeAuditColumn, purchaseOrderChangePerms.canDelete, purchaseOrderChangePerms.canUpdate, purchaseOrderChangePerms.canAction, changeCategoryValueEnum, changeSupplierSearchOptions, suppliersLoading, t, renderDeltaAmount, reloadTable, runSubmitWithPreview],
   );
 
   const request = useCallback(

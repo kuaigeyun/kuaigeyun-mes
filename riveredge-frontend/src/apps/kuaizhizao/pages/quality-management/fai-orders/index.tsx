@@ -116,7 +116,7 @@ const FaiOrdersPage: React.FC = () => {
         messageApi.success(successMessage(success));
         setSelectedRowKeys([]);
         invalidateMenuBadgeCounts();
-        actionRef.current?.reload();
+    actionRef.current?.reload();
       }
       if (failed > 0) {
         messageApi.warning(t('components.uniBatch.capability.partial', { success, failed }));
@@ -731,7 +731,7 @@ const FaiOrdersPage: React.FC = () => {
               );
               setSelectedRowKeys([]);
               invalidateMenuBadgeCounts();
-              actionRef.current?.reload();
+    actionRef.current?.reload();
             } catch (e: any) {
               messageApi.error(e?.message || t('common.deleteFailed'));
             }
@@ -803,7 +803,7 @@ const FaiOrdersPage: React.FC = () => {
               setEditing(saved);
               setChars(saved.characteristics?.length ? saved.characteristics : chars);
               invalidateMenuBadgeCounts();
-              actionRef.current?.reload();
+    actionRef.current?.reload();
               return true;
             } catch (e: any) {
               messageApi.error(e?.message || t('common.saveFailed'));

@@ -226,7 +226,7 @@ const CarriersPage: React.FC = () => {
                   onClick={async () => {
                     await deleteCarrier(row.id);
                     message.success(t('common.deleteSuccess'));
-                    actionRef.current?.reload();
+    actionRef.current?.reload();
                   }}
                 />,
               );
@@ -263,7 +263,7 @@ const CarriersPage: React.FC = () => {
         onDelete={async (keys) => {
           await Promise.all(keys.map((key) => deleteCarrier(Number(key))));
           message.success(t('common.batchDeleteSuccess', { count: keys.length }));
-          actionRef.current?.reload();
+    actionRef.current?.reload();
         }}
         toolBarActionsAfterDelete={
           perms.canCreate
@@ -296,7 +296,7 @@ const CarriersPage: React.FC = () => {
           if (detail?.id === record.id) {
             setDetail(record);
           }
-          actionRef.current?.reload();
+    actionRef.current?.reload();
         }}
       />
       <Modal

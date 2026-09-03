@@ -67,7 +67,7 @@ import { useResourcePermissions } from '../../../../../../hooks/useResourcePermi
 import { useDetailDrawerFeatures } from '../../../../../../hooks/useDetailDrawerFeatures'
 import { isDetailTimeFieldHidden } from '../../../../constants/detailDrawerTimeFields'
 
-const DEMAND_COMPUTATION_RESOURCE = 'plan-management-demand-computation'
+const DEMAND_COMPUTATION_RESOURCE = 'kuaizhizao:plan-management-demand-computation'
 
 const PLACEHOLDER: DemandComputation = { id: 0 }
 const DEMAND_COMPUTATION_DETAIL_ITEMS_MIN_WIDTH = 1920

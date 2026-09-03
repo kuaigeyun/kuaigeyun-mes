@@ -82,7 +82,10 @@ export async function getTodos(limit: number = 20, module?: string): Promise<Tod
 /**
  * 处理待办事项
  */
-export async function handleTodo(todoId: string, action: string): Promise<void> {
+export async function handleTodo(
+  todoId: string,
+  action: string,
+): Promise<{ success?: boolean; message?: string; redirect?: string | null; refresh?: boolean; todo_id?: string }> {
   return apiRequest(`/apps/kuaizhizao/dashboard/todos/${todoId}/handle`, {
     method: 'POST',
     params: { action },
@@ -251,6 +254,8 @@ export interface ProductionBroadcastItem {
   operator_name: string;
   /** 操作员头像文件 UUID，无则前端用姓名首字 */
   operator_avatar?: string | null;
+  /** 报工来源渠道码（pc/station/android/ios/mobile_h5/miniprogram） */
+  client_channel?: string | null;
   process_name: string;
   date: string;
   work_order_no: string;

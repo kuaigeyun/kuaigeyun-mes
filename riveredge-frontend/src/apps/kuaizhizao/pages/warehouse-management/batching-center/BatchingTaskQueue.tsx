@@ -20,6 +20,7 @@ import {
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { rowActionKind } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { UniTable } from '../../../../../components/uni-table';
 import {
   MaterialStackedCell,
@@ -806,20 +807,20 @@ const BatchingTaskQueue: React.FC<Props> = ({
           }
           if (['pending', 'processing', 'partial', 'picking'].includes(record.status ?? '')) {
             actions.push(
-              <Button
-                key="cancel-call"
-                {...rowActionKind('revoke')}
-                size="small"
-                onClick={() => {
-                  getAntdModal().confirm({
-                    title: t('app.kuaizhizao.batchingCenter.confirmCancelTitle'),
-                    content: t('app.kuaizhizao.batchingCenter.confirmCancelCall'),
-                    onOk: () => handleMaterialCallUpdate(record.task_id, 'cancelled'),
-                  });
-                }}
+              <ActionConfirmPopconfirm
+                title={t('app.kuaizhizao.batchingCenter.confirmCancelTitle')}
+                description={t('app.kuaizhizao.batchingCenter.confirmCancelCall')}
+                onConfirm={() => handleMaterialCallUpdate(record.task_id, 'cancelled')}
               >
-                {t('common.cancel')}
-              </Button>,
+                <Button
+                  key="cancel-call"
+                  {...rowActionKind('revoke')}
+                  size="small"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {t('common.cancel')}
+                </Button>
+              </ActionConfirmPopconfirm>,
             );
           }
           return actions.length ? actions : null;

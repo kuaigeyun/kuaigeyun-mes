@@ -57,6 +57,12 @@ import {
 } from '../../../utils/warehouseListCore';
 import { materialApi, materialBatchApi, materialSerialApi } from '../../../../master-data/services/material';
 import { SerialNumbersImportTrigger } from '../../../../../components/serial-numbers-import';
+import {
+  filterWarehouseTrackingColumns,
+  isMaterialBatchEntryEnabled,
+  isMaterialSerialEntryEnabled,
+  useWarehouseTrackingFlags,
+} from '../shared/warehouseTrackingFlags';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 
 interface RegistrationItem {
@@ -125,6 +131,7 @@ interface CustomerMaterialRegistration {
 
 const CustomerMaterialRegistrationPage: React.FC = () => {
   const { t } = useTranslation();
+  const trackingFlags = useWarehouseTrackingFlags();
   const quantityDecimals = useNumericPrecisionPlaces('quantity');
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
@@ -169,8 +176,8 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
           material_spec: m.specification ?? '',
           material_unit: m.baseUnit ?? '',
           material_uuid: m.uuid,
-          batch_managed: m.batchManaged ?? false,
-          serial_managed: m.serialManaged ?? false,
+          batch_managed: isMaterialBatchEntryEnabled(trackingFlags, m.batchManaged ?? false),
+          serial_managed: isMaterialSerialEntryEnabled(trackingFlags, m.serialManaged ?? false),
           default_batch_rule_id: m.defaultBatchRuleId,
           default_serial_rule_id: m.defaultSerialRuleId,
         };
@@ -179,8 +186,8 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
             const full = await materialApi.get(m.uuid);
             return {
               ...row,
-              batch_managed: full.batchManaged ?? false,
-              serial_managed: full.serialManaged ?? false,
+              batch_managed: isMaterialBatchEntryEnabled(trackingFlags, full.batchManaged ?? false),
+              serial_managed: isMaterialSerialEntryEnabled(trackingFlags, full.serialManaged ?? false),
               default_batch_rule_id: full.defaultBatchRuleId,
               default_serial_rule_id: full.defaultSerialRuleId,
             };
@@ -232,8 +239,8 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
       }
     }
     formRef.current?.setFieldValue(['items', idx, 'material_uuid'], uuid);
-    formRef.current?.setFieldValue(['items', idx, 'batch_managed'], batchManaged);
-    formRef.current?.setFieldValue(['items', idx, 'serial_managed'], serialManaged);
+    formRef.current?.setFieldValue(['items', idx, 'batch_managed'], isMaterialBatchEntryEnabled(trackingFlags, batchManaged));
+    formRef.current?.setFieldValue(['items', idx, 'serial_managed'], isMaterialSerialEntryEnabled(trackingFlags, serialManaged));
     formRef.current?.setFieldValue(['items', idx, 'default_batch_rule_id'], defaultBatchRuleId);
     formRef.current?.setFieldValue(['items', idx, 'default_serial_rule_id'], defaultSerialRuleId);
   };
@@ -262,8 +269,8 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
       }
     }
     setScanMaterialUuid(uuid);
-    setScanBatchManaged(batchManaged);
-    setScanSerialManaged(serialManaged);
+    setScanBatchManaged(isMaterialBatchEntryEnabled(trackingFlags, batchManaged));
+    setScanSerialManaged(isMaterialSerialEntryEnabled(trackingFlags, serialManaged));
     setScanDefaultBatchRuleId(defaultBatchRuleId);
     setScanDefaultSerialRuleId(defaultSerialRuleId);
   };
@@ -841,7 +848,10 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
     );
   }, [currentRegistration, t]);
 
-  const formItemColumns = useMemo(() => [
+  const formItemColumns = useMemo(
+    () =>
+      filterWarehouseTrackingColumns(
+        [
     {
       title: t('app.kuaizhizao.warehouseCommon.colMaterial'),
       dataIndex: 'material_id',
@@ -1000,7 +1010,11 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
         </AntForm.Item>
       ),
     },
-  ], [t, generatingBatchIdx, generatingSerialIdx]);
+        ],
+        trackingFlags,
+      ),
+    [t, trackingFlags, generatingBatchIdx, generatingSerialIdx],
+  );
 
   const timeconfigBasicItems = useDetailDrawerDescriptionItems(
     detailBasicColumns,
@@ -1180,7 +1194,8 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
                 <ProFormDigit name="quantity" label={t('app.kuaizhizao.customerMaterialRegistration.incomingQty')} rules={[{ required: true }]} min={0} fieldProps={{ precision: 2 }} />
               </Col>
               <Col span={12}>
-                {scanBatchManaged ? (
+                {trackingFlags.batchManagement ? (
+                  scanBatchManaged ? (
                   <ProForm.Item label={t('app.kuaizhizao.warehouseCommon.colBatchNo')}>
                     <Space size={4}>
                       <ProFormText name="batch_number" noStyle fieldProps={{ placeholder: t('app.kuaizhizao.warehouseCommon.optional') }} />
@@ -1194,10 +1209,11 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
                   </ProForm.Item>
                 ) : (
                   <ProFormText name="batch_number" label={t('app.kuaizhizao.warehouseCommon.colBatchNo')} fieldProps={{ placeholder: t('app.kuaizhizao.warehouseCommon.notApplicable') }} disabled />
-                )}
+                )
+                ) : null}
               </Col>
             </Row>
-            {scanSerialManaged ? (
+            {trackingFlags.serialManagement && scanSerialManaged ? (
               <ProForm.Item label={t('app.kuaizhizao.warehouseCommon.colSerialNo')} shouldUpdate>
                 {({ getFieldValue }) => {
                   const qty = Number(getFieldValue('quantity') ?? 0);

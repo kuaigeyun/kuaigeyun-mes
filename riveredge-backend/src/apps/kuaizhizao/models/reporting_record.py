@@ -93,6 +93,11 @@ class ReportingRecord(BaseModel):
     recorded_by = fields.IntField(null=True, description="记录人用户ID（提交报工者）")
     recorded_by_name = fields.CharField(max_length=100, null=True, description="记录人姓名")
 
+    # 报工来源渠道（X-Client-Channel 归一化码：pc/station/android/ios/mobile_h5/miniprogram）
+    client_channel = fields.CharField(max_length=32, null=True, description="报工来源渠道码")
+    # 报工方式：self 自报 / proxy 代报 / team 小组报工
+    report_mode = fields.CharField(max_length=16, null=True, description="报工方式（self/proxy/team）")
+
     # 报工数据
     reported_quantity = fields.DecimalField(max_digits=14, decimal_places=4, description="报工数量")
     qualified_quantity = fields.DecimalField(max_digits=14, decimal_places=4, description="合格数量")

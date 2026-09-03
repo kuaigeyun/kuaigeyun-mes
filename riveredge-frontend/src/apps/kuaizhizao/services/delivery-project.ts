@@ -9,6 +9,34 @@ export interface DeliveryMember {
   user_name: string;
 }
 
+export interface DeliveryProjectNodeDocument {
+  id: number;
+  project_id: number;
+  node_id: number;
+  node_name?: string | null;
+  doc_type: string;
+  doc_id: number;
+  doc_code: string;
+  title?: string | null;
+  linked_at?: string | null;
+  linked_by_name?: string | null;
+}
+
+export interface DeliveryAlertRow {
+  alert_kind: string;
+  project_id: number;
+  project_code: string;
+  project_name: string;
+  node_id: number;
+  node_name: string;
+  is_milestone: boolean;
+  planned_end_date?: string | null;
+  days_remaining?: number | null;
+  days_overdue?: number | null;
+  owner_name?: string | null;
+  project_owner_name?: string | null;
+}
+
 export interface DeliveryProjectNodeTask {
   id: number;
   project_id: number;
@@ -91,6 +119,7 @@ export interface DeliveryProjectWorkbench extends DeliveryProject {
   recent_reports?: DeliveryNodeReport[];
   open_issues?: DeliveryIssue[];
   linked_rd_project?: DeliveryLinkedRdProject | null;
+  node_documents?: DeliveryProjectNodeDocument[];
 }
 
 export interface DeliveryProcessTemplateNodeTask {
@@ -212,6 +241,7 @@ export interface DeliveryDashboard {
     overdue_nodes: number;
     at_risk_projects: number;
     open_issues: number;
+    alert_count: number;
   };
   recent_projects: DeliveryProject[];
   overdue_nodes: Array<{
@@ -222,6 +252,7 @@ export interface DeliveryDashboard {
     node_name: string;
     planned_end_date?: string;
   }>;
+  alerts?: DeliveryAlertRow[];
   project_gantt?: DeliveryGanttItem[];
 }
 
@@ -320,6 +351,22 @@ export const deliveryProjectApi = {
     }),
   updateNode: (projectId: number, nodeId: number, data: Record<string, unknown>) =>
     apiRequest<DeliveryProjectNode>(`${BASE}/delivery-projects/${projectId}/nodes/${nodeId}`, { method: 'PUT', data }),
+  startNode: (projectId: number, nodeId: number) =>
+    apiRequest<DeliveryProjectNode>(`${BASE}/delivery-projects/${projectId}/nodes/${nodeId}/start`, { method: 'POST' }),
+  completeNode: (projectId: number, nodeId: number) =>
+    apiRequest<DeliveryProjectNode>(`${BASE}/delivery-projects/${projectId}/nodes/${nodeId}/complete`, { method: 'POST' }),
+  listNodeDocuments: (projectId: number, nodeId?: number) =>
+    apiRequest<DeliveryProjectNodeDocument[]>(`${BASE}/delivery-projects/${projectId}/node-documents`, {
+      method: 'GET',
+      params: nodeId ? { node_id: nodeId } : undefined,
+    }),
+  linkNodeDocument: (projectId: number, data: Record<string, unknown>) =>
+    apiRequest<DeliveryProjectNodeDocument>(`${BASE}/delivery-projects/${projectId}/node-documents`, {
+      method: 'POST',
+      data,
+    }),
+  unlinkNodeDocument: (projectId: number, linkId: number) =>
+    apiRequest(`${BASE}/delivery-projects/${projectId}/node-documents/${linkId}`, { method: 'DELETE' }),
   createNodeTask: (projectId: number, data: Record<string, unknown>) =>
     apiRequest<DeliveryProjectNodeTask>(`${BASE}/delivery-projects/${projectId}/node-tasks`, {
       method: 'POST',
@@ -394,6 +441,22 @@ export const deliveryIssueApi = {
   update: (id: number, data: Record<string, unknown>) =>
     apiRequest<DeliveryIssue>(`${BASE}/delivery-issues/${id}`, { method: 'PUT', data }),
   delete: (id: number) => apiRequest(`${BASE}/delivery-issues/${id}`, { method: 'DELETE' }),
+};
+
+export const DELIVERY_NODE_DOCUMENT_TYPES: Record<string, string> = {
+  sales_order: '销售订单',
+  purchase_order: '采购订单',
+  work_order: '工单',
+  purchase_receipt: '采购入库',
+  sales_delivery: '销售出库',
+  quality_inspection: '检验单',
+  rd_project: '研发项目',
+};
+
+export const DELIVERY_ALERT_KIND: Record<string, string> = {
+  due_soon: '临期',
+  overdue: '逾期',
+  milestone_overdue: '里程碑逾期',
 };
 
 export const DELIVERY_PROJECT_STATUS: Record<string, string> = {

@@ -160,7 +160,7 @@ const InputCertificationPage: React.FC = () => {
                     try {
                       await taxService.certify(row.id);
                       messageApi.success(t(`${NS}.certified`));
-                      actionRef.current?.reload();
+    actionRef.current?.reload();
                     } catch (error) {
                       messageApi.error(getApiErrorMessage(error, t(`${NS}.certifyFailed`)));
                     }
@@ -225,7 +225,7 @@ const InputCertificationPage: React.FC = () => {
                           n: res.certified?.length ?? 0,
                         }),
                       );
-                      actionRef.current?.reload();
+    actionRef.current?.reload();
                       actionRef.current?.clearSelected?.();
                     } catch (error) {
                       messageApi.error(getApiErrorMessage(error, t(`${NS}.certifyFailed`)));
@@ -264,7 +264,7 @@ const InputCertificationPage: React.FC = () => {
             messageApi.success(t(`${NS}.transferred`));
             setTransferId(null);
             setTransferReason('');
-            actionRef.current?.reload();
+    actionRef.current?.reload();
           } catch (error) {
             messageApi.error(getApiErrorMessage(error, t(`${NS}.transferFailed`)));
           }
@@ -293,7 +293,7 @@ const InputCertificationPage: React.FC = () => {
             messageApi.success(t(`${NS}.redDone`));
             setRedId(null);
             setRedReason('');
-            actionRef.current?.reload();
+    actionRef.current?.reload();
           } catch (error) {
             messageApi.error(getApiErrorMessage(error, t(`${NS}.redFailed`)));
           }

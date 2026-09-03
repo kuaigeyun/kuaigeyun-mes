@@ -48,7 +48,7 @@ const ComputationHistoryPage: React.FC = () => {
   const [compareResult, setCompareResult] = useState<ComputationCompareResult | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const tableRowsRef = useRef<DemandComputation[]>([]);
-  const computationPerms = useResourcePermissions('plan-management-demand-computation');
+  const computationPerms = useResourcePermissions('kuaizhizao:plan-management-demand-computation');
 
   const selectedComputationsForBatch = useMemo(
     () =>

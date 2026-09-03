@@ -17,7 +17,7 @@ ENTITY_LIST_PATH: dict[str, str] = {
     "sales_contract": "/apps/kuaizhizao/sales-management/sales-contracts",
     "quotation": "/apps/kuaizhizao/sales-management/quotations",
     "shipment_notice": "/apps/kuaizhizao/sales-management/shipment-notices",
-    "sales_delivery": "/apps/kuaizhizao/sales-management/sales-deliveries",
+    "sales_delivery": "/apps/kuaizhizao/warehouse-management/outbound?outbound_type=sales_delivery",
     "freight_bill": "/apps/kuaizhizao/logistics-management/freight-bills",
     "sales_return": "/apps/kuaizhizao/sales-management/sales-returns",
     "sales_contract_change": "/apps/kuaizhizao/sales-management/sales-contract-changes",
@@ -27,10 +27,14 @@ ENTITY_LIST_PATH: dict[str, str] = {
     "purchase_request": "/apps/kuaizhizao/purchase-management/purchase-requisitions",
     "purchase_inquiry": "/apps/kuaizhizao/purchase-management/purchase-inquiries",
     "reporting_record": "/apps/kuaizhizao/production-execution/reporting-records",
+    "production_picking": "/apps/kuaizhizao/warehouse-management/outbound?outbound_type=production_picking",
     "incoming_inspection": "/apps/kuaizhizao/quality-management/incoming-inspection",
     "process_inspection": "/apps/kuaizhizao/quality-management/process-inspection",
     "finished_goods_inspection": "/apps/kuaizhizao/quality-management/finished-goods-inspection",
     "oqc_inspection": "/apps/kuaizhizao/quality-management/oqc-inspection",
+    "payable": "/apps/kuaicaiwu/finance-management/payables",
+    "receivable": "/apps/kuaicaiwu/finance-management/receivables",
+    "purchase_invoice": "/apps/kuaicaiwu/finance-management/purchase-invoices",
     "kuaioa_form_request": "/apps/kuaioa/approval/form-requests",
     "kuaioa_asset_purchase": "/apps/kuaioa/assets/purchases",
     "kuaioa_leave": "/apps/kuaioa/hr/leave",
@@ -58,10 +62,14 @@ ENTITY_MODULE: dict[str, str] = {
     "purchase_inquiry": "purchase",
     "demand": "manufacturing",
     "reporting_record": "manufacturing",
+    "production_picking": "manufacturing",
     "incoming_inspection": "quality",
     "process_inspection": "quality",
     "finished_goods_inspection": "quality",
     "oqc_inspection": "quality",
+    "payable": "finance",
+    "receivable": "finance",
+    "purchase_invoice": "finance",
 }
 
 # entity_type → 首页待办 Tab type
@@ -74,6 +82,9 @@ ENTITY_TODO_TYPE: dict[str, str] = {
     "process_inspection": "quality_inspection",
     "finished_goods_inspection": "quality_inspection",
     "oqc_inspection": "quality_inspection",
+    "payable": "approval",
+    "receivable": "approval",
+    "purchase_invoice": "approval",
 }
 
 
@@ -81,7 +92,8 @@ def build_approval_entity_link(entity_type: Optional[str], entity_id: Optional[i
     key = (entity_type or "").strip()
     base = ENTITY_LIST_PATH.get(key)
     if base and entity_id:
-        return f"{base}?id={entity_id}"
+        sep = "&" if "?" in base else "?"
+        return f"{base}{sep}id={entity_id}"
     if base:
         return base
     return "/personal/tasks"
@@ -101,6 +113,9 @@ async def fetch_user_approval_todos(
     limit: int = 20,
 ) -> List[dict[str, Any]]:
     """查询当前用户待审批任务并转为 TodoItem 字段 dict。"""
+    await ApprovalInstanceService.reconcile_orphaned_approval_tasks(
+        tenant_id, user_id
+    )
     tasks = (
         await ApprovalTask.filter(
             tenant_id=tenant_id,

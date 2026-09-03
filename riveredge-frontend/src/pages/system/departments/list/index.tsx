@@ -302,7 +302,7 @@ const DepartmentListPage: React.FC = () => {
         messageApi.success(
           t('field.department.syncComplete', { created: r.created, updated: r.updated, skipped: r.skipped }),
         );
-        actionRef.current?.reload();
+    actionRef.current?.reload();
       })
       .catch((e) => {
         hideLoading();
@@ -471,7 +471,7 @@ const DepartmentListPage: React.FC = () => {
     } catch (error: unknown) {
       if (isDepartmentNotFoundError(error)) {
         messageApi.warning(t('field.department.alreadyDeletedRefresh'));
-        actionRef.current?.reload();
+    actionRef.current?.reload();
         return;
       }
       messageApi.error((error as Error).message || t('common.deleteFailed'));
@@ -507,7 +507,7 @@ const DepartmentListPage: React.FC = () => {
       });
       if (result.success_count > 0) {
         messageApi.success(t('field.department.importSuccess', { count: result.success_count }));
-        actionRef.current?.reload();
+    actionRef.current?.reload();
       }
       if (result.failure_count > 0) {
         modal.error({
@@ -721,7 +721,7 @@ const DepartmentListPage: React.FC = () => {
               try {
                 const res = await linkPresetDepartmentManagers();
                 messageApi.success(res.message);
-                actionRef.current?.reload();
+    actionRef.current?.reload();
               } catch (e: any) {
                 messageApi.error(e?.message || t('common.operationFailed'));
               }
@@ -795,7 +795,7 @@ const DepartmentListPage: React.FC = () => {
                 const res = await loadPresetDepartments(selectedPresetCodes);
                 messageApi.success(res.message);
                 setPresetModalVisible(false);
-                actionRef.current?.reload();
+    actionRef.current?.reload();
               } catch (e: any) {
                 messageApi.error(e?.message || t('common.operationFailed'));
               } finally {

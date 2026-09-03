@@ -60,6 +60,7 @@ import { DocumentLineUnitSelect } from '../../../../../components/quantity-with-
 import { resolveMaterialScenarioUnit } from '../../../../../utils/materialScenarioUnit';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import { resolveDeliveryNoticeQualityCertificates } from '../../../services/print';
@@ -76,12 +77,12 @@ import {
   resolveDeliveryNoticeListParams,
 } from '../../../utils/warehouseListCore';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { lookupFreightOrderBySource } from '../../../services/logistics';
 import { buildLogisticsTrackingUrl } from '../../logistics-management/tracking/logisticsTrackingDeepLink';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
-import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 interface DeliveryNotice {
   id?: number;
@@ -372,7 +373,9 @@ const DeliveryNotesPage: React.FC = () => {
             {record.status === '待发送' && (
               <>
                 <Button {...rowActionKind('update')} onClick={() => handleEdit(record)} />
-                <Button {...rowActionKind('delete')} onClick={() => handleDelete(record)} />
+                <ActionConfirmPopconfirm title={t('app.kuaizhizao.deliveryNote.msg.deleteTitle')} description={t('app.kuaizhizao.deliveryNote.msg.deleteContent', { code: record.notice_code })} onConfirm={() => executeDelete(record)}>
+              <Button {...rowActionKind('delete')} onClick={(e) => e.stopPropagation()} />
+            </ActionConfirmPopconfirm>
               </>
             )}
             {moreItems.length > 0 && (
@@ -438,40 +441,34 @@ const DeliveryNotesPage: React.FC = () => {
     }
   };
 
+  const executeSend = async (record: DeliveryNotice) => {
+    try {
+      await deliveryNoticeApi.send(record.id!.toString());
+      messageApi.success(t('app.kuaizhizao.deliveryNote.msg.sendSuccess'));
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || t('app.kuaizhizao.deliveryNote.msg.sendFailed'));
+    }
+  };
+
   const handleSend = (record: DeliveryNotice) => {
     getAntdModal().confirm({
       title: t('app.kuaizhizao.deliveryNote.msg.sendTitle'),
       content: t('app.kuaizhizao.deliveryNote.msg.sendContent', { code: record.notice_code }),
-      onOk: async () => {
-        try {
-          await deliveryNoticeApi.send(record.id!.toString());
-          messageApi.success(t('app.kuaizhizao.deliveryNote.msg.sendSuccess'));
-          invalidateMenuBadgeCounts();
-
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error.message || t('app.kuaizhizao.deliveryNote.msg.sendFailed'));
-        }
-      },
+      onOk: () => executeSend(record),
     });
   };
 
-  const handleDelete = (record: DeliveryNotice) => {
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.deliveryNote.msg.deleteTitle'),
-      content: t('app.kuaizhizao.deliveryNote.msg.deleteContent', { code: record.notice_code }),
-      onOk: async () => {
-        try {
+  const executeDelete = async (record: DeliveryNotice) => {
+    try {
           await deliveryNoticeApi.delete(record.id!.toString());
           messageApi.success(t('common.deleteSuccess'));
           invalidateMenuBadgeCounts();
-
-          actionRef.current?.reload();
+    actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || t('common.deleteFailed'));
         }
-      },
-    });
   };
 
   const handleBatchDelete = async (keys: React.Key[]) => {
@@ -650,7 +647,7 @@ const DeliveryNotesPage: React.FC = () => {
         );
         pullFromSalesDeliveryQuery.closeModal();
         invalidateMenuBadgeCounts();
-        actionRef.current?.reload();
+    actionRef.current?.reload();
       } catch (error: unknown) {
         messageApi.error(
           getApiErrorMessage(

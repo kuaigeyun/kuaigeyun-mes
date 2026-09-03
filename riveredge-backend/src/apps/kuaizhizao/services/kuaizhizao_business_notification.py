@@ -172,3 +172,198 @@ async def notify_work_order_next_operation(
             "next_operation_assignee_user_ids": assignee_ids,
         },
     )
+
+
+DOC_DELIVERY_PROJECT = "delivery_project"
+ACTION_NODE_DUE_SOON = "node_due_soon"
+ACTION_NODE_OVERDUE = "node_overdue"
+ACTION_MILESTONE_OVERDUE = "milestone_overdue"
+
+
+async def _send_delivery_project_internal(
+    tenant_id: int,
+    *,
+    recipient_user_ids: List[int],
+    subject: str,
+    content: str,
+    detail_path: str,
+) -> int:
+    """交付项目预警：固化默认站内信（不依赖配置中心规则）。"""
+    from core.schemas.message_template import SendMessageRequest
+    from core.services.messaging.message_service import MessageService
+
+    sent = 0
+    seen: set[int] = set()
+    for raw in recipient_user_ids:
+        try:
+            uid = int(raw)
+        except (TypeError, ValueError):
+            continue
+        if uid < 1 or uid in seen:
+            continue
+        seen.add(uid)
+        try:
+            req = SendMessageRequest(
+                type="internal",
+                recipient=str(uid),
+                subject=subject,
+                content=content,
+                variables={"detail_path": detail_path, "message_category": "process"},
+            )
+            result = await MessageService.send_message(tenant_id, req)
+            if result.success:
+                sent += 1
+        except Exception as exc:
+            logger.error(
+                "交付项目预警站内信失败 tenant={} user={}: {}",
+                tenant_id,
+                uid,
+                exc,
+            )
+    return sent
+
+
+def _delivery_workbench_path(project_id: int) -> str:
+    return f"/apps/kuaizhizao/delivery-project/projects/{project_id}"
+
+
+async def notify_delivery_node_due_soon(
+    tenant_id: int,
+    *,
+    project_id: int,
+    project_code: str,
+    project_name: str,
+    node_id: int,
+    node_name: str,
+    planned_end_date: str,
+    days_remaining: int,
+    node_owner_user_id: Optional[int],
+    project_owner_user_id: Optional[int],
+) -> int:
+    recipients = [uid for uid in (node_owner_user_id, project_owner_user_id) if uid]
+    subject = f"交付节点临期提醒 {project_code} {node_name}"
+    content = (
+        f"项目 {project_code} {project_name} 的节点「{node_name}」"
+        f"计划 {planned_end_date} 完成，剩余 {days_remaining} 天，请及时跟进。"
+    )
+    dispatched = await dispatch_kuaizhizao_notification(
+        tenant_id,
+        trigger_document=DOC_DELIVERY_PROJECT,
+        trigger_action=ACTION_NODE_DUE_SOON,
+        variables={
+            "project_code": project_code,
+            "project_name": project_name,
+            "node_name": node_name,
+            "planned_end_date": planned_end_date,
+            "days_remaining": str(days_remaining),
+            "detail_path": _delivery_workbench_path(project_id),
+        },
+        context={
+            "node_owner_user_id": node_owner_user_id,
+            "project_owner_user_id": project_owner_user_id,
+        },
+    )
+    if dispatched:
+        return dispatched
+    return await _send_delivery_project_internal(
+        tenant_id,
+        recipient_user_ids=recipients,
+        subject=subject,
+        content=content,
+        detail_path=_delivery_workbench_path(project_id),
+    )
+
+
+async def notify_delivery_node_overdue(
+    tenant_id: int,
+    *,
+    project_id: int,
+    project_code: str,
+    project_name: str,
+    node_id: int,
+    node_name: str,
+    planned_end_date: str,
+    days_overdue: int,
+    node_owner_user_id: Optional[int],
+    project_owner_user_id: Optional[int],
+) -> int:
+    recipients = [uid for uid in (node_owner_user_id, project_owner_user_id) if uid]
+    subject = f"交付节点逾期 {project_code} {node_name}"
+    content = (
+        f"项目 {project_code} {project_name} 的节点「{node_name}」"
+        f"计划 {planned_end_date} 完成，已逾期 {days_overdue} 天，请负责人与项目负责人尽快处理。"
+    )
+    dispatched = await dispatch_kuaizhizao_notification(
+        tenant_id,
+        trigger_document=DOC_DELIVERY_PROJECT,
+        trigger_action=ACTION_NODE_OVERDUE,
+        variables={
+            "project_code": project_code,
+            "project_name": project_name,
+            "node_name": node_name,
+            "planned_end_date": planned_end_date,
+            "days_overdue": str(days_overdue),
+            "detail_path": _delivery_workbench_path(project_id),
+        },
+        context={
+            "node_owner_user_id": node_owner_user_id,
+            "project_owner_user_id": project_owner_user_id,
+        },
+    )
+    if dispatched:
+        return dispatched
+    return await _send_delivery_project_internal(
+        tenant_id,
+        recipient_user_ids=recipients,
+        subject=subject,
+        content=content,
+        detail_path=_delivery_workbench_path(project_id),
+    )
+
+
+async def notify_delivery_node_milestone_overdue(
+    tenant_id: int,
+    *,
+    project_id: int,
+    project_code: str,
+    project_name: str,
+    node_id: int,
+    node_name: str,
+    planned_end_date: str,
+    days_overdue: int,
+    node_owner_user_id: Optional[int],
+    project_owner_user_id: Optional[int],
+) -> int:
+    recipients = [uid for uid in (node_owner_user_id, project_owner_user_id) if uid]
+    subject = f"里程碑节点逾期 {project_code} {node_name}"
+    content = (
+        f"【高优先级】项目 {project_code} {project_name} 的里程碑节点「{node_name}」"
+        f"计划 {planned_end_date} 完成，已逾期 {days_overdue} 天，请立即升级处理。"
+    )
+    dispatched = await dispatch_kuaizhizao_notification(
+        tenant_id,
+        trigger_document=DOC_DELIVERY_PROJECT,
+        trigger_action=ACTION_MILESTONE_OVERDUE,
+        variables={
+            "project_code": project_code,
+            "project_name": project_name,
+            "node_name": node_name,
+            "planned_end_date": planned_end_date,
+            "days_overdue": str(days_overdue),
+            "detail_path": _delivery_workbench_path(project_id),
+        },
+        context={
+            "node_owner_user_id": node_owner_user_id,
+            "project_owner_user_id": project_owner_user_id,
+        },
+        message_category="process",
+    )
+    if dispatched:
+        return dispatched
+    return await _send_delivery_project_internal(
+        tenant_id,
+        recipient_user_ids=recipients,
+        subject=subject,
+        content=content,
+        detail_path=_delivery_workbench_path(project_id),
+    )

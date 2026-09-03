@@ -33,9 +33,9 @@ import { alignProColumns } from '../../sales-management/shared/documentFieldAlig
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { assemblyTemplateApi } from '../../../services/assembly-template';
 import { formatDateTimeBySiteSetting, formatQuantity } from '../../../../../utils/format';
-import { getAntdModal } from '../../../../../utils/antdAppApis';
 const ASSEMBLY_ORDERS_RESOURCE = 'kuaizhizao:warehouse-management-assembly-orders';
 
 type TemplateItem = {
@@ -185,12 +185,8 @@ export const AssemblyTemplatesTab: React.FC = () => {
     }
   };
 
-  const confirmDeleteTemplate = (record: AssemblyTemplate) => {
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.assemblyTemplate.deleteTitle'),
-      content: t('app.kuaizhizao.assemblyTemplate.deleteConfirm', { code: record.template_code }),
-      onOk: async () => {
-        try {
+  const executeconfirmDeleteTemplate = async (record: AssemblyTemplate) => {
+    try {
           await assemblyTemplateApi.delete(String(record.id));
           messageApi.success(t('app.kuaizhizao.assemblyTemplate.deleteSuccess'));
           if (currentTemplate?.id === record.id) {
@@ -201,8 +197,6 @@ export const AssemblyTemplatesTab: React.FC = () => {
         } catch (error: any) {
           messageApi.error(error?.message || t('app.kuaizhizao.assemblyTemplate.deleteFailed'));
         }
-      },
-    });
   };
 
   const openItemModal = (template: AssemblyTemplate, item?: TemplateItem) => {
@@ -256,14 +250,8 @@ export const AssemblyTemplatesTab: React.FC = () => {
     }
   };
 
-  const confirmDeleteItem = (template: AssemblyTemplate, item: TemplateItem) => {
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.assemblyTemplate.deleteItemTitle'),
-      content: t('app.kuaizhizao.assemblyTemplate.deleteItemConfirm', {
-        name: item.material_code || item.material_name,
-      }),
-      onOk: async () => {
-        try {
+  const executeconfirmDeleteItem = async (template: AssemblyTemplate, item: TemplateItem) => {
+    try {
           if (!template.id || !item.id) return;
           await assemblyTemplateApi.deleteItem(String(template.id), String(item.id));
           messageApi.success(t('app.kuaizhizao.assemblyTemplate.deleteItemSuccess'));
@@ -272,8 +260,6 @@ export const AssemblyTemplatesTab: React.FC = () => {
         } catch (error: any) {
           messageApi.error(error?.message || t('app.kuaizhizao.assemblyTemplate.deleteItemFailed'));
         }
-      },
-    });
   };
 
   const previewBom = async (template: AssemblyTemplate) => {
@@ -296,12 +282,8 @@ export const AssemblyTemplatesTab: React.FC = () => {
     }
   };
 
-  const confirmImportFromBom = (template: AssemblyTemplate) => {
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.assemblyTemplate.importFromBomTitle'),
-      content: t('app.kuaizhizao.assemblyTemplate.importFromBomConfirm'),
-      onOk: async () => {
-        try {
+  const executeconfirmImportFromBom = async (template: AssemblyTemplate) => {
+    try {
           const updated = await assemblyTemplateApi.importFromBom(String(template.id));
           messageApi.success(t('app.kuaizhizao.assemblyTemplate.importFromBomSuccess'));
           setCurrentTemplate(updated as AssemblyTemplate);
@@ -309,8 +291,6 @@ export const AssemblyTemplatesTab: React.FC = () => {
         } catch (error: any) {
           messageApi.error(error?.message || t('app.kuaizhizao.assemblyTemplate.importFromBomFailed'));
         }
-      },
-    });
   };
 
   const columns: ProColumns<AssemblyTemplate>[] = useMemo(
@@ -417,7 +397,9 @@ export const AssemblyTemplatesTab: React.FC = () => {
                 {t('app.kuaizhizao.assemblyTemplate.previewBom')}
               </Button>
             )}
-            {canDelete && <Button {...rowActionKind('delete')} onClick={() => confirmDeleteTemplate(record)} />}
+            {canDelete && <ActionConfirmPopconfirm title={t('app.kuaizhizao.assemblyTemplate.deleteTitle')} description={t('app.kuaizhizao.assemblyTemplate.deleteConfirm', { code: record.template_code })} onConfirm={() => executeconfirmDeleteTemplate(record)}>
+              <Button {...rowActionKind('delete')} onClick={(e) => e.stopPropagation()} />
+            </ActionConfirmPopconfirm>}
           </Space>
         ),
       },
@@ -490,15 +472,19 @@ export const AssemblyTemplatesTab: React.FC = () => {
                 </Button>
               )}
               {canDelete && (
-                <Button
+                <ActionConfirmPopconfirm title={t('app.kuaizhizao.assemblyTemplate.deleteItemTitle')} description={t('app.kuaizhizao.assemblyTemplate.deleteItemConfirm', {
+        name: item.material_code || item.material_name,
+      })} onConfirm={() => executeconfirmDeleteItem(currentTemplate!, item)}>
+              <Button
                   type="link"
                   size="small"
                   danger
                   icon={<DeleteOutlined />}
-                  onClick={() => confirmDeleteItem(currentTemplate!, item)}
+                  onClick={(e) => e.stopPropagation()}
                 >
                   {t('common.delete')}
                 </Button>
+            </ActionConfirmPopconfirm>
               )}
             </Space>
           ) : null,
@@ -534,14 +520,16 @@ export const AssemblyTemplatesTab: React.FC = () => {
           <Button size="small" icon={<ImportOutlined />} onClick={() => previewBom(currentTemplate)}>
             {t('app.kuaizhizao.assemblyTemplate.previewBom')}
           </Button>
-          <Button
+          <ActionConfirmPopconfirm title={t('app.kuaizhizao.assemblyTemplate.importFromBomTitle')} description={t('app.kuaizhizao.assemblyTemplate.importFromBomConfirm')} onConfirm={() => executeconfirmImportFromBom(currentTemplate)}>
+              <Button
             size="small"
             type="primary"
             icon={<ImportOutlined />}
-            onClick={() => confirmImportFromBom(currentTemplate)}
+            onClick={(e) => e.stopPropagation()}
           >
             {t('app.kuaizhizao.assemblyTemplate.importFromBom')}
           </Button>
+            </ActionConfirmPopconfirm>
         </>
       )}
     </Space>

@@ -189,21 +189,13 @@ const MessageConfigListPage: React.FC = () => {
   /**
    * 处理批量删除消息配置
    */
-  const handleBatchDelete = () => {
-    const deletableKeys = selectedRowKeys.filter((k) => String(k) !== BUILTIN_INTERNAL_CHANNEL_UUID);
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    const deletableKeys = keys.filter((k) => String(k) !== BUILTIN_INTERNAL_CHANNEL_UUID);
     if (deletableKeys.length === 0) {
       messageApi.warning(t('pages.system.selectFirst'));
       return;
     }
-
-    getAntdModal().confirm({
-      title: t('pages.system.messageConfig.batchDeleteConfirmTitle'),
-      content: t('pages.system.messageConfig.batchDeleteConfirmContent', { count: deletableKeys.length }),
-      okText: t('common.confirm'),
-      cancelText: t('common.cancel'),
-      okType: 'danger',
-      onOk: async () => {
-        try {
+    try {
           let successCount = 0;
           let failCount = 0;
           const errors: string[] = [];
@@ -226,13 +218,11 @@ const MessageConfigListPage: React.FC = () => {
           }
 
           setSelectedRowKeys([]);
-          actionRef.current?.reload();
+    actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || t('pages.system.messageConfig.batchDeleteFailed'));
         }
-      },
-    });
-  };
+  };;
 
   /**
    * 处理提交表单（创建/更新消息配置）
@@ -583,7 +573,9 @@ const MessageConfigListPage: React.FC = () => {
         onCreate={handleCreate}
         enableRowSelection
         onRowSelectionChange={setSelectedRowKeys}
-        showDeleteButton
+        showDeleteButtondeleteConfirmTitle={t('pages.system.messageConfig.batchDeleteConfirmTitle')}
+          deleteConfirmDescription={(count) => t('pages.system.messageConfig.batchDeleteConfirmContent', { count: deletableKeys.length })}
+          
         onDelete={handleBatchDelete}
         deleteButtonText={t('common.batchDelete')}
         showImportButton={false}

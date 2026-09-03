@@ -30,6 +30,7 @@ import { ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-d
 import { UniTable, invalidateUniTableListCache, readPersistedUniTableViewType, type UniTableRequestMeta } from '../../../../../components/uni-table';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -695,8 +696,6 @@ const QuotationsPage: React.FC = () => {
   const pendingListReloadRef = useRef(false);
   const queryClient = useQueryClient();
   const [listScopeFilter, setListScopeFilter] = useState<QuotationListScope>(resolveDefaultQuotationListScope);
-  const listScopeFilterRef = useRef(listScopeFilter);
-  listScopeFilterRef.current = listScopeFilter;
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const invalidateSalesOrderList = useInvalidateSalesOrderList();
 
@@ -916,13 +915,6 @@ const QuotationsPage: React.FC = () => {
   const [pushPreviewRecord, setPushPreviewRecord] = useState<Quotation | null>(null);
   const [pushSelectedItemIds, setPushSelectedItemIds] = useState<number[]>([]);
   const leaveQuotationFormPage = useLeaveFormTab(QUOTATION_LIST_PATH);
-
-  const handleListScopeFilterChange = useCallback((v: QuotationListScope) => {
-    if (v === listScopeFilterRef.current) return;
-    listScopeFilterRef.current = v;
-    setListScopeFilter(v);
-    actionRef.current?.reload();
-  }, []);
 
   const currentUser = useCurrentUser();
   const quotationPerms = useResourcePermissions(QUOTATION_RESOURCE);
@@ -1336,9 +1328,11 @@ const QuotationsPage: React.FC = () => {
         }
         if (deletable) {
           parts.push(
-            <Button {...rowActionKind('delete')} key="del" onClick={() => handleDelete(record)}>
+            <ActionConfirmPopconfirm title={t('app.kuaizhizao.quotation.deleteModalTitle')} description={t('app.kuaizhizao.quotation.confirmDelete', { code: record.quotation_code })} onConfirm={() => executeDelete(record)}>
+              <Button {...rowActionKind('delete')} key="del" onClick={(e) => e.stopPropagation()}>
               {t('common.delete')}
-            </Button>,
+            </Button>
+            </ActionConfirmPopconfirm>,
           );
         }
         parts.push(
@@ -1356,7 +1350,7 @@ const QuotationsPage: React.FC = () => {
             approvedStatuses={['已审核', '审核通过', 'approved', 'APPROVED']}
             rejectedStatuses={['已驳回', 'rejected', 'REJECTED']}
             onSuccess={() => {
-              actionRef.current?.reload();
+    actionRef.current?.reload();
               if (quotationDetail?.id === record.id) {
                 void loadQuotationDetail(record.id!);
               }
@@ -1365,16 +1359,20 @@ const QuotationsPage: React.FC = () => {
         );
         if (record.capabilities?.reopen?.allowed === true && quotationPerms.canUpdate) {
           parts.push(
-            <Button {...rowActionKind('read')} key="ro" onClick={() => handleReopen(record)}>
+            <ActionConfirmPopconfirm title={t('app.kuaizhizao.quotation.reopenEdit')} description={t('app.kuaizhizao.quotation.reopenContent')} onConfirm={() => executeReopen(record)}>
+              <Button {...rowActionKind('read')} key="ro" onClick={(e) => e.stopPropagation()}>
               {t('app.kuaizhizao.quotation.reopenEdit')}
             </Button>
+            </ActionConfirmPopconfirm>
           );
         }
         if (record.capabilities?.revoke_push?.allowed === true && quotationPerms.canUpdate) {
           parts.push(
-            <Button {...rowActionKind('skip')} key="rp" icon={<RollbackOutlined />} onClick={() => handleRevokePush(record)}>
+            <ActionConfirmPopconfirm title={t('app.kuaizhizao.quotation.revokePush')} description={t('app.kuaizhizao.quotation.revokePushContent')} onConfirm={() => executeRevokePush(record)}>
+              <Button {...rowActionKind('skip')} key="rp" icon={<RollbackOutlined />} onClick={(e) => e.stopPropagation()}>
               {t('app.kuaizhizao.quotation.revokePush')}
             </Button>
+            </ActionConfirmPopconfirm>
           );
         }
         if (record.customer_id != null && Number.isFinite(Number(record.customer_id))) {
@@ -1596,23 +1594,19 @@ const QuotationsPage: React.FC = () => {
     navigate(quotationEditPath(record.id));
   };
 
-  const handleDelete = (record: Quotation) => {
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.quotation.deleteModalTitle'),
-      content: t('app.kuaizhizao.quotation.confirmDelete', { code: record.quotation_code }),
-      onOk: async () => {
-        try {
-          await deleteQuotation(record.id!);
-          messageApi.success(t('common.deleteSuccess'));
-          invalidateMenuBadgeCounts();
-
-          actionRef.current?.reload();
-          setSelectedRowKeys((prev) => prev.filter((k) => Number(k) !== record.id!));
-        } catch (error: any) {
-          messageApi.error(error.message || t('common.deleteFailed'));
-        }
-      },
-    });
+  const executeDelete = async (record: Quotation) => {
+    try {
+      await deleteQuotation(record.id!);
+      messageApi.success(t('common.deleteSuccess'));
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+      setSelectedRowKeys((prev) => prev.filter((k) => Number(k) !== record.id!));
+      if (quotationDetail?.id === record.id) {
+        closeQuotationDetailDrawer();
+      }
+    } catch (error: any) {
+      messageApi.error(error.message || t('common.deleteFailed'));
+    }
   };
 
   const handleItemImport = (data: any[][]) => {
@@ -2021,8 +2015,7 @@ const QuotationsPage: React.FC = () => {
       }
       if (result.successCount > 0) {
         invalidateMenuBadgeCounts();
-
-        actionRef.current?.reload();
+    actionRef.current?.reload();
       }
     } catch (error: any) {
       messageApi.error(error?.message || t('common.importFailed'));
@@ -2118,7 +2111,7 @@ const QuotationsPage: React.FC = () => {
         });
         invalidateMenuBadgeCounts();
         invalidateSalesOrderList();
-        actionRef.current?.reload();
+    actionRef.current?.reload();
         closeQuotationDetailDrawer();
       } else {
         const res = await convertQuotationToSalesReview(pushPreviewRecord.id, { selected_item_ids: selectedIds });
@@ -2133,7 +2126,7 @@ const QuotationsPage: React.FC = () => {
           duration: 6,
         });
         invalidateMenuBadgeCounts();
-        actionRef.current?.reload();
+    actionRef.current?.reload();
         if (quotationDetail?.id === pushPreviewRecord.id) {
           void loadQuotationDetail(pushPreviewRecord.id);
         }
@@ -2160,90 +2153,56 @@ const QuotationsPage: React.FC = () => {
     showQuotationPushPreview(record, 'sales_review');
   };
 
-  // 统一审核动作由 UniWorkflowActions 接管（提交/撤回提交/审核/驳回/撤销审核）
-
-  const handleConfirmCustomer = (record: Quotation) => {
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.quotation.customerConfirm'),
-      content: t('app.kuaizhizao.quotation.customerConfirmContent'),
-      onOk: async () => {
-        try {
-          const updated = await confirmCustomerQuotation(record.id!);
-          messageApi.success(t('app.kuaizhizao.quotation.customerConfirmSuccess'));
-          invalidateMenuBadgeCounts();
-
-          actionRef.current?.reload();
-          setQuotationDetail((prev) => (prev?.id === record.id ? updated : prev));
-        } catch (e: any) {
-          messageApi.error(e?.message || e?.detail || t('common.operationFailed'));
-        }
-      },
-    });
+  const executeConfirmCustomer = async (record: Quotation) => {
+    try {
+      const updated = await confirmCustomerQuotation(record.id!);
+      messageApi.success(t('app.kuaizhizao.quotation.customerConfirmSuccess'));
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+      setQuotationDetail((prev) => (prev?.id === record.id ? updated : prev));
+    } catch (e: any) {
+      messageApi.error(e?.message || e?.detail || t('common.operationFailed'));
+    }
   };
 
-  const handleCancelCustomerConfirm = (record: Quotation) => {
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.quotation.cancelCustomerConfirm'),
-      content: t('app.kuaizhizao.quotation.cancelCustomerConfirmContent'),
-      onOk: async () => {
-        try {
-          const updated = await cancelCustomerConfirmQuotation(record.id!);
-          messageApi.success(t('app.kuaizhizao.quotation.cancelCustomerConfirmSuccess'));
-          invalidateMenuBadgeCounts();
-
-          actionRef.current?.reload();
-          setQuotationDetail((prev) => (prev?.id === record.id ? updated : prev));
-        } catch (e: any) {
-          messageApi.error(e?.message || e?.detail || t('common.operationFailed'));
-        }
-      },
-    });
+  const executeCancelCustomerConfirm = async (record: Quotation) => {
+    try {
+      const updated = await cancelCustomerConfirmQuotation(record.id!);
+      messageApi.success(t('app.kuaizhizao.quotation.cancelCustomerConfirmSuccess'));
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+      setQuotationDetail((prev) => (prev?.id === record.id ? updated : prev));
+    } catch (e: any) {
+      messageApi.error(e?.message || e?.detail || t('common.operationFailed'));
+    }
   };
 
-  const handleReopen = (record: Quotation) => {
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.quotation.reopenEdit'),
-      content: t('app.kuaizhizao.quotation.reopenContent'),
-      onOk: async () => {
-        try {
-          const updated = await reopenQuotation(record.id!);
-          messageApi.success(t('app.kuaizhizao.quotation.reopenSuccess'));
-          invalidateMenuBadgeCounts();
-
-          actionRef.current?.reload();
-          setQuotationDetail((prev) => (prev?.id === record.id ? updated : prev));
-        } catch (e: any) {
-          messageApi.error(e?.message || e?.detail || t('common.operationFailed'));
-        }
-      },
-    });
+  const executeReopen = async (record: Quotation) => {
+    try {
+      const updated = await reopenQuotation(record.id!);
+      messageApi.success(t('app.kuaizhizao.quotation.reopenSuccess'));
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+      setQuotationDetail((prev) => (prev?.id === record.id ? updated : prev));
+    } catch (e: any) {
+      messageApi.error(e?.message || e?.detail || t('common.operationFailed'));
+    }
   };
 
-  const handleRevokePush = (record: Quotation) => {
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.quotation.revokePush'),
-      content: t('app.kuaizhizao.quotation.revokePushContent'),
-      onOk: async () => {
-        try {
+  const executeRevokePush = async (record: Quotation) => {
+    try {
           const updated = await revokePushQuotation(record.id!);
           messageApi.success(t('app.kuaizhizao.quotation.revokePushSuccess'));
           invalidateMenuBadgeCounts();
-
-          actionRef.current?.reload();
+    actionRef.current?.reload();
           setQuotationDetail((prev) => (prev?.id === record.id ? updated : prev));
         } catch (e: any) {
           messageApi.error(e?.message || e?.detail || t('common.operationFailed'));
         }
-      },
-    });
   };
 
-  const handleRevision = (record: Quotation) => {
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.quotation.saveAsRevision'),
-      content: t('app.kuaizhizao.quotation.saveAsRevisionHint'),
-      onOk: async () => {
-        try {
+  const executeRevision = async (record: Quotation) => {
+    try {
           const created = await createQuotationRevision(record.id!);
           messageApi.success(
             created.quotation_code
@@ -2251,7 +2210,7 @@ const QuotationsPage: React.FC = () => {
               : t('app.kuaizhizao.quotation.revisionCreated')
           );
           invalidateMenuBadgeCounts();
-          actionRef.current?.reload();
+    actionRef.current?.reload();
           // 创建新版后直接进入编辑页（与「新建」一致），不再跳详情抽屉。
           closeQuotationDetailDrawer();
           if (created.id) {
@@ -2260,8 +2219,6 @@ const QuotationsPage: React.FC = () => {
         } catch (e: any) {
           messageApi.error(e?.message || e?.detail || t('common.operationFailed'));
         }
-      },
-    });
   };
 
   const handlePrint = useCallback(
@@ -2317,12 +2274,12 @@ const QuotationsPage: React.FC = () => {
           messageApi.warning(t('app.kuaizhizao.quotation.revisionOnlyLatest'));
           return;
         }
-        handleRevision(latest);
+        executeRevision(latest);
       } catch (error: any) {
         messageApi.error(error?.message || t('app.kuaizhizao.quotation.loadFailed'));
       }
     },
-    [handleRevision, messageApi]
+    [executeRevision, messageApi, t]
   );
 
   const selectedQuotationIdForToolbar = useMemo(() => {
@@ -3858,8 +3815,9 @@ const QuotationsPage: React.FC = () => {
           columnPersistenceId={QUOTATION_LIST_PERSISTENCE_ID}
           permissionResource={QUOTATION_FIELD_RESOURCE}
           tanstackQuery={{
-            queryKeyPrefix: ['apps.kuaizhizao.pages.sales-management.quotations', listScopeFilter],
+            queryKeyPrefix: [QUOTATION_TABLE_CACHE_ID],
           }}
+          params={{ list_scope: listScopeFilter }}
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           headerTitle={t('app.kuaizhizao.quotation.title')}
@@ -3885,7 +3843,7 @@ const QuotationsPage: React.FC = () => {
               surfaceBackground
               size="medium"
               value={listScopeFilter}
-              onChange={(v) => handleListScopeFilterChange(v as QuotationListScope)}
+              onChange={(v) => setListScopeFilter(v as QuotationListScope)}
               options={[
                 { label: t('app.kuaizhizao.quotation.listScopeAll'), value: 'all' },
                 { label: t('app.kuaizhizao.quotation.listScopeMine'), value: 'mine' },
@@ -4012,7 +3970,7 @@ const QuotationsPage: React.FC = () => {
                 type === 'currentPage' && pageData?.length
                   ? flattenQuotationTableRows(pageData as QuotationTableRow[])
                   : await fetchAllListItems((p) =>
-                      listQuotations({ ...p, list_scope: listScopeFilterRef.current }),
+                      listQuotations({ ...p, list_scope: listScopeFilter }),
                     );
               if (type === 'selected' && keys?.length) {
                 items = items.filter((d) => d.id != null && keys.includes(d.id));
@@ -4073,7 +4031,7 @@ const QuotationsPage: React.FC = () => {
                 start_date: startDate,
                 end_date: endDate,
                 order_by: orderBy,
-                list_scope: listScopeFilterRef.current,
+                list_scope: params.list_scope,
                 include_items: true,
               });
               if (!isPrefetch) {
@@ -4175,24 +4133,36 @@ const QuotationsPage: React.FC = () => {
           quotationDetail && (
             <Space size="small">
               {!detailCapabilityGates.confirmCustomer.disabled && (
-                <Button color="green" variant="solid" icon={<SendOutlined />} onClick={() => handleConfirmCustomer(quotationDetail)}>{t('app.kuaizhizao.quotation.customerConfirm')}</Button>
+                <ActionConfirmPopconfirm title={t('app.kuaizhizao.quotation.customerConfirm')} description={t('app.kuaizhizao.quotation.customerConfirmContent')} onConfirm={() => executeConfirmCustomer(quotationDetail)}>
+              <Button color="green" variant="solid" icon={<SendOutlined />} onClick={(e) => e.stopPropagation()}>{t('app.kuaizhizao.quotation.customerConfirm')}</Button>
+            </ActionConfirmPopconfirm>
               )}
               {!detailCapabilityGates.cancelCustomerConfirm.disabled && (
-                <Button color="orange" variant="solid" icon={<CloseCircleOutlined />} onClick={() => handleCancelCustomerConfirm(quotationDetail)}>{t('app.kuaizhizao.quotation.cancelCustomerConfirm')}</Button>
+                <ActionConfirmPopconfirm title={t('app.kuaizhizao.quotation.cancelCustomerConfirm')} description={t('app.kuaizhizao.quotation.cancelCustomerConfirmContent')} onConfirm={() => executeCancelCustomerConfirm(quotationDetail)}>
+              <Button color="orange" variant="solid" icon={<CloseCircleOutlined />} onClick={(e) => e.stopPropagation()}>{t('app.kuaizhizao.quotation.cancelCustomerConfirm')}</Button>
+            </ActionConfirmPopconfirm>
               )}
               {!detailCapabilityGates.revokePush.disabled && (
-                <Button icon={<RollbackOutlined />} onClick={() => handleRevokePush(quotationDetail)}>{t('app.kuaizhizao.quotation.revokePush')}</Button>
+                <ActionConfirmPopconfirm title={t('app.kuaizhizao.quotation.revokePush')} description={t('app.kuaizhizao.quotation.revokePushContent')} onConfirm={() => executeRevokePush(quotationDetail)}>
+                  <Button icon={<RollbackOutlined />} onClick={(e) => e.stopPropagation()}>{t('app.kuaizhizao.quotation.revokePush')}</Button>
+                </ActionConfirmPopconfirm>
               )}
               {!detailCapabilityGates.createRevision.disabled && (
-                <Button icon={<BranchesOutlined />} onClick={() => handleRevision(quotationDetail)}>
+                <ActionConfirmPopconfirm title={t('app.kuaizhizao.quotation.saveAsRevision')} description={t('app.kuaizhizao.quotation.saveAsRevisionHint')} onConfirm={() => executeRevision(quotationDetail)}>
+              <Button icon={<BranchesOutlined />} onClick={(e) => e.stopPropagation()}>
                   {t('app.kuaizhizao.quotation.saveAsRevision')}
                 </Button>
+            </ActionConfirmPopconfirm>
               )}
               {!detailCapabilityGates.reopen.disabled && (
-                <Button icon={<EditOutlined />} onClick={() => handleReopen(quotationDetail)}>{t('app.kuaizhizao.quotation.reopenEdit')}</Button>
+                <ActionConfirmPopconfirm title={t('app.kuaizhizao.quotation.reopenEdit')} description={t('app.kuaizhizao.quotation.reopenContent')} onConfirm={() => executeReopen(quotationDetail)}>
+                  <Button icon={<EditOutlined />} onClick={(e) => e.stopPropagation()}>{t('app.kuaizhizao.quotation.reopenEdit')}</Button>
+                </ActionConfirmPopconfirm>
               )}
               {!detailCapabilityGates.delete.disabled && (
-                <Button danger icon={<DeleteOutlined />} onClick={() => handleDelete(quotationDetail)}>{t('common.delete')}</Button>
+                <ActionConfirmPopconfirm title={t('app.kuaizhizao.quotation.deleteModalTitle')} description={t('app.kuaizhizao.quotation.confirmDelete', { code: quotationDetail.quotation_code })} onConfirm={() => executeDelete(quotationDetail)}>
+                  <Button danger icon={<DeleteOutlined />} onClick={(e) => e.stopPropagation()}>{t('common.delete')}</Button>
+                </ActionConfirmPopconfirm>
               )}
               <UniWorkflowActions
                 {...rowActionKind('skip')}
@@ -4208,7 +4178,7 @@ const QuotationsPage: React.FC = () => {
                 approvedStatuses={['已审核', '审核通过', 'approved', 'APPROVED']}
                 rejectedStatuses={['已驳回', 'rejected', 'REJECTED']}
                 onSuccess={() => {
-                  actionRef.current?.reload();
+    actionRef.current?.reload();
                   void loadQuotationDetail(quotationDetail.id!);
                 }}
               />

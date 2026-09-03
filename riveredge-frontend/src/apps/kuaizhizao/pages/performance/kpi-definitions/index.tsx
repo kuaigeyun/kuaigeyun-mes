@@ -286,7 +286,7 @@ const KpiDefinitionsPage: React.FC = () => {
                 await employeePerformanceApi.deleteKpiDefinition(Number(id));
               }
               messageApi.success(t('app.kuaizhizao.performance.common.messages.deleteBatchSuccess', { count: keys.length }));
-              actionRef.current?.reload();
+    actionRef.current?.reload();
             } catch (error: any) {
               messageApi.error(error?.message || t('common.deleteFailed'));
             }
@@ -333,7 +333,7 @@ const KpiDefinitionsPage: React.FC = () => {
           }
           setModalVisible(false);
           setEditId(null);
-          actionRef.current?.reload();
+    actionRef.current?.reload();
         }}
         isEdit={!!editId}
         width={MODAL_CONFIG.STANDARD_WIDTH}

@@ -81,5 +81,21 @@ describe('buildDataPolicySavePayload', () => {
       dimension: 'manufacturer',
       code_field: 'manufacturer_code',
     });
+    expect(defaultCustomPayloadForResource('haoligo:finance-equipment-contracts')).toEqual({
+      resolver: 'partner',
+      dimension: 'manufacturer',
+      code_field: 'manufacturer_code',
+    });
+  });
+
+  it('keeps scope_all resources in payload when visible list is empty', () => {
+    const payload = buildDataPolicySavePayload({
+      dataPolicies: [policy('app:a', 'scope_all')],
+      selectedResources: [],
+      visibleResources: [],
+      batchScope: 'scope_self',
+      grantedKeys: granted,
+    });
+    expect(payload).toEqual([{ resource: 'app:a', scope_type: 'scope_all', scope_payload: undefined }]);
   });
 });

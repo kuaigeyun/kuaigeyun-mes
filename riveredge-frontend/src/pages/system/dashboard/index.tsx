@@ -27,12 +27,21 @@ import {
   App,
   theme,
   Tabs,
+  Tooltip,
 } from 'antd';
 import {
   ClockCircleOutlined,
   RightOutlined,
   ShopOutlined,
+  DesktopOutlined,
+  MobileOutlined,
+  TabletOutlined,
+  WechatOutlined,
 } from '@ant-design/icons';
+import {
+  reportingClientChannelSourceI18nKey,
+  reportingClientChannelSourceKey,
+} from '../../../utils/clientChannel';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
@@ -166,6 +175,53 @@ function ProductionBroadcastOperatorAvatar({
     >
       {getAvatarText(displayName)}
     </Avatar>
+  );
+}
+
+/** 最新操作：报工来源图标（无渠道码不展示，禁止猜） */
+function ProductionBroadcastSourceIcon({
+  clientChannel,
+}: {
+  clientChannel?: string | null;
+}) {
+  const { t } = useTranslation();
+  const { token } = useToken();
+  const sourceKey = reportingClientChannelSourceKey(clientChannel);
+  const labelKey = reportingClientChannelSourceI18nKey(clientChannel);
+  if (!sourceKey || !labelKey) return null;
+
+  // 克制色：浅底 + 同系文字，避免高饱和色块
+  const tone =
+    sourceKey === 'miniprogram'
+      ? { bg: token.colorSuccessBg, fg: token.colorSuccess }
+      : sourceKey === 'app'
+        ? { bg: token.colorInfoBg, fg: token.colorInfo }
+        : sourceKey === 'station'
+          ? { bg: token.colorWarningBg, fg: token.colorWarning }
+          : { bg: token.colorFillSecondary, fg: token.colorTextSecondary };
+
+  const iconStyle = { fontSize: 18, color: tone.fg };
+  const icon =
+    sourceKey === 'miniprogram' ? (
+      <WechatOutlined style={iconStyle} />
+    ) : sourceKey === 'app' ? (
+      <MobileOutlined style={iconStyle} />
+    ) : sourceKey === 'station' ? (
+      <TabletOutlined style={iconStyle} />
+    ) : (
+      <DesktopOutlined style={iconStyle} />
+    );
+
+  return (
+    <Tooltip title={t(labelKey)}>
+      <span
+        className="dashboard-feed-item__source"
+        aria-label={t(labelKey)}
+        style={{ backgroundColor: tone.bg, color: tone.fg }}
+      >
+        {icon}
+      </span>
+    </Tooltip>
   );
 }
 
@@ -483,8 +539,12 @@ export default function DashboardPage() {
   const handleTodoMutation = useMutation({
     mutationFn: ({ todoId, action }: { todoId: string; action: string }) => handleTodo(todoId, action),
     onSuccess: (data: any) => {
+      if (data?.success === false) {
+        message.error(data.message || t('pages.dashboard.handleFailed', { message: t('pages.dashboard.unknownError') }));
+        refetchTodos();
+        return;
+      }
       message.success(data.message || t('pages.dashboard.handleSuccess'));
-      // 如果有跳转链接，自动跳转
       if (data.redirect) {
         navigate(data.redirect);
       } else {
@@ -493,6 +553,7 @@ export default function DashboardPage() {
     },
     onError: (error: any) => {
       message.error(t('pages.dashboard.handleFailed', { message: error.message || t('pages.dashboard.unknownError') }));
+      refetchTodos();
     },
   });
 
@@ -720,29 +781,34 @@ export default function DashboardPage() {
                       navigate(`/apps/kuaizhizao/production-execution/reporting?work_order=${item.work_order_no}`);
                     }}
                   >
-                    <div className="dashboard-feed-item__row">
-                      <div className="dashboard-feed-item__main">
-                        <p className="dashboard-feed-item__title">
-                          {item.operator_name} | {item.process_name}
-                        </p>
-                      </div>
-                      <span className="dashboard-feed-item__time">
-                        {item.created_at ? formatDateTime(item.created_at, 'MM-DD HH:mm') : item.date}
-                      </span>
-                    </div>
-                    <div className="dashboard-feed-item__row">
-                      <p className="dashboard-feed-item__meta dashboard-feed-item__main">
-                        {`${item.work_order_no}${item.product_name ? ` - ${item.product_name}` : ''}`}
-                      </p>
-                      <div className="dashboard-feed-item__stats">
-                        <span className="dashboard-feed-item__stat--ok">
-                          {t('pages.dashboard.qualified')} {item.qualified_quantity.toFixed(0)}
-                        </span>
-                        {item.unqualified_quantity > 0 ? (
-                          <span className="dashboard-feed-item__stat--bad">
-                            {t('pages.dashboard.unqualified')} {item.unqualified_quantity.toFixed(0)}
+                    <div className="dashboard-feed-item__body">
+                      <ProductionBroadcastSourceIcon clientChannel={item.client_channel} />
+                      <div className="dashboard-feed-item__content">
+                        <div className="dashboard-feed-item__row">
+                          <div className="dashboard-feed-item__main">
+                            <p className="dashboard-feed-item__title">
+                              {item.operator_name} | {item.process_name}
+                            </p>
+                          </div>
+                          <span className="dashboard-feed-item__time">
+                            {item.created_at ? formatDateTime(item.created_at, 'MM-DD HH:mm') : item.date}
                           </span>
-                        ) : null}
+                        </div>
+                        <div className="dashboard-feed-item__row">
+                          <p className="dashboard-feed-item__meta dashboard-feed-item__main">
+                            {`${item.work_order_no}${item.product_name ? ` - ${item.product_name}` : ''}`}
+                          </p>
+                          <div className="dashboard-feed-item__stats">
+                            <span className="dashboard-feed-item__stat--ok">
+                              {t('pages.dashboard.qualified')} {item.qualified_quantity.toFixed(0)}
+                            </span>
+                            {item.unqualified_quantity > 0 ? (
+                              <span className="dashboard-feed-item__stat--bad">
+                                {t('pages.dashboard.unqualified')} {item.unqualified_quantity.toFixed(0)}
+                              </span>
+                            ) : null}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>

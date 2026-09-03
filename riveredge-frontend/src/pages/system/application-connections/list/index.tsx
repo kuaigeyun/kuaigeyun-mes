@@ -1538,7 +1538,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
               }
             }
             messageApi.success(t('pages.system.applicationConnections.importSuccess', { count: done }));
-            actionRef.current?.reload();
+    actionRef.current?.reload();
           }}
           importHeaders={applicationConnectionImportTemplate.importHeaders}
           importExampleRow={applicationConnectionImportTemplate.importExampleRow}

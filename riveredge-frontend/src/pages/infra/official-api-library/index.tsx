@@ -25,12 +25,12 @@ import { UniTable } from '../../../components/uni-table';
 import { ThemedSegmented } from '../../../components/themed-segmented';
 
 import { rowActionKind, rowActionLabelKeep } from '../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../components/action-confirm';
 
 import { MarkerTag } from '../../../constants/statusBadges';
 
 import { formatDateTimeBySiteSetting } from '../../../utils/format';
 
-import { getAntdModal } from '../../../utils/antdAppApis';
 
 import {
 
@@ -135,8 +135,7 @@ const OfficialApiLibraryPage: React.FC = () => {
       messageApi.success(t('pages.infra.officialApiLibrary.hostSaveSuccess'));
 
       if (data.manage_table_visible) {
-
-        actionRef.current?.reload();
+    actionRef.current?.reload();
 
       }
 
@@ -198,31 +197,13 @@ const OfficialApiLibraryPage: React.FC = () => {
 
 
 
-  const handleDelete = (record: OfficialApiLibraryPack) => {
-
-    getAntdModal().confirm({
-
-      title: t('pages.infra.officialApiLibrary.deleteConfirmTitle'),
-
-      content: t('pages.infra.officialApiLibrary.deleteConfirmContent', {
-
-        name: record.name,
-
-        packId: record.pack_id,
-
-      }),
-
-      okType: 'danger',
-
-      onOk: async () => {
-
-        try {
+  const executeDelete = async (record: OfficialApiLibraryPack) => {
+    try {
 
           await deleteOfficialApiLibraryAdminPack(record.pack_id);
 
           messageApi.success(t('pages.infra.officialApiLibrary.deleteSuccess'));
-
-          actionRef.current?.reload();
+    actionRef.current?.reload();
 
         } catch (error: unknown) {
 
@@ -233,11 +214,6 @@ const OfficialApiLibraryPage: React.FC = () => {
           throw error;
 
         }
-
-      },
-
-    });
-
   };
 
 
@@ -424,7 +400,14 @@ const OfficialApiLibraryPage: React.FC = () => {
 
           </Button>,
 
-          <Button
+          <ActionConfirmPopconfirm title={t('pages.infra.officialApiLibrary.deleteConfirmTitle')} description={t('pages.infra.officialApiLibrary.deleteConfirmContent', {
+
+        name: record.name,
+
+        packId: record.pack_id,
+
+      })} okType="danger" onConfirm={() => executeDelete(record)}>
+              <Button
 
             key="delete"
 
@@ -436,9 +419,10 @@ const OfficialApiLibraryPage: React.FC = () => {
 
             {...rowActionKind('delete')}
 
-            onClick={() => handleDelete(record)}
+            onClick={(e) => e.stopPropagation()}
 
-          />,
+          />
+            </ActionConfirmPopconfirm>,
 
         ],
 

@@ -60,7 +60,6 @@ import {
   renderEquipmentMasterRowActions,
 } from '../shared/equipmentMasterDataDetail';
 import { buildToolLedgerDetailPath } from './toolLedgerPaths';
-import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { todaySiteDateString } from '../../../../../utils/format';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 interface Tool {
@@ -225,21 +224,15 @@ const ToolLedgerPage: React.FC = () => {
 
 
   const handleDelete = async (keys: React.Key[]) => {
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.toolLedger.confirmBatchDeleteTitle'),
-      content: t('app.kuaizhizao.toolLedger.confirmBatchDeleteContent', { count: keys.length }),
-      onOk: async () => {
-        try {
+    try {
           for (const uuid of keys) {
             await toolApi.delete(String(uuid));
           }
-          messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
-          actionRef.current?.reload();
+    messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
+    actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || t('common.deleteFailed'));
         }
-      },
-    });
   };
 
   const handleSubmit = async (values: any) => {
@@ -432,6 +425,9 @@ const ToolLedgerPage: React.FC = () => {
           }}
           enableRowSelection={perms.canDelete}
           showDeleteButton={perms.canDelete}
+          deleteConfirmTitle={t('app.kuaizhizao.toolLedger.confirmBatchDeleteTitle')}
+          deleteConfirmDescription={(count) => t('app.kuaizhizao.toolLedger.confirmBatchDeleteContent', { count: count })}
+          
           onDelete={handleDelete}
           showCreateButton={perms.canCreate}
           createButtonText={createButtonLabel}
@@ -506,7 +502,7 @@ const ToolLedgerPage: React.FC = () => {
             });
             if (result.successCount > 0) {
               messageApi.success(t('app.kuaizhizao.toolLedger.importSuccess', { count: result.successCount }));
-              actionRef.current?.reload();
+    actionRef.current?.reload();
             }
             if (result.failureCount > 0) {
               messageApi.warning(t('app.kuaizhizao.toolLedger.importPartialFail', { count: result.failureCount }));

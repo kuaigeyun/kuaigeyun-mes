@@ -9,6 +9,7 @@ import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, SaveOutline
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ListPageTemplate, TwoColumnLayout } from '../../../../components/layout-templates';
+import { ActionConfirmPopconfirm } from '../../../../components/action-confirm';
 import LoginRichTextEditor, {
   type LoginRichTextEditorMode,
 } from '../../../../components/login-page-editor/LoginRichTextEditor';
@@ -294,6 +295,16 @@ const KnowledgeBasePage: React.FC = () => {
     });
   };
 
+  const executeDeleteSpace = async () => {
+    if (!selectedSpace?.id) return;
+    await deleteKbSpace(selectedSpace.id);
+    messageApi.success(t('app.kuaiplm.knowledgeBase.messages.deleteSpaceSuccess'));
+    if (selectedSpaceId === selectedSpace.id) {
+      setSelectedSpaceId(undefined);
+    }
+    await loadSpaces();
+  };
+
   const handleDeleteSpace = () => {
     if (!selectedSpace?.id) {
       messageApi.warning(t('app.kuaiplm.knowledgeBase.messages.selectSpaceFirst'));
@@ -303,14 +314,7 @@ const KnowledgeBasePage: React.FC = () => {
       title: t('app.kuaiplm.knowledgeBase.modal.deleteSpaceTitle'),
       content: selectedSpace.space_name || String(selectedSpace.id),
       okButtonProps: { danger: true },
-      onOk: async () => {
-        await deleteKbSpace(selectedSpace.id!);
-        messageApi.success(t('app.kuaiplm.knowledgeBase.messages.deleteSpaceSuccess'));
-        if (selectedSpaceId === selectedSpace.id) {
-          setSelectedSpaceId(undefined);
-        }
-        await loadSpaces();
-      },
+      onOk: () => executeDeleteSpace(),
     });
   };
 
@@ -334,14 +338,8 @@ const KnowledgeBasePage: React.FC = () => {
     }
   };
 
-  const handleDeleteCurrent = async () => {
-    if (!activeArticle?.id) return;
-    modal.confirm({
-      title: t('app.kuaiplm.knowledgeBase.modal.deleteArticleTitle'),
-      content: activeArticle.title || String(activeArticle.id),
-      okButtonProps: { danger: true },
-      onOk: async () => {
-        await deleteKbArticle(activeArticle.id!);
+  const executeDeleteCurrent = async () => {
+    await deleteKbArticle(activeArticle.id!);
         messageApi.success(t('common.deleteSuccess'));
         setActiveArticle(null);
         setSelectedArticleId(undefined);
@@ -351,8 +349,6 @@ const KnowledgeBasePage: React.FC = () => {
           return next;
         });
         await loadArticles(selectedSpaceId, searchKeyword);
-      },
-    });
   };
 
   const spaceTreeData = useMemo<DataNode[]>(() => {
@@ -583,14 +579,16 @@ const KnowledgeBasePage: React.FC = () => {
             ),
             right: (
               <>
-                <Button
+                <ActionConfirmPopconfirm title={t('app.kuaiplm.knowledgeBase.modal.deleteArticleTitle')} description={activeArticle.title || String(activeArticle.id)} onConfirm={() => executeDeleteCurrent()}>
+              <Button
                   danger
                   icon={<DeleteOutlined />}
-                  onClick={() => void handleDeleteCurrent()}
+                  onClick={(e) => e.stopPropagation()}
                   disabled={!activeArticle?.id}
                 >
                   {t('common.delete')}
                 </Button>
+            </ActionConfirmPopconfirm>
                 <Button
                   type="primary"
                   icon={<SaveOutlined />}

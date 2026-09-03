@@ -234,6 +234,7 @@ const TypedStepFields: React.FC<{
         ) : null}
         <Form.Item
           name={['item_results', stepKey]}
+          initialValue="pass"
           rules={[{ required: true, message: t('app.kuaizhizao.quality.template.judgmentRequired', { label }) }]}
         >
           <ThemedSegmented
@@ -274,6 +275,7 @@ const TypedStepFields: React.FC<{
       {vt === 'boolean' ? (
         <Form.Item
           name={[...basePath, 'value']}
+          initialValue={true}
           rules={[skipValueRule()]}
           getValueProps={() => ({ value: booleanSegValue })}
           normalize={(next) => {
@@ -361,6 +363,7 @@ const TypedStepFields: React.FC<{
           ) : null}
           <Form.Item
             name={[...basePath, 'judgment']}
+            initialValue="pass"
             rules={[{ required: true, message: t('app.kuaizhizao.quality.template.judgmentRequired', { label }) }]}
           >
             <ThemedSegmented
@@ -480,6 +483,7 @@ const InspectionTemplateConductFields: React.FC<InspectionTemplateConductFieldsP
         ) : null}
         <Form.Item
           name={['item_results', '0']}
+          initialValue="pass"
           rules={[{ required: true, message: t('app.kuaizhizao.quality.template.overallJudgmentRequired') }]}
         >
           <ThemedSegmented

@@ -38,6 +38,13 @@ const ProcessProgressReportPage: React.FC = () => {
         width: 110,
       },
       {
+        title: t('app.kuaizhizao.deliveryProject.fields.isMilestone'),
+        dataIndex: 'is_milestone',
+        width: 80,
+        hideInSearch: true,
+        render: (_, r) => (r.is_milestone ? t('common.yes') : t('common.no')),
+      },
+      {
         title: t('app.kuaizhizao.deliveryProject.fields.ownerName'),
         dataIndex: 'node_owner_name',
         width: 90,
@@ -132,7 +139,7 @@ const ProcessProgressReportPage: React.FC = () => {
 
   return (
     <KuaizhizaoReport<DeliveryProcessProgressRow>
-      columnPersistenceId="apps.kuaizhizao.pages.delivery-project.reports.process-progress.index-v4"
+      columnPersistenceId="apps.kuaizhizao.pages.delivery-project.reports.process-progress.index-v5"
       title={t('app.kuaizhizao.menu.delivery-project.reports.process-progress')}
       reportType="delivery-process-progress"
       domain="delivery"

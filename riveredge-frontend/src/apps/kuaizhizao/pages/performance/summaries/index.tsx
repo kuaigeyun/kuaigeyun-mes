@@ -381,7 +381,7 @@ const SummariesPage: React.FC = () => {
                 value={period ? dayjs(period) : null}
                 onChange={(d) => {
                   setPeriod(d ? d.format('YYYY-MM') : '');
-                  actionRef.current?.reload();
+    actionRef.current?.reload();
                 }}
                 placeholder={t('app.kuaizhizao.performance.summaries.placeholder.period')}
               />
@@ -393,7 +393,7 @@ const SummariesPage: React.FC = () => {
                 value={employeeId}
                 onChange={(v) => {
                   setEmployeeId(v);
-                  actionRef.current?.reload();
+    actionRef.current?.reload();
                 }}
               />
               {summaryPerms.canUpdate ? (

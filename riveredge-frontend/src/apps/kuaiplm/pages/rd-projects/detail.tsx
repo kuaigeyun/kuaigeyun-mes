@@ -46,6 +46,7 @@ import { useLeaveFormTab } from '../../../../components/uni-tabs/navigateClosing
 import { useTranslation } from 'react-i18next';
 import { useResourcePermissions } from '../../../../hooks/useResourcePermissions';
 import { ListPageTemplate, FormModalTemplate, ProjectWorkbenchToolbar } from '../../../../components/layout-templates';
+import { ActionConfirmPopconfirm } from '../../../../components/action-confirm';
 import { UniUserSelect } from '../../../../components/uni-user-select';
 import { resolveUserDisplay, type User } from '../../../../services/user';
 import {
@@ -171,7 +172,7 @@ const RdProjectDetailPage: React.FC = () => {
   const leaveRdProjectDetail = useLeaveFormTab('/apps/kuaiplm/rd-projects');
   const projectPerms = useResourcePermissions('kuaiplm:project');
   const { token } = theme.useToken();
-  const { message: messageApi, modal: modalApi } = App.useApp();
+  const { message: messageApi } = App.useApp();
   const [loading, setLoading] = useState(true);
   const [workbench, setWorkbench] = useState<RdProjectWorkbench | null>(null);
   const [activeGateKey, setActiveGateKey] = useState<string>();
@@ -359,17 +360,8 @@ const RdProjectDetailPage: React.FC = () => {
     }, 0);
   };
 
-  const handlePassGate = (gate: RdProjectGate) => {
-    if (!id || !gate.id) return;
-    if (!canPassGate(gates, gate)) {
-      messageApi.warning(t('app.kuaiplm.rdProjects.detail.gatePreviousRequired'));
-      return;
-    }
-    modalApi.confirm({
-      title: `${t('app.kuaiplm.common.actions.approve')} - ${gate.gate_name}`,
-      content: t('app.kuaiplm.rdProjects.detail.gatePassConfirm'),
-      onOk: async () => {
-        try {
+  const executePassGate = async (gate: RdProjectGate) => {
+    try {
           await updateRdProjectGate(id, gate.id!, {
             status: 'PASSED',
             actual_date: formatDateTime(dayjs(), 'YYYY-MM-DD'),
@@ -380,8 +372,6 @@ const RdProjectDetailPage: React.FC = () => {
           messageApi.error(e?.message || t('app.kuaiplm.rdProjects.detail.gatePassFailed'));
           throw e;
         }
-      },
-    });
   };
 
   const parentTaskOptions = useMemo(() => {
@@ -439,27 +429,27 @@ const RdProjectDetailPage: React.FC = () => {
             >
               {t('common.detail')}
             </Button>
-            <Button
-              type="link"
-              size="small"
-              danger
-              icon={<DeleteOutlined />}
-              onClick={() => {
-                modalApi.confirm({
-                  title: t('app.kuaiplm.rdProjects.detail.link.deleteConfirm'),
-                  onOk: async () => {
-                    await deleteRdProjectLink(id!, row.id!);
-                    messageApi.success(t('common.deleteSuccess'));
-                    load();
-                  },
-                });
+            <ActionConfirmPopconfirm
+              title={t('app.kuaiplm.rdProjects.detail.link.deleteConfirm')}
+              onConfirm={async () => {
+                await deleteRdProjectLink(id!, row.id!);
+                messageApi.success(t('common.deleteSuccess'));
+                load();
               }}
-            />
+            >
+              <Button
+                type="link"
+                size="small"
+                danger
+                icon={<DeleteOutlined />}
+                onClick={(e) => e.stopPropagation()}
+              />
+            </ActionConfirmPopconfirm>
           </Space>
         ),
       },
     ],
-    [t, id, project?.id, modalApi, messageApi, load],
+    [t, id, project?.id, messageApi, load],
   );
 
   const renderGatePanel = useCallback(
@@ -480,18 +470,24 @@ const RdProjectDetailPage: React.FC = () => {
                 <Button size="small" icon={<EditOutlined />} onClick={() => openGateEdit(gate)}>
                   {t('common.edit')}
                 </Button>
-                <Button
-                  type="primary"
-                  size="small"
-                  disabled={
-                    gateStatus === 'PASSED' ||
-                    gateStatus === 'SKIPPED' ||
-                    !canPassGate(gates, gate)
-                  }
-                  onClick={() => handlePassGate(gate)}
+                <ActionConfirmPopconfirm
+                  title={`${t('app.kuaiplm.common.actions.approve')} - ${gate.gate_name}`}
+                  description={t('app.kuaiplm.rdProjects.detail.gatePassConfirm')}
+                  onConfirm={() => executePassGate(gate)}
                 >
-                  {t('app.kuaiplm.common.actions.approve')}
-                </Button>
+                  <Button
+                    type="primary"
+                    size="small"
+                    disabled={
+                      gateStatus === 'PASSED' ||
+                      gateStatus === 'SKIPPED' ||
+                      !canPassGate(gates, gate)
+                    }
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {t('app.kuaiplm.common.actions.approve')}
+                  </Button>
+                </ActionConfirmPopconfirm>
               </Space>
             }
           >
@@ -588,23 +584,23 @@ const RdProjectDetailPage: React.FC = () => {
                       <Button type="link" size="small" onClick={() => void openEditTask(row)}>
                         {t('common.edit')}
                       </Button>
-                      <Button
-                        type="link"
-                        size="small"
-                        danger
-                        onClick={() => {
-                          modalApi.confirm({
-                            title: t('app.kuaiplm.rdProjects.detail.task.deleteConfirm'),
-                            onOk: async () => {
-                              await deleteRdProjectTask(id!, row.id!);
-                              messageApi.success(t('common.deleteSuccess'));
-                              load();
-                            },
-                          });
+                      <ActionConfirmPopconfirm
+                        title={t('app.kuaiplm.rdProjects.detail.task.deleteConfirm')}
+                        onConfirm={async () => {
+                          await deleteRdProjectTask(id!, row.id!);
+                          messageApi.success(t('common.deleteSuccess'));
+                          load();
                         }}
                       >
-                        {t('common.delete')}
-                      </Button>
+                        <Button
+                          type="link"
+                          size="small"
+                          danger
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {t('common.delete')}
+                        </Button>
+                      </ActionConfirmPopconfirm>
                     </Space>
                   ),
                 },
@@ -697,23 +693,23 @@ const RdProjectDetailPage: React.FC = () => {
                           {t('app.kuaiplm.common.actions.approve')}
                         </Button>
                       ) : null}
-                      <Button
-                        type="link"
-                        size="small"
-                        danger
-                        onClick={() => {
-                          modalApi.confirm({
-                            title: t('app.kuaiplm.rdProjects.detail.deliverable.deleteConfirm'),
-                            onOk: async () => {
-                              await deleteRdProjectDeliverable(id!, row.id!);
-                              messageApi.success(t('common.deleteSuccess'));
-                              load();
-                            },
-                          });
+                      <ActionConfirmPopconfirm
+                        title={t('app.kuaiplm.rdProjects.detail.deliverable.deleteConfirm')}
+                        onConfirm={async () => {
+                          await deleteRdProjectDeliverable(id!, row.id!);
+                          messageApi.success(t('common.deleteSuccess'));
+                          load();
                         }}
                       >
-                        {t('common.delete')}
-                      </Button>
+                        <Button
+                          type="link"
+                          size="small"
+                          danger
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {t('common.delete')}
+                        </Button>
+                      </ActionConfirmPopconfirm>
                     </Space>
                     );
                   },
@@ -724,7 +720,7 @@ const RdProjectDetailPage: React.FC = () => {
         </Space>
       );
     },
-    [t, tasks, deliverables, id, modalApi, messageApi, load, project?.material_id, gates],
+    [t, tasks, deliverables, id, messageApi, load, project?.material_id, gates],
   );
 
   if (loading) {
@@ -760,59 +756,51 @@ const RdProjectDetailPage: React.FC = () => {
     gates.some((g) => g.milestone_role === 'spawn_delivery' && g.status === 'PASSED') ? (
       <Space wrap>
         {project.status === 'DRAFT' ? (
-          <Button
-            type="primary"
-            onClick={() => {
-              modalApi.confirm({
-                title: t('app.kuaiplm.rdProjects.detail.startConfirmTitle'),
-                content: t('app.kuaiplm.rdProjects.detail.startConfirmContent'),
-                onOk: async () => {
-                  await updateRdProject(id!, {
-                    status: 'IN_PROGRESS',
-                    actual_start_date: formatDateTime(dayjs(), 'YYYY-MM-DD'),
-                  });
-                  messageApi.success(t('app.kuaiplm.rdProjects.detail.startSuccess'));
-                  load();
-                },
+          <ActionConfirmPopconfirm
+            title={t('app.kuaiplm.rdProjects.detail.startConfirmTitle')}
+            description={t('app.kuaiplm.rdProjects.detail.startConfirmContent')}
+            onConfirm={async () => {
+              await updateRdProject(id!, {
+                status: 'IN_PROGRESS',
+                actual_start_date: formatDateTime(dayjs(), 'YYYY-MM-DD'),
               });
+              messageApi.success(t('app.kuaiplm.rdProjects.detail.startSuccess'));
+              load();
             }}
           >
-            {t('app.kuaiplm.rdProjects.detail.startProject')}
-          </Button>
+            <Button type="primary" onClick={(e) => e.stopPropagation()}>
+              {t('app.kuaiplm.rdProjects.detail.startProject')}
+            </Button>
+          </ActionConfirmPopconfirm>
         ) : null}
         {project.status === 'IN_PROGRESS' && project.not_executed && projectPerms.canUpdate ? (
-          <Button
-            onClick={() => {
-              modalApi.confirm({
-                title: t('app.kuaiplm.rdProjects.withdrawConfirm'),
-                content: t('app.kuaiplm.rdProjects.withdrawConfirmContent'),
-                onOk: async () => {
-                  await withdrawRdProject(id!);
-                  messageApi.success(t('app.kuaiplm.rdProjects.withdrawSuccess'));
-                  load();
-                },
-              });
+          <ActionConfirmPopconfirm
+            title={t('app.kuaiplm.rdProjects.withdrawConfirm')}
+            description={t('app.kuaiplm.rdProjects.withdrawConfirmContent')}
+            onConfirm={async () => {
+              await withdrawRdProject(id!);
+              messageApi.success(t('app.kuaiplm.rdProjects.withdrawSuccess'));
+              load();
             }}
           >
-            {t('components.uniAction.withdrawProject')}
-          </Button>
+            <Button onClick={(e) => e.stopPropagation()}>
+              {t('components.uniAction.withdrawProject')}
+            </Button>
+          </ActionConfirmPopconfirm>
         ) : null}
         {project.status === 'IN_PROGRESS' && project.not_executed && projectPerms.canDelete ? (
-          <Button
-            danger
-            onClick={() => {
-              modalApi.confirm({
-                title: t('app.kuaiplm.rdProjects.deleteConfirm'),
-                onOk: async () => {
-                  await deleteRdProject(id!);
-                  messageApi.success(t('common.deleteSuccess'));
-                  leaveRdProjectDetail();
-                },
-              });
+          <ActionConfirmPopconfirm
+            title={t('app.kuaiplm.rdProjects.deleteConfirm')}
+            onConfirm={async () => {
+              await deleteRdProject(id!);
+              messageApi.success(t('common.deleteSuccess'));
+              leaveRdProjectDetail();
             }}
           >
-            {t('common.delete')}
-          </Button>
+            <Button danger onClick={(e) => e.stopPropagation()}>
+              {t('common.delete')}
+            </Button>
+          </ActionConfirmPopconfirm>
         ) : null}
         {isRdProject ? (
           <Button onClick={() => setPushModalOpen(true)}>
@@ -820,21 +808,19 @@ const RdProjectDetailPage: React.FC = () => {
           </Button>
         ) : null}
         {isRdProject && gates.some((g) => g.milestone_role === 'spawn_delivery' && g.status === 'PASSED') ? (
-          <Button
-            onClick={() => {
-              modalApi.confirm({
-                title: t('app.kuaiplm.rdProjects.detail.createDeliveryTitle'),
-                content: t('app.kuaiplm.rdProjects.detail.createDeliveryContent'),
-                onOk: async () => {
-                  const res = await spawnDeliveryProject(id!);
-                  messageApi.success(t('app.kuaiplm.rdProjects.detail.createDeliverySuccess'));
-                  navigate(`/apps/kuaizhizao/delivery-project/projects/${res.delivery_project_id}`);
-                },
-              });
+          <ActionConfirmPopconfirm
+            title={t('app.kuaiplm.rdProjects.detail.createDeliveryTitle')}
+            description={t('app.kuaiplm.rdProjects.detail.createDeliveryContent')}
+            onConfirm={async () => {
+              const res = await spawnDeliveryProject(id!);
+              messageApi.success(t('app.kuaiplm.rdProjects.detail.createDeliverySuccess'));
+              navigate(`/apps/kuaizhizao/delivery-project/projects/${res.delivery_project_id}`);
             }}
           >
-            {t('app.kuaiplm.gateTemplates.milestoneRole.spawnDelivery')}
-          </Button>
+            <Button onClick={(e) => e.stopPropagation()}>
+              {t('app.kuaiplm.gateTemplates.milestoneRole.spawnDelivery')}
+            </Button>
+          </ActionConfirmPopconfirm>
         ) : null}
       </Space>
     ) : null;

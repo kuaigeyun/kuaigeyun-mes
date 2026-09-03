@@ -12,6 +12,11 @@ import { warehouseApi as masterWarehouseApi } from '../../../../master-data/serv
 import { mapWarehouseSelectOptions, type WarehouseSelectOption } from './outboundEntryShared';
 import OutboundSerialPickerField from './OutboundSerialPickerField';
 import {
+  filterWarehouseTrackingColumns,
+  isMaterialSerialEntryEnabled,
+  useWarehouseTrackingFlags,
+} from '../shared/warehouseTrackingFlags';
+import {
   loadConfirmPreviewMaterialMeta,
   type ConfirmPreviewMaterialMeta,
 } from './outboundItemTracking';
@@ -74,6 +79,7 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
   onSuccess,
 }) => {
   const { t } = useTranslation();
+  const trackingFlags = useWarehouseTrackingFlags();
   const quantityDecimals = useNumericPrecisionPlaces('quantity');
   const { message: messageApi } = App.useApp();
   const [loading, setLoading] = useState(false);
@@ -449,7 +455,9 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
   }, [detail, isDelivery, isPicking, record, t]);
 
   const pickingColumns = useMemo(
-    () => [
+    () =>
+      filterWarehouseTrackingColumns(
+        [
       { title: t('app.kuaizhizao.warehouseOutbound.col.materialCode'), dataIndex: 'material_code', width: 120 },
       { title: t('app.kuaizhizao.warehouseOutbound.col.materialName'), dataIndex: 'material_name', width: 150 },
       {
@@ -533,9 +541,12 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
           );
         },
       },
-    ],
+        ],
+        trackingFlags,
+      ),
     [
       t,
+      trackingFlags,
       quantityDecimals,
       editablePickingQuantities,
       editablePickingWarehouses,
@@ -546,6 +557,7 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
 
   const deliveryColumns = useMemo(
     () =>
+      filterWarehouseTrackingColumns(
       appendWarehouseLineAmountColumns(
         [
           { title: t('app.kuaizhizao.warehouseOutbound.col.materialCode'), dataIndex: 'material_code', width: 120 },
@@ -601,14 +613,14 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
               const meta = deliveryMaterialMeta[rid];
               const serials =
                 editableDeliverySerials[rid] ?? parseOutboundLineSerialNumbers(row.serial_numbers);
-              if (meta && !meta.serialManaged) {
+              if (meta && !isMaterialSerialEntryEnabled(trackingFlags, meta.serialManaged)) {
                 return '—';
               }
               const qty = Math.max(
                 1,
                 Math.round(Number(editableDeliveryQuantities[rid] ?? row.delivery_quantity ?? 0)),
               );
-              if (!meta?.serialManaged && !serials.length) {
+              if (!isMaterialSerialEntryEnabled(trackingFlags, meta?.serialManaged) && !serials.length) {
                 return '—';
               }
               return (
@@ -630,8 +642,11 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
         t,
         true,
       ),
+      trackingFlags,
+      ),
     [
       t,
+      trackingFlags,
       quantityDecimals,
       editableDeliveryQuantities,
       editableDeliveryBatches,

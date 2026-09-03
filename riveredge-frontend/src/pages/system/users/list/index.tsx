@@ -35,6 +35,7 @@ import { QRCodeGenerator } from '../../../../components/qrcode';
 import { qrcodeApi } from '../../../../services/qrcode';
 import { getUserFormCoreReferenceOptions } from '../userFormReferenceOptions';
 import { rowActionKind, rowActionResetPassword, rowActionToneDestructive } from '../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../components/action-confirm';
 import { UserFormModal } from '../components/UserFormModal';
 import {
   resolvePresetDepartmentName,
@@ -253,19 +254,13 @@ const UserListPage: React.FC = () => {
   /**
    * 处理重置密码
    */
-  const handleResetPassword = useCallback(async (record: User) => {
-    getAntdModal().confirm({
-      title: t('field.user.resetPasswordTitle'),
-      content: t('field.user.resetPasswordConfirm', { username: record.username }),
-      onOk: async () => {
-        try {
+  const executeResetPassword = useCallback(async (record: User) => {
+    try {
           await resetUserPassword(record.uuid);
           messageApi.success(t('field.user.resetPasswordSuccess'));
         } catch (error: any) {
           messageApi.error(error.message || t('field.user.resetPasswordFailed'));
         }
-      },
-    });
   }, [messageApi, t]);
 
   const showImportResult = (result: Awaited<ReturnType<typeof importUsers>>) => {
@@ -655,12 +650,14 @@ const UserListPage: React.FC = () => {
             <Popconfirm key="delete" title={t('field.user.deleteConfirm')} onConfirm={() => handleDelete(record)}>
               <Button {...rowActionKind('delete')} />
             </Popconfirm>,
-            <Button
+            <ActionConfirmPopconfirm title={t('field.user.resetPasswordTitle')} description={t('field.user.resetPasswordConfirm', { username: record.username })} onConfirm={() => executeResetPassword(record)}>
+              <Button
               key="reset"
               {...rowActionResetPassword('update')}
               {...rowActionToneDestructive()}
-              onClick={() => handleResetPassword(record)}
-            />,
+              onClick={(e) => e.stopPropagation()}
+            />
+            </ActionConfirmPopconfirm>,
           ],
     },
   ], GLOBAL_DOC_LIST_FIELD_RANK), [t, departmentOptions, positionOptions, handleView, handleEdit, handleResetPassword, handleDelete, handleOpenRoleEdit]);
@@ -854,7 +851,7 @@ const UserListPage: React.FC = () => {
           setUserEditUuid(null);
         }}
         onSuccess={() => {
-          actionRef.current?.reload();
+    actionRef.current?.reload();
           void loadReferenceOptions();
         }}
       />

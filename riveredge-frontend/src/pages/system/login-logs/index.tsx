@@ -394,7 +394,7 @@ const LoginLogsPage: React.FC = () => {
           toolBarRender={() => [
             <Button key="refresh" onClick={() => {
               loadStats();
-              actionRef.current?.reload();
+    actionRef.current?.reload();
             }}>
               <BarChartOutlined /> {t('pages.system.loginLogs.refreshStats')}
             </Button>,

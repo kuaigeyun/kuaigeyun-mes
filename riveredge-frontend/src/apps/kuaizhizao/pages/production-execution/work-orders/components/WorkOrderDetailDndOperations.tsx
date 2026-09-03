@@ -23,8 +23,6 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { workOrderApi } from '../../../../services/production'
-import { formatDateTime } from '../../../../../../utils/format'
-import { getAntdModal } from '../../../../../../utils/antdAppApis';
 export interface WorkOrderOperationsListProps {
   workOrderId?: number
   operations: any[]
@@ -89,36 +87,35 @@ const SortableOperationItem: React.FC<SortableOperationItemProps> = ({
           </div>
         )}
         <div style={{ flex: 1 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: (operation.workshop_name || operation.standard_time > 0) ? '4px' : 0 }}>
             <span style={{ fontWeight: 'bold', color: isReported ? token.colorTextSecondary : token.colorText }}>
-              {operation.sequence}. {operation.operation_name || operation.name}
+              {operation.sequence}.{' '}
+              {(operation.operation_code || operation.code) ? (
+                <span style={{ fontWeight: 'normal', color: token.colorTextSecondary, marginRight: 6 }}>
+                  {operation.operation_code || operation.code}
+                </span>
+              ) : null}
+              {operation.operation_name || operation.name}
             </span>
             <Tag color={statusConfig.color}>{statusConfig.text}</Tag>
             {isReported && <Tag color="warning">{t('app.kuaizhizao.workOrder.tagReported')}</Tag>}
           </div>
-          <div style={{ fontSize: '12px', color: token.colorTextSecondary }}>
-            <Space separator={<span>|</span>}>
-              <span>
-                {t('app.kuaizhizao.workOrder.colCodeShort')}: {operation.operation_code || operation.code}
-              </span>
-              {operation.workshop_name && (
-                <span>
-                  {t('app.kuaizhizao.workOrder.colWorkshop')}: {operation.workshop_name}
-                </span>
-              )}
-              {operation.standard_time > 0 && (
-                <span>
-                  {t('app.kuaizhizao.workOrder.colStandardTime')}: {operation.standard_time}h
-                </span>
-              )}
-              {operation.planned_start_date && (
-                <span>
-                  {t('app.kuaizhizao.workOrder.labelPlan')}:{' '}
-                  {formatDateTime(operation.planned_start_date, 'YYYY-MM-DD HH:mm')}
-                </span>
-              )}
-            </Space>
-          </div>
+          {(operation.workshop_name || operation.standard_time > 0) ? (
+            <div style={{ fontSize: '12px', color: token.colorTextSecondary }}>
+              <Space separator={<span>|</span>}>
+                {operation.workshop_name && (
+                  <span>
+                    {t('app.kuaizhizao.workOrder.colWorkshop')}: {operation.workshop_name}
+                  </span>
+                )}
+                {operation.standard_time > 0 && (
+                  <span>
+                    {t('app.kuaizhizao.workOrder.colStandardTime')}: {operation.standard_time}h
+                  </span>
+                )}
+              </Space>
+            </div>
+          ) : null}
         </div>
         {canEdit && (
           <Space>
@@ -224,12 +221,7 @@ const WorkOrderOperationsList: React.FC<WorkOrderOperationsListProps> = ({
       messageApi.warning(t('app.kuaizhizao.workOrder.msgOpCannotDeleteReported'))
       return
     }
-
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.workOrder.modalConfirmDeleteOp'),
-      content: t('app.kuaizhizao.workOrder.msgOpDeleteConfirm', { name: operation.operation_name }),
-      onOk: async () => {
-        try {
+    try {
           if (!workOrderId) return
 
           const updatedOperations = localOperations
@@ -248,9 +240,7 @@ const WorkOrderOperationsList: React.FC<WorkOrderOperationsListProps> = ({
         } catch (error: any) {
           messageApi.error(error.message || t('common.deleteFailed'))
         }
-      },
-    })
-  }
+  };
 
   const canEdit = !readOnly && workOrderStatus && ['draft', 'released'].includes(workOrderStatus)
 

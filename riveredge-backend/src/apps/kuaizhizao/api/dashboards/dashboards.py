@@ -10,7 +10,7 @@ Date: 2025-01-15
 from typing import List, Optional
 import re
 from decimal import Decimal
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException
 from pydantic import BaseModel, Field
 from datetime import date, datetime, timedelta
 
@@ -1315,12 +1315,57 @@ async def handle_todo(
             "todo_id": todo_id,
             "redirect": "/apps/kuaizhizao/quality-management/finished-goods-inspection",
         }
-    else:
+    elif todo_id.startswith("approval_task_"):
+        # 工作流审批待办：按任务解析单据深链
+        from core.models.approval_task import ApprovalTask
+        from core.services.user.approval_todo_mapper import build_approval_entity_link
+
+        raw_id = todo_id.replace("approval_task_", "", 1)
+        try:
+            task_id = int(raw_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=f"无效的审批待办 ID: {todo_id}") from exc
+
+        task = (
+            await ApprovalTask.filter(
+                tenant_id=tenant_id,
+                id=task_id,
+                approver_id=current_user.id,
+            )
+            .prefetch_related("approval_instance")
+            .first()
+        )
+        if not task:
+            raise HTTPException(status_code=404, detail="审批待办不存在或无权处理")
+        if str(task.status or "").strip() != "pending":
+            return {
+                "success": True,
+                "message": "该审批任务已处理，列表将刷新",
+                "todo_id": todo_id,
+                "redirect": None,
+                "refresh": True,
+            }
+        inst = task.approval_instance
+        data = inst.data if inst and isinstance(inst.data, dict) else {}
+        entity_type = str(data.get("entity_type") or "").strip()
+        entity_id = None
+        try:
+            if data.get("entity_id") is not None:
+                entity_id = int(data.get("entity_id"))
+        except (TypeError, ValueError):
+            entity_id = None
+        redirect = build_approval_entity_link(entity_type, entity_id)
         return {
-            "success": False,
-            "message": f"未知的待办事项类型: {todo_id}",
+            "success": True,
+            "message": "请前往单据详情完成审核",
             "todo_id": todo_id,
+            "redirect": redirect,
         }
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail=f"未知的待办事项类型: {todo_id}",
+        )
 
 
 @router.get("/statistics", response_model=StatisticsResponse, summary="Statistics overview")
@@ -1823,6 +1868,7 @@ class ProductionBroadcastItem(BaseModel):
     id: str = Field(..., description="播报ID")
     operator_name: str = Field(..., description="操作员姓名")
     operator_avatar: Optional[str] = Field(None, description="操作员头像文件UUID（关联文件管理）")
+    client_channel: Optional[str] = Field(None, description="报工来源渠道码")
     process_name: str = Field(..., description="工序名称")
     date: str = Field(..., description="日期")
     work_order_no: str = Field(..., description="工单号")
@@ -1839,7 +1885,7 @@ class ProductionBroadcastResponse(BaseModel):
 
 
 @router.get("/production-broadcast", response_model=ProductionBroadcastResponse, summary="Production live broadcast")
-@cache_by_kwargs(namespace="dashboard:broadcast", ttl=30)
+@cache_by_kwargs(namespace="dashboard:broadcast:v2", ttl=30)
 async def get_production_broadcast(
     limit: int = Query(10, ge=1, le=50, description="返回数量限制"),
     current_user: User = Depends(get_current_user),
@@ -1889,6 +1935,7 @@ async def get_production_broadcast(
                 id=str(record.id),
                 operator_name=record.worker_name or "未知操作员",
                 operator_avatar=avatar_by_worker_id.get(record.worker_id),
+                client_channel=(str(record.client_channel).strip() if getattr(record, "client_channel", None) else None) or None,
                 process_name=record.operation_name or "未知工序",
                 date=record.reported_at.strftime("%Y-%m-%d") if record.reported_at else resolve_business_datetime().strftime("%Y-%m-%d"),
                 work_order_no=record.work_order_code or (work_order.code if work_order else "未知工单"),

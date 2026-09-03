@@ -471,7 +471,7 @@ const WarehousesPage: React.FC = () => {
 
       // 刷新列表
       if (result.successCount > 0) {
-        actionRef.current?.reload();
+    actionRef.current?.reload();
       }
     } catch (error: any) {
       messageApi.error(error.message || t('app.master-data.importFailed'));
@@ -925,7 +925,7 @@ const WarehousesPage: React.FC = () => {
                   setSyncLineSideLoading(true);
                   const res = await warehouseApi.syncLineSide();
                   messageApi.success(res.message);
-                  actionRef.current?.reload();
+    actionRef.current?.reload();
                 } catch (e: any) {
                   messageApi.error(e?.message || t('common.operationFailed'));
                 } finally {
@@ -1011,7 +1011,7 @@ const WarehousesPage: React.FC = () => {
                 const res = await warehouseApi.loadPreset(selectedPresetNames);
                 messageApi.success(res.message);
                 setPresetModalVisible(false);
-                actionRef.current?.reload();
+    actionRef.current?.reload();
               } catch (e: any) {
                 messageApi.error(e?.message || t('common.operationFailed'));
               } finally {

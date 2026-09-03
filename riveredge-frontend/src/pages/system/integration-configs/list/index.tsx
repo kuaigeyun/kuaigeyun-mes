@@ -854,7 +854,7 @@ const IntegrationConfigListPage: React.FC = () => {
         open={wizardVisible}
         onClose={() => setWizardVisible(false)}
         onSuccess={() => {
-          actionRef.current?.reload();
+    actionRef.current?.reload();
         }}
       />
 

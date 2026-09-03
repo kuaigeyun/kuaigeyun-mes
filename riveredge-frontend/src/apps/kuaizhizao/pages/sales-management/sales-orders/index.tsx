@@ -270,6 +270,7 @@ import { useDeferAfterPaint } from '../../../../../hooks/useDeferAfterPaint';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { isManualAuditEnabled } from '../../../../../utils/auditMode';
 import { rowActionKind } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import { CustomerFollowUpFormModal, type CustomerFollowUpPreset } from '../../../components/CustomerFollowUpFormModal';
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
@@ -290,6 +291,15 @@ function salesOrderCatchMessage(error: unknown, fallback: string): string {
     formatApiErrorDetail(e?.message) ||
     fallback
   );
+}
+
+type SalesOrderListScope = 'all' | 'mine' | 'department';
+
+/** 列表数据范围默认值：管理员看全部，其余看「我的」（与报价单一致） */
+function resolveDefaultSalesOrderListScope(): SalesOrderListScope {
+  const u = useGlobalStore.getState().currentUser;
+  if (u?.is_tenant_admin || u?.is_infra_admin) return 'all';
+  return 'mine';
 }
 
 /** 销售明细行（订单 + 明细合并，用于明细表格平铺） */
@@ -465,6 +475,7 @@ const SALES_ORDER_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_sales_orders';
 
 const SALES_ORDER_LIST_PATH = '/apps/kuaizhizao/sales-management/sales-orders';
 const SALES_ORDER_RESOURCE = 'kuaizhizao:sales-order';
+const SALES_ORDER_TABLE_CACHE_ID = 'apps.kuaizhizao.pages.sales-management.sales-orders';
 const SALES_CONTRACT_RESOURCE = 'kuaizhizao:sales-contract';
 const SALES_ORDER_CREATE_PATH = `${SALES_ORDER_LIST_PATH}/new`;
 const salesOrderEditPath = (id: number) => `${SALES_ORDER_LIST_PATH}/${id}/edit`;
@@ -552,6 +563,9 @@ const SalesOrdersPage: React.FC = () => {
   const formPageInitializedRef = useRef(false);
   const queryClient = useQueryClient();
   const actionRef = useRef<ActionType>(null);
+  const [listScopeFilter, setListScopeFilter] = useState<SalesOrderListScope>(
+    resolveDefaultSalesOrderListScope,
+  );
   const formRef = useRef<any>(null);
   /** 上一次订单头交货日期，用于改表头时同步曾跟随表头的明细行 */
   const lastHeaderDeliveryRef = useRef<ReturnType<typeof dayjs> | null>(null);
@@ -660,8 +674,8 @@ const SalesOrdersPage: React.FC = () => {
 
   const secondaryStatsReady = useDeferAfterPaint();
   const { data: statistics } = useQuery({
-    queryKey: ['salesOrderStatistics', location.pathname],
-    queryFn: getSalesOrderStatistics,
+    queryKey: ['salesOrderStatistics', location.pathname, listScopeFilter],
+    queryFn: () => getSalesOrderStatistics({ list_scope: listScopeFilter }),
     /** 与页面指标错开：先让列表请求发起，再拉聚合统计（趋势图等） */
     enabled: secondaryStatsReady,
   });
@@ -1347,22 +1361,13 @@ const SalesOrdersPage: React.FC = () => {
   /**
    * 处理删除销售订单（单条，草稿或待审核）
    */
-  const handleDeleteSingle = async (id: number) => {
-    modalApi.confirm({
-      title: t('app.kuaizhizao.salesOrder.confirmDelete'),
-      content: t('app.kuaizhizao.salesOrder.deleteConfirm', { count: 1 }),
-      okText: t('app.kuaizhizao.salesOrder.okDelete'),
-      okType: 'danger',
-      cancelText: t('common.cancel'),
-      zIndex: elevatedModalZIndex,
-      onOk: async () => {
-        try {
+  const executeDeleteSingle = async (id: number) => {
+    try {
           await deleteSalesOrder(id);
           messageApi.success(t('app.kuaizhizao.salesOrder.deleteSuccess', { count: 1 }));
           invalidateMenuBadge();
           invalidateStatistics();
-
-          actionRef.current?.reload();
+    actionRef.current?.reload();
           if (currentSalesOrder?.id === id) {
             setDrawerVisible(false);
             setCurrentSalesOrder(null);
@@ -1370,8 +1375,6 @@ const SalesOrdersPage: React.FC = () => {
         } catch (error: any) {
           messageApi.error(salesOrderCatchMessage(error, t('common.deleteFailed')));
         }
-      },
-    });
   };
 
   const handleSyncComplete = useCallback(() => {
@@ -2282,7 +2285,7 @@ const SalesOrdersPage: React.FC = () => {
         );
         pullFromQuotationQuery.closeModal();
         invalidateMenuBadge();
-        actionRef.current?.reload();
+    actionRef.current?.reload();
         if (result?.sales_order?.id) {
           refreshDrawerOrder(result.sales_order.id);
         }
@@ -2370,7 +2373,7 @@ const SalesOrdersPage: React.FC = () => {
         );
         pullFromSalesContractQuery.closeModal();
         invalidateMenuBadge();
-        actionRef.current?.reload();
+    actionRef.current?.reload();
         if (result?.sales_order?.id) {
           refreshDrawerOrder(result.sales_order.id);
         }
@@ -2457,7 +2460,7 @@ const SalesOrdersPage: React.FC = () => {
         );
         pullFromSalesReviewQuery.closeModal();
         invalidateMenuBadge();
-        actionRef.current?.reload();
+    actionRef.current?.reload();
         const orderId = result?.sales_order?.id ?? result?.sales_order_id;
         if (orderId) {
           refreshDrawerOrder(orderId);
@@ -2865,8 +2868,7 @@ const SalesOrdersPage: React.FC = () => {
         messageApi.success(t('app.kuaizhizao.salesOrder.importSuccess', { count: successCount }));
         invalidateMenuBadge();
         invalidateStatistics();
-
-          actionRef.current?.reload();
+    actionRef.current?.reload();
       } else {
         messageApi.warning(
           t('app.kuaizhizao.salesOrder.importPartialSuccess', { success: successCount, failed: failureCount })
@@ -2886,8 +2888,7 @@ const SalesOrdersPage: React.FC = () => {
         }
         invalidateMenuBadge();
         invalidateStatistics();
-
-          actionRef.current?.reload();
+    actionRef.current?.reload();
       }
     } catch (error: any) {
       messageApi.error(error.message || t('app.kuaizhizao.salesOrder.batchImportFailed'));
@@ -3628,7 +3629,9 @@ const SalesOrdersPage: React.FC = () => {
           parts.push(<Button {...rowActionKind('update')} key="edit" onClick={() => handleEdit([record.id!])} />);
         }
         if (canDelete) {
-          parts.push(<Button {...rowActionKind('delete')} key="delete" onClick={() => handleDeleteSingle(record.id!)} />);
+          parts.push(<ActionConfirmPopconfirm title={t('app.kuaizhizao.salesOrder.confirmDelete')} description={t('app.kuaizhizao.salesOrder.deleteConfirm', { count: 1 })} okType="danger" onConfirm={() => executeDeleteSingle(record.id!)}>
+              <Button {...rowActionKind('delete')} key="delete" onClick={(e) => e.stopPropagation()} />
+            </ActionConfirmPopconfirm>);
         }
         parts.push(
           <UniWorkflowActions {...rowActionKind('skip')}
@@ -3646,7 +3649,7 @@ const SalesOrdersPage: React.FC = () => {
               } else {
                 invalidateMenuBadge();
                 invalidateStatistics();
-                actionRef.current?.reload();
+    actionRef.current?.reload();
               }
             }}
             confirmMessages={{
@@ -4874,6 +4877,10 @@ const SalesOrdersPage: React.FC = () => {
         <SalesOrderIndicatorsProvider>
         <UniTable
           columnPersistenceId={salesOrderListPersistenceId}
+          tanstackQuery={{
+            queryKeyPrefix: [SALES_ORDER_TABLE_CACHE_ID],
+          }}
+          params={{ list_scope: listScopeFilter }}
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           onTableDataChange={handleTableDataChange}
@@ -4891,6 +4898,20 @@ const SalesOrdersPage: React.FC = () => {
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.salesOrder)}
           actionRef={actionRef}
           toolBarButtonSize="middle"
+          beforeSearchButtons={
+            <ThemedSegmented
+              key="sales-order-list-scope"
+              surfaceBackground
+              size="medium"
+              value={listScopeFilter}
+              onChange={(v) => setListScopeFilter(v as SalesOrderListScope)}
+              options={[
+                { label: t('app.kuaizhizao.salesOrder.listScopeAll'), value: 'all' },
+                { label: t('app.kuaizhizao.salesOrder.listScopeMine'), value: 'mine' },
+                { label: t('app.kuaizhizao.salesOrder.listScopeDepartment'), value: 'department' },
+              ]}
+            />
+          }
           columns={columns}
           rowKey={dataViewMode === 'detail' ? '_rowKey' : 'id'}
           rowClassName={(record) => {
@@ -4942,6 +4963,7 @@ const SalesOrdersPage: React.FC = () => {
             if (typeof sf.column_filters === 'string' && sf.column_filters.trim()) {
               apiParams.column_filters = sf.column_filters.trim();
             }
+            apiParams.list_scope = params.list_scope;
 
             const toFlatRows = (orders: SalesOrder[], writeRowKeyMap: boolean): SalesOrderItemRow[] => {
               const map = new Map<string, number>();
@@ -5175,7 +5197,11 @@ const SalesOrdersPage: React.FC = () => {
                 return flatRows;
               };
               const orders = await fetchAllListItems((p) =>
-                listSalesOrders({ ...p, include_items: true }),
+                listSalesOrders({
+                  ...p,
+                  include_items: true,
+                  list_scope: listScopeFilter,
+                }),
               );
               const flatRows = flattenOrders(orders);
               let toExport = flatRows;
@@ -5305,9 +5331,16 @@ const SalesOrdersPage: React.FC = () => {
                 </Button>
               )}
               {!detailCapabilityGates.delete.disabled && (
-                <Button danger icon={<DeleteOutlined />} onClick={() => handleDeleteSingle(currentSalesOrder.id!)}>
-                  {t('common.delete')}
-                </Button>
+                <ActionConfirmPopconfirm
+                  title={t('app.kuaizhizao.salesOrder.confirmDelete')}
+                  description={t('app.kuaizhizao.salesOrder.deleteConfirm', { count: 1 })}
+                  okType="danger"
+                  onConfirm={() => executeDeleteSingle(currentSalesOrder.id!)}
+                >
+                  <Button danger icon={<DeleteOutlined />} onClick={(e) => e.stopPropagation()}>
+                    {t('common.delete')}
+                  </Button>
+                </ActionConfirmPopconfirm>
               )}
               <UniWorkflowActions
                 {...rowActionKind('skip')}

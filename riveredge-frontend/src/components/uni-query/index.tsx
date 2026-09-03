@@ -53,7 +53,7 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { getAntdModal } from '../../utils/antdAppApis';
+import { ActionConfirmPopconfirm } from '../action-confirm';
 /**
  * 可拖拽的列表项组件
  */
@@ -1383,26 +1383,10 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
   }, [getSearchableColumns, formRef, searchParamsRef, actionRef, filterEmptyValues, messageApi, onClose, onSearchParamsApplied]);
   
   /**
-   * 删除已保存的搜索条件
+   * 删除已保存的搜索条件（调用方须自行校验 isOwnSearch）
    */
-  const handleDeleteSavedSearch = (e: React.MouseEvent | React.KeyboardEvent, search: SavedSearch) => {
-    if ('stopPropagation' in e) {
-      e.stopPropagation(); // 阻止事件冒泡
-    }
-    
-    // 检查是否是自己的条件
-    if (!isOwnSearch(search)) {
-      messageApi.warning(t('components.uniQuery.onlyDeleteOwn'));
-      return;
-    }
-    
-    getAntdModal().confirm({
-      title: t('components.uniQuery.deleteConfirm'),
-      content: t('components.uniQuery.deleteConfirmContent'),
-      onOk: () => {
-        deleteSavedSearchMutation.mutate(search.uuid);
-      },
-    });
+  const executeDeleteSavedSearch = (search: SavedSearch) => {
+    deleteSavedSearchMutation.mutate(search.uuid);
   };
   
   /**
@@ -1827,13 +1811,17 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
                           // 只有自己的条件才能删除
                           ...(isOwnSearch(item) ? [{
                             key: 'delete',
-                            label: t('common.delete'),
+                            label: (
+                              <ActionConfirmPopconfirm
+                                title={t('components.uniQuery.deleteConfirm')}
+                                description={t('components.uniQuery.deleteConfirmContent')}
+                                onConfirm={() => executeDeleteSavedSearch(item)}
+                              >
+                                <span onClick={(e) => e.stopPropagation()}>{t('common.delete')}</span>
+                              </ActionConfirmPopconfirm>
+                            ),
                             icon: <DeleteOutlined />,
                             danger: true,
-                            onClick: (e: any) => {
-                              e.domEvent.stopPropagation();
-                              handleDeleteSavedSearch(e.domEvent, item);
-                            },
                           }] : []),
                         ],
                       }}
@@ -2035,13 +2023,17 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
                           // 只有自己的条件才能删除
                           ...(isOwnSearch(item) ? [{
                             key: 'delete',
-                            label: t('common.delete'),
+                            label: (
+                              <ActionConfirmPopconfirm
+                                title={t('components.uniQuery.deleteConfirm')}
+                                description={t('components.uniQuery.deleteConfirmContent')}
+                                onConfirm={() => executeDeleteSavedSearch(item)}
+                              >
+                                <span onClick={(e) => e.stopPropagation()}>{t('common.delete')}</span>
+                              </ActionConfirmPopconfirm>
+                            ),
                             icon: <DeleteOutlined />,
                             danger: true,
-                            onClick: (e: any) => {
-                              e.domEvent.stopPropagation();
-                              handleDeleteSavedSearch(e.domEvent, item);
-                            },
                           }] : []),
                         ],
                       }}

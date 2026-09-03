@@ -192,7 +192,7 @@ const SystemDocumentsPage: React.FC = () => {
                   onClick={async () => {
                     await qualityQmsApi.systemDocuments.publish(row.id);
                     messageApi.success(t('app.kuaizhizao.quality.qms.messages.publishSuccess'));
-                    actionRef.current?.reload();
+    actionRef.current?.reload();
                   }}
                 >
                   {t('app.kuaizhizao.quality.qms.actions.publish')}
@@ -205,7 +205,7 @@ const SystemDocumentsPage: React.FC = () => {
                   onClick={async () => {
                     await qualityQmsApi.systemDocuments.obsolete(row.id);
                     messageApi.success(t('app.kuaizhizao.quality.qms.messages.obsoleteSuccess'));
-                    actionRef.current?.reload();
+    actionRef.current?.reload();
                   }}
                 />
               ) : null,
@@ -216,7 +216,7 @@ const SystemDocumentsPage: React.FC = () => {
                   onClick={async () => {
                     await qualityQmsApi.systemDocuments.delete(row.id);
                     messageApi.success(t('common.deleteSuccess'));
-                    actionRef.current?.reload();
+    actionRef.current?.reload();
                   }}
                 />
               ) : null,
@@ -305,7 +305,7 @@ const SystemDocumentsPage: React.FC = () => {
               }
               messageApi.success(t('common.saveSuccess'));
               setOpen(false);
-              actionRef.current?.reload();
+    actionRef.current?.reload();
               return true;
             } catch (e: any) {
               messageApi.error(e?.message || t('common.saveFailed'));

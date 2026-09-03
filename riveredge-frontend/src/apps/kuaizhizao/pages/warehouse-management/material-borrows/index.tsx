@@ -33,6 +33,7 @@ import DocumentAttachmentsField from '../../../components/DocumentAttachmentsFie
 import { DocumentLineUnitSelect } from '../../../../../components/quantity-with-unit';
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import { useTranslation } from 'react-i18next';
 import { useNumericPrecisionPlaces } from '../../../../../hooks/useNumericPrecision';
@@ -58,7 +59,6 @@ import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
-import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 interface MaterialBorrow {
   id?: number;
@@ -341,20 +341,26 @@ const MaterialBorrowsPage: React.FC = () => {
             <Button {...rowActionKind('read')} onClick={() => handleDetail(record)} />
             {record.status === '待借出' && (
               <>
-                <Button
+                <ActionConfirmPopconfirm title={t('app.kuaizhizao.materialBorrow.msg.confirmTitle')} description={t('app.kuaizhizao.materialBorrow.msg.confirmContent', { code: record.borrow_code })} onConfirm={() => executeConfirm(record)}>
+              <Button
                   {...rowActionKind('execute')}
                   {...rowActionLabelKeep()}
-                  onClick={() => handleConfirm(record)}
+                  onClick={(e) => e.stopPropagation()}
                 >
                   {t('app.kuaizhizao.materialBorrow.action.confirmBorrow')}
                 </Button>
-                <Button {...rowActionKind('delete')} onClick={() => handleDelete(record)} />
+            </ActionConfirmPopconfirm>
+                <ActionConfirmPopconfirm title={t('app.kuaizhizao.materialBorrow.msg.deleteTitle')} description={t('app.kuaizhizao.materialBorrow.msg.deleteContent', { code: record.borrow_code })} onConfirm={() => executeDelete(record)}>
+              <Button {...rowActionKind('delete')} onClick={(e) => e.stopPropagation()} />
+            </ActionConfirmPopconfirm>
               </>
             )}
             {record.status === '已借出' && (
-              <Button {...rowActionKind('revoke')} {...rowActionLabelKeep()} onClick={() => handleWithdraw(record)}>
+              <ActionConfirmPopconfirm title={t('app.kuaizhizao.materialBorrow.msg.withdrawTitle')} description={t('app.kuaizhizao.materialBorrow.msg.withdrawContent', { code: record.borrow_code })} onConfirm={() => executeWithdraw(record)}>
+              <Button {...rowActionKind('revoke')} {...rowActionLabelKeep()} onClick={(e) => e.stopPropagation()}>
                 {t('app.kuaizhizao.materialBorrow.action.withdrawBorrow')}
               </Button>
+            </ActionConfirmPopconfirm>
             )}
           </Space>
         );
@@ -416,57 +422,37 @@ const MaterialBorrowsPage: React.FC = () => {
     })();
   }, [searchParams, handleDetail, messageApi, t]);
 
-  const handleConfirm = async (record: MaterialBorrow) => {
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.materialBorrow.msg.confirmTitle'),
-      content: t('app.kuaizhizao.materialBorrow.msg.confirmContent', { code: record.borrow_code }),
-      onOk: async () => {
-        try {
-          await warehouseApi.materialBorrow.confirm(record.id!.toString());
-          messageApi.success(t('app.kuaizhizao.materialBorrow.msg.confirmSuccess'));
-          invalidateMenuBadgeCounts();
-
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error.message || t('app.kuaizhizao.materialBorrow.msg.confirmFailed'));
-        }
-      },
-    });
+  const executeConfirm = async (record: MaterialBorrow) => {
+    try {
+      await warehouseApi.materialBorrow.confirm(record.id!.toString());
+      messageApi.success(t('app.kuaizhizao.materialBorrow.msg.confirmSuccess'));
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || t('app.kuaizhizao.materialBorrow.msg.confirmFailed'));
+    }
   };
 
-  const handleWithdraw = async (record: MaterialBorrow) => {
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.materialBorrow.msg.withdrawTitle'),
-      content: t('app.kuaizhizao.materialBorrow.msg.withdrawContent', { code: record.borrow_code }),
-      onOk: async () => {
-        try {
-          await warehouseApi.materialBorrow.withdraw(record.id!.toString());
-          messageApi.success(t('app.kuaizhizao.materialBorrow.msg.withdrawSuccess'));
-          invalidateMenuBadgeCounts();
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error.message || t('app.kuaizhizao.materialBorrow.msg.withdrawFailed'));
-        }
-      },
-    });
+  const executeWithdraw = async (record: MaterialBorrow) => {
+    try {
+      await warehouseApi.materialBorrow.withdraw(record.id!.toString());
+      messageApi.success(t('app.kuaizhizao.materialBorrow.msg.withdrawSuccess'));
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || t('app.kuaizhizao.materialBorrow.msg.withdrawFailed'));
+    }
   };
 
-  const handleDelete = async (record: MaterialBorrow) => {
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.materialBorrow.msg.deleteTitle'),
-      content: t('app.kuaizhizao.materialBorrow.msg.deleteContent', { code: record.borrow_code }),
-      onOk: async () => {
-        try {
-          await warehouseApi.materialBorrow.delete(record.id!.toString());
-          messageApi.success(t('common.deleteSuccess'));
-          invalidateMenuBadgeCounts();
-
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error.message || t('common.deleteFailed'));
-        }
-      },
-    });
+  const executeDelete = async (record: MaterialBorrow) => {
+    try {
+      await warehouseApi.materialBorrow.delete(record.id!.toString());
+      messageApi.success(t('common.deleteSuccess'));
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || t('common.deleteFailed'));
+    }
   };
 
   const listRowsRef = useRef<Map<string, MaterialBorrow>>(new Map());

@@ -6,6 +6,7 @@ import { App, Button, Descriptions, InputNumber, Modal, Space, Spin, Table, Typo
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
@@ -20,7 +21,7 @@ const money = (v: number) => Number(v || 0).toFixed(2);
 const VatLedgerPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { message: messageApi, modal } = App.useApp();
+  const { message: messageApi } = App.useApp();
   const { canUpdate, canExport } = useResourcePermissions('kuaicaiwu:tax');
   const currentUser = useCurrentUser();
   const siteName = useConfigStore((s) => String(s.getConfig('site_name', '') || '').trim());
@@ -69,14 +70,8 @@ const VatLedgerPage: React.FC = () => {
     }
   };
 
-  const confirmVoucher = (action: 'vat' | 'surcharge') => {
-    modal.confirm({
-      title:
-        action === 'vat'
-          ? t(`${NS}.confirmVatVoucher`, { defaultValue: '生成增值税结转凭证？' })
-          : t(`${NS}.confirmSurchargeVoucher`, { defaultValue: '生成附加税计提凭证？' }),
-      onOk: async () => {
-        try {
+  const executeconfirmVoucher = async (action: 'vat' | 'surcharge') => {
+    try {
           const res =
             action === 'vat'
               ? await taxService.createVatVoucher(year, month)
@@ -91,8 +86,6 @@ const VatLedgerPage: React.FC = () => {
         } catch (error) {
           messageApi.error(getApiErrorMessage(error, t(`${NS}.voucherFailed`, { defaultValue: '生成凭证失败' })));
         }
-      },
-    });
   };
 
   const drillColumns = [
@@ -122,12 +115,29 @@ const VatLedgerPage: React.FC = () => {
             )}
             {canUpdate && !summary?.locked && (
               <>
-                <Button type="primary" onClick={() => confirmVoucher('vat')} disabled={!!summary?.vat_transfer_voucher_id}>
-                  {t(`${NS}.vatVoucher`, { defaultValue: '增值税结转' })}
-                </Button>
-                <Button onClick={() => confirmVoucher('surcharge')} disabled={!!summary?.surcharge_voucher_id}>
-                  {t(`${NS}.surchargeVoucher`, { defaultValue: '附加税计提' })}
-                </Button>
+                <ActionConfirmPopconfirm
+                  title={t(`${NS}.confirmVatVoucher`, { defaultValue: '生成增值税结转凭证？' })}
+                  onConfirm={() => executeconfirmVoucher('vat')}
+                >
+                  <Button
+                    type="primary"
+                    onClick={(e) => e.stopPropagation()}
+                    disabled={!!summary?.vat_transfer_voucher_id}
+                  >
+                    {t(`${NS}.vatVoucher`, { defaultValue: '增值税结转' })}
+                  </Button>
+                </ActionConfirmPopconfirm>
+                <ActionConfirmPopconfirm
+                  title={t(`${NS}.confirmSurchargeVoucher`, { defaultValue: '生成附加税计提凭证？' })}
+                  onConfirm={() => executeconfirmVoucher('surcharge')}
+                >
+                  <Button
+                    onClick={(e) => e.stopPropagation()}
+                    disabled={!!summary?.surcharge_voucher_id}
+                  >
+                    {t(`${NS}.surchargeVoucher`, { defaultValue: '附加税计提' })}
+                  </Button>
+                </ActionConfirmPopconfirm>
               </>
             )}
           </Space>

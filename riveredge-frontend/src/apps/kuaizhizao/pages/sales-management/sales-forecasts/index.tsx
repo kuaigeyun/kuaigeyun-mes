@@ -1278,7 +1278,7 @@ export default function SalesForecastsPage() {
                 invalidateStatistics();
                 invalidateMenuBadge();
                 setTrackingRefreshKey((k) => k + 1);
-                actionRef.current?.reload();
+    actionRef.current?.reload();
               }
             }}
           />,
@@ -1472,7 +1472,7 @@ export default function SalesForecastsPage() {
                   invalidateStatistics();
                   invalidateMenuBadge();
                   setTrackingRefreshKey((k) => k + 1);
-                  actionRef.current?.reload();
+    actionRef.current?.reload();
                 }
               }}
             />,
@@ -2188,7 +2188,7 @@ export default function SalesForecastsPage() {
               }}
               onSuccess={() => {
                 setSelectedRowKeys([]);
-                actionRef.current?.reload();
+    actionRef.current?.reload();
               }}
               toolBarButtonSize="middle"
             />,
@@ -2292,7 +2292,7 @@ export default function SalesForecastsPage() {
                     invalidateStatistics();
                     invalidateMenuBadge();
                     setTrackingRefreshKey((k) => k + 1);
-                    actionRef.current?.reload();
+    actionRef.current?.reload();
                   }
                 }}
               />

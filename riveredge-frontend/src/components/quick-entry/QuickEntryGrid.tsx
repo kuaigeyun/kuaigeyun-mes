@@ -16,7 +16,6 @@ import type { DataNode } from 'antd/es/tree';
 import { QuickEntryIcon } from './QuickEntryIcon';
 import { generateQuickEntryGradient, type QuickEntryThemeStyle } from './quickEntryGradients';
 import { useThemeStore } from '../../stores/themeStore';
-import { getAntdModal } from '../../utils/antdAppApis';
 const { useToken } = theme;
 
 export interface QuickEntryItem {
@@ -155,15 +154,8 @@ export const QuickEntryGrid: React.FC<QuickEntryGridProps> = ({
   };
 
   // 右键快捷删除（非编辑态）
-  const handleDeleteByContextMenu = (targetItem: QuickEntryItem) => {
-    getAntdModal().confirm({
-      title: t('pages.dashboard.quickEntryDeleteTitle'),
-      content: t('pages.dashboard.quickEntryDeleteConfirm', { name: targetItem.menu_name }),
-      okText: t('common.delete'),
-      cancelText: t('common.cancel'),
-      okButtonProps: { danger: true },
-      onOk: async () => {
-        const newItems = displayedItems
+  const handleDeleteByContextMenu = async (targetItem: QuickEntryItem) => {
+    const newItems = displayedItems
           .filter(item => item.menu_uuid !== targetItem.menu_uuid)
           .map((item, index) => ({ ...item, sort_order: index }));
 
@@ -174,9 +166,7 @@ export const QuickEntryGrid: React.FC<QuickEntryGridProps> = ({
         const keys = newItems.map(item => item.menu_uuid);
         setSelectedMenuKeys(keys);
         message.success(t('pages.dashboard.quickEntryDeleted'));
-      },
-    });
-  };
+  };;
 
   return (
     <>

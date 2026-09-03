@@ -258,7 +258,7 @@ const SPCMonitorPage: React.FC = () => {
             });
             messageApi.success(t('app.kuaizhizao.quality.spc.messages.saveSuccess'));
             setCreateVisible(false);
-            actionRef.current?.reload();
+    actionRef.current?.reload();
           }}
         >
           <ProFormText name="characteristic_name" label={t('app.kuaizhizao.quality.spc.characteristicName')} rules={[{ required: true }]} />

@@ -1,4 +1,5 @@
 import { rowActionKind } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ActionType, ProColumns, ProFormDependency, ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
@@ -23,6 +24,7 @@ import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../
 import { useTranslation } from 'react-i18next';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { todaySiteDateString } from '../../../../../utils/format';
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
@@ -46,7 +48,6 @@ import {
   resolveNcDispositionSource,
 } from '../components/qualityMeta';
 import { DispositionConditionalFields, getDispositionSuccessMessageKey } from '../components/DispositionConditionalFields';
-import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { NonconformingLedgerDetailDrawer } from './components/NonconformingLedgerDetailDrawer';
 import { sourceInspectionLabel, sourceInspectionTypeText } from './ncLedgerSource';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
@@ -103,22 +104,24 @@ const NonconformingLedgerPage: React.FC = () => {
     setOpen(true);
   }, []);
 
-  const handleStart8d = useCallback((row: DefectLedgerItem) => {
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.quality.nc.modal.start8dTitle'),
-      content: t('app.kuaizhizao.quality.nc.modal.start8dContent', { code: row.code }),
-      onOk: async () => {
-        const report = await qualityImprovementApi.nonconformingLedger.start8d(
+  const executeStart8d = useCallback(async (row: DefectLedgerItem) => {
+    const report = await qualityImprovementApi.nonconformingLedger.start8d(
           row.id,
           `8D - ${row.product_name || row.code}`,
         );
         messageApi.success(t('app.kuaizhizao.quality.nc.messages.start8dSuccess', { code: report.report_code }));
-        actionRef.current?.reload();
+    actionRef.current?.reload();
         setDetailRefreshNonce((n) => n + 1);
         navigate(`/apps/kuaizhizao/quality-management/eight-d-reports/${report.id}`);
-      },
-    });
   }, [messageApi, navigate, t]);
+
+  const handleStart8d = useCallback((row: DefectLedgerItem) => {
+    getAntdModal().confirm({
+      title: t('app.kuaizhizao.quality.nc.modal.start8dTitle'),
+      content: t('app.kuaizhizao.quality.nc.modal.start8dContent', { code: row.code }),
+      onOk: () => executeStart8d(row),
+    });
+  }, [executeStart8d, t]);
 
   const handleBatchStart8d = useCallback(
     async (keys: React.Key[]) => {
@@ -522,15 +525,17 @@ const NonconformingLedgerPage: React.FC = () => {
                 </Button>
               )}
               {gates.start8d.allowed && (
-                <Button
+                <ActionConfirmPopconfirm title={t('app.kuaizhizao.quality.nc.modal.start8dTitle')} description={t('app.kuaizhizao.quality.nc.modal.start8dContent', { code: row.code })} onConfirm={() => executeStart8d(row)}>
+              <Button
                   key="start8d"
                   {...rowActionKind('execute')}
                   disabled={gates.start8d.disabled}
                   title={gates.start8d.title}
-                  onClick={() => handleStart8d(row)}
+                  onClick={(e) => e.stopPropagation()}
                 >
                   {t('app.kuaizhizao.quality.nc.actions.start8d')}
                 </Button>
+            </ActionConfirmPopconfirm>
               )}
             </Space>
           );
@@ -629,7 +634,7 @@ const NonconformingLedgerPage: React.FC = () => {
             messageApi.success(t(getDispositionSuccessMessageKey(values.disposition)));
             setOpen(false);
             setCurrentRow(null);
-            actionRef.current?.reload();
+    actionRef.current?.reload();
             setDetailRefreshNonce((n) => n + 1);
           }}
         >

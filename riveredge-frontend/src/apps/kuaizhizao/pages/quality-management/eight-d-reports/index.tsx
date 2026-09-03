@@ -330,7 +330,7 @@ const EightDReportsPage: React.FC = () => {
                   onOk: async () => {
                     await qualityImprovementApi.eightD.delete(row.id!);
                     messageApi.success(t('common.deleteSuccess'));
-                    actionRef.current?.reload();
+    actionRef.current?.reload();
                   },
                 });
               }}
@@ -381,11 +381,11 @@ const EightDReportsPage: React.FC = () => {
           onDelete={async (keys) => {
             try {
               for (const key of keys) {
-                await qualityImprovementApi.eightD.delete(Number(key));
+      await qualityImprovementApi.eightD.delete(Number(key));
               }
               messageApi.success(t('app.kuaizhizao.eightD.batchDeleteSuccess', { count: keys.length }));
               setSelectedRowKeys([]);
-              actionRef.current?.reload();
+    actionRef.current?.reload();
             } catch (e: any) {
               messageApi.error(e?.message || t('common.deleteFailed'));
             }
@@ -446,7 +446,7 @@ const EightDReportsPage: React.FC = () => {
             const created = await qualityImprovementApi.eightD.create(payload);
             messageApi.success(t('app.kuaizhizao.eightD.createSuccess'));
             setCreateVisible(false);
-            actionRef.current?.reload();
+    actionRef.current?.reload();
             if (created.id) {
               navigate(`${WORKBENCH_PATH}/${created.id}`);
             }
@@ -528,7 +528,7 @@ const EightDReportsPage: React.FC = () => {
             messageApi.success(t('common.saveSuccess'));
             setEditVisible(false);
             setEditingReportId(undefined);
-            actionRef.current?.reload();
+    actionRef.current?.reload();
           }}
         >
           <ProFormText

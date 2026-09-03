@@ -7,6 +7,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -1210,23 +1211,8 @@ const SalesContractsPage: React.FC = () => {
   };
 
 
-  const handleDeleteDraft = (record: SalesContract) => {
-
-    getAntdModal().confirm({
-
-      title: t('app.kuaizhizao.salesContract.deleteTitle'),
-
-      content: t('app.kuaizhizao.salesContract.deleteDraftConfirm', {
-        code: record.contract_code || record.id,
-      }),
-
-      okText: t('common.delete'),
-
-      okButtonProps: { danger: true },
-
-      onOk: async () => {
-
-        try {
+  const executeDeleteDraft = async (record: SalesContract) => {
+    try {
 
           await salesContractApi.remove(record.id!);
 
@@ -1241,11 +1227,18 @@ const SalesContractsPage: React.FC = () => {
           messageApi.error(e?.message || t('common.deleteFailed'));
 
         }
+  };
 
-      },
-
+  const handleDeleteDraft = (record: SalesContract) => {
+    getAntdModal().confirm({
+      title: t('app.kuaizhizao.salesContract.deleteTitle'),
+      content: t('app.kuaizhizao.salesContract.deleteDraftConfirm', {
+        code: record.contract_code || record.id,
+      }),
+      okText: t('common.delete'),
+      okButtonProps: { danger: true },
+      onOk: () => executeDeleteDraft(record),
     });
-
   };
 
 
@@ -2117,9 +2110,13 @@ const SalesContractsPage: React.FC = () => {
           }
           if (canDelete) {
             parts.push(
-              <Button {...rowActionKind('delete')} key="del" onClick={() => handleDeleteDraft(record)}>
+              <ActionConfirmPopconfirm title={t('app.kuaizhizao.salesContract.deleteTitle')} description={t('app.kuaizhizao.salesContract.deleteDraftConfirm', {
+        code: record.contract_code || record.id,
+      })} onConfirm={() => executeDeleteDraft(record)}>
+              <Button {...rowActionKind('delete')} key="del" onClick={(e) => e.stopPropagation()}>
                 {t('common.delete')}
-              </Button>,
+              </Button>
+            </ActionConfirmPopconfirm>,
             );
           }
           parts.push(

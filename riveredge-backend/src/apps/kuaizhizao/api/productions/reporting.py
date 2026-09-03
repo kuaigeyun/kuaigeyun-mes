@@ -25,6 +25,11 @@ from apps.kuaizhizao.services.reporting_service import ReportingService, REPORTI
 from apps.kuaizhizao.services.scrap_record_service import ScrapRecordService
 from apps.kuaizhizao.services.defect_record_service import DefectRecordService
 from apps.kuaizhizao.services.material_binding_service import MaterialBindingService
+from core.utils.client_channel import resolve_client_channel_code_from_request
+
+
+def _resolve_reporting_client_channel(request: Request) -> Optional[str]:
+    return resolve_client_channel_code_from_request(request)
 
 from apps.kuaizhizao.schemas.reporting_record import (
     ReportingRecordCreate,
@@ -267,6 +272,7 @@ async def create_reporting_record(
             reporting_data=reporting,
             reported_by=current_user.id,
             entry_mode="manual",
+            client_channel=_resolve_reporting_client_channel(request),
         )
     except NotFoundError as e:
         raise _http_exception_with_trace(404, str(e), "/reporting", tenant_id)
@@ -305,6 +311,7 @@ async def create_quick_reporting_record(
             reporting_data=reporting,
             reported_by=current_user.id,
             entry_mode="quick",
+            client_channel=_resolve_reporting_client_channel(request),
         )
     except NotFoundError as e:
         raise _http_exception_with_trace(404, str(e), "/reporting/quick", tenant_id)
@@ -323,6 +330,8 @@ async def list_reporting_records(
     operation_name: Optional[str] = Query(None, description="工序名称（模糊搜索）"),
     worker_name: Optional[str] = Query(None, description="操作工姓名（模糊搜索）"),
     worker_id: Optional[int] = Query(None, description="操作工用户ID（我的报工）"),
+    client_channel: Optional[str] = Query(None, description="报工来源渠道码"),
+    report_mode: Optional[str] = Query(None, description="报工方式 self/proxy/team"),
     status: Optional[str] = Query(None, description="审核状态"),
     keyword: Optional[str] = Query(None, description="关键词（工单/工序/操作工等）"),
     reported_at_start: Optional[str] = Query(None, description="报工开始时间（ISO格式）"),
@@ -353,6 +362,8 @@ async def list_reporting_records(
         operation_name=operation_name,
         worker_name=worker_name,
         worker_id=worker_id,
+        client_channel=client_channel,
+        report_mode=report_mode,
         status=status,
         keyword=keyword,
         reported_at_start=reported_at_start_dt,

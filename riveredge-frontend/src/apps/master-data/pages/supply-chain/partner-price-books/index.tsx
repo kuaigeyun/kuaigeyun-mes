@@ -343,7 +343,7 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
       const successCount = results.filter((item) => item.status === 'fulfilled').length;
       const failedCount = keys.length - successCount;
       if (successCount > 0) {
-        messageApi.success(t('common.batchDeleteSuccess', { count: successCount }));
+    messageApi.success(t('common.batchDeleteSuccess', { count: successCount }));
       }
       if (failedCount > 0) {
         messageApi.warning(

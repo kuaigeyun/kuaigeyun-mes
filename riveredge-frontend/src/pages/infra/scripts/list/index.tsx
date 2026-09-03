@@ -165,8 +165,7 @@ const ScriptListPage: React.FC = () => {
       } else {
         messageApi.error(result.error || t('pages.infra.scripts.executeFailed'));
       }
-      
-      actionRef.current?.reload();
+    actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || t('pages.infra.scripts.executeFailed'));
     } finally {

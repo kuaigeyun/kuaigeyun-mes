@@ -9,7 +9,8 @@
 
 import React, { useRef, useState, useMemo, useEffect, useCallback, lazy, Suspense } from 'react';
 import type { TFunction } from 'i18next';
-import { rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -125,6 +126,11 @@ import { alignProColumns, alignDescriptionColumns, SALES_DOC_LIST_FIELD_RANK } f
 import { LinkedDocumentCode } from '../../../../../components/linked-document-code';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { flattenDocumentDetailRows, resolveDetailTableViewMode } from '../../shared/detailTableFlatRows';
+import {
+  KUAIZHIZAO_DOC_HOST,
+  loadMaterialFormReferenceList,
+  loadSupplierFormReferenceList,
+} from '../../../../../utils/documentFormReferenceLoad';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { useImportDictionaryOptions } from '../../../../../hooks/useImportDictionaryOptions';
@@ -153,7 +159,6 @@ import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../
 import { formatBusinessDateOnly, formatDateTime, formatNumber, formatQuantity, formatCurrencyAmount } from '../../../../../utils/format';;
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
-import { getAntdModal } from '../../../../../utils/antdAppApis';
 const PURCHASE_RETURN_RESOURCE = 'kuaizhizao:purchase-return';
 
 const PURCHASE_RETURN_LIST_PERSISTENCE_ID =
@@ -225,13 +230,21 @@ function buildDictFallbackOptions(t: TFunction, values: string[]) {
   });
 }
 
-/** 行/抽屉「确认退货」：capabilities + 业务态双重门禁（已退货/已取消不得再点）。 */
+/** 行/抽屉「确认退货」：capabilities + 业务态 + 人工审核相位（与后端 assert 同源）。 */
 function canShowPurchaseReturnConfirm(
-  record: { status?: string | null; capabilities?: PurchaseReturn['capabilities'] },
+  record: {
+    status?: string | null;
+    capabilities?: PurchaseReturn['capabilities'];
+    audit?: PurchaseReturn['audit'];
+  },
   canSubmit: boolean,
 ): boolean {
   if (!canSubmit) return false;
   if (record.capabilities?.confirm?.allowed !== true) return false;
+  // 人工审核开启时须已通过；自动通过模式仍可在草稿相位确认
+  if (isManualAuditEnabled(record.audit) && String(record.audit?.phase ?? '') !== 'approved') {
+    return false;
+  }
   const status = String(record.status ?? '').trim();
   if (
     status === '已退货' ||
@@ -278,7 +291,7 @@ const PurchaseReturnsPage: React.FC = () => {
     t,
     'purchase_return.pull_from_incoming_inspection',
   );
-  const { message: messageApi } = App.useApp();
+  const { message: messageApi, modal: modalApi } = App.useApp();
   const navigate = useNavigate();
   const { token } = theme.useToken();
   const purchaseReturnDetailDrawerZIndex = token.zIndexPopupBase;
@@ -557,27 +570,29 @@ const PurchaseReturnsPage: React.FC = () => {
     }
   };
 
-  const handleConfirm = async (record: PurchaseReturn) => {
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.purchaseReturn.confirmTitle'),
-      content: t('app.kuaizhizao.purchaseReturn.confirmContent', { code: record.return_code }),
-      onOk: async () => {
-        try {
-          await warehouseApi.purchaseReturn.confirm(record.id!.toString());
+  const executeConfirm = async (record: PurchaseReturn) => {
+    try {
+          await warehouseApi.purchaseReturn.confirm(String(record.id));
           messageApi.success(t('app.kuaizhizao.purchaseReturn.confirmSuccess'));
           invalidatePurchaseReturnStatistics();
           if (returnDetail?.id === record.id) {
-            const fresh = await warehouseApi.purchaseReturn.get(record.id!.toString());
+            const fresh = await warehouseApi.purchaseReturn.get(String(record.id));
             setReturnDetail(fresh as PurchaseReturnDetail);
             setPrRetTrackingRefreshKey((k) => k + 1);
           }
           invalidateMenuBadgeCounts();
-
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error.message || t('app.kuaizhizao.purchaseReturn.confirmFailed'));
+    actionRef.current?.reload();
+        } catch (error: unknown) {
+          messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.purchaseReturn.confirmFailed')));
+          throw error;
         }
-      },
+  };
+
+  const handleConfirm = async (record: PurchaseReturn) => {
+    modalApi.confirm({
+      title: t('app.kuaizhizao.purchaseReturn.confirmTitle'),
+      content: t('app.kuaizhizao.purchaseReturn.confirmContent', { code: record.return_code }),
+      onOk: () => executeConfirm(record),
     });
   };
 
@@ -675,7 +690,7 @@ const PurchaseReturnsPage: React.FC = () => {
         pullFromPurchaseOrderQuery.closeModal();
         invalidatePurchaseReturnStatistics();
         invalidateMenuBadgeCounts();
-        actionRef.current?.reload();
+    actionRef.current?.reload();
       } catch (error: unknown) {
         messageApi.error(
           getApiErrorMessage(
@@ -740,7 +755,7 @@ const PurchaseReturnsPage: React.FC = () => {
         pullFromIncomingInspectionQuery.closeModal();
         invalidatePurchaseReturnStatistics();
         invalidateMenuBadgeCounts();
-        actionRef.current?.reload();
+    actionRef.current?.reload();
       } catch (error: unknown) {
         messageApi.error(
           getApiErrorMessage(
@@ -803,26 +818,29 @@ const PurchaseReturnsPage: React.FC = () => {
     }
   };
 
-  const handleWithdraw = async (record: PurchaseReturn) => {
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.purchaseReturn.withdrawTitle'),
-      content: t('app.kuaizhizao.purchaseReturn.withdrawContent', { code: record.return_code }),
-      onOk: async () => {
-        try {
-          await warehouseApi.purchaseReturn.withdraw(record.id!.toString());
+  const executeWithdraw = async (record: PurchaseReturn) => {
+    try {
+          await warehouseApi.purchaseReturn.withdraw(String(record.id));
           messageApi.success(t('app.kuaizhizao.purchaseReturn.withdrawSuccess'));
           invalidatePurchaseReturnStatistics();
           invalidateMenuBadgeCounts();
           if (returnDetail?.id === record.id) {
-            const fresh = await warehouseApi.purchaseReturn.get(record.id!.toString());
+            const fresh = await warehouseApi.purchaseReturn.get(String(record.id));
             setReturnDetail(fresh as PurchaseReturnDetail);
             setPrRetTrackingRefreshKey((k) => k + 1);
           }
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error.message || t('app.kuaizhizao.purchaseReturn.withdrawFailed'));
+    actionRef.current?.reload();
+        } catch (error: unknown) {
+          messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.purchaseReturn.withdrawFailed')));
+          throw error;
         }
-      },
+  };
+
+  const handleWithdraw = async (record: PurchaseReturn) => {
+    modalApi.confirm({
+      title: t('app.kuaizhizao.purchaseReturn.withdrawTitle'),
+      content: t('app.kuaizhizao.purchaseReturn.withdrawContent', { code: record.return_code }),
+      onOk: () => executeWithdraw(record),
     });
   };
 
@@ -963,7 +981,7 @@ const PurchaseReturnsPage: React.FC = () => {
       });
 
       if (errors.length > 0) {
-        getAntdModal().warning({
+        modalApi.warning({
           title: t('app.kuaizhizao.quotation.validationFailed'),
           width: 600,
           content: (
@@ -1016,7 +1034,7 @@ const PurchaseReturnsPage: React.FC = () => {
       });
 
       if (result.failureCount > 0) {
-        getAntdModal().warning({
+        modalApi.warning({
           title: t('app.kuaizhizao.quotation.importPartialTitle'),
           width: 600,
           content: (
@@ -1056,7 +1074,7 @@ const PurchaseReturnsPage: React.FC = () => {
       if (result.successCount > 0) {
         invalidateMenuBadgeCounts();
         invalidatePurchaseReturnStatistics();
-        actionRef.current?.reload();
+    actionRef.current?.reload();
       }
     } catch (error: any) {
       messageApi.error(error?.message || t('common.importFailed'));
@@ -1442,12 +1460,13 @@ const PurchaseReturnsPage: React.FC = () => {
           );
           if (canShowPurchaseReturnConfirm(record, purchaseReturnPerms.canAction?.('submit') ?? false)) {
             parts.push(
-              <Button {...rowActionKind('read')}
+              <Button
+                {...rowActionKind('skip')}
+                {...rowActionLabelKeep()}
                 key="c"
                 type="link"
                 size="small"
                 icon={<CheckCircleOutlined />}
-                style={{ color: '#52c41a' }}
                 onClick={(e) => {
                   e.stopPropagation();
                   handleConfirm(record);
@@ -2050,7 +2069,7 @@ const PurchaseReturnsPage: React.FC = () => {
                 setSelectedRowKeys([]);
                 invalidatePurchaseReturnStatistics();
                 invalidateMenuBadgeCounts();
-                actionRef.current?.reload();
+    actionRef.current?.reload();
               }}
               requireConfirm
               labels={{
@@ -2076,7 +2095,7 @@ const PurchaseReturnsPage: React.FC = () => {
                 setSelectedRowKeys([]);
                 invalidatePurchaseReturnStatistics();
                 invalidateMenuBadgeCounts();
-                actionRef.current?.reload();
+    actionRef.current?.reload();
               }}
               requireConfirm
               labels={{
@@ -2411,9 +2430,16 @@ const PurchaseReturnsPage: React.FC = () => {
                       purchaseReturnPerms.canAction?.('submit') ?? false,
                     ),
                     render: () => (
-                      <Button {...rowActionKind('submit')} onClick={() => handleConfirm(returnDetail)}>
+                      <ActionConfirmPopconfirm title={t('app.kuaizhizao.purchaseReturn.confirmTitle')} description={t('app.kuaizhizao.purchaseReturn.confirmContent', { code: record.return_code })} onConfirm={() => executeConfirm(returnDetail)}>
+              <Button
+                        {...rowActionKind('submit')}
+                        {...rowActionLabelKeep()}
+                        icon={<CheckCircleOutlined />}
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         {t('app.kuaizhizao.purchaseReturn.confirmReturn')}
                       </Button>
+            </ActionConfirmPopconfirm>
                     ),
                   },
                   {
@@ -2422,9 +2448,11 @@ const PurchaseReturnsPage: React.FC = () => {
                       returnDetail.capabilities?.withdraw?.allowed === true &&
                       (purchaseReturnPerms.canAction?.('revoke') ?? false),
                     render: () => (
-                      <Button {...rowActionKind('revoke')} onClick={() => void handleWithdraw(returnDetail)}>
+                      <ActionConfirmPopconfirm title={t('app.kuaizhizao.purchaseReturn.withdrawTitle')} description={t('app.kuaizhizao.purchaseReturn.withdrawContent', { code: record.return_code })} onConfirm={() => executeWithdraw(returnDetail)}>
+              <Button {...rowActionKind('revoke')} onClick={(e) => e.stopPropagation()}>
                         {t('app.kuaizhizao.purchaseReturn.withdrawConfirm')}
                       </Button>
+            </ActionConfirmPopconfirm>
                     ),
                   },
                   {

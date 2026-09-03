@@ -479,7 +479,7 @@ const PurchaseInquiriesPage: React.FC = () => {
               }),
         );
         pullFromRequisitionQuery.closeModal();
-        actionRef.current?.reload();
+    actionRef.current?.reload();
       } catch (error: unknown) {
         message.error(
           getApiErrorMessage(
@@ -826,7 +826,7 @@ const PurchaseInquiriesPage: React.FC = () => {
                   onOk: async () => {
                     await deletePurchaseInquiry(record.id!);
                     message.success(t('app.kuaizhizao.purchaseInquiry.deleted'));
-                    actionRef.current?.reload();
+    actionRef.current?.reload();
                   },
                 });
               }}
@@ -843,7 +843,7 @@ const PurchaseInquiriesPage: React.FC = () => {
                 if (!canSubmit) return;
                 await submitPurchaseInquiry(record.id!);
                 message.success(t('app.kuaizhizao.purchaseInquiry.submitSuccess'));
-                actionRef.current?.reload();
+    actionRef.current?.reload();
               }}
             >
               {t('common.submit')}
@@ -858,7 +858,7 @@ const PurchaseInquiriesPage: React.FC = () => {
                 if (!purchaseInquiryPerms.canUpdate) return;
                 await publishPurchaseInquiry(record.id!);
                 message.success(t('app.kuaizhizao.purchaseInquiry.publishSuccess'));
-                actionRef.current?.reload();
+    actionRef.current?.reload();
               }}
             >
               {t('app.kuaizhizao.purchaseInquiry.publishInquiry')}
@@ -876,7 +876,7 @@ const PurchaseInquiriesPage: React.FC = () => {
                 if (!purchaseInquiryPerms.canUpdate) return;
                 await closeInquiryQuoting(record.id!);
                 message.success(t('app.kuaizhizao.purchaseInquiry.closeQuotingSuccess'));
-                actionRef.current?.reload();
+    actionRef.current?.reload();
               }}
             >
               {t('app.kuaizhizao.purchaseInquiry.closeQuoting')}
@@ -905,7 +905,7 @@ const PurchaseInquiriesPage: React.FC = () => {
             approvedStatuses={['APPROVED', '已通过', '审核通过']}
             rejectedStatuses={['REJECTED', '已驳回']}
             onSuccess={() => {
-              actionRef.current?.reload();
+    actionRef.current?.reload();
               if (detailOpen && detail?.id === record.id && record.id != null) {
                 void getPurchaseInquiry(record.id)
                   .then(setDetail)
@@ -1819,7 +1819,7 @@ const PurchaseInquiriesPage: React.FC = () => {
                   await publishPurchaseInquiry(detail.id!);
                   message.success(t('app.kuaizhizao.purchaseInquiry.publishSuccess'));
                   setDetail(await getPurchaseInquiry(detail.id!));
-                  actionRef.current?.reload();
+    actionRef.current?.reload();
                 }}>{t('app.kuaizhizao.purchaseInquiry.publishInquiry')}</Button>
               )}
               {isInquiryQuoting(detail) && (
@@ -1827,7 +1827,7 @@ const PurchaseInquiriesPage: React.FC = () => {
                   await closeInquiryQuoting(detail.id!);
                   message.success(t('app.kuaizhizao.purchaseInquiry.closeQuotingSuccess'));
                   setDetail(await getPurchaseInquiry(detail.id!));
-                  actionRef.current?.reload();
+    actionRef.current?.reload();
                 }}>{t('app.kuaizhizao.purchaseInquiry.closeQuoting')}</Button>
               )}
               {(isInquiryPendingCompare(detail) || isInquiryQuoting(detail) || isInquiryAwarded(detail)) && (
@@ -1849,7 +1849,7 @@ const PurchaseInquiriesPage: React.FC = () => {
                 rejectedStatuses={['REJECTED', '已驳回']}
                 theme="default"
                 onSuccess={async () => {
-                  actionRef.current?.reload();
+    actionRef.current?.reload();
                   setInquiryTrackingRefreshKey((k) => k + 1);
                   if (detail.id) setDetail(await getPurchaseInquiry(detail.id));
                 }}

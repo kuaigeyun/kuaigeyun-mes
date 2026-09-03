@@ -1996,6 +1996,8 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
         picking_id: int,
         approver_id: int,
     ) -> ProductionPickingResponse:
+        from core.services.approval.uni_audit_service import UniAuditService
+
         picking = await ProductionPicking.get_or_none(
             id=picking_id, tenant_id=tenant_id, deleted_at__isnull=True
         )
@@ -2004,16 +2006,27 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
         status = str(picking.status or "").strip()
         if status != "待审核":
             raise BusinessLogicError(f"只能审核待审核状态的生产领料单，当前: {status or '-'}")
-        approver_name = await self.get_user_name(approver_id)
-        await ProductionPicking.filter(tenant_id=tenant_id, id=picking_id).update(
-            status="待领料",
-            review_status="已通过",
-            reviewer_id=approver_id,
-            reviewer_name=approver_name,
-            review_time=resolve_business_datetime(),
-            updated_by=approver_id,
+
+        async def _do_approve() -> ProductionPickingResponse:
+            approver_name = await self.get_user_name(approver_id)
+            await ProductionPicking.filter(tenant_id=tenant_id, id=picking_id).update(
+                status="待领料",
+                review_status="已通过",
+                reviewer_id=approver_id,
+                reviewer_name=approver_name,
+                review_time=resolve_business_datetime(),
+                updated_by=approver_id,
+            )
+            return await self.get_production_picking_by_id(tenant_id, picking_id)
+
+        result = await UniAuditService.approve_with_flow_fallback(
+            tenant_id=tenant_id,
+            entity_type="production_picking",
+            entity_id=picking_id,
+            approver_id=approver_id,
+            flow_approve=_do_approve,
         )
-        return await self.get_production_picking_by_id(tenant_id, picking_id)
+        return result if result is not None else await self.get_production_picking_by_id(tenant_id, picking_id)
 
     async def reject_production_picking(
         self,
@@ -2023,6 +2036,8 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
         *,
         rejection_reason: Optional[str] = None,
     ) -> ProductionPickingResponse:
+        from core.services.approval.uni_audit_service import UniAuditService
+
         picking = await ProductionPicking.get_or_none(
             id=picking_id, tenant_id=tenant_id, deleted_at__isnull=True
         )
@@ -2031,13 +2046,25 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
         status = str(picking.status or "").strip()
         if status != "待审核":
             raise BusinessLogicError(f"只能驳回待审核状态的生产领料单，当前: {status or '-'}")
-        await ProductionPicking.filter(tenant_id=tenant_id, id=picking_id).update(
-            status="草稿",
-            review_status="已驳回",
-            review_remarks=rejection_reason,
-            updated_by=approver_id,
+
+        async def _do_reject(_reason: Optional[str] = None) -> ProductionPickingResponse:
+            await ProductionPicking.filter(tenant_id=tenant_id, id=picking_id).update(
+                status="草稿",
+                review_status="已驳回",
+                review_remarks=_reason or rejection_reason,
+                updated_by=approver_id,
+            )
+            return await self.get_production_picking_by_id(tenant_id, picking_id)
+
+        result = await UniAuditService.reject_with_flow_fallback(
+            tenant_id=tenant_id,
+            entity_type="production_picking",
+            entity_id=picking_id,
+            approver_id=approver_id,
+            reason=rejection_reason,
+            flow_reject=_do_reject,
         )
-        return await self.get_production_picking_by_id(tenant_id, picking_id)
+        return result if result is not None else await self.get_production_picking_by_id(tenant_id, picking_id)
 
     async def withdraw_production_picking_submit(
         self,
@@ -5900,6 +5927,8 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         delivery_id: int,
         approver_id: int,
     ) -> SalesDeliveryResponse:
+        from core.services.approval.uni_audit_service import UniAuditService
+
         delivery = await SalesDelivery.get_or_none(
             id=delivery_id,
             tenant_id=tenant_id,
@@ -5910,16 +5939,27 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         status = str(delivery.status or "").strip()
         if status != "待审核":
             raise BusinessLogicError(f"只能审核待审核状态的销售出库单，当前: {status or '-'}")
-        approver_name = await self.get_user_name(approver_id)
-        await SalesDelivery.filter(tenant_id=tenant_id, id=delivery_id).update(
-            status="待出库",
-            review_status="已通过",
-            reviewer_id=approver_id,
-            reviewer_name=approver_name,
-            review_time=resolve_business_datetime(),
-            updated_by=approver_id,
+
+        async def _do_approve() -> SalesDeliveryResponse:
+            approver_name = await self.get_user_name(approver_id)
+            await SalesDelivery.filter(tenant_id=tenant_id, id=delivery_id).update(
+                status="待出库",
+                review_status="已通过",
+                reviewer_id=approver_id,
+                reviewer_name=approver_name,
+                review_time=resolve_business_datetime(),
+                updated_by=approver_id,
+            )
+            return await self.get_sales_delivery_by_id(tenant_id, delivery_id)
+
+        result = await UniAuditService.approve_with_flow_fallback(
+            tenant_id=tenant_id,
+            entity_type="sales_delivery",
+            entity_id=delivery_id,
+            approver_id=approver_id,
+            flow_approve=_do_approve,
         )
-        return await self.get_sales_delivery_by_id(tenant_id, delivery_id)
+        return result if result is not None else await self.get_sales_delivery_by_id(tenant_id, delivery_id)
 
     async def reject_sales_delivery(
         self,
@@ -5929,6 +5969,8 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         *,
         rejection_reason: Optional[str] = None,
     ) -> SalesDeliveryResponse:
+        from core.services.approval.uni_audit_service import UniAuditService
+
         delivery = await SalesDelivery.get_or_none(
             id=delivery_id,
             tenant_id=tenant_id,
@@ -5939,13 +5981,25 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         status = str(delivery.status or "").strip()
         if status != "待审核":
             raise BusinessLogicError(f"只能驳回待审核状态的销售出库单，当前: {status or '-'}")
-        await SalesDelivery.filter(tenant_id=tenant_id, id=delivery_id).update(
-            status="草稿",
-            review_status="已驳回",
-            review_remarks=rejection_reason,
-            updated_by=approver_id,
+
+        async def _do_reject(_reason: Optional[str] = None) -> SalesDeliveryResponse:
+            await SalesDelivery.filter(tenant_id=tenant_id, id=delivery_id).update(
+                status="草稿",
+                review_status="已驳回",
+                review_remarks=_reason or rejection_reason,
+                updated_by=approver_id,
+            )
+            return await self.get_sales_delivery_by_id(tenant_id, delivery_id)
+
+        result = await UniAuditService.reject_with_flow_fallback(
+            tenant_id=tenant_id,
+            entity_type="sales_delivery",
+            entity_id=delivery_id,
+            approver_id=approver_id,
+            reason=rejection_reason,
+            flow_reject=_do_reject,
         )
-        return await self.get_sales_delivery_by_id(tenant_id, delivery_id)
+        return result if result is not None else await self.get_sales_delivery_by_id(tenant_id, delivery_id)
 
     async def withdraw_sales_delivery_submit(
         self,
@@ -8053,7 +8107,26 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
         occupied_by_item = await occupied_purchase_receipt_qty_by_po_item_ids(
             tenant_id, list(order_by_id.keys())
         )
+        from apps.master_data.services.material_service import (
+            resolve_primary_default_warehouse_from_material,
+        )
+
         kw = (keyword or "").strip().lower()
+        material_ids = {
+            int(item.material_id)
+            for item in items
+            if getattr(item, "material_id", None)
+        }
+        default_wh_by_material: Dict[int, tuple[Optional[int], Optional[str]]] = {}
+        for mid in material_ids:
+            material_wh = await resolve_primary_default_warehouse_from_material(
+                tenant_id, material_id=mid
+            )
+            if material_wh and material_wh[0]:
+                default_wh_by_material[mid] = (int(material_wh[0]), material_wh[1])
+            else:
+                default_wh_by_material[mid] = (None, None)
+
         lines: List[Dict[str, Any]] = []
         for item in items:
             order = order_by_id.get(int(item.order_id))
@@ -8081,6 +8154,8 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 haystack = " ".join([material_code, material_name, material_spec]).lower()
                 if kw not in haystack:
                     continue
+            mid = int(item.material_id) if item.material_id else 0
+            line_wh_id, line_wh_name = default_wh_by_material.get(mid, (None, None))
             lines.append(
                 {
                     "id": int(item.id),
@@ -8097,6 +8172,8 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                     "pushed_quantity": max(0.0, qty - remaining),
                     "remaining_quantity": remaining,
                     "required_date": str(item.required_date) if item.required_date else None,
+                    "warehouse_id": line_wh_id,
+                    "warehouse_name": line_wh_name,
                 }
             )
         lines.sort(
@@ -8113,8 +8190,13 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
         tenant_id: int,
         item_ids: List[int],
         created_by: int,
+        line_warehouses: Optional[Dict[int, int]] = None,
     ) -> Dict[str, Any]:
-        """按采购订单行 id 建采购入库单，可跨多张订单；同供应商合并一张。"""
+        """按采购订单行 id 建采购入库单，可跨多张订单；同供应商合并一张。
+
+        line_warehouses: 行级入库仓库 {purchase_order_item_id: warehouse_id}；
+        未传时回落物料默认仓，再回落租户可用仓（与采购下推入库一致）。
+        """
         from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderItem, effective_po_item_outstanding
         from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
         from apps.kuaizhizao.services.document_action_policy.purchase_order import (
@@ -8122,11 +8204,19 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
         )
         from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
         from apps.kuaizhizao.services.purchase_service import PurchaseService
-        from apps.master_data.services.material_service import (
-            resolve_primary_default_warehouse_from_material,
-        )
+        from apps.kuaizhizao.utils.warehouse_resolver import resolve_inbound_warehouse_for_purchase_push
 
         selected_ids = [int(v) for v in item_ids if v is not None]
+        line_wh_map: Dict[int, int] = {}
+        if line_warehouses:
+            for k, v in line_warehouses.items():
+                try:
+                    item_key = int(k)
+                    wh_val = int(v)
+                except (TypeError, ValueError):
+                    continue
+                if item_key > 0 and wh_val > 0:
+                    line_wh_map[item_key] = wh_val
         if not selected_ids:
             raise BusinessLogicError("请至少选择一条可入库采购订单明细")
         items = await PurchaseOrderItem.filter(tenant_id=tenant_id, id__in=selected_ids).all()
@@ -8185,20 +8275,26 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                     raise ValidationError(
                         f"物料 {item.material_code or item.material_name or item.id} 的单价无效，无法下推采购入库"
                     )
-                material_wh = await resolve_primary_default_warehouse_from_material(
-                    tenant_id, material_id=int(item.material_id)
-                )
-                if not material_wh or not material_wh[0]:
-                    raise ValidationError(
-                        f"请为物料 {item.material_code or item.material_name or item.id} 维护默认仓库"
+                material_label = str(item.material_code or item.material_name or item.id)
+                explicit_wh = line_wh_map.get(int(item.id))
+                try:
+                    line_wh_id, line_wh_name = await resolve_inbound_warehouse_for_purchase_push(
+                        tenant_id,
+                        material_id=int(item.material_id),
+                        explicit_warehouse_id=explicit_wh,
                     )
-                line_wh_id, line_wh_name = int(material_wh[0]), material_wh[1]
+                except ValidationError as err:
+                    if explicit_wh is None:
+                        raise ValidationError(
+                            f"请为物料 {material_label} 选择入库仓库"
+                        ) from err
+                    raise
                 if not line_wh_name:
                     line_wh_name = await _resolve_warehouse_name_by_id(tenant_id, line_wh_id)
                 loc_id, loc_code = await _default_location_if_required(
                     tenant_id,
                     line_wh_id,
-                    material_label=str(item.material_code or item.material_name or item.id),
+                    material_label=material_label,
                 )
                 if header_wh_id is None:
                     header_wh_id = line_wh_id

@@ -193,7 +193,7 @@ export default function LicenseManagementPage() {
                     onOk: async () => {
                       await revokePlatformLicense(record.uuid);
                       messageApi.success(t('pages.infra.licenseCenter.revokeSuccess'));
-                      actionRef.current?.reload();
+    actionRef.current?.reload();
                     },
                   });
                 }}
@@ -292,7 +292,7 @@ export default function LicenseManagementPage() {
             });
             messageApi.success(t('pages.infra.licenseCenter.createSuccess'));
             setModalOpen(false);
-            actionRef.current?.reload();
+    actionRef.current?.reload();
             return;
           } finally {
             setSubmitting(false);

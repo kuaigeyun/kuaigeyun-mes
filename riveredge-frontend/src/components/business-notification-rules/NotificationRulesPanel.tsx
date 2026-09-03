@@ -1,4 +1,5 @@
 import { rowActionKind } from '../uni-action';
+import { ActionConfirmPopconfirm } from '../action-confirm';
 /**
  * 业务配置 - 消息提醒（平台通用 + 已开通定制 APP 合并展示）
  */
@@ -499,20 +500,14 @@ export const NotificationRulesPanel: React.FC<NotificationRulesPanelProps> = ({ 
     notificationTableActionRef.current?.reload?.();
   };
 
-  const handleDeleteNotificationRule = (row: { id: string }) => {
-    getAntdModal().confirm({
-      title: t('pages.system.configCenter.notification.modal.deleteTitle'),
-      content: t('pages.system.configCenter.notification.modal.deleteConfirm'),
-      onOk: async () => {
-        try {
+  const executeDeleteNotificationRule = async (row: { id: string }) => {
+    try {
           await deleteNotificationRulesByIds([row.id]);
         } catch (error: unknown) {
           messageApi.error(
             (error as Error)?.message || t('pages.system.configCenter.notification.message.deleteFailed'),
           );
         }
-      },
-    });
   };
 
   /** 批量删除（确认由 UniTable / UniBatchDeleteButton 承担，此处仅执行删除） */
@@ -762,9 +757,11 @@ export const NotificationRulesPanel: React.FC<NotificationRulesPanelProps> = ({ 
                         <Button {...rowActionKind('update')} key="edit" onClick={() => handleEditNotificationRule(row as never)}>
                           {t('common.edit')}
                         </Button>,
-                        <Button {...rowActionKind('delete')} key="delete" onClick={() => handleDeleteNotificationRule(row)}>
+                        <ActionConfirmPopconfirm title={t('pages.system.configCenter.notification.modal.deleteTitle')} description={t('pages.system.configCenter.notification.modal.deleteConfirm')} onConfirm={() => executeDeleteNotificationRule(row)}>
+              <Button {...rowActionKind('delete')} key="delete" onClick={(e) => e.stopPropagation()}>
                           {t('common.delete')}
-                        </Button>,
+                        </Button>
+            </ActionConfirmPopconfirm>,
                       ];
                       return actions;
                     },

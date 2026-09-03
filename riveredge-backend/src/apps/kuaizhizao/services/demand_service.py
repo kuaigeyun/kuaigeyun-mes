@@ -560,6 +560,9 @@ class DemandService(AppBaseService[Demand]):
         提交需求（提交审核）。
 
         蓝图 nodes.demand.auditRequired=false 时，与销售订单一致：提交后立即自动审核通过，不创建审批流实例。
+        需审核时：先启动审批实例（暂不发通知），再写单据状态，最后再发待办通知。
+        禁止在写库过程中并发站内信（否则 asyncpg 同连接报
+        「another operation is in progress」）。
         
         Args:
             tenant_id: 租户ID
@@ -571,78 +574,32 @@ class DemandService(AppBaseService[Demand]):
             
         Raises:
             NotFoundError: 需求不存在
-            BusinessLogicError: 需求状态不允许提交
+            BusinessLogicError: 需求状态不允许提交 / 审核开启但无可用流程
         """
-        audit_required = True
-        async with in_transaction():
-            demand = await Demand.get_or_none(tenant_id=tenant_id, id=demand_id, deleted_at__isnull=True)
-            if not demand:
-                raise NotFoundError("需求", str(demand_id))
-            
-            # 只能提交草稿状态的需求
-            if demand.status != DemandStatus.DRAFT:
-                raise BusinessLogicError(f"只能提交草稿状态的需求，当前状态: {demand.status}")
-            
-            # 使用状态流转服务更新状态
-            try:
-                from apps.kuaizhizao.services.state_transition_service import StateTransitionService
-                state_service = StateTransitionService()
-                submitter_name = await self.get_user_name(submitted_by)
-                
-                await state_service.transition_state(
-                    tenant_id=tenant_id,
-                    entity_type="demand",
-                    entity_id=demand_id,
-                    from_state=demand.status,
-                    to_state=DemandStatus.PENDING_REVIEW,
-                    operator_id=submitted_by,
-                    operator_name=submitter_name,
-                    transition_reason="提交审核"
-                )
-            except Exception as e:
-                logger.warning(f"状态流转失败: {e}，使用直接更新方式")
-            
-            # 更新状态为待审核，记录提交时间
-            await Demand.filter(tenant_id=tenant_id, id=demand_id).update(
-                status=DemandStatus.PENDING_REVIEW,
-                review_status=ReviewStatus.PENDING,
-                submit_time=resolve_business_datetime(),
-                updated_by=submitted_by,
-                updated_by_name=submitter_name,
-            )
+        demand = await Demand.get_or_none(tenant_id=tenant_id, id=demand_id, deleted_at__isnull=True)
+        if not demand:
+            raise NotFoundError("需求", str(demand_id))
 
-            # 蓝图 nodes.demand.auditRequired=False 时表示自动审核，优先于审批流（与销售订单 submit 逻辑一致）
-            from infra.services.business_config_service import BusinessConfigService
+        if demand.status != DemandStatus.DRAFT:
+            raise BusinessLogicError(f"只能提交草稿状态的需求，当前状态: {demand.status}")
 
-            audit_required = await BusinessConfigService().check_audit_required(tenant_id, "demand")
+        submitter_name = await self.get_user_name(submitted_by)
+        from infra.services.business_config_service import BusinessConfigService
 
-            if audit_required:
-                # 启动审核流程（统一使用 ApprovalInstanceService）
-                try:
-                    from core.services.approval.approval_instance_service import ApprovalInstanceService
-                    instance = await ApprovalInstanceService.start_approval_for_node(
-                        tenant_id=tenant_id,
-                        user_id=submitted_by,
-                        node_key="demand",
-                        entity_type="demand",
-                        entity_id=demand_id,
-                        entity_uuid=str(demand.uuid),
-                        title=f"需求审批: {demand.demand_code}",
-                        content=f"需求类型: {demand.demand_type or '-'}, 业务模式: {demand.business_mode or '-'}",
-                    )
-                    if instance:
-                        logger.info(f"需求 {demand.demand_code} 已启动审核流程")
-                    else:
-                        logger.info(f"需求 {demand.demand_code} 未配置审核流程，使用简单审核模式")
-                except Exception as e:
-                    logger.warning(f"启动审核流程失败: {e}，继续使用简单审核模式")
-            else:
-                logger.info(
-                    "需求 %s 蓝图配置为无需审核（nodes.demand.auditRequired=false），跳过审批实例，提交后将自动通过",
-                    demand.demand_code,
-                )
+        audit_required = await BusinessConfigService().check_audit_required(tenant_id, "demand")
 
         if not audit_required:
+            logger.info(
+                "需求 %s 蓝图配置为无需审核（nodes.demand.auditRequired=false），跳过审批实例，提交后将自动通过",
+                demand.demand_code,
+            )
+            await self._mark_demand_submitted(
+                tenant_id=tenant_id,
+                demand_id=demand_id,
+                from_status=demand.status,
+                submitted_by=submitted_by,
+                submitter_name=submitter_name,
+            )
             return await self.approve_demand(
                 tenant_id,
                 demand_id,
@@ -650,7 +607,87 @@ class DemandService(AppBaseService[Demand]):
                 target_confirmed=True,
             )
 
+        from core.services.approval.approval_instance_service import ApprovalInstanceService
+
+        instance = await ApprovalInstanceService.start_approval_for_node(
+            tenant_id=tenant_id,
+            user_id=submitted_by,
+            node_key="demand",
+            entity_type="demand",
+            entity_id=demand_id,
+            entity_uuid=str(demand.uuid),
+            title=f"需求审批: {demand.demand_code}",
+            content=f"需求类型: {demand.demand_type or '-'}, 业务模式: {demand.business_mode or '-'}",
+            send_notification=False,
+        )
+        if not instance:
+            raise BusinessLogicError(
+                "需求审核已开启但未找到可用的审批流程，请在配置中心检查 demand 审批流程是否已激活"
+            )
+        logger.info(f"需求 {demand.demand_code} 已启动审核流程")
+
+        try:
+            current = await Demand.get_or_none(tenant_id=tenant_id, id=demand_id, deleted_at__isnull=True)
+            if not current:
+                raise NotFoundError("需求", str(demand_id))
+            if current.status != DemandStatus.DRAFT:
+                raise BusinessLogicError(f"只能提交草稿状态的需求，当前状态: {current.status}")
+            await self._mark_demand_submitted(
+                tenant_id=tenant_id,
+                demand_id=demand_id,
+                from_status=current.status,
+                submitted_by=submitted_by,
+                submitter_name=submitter_name,
+            )
+        except Exception:
+            await ApprovalInstanceService.cancel_approval(
+                tenant_id=tenant_id,
+                entity_type="demand",
+                entity_id=demand_id,
+                operator_id=submitted_by,
+            )
+            raise
+
+        ApprovalInstanceService.notify_approval_submitted(
+            tenant_id=tenant_id,
+            approval_instance=instance,
+        )
+
         return await self.get_demand_by_id(tenant_id, demand_id)
+
+    async def _mark_demand_submitted(
+        self,
+        *,
+        tenant_id: int,
+        demand_id: int,
+        from_status: str,
+        submitted_by: int,
+        submitter_name: str,
+    ) -> None:
+        """将需求标为待审核。"""
+        try:
+            from apps.kuaizhizao.services.state_transition_service import StateTransitionService
+
+            await StateTransitionService().transition_state(
+                tenant_id=tenant_id,
+                entity_type="demand",
+                entity_id=demand_id,
+                from_state=from_status,
+                to_state=DemandStatus.PENDING_REVIEW,
+                operator_id=submitted_by,
+                operator_name=submitter_name,
+                transition_reason="提交审核",
+            )
+        except Exception as e:
+            logger.warning(f"状态流转失败: {e}，使用直接更新方式")
+
+        await Demand.filter(tenant_id=tenant_id, id=demand_id).update(
+            status=DemandStatus.PENDING_REVIEW,
+            review_status=ReviewStatus.PENDING,
+            submit_time=resolve_business_datetime(),
+            updated_by=submitted_by,
+            updated_by_name=submitter_name,
+        )
 
     async def approve_demand(
         self, 
@@ -661,103 +698,77 @@ class DemandService(AppBaseService[Demand]):
         target_confirmed: bool = False,
     ) -> DemandResponse:
         """
-        审核需求
-        
-        Args:
-            tenant_id: 租户ID
-            demand_id: 需求ID
-            approved_by: 审核人ID
-            rejection_reason: 驳回原因（如果驳回）
-            
-        Returns:
-            DemandResponse: 审核后的需求响应
-            
-        Raises:
-            NotFoundError: 需求不存在
-            BusinessLogicError: 需求状态不允许审核
+        审核需求。
+
+        有审批流时由 UniAuditService 关流程，单据写回在完成回调 / flow_approve 中进行；
+        禁止在 in_transaction 内调用 execute_approval（会并发撞 asyncpg 连接）。
         """
-        async with in_transaction():
-            demand = await Demand.get_or_none(tenant_id=tenant_id, id=demand_id, deleted_at__isnull=True)
-            if not demand:
-                raise NotFoundError("需求", str(demand_id))
-            
-            # 只能审核待审核状态的需求
-            if demand.review_status != ReviewStatus.PENDING:
-                raise BusinessLogicError(f"只能审核待审核状态的需求，当前审核状态: {demand.review_status}")
-            
-            # 获取审核人信息
+        demand = await Demand.get_or_none(tenant_id=tenant_id, id=demand_id, deleted_at__isnull=True)
+        if not demand:
+            raise NotFoundError("需求", str(demand_id))
+
+        if demand.review_status != ReviewStatus.PENDING:
+            raise BusinessLogicError(f"只能审核待审核状态的需求，当前审核状态: {demand.review_status}")
+
+        from core.services.approval.uni_audit_service import UniAuditService
+        from apps.kuaizhizao.services.state_transition_service import StateTransitionService
+
+        from_status = demand.status
+
+        async def _do_write(reason: Optional[str] = None) -> DemandResponse:
+            use_reason = reason if reason is not None else rejection_reason
             approver_name = await self.get_user_name(approved_by)
-            
-            # 使用统一审批服务执行审核
+            review_status = ReviewStatus.REJECTED if use_reason else ReviewStatus.APPROVED
+            status = (
+                DemandStatus.REJECTED
+                if use_reason
+                else (DemandStatus.CONFIRMED if target_confirmed else DemandStatus.AUDITED)
+            )
             try:
-                from core.services.approval.approval_instance_service import ApprovalInstanceService
-                approval_status = await ApprovalInstanceService.get_approval_status(
+                await StateTransitionService().transition_state(
                     tenant_id=tenant_id,
                     entity_type="demand",
                     entity_id=demand_id,
-                )
-                if approval_status.get("has_flow"):
-                    result = await ApprovalInstanceService.execute_approval(
-                        tenant_id=tenant_id,
-                        entity_type="demand",
-                        entity_id=demand_id,
-                        approver_id=approved_by,
-                        approved=not bool(rejection_reason),
-                        comment=rejection_reason,
-                    )
-                    if result.get("flow_rejected"):
-                        review_status = ReviewStatus.REJECTED
-                        status = DemandStatus.REJECTED
-                    elif result.get("flow_completed"):
-                        review_status = ReviewStatus.APPROVED
-                        status = DemandStatus.CONFIRMED if target_confirmed else DemandStatus.AUDITED
-                    else:
-                        review_status = ReviewStatus.PENDING
-                        status = DemandStatus.PENDING_REVIEW
-                else:
-                    review_status = ReviewStatus.REJECTED if rejection_reason else ReviewStatus.APPROVED
-                    status = DemandStatus.REJECTED if rejection_reason else (
-                        DemandStatus.CONFIRMED if target_confirmed else DemandStatus.AUDITED
-                    )
-            except Exception as e:
-                logger.warning(f"使用审批服务失败: {e}，回退到简单审核模式")
-                review_status = ReviewStatus.REJECTED if rejection_reason else ReviewStatus.APPROVED
-                status = DemandStatus.REJECTED if rejection_reason else (
-                    DemandStatus.CONFIRMED if target_confirmed else DemandStatus.AUDITED
-                )
-            
-            # 使用状态流转服务更新状态
-            try:
-                from apps.kuaizhizao.services.state_transition_service import StateTransitionService
-                state_service = StateTransitionService()
-                
-                await state_service.transition_state(
-                    tenant_id=tenant_id,
-                    entity_type="demand",
-                    entity_id=demand_id,
-                    from_state=demand.status,
+                    from_state=from_status,
                     to_state=status,
                     operator_id=approved_by,
                     operator_name=approver_name,
-                    transition_reason="审核" + ("通过" if not rejection_reason else "驳回"),
-                    transition_comment=rejection_reason
+                    transition_reason="审核" + ("通过" if not use_reason else "驳回"),
+                    transition_comment=use_reason,
                 )
             except Exception as e:
                 logger.warning(f"状态流转失败: {e}，使用直接更新方式")
-            
-            # 更新审核信息
+
             await Demand.filter(tenant_id=tenant_id, id=demand_id).update(
                 reviewer_id=approved_by,
                 reviewer_name=approver_name,
                 review_time=resolve_business_datetime(),
                 review_status=review_status,
-                review_remarks=rejection_reason,
+                review_remarks=use_reason,
                 status=status,
                 updated_by=approved_by,
                 updated_by_name=approver_name,
             )
-            
             return await self.get_demand_by_id(tenant_id, demand_id)
+
+        if rejection_reason:
+            result = await UniAuditService.reject_with_flow_fallback(
+                tenant_id=tenant_id,
+                entity_type="demand",
+                entity_id=demand_id,
+                approver_id=approved_by,
+                reason=rejection_reason,
+                flow_reject=lambda reason=None: _do_write(reason),
+            )
+        else:
+            result = await UniAuditService.approve_with_flow_fallback(
+                tenant_id=tenant_id,
+                entity_type="demand",
+                entity_id=demand_id,
+                approver_id=approved_by,
+                flow_approve=lambda: _do_write(None),
+            )
+        return result if result is not None else await self.get_demand_by_id(tenant_id, demand_id)
 
     async def _is_downstream_executed(
         self,

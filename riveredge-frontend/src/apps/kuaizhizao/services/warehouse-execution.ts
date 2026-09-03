@@ -54,6 +54,8 @@ export type PurchaseReceiptOrderPullLine = {
   pushed_quantity?: number;
   remaining_quantity?: number;
   required_date?: string | null;
+  warehouse_id?: number | null;
+  warehouse_name?: string | null;
 };
 
 export type PurchaseReceiptNoticePullLine = {
@@ -802,6 +804,7 @@ export const warehouseApi = {
       }),
     pullFromPurchaseOrderItems: async (
       selectedItemIds: number[],
+      options?: { lineWarehouses?: Record<number, number> },
     ): Promise<{
       success: boolean;
       message: string;
@@ -811,7 +814,12 @@ export const warehouseApi = {
     }> =>
       apiRequest('/apps/kuaizhizao/purchase-receipts/pull-from-purchase-order-items', {
         method: 'POST',
-        data: { selected_item_ids: selectedItemIds },
+        data: {
+          selected_item_ids: selectedItemIds,
+          ...(options?.lineWarehouses && Object.keys(options.lineWarehouses).length > 0
+            ? { line_warehouses: options.lineWarehouses }
+            : {}),
+        },
       }),
     listReceiptNoticePullLines: async (params: {
       skip?: number;

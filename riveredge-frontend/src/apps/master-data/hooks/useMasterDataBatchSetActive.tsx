@@ -93,7 +93,7 @@ export function useMasterDataBatchSetActive(options: {
     async (keys: React.Key[], isActive: boolean) => {
       await runMasterDataBatchSetActive(keys, isActive, update, messageApi, t, () => {
         setSelectedRowKeys([]);
-        actionRef.current?.reload();
+    actionRef.current?.reload();
       });
     },
     [actionRef, messageApi, setSelectedRowKeys, t, update],

@@ -322,7 +322,7 @@ const ProcessRoutesPage: React.FC = () => {
       }
 
       if (successCount > 0) {
-        messageApi.success(t('common.batchDeleteSuccess', { count: successCount }));
+    messageApi.success(t('common.batchDeleteSuccess', { count: successCount }));
       }
       if (failCount > 0) {
         messageApi.error(

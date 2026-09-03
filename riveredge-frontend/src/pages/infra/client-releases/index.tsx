@@ -376,7 +376,7 @@ const ClientReleasesPage: React.FC = () => {
           setEditingRelease(null);
         }}
         onSuccess={() => {
-          actionRef.current?.reload();
+    actionRef.current?.reload();
           void queryClient.invalidateQueries({ queryKey: ['clientProducts'] });
         }}
       />

@@ -6,7 +6,7 @@
 
 from typing import List, Optional, Dict, Any
 from datetime import date, datetime
-from fastapi import APIRouter, Depends, Query, status as http_status, HTTPException, Body
+from fastapi import APIRouter, Depends, Query, status as http_status, HTTPException, Body, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from loguru import logger
@@ -1652,15 +1652,19 @@ async def get_rework_order_reporting_options(
 async def create_rework_order_reporting(
     rework_order_id: int,
     reporting_data: ReworkReportingCreate,
+    request: Request,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> ReportingRecordResponse:
     """返工报工：仅可在当前激活工序上报。"""
+    from core.utils.client_channel import resolve_client_channel_code_from_request
+
     return await ReworkOrderService().create_rework_reporting(
         tenant_id=tenant_id,
         rework_order_id=rework_order_id,
         reporting_data=reporting_data,
         reported_by=current_user.id,
+        client_channel=resolve_client_channel_code_from_request(request),
     )
 
 

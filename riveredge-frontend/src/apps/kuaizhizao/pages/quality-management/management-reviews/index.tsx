@@ -177,7 +177,7 @@ const ManagementReviewsPage: React.FC = () => {
                   onClick={async () => {
                     await qualityQmsApi.managementReviews.delete(row.id);
                     messageApi.success(t('common.deleteSuccess'));
-                    actionRef.current?.reload();
+    actionRef.current?.reload();
                   }}
                 />
               ) : null,
@@ -259,7 +259,7 @@ const ManagementReviewsPage: React.FC = () => {
               }
               messageApi.success(t('common.saveSuccess'));
               setOpen(false);
-              actionRef.current?.reload();
+    actionRef.current?.reload();
               return true;
             } catch (e: any) {
               messageApi.error(e?.message || t('common.saveFailed'));

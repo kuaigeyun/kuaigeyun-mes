@@ -2,7 +2,7 @@
  * 交付节点汇报详情抽屉
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { App, Button, Descriptions, Modal, Result, Space, Typography } from 'antd';
+import { App, Button, Descriptions, Popconfirm, Result, Space, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import type { ProDescriptionsItemProps } from '@ant-design/pro-components';
 import {
@@ -97,21 +97,16 @@ export const DeliveryNodeReportDetailDrawer: React.FC<DeliveryNodeReportDetailDr
     }
   };
 
-  const handleDelete = () => {
+  const confirmDelete = async () => {
     if (!reportId) return;
-    Modal.confirm({
-      title: t('app.kuaizhizao.deliveryProject.deleteReportConfirm'),
-      onOk: async () => {
-        try {
-          await deliveryNodeReportApi.delete(reportId);
-          message.success(t('common.deleted'));
-          onChanged?.();
-          onClose();
-        } catch (e: unknown) {
-          message.error((e as Error)?.message ?? t('common.operationFailed'));
-        }
-      },
-    });
+    try {
+      await deliveryNodeReportApi.delete(reportId);
+      message.success(t('common.deleted'));
+      onChanged?.();
+      onClose();
+    } catch (e: unknown) {
+      message.error((e as Error)?.message ?? t('common.operationFailed'));
+    }
   };
 
   const contentReady = Boolean(report);
@@ -200,9 +195,9 @@ export const DeliveryNodeReportDetailDrawer: React.FC<DeliveryNodeReportDetailDr
           </>
         ) : null}
         {effective.status === 'draft' && canDelete ? (
-          <Button danger onClick={handleDelete}>
-            {t('common.delete')}
-          </Button>
+          <Popconfirm title={t('app.kuaizhizao.deliveryProject.deleteReportConfirm')} onConfirm={() => void confirmDelete()}>
+            <Button danger>{t('common.delete')}</Button>
+          </Popconfirm>
         ) : null}
       </Space>
     ) : null;

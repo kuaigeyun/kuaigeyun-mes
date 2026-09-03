@@ -121,8 +121,14 @@ import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
-import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
+import { MarkerTag } from '../../../../../constants/statusBadges';
+import {
+  reportingClientChannelSourceKey,
+  type ReportingReportMode,
+} from '../../../../../utils/clientChannel';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 
 const REPORTING_RESOURCE = 'kuaizhizao:production-execution-reporting';
 const REPORTING_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_reporting_records';
@@ -138,6 +144,10 @@ interface ReportingRecord {
   team_name?: string | null;
   /** 提交报工的用户姓名（代报工时为录入人） */
   recorded_by_name?: string | null;
+  /** 报工来源渠道码 */
+  client_channel?: string | null;
+  /** 报工方式 self/proxy/team */
+  report_mode?: ReportingReportMode | string | null;
   reported_quantity: number;
   qualified_quantity: number;
   unqualified_quantity: number;
@@ -1237,6 +1247,22 @@ const ReportingPage: React.FC = () => {
     }
   };
 
+  const deleteReportingRecord = async (record: ReportingRecord) => {
+    try {
+      await reportingApi.delete(record.id.toString());
+      messageApi.success(t('common.deleteSuccess'));
+      if (reportingDetail?.id === record.id) {
+        setDetailDrawerVisible(false);
+        setReportingDetail(null);
+      }
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+      invalidateStatistics();
+    } catch (error: any) {
+      messageApi.error(error.message || t('common.deleteFailed'));
+    }
+  };
+
   const renderReportingRowActionNodes = (record: ReportingRecord): React.ReactNode[] => {
     const nodes: React.ReactNode[] = [];
     const isPending = isReportingPending(record.status);
@@ -1282,37 +1308,21 @@ const ReportingPage: React.FC = () => {
         </Button>
       );
       nodes.push(
-        <Button {...rowActionKind('delete')}
+        <ActionConfirmPopconfirm
           key="del"
-          type="link"
-          size="small"
-          danger
-          onClick={(e) => {
-            e.stopPropagation();
-            getAntdModal().confirm({
-              title: t('app.kuaizhizao.workReporting.confirmDeleteTitle'),
-              content: t('app.kuaizhizao.workReporting.confirmDeletePendingContent'),
-              onOk: async () => {
-                try {
-                  await reportingApi.delete(record.id.toString());
-                  messageApi.success(t('common.deleteSuccess'));
-                  if (reportingDetail?.id === record.id) {
-                    setDetailDrawerVisible(false);
-                    setReportingDetail(null);
-                  }
-                  invalidateMenuBadgeCounts();
-
-                  actionRef.current?.reload();
-                  invalidateStatistics();
-                } catch (error: any) {
-                  messageApi.error(error.message || t('common.deleteFailed'));
-                }
-              },
-            });
-          }}
+          title={t('app.kuaizhizao.workReporting.confirmDeleteTitle')}
+          description={t('app.kuaizhizao.workReporting.confirmDeletePendingContent')}
+          onConfirm={() => deleteReportingRecord(record)}
         >
-          {t('common.delete')}
-        </Button>
+          <Button {...rowActionKind('delete')}
+            type="link"
+            size="small"
+            danger
+            onClick={(e) => e.stopPropagation()}
+          >
+            {t('common.delete')}
+          </Button>
+        </ActionConfirmPopconfirm>
       );
     }
     if (isApproved) {
@@ -1362,37 +1372,21 @@ const ReportingPage: React.FC = () => {
     }
     if (isRejected) {
       nodes.push(
-        <Button {...rowActionKind('delete')}
+        <ActionConfirmPopconfirm
           key="del2"
-          type="link"
-          size="small"
-          danger
-          onClick={(e) => {
-            e.stopPropagation();
-            getAntdModal().confirm({
-              title: t('app.kuaizhizao.workReporting.confirmDeleteTitle'),
-              content: t('app.kuaizhizao.workReporting.confirmDeleteRejectedContent'),
-              onOk: async () => {
-                try {
-                  await reportingApi.delete(record.id.toString());
-                  messageApi.success(t('common.deleteSuccess'));
-                  if (reportingDetail?.id === record.id) {
-                    setDetailDrawerVisible(false);
-                    setReportingDetail(null);
-                  }
-                  invalidateMenuBadgeCounts();
-
-                  actionRef.current?.reload();
-                  invalidateStatistics();
-                } catch (error: any) {
-                  messageApi.error(error.message || t('common.deleteFailed'));
-                }
-              },
-            });
-          }}
+          title={t('app.kuaizhizao.workReporting.confirmDeleteTitle')}
+          description={t('app.kuaizhizao.workReporting.confirmDeleteRejectedContent')}
+          onConfirm={() => deleteReportingRecord(record)}
         >
-          {t('common.delete')}
-        </Button>
+          <Button {...rowActionKind('delete')}
+            type="link"
+            size="small"
+            danger
+            onClick={(e) => e.stopPropagation()}
+          >
+            {t('common.delete')}
+          </Button>
+        </ActionConfirmPopconfirm>
       );
     }
     return nodes;
@@ -1469,6 +1463,57 @@ const ReportingPage: React.FC = () => {
       hideInSearch: false,
       render: (_, record) =>
         String(record.worker_name || record.team_name || '').trim() || '—',
+    },
+    {
+      title: t('app.kuaizhizao.workReporting.colClientChannel'),
+      dataIndex: 'client_channel',
+      key: 'client_channel',
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+      width: 88,
+      minWidth: 88,
+      hideInSearch: true,
+      render: (_, record) => {
+        const sourceKey = reportingClientChannelSourceKey(record.client_channel);
+        if (!sourceKey) return '—';
+        const label =
+          sourceKey === 'miniprogram'
+            ? t('app.kuaizhizao.workReporting.clientChannel.miniprogram')
+            : sourceKey === 'app'
+              ? t('app.kuaizhizao.workReporting.clientChannel.app')
+              : sourceKey === 'station'
+                ? t('app.kuaizhizao.workReporting.clientChannel.station')
+                : t('app.kuaizhizao.workReporting.clientChannel.pc');
+        return <MarkerTag color="processing">{label}</MarkerTag>;
+      },
+    },
+    {
+      title: t('app.kuaizhizao.workReporting.colReportMode'),
+      dataIndex: 'report_mode',
+      key: 'report_mode',
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+      width: 96,
+      minWidth: 96,
+      hideInSearch: false,
+      valueType: 'select',
+      valueEnum: {
+        self: { text: t('app.kuaizhizao.workReporting.reportMode.self') },
+        proxy: { text: t('app.kuaizhizao.workReporting.reportMode.proxy') },
+        team: { text: t('app.kuaizhizao.workReporting.reportMode.team') },
+      },
+      render: (_, record) => {
+        const mode = String(record.report_mode ?? '').trim().toLowerCase();
+        if (!mode) return '—';
+        if (mode === 'proxy') {
+          return <MarkerTag color="warning">{t('app.kuaizhizao.workReporting.reportMode.proxy')}</MarkerTag>;
+        }
+        if (mode === 'team') {
+          return <MarkerTag color="default">{t('app.kuaizhizao.workReporting.reportMode.team')}</MarkerTag>;
+        }
+        if (mode === 'self') {
+          return <MarkerTag color="success">{t('app.kuaizhizao.workReporting.reportMode.self')}</MarkerTag>;
+        }
+        return '—';
+      },
     },
     {
       title: t('app.kuaizhizao.workReporting.colQualifiedQty'),
@@ -1611,6 +1656,32 @@ const ReportingPage: React.FC = () => {
           dataIndex: 'recorded_by_name',
           render: (_: unknown, r: ReportingRecord) => r.recorded_by_name || r.worker_name || '—',
         },
+        {
+          title: t('app.kuaizhizao.workReporting.colClientChannel'),
+          dataIndex: 'client_channel',
+          render: (_: unknown, r: ReportingRecord) => {
+            const sourceKey = reportingClientChannelSourceKey(r.client_channel);
+            if (!sourceKey) return '—';
+            return sourceKey === 'miniprogram'
+              ? t('app.kuaizhizao.workReporting.clientChannel.miniprogram')
+              : sourceKey === 'app'
+                ? t('app.kuaizhizao.workReporting.clientChannel.app')
+                : sourceKey === 'station'
+                  ? t('app.kuaizhizao.workReporting.clientChannel.station')
+                  : t('app.kuaizhizao.workReporting.clientChannel.pc');
+          },
+        },
+        {
+          title: t('app.kuaizhizao.workReporting.colReportMode'),
+          dataIndex: 'report_mode',
+          render: (_: unknown, r: ReportingRecord) => {
+            const mode = String(r.report_mode ?? '').trim().toLowerCase();
+            if (mode === 'proxy') return t('app.kuaizhizao.workReporting.reportMode.proxy');
+            if (mode === 'team') return t('app.kuaizhizao.workReporting.reportMode.team');
+            if (mode === 'self') return t('app.kuaizhizao.workReporting.reportMode.self');
+            return '—';
+          },
+        },
         { title: t('app.kuaizhizao.workReporting.colQualifiedQty'), dataIndex: 'qualified_quantity' },
         { title: t('app.kuaizhizao.workReporting.colUnqualifiedQty'), dataIndex: 'unqualified_quantity' },
         { title: t('app.kuaizhizao.workReporting.colReportedQty'), dataIndex: 'reported_quantity' },
@@ -1661,7 +1732,7 @@ const ReportingPage: React.FC = () => {
         headerTitle={t('app.kuaizhizao.menu.production-execution.reporting')}
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.reporting)}
-        columnPersistenceId="apps.kuaizhizao.pages.production-execution.reporting-width-v1"
+        columnPersistenceId="apps.kuaizhizao.pages.production-execution.reporting-width-v2"
         actionRef={actionRef}
         rowKey="id"
         columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
@@ -1736,14 +1807,14 @@ const ReportingPage: React.FC = () => {
             for (const id of keys) {
               await reportingApi.delete(String(id));
             }
-            messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
+    messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
             setSelectedRowKeys([]);
             if (reportingDetail?.id != null && keys.includes(reportingDetail.id)) {
               setDetailDrawerVisible(false);
               setReportingDetail(null);
             }
             invalidateMenuBadgeCounts();
-            actionRef.current?.reload();
+    actionRef.current?.reload();
             invalidateStatistics();
           } catch (error: any) {
             messageApi.error(error.message || t('common.deleteFailed'));

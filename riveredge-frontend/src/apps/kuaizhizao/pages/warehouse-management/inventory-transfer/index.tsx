@@ -9,6 +9,10 @@
 
 import React, { useRef, useState, useMemo, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import {
+  filterWarehouseTrackingColumns,
+  useWarehouseTrackingFlags,
+} from '../shared/warehouseTrackingFlags';
 import { useNumericPrecisionPlaces } from '../../../../../hooks/useNumericPrecision';
 import { useSearchParams } from 'react-router-dom';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
@@ -30,6 +34,7 @@ import DocumentAttachmentsField from '../../../components/DocumentAttachmentsFie
 import { DocumentLineUnitSelect, QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import {formatDateTime, formatQuantity} from '../../../../../utils/format';
 import { formDateRangeFormItemProps, toApiDateTimeString, nowSiteDateTimeString } from '../../../../../utils/formDate';
 import { alignDescriptionColumns, alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
@@ -50,7 +55,6 @@ import {
 } from '../../../utils/warehouseListCore';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
-import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 interface InventoryTransfer {
   id?: number;
@@ -118,6 +122,7 @@ const defaultTransferItem = {
 
 const InventoryTransferPage: React.FC = () => {
   const { t } = useTranslation();
+  const trackingFlags = useWarehouseTrackingFlags();
   const quantityDecimals = useNumericPrecisionPlaces('quantity');
   const [searchParams] = useSearchParams();
   const { message: messageApi } = App.useApp();
@@ -355,7 +360,7 @@ const InventoryTransferPage: React.FC = () => {
       } catch {
         messageApi.error(t('app.kuaizhizao.inventoryTransfer.msgGetDetailFailed'));
       } finally {
-        actionRef.current?.reload();
+    actionRef.current?.reload();
       }
     })();
   }, [searchParams, handleDetail, messageApi, t]);
@@ -363,22 +368,15 @@ const InventoryTransferPage: React.FC = () => {
   /**
    * 处理执行调拨
    */
-  const handleExecute = async (record: InventoryTransfer) => {
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.inventoryTransfer.msgExecuteTitle'),
-      content: t('app.kuaizhizao.inventoryTransfer.msgExecuteContent', { code: record.code }),
-      onOk: async () => {
-        try {
+  const executeExecute = async (record: InventoryTransfer) => {
+    try {
           await inventoryTransferApi.execute(record.id!.toString());
           messageApi.success(t('app.kuaizhizao.inventoryTransfer.msgExecuteSuccess'));
           invalidateMenuBadgeCounts();
-
-          actionRef.current?.reload();
+    actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || t('app.kuaizhizao.inventoryTransfer.msgExecuteFailed'));
         }
-      },
-    });
   };
 
   /**
@@ -632,13 +630,15 @@ const InventoryTransferPage: React.FC = () => {
               <Button {...rowActionKind('create')} {...rowActionLabelKeep()} onClick={() => handleAddItem(record)}>
                 {t('app.kuaizhizao.inventoryTransfer.actionAddItem')}
               </Button>
+              <ActionConfirmPopconfirm title={t('app.kuaizhizao.inventoryTransfer.msgExecuteTitle')} description={t('app.kuaizhizao.inventoryTransfer.msgExecuteContent', { code: record.code })} onConfirm={() => executeExecute(record)}>
               <Button
                 {...rowActionKind('execute')}
                 {...rowActionLabelKeep()}
-                onClick={() => handleExecute(record)}
+                onClick={(e) => e.stopPropagation()}
               >
                 {t('app.kuaizhizao.inventoryTransfer.actionExecute')}
               </Button>
+            </ActionConfirmPopconfirm>
             </>
           )}
           {record.status === 'in_progress' && (
@@ -824,7 +824,7 @@ const InventoryTransferPage: React.FC = () => {
             }
             messageApi.success(t('app.kuaizhizao.warehouseCommon.deleteSuccess', { count: keys.length }));
             invalidateMenuBadgeCounts();
-            actionRef.current?.reload();
+    actionRef.current?.reload();
           } catch (error: any) {
             messageApi.error(error.message || t('common.deleteFailed'));
           }
@@ -1126,7 +1126,7 @@ const InventoryTransferPage: React.FC = () => {
                     ),
                   },
                 ];
-                const cols = [...baseCols, ...binCols, ...tailCols];
+                const cols = [...baseCols, ...binCols, ...filterWarehouseTrackingColumns(tailCols, trackingFlags)];
                 const totalWidth = cols.reduce((s, c) => s + ((c.width as number) || 0), 0);
                 return (
                   <div style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }}>

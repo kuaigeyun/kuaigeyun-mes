@@ -312,6 +312,7 @@ import { getSessionCurrentUser } from '../../../../../utils/sessionCurrentUser'
 import type { CurrentUser } from '../../../../../types/api'
 import { hasModulePermission } from '../../../../../utils/permissionContract';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { Ungroup } from 'lucide-react';
 import { useGlobalStore } from '../../../../../stores'
 
@@ -5185,62 +5186,75 @@ const WorkOrdersPage: React.FC = () => {
   /**
    * 处理提交批量下达
    */
+  const executeSubmitBatchRelease = async (ignoreErrors: boolean = false) => {
+    const idsToRelease = ignoreErrors
+      ? selectedWorkOrderIds
+      : batchReleaseCheckResults
+          .filter((result) => result.passed)
+          .map((result) => result.workOrder.id);
+
+    if (idsToRelease.length === 0) {
+      messageApi.warning('没有可下达的工单');
+      return;
+    }
+
+    try {
+      await Promise.all(
+        idsToRelease.map((id) =>
+          workOrderApi.release(id.toString(), { ignoreShortage: ignoreErrors }),
+        ),
+      );
+      messageApi.success(`已批量下达 ${idsToRelease.length} 个工单`);
+      setBatchReleaseModalVisible(false);
+      setSelectedRowKeys([]);
+      setBatchReleaseCheckResults([]);
+      invalidateStatistics();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || '批量下达失败');
+    }
+  };
+
   const handleSubmitBatchRelease = async (ignoreErrors: boolean = false) => {
     try {
       const idsToRelease = ignoreErrors
         ? selectedWorkOrderIds
         : batchReleaseCheckResults
-            .filter(result => result.passed)
-            .map(result => result.workOrder.id)
+            .filter((result) => result.passed)
+            .map((result) => result.workOrder.id);
 
       if (idsToRelease.length === 0) {
-        messageApi.warning('没有可下达的工单')
-        return
+        messageApi.warning('没有可下达的工单');
+        return;
       }
 
-      // 确认对话框（优化，新增）
       getAntdModal().confirm({
         title: t('app.kuaizhizao.workOrder.modalConfirmBatchRelease'),
         content: `确定要${ignoreErrors ? '强制' : ''}下达 ${idsToRelease.length} 个工单吗？${ignoreErrors ? '（将忽略所有错误和警告）' : ''}`,
-        onOk: async () => {
-          try {
-            // 批量下达工单
-            await Promise.all(
-              idsToRelease.map((id) =>
-                workOrderApi.release(id.toString(), { ignoreShortage: ignoreErrors }),
-              ),
-            )
-
-            messageApi.success(`已批量下达 ${idsToRelease.length} 个工单`)
-            setBatchReleaseModalVisible(false)
-            setSelectedRowKeys([])
-            setBatchReleaseCheckResults([])
-            invalidateStatistics(); actionRef.current?.reload()
-          } catch (error: any) {
-            messageApi.error(error.message || '批量下达失败')
-          }
-        },
-      })
+        onOk: () => executeSubmitBatchRelease(ignoreErrors),
+      });
     } catch (error: any) {
-      messageApi.error(error.message || '批量下达失败')
+      messageApi.error(error.message || '批量下达失败');
     }
-  }
+  };
 
   /** 齐套自动下达 (Phase 2) */
+  const executeSmartReleaseKitted = async () => {
+    try {
+          const res = await productionControlApi.releaseKitted([]);
+          messageApi.success(`齐套下达成功：共下达 ${res.count} 个工单`);
+          invalidateStatistics();
+    actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error.message || '齐套下达失败');
+        }
+  };
+
   const handleSmartReleaseKitted = async () => {
     getAntdModal().confirm({
       title: t('app.kuaizhizao.workOrder.actionSmartRelease'),
       content: '系统将自动扫描所有未下达的工单，并将其中 100% 齐套的工单批量下达。是否确认？',
-      onOk: async () => {
-        try {
-          const res = await productionControlApi.releaseKitted([]);
-          messageApi.success(`齐套下达成功：共下达 ${res.count} 个工单`);
-          invalidateStatistics();
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error.message || '齐套下达失败');
-        }
-      },
+      onOk: () => executeSmartReleaseKitted(),
     });
   };
 
@@ -5349,71 +5363,77 @@ const WorkOrdersPage: React.FC = () => {
   /**
    * 处理撤回工单
    */
-  const handleRevoke = async (record: WorkOrder) => {
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.workOrder.modalConfirmRevoke'),
-      content: t('app.kuaizhizao.workOrder.modalRevokeContent', { code: record.code }),
-      onOk: async () => {
-        try {
+  const executeRevoke = async (record: WorkOrder) => {
+    try {
           await workOrderApi.revoke(record.id!.toString())
           messageApi.success(t('app.kuaizhizao.workOrder.msgRevokeSuccess'))
           invalidateStatistics(); actionRef.current?.reload()
         } catch (error: any) {
           messageApi.error(error.message || t('app.kuaizhizao.workOrder.msgRevokeFailed'))
         }
-      },
-    })
-  }
+  };
+
+  const handleRevoke = async (record: WorkOrder) => {
+    getAntdModal().confirm({
+      title: t('app.kuaizhizao.workOrder.modalConfirmRevoke'),
+      content: t('app.kuaizhizao.workOrder.modalRevokeContent', { code: record.code }),
+      onOk: () => executeRevoke(record),
+    });
+  };
 
   /**
    * 撤回指定结束
    */
-  const handleWithdrawManualComplete = async (record: WorkOrder) => {
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.workOrder.modalConfirmWithdrawManualComplete'),
-      content: t('app.kuaizhizao.workOrder.modalWithdrawManualCompleteContent', { code: record.code }),
-      onOk: async () => {
-        try {
+  const executeWithdrawManualComplete = async (record: WorkOrder) => {
+    try {
           await workOrderApi.withdrawManualComplete(record.id!.toString())
           messageApi.success(t('app.kuaizhizao.workOrder.msgWithdrawManualCompleteSuccess'))
           invalidateStatistics(); actionRef.current?.reload()
         } catch (error: any) {
           messageApi.error(error.message || t('app.kuaizhizao.workOrder.msgWithdrawManualCompleteFailed'))
         }
-      },
-    })
-  }
+  };
+
+  const handleWithdrawManualComplete = async (record: WorkOrder) => {
+    getAntdModal().confirm({
+      title: t('app.kuaizhizao.workOrder.modalConfirmWithdrawManualComplete'),
+      content: t('app.kuaizhizao.workOrder.modalWithdrawManualCompleteContent', { code: record.code }),
+      onOk: () => executeWithdrawManualComplete(record),
+    });
+  };
 
   /**
    * 处理指定结束工单
    */
-  const handleComplete = async (record: WorkOrder) => {
-    const needsTracking =
-      record.tracking_mode && record.tracking_mode !== 'none' && record.status !== 'split'
-    if (needsTracking) {
-      try {
-        const detail = await workOrderApi.get(record.id!.toString())
-        setCompleteTrackingWorkOrder(detail)
-        setCompleteTrackingModalOpen(true)
-      } catch (error: any) {
-        messageApi.error(error.message || '获取工单详情失败')
-      }
-      return
-    }
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.workOrder.modalConfirmComplete'),
-      content: t('app.kuaizhizao.workOrder.modalCompleteContent', { code: record.code }),
-      onOk: async () => {
-        try {
+  const executeComplete = async (record: WorkOrder) => {
+    try {
           await workOrderApi.complete(record.id!.toString())
           messageApi.success('工单已指定结束')
           invalidateStatistics(); actionRef.current?.reload()
         } catch (error: any) {
           messageApi.error(error.message || '指定结束失败')
         }
-      },
-    })
-  }
+  };
+
+  const handleComplete = async (record: WorkOrder) => {
+    const needsTracking =
+      record.tracking_mode && record.tracking_mode !== 'none' && record.status !== 'split';
+    if (needsTracking) {
+      try {
+        const detail = await workOrderApi.get(record.id!.toString());
+        setCompleteTrackingWorkOrder(detail);
+        setCompleteTrackingModalOpen(true);
+      } catch (error: any) {
+        messageApi.error(error.message || '获取工单详情失败');
+      }
+      return;
+    }
+    getAntdModal().confirm({
+      title: t('app.kuaizhizao.workOrder.modalConfirmComplete'),
+      content: t('app.kuaizhizao.workOrder.modalCompleteContent', { code: record.code }),
+      onOk: () => executeComplete(record),
+    });
+  };
 
   const handleConfirmCompleteTracking = async (values: WorkOrderTrackingConfirmValues) => {
     if (!completeTrackingWorkOrder?.id) return
@@ -6023,12 +6043,8 @@ const WorkOrdersPage: React.FC = () => {
   /**
    * 处理解冻工单
    */
-  const handleUnfreeze = async (record: WorkOrder) => {
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.workOrder.modalConfirmUnfreeze'),
-      content: `确定要解冻工单"${record.code}"吗？`,
-      onOk: async () => {
-        try {
+  const executeUnfreeze = async (record: WorkOrder) => {
+    try {
           await workOrderApi.unfreeze(record.id!.toString())
           messageApi.success('工单解冻成功')
           invalidateStatistics(); actionRef.current?.reload()
@@ -6041,9 +6057,15 @@ const WorkOrdersPage: React.FC = () => {
         } catch (error: any) {
           messageApi.error(error.message || '工单解冻失败')
         }
-      },
-    })
-  }
+  };
+
+  const handleUnfreeze = async (record: WorkOrder) => {
+    getAntdModal().confirm({
+      title: t('app.kuaizhizao.workOrder.modalConfirmUnfreeze'),
+      content: `确定要解冻工单"${record.code}"吗？`,
+      onOk: () => executeUnfreeze(record),
+    });
+  };
 
   /**
    * 处理批量冻结工单
@@ -6090,17 +6112,8 @@ const WorkOrdersPage: React.FC = () => {
   /**
    * 处理批量取消工单
    */
-  const handleBatchCancel = async () => {
-    if (selectedWorkOrderIds.length === 0) {
-      messageApi.warning('请至少选择一个工单')
-      return
-    }
-
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.workOrder.modalConfirmBatchCancel'),
-      content: `确定要取消 ${selectedWorkOrderIds.length} 个工单吗？`,
-      onOk: async () => {
-        try {
+  const executeBatchCancel = async () => {
+    try {
           await Promise.all(
             selectedWorkOrderIds.map((id) =>
               workOrderApi.update(String(id), { status: 'cancelled' })
@@ -6112,9 +6125,20 @@ const WorkOrdersPage: React.FC = () => {
         } catch (error: any) {
           messageApi.error(error.message || '批量取消失败')
         }
-      },
-    })
-  }
+  };
+
+  const handleBatchCancel = async () => {
+    if (selectedWorkOrderIds.length === 0) {
+      messageApi.warning('请至少选择一个工单');
+      return;
+    }
+
+    getAntdModal().confirm({
+      title: t('app.kuaizhizao.workOrder.modalConfirmBatchCancel'),
+      content: `确定要取消 ${selectedWorkOrderIds.length} 个工单吗？`,
+      onOk: () => executeBatchCancel(),
+    });
+  };
 
   /**
    * 处理提交冻结表单
@@ -6527,13 +6551,8 @@ const WorkOrdersPage: React.FC = () => {
     return isReleasedChild && !child.actual_start_date && !childHasWork
   }
 
-  const handleUnsplit = (record: WorkOrder) => {
-    if (record.id == null) return
-    getAntdModal().confirm({
-      title: t('app.kuaizhizao.workOrder.modalConfirmUnsplit'),
-      content: t('app.kuaizhizao.workOrder.modalUnsplitContent'),
-      onOk: async () => {
-        try {
+  const executeUnsplit = async (record: WorkOrder) => {
+    try {
           await workOrderApi.unsplit(record.id!.toString())
           messageApi.success(t('app.kuaizhizao.workOrder.unsplitSuccess'))
           invalidateStatistics()
@@ -6542,9 +6561,16 @@ const WorkOrdersPage: React.FC = () => {
           messageApi.error(error.message || t('app.kuaizhizao.workOrder.unsplitFailed'))
           throw error
         }
-      },
-    })
-  }
+  };
+
+  const handleUnsplit = (record: WorkOrder) => {
+    if (record.id == null) return;
+    getAntdModal().confirm({
+      title: t('app.kuaizhizao.workOrder.modalConfirmUnsplit'),
+      content: t('app.kuaizhizao.workOrder.modalUnsplitContent'),
+      onOk: () => executeUnsplit(record),
+    });
+  };
 
   /**
    * 添加拆分数量输入框
@@ -7417,23 +7443,25 @@ const WorkOrdersPage: React.FC = () => {
         const canSplit = isDraft || isReleased || hasSplitRemaining
         const canFreeze = !isTerminal && !isCompleted
 
+        const executeDeleteClick = async () => {
+          try {
+            await workOrderApi.delete(record.id!.toString());
+            messageApi.success('删除成功');
+            invalidateStatistics();
+            actionRef.current?.reload();
+          } catch (error: any) {
+            messageApi.error(error.message || '删除失败');
+          }
+        };
+
         const handleDeleteClick = () => {
-          if (!canDelete) return
+          if (!canDelete) return;
           getAntdModal().confirm({
             title: t('app.kuaizhizao.workOrder.modalConfirmDelete'),
             content: t('app.kuaizhizao.workOrder.modalDeleteContent'),
-            onOk: async () => {
-              try {
-                await workOrderApi.delete(record.id!.toString())
-                messageApi.success('删除成功')
-                invalidateStatistics()
-                actionRef.current?.reload()
-              } catch (error: any) {
-                messageApi.error(error.message || '删除失败')
-              }
-            },
-          })
-        }
+            onOk: () => executeDeleteClick(),
+          });
+        };
 
         const makeItem = (
           key: string,
@@ -9821,9 +9849,11 @@ const WorkOrdersPage: React.FC = () => {
                     workOrderDetail.capabilities?.revoke?.allowed === true &&
                     (workOrderPerms.canAction?.('revoke') ?? false),
                   render: () => (
-                    <Button danger onClick={() => handleRevoke(workOrderDetail)}>
+                    <ActionConfirmPopconfirm title={t('app.kuaizhizao.workOrder.modalConfirmRevoke')} description={t('app.kuaizhizao.workOrder.modalRevokeContent', { code: record.code })} onConfirm={() => executeRevoke(workOrderDetail)}>
+              <Button danger onClick={(e) => e.stopPropagation()}>
                       {t('app.kuaizhizao.workOrder.actionRevoke')}
                     </Button>
+            </ActionConfirmPopconfirm>
                   ),
                 },
                 {
@@ -9832,9 +9862,11 @@ const WorkOrdersPage: React.FC = () => {
                     workOrderDetail.capabilities?.withdraw_manual_complete?.allowed === true &&
                     (workOrderPerms.canAction?.('revoke') ?? false),
                   render: () => (
-                    <Button danger onClick={() => handleWithdrawManualComplete(workOrderDetail)}>
+                    <ActionConfirmPopconfirm title={t('app.kuaizhizao.workOrder.modalConfirmWithdrawManualComplete')} description={t('app.kuaizhizao.workOrder.modalWithdrawManualCompleteContent', { code: record.code })} onConfirm={() => executeWithdrawManualComplete(workOrderDetail)}>
+              <Button danger onClick={(e) => e.stopPropagation()}>
                       {t('app.kuaizhizao.workOrder.actionWithdrawManualComplete')}
                     </Button>
+            </ActionConfirmPopconfirm>
                   ),
                 },
                 {

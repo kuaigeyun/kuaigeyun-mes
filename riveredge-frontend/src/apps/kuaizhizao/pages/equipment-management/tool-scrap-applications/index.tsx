@@ -35,7 +35,7 @@ import {
   EquipmentMasterDetailDrawer,
   useEquipmentDetailDrawer,
 } from '../shared/equipmentMasterDataDetail';
-import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 const P = 'app.kuaizhizao.toolOps.scrap';
@@ -117,18 +117,12 @@ const ToolScrapApplicationsPage: React.FC = () => {
     });
   };
 
-  const handleDelete = async (keys: React.Key[]) => {
-    getAntdModal().confirm({
-      title: t('common.batchDeleteTitle'),
-      content: t('common.batchDeleteContent', { count: keys.length }),
-      onOk: async () => {
-        for (const id of keys) {
-          await scrapApplicationsApi.delete(Number(id));
-        }
-        messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
-        actionRef.current?.reload();
-      },
-    });
+  const executeDelete = async (keys: React.Key[]) => {
+    for (const id of keys) {
+      await scrapApplicationsApi.delete(Number(id));
+    }
+    messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
+    actionRef.current?.reload();
   };
 
   const handleSubmit = async (values: Record<string, unknown>) => {
@@ -367,21 +361,20 @@ const ToolScrapApplicationsPage: React.FC = () => {
               </Button>
             )}
             {perms.canDelete && record.status === '草稿' && (
-              <Button
-                {...rowActionKind('delete')}
-                type="link"
-                size="small"
-                danger
-                onClick={(e) => {
-                  e.stopPropagation();
-                  getAntdModal().confirm({
-                    title: t('common.deleteTitle'),
-                    onOk: () => record.id && handleDelete([record.id]),
-                  });
-                }}
+              <ActionConfirmPopconfirm
+                title={t('common.deleteTitle')}
+                onConfirm={() => record.id && void executeDelete([record.id])}
               >
-                {t('common.delete')}
-              </Button>
+                <Button
+                  {...rowActionKind('delete')}
+                  type="link"
+                  size="small"
+                  danger
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {t('common.delete')}
+                </Button>
+              </ActionConfirmPopconfirm>
             )}
           </>
         ),

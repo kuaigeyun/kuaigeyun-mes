@@ -248,20 +248,20 @@ const DataBackupsPage: React.FC = () => {
         messageApi.info(result.message || t('pages.system.dataBackups.restoreSuccess'));
         setRestoreModalVisible(false);
         setRestoreBackupRecord(null);
-        actionRef.current?.reload();
+    actionRef.current?.reload();
         loadWorkerHealth(true);
         void pollRestoreStatus(restoringUuid, {
           onSuccess: () => {
             messageApi.success(t('pages.system.dataBackups.restoreCompletedSuccess'));
-            actionRef.current?.reload();
+    actionRef.current?.reload();
           },
           onFailed: (errorMessage) => {
             messageApi.error(errorMessage || t('pages.system.dataBackups.restoreFailed'));
-            actionRef.current?.reload();
+    actionRef.current?.reload();
           },
           onTimeout: () => {
             messageApi.warning(t('pages.system.dataBackups.restorePollingTimeout'));
-            actionRef.current?.reload();
+    actionRef.current?.reload();
           },
         });
       } else {

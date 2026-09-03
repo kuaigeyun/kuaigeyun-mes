@@ -4,6 +4,7 @@
 
 import React, { useRef, useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { useLeaveFormTab } from '../../../../../components/uni-tabs/navigateClosingTab';
@@ -1421,13 +1422,8 @@ const PurchaseRequisitionsPage: React.FC = () => {
     t,
   ]);
 
-  const handleDeleteOne = (record: PurchaseRequisition) => {
-    if (record.status !== '草稿') return;
-    modalApi.confirm({
-      title: t('app.kuaizhizao.purchaseRequisition.confirmDelete'),
-      content: t('app.kuaizhizao.purchaseRequisition.confirmDeleteContent', { code: record.requisition_code }),
-      onOk: async () => {
-        try {
+  const executeDeleteOne = async (record: PurchaseRequisition) => {
+    try {
           await deletePurchaseRequisition(record.id!);
           messageApi.success(t('common.deleteSuccess'));
           if (currentReq?.id === record.id) {
@@ -1435,12 +1431,18 @@ const PurchaseRequisitionsPage: React.FC = () => {
             setCurrentReq(null);
           }
           invalidateMenuBadgeCounts();
-
-          actionRef.current?.reload();
+    actionRef.current?.reload();
         } catch (e: any) {
           messageApi.error(e?.response?.data?.detail || t('common.deleteFailed'));
         }
-      },
+  };
+
+  const handleDeleteOne = (record: PurchaseRequisition) => {
+    if (record.status !== '草稿') return;
+    modalApi.confirm({
+      title: t('app.kuaizhizao.purchaseRequisition.confirmDelete'),
+      content: t('app.kuaizhizao.purchaseRequisition.confirmDeleteContent', { code: record.requisition_code }),
+      onOk: () => executeDeleteOne(record),
     });
   };
 
@@ -1644,7 +1646,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
               confirmMessages={{ revoke: t('app.kuaizhizao.purchaseRequisition.workflowRevokeConfirm') }}
               onSuccess={() => {
                 invalidateMenuBadgeCounts();
-                actionRef.current?.reload();
+    actionRef.current?.reload();
                 if (detailVisible && currentReq?.id === record.id && record.id != null) {
                   void getPurchaseRequisition(record.id)
                     .then((res) => {
@@ -1659,9 +1661,11 @@ const PurchaseRequisitionsPage: React.FC = () => {
         );
         if (isDraft) {
           parts.push(
-            <Button {...rowActionKind('delete')} key="del" onClick={() => handleDeleteOne(record)}>
+            <ActionConfirmPopconfirm title={t('app.kuaizhizao.purchaseRequisition.confirmDelete')} description={t('app.kuaizhizao.purchaseRequisition.confirmDeleteContent', { code: record.requisition_code })} onConfirm={() => executeDeleteOne(record)}>
+              <Button {...rowActionKind('delete')} key="del" onClick={(e) => e.stopPropagation()}>
               {t('common.delete')}
             </Button>
+            </ActionConfirmPopconfirm>
           );
         }
         return parts;
@@ -2694,7 +2698,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
                           setCurrentReq(res);
                           setPrTrackingRefreshKey((k) => k + 1);
                           invalidateMenuBadgeCounts();
-                          actionRef.current?.reload();
+    actionRef.current?.reload();
                           messageApi.success(t('app.kuaizhizao.purchaseRequisition.statusFixed'));
                         } catch (e: unknown) {
                           const err = e as { response?: { data?: { detail?: string } } };
@@ -2765,7 +2769,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
                       confirmMessages={{ revoke: t('app.kuaizhizao.purchaseRequisition.workflowRevokeConfirm') }}
                       onSuccess={async () => {
                         invalidateMenuBadgeCounts();
-                        actionRef.current?.reload();
+    actionRef.current?.reload();
                         setPrTrackingRefreshKey((k) => k + 1);
                         if (currentReq?.id) {
                           try {

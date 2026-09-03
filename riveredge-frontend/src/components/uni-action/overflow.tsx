@@ -23,7 +23,6 @@ import {
 } from './actionText'
 import { rowActionSortRank } from './actionCatalog'
 import { normalizeActionTree } from './normalize'
-import { getAntdModal } from '../../utils/antdAppApis';
 /**
  * 行内默认仅直出基础动作（详情/编辑/删除等），其余动作折叠到「更多」，
  * 以收窄操作列宽度并提升右侧固定列稳定性；「更多」仅 1 项时仍直出。
@@ -271,29 +270,41 @@ function toMenuItem(node: React.ReactNode, key: string) {
         : undefined
     const destructive = tone.mode === 'destructive'
 
-    // 折叠到「更多」后，Popconfirm 不会自动触发；转成与 Popconfirm 同构的确认（问句贴图标，避免空正文 Modal）。
     if (popconfirm) {
       const popProps = (popconfirm.props || {}) as Record<string, unknown>
-      onClick = () => {
-        const onConfirm = popProps.onConfirm
-        const titleNode = (popProps.title as React.ReactNode) ?? text
-        const descriptionNode = popProps.description as React.ReactNode
-        const hasDescription =
-          descriptionNode != null && descriptionNode !== false && descriptionNode !== ''
-        getAntdModal().confirm({
-          // 无 description 时把问句放在 content，布局接近行内 Popconfirm（图标 + 文案）
-          title: hasDescription ? titleNode : undefined,
-          content: hasDescription ? descriptionNode : titleNode,
-          okText: (popProps.okText as string) || i18next.t('common.confirm', { defaultValue: 'Confirm' }),
-          cancelText:
-            (popProps.cancelText as string) || i18next.t('common.cancel', { defaultValue: 'Cancel' }),
-          okButtonProps: destructive ? { danger: true } : undefined,
-          onOk: async () => {
-            if (typeof onConfirm === 'function') {
-              await (onConfirm as () => void | Promise<void>)()
+      const onConfirm = popProps.onConfirm
+      const titleNode = (popProps.title as React.ReactNode) ?? text
+      const descriptionNode = popProps.description as React.ReactNode
+      const hasDescription =
+        descriptionNode != null && descriptionNode !== false && descriptionNode !== ''
+      return {
+        key,
+        label: (
+          <Popconfirm
+            title={titleNode}
+            description={hasDescription ? descriptionNode : undefined}
+            okText={(popProps.okText as string) || i18next.t('common.confirm', { defaultValue: 'Confirm' })}
+            cancelText={
+              (popProps.cancelText as string) || i18next.t('common.cancel', { defaultValue: 'Cancel' })
             }
-          },
-        })
+            okButtonProps={destructive ? { danger: true } : undefined}
+            onConfirm={async (e) => {
+              e?.stopPropagation()
+              if (typeof onConfirm === 'function') {
+                await (onConfirm as () => void | Promise<void>)()
+              }
+            }}
+          >
+            <span
+              style={{ display: 'inline-block', width: '100%' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {text}
+            </span>
+          </Popconfirm>
+        ),
+        danger: destructive || !!props.danger,
+        disabled: !!props.disabled,
       }
     }
 

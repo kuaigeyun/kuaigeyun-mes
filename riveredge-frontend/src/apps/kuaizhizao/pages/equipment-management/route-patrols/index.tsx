@@ -43,7 +43,6 @@ import {
 } from '../../../utils/equipmentListCore';
 import LineAttachmentsUpload from '../../../components/LineAttachmentsUpload';
 import type { DocumentAttachmentFile } from '../../../utils/documentAttachments';
-import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 const P = 'app.kuaizhizao.equipmentOps.routePatrol';
@@ -202,17 +201,11 @@ const RoutePatrolsPage: React.FC = () => {
   };
 
   const handleDelete = async (keys: React.Key[]) => {
-    getAntdModal().confirm({
-      title: t('common.batchDeleteTitle'),
-      content: t('common.batchDeleteContent', { count: keys.length }),
-      onOk: async () => {
-        for (const id of keys) {
+    for (const id of keys) {
           await routePatrolsApi.delete(Number(id));
         }
-        messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
-        actionRef.current?.reload();
-      },
-    });
+    messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
+    actionRef.current?.reload();
   };
 
   const handleSubmit = async (values: Record<string, unknown>) => {
@@ -615,6 +608,9 @@ const RoutePatrolsPage: React.FC = () => {
           createButtonText={withSingleNewShortcutHint(t(`${P}.create`))}
           onCreate={handleCreate}
           showDeleteButton={perms.canDelete}
+          deleteConfirmTitle={t('common.batchDeleteTitle')}
+          deleteConfirmDescription={(count) => t('common.batchDeleteContent', { count: count })}
+          
           onDelete={handleDelete}
           enableRowSelection={perms.canDelete}
         />

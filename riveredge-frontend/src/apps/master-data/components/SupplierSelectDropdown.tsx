@@ -11,6 +11,7 @@ import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import {
   ReferenceDisplayAccessError,
   canReadReferenceResource,
+  mapPartnerReferenceDisplayItem,
   referenceDisplayToIdOptions,
   searchReferenceDisplay,
 } from '../../../utils/referenceDisplay';
@@ -83,13 +84,7 @@ export const SupplierSelectDropdown: React.FC<SupplierSelectDropdownProps> = ({
         pageSize: 200,
       });
       const list = res.items.map(
-        (item) =>
-          ({
-            id: item.id,
-            uuid: item.uuid,
-            code: item.code,
-            name: item.name,
-          }) as Supplier,
+        (item) => mapPartnerReferenceDisplayItem(item) as Supplier,
       );
       if (suppliersProp == null) {
         setInternalSuppliers(list);

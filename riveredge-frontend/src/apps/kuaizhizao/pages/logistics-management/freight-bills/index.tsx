@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import type { ActionType, ProColumns, ProFormInstance } from '@ant-design/pro-components';
 import { ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Col, Form, Input, InputNumber, Modal, Row, theme } from 'antd';
+import { App, Button, Col, Form, Input, InputNumber, Modal, Popconfirm, Row, theme } from 'antd';
 import { CheckOutlined, CloseOutlined, SendOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
@@ -302,20 +302,19 @@ const FreightBillsPage: React.FC = () => {
             }
             if (perms.canDelete && canEditFreightBill(row.review_status)) {
               nodes.push(
-                <Button
+                <Popconfirm
                   key="delete"
-                  {...rowActionKind('delete')}
-                  onClick={() => {
-                    Modal.confirm({
-                      title: t('common.confirmDelete'),
-                      onOk: async () => {
-                        await deleteFreightBill(row.id);
-                        messageApi.success(t('common.deleteSuccess'));
-                        billsActionRef.current?.reload();
-                      },
-                    });
+                  title={t('common.confirmDelete')}
+                  onConfirm={async (e) => {
+                    e?.stopPropagation();
+                    await deleteFreightBill(row.id);
+                    messageApi.success(t('common.deleteSuccess'));
+                    billsActionRef.current?.reload();
                   }}
-                />,
+                  onCancel={(e) => e?.stopPropagation()}
+                >
+                  <Button {...rowActionKind('delete')} onClick={(e) => e.stopPropagation()} />
+                </Popconfirm>,
               );
             }
             return nodes;
@@ -476,7 +475,7 @@ const FreightBillsPage: React.FC = () => {
                 showDeleteButton={perms.canDelete}
                 onDelete={async (keys) => {
                   await Promise.all(keys.map((key) => deleteFreightBill(Number(key))));
-                  messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
+    messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
                   billsActionRef.current?.reload();
                 }}
               />

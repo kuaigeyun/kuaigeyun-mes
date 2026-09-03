@@ -925,7 +925,7 @@ const ApplicationListPage: React.FC = () => {
                   const result = await syncApplicationManifest(record.code);
                   if (result.success) {
                     messageApi.success({ content: result.message || t('pages.system.applications.syncMenuSuccess'), key: 'sync-manifest' });
-                    actionRef.current?.reload();
+    actionRef.current?.reload();
                     await finalizeManifestSyncForSidebar();
                   } else {
                     throw new Error(result.message || t('pages.system.applications.syncFailed'));
@@ -1085,8 +1085,7 @@ const ApplicationListPage: React.FC = () => {
                     content: result.message || t('pages.system.applications.syncMenuSuccess'),
                     key: 'sync-manifest'
                   });
-
-                  actionRef.current?.reload();
+    actionRef.current?.reload();
 
                   await finalizeManifestSyncForSidebar();
                 } else {
@@ -1805,7 +1804,7 @@ const ApplicationListPage: React.FC = () => {
                       if (result?.success) {
                         messageApi.success(result.message || '重置成功并已自动备份');
                         setResetModalVisible(false);
-                        actionRef.current?.reload();
+    actionRef.current?.reload();
                       } else {
                         messageApi.error(result?.message || '重置失败');
                       }
@@ -1984,7 +1983,7 @@ const ApplicationListPage: React.FC = () => {
                       await finalizeManifestSyncForSidebar();
                       messageApi.success(t('pages.system.applications.restoreSuccess'));
                       setEditModalVisible(false);
-                      actionRef.current?.reload();
+    actionRef.current?.reload();
                     } catch (error: any) {
                       messageApi.error(error.message || t('pages.system.applications.restoreFailed'));
                     } finally {
