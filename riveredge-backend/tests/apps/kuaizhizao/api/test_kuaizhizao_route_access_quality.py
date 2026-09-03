@@ -63,6 +63,46 @@ def test_ensure_for_purchase_receipt_defaults_to_create_action() -> None:
     )
 
 
+def test_audit_only_modules_map_approve_and_reject_to_audit() -> None:
+    """销售订单等仅声明 :audit 的模块：直连接口 /approve|/reject 须走 audit，与 uni-audit 门控一致。"""
+    for module in ("sales-order", "purchase-order", "sales-order-change", "purchase-order-change"):
+        assert (
+            resolve_kuaizhizao_module_action(
+                "POST",
+                f"/api/v1/apps/kuaizhizao/{module}s/1/approve",
+                module_code=module,
+            )
+            == "audit"
+        )
+        assert (
+            resolve_kuaizhizao_module_action(
+                "POST",
+                f"/api/v1/apps/kuaizhizao/{module}s/1/reject",
+                module_code=module,
+            )
+            == "audit"
+        )
+
+
+def test_modules_with_approve_keep_approve_action() -> None:
+    assert (
+        resolve_kuaizhizao_module_action(
+            "POST",
+            "/api/v1/apps/kuaizhizao/quotations/1/approve",
+            module_code="quotation",
+        )
+        == "approve"
+    )
+    assert (
+        resolve_kuaizhizao_module_action(
+            "POST",
+            "/api/v1/apps/kuaizhizao/quotations/1/reject",
+            module_code="quotation",
+        )
+        == "reject"
+    )
+
+
 def test_quality_management_router_mounts_dashboard_routes() -> None:
     from apps.kuaizhizao.api.productions.quality_management import router as qm
 

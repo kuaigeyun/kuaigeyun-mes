@@ -19,11 +19,15 @@ _SALES_ORDER_TRACKING_GET_RE = re.compile(r"/sales-orders/(\d+)/tracking(?:/)?$"
 _WORK_ORDER_DETAIL_GET_RE = re.compile(r"/work-orders/(\d+)(?:/)?$")
 _WORK_ORDER_OPERATIONS_GET_RE = re.compile(r"/work-orders/(\d+)/operations(?:/)?$")
 
-# 审核走 audit 而非 approve 的模块（与 manifest 一致）
-_AUDIT_APPROVE_MODULES = frozenset({
-    "purchase-order-change",
+# 仅声明 :audit（无 :approve/:reject）的模块：/approve、/reject 均走 audit
+_AUDIT_ONLY_REVIEW_MODULES = frozenset({
+    "after-sales-spare-part-requisition",
     "purchase-arrival-delay",
+    "purchase-order",
+    "purchase-order-change",
+    "sales-order",
     "sales-order-change",
+    "service-settlement",
 })
 
 
@@ -58,10 +62,12 @@ def resolve_kuaizhizao_module_action(
     if "/unapprove" in p:
         return "revoke"
     if "/approve" in p:
-        if module_code in _AUDIT_APPROVE_MODULES:
+        if module_code in _AUDIT_ONLY_REVIEW_MODULES:
             return "audit"
         return "approve"
     if "/reject" in p:
+        if module_code in _AUDIT_ONLY_REVIEW_MODULES:
+            return "audit"
         return "reject"
     if "/issue" in p:
         return "submit"
@@ -115,9 +121,6 @@ def resolve_kuaizhizao_module_action(
     if module_code == "repair-order":
         if "/close" in p and m == "POST":
             return "close"
-    if module_code in {"after-sales-spare-part-requisition", "service-settlement"}:
-        if "/reject" in p and m == "POST":
-            return "audit"
     if m == "GET":
         return "read"
     if m in {"PUT", "PATCH"}:

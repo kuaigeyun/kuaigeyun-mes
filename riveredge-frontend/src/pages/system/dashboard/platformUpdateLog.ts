@@ -36,6 +36,13 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
   {
+    id: 'sales-order-audit-permission-gate',
+    date: '2026-09-03',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-order-audit-permission-gate.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.sales-order-audit-permission-gate.description',
+  },
+  {
     id: 'user-list-reset-password-handler',
     date: '2026-09-03',
     type: 'fix',

@@ -1,0 +1,1 @@
+import{D as a}from"./clientRelease-CZQfFnV4.js";const c=["submit","withdraw","approve","revoke"];function u(o,i=c){const t=o.trim();if(!t)throw new Error("createUniAuditBatchHandlers requires entityType");const e={};for(const r of i)e[r]=n=>a(`/core/uni-audit/${t}/${n}/${r}`,{method:"POST"});return e}export{u as c};

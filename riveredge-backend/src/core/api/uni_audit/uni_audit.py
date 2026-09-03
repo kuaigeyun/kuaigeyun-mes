@@ -5,6 +5,8 @@ submit/approve/reject/revoke/withdraw 统一从此执行。
 
 - 实体集合：manifest.audit（audit_registry）声明的实体。
 - 权限：按 `entry.resource` + 动作标准权限码命令式校验（不绕过权限契约）。
+- 审核类动作（approve/reject/transfer 等）：与前端 hasReviewPermission 一致，
+  audit/approve/reject 任一即可（部分模块如销售订单仅声明 :audit）。
 """
 
 from typing import Optional
@@ -14,6 +16,7 @@ from fastapi import APIRouter, Body, Depends, Request
 from core.api.deps.access import AuthContext, ensure_permission_codes, get_auth_context
 from core.api.deps.deps import get_current_tenant
 from core.config.audit_registry import entry_by_entity_type
+from core.config.permission_contract import REVIEW_ACTIONS
 from core.services.approval.uni_audit_dispatch import (
     action_permission_for,
     execute_uni_audit,
@@ -22,6 +25,15 @@ from core.services.approval.uni_audit_dispatch import (
 from infra.exceptions.exceptions import ValidationError
 
 router = APIRouter(prefix="/uni-audit", tags=["Core - Uni Audit"])
+
+
+def _uni_audit_required_permission_codes(resource: str, permission_action: str) -> list[str]:
+    """拼鉴权码；审核门控与前端 hasReviewPermission 对齐（REVIEW_ACTIONS 任一）。"""
+    prefix = (resource or "").strip().rstrip(":")
+    act = (permission_action or "").strip().lower()
+    if act in REVIEW_ACTIONS:
+        return [f"{prefix}:{a}" for a in sorted(REVIEW_ACTIONS)]
+    return [f"{prefix}:{act}"]
 
 
 @router.post("/{entity_type}/{entity_id}/{action}")
@@ -45,7 +57,8 @@ async def execute_audit_action(
         auth,
         tenant_id,
         request,
-        [f"{entry.resource}:{permission_action}"],
+        _uni_audit_required_permission_codes(entry.resource, permission_action),
+        require_all=False,
     )
 
     payload = dict(body or {})

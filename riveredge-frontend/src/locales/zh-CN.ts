@@ -24817,6 +24817,10 @@ export default {
   'pages.dashboard.updateLogTypeSection.improvement': '优化',
   'pages.dashboard.updateLogTypeSection.fix': '修复',
   'pages.dashboard.updateLogTypeSection.security': '安全',
+  'pages.dashboard.updateLog.entries.sales-order-audit-permission-gate.title':
+    '销售订单审核误报权限不足',
+  'pages.dashboard.updateLog.entries.sales-order-audit-permission-gate.description':
+    '修复仅有「审核」(audit) 权限的角色（如销售专员）在流程可审节点点击通过时，因后端误校验不存在的 approve 码而报权限不足。',
   'pages.dashboard.updateLog.entries.user-list-reset-password-handler.title':
     '账户管理页重置密码报错',
   'pages.dashboard.updateLog.entries.user-list-reset-password-handler.description':
