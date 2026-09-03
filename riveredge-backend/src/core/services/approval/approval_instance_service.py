@@ -261,6 +261,10 @@ class ApprovalInstanceService:
                         await ApprovalInstanceService._sync_node_approver_tasks(
                             tenant_id, approval_instance, current_node
                         )
+                        # 或签已通过却仍挂 pending 等同节点任务：按完成规则推进（收敛历史卡住实例）
+                        await ApprovalInstanceService._reconcile_current_node_completion(
+                            tenant_id, approval_instance
+                        )
                         return True
                     await ApprovalInstanceService._create_node_tasks(
                         tenant_id, approval_instance, current_node
@@ -508,12 +512,13 @@ class ApprovalInstanceService:
                 and instance.status == "pending"
                 and instance.current_node == node_id
             )
+            # 仍停在本节点时一律 pending（会签部分通过 / 或签后加签等），避免流程图误显示「已通过」但未到结束
             if any(t.status == "rejected" for t in node_tasks):
                 node_status = "rejected"
-            elif any(t.status == "approved" for t in node_tasks):
-                node_status = "approved"
             elif is_current:
                 node_status = "pending"
+            elif any(t.status == "approved" for t in node_tasks):
+                node_status = "approved"
             elif instance and instance.status == "approved":
                 node_status = "approved"
             elif instance and instance.status in {"rejected", "cancelled"}:
@@ -1278,54 +1283,14 @@ class ApprovalInstanceService:
             return instance
 
         # 审核/驳回的执行记录以 ApprovalTask 为准，不再双写 ApprovalHistory（避免节点记录重复）
-        
-        # 检查节点是否完成
+
         node_completed, instance_status = await ApprovalInstanceService._check_node_completion(
-            instance, action_data.action
+            instance
         )
-        
         if node_completed:
-            if instance_status == "rejected":
-                # 全盘拒绝
-                instance.status = "rejected"
-                instance.completed_at = resolve_business_datetime()
-                instance.current_node = None
-                instance.current_approver_id = None
-                await instance.save()
-                
-                # 取消该节点其他待办任务
-                await ApprovalTask.filter(
-                    approval_instance_id=instance.id,
-                    node_id=instance.current_node,
-                    status="pending"
-                ).update(status="cancelled")
-            else:
-                # 节点通过，寻找下一个节点
-                next_node = ApprovalInstanceService._get_next_node(
-                    instance.process.nodes, instance.current_node, instance=instance
-                )
-                if not next_node:
-                    instance.status = "approved"
-                    instance.completed_at = resolve_business_datetime()
-                    instance.current_node = None
-                    instance.current_approver_id = None
-                    await instance.save()
-                else:
-                    next_type = next_node.get("type") or (next_node.get("data") or {}).get("type")
-                    if next_type == "end":
-                        instance.status = "approved"
-                        instance.completed_at = resolve_business_datetime()
-                        instance.current_node = None
-                        instance.current_approver_id = None
-                        await instance.save()
-                    else:
-                        instance.current_node = next_node.get("id")
-                        await instance.save()
-                        await ApprovalInstanceService._create_node_tasks(tenant_id, instance, next_node)
-            
-            # 触发业务回调
-            if instance.status in ["approved", "rejected"]:
-                await ApprovalInstanceService._handle_approval_completion(tenant_id, instance)
+            await ApprovalInstanceService._advance_instance_after_node_completion(
+                tenant_id, instance, instance_status
+            )
 
         return instance
 
@@ -1681,45 +1646,136 @@ class ApprovalInstanceService:
         return [submitter_id]
 
     @staticmethod
-    async def _check_node_completion(instance: ApprovalInstance, last_action: str) -> (bool, str):
+    async def _check_node_completion(
+        instance: ApprovalInstance,
+        last_action: Optional[str] = None,
+    ) -> tuple[bool, str]:
         """
-        检查节点是否完成
-        返回: (是否完成, 建议状态)
+        检查当前节点是否完成。
+
+        或签 (OR)：任一人通过即完成（后加签 pending 除外）；任一人驳回即拒绝。
+        会签 (AND)：全部通过才完成；任一人驳回即拒绝。
+
+        返回: (是否完成, 建议状态 approved|rejected|pending)
         """
+        del last_action  # 完成判定以任务状态为准，保留参数仅兼容旧调用
         node_id = instance.current_node
         process_nodes = instance.process.nodes or {}
-        
-        # 查找当前节点配置
+
         current_node_config = None
         for node in process_nodes.get("nodes", []):
             if node.get("id") == node_id:
                 current_node_config = node
                 break
-                
+
         if not current_node_config:
             return True, "approved"
 
-        data = current_node_config.get("data", {})
-        approval_type = data.get("approvalType") or data.get("approval_type") or "OR"  # AND 会签, OR 或签
-        
-        # 获取该节点所有任务
+        data = current_node_config.get("data", {}) or {}
+        approval_type = str(
+            data.get("approvalType") or data.get("approval_type") or "OR"
+        ).upper()
+
         tasks = await ApprovalTask.filter(approval_instance=instance, node_id=node_id).all()
         active = [t for t in tasks if t.status not in ("transferred", "suspended", "cancelled")]
-        
-        if last_action == "reject":
-            return True, "rejected" # 只要有一个拒绝，立即节点拒绝
-            
-        if any(t.status == "pending" for t in active):
-            return False, "pending"
+
+        # 一人驳回即整节点拒绝（或签/会签相同）
+        if any(t.status == "rejected" for t in active):
+            return True, "rejected"
 
         if approval_type == "OR":
+            # 后加签：发起人已通过，须等后加签人处理完再推进
+            if any(t.status == "pending" and t.sign_type == "after" for t in active):
+                return False, "pending"
             if any(t.status == "approved" for t in active):
                 return True, "approved"
-        else:
-            if active and all(t.status == "approved" for t in active):
-                return True, "approved"
-                
+            return False, "pending"
+
+        # 会签：须无 pending，且有效任务全部通过
+        if any(t.status == "pending" for t in active):
+            return False, "pending"
+        if active and all(t.status == "approved" for t in active):
+            return True, "approved"
         return False, "pending"
+
+    @staticmethod
+    async def _advance_instance_after_node_completion(
+        tenant_id: int,
+        instance: ApprovalInstance,
+        instance_status: str,
+    ) -> ApprovalInstance:
+        """节点完成后取消同节点剩余待办，并推进到下一节点或结束流程。"""
+        completed_node_id = instance.current_node
+        if completed_node_id:
+            await ApprovalTask.filter(
+                approval_instance_id=instance.id,
+                node_id=completed_node_id,
+                status__in=["pending", "suspended"],
+            ).update(status="cancelled")
+
+        if not instance.process:
+            await instance.fetch_related("process")
+
+        if instance_status == "rejected":
+            instance.status = "rejected"
+            instance.completed_at = resolve_business_datetime()
+            instance.current_node = None
+            instance.current_approver_id = None
+            await instance.save()
+        else:
+            next_node = ApprovalInstanceService._get_next_node(
+                instance.process.nodes, completed_node_id, instance=instance
+            )
+            if not next_node:
+                instance.status = "approved"
+                instance.completed_at = resolve_business_datetime()
+                instance.current_node = None
+                instance.current_approver_id = None
+                await instance.save()
+            else:
+                next_type = next_node.get("type") or (next_node.get("data") or {}).get("type")
+                if next_type == "end":
+                    instance.status = "approved"
+                    instance.completed_at = resolve_business_datetime()
+                    instance.current_node = None
+                    instance.current_approver_id = None
+                    await instance.save()
+                else:
+                    instance.current_node = next_node.get("id")
+                    await instance.save()
+                    await ApprovalInstanceService._create_node_tasks(
+                        tenant_id, instance, next_node
+                    )
+
+        if instance.status in ("approved", "rejected"):
+            await ApprovalInstanceService._handle_approval_completion(tenant_id, instance)
+        return instance
+
+    @staticmethod
+    async def _reconcile_current_node_completion(
+        tenant_id: int,
+        instance: ApprovalInstance,
+    ) -> bool:
+        """
+        若当前节点按或签/会签规则已满足完成条件，则推进。
+        用于打开审批状态时收敛「或签已通过但仍卡住」的历史实例。
+        """
+        if instance.status != "pending" or not instance.current_node:
+            return False
+        if not instance.process:
+            await instance.fetch_related("process")
+        if not instance.process:
+            return False
+
+        node_completed, instance_status = await ApprovalInstanceService._check_node_completion(
+            instance
+        )
+        if not node_completed:
+            return False
+        await ApprovalInstanceService._advance_instance_after_node_completion(
+            tenant_id, instance, instance_status
+        )
+        return True
 
     @staticmethod
     async def perform_approval_action(

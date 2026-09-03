@@ -1,4 +1,4 @@
-"""审批多审批人：标识解析与待办数据可见性。"""
+"""审批多审批人：标识解析、或签/会签完成判定与待办数据可见性。"""
 
 from __future__ import annotations
 
@@ -11,6 +11,125 @@ from core.services.approval.approval_data_scope import (
     user_is_pending_approver_for_entity,
 )
 from core.services.approval.approval_instance_service import ApprovalInstanceService
+
+
+def _make_instance(*, approval_type: str = "OR", node_id: str = "approval-1") -> MagicMock:
+    instance = MagicMock()
+    instance.current_node = node_id
+    instance.process = MagicMock()
+    instance.process.nodes = {
+        "nodes": [
+            {
+                "id": node_id,
+                "type": "approval",
+                "data": {"approvalType": approval_type, "label": "审核"},
+            }
+        ],
+        "edges": [],
+    }
+    return instance
+
+
+def _task(*, status: str, sign_type: str | None = None) -> MagicMock:
+    t = MagicMock()
+    t.status = status
+    t.sign_type = sign_type
+    return t
+
+
+class TestCheckNodeCompletion:
+    @pytest.mark.asyncio
+    async def test_or_sign_completes_when_one_approved_and_peer_still_pending(self):
+        """或签：一人通过即完成，不等待其他指定人。"""
+        instance = _make_instance(approval_type="OR")
+        qs = MagicMock()
+        qs.all = AsyncMock(
+            return_value=[
+                _task(status="approved"),
+                _task(status="pending"),
+            ]
+        )
+        with patch(
+            "core.services.approval.approval_instance_service.ApprovalTask.filter",
+            return_value=qs,
+        ):
+            done, status = await ApprovalInstanceService._check_node_completion(instance)
+        assert done is True
+        assert status == "approved"
+
+    @pytest.mark.asyncio
+    async def test_or_sign_waits_for_after_sign_pending(self):
+        """或签后加签：须等后加签人处理完。"""
+        instance = _make_instance(approval_type="OR")
+        qs = MagicMock()
+        qs.all = AsyncMock(
+            return_value=[
+                _task(status="approved"),
+                _task(status="pending", sign_type="after"),
+            ]
+        )
+        with patch(
+            "core.services.approval.approval_instance_service.ApprovalTask.filter",
+            return_value=qs,
+        ):
+            done, status = await ApprovalInstanceService._check_node_completion(instance)
+        assert done is False
+        assert status == "pending"
+
+    @pytest.mark.asyncio
+    async def test_or_sign_reject_completes_immediately(self):
+        instance = _make_instance(approval_type="OR")
+        qs = MagicMock()
+        qs.all = AsyncMock(
+            return_value=[
+                _task(status="rejected"),
+                _task(status="pending"),
+            ]
+        )
+        with patch(
+            "core.services.approval.approval_instance_service.ApprovalTask.filter",
+            return_value=qs,
+        ):
+            done, status = await ApprovalInstanceService._check_node_completion(instance)
+        assert done is True
+        assert status == "rejected"
+
+    @pytest.mark.asyncio
+    async def test_and_sign_waits_until_all_approved(self):
+        """会签：一人通过、另一人仍 pending 时不完成。"""
+        instance = _make_instance(approval_type="AND")
+        qs = MagicMock()
+        qs.all = AsyncMock(
+            return_value=[
+                _task(status="approved"),
+                _task(status="pending"),
+            ]
+        )
+        with patch(
+            "core.services.approval.approval_instance_service.ApprovalTask.filter",
+            return_value=qs,
+        ):
+            done, status = await ApprovalInstanceService._check_node_completion(instance)
+        assert done is False
+        assert status == "pending"
+
+    @pytest.mark.asyncio
+    async def test_and_sign_completes_when_all_approved(self):
+        instance = _make_instance(approval_type="AND")
+        qs = MagicMock()
+        qs.all = AsyncMock(
+            return_value=[
+                _task(status="approved"),
+                _task(status="approved"),
+            ]
+        )
+        with patch(
+            "core.services.approval.approval_instance_service.ApprovalTask.filter",
+            return_value=qs,
+        ):
+            done, status = await ApprovalInstanceService._check_node_completion(instance)
+        assert done is True
+        assert status == "approved"
 
 
 class TestResolveApproverIdentifiers:

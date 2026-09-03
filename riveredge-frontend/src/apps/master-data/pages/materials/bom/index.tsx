@@ -13,13 +13,12 @@ import { App, Button, Tag, Space, Modal, Input, Tree, Spin, Table, Form as AntFo
 import type { MenuProps } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import type { ColumnsType } from 'antd/es/table';
-import { DeleteOutlined, PlusOutlined, MinusCircleOutlined, CheckCircleOutlined, CloseCircleOutlined, UploadOutlined, DiffOutlined, HistoryOutlined, CalculatorOutlined, UndoOutlined, StarOutlined, ProductOutlined, UnorderedListOutlined, ClusterOutlined, CopyOutlined, PrinterOutlined, SearchOutlined } from '@ant-design/icons';
+import { DeleteOutlined, PlusOutlined, MinusCircleOutlined, CheckCircleOutlined, CloseCircleOutlined, UploadOutlined, DiffOutlined, HistoryOutlined, CalculatorOutlined, UndoOutlined, StarOutlined, ProductOutlined, UnorderedListOutlined, ClusterOutlined, CopyOutlined, PrinterOutlined, SearchOutlined, NodeIndexOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { UniTable, type UniTableRequestMeta, readPersistedUniTableViewType, uniTableViewTypePreferencePath } from '../../../../../components/uni-table';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import {
   UniTableStackedPrimaryCell,
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
@@ -88,7 +87,7 @@ import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 const BOM_CUSTOM_FIELD_TABLE = 'master_data_boms';
 const BOM_RESOURCE = 'master-data:process:engineering-bom';
-const BOM_LIST_COLUMN_PERSISTENCE_ID = 'apps.master-data.pages.materials.bom.stacked-v3';
+const BOM_LIST_COLUMN_PERSISTENCE_ID = 'apps.master-data.pages.materials.bom.layout-v5';
 const BOM_LIST_VIEW_TYPES = ['productBom', 'semiProductBom', 'allBom'] as const;
 type BomListViewType = (typeof BOM_LIST_VIEW_TYPES)[number];
 
@@ -2625,11 +2624,16 @@ const BOMPage: React.FC = () => {
 
   const groupColumns: MaterialBOMProColumn[] = [
     {
-      // 非稀疏：物料名/码、BOM 名/码保持叠列；审核 StatusTag 右固
+      // 三桶：物料 KeepWidth；BOM 名称唯一 RemainderFlex；其余业务列 KeepWidth；审核 StatusTag 右固
       title: t('app.master-data.bom.materialTitle'),
       key: 'bom_material_stacked',
       dataIndex: 'materialId',
-      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+      width: 240,
+      minWidth: 240,
+      uniTableKeepWidth: true,
+      uniTablePrimaryFlex: false,
+      resizable: false,
+      ellipsis: false,
       hideInSearch: true,
       sorter: true,
       render: (_, r: any) => {
@@ -2730,11 +2734,15 @@ const BOMPage: React.FC = () => {
       },
     },
     {
+      // BOM 名称/编码长短不一：唯一 RemainderFlex
       title: t('app.master-data.bom.bomName'),
       key: 'bom_name_stacked',
       dataIndex: 'bomName',
-      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-      minWidth: 180,
+      minWidth: 200,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
+      resizable: false,
+      ellipsis: false,
       hideInSearch: true,
       sorter: true,
       render: (_, r: any) => {
@@ -2878,7 +2886,7 @@ const BOMPage: React.FC = () => {
             label: t('common.view'),
             children: [
               { key: 'calculateQuantity', icon: <CalculatorOutlined />, label: t('app.master-data.bom.calculateQuantity'), onClick: () => handleCalculateQuantity(r) },
-              { key: 'whereUsed', label: t('app.master-data.bom.whereUsed'), onClick: () => handleOpenWhereUsed(r.materialId) },
+              { key: 'whereUsed', icon: <NodeIndexOutlined />, label: t('app.master-data.bom.whereUsed'), onClick: () => handleOpenWhereUsed(r.materialId) },
             ],
           },
           {

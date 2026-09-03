@@ -36,6 +36,41 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
   {
+    id: 'material-call-lifecycle-pending-i18n',
+    date: '2026-09-03',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.material-call-lifecycle-pending-i18n.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.material-call-lifecycle-pending-i18n.description',
+  },
+  {
+    id: 'bom-list-remainder-bom-name',
+    date: '2026-09-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.bom-list-remainder-bom-name.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.bom-list-remainder-bom-name.description',
+  },
+  {
+    id: 'bom-more-menu-icons',
+    date: '2026-09-03',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.bom-more-menu-icons.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.bom-more-menu-icons.description',
+  },
+  {
+    id: 'bom-list-three-bucket-layout',
+    date: '2026-09-03',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.bom-list-three-bucket-layout.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.bom-list-three-bucket-layout.description',
+  },
+  {
+    id: 'approval-or-sign-node-completion',
+    date: '2026-09-03',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.approval-or-sign-node-completion.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.approval-or-sign-node-completion.description',
+  },
+  {
     id: 'inbound-hub-type-label-undefined',
     date: '2026-09-03',
     type: 'fix',

@@ -279,6 +279,7 @@ function toMenuItem(node: React.ReactNode, key: string) {
         descriptionNode != null && descriptionNode !== false && descriptionNode !== ''
       return {
         key,
+        icon: props.icon as React.ReactNode,
         label: (
           <Popconfirm
             title={titleNode}
@@ -311,6 +312,7 @@ function toMenuItem(node: React.ReactNode, key: string) {
     return {
       key,
       label: text,
+      icon: props.icon as React.ReactNode,
       danger: destructive || !!props.danger,
       disabled: !!props.disabled,
       onClick,

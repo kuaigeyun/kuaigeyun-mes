@@ -11831,6 +11831,11 @@ export default {
   'app.kuaizhizao.batchingCenter.selectBatchingDate': '请选择备料日期',
   'app.kuaizhizao.batchingCenter.detailTitle': '线边备料单详情',
   'app.kuaizhizao.batchingCenter.detailTitleMaterialCall': '产线补料详情',
+  'app.kuaizhizao.materialCall.lifecycle.pending': '待处理',
+  'app.kuaizhizao.materialCall.lifecycle.processing': '备料中',
+  'app.kuaizhizao.materialCall.lifecycle.partial': '部分送达',
+  'app.kuaizhizao.materialCall.lifecycle.completed': '已完成',
+  'app.kuaizhizao.materialCall.lifecycle.cancelled': '已取消',
   'app.kuaizhizao.batchingCenter.detailTitleBackflush': '倒冲记录详情',
   'app.kuaizhizao.batchingCenter.detailTitleOutsourceIssue': '委外发料单详情',
   'app.kuaizhizao.batchingCenter.detailTitleOutsourceReceipt': '委外收货单详情',
@@ -24817,6 +24822,26 @@ export default {
   'pages.dashboard.updateLogTypeSection.improvement': '优化',
   'pages.dashboard.updateLogTypeSection.fix': '修复',
   'pages.dashboard.updateLogTypeSection.security': '安全',
+  'pages.dashboard.updateLog.entries.material-call-lifecycle-pending-i18n.title':
+    '工单提交补料申请后页面崩溃',
+  'pages.dashboard.updateLog.entries.material-call-lifecycle-pending-i18n.description':
+    '修复补料申请状态 pending 误走全局「待审核」键导致 Missing lifecycle stage i18n key 的问题；补料生命周期改用模块专用文案（待处理/备料中/部分送达等）。',
+  'pages.dashboard.updateLog.entries.bom-list-remainder-bom-name.title':
+    'BOM 列表余量留给名称列',
+  'pages.dashboard.updateLog.entries.bom-list-remainder-bom-name.description':
+    '物料清单列表将唯一余量列改到 BOM 名称，工艺路线改回定宽，避免名称被截断而中间列留白。',
+  'pages.dashboard.updateLog.entries.bom-more-menu-icons.title':
+    'BOM 更多菜单补齐图标',
+  'pages.dashboard.updateLog.entries.bom-more-menu-icons.description':
+    '补齐「反查用途」菜单图标；并修复行操作溢出合并进「更多」时丢失原按钮图标（如审核）的问题。',
+  'pages.dashboard.updateLog.entries.bom-list-three-bucket-layout.title':
+    'BOM 列表列宽恢复三桶契约',
+  'pages.dashboard.updateLog.entries.bom-list-three-bucket-layout.description':
+    '修复物料清单列表双主列抢余量、缺少唯一余量列导致用量/单位等定宽列被拉宽的问题：物料与 BOM 名称改为 KeepWidth，工艺路线为唯一 RemainderFlex。',
+  'pages.dashboard.updateLog.entries.approval-or-sign-node-completion.title':
+    '或签审核通过后流程未结束',
+  'pages.dashboard.updateLog.entries.approval-or-sign-node-completion.description':
+    '修复多指定人「或签」节点在一人通过后仍等待其他人、流程无法到达结束的问题；会签仍须全员通过。打开审核状态时会自动收敛已卡住的历史实例。',
   'pages.dashboard.updateLog.entries.inbound-hub-type-label-undefined.title':
     '入库出库列表确认文案崩溃',
   'pages.dashboard.updateLog.entries.inbound-hub-type-label-undefined.description':
