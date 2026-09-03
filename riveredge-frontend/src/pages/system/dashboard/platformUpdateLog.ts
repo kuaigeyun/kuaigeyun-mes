@@ -36,6 +36,20 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
   {
+    id: 'user-list-reset-password-handler',
+    date: '2026-09-03',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.user-list-reset-password-handler.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.user-list-reset-password-handler.description',
+  },
+  {
+    id: 'dashboard-update-log-timeline-date-window',
+    date: '2026-09-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.dashboard-update-log-timeline-date-window.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.dashboard-update-log-timeline-date-window.description',
+  },
+  {
     id: 'core-data-scope-all-fix',
     date: '2026-09-03',
     type: 'fix',

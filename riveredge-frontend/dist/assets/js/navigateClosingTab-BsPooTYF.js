@@ -1,1 +1,0 @@
-import{r as o}from"./vendor-DF57fAD-.js";import{e as s,J as r}from"./clientRelease-CNE_5vTl.js";function c(a,e=""){return a+(e||"")}function i(a,e,n,t){a(e,{state:{closeTab:n,...t??{}}})}function p(a){const e=s(),n=r();return o.useCallback(()=>{i(e,a,c(n.pathname,n.search))},[e,a,n.pathname,n.search])}export{c as a,i as n,p as u};

@@ -24804,6 +24804,7 @@ export default {
   'pages.dashboard.updateLogButton': '更新日志',
   'pages.dashboard.updateLogModalTitle': '更新日志',
   'pages.dashboard.updateLogTab.all': '全部',
+  'pages.dashboard.updateLogDateNavAria': '更新日志日期导航',
   'pages.dashboard.updateLogLatestTitle': '最新更新',
   'pages.dashboard.updateLogEmpty': '暂无更新记录',
   'pages.dashboard.updateLogType.feature': '新功能',
@@ -24816,6 +24817,14 @@ export default {
   'pages.dashboard.updateLogTypeSection.improvement': '优化',
   'pages.dashboard.updateLogTypeSection.fix': '修复',
   'pages.dashboard.updateLogTypeSection.security': '安全',
+  'pages.dashboard.updateLog.entries.user-list-reset-password-handler.title':
+    '账户管理页重置密码报错',
+  'pages.dashboard.updateLog.entries.user-list-reset-password-handler.description':
+    '修复账户管理列表因依赖数组引用未定义的 handleResetPassword 导致整页崩溃的问题。',
+  'pages.dashboard.updateLog.entries.dashboard-update-log-timeline-date-window.title':
+    '更新日志左侧日期导航',
+  'pages.dashboard.updateLog.entries.dashboard-update-log-timeline-date-window.description':
+    '左侧 10 节点日期导航可点击跳转；右侧按日期分组展示标题，点击后分组标题与左侧节点行对齐。',
   'pages.dashboard.updateLog.entries.core-data-scope-all-fix.title':
     '数据权限「全部」修复',
   'pages.dashboard.updateLog.entries.core-data-scope-all-fix.description':

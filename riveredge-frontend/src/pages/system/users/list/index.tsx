@@ -660,7 +660,7 @@ const UserListPage: React.FC = () => {
             </ActionConfirmPopconfirm>,
           ],
     },
-  ], GLOBAL_DOC_LIST_FIELD_RANK), [t, departmentOptions, positionOptions, handleView, handleEdit, handleResetPassword, handleDelete, handleOpenRoleEdit]);
+  ], GLOBAL_DOC_LIST_FIELD_RANK), [t, departmentOptions, positionOptions, handleView, handleEdit, executeResetPassword, handleDelete, handleOpenRoleEdit]);
 
   /**
    * 详情列定义
