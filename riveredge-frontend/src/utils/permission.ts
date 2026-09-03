@@ -199,7 +199,7 @@ function isAppGroupPlaceholderItem(item: PermissionMenuItem): boolean {
  * 按权限过滤菜单树。
  *
  * 节点分类（唯一判定依据，禁止按 path 白名单补丁）：
- * - **可导航项**：自身有 `path` 且非 `hideInMenu` → 是否展示只看本节点 permissionCodes
+ * - **可导航项**：自身有 `path` 且非 `hideInMenu` → 只认非 workspace/entry 的模块权限码；仅占位码且无可见子项则隐藏
  * - **分组壳**：无 `path`（或自身 hideInMenu）→ 仅当有可见子节点时保留
  *
  * `hideInMenu` 子路由（设计器等）不参与「可见子节点」计数，但可挂在可导航项下供面包屑/路由树使用。
@@ -249,11 +249,14 @@ export function filterMenuItemsByPermission<T extends PermissionMenuItem>(
         return null;
       }
 
-      if (permissionCodes?.length) {
-        const required = permissionCodes.filter((c) => c && !isGenericMenuPermissionCode(c));
-        if (required.length > 0 && !hasAnyMenuPermission(user, required)) {
+      const required = (permissionCodes ?? []).filter((c) => c && !isGenericMenuPermissionCode(c));
+      if (isNavigableMenuEntry && !hasVisibleChildren) {
+        // 可导航空壳：必须有真实模块码且已授权。workspace/entry 占位码不能单独撑开侧栏
+        if (required.length === 0 || !hasAnyMenuPermission(user, required)) {
           return null;
         }
+      } else if (required.length > 0 && !hasAnyMenuPermission(user, required)) {
+        return null;
       }
 
       if (!isNavigableMenuEntry && !hasVisibleChildren) {
