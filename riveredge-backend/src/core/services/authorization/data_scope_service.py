@@ -364,11 +364,28 @@ class DataScopeService:
         dept_uuid, dept_user_ids = await cls._department_context(tenant_id, user)
         any_unrestricted = False
         q_parts: list[Q] = []
+        partner_field = (getattr(profile, "partner_code_field", None) or "").strip()
         for role in roles_for_scope:
             role_uuid = (getattr(role, "uuid", None) or "").strip()
             if not role_uuid:
                 continue
             role_policies = policies_by_role.get(role_uuid, [])
+            # 外协 + 单据合作方编码画像：可见范围是绑定编码，不是登记人。
+            # 「本人」会把厂内代登记的合同/验收单藏掉（设备制造商只能看到自己当 reporter 的行）。
+            if cls._role_is_external_partner(role) and partner_field:
+                if any((p.scope_type or "").strip().lower() == DataScopeType.ALL for p in role_policies):
+                    any_unrestricted = True
+                    break
+                part = await cls._external_partner_q_for_role(
+                    tenant_id=tenant_id,
+                    user=user,
+                    profile=profile,
+                    role=role,
+                )
+                if part is not None:
+                    q_parts.append(part)
+                continue
+
             if not role_policies:
                 if cls._role_is_external_partner(role):
                     part = await cls._external_partner_q_for_role(
