@@ -417,7 +417,7 @@ def test_route_access_maps_payments_to_execute():
     )
 
 
-def test_apply_equipment_finance_contract_scope_matches_acceptance_data_scope_only():
+def test_apply_equipment_finance_contract_scope_internal_uses_data_scope():
     import asyncio
 
     from apps.haoligo.api._data_scope import apply_equipment_finance_contract_scope
@@ -427,6 +427,12 @@ def test_apply_equipment_finance_contract_scope_matches_acceptance_data_scope_on
 
     async def run():
         with patch(
+            "apps.haoligo.api._data_scope.UserPermissionService.is_admin_bypass",
+            new=AsyncMock(return_value=False),
+        ), patch(
+            "apps.haoligo.api._data_scope.user_is_external_partner",
+            new=AsyncMock(return_value=False),
+        ), patch(
             "apps.haoligo.api._data_scope.DataScopeService.apply",
             new=AsyncMock(return_value=scoped_qs),
         ) as apply_mock:
@@ -441,29 +447,45 @@ def test_apply_equipment_finance_contract_scope_matches_acceptance_data_scope_on
 
     result = asyncio.run(run())
     assert result is scoped_qs
-    scoped_qs.filter.assert_not_called()
 
 
-def test_assert_equipment_finance_contract_visible_matches_acceptance_row_visible():
+def test_apply_equipment_finance_contract_scope_manufacturer_uses_bound_code_not_self():
     import asyncio
 
-    from apps.haoligo.api._data_scope import assert_equipment_finance_contract_visible
+    from apps.haoligo.api._data_scope import apply_equipment_finance_contract_scope
 
-    row = SimpleNamespace(id=7)
-    assert_row = AsyncMock()
+    base_qs = MagicMock()
+    filtered = MagicMock()
+    base_qs.filter.return_value = filtered
+    role = SimpleNamespace(role_type="external", external_partner_type="manufacturer")
 
     async def run():
         with patch(
-            "apps.haoligo.api._data_scope.DataScopeService.assert_row_visible",
-            new=assert_row,
-        ):
-            await assert_equipment_finance_contract_visible(
-                row,
+            "apps.haoligo.api._data_scope.UserPermissionService.is_admin_bypass",
+            new=AsyncMock(return_value=False),
+        ), patch(
+            "apps.haoligo.api._data_scope.user_is_external_partner",
+            new=AsyncMock(return_value=True),
+        ), patch(
+            "apps.haoligo.api._data_scope.DataScopeService._load_active_roles",
+            new=AsyncMock(return_value=[role]),
+        ), patch(
+            "core.services.authorization.user_data_scope_binding_service.UserDataScopeBindingService.list_scope_codes",
+            new=AsyncMock(return_value=["ZW"]),
+        ), patch(
+            "apps.haoligo.api._data_scope.DataScopeService.apply",
+            new=AsyncMock(),
+        ) as apply_mock:
+            result = await apply_equipment_finance_contract_scope(
+                base_qs,
                 tenant_id=1,
                 user=SimpleNamespace(id=9),
                 resource="haoligo:finance-equipment-contracts",
             )
+            apply_mock.assert_not_called()
+            return result
 
-    asyncio.run(run())
-    assert_row.assert_awaited_once()
+    result = asyncio.run(run())
+    assert result is filtered
+    base_qs.filter.assert_called_once_with(manufacturer_code__in=["ZW"])
 
