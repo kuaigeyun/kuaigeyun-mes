@@ -66,7 +66,15 @@ dev = [
     "black>=23.0.0",
     "ruff>=0.1.0",
     "mypy>=1.0.0",
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# 未声明该插件与模式时，仓库里全部 @pytest.mark.asyncio 测试会以
+# 「async def functions are not natively supported」静默计为失败/不执行。
+asyncio_mode = "strict"
 
 [tool.black]
 line-length = 100
