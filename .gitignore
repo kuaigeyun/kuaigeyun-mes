@@ -57,7 +57,11 @@ riveredge-backend/backups/
 
 # ===== IDE / Agent 本地产物 =====
 .agent/
-.cursor/
+.cursor/*
+# 但保留 Cloud Agent 开发环境配置（供云端代理复现开发环境）
+!.cursor/environment.json
+!.cursor/install.sh
+!.cursor/start.sh
 .trae/
 .vscode/
 # CI：工作流在团队仓库中不跟踪（本地可自建 .github/workflows）
