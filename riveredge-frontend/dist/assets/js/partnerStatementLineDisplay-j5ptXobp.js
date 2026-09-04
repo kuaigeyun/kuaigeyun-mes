@@ -1,1 +1,0 @@
-import{j as o}from"./vendor-ChObXcz2.js";function l(r,n){const t=Number(n.tree_level||0),e=r||"—";return t<=0?e:o.jsxs("span",{style:{paddingLeft:16,color:"rgba(0,0,0,0.65)"},children:["└ ",e]})}export{l as r};
