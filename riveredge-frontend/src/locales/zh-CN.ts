@@ -3831,6 +3831,7 @@ export default {
   'app.haoligo.equipment.manufacturers.formCode': '厂商编码',
   'app.haoligo.equipment.manufacturers.formCodePh': '请输入厂商编码',
   'app.haoligo.equipment.manufacturers.formCodeReq': '请输入厂商编码',
+  'app.haoligo.equipment.manufacturers.formCodeEditHint': '修改编码会同步改写该厂商全部设备合同、应付款、验收单上的编码，以及已绑定的厂家账号可见范围。',
   'app.haoligo.equipment.manufacturers.formName': '厂商名称',
   'app.haoligo.equipment.manufacturers.formNamePh': '请输入厂商名称',
   'app.haoligo.equipment.manufacturers.formNameReq': '请输入厂商名称',
