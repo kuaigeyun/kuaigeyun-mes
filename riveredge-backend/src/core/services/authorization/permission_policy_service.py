@@ -16,6 +16,7 @@ from core.models.permission import Permission, PermissionType
 from core.models.role import Role
 from core.models.role_permission import RolePermission
 from core.models.user_role import UserRole
+from core.services.authorization.data_scope_resource_registry import get_resource_profile
 from core.services.authorization.menu_resource_resolver import is_generic_menu_permission_code
 from core.services.authorization.permission_registry_service import PermissionRegistryService
 from core.schemas.permission_policy import (
@@ -296,23 +297,47 @@ class PermissionPolicyService:
             if cls._normalize_resource(r.resource) in role_resources
         ]
         explicit_map = {cls._normalize_resource(r.resource): r for r in explicit}
+        role = await Role.filter(uuid=role_uuid, tenant_id=tenant_id).first()
         synthesized: list[DataPermissionPolicyResponse] = []
         now = now_utc()
         for resource in sorted(role_resources):
             if resource in explicit_map:
                 continue
+            scope_type, scope_payload = cls._implicit_scope_for_resource(role, resource)
             synthesized.append(
                 DataPermissionPolicyResponse(
                     uuid=f"builtin:{role_uuid}:{resource}",
                     role_uuid=role_uuid,
                     resource=resource,
-                    scope_type=DataScopeType.ALL,
-                    scope_payload=None,
+                    scope_type=scope_type,
+                    scope_payload=scope_payload,
                     created_at=now,
                     updated_at=now,
                 )
             )
         return explicit + synthesized
+
+    @classmethod
+    def _implicit_scope_for_resource(
+        cls,
+        role: Role | None,
+        resource: str,
+    ) -> tuple[str, dict[str, Any] | None]:
+        """未显式配置时 DataScopeService 实际施加的范围（须与 _apply_no_explicit_policies 一致）。"""
+        profile = get_resource_profile(resource)
+        dimension = (getattr(role, "external_partner_type", "") or "").strip().lower()
+        is_external = (getattr(role, "role_type", "") or "").strip().lower() == "external"
+        code_field = (getattr(profile, "partner_code_field", None) or "").strip()
+        if is_external and dimension and code_field:
+            return DataScopeType.CUSTOM, {
+                "resolver": "partner",
+                "dimension": dimension,
+                "code_field": code_field,
+            }
+        default_resolver = (getattr(profile, "no_policy_default_resolver", None) or "").strip().lower()
+        if default_resolver:
+            return DataScopeType.CUSTOM, {"resolver": default_resolver}
+        return DataScopeType.ALL, None
 
     @classmethod
     async def save_data_policies(
@@ -348,13 +373,13 @@ class PermissionPolicyService:
                         'scope_custom 须在 scope_payload 中指定 resolver，'
                         '例如 {"resolver": "outsourced_unit"} 或 {"resolver": "partner", "dimension": "supplier"}'
                     )
-            # 默认数据权限为“全部”：scope_all 不落库，仅在显式收敛时保存策略。
-            if scope != DataScopeType.ALL:
-                desired[resource] = DataPermissionPolicyUpsert(
-                    resource=resource,
-                    scope_type=scope,
-                    scope_payload=payload,
-                )
+            # scope_all 与其它范围一样落库：外协角色的默认范围是「按绑定合作方」，
+            # 若用「策略行不存在」表示「全部」，管理员选的「全部」就会被默认收敛吃掉。
+            desired[resource] = DataPermissionPolicyUpsert(
+                resource=resource,
+                scope_type=scope,
+                scope_payload=payload,
+            )
 
         async with in_transaction():
             existing = await DataPermissionPolicy.filter(

@@ -449,32 +449,19 @@ def test_apply_equipment_finance_contract_scope_internal_uses_data_scope():
     assert result is scoped_qs
 
 
-def test_apply_equipment_finance_contract_scope_manufacturer_uses_bound_code_not_self():
+def test_apply_equipment_finance_contract_scope_manufacturer_uses_single_engine():
+    """设备制造商外协不得走 app 内第二套过滤，一律交给 DataScopeService。"""
     import asyncio
 
     from apps.haoligo.api._data_scope import apply_equipment_finance_contract_scope
 
     base_qs = MagicMock()
-    filtered = MagicMock()
-    base_qs.filter.return_value = filtered
-    role = SimpleNamespace(role_type="external", external_partner_type="manufacturer")
+    scoped_qs = MagicMock()
 
     async def run():
         with patch(
-            "apps.haoligo.api._data_scope.UserPermissionService.is_admin_bypass",
-            new=AsyncMock(return_value=False),
-        ), patch(
-            "apps.haoligo.api._data_scope.user_is_external_partner",
-            new=AsyncMock(return_value=True),
-        ), patch(
-            "apps.haoligo.api._data_scope.DataScopeService._load_active_roles",
-            new=AsyncMock(return_value=[role]),
-        ), patch(
-            "core.services.authorization.user_data_scope_binding_service.UserDataScopeBindingService.list_scope_codes",
-            new=AsyncMock(return_value=["ZW"]),
-        ), patch(
             "apps.haoligo.api._data_scope.DataScopeService.apply",
-            new=AsyncMock(),
+            new=AsyncMock(return_value=scoped_qs),
         ) as apply_mock:
             result = await apply_equipment_finance_contract_scope(
                 base_qs,
@@ -482,10 +469,21 @@ def test_apply_equipment_finance_contract_scope_manufacturer_uses_bound_code_not
                 user=SimpleNamespace(id=9),
                 resource="haoligo:finance-equipment-contracts",
             )
-            apply_mock.assert_not_called()
+            apply_mock.assert_awaited_once()
             return result
 
     result = asyncio.run(run())
-    assert result is filtered
-    base_qs.filter.assert_called_once_with(manufacturer_code__in=["ZW"])
+    assert result is scoped_qs
+    base_qs.filter.assert_not_called()
+
+
+def test_haoligo_data_scope_has_no_second_engine():
+    """回归：合同/应付款不得再出现绕过 DataScopeService 的厂商编码过滤。"""
+    from pathlib import Path
+
+    import apps.haoligo.api._data_scope as data_scope_module
+
+    source = Path(data_scope_module.__file__).read_text(encoding="utf-8")
+    assert "apply_manufacturer_code_document_scope" not in source
+    assert "manufacturer_id__in" not in source
 

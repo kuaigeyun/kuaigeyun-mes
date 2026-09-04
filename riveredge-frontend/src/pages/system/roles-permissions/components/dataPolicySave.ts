@@ -26,7 +26,7 @@ export type DataPolicySaveItem = Pick<
 
 /**
  * 组装数据权限保存载荷：
- * - 保留已有显式策略（功能权限范围内，scope_all 视为默认值不落库）
+ * - 保留已有显式策略（功能权限范围内，含 scope_all）
  * - 已勾选行应用 batchScope
  * - 未勾选时，对当前可见资源应用 batchScope（无需再点「全选」）
  */
@@ -44,7 +44,8 @@ export function buildDataPolicySavePayload(params: {
     const nk = normalizeResourceKey(p.resource);
     if (!nk || !grantedKeys.has(nk)) continue;
     if (p.scope_type === 'scope_all') {
-      // 显式改回「全部」须进 payload，后端才会删除库内收敛策略
+      // 「全部」须进 payload 并落库：外协角色的默认范围是「按绑定合作方」，
+      // 缺这一行后端会当成「未配置」继续收敛。
       map.set(nk, {
         resource: nk,
         scope_type: 'scope_all',

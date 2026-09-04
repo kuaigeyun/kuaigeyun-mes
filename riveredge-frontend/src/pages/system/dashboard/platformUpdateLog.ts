@@ -36,6 +36,14 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
   {
+    id: 'data-scope-all-persisted-for-external-roles',
+    date: '2026-09-04',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.data-scope-all-persisted-for-external-roles.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.data-scope-all-persisted-for-external-roles.description',
+  },
+  {
     id: 'material-call-lifecycle-pending-i18n',
     date: '2026-09-03',
     type: 'fix',

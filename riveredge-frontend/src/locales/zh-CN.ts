@@ -24822,6 +24822,10 @@ export default {
   'pages.dashboard.updateLogTypeSection.improvement': '优化',
   'pages.dashboard.updateLogTypeSection.fix': '修复',
   'pages.dashboard.updateLogTypeSection.security': '安全',
+  'pages.dashboard.updateLog.entries.data-scope-all-persisted-for-external-roles.title':
+    '外部角色数据范围选「全部」不生效',
+  'pages.dashboard.updateLog.entries.data-scope-all-persisted-for-external-roles.description':
+    '「全部」此前不写入数据库，与「未配置」无法区分；而外部角色未配置时按绑定合作方收敛，导致管理员设了「全部」仍只看到本合作方数据、未绑定时一条都看不到。现「全部」与其它范围一样落库并生效；角色矩阵不再把外部角色的默认范围谎报为「全部」，而是如实显示为按绑定合作方的自定义范围。',
   'pages.dashboard.updateLog.entries.material-call-lifecycle-pending-i18n.title':
     '工单提交补料申请后页面崩溃',
   'pages.dashboard.updateLog.entries.material-call-lifecycle-pending-i18n.description':
