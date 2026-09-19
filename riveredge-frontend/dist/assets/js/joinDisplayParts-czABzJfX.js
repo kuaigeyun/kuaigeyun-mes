@@ -1,0 +1,1 @@
+function o(...t){return t.map(n=>String(n??"").trim()).filter(Boolean).join(" ")}function a(t,n){const r=String(t??"").trim(),i=String(n??"").trim();return r&&i?`${r} - ${i}`:r||i}export{a as f,o as j};

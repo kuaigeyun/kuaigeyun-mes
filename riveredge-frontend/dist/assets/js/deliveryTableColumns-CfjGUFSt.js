@@ -1,0 +1,1 @@
+const e={width:220,minWidth:220,uniTableKeepWidth:!0,ellipsis:!0},i={minWidth:200,uniTableRemainderFlex:!0,uniTablePrimaryFlex:!0,resizable:!1,ellipsis:!1},l={minWidth:200,uniTableRemainderFlex:!0,uniTablePrimaryFlex:!0,resizable:!1,ellipsis:!1};export{e as D,l as a,i as b};

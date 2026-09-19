@@ -1,0 +1,1 @@
+const t="/apps/kuaizhizao/equipment-management/molds";function a(o,e){const n=`${t}/${o}`;return e?`${n}?tab=${encodeURIComponent(e)}`:n}function i(o){return o&&["info","borrow_return","calibrations","ops"].includes(o)?o:"info"}export{t as K,a as b,i as r};

@@ -1,0 +1,1 @@
+import{k as t,a as l,b as m,c as s,d as p}from"./kuaioaApi-BWbWB_u6.js";const a="/apps/kuaioa/employees",i=e=>s(a,e),n=e=>p(`${a}/${e}`),u=e=>m(a,e),k=(e,o)=>l(`${a}/${e}`,o),y=e=>t(`${a}/${e}`),E=e=>s(`${a}/movements`,e);export{E as a,u as c,y as d,n as g,i as l,k as u};
