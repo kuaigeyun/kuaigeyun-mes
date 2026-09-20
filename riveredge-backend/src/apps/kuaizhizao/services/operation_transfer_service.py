@@ -22,6 +22,29 @@ from apps.kuaizhizao.services.inspection_policy_service import (
 )
 
 
+def material_consumed_against_incoming(
+    *,
+    is_first_operation: bool,
+    inspection_mode: str,
+    completed: Decimal,
+    qualified: Decimal,
+    inspection_qualified: Decimal = Decimal("0"),
+    inspection_unqualified: Decimal = Decimal("0"),
+) -> Decimal:
+    """本道已占用的在制数量。
+
+    首道按合格数扣计划在制，本次可报仍由计划完成数封顶。
+    后道合格与不良都占用上道转入：上道合格 81、本道 76 合格 + 5 不良时剩余为 0。
+    方案质检已出结果时，检验不合格不占转入，允许补报。
+    """
+    if inspection_mode == "plan" and inspection_qualified + inspection_unqualified > 0:
+        consumed = completed - inspection_unqualified
+        return consumed if consumed > 0 else Decimal("0")
+    if is_first_operation:
+        return qualified if qualified > 0 else Decimal("0")
+    return completed if completed > 0 else Decimal("0")
+
+
 def is_rework_verification_process_inspection(inspection: Any) -> bool:
     """返工完修生成的过程复检单：不计入前道转序/卡片不合格，避免与原检验单双计。"""
     code = str(getattr(inspection, "inspection_code", "") or "").strip()
