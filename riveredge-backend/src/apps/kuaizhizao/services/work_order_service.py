@@ -5526,6 +5526,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             build_operation_policy_cache,
             count_pending_process_inspections,
             load_process_inspections_by_operation,
+            material_consumed_against_incoming,
             pending_process_inspection_codes,
             resolve_ipqc_for_work_order_operation,
             resolve_operation_transfer_qualified,
@@ -5823,21 +5824,18 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 op_data["inspection_qualified_quantity"] = None
                 op_data["inspection_unqualified_quantity"] = None
 
-            # 物料剩余：上道可转下道 - 本道已消耗。
-            # 方案质检已检验后：消耗 = 完成 − 检验不合格（不合格不占上道转入，可补报；
-            # 已报未检仍占用，避免补报后额度虚高）。
+            # 物料剩余：上道可转下道（首道为计划数）- 本道已消耗。
             completed = op.completed_quantity or Decimal("0")
-            if mode == "plan":
-                insp_q = Decimal(str(op_data.get("inspection_qualified_quantity") or 0))
-                insp_u = Decimal(str(op_data.get("inspection_unqualified_quantity") or 0))
-                if insp_q + insp_u > 0:
-                    material_consumed = completed - insp_u
-                    if material_consumed < 0:
-                        material_consumed = Decimal("0")
-                else:
-                    material_consumed = qualified
-            else:
-                material_consumed = qualified
+            insp_q = Decimal(str(op_data.get("inspection_qualified_quantity") or 0))
+            insp_u = Decimal(str(op_data.get("inspection_unqualified_quantity") or 0))
+            material_consumed = material_consumed_against_incoming(
+                is_first_operation=idx == 0,
+                inspection_mode=mode,
+                completed=completed,
+                qualified=qualified,
+                inspection_qualified=insp_q,
+                inspection_unqualified=insp_u,
+            )
             material_remaining = prev_transfer - material_consumed
             if material_remaining < 0:
                 material_remaining = Decimal("0")

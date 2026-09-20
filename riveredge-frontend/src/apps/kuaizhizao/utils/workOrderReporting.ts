@@ -133,14 +133,14 @@ export function getReportableQuantityBreakdown(
   // prev = material_remaining + material_consumed；消耗口径与后端一致
   const metrics = getOperationQualityMetrics(operation);
   const qualified = Number(operation?.qualified_quantity ?? operation?.qualifiedQuantity ?? 0) || 0;
-  let materialConsumed = qualified;
+  const seq = Number(operation?.sequence ?? 1);
+  const isFirstOperation = seq <= 1;
+  let materialConsumed = isFirstOperation ? qualified : operationCompleted;
   if (metrics.fromInspection && metrics.qualified + metrics.unqualified > 0) {
     materialConsumed = Math.max(0, operationCompleted - metrics.unqualified);
   }
   const prevTransferQty =
     materialRemaining != null ? materialRemaining + materialConsumed : null;
-  const seq = Number(operation?.sequence ?? 1);
-  const isFirstOperation = seq <= 1;
   const effectiveRemaining =
     materialRemaining != null ? Math.min(planRemaining, materialRemaining) : planRemaining;
   return {

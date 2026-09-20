@@ -1493,6 +1493,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
         )
         from apps.kuaizhizao.services.operation_transfer_service import (
             build_operation_policy_cache,
+            material_consumed_against_incoming,
             resolve_ipqc_for_work_order_operation,
             resolve_operation_transfer_qualified,
             sum_process_inspection_quality_quantities,
@@ -1580,7 +1581,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 continue
 
             prev_transfer = plan_qty
-            for op in wo_ops:
+            for op_index, op in enumerate(wo_ops):
                 master_id = int(op.operation_id) if op.operation_id is not None else 0
                 mode = "none"
                 if master_id > 0:
@@ -1602,16 +1603,19 @@ class ReportingService(AppBaseService[ReportingRecord]):
 
                 completed = Decimal(str(op.completed_quantity or 0))
                 qualified = Decimal(str(op.qualified_quantity or 0))
-                if mode == "plan":
-                    insp_q, insp_u = sum_process_inspection_quality_quantities(op_inspections)
-                    if insp_q + insp_u > 0:
-                        material_consumed = completed - insp_u
-                        if material_consumed < 0:
-                            material_consumed = Decimal("0")
-                    else:
-                        material_consumed = qualified
-                else:
-                    material_consumed = qualified
+                insp_q, insp_u = (
+                    sum_process_inspection_quality_quantities(op_inspections)
+                    if mode == "plan"
+                    else (Decimal("0"), Decimal("0"))
+                )
+                material_consumed = material_consumed_against_incoming(
+                    is_first_operation=op_index == 0,
+                    inspection_mode=mode,
+                    completed=completed,
+                    qualified=qualified,
+                    inspection_qualified=insp_q,
+                    inspection_unqualified=insp_u,
+                )
 
                 material_remaining = prev_transfer - material_consumed
                 if material_remaining < 0:
