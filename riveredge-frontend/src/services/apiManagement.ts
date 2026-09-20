@@ -25,6 +25,11 @@ export interface API {
   request_body?: Record<string, any>;
   response_format?: Record<string, any>;
   response_example?: Record<string, any>;
+  /** 来源类型编码转换映射（接口级统一维护） */
+  source_type_conversion_map?: Array<{
+    field_name: string;
+    mapping: Record<string, string>;
+  }> | null;
   is_active: boolean;
   is_system: boolean;
   created_at: string;
@@ -63,6 +68,10 @@ export interface CreateAPIData {
   request_body?: Record<string, any>;
   response_format?: Record<string, any>;
   response_example?: Record<string, any>;
+  source_type_conversion_map?: Array<{
+    field_name: string;
+    mapping: Record<string, string>;
+  }> | null;
   is_active?: boolean;
   is_system?: boolean;
 }
@@ -80,6 +89,10 @@ export interface UpdateAPIData {
   request_body?: Record<string, any>;
   response_format?: Record<string, any>;
   response_example?: Record<string, any>;
+  source_type_conversion_map?: Array<{
+    field_name: string;
+    mapping: Record<string, string>;
+  }> | null;
   is_active?: boolean;
 }
 

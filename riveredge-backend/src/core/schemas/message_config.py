@@ -62,6 +62,24 @@ class MessageConfigTestRequest(BaseModel):
     config: Dict[str, Any] = Field(..., description="配置信息")
     target: str = Field(..., description="测试目标（如：接收邮箱、接收手机号）")
 
+    @field_validator('type')
+    @classmethod
+    def validate_test_type(cls, v: str) -> str:
+        allowed_types = ['email', 'sms', 'internal', 'push']
+        if v not in allowed_types:
+            raise ValueError(f'消息类型必须是 {allowed_types} 之一')
+        return v
+
+    @field_validator('target')
+    @classmethod
+    def validate_target(cls, v: str) -> str:
+        value = (v or '').strip()
+        if not value:
+            raise ValueError('测试目标不能为空')
+        if len(value) > 512:
+            raise ValueError('测试目标长度不能超过 512 个字符')
+        return value
+
 
 class MessageConfigTestResponse(BaseModel):
     """测试消息配置响应 Schema"""

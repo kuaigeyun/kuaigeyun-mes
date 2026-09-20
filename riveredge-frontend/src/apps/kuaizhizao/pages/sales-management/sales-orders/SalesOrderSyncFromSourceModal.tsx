@@ -8,6 +8,8 @@ export interface SalesOrderSyncFromSourceModalProps {
   onClose: () => void;
   onComplete?: (result: SyncFromSourceResult) => void;
   zIndex?: number;
+  /** 内嵌 SyncPushHub 时不渲染独立 Modal 壳 */
+  contentOnly?: boolean;
 }
 
 export const SalesOrderSyncFromSourceModal: React.FC<SalesOrderSyncFromSourceModalProps> = (props) => {

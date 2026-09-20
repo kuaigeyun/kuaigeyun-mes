@@ -62,6 +62,7 @@ class ReportingRecord(BaseModel):
             ("reported_at",),
             ("approved_at",),
             ("created_at",),
+            ("kingdee_push_status", "kingdee_push_next_at"),
         ]
 
     # 主键（BaseModel 不包含 id 字段，需要自己定义）
@@ -122,6 +123,16 @@ class ReportingRecord(BaseModel):
     
     # SOP参数数据（核心功能，新增）
     sop_parameters = fields.JSONField(null=True, description="SOP参数数据（JSON格式，存储报工时收集的SOP参数）")
+
+    # 金蝶生产汇报单推送重试状态（P0-3）
+    kingdee_push_status = fields.CharField(
+        max_length=20, null=True,
+        description="金蝶生产汇报单推送状态（null=未推送/success=成功/failed=需重试/dead=超限终止）",
+    )
+    kingdee_push_attempts = fields.IntField(default=0, description="金蝶生产汇报单已推送尝试次数")
+    kingdee_push_next_at = fields.DatetimeField(null=True, description="下次推送重试时间")
+    kingdee_push_last_error = fields.TextField(null=True, description="最近一次推送失败原因")
+    kingdee_push_last_at = fields.DatetimeField(null=True, description="最近一次推送尝试时间")
     
     # 软删除字段
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")

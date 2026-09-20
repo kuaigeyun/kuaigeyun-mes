@@ -44,10 +44,17 @@ import {
   DeleteOutlined,
   WarningOutlined,
   EyeOutlined,
+  HistoryOutlined,
 } from '@ant-design/icons';
 import { UniTable, type UniTableRequestMeta } from '../../../../../components/uni-table';
 import { UniAuditBatchMenuButton } from '../../../../../components/uni-batch';
 import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
+import { SyncPushHubButton } from '../../../../../components/sync-push-hub';
+import { SyncFreshnessBadge } from '../../../../../components/sync-from-source-modal/SyncFreshnessBadge';
+import { useToolbarSyncPushFlags } from '../../../../../hooks/useToolbarSyncPushFlags';
+import ReportingPushBatchModal from './ReportingPushBatchModal';
+import ReportingSyncFromSourceModal from './ReportingSyncFromSourceModal';
+import ReportingSyncHistoryModal from './ReportingSyncHistoryModal';
 import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import {
@@ -68,7 +75,7 @@ import {
   unwrapProcessPagedList,
 } from '../../../../master-data/services/process';
 import type { DefectType } from '../../../../master-data/types/process';
-import { reportingApi, workOrderApi, materialBindingApi, getReportingStatistics } from '../../../services/production';
+import { reportingApi, workOrderApi, materialBindingApi, getReportingStatistics, getReportingSyncBinding } from '../../../services/production';
 import { getReportingLifecycle, reportingRecordUniAuditProps, buildReportingStatusValueEnum, resolveReportingListStatusParams } from '../../../utils/reportingLifecycle';
 import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
 import type { AuditPhaseRecord } from '../../../../../components/uni-audit/AuditPhaseBadge';
@@ -305,6 +312,7 @@ const ReportingPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   const tableRowsRef = useRef<ReportingRecord[]>([]);
   const reportingPerms = useResourcePermissions(REPORTING_RESOURCE);
+  const toolbarSyncPush = useToolbarSyncPushFlags('reporting');
   const reportingAuditEnabled = useAuditRequired('reporting_record', false);
   const reportingAuditColumn = useMemo(
     () => createListAuditPhaseColumn<ReportingRecord>({ t, auditEnabled: reportingAuditEnabled }),
@@ -340,6 +348,9 @@ const ReportingPage: React.FC = () => {
   const [reportingDetail, setReportingDetail] = useState<ReportingRecord | null>(null);
   const [detailMaterialBindings, setDetailMaterialBindings] = useState<any[]>([]);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [syncHistoryVisible, setSyncHistoryVisible] = useState(false);
+  const [syncFreshnessKey, setSyncFreshnessKey] = useState(0);
+  const loadReportingSyncBinding = useCallback(() => getReportingSyncBinding(), []);
 
   const selectedRecordsForBatch = useMemo(
     () =>
@@ -347,6 +358,13 @@ const ReportingPage: React.FC = () => {
         .map((key) => tableRowsRef.current.find((row) => String(row.id) === String(key)))
         .filter((row): row is ReportingRecord => row != null),
     [selectedRowKeys],
+  );
+  const selectedReportingIds = useMemo(
+    () =>
+      selectedRecordsForBatch
+        .map((row) => Number(row.id))
+        .filter((id) => Number.isFinite(id) && id > 0),
+    [selectedRecordsForBatch],
   );
 
   const [rpTrackingRefreshKey, setRpTrackingRefreshKey] = useState(0);
@@ -405,6 +423,13 @@ const ReportingPage: React.FC = () => {
 
   const handleReportingBatchSuccess = useCallback(() => {
     setSelectedRowKeys([]);
+    invalidateMenuBadgeCounts();
+    actionRef.current?.reload();
+    invalidateStatistics();
+  }, [invalidateMenuBadgeCounts, invalidateStatistics]);
+
+  const handleSyncComplete = useCallback(() => {
+    setSyncFreshnessKey((key) => key + 1);
     invalidateMenuBadgeCounts();
     actionRef.current?.reload();
     invalidateStatistics();
@@ -1807,6 +1832,59 @@ const ReportingPage: React.FC = () => {
         showCreateButton={true}
         createButtonText={createButtonLabel}
         onCreate={handleNewReporting}
+        showSyncButton={reportingPerms.canCreate && toolbarSyncPush.hubVisible}
+        onSync={() => undefined}
+        syncToolbarExtra={
+          reportingPerms.canCreate && toolbarSyncPush.hubVisible
+            ? () => (
+                <Space>
+                  <SyncPushHubButton
+                    syncEnabled={toolbarSyncPush.syncEnabled}
+                    pushEnabled={toolbarSyncPush.pushEnabled}
+                    size="middle"
+                    wrapButton={(hubButton) => (
+                      <SyncFreshnessBadge
+                        getBinding={loadReportingSyncBinding}
+                        refreshKey={syncFreshnessKey}
+                      >
+                        {hubButton}
+                      </SyncFreshnessBadge>
+                    )}
+                    renderSyncPanel={({ active, close }) => (
+                      <ReportingSyncFromSourceModal
+                        contentOnly
+                        open={active}
+                        onClose={close}
+                        onComplete={() => {
+                          handleSyncComplete();
+                          close();
+                        }}
+                      />
+                    )}
+                    renderPushPanel={({ active, close }) => (
+                      <ReportingPushBatchModal
+                        embedded
+                        open={active}
+                        onClose={close}
+                        reportingIds={selectedReportingIds}
+                        onComplete={() => {
+                          handleSyncComplete();
+                          close();
+                        }}
+                      />
+                    )}
+                  />
+                  <Button
+                    size="middle"
+                    icon={<HistoryOutlined />}
+                    onClick={() => setSyncHistoryVisible(true)}
+                  >
+                    {t('app.kuaizhizao.workReporting.syncHistoryOpen')}
+                  </Button>
+                </Space>
+              )
+            : undefined
+        }
         showDeleteButton={true}
         onDelete={async (keys) => {
           try {
@@ -1844,6 +1922,11 @@ const ReportingPage: React.FC = () => {
             toolBarButtonSize="middle"
           />,
         ]}
+      />
+
+      <ReportingSyncHistoryModal
+        open={syncHistoryVisible}
+        onClose={() => setSyncHistoryVisible(false)}
       />
 
       <FormModalTemplate

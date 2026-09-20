@@ -29,7 +29,34 @@ class WorkOrderSyncBinding(BaseModel):
         default="manual_full",
         description="manual_full | scheduled_full | scheduled_incremental",
     )
+    sync_direction = fields.CharField(
+        max_length=20,
+        default="pull",
+        description="pull | push | bidirectional",
+    )
     schedule_interval_minutes = fields.IntField(default=15, description="定时同步间隔（分钟）")
     last_success_at = fields.DatetimeField(null=True, description="最近一次成功同步时间")
     last_attempt_at = fields.DatetimeField(null=True, description="最近一次尝试同步时间")
     last_error = fields.TextField(null=True, description="最近一次同步错误")
+    # 推送：仅存连接身份（映射/单位在 BusinessConfig，编排走 DocumentPushPipeline）
+    push_connection_code = fields.CharField(
+        max_length=64,
+        null=True,
+        description="推送选用的应用连接器 code（仅身份，不含 field_map）",
+    )
+    push_save_api_uuid = fields.CharField(
+        max_length=36,
+        null=True,
+        description="推送选用的接口管理 Save 接口 UUID（仅身份；运行时 body 整包替换模板）",
+    )
+    push_sync_mode = fields.CharField(
+        max_length=32,
+        default="manual_full",
+        description="manual_full | scheduled_full",
+    )
+    push_schedule_interval_minutes = fields.IntField(
+        default=15, description="定时推送间隔（分钟）"
+    )
+    push_last_success_at = fields.DatetimeField(null=True, description="最近一次成功推送时间")
+    push_last_attempt_at = fields.DatetimeField(null=True, description="最近一次尝试推送时间")
+    push_last_error = fields.TextField(null=True, description="最近一次推送错误")

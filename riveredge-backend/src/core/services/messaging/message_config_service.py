@@ -261,6 +261,10 @@ class MessageConfigService:
                     "短信通道未接入真实供应商，禁止模拟成功",
                     "SMS_PROVIDER_NOT_CONFIGURED",
                 )
+            elif data.type == "push":
+                success, message, error = await MessageConfigService._send_test_push(
+                    data.config, data.target, tenant_id
+                )
             else:
                 success, message, error = False, f"不支持测试的消息类型: {data.type}", None
                 
@@ -275,6 +279,47 @@ class MessageConfigService:
                 message=f"系统错误: {str(e)}",
                 error_detail=str(e)
             )
+
+    @staticmethod
+    async def _send_test_push(config: dict, target: str, tenant_id: int) -> tuple[bool, str, Optional[str]]:
+        """发送一条最小推送测试；企业微信凭据始终从应用连接器读取。"""
+        channel = config or {}
+        provider = str(channel.get("provider") or channel.get("connection_type") or "").strip().lower()
+        content = "RiverEdge 消息渠道测试"
+
+        if provider in ("wecom", "wechat_work", "企业微信"):
+            from core.services.messaging.wecom_message_service import send_wecom_text_message
+
+            user_ids = [v.strip() for v in target.replace(",", "|").split("|") if v.strip()]
+            sent = await send_wecom_text_message(
+                tenant_id=tenant_id,
+                user_ids=user_ids,
+                content=content,
+            )
+            return (
+                (True, "企业微信测试消息已发送", None)
+                if sent
+                else (False, "企业微信未配置或测试目标无效", "请确认已启用 type=wecom 的应用连接器，并填写企微 UserID")
+            )
+
+        if provider in ("webhook", "http", "rest"):
+            url = str(channel.get("webhook_url") or channel.get("url") or "").strip()
+            if not url:
+                return False, "推送配置缺少 webhook_url", "请填写应用 Webhook 地址"
+            from infra.infrastructure.http.client import get_http_client
+
+            headers = channel.get("headers") if isinstance(channel.get("headers"), dict) else None
+            resp = await get_http_client().post(
+                url,
+                json={"title": "RiverEdge 消息渠道测试", "content": content, "recipient": target},
+                headers=headers,
+                timeout=10.0,
+            )
+            if resp.status_code >= 400:
+                return False, "Webhook 测试失败", f"Webhook 返回 HTTP {resp.status_code}"
+            return True, "应用 Webhook 测试消息已发送", None
+
+        return False, "推送配置缺少 provider", "provider 仅支持 wecom 或 webhook"
 
     @staticmethod
     async def _send_test_email(config: dict, target: str) -> tuple[bool, str, Optional[str]]:

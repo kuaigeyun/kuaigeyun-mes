@@ -54,6 +54,7 @@ import { pickListSearchKeyword } from '../../../../utils/tableQueryKey';
 import { getAntdModal } from '../../../../utils/antdAppApis';
 import { todaySiteDateString } from '../../../../utils/format';
 import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
+import { getIntegrationConfigListAllMatching } from '../../../../services/integrationConfig';
 /**
  * 消息配置管理列表页面组件
  */
@@ -70,6 +71,7 @@ const MessageConfigListPage: React.FC = () => {
   const [isEdit, setIsEdit] = useState(false);
   const [currentMessageConfigUuid, setCurrentMessageConfigUuid] = useState<string | null>(null);
   const [formLoading, setFormLoading] = useState(false);
+  const [formInitialValues, setFormInitialValues] = useState<Record<string, any>>({});
   
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -100,6 +102,7 @@ const MessageConfigListPage: React.FC = () => {
   const handleCreate = () => {
     setIsEdit(false);
     setCurrentMessageConfigUuid(null);
+    setFormInitialValues({ type: 'email', is_active: true, is_default: false });
     setModalVisible(true);
     formRef.current?.resetFields();
     formRef.current?.setFieldsValue({
@@ -122,7 +125,7 @@ const MessageConfigListPage: React.FC = () => {
       setCurrentMessageConfigUuid(record.uuid);
       // 获取消息配置详情
       const detail = await getMessageConfigByUuid(record.uuid);
-      formRef.current?.setFieldsValue({
+      const values = {
         name: detail.name,
         code: detail.code,
         description: detail.description,
@@ -130,8 +133,11 @@ const MessageConfigListPage: React.FC = () => {
         is_active: detail.is_active,
         is_default: detail.is_default,
         ...detail.config, // 将配置项展开到表单字段中
-      });
+      };
+      setFormInitialValues(values);
+      setModalVisible(true);
     } catch (error: any) {
+      setModalVisible(false);
       messageApi.error(error.message || t('pages.system.messageConfig.getDetailFailed'));
     }
   };
@@ -288,9 +294,9 @@ const MessageConfigListPage: React.FC = () => {
         icon: null,
         content: (
           <div style={{ marginTop: 16 }}>
-            <p>{t('pages.system.messageConfig.testInputLabel', { target: type === 'email' ? t('pages.system.messageConfig.testTargetEmail') : t('pages.system.messageConfig.testTargetPhone') })}</p>
+            <p>{t('pages.system.messageConfig.testInputLabel', { target: type === 'email' ? t('pages.system.messageConfig.testTargetEmail') : type === 'push' ? '企业微信 UserID 或应用接收人' : t('pages.system.messageConfig.testTargetPhone') })}</p>
             <Input 
-              placeholder={type === 'email' ? t('pages.system.messageConfig.testTargetPlaceholderEmail') : t('pages.system.messageConfig.testTargetPlaceholderPhone')} 
+              placeholder={type === 'email' ? t('pages.system.messageConfig.testTargetPlaceholderEmail') : type === 'push' ? '如 userid 或 user1|user2' : t('pages.system.messageConfig.testTargetPlaceholderPhone')}
               onChange={(e) => { testTarget = e.target.value; }}
             />
           </div>
@@ -615,6 +621,7 @@ const MessageConfigListPage: React.FC = () => {
         onClose={() => setModalVisible(false)}
         onFinish={handleSubmit}
         isEdit={isEdit}
+        initialValues={formInitialValues}
         loading={formLoading}
         width={MODAL_CONFIG.SMALL_WIDTH}
         grid
@@ -740,6 +747,68 @@ const MessageConfigListPage: React.FC = () => {
                     placeholder={t('pages.system.messageConfig.signNamePlaceholder')}
                     colProps={{ span: 24 }}
                     fieldProps={{ prefix: <CheckCircleOutlined style={{ color: '#bfbfbf' }} /> }}
+                  />
+                </>
+              );
+            }
+            if (type === 'push') {
+              return (
+                <>
+                  <SafeProFormSelect
+                    name="provider"
+                    label="推送方式"
+                    rules={[{ required: true, message: '请选择推送方式' }]}
+                    options={[
+                      { label: '企业微信应用', value: 'wecom' },
+                      { label: '其他应用 Webhook', value: 'webhook' },
+                    ]}
+                    colProps={{ span: 12 }}
+                  />
+                  <SafeProFormSelect
+                    name="connection_uuid"
+                    label="应用连接器"
+                    tooltip="可选：关联已配置的企业微信或其他应用连接"
+                    showSearch
+                    request={async () => {
+                      const items = await getIntegrationConfigListAllMatching({ is_active: true });
+                      const supported = new Set(['wecom', 'webhook']);
+                      return items
+                        .filter((item) => supported.has(String(item.type).toLowerCase()))
+                        .map((item) => ({
+                          label: `${item.name}（${item.type}）`,
+                          value: item.uuid,
+                        }));
+                    }}
+                    colProps={{ span: 12 }}
+                  />
+                  <SafeProFormSelect
+                    name="message_format"
+                    label="消息格式"
+                    initialValue="text"
+                    options={[
+                      { label: '文本', value: 'text' },
+                      { label: 'Markdown', value: 'markdown' },
+                      { label: '模板消息', value: 'template' },
+                    ]}
+                    colProps={{ span: 12 }}
+                  />
+                  <ProFormDependency name={['provider']}>
+                    {({ provider }) => provider === 'webhook' ? (
+                      <ProFormText
+                        name="webhook_url"
+                        label="Webhook 地址"
+                        rules={[{ required: true, type: 'url', message: '请输入有效的 Webhook 地址' }]}
+                        placeholder="https://example.com/webhook"
+                        colProps={{ span: 24 }}
+                      />
+                    ) : null}
+                  </ProFormDependency>
+                  <ProFormText
+                    name="recipient_field"
+                    label="接收人字段"
+                    placeholder="如 userid、mobile 或 open_id"
+                    tooltip="企业微信通常填写 userid；其他连接器按其接收人标识填写"
+                    colProps={{ span: 12 }}
                   />
                 </>
               );

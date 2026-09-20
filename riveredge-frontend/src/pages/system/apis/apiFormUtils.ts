@@ -77,6 +77,11 @@ export interface ApiFormRawValues {
   request_body?: unknown;
   response_format?: unknown;
   response_example?: unknown;
+  source_type_conversion_map_entries?: Array<{
+    field_name?: string;
+    source?: string;
+    target?: string;
+  }>;
 }
 
 export interface ApiFormSubmitValues {
@@ -94,6 +99,7 @@ export interface ApiFormSubmitValues {
   request_body: Record<string, unknown>;
   response_format: Record<string, unknown>;
   response_example: Record<string, unknown>;
+  source_type_conversion_map?: Array<{ field_name: string; mapping: Record<string, string> }> | null;
 }
 
 /** 表单原始值 → 提交 API 的结构 */
@@ -113,5 +119,24 @@ export function transformApiFormValues(values: ApiFormRawValues): ApiFormSubmitV
     request_body: normalizeApiJsonObject(values.request_body),
     response_format: normalizeApiJsonObject(values.response_format),
     response_example: normalizeApiJsonObject(values.response_example),
+    source_type_conversion_map: (() => {
+      const entries = values.source_type_conversion_map_entries?.filter(
+        (e) => e?.field_name?.trim() && e?.source?.trim() && e?.target?.trim(),
+      ) ?? [];
+      if (!entries.length) return null;
+      const grouped: Record<string, Record<string, string>> = {};
+      for (const e of entries) {
+        const fieldName = e.field_name!.trim();
+        if (!grouped[fieldName]) grouped[fieldName] = {};
+        // Accept both half-width and full-width commas commonly used in Chinese input.
+        const sources = e.source!.split(/[,，]/).map(s => s.trim()).filter(Boolean);
+        const targets = e.target!.split(/[,，]/).map(t => t.trim()).filter(Boolean);
+        const len = Math.min(sources.length, targets.length);
+        for (let i = 0; i < len; i++) {
+          grouped[fieldName][sources[i]] = targets[i];
+        }
+      }
+      return Object.entries(grouped).map(([field_name, mapping]) => ({ field_name, mapping }));
+    })(),
   };
 }

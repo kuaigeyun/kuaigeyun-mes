@@ -837,6 +837,63 @@ class ReportingService(AppBaseService[ReportingRecord]):
             period,
         )
 
+    async def _push_kingdee_production_report_after_approved(
+        self,
+        tenant_id: int,
+        record: ReportingRecord,
+        acting_user_id: int,
+    ) -> None:
+        """Push approved reporting data to Kingdee when the tenant enables it."""
+        try:
+            from apps.kuaizhizao.services.kingdee_production_report_push_service import (
+                KingdeeProductionReportPushService,
+            )
+
+            await KingdeeProductionReportPushService().push_after_reporting_approved(
+                tenant_id=tenant_id,
+                record_id=int(record.id),
+                acting_user_id=int(acting_user_id),
+            )
+        except BusinessLogicError:
+            raise
+        except Exception as exc:
+            logger.warning(
+                "报工审核通过后推送金蝶生产汇报单异常 tenant_id={} record_id={} err={}",
+                tenant_id,
+                getattr(record, "id", None),
+                exc,
+            )
+
+    async def retry_kingdee_production_report_push(
+        self,
+        tenant_id: int,
+        record_id: int,
+        acting_user_id: int,
+    ) -> Dict[str, Any]:
+        """手动重推金蝶生产汇报单：重置重试状态后立即推送一次（获得全新 5 次预算）。"""
+        record = await ReportingRecord.get_or_none(
+            tenant_id=tenant_id,
+            id=record_id,
+            deleted_at__isnull=True,
+        )
+        if not record:
+            raise NotFoundError("报工记录不存在")
+        if record.status != "approved":
+            raise BusinessLogicError("仅已审核通过的报工记录可重推金蝶生产汇报单")
+
+        from apps.kuaizhizao.services.kingdee_production_report_push_service import (
+            KingdeeProductionReportPushService,
+        )
+
+        result = await KingdeeProductionReportPushService().retry_push_record(
+            tenant_id=tenant_id,
+            record_id=record_id,
+            acting_user_id=int(acting_user_id),
+        )
+        if result is None:
+            return {"success": False, "message": "金蝶生产汇报单推送未启用"}
+        return result
+
     async def create_reporting_record(
         self,
         tenant_id: int,
@@ -1431,6 +1488,9 @@ class ReportingService(AppBaseService[ReportingRecord]):
             await self._refresh_performance_after_approved_reporting(
                 tenant_id, reporting_record
             )
+            await self._push_kingdee_production_report_after_approved(
+                tenant_id, reporting_record, reported_by
+            )
         return _attach_inbound_notices(
             ReportingRecordResponse.model_validate(reporting_record),
             inbound_result,
@@ -1964,6 +2024,9 @@ class ReportingService(AppBaseService[ReportingRecord]):
 
         if record.status == "approved":
             await self._refresh_performance_after_approved_reporting(tenant_id, record)
+            await self._push_kingdee_production_report_after_approved(
+                tenant_id, record, approved_by
+            )
 
         return _attach_inbound_notices(response, inbound_result)
 

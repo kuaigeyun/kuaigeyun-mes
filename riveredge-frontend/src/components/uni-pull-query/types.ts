@@ -63,6 +63,8 @@ export interface UniPullQueryModalProps<T extends object> {
 
   /** 搜索框右侧扩展筛选 */
   filterExtra?: ReactNode;
+  /** inline：与搜索框同一行（默认）；block：独占下一行 */
+  filterExtraPlacement?: 'inline' | 'block';
 
   okText?: ReactNode;
   cancelText?: ReactNode;

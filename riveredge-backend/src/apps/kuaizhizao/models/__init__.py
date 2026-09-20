@@ -8,6 +8,7 @@
 from .work_order import WorkOrder
 from .work_order_group import WorkOrderGroup
 from .reporting_record import ReportingRecord
+from .reporting_sync_binding import ReportingSyncBinding
 from .rework_order import ReworkOrder
 from .rework_order_operation import ReworkOrderOperation
 from .rework_order_signoff import (
@@ -42,6 +43,7 @@ from .assembly_material_binding import AssemblyMaterialBinding
 from .batching_order import BatchingOrder, BatchingOrderItem
 from .disassembly_order import DisassemblyOrder, DisassemblyOrderItem
 from .inventory_alert import InventoryAlertRule, InventoryAlert
+from .inventory_sync_binding import InventorySyncBinding
 from .packing_binding import PackingBinding
 from .customer_material_registration import (
     CustomerMaterialRegistration,
@@ -308,6 +310,7 @@ __all__ = [
     'WorkOrder',
     'WorkOrderGroup',
     'ReportingRecord',
+    'ReportingSyncBinding',
     'ReworkOrder',
     'ReworkOrderOperation',
     'OutsourceOrder',
@@ -326,6 +329,7 @@ __all__ = [
     'InventoryTransferItem',
     'InventoryAlertRule',
     'InventoryAlert',
+    'InventorySyncBinding',
     'PackingBinding',
     'BarcodeMappingRule',
     'CustomerMaterialRegistration',

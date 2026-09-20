@@ -141,6 +141,465 @@ def build_view_body(*, form_id: str, number: str = "", id: str = "") -> Dict[str
     return build_kdsvc_envelope([form_id, json.dumps(data, ensure_ascii=False)])
 
 
+SAVE_PATH = "Kingdee.BOS.WebApi.ServicesStub.DynamicFormService.Save.common.kdsvc"
+
+SUBMIT_PATH = "Kingdee.BOS.WebApi.ServicesStub.DynamicFormService.Submit.common.kdsvc"
+
+AUDIT_PATH = "Kingdee.BOS.WebApi.ServicesStub.DynamicFormService.Audit.common.kdsvc"
+
+SAL_SALE_ORDER_FORM_ID = "SAL_SaleOrder"
+
+SAL_SALE_ORDER_DEFAULT_BILL_TYPE = "XSDD01_SYS"
+
+SAL_SALE_ORDER_SAVE_PRESET_CODE_SUFFIX = "save_sal_saleorder"
+
+SAL_SALE_ORDER_PUSH_PRESET_CODE_SUFFIX = "push_sal_saleorder"
+
+PUR_PURCHASE_ORDER_FORM_ID = "PUR_PurchaseOrder"
+
+PUR_PURCHASE_ORDER_DEFAULT_BILL_TYPE = "CGDD01_SYS"
+
+PUR_PURCHASE_ORDER_SAVE_PRESET_CODE_SUFFIX = "save_pur_purchaseorder"
+
+PUR_PURCHASE_ORDER_PUSH_PRESET_CODE_SUFFIX = "push_pur_purchaseorder"
+
+STK_MISCELLANEOUS_FORM_ID = "STK_MISCELLANEOUS"
+
+STK_MISCELLANEOUS_DEFAULT_BILL_TYPE = "QTRKD01_SYS"
+
+STK_MISCELLANEOUS_SAVE_PRESET_CODE_SUFFIX = "save_stk_miscellaneous"
+
+STK_MISCELLANEOUS_PUSH_PRESET_CODE_SUFFIX = "push_stk_miscellaneous"
+
+PRD_MO_FORM_ID = "PRD_MO"
+
+PRD_MO_DEFAULT_BILL_TYPE = "SCDD01_SYS"
+
+PRD_MO_SAVE_PRESET_CODE_SUFFIX = "save_prd_mo"
+
+PRD_MO_PUSH_PRESET_CODE_SUFFIX = "push_prd_mo"
+
+PRD_MO_SUBMIT_PRESET_CODE_SUFFIX = "submit_prd_mo"
+
+PRD_MO_AUDIT_PRESET_CODE_SUFFIX = "audit_prd_mo"
+
+PRD_MO_VIEW_PRESET_CODE_SUFFIX = "view_prd_mo"
+
+PRD_MORPT_PRESET_CODE_SUFFIX = "query_prd_morpt"
+
+PRD_MORPT_FIELD_KEYS = (
+    "FID,FBillNo,FDate,"
+    "FPrdOrgId.FNumber,FBillType.FNUMBER,"
+    "FEntity_FEntryID,FMoBillNo,"
+    "FMaterialId.FNumber,FMaterialId.FName,"
+    "FReportType.FNumber,"
+    "FFinishQty,FQuaQty,FFailQty,FHrWorkTime,FUnitID.FNumber,"
+    "FDocumentStatus"
+)
+
+PRD_MORPT_FIELD_MARKER = "FQuaQty"
+
+PRD_MORPT_STALE_FIELD_MARKERS = ("FStockOrgId", "FRealQty", "FProcessId")
+
+PRD_REPORT_PRESET_CODE_SUFFIX = "query_prd_report"
+
+PRD_REPORT_FIELD_KEYS = PRD_MORPT_FIELD_KEYS
+
+PRD_MORPT_SAVE_PRESET_CODE_SUFFIX = "save_prd_morpt"
+
+PRD_MORPT_SUBMIT_PRESET_CODE_SUFFIX = "submit_prd_morpt"
+
+PRD_MORPT_AUDIT_PRESET_CODE_SUFFIX = "audit_prd_morpt"
+
+PRD_MORPT_VIEW_PRESET_CODE_SUFFIX = "view_prd_morpt"
+
+PRD_MORPT_FORM_ID = "PRD_MORPT"
+
+PRD_MORPT_DEFAULT_BILL_TYPE = "SCHBD02_SYS"
+
+PRD_MORPT_DEFAULT_REPORT_TYPE = "HBLX01_SYS"
+
+PRD_PICK_MTRL_PRESET_CODE_SUFFIX = "query_prd_pick_mtrl"
+
+PRD_PICK_MTRL_FIELD_KEYS = (
+    "FID,FBillNo,FDate,"
+    "FPrdOrgId.FNumber,FStockOrgId.FNumber,"
+    "FEntity_FEntryID,FMoBillNo,"
+    "FMaterialId.FNumber,FMaterialId.FName,FUnitID.FNumber,"
+    "FActualQty,FStockId.FNumber,FLot.FNumber,"
+    "FDocumentStatus"
+)
+
+PRD_RETURN_MTRL_PRESET_CODE_SUFFIX = "query_prd_return_mtrl"
+
+PRD_RETURN_MTRL_FIELD_KEYS = (
+    "FID,FBillNo,FDate,"
+    "FPrdOrgId.FNumber,FStockOrgId.FNumber,"
+    "FEntity_FEntryID,FMoBillNo,"
+    "FMaterialId.FNumber,FMaterialId.FName,FUnitID.FNumber,"
+    "FQty,FStockId.FNumber,FLot.FNumber,"
+    "FDocumentStatus"
+)
+
+PRD_INSTOCK_PRESET_CODE_SUFFIX = "query_prd_instock"
+
+PRD_INSTOCK_FIELD_KEYS = (
+    "FID,FBillNo,FDate,"
+    "FPrdOrgId.FNumber,FStockOrgId.FNumber,"
+    "FEntity_FEntryID,FMoBillNo,"
+    "FMaterialId.FNumber,FMaterialId.FName,FUnitID.FNumber,"
+    "FRealQty,FStockId.FNumber,FLot.FNumber,"
+    "FDocumentStatus"
+)
+
+def build_save_data_payload(
+    *,
+    model: Dict[str, Any],
+    need_return_fields: Optional[List[str]] = None,
+    need_update_fields: Optional[List[str]] = None,
+    is_delete_entry: bool = True,
+    is_verify_base_data_field: bool = False,
+    is_entry_batch_fill: bool = True,
+    validate_flag: bool = True,
+    number_search: bool = True,
+    is_auto_adjust_field: bool = False,
+    interation_flags: str = "",
+    ignore_interation_flag: bool = True,
+    is_control_precision: bool = False,
+    validate_repeat_json: bool = False,
+    sub_system_id: str = "",
+) -> Dict[str, Any]:
+    """金蝶 DynamicFormService.Save 的 data 对象（与 WebAPI 控制台说明一致）。"""
+    return {
+        "NeedUpDateFields": need_update_fields or [],
+        # 为空时金蝶可不回传单据号 → 业务侧表现为「同步未返回结果」
+        "NeedReturnFields": need_return_fields or ["FID", "FBillNo"],
+        "IsDeleteEntry": str(is_delete_entry).lower(),
+        "SubSystemId": sub_system_id or "",
+        "IsVerifyBaseDataField": str(is_verify_base_data_field).lower(),
+        "IsEntryBatchFill": str(is_entry_batch_fill).lower(),
+        "ValidateFlag": str(validate_flag).lower(),
+        "NumberSearch": str(number_search).lower(),
+        "IsAutoAdjustField": str(is_auto_adjust_field).lower(),
+        "InterationFlags": interation_flags or "",
+        "IgnoreInterationFlag": str(ignore_interation_flag).lower(),
+        "IsControlPrecision": str(is_control_precision).lower(),
+        "ValidateRepeatJson": str(validate_repeat_json).lower(),
+        "Model": model,
+    }
+
+def build_save_body(*, form_id: str, model: Dict[str, Any], **kwargs: Any) -> Dict[str, Any]:
+    data = build_save_data_payload(model=model, **kwargs)
+    return build_kdsvc_envelope([form_id, json.dumps(data, ensure_ascii=False)])
+
+def build_operate_body(
+    *,
+    form_id: str,
+    bill_id: str = "",
+    bill_no: str = "",
+    create_org_id: int = 0,
+) -> Dict[str, Any]:
+    """Submit / Audit 共用报文：优先 Ids，否则 Numbers。"""
+    use_id = bool(str(bill_id or "").strip())
+    data = {
+        "CreateOrgId": int(create_org_id or 0),
+        "Numbers": [] if use_id else ([str(bill_no)] if str(bill_no or "").strip() else [""]),
+        "Ids": str(bill_id) if use_id else "",
+    }
+    return build_kdsvc_envelope([form_id, json.dumps(data, ensure_ascii=False)])
+
+def build_prd_morpt_sample_model() -> Dict[str, Any]:
+    """生产汇报单 Save 示例 Model（占位值，联调前请改成账套真实编码）。
+
+    字段对齐金蝶 WebAPI 控制台「生产汇报单」说明必填项：
+    FBillType / FPrdOrgId / FDate / FReportType / FTimeUnitId / FWorkshipId / FStandHourUnitId
+    """
+    return {
+        "FID": 0,
+        "FBillType": {"FNUMBER": PRD_MORPT_DEFAULT_BILL_TYPE},
+        "FDate": "2026-01-01",
+        "FPrdOrgId": {"FNumber": "100"},
+        "FWorkshipIdH": {"FNumber": "BM000001"},
+        "FDescription": "快格云报工推送示例",
+        "FEntity": [
+            {
+                "FEntryID": 0,
+                "FIsNew": "true",
+                "FProductType": "1",
+                "FMaterialId": {"FNumber": "CH4441"},
+                "FReportType": {"FNumber": PRD_MORPT_DEFAULT_REPORT_TYPE},
+                "FUnitID": {"FNumber": "Pcs"},
+                "FWorkshipId": {"FNumber": "BM000001"},
+                "FMoBillNo": "MO00000001",
+                "FFinishQty": 1,
+                "FQuaQty": 1,
+                "FFailQty": 0,
+                "FHrWorkTime": 0,
+                "FTimeUnitId": "1",
+                "FStandHourUnitId": "1",
+                "FStockInOrgId": {"FNumber": "100"},
+                "FSrcBillType": "PRD_MO",
+                "FDescriptionE": "快格云报工推送示例明细",
+            }
+        ],
+    }
+
+def build_prd_morpt_save_preset_body() -> Dict[str, Any]:
+    return build_save_body(
+        form_id=PRD_MORPT_FORM_ID,
+        model=build_prd_morpt_sample_model(),
+        need_return_fields=["FID", "FBillNo"],
+    )
+
+def build_prd_morpt_submit_preset_body() -> Dict[str, Any]:
+    return build_operate_body(form_id=PRD_MORPT_FORM_ID, bill_no="")
+
+def build_prd_morpt_audit_preset_body() -> Dict[str, Any]:
+    return build_operate_body(form_id=PRD_MORPT_FORM_ID, bill_no="")
+
+def build_prd_morpt_view_preset_body() -> Dict[str, Any]:
+    return build_view_body(form_id=PRD_MORPT_FORM_ID, number="")
+
+def build_sal_sale_order_sample_model() -> Dict[str, Any]:
+    return {
+        "FID": 0,
+        "FBillTypeID": {"FNUMBER": SAL_SALE_ORDER_DEFAULT_BILL_TYPE},
+        "FDate": "2026-01-01",
+        "FSaleOrgId": {"FNumber": "100"},
+        "FCustId": {"FNumber": "CUST001"},
+        "FNote": "快格云销售订单推送示例",
+        "FSaleOrderEntry": [
+            {
+                "FEntryID": 0,
+                "FMaterialId": {"FNumber": "CH4441"},
+                "FUnitID": {"FNumber": "006"},
+                "FQty": 1,
+                "FPrice": 1,
+                "FTaxPrice": 1,
+                "FEntryTaxRate": 13,
+                "FDeliveryDate": "2026-01-10",
+            }
+        ],
+    }
+
+def build_sal_sale_order_save_preset_body() -> Dict[str, Any]:
+    return build_save_body(
+        form_id=SAL_SALE_ORDER_FORM_ID,
+        model=build_sal_sale_order_sample_model(),
+        need_return_fields=["FID", "FBillNo"],
+    )
+
+def build_sal_sale_order_push_preset_body() -> Dict[str, Any]:
+    return build_sal_sale_order_save_preset_body()
+
+def build_pur_purchase_order_sample_model() -> Dict[str, Any]:
+    return {
+        "FID": 0,
+        "FBillTypeID": {"FNUMBER": PUR_PURCHASE_ORDER_DEFAULT_BILL_TYPE},
+        "FDate": "2026-01-01",
+        "FPurchaseOrgId": {"FNumber": "100"},
+        "FSupplierId": {"FNumber": "VEN001"},
+        "FNote": "快格云采购订单推送示例",
+        "FPOOrderEntry": [
+            {
+                "FEntryID": 0,
+                "FMaterialId": {"FNumber": "CH4441"},
+                "FUnitId": {"FNumber": "006"},
+                "FQty": 1,
+                "FPrice": 1,
+                "FTaxPrice": 1,
+                "FEntryTaxRate": 13,
+                "FDeliveryDate": "2026-01-10",
+            }
+        ],
+    }
+
+def build_pur_purchase_order_save_preset_body() -> Dict[str, Any]:
+    return build_save_body(
+        form_id=PUR_PURCHASE_ORDER_FORM_ID,
+        model=build_pur_purchase_order_sample_model(),
+        need_return_fields=["FID", "FBillNo"],
+    )
+
+def build_pur_purchase_order_push_preset_body() -> Dict[str, Any]:
+    return build_pur_purchase_order_save_preset_body()
+
+def build_stk_miscellaneous_sample_model() -> Dict[str, Any]:
+    return {
+        "FID": 0,
+        "FBillTypeID": {"FNUMBER": STK_MISCELLANEOUS_DEFAULT_BILL_TYPE},
+        "FStockOrgId": {"FNumber": "100"},
+        "FDate": "2026-01-01",
+        "FOwnerTypeIdHead": "BD_OwnerOrg",
+        "FOwnerIdHead": {"FNumber": "100"},
+        "FNote": "快格云即时库存推送示例",
+        "FEntity": [
+            {
+                "FEntryID": 0,
+                "FMATERIALID": {"FNumber": "CH4441"},
+                "FUnitID": {"FNumber": "006"},
+                "FSTOCKID": {"FNumber": "CK001"},
+                "FQty": 1,
+                "FLot": {"FNumber": "LOT001"},
+            }
+        ],
+    }
+
+def build_stk_miscellaneous_save_preset_body() -> Dict[str, Any]:
+    return build_save_body(
+        form_id=STK_MISCELLANEOUS_FORM_ID,
+        model=build_stk_miscellaneous_sample_model(),
+        need_return_fields=["FID", "FBillNo"],
+    )
+
+def build_stk_miscellaneous_push_preset_body() -> Dict[str, Any]:
+    return build_stk_miscellaneous_save_preset_body()
+
+def build_prd_mo_sample_model() -> Dict[str, Any]:
+    """生产订单 Save 示例 Model（占位值，联调前请改成账套真实编码）。"""
+    return {
+        "FID": 0,
+        "FBillNo": "",
+        "FBillType": {"FNUMBER": PRD_MO_DEFAULT_BILL_TYPE},
+        "FDate": "2026-01-01",
+        "FPrdOrgId": {"FNumber": "100"},
+        "FOwnerTypeId": "BD_OwnerOrg",
+        "FPPBOMType": "1",
+        "FDescription": "快格云工单推送示例",
+        "FTreeEntity": [
+            {
+                "FEntryID": 0,
+                "FProductType": "1",
+                "FMaterialId": {"FNumber": "CH4441"},
+                "FUnitId": {"FNumber": "006"},
+                "FBaseUnitId": {"FNumber": "006"},
+                "FQty": 1,
+                "FWorkShopID": {"FNumber": "BM000001"},
+                "FPlanStartDate": "2026-01-01",
+                "FPlanFinishDate": "2026-01-02",
+                "FStockInOrgId": {"FNumber": "100"},
+                "FCreateType": "1",
+                "FReqType": "1",
+                "FScheduleStatus": "1",
+                "FFirstInspectStatus": "0",
+                "FFirstQCControlType": "1",
+            }
+        ],
+    }
+
+def build_prd_mo_save_preset_body() -> Dict[str, Any]:
+    return build_save_body(
+        form_id=PRD_MO_FORM_ID,
+        model=build_prd_mo_sample_model(),
+        need_return_fields=["FID", "FBillNo"],
+    )
+
+def build_prd_mo_push_preset_body() -> Dict[str, Any]:
+    """工单页「推送」专用：生产订单 Save 请求体（完整 JSON，可在接口管理编辑）。"""
+    model = build_prd_mo_sample_model()
+    model["FDescription"] = "快格云工单推送金蝶生产订单"
+    return build_save_body(
+        form_id=PRD_MO_FORM_ID,
+        model=model,
+        need_return_fields=["FID", "FBillNo"],
+        # 推送场景默认校验基础资料，减少静默丢字段
+        is_verify_base_data_field=True,
+    )
+
+def build_prd_mo_submit_preset_body() -> Dict[str, Any]:
+    return build_operate_body(form_id=PRD_MO_FORM_ID, bill_no="")
+
+def build_prd_mo_audit_preset_body() -> Dict[str, Any]:
+    return build_operate_body(form_id=PRD_MO_FORM_ID, bill_no="")
+
+def build_prd_mo_view_preset_body() -> Dict[str, Any]:
+    return build_view_body(form_id=PRD_MO_FORM_ID, number="")
+
+def build_prd_morpt_query_preset_body(
+    *,
+    filter_string: str = "FDocumentStatus='C'",
+    start_row: int = 0,
+    limit: int = 2000,
+) -> Dict[str, Any]:
+    return build_execute_bill_query_body(
+        form_id="PRD_MORPT",
+        field_keys=PRD_MORPT_FIELD_KEYS,
+        filter_string=filter_string,
+        order_string="FDate DESC,FBillNo DESC",
+        start_row=start_row,
+        limit=limit,
+    )
+
+def build_prd_report_query_preset_body(
+    *,
+    filter_string: str = "FDocumentStatus='C'",
+    start_row: int = 0,
+    limit: int = 2000,
+) -> Dict[str, Any]:
+    return build_execute_bill_query_body(
+        form_id="PRD_MORPT",
+        field_keys=PRD_REPORT_FIELD_KEYS,
+        filter_string=filter_string,
+        order_string="FDate DESC,FBillNo DESC",
+        start_row=start_row,
+        limit=limit,
+    )
+
+def build_prd_pick_mtrl_query_preset_body(
+    *,
+    filter_string: str = "FDocumentStatus='C'",
+    start_row: int = 0,
+    limit: int = 2000,
+) -> Dict[str, Any]:
+    return build_execute_bill_query_body(
+        form_id="PRD_PickMtrl",
+        field_keys=PRD_PICK_MTRL_FIELD_KEYS,
+        filter_string=filter_string,
+        order_string="FDate DESC,FBillNo DESC",
+        start_row=start_row,
+        limit=limit,
+    )
+
+def build_prd_return_mtrl_query_preset_body(
+    *,
+    filter_string: str = "FDocumentStatus='C'",
+    start_row: int = 0,
+    limit: int = 2000,
+) -> Dict[str, Any]:
+    return build_execute_bill_query_body(
+        form_id="PRD_ReturnMtrl",
+        field_keys=PRD_RETURN_MTRL_FIELD_KEYS,
+        filter_string=filter_string,
+        order_string="FDate DESC,FBillNo DESC",
+        start_row=start_row,
+        limit=limit,
+    )
+
+def build_prd_instock_query_preset_body(
+    *,
+    filter_string: str = "FDocumentStatus='C'",
+    start_row: int = 0,
+    limit: int = 2000,
+) -> Dict[str, Any]:
+    return build_execute_bill_query_body(
+        form_id="PRD_INSTOCK",
+        field_keys=PRD_INSTOCK_FIELD_KEYS,
+        filter_string=filter_string,
+        order_string="FDate DESC,FBillNo DESC",
+        start_row=start_row,
+        limit=limit,
+    )
+
+def prd_morpt_query_preset_needs_upgrade(request_body: Any) -> bool:
+    """生产汇报查询预置仍含 FStockOrgId/FRealQty/FProcessId，或缺少 FQuaQty 时需升级。"""
+    query = _parse_execute_bill_query(request_body)
+    if query is None:
+        return True
+    field_keys = str(query.get("FieldKeys") or query.get("fieldKeys") or "")
+    if PRD_MORPT_FIELD_MARKER not in field_keys:
+        return True
+    return any(marker in field_keys for marker in PRD_MORPT_STALE_FIELD_MARKERS)
+
 def list_kingdee_galaxy_api_presets() -> List[KingdeeGalaxyApiPreset]:
     """常用查询类预设（物料/客商/采购销售订单/即时库存 + 单据查看）。"""
     return [
@@ -201,6 +660,28 @@ def list_kingdee_galaxy_api_presets() -> List[KingdeeGalaxyApiPreset]:
             "request_body": build_purchase_order_query_preset_body(),
         },
         {
+            "code_suffix": PUR_PURCHASE_ORDER_SAVE_PRESET_CODE_SUFFIX,
+            "name": "金蝶保存采购订单",
+            "description": (
+                "Save：采购订单（PUR_PurchaseOrder）。"
+                "示例含单据类型/组织/供应商/物料行；联调前请改账套编码。"
+            ),
+            "path": SAVE_PATH,
+            "method": "POST",
+            "request_body": build_pur_purchase_order_save_preset_body(),
+        },
+        {
+            "code_suffix": PUR_PURCHASE_ORDER_PUSH_PRESET_CODE_SUFFIX,
+            "name": "金蝶推送采购订单",
+            "description": (
+                "快格云采购订单 → 金蝶 PUR_PurchaseOrder 推送用 Save 接口。"
+                "页面推送弹窗优先选用本接口。"
+            ),
+            "path": SAVE_PATH,
+            "method": "POST",
+            "request_body": build_pur_purchase_order_push_preset_body(),
+        },
+        {
             "code_suffix": PRD_MO_PRESET_CODE_SUFFIX,
             "name": "金蝶查询生产订单",
             "description": "ExecuteBillQuery：生产订单（PRD_MO）",
@@ -209,12 +690,158 @@ def list_kingdee_galaxy_api_presets() -> List[KingdeeGalaxyApiPreset]:
             "request_body": build_prd_mo_query_preset_body(),
         },
         {
+            "code_suffix": PRD_MO_SAVE_PRESET_CODE_SUFFIX,
+            "name": "金蝶保存生产订单",
+            "description": (
+                "Save：生产订单（PRD_MO）。"
+                "示例含必填 FBillType/FPrdOrgId/FDate/物料/数量/单位/计划日期；"
+                "默认单据类型 SCDD01_SYS（汇报入库-普通生产）。联调前请改组织/物料/单位等编码。"
+            ),
+            "path": SAVE_PATH,
+            "method": "POST",
+            "request_body": build_prd_mo_save_preset_body(),
+        },
+        {
+            "code_suffix": PRD_MO_PUSH_PRESET_CODE_SUFFIX,
+            "name": "金蝶推送生产订单",
+            "description": (
+                "快格云工单 → 金蝶生产订单（PRD_MO）推送用 Save 接口。"
+                "与「金蝶保存生产订单」同路径；页面推送弹窗优先选用本接口。"
+                "联调前请按账套改组织/车间/物料/单位等编码。"
+            ),
+            "path": SAVE_PATH,
+            "method": "POST",
+            "request_body": build_prd_mo_push_preset_body(),
+        },
+        {
+            "code_suffix": PRD_MO_SUBMIT_PRESET_CODE_SUFFIX,
+            "name": "金蝶提交生产订单",
+            "description": "Submit：生产订单（PRD_MO）",
+            "path": SUBMIT_PATH,
+            "method": "POST",
+            "request_body": build_prd_mo_submit_preset_body(),
+        },
+        {
+            "code_suffix": PRD_MO_AUDIT_PRESET_CODE_SUFFIX,
+            "name": "金蝶审核生产订单",
+            "description": "Audit：生产订单（PRD_MO）",
+            "path": AUDIT_PATH,
+            "method": "POST",
+            "request_body": build_prd_mo_audit_preset_body(),
+        },
+        {
+            "code_suffix": PRD_MO_VIEW_PRESET_CODE_SUFFIX,
+            "name": "金蝶查看生产订单",
+            "description": "View：生产订单（PRD_MO）",
+            "path": VIEW_PATH,
+            "method": "POST",
+            "request_body": build_prd_mo_view_preset_body(),
+        },
+        {
+            "code_suffix": PRD_MORPT_PRESET_CODE_SUFFIX,
+            "name": "金蝶查询生产汇报单",
+            "description": "ExecuteBillQuery：生产汇报单（PRD_MORPT）",
+            "path": EXECUTE_BILL_QUERY_PATH,
+            "method": "POST",
+            "request_body": build_prd_morpt_query_preset_body(),
+        },
+        {
+            "code_suffix": PRD_REPORT_PRESET_CODE_SUFFIX,
+            "name": "金蝶查询生产汇报/报工",
+            "description": "ExecuteBillQuery：生产汇报/报工（PRD_MORPT），用于报工同步场景",
+            "path": EXECUTE_BILL_QUERY_PATH,
+            "method": "POST",
+            "request_body": build_prd_report_query_preset_body(),
+        },
+        {
+            "code_suffix": PRD_MORPT_SAVE_PRESET_CODE_SUFFIX,
+            "name": "金蝶保存生产汇报单",
+            "description": (
+                "Save：生产汇报单（PRD_MORPT）。"
+                "示例含必填 FBillType/FPrdOrgId/FReportType/FWorkshipId/FTimeUnitId；"
+                "联调前请改组织/车间/物料/生产订单等编码。NeedReturnFields 默认 FID+FBillNo。"
+            ),
+            "path": SAVE_PATH,
+            "method": "POST",
+            "request_body": build_prd_morpt_save_preset_body(),
+        },
+        {
+            "code_suffix": PRD_MORPT_SUBMIT_PRESET_CODE_SUFFIX,
+            "name": "金蝶提交生产汇报单",
+            "description": "Submit：生产汇报单（PRD_MORPT）。保存成功后按单号或内码提交；请填 Numbers 或 Ids。",
+            "path": SUBMIT_PATH,
+            "method": "POST",
+            "request_body": build_prd_morpt_submit_preset_body(),
+        },
+        {
+            "code_suffix": PRD_MORPT_AUDIT_PRESET_CODE_SUFFIX,
+            "name": "金蝶审核生产汇报单",
+            "description": "Audit：生产汇报单（PRD_MORPT）。提交成功后按单号或内码审核；请填 Numbers 或 Ids。",
+            "path": AUDIT_PATH,
+            "method": "POST",
+            "request_body": build_prd_morpt_audit_preset_body(),
+        },
+        {
+            "code_suffix": PRD_MORPT_VIEW_PRESET_CODE_SUFFIX,
+            "name": "金蝶查看生产汇报单",
+            "description": "View：生产汇报单（PRD_MORPT）。按单据编号查看详情。",
+            "path": VIEW_PATH,
+            "method": "POST",
+            "request_body": build_prd_morpt_view_preset_body(),
+        },
+        {
+            "code_suffix": PRD_PICK_MTRL_PRESET_CODE_SUFFIX,
+            "name": "金蝶查询生产领料单",
+            "description": "ExecuteBillQuery：生产领料单（PRD_PickMtrl）",
+            "path": EXECUTE_BILL_QUERY_PATH,
+            "method": "POST",
+            "request_body": build_prd_pick_mtrl_query_preset_body(),
+        },
+        {
+            "code_suffix": PRD_RETURN_MTRL_PRESET_CODE_SUFFIX,
+            "name": "金蝶查询生产退料单",
+            "description": "ExecuteBillQuery：生产退料单（PRD_ReturnMtrl）",
+            "path": EXECUTE_BILL_QUERY_PATH,
+            "method": "POST",
+            "request_body": build_prd_return_mtrl_query_preset_body(),
+        },
+        {
+            "code_suffix": PRD_INSTOCK_PRESET_CODE_SUFFIX,
+            "name": "金蝶查询生产入库单",
+            "description": "ExecuteBillQuery：生产入库单（PRD_INSTOCK）",
+            "path": EXECUTE_BILL_QUERY_PATH,
+            "method": "POST",
+            "request_body": build_prd_instock_query_preset_body(),
+        },
+        {
             "code_suffix": SALES_ORDER_PRESET_CODE_SUFFIX,
             "name": "金蝶查询销售订单",
             "description": "ExecuteBillQuery：销售订单（SAL_SaleOrder，含行明细）",
             "path": EXECUTE_BILL_QUERY_PATH,
             "method": "POST",
             "request_body": build_sales_order_query_preset_body(),
+        },
+        {
+            "code_suffix": SAL_SALE_ORDER_SAVE_PRESET_CODE_SUFFIX,
+            "name": "金蝶保存销售订单",
+            "description": (
+                "Save：销售订单（SAL_SaleOrder）。"
+                "示例含单据类型/组织/客户/物料行；联调前请改账套编码。"
+            ),
+            "path": SAVE_PATH,
+            "method": "POST",
+            "request_body": build_sal_sale_order_save_preset_body(),
+        },
+        {
+            "code_suffix": SAL_SALE_ORDER_PUSH_PRESET_CODE_SUFFIX,
+            "name": "金蝶推送销售订单",
+            "description": (
+                "快格云销售订单 → 金蝶 SAL_SaleOrder 推送用 Save 接口。"
+                "页面推送弹窗优先选用本接口。"
+            ),
+            "path": SAVE_PATH,
+            "method": "POST",
+            "request_body": build_sal_sale_order_push_preset_body(),
         },
         {
             "code_suffix": "query_inventory",
@@ -233,6 +860,28 @@ def list_kingdee_galaxy_api_presets() -> List[KingdeeGalaxyApiPreset]:
             ),
         },
         {
+            "code_suffix": STK_MISCELLANEOUS_SAVE_PRESET_CODE_SUFFIX,
+            "name": "金蝶保存其他入库单",
+            "description": (
+                "Save：其他入库单（STK_MISCELLANEOUS）。"
+                "STK_Inventory 多为查询态不可 Save；即时库存回写请用本单据。"
+            ),
+            "path": SAVE_PATH,
+            "method": "POST",
+            "request_body": build_stk_miscellaneous_save_preset_body(),
+        },
+        {
+            "code_suffix": STK_MISCELLANEOUS_PUSH_PRESET_CODE_SUFFIX,
+            "name": "金蝶推送其他入库单",
+            "description": (
+                "快格云物料批次 → 金蝶 STK_MISCELLANEOUS 推送用 Save 接口。"
+                "页面推送弹窗优先选用本接口。"
+            ),
+            "path": SAVE_PATH,
+            "method": "POST",
+            "request_body": build_stk_miscellaneous_push_preset_body(),
+        },
+        {
             "code_suffix": "view_bill",
             "name": "金蝶查看单据",
             "description": "View：按 FormId + 单号查看单据详情（默认示例为物料）",
@@ -241,7 +890,6 @@ def list_kingdee_galaxy_api_presets() -> List[KingdeeGalaxyApiPreset]:
             "request_body": build_view_body(form_id="BD_MATERIAL", number=""),
         },
     ]
-
 
 def build_material_query_preset_body(
     *,

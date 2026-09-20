@@ -29,6 +29,11 @@ class PurchaseOrderSyncBinding(BaseModel):
         default="manual_full",
         description="manual_full | scheduled_full | scheduled_incremental",
     )
+    sync_direction = fields.CharField(
+        max_length=20,
+        default="pull",
+        description="pull | push | bidirectional",
+    )
     schedule_interval_minutes = fields.IntField(default=15, description="定时同步间隔（分钟）")
     last_success_at = fields.DatetimeField(null=True, description="最近一次成功同步时间")
     last_attempt_at = fields.DatetimeField(null=True, description="最近一次尝试同步时间")

@@ -86,6 +86,7 @@ class APIService:
                 "request_body",
                 "response_format",
                 "response_example",
+                "source_type_conversion_map",
                 "is_active",
                 "is_system",
                 "created_at",

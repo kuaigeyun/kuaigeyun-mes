@@ -110,7 +110,10 @@ import {
   isPendingReviewStatus,
 } from '../../../constants/documentStatus';
 import SalesOrderSyncFromSourceModal from './SalesOrderSyncFromSourceModal';
+import SalesOrderDocumentPushPanel from './SalesOrderDocumentPushPanel';
 import { SyncFreshnessBadge } from '../../../../../components/sync-from-source-modal/SyncFreshnessBadge';
+import { SyncPushHubButton } from '../../../../../components/sync-push-hub';
+import { useToolbarSyncPushFlags } from '../../../../../hooks/useToolbarSyncPushFlags';
 import { UniUserSelect } from '../../../../../components/uni-user-select';
 import { strokeColorWithAlpha } from '../../../../../components/common/StatCardTrendArea';
 import { useCustomFields } from '../../../../../hooks/useCustomFields';
@@ -727,6 +730,7 @@ const SalesOrdersPage: React.FC = () => {
 
   const auditEnabled = useAuditRequired('sales_order', false);
   const salesOrderPerms = useResourcePermissions(SALES_ORDER_RESOURCE);
+  const toolbarSyncPush = useToolbarSyncPushFlags('sales');
   const salesContractPerms = useResourcePermissions(SALES_CONTRACT_RESOURCE);
   const deliveryProjectPerms = useResourcePermissions('kuaizhizao:delivery-project');
   const permDeniedTitle = t('common.noPermission');
@@ -5467,17 +5471,47 @@ const SalesOrdersPage: React.FC = () => {
               messageApi.error(error?.message || t('common.exportFailed'));
             }
           }}
-          showSyncButton={salesOrderPerms.canCreate}
-          onSync={() => setSyncModalVisible(true)}
+          showSyncButton={salesOrderPerms.canCreate && toolbarSyncPush.hubVisible}
+          onSync={() => undefined}
           syncToolbarExtra={
-            salesOrderPerms.canCreate
-              ? (syncButton) => (
-                  <SyncFreshnessBadge
-                    getBinding={loadSalesOrderSyncBinding}
-                    refreshKey={syncFreshnessKey}
-                  >
-                    {syncButton}
-                  </SyncFreshnessBadge>
+            salesOrderPerms.canCreate && toolbarSyncPush.hubVisible
+              ? () => (
+                  <SyncPushHubButton
+                    syncEnabled={toolbarSyncPush.syncEnabled}
+                    pushEnabled={toolbarSyncPush.pushEnabled}
+                    size="middle"
+                    wrapButton={(hubButton) => (
+                      <SyncFreshnessBadge
+                        getBinding={loadSalesOrderSyncBinding}
+                        refreshKey={syncFreshnessKey}
+                      >
+                        {hubButton}
+                      </SyncFreshnessBadge>
+                    )}
+                    renderSyncPanel={({ active, close }) => (
+                      <SalesOrderSyncFromSourceModal
+                        contentOnly
+                        open={active}
+                        onClose={close}
+                        onComplete={() => {
+                          handleSyncComplete();
+                          close();
+                        }}
+                      />
+                    )}
+                    renderPushPanel={({ active, close }) => (
+                      <SalesOrderDocumentPushPanel
+                        embedded
+                        open={active}
+                        onClose={close}
+                        orderIds={resolveOrderIdsFromRowKeys(selectedRowKeys)}
+                        onComplete={() => {
+                          handleSyncComplete();
+                          close();
+                        }}
+                      />
+                    )}
+                  />
                 )
               : undefined
           }

@@ -247,7 +247,47 @@ export const ApiFormModal: React.FC<ApiFormModalProps> = ({
         key: 'body',
         label: t('pages.system.apis.tabBody'),
         children: (
-          <ProFormDependency name={['connection_uuid', 'path', 'request_body', 'request_headers']}>
+          <>
+            {/* SOURCE_TYPE_CONVERSION: 接口编辑页维护来源编码映射。 */}
+            <ProFormList
+              name="source_type_conversion_map_entries"
+              label={t('pages.system.apis.sourceTypeConversionLabel')}
+              tooltip={t('pages.system.apis.sourceTypeConversionHint')}
+              creatorButtonProps={{ creatorButtonText: t('components.syncFromSource.addConversionRow') }}
+              className="api-form-kv-list"
+              itemRender={({ listDom, action }) => (
+                <div className="api-form-kv-list-item">
+                  <div className="api-form-kv-list-item__fields">{listDom}</div>
+                  <div className="api-form-kv-list-item__actions">{action}</div>
+                </div>
+              )}
+              min={0}
+            >
+              <Row gutter={8} align="middle">
+                <Col span={7}>
+                  <ProFormText
+                    name="field_name"
+                    label={t('pages.system.apis.sourceFieldLabel')}
+                    fieldProps={{ placeholder: t('pages.system.apis.sourceFieldPlaceholder') }}
+                  />
+                </Col>
+                <Col span={8}>
+                  <ProFormText
+                    name="source"
+                    label={t('components.syncFromSource.srcCode')}
+                    fieldProps={{ placeholder: t('pages.system.apis.sourceCodeHint') }}
+                  />
+                </Col>
+                <Col span={8}>
+                  <ProFormText
+                    name="target"
+                    label={t('components.syncFromSource.dstType')}
+                    fieldProps={{ placeholder: t('pages.system.apis.targetTypeHint') }}
+                  />
+                </Col>
+              </Row>
+            </ProFormList>
+            <ProFormDependency name={['connection_uuid', 'path', 'request_body', 'request_headers']}>
             {(values) => {
               const connectionType = connectionItems.find(
                 (item) => item.uuid === values.connection_uuid,
@@ -277,6 +317,7 @@ export const ApiFormModal: React.FC<ApiFormModalProps> = ({
               );
             }}
           </ProFormDependency>
+          </>
         ),
       },
       {
@@ -451,6 +492,7 @@ export function normalizeApiFormInitialValues(
     request_body?: Record<string, unknown> | null;
     response_format?: Record<string, unknown> | null;
     response_example?: Record<string, unknown> | null;
+    source_type_conversion_map?: Array<{ field_name: string; mapping: Record<string, string> }> | null;
   }>,
 ): Partial<ApiFormRawValues> {
   return {
@@ -468,5 +510,12 @@ export function normalizeApiFormInitialValues(
     request_body: normalizeJsonFieldValue(detail.request_body) ?? undefined,
     response_format: normalizeJsonFieldValue(detail.response_format) ?? undefined,
     response_example: normalizeJsonFieldValue(detail.response_example) ?? undefined,
+    source_type_conversion_map_entries: detail.source_type_conversion_map
+      ? detail.source_type_conversion_map.map((e: any) => ({
+          field_name: e.field_name,
+          source: Object.keys(e.mapping ?? {}).join(','),
+          target: Object.values(e.mapping ?? {}).join(','),
+        }))
+      : undefined,
   };
 }

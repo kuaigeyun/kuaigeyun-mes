@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Type, TypeVar
 
 from infra.exceptions.exceptions import ValidationError
 
-from apps.master_data.schemas.master_data_sync import VALID_SYNC_MODES
+from apps.master_data.schemas.master_data_sync import VALID_SYNC_DIRECTIONS, VALID_SYNC_MODES
 from core.services.data.sync_from_source_fetch import fetch_rows_from_api, fetch_rows_from_dataset
 from core.utils.timezone_utils import resolve_business_datetime
+
+logger = logging.getLogger(__name__)
 
 TBinding = TypeVar("TBinding")
 
@@ -23,6 +26,13 @@ def normalize_sync_mode(value: Optional[str]) -> str:
             "同步模式须为 manual_full、scheduled_full 或 scheduled_incremental"
         )
     return mode
+
+
+def normalize_sync_direction(value: Optional[str]) -> str:
+    direction = (value or "pull").strip() or "pull"
+    if direction not in VALID_SYNC_DIRECTIONS:
+        raise ValidationError("同步方向须为 pull、push 或 bidirectional")
+    return direction
 
 
 def normalize_schedule_interval(value: Optional[int]) -> int:
@@ -50,6 +60,7 @@ def serialize_binding_row(
             "field_mapping": {},
             "match_key_field": default_match_key,
             "sync_mode": "manual_full",
+            "sync_direction": "pull",
             "schedule_interval_minutes": DEFAULT_SCHEDULE_INTERVAL_MINUTES,
             "last_success_at": None,
             "last_attempt_at": None,
@@ -63,6 +74,7 @@ def serialize_binding_row(
         "field_mapping": {str(k): str(v) for k, v in mapping.items()},
         "match_key_field": row.match_key_field or default_match_key,
         "sync_mode": row.sync_mode or "manual_full",
+        "sync_direction": getattr(row, "sync_direction", None) or "pull",
         "schedule_interval_minutes": int(
             getattr(row, "schedule_interval_minutes", None) or DEFAULT_SCHEDULE_INTERVAL_MINUTES
         ),
@@ -82,6 +94,7 @@ async def upsert_sync_binding(
     field_mapping: Dict[str, str],
     match_key_field: str,
     sync_mode: str = "manual_full",
+    sync_direction: str = "pull",
     schedule_interval_minutes: Optional[int] = None,
 ) -> TBinding:
     if source_type not in ("api", "dataset"):
@@ -96,6 +109,7 @@ async def upsert_sync_binding(
         raise ValidationError(f"字段映射须包含匹配键 {match_key_field}")
 
     mode = normalize_sync_mode(sync_mode)
+    direction = normalize_sync_direction(sync_direction)
     interval = normalize_schedule_interval(schedule_interval_minutes)
 
     existing = await binding_model.filter(tenant_id=tenant_id).first()
@@ -113,6 +127,7 @@ async def upsert_sync_binding(
         field_mapping=field_mapping,
         match_key_field=match_key_field,
         sync_mode=mode,
+        sync_direction=direction,
         schedule_interval_minutes=interval,
         **preserve,
     )
@@ -433,8 +448,107 @@ async def mark_binding_failure(binding: Any, error: str) -> None:
     await binding.save(update_fields=["last_attempt_at", "last_error", "updated_at"])
 
 
-def attach_sync_fetch_meta(result: Any, *, fetched: int, since: Optional[datetime]) -> Any:
-    """补齐本轮拉取条数与全量/增量标记，供进度展示。"""
+async def mark_binding_partial_success(binding: Any, error: str) -> None:
+    """部分成功：同时存在成功与失败行时调用；只更新尝试时间与错误，保留 last_success_at 游标。"""
+    binding.last_attempt_at = resolve_business_datetime()
+    binding.last_error = (error or "")[:2000]
+    await binding.save(update_fields=["last_attempt_at", "last_error", "updated_at"])
+
+
+def attach_sync_fetch_meta(
+    result: Any, *, fetched: int, since: Optional[datetime], truncated: bool = False
+) -> Any:
+    """补齐本轮拉取条数、全量/增量标记与截断标记，供进度展示。"""
     result.fetched = int(fetched or 0)
     result.mode = "incremental" if since is not None else "full"
+    if hasattr(result, "truncated"):
+        result.truncated = bool(truncated)
     return result
+
+
+async def record_sync_run_log(
+    *,
+    tenant_id: int,
+    binding: Any,
+    entity_type: str,
+    result: Any,
+    started_at: Any,
+    error: Optional[str] = None,
+    truncated: Optional[bool] = None,
+    fetched: Optional[int] = None,
+    mode: Optional[str] = None,
+) -> None:
+    """追加一条同步运行日志（只增不改）。"""
+    from core.models.sync_run_log import SyncRunLog
+
+    now = resolve_business_datetime()
+
+    if result is not None:
+        created = int(getattr(result, "created", 0) or 0)
+        updated = int(getattr(result, "updated", 0) or 0)
+        failed = int(getattr(result, "failed", 0) or 0)
+        skipped = int(getattr(result, "skipped", 0) or 0)
+        errors = getattr(result, "errors", None) or []
+        error_summary = "; ".join(str(e) for e in errors[:5]) if errors else None
+    else:
+        created = updated = failed = skipped = 0
+        error_summary = None
+
+    if fetched is None:
+        fetched = int(getattr(result, "fetched", 0) or 0) if result is not None else 0
+    else:
+        fetched = int(fetched or 0)
+    if mode is None:
+        mode = getattr(result, "mode", "full") or "full" if result is not None else "full"
+    else:
+        mode = mode or "full"
+    if truncated is None:
+        truncated = bool(getattr(result, "truncated", False)) if result is not None else False
+    else:
+        truncated = bool(truncated)
+
+    if result is None:
+        status = "failed"
+    elif failed and not (created or updated):
+        status = "failed"
+    elif failed or truncated:
+        status = "partial"
+    else:
+        status = "success"
+
+    if error and not error_summary:
+        error_summary = error[:2000]
+
+    duration_ms = 0
+    if started_at is not None:
+        try:
+            delta = now - started_at
+            duration_ms = int(delta.total_seconds() * 1000)
+        except Exception:
+            pass
+
+    try:
+        await SyncRunLog.create(
+            tenant_id=tenant_id,
+            binding_id=getattr(binding, "id", None) if binding else None,
+            entity_type=entity_type,
+            mode=mode,
+            status=status,
+            created=created,
+            updated=updated,
+            skipped=skipped,
+            failed=failed,
+            fetched=fetched,
+            truncated=truncated,
+            duration_ms=duration_ms,
+            error_summary=error_summary,
+            started_at=started_at,
+            finished_at=now,
+        )
+    except Exception:
+        logger.warning(
+            "记录同步运行日志失败（tenant_id=%s, entity_type=%s）",
+            tenant_id,
+            entity_type,
+            exc_info=True,
+        )

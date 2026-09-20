@@ -8,6 +8,7 @@ from pydantic import Field
 from core.schemas.base import BaseSchema
 
 VALID_SYNC_MODES = frozenset({"manual_full", "scheduled_full", "scheduled_incremental"})
+VALID_SYNC_DIRECTIONS = frozenset({"pull", "push", "bidirectional"})
 
 
 class MasterDataSyncBindingOut(BaseSchema):

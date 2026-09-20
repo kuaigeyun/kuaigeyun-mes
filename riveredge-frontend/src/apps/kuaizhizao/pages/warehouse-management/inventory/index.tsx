@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ProColumns } from '@ant-design/pro-components';
 import { App, Popover, Select, Space, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
@@ -19,6 +19,12 @@ import {
   resolveInventoryMaterialBalanceListParams,
 } from '../../../utils/warehouseListCore';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
+import { SyncPushHubButton } from '../../../../../components/sync-push-hub';
+import { SyncFreshnessBadge } from '../../../../../components/sync-from-source-modal/SyncFreshnessBadge';
+import { useToolbarSyncPushFlags } from '../../../../../hooks/useToolbarSyncPushFlags';
+import InventoryDocumentPushPanel from './InventoryDocumentPushPanel';
+import { InventorySyncFromSourceModal } from '../../../components/InventorySyncFromSourceModal';
+import { getInventorySyncBinding } from '../../../services/inventory';
 import { fetchAllCurrentPageItems } from '../../../../../utils/fetchAllListPages';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
@@ -159,6 +165,10 @@ const InventoryPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<any>(null);
   const lastQueryRef = useRef<Record<string, any>>({});
+  const toolbarSyncPush = useToolbarSyncPushFlags('warehouse');
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [syncFreshnessKey, setSyncFreshnessKey] = useState(0);
+  const loadInventorySyncBinding = useCallback(() => getInventorySyncBinding(), []);
 
   const [includeZeroStock, setIncludeZeroStock] = useState(true);
   const [warehouseFilter, setWarehouseFilter] = useState<'all' | number>('all');
@@ -560,9 +570,62 @@ const InventoryPage: React.FC = () => {
         params={{ warehouse_id: warehouseFilter === 'all' ? undefined : warehouseFilter }}
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
+        showSyncButton={toolbarSyncPush.hubVisible}
+        onSync={() => undefined}
+        syncToolbarExtra={
+          toolbarSyncPush.hubVisible
+            ? () => (
+                <SyncPushHubButton
+                  syncEnabled={toolbarSyncPush.syncEnabled}
+                  pushEnabled={toolbarSyncPush.pushEnabled}
+                  size="middle"
+                  wrapButton={(hubButton) => (
+                    <SyncFreshnessBadge
+                      getBinding={loadInventorySyncBinding}
+                      refreshKey={syncFreshnessKey}
+                    >
+                      {hubButton}
+                    </SyncFreshnessBadge>
+                  )}
+                  renderSyncPanel={({ active, close }) => (
+                    <InventorySyncFromSourceModal
+                      contentOnly
+                      open={active}
+                      onClose={() => {
+                        setSyncFreshnessKey((k) => k + 1);
+                        close();
+                      }}
+                      onComplete={() => {
+                        setSyncFreshnessKey((k) => k + 1);
+                        actionRef.current?.reload?.();
+                        close();
+                      }}
+                    />
+                  )}
+                  renderPushPanel={({ active, close }) => (
+                    <InventoryDocumentPushPanel
+                      embedded
+                      open={active}
+                      onClose={close}
+                      batchIds={selectedRowKeys
+                        .map((k) => Number(k))
+                        .filter((id) => Number.isFinite(id) && id > 0)}
+                      onComplete={() => {
+                        setSyncFreshnessKey((k) => k + 1);
+                        actionRef.current?.reload();
+                        close();
+                      }}
+                    />
+                  )}
+                />
+              )
+            : undefined
+        }
         showExportButton
         onExport={handleExport}
         enableRowSelection
+        selectedRowKeys={selectedRowKeys}
+        onRowSelectionChange={setSelectedRowKeys}
         rowKey="id"
         search={{ labelWidth: 'auto' }}
         pagination={{ defaultPageSize: 20, showSizeChanger: true }}

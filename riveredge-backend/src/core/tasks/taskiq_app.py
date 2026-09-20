@@ -151,6 +151,16 @@ async def run_event_pipeline(
     )
 
 
+@task(schedule=[{"cron": "* * * * *"}])
+async def reporting_kingdee_push_retry_tick() -> dict:
+    """每分钟重试到期的未推送成功金蝶生产汇报单（退避 1m/5m/30m/2h/8h，超限置 dead）。"""
+    from apps.kuaizhizao.services.kingdee_production_report_push_service import (
+        KingdeeProductionReportPushService,
+    )
+
+    return await KingdeeProductionReportPushService().retry_due_pushes()
+
+
 @task(schedule=[{"cron": "*/10 * * * *"}])
 async def online_user_cleanup_task() -> None:
     from core.services.logging.online_user_service import OnlineUserService

@@ -8,12 +8,21 @@ from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaizhizao.models.work_order_sync_binding import WorkOrderSyncBinding
 from apps.kuaizhizao.schemas.work_order import WorkOrderCreate, WorkOrderUpdate
 from apps.kuaizhizao.schemas.work_order_sync import (
+    WorkOrderPushBindingOut,
+    WorkOrderPushBindingUpsert,
+    WorkOrderPushCandidateListOut,
+    WorkOrderPushCandidateOut,
     WorkOrderSyncBindingOut,
     WorkOrderSyncBindingUpsert,
     WorkOrderSyncFromSourceOut,
     WorkOrderSyncFromSourceRequest,
 )
+from apps.kuaizhizao.services.kingdee_production_order_push_service import (
+    TARGET_TYPE as KINGDEE_MO_TARGET_TYPE,
+    WORK_ORDER_PUSH_STATUSES,
+)
 from apps.kuaizhizao.services.work_order_service import WorkOrderService
+from apps.kuaizhizao.models.document_relation import DocumentRelation
 from apps.master_data.services.master_data_sync_common import (
     map_sync_rows,
     mark_binding_failure,
@@ -37,6 +46,15 @@ from core.services.data.sync_from_source_fetch import (
     fetch_rows_from_dataset,
 )
 from core.utils.timezone_utils import resolve_business_datetime
+
+
+def normalize_work_order_push_sync_mode(value: Optional[str]) -> str:
+    mode = str(value or "manual_full").strip() or "manual_full"
+    if mode not in ("manual_full", "scheduled_full"):
+        return "manual_full"
+    return mode
+
+
 class WorkOrderSyncService:
     def serialize_binding(self, row: Optional[WorkOrderSyncBinding]) -> WorkOrderSyncBindingOut:
         if not row:
@@ -98,9 +116,132 @@ class WorkOrderSyncService:
             **preserve,
         )
         return self.serialize_binding(row)
+
     async def get_binding(self, tenant_id: int) -> WorkOrderSyncBindingOut:
         row = await WorkOrderSyncBinding.filter(tenant_id=tenant_id).first()
         return self.serialize_binding(row)
+
+    def serialize_push_binding(self, row: Optional[WorkOrderSyncBinding]) -> "WorkOrderPushBindingOut":
+        from apps.kuaizhizao.schemas.work_order_sync import WorkOrderPushBindingOut
+
+        if not row:
+            return WorkOrderPushBindingOut()
+        return WorkOrderPushBindingOut(
+            connection_code=getattr(row, "push_connection_code", None),
+            save_api_uuid=getattr(row, "push_save_api_uuid", None),
+            sync_mode=normalize_work_order_push_sync_mode(
+                getattr(row, "push_sync_mode", None)
+            ),
+            schedule_interval_minutes=int(
+                getattr(row, "push_schedule_interval_minutes", None) or 15
+            ),
+            last_success_at=getattr(row, "push_last_success_at", None),
+            last_attempt_at=getattr(row, "push_last_attempt_at", None),
+            last_error=getattr(row, "push_last_error", None),
+        )
+
+    async def get_push_binding(self, tenant_id: int):
+        row = await WorkOrderSyncBinding.filter(tenant_id=tenant_id).first()
+        return self.serialize_push_binding(row)
+
+    async def upsert_push_binding(self, tenant_id: int, body):
+        from apps.kuaizhizao.schemas.work_order_sync import WorkOrderPushBindingUpsert
+
+        if not isinstance(body, WorkOrderPushBindingUpsert):
+            body = WorkOrderPushBindingUpsert.model_validate(body)
+        row = await WorkOrderSyncBinding.filter(tenant_id=tenant_id).first()
+        if not row:
+            row = await WorkOrderSyncBinding.create(tenant_id=tenant_id)
+        connection_code = str(body.connection_code or "").strip() or None
+        save_api_uuid = str(body.save_api_uuid or "").strip() or None
+        sync_mode = normalize_work_order_push_sync_mode(body.sync_mode)
+        interval = normalize_schedule_interval(body.schedule_interval_minutes)
+        await WorkOrderSyncBinding.filter(id=row.id).update(
+            push_connection_code=connection_code,
+            push_save_api_uuid=save_api_uuid,
+            push_sync_mode=sync_mode,
+            push_schedule_interval_minutes=interval,
+        )
+        fresh = await WorkOrderSyncBinding.get(id=row.id)
+        return self.serialize_push_binding(fresh)
+
+    async def list_push_candidates(
+        self,
+        tenant_id: int,
+        *,
+        keyword: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 20,
+        prefer_ids: Optional[List[int]] = None,
+    ):
+        from apps.kuaizhizao.models.document_relation import DocumentRelation
+        from apps.kuaizhizao.schemas.work_order_sync import (
+            WorkOrderPushCandidateListOut,
+            WorkOrderPushCandidateOut,
+        )
+        from apps.kuaizhizao.services.kingdee_production_order_push_service import (
+            TARGET_TYPE as KINGDEE_MO_TARGET_TYPE,
+            WORK_ORDER_PUSH_STATUSES,
+        )
+
+        skip = max(0, int(skip or 0))
+        limit = max(1, min(int(limit or 20), 200))
+        prefer = [int(item) for item in (prefer_ids or []) if item is not None]
+
+        base = WorkOrder.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            external_sync_at__isnull=True,
+            status__in=list(WORK_ORDER_PUSH_STATUSES),
+        )
+        kw = str(keyword or "").strip()
+        if kw:
+            base = base.filter(code__icontains=kw)
+
+        all_ids = await base.order_by("id").values_list("id", flat=True)
+        pushed_ids = set(
+            await DocumentRelation.filter(
+                tenant_id=tenant_id,
+                source_type="work_order",
+                source_id__in=[int(item) for item in all_ids],
+                target_type=KINGDEE_MO_TARGET_TYPE,
+            ).values_list("source_id", flat=True)
+        )
+        eligible = [int(item) for item in all_ids if int(item) not in pushed_ids]
+        if prefer:
+            eligible_set = set(eligible)
+            head = [item for item in prefer if item in eligible_set]
+            head_set = set(head)
+            tail = [item for item in eligible if item not in head_set]
+            eligible = head + tail
+
+        total = len(eligible)
+        page_ids = eligible[skip : skip + limit]
+        if not page_ids:
+            return WorkOrderPushCandidateListOut(items=[], total=total)
+
+        rows = await WorkOrder.filter(id__in=page_ids).all()
+        by_id = {int(row.id): row for row in rows}
+        items: list[WorkOrderPushCandidateOut] = []
+        for wid in page_ids:
+            row = by_id.get(wid)
+            if not row:
+                continue
+            qty = row.quantity
+            items.append(
+                WorkOrderPushCandidateOut(
+                    id=int(row.id),
+                    code=row.code,
+                    name=row.name,
+                    product_code=row.product_code,
+                    product_name=getattr(row, "product_name", None),
+                    quantity=float(qty) if qty is not None else None,
+                    status=row.status,
+                    planned_start_date=row.planned_start_date,
+                )
+            )
+        return WorkOrderPushCandidateListOut(items=items, total=total)
+
     async def sync_from_source(
         self,
         tenant_id: int,

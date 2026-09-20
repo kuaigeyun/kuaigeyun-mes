@@ -806,18 +806,21 @@ const FileListPage: React.FC = () => {
     }
     try {
       setUploading(true);
-      const uploadPromises = uploadFileList.map(file => {
-        if (file.originFileObj) {
-          return uploadFile(
-            file.originFileObj,
+      const filesToUpload = uploadFileList.filter((file) => file.originFileObj);
+      if (filesToUpload.length === 0) {
+        messageApi.warning(t('pages.system.files.selectFilesToUpload'));
+        return;
+      }
+      await Promise.all(
+        filesToUpload.map((file) =>
+          uploadFile(
+            file.originFileObj!,
             uploadCategory
               ? { category: uploadCategory, fileManagerPrivate: isPrivateFileCategory(uploadCategory) }
               : undefined,
-          );
-        }
-        return Promise.resolve(null);
-      });
-      await Promise.all(uploadPromises);
+          ),
+        ),
+      );
       messageApi.success(t('pages.system.files.uploadSuccess'));
       setUploadVisible(false);
       setUploadFileList([]);

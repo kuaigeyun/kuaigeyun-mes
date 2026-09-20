@@ -86,6 +86,8 @@ export interface SyncFromSourceModalProps {
   config: SyncFromSourceConfig;
   onComplete?: (result: SyncFromSourceResult) => void;
   zIndex?: number;
+  /** 仅渲染内容区，供同步中心内嵌；拉取请求与独立弹窗相同。 */
+  contentOnly?: boolean;
 }
 
 export const SyncFromSourceModal: React.FC<SyncFromSourceModalProps> = ({
@@ -94,6 +96,7 @@ export const SyncFromSourceModal: React.FC<SyncFromSourceModalProps> = ({
   config,
   onComplete,
   zIndex,
+  contentOnly = false,
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -756,34 +759,24 @@ export const SyncFromSourceModal: React.FC<SyncFromSourceModalProps> = ({
     };
   });
 
-  return (
-    <Modal
-      title={t(config.titleKey)}
-      open={open}
-      onCancel={() => {
-        if (syncing) return;
-        onClose();
-      }}
-      zIndex={zIndex}
-      width={960}
-      destroyOnHidden
-      footer={[
-        <Button key="cancel" disabled={syncing} onClick={onClose}>
-          {t('common.cancel')}
-        </Button>,
-        <Button
-          key="preview"
-          icon={<SyncOutlined />}
-          loading={executing}
-          onClick={() => void handlePreview()}
-        >
-          {t('components.syncFromSource.previewFetch')}
-        </Button>,
-        <Button key="sync" type="primary" loading={syncing} onClick={() => void handleSync()}>
-          {t('components.syncFromSource.confirmSync')}
-        </Button>,
-      ]}
+  const footerButtons = [
+    <Button key="cancel" disabled={syncing} onClick={onClose}>
+      {t('common.cancel')}
+    </Button>,
+    <Button
+      key="preview"
+      icon={<SyncOutlined />}
+      loading={executing}
+      onClick={() => void handlePreview()}
     >
+      {t('components.syncFromSource.previewFetch')}
+    </Button>,
+    <Button key="sync" type="primary" loading={syncing} onClick={() => void handleSync()}>
+      {t('components.syncFromSource.confirmSync')}
+    </Button>,
+  ];
+
+  const body = (
       <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
         {config.hintKey ? <Alert type="info" showIcon title={t(config.hintKey)} /> : null}
 
@@ -1137,6 +1130,42 @@ export const SyncFromSourceModal: React.FC<SyncFromSourceModalProps> = ({
           </>
         )}
       </Space>
+  );
+
+  if (contentOnly) {
+    if (!open) return null;
+    return (
+      <div>
+        {body}
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'flex-end',
+            gap: 8,
+            marginTop: 16,
+            flexWrap: 'wrap',
+          }}
+        >
+          {footerButtons}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <Modal
+      title={t(config.titleKey)}
+      open={open}
+      onCancel={() => {
+        if (syncing) return;
+        onClose();
+      }}
+      zIndex={zIndex}
+      width={960}
+      destroyOnHidden
+      footer={footerButtons}
+    >
+      {body}
     </Modal>
   );
 };

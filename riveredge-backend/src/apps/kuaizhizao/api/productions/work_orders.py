@@ -18,6 +18,9 @@ from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, BusinessLogicError, ValidationError
 
 from apps.kuaizhizao.schemas.work_order_sync import (
+    WorkOrderPushBindingOut,
+    WorkOrderPushBindingUpsert,
+    WorkOrderPushCandidateListOut,
     WorkOrderSyncBindingOut,
     WorkOrderSyncBindingUpsert,
     WorkOrderSyncFromSourceOut,
@@ -155,6 +158,74 @@ async def put_work_order_sync_binding(
         return await work_order_sync_service.upsert_binding(tenant_id, body)
     except ValidationError as e:
         raise HTTPException(status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.get(
+    "/work-orders/push-binding",
+    response_model=WorkOrderPushBindingOut,
+    summary="生产工单推送金蝶绑定配置",
+)
+async def get_work_order_push_binding(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_permission_codes("kuaizhizao:work-order:read")),
+):
+    _ = current_user
+    return await work_order_sync_service.get_push_binding(tenant_id)
+
+
+@router.put(
+    "/work-orders/push-binding",
+    response_model=WorkOrderPushBindingOut,
+    summary="保存生产工单推送金蝶绑定配置",
+)
+async def put_work_order_push_binding(
+    body: WorkOrderPushBindingUpsert,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_permission_codes("kuaizhizao:work-order:update")),
+):
+    _ = current_user
+    try:
+        return await work_order_sync_service.upsert_push_binding(tenant_id, body)
+    except ValidationError as e:
+        raise HTTPException(status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.get(
+    "/work-orders/sync-to-kingdee/candidates",
+    response_model=WorkOrderPushCandidateListOut,
+    summary="List work orders eligible to push as Kingdee production order",
+)
+async def list_work_order_push_to_kingdee_candidates(
+    keyword: Optional[str] = Query(None, description="按工单编码模糊搜索"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=200),
+    prefer_ids: Optional[str] = Query(
+        None, description="优先排在前面的工单 ID，逗号分隔"
+    ),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_permission_codes("kuaizhizao:work-order:create")),
+):
+    _ = current_user
+    prefer: list[int] = []
+    if prefer_ids:
+        for part in str(prefer_ids).split(","):
+            part = part.strip()
+            if not part:
+                continue
+            try:
+                prefer.append(int(part))
+            except ValueError:
+                continue
+    return await work_order_sync_service.list_push_candidates(
+        tenant_id,
+        keyword=keyword,
+        skip=skip,
+        limit=limit,
+        prefer_ids=prefer or None,
+    )
 
 
 @router.post(

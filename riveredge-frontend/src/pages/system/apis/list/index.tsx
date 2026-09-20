@@ -401,6 +401,7 @@ const APIListPage: React.FC = () => {
           request_body: values.request_body,
           response_format: values.response_format,
           response_example: values.response_example,
+          source_type_conversion_map: values.source_type_conversion_map ?? null,
           is_active: values.is_active,
         } as UpdateAPIData)
         messageApi.success(t('common.updateSuccess'))
@@ -418,6 +419,7 @@ const APIListPage: React.FC = () => {
           request_body: values.request_body,
           response_format: values.response_format,
           response_example: values.response_example,
+          source_type_conversion_map: values.source_type_conversion_map ?? null,
           is_active: values.is_active,
           is_system: values.is_system || false,
         } as CreateAPIData)
