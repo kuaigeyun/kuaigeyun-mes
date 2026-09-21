@@ -141,5 +141,6 @@ class EcnFormProfile(BaseModel):
     material_line_columns: List[Dict[str, Any]] = Field(default_factory=list)
     signoff_depts: List[Dict[str, Any]] = Field(default_factory=list)
     header_option_flags: List[Dict[str, Any]] = Field(default_factory=list)
+    header_fields: List[Dict[str, Any]] = Field(default_factory=list)
     entry_sources: List[Dict[str, Any]] = Field(default_factory=list)
     validation_rules: List[Dict[str, Any]] = Field(default_factory=list)

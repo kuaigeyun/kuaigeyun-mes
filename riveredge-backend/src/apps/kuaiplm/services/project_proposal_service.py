@@ -2,10 +2,19 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, List, Optional
 
 from apps.common.audit_actor import apply_create_audit, apply_update_audit
 from apps.common.base_service import AppBaseService
+from apps.kuaiplm.constants.project_proposal_template import (
+    CUSTOMER_MATERIAL_TYPES,
+    DEV_REQ_TYPES,
+    DEV_REQ_TYPES_NEED_SUPPLIER,
+    PRODUCT_LINES,
+    PROPOSING_DEPTS,
+    SUPPLIER_ASSESSMENT_MATERIAL_KEYS,
+    SUPPLIER_ASSESSMENT_MATERIALS,
+)
 from apps.kuaiplm.models.project_proposal import ProjectProposal
 from apps.kuaiplm.models.rd_project import RdProject
 from apps.kuaiplm.schemas.project_proposal import (
@@ -14,6 +23,7 @@ from apps.kuaiplm.schemas.project_proposal import (
     ProjectProposalResponse,
     ProjectProposalSupplierFill,
     ProjectProposalUpdate,
+    SupplierAssessmentLine,
 )
 from core.services.approval.approval_instance_service import ApprovalInstanceService
 from core.services.approval.audit_binding_service import AuditBindingService
@@ -56,6 +66,116 @@ class ProjectProposalService(AppBaseService[ProjectProposal]):
             raise NotFoundError("项目建议书不存在")
         return row
 
+    def _normalize_str_list(self, raw: Optional[List[str]], allowed: frozenset[str], label: str) -> List[str]:
+        if not raw:
+            return []
+        out: List[str] = []
+        for item in raw:
+            if label == "开发要求分类":
+                key = str(item or "").strip().upper()
+            else:
+                key = str(item or "").strip().lower()
+            if not key:
+                continue
+            if key not in allowed:
+                raise ValidationError(f"非法{label}: {item}")
+            if key not in out:
+                out.append(key)
+        return out
+
+    def _normalize_optional_text(self, value: Optional[str], *, max_len: int) -> Optional[str]:
+        if value is None:
+            return None
+        text = str(value).strip()
+        if not text:
+            return None
+        if len(text) > max_len:
+            raise ValidationError(f"字段长度不能超过 {max_len}")
+        return text
+
+    def _default_supplier_lines(self) -> List[dict[str, Any]]:
+        return [
+            {"material_key": key, "suppliers_text": None}
+            for key, _ in SUPPLIER_ASSESSMENT_MATERIALS
+        ]
+
+    def _normalize_supplier_lines(
+        self, raw: Optional[List[SupplierAssessmentLine | dict[str, Any]]]
+    ) -> List[dict[str, Any]]:
+        if not raw:
+            return self._default_supplier_lines()
+        by_key: dict[str, str | None] = {}
+        for item in raw:
+            if isinstance(item, SupplierAssessmentLine):
+                data = item.model_dump()
+            elif isinstance(item, dict):
+                data = item
+            else:
+                raise ValidationError("供应商评审行格式非法")
+            key = str(data.get("material_key") or "").strip()
+            if key not in SUPPLIER_ASSESSMENT_MATERIAL_KEYS:
+                raise ValidationError(f"非法物料类型: {key}")
+            text = self._normalize_optional_text(data.get("suppliers_text"), max_len=500)
+            by_key[key] = text
+        return [
+            {"material_key": key, "suppliers_text": by_key.get(key)}
+            for key, _ in SUPPLIER_ASSESSMENT_MATERIALS
+        ]
+
+    def _supplier_assessment_ready(self, lines: List[dict[str, Any]]) -> bool:
+        for line in lines:
+            text = str(line.get("suppliers_text") or "").strip()
+            if not text:
+                return False
+        return True
+
+    def _needs_supplier_assessment(self, dev_req_types: List[str]) -> bool:
+        normalized = {str(x).strip().upper() for x in (dev_req_types or []) if str(x).strip()}
+        return bool(normalized & DEV_REQ_TYPES_NEED_SUPPLIER)
+
+    def _apply_sales_fields(self, row: ProjectProposal, payload: ProjectProposalCreate | ProjectProposalUpdate) -> None:
+        data = payload.model_dump(exclude_unset=True)
+        if "title" in data and data["title"] is not None:
+            row.title = str(data["title"]).strip()
+        for field in (
+            "summary",
+            "expected_date",
+            "proposed_at",
+            "sample_date",
+            "mass_production_date",
+            "cost_change_notes",
+            "remarks",
+        ):
+            if field in data:
+                setattr(row, field, data[field])
+        text_fields = {
+            "customer_name": 200,
+            "proposer_name": 100,
+            "sample_quantity": 80,
+            "customer_code": 80,
+            "contact_name": 100,
+            "contact_phone": 50,
+            "contact_email": 200,
+            "customer_product_model": 200,
+            "company_product_model": 200,
+        }
+        for field, max_len in text_fields.items():
+            if field in data:
+                setattr(row, field, self._normalize_optional_text(data[field], max_len=max_len))
+        if "product_lines" in data and data["product_lines"] is not None:
+            row.product_lines = self._normalize_str_list(data["product_lines"], PRODUCT_LINES, "产品类型")
+        if "customer_material_types" in data and data["customer_material_types"] is not None:
+            row.customer_material_types = self._normalize_str_list(
+                data["customer_material_types"], CUSTOMER_MATERIAL_TYPES, "客户资料类型"
+            )
+        if "dev_req_types" in data and data["dev_req_types"] is not None:
+            row.dev_req_types = self._normalize_str_list(data["dev_req_types"], DEV_REQ_TYPES, "开发要求分类")
+        if "proposing_dept" in data:
+            dept = self._normalize_optional_text(data.get("proposing_dept"), max_len=32)
+            if dept and dept not in PROPOSING_DEPTS:
+                raise ValidationError(f"非法提出部门: {dept}")
+            row.proposing_dept = dept
+
     async def create(
         self, tenant_id: int, payload: ProjectProposalCreate, user: User
     ) -> ProjectProposalResponse:
@@ -74,17 +194,13 @@ class ProjectProposalService(AppBaseService[ProjectProposal]):
             project_code=project.project_code,
             project_name=project.project_name,
             title=payload.title.strip(),
-            summary=payload.summary,
-            customer_name=(payload.customer_name or "").strip() or None,
-            expected_date=payload.expected_date,
-            supplier_id=payload.supplier_id,
-            supplier_code=(payload.supplier_code or "").strip() or None,
-            supplier_name=(payload.supplier_name or "").strip() or None,
-            supplier_contact=(payload.supplier_contact or "").strip() or None,
-            supplier_remark=payload.supplier_remark,
             status="draft",
-            remarks=payload.remarks,
+            product_lines=[],
+            customer_material_types=[],
+            dev_req_types=[],
+            supplier_assessment_lines=self._default_supplier_lines(),
         )
+        self._apply_sales_fields(row, payload)
         apply_create_audit(row, user)
         await row.save()
         return ProjectProposalResponse.model_validate(row)
@@ -125,13 +241,7 @@ class ProjectProposalService(AppBaseService[ProjectProposal]):
         row = await self._get_row(tenant_id, proposal_id)
         if row.status not in {"draft", "rejected"}:
             raise BusinessLogicError("仅草稿或已驳回可编辑")
-        data = payload.model_dump(exclude_unset=True)
-        if "title" in data and data["title"] is not None:
-            data["title"] = str(data["title"]).strip()
-        if "customer_name" in data and data["customer_name"] is not None:
-            data["customer_name"] = str(data["customer_name"]).strip() or None
-        for key, value in data.items():
-            setattr(row, key, value)
+        self._apply_sales_fields(row, payload)
         apply_update_audit(row, user)
         await row.save()
         return ProjectProposalResponse.model_validate(row)
@@ -143,15 +253,37 @@ class ProjectProposalService(AppBaseService[ProjectProposal]):
         payload: ProjectProposalSupplierFill,
         user: User,
     ) -> ProjectProposalResponse:
-        """采购填写供应商信息。"""
+        """采购填写供应商（通用单供应商或定制评审表）。"""
         row = await self._get_row(tenant_id, proposal_id)
         if row.status not in {"draft", "rejected"}:
             raise BusinessLogicError("仅草稿或已驳回可填写供应商")
-        row.supplier_id = payload.supplier_id
-        row.supplier_code = (payload.supplier_code or "").strip() or None
-        row.supplier_name = payload.supplier_name.strip()
-        row.supplier_contact = (payload.supplier_contact or "").strip() or None
-        row.supplier_remark = payload.supplier_remark
+        if payload.supplier_assessment_lines is not None:
+            lines = self._normalize_supplier_lines(payload.supplier_assessment_lines)
+            row.supplier_assessment_lines = lines
+            row.procurement_reviewer_name = self._normalize_optional_text(
+                payload.procurement_reviewer_name, max_len=100
+            )
+            row.supplier_remark = payload.supplier_remark
+            first_supplier = next(
+                (
+                    str(line.get("suppliers_text") or "").strip()
+                    for line in lines
+                    if line.get("suppliers_text")
+                ),
+                "",
+            )
+            row.supplier_name = first_supplier or None
+        else:
+            name = self._normalize_optional_text(payload.supplier_name, max_len=200)
+            if not name:
+                raise ValidationError("供应商名称必填")
+            row.supplier_id = payload.supplier_id
+            row.supplier_code = self._normalize_optional_text(payload.supplier_code, max_len=80)
+            row.supplier_name = name
+            row.supplier_contact = self._normalize_optional_text(
+                payload.supplier_contact, max_len=200
+            )
+            row.supplier_remark = payload.supplier_remark
         apply_update_audit(row, user)
         await row.save()
         return ProjectProposalResponse.model_validate(row)
@@ -162,7 +294,13 @@ class ProjectProposalService(AppBaseService[ProjectProposal]):
         row = await self._get_row(tenant_id, proposal_id)
         if row.status not in {"draft", "rejected"}:
             raise BusinessLogicError("仅草稿或已驳回可提交审核")
-        if not (row.supplier_name or "").strip():
+        if self._needs_supplier_assessment(list(row.dev_req_types or [])):
+            if not (row.summary and str(row.summary).strip()):
+                raise ValidationError("请先填写开发要求概述")
+            lines = self._normalize_supplier_lines(list(row.supplier_assessment_lines or []))
+            if not self._supplier_assessment_ready(lines):
+                raise ValidationError("开发要求为 D/E/F 类时，采购须完整填写供应商评审表")
+        elif not (row.supplier_name or "").strip():
             raise ValidationError("提交前须由采购填写供应商")
 
         row.status = "pending"

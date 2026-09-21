@@ -37,6 +37,8 @@ export interface TrialFlowStep {
   status: string;
   result?: string | null;
   result_notes?: string | null;
+  step_description?: string | null;
+  defect_rate?: number | null;
   filled_by_name?: string | null;
   filled_at?: string | null;
 }
@@ -119,7 +121,16 @@ export const trialFlowApi = {
     (await api.post(`${BASE}/${id}/approve`)) as TrialFlow,
   reject: async (id: number) =>
     (await api.post(`${BASE}/${id}/reject`)) as TrialFlow,
-  fillStep: async (id: number, stepKey: string, data: { result: string; result_notes?: string }) =>
+  fillStep: async (
+    id: number,
+    stepKey: string,
+    data: {
+      result: string;
+      result_notes?: string;
+      step_description?: string;
+      defect_rate?: number;
+    },
+  ) =>
     (await api.post(`${BASE}/${id}/steps/${stepKey}/fill`, data)) as TrialFlow,
   conclude: async (id: number, data: { conclusion: string; conclusion_summary?: string }) =>
     (await api.post(`${BASE}/${id}/conclude`, data)) as TrialFlow,

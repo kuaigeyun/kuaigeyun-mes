@@ -274,6 +274,7 @@
     "kuaiplm:project:approve",
     "kuaiplm:project:reject",
     "kuaiplm:project:export",
+    "kuaiplm:project:upload-part-spec",
     "kuaiplm:gate-template:read",
     "kuaiplm:gate-template:create",
     "kuaiplm:gate-template:update",

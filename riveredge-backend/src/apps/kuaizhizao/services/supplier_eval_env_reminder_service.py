@@ -29,7 +29,15 @@ RULE_PREFIX = "kuaizhizao.supplier_env_document"
 RULE_DUE_SOON = f"{RULE_PREFIX}.due_soon"
 RULE_OVERDUE = f"{RULE_PREFIX}.overdue"
 CHANNEL_INTERNAL = "internal"
-DUE_SOON_DAYS = 30
+DEFAULT_DUE_SOON_DAYS = 30
+
+
+def _resolve_lead_days(doc: SupplierEvalEnvDocument) -> int:
+    raw = getattr(doc, "reminder_lead_days", None)
+    if raw is None:
+        return DEFAULT_DUE_SOON_DAYS
+    days = int(raw)
+    return max(1, days)
 
 
 def _site_day_at_hour_utc(day, *, hour: int = 9) -> datetime:
@@ -56,7 +64,7 @@ class SupplierEvalEnvReminderService:
         if not doc.expires_at:
             return
         due = doc.expires_at
-        soon_day = due - timedelta(days=DUE_SOON_DAYS)
+        soon_day = due - timedelta(days=_resolve_lead_days(doc))
         payload = {
             "doc_id": doc.id,
             "title": doc.title,

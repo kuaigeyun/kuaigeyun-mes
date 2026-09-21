@@ -90,6 +90,9 @@ export function hasReviewPermission(user: CurrentUser | undefined, resourcePrefi
 /** 全局档案总查看（与后端 system:document-global-view:read 一致） */
 export const DOCUMENT_GLOBAL_VIEW_PERMISSION = 'system:document-global-view:read';
 
+/** 资深制定方可查看历史版本（与后端 system:document-senior-author:read 一致） */
+export const DOCUMENT_SENIOR_AUTHOR_PERMISSION = 'system:document-senior-author:read';
+
 export function hasDocumentGlobalView(user: CurrentUser | undefined): boolean {
   return hasPermission(user, DOCUMENT_GLOBAL_VIEW_PERMISSION);
 }

@@ -51,12 +51,20 @@ export interface EcnFormProfileFlag {
   type?: string;
 }
 
+export interface EcnFormProfileHeaderField {
+  key: string;
+  label: string;
+  sort?: number;
+  type?: string;
+}
+
 export interface EcnFormProfile {
   industry_profile_enabled?: boolean;
   field_labels: Record<string, string>;
   material_line_columns: EcnFormProfileColumn[];
   signoff_depts: Array<{ code: string; label: string; sort?: number }>;
   header_option_flags: EcnFormProfileFlag[];
+  header_fields?: EcnFormProfileHeaderField[];
   entry_sources: Array<{ code: string; label: string; sort?: number }>;
   validation_rules: Array<Record<string, unknown>>;
 }

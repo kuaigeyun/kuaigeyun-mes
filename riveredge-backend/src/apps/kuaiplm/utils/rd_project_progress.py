@@ -5,8 +5,39 @@ from typing import Iterable, Sequence
 from apps.kuaiplm.constants.rd_project import (
     RdDeliverableStatus,
     RdGateStatus,
+    RdProjectStatus,
     RdTaskStatus,
 )
+
+# 看板「待审门」只跟在研/暂停项目；草稿、已完成、已取消、已删除不计入
+PENDING_GATE_LIVE_PROJECT_STATUSES = (
+    RdProjectStatus.IN_PROGRESS.value,
+    RdProjectStatus.ON_HOLD.value,
+)
+PENDING_GATE_REVIEW_STATUSES = (
+    RdGateStatus.PENDING.value,
+    RdGateStatus.IN_PROGRESS.value,
+)
+
+
+def count_pending_current_gates(projects: Sequence, gates: Sequence) -> int:
+    """当前待审阶段门数：仅未删除的在研/暂停项目的 current_gate。"""
+    current = {
+        (int(p.id), p.current_gate_key)
+        for p in projects
+        if getattr(p, "deleted_at", None) is None
+        and getattr(p, "status", None) in PENDING_GATE_LIVE_PROJECT_STATUSES
+        and getattr(p, "current_gate_key", None)
+    }
+    if not current:
+        return 0
+    pending = set(PENDING_GATE_REVIEW_STATUSES)
+    return sum(
+        1
+        for g in gates
+        if getattr(g, "status", None) in pending
+        and (int(getattr(g, "project_id")), getattr(g, "gate_key", None)) in current
+    )
 
 
 def _gate_progress(gates: Sequence) -> float:

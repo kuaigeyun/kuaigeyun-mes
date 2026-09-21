@@ -123,6 +123,10 @@ class TrialFlowStepResult(BaseModel):
         max_length=20, null=True, description="pass/fail/na"
     )
     result_notes = fields.TextField(null=True)
+    step_description = fields.TextField(null=True, description="工序描述")
+    defect_rate = fields.DecimalField(
+        max_digits=8, decimal_places=4, null=True, description="不良率 0-100"
+    )
     filled_by = fields.IntField(null=True)
     filled_by_name = fields.CharField(max_length=100, null=True)
     filled_at = fields.DatetimeField(null=True)

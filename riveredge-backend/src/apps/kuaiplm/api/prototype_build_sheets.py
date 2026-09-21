@@ -299,3 +299,26 @@ async def close_prototype_build_sheet(
         return await service.close(tenant_id, sheet_id, current_user)
     except Exception as e:
         raise _http(e)
+
+
+@router.delete(
+    "/{sheet_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete draft prototype build sheet",
+)
+async def delete_prototype_build_sheet(
+    sheet_id: int = Path(..., ge=1),
+    current_user: User = Depends(get_current_user),
+    _auth=Depends(
+        require_access(
+            "kuaiplm.prototype-build-sheet",
+            "delete",
+            required_permissions=["kuaiplm:prototype-build-sheet:delete"],
+        )
+    ),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        await service.delete(tenant_id, sheet_id, current_user)
+    except Exception as e:
+        raise _http(e)

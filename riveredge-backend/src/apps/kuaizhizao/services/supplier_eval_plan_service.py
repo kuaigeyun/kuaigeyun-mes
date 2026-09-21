@@ -264,6 +264,7 @@ class SupplierEvalPlanService(AppBaseService[SupplierEvalPlan]):
             template_code=tpl.code,
             template_name=tpl.name,
             audit_mode=self._validate_audit_mode(data.audit_mode),
+            reminder_lead_days=max(1, int(getattr(data, "reminder_lead_days", None) or 7)),
             status=PLAN_STATUS_DRAFT,
             remarks=data.remarks,
         )

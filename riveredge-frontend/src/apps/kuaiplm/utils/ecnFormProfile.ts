@@ -15,6 +15,30 @@ export type EcnProfileColumn = {
   type?: string;
 };
 
+export type EcnProfileHeaderField = {
+  key: string;
+  label: string;
+  sort?: number;
+  type?: string;
+};
+
+export function sortedHeaderFields(
+  profile: EcnFormProfile | null,
+  industryActive = false,
+): EcnProfileHeaderField[] {
+  if (!industryActive) return [];
+  const raw = profile?.header_fields || [];
+  return [...raw]
+    .filter((f) => f?.key)
+    .sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0))
+    .map((f) => ({
+      key: String(f.key),
+      label: String(f.label || f.key),
+      sort: f.sort,
+      type: f.type,
+    }));
+}
+
 /** profile 列 key → API 直接字段 */
 export const ECN_MATERIAL_DIRECT_KEYS = new Set([
   'material_id',
@@ -151,10 +175,14 @@ export function buildHeaderExtensionPayload(
   industryActive = false,
 ): Record<string, unknown> | null {
   if (!industryActive) return null;
-  const flags = profile?.header_option_flags || [];
-  if (!flags.length) return null;
   const payload: Record<string, unknown> = {};
-  for (const flag of flags) {
+  for (const field of sortedHeaderFields(profile, true)) {
+    const value = values[field.key];
+    if (value !== undefined && value !== null && value !== '') {
+      payload[field.key] = value;
+    }
+  }
+  for (const flag of profile?.header_option_flags || []) {
     const key = String(flag.key || '');
     if (!key) continue;
     const value = values[key];

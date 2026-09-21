@@ -1073,6 +1073,20 @@ const RdProjectDetailPage: React.FC = () => {
                 <Empty description={t('app.kuaiplm.rdProjects.detail.empty.gates')} />
               </Card>
             )}
+            {isRdProject ? (
+              <Card
+                size="small"
+                title={t('app.kuaiplm.rdProjects.systemArchive.sectionTitle')}
+                style={{ marginTop: 16 }}
+              >
+                <RdProjectSystemArchivePanel
+                  projectId={projectId}
+                  archive={systemArchive}
+                  canUpdate={projectPerms.canUpdate}
+                  onChanged={load}
+                />
+              </Card>
+            ) : null}
           </Col>
 
           <Col xs={24} lg={8}>
@@ -1171,17 +1185,6 @@ const RdProjectDetailPage: React.FC = () => {
             </Card>
           </Col>
         </Row>
-
-        {isRdProject ? (
-          <Card size="small" title={t('app.kuaiplm.rdProjects.systemArchive.sectionTitle')}>
-            <RdProjectSystemArchivePanel
-              projectId={projectId}
-              archive={systemArchive}
-              canUpdate={projectPerms.canUpdate}
-              onChanged={load}
-            />
-          </Card>
-        ) : null}
       </Space>
 
       <FormModalTemplate

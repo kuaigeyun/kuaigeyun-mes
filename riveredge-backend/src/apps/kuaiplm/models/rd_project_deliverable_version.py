@@ -36,6 +36,8 @@ class RdProjectDeliverableVersion(BaseModel):
     file_url = fields.CharField(max_length=500, null=True, description="文件 URL")
     file_name = fields.CharField(max_length=200, null=True, description="文件名")
     file_uuid = fields.CharField(max_length=36, null=True, description="core file UUID")
+    material_code = fields.CharField(max_length=80, null=True, description="关联料号快照")
+    legacy_material_code = fields.CharField(max_length=80, null=True, description="沿用旧料号快照")
     change_summary = fields.TextField(null=True, description="升版说明")
     effective_at = fields.DatetimeField(null=True, description="生效时间")
     obsolete_at = fields.DatetimeField(null=True, description="作废时间")

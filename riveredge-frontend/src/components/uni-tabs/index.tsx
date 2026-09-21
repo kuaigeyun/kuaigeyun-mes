@@ -58,6 +58,13 @@ function stripPlaceholderHomeTabs(tabs: TabItem[]): TabItem[] {
   return tabs.filter((tab) => !isTenantDefaultHomePath(tab.key));
 }
 
+/** 占位首页不得入栏：首页未就绪一律拒绝；就绪后仅允许与有效首页 path 一致 */
+function shouldSkipPlaceholderHomeTab(path: string, tenantHomePath: string, homeReady: boolean): boolean {
+  if (!isTenantDefaultHomePath(path)) return false;
+  if (!homeReady) return true;
+  return path !== tenantHomePath;
+}
+
 function tabsForPersistence(tabs: TabItem[], tenantHomePath: string, homeReady: boolean): TabItem[] {
   const stripped = stripPlaceholderHomeTabs(tabs);
   if (!homeReady || !tenantHomePath) return stripped;
@@ -269,6 +276,7 @@ function loadPersistedTabs(
   t: (key: string) => string,
   tenantHomePath: string,
   sourceTabs?: TabItem[] | null,
+  options?: { homeReady?: boolean },
 ): TabItem[] | null {
   if (typeof window === 'undefined') return null;
   try {
@@ -283,9 +291,14 @@ function loadPersistedTabs(
     });
 
     const contentTabs = stripPlaceholderHomeTabs(validTabs);
-    if (contentTabs.length === 0 && validTabs.length === 0) return null;
+    if (contentTabs.length === 0) return null;
+    const deduped = dedupeTabsByPathname(contentTabs);
+    const homeReady = options?.homeReady === true && !!tenantHomePath;
+    if (!homeReady) {
+      return deduped;
+    }
     const titleFor = (path: string) => findMenuTitleWithTranslation(path, menuConfig, t);
-    return dedupeTabsByPathname(normalizeTabsForTenantHome(contentTabs, tenantHomePath, titleFor));
+    return dedupeTabsByPathname(normalizeTabsForTenantHome(deduped, tenantHomePath, titleFor));
   } catch {
     return null;
   }
@@ -404,12 +417,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
 
     try {
       const cloudState = readUniTabsStateFromPreferenceCache();
-      const restored = loadPersistedTabs(
-        menuConfig,
-        t,
-        resolveEffectiveHomePath(undefined, undefined, getPersistedConfigs() ?? {}),
-        cloudState?.tabs,
-      );
+      const restored = loadPersistedTabs(menuConfig, t, '', cloudState?.tabs, { homeReady: false });
       if (restored?.length) return restored;
     } catch (e) {
       console.warn('Failed to load tabs from cache', e);
@@ -482,13 +490,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
       if (shouldSkipTabPath(path)) {
         return;
       }
-      // 有效首页已解析为自定义页时，不再为登录中转的占位首页（Default-home 等）新开标签
-      if (
-        homePathReady &&
-        tenantHomePath &&
-        isTenantDefaultHomePath(path) &&
-        path !== tenantHomePath
-      ) {
+      if (shouldSkipPlaceholderHomeTab(path, tenantHomePath, homePathReady)) {
         return;
       }
 
@@ -706,7 +708,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     const cloudState = readUniTabsStateFromPreferences(
       useUserPreferenceStore.getState().preferences,
     );
-    return loadPersistedTabs(menuConfig, t, tenantHomePath, cloudState?.tabs);
+    return loadPersistedTabs(menuConfig, t, tenantHomePath, cloudState?.tabs, { homeReady: true });
   }, [menuConfig, t, tenantHomePath]);
 
   /** 是否已完成持久化恢复（避免重复覆盖用户操作） */
@@ -731,15 +733,12 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
   const seedTabsAfterTenantSwitch = useCallback(() => {
     const routeKey = getCurrentRouteTabKey();
     queueMicrotask(() => {
-      if (tenantHomePath) {
-        addTabRef.current(tenantHomePath);
-      }
       if (routeKey && routeKey !== '/login') {
         addTabRef.current(routeKey);
         setActiveKey(routeKey);
       }
     });
-  }, [getCurrentRouteTabKey, tenantHomePath]);
+  }, [getCurrentRouteTabKey]);
 
   /** 切换租户时从该租户的会话/持久化恢复标签（替代 UniTabs key remount） */
   useEffect(() => {
@@ -775,40 +774,29 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
       return;
     }
 
-    const cloudState = readUniTabsStateFromPreferences(
-      useUserPreferenceStore.getState().preferences,
-    );
-    const restored = loadPersistedTabs(
-      menuConfig,
-      t,
-      tenantHomePath,
-      cloudState?.tabs,
-    );
-    if (restored?.length) {
-      setTabs(restored);
-      setActiveKey(getCurrentRouteTabKey());
-    } else {
-      setTabs([]);
-      seedTabsAfterTenantSwitch();
-    }
-    didRestoreFromSyncRef.current = true;
+    // 持久化恢复统一交给 homePathReady 后的 effect，避免 configs 猜错首页注入 Default-home
+    setTabs([]);
+    seedTabsAfterTenantSwitch();
   }, [
     tenantIdStrForTabs,
     menuConfig,
     t,
     tenantHomePath,
+    homePathReady,
     tabsPersistence,
     preferencesInitialized,
     seedTabsAfterTenantSwitch,
     getCurrentRouteTabKey,
   ]);
 
-  /** 会话内实时缓存标签，跨 APP / 组件 remount 不丢 */
+  /** 会话内实时缓存标签，跨 APP / 组件 remount 不丢（不写占位首页，避免 remount 带回 Default-home） */
   useLayoutEffect(() => {
     const tenantId = getTenantId();
     if (tenantId == null || tabs.length === 0) return;
-    setSessionTabs(tenantId, tabs, activeKey);
-  }, [tabs, activeKey]);
+    const sessionTabs = tabsForPersistence(tabs, tenantHomePath, homePathReady);
+    if (!sessionTabs.length) return;
+    setSessionTabs(tenantId, sessionTabs, activeKey);
+  }, [tabs, activeKey, tenantHomePath, homePathReady]);
 
   /**
    * 当 tabsPersistence 异步恢复为 true 时（如登出后再次登录），从本地存储恢复标签
@@ -859,7 +847,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     const cloudState = readUniTabsStateFromPreferences(
       useUserPreferenceStore.getState().preferences,
     );
-    const restored = loadPersistedTabs(menuConfig, t, tenantHomePath, cloudState?.tabs);
+    const restored = loadPersistedTabs(menuConfig, t, tenantHomePath, cloudState?.tabs, { homeReady: true });
     if (restored?.length) {
       didRestoreFromSyncRef.current = true;
       isRestoringRef.current = true;
@@ -966,9 +954,12 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
   useEffect(() => {
     if (!location.pathname) return;
     const tabKey = getCurrentRouteTabKey();
+    if (shouldSkipPlaceholderHomeTab(tabKey, tenantHomePath, homePathReady)) {
+      return;
+    }
     addTabRef.current(tabKey);
     setActiveKey((prev) => (prev === tabKey ? prev : tabKey));
-  }, [location.pathname, location.search, getCurrentRouteTabKey]);
+  }, [location.pathname, location.search, getCurrentRouteTabKey, tenantHomePath, homePathReady]);
 
   /** 有效首页 API 就绪后再注入首页标签，避免自定义首页租户先闪工作台/兜底占位 */
   useEffect(() => {

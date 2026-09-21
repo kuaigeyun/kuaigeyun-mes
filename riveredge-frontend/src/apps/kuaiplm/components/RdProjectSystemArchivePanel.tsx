@@ -316,7 +316,7 @@ export const RdProjectSystemArchivePanel: React.FC<RdProjectSystemArchivePanelPr
         ) : null}
         <ProFormUploadDragger
           name="file_upload"
-          label={t('common.attachment')}
+          label={t('common.attachments')}
           max={1}
           rules={[{ required: true }]}
           fieldProps={{

@@ -36,12 +36,113 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
   {
+    id: 'project-proposal-funide-menu-route-r01',
+    date: '2026-09-21',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.project-proposal-funide-menu-route-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.project-proposal-funide-menu-route-r01.description',
+  },
+  {
+    id: 'project-proposal-dedicated-split-r01',
+    date: '2026-09-21',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.project-proposal-dedicated-split-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.project-proposal-dedicated-split-r01.description',
+  },
+  {
+    id: 'project-proposal-template-fields-r01',
+    date: '2026-09-21',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.project-proposal-template-fields-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.project-proposal-template-fields-r01.description',
+  },
+  {
+    id: 'prototype-build-sheet-crud-r01',
+    date: '2026-09-21',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.prototype-build-sheet-crud-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.prototype-build-sheet-crud-r01.description',
+  },
+  {
+    id: 'rd-archive-upload-attachment-i18n-r01',
+    date: '2026-09-21',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.rd-archive-upload-attachment-i18n-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.rd-archive-upload-attachment-i18n-r01.description',
+  },
+  {
+    id: 'kuaiplm-dashboard-gantt-gate-expand-r01',
+    date: '2026-09-21',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiplm-dashboard-gantt-gate-expand-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-dashboard-gantt-gate-expand-r01.description',
+  },
+  {
+    id: 'lab-request-remarks-i18n-r01',
+    date: '2026-09-21',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.lab-request-remarks-i18n-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.lab-request-remarks-i18n-r01.description',
+  },
+  {
+    id: 'lab-request-status-tag-trim-r01',
+    date: '2026-09-21',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.lab-request-status-tag-trim-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.lab-request-status-tag-trim-r01.description',
+  },
+  {
+    id: 'rd-project-system-archive-left-column-r01',
+    date: '2026-09-21',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.rd-project-system-archive-left-column-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.rd-project-system-archive-left-column-r01.description',
+  },
+  {
+    id: 'rework-position-plan-template-list-uuid-r01',
+    date: '2026-09-21',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.rework-position-plan-template-list-uuid-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.rework-position-plan-template-list-uuid-r01.description',
+  },
+  {
+    id: 'kuaiplm-dashboard-pending-gates-live-r01',
+    date: '2026-09-21',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiplm-dashboard-pending-gates-live-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-dashboard-pending-gates-live-r01.description',
+  },
+  {
+    id: 'funide-phase1-template-profile-r01',
+    date: '2026-09-21',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-phase1-template-profile-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-phase1-template-profile-r01.description',
+  },
+  {
     id: 'uni-tabs-strip-placeholder-home-r01',
     date: '2026-09-21',
     type: 'fix',
     titleKey: 'pages.dashboard.updateLog.entries.uni-tabs-strip-placeholder-home-r01.title',
     descriptionKey:
       'pages.dashboard.updateLog.entries.uni-tabs-strip-placeholder-home-r01.description',
+  },
+  {
+    id: 'funide-rd-quality-2691-gap-r01',
+    date: '2026-09-21',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-rd-quality-2691-gap-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.funide-rd-quality-2691-gap-r01.description',
   },
   {
     id: 'post-login-effective-home-no-flash-r01',

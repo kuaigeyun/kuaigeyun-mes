@@ -331,3 +331,11 @@ class PrototypeBuildSheetService(AppBaseService[PrototypeBuildSheet]):
         apply_update_audit(row, user)
         await row.save()
         return PrototypeBuildSheetResponse.model_validate(row)
+
+    async def delete(self, tenant_id: int, sheet_id: int, user: User) -> None:
+        row = await self._get_row(tenant_id, sheet_id)
+        if row.status not in {"draft", "rejected"}:
+            raise BusinessLogicError("仅草稿或已驳回可删除")
+        row.deleted_at = resolve_business_datetime()
+        apply_update_audit(row, user)
+        await row.save()

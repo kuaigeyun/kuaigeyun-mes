@@ -175,6 +175,9 @@ class SupplierEvalPlan(BaseModel):
     template_code = fields.CharField(max_length=50, null=True)
     template_name = fields.CharField(max_length=200, null=True)
     audit_mode = fields.CharField(max_length=20, default="document")
+    reminder_lead_days = fields.IntField(
+        default=7, description="评价截止前提醒提前天数"
+    )
     status = fields.CharField(
         max_length=30,
         default="draft",
@@ -222,6 +225,9 @@ class SupplierEvalEnvDocument(BaseModel):
     title = fields.CharField(max_length=200)
     issued_at = fields.DateField(null=True)
     expires_at = fields.DateField(null=True, description="有效期至（提醒真源）")
+    reminder_lead_days = fields.IntField(
+        null=True, description="到期前提醒提前天数；空则默认30"
+    )
     attachments = fields.JSONField(null=True)
     remarks = fields.TextField(null=True)
     deleted_at = fields.DatetimeField(null=True)

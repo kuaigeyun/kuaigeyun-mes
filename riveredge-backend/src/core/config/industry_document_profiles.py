@@ -118,10 +118,15 @@ GENERIC_REWORK_ORDER_PROFILE: Dict[str, Any] = {
     "validation_rules": [],
 }
 
+GENERIC_RD_DELIVERABLE_PROFILE: Dict[str, Any] = {
+    "naming_rules": {},
+}
+
 GENERIC_PROFILES_BY_KEY: Dict[str, Dict[str, Any]] = {
     "kuaiplm.sample_process": GENERIC_SAMPLE_PROCESS_PROFILE,
     "kuaiplm.bom_collab": GENERIC_BOM_COLLAB_PROFILE,
     "kuaiplm.ecn": GENERIC_ECN_PROFILE,
     "kuaiplm.trial_flow": GENERIC_TRIAL_FLOW_PROFILE,
+    "kuaiplm.rd_deliverable": GENERIC_RD_DELIVERABLE_PROFILE,
     "kuaizhizao.rework_order": GENERIC_REWORK_ORDER_PROFILE,
 }

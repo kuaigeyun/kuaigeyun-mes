@@ -439,9 +439,7 @@ const LabRequestsPage: React.FC = () => {
             valueEnum: Object.fromEntries(STATUS_KEYS.map((k) => [k, { text: statusLabel(k) }])),
             hideInSearch: isBoard,
             render: (_, row) =>
-              renderDocumentStatusTag(row.status || 'draft', {
-                label: statusLabel(row.status),
-              }),
+              renderDocumentStatusTag(statusLabel(row.status), row.status || 'draft'),
           },
           {
             title: t('common.actions'),
@@ -667,7 +665,7 @@ const LabRequestsPage: React.FC = () => {
         },
         {
           key: 'remarks',
-          label: t('common.remarks'),
+          label: t('common.remark'),
           children: detail.remarks || '-',
         },
       ] as ProDescriptionsItemProps[],
@@ -1051,7 +1049,7 @@ const LabRequestsPage: React.FC = () => {
           <Col span={24}>
             <ProFormTextArea
               name="remarks"
-              label={t('common.remarks')}
+              label={t('common.remark')}
               fieldProps={{ rows: 2 }}
             />
           </Col>

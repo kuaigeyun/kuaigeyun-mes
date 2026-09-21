@@ -9,6 +9,12 @@ from tortoise.expressions import Q
 
 from apps.common.audit_actor import apply_create_audit, apply_update_audit
 from apps.common.base_service import AppBaseService
+from apps.kuaizhizao.constants.quality_complaint_code_rules import (
+    CUSTOMER_CONTAINMENT_HOUR,
+    CUSTOMER_CORRECTIVE_SLA_WORKDAYS,
+    resolve_complaint_code_prefix,
+    resolve_complaint_rule_code,
+)
 from apps.kuaizhizao.constants.quality_complaint_types import (
     COMPLAINT_CUSTOMER,
     COMPLAINT_IQC_INCOMING,
@@ -103,11 +109,15 @@ class QualityComplaintService(AppBaseService[QualityComplaint]):
         super().__init__(QualityComplaint)
         self.model = QualityComplaint
 
-    async def _ensure_code(self, tenant_id: int, code: Optional[str]) -> str:
+    async def _ensure_code(
+        self, tenant_id: int, code: Optional[str], *, business_type: str
+    ) -> str:
         raw = (code or "").strip()
         if raw:
             return raw
-        return await self.generate_code(tenant_id, self.rule_code, prefix=self.code_prefix)
+        rule_code = resolve_complaint_rule_code(business_type)
+        prefix = resolve_complaint_code_prefix(business_type)
+        return await self.generate_code(tenant_id, rule_code, prefix=prefix)
 
     def _validate_business_type(self, business_type: str) -> str:
         bt = (business_type or "").strip().lower()
@@ -145,7 +155,7 @@ class QualityComplaintService(AppBaseService[QualityComplaint]):
         self, tenant_id: int, data: QualityComplaintCreate, user: User
     ) -> QualityComplaintResponse:
         bt = self._validate_business_type(data.business_type or QUALITY_COMPLAINT_TYPE_DEFAULT)
-        code = await self._ensure_code(tenant_id, data.code)
+        code = await self._ensure_code(tenant_id, data.code, business_type=bt)
         exists = await QualityComplaint.filter(
             tenant_id=tenant_id, code=code, deleted_at__isnull=True
         ).exists()
@@ -282,6 +292,19 @@ class QualityComplaintService(AppBaseService[QualityComplaint]):
         naive_end = datetime.combine(due_day, time(23, 59, 59))
         return resolve_business_datetime(naive_end)
 
+    async def _compute_customer_dual_sla(
+        self, tenant_id: int, row: QualityComplaint
+    ) -> tuple[datetime, datetime]:
+        """客诉双时效：围堵当日17:00 + 纠正措施工作日。"""
+        site_day = today_site_date()
+        naive_containment = datetime.combine(site_day, time(CUSTOMER_CONTAINMENT_HOUR, 0, 0))
+        containment_due = resolve_business_datetime(naive_containment)
+        corrective_days = int(
+            row.corrective_sla_workdays or CUSTOMER_CORRECTIVE_SLA_WORKDAYS
+        )
+        corrective_due = await self._compute_due_at(tenant_id, corrective_days)
+        return containment_due, corrective_due
+
     async def submit(
         self, tenant_id: int, complaint_id: int, user: User
     ) -> QualityComplaintResponse:
@@ -291,9 +314,20 @@ class QualityComplaintService(AppBaseService[QualityComplaint]):
         now = resolve_business_datetime()
         row.status = "pending"
         row.submitted_at = now
-        row.due_at = await self._compute_due_at(
-            tenant_id, row.sla_workdays or QUALITY_COMPLAINT_DEFAULT_SLA_WORKDAYS
-        )
+        bt = row.business_type or QUALITY_COMPLAINT_TYPE_DEFAULT
+        if bt == COMPLAINT_CUSTOMER:
+            if row.corrective_sla_workdays is None:
+                row.corrective_sla_workdays = CUSTOMER_CORRECTIVE_SLA_WORKDAYS
+            containment_due, corrective_due = await self._compute_customer_dual_sla(
+                tenant_id, row
+            )
+            row.containment_due_at = containment_due
+            row.corrective_due_at = corrective_due
+            row.due_at = corrective_due
+        else:
+            row.due_at = await self._compute_due_at(
+                tenant_id, row.sla_workdays or QUALITY_COMPLAINT_DEFAULT_SLA_WORKDAYS
+            )
         apply_update_audit(row, user)
         await row.save()
 

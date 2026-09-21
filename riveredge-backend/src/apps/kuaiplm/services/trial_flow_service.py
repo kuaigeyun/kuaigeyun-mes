@@ -398,6 +398,50 @@ class TrialFlowService(AppBaseService[TrialFlow]):
         )
         return self._to_response(row, mats, steps)
 
+    async def _validate_step_fill(
+        self,
+        tenant_id: int,
+        row: TrialFlow,
+        step: TrialFlowStepResult,
+        payload: TrialFlowStepFill,
+    ) -> None:
+        profile = await self._profile(tenant_id)
+        rules = profile.get("validation_rules") or []
+        bt = (row.business_type or "").strip().lower()
+        step_templates = profile.get("step_templates") or {}
+        step_defs = step_templates.get(bt) or []
+        step_meta = next(
+            (d for d in step_defs if isinstance(d, dict) and d.get("step_key") == step.step_key),
+            {},
+        )
+        phase = str(step_meta.get("phase") or "").strip().lower()
+        if phase == "conclusion":
+            return
+        require_fields: set[str] = set()
+        for rule in rules:
+            if not isinstance(rule, dict):
+                continue
+            when_bt = rule.get("when_business_type")
+            if when_bt and when_bt != bt:
+                continue
+            when_steps = rule.get("when_step_keys")
+            if when_steps and step.step_key not in when_steps:
+                continue
+            for field in rule.get("require") or []:
+                require_fields.add(str(field))
+        if bt == "complete" and not require_fields:
+            require_fields = {"step_description", "defect_rate", "result"}
+        if "step_description" in require_fields and not (payload.step_description or "").strip():
+            raise ValidationError("请填写工序描述")
+        if "defect_rate" in require_fields and payload.defect_rate is None:
+            raise ValidationError("请填写不良率")
+        if "result" in require_fields and not (payload.result or "").strip():
+            raise ValidationError("请填写判定结果")
+        if payload.defect_rate is not None:
+            rate = float(payload.defect_rate)
+            if rate < 0 or rate > 100:
+                raise ValidationError("不良率须在 0–100 之间")
+
     async def fill_step(
         self,
         tenant_id: int,
@@ -422,9 +466,12 @@ class TrialFlowService(AppBaseService[TrialFlow]):
             raise NotFoundError("工序节点不存在")
         if row.current_step_key and step.step_key != row.current_step_key:
             raise BusinessLogicError("请按当前工序顺序填报")
+        await self._validate_step_fill(tenant_id, row, step, payload)
         step.status = "done"
         step.result = result
         step.result_notes = payload.result_notes
+        step.step_description = (payload.step_description or "").strip() or None
+        step.defect_rate = payload.defect_rate
         step.filled_by = user.id
         step.filled_by_name = getattr(user, "name", None) or getattr(user, "username", None)
         step.filled_at = resolve_business_datetime()

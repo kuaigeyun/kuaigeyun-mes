@@ -27,7 +27,12 @@ from apps.kuaiplm.models import (
     RdRequirement,
 )
 from apps.kuaiplm.schemas.change_desk import DashboardSummaryResponse
-from apps.kuaiplm.utils.rd_project_progress import compute_project_progress
+from apps.kuaiplm.utils.rd_project_progress import (
+    PENDING_GATE_LIVE_PROJECT_STATUSES,
+    PENDING_GATE_REVIEW_STATUSES,
+    compute_project_progress,
+    count_pending_current_gates,
+)
 from apps.master_data.models.bom_change import BOMChange
 from apps.master_data.models.process_route_change import ProcessRouteChange
 from core.utils.timezone_utils import to_api_isoformat
@@ -68,6 +73,41 @@ class DashboardService:
             end = start + timedelta(days=90)
         return start, end
 
+    @staticmethod
+    def _gate_gantt_progress(gate: RdProjectGate) -> float:
+        status = (gate.status or "").upper()
+        if status in (RdGateStatus.PASSED.value, RdGateStatus.SKIPPED.value):
+            return 100.0
+        if status == RdGateStatus.IN_PROGRESS.value:
+            return 50.0
+        return 0.0
+
+    @classmethod
+    def _resolve_gate_gantt_dates(
+        cls,
+        project: RdProject,
+        gates: List[RdProjectGate],
+        gate_index: int,
+        gate: RdProjectGate,
+    ) -> tuple[date, date]:
+        p_start, p_end = DashboardService()._resolve_gantt_dates(project)
+        if gate_index > 0:
+            prev = gates[gate_index - 1]
+            start = prev.planned_date or prev.actual_date or p_start
+        else:
+            start = p_start
+
+        end = gate.planned_date or gate.actual_date
+        if end is None:
+            n = max(len(gates), 1)
+            total_days = max((p_end - p_start).days, n)
+            seg = max(1, total_days // n)
+            start = p_start + timedelta(days=seg * gate_index)
+            end = start + timedelta(days=seg)
+        if end <= start:
+            end = start + timedelta(days=7)
+        return start, end
+
     async def _build_project_gantt_items(self, tenant_id: int) -> List[Dict[str, Any]]:
         projects = await RdProject.filter(
             tenant_id=tenant_id,
@@ -106,20 +146,49 @@ class DashboardService:
             gates = gates_by_project.get(project.id, [])
             tasks = tasks_by_project.get(project.id, [])
             deliverables = deliverables_by_project.get(project.id, [])
+            project_progress = self._project_progress(gates, tasks, deliverables)
             start, end = self._resolve_gantt_dates(project)
-            items.append({
-                "id": project.id,
-                "project_code": project.project_code,
-                "project_name": project.project_name,
-                "status": project.status,
-                "status_label": PROJECT_STATUS_LABELS.get(project.status, project.status),
-                "planned_start_date": to_api_isoformat(start),
-                "planned_end_date": to_api_isoformat(end),
-                "progress": self._project_progress(gates, tasks, deliverables),
-                "current_gate_key": project.current_gate_key,
-                "current_gate_name": self._gate_display_name(project.current_gate_key, gates),
-                "owner_name": project.owner_name,
-            })
+
+            if not gates:
+                items.append(
+                    {
+                        "id": project.id * 100000,
+                        "project_id": project.id,
+                        "gate_id": 0,
+                        "project_code": project.project_code,
+                        "project_name": project.project_name,
+                        "gate_name": self._gate_display_name(
+                            project.current_gate_key, gates
+                        )
+                        or project.project_name,
+                        "owner_name": project.owner_name,
+                        "gate_status": project.status,
+                        "planned_start_date": to_api_isoformat(start),
+                        "planned_end_date": to_api_isoformat(end),
+                        "progress": project_progress,
+                        "project_progress": project_progress,
+                    }
+                )
+                continue
+
+            for idx, gate in enumerate(gates):
+                g_start, g_end = self._resolve_gate_gantt_dates(project, gates, idx, gate)
+                items.append(
+                    {
+                        "id": project.id * 100000 + gate.id,
+                        "project_id": project.id,
+                        "gate_id": gate.id,
+                        "project_code": project.project_code,
+                        "project_name": project.project_name,
+                        "gate_name": gate.gate_name,
+                        "owner_name": project.owner_name,
+                        "gate_status": gate.status,
+                        "planned_start_date": to_api_isoformat(g_start),
+                        "planned_end_date": to_api_isoformat(g_end),
+                        "progress": self._gate_gantt_progress(gate),
+                        "project_progress": project_progress,
+                    }
+                )
         return items
 
     async def list_my_tasks(
@@ -203,10 +272,20 @@ class DashboardService:
             deleted_at__isnull=True,
             status__in=[RdTaskStatus.TODO.value, RdTaskStatus.IN_PROGRESS.value],
         ).count()
-        pending_gate_reviews = await RdProjectGate.filter(
+        live_projects = await RdProject.filter(
             tenant_id=tenant_id,
-            status__in=[RdGateStatus.PENDING.value, RdGateStatus.IN_PROGRESS.value],
-        ).count()
+            deleted_at__isnull=True,
+            status__in=list(PENDING_GATE_LIVE_PROJECT_STATUSES),
+        ).all()
+        if live_projects:
+            live_gates = await RdProjectGate.filter(
+                tenant_id=tenant_id,
+                project_id__in=[p.id for p in live_projects],
+                status__in=list(PENDING_GATE_REVIEW_STATUSES),
+            ).all()
+            pending_gate_reviews = count_pending_current_gates(live_projects, live_gates)
+        else:
+            pending_gate_reviews = 0
         pending_bom = await BOMChange.filter(
             tenant_id=tenant_id, deleted_at__isnull=True, status="pending"
         ).count()

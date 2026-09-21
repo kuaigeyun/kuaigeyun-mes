@@ -173,6 +173,8 @@ class PermissionRegistryService:
         "system:document-time-rewrite:execute",
         # 全局总查看：制定方以外角色查看文件历史版本/档案（由权限服务合并，禁止页面写人员名单）
         "system:document-global-view:read",
+        # 资深制定方：研发资深工程师等可查看所辖文档全部历史版本（INF-05）
+        "system:document-senior-author:read",
     )
 
     @classmethod

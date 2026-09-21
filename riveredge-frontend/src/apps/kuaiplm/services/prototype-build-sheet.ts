@@ -45,6 +45,10 @@ export interface PrototypeBuildSheet {
   closed_at?: string | null;
   created_at: string;
   updated_at: string;
+  created_by?: number | null;
+  created_by_name?: string | null;
+  updated_by?: number | null;
+  updated_by_name?: string | null;
 }
 
 export const prototypeBuildSheetApi = {
@@ -116,5 +120,8 @@ export const prototypeBuildSheetApi = {
   },
   close(id: number) {
     return apiRequest<PrototypeBuildSheet>(`${BASE}/${id}/close`, { method: 'POST' });
+  },
+  remove(id: number) {
+    return apiRequest<void>(`${BASE}/${id}`, { method: 'DELETE' });
   },
 };

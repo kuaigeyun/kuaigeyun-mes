@@ -9,6 +9,11 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class SupplierAssessmentLine(BaseModel):
+    material_key: str = Field(..., min_length=1, max_length=40)
+    suppliers_text: Optional[str] = Field(None, max_length=500)
+
+
 class ProjectProposalCreate(BaseModel):
     project_id: int
     title: str = Field(..., min_length=1, max_length=200)
@@ -16,11 +21,22 @@ class ProjectProposalCreate(BaseModel):
     summary: Optional[str] = None
     customer_name: Optional[str] = Field(None, max_length=200)
     expected_date: Optional[date] = None
-    supplier_id: Optional[int] = None
-    supplier_code: Optional[str] = Field(None, max_length=80)
-    supplier_name: Optional[str] = Field(None, max_length=200)
-    supplier_contact: Optional[str] = Field(None, max_length=200)
-    supplier_remark: Optional[str] = None
+    product_lines: List[str] = Field(default_factory=list)
+    proposing_dept: Optional[str] = Field(None, max_length=32)
+    proposer_name: Optional[str] = Field(None, max_length=100)
+    proposed_at: Optional[date] = None
+    sample_date: Optional[date] = None
+    mass_production_date: Optional[date] = None
+    sample_quantity: Optional[str] = Field(None, max_length=80)
+    customer_code: Optional[str] = Field(None, max_length=80)
+    contact_name: Optional[str] = Field(None, max_length=100)
+    contact_phone: Optional[str] = Field(None, max_length=50)
+    contact_email: Optional[str] = Field(None, max_length=200)
+    customer_product_model: Optional[str] = Field(None, max_length=200)
+    customer_material_types: List[str] = Field(default_factory=list)
+    dev_req_types: List[str] = Field(default_factory=list)
+    company_product_model: Optional[str] = Field(None, max_length=200)
+    cost_change_notes: Optional[str] = None
     remarks: Optional[str] = None
 
 
@@ -29,15 +45,33 @@ class ProjectProposalUpdate(BaseModel):
     summary: Optional[str] = None
     customer_name: Optional[str] = Field(None, max_length=200)
     expected_date: Optional[date] = None
+    product_lines: Optional[List[str]] = None
+    proposing_dept: Optional[str] = Field(None, max_length=32)
+    proposer_name: Optional[str] = Field(None, max_length=100)
+    proposed_at: Optional[date] = None
+    sample_date: Optional[date] = None
+    mass_production_date: Optional[date] = None
+    sample_quantity: Optional[str] = Field(None, max_length=80)
+    customer_code: Optional[str] = Field(None, max_length=80)
+    contact_name: Optional[str] = Field(None, max_length=100)
+    contact_phone: Optional[str] = Field(None, max_length=50)
+    contact_email: Optional[str] = Field(None, max_length=200)
+    customer_product_model: Optional[str] = Field(None, max_length=200)
+    customer_material_types: Optional[List[str]] = None
+    dev_req_types: Optional[List[str]] = None
+    company_product_model: Optional[str] = Field(None, max_length=200)
+    cost_change_notes: Optional[str] = None
     remarks: Optional[str] = None
 
 
 class ProjectProposalSupplierFill(BaseModel):
     supplier_id: Optional[int] = None
     supplier_code: Optional[str] = Field(None, max_length=80)
-    supplier_name: str = Field(..., min_length=1, max_length=200)
+    supplier_name: Optional[str] = Field(None, max_length=200)
     supplier_contact: Optional[str] = Field(None, max_length=200)
     supplier_remark: Optional[str] = None
+    supplier_assessment_lines: Optional[List[SupplierAssessmentLine]] = None
+    procurement_reviewer_name: Optional[str] = Field(None, max_length=100)
 
 
 class ProjectProposalResponse(BaseModel):
@@ -53,6 +87,24 @@ class ProjectProposalResponse(BaseModel):
     summary: Optional[str] = None
     customer_name: Optional[str] = None
     expected_date: Optional[date] = None
+    product_lines: List[str] = Field(default_factory=list)
+    proposing_dept: Optional[str] = None
+    proposer_name: Optional[str] = None
+    proposed_at: Optional[date] = None
+    sample_date: Optional[date] = None
+    mass_production_date: Optional[date] = None
+    sample_quantity: Optional[str] = None
+    customer_code: Optional[str] = None
+    contact_name: Optional[str] = None
+    contact_phone: Optional[str] = None
+    contact_email: Optional[str] = None
+    customer_product_model: Optional[str] = None
+    customer_material_types: List[str] = Field(default_factory=list)
+    dev_req_types: List[str] = Field(default_factory=list)
+    company_product_model: Optional[str] = None
+    cost_change_notes: Optional[str] = None
+    supplier_assessment_lines: List[dict] = Field(default_factory=list)
+    procurement_reviewer_name: Optional[str] = None
     supplier_id: Optional[int] = None
     supplier_code: Optional[str] = None
     supplier_name: Optional[str] = None

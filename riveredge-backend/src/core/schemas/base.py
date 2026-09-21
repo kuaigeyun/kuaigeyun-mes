@@ -6,7 +6,7 @@
 
 from datetime import datetime
 from typing import Any, Dict, Optional
-from pydantic import BaseModel, ConfigDict, Field, field_serializer
+from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
 
 from core.utils.timezone_utils import to_api_isoformat
 
@@ -41,6 +41,19 @@ class BaseSchema(BaseModel):
         if not isinstance(value, datetime):
             return value
         return to_api_isoformat(value)
+
+
+class UuidStrCoerceMixin(BaseModel):
+    """PostgreSQL UUID 列经 ORM 读出为 uuid.UUID 时，统一序列化为 str。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    @field_validator("uuid", mode="before", check_fields=False)
+    @classmethod
+    def _coerce_uuid_to_str(cls, value: object) -> object:
+        if value is None:
+            return None
+        return str(value)
 
 
 

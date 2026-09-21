@@ -81,6 +81,7 @@ class EngineeringChangeService(AppBaseService[EngineeringChange]):
             material_line_columns=list(profile.get("material_line_columns") or []),
             signoff_depts=list(profile.get("signoff_depts") or []),
             header_option_flags=list(profile.get("header_option_flags") or []),
+            header_fields=list(profile.get("header_fields") or []),
             entry_sources=list(profile.get("entry_sources") or []),
             validation_rules=list(profile.get("validation_rules") or []),
         )
@@ -222,12 +223,42 @@ class EngineeringChangeService(AppBaseService[EngineeringChange]):
             created.append(row)
         return created
 
+    async def _assert_entry_source_create(
+        self,
+        tenant_id: int,
+        *,
+        extension_payload: Optional[dict],
+        permission_codes: Optional[List[str]],
+    ) -> None:
+        ext = extension_payload if isinstance(extension_payload, dict) else {}
+        entry_source = str(ext.get("entry_source") or "engineering_change").strip().lower()
+        if entry_source == "engineering_change":
+            return
+        profile = await self._profile(tenant_id)
+        mapping = profile.get("entry_source_create_permissions") or {}
+        allowed = mapping.get(entry_source) if isinstance(mapping, dict) else None
+        if not allowed:
+            return
+        codes = {str(c or "").strip().lower() for c in (permission_codes or []) if str(c or "").strip()}
+        if not codes.intersection({str(a).strip().lower() for a in allowed}):
+            raise BusinessLogicError("当前账号无权以所选入口发起设计更改申请")
+
     async def create(
-        self, tenant_id: int, payload: EngineeringChangeCreate, user: User
+        self,
+        tenant_id: int,
+        payload: EngineeringChangeCreate,
+        user: User,
+        *,
+        permission_codes: Optional[List[str]] = None,
     ) -> EngineeringChangeResponse:
         kind = (payload.change_kind or "").strip().lower()
         if kind not in CHANGE_KINDS:
             raise ValidationError("非法更改种类")
+        await self._assert_entry_source_create(
+            tenant_id,
+            extension_payload=payload.extension_payload,
+            permission_codes=permission_codes,
+        )
         project = await self._optional_project(tenant_id, payload.project_id)
         code = await self._ensure_code(tenant_id, payload.ecn_code)
         exists = await EngineeringChange.filter(

@@ -5,14 +5,14 @@
 
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import type { ProColumns } from '@ant-design/pro-components';
+import type { ProColumns, ProFormInstance } from '@ant-design/pro-components';
 import {
   ActionType,
   ProFormSelect,
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, Button, Col, Descriptions, Input, Modal, Row, Space } from 'antd';
+import { App, Button, Col, Descriptions, Input, Modal, Result, Row, Space } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../components/uni-table';
 import { rowActionKind } from '../../../../components/uni-action';
@@ -26,9 +26,16 @@ import {
 import { detailDrawerDescriptionItems } from '../../../../components/layout-templates/detailDrawerDescriptionItems';
 import { useResourcePermissions } from '../../../../hooks/useResourcePermissions';
 import { getApiErrorMessage } from '../../../../utils/errorHandler';
+import { todaySiteDateString } from '../../../../utils/format';
+import { downloadRecordsAsXlsx, type ExportXlsxColumn } from '../../../../utils/exportRecordsXlsx';
+import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
 import { renderDocumentStatusTag } from '../../../../utils/documentLifecycleStatusTag';
 import { MarkerTag } from '../../../../constants/statusBadges';
-import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import {
+  alignProColumns,
+  GLOBAL_DOC_LIST_FIELD_RANK,
+} from '../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { buildDocumentAuditColumns } from '../../../kuaizhizao/pages/shared/documentAuditColumns';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../utils/uniTableLayoutColumns';
 import { NEW_SHORTCUT_HINT } from '../../../../utils/globalNewShortcut';
 import Phase2ProjectSelect from '../../components/Phase2ProjectSelect';
@@ -50,6 +57,21 @@ const STATUS_KEYS: PrototypeBuildSheetStatus[] = [
 ];
 const ROUND_KEYS: PrototypeBuildRound[] = ['handboard', 't1', 't2', 't3'];
 
+const EXPORT_COLUMNS: ExportXlsxColumn[] = [
+  { key: 'sheet_code', title: '单号' },
+  { key: 'project_code', title: '项目代号' },
+  { key: 'project_name', title: '项目名称' },
+  { key: 'round_label', title: '样机轮次' },
+  { key: 'title', title: '标题' },
+  { key: 'status_label', title: '状态' },
+  { key: 'electronics_status', title: '电子填写状态' },
+  { key: 'structure_status', title: '结构填写状态' },
+  { key: 'created_by_name', title: '创建人' },
+  { key: 'updated_by_name', title: '更新人' },
+  { key: 'created_at', title: '创建时间' },
+  { key: 'updated_at', title: '更新时间' },
+];
+
 const PrototypeBuildSheetsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -58,8 +80,12 @@ const PrototypeBuildSheetsPage: React.FC = () => {
   const filterProjectId = searchParams.get('project_id')
     ? Number(searchParams.get('project_id'))
     : undefined;
+
   const actionRef = useRef<ActionType>(null);
+  const tableRowsRef = useRef<PrototypeBuildSheet[]>([]);
+  const formRef = useRef<ProFormInstance | undefined>(undefined);
   const [modalOpen, setModalOpen] = useState(false);
+  const [editing, setEditing] = useState<PrototypeBuildSheet | null>(null);
   const [sectionOpen, setSectionOpen] = useState(false);
   const [signoffOpen, setSignoffOpen] = useState(false);
   const [activeSection, setActiveSection] = useState<'electronics' | 'structure'>('electronics');
@@ -67,8 +93,16 @@ const PrototypeBuildSheetsPage: React.FC = () => {
   const [mfgOpinion, setMfgOpinion] = useState('');
   const [qaOpinion, setQaOpinion] = useState('');
   const [detail, setDetail] = useState<PrototypeBuildSheet | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   const reload = useCallback(() => actionRef.current?.reload(), []);
+  const openCreate = useCallback(() => {
+    setEditing(null);
+    setModalOpen(true);
+  }, []);
+
   const statusLabel = useCallback(
     (s: string) => t(`app.kuaiplm.prototypeBuildSheet.status.${s}`, { defaultValue: s }),
     [t],
@@ -78,93 +112,269 @@ const PrototypeBuildSheetsPage: React.FC = () => {
     [t],
   );
 
-  const refreshDetail = useCallback(async (id: number) => {
-    const full = await prototypeBuildSheetApi.get(id);
-    setDetail(full);
-    reload();
-    return full;
-  }, [reload]);
+  const openDetail = useCallback(async (row: PrototypeBuildSheet) => {
+    if (!row.id) return;
+    setDetailLoading(true);
+    setDetailError(null);
+    setDetail(row);
+    try {
+      const full = await prototypeBuildSheetApi.get(row.id);
+      setDetail(full);
+    } catch (e) {
+      setDetailError(getApiErrorMessage(e));
+    } finally {
+      setDetailLoading(false);
+    }
+  }, []);
 
-  const columns = useMemo<ProColumns<PrototypeBuildSheet>[]>(
-    () =>
-      alignProColumns(
-        [
-          {
-            title: t('app.kuaiplm.prototypeBuildSheet.fields.code'),
-            dataIndex: 'sheet_code',
-            key: 'document_code',
-            width: 140,
-            copyable: true,
-            uniTableKeepWidth: true,
-          },
-          {
-            title: t('app.kuaiplm.prototypeBuildSheet.fields.project'),
-            dataIndex: 'project_name',
-            key: 'project_name',
-            width: 180,
-            ellipsis: true,
-            render: (_, r) => `${r.project_name} (${r.project_code})`,
-          },
-          {
-            title: t('app.kuaiplm.prototypeBuildSheet.fields.round'),
-            dataIndex: 'round_key',
-            key: 'round_key',
-            width: 100,
-            uniTableKeepWidth: true,
-            render: (_, r) => <MarkerTag variant="filled">{roundLabel(r.round_key)}</MarkerTag>,
-          },
-          {
-            title: t('app.kuaiplm.prototypeBuildSheet.fields.title'),
-            dataIndex: 'title',
-            key: 'title',
-            ellipsis: true,
-            uniTableRemainderFlex: true,
-          },
-          {
-            ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
-            title: t('common.status'),
-            dataIndex: 'status',
-            key: 'lifecycle',
-            fixed: 'right',
-            render: (_, r) => renderDocumentStatusTag(statusLabel(r.status), r.status),
-          },
-          {
-            title: t('common.action'),
-            valueType: 'option',
-            key: 'option',
-            fixed: 'right',
-            render: (_, row) => [
+  const refreshDetail = useCallback(
+    async (id: number) => {
+      const full = await prototypeBuildSheetApi.get(id);
+      setDetail(full);
+      reload();
+      return full;
+    },
+    [reload],
+  );
+
+  const openEdit = useCallback((row: PrototypeBuildSheet) => {
+    setEditing(row);
+    setModalOpen(true);
+  }, []);
+
+  const columns = useMemo<ProColumns<PrototypeBuildSheet>[]>(() => {
+    const cols: ProColumns<PrototypeBuildSheet>[] = [
+      {
+        title: t('app.kuaiplm.prototypeBuildSheet.fields.code'),
+        dataIndex: 'sheet_code',
+        key: 'document_code',
+        width: 140,
+        copyable: true,
+        uniTableKeepWidth: true,
+      },
+      {
+        title: t('app.kuaiplm.prototypeBuildSheet.fields.project'),
+        dataIndex: 'project_name',
+        key: 'project_name',
+        width: 180,
+        ellipsis: true,
+        render: (_, r) => `${r.project_name} (${r.project_code})`,
+      },
+      {
+        title: t('app.kuaiplm.prototypeBuildSheet.fields.round'),
+        dataIndex: 'round_key',
+        key: 'round_key',
+        width: 100,
+        uniTableKeepWidth: true,
+        valueEnum: Object.fromEntries(ROUND_KEYS.map((k) => [k, { text: roundLabel(k) }])),
+        render: (_, r) => <MarkerTag variant="filled">{roundLabel(r.round_key)}</MarkerTag>,
+      },
+      {
+        title: t('app.kuaiplm.prototypeBuildSheet.fields.title'),
+        dataIndex: 'title',
+        key: 'title',
+        ellipsis: true,
+        uniTableRemainderFlex: true,
+      },
+      {
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+        title: t('common.status'),
+        dataIndex: 'status',
+        key: 'lifecycle',
+        fixed: 'right',
+        valueEnum: Object.fromEntries(STATUS_KEYS.map((k) => [k, { text: statusLabel(k) }])),
+        render: (_, r) => renderDocumentStatusTag(statusLabel(r.status), r.status),
+      },
+      ...buildDocumentAuditColumns(t),
+      {
+        title: t('common.action'),
+        valueType: 'option',
+        key: 'option',
+        fixed: 'right',
+        render: (_, row) => {
+          const actions: React.ReactNode[] = [
+            <Button
+              key="detail"
+              type="link"
+              size="small"
+              {...rowActionKind('detail')}
+              onClick={() => void openDetail(row)}
+            />,
+          ];
+          if ((row.status === 'draft' || row.status === 'rejected') && perms.canUpdate) {
+            actions.push(
               <Button
-                key="detail"
+                key="edit"
                 type="link"
                 size="small"
-                {...rowActionKind('detail')}
-                onClick={() => void refreshDetail(row.id).then(setDetail)}
+                {...rowActionKind('edit')}
+                onClick={() => openEdit(row)}
               />,
-            ],
-          },
-        ],
-        GLOBAL_DOC_LIST_FIELD_RANK,
-      ),
-    [refreshDetail, roundLabel, statusLabel, t],
-  );
+            );
+          }
+          if (
+            (row.status === 'draft' || row.status === 'rejected') &&
+            perms.canAction?.('submit') &&
+            row.id
+          ) {
+            actions.push(
+              <Button
+                key="submit"
+                type="link"
+                size="small"
+                {...rowActionKind('submit')}
+                onClick={async () => {
+                  try {
+                    await prototypeBuildSheetApi.submit(row.id);
+                    messageApi.success(t('app.kuaiplm.prototypeBuildSheet.messages.submitSuccess'));
+                    reload();
+                  } catch (e) {
+                    messageApi.error(getApiErrorMessage(e));
+                  }
+                }}
+              />,
+            );
+          }
+          if (row.status === 'pending' && perms.canAction?.('approve') && row.id) {
+            actions.push(
+              <Button
+                key="approve"
+                type="link"
+                size="small"
+                {...rowActionKind('approve')}
+                onClick={async () => {
+                  try {
+                    await prototypeBuildSheetApi.approve(row.id);
+                    messageApi.success(t('common.approveSuccess'));
+                    reload();
+                  } catch (e) {
+                    messageApi.error(getApiErrorMessage(e));
+                  }
+                }}
+              />,
+            );
+          }
+          if (row.status === 'pending' && perms.canAction?.('reject') && row.id) {
+            actions.push(
+              <Button
+                key="reject"
+                type="link"
+                size="small"
+                {...rowActionKind('reject')}
+                onClick={async () => {
+                  try {
+                    await prototypeBuildSheetApi.reject(row.id);
+                    messageApi.success(t('common.rejectSuccess'));
+                    reload();
+                  } catch (e) {
+                    messageApi.error(getApiErrorMessage(e));
+                  }
+                }}
+              />,
+            );
+          }
+          if (row.status === 'approved' && perms.canAction?.('execute') && row.id) {
+            actions.push(
+              <Button
+                key="issue"
+                type="link"
+                size="small"
+                {...rowActionKind('execute')}
+                onClick={async () => {
+                  try {
+                    await prototypeBuildSheetApi.issue(row.id);
+                    messageApi.success(t('app.kuaiplm.prototypeBuildSheet.messages.issued'));
+                    reload();
+                  } catch (e) {
+                    messageApi.error(getApiErrorMessage(e));
+                  }
+                }}
+              >
+                {t('app.kuaiplm.prototypeBuildSheet.actions.issue')}
+              </Button>,
+            );
+          }
+          return actions;
+        },
+      },
+    ];
+    return alignProColumns(cols, GLOBAL_DOC_LIST_FIELD_RANK);
+  }, [messageApi, openDetail, openEdit, perms, reload, roundLabel, statusLabel, t]);
 
   return (
     <>
       <ListPageTemplate>
         <UniTable<PrototypeBuildSheet>
           actionRef={actionRef}
-          columnPersistenceId="apps.kuaiplm.pages.prototype-build-sheets.v1"
+          rowKey="uuid"
+          permissionResource={RESOURCE}
+          enableRowSelection
+          selectedRowKeys={selectedRowKeys}
+          onRowSelectionChange={setSelectedRowKeys}
+          columnPersistenceId="apps.kuaiplm.pages.prototype-build-sheets.v2"
           headerTitle={t('app.kuaiplm.prototypeBuildSheet.title')}
+          showCreateButton={perms.canCreate}
           createButtonText={t('app.kuaiplm.prototypeBuildSheet.createButton') + NEW_SHORTCUT_HINT}
-          onCreate={perms.canCreate ? () => setModalOpen(true) : undefined}
+          onCreate={openCreate}
+          showDeleteButton={perms.canDelete}
+          onDelete={async (keys) => {
+            const rows = tableRowsRef.current.filter((r) => keys.includes(r.uuid));
+            const deletable = rows.filter(
+              (r) => (r.status === 'draft' || r.status === 'rejected') && r.id,
+            );
+            if (!deletable.length) {
+              messageApi.warning(t('app.kuaiplm.prototypeBuildSheet.messages.deleteOnlyDraft'));
+              return;
+            }
+            await Promise.all(deletable.map((r) => prototypeBuildSheetApi.remove(r.id)));
+            messageApi.success(t('common.deleteSuccess'));
+            setSelectedRowKeys([]);
+            reload();
+          }}
+          showExportButton={perms.canExport}
+          onExport={async (type, keys, pageData) => {
+            try {
+              let items =
+                type === 'currentPage' && pageData?.length
+                  ? (pageData as PrototypeBuildSheet[])
+                  : await fetchAllListItems((p) =>
+                      prototypeBuildSheetApi.list({
+                        ...p,
+                        project_id: filterProjectId,
+                      }),
+                    );
+              if (type === 'selected' && keys?.length) {
+                items = items.filter((d) => d.uuid != null && keys.includes(d.uuid));
+              }
+              if (items.length === 0) {
+                messageApi.warning(t('app.kuaiplm.prototypeBuildSheet.messages.noExportData'));
+                return;
+              }
+              const rows = items.map((r) => ({
+                ...r,
+                status_label: statusLabel(r.status),
+                round_label: roundLabel(r.round_key),
+              }));
+              await downloadRecordsAsXlsx(
+                rows as Array<Record<string, unknown>>,
+                `prototype-build-sheets-${todaySiteDateString()}.xlsx`,
+                { columns: EXPORT_COLUMNS, sheetName: '样机制作书' },
+              );
+              messageApi.success(t('common.exportSuccess', { count: items.length }));
+            } catch (err) {
+              messageApi.error(getApiErrorMessage(err, t('common.exportFailed')));
+            }
+          }}
           columns={columns}
-          onTableDataChange={() => {}}
+          onTableDataChange={(rows) => {
+            tableRowsRef.current = rows;
+          }}
           request={async (params) => {
             const res = await prototypeBuildSheetApi.list({
               skip: ((params.current || 1) - 1) * (params.pageSize || 20),
               limit: params.pageSize || 20,
               keyword: params.keyword as string | undefined,
+              status: params.status as string | undefined,
               project_id: filterProjectId,
             });
             return { data: res.items, success: true, total: res.total };
@@ -173,40 +383,87 @@ const PrototypeBuildSheetsPage: React.FC = () => {
       </ListPageTemplate>
 
       <FormModalTemplate
-        title={t('app.kuaiplm.prototypeBuildSheet.createButton')}
+        key={editing?.uuid ?? 'create'}
+        title={
+          editing
+            ? t('common.edit') + t('app.kuaiplm.prototypeBuildSheet.title')
+            : t('app.kuaiplm.prototypeBuildSheet.createButton')
+        }
         open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        grid={false}
-        onFinish={async (values) => {
-          await prototypeBuildSheetApi.create({
-            project_id: Number(values.project_id),
-            title: String(values.title || '').trim(),
-            round_key: values.round_key as string,
-            project_requirements: values.project_requirements || undefined,
-            remarks: values.remarks || undefined,
-          });
-          messageApi.success(t('common.saveSuccess'));
+        onClose={() => {
           setModalOpen(false);
-          reload();
+          setEditing(null);
+        }}
+        formRef={formRef}
+        grid={false}
+        initialValues={
+          editing
+            ? {
+                project_id: editing.project_id,
+                round_key: editing.round_key,
+                title: editing.title,
+                project_requirements: editing.project_requirements,
+                remarks: editing.remarks,
+              }
+            : filterProjectId
+              ? { project_id: filterProjectId, round_key: 't1' }
+              : { round_key: 't1' }
+        }
+        onFinish={async (values) => {
+          try {
+            const payload = {
+              title: String(values.title || '').trim(),
+              project_requirements: values.project_requirements || undefined,
+              remarks: values.remarks || undefined,
+            };
+            if (editing?.id) {
+              await prototypeBuildSheetApi.update(editing.id, payload);
+            } else {
+              await prototypeBuildSheetApi.create({
+                project_id: Number(values.project_id),
+                round_key: values.round_key as string,
+                ...payload,
+              });
+            }
+            messageApi.success(t('common.saveSuccess'));
+            setModalOpen(false);
+            setEditing(null);
+            reload();
+          } catch (e) {
+            messageApi.error(getApiErrorMessage(e));
+            throw e;
+          }
         }}
       >
         <Row gutter={16}>
           <Col span={12}>
-            <Phase2ProjectSelect name="project_id" rules={[{ required: true }]} />
+            <Phase2ProjectSelect
+              name="project_id"
+              rules={[{ required: true }]}
+              disabled={!!editing}
+            />
           </Col>
           <Col span={12}>
             <ProFormSelect
               name="round_key"
               label={t('app.kuaiplm.prototypeBuildSheet.fields.round')}
-              initialValue="t1"
+              rules={[{ required: true }]}
+              disabled={!!editing}
               options={ROUND_KEYS.map((k) => ({ value: k, label: roundLabel(k) }))}
             />
           </Col>
           <Col span={24}>
-            <ProFormText name="title" label={t('app.kuaiplm.prototypeBuildSheet.fields.title')} rules={[{ required: true }]} />
+            <ProFormText
+              name="title"
+              label={t('app.kuaiplm.prototypeBuildSheet.fields.title')}
+              rules={[{ required: true }]}
+            />
           </Col>
           <Col span={24}>
-            <ProFormTextArea name="project_requirements" label={t('app.kuaiplm.prototypeBuildSheet.fields.projectRequirements')} />
+            <ProFormTextArea
+              name="project_requirements"
+              label={t('app.kuaiplm.prototypeBuildSheet.fields.projectRequirements')}
+            />
           </Col>
           <Col span={24}>
             <ProFormTextArea name="remarks" label={t('common.remark')} />
@@ -216,16 +473,38 @@ const PrototypeBuildSheetsPage: React.FC = () => {
 
       <DetailDrawerTemplate
         open={!!detail}
-        onClose={() => setDetail(null)}
+        onClose={() => {
+          setDetail(null);
+          setDetailError(null);
+        }}
         title={detail?.title}
         subtitle={detail?.sheet_code}
-        loading={false}
+        loading={detailLoading}
         size={DRAWER_CONFIG.HALF_WIDTH}
+        plainBody={
+          detailError ? (
+            <Result
+              status="error"
+              title={t('common.loadFailed')}
+              subTitle={detailError}
+              extra={
+                detail?.id ? (
+                  <Button type="primary" onClick={() => void openDetail(detail)}>
+                    {t('common.retry')}
+                  </Button>
+                ) : null
+              }
+            />
+          ) : undefined
+        }
         extra={
-          detail ? (
+          detail && !detailError ? (
             <Space wrap>
               {perms.canUpdate && ['draft', 'rejected'].includes(detail.status) ? (
                 <>
+                  <Button size="small" onClick={() => openEdit(detail)}>
+                    {t('common.edit')}
+                  </Button>
                   <Button
                     size="small"
                     onClick={() => {
@@ -255,7 +534,7 @@ const PrototypeBuildSheetsPage: React.FC = () => {
                   onClick={async () => {
                     try {
                       await prototypeBuildSheetApi.submit(detail.id);
-                      messageApi.success(t('common.submitSuccess'));
+                      messageApi.success(t('app.kuaiplm.prototypeBuildSheet.messages.submitSuccess'));
                       await refreshDetail(detail.id);
                     } catch (e) {
                       messageApi.error(getApiErrorMessage(e));
@@ -314,7 +593,7 @@ const PrototypeBuildSheetsPage: React.FC = () => {
                   {t('app.kuaiplm.prototypeBuildSheet.actions.signoff')}
                 </Button>
               ) : null}
-              {perms.canUpdate && ['issued', 'approved'].includes(detail.status) ? (
+              {perms.canAction?.('complete') && ['issued', 'approved'].includes(detail.status) ? (
                 <Button
                   type="primary"
                   size="small"
@@ -335,23 +614,65 @@ const PrototypeBuildSheetsPage: React.FC = () => {
           ) : undefined
         }
         basic={
-          detail ? (
+          detail && !detailError ? (
             <Descriptions
               column={detailDrawerBasicColumn(false)}
               items={detailDrawerDescriptionItems([
-                { key: 'project', label: t('app.kuaiplm.prototypeBuildSheet.fields.project'), children: `${detail.project_name} (${detail.project_code})` },
-                { key: 'round', label: t('app.kuaiplm.prototypeBuildSheet.fields.round'), children: roundLabel(detail.round_key) },
-                { key: 'status', label: t('common.status'), children: statusLabel(detail.status) },
-                { key: 'electronics_status', label: t('app.kuaiplm.prototypeBuildSheet.fields.electronicsStatus'), children: detail.electronics_status },
-                { key: 'structure_status', label: t('app.kuaiplm.prototypeBuildSheet.fields.structureStatus'), children: detail.structure_status },
-                { key: 'project_requirements', label: t('app.kuaiplm.prototypeBuildSheet.fields.projectRequirements'), children: detail.project_requirements || '—' },
-                { key: 'electronics_requirements', label: t('app.kuaiplm.prototypeBuildSheet.fields.electronicsRequirements'), children: detail.electronics_requirements || '—' },
-                { key: 'structure_requirements', label: t('app.kuaiplm.prototypeBuildSheet.fields.structureRequirements'), children: detail.structure_requirements || '—' },
-                { key: 'manufacturing_opinion', label: t('app.kuaiplm.prototypeBuildSheet.fields.manufacturingOpinion'), children: detail.manufacturing_opinion || '—' },
-                { key: 'quality_opinion', label: t('app.kuaiplm.prototypeBuildSheet.fields.qualityOpinion'), children: detail.quality_opinion || '—' },
+                {
+                  key: 'project',
+                  label: t('app.kuaiplm.prototypeBuildSheet.fields.project'),
+                  children: `${detail.project_name} (${detail.project_code})`,
+                },
+                {
+                  key: 'round',
+                  label: t('app.kuaiplm.prototypeBuildSheet.fields.round'),
+                  children: roundLabel(detail.round_key),
+                },
+                {
+                  key: 'status',
+                  label: t('common.status'),
+                  children: statusLabel(detail.status),
+                },
+                {
+                  key: 'electronics_status',
+                  label: t('app.kuaiplm.prototypeBuildSheet.fields.electronicsStatus'),
+                  children: detail.electronics_status,
+                },
+                {
+                  key: 'structure_status',
+                  label: t('app.kuaiplm.prototypeBuildSheet.fields.structureStatus'),
+                  children: detail.structure_status,
+                },
+                {
+                  key: 'project_requirements',
+                  label: t('app.kuaiplm.prototypeBuildSheet.fields.projectRequirements'),
+                  children: detail.project_requirements || '—',
+                },
+                {
+                  key: 'electronics_requirements',
+                  label: t('app.kuaiplm.prototypeBuildSheet.fields.electronicsRequirements'),
+                  children: detail.electronics_requirements || '—',
+                },
+                {
+                  key: 'structure_requirements',
+                  label: t('app.kuaiplm.prototypeBuildSheet.fields.structureRequirements'),
+                  children: detail.structure_requirements || '—',
+                },
+                {
+                  key: 'manufacturing_opinion',
+                  label: t('app.kuaiplm.prototypeBuildSheet.fields.manufacturingOpinion'),
+                  children: detail.manufacturing_opinion || '—',
+                },
+                {
+                  key: 'quality_opinion',
+                  label: t('app.kuaiplm.prototypeBuildSheet.fields.qualityOpinion'),
+                  children: detail.quality_opinion || '—',
+                },
               ])}
             />
-          ) : null
+          ) : detailError ? null : (
+            <div style={{ minHeight: 80 }} />
+          )
         }
       />
 
@@ -379,7 +700,9 @@ const PrototypeBuildSheetsPage: React.FC = () => {
         }}
       >
         <div>
-          <div style={{ marginBottom: 8 }}>{t('app.kuaiplm.prototypeBuildSheet.fields.requirements')}</div>
+          <div style={{ marginBottom: 8 }}>
+            {t('app.kuaiplm.prototypeBuildSheet.fields.requirements')}
+          </div>
           <Input.TextArea rows={6} value={sectionText} onChange={(e) => setSectionText(e.target.value)} />
         </div>
       </Modal>
@@ -405,11 +728,15 @@ const PrototypeBuildSheetsPage: React.FC = () => {
         }}
       >
         <div style={{ marginBottom: 12 }}>
-          <div style={{ marginBottom: 8 }}>{t('app.kuaiplm.prototypeBuildSheet.fields.manufacturingOpinion')}</div>
+          <div style={{ marginBottom: 8 }}>
+            {t('app.kuaiplm.prototypeBuildSheet.fields.manufacturingOpinion')}
+          </div>
           <Input.TextArea value={mfgOpinion} onChange={(e) => setMfgOpinion(e.target.value)} />
         </div>
         <div>
-          <div style={{ marginBottom: 8 }}>{t('app.kuaiplm.prototypeBuildSheet.fields.qualityOpinion')}</div>
+          <div style={{ marginBottom: 8 }}>
+            {t('app.kuaiplm.prototypeBuildSheet.fields.qualityOpinion')}
+          </div>
           <Input.TextArea value={qaOpinion} onChange={(e) => setQaOpinion(e.target.value)} />
         </div>
       </Modal>

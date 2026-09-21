@@ -109,6 +109,8 @@ const TrialFlowsPage: React.FC = () => {
   const [fillStepKey, setFillStepKey] = useState<string | null>(null);
   const [fillResult, setFillResult] = useState<string>('pass');
   const [fillNotes, setFillNotes] = useState('');
+  const [fillDescription, setFillDescription] = useState('');
+  const [fillDefectRate, setFillDefectRate] = useState<string>('');
   const [concludeOpen, setConcludeOpen] = useState(false);
   const [conclusion, setConclusion] = useState<string>('pass');
   const [conclusionSummary, setConclusionSummary] = useState('');
@@ -606,6 +608,8 @@ const TrialFlowsPage: React.FC = () => {
                               setFillStepKey(step.step_key);
                               setFillResult('pass');
                               setFillNotes('');
+                              setFillDescription('');
+                              setFillDefectRate('');
                               setFillOpen(true);
                             }}
                           >
@@ -633,6 +637,9 @@ const TrialFlowsPage: React.FC = () => {
             await trialFlowApi.fillStep(detail.id, fillStepKey, {
               result: fillResult,
               result_notes: fillNotes || undefined,
+              step_description: fillDescription.trim() || undefined,
+              defect_rate:
+                fillDefectRate.trim() === '' ? undefined : Number(fillDefectRate),
             });
             messageApi.success(t('app.kuaiplm.trialFlow.messages.fillSuccess'));
             setFillOpen(false);
@@ -655,6 +662,26 @@ const TrialFlowsPage: React.FC = () => {
             ]}
           />
         </div>
+        {detail?.business_type === 'complete' ? (
+          <>
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ marginBottom: 4 }}>{t('app.kuaiplm.trialFlow.fields.stepDescription')}</div>
+              <Input.TextArea
+                rows={2}
+                value={fillDescription}
+                onChange={(e) => setFillDescription(e.target.value)}
+              />
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ marginBottom: 4 }}>{t('app.kuaiplm.trialFlow.fields.defectRate')}</div>
+              <Input
+                value={fillDefectRate}
+                onChange={(e) => setFillDefectRate(e.target.value)}
+                placeholder="0-100"
+              />
+            </div>
+          </>
+        ) : null}
         <div>
           <div style={{ marginBottom: 4 }}>{t('app.kuaiplm.trialFlow.fields.resultNotes')}</div>
           <Input.TextArea rows={3} value={fillNotes} onChange={(e) => setFillNotes(e.target.value)} />

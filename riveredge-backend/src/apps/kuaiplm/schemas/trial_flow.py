@@ -39,6 +39,8 @@ class TrialFlowStepOut(BaseModel):
     status: str
     result: Optional[str] = None
     result_notes: Optional[str] = None
+    step_description: Optional[str] = None
+    defect_rate: Optional[Decimal] = None
     filled_by: Optional[int] = None
     filled_by_name: Optional[str] = None
     filled_at: Optional[datetime] = None
@@ -64,6 +66,8 @@ class TrialFlowUpdate(BaseModel):
 class TrialFlowStepFill(BaseModel):
     result: str = Field(..., description="pass/fail/na")
     result_notes: Optional[str] = None
+    step_description: Optional[str] = Field(None, description="工序描述")
+    defect_rate: Optional[Decimal] = Field(None, description="不良率 0-100")
 
 
 class TrialFlowConclude(BaseModel):

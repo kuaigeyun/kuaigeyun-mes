@@ -30,9 +30,24 @@ import {
   mergeHeaderExtensionIntoForm,
   prepareMaterialLineForApi,
   resolveEcnFieldLabel,
+  sortedHeaderFields,
   sortedMaterialColumns,
   type EcnProfileColumn,
+  type EcnProfileHeaderField,
 } from '../utils/ecnFormProfile';
+
+function renderEcnHeaderField(field: EcnProfileHeaderField) {
+  const span = field.type === 'textarea' ? 24 : 12;
+  return (
+    <Col span={span} key={field.key}>
+      {field.type === 'textarea' ? (
+        <ProFormTextArea name={field.key} label={field.label} />
+      ) : (
+        <ProFormText name={field.key} label={field.label} />
+      )}
+    </Col>
+  );
+}
 
 const KIND_KEYS: EcnChangeKind[] = ['material', 'process', 'drawing', 'doc_template', 'other'];
 const DISPOSITION_KEYS = ['scrap', 'use_up', 'rework', 'return', 'other'];
@@ -140,6 +155,11 @@ const EcnChangeFormModal: React.FC<EcnChangeFormModalProps> = ({
         render: (_: unknown, __: unknown, index: number) => renderMaterialCell(col, index, t),
       })),
     [materialColumns, t],
+  );
+
+  const headerFields = useMemo(
+    () => sortedHeaderFields(formProfile, industryActive),
+    [formProfile, industryActive],
   );
 
   const headerFlags = useMemo(
@@ -295,6 +315,7 @@ const EcnChangeFormModal: React.FC<EcnChangeFormModalProps> = ({
             )}
           />
         </Col>
+        {headerFields.map((field) => renderEcnHeaderField(field))}
         {headerFlags.map((flag) => {
           const key = String(flag.key);
           const label = String(flag.label || key);

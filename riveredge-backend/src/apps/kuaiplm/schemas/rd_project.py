@@ -133,6 +133,8 @@ class RdProjectDeliverableBase(BaseModel):
     file_url: Optional[str] = None
     file_name: Optional[str] = None
     file_uuid: Optional[str] = None
+    material_code: Optional[str] = Field(None, max_length=80, description="关联料号")
+    legacy_material_code: Optional[str] = Field(None, max_length=80, description="沿用旧料号")
 
 
 class RdProjectDeliverableCreate(RdProjectDeliverableBase):
@@ -148,6 +150,8 @@ class RdProjectDeliverableUpdate(BaseModel):
     file_url: Optional[str] = None
     file_name: Optional[str] = None
     file_uuid: Optional[str] = None
+    material_code: Optional[str] = Field(None, max_length=80)
+    legacy_material_code: Optional[str] = Field(None, max_length=80)
 
 
 class RdProjectDeliverableResponse(RdProjectDeliverableBase):

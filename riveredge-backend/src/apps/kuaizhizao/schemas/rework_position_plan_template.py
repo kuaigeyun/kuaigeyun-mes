@@ -6,6 +6,8 @@ from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from core.schemas.base import UuidStrCoerceMixin
+
 
 class ReworkPositionPlanTemplateItemBase(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -27,9 +29,10 @@ class ReworkPositionPlanTemplateItemCreate(ReworkPositionPlanTemplateItemBase):
     pass
 
 
-class ReworkPositionPlanTemplateItemResponse(ReworkPositionPlanTemplateItemBase):
+class ReworkPositionPlanTemplateItemResponse(ReworkPositionPlanTemplateItemBase, UuidStrCoerceMixin):
     id: int
     template_id: int
+    uuid: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -57,7 +60,7 @@ class ReworkPositionPlanTemplateUpdate(BaseModel):
     )
 
 
-class ReworkPositionPlanTemplateResponse(BaseModel):
+class ReworkPositionPlanTemplateResponse(UuidStrCoerceMixin):
     model_config = ConfigDict(from_attributes=True)
 
     id: int

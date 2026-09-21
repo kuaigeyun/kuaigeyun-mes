@@ -21,7 +21,7 @@ import {
   type EngineeringChange,
 } from '../services/engineering-change';
 import { isIndustryFormProfileActive } from '../../../utils/industryFormProfile';
-import { buildEcnDetailMaterialColumns } from '../utils/ecnFormProfile';
+import { buildEcnDetailMaterialColumns, sortedHeaderFields } from '../utils/ecnFormProfile';
 import {
   buildBomChangeCreateUrl,
   buildMasterDataUrl,
@@ -108,6 +108,10 @@ const ChangeDetailDrawer: React.FC<ChangeDetailDrawerProps> = ({ row, onClose, o
   }, [row?.change_category]);
 
   const ecnIndustryActive = isIndustryFormProfileActive(ecnFormProfile);
+  const ecnHeaderFields = useMemo(
+    () => sortedHeaderFields(ecnFormProfile, ecnIndustryActive),
+    [ecnFormProfile, ecnIndustryActive],
+  );
   const ecnMaterialColumns = useMemo(
     () => buildEcnDetailMaterialColumns(ecnFormProfile, t, ecnIndustryActive),
     [ecnFormProfile, ecnIndustryActive, t],
@@ -269,6 +273,20 @@ const ChangeDetailDrawer: React.FC<ChangeDetailDrawerProps> = ({ row, onClose, o
                   ) : null}
                   {category === 'ecn' ? (
                     <>
+                      {ecnHeaderFields.map((field) => {
+                        const key = String(field.key || '');
+                        if (!key) return null;
+                        const raw = ecnDetail?.extension_payload?.[key];
+                        return (
+                          <Descriptions.Item
+                            key={key}
+                            label={String(field.label || key)}
+                            span={field.type === 'textarea' ? 2 : 1}
+                          >
+                            {raw != null && raw !== '' ? String(raw) : '-'}
+                          </Descriptions.Item>
+                        );
+                      })}
                       {(ecnFormProfile?.header_option_flags || []).map((flag) => {
                         const key = String(flag.key || '');
                         if (!key) return null;

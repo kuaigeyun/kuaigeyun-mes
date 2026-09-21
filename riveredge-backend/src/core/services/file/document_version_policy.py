@@ -18,6 +18,8 @@ class DocumentVersionAudience(str, Enum):
 
 
 DOCUMENT_GLOBAL_VIEW_PERMISSION = "system:document-global-view:read"
+# 资深制定方：可查看历史版本（等同全局总查看，禁止页面写人员名单）
+DOCUMENT_SENIOR_AUTHOR_PERMISSION = "system:document-senior-author:read"
 
 
 def resolve_audience(
@@ -30,6 +32,8 @@ def resolve_audience(
         str(c or "").strip().lower() for c in (permission_codes or []) if str(c or "").strip()
     }
     if DOCUMENT_GLOBAL_VIEW_PERMISSION in codes:
+        return DocumentVersionAudience.GLOBAL_VIEWER
+    if DOCUMENT_SENIOR_AUTHOR_PERMISSION in codes:
         return DocumentVersionAudience.GLOBAL_VIEWER
     if production_context:
         return DocumentVersionAudience.PRODUCTION

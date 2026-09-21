@@ -1137,6 +1137,8 @@ class RdProjectService(AppBaseService[RdProject]):
             existing.file_url = row.file_url
             existing.file_name = row.file_name
             existing.file_uuid = getattr(row, "file_uuid", None)
+            existing.material_code = getattr(row, "material_code", None)
+            existing.legacy_material_code = getattr(row, "legacy_material_code", None)
             existing.updated_by = row.updated_by
             existing.updated_by_name = actor_name or getattr(row, "updated_by_name", None)
             if is_effective and not existing.effective_at:
@@ -1156,6 +1158,8 @@ class RdProjectService(AppBaseService[RdProject]):
             file_url=row.file_url,
             file_name=row.file_name,
             file_uuid=getattr(row, "file_uuid", None),
+            material_code=getattr(row, "material_code", None),
+            legacy_material_code=getattr(row, "legacy_material_code", None),
             change_summary=change_summary,
             effective_at=resolve_business_datetime() if is_effective else None,
             created_by=row.created_by,
@@ -1164,10 +1168,71 @@ class RdProjectService(AppBaseService[RdProject]):
             updated_by_name=getattr(row, "updated_by_name", None) or actor_name,
         )
 
+    async def _validate_deliverable_write(
+        self,
+        tenant_id: int,
+        *,
+        project_code: Optional[str],
+        deliverable_type: Optional[str],
+        material_code: Optional[str],
+        legacy_material_code: Optional[str],
+        file_name: Optional[str],
+        permission_codes: Optional[List[str]] = None,
+    ) -> None:
+        from apps.kuaiplm.utils.rd_deliverable_naming import (
+            PART_SPEC_TYPES,
+            validate_deliverable_catalog,
+        )
+        from core.services.application.industry_extension_runtime_service import (
+            IndustryExtensionRuntimeService,
+        )
+
+        profile: dict = {}
+        try:
+            profile = await IndustryExtensionRuntimeService.resolve_profile(
+                tenant_id, "kuaiplm.rd_deliverable"
+            )
+        except Exception:
+            profile = {}
+        naming_rules = profile.get("naming_rules") if isinstance(profile, dict) else None
+        validate_deliverable_catalog(
+            deliverable_type=deliverable_type,
+            material_code=material_code,
+            legacy_material_code=legacy_material_code,
+            file_name=file_name,
+            project_code=project_code,
+            naming_rules=naming_rules if isinstance(naming_rules, dict) else None,
+        )
+        dtype = (deliverable_type or "").strip().lower()
+        if dtype in PART_SPEC_TYPES or dtype in (naming_rules or {}).get("part_spec_types", []):
+            codes = {str(c or "").strip().lower() for c in (permission_codes or [])}
+            allowed = {
+                "kuaiplm:project:create",
+                "kuaiplm:project:update",
+                "kuaiplm:project:upload-part-spec",
+            }
+            if not codes.intersection(allowed):
+                raise BusinessLogicError("上传部品规格书须具备研发项目维护或 IQC 部品规格书上传权限")
+
     async def create_deliverable(
-        self, tenant_id: int, project_id: int, data: RdProjectDeliverableCreate, created_by: int
+        self,
+        tenant_id: int,
+        project_id: int,
+        data: RdProjectDeliverableCreate,
+        created_by: int,
+        *,
+        permission_codes: Optional[List[str]] = None,
     ) -> RdProjectDeliverableResponse:
-        await self._get_project_or_404(tenant_id, project_id)
+        project = await self._get_project_or_404(tenant_id, project_id)
+        await self._validate_deliverable_write(
+            tenant_id,
+            project_code=project.project_code,
+            deliverable_type=data.deliverable_type,
+            material_code=getattr(data, "material_code", None),
+            legacy_material_code=getattr(data, "legacy_material_code", None),
+            file_name=data.file_name,
+            permission_codes=permission_codes,
+        )
         if data.gate_id is not None:
             gate = await RdProjectGate.get_or_none(
                 tenant_id=tenant_id, id=data.gate_id, project_id=project_id
@@ -1191,6 +1256,8 @@ class RdProjectService(AppBaseService[RdProject]):
             file_url=data.file_url,
             file_name=data.file_name,
             file_uuid=getattr(data, "file_uuid", None),
+            material_code=(getattr(data, "material_code", None) or "").strip() or None,
+            legacy_material_code=(getattr(data, "legacy_material_code", None) or "").strip() or None,
             created_by=created_by,
             created_by_name=user_info["name"],
             updated_by=created_by,
@@ -1200,13 +1267,21 @@ class RdProjectService(AppBaseService[RdProject]):
         return RdProjectDeliverableResponse.model_validate(row)
 
     async def update_deliverable(
-        self, tenant_id: int, project_id: int, deliverable_id: int, data: RdProjectDeliverableUpdate, updated_by: int
+        self,
+        tenant_id: int,
+        project_id: int,
+        deliverable_id: int,
+        data: RdProjectDeliverableUpdate,
+        updated_by: int,
+        *,
+        permission_codes: Optional[List[str]] = None,
     ) -> RdProjectDeliverableResponse:
         row = await RdProjectDeliverable.get_or_none(
             tenant_id=tenant_id, id=deliverable_id, project_id=project_id, deleted_at__isnull=True
         )
         if not row:
             raise NotFoundError(f"交付物不存在: {deliverable_id}")
+        project = await self._get_project_or_404(tenant_id, project_id)
         user_info = await self.get_user_info(updated_by)
         update_fields: Dict[str, Any] = {
             "updated_by": updated_by,
@@ -1221,10 +1296,28 @@ class RdProjectService(AppBaseService[RdProject]):
             "file_url",
             "file_name",
             "file_uuid",
+            "material_code",
+            "legacy_material_code",
         ):
             val = getattr(data, field, None)
             if val is not None:
-                update_fields[field] = val
+                if field in {"material_code", "legacy_material_code"}:
+                    update_fields[field] = str(val).strip() or None
+                else:
+                    update_fields[field] = val
+        merged_type = update_fields.get("deliverable_type", row.deliverable_type)
+        merged_material = update_fields.get("material_code", row.material_code)
+        merged_legacy = update_fields.get("legacy_material_code", row.legacy_material_code)
+        merged_file = update_fields.get("file_name", row.file_name)
+        await self._validate_deliverable_write(
+            tenant_id,
+            project_code=project.project_code,
+            deliverable_type=merged_type,
+            material_code=merged_material,
+            legacy_material_code=merged_legacy,
+            file_name=merged_file,
+            permission_codes=permission_codes,
+        )
         if data.status is not None:
             status = str(data.status).strip().upper()
             if status not in {s.value for s in RdDeliverableStatus}:

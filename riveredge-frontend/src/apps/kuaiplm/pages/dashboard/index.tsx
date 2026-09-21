@@ -8,11 +8,11 @@
 
 
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 
 import { useQuery } from '@tanstack/react-query';
 
-import { Table, Tag, theme } from 'antd';
+import { Segmented, Space, Table, Tag, theme } from 'antd';
 
 import {
 
@@ -63,7 +63,7 @@ import { getDashboardSummary, type MyTaskItem } from '../../services/dashboard';
 
 import { listUnifiedChanges } from '../../services/change-desk';
 
-import RdProjectGanttChart from '../../components/RdProjectGanttChart';
+import RdProjectGanttChart, { type RdGanttViewMode } from '../../components/RdProjectGanttChart';
 import { formatDateTime } from '../../../../utils/format';
 import {
   getKuaiplmChangeCategoryText,
@@ -118,10 +118,28 @@ const KuaiplmDashboard: React.FC = () => {
 
 
 
+  const [ganttViewMode, setGanttViewMode] = useState<RdGanttViewMode>('week');
+
+  const ganttViewOptions = useMemo(
+    () => [
+      { label: t('app.kuaiplm.gantt.viewDay'), value: 'day' as const },
+      { label: t('app.kuaiplm.gantt.viewWeek'), value: 'week' as const },
+      { label: t('app.kuaiplm.gantt.viewMonth'), value: 'month' as const },
+    ],
+    [t],
+  );
+
   const progressByProjectId = useMemo(() => {
     const map = new Map<number, number>();
-    (data?.project_gantt ?? []).forEach((p) => {
-      if (p.id != null) map.set(p.id, Math.round(Number(p.progress ?? 0)));
+    (data?.project_gantt ?? []).forEach((row) => {
+      const projectId = row.project_id;
+      if (projectId == null) {
+        return;
+      }
+      const pct = row.project_progress ?? (row.gate_id === 0 ? row.progress : undefined);
+      if (pct != null) {
+        map.set(projectId, Math.round(Number(pct)));
+      }
     });
     return map;
   }, [data?.project_gantt]);
@@ -386,15 +404,23 @@ const KuaiplmDashboard: React.FC = () => {
         <ModuleChartPanel
           title={t('app.kuaiplm.dashboard.chart.ganttTitle')}
           extra={
-            <a onClick={() => navigate('/apps/kuaiplm/rd-projects')}>
-              {t('app.kuaiplm.common.actions.manageProjects')}
-            </a>
+            <Space size={12} align="center">
+              <Segmented
+                size="small"
+                value={ganttViewMode}
+                options={ganttViewOptions}
+                onChange={(value) => setGanttViewMode(value as RdGanttViewMode)}
+              />
+              <a onClick={() => navigate('/apps/kuaiplm/rd-projects')}>
+                {t('app.kuaiplm.common.actions.manageProjects')}
+              </a>
+            </Space>
           }
           loading={isLoading}
           fitContent
           layout="standalone"
         >
-          <RdProjectGanttChart items={data?.project_gantt ?? []} />
+          <RdProjectGanttChart items={data?.project_gantt ?? []} viewMode={ganttViewMode} />
         </ModuleChartPanel>
       }
 

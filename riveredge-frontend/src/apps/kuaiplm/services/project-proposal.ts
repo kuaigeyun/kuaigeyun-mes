@@ -4,6 +4,11 @@
 
 import { api } from '../../../services/api';
 
+export type SupplierAssessmentLine = {
+  material_key: string;
+  suppliers_text?: string | null;
+};
+
 const BASE = '/apps/kuaiplm/project-proposals';
 
 export type ProjectProposalStatus =
@@ -24,6 +29,24 @@ export interface ProjectProposal {
   summary?: string | null;
   customer_name?: string | null;
   expected_date?: string | null;
+  product_lines?: string[];
+  proposing_dept?: string | null;
+  proposer_name?: string | null;
+  proposed_at?: string | null;
+  sample_date?: string | null;
+  mass_production_date?: string | null;
+  sample_quantity?: string | null;
+  customer_code?: string | null;
+  contact_name?: string | null;
+  contact_phone?: string | null;
+  contact_email?: string | null;
+  customer_product_model?: string | null;
+  customer_material_types?: string[];
+  dev_req_types?: string[];
+  company_product_model?: string | null;
+  cost_change_notes?: string | null;
+  supplier_assessment_lines?: SupplierAssessmentLine[];
+  procurement_reviewer_name?: string | null;
   supplier_id?: number | null;
   supplier_code?: string | null;
   supplier_name?: string | null;
@@ -41,17 +64,28 @@ export interface ProjectProposal {
   updated_by_name?: string | null;
 }
 
-export interface ProjectProposalPayload {
+export interface ProjectProposalSalesPayload {
   project_id: number;
   title: string;
   summary?: string | null;
   customer_name?: string | null;
   expected_date?: string | null;
-  supplier_id?: number | null;
-  supplier_code?: string | null;
-  supplier_name?: string | null;
-  supplier_contact?: string | null;
-  supplier_remark?: string | null;
+  product_lines?: string[];
+  proposing_dept?: string | null;
+  proposer_name?: string | null;
+  proposed_at?: string | null;
+  sample_date?: string | null;
+  mass_production_date?: string | null;
+  sample_quantity?: string | null;
+  customer_code?: string | null;
+  contact_name?: string | null;
+  contact_phone?: string | null;
+  contact_email?: string | null;
+  customer_product_model?: string | null;
+  customer_material_types?: string[];
+  dev_req_types?: string[];
+  company_product_model?: string | null;
+  cost_change_notes?: string | null;
   remarks?: string | null;
 }
 
@@ -76,16 +110,11 @@ export const projectProposalApi = {
     const res = await api.get(`${BASE}/${id}`);
     return res as ProjectProposal;
   },
-  create: async (data: ProjectProposalPayload) => {
+  create: async (data: ProjectProposalSalesPayload) => {
     const res = await api.post(BASE, data);
     return res as ProjectProposal;
   },
-  update: async (
-    id: number,
-    data: Partial<
-      Pick<ProjectProposalPayload, 'title' | 'summary' | 'customer_name' | 'expected_date' | 'remarks'>
-    >,
-  ) => {
+  update: async (id: number, data: Partial<Omit<ProjectProposalSalesPayload, 'project_id'>>) => {
     const res = await api.put(`${BASE}/${id}`, data);
     return res as ProjectProposal;
   },
@@ -94,9 +123,11 @@ export const projectProposalApi = {
     data: {
       supplier_id?: number | null;
       supplier_code?: string | null;
-      supplier_name: string;
+      supplier_name?: string;
       supplier_contact?: string | null;
       supplier_remark?: string | null;
+      supplier_assessment_lines?: SupplierAssessmentLine[];
+      procurement_reviewer_name?: string | null;
     },
   ) => {
     const res = await api.put(`${BASE}/${id}/supplier`, data);

@@ -17,6 +17,7 @@ from apps.kuaiplm.schemas.engineering_change import (
 from apps.kuaiplm.services.engineering_change_service import EngineeringChangeService
 from core.api.deps.access import require_access
 from core.api.deps.deps import get_current_tenant
+from core.services.authorization.user_permission_service import UserPermissionService
 from infra.api.deps.deps import get_current_user
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
 from infra.models.user import User
@@ -99,7 +100,13 @@ async def create_engineering_change(
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        return await service.create(tenant_id, data, current_user)
+        codes = sorted(
+            await UserPermissionService.get_user_permissions(
+                user_id=current_user.id,
+                tenant_id=tenant_id,
+            )
+        )
+        return await service.create(tenant_id, data, current_user, permission_codes=codes)
     except Exception as e:
         raise _http(e)
 

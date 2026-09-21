@@ -173,6 +173,12 @@ class RdProjectDeliverable(BaseModel):
     file_url = fields.CharField(max_length=500, null=True, description="文件URL")
     file_name = fields.CharField(max_length=200, null=True, description="文件名")
     file_uuid = fields.CharField(max_length=36, null=True, description="core file UUID")
+    material_code = fields.CharField(
+        max_length=80, null=True, description="关联料号（测试报告/部品规格书等）"
+    )
+    legacy_material_code = fields.CharField(
+        max_length=80, null=True, description="沿用旧料号（料号变更显式关联）"
+    )
     submitted_at = fields.DatetimeField(null=True, description="提交时间")
     approved_at = fields.DatetimeField(null=True, description="批准时间")
     created_by = fields.IntField(null=True, description="创建人")

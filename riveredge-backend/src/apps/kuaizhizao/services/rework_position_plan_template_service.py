@@ -57,7 +57,27 @@ class ReworkPositionPlanTemplateService(AppBaseService[ReworkPositionPlanTemplat
             template_id=template_id,
             deleted_at__isnull=True,
         ).order_by("sequence", "line_no", "id")
-        return [ReworkPositionPlanTemplateItemResponse.model_validate(r) for r in rows]
+        return [
+            ReworkPositionPlanTemplateItemResponse(
+                id=r.id,
+                uuid=str(r.uuid) if r.uuid is not None else None,
+                template_id=r.template_id,
+                line_no=r.line_no,
+                sequence=r.sequence,
+                station_name=r.station_name,
+                section_name=r.section_name,
+                station_code=r.station_code,
+                planned_headcount=r.planned_headcount,
+                standard_minutes=r.standard_minutes,
+                planned_qty=r.planned_qty,
+                owner_user_id=r.owner_user_id,
+                owner_user_name=r.owner_user_name,
+                remarks=r.remarks,
+                created_at=r.created_at,
+                updated_at=r.updated_at,
+            )
+            for r in rows
+        ]
 
     async def _build_response(
         self,
@@ -65,7 +85,22 @@ class ReworkPositionPlanTemplateService(AppBaseService[ReworkPositionPlanTemplat
         *,
         include_items: bool = True,
     ) -> ReworkPositionPlanTemplateResponse:
-        resp = ReworkPositionPlanTemplateResponse.model_validate(row)
+        resp = ReworkPositionPlanTemplateResponse(
+            id=row.id,
+            uuid=str(row.uuid) if row.uuid is not None else None,
+            template_code=row.template_code,
+            template_name=row.template_name,
+            product_line_code=row.product_line_code,
+            is_active=row.is_active,
+            total_items=row.total_items,
+            remarks=row.remarks,
+            created_by=row.created_by,
+            created_by_name=row.created_by_name,
+            updated_by=row.updated_by,
+            updated_by_name=row.updated_by_name,
+            created_at=row.created_at,
+            updated_at=row.updated_at,
+        )
         if include_items:
             resp.items = await self._load_items(row.tenant_id, row.id)
         return resp

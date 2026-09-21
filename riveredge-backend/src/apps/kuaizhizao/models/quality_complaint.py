@@ -52,6 +52,13 @@ class QualityComplaint(BaseModel):
     unit = fields.CharField(max_length=20, null=True)
     sla_workdays = fields.IntField(default=5, description="工作日时效天数")
     due_at = fields.DatetimeField(null=True, description="要求完成时刻（工作日推算）")
+    containment_due_at = fields.DatetimeField(
+        null=True, description="围堵时效截止（客诉提交日站点17:00）"
+    )
+    corrective_sla_workdays = fields.IntField(
+        null=True, description="纠正措施工作日时效（客诉默认3日）"
+    )
+    corrective_due_at = fields.DatetimeField(null=True, description="纠正措施截止时刻")
     supplier_response = fields.TextField(null=True, description="供方整改说明")
     supplier_response_attachments = fields.JSONField(null=True)
     attachments = fields.JSONField(null=True)

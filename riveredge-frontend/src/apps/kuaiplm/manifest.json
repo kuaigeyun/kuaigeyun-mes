@@ -262,6 +262,7 @@
     "kuaiplm:project:delete",
     "kuaiplm:project:update",
     "kuaiplm:project:export",
+    "kuaiplm:project:upload-part-spec",
     "kuaiplm:gate-template:read",
     "kuaiplm:gate-template:create",
     "kuaiplm:gate-template:update",

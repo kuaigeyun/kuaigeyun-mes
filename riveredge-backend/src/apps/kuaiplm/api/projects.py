@@ -59,6 +59,15 @@ def _err(status_code: int, message: str, route: str, tenant_id: Optional[int] = 
     return HTTPException(status_code=status_code, detail={"message": message, "trace_id": trace_id})
 
 
+async def _permission_codes(user: User, tenant_id: int) -> list[str]:
+    return sorted(
+        await UserPermissionService.get_user_permissions(
+            user_id=user.id,
+            tenant_id=tenant_id,
+        )
+    )
+
+
 @router.get("", summary="List projects")
 async def list_projects(
     skip: int = Query(0, ge=0),
@@ -248,9 +257,14 @@ async def create_deliverable(
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        return await service.create_deliverable(tenant_id, project_id, data, current_user.id)
+        codes = await _permission_codes(current_user, tenant_id)
+        return await service.create_deliverable(
+            tenant_id, project_id, data, current_user.id, permission_codes=codes
+        )
     except NotFoundError as e:
         raise _err(404, str(e), f"/rd-projects/{project_id}/deliverables", tenant_id)
+    except BusinessLogicError as e:
+        raise _err(422, str(e), f"/rd-projects/{project_id}/deliverables", tenant_id)
 
 
 @router.put(
@@ -267,11 +281,19 @@ async def update_deliverable(
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        return await service.update_deliverable(tenant_id, project_id, deliverable_id, data, current_user.id)
+        codes = await _permission_codes(current_user, tenant_id)
+        return await service.update_deliverable(
+            tenant_id,
+            project_id,
+            deliverable_id,
+            data,
+            current_user.id,
+            permission_codes=codes,
+        )
     except NotFoundError as e:
         raise _err(404, str(e), f"/rd-projects/{project_id}/deliverables/{deliverable_id}", tenant_id)
     except BusinessLogicError as e:
-        raise _err(400, str(e), f"/rd-projects/{project_id}/deliverables/{deliverable_id}", tenant_id)
+        raise _err(422, str(e), f"/rd-projects/{project_id}/deliverables/{deliverable_id}", tenant_id)
 
 
 @router.delete(

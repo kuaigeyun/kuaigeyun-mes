@@ -323,6 +323,7 @@ class SupplierEvalPlanCreate(BaseModel):
     period_quarter: Optional[int] = None
     template_id: int
     audit_mode: str = "document"
+    reminder_lead_days: int = Field(7, ge=1, le=365, description="评价截止前提醒提前天数")
     remarks: Optional[str] = None
     lines: List[SupplierEvalPlanLineInput] = Field(default_factory=list)
 
@@ -334,6 +335,7 @@ class SupplierEvalPlanUpdate(BaseModel):
     period_quarter: Optional[int] = None
     template_id: Optional[int] = None
     audit_mode: Optional[str] = None
+    reminder_lead_days: Optional[int] = Field(None, ge=1, le=365)
     remarks: Optional[str] = None
     lines: Optional[List[SupplierEvalPlanLineInput]] = None
 
@@ -352,6 +354,7 @@ class SupplierEvalPlanResponse(BaseModel):
     template_code: Optional[str] = None
     template_name: Optional[str] = None
     audit_mode: str
+    reminder_lead_days: int = 7
     status: str
     remarks: Optional[str] = None
     lines: List[SupplierEvalPlanLineResponse] = Field(default_factory=list)

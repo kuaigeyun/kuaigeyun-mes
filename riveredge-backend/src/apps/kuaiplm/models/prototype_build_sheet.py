@@ -59,4 +59,8 @@ class PrototypeBuildSheet(BaseModel):
     approved_at = fields.DatetimeField(null=True)
     issued_at = fields.DatetimeField(null=True)
     closed_at = fields.DatetimeField(null=True)
+    created_by = fields.IntField(null=True)
+    created_by_name = fields.CharField(max_length=100, null=True)
+    updated_by = fields.IntField(null=True)
+    updated_by_name = fields.CharField(max_length=100, null=True)
     deleted_at = fields.DatetimeField(null=True)

@@ -6,6 +6,8 @@ from typing import Any, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from core.schemas.base import UuidStrCoerceMixin
+
 
 class QualityComplaintBase(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -59,6 +61,7 @@ class QualityComplaintUpdate(BaseModel):
     quantity: Optional[Decimal] = None
     unit: Optional[str] = Field(None, max_length=20)
     sla_workdays: Optional[int] = Field(None, ge=1, le=365)
+    corrective_sla_workdays: Optional[int] = Field(None, ge=1, le=365)
     attachments: Optional[List[dict]] = None
     eight_d_report_id: Optional[int] = None
     source_inspection_type: Optional[str] = Field(None, max_length=50)
@@ -70,13 +73,16 @@ class QualityComplaintUpdate(BaseModel):
     extension_payload: Optional[dict] = None
 
 
-class QualityComplaintResponse(QualityComplaintBase):
+class QualityComplaintResponse(QualityComplaintBase, UuidStrCoerceMixin):
     id: int
     uuid: str
     tenant_id: int
     code: str
     status: str
     due_at: Optional[datetime] = None
+    containment_due_at: Optional[datetime] = None
+    corrective_due_at: Optional[datetime] = None
+    corrective_sla_workdays: Optional[int] = None
     supplier_response: Optional[str] = None
     supplier_response_attachments: Optional[Any] = None
     export_masked: bool = False
@@ -95,8 +101,7 @@ class QualityComplaintResponse(QualityComplaintBase):
     updated_at: datetime
 
 
-class QualityComplaintListItem(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+class QualityComplaintListItem(UuidStrCoerceMixin):
 
     id: int
     uuid: str

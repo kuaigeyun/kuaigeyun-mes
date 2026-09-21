@@ -284,6 +284,11 @@ ENTITY_MODEL_BY_RULE_CODE: Dict[str, Tuple[str, str]] = {
         "LabelOuterBox",
     ),
     "QUALITY_COMPLAINT_CODE": ("apps.kuaizhizao.models.quality_complaint", "QualityComplaint"),
+    "QUALITY_COMPLAINT_IQC_CODE": ("apps.kuaizhizao.models.quality_complaint", "QualityComplaint"),
+    "QUALITY_COMPLAINT_LINE_CODE": ("apps.kuaizhizao.models.quality_complaint", "QualityComplaint"),
+    "QUALITY_COMPLAINT_PQC_CODE": ("apps.kuaizhizao.models.quality_complaint", "QualityComplaint"),
+    "QUALITY_COMPLAINT_OQC_CODE": ("apps.kuaizhizao.models.quality_complaint", "QualityComplaint"),
+    "QUALITY_COMPLAINT_CUSTOMER_CODE": ("apps.kuaizhizao.models.quality_complaint", "QualityComplaint"),
     "SUPPLIER_EVALUATION_CODE": (
         "apps.kuaizhizao.models.supplier_evaluation",
         "SupplierEvaluation",
