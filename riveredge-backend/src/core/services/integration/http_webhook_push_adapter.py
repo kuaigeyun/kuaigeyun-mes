@@ -20,6 +20,9 @@ class HttpWebhookPushAdapter:
     """IntegrationConfig.url(+headers/method) → HTTP JSON 推送。"""
 
     connector_type = "Webhook"
+    save_path = ""
+    submit_path = ""
+    audit_path = ""
 
     def supports_submit_audit(self) -> bool:
         return False

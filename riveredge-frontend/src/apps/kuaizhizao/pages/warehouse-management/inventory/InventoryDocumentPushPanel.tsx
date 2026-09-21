@@ -28,7 +28,8 @@ export interface InventoryDocumentPushPanelProps {
   embedded?: boolean;
 }
 
-const INV_DEFAULT_PROFILES = ['kingdee_stk_miscellaneous'];
+/** 默认勾选由 profiles 接口 ∩ material_batch 驱动；不写死仅金蝶 */
+const INV_DEFAULT_PROFILES: string[] = [];
 const INV_KINGDEE_PROFILES = ['kingdee_stk_miscellaneous'];
 const INV_SAVE_API_HINTS = ['miscellaneous', '其他入库', 'push_stk'];
 

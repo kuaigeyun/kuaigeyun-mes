@@ -30,7 +30,8 @@ export interface PurchaseOrderDocumentPushPanelProps {
   embedded?: boolean;
 }
 
-const PURCHASE_DEFAULT_PROFILES = ['kingdee_pur_purchaseorder'];
+/** 默认勾选由 profiles 接口 ∩ purchase_order 驱动；不写死仅金蝶 */
+const PURCHASE_DEFAULT_PROFILES: string[] = [];
 const PURCHASE_KINGDEE_PROFILES = ['kingdee_pur_purchaseorder'];
 const PURCHASE_SAVE_API_HINTS = ['purchaseorder', '采购订单', 'push_pur'];
 

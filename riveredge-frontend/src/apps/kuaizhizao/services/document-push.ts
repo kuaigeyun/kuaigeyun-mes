@@ -38,6 +38,59 @@ export interface DocumentPushResult {
 }
 
 /**
+ * 与后端 SUPPORTED_PROFILES 的 target_profile 对齐。
+ * 禁止把 connector 目录（WMS/PLM/CRM 等）当成可推目标展示。
+ */
+export const DOCUMENT_PUSH_KNOWN_PROFILES = [
+  'kingdee_prd_mo',
+  'oa_http_webhook',
+  'feishu_im_notify',
+  'kingdee_prd_morpt',
+  'kingdee_sal_saleorder',
+  'kingdee_pur_purchaseorder',
+  'kingdee_stk_miscellaneous',
+] as const;
+
+const KNOWN_PROFILE_SET = new Set<string>(DOCUMENT_PUSH_KNOWN_PROFILES);
+
+export function isKnownDocumentPushProfile(profile: string): boolean {
+  return KNOWN_PROFILE_SET.has(String(profile || '').trim());
+}
+
+/** 取某 source 在 profiles 接口中的已知可推目标（已过滤目录噪音）。 */
+export function filterProfilesForSource(
+  rows: DocumentPushProfile[] | null | undefined,
+  sourceType: string,
+): string[] {
+  const st = String(sourceType || '').trim();
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const row of rows || []) {
+    if (String(row.source_type || '').trim() !== st) continue;
+    const p = String(row.target_profile || '').trim();
+    if (!p || !isKnownDocumentPushProfile(p) || seen.has(p)) continue;
+    seen.add(p);
+    out.push(p);
+  }
+  return out;
+}
+
+/**
+ * 默认勾选：preferred ∩ 接口该 source 可用；preferred 为空则取接口全部。
+ */
+export function resolveDefaultTargetProfiles(
+  available: string[],
+  preferred: string[] | null | undefined,
+): string[] {
+  if (!available.length) return [];
+  const prefs = (preferred || []).map((p) => String(p || '').trim()).filter(Boolean);
+  if (!prefs.length) return [...available];
+  const allowed = new Set(available);
+  const hit = prefs.filter((p) => allowed.has(p));
+  return hit.length ? hit : [...available];
+}
+
+/**
  * profiles 为租户级静态注册表，短 TTL + 并发合并，避免 Hub 打开期间父页重渲染打爆接口。
  */
 const PROFILES_TTL_MS = 60_000;

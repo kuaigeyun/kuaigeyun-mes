@@ -25,6 +25,28 @@ def test_adapters_register_galaxy_webhook_and_feishu():
     assert get_push_adapter("feishu").connector_type == "feishu"
 
 
+def test_adapter_paths_and_submit_audit_capability():
+    ensure_default_adapters_registered()
+    galaxy = get_push_adapter("kingdee_galaxy")
+    webhook = get_push_adapter("Webhook")
+    feishu = get_push_adapter("feishu")
+
+    assert galaxy.supports_submit_audit() is True
+    assert galaxy.save_path.endswith("Save.common.kdsvc")
+    assert galaxy.submit_path.endswith("Submit.common.kdsvc")
+    assert galaxy.audit_path.endswith("Audit.common.kdsvc")
+
+    assert webhook.supports_submit_audit() is False
+    assert webhook.save_path == ""
+    assert webhook.submit_path == ""
+    assert webhook.audit_path == ""
+
+    assert feishu.supports_submit_audit() is False
+    assert feishu.save_path == ""
+    assert feishu.submit_path == ""
+    assert feishu.audit_path == ""
+
+
 def test_http_webhook_wrap_and_parse():
     adapter = HttpWebhookPushAdapter()
     body = adapter.wrap_save(form_id="work_order", model={"code": "WO1"}, cfg={})

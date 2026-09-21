@@ -28,8 +28,8 @@ export interface ReportingPushBatchModalProps {
   embedded?: boolean;
 }
 
-/** 模块级常量：避免每次 render 新数组触发 DocumentPushBatchPanel 重复拉 profiles/apis */
-const REPORTING_DEFAULT_PROFILES = ['kingdee_prd_morpt'];
+/** 默认勾选由 profiles 接口 ∩ reporting_record 驱动；不写死仅金蝶 */
+const REPORTING_DEFAULT_PROFILES: string[] = [];
 const REPORTING_KINGDEE_PROFILES = ['kingdee_prd_morpt'];
 const REPORTING_SAVE_API_HINTS = ['生产汇报', 'prd_morpt'];
 

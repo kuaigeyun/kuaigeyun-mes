@@ -3,11 +3,13 @@
 与「系统内下推」document_push_pull 无关；本模块只推外部系统。
 
 P2：支持多目标 fan-out（target_profiles / target_profile=*）。
+分发走 (source_type, profile)→handler 注册表；禁止再扩品牌 if/elif。
+正式写回：push_ready ∧ SUPPORTED_PROFILES（见 document_push_readiness）。
 """
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Set, Tuple
 
 from apps.kuaizhizao.services.feishu_work_order_push_service import (
     TARGET_PROFILE as WO_FEISHU_PROFILE,
@@ -37,6 +39,7 @@ from apps.kuaizhizao.services.oa_document_push_service import (
     TARGET_PROFILE as WO_OA_PROFILE,
     OaDocumentPushService,
 )
+from core.services.integration.document_push_readiness import assert_document_push_ready
 from infra.exceptions.exceptions import ValidationError
 from infra.services.business_config_service import BusinessConfigService
 
@@ -61,6 +64,241 @@ _SOURCE_CONFIG_CATEGORY: Dict[str, str] = {
 }
 
 MULTI_PROFILE_TOKEN = "*"
+
+PushHandler = Callable[..., Awaitable[Dict[str, Any]]]
+
+# (source_type, target_profile) → handler；禁止用品牌 if 扩张
+_PUSH_HANDLERS: Dict[Tuple[str, str], PushHandler] = {}
+
+
+def _disabled_result(
+    *,
+    source_type: str,
+    source_id: int,
+    target_profile: str,
+    message: str,
+) -> Dict[str, Any]:
+    return {
+        "success": False,
+        "message": message,
+        "source_type": source_type,
+        "source_id": int(source_id),
+        "target_profile": target_profile,
+    }
+
+
+def register_push_handler(
+    source_type: str,
+    target_profile: str,
+    handler: PushHandler,
+) -> None:
+    key = (str(source_type).strip(), str(target_profile).strip())
+    _PUSH_HANDLERS[key] = handler
+
+
+def list_registered_push_handlers() -> list[Tuple[str, str]]:
+    return sorted(_PUSH_HANDLERS.keys())
+
+
+async def _handle_work_order_kingdee(
+    *,
+    tenant_id: int,
+    acting_user_id: int,
+    source_id: int,
+    connection_code: Optional[str],
+    save_api_uuid: Optional[str],
+    dry_run: bool,
+    **_: Any,
+) -> Dict[str, Any]:
+    result = await KingdeeProductionOrderPushService().push_work_order(
+        tenant_id=tenant_id,
+        work_order_id=int(source_id),
+        acting_user_id=acting_user_id,
+        connection_code=connection_code,
+        save_api_uuid=save_api_uuid,
+        dry_run=dry_run,
+    )
+    if result is None:
+        return _disabled_result(
+            source_type="work_order",
+            source_id=source_id,
+            target_profile=WO_KD_PROFILE,
+            message="推送未启用或工单不存在",
+        )
+    return result
+
+
+async def _handle_work_order_oa(
+    *,
+    tenant_id: int,
+    acting_user_id: int,
+    source_id: int,
+    connection_code: Optional[str],
+    save_api_uuid: Optional[str],
+    dry_run: bool,
+    **_: Any,
+) -> Dict[str, Any]:
+    result = await OaDocumentPushService().push_work_order(
+        tenant_id=tenant_id,
+        work_order_id=int(source_id),
+        acting_user_id=acting_user_id,
+        connection_code=connection_code,
+        save_api_uuid=save_api_uuid,
+        dry_run=dry_run,
+    )
+    if result is None:
+        return _disabled_result(
+            source_type="work_order",
+            source_id=source_id,
+            target_profile=WO_OA_PROFILE,
+            message="OA 推送未启用或工单不存在",
+        )
+    return result
+
+
+async def _handle_work_order_feishu(
+    *,
+    tenant_id: int,
+    acting_user_id: int,
+    source_id: int,
+    connection_code: Optional[str],
+    save_api_uuid: Optional[str],
+    dry_run: bool,
+    **_: Any,
+) -> Dict[str, Any]:
+    result = await FeishuWorkOrderPushService().push_work_order(
+        tenant_id=tenant_id,
+        work_order_id=int(source_id),
+        acting_user_id=acting_user_id,
+        connection_code=connection_code,
+        save_api_uuid=save_api_uuid,
+        dry_run=dry_run,
+    )
+    if result is None:
+        return _disabled_result(
+            source_type="work_order",
+            source_id=source_id,
+            target_profile=WO_FEISHU_PROFILE,
+            message="飞书推送未启用或工单不存在",
+        )
+    return result
+
+
+async def _handle_reporting_kingdee(
+    *,
+    tenant_id: int,
+    acting_user_id: int,
+    source_id: int,
+    connection_code: Optional[str],
+    save_api_uuid: Optional[str],
+    dry_run: bool,
+    **_: Any,
+) -> Dict[str, Any]:
+    return await DocumentPushService()._push_reporting(
+        tenant_id=tenant_id,
+        record_id=int(source_id),
+        acting_user_id=acting_user_id,
+        connection_code=connection_code,
+        save_api_uuid=save_api_uuid,
+        dry_run=dry_run,
+    )
+
+
+async def _handle_sales_order_kingdee(
+    *,
+    tenant_id: int,
+    acting_user_id: int,
+    source_id: int,
+    connection_code: Optional[str],
+    save_api_uuid: Optional[str],
+    dry_run: bool,
+    **_: Any,
+) -> Dict[str, Any]:
+    result = await KingdeeSalesOrderPushService().push_sales_order(
+        tenant_id=tenant_id,
+        sales_order_id=int(source_id),
+        acting_user_id=acting_user_id,
+        connection_code=connection_code,
+        save_api_uuid=save_api_uuid,
+        dry_run=dry_run,
+    )
+    if result is None:
+        return _disabled_result(
+            source_type="sales_order",
+            source_id=source_id,
+            target_profile=SO_KD_PROFILE,
+            message="金蝶销售订单推送未启用或订单不存在",
+        )
+    return result
+
+
+async def _handle_purchase_order_kingdee(
+    *,
+    tenant_id: int,
+    acting_user_id: int,
+    source_id: int,
+    connection_code: Optional[str],
+    save_api_uuid: Optional[str],
+    dry_run: bool,
+    **_: Any,
+) -> Dict[str, Any]:
+    result = await KingdeePurchaseOrderPushService().push_purchase_order(
+        tenant_id=tenant_id,
+        purchase_order_id=int(source_id),
+        acting_user_id=acting_user_id,
+        connection_code=connection_code,
+        save_api_uuid=save_api_uuid,
+        dry_run=dry_run,
+    )
+    if result is None:
+        return _disabled_result(
+            source_type="purchase_order",
+            source_id=source_id,
+            target_profile=PO_KD_PROFILE,
+            message="金蝶采购订单推送未启用或订单不存在",
+        )
+    return result
+
+
+async def _handle_material_batch_kingdee(
+    *,
+    tenant_id: int,
+    acting_user_id: int,
+    source_id: int,
+    connection_code: Optional[str],
+    save_api_uuid: Optional[str],
+    dry_run: bool,
+    **_: Any,
+) -> Dict[str, Any]:
+    result = await KingdeeInventoryPushService().push_material_batch(
+        tenant_id=tenant_id,
+        material_batch_id=int(source_id),
+        acting_user_id=acting_user_id,
+        connection_code=connection_code,
+        save_api_uuid=save_api_uuid,
+        dry_run=dry_run,
+    )
+    if result is None:
+        return _disabled_result(
+            source_type="material_batch",
+            source_id=source_id,
+            target_profile=INV_KD_PROFILE,
+            message="金蝶即时库存推送未启用或批次不存在",
+        )
+    return result
+
+
+def ensure_default_push_handlers_registered() -> None:
+    """惰性注册真实已实现 profile；禁止把 WMS/PLM/CRM 虚报进来。"""
+    if _PUSH_HANDLERS:
+        return
+    register_push_handler("work_order", WO_KD_PROFILE, _handle_work_order_kingdee)
+    register_push_handler("work_order", WO_OA_PROFILE, _handle_work_order_oa)
+    register_push_handler("work_order", WO_FEISHU_PROFILE, _handle_work_order_feishu)
+    register_push_handler("reporting_record", RPT_KD_PROFILE, _handle_reporting_kingdee)
+    register_push_handler("sales_order", SO_KD_PROFILE, _handle_sales_order_kingdee)
+    register_push_handler("purchase_order", PO_KD_PROFILE, _handle_purchase_order_kingdee)
+    register_push_handler("material_batch", INV_KD_PROFILE, _handle_material_batch_kingdee)
 
 
 class DocumentPushService:
@@ -236,131 +474,38 @@ class DocumentPushService:
         save_api_uuid: Optional[str],
         dry_run: bool,
     ) -> Dict[str, Any]:
-        if source_type == "work_order" and target_profile == WO_KD_PROFILE:
-            result = await KingdeeProductionOrderPushService().push_work_order(
-                tenant_id=tenant_id,
-                work_order_id=int(source_id),
-                acting_user_id=acting_user_id,
-                connection_code=connection_code,
-                save_api_uuid=save_api_uuid,
-                dry_run=dry_run,
-            )
-            if result is None:
-                return {
-                    "success": False,
-                    "message": "推送未启用或工单不存在",
-                    "source_type": source_type,
-                    "source_id": int(source_id),
-                    "target_profile": target_profile,
-                }
-            return result
+        ensure_default_push_handlers_registered()
 
-        if source_type == "work_order" and target_profile == WO_OA_PROFILE:
-            result = await OaDocumentPushService().push_work_order(
-                tenant_id=tenant_id,
-                work_order_id=int(source_id),
-                acting_user_id=acting_user_id,
-                connection_code=connection_code,
-                save_api_uuid=save_api_uuid,
-                dry_run=dry_run,
-            )
-            if result is None:
-                return {
-                    "success": False,
-                    "message": "OA 推送未启用或工单不存在",
-                    "source_type": source_type,
-                    "source_id": int(source_id),
-                    "target_profile": target_profile,
-                }
-            return result
-
-        if source_type == "work_order" and target_profile == WO_FEISHU_PROFILE:
-            result = await FeishuWorkOrderPushService().push_work_order(
-                tenant_id=tenant_id,
-                work_order_id=int(source_id),
-                acting_user_id=acting_user_id,
-                connection_code=connection_code,
-                save_api_uuid=save_api_uuid,
-                dry_run=dry_run,
-            )
-            if result is None:
-                return {
-                    "success": False,
-                    "message": "飞书推送未启用或工单不存在",
-                    "source_type": source_type,
-                    "source_id": int(source_id),
-                    "target_profile": target_profile,
-                }
-            return result
-
-        if source_type == "reporting_record" and target_profile == RPT_KD_PROFILE:
-            return await self._push_reporting(
-                tenant_id=tenant_id,
-                record_id=int(source_id),
-                acting_user_id=acting_user_id,
-                connection_code=connection_code,
-                save_api_uuid=save_api_uuid,
-                dry_run=dry_run,
+        key = (source_type, target_profile)
+        # 正式写回条件之一：必须 ∈ SUPPORTED_PROFILES（禁止虚报）
+        if key not in SUPPORTED_PROFILES:
+            raise ValidationError(
+                f"不支持的推送组合 source_type={source_type!r} target_profile={target_profile!r}"
             )
 
-        if source_type == "sales_order" and target_profile == SO_KD_PROFILE:
-            result = await KingdeeSalesOrderPushService().push_sales_order(
-                tenant_id=tenant_id,
-                sales_order_id=int(source_id),
-                acting_user_id=acting_user_id,
-                connection_code=connection_code,
-                save_api_uuid=save_api_uuid,
-                dry_run=dry_run,
-            )
-            if result is None:
-                return {
-                    "success": False,
-                    "message": "金蝶销售订单推送未启用或订单不存在",
-                    "source_type": source_type,
-                    "source_id": int(source_id),
-                    "target_profile": target_profile,
-                }
-            return result
+        # 写门：正式推必须 push_ready；dry_run 可组装预览、不得假装已接通
+        await assert_document_push_ready(
+            tenant_id,
+            source_type=source_type,
+            target_profile=target_profile,
+            connection_code=connection_code,
+            dry_run=dry_run,
+        )
 
-        if source_type == "purchase_order" and target_profile == PO_KD_PROFILE:
-            result = await KingdeePurchaseOrderPushService().push_purchase_order(
-                tenant_id=tenant_id,
-                purchase_order_id=int(source_id),
-                acting_user_id=acting_user_id,
-                connection_code=connection_code,
-                save_api_uuid=save_api_uuid,
-                dry_run=dry_run,
-            )
-            if result is None:
-                return {
-                    "success": False,
-                    "message": "金蝶采购订单推送未启用或订单不存在",
-                    "source_type": source_type,
-                    "source_id": int(source_id),
-                    "target_profile": target_profile,
-                }
-            return result
+        handler = _PUSH_HANDLERS.get(key)
+        if handler is None:
+            raise ValidationError(f"未实现的推送适配: {source_type}/{target_profile}")
 
-        if source_type == "material_batch" and target_profile == INV_KD_PROFILE:
-            result = await KingdeeInventoryPushService().push_material_batch(
-                tenant_id=tenant_id,
-                material_batch_id=int(source_id),
-                acting_user_id=acting_user_id,
-                connection_code=connection_code,
-                save_api_uuid=save_api_uuid,
-                dry_run=dry_run,
-            )
-            if result is None:
-                return {
-                    "success": False,
-                    "message": "金蝶即时库存推送未启用或批次不存在",
-                    "source_type": source_type,
-                    "source_id": int(source_id),
-                    "target_profile": target_profile,
-                }
-            return result
-
-        raise ValidationError(f"未实现的推送适配: {source_type}/{target_profile}")
+        return await handler(
+            tenant_id=tenant_id,
+            acting_user_id=acting_user_id,
+            source_type=source_type,
+            source_id=int(source_id),
+            target_profile=target_profile,
+            connection_code=connection_code,
+            save_api_uuid=save_api_uuid,
+            dry_run=dry_run,
+        )
 
     async def _push_reporting(
         self,

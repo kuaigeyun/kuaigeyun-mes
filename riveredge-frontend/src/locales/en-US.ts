@@ -4367,6 +4367,9 @@ export default {
   'app.kuaizhizao.workReporting.deleteSelectedConfirm': 'Delete {{count}} selected reporting record(s)?',
   'app.kuaizhizao.workReporting.createButton': 'New reporting record',
   'app.kuaizhizao.workReporting.createModalTitle': 'New reporting record',
+  'components.syncPushHub.pushNotReady':
+    'Push not ready: no available targets, or missing application connection / API config',
+  'components.syncPushHub.goConfigureConnection': 'Configure',
   'app.kuaizhizao.documentPush.preview': 'Preview payload',
   'app.kuaizhizao.documentPush.previewTitle': 'Push payload preview (dry-run)',
   'app.kuaizhizao.documentPush.previewSourceNote':
@@ -4384,6 +4387,9 @@ export default {
   'app.kuaizhizao.documentPush.batch.needTargetProfile': 'Select at least one push target (profile)',
   'app.kuaizhizao.documentPush.batch.needConnector': 'Select an application connector first',
   'app.kuaizhizao.documentPush.batch.needApi': 'Select a Save API from API management first',
+  'app.kuaizhizao.documentPush.batch.profilesLoading': 'Loading available push targets…',
+  'app.kuaizhizao.documentPush.batch.noProfiles':
+    'No registered push targets for this document type; configure an application connection first',
   'app.kuaizhizao.documentPush.batch.connectorPlaceholder': 'Application connector',
   'app.kuaizhizao.documentPush.batch.apiPlaceholder': 'Save API (API management)',
   'app.kuaizhizao.documentPush.batch.connectorEmpty': 'No active Kingdee Galaxy connectors',

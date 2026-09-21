@@ -13,6 +13,10 @@ class DocumentPushAdapter(Protocol):
     """连接器协议适配：组信封、调用、解析结果；不感知业务单据。"""
 
     connector_type: str
+    # 直连 API 路径；无 Submit/Audit 的 Adapter 可留空字符串
+    save_path: str
+    submit_path: str
+    audit_path: str
 
     def wrap_save(
         self, *, form_id: str, model: Dict[str, Any], cfg: Optional[Dict[str, Any]] = None
@@ -55,7 +59,7 @@ class DocumentPushAdapter(Protocol):
         ...
 
     def supports_submit_audit(self) -> bool:
-        """是否支持 Save 后 Submit/Audit 生命周期（金蝶有，Webhook 无）。"""
+        """是否支持 Save 后 Submit/Audit 生命周期（金蝶有，Webhook/飞书无）。"""
         ...
 
 

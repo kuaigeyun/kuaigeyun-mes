@@ -23,6 +23,9 @@ class FeishuImPushAdapter:
     """飞书开放平台：将单据 Model 推成 IM 文本/卡片消息。"""
 
     connector_type = "feishu"
+    save_path = ""
+    submit_path = ""
+    audit_path = ""
 
     def supports_submit_audit(self) -> bool:
         return False

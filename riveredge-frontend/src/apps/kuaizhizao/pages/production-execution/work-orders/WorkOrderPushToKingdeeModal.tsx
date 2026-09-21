@@ -32,8 +32,11 @@ export interface WorkOrderPushToKingdeeModalProps {
   embedded?: boolean;
 }
 
-/** 模块级常量：避免每次 render 新数组触发 DocumentPushBatchPanel 重复拉 profiles/apis */
-const WORK_ORDER_DEFAULT_PROFILES = ['kingdee_prd_mo'];
+/**
+ * 默认勾选由 GET /document-push/profiles ∩ work_order 驱动（含 OA/飞书若已注册）。
+ * 空数组 = 不写死仅金蝶；kingdeeProfiles 仍用于连接器/Save 门控。
+ */
+const WORK_ORDER_DEFAULT_PROFILES: string[] = [];
 const WORK_ORDER_KINGDEE_PROFILES = ['kingdee_prd_mo'];
 const WORK_ORDER_SAVE_API_HINTS = ['生产订单', 'prd_mo'];
 

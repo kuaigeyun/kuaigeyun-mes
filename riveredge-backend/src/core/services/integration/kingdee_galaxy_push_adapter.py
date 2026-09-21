@@ -77,6 +77,9 @@ class KingdeeGalaxyPushAdapter:
     """按 IntegrationConfig.type=kingdee_galaxy 调用 Save/Submit/Audit。"""
 
     connector_type = "kingdee_galaxy"
+    save_path = SAVE_PATH
+    submit_path = SUBMIT_PATH
+    audit_path = AUDIT_PATH
 
     def supports_submit_audit(self) -> bool:
         return True

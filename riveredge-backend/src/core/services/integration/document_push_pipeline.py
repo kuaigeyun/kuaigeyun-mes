@@ -192,14 +192,9 @@ class DocumentPushPipeline:
                 timeout=timeout,
             )
         else:
-            save_path = ""
-            if str(getattr(adapter, "connector_type", "") or "") == "kingdee_galaxy":
-                from core.services.integration.kingdee_galaxy_push_adapter import SAVE_PATH
-
-                save_path = SAVE_PATH
             response = await adapter.call_direct(
                 connection,
-                save_path,
+                adapter.save_path,
                 body,
                 timeout=timeout,
             )
@@ -211,18 +206,13 @@ class DocumentPushPipeline:
         fallback = str(request.source_code or request.source_id or "")
         target_id, bill_no = adapter.parse_bill_ref(response, fallback=fallback)
 
+        # Submit/Audit 仅 supports_submit_audit() 为 True 的 Adapter（金蝶）
         if adapter.supports_submit_audit():
-            # 金蝶 Save 路径常量仅 Galaxy 使用
-            from core.services.integration.kingdee_galaxy_push_adapter import (
-                AUDIT_PATH,
-                SUBMIT_PATH,
-            )
-
             if bool(config.get("submit_after_save", False)):
                 await self._submit_or_audit(
                     adapter,
                     connection,
-                    SUBMIT_PATH,
+                    adapter.submit_path,
                     form_id,
                     bill_id=target_id,
                     bill_no=bill_no,
@@ -232,7 +222,7 @@ class DocumentPushPipeline:
                 await self._submit_or_audit(
                     adapter,
                     connection,
-                    AUDIT_PATH,
+                    adapter.audit_path,
                     form_id,
                     bill_id=target_id,
                     bill_no=bill_no,

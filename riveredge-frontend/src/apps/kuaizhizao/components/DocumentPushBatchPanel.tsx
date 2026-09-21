@@ -11,14 +11,17 @@ import {
   UniPullQueryModal,
   useUniPullQuery,
 } from '../../../components/uni-pull-query';
+import { DocumentPushUnavailablePanel } from '../../../components/sync-push-hub';
 import {
   getApplicationConnectionListAll,
   type ApplicationConnection,
 } from '../../../services/applicationConnection';
 import { getAPIList, type API } from '../../../services/apiManagement';
 import {
+  filterProfilesForSource,
   listDocumentPushProfiles,
   pushDocumentExternal,
+  resolveDefaultTargetProfiles,
 } from '../services/document-push';
 
 export const DOCUMENT_PUSH_PROFILE_LABEL_KEYS: Record<string, string> = {
@@ -45,7 +48,11 @@ export interface DocumentPushBatchPanelProps<T extends { id: number }> {
   embedded?: boolean;
   preferIds?: number[];
   sourceType: string;
-  defaultProfiles: string[];
+  /**
+   * 偏好勾选（与 GET /document-push/profiles ∩ source 求交）。
+   * 空数组 = 该 source 接口返回的全部已知 profile 作为默认；禁止写死「仅金蝶」。
+   */
+  defaultProfiles?: string[];
   /** 勾选后需要金蝶连接器 + Save 接口的 profile */
   kingdeeProfiles?: string[];
   title: string;
@@ -87,7 +94,7 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
   embedded = false,
   preferIds,
   sourceType,
-  defaultProfiles,
+  defaultProfiles = EMPTY_STRING_ARRAY,
   kingdeeProfiles = EMPTY_STRING_ARRAY,
   title,
   hint,
@@ -121,7 +128,9 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
   const [connectorsLoading, setConnectorsLoading] = useState(false);
   const [apisLoading, setApisLoading] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
-  const [targetProfiles, setTargetProfiles] = useState<string[]>(defaultProfiles);
+  const [profilesLoading, setProfilesLoading] = useState(false);
+  const [profilesLoaded, setProfilesLoaded] = useState(false);
+  const [targetProfiles, setTargetProfiles] = useState<string[]>([]);
   const [profileOptions, setProfileOptions] = useState<Array<{ label: string; value: string }>>([]);
   const preferIdsRef = useRef<number[]>([]);
   const prefilledRef = useRef(false);
@@ -130,12 +139,14 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
   const saveApiUuidRef = useRef<string | undefined>();
   const syncModeRef = useRef('manual_full');
   const scheduleIntervalRef = useRef(15);
-  const targetProfilesRef = useRef<string[]>(defaultProfiles);
+  const targetProfilesRef = useRef<string[]>([]);
+  const profileOptionsRef = useRef<Array<{ label: string; value: string }>>([]);
   connectionCodeRef.current = connectionCode;
   saveApiUuidRef.current = saveApiUuid;
   syncModeRef.current = syncMode;
   scheduleIntervalRef.current = scheduleIntervalMinutes;
   targetProfilesRef.current = targetProfiles;
+  profileOptionsRef.current = profileOptions;
 
   const needsKingdeeConnector = useMemo(
     () => targetProfiles.some((p) => kingdeeProfiles.includes(p)),
@@ -231,41 +242,32 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    const defaults = defaultProfilesRef.current;
+    const preferred = defaultProfilesRef.current;
     const labelOf = profileLabelRef.current;
+    setProfilesLoading(true);
+    setProfilesLoaded(false);
     void (async () => {
       try {
         const rows = await listDocumentPushProfiles();
         if (cancelled) return;
-        const opts = (rows || [])
-          .filter((r) => r.source_type === sourceType)
-          .map((r) => ({
-            value: r.target_profile,
-            label: labelOf(r.target_profile),
-          }));
-        if (opts.length) {
-          setProfileOptions(opts);
-          setTargetProfiles((prev) => {
-            const allowed = new Set(opts.map((o) => o.value));
-            const kept = prev.filter((p) => allowed.has(p));
-            return kept.length ? kept : [opts[0].value];
-          });
-        } else {
-          setProfileOptions(
-            defaults.map((p) => ({
-              value: p,
-              label: labelOf(p),
-            })),
-          );
-        }
+        // 仅展示接口 ∩ 已知 SUPPORTED profile；不把 connector 目录品类当目标
+        const available = filterProfilesForSource(rows, sourceType);
+        const opts = available.map((value) => ({
+          value,
+          label: labelOf(value),
+        }));
+        setProfileOptions(opts);
+        setTargetProfiles(resolveDefaultTargetProfiles(available, preferred));
       } catch {
         if (cancelled) return;
-        setProfileOptions(
-          defaults.map((p) => ({
-            value: p,
-            label: labelOf(p),
-          })),
-        );
+        // 失败时禁止回退到硬编码默认（避免伪造成功可推）
+        setProfileOptions([]);
+        setTargetProfiles([]);
+      } finally {
+        if (!cancelled) {
+          setProfilesLoading(false);
+          setProfilesLoaded(true);
+        }
       }
     })();
     return () => {
@@ -300,6 +302,75 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
     })();
   }, [loadBinding, open]);
 
+  const allowedProfileSet = useMemo(
+    () => new Set(profileOptions.map((o) => o.value)),
+    [profileOptions],
+  );
+
+  const profilesReady = useMemo(() => {
+    if (!profilesLoaded || profilesLoading) return false;
+    if (!profileOptions.length || !targetProfiles.length) return false;
+    return targetProfiles.every((p) => allowedProfileSet.has(p));
+  }, [
+    allowedProfileSet,
+    profileOptions.length,
+    profilesLoaded,
+    profilesLoading,
+    targetProfiles,
+  ]);
+
+  const connectorReady = useMemo(() => {
+    if (!needsKingdeeConnector) return true;
+    if (connectorsLoading) return false;
+    if (!connectionCode) return false;
+    if (matchSaveApi) {
+      if (apisLoading) return false;
+      if (!saveApiUuid) return false;
+    }
+    return true;
+  }, [
+    apisLoading,
+    connectionCode,
+    connectorsLoading,
+    matchSaveApi,
+    needsKingdeeConnector,
+    saveApiUuid,
+  ]);
+
+  const pushReady = profilesReady && connectorReady;
+  const pushReadyRef = useRef(pushReady);
+  pushReadyRef.current = pushReady;
+
+  const notReadyReason = useMemo(() => {
+    if (!profilesLoaded || profilesLoading) {
+      return t('app.kuaizhizao.documentPush.batch.profilesLoading');
+    }
+    if (!profileOptions.length) {
+      return t('app.kuaizhizao.documentPush.batch.noProfiles');
+    }
+    if (!targetProfiles.length || !targetProfiles.every((p) => allowedProfileSet.has(p))) {
+      return t('app.kuaizhizao.documentPush.batch.needTargetProfile');
+    }
+    if (needsKingdeeConnector && !connectionCode) {
+      return t('app.kuaizhizao.documentPush.batch.needConnector');
+    }
+    if (needsKingdeeConnector && matchSaveApi && !saveApiUuid) {
+      return t('app.kuaizhizao.documentPush.batch.needApi');
+    }
+    return null;
+  }, [
+    allowedProfileSet,
+    connectionCode,
+    matchSaveApi,
+    needsKingdeeConnector,
+    profileOptions.length,
+    profilesLoaded,
+    profilesLoading,
+    saveApiUuid,
+    t,
+    targetProfiles,
+  ]);
+
   const pull = useUniPullQuery<T>({
     rowKey: 'id',
     selectionType: 'checkbox',
@@ -313,6 +384,14 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
       return { data: res.data || [], total: res.total || 0 };
     },
     onConfirm: async (_keys, rows) => {
+      // 未就绪禁止推送与成功 toast
+      if (!pushReadyRef.current) {
+        Modal.warning({
+          title,
+          content: notReadyReason || t('components.syncPushHub.pushNotReady'),
+        });
+        return;
+      }
       const ids = rows.map((row) => Number(row.id)).filter((id) => Number.isFinite(id) && id > 0);
       if (!ids.length) {
         Modal.warning({ title, content: needSelectMessage });
@@ -320,7 +399,8 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
       }
       const conn = connectionCodeRef.current;
       const apiUuid = saveApiUuidRef.current;
-      const profiles = targetProfilesRef.current.filter(Boolean);
+      const allowed = new Set(profileOptionsRef.current.map((o) => o.value));
+      const profiles = targetProfilesRef.current.filter((p) => p && allowed.has(p));
       if (!profiles.length) {
         Modal.warning({
           title,
@@ -463,6 +543,13 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
   }, [open, pull.dataSource, pull.handleSelectedRowKeysChange]);
 
   const handlePreviewPayload = useCallback(async () => {
+    if (!pushReadyRef.current) {
+      Modal.warning({
+        title: t('app.kuaizhizao.documentPush.previewTitle'),
+        content: notReadyReason || t('components.syncPushHub.pushNotReady'),
+      });
+      return;
+    }
     const rows = pull.selectedRows || [];
     const first = rows[0];
     if (!first?.id) {
@@ -474,7 +561,8 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
     }
     const conn = connectionCodeRef.current;
     const apiUuid = saveApiUuidRef.current;
-    const profiles = targetProfilesRef.current.filter(Boolean);
+    const allowed = new Set(profileOptionsRef.current.map((o) => o.value));
+    const profiles = targetProfilesRef.current.filter((p) => p && allowed.has(p));
     if (!profiles.length) {
       Modal.warning({
         title: t('app.kuaizhizao.documentPush.previewTitle'),
@@ -541,7 +629,16 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
     } finally {
       setPreviewLoading(false);
     }
-  }, [failedTitleKey, kingdeeProfiles, matchSaveApi, profileLabel, pull.selectedRows, sourceType, t]);
+  }, [
+    failedTitleKey,
+    kingdeeProfiles,
+    matchSaveApi,
+    notReadyReason,
+    profileLabel,
+    pull.selectedRows,
+    sourceType,
+    t,
+  ]);
 
   const connectorOptions = useMemo(
     () =>
@@ -579,6 +676,7 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
       onCancel={pull.closeModal}
       onOk={pull.handleConfirm}
       confirmLoading={pull.confirmLoading}
+      okButtonProps={{ disabled: !pushReady || pull.confirmLoading }}
       rowKey="id"
       columns={columns}
       dataSource={pull.dataSource}
@@ -600,7 +698,12 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
       onPageChange={pull.handlePageChange}
       okText={confirmText || t('app.kuaizhizao.documentPush.batch.confirm')}
       alert={
-        <Alert type="info" showIcon message={hint} description={pipelineDesc} />
+        <Flex vertical gap={8}>
+          <Alert type="info" showIcon message={hint} description={pipelineDesc} />
+          {!pushReady && profilesLoaded ? (
+            <DocumentPushUnavailablePanel message={notReadyReason || undefined} />
+          ) : null}
+        </Flex>
       }
       filterExtraPlacement="block"
       filterExtra={
@@ -614,10 +717,15 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
                 style={{ flex: 1, minWidth: 0 }}
                 options={profileOptions}
                 value={targetProfiles}
+                disabled={profilesLoading || !profileOptions.length}
                 onChange={(vals) => setTargetProfiles(vals.map(String))}
               />
             </Flex>
-            <Button loading={previewLoading} onClick={() => void handlePreviewPayload()}>
+            <Button
+              loading={previewLoading}
+              disabled={!pushReady}
+              onClick={() => void handlePreviewPayload()}
+            >
               {t('app.kuaizhizao.documentPush.preview')}
             </Button>
           </Flex>

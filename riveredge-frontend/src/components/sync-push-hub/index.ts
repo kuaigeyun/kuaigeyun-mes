@@ -6,3 +6,5 @@ export type {
   SyncPushHubPanelContext,
   SyncPushHubTabKey,
 } from './SyncPushHubModal';
+export { DocumentPushUnavailablePanel } from './DocumentPushUnavailablePanel';
+export type { DocumentPushUnavailablePanelProps } from './DocumentPushUnavailablePanel';

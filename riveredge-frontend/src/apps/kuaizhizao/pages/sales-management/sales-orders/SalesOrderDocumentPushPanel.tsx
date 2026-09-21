@@ -30,7 +30,8 @@ export interface SalesOrderDocumentPushPanelProps {
   embedded?: boolean;
 }
 
-const SALES_DEFAULT_PROFILES = ['kingdee_sal_saleorder'];
+/** 默认勾选由 profiles 接口 ∩ sales_order 驱动；不写死仅金蝶 */
+const SALES_DEFAULT_PROFILES: string[] = [];
 const SALES_KINGDEE_PROFILES = ['kingdee_sal_saleorder'];
 const SALES_SAVE_API_HINTS = ['saleorder', '销售订单', 'push_sal'];
 
