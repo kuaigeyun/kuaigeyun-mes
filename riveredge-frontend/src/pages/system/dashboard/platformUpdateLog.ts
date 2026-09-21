@@ -36,6 +36,14 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
   {
+    id: 'uni-tabs-strip-placeholder-home-r01',
+    date: '2026-09-21',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.uni-tabs-strip-placeholder-home-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.uni-tabs-strip-placeholder-home-r01.description',
+  },
+  {
     id: 'post-login-effective-home-no-flash-r01',
     date: '2026-09-21',
     type: 'fix',

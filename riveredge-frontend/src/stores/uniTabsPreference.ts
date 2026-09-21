@@ -34,13 +34,16 @@ export function parseUniTabsPreferenceState(raw: unknown): UniTabsPreferenceStat
   if (!raw || typeof raw !== 'object') return null;
   const state = raw as UniTabsPreferenceState;
   if (!Array.isArray(state.tabs)) return null;
-  const tabs = state.tabs.filter(isValidTabItem).map((tab) => ({
-    key: tab.key,
-    path: tab.path,
-    label: tab.label,
-    closable: tab.closable,
-    pinned: Boolean(tab.pinned),
-  }));
+  const tabs = state.tabs
+    .filter(isValidTabItem)
+    .filter((tab) => !isPlaceholderHomeTabKey(tab.key))
+    .map((tab) => ({
+      key: tab.key,
+      path: tab.path,
+      label: tab.label,
+      closable: tab.closable,
+      pinned: Boolean(tab.pinned),
+    }));
   if (tabs.length === 0) return null;
   return { tabs };
 }

@@ -53,6 +53,18 @@ function isTenantDefaultHomePath(p: string): boolean {
   return (LEGACY_TENANT_DEFAULT_HOME_PATHS as readonly string[]).includes(p);
 }
 
+/** 登录/切租户中转占位首页，不得从持久化或会话恢复（真首页由 effective-home 注入） */
+function stripPlaceholderHomeTabs(tabs: TabItem[]): TabItem[] {
+  return tabs.filter((tab) => !isTenantDefaultHomePath(tab.key));
+}
+
+function tabsForPersistence(tabs: TabItem[], tenantHomePath: string, homeReady: boolean): TabItem[] {
+  const stripped = stripPlaceholderHomeTabs(tabs);
+  if (!homeReady || !tenantHomePath) return stripped;
+  if (isTenantDefaultHomePath(tenantHomePath)) return tabs;
+  return tabs.filter((tab) => !isTenantDefaultHomePath(tab.key) || tab.key === tenantHomePath);
+}
+
 /** 有效首页就绪后：剔除冲突占位首页，并把真实首页固定到第一位 */
 function normalizeTabsForTenantHome(
   tabs: TabItem[],
@@ -270,9 +282,10 @@ function loadPersistedTabs(
       return true;
     });
 
-    if (validTabs.length === 0) return null;
+    const contentTabs = stripPlaceholderHomeTabs(validTabs);
+    if (contentTabs.length === 0 && validTabs.length === 0) return null;
     const titleFor = (path: string) => findMenuTitleWithTranslation(path, menuConfig, t);
-    return dedupeTabsByPathname(normalizeTabsForTenantHome(validTabs, tenantHomePath, titleFor));
+    return dedupeTabsByPathname(normalizeTabsForTenantHome(contentTabs, tenantHomePath, titleFor));
   } catch {
     return null;
   }
@@ -382,7 +395,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     if (initTenantId != null) {
       const sessionTabs = getSessionTabs(initTenantId);
       if (sessionTabs?.length) {
-        return dedupeTabsByPathname(sessionTabs);
+        return dedupeTabsByPathname(stripPlaceholderHomeTabs(sessionTabs));
       }
     }
 
@@ -600,19 +613,31 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     const prev = prevTenantHomePathRef.current;
     const homePathChanged = prev !== null && prev !== tenantHomePath;
     const needsInitialNormalize = !didInitialHomeTabNormalizeRef.current;
-    if (!needsInitialNormalize && !homePathChanged) return;
 
-    didInitialHomeTabNormalizeRef.current = true;
-    prevTenantHomePathRef.current = tenantHomePath;
-
+    let shouldNormalize = needsInitialNormalize || homePathChanged;
     setTabs((prevTabs) => {
-      let working = prevTabs;
+      const hasStrayPlaceholder = prevTabs.some(
+        (t) => isTenantDefaultHomePath(t.key) && t.key !== tenantHomePath,
+      );
+      if (!shouldNormalize && !hasStrayPlaceholder) {
+        return prevTabs;
+      }
+
+      let working = stripPlaceholderHomeTabs(prevTabs);
       if (homePathChanged && prev) {
         working = working.filter((t) => t.key !== prev);
       }
       const normalized = normalizeTabsForTenantHome(working, tenantHomePath, getTabTitle);
+      if (!tabsSameKeys(normalized, prevTabs)) {
+        shouldNormalize = true;
+      }
       return tabsSameKeys(normalized, prevTabs) ? prevTabs : normalized;
     });
+
+    if (shouldNormalize) {
+      didInitialHomeTabNormalizeRef.current = true;
+      prevTenantHomePathRef.current = tenantHomePath;
+    }
 
     setActiveKey((ak) => {
       if (isTenantDefaultHomePath(ak) && ak !== tenantHomePath) {
@@ -733,7 +758,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
 
     const sessionTabs = getSessionTabs(tenantId);
     if (sessionTabs?.length) {
-      setTabs(dedupeTabsByPathname(sessionTabs));
+      setTabs(dedupeTabsByPathname(stripPlaceholderHomeTabs(sessionTabs)));
       setActiveKey(getCurrentRouteTabKey());
       didRestoreFromSyncRef.current = true;
       return;
@@ -790,12 +815,18 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
    * 解决 clearForLogout 清除 riveredge_tabs_persistence 导致初始化时 tabs=[] 的问题
    */
   useEffect(() => {
-    if (!tabsPersistence || didRestoreFromSyncRef.current) return;
+    if (!tabsPersistence || !homePathReady || didRestoreFromSyncRef.current) return;
     const restored = loadTabsFromStorage();
     if (restored && restored.length > 0) {
       didRestoreFromSyncRef.current = true;
       isRestoringRef.current = true;
-      setTabs((prev) => mergeTabLists(prev, restored));
+      setTabs((prev) =>
+        normalizeTabsForTenantHome(
+          mergeTabLists(stripPlaceholderHomeTabs(prev), restored),
+          tenantHomePath,
+          getTabTitle,
+        ),
+      );
       setActiveKey(getCurrentRouteTabKey());
       queueMicrotask(() => {
         isRestoringRef.current = false;
@@ -805,7 +836,15 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     if (preferencesInitialized) {
       didRestoreFromSyncRef.current = true;
     }
-  }, [tabsPersistence, preferencesInitialized, loadTabsFromStorage, getCurrentRouteTabKey]);
+  }, [
+    tabsPersistence,
+    preferencesInitialized,
+    homePathReady,
+    tenantHomePath,
+    getTabTitle,
+    loadTabsFromStorage,
+    getCurrentRouteTabKey,
+  ]);
 
   const cloudTabsSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const legacyTabsMigratedRef = useRef(false);
@@ -813,7 +852,9 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
 
   /** 云端偏好就绪后恢复标签（跨设备真源；每租户会话仅一次） */
   useEffect(() => {
-    if (!tabsPersistence || !preferencesInitialized || didRestoreFromSyncRef.current) return;
+    if (!tabsPersistence || !preferencesInitialized || !homePathReady || didRestoreFromSyncRef.current) {
+      return;
+    }
 
     const cloudState = readUniTabsStateFromPreferences(
       useUserPreferenceStore.getState().preferences,
@@ -822,7 +863,13 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     if (restored?.length) {
       didRestoreFromSyncRef.current = true;
       isRestoringRef.current = true;
-      setTabs((prev) => mergeTabLists(prev, restored));
+      setTabs((prev) =>
+        normalizeTabsForTenantHome(
+          mergeTabLists(stripPlaceholderHomeTabs(prev), restored),
+          tenantHomePath,
+          getTabTitle,
+        ),
+      );
       setActiveKey(getCurrentRouteTabKey());
       queueMicrotask(() => {
         isRestoringRef.current = false;
@@ -843,10 +890,12 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
   }, [
     tabsPersistence,
     preferencesInitialized,
+    homePathReady,
     tenantIdStrForTabs,
     menuConfig,
     t,
     tenantHomePath,
+    getTabTitle,
     updatePreferences,
     getCurrentRouteTabKey,
   ]);
@@ -858,8 +907,10 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     if (!tabsPersistence) return;
     if (isRestoringRef.current) return;
 
+    const persistTabs = tabsForPersistence(tabs, tenantHomePath, homePathReady);
+
     try {
-      setSavedTabs(tabs);
+      setSavedTabs(persistTabs);
     } catch {
       // ignore
     }
@@ -868,7 +919,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
       clearTimeout(cloudTabsSaveTimerRef.current);
     }
     cloudTabsSaveTimerRef.current = setTimeout(() => {
-      const patch = buildUniTabsPreferencePatch(tabs);
+      const patch = buildUniTabsPreferencePatch(persistTabs);
       const serialized = JSON.stringify(patch[UNI_TABS_STATE_PREF_KEY]);
       if (serialized === lastCloudTabsPatchRef.current) return;
       lastCloudTabsPatchRef.current = serialized;
@@ -883,14 +934,18 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         cloudTabsSaveTimerRef.current = null;
       }
     };
-  }, [tabs, activeKey, tabsPersistence, updatePreferences]);
+  }, [tabs, activeKey, tabsPersistence, tenantHomePath, homePathReady, updatePreferences]);
 
   /** 关页/刷新前立即落库，避免 600ms 防抖未触发就丢失标签 */
   useEffect(() => {
     if (!tabsPersistence) return;
     const flushCloudTabs = () => {
       if (isRestoringRef.current) return;
-      const snapshotTabs = tabsForCloudSaveRef.current;
+      const snapshotTabs = tabsForPersistence(
+        tabsForCloudSaveRef.current,
+        tenantHomePath,
+        homePathReady,
+      );
       if (!snapshotTabs.length) return;
       const patch = buildUniTabsPreferencePatch(snapshotTabs);
       const serialized = JSON.stringify(patch[UNI_TABS_STATE_PREF_KEY]);
@@ -902,7 +957,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     };
     window.addEventListener('pagehide', flushCloudTabs);
     return () => window.removeEventListener('pagehide', flushCloudTabs);
-  }, [tabsPersistence, updatePreferences]);
+  }, [tabsPersistence, tenantHomePath, homePathReady, updatePreferences]);
 
   /**
    * 监听路由变化，自动添加标签

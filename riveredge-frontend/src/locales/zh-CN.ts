@@ -30706,6 +30706,10 @@ export default {
     '基础应用与扩展模块边界解耦',
   'pages.dashboard.updateLog.entries.application-layer-host-capabilities.description':
     '快制造与轻办公列表不再编译依赖行业包；扩展对照与清单改由平台 host-capabilities 接口按租户已启用模块动态解析。',
+  'pages.dashboard.updateLog.entries.uni-tabs-strip-placeholder-home-r01.title':
+    '剔除标签栏 Default-home 占位标签',
+  'pages.dashboard.updateLog.entries.uni-tabs-strip-placeholder-home-r01.description':
+    '占位首页（工作台/Default-home）不再从云端恢复或写入持久化；有效首页就绪后统一注入，避免自定义主页租户残留 Default-home 标签。',
   'pages.dashboard.updateLog.entries.post-login-effective-home-no-flash-r01.title':
     '登录落地不再闪工作台或 Default-home',
   'pages.dashboard.updateLog.entries.post-login-effective-home-no-flash-r01.description':
