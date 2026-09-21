@@ -48,6 +48,10 @@ class SyncRunLog(LogBaseModel):
     error_summary = fields.TextField(null=True, description="错误摘要")
     started_at = fields.DatetimeField(null=True, description="开始时间")
     finished_at = fields.DatetimeField(null=True, description="结束时间")
+    # 外推一等维度（entity_type=document_push 时写入；拉取同步可为空）
+    category = fields.CharField(max_length=32, null=True, description="连接器品类")
+    connector_type = fields.CharField(max_length=64, null=True, description="连接器类型")
+    target_profile = fields.CharField(max_length=64, null=True, description="外推目标 profile")
 
     class Meta:
         table = "core_sync_run_logs"
@@ -57,6 +61,7 @@ class SyncRunLog(LogBaseModel):
             ("tenant_id", "entity_type"),
             ("tenant_id", "created_at"),
             ("binding_id",),
+            ("tenant_id", "entity_type", "category", "connector_type", "target_profile"),
         ]
 
     def __str__(self) -> str:

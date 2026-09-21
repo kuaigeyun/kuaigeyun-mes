@@ -8,3 +8,5 @@ export type {
 } from './SyncPushHubModal';
 export { DocumentPushUnavailablePanel } from './DocumentPushUnavailablePanel';
 export type { DocumentPushUnavailablePanelProps } from './DocumentPushUnavailablePanel';
+export { ConnectorCategoryConfigLayer } from './ConnectorCategoryConfigLayer';
+export type { ConnectorCategoryConfigLayerProps } from './ConnectorCategoryConfigLayer';

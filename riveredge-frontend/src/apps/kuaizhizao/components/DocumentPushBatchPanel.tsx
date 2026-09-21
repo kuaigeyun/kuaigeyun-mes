@@ -11,7 +11,7 @@ import {
   UniPullQueryModal,
   useUniPullQuery,
 } from '../../../components/uni-pull-query';
-import { DocumentPushUnavailablePanel } from '../../../components/sync-push-hub';
+import { DocumentPushUnavailablePanel, ConnectorCategoryConfigLayer } from '../../../components/sync-push-hub';
 import {
   getApplicationConnectionListAll,
   type ApplicationConnection,
@@ -22,6 +22,7 @@ import {
   listDocumentPushProfiles,
   pushDocumentExternal,
   resolveDefaultTargetProfiles,
+  categoriesWithRegisteredPush,
 } from '../services/document-push';
 
 export const DOCUMENT_PUSH_PROFILE_LABEL_KEYS: Record<string, string> = {
@@ -304,6 +305,11 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
 
   const allowedProfileSet = useMemo(
     () => new Set(profileOptions.map((o) => o.value)),
+    [profileOptions],
+  );
+
+  const writableCategories = useMemo(
+    () => [...categoriesWithRegisteredPush(profileOptions.map((option) => option.value))],
     [profileOptions],
   );
 
@@ -729,6 +735,7 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
               {t('app.kuaizhizao.documentPush.preview')}
             </Button>
           </Flex>
+          <ConnectorCategoryConfigLayer writableCategories={writableCategories} />
           {needsKingdeeConnector ? (
             <Row gutter={[12, 8]}>
               <Col xs={24} sm={12} md={8}>

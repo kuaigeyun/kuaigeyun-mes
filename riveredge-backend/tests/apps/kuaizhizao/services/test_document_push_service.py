@@ -187,3 +187,212 @@ async def test_assert_document_push_ready_blocks_formal_without_connection():
             target_profile=WO_PROFILE,
             dry_run=True,
         )
+
+
+@pytest.mark.asyncio
+async def test_fanout_isolates_failures():
+    ensure_default_push_handlers_registered()
+    ok = AsyncMock(return_value={"success": True, "dry_run": True, "message": "dry_run"})
+    bad = AsyncMock(side_effect=RuntimeError("boom"))
+    with (
+        patch(
+            "apps.kuaizhizao.services.document_push_service.assert_document_push_ready",
+            new=AsyncMock(),
+        ),
+        patch(
+            "core.services.integration.document_push_guard.document_push_guard.assert_allowed",
+        ),
+        patch.dict(
+            "apps.kuaizhizao.services.document_push_service._PUSH_HANDLERS",
+            {("work_order", WO_PROFILE): bad, ("work_order", OA_PROFILE): ok},
+            clear=False,
+        ),
+    ):
+        result = await DocumentPushService().push(
+            tenant_id=1,
+            acting_user_id=1,
+            source_type="work_order",
+            source_id=7,
+            target_profiles=[WO_PROFILE, OA_PROFILE],
+            dry_run=True,
+        )
+    assert result.get("multi") is True
+    assert result.get("failed") == 1
+    assert not result.get("bill_no")
+
+
+def test_guard_quota_and_circuit_ignore_dry_run():
+    from core.services.integration.document_push_guard import DocumentPushGuard
+
+    dims = dict(category="erp", connector_type="kingdee_galaxy", target_profile=WO_PROFILE)
+    guard = DocumentPushGuard(max_calls_per_minute=2, failure_threshold=2, cooldown_seconds=30)
+    for _ in range(5):
+        guard.assert_allowed(1, dry_run=True, **dims)
+    guard.assert_allowed(1, dry_run=False, **dims)
+    guard.assert_allowed(1, dry_run=False, **dims)
+    with pytest.raises(ValidationError):
+        guard.assert_allowed(1, dry_run=False, **dims)
+
+    guard2 = DocumentPushGuard(max_calls_per_minute=100, failure_threshold=2, cooldown_seconds=60)
+    guard2.record_outcome(1, success=False, dry_run=False, **dims)
+    guard2.record_outcome(1, success=False, dry_run=False, **dims)
+    with pytest.raises(ValidationError) as exc:
+        guard2.assert_allowed(1, dry_run=False, **dims)
+    assert "熔断" in str(exc.value)
+    guard2.assert_allowed(1, dry_run=True, **dims)
+
+
+def test_slo_snapshot_three_dimensions():
+    from core.services.integration.document_push_slo import DocumentPushSloRegistry
+
+    slo = DocumentPushSloRegistry()
+    slo.record(
+        category="erp",
+        connector_type="kingdee_galaxy",
+        target_profile=WO_PROFILE,
+        success=True,
+        duration_ms=20,
+    )
+    slo.record(
+        category="erp",
+        connector_type="kingdee_galaxy",
+        target_profile=WO_PROFILE,
+        success=False,
+        duration_ms=40,
+    )
+    rows = {
+        (r["category"], r["connector_type"], r["target_profile"]): r for r in slo.snapshot()
+    }
+    erp = rows[("erp", "kingdee_galaxy", WO_PROFILE)]
+    assert erp["attempts"] == 2
+    assert erp["success"] == 1
+    assert erp["failed"] == 1
+
+
+def test_category_for_kingdee_is_erp():
+    from core.services.integration.document_push_pipeline import category_for_connector_type
+
+    assert category_for_connector_type("kingdee_galaxy") == "erp"
+    assert category_for_connector_type("feishu") == "collaboration"
+    assert category_for_connector_type("") is None
+
+
+@pytest.mark.asyncio
+async def test_fanout_isolates_failures_and_dry_run_has_no_bill():
+    """多目标 fan-out：单目标失败不阻断其余；dry_run 汇总不含 bill_no。"""
+    from apps.kuaizhizao.services.document_push_service import ensure_default_push_handlers_registered
+
+    ensure_default_push_handlers_registered()
+    ok = AsyncMock(
+        return_value={
+            "success": True,
+            "dry_run": True,
+            "model": {"code": "OA"},
+            "body": {"code": "OA"},
+            "message": "dry_run",
+        }
+    )
+    bad = AsyncMock(side_effect=RuntimeError("boom"))
+    with (
+        patch(
+            "apps.kuaizhizao.services.document_push_service.assert_document_push_ready",
+            new=AsyncMock(),
+        ),
+        patch(
+            "core.services.integration.document_push_guard.document_push_guard.assert_allowed",
+        ),
+        patch.dict(
+            "apps.kuaizhizao.services.document_push_service._PUSH_HANDLERS",
+            {
+                ("work_order", WO_PROFILE): bad,
+                ("work_order", OA_PROFILE): ok,
+            },
+            clear=False,
+        ),
+    ):
+        result = await DocumentPushService().push(
+            tenant_id=1,
+            acting_user_id=1,
+            source_type="work_order",
+            source_id=7,
+            target_profiles=[WO_PROFILE, OA_PROFILE],
+            dry_run=True,
+        )
+    assert result.get("multi") is True
+    assert result.get("dry_run") is True
+    assert result.get("failed") == 1
+    assert result.get("success") is False
+    assert not result.get("bill_no")
+    for row in result.get("results") or []:
+        assert not row.get("bill_no")
+    ok.assert_awaited()
+    bad.assert_awaited()
+
+
+def test_guard_quota_and_circuit_ignore_dry_run():
+    from core.services.integration.document_push_guard import DocumentPushGuard
+
+    guard = DocumentPushGuard(max_calls_per_minute=2, failure_threshold=2, cooldown_seconds=30)
+    dims = dict(category="erp", connector_type="kingdee_galaxy", target_profile=WO_PROFILE)
+    # dry_run 不占配额
+    for _ in range(5):
+        guard.assert_allowed(1, dry_run=True, **dims)
+    guard.assert_allowed(1, dry_run=False, **dims)
+    guard.assert_allowed(1, dry_run=False, **dims)
+    with pytest.raises(ValidationError):
+        guard.assert_allowed(1, dry_run=False, **dims)
+
+    guard2 = DocumentPushGuard(max_calls_per_minute=100, failure_threshold=2, cooldown_seconds=60)
+    guard2.record_outcome(1, success=False, dry_run=False, **dims)
+    guard2.record_outcome(1, success=False, dry_run=False, **dims)
+    with pytest.raises(ValidationError) as exc:
+        guard2.assert_allowed(1, dry_run=False, **dims)
+    assert "熔断" in str(exc.value)
+    # dry_run 仍放行
+    guard2.assert_allowed(1, dry_run=True, **dims)
+
+
+def test_slo_snapshot_three_dimensions():
+    from core.services.integration.document_push_slo import DocumentPushSloRegistry
+
+    slo = DocumentPushSloRegistry()
+    slo.record(
+        category="erp",
+        connector_type="kingdee_galaxy",
+        target_profile=WO_PROFILE,
+        success=True,
+        duration_ms=20,
+    )
+    slo.record(
+        category="erp",
+        connector_type="kingdee_galaxy",
+        target_profile=WO_PROFILE,
+        success=False,
+        duration_ms=40,
+    )
+    slo.record(
+        category="oa",
+        connector_type="Webhook",
+        target_profile=OA_PROFILE,
+        success=True,
+        dry_run=True,
+    )
+    rows = { (r["category"], r["connector_type"], r["target_profile"]): r for r in slo.snapshot() }
+    erp = rows[("erp", "kingdee_galaxy", WO_PROFILE)]
+    assert erp["attempts"] == 2
+    assert erp["success"] == 1
+    assert erp["failed"] == 1
+    assert erp["dry_run"] == 0
+    oa = rows[("oa", "Webhook", OA_PROFILE)]
+    assert oa["dry_run"] == 1
+    assert oa["attempts"] == 0
+
+
+def test_category_for_connector_type_from_presets():
+    from core.services.integration.document_push_pipeline import (
+        category_for_connector_type,
+    )
+
+    assert category_for_connector_type("kingdee_galaxy") == "erp"
+    assert category_for_connector_type("feishu") == "collaboration"
+    assert category_for_connector_type("") is None

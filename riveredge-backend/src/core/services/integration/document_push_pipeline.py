@@ -25,6 +25,31 @@ from infra.exceptions.exceptions import BusinessLogicError, ValidationError
 
 PersistRelationFn = Callable[[Dict[str, Any]], Awaitable[None]]
 
+# connector_type → category 缓存（来自 PRESET；目录存在 ≠ 可推）
+_CONNECTOR_CATEGORY_CACHE: Optional[Dict[str, str]] = None
+
+
+def category_for_connector_type(connector_type: str) -> Optional[str]:
+    """connector_type → 品类；目录映射存在不等于可写回。"""
+    global _CONNECTOR_CATEGORY_CACHE
+    ctype = str(connector_type or "").strip()
+    if not ctype:
+        return None
+    if _CONNECTOR_CATEGORY_CACHE is None:
+        try:
+            from core.api.connector_definitions.connector_definitions import (
+                PRESET_APP_CONNECTORS,
+            )
+
+            _CONNECTOR_CATEGORY_CACHE = {
+                str(item.get("type") or "").strip(): str(item.get("category") or "").strip()
+                for item in PRESET_APP_CONNECTORS
+                if str(item.get("type") or "").strip()
+            }
+        except Exception:
+            _CONNECTOR_CATEGORY_CACHE = {}
+    return _CONNECTOR_CATEGORY_CACHE.get(ctype) or "other"
+
 
 @dataclass
 class DocumentPushRequest:
@@ -283,12 +308,26 @@ class DocumentPushPipeline:
                 duration_ms = int((now - started_at).total_seconds() * 1000)
             except Exception:
                 duration_ms = 0
+        category = category_for_connector_type(connector_type)
         summary = (
-            f"{source_type}/{source_id} → {target_profile} ({connector_type})"
+            f"{source_type}/{source_id} → {target_profile} ({connector_type}/{category})"
             + (f" bill_no={bill_no}" if bill_no else "")
         )
         if error:
             summary = f"{summary}; {error}"[:2000]
+        try:
+            from core.services.integration.document_push_slo import document_push_slo
+
+            document_push_slo.record(
+                category=category or "other",
+                connector_type=str(connector_type or "").strip() or "unknown",
+                target_profile=str(target_profile or "").strip() or "unknown",
+                success=success,
+                duration_ms=duration_ms,
+                dry_run=False,
+            )
+        except Exception:
+            pass
         try:
             await SyncRunLog.create(
                 tenant_id=tenant_id,
@@ -303,9 +342,12 @@ class DocumentPushPipeline:
                 fetched=0,
                 truncated=False,
                 duration_ms=duration_ms,
-                error_summary=summary if (error or bill_no) else summary,
+                error_summary=summary,
                 started_at=started_at,
                 finished_at=now,
+                category=category,
+                connector_type=str(connector_type or "").strip() or None,
+                target_profile=str(target_profile or "").strip() or None,
             )
         except Exception:
             logger.warning(

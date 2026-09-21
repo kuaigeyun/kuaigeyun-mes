@@ -28,7 +28,7 @@ from core.services.integration.kingdee_galaxy_api_presets import (
     PRD_MORPT_FORM_ID,
 )
 from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
-from infra.exceptions.exceptions import BusinessLogicError
+from infra.exceptions.exceptions import BusinessLogicError, ValidationError
 from infra.services.business_config_service import BusinessConfigService
 
 
@@ -225,53 +225,29 @@ class KingdeeProductionReportPushService:
         record_id: int,
         acting_user_id: int,
     ) -> Optional[Dict[str, Any]]:
+        """薄壳：Taskiq 定时重推等入口统一转 DocumentPushService（含写门与重试水位）。"""
         config = await self._get_push_config(tenant_id)
         if not bool(config.get("enabled", False)):
             return None
 
-        record = await ReportingRecord.get_or_none(
-            tenant_id=tenant_id,
-            id=record_id,
-            deleted_at__isnull=True,
-        )
-        if not record or record.status != "approved":
-            return None
-
-        if await DocumentRelation.filter(
-            tenant_id=tenant_id,
-            source_type="reporting_record",
-            source_id=record_id,
-            target_type=TARGET_TYPE,
-        ).exists():
-            await self._record_push_success(record=record)
-            return {"success": True, "skipped": True, "message": "已推送过金蝶生产汇报单"}
+        from apps.kuaizhizao.services.document_push_service import DocumentPushService
 
         try:
-            result = await self._push_now(
+            result = await DocumentPushService().push(
                 tenant_id=tenant_id,
-                record=record,
-                acting_user_id=acting_user_id,
-                config=config,
+                acting_user_id=int(acting_user_id),
+                source_type=SOURCE_TYPE,
+                source_id=int(record_id),
+                target_profile=TARGET_PROFILE,
             )
-            logger.info(
-                "报工审核通过已推送金蝶生产汇报单 tenant_id={} reporting_record_id={} bill_no={}",
-                tenant_id,
-                record_id,
-                result.get("bill_no"),
-            )
-            await self._record_push_success(record=record)
-            return result
-        except Exception as exc:
-            logger.warning(
-                "报工审核通过推送金蝶生产汇报单失败 tenant_id={} reporting_record_id={} err={}",
-                tenant_id,
-                record_id,
-                exc,
-            )
-            await self._record_push_failure(tenant_id=tenant_id, record=record, error=str(exc))
-            if bool(config.get("fail_on_error", False)):
-                raise BusinessLogicError(f"推送金蝶生产汇报单失败：{exc}")
-            return {"success": False, "message": str(exc)}
+        except ValidationError:
+            # 写门未就绪：与「未启用」一样跳过，避免每分钟空扫
+            return None
+        if isinstance(result, dict) and not result.get("success") and not result.get("skipped"):
+            msg = str(result.get("message") or "")
+            if "未启用" in msg or "不存在" in msg or "仅已审核" in msg:
+                return None
+        return result
 
     async def _record_push_success(self, *, record: ReportingRecord) -> None:
         now = resolve_business_datetime()

@@ -53,8 +53,34 @@ export const DOCUMENT_PUSH_KNOWN_PROFILES = [
 
 const KNOWN_PROFILE_SET = new Set<string>(DOCUMENT_PUSH_KNOWN_PROFILES);
 
+export const DOCUMENT_PUSH_PROFILE_CATEGORY: Record<
+  (typeof DOCUMENT_PUSH_KNOWN_PROFILES)[number],
+  string
+> = {
+  kingdee_prd_mo: 'erp',
+  oa_http_webhook: 'oa',
+  feishu_im_notify: 'collaboration',
+  kingdee_prd_morpt: 'erp',
+  kingdee_sal_saleorder: 'erp',
+  kingdee_pur_purchaseorder: 'erp',
+  kingdee_stk_miscellaneous: 'erp',
+};
+
 export function isKnownDocumentPushProfile(profile: string): boolean {
   return KNOWN_PROFILE_SET.has(String(profile || '').trim());
+}
+
+/** 已注册 profile 所落品类。未知 profile 不会进入结果。 */
+export function categoriesWithRegisteredPush(profiles: string[] | null | undefined): Set<string> {
+  const out = new Set<string>();
+  for (const raw of profiles || []) {
+    const profile = String(raw || '').trim();
+    if (!isKnownDocumentPushProfile(profile)) continue;
+    const category =
+      DOCUMENT_PUSH_PROFILE_CATEGORY[profile as keyof typeof DOCUMENT_PUSH_PROFILE_CATEGORY];
+    if (category) out.add(category);
+  }
+  return out;
 }
 
 /** 取某 source 在 profiles 接口中的已知可推目标（已过滤目录噪音）。 */

@@ -699,7 +699,7 @@ export async function listWorkOrderPushToKingdeeCandidates(params?: {
   total: number;
 }> {
   const prefer = (params?.prefer_ids || []).filter((id) => Number.isFinite(id));
-  return apiRequest('/apps/kuaizhizao/work-orders/sync-to-kingdee/candidates', {
+  return apiRequest('/apps/kuaizhizao/work-orders/push-candidates', {
     method: 'GET',
     params: {
       keyword: params?.keyword || undefined,

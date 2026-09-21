@@ -843,22 +843,43 @@ class ReportingService(AppBaseService[ReportingRecord]):
         record: ReportingRecord,
         acting_user_id: int,
     ) -> None:
-        """Push approved reporting data to Kingdee when the tenant enables it."""
+        """审核通过后外推：唯一入口 DocumentPushService（禁止直连金蝶服务）。"""
         try:
+            from apps.kuaizhizao.services.document_push_service import (
+                RPT_KD_PROFILE,
+                DocumentPushService,
+            )
             from apps.kuaizhizao.services.kingdee_production_report_push_service import (
                 KingdeeProductionReportPushService,
             )
 
-            await KingdeeProductionReportPushService().push_after_reporting_approved(
+            result = await DocumentPushService().push(
                 tenant_id=tenant_id,
-                record_id=int(record.id),
                 acting_user_id=int(acting_user_id),
+                source_type="reporting_record",
+                source_id=int(record.id),
+                target_profile=RPT_KD_PROFILE,
             )
+            # fail_on_error：业务配置要求失败则阻断审核成功路径
+            if isinstance(result, dict) and not result.get("success") and not result.get("skipped"):
+                config = await KingdeeProductionReportPushService()._get_push_config(tenant_id)
+                if bool(config.get("fail_on_error", False)):
+                    raise BusinessLogicError(
+                        f"推送外部生产汇报单失败：{result.get('message') or 'unknown'}"
+                    )
         except BusinessLogicError:
             raise
+        except ValidationError as exc:
+            # 写门未就绪等：不阻断审核，仅记日志（与历史「未启用则跳过」一致）
+            logger.warning(
+                "报工审核通过后外推被拒绝 tenant_id={} record_id={} err={}",
+                tenant_id,
+                getattr(record, "id", None),
+                exc,
+            )
         except Exception as exc:
             logger.warning(
-                "报工审核通过后推送金蝶生产汇报单异常 tenant_id={} record_id={} err={}",
+                "报工审核通过后外推异常 tenant_id={} record_id={} err={}",
                 tenant_id,
                 getattr(record, "id", None),
                 exc,
@@ -870,7 +891,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
         record_id: int,
         acting_user_id: int,
     ) -> Dict[str, Any]:
-        """手动重推金蝶生产汇报单：重置重试状态后立即推送一次（获得全新 5 次预算）。"""
+        """手动重推外部生产汇报单：重置重试状态后经 DocumentPushService 推送一次。"""
         record = await ReportingRecord.get_or_none(
             tenant_id=tenant_id,
             id=record_id,
@@ -879,20 +900,26 @@ class ReportingService(AppBaseService[ReportingRecord]):
         if not record:
             raise NotFoundError("报工记录不存在")
         if record.status != "approved":
-            raise BusinessLogicError("仅已审核通过的报工记录可重推金蝶生产汇报单")
+            raise BusinessLogicError("仅已审核通过的报工记录可重推外部生产汇报单")
 
-        from apps.kuaizhizao.services.kingdee_production_report_push_service import (
-            KingdeeProductionReportPushService,
+        from apps.kuaizhizao.services.document_push_service import (
+            RPT_KD_PROFILE,
+            DocumentPushService,
         )
 
-        result = await KingdeeProductionReportPushService().retry_push_record(
+        await ReportingRecord.filter(id=record_id).update(
+            kingdee_push_status=None,
+            kingdee_push_attempts=0,
+            kingdee_push_next_at=None,
+            kingdee_push_last_error=None,
+        )
+        return await DocumentPushService().push(
             tenant_id=tenant_id,
-            record_id=record_id,
             acting_user_id=int(acting_user_id),
+            source_type="reporting_record",
+            source_id=int(record_id),
+            target_profile=RPT_KD_PROFILE,
         )
-        if result is None:
-            return {"success": False, "message": "金蝶生产汇报单推送未启用"}
-        return result
 
     async def create_reporting_record(
         self,

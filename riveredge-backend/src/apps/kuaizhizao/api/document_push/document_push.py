@@ -43,6 +43,18 @@ class DocumentPushProfileOut(BaseModel):
     target_profile: str
 
 
+@router.get("/slo", summary="Document push SLO by category×connector×profile")
+async def get_document_push_slo(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    """进程内 SLO 快照（category × connector_type × target_profile）。"""
+    _ = current_user, tenant_id
+    from core.services.integration.document_push_slo import document_push_slo
+
+    return {"dimensions": ["category", "connector_type", "target_profile"], "rows": document_push_slo.snapshot()}
+
+
 @router.get("/profiles", summary="List supported external push profiles")
 async def list_document_push_profiles(
     current_user: User = Depends(get_current_user),

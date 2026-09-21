@@ -195,9 +195,14 @@ async def put_work_order_push_binding(
 @router.get(
     "/work-orders/sync-to-kingdee/candidates",
     response_model=WorkOrderPushCandidateListOut,
-    summary="List work orders eligible to push as Kingdee production order",
+    summary="（兼容）列出可外推的生产工单",
 )
-async def list_work_order_push_to_kingdee_candidates(
+@router.get(
+    "/work-orders/push-candidates",
+    response_model=WorkOrderPushCandidateListOut,
+    summary="列出可外推的生产工单",
+)
+async def list_work_order_push_candidates(
     keyword: Optional[str] = Query(None, description="按工单编码模糊搜索"),
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=200),

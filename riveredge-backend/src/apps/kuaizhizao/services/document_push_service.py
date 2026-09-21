@@ -492,20 +492,77 @@ class DocumentPushService:
             dry_run=dry_run,
         )
 
+        from core.services.integration.document_push_guard import (
+            document_push_guard,
+            resolve_push_dimensions,
+        )
+        from core.services.integration.document_push_slo import document_push_slo
+
+        category, connector_type, profile = resolve_push_dimensions(
+            target_profile=target_profile
+        )
+        document_push_guard.assert_allowed(
+            tenant_id,
+            category=category,
+            connector_type=connector_type,
+            target_profile=profile,
+            dry_run=dry_run,
+        )
+
         handler = _PUSH_HANDLERS.get(key)
         if handler is None:
             raise ValidationError(f"未实现的推送适配: {source_type}/{target_profile}")
 
-        return await handler(
-            tenant_id=tenant_id,
-            acting_user_id=acting_user_id,
-            source_type=source_type,
-            source_id=int(source_id),
-            target_profile=target_profile,
-            connection_code=connection_code,
-            save_api_uuid=save_api_uuid,
+        try:
+            result = await handler(
+                tenant_id=tenant_id,
+                acting_user_id=acting_user_id,
+                source_type=source_type,
+                source_id=int(source_id),
+                target_profile=target_profile,
+                connection_code=connection_code,
+                save_api_uuid=save_api_uuid,
+                dry_run=dry_run,
+            )
+        except Exception:
+            document_push_guard.record_outcome(
+                tenant_id,
+                category=category,
+                connector_type=connector_type,
+                target_profile=profile,
+                success=False,
+                dry_run=dry_run,
+            )
+            if dry_run:
+                document_push_slo.record(
+                    category=category,
+                    connector_type=connector_type,
+                    target_profile=profile,
+                    success=False,
+                    dry_run=True,
+                )
+            raise
+
+        success = bool(result.get("success")) if isinstance(result, dict) else True
+        if isinstance(result, dict) and result.get("skipped"):
+            success = True
+        document_push_guard.record_outcome(
+            tenant_id,
+            category=category,
+            connector_type=connector_type,
+            target_profile=profile,
+            success=success,
             dry_run=dry_run,
         )
+        if dry_run:
+            document_push_slo.record(
+                category=category,
+                connector_type=connector_type,
+                target_profile=profile,
+                success=True,
+                dry_run=True,
+            )
+        return result
 
     async def _push_reporting(
         self,
@@ -517,7 +574,7 @@ class DocumentPushService:
         save_api_uuid: Optional[str],
         dry_run: bool,
     ) -> Dict[str, Any]:
-        """报工适配：支持 dry_run / 连接覆盖（审核通过自动推仍走原入口）。"""
+        """报工适配：dry_run / 连接覆盖；正式推写 kingdee_push_* 重试水位。"""
         from apps.kuaizhizao.models.document_relation import DocumentRelation
         from apps.kuaizhizao.models.reporting_record import ReportingRecord
         from apps.kuaizhizao.services.kingdee_production_report_push_service import (
@@ -572,6 +629,7 @@ class DocumentPushService:
             source_id=record_id,
             target_type=TARGET_TYPE,
         ).exists():
+            await svc._record_push_success(record=record)
             return {
                 "success": True,
                 "skipped": True,
@@ -581,10 +639,30 @@ class DocumentPushService:
                 "target_profile": RPT_KD_PROFILE,
             }
 
-        return await svc._push_now(
-            tenant_id=tenant_id,
-            record=record,
-            acting_user_id=acting_user_id,
-            config=config,
-            dry_run=dry_run,
-        )
+        try:
+            result = await svc._push_now(
+                tenant_id=tenant_id,
+                record=record,
+                acting_user_id=acting_user_id,
+                config=config,
+                dry_run=dry_run,
+            )
+            if not dry_run:
+                await svc._record_push_success(record=record)
+            return result
+        except Exception as exc:
+            if not dry_run:
+                await svc._record_push_failure(
+                    tenant_id=tenant_id, record=record, error=str(exc)
+                )
+            if bool(config.get("fail_on_error", False)):
+                from infra.exceptions.exceptions import BusinessLogicError
+
+                raise BusinessLogicError(f"推送金蝶生产汇报单失败：{exc}") from exc
+            return {
+                "success": False,
+                "message": str(exc),
+                "source_type": "reporting_record",
+                "source_id": record_id,
+                "target_profile": RPT_KD_PROFILE,
+            }
