@@ -4367,6 +4367,54 @@ export default {
   'app.kuaizhizao.workReporting.deleteSelectedConfirm': 'Delete {{count}} selected reporting record(s)?',
   'app.kuaizhizao.workReporting.createButton': 'New reporting record',
   'app.kuaizhizao.workReporting.createModalTitle': 'New reporting record',
+  'components.syncPushHub.pushNotReady':
+    'Push not ready: no available targets, or missing application connection / API config',
+  'components.syncPushHub.goConfigureConnection': 'Configure',
+  'app.kuaizhizao.documentPush.preview': 'Preview payload',
+  'app.kuaizhizao.documentPush.previewTitle': 'Push payload preview (dry-run)',
+  'app.kuaizhizao.documentPush.previewSourceNote':
+    'This preview is assembled by the Pipeline, not the API library request_body template. Configure unit codes in the Save API “Source type conversion” map.',
+  'app.kuaizhizao.documentPush.pushFailed': 'Push failed',
+  'app.kuaizhizao.documentPush.profile.kingdee_prd_mo': 'Kingdee production order',
+  'app.kuaizhizao.documentPush.profile.kingdee_prd_morpt': 'Kingdee production report',
+  'app.kuaizhizao.documentPush.profile.kingdee_sal_saleorder': 'Kingdee sales order',
+  'app.kuaizhizao.documentPush.profile.kingdee_pur_purchaseorder': 'Kingdee purchase order',
+  'app.kuaizhizao.documentPush.profile.kingdee_stk_miscellaneous': 'Kingdee miscellaneous receipt',
+  'app.kuaizhizao.documentPush.profile.oa_http_webhook': 'OA/CRM Webhook',
+  'app.kuaizhizao.documentPush.profile.feishu_im_notify': 'Feishu notify',
+  'app.kuaizhizao.documentPush.batch.confirm': 'Push selected',
+  'app.kuaizhizao.documentPush.batch.targetProfiles': 'Push targets',
+  'app.kuaizhizao.documentPush.batch.needTargetProfile': 'Select at least one push target (profile)',
+  'app.kuaizhizao.documentPush.batch.needConnector': 'Select an application connector first',
+  'app.kuaizhizao.documentPush.batch.needApi': 'Select a Save API from API management first',
+  'app.kuaizhizao.documentPush.batch.profilesLoading': 'Loading available push targets…',
+  'app.kuaizhizao.documentPush.batch.noProfiles':
+    'No registered push targets for this document type; configure an application connection first',
+  'app.kuaizhizao.documentPush.batch.connectorPlaceholder': 'Application connector',
+  'app.kuaizhizao.documentPush.batch.apiPlaceholder': 'Save API (API management)',
+  'app.kuaizhizao.documentPush.batch.connectorEmpty': 'No active Kingdee Galaxy connectors',
+  'app.kuaizhizao.documentPush.batch.apiEmpty':
+    'No Save APIs on this connector; load presets in API management first',
+  'app.kuaizhizao.documentPush.batch.modeManual': 'Manual push',
+  'app.kuaizhizao.documentPush.batch.modeScheduled': 'Scheduled push',
+  'app.kuaizhizao.documentPush.batch.modeLabel': 'Push mode',
+  'app.kuaizhizao.documentPush.batch.intervalLabel': 'Interval',
+  'app.kuaizhizao.documentPush.batch.interval': 'Every {{n}} minutes',
+  'app.kuaizhizao.documentPush.batch.previewNeedOne': 'Select at least one row before preview',
+  'app.kuaizhizao.documentPush.batch.success': 'Push succeeded: {{count}}',
+  'app.kuaizhizao.documentPush.batch.partial':
+    'Push partial: {{created}} created, {{skipped}} skipped, {{failed}} failed',
+  'app.kuaizhizao.documentPush.batch.skippedHint':
+    '{{skipped}} more skipped due to binding or gate rules.',
+  'app.kuaizhizao.workReporting.pushBatchTitle': 'Push to external systems',
+  'app.kuaizhizao.workReporting.pushBatchHint':
+    'Only approved reporting records are listed; select rows and push via the Pipeline.',
+  'app.kuaizhizao.workReporting.pushBatchPipelineDesc':
+    'Flow: choose targets → (Kingdee) connector & Save API → preview → push selected. Same standard as work-order push.',
+  'app.kuaizhizao.workReporting.pushBatchSearchPlaceholder':
+    'Search by work order / operation / worker',
+  'app.kuaizhizao.workReporting.pushBatchNeedSelect': 'Select approved reporting rows to push',
+  'app.kuaizhizao.workReporting.pushBatchColKingdeeStatus': 'Kingdee push',
   'app.kuaizhizao.workReporting.pullSelectSource': 'Select Load Source (Work Order Operation)',
   'app.kuaizhizao.workReporting.pullScopeReportable': 'Reportable',
   'app.kuaizhizao.workReporting.pullScopeAll': 'All',
@@ -6688,6 +6736,13 @@ export default {
   'app.kuaizhizao.menu.warehouse-management.finished-goods-inventory': 'FG Inventory',
   'app.kuaizhizao.menu.warehouse-management.sales-outbound': 'Sales Outbound',
   'app.kuaizhizao.salesOrder.title': 'Sales Order',
+  'app.kuaizhizao.salesOrder.documentPush.title': 'Push to external systems',
+  'app.kuaizhizao.salesOrder.documentPush.hint':
+    'List sales orders for selection; confirmed/audited orders are prioritized. Push via the Pipeline.',
+  'app.kuaizhizao.salesOrder.documentPush.pipelineDesc':
+    'Flow: choose targets → (Kingdee) connector & Save API → preview → push selected. Same standard as work-order / reporting push.',
+  'app.kuaizhizao.salesOrder.documentPush.searchPlaceholder': 'Search by order code / customer',
+  'app.kuaizhizao.salesOrder.documentPush.needSelect': 'Select sales orders to push',
   'app.kuaizhizao.salesOrder.create': 'Create Sales Order',
   'app.kuaizhizao.salesOrder.edit': 'Edit Sales Order',
   'app.kuaizhizao.salesOrder.detail': 'Sales Order Detail',
@@ -7097,6 +7152,13 @@ export default {
   'app.kuaizhizao.purchaseOrder.entityName': 'Purchase Order',
   'app.kuaizhizao.purchaseOrder.col.supplierAndOrder': 'Supplier / Order',
   'app.kuaizhizao.purchaseOrder.col.orderCode': 'Order No.',
+  'app.kuaizhizao.purchaseOrder.documentPush.title': 'Push to external systems',
+  'app.kuaizhizao.purchaseOrder.documentPush.hint':
+    'List purchase orders for selection; confirmed/audited orders are prioritized. Push via the Pipeline.',
+  'app.kuaizhizao.purchaseOrder.documentPush.pipelineDesc':
+    'Flow: choose targets → (Kingdee) connector & Save API → preview → push selected. Same standard as work-order / reporting push.',
+  'app.kuaizhizao.purchaseOrder.documentPush.searchPlaceholder': 'Search by order code / supplier',
+  'app.kuaizhizao.purchaseOrder.documentPush.needSelect': 'Select purchase orders to push',
   'app.kuaizhizao.purchaseOrder.col.supplier': 'Supplier',
   'app.kuaizhizao.purchaseOrder.col.buyer': 'Buyer',
   'app.kuaizhizao.purchaseOrder.col.orderDate': 'Order Date',
@@ -8734,6 +8796,20 @@ export default {
   'app.kuaizhizao.workOrder.opStatusPaused': 'Paused',
   'app.kuaizhizao.workOrder.opStatusPending': 'Pending',
   'app.kuaizhizao.workOrder.pageTitle': 'Work Orders',
+  'app.kuaizhizao.workOrder.pushToKingdeeTitle': 'Push to external systems',
+  'app.kuaizhizao.workOrder.pushToKingdeeConfirm': 'Push selected',
+  'app.kuaizhizao.workOrder.pushToKingdeeHint':
+    'Uses the shared document-push Pipeline. Select one or more targets (Kingdee MO / OA Webhook / Feishu). Kingdee requires a connector and Save API.',
+  'app.kuaizhizao.workOrder.pushToKingdeePipelineDesc':
+    'Preview the assembled payload before push (no write). API library sample templates are not used; configure unit codes in the Save API “Source type conversion” map.',
+  'app.kuaizhizao.workOrder.pushToKingdeeSearchPlaceholder': 'Search by work order code',
+  'app.kuaizhizao.workOrder.pushToKingdeeNeedSelect': 'Select work orders to push',
+  'app.kuaizhizao.workOrder.pushToKingdeeSkippedHint':
+    '{{skipped}} more skipped due to binding or gate rules.',
+  'app.kuaizhizao.workOrder.syncPushSuccess': 'Push succeeded: {{count}} production orders created',
+  'app.kuaizhizao.workOrder.syncPushPartial':
+    'Push partial: {{created}} created, {{skipped}} skipped, {{failed}} failed',
+  'app.kuaizhizao.workOrder.syncPushFailed': 'Push failed',
   'app.kuaizhizao.workOrder.detailTitle': 'Work Order Details - {{code}}',
   'app.kuaizhizao.workOrder.entityName': 'WO',
   'app.kuaizhizao.workOrder.qrTitle': 'Work Order QR Code',
@@ -11308,6 +11384,14 @@ export default {
   'app.kuaizhizao.customerMaterialRegistration.workOrderGroup': 'WO group {{code}}',
   'app.kuaizhizao.customerMaterialRegistration.batchingOrders': ', batching {{codes}}',
   'app.kuaizhizao.warehouseInventory.headerTitle': 'Real-time Inventory',
+  'app.kuaizhizao.warehouseInventory.documentPush.title': 'Push to external systems',
+  'app.kuaizhizao.warehouseInventory.documentPush.hint':
+    'Select material batches (MaterialBatch) to push; do not use inventory balance pseudo-ids. Push Kingdee miscellaneous receipts via the Pipeline.',
+  'app.kuaizhizao.warehouseInventory.documentPush.pipelineDesc':
+    'Flow: choose targets → (Kingdee) connector & Save API → preview → push selected. Same standard as work-order / reporting push.',
+  'app.kuaizhizao.warehouseInventory.documentPush.searchPlaceholder':
+    'Search by material code / batch no / warehouse',
+  'app.kuaizhizao.warehouseInventory.documentPush.needSelect': 'Select material batches to push',
   'app.kuaizhizao.warehouseInventory.loadWarehousesFailed': 'Failed to load warehouses',
   'app.kuaizhizao.warehouseInventory.colBrand': 'Brand',
   'app.kuaizhizao.warehouseInventory.colTexture': 'Material',

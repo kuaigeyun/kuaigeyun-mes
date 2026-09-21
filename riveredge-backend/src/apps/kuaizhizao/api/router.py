@@ -78,6 +78,7 @@ from .sales_opportunities.sales_opportunities import router as sales_opportunity
 from .customer_pool.customer_pool import router as customer_pool_router
 from .state_transitions.state_transitions import router as state_transition_router
 from .document_push_pull.document_push_pull import router as document_push_pull_router
+from .document_push.document_push import router as document_push_router
 from .document_relations.document_relations import router as document_relation_router
 from .routes_print import router as print_router
 from .routes_config import router as config_router
@@ -187,7 +188,8 @@ router.include_router(material_call_router)
 router.include_router(demand_router)  # 统一需求管理（新设计）
 router.include_router(demand_computation_router)  # 统一需求计算（新设计）
 router.include_router(state_transition_router)  # 状态流转管理
-router.include_router(document_push_pull_router)  # 单据下推和加载
+router.include_router(document_push_pull_router)  # 单据下推和加载（系统内）
+router.include_router(document_push_router)  # 单据外推（金蝶/OA/CRM Pipeline）
 router.include_router(document_relation_router)  # 单据关联关系
 router.include_router(scheduling_config_router)  # 排程配置
 router.include_router(visual_scheduling_router)  # 可视排产诊断

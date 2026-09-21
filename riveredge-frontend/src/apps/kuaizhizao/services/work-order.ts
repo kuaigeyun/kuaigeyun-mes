@@ -679,3 +679,56 @@ export async function syncWorkOrdersFromSource(
     timeoutMs: 600_000,
   });
 }
+
+export async function listWorkOrderPushToKingdeeCandidates(params?: {
+  keyword?: string;
+  skip?: number;
+  limit?: number;
+  prefer_ids?: number[];
+}): Promise<{
+  items: Array<{
+    id: number;
+    code?: string;
+    name?: string;
+    product_code?: string;
+    product_name?: string;
+    quantity?: number;
+    status?: string;
+    planned_start_date?: string;
+  }>;
+  total: number;
+}> {
+  const prefer = (params?.prefer_ids || []).filter((id) => Number.isFinite(id));
+  return apiRequest('/apps/kuaizhizao/work-orders/sync-to-kingdee/candidates', {
+    method: 'GET',
+    params: {
+      keyword: params?.keyword || undefined,
+      skip: params?.skip ?? 0,
+      limit: params?.limit ?? 20,
+      prefer_ids: prefer.length ? prefer.join(',') : undefined,
+    },
+  });
+}
+
+export interface WorkOrderPushBinding {
+  connection_code?: string | null;
+  save_api_uuid?: string | null;
+  sync_mode: string;
+  schedule_interval_minutes?: number;
+  last_success_at?: string | null;
+  last_attempt_at?: string | null;
+  last_error?: string | null;
+}
+
+export async function getWorkOrderPushBinding(): Promise<WorkOrderPushBinding> {
+  return apiRequest<WorkOrderPushBinding>('/apps/kuaizhizao/work-orders/push-binding');
+}
+
+export async function saveWorkOrderPushBinding(
+  payload: Partial<WorkOrderPushBinding>,
+): Promise<WorkOrderPushBinding> {
+  return apiRequest<WorkOrderPushBinding>('/apps/kuaizhizao/work-orders/push-binding', {
+    method: 'PUT',
+    data: payload,
+  });
+}

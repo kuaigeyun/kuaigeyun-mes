@@ -22,6 +22,7 @@ from infra.exceptions.exceptions import ValidationError, BusinessLogicError, Not
 from infra.services.business_config_service import BusinessConfigService
 
 from apps.kuaizhizao.services.reporting_service import ReportingService, REPORTING_SORTABLE_FIELDS
+from apps.kuaizhizao.services.reporting_sync_service import ReportingSyncService
 from apps.kuaizhizao.services.scrap_record_service import ScrapRecordService
 from apps.kuaizhizao.services.defect_record_service import DefectRecordService
 from apps.kuaizhizao.services.material_binding_service import MaterialBindingService
@@ -39,6 +40,13 @@ from apps.kuaizhizao.schemas.reporting_record import (
     ReportingOverviewStatisticsResponse,
     ReportingDetailedStatisticsResponse,
     ReportingPullCandidateListResponse,
+)
+from apps.kuaizhizao.schemas.reporting_sync import (
+    ReportingSyncBindingOut,
+    ReportingSyncBindingUpsert,
+    ReportingSyncFromSourceOut,
+    ReportingSyncFromSourceRequest,
+    ReportingSyncHistoryListResponse,
 )
 from apps.kuaizhizao.schemas.scrap_record import (
     ScrapRecordCreateFromReporting,
@@ -58,6 +66,7 @@ from apps.kuaizhizao.schemas.material_binding import (
 
 # 初始化服务实例
 reporting_service = ReportingService()
+reporting_sync_service = ReportingSyncService()
 scrap_record_service = ScrapRecordService()
 defect_record_service = DefectRecordService()
 material_binding_service = MaterialBindingService()
@@ -152,6 +161,88 @@ async def _emit_overview_statistics_alert(tenant_id: int, trace_id: str, error_m
 
 
 # ============ 报工管理 API ============
+
+@router.get(
+    "/reporting/sync-binding",
+    response_model=ReportingSyncBindingOut,
+    summary="Reporting sync binding",
+)
+async def get_reporting_sync_binding(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ReportingSyncBindingOut:
+    _ = current_user
+    return await reporting_sync_service.get_binding(tenant_id)
+
+
+@router.put(
+    "/reporting/sync-binding",
+    response_model=ReportingSyncBindingOut,
+    summary="Save reporting sync binding",
+)
+async def upsert_reporting_sync_binding(
+    body: ReportingSyncBindingUpsert,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ReportingSyncBindingOut:
+    _ = current_user
+    try:
+        return await reporting_sync_service.upsert_binding(tenant_id, body)
+    except ValidationError as e:
+        raise _http_exception_with_trace(400, str(e), "/reporting/sync-binding", tenant_id)
+
+
+@router.post(
+    "/reporting/sync-from-source",
+    response_model=ReportingSyncFromSourceOut,
+    summary="Sync reporting records from source",
+)
+async def sync_reporting_from_source(
+    body: ReportingSyncFromSourceRequest = Body(default_factory=ReportingSyncFromSourceRequest),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    stream: bool = Query(False, description="为 true 时以 NDJSON 流式返回进度"),
+) -> ReportingSyncFromSourceOut:
+    try:
+        if stream:
+            from core.services.data.sync_progress_stream import stream_sync_ndjson
+
+            return await stream_sync_ndjson(
+                lambda: reporting_sync_service.sync_from_source(
+                    tenant_id=tenant_id,
+                    user_id=current_user.id,
+                    request=body,
+                )
+            )
+        return await reporting_sync_service.sync_from_source(
+            tenant_id=tenant_id,
+            user_id=current_user.id,
+            request=body,
+        )
+    except ValidationError as e:
+        raise _http_exception_with_trace(400, str(e), "/reporting/sync-from-source", tenant_id)
+    except BusinessLogicError as e:
+        raise _http_exception_with_trace(400, str(e), "/reporting/sync-from-source", tenant_id)
+
+
+@router.get(
+    "/reporting/sync-history",
+    response_model=ReportingSyncHistoryListResponse,
+    summary="List reporting sync run history",
+)
+async def list_reporting_sync_history(
+    skip: int = Query(0, ge=0, description="跳过条数"),
+    limit: int = Query(50, ge=1, le=200, description="每页条数"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ReportingSyncHistoryListResponse:
+    _ = current_user
+    return await reporting_sync_service.list_sync_history(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+    )
+
 
 @router.get(
     "/reporting/overview-statistics",
@@ -524,6 +615,27 @@ async def batch_revoke_reporting_approval(
         raise _http_exception_with_trace(400, str(e), "/reporting/batch-revoke", tenant_id)
     except BusinessLogicError as e:
         raise _http_exception_with_trace(400, str(e), "/reporting/batch-revoke", tenant_id)
+
+
+@router.post("/reporting/{record_id}/retry", summary="Retry Kingdee production report push")
+async def retry_reporting_kingdee_push(
+    record_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    """手动重推金蝶生产汇报单（重置重试状态后立即推送一次）。"""
+    try:
+        return await reporting_service.retry_kingdee_production_report_push(
+            tenant_id=tenant_id,
+            record_id=record_id,
+            acting_user_id=current_user.id,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/reporting/{record_id}/retry", tenant_id)
+    except ValidationError as e:
+        raise _http_exception_with_trace(400, str(e), "/reporting/{record_id}/retry", tenant_id)
+    except BusinessLogicError as e:
+        raise _http_exception_with_trace(400, str(e), "/reporting/{record_id}/retry", tenant_id)
 
 
 @router.put("/reporting/{record_id}/correct", response_model=ReportingRecordResponse, summary="Correct reporting data")

@@ -24,6 +24,10 @@ class APIBase(BaseModel):
     request_body: Optional[Dict[str, Any]] = Field(None, description="请求体")
     response_format: Optional[Dict[str, Any]] = Field(None, description="响应格式")
     response_example: Optional[Dict[str, Any]] = Field(None, description="响应示例")
+    source_type_conversion_map: Optional[List[Dict[str, Any]]] = Field(
+        None,
+        description='来源类型编码转换映射（如金蝶 FErpClsID: {"1":"Buy"}），用于物料同步时自动转换编码',
+    )
     is_active: bool = Field(True, description="是否启用")
     is_system: bool = Field(False, description="是否系统接口")
 
@@ -47,6 +51,10 @@ class APIUpdate(BaseModel):
     request_body: Optional[Dict[str, Any]] = Field(None, description="请求体")
     response_format: Optional[Dict[str, Any]] = Field(None, description="响应格式")
     response_example: Optional[Dict[str, Any]] = Field(None, description="响应示例")
+    source_type_conversion_map: Optional[List[Dict[str, Any]]] = Field(
+        None,
+        description='来源类型编码转换映射（如金蝶 FErpClsID: {"1":"Buy"}），用于物料同步时自动转换编码',
+    )
     is_active: Optional[bool] = Field(None, description="是否启用")
 
 

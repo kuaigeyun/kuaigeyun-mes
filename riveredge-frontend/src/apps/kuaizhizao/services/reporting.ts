@@ -198,6 +198,109 @@ export const reportingApi = {
   },
 };
 
+export type ReportingSyncSourceType = 'api' | 'dataset';
+
+export interface ReportingSyncBinding {
+  source_type?: ReportingSyncSourceType | null;
+  api_uuid?: string | null;
+  dataset_uuid?: string | null;
+  field_mapping: Record<string, string>;
+  match_key_field?: string;
+  sync_direction?: string;
+  sync_mode?: string;
+  schedule_interval_minutes?: number;
+  last_success_at?: string | null;
+  last_attempt_at?: string | null;
+  last_error?: string | null;
+}
+
+export interface ReportingSyncFromSourcePayload {
+  source_type?: ReportingSyncSourceType;
+  api_uuid?: string;
+  dataset_uuid?: string;
+  field_mapping?: Record<string, string>;
+  save_binding?: boolean;
+  skip_prerequisite_syncs?: boolean;
+  sync_direction?: 'pull' | 'push' | 'bidirectional';
+  sync_mode?: string;
+  schedule_interval_minutes?: number;
+  incremental?: boolean;
+  active_only?: boolean;
+}
+
+export interface ReportingSyncFromSourceResult {
+  created: number;
+  updated: number;
+  skipped: number;
+  failed: number;
+  errors: string[];
+  fetched?: number;
+  mode?: string;
+}
+
+export async function getReportingSyncBinding(): Promise<ReportingSyncBinding> {
+  return apiRequest<ReportingSyncBinding>('/apps/kuaizhizao/reporting/sync-binding');
+}
+
+export async function syncReportingFromSource(
+  payload: ReportingSyncFromSourcePayload,
+  onProgress?: (message: string) => void,
+): Promise<ReportingSyncFromSourceResult> {
+  const { apiRequestSyncNdjson } = await import(
+    '../../../components/sync-from-source-modal/apiRequestSyncNdjson'
+  );
+  return apiRequestSyncNdjson<ReportingSyncFromSourceResult>(
+    '/apps/kuaizhizao/reporting/sync-from-source',
+    {
+      data: payload,
+      timeoutMs: 600_000,
+      onProgress,
+    },
+  );
+}
+
+/** 同步运行历史（来自 core_sync_run_logs，只读） */
+export interface ReportingSyncHistoryItem {
+  id: number;
+  entity_type: string;
+  mode: 'full' | 'incremental' | string;
+  status: 'success' | 'partial' | 'failed' | string;
+  created: number;
+  updated: number;
+  skipped: number;
+  failed: number;
+  fetched: number;
+  truncated: boolean;
+  duration_ms: number;
+  error_summary?: string | null;
+  started_at?: string | null;
+  finished_at?: string | null;
+  created_at?: string | null;
+}
+
+export interface ReportingSyncHistoryListResponse {
+  data: ReportingSyncHistoryItem[];
+  total: number;
+  success: boolean;
+}
+
+/** 分页拉取报工同步运行历史（只读） */
+export async function getReportingSyncHistory(params?: {
+  skip?: number;
+  limit?: number;
+}): Promise<ReportingSyncHistoryListResponse> {
+  const raw = await apiRequest<ReportingSyncHistoryListResponse>(
+    '/apps/kuaizhizao/reporting/sync-history',
+    { method: 'GET', params },
+  );
+  const rows = Array.isArray(raw?.data) ? raw.data : [];
+  return {
+    data: rows,
+    total: Number(raw?.total ?? rows.length) || 0,
+    success: raw?.success !== false,
+  };
+}
+
 /** 报工统计快捷函数（采用 useQuery） */
 export const getReportingStatistics = async () =>
   apiRequest<ReportingOverviewStatistics>('/apps/kuaizhizao/reporting/overview-statistics', { method: 'GET' });

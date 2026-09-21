@@ -51,3 +51,36 @@ class WorkOrderSyncFromSourceOut(BaseSchema):
     skipped: int = 0
     failed: int = 0
     errors: List[str] = Field(default_factory=list)
+
+
+class WorkOrderPushBindingOut(BaseSchema):
+    connection_code: Optional[str] = None
+    save_api_uuid: Optional[str] = None
+    sync_mode: str = "manual_full"
+    schedule_interval_minutes: int = 15
+    last_success_at: Optional[datetime] = None
+    last_attempt_at: Optional[datetime] = None
+    last_error: Optional[str] = None
+
+
+class WorkOrderPushBindingUpsert(BaseSchema):
+    connection_code: Optional[str] = None
+    save_api_uuid: Optional[str] = None
+    sync_mode: Optional[str] = None
+    schedule_interval_minutes: Optional[int] = None
+
+
+class WorkOrderPushCandidateOut(BaseSchema):
+    id: int
+    code: Optional[str] = None
+    name: Optional[str] = None
+    product_code: Optional[str] = None
+    product_name: Optional[str] = None
+    quantity: Optional[float] = None
+    status: Optional[str] = None
+    planned_start_date: Optional[datetime] = None
+
+
+class WorkOrderPushCandidateListOut(BaseSchema):
+    items: List[WorkOrderPushCandidateOut] = Field(default_factory=list)
+    total: int = 0

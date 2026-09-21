@@ -98,6 +98,8 @@ import {
   UNI_TABLE_OPERATION_STEPS_COLUMN_MIN_WIDTH,
 } from '../../../../../components/uni-table/stackedPrimaryColumn'
 import { renderExternalSyncPrimaryExtra } from '../../../../../components/external-sync-source/ExternalSyncSourceIcon'
+import { SyncPushHubButton } from '../../../../../components/sync-push-hub'
+import { useToolbarSyncPushFlags } from '../../../../../hooks/useToolbarSyncPushFlags'
 import { useUserPreferenceStore } from '../../../../../stores/userPreferenceStore'
 import { useConfigStore } from '../../../../../stores/configStore'
 import {
@@ -122,6 +124,9 @@ const SyncFreshnessBadge = lazy(() =>
 )
 const WorkOrderSyncFromSourceModal = lazy(
   () => import('./WorkOrderSyncFromSourceModal'),
+)
+const WorkOrderPushToKingdeeModal = lazy(
+  () => import('./WorkOrderPushToKingdeeModal'),
 )
 import {
   ListPageTemplate,
@@ -1444,6 +1449,7 @@ const WorkOrdersPage: React.FC = () => {
   const quantityDecimals = useNumericPrecisionPlaces('quantity')
   const { message: messageApi } = App.useApp()
   const workOrderPerms = useResourcePermissions(WORK_ORDER_RESOURCE)
+  const toolbarSyncPush = useToolbarSyncPushFlags('work_order')
   const outboundPerms = useResourcePermissions('kuaizhizao:outbound')
   const workOrderAuditEnabled = useAuditRequired('work_order', false)
   const workOrderAuditColumn = useMemo(
@@ -8255,18 +8261,50 @@ const WorkOrdersPage: React.FC = () => {
               messageApi.error(error?.message || t('common.exportFailed'))
             }
           }}
-          showSyncButton={workOrderPerms.canCreate}
-          onSync={() => setSyncModalVisible(true)}
+          showSyncButton={
+            workOrderPerms.canCreate && toolbarSyncPush.hubVisible
+          }
+          onSync={() => undefined}
           syncToolbarExtra={
-            workOrderPerms.canCreate
-              ? (syncButton) => (
-                  <Suspense fallback={syncButton}>
-                    <SyncFreshnessBadge
-                      getBinding={loadWorkOrderSyncBinding}
-                      refreshKey={syncFreshnessKey}
-                    >
-                      {syncButton}
-                    </SyncFreshnessBadge>
+            workOrderPerms.canCreate && toolbarSyncPush.hubVisible
+              ? () => (
+                  <Suspense fallback={null}>
+                    <SyncPushHubButton
+                      syncEnabled={toolbarSyncPush.syncEnabled}
+                      pushEnabled={toolbarSyncPush.pushEnabled}
+                      size="middle"
+                      wrapButton={(hubButton) => (
+                        <SyncFreshnessBadge
+                          getBinding={loadWorkOrderSyncBinding}
+                          refreshKey={syncFreshnessKey}
+                        >
+                          {hubButton}
+                        </SyncFreshnessBadge>
+                      )}
+                      renderSyncPanel={({ active, close }) => (
+                        <WorkOrderSyncFromSourceModal
+                          contentOnly
+                          open={active}
+                          onClose={close}
+                          onComplete={() => {
+                            handleSyncComplete()
+                            close()
+                          }}
+                        />
+                      )}
+                      renderPushPanel={({ active, close }) => (
+                        <WorkOrderPushToKingdeeModal
+                          embedded
+                          open={active}
+                          onClose={close}
+                          workOrderIds={selectedWorkOrderIds}
+                          onComplete={() => {
+                            handleSyncComplete()
+                            close()
+                          }}
+                        />
+                      )}
+                    />
                   </Suspense>
                 )
               : undefined

@@ -61,7 +61,7 @@ async def message_sender_function(event: Event) -> Dict[str, Any]:
         elif message_type == "internal":
             result = {"success": True, "message": "站内信已创建"}
         elif message_type == "push":
-            result = await _send_push_notification(tenant_id, recipient, subject, content)
+            result = await _send_push_notification(tenant_id, config_uuid, recipient, subject, content)
         else:
             result = {"success": False, "error": f"不支持的消息类型: {message_type}"}
 
@@ -145,25 +145,42 @@ async def _send_sms(
 
 async def _send_push_notification(
     tenant_id: int,
+    config_uuid: str,
     recipient: str,
     subject: str,
     content: str,
 ) -> Dict[str, Any]:
     try:
-        from core.services.messaging.push_dispatch_service import schedule_internal_message_push
+        config = await MessageConfigService.get_message_config_by_uuid(tenant_id, config_uuid)
+        if not config:
+            return {"success": False, "error": "推送配置不存在"}
+        channel = config.config or {}
+        provider = str(channel.get("provider") or channel.get("connection_type") or "").strip().lower()
+        if provider in ("wecom", "wechat_work", "企业微信"):
+            from core.services.messaging.wecom_message_service import send_wecom_text_message
 
-        user_id = int(str(recipient).strip())
-        if user_id < 1:
-            return {"success": False, "error": "推送收件人无效"}
-        schedule_internal_message_push(
-            tenant_id=tenant_id,
-            user_id=user_id,
-            subject=subject or "新消息",
-            content=content or "",
-            message_log_uuid=None,
-            variables=None,
-        )
-        return {"success": True, "message": "推送已调度"}
+            user_ids = [v.strip() for v in str(recipient or "").replace(",", "|").split("|") if v.strip()]
+            sent = await send_wecom_text_message(
+                tenant_id=tenant_id,
+                user_ids=user_ids,
+                content=content or subject or "",
+            )
+            if not sent:
+                return {"success": False, "error": "企业微信未配置或无有效接收人"}
+            return {"success": True, "message": "企业微信消息发送成功"}
+        if provider in ("webhook", "http", "rest"):
+            from infra.infrastructure.http.client import get_http_client
+
+            url = str(channel.get("webhook_url") or channel.get("url") or "").strip()
+            if not url:
+                return {"success": False, "error": "推送配置缺少 webhook_url"}
+            payload = {"title": subject or "新消息", "content": content or "", "recipient": recipient}
+            headers = channel.get("headers") if isinstance(channel.get("headers"), dict) else None
+            resp = await get_http_client().post(url, json=payload, headers=headers, timeout=10)
+            if resp.status_code >= 400:
+                return {"success": False, "error": f"Webhook 返回 HTTP {resp.status_code}"}
+            return {"success": True, "message": "应用 Webhook 推送成功"}
+        return {"success": False, "error": "推送配置缺少 provider（wecom 或 webhook）"}
     except Exception as e:
         logger.error(f"发送推送通知失败: {e}")
         return {"success": False, "error": str(e)}

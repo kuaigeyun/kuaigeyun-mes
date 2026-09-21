@@ -15,6 +15,8 @@ export interface UniPullQueryFilterBarProps {
   onScopeChange?: (scope: string) => void;
   /** 搜索框右侧扩展筛选（如分类、来源类型） */
   filterExtra?: ReactNode;
+  /** inline：放在搜索框右侧（默认）；block：独占下一行，不与搜索框抢宽 */
+  filterExtraPlacement?: 'inline' | 'block';
 }
 
 /**
@@ -30,8 +32,34 @@ export const UniPullQueryFilterBar: React.FC<UniPullQueryFilterBarProps> = ({
   scope,
   onScopeChange,
   filterExtra,
+  filterExtraPlacement = 'inline',
 }) => {
   const { token } = theme.useToken();
+  const placeExtraBelow = filterExtraPlacement === 'block' && filterExtra != null;
+
+  const searchRow = (
+    <Flex gap={8} align="center" style={{ width: '100%' }}>
+      {scopeOptions && scopeOptions.length > 0 && scope != null && onScopeChange ? (
+        <ThemedSegmented
+          surfaceBackground
+          value={scope}
+          options={scopeOptions}
+          onChange={(value) => onScopeChange(String(value))}
+          style={{ flexShrink: 0 }}
+        />
+      ) : null}
+      <Input.Search
+        allowClear
+        placeholder={searchPlaceholder}
+        style={{ flex: 1, minWidth: 0 }}
+        value={searchDraft}
+        onChange={(e) => onSearchDraftChange(e.target.value)}
+        onSearch={(value) => onSearchApply(value)}
+        onClear={onSearchClear}
+      />
+      {placeExtraBelow ? null : filterExtra}
+    </Flex>
+  );
 
   return (
     <div
@@ -43,27 +71,14 @@ export const UniPullQueryFilterBar: React.FC<UniPullQueryFilterBarProps> = ({
         border: `1px solid ${token.colorBorderSecondary}`,
       }}
     >
-      <Flex gap={8} align="center" style={{ width: '100%' }}>
-        {scopeOptions && scopeOptions.length > 0 && scope != null && onScopeChange ? (
-          <ThemedSegmented
-            surfaceBackground
-            value={scope}
-            options={scopeOptions}
-            onChange={(value) => onScopeChange(String(value))}
-            style={{ flexShrink: 0 }}
-          />
-        ) : null}
-        <Input.Search
-          allowClear
-          placeholder={searchPlaceholder}
-          style={{ flex: 1, minWidth: 0 }}
-          value={searchDraft}
-          onChange={(e) => onSearchDraftChange(e.target.value)}
-          onSearch={(value) => onSearchApply(value)}
-          onClear={onSearchClear}
-        />
-        {filterExtra}
-      </Flex>
+      {placeExtraBelow ? (
+        <Flex vertical gap={12} style={{ width: '100%' }}>
+          {searchRow}
+          <div style={{ width: '100%' }}>{filterExtra}</div>
+        </Flex>
+      ) : (
+        searchRow
+      )}
     </div>
   );
 };

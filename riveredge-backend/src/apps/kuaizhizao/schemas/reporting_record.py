@@ -139,6 +139,13 @@ class ReportingRecordResponse(ReportingRecordBase):
     inbound_warehouse_name: Optional[str] = Field(None, description="末道工序入库仓库名称")
     device_info: Optional[Any] = Field(None, description="设备信息")
     sop_parameters: Optional[Any] = Field(None, description="SOP参数数据（JSON格式）")
+    kingdee_push_status: Optional[str] = Field(
+        None, description="金蝶生产汇报单推送状态（null=未推送/success=成功/failed=需重试/dead=超限终止）"
+    )
+    kingdee_push_attempts: int = Field(0, description="金蝶生产汇报单已推送尝试次数")
+    kingdee_push_next_at: Optional[datetime] = Field(None, description="下次推送重试时间")
+    kingdee_push_last_error: Optional[str] = Field(None, description="最近一次推送失败原因")
+    kingdee_push_last_at: Optional[datetime] = Field(None, description="最近一次推送尝试时间")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
     capabilities: Optional[ReportingRecordCapabilities] = Field(

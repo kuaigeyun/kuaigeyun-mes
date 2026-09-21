@@ -8,8 +8,8 @@ Date: 2025-01-15
 """
 
 from datetime import datetime
-from typing import List, Optional, Dict, Any
-from fastapi import APIRouter, Depends, Query, Body
+from typing import Annotated, List, Optional, Dict, Any
+from fastapi import APIRouter, Depends, Query, Body, HTTPException, status
 from fastapi.responses import FileResponse
 from loguru import logger
 
@@ -19,6 +19,10 @@ from infra.exceptions.exceptions import ValidationError
 
 from apps.kuaizhizao.services.report_service import ReportService
 from apps.kuaizhizao.services.report_enhancements import REPORT_LIST_MAX_LIMIT
+from apps.kuaizhizao.schemas.inventory_sync import (
+    InventorySyncBindingUpsert,
+    InventorySyncFromSourceRequest,
+)
 
 # 初始化服务实例
 report_service = ReportService()
@@ -796,3 +800,53 @@ async def export_domain_report(
         media_type="text/csv",
         filename=filename,
     )
+
+
+# ===== 即时库存同步路由 =====
+
+@router.get(
+    "/inventory/sync-binding",
+    summary="即时库存同步绑定配置",
+)
+async def get_inventory_sync_binding(
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    from apps.kuaizhizao.services.inventory_sync_service import InventorySyncService
+    return await InventorySyncService().get_binding(tenant_id)
+
+
+@router.put(
+    "/inventory/sync-binding",
+    summary="保存即时库存同步绑定配置",
+)
+async def put_inventory_sync_binding(
+    body: InventorySyncBindingUpsert,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    from apps.kuaizhizao.services.inventory_sync_service import InventorySyncService
+    try:
+        return await InventorySyncService().upsert_binding(tenant_id, body)
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.post(
+    "/inventory/sync-from-source",
+    summary="从数据接口或数据集同步即时库存",
+)
+async def sync_inventory_from_source(
+    body: InventorySyncFromSourceRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    stream: bool = Query(False, description="为 true 时以 NDJSON 流式返回进度"),
+):
+    from apps.kuaizhizao.services.inventory_sync_service import InventorySyncService
+    try:
+        if stream:
+            from core.services.data.sync_progress_stream import stream_sync_ndjson
+            return await stream_sync_ndjson(
+                lambda: InventorySyncService().sync_from_source(tenant_id, current_user, body)
+            )
+        return await InventorySyncService().sync_from_source(tenant_id, current_user, body)
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))

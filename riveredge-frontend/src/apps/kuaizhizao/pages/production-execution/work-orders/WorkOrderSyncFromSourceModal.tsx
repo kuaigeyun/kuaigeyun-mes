@@ -8,6 +8,7 @@ export interface WorkOrderSyncFromSourceModalProps {
   onClose: () => void;
   onComplete?: (result: SyncFromSourceResult) => void;
   zIndex?: number;
+  contentOnly?: boolean;
 }
 
 export const WorkOrderSyncFromSourceModal: React.FC<WorkOrderSyncFromSourceModalProps> = (props) => {

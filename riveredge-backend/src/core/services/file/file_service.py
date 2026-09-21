@@ -362,8 +362,12 @@ class FileService:
             else:
                 query = query.filter(category=category)
         else:
-            # 全部文件列表不含保密 category
-            query = query.exclude(category__in=list(PRIVATE_FILE_CATEGORIES))
+            # PostgreSQL 的 NOT IN 匹配不到 NULL，未分类上传会被「全部文件」滤掉
+            query = query.filter(
+                Q(category__isnull=True)
+                | Q(category="")
+                | ~Q(category__in=list(PRIVATE_FILE_CATEGORIES))
+            )
         
         if file_type:
             query = query.filter(file_type=file_type)

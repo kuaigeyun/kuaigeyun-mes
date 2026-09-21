@@ -54,6 +54,7 @@ export function UniPullQueryModal<T extends object>({
   scope,
   onScopeChange,
   filterExtra,
+  filterExtraPlacement,
   okText,
   cancelText,
   okButtonProps,
@@ -196,6 +197,7 @@ export function UniPullQueryModal<T extends object>({
         scope={scope}
         onScopeChange={onScopeChange}
         filterExtra={filterExtra}
+        filterExtraPlacement={filterExtraPlacement}
       />
       <UniPullQuerySelectionBar
         showCrossPage={isMultiSelect}

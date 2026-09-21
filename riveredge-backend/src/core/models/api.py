@@ -41,6 +41,8 @@ class API(BaseModel):
     
     is_active = fields.BooleanField(default=True, description="是否启用")
     is_system = fields.BooleanField(default=False, description="是否系统接口（系统接口不可删除）")
+    # SOURCE_TYPE_CONVERSION: 接口级来源编码到系统来源类型的配置。
+    source_type_conversion_map = fields.JSONField(null=True, description="来源类型编码转换映射（如金蝶 FErpClsID: 1->Buy）")
 
     integration_config: fields.ForeignKeyNullableRelation["IntegrationConfig"] = fields.ForeignKeyField(
         "models.IntegrationConfig",

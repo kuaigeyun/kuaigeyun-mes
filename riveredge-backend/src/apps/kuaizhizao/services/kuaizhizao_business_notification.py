@@ -29,6 +29,7 @@ DOC_EQUIPMENT_SPOT_CHECK = "equipment_spot_check"
 DOC_EQUIPMENT_LINE_REBIND = "equipment_line_rebind"
 DOC_INVENTORY_ALERT = "inventory_alert"
 DOC_SHIPMENT_NOTICE = "shipment_notice"
+DOC_REPORTING_RECORD = "reporting_record"
 
 ACTION_DELIVERY_DELAYED = "delivery_delayed"
 ACTION_CREATED = "created"
@@ -56,6 +57,7 @@ ACTION_MONTH_END_OVERDUE = "month_end_overdue"
 ACTION_PQC_CHECKED = "pqc_checked"
 ACTION_OQC_NOTIFIED = "oqc_notified"
 ACTION_CONFIRMED = "confirmed"
+ACTION_KINGDEE_PUSH_DEAD = "kingdee_push_dead"
 
 
 async def dispatch_kuaizhizao_notification(

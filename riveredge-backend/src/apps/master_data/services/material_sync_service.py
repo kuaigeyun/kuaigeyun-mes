@@ -102,7 +102,12 @@ MATERIAL_SYNC_DECIMAL_FIELDS = frozenset(
 MATERIAL_SYNC_INT_FIELDS = frozenset({"shelf_life_days"})
 
 
-def _coerce_material_extra_value(field_name: str, raw: Any) -> Any:
+def _coerce_material_extra_value(
+    field_name: str,
+    raw: Any,
+    conversion_entries: Optional[List[Dict[str, Any]]] = None,
+    source_field_names: Optional[set[str]] = None,
+) -> Any:
     if field_name in MATERIAL_SYNC_BOOL_FIELDS:
         return cell_optional_bool(raw)
     if field_name in MATERIAL_SYNC_DECIMAL_FIELDS:
@@ -111,6 +116,16 @@ def _coerce_material_extra_value(field_name: str, raw: Any) -> Any:
         return cell_optional_int(raw)
     if field_name == "source_type":
         text = cell_str(raw)
+        if conversion_entries:
+            for entry in conversion_entries:
+                if not isinstance(entry, dict):
+                    continue
+                entry_field_name = cell_str(entry.get("field_name"))
+                if entry_field_name != field_name and entry_field_name not in (source_field_names or set()):
+                    continue
+                mapping = entry.get("mapping")
+                if isinstance(mapping, dict) and text in mapping:
+                    return mapping[text]
         if not text:
             return None
         return require_canonical_material_source_type(text)
@@ -122,11 +137,19 @@ def _apply_material_extra_scalars(
     material: Material,
     row: Dict[str, Any],
     update_fields: List[str],
+    *,
+    conversion_entries: Optional[List[Dict[str, Any]]] = None,
+    source_field_names: Optional[set[str]] = None,
 ) -> None:
     for field_name in MATERIAL_SYNC_EXTRA_SCALAR_FIELDS:
         if field_name not in row:
             continue
-        coerced = _coerce_material_extra_value(field_name, row.get(field_name))
+        coerced = _coerce_material_extra_value(
+            field_name,
+            row.get(field_name),
+            conversion_entries,
+            source_field_names,
+        )
         if coerced is None and field_name in MATERIAL_SYNC_BOOL_FIELDS:
             continue
         if coerced is None and field_name in {"weight", "volume", "over_report_value"}:
@@ -192,6 +215,25 @@ class MaterialSyncService:
             req,
             default_match_key=self.MATCH_KEY,
         )
+        conversion_entries = None
+        source_field_names: set[str] = set()
+        if isinstance(field_mapping, dict):
+            source_field_names = {
+                str(source).strip()
+                for source, target in field_mapping.items()
+                if str(target).strip() == "source_type"
+            }
+        # SOURCE_TYPE_CONVERSION: 仅从当前接口配置读取映射，不在同步页面维护编码。
+        if api_uuid:
+            from core.models.api import API
+
+            api_obj = await API.filter(tenant_id=tenant_id, uuid=api_uuid).first()
+            conv = getattr(api_obj, "source_type_conversion_map", None) if api_obj else None
+            if isinstance(conv, list):
+                conversion_entries = conv
+            elif isinstance(conv, dict):
+                # 兼容旧格式：扁平映射，字段名默认为 source_type
+                conversion_entries = [{"field_name": "source_type", "mapping": conv}]
         if not source_type:
             raise ValidationError("请配置同步来源（数据接口或数据集）")
         if not field_mapping:
@@ -248,7 +290,14 @@ class MaterialSyncService:
             )
             rows = map_sync_rows(raw_rows, field_mapping)
             await emit_sync_progress(f"字段映射完成，准备写入 {len(rows)} 条物料…")
-            result = await self._upsert_materials(tenant_id, current_user, rows, match_key)
+            result = await self._upsert_materials(
+                tenant_id,
+                current_user,
+                rows,
+                match_key,
+                conversion_entries=conversion_entries,
+                source_field_names=source_field_names,
+            )
             attach_sync_fetch_meta(result, fetched=len(raw_rows), since=since)
             if prerequisite_errors:
                 result.errors = (prerequisite_errors + list(result.errors))[:20]
@@ -272,6 +321,9 @@ class MaterialSyncService:
         current_user: Optional[User],
         rows: List[Dict[str, Any]],
         match_key: str,
+        *,
+        conversion_entries: Optional[List[Dict[str, Any]]] = None,
+        source_field_names: Optional[set[str]] = None,
     ) -> MasterDataSyncFromSourceOut:
         created = 0
         updated = 0
@@ -413,7 +465,13 @@ class MaterialSyncService:
                     existing.base_unit = resolved_unit
                     if group_id is not None:
                         existing.group_id = group_id
-                    _apply_material_extra_scalars(existing, mapped_row, update_fields)
+                    _apply_material_extra_scalars(
+                        existing,
+                        mapped_row,
+                        update_fields,
+                        conversion_entries=conversion_entries,
+                        source_field_names=source_field_names,
+                    )
                     existing.external_sync_at = sync_at
                     existing.updated_at = sync_at
                     if current_user is not None:
@@ -421,7 +479,12 @@ class MaterialSyncService:
                     to_update.append(existing)
                 else:
                     source_type = (
-                        _coerce_material_extra_value("source_type", mapped_row.get("source_type"))
+                        _coerce_material_extra_value(
+                            "source_type",
+                            mapped_row.get("source_type"),
+                            conversion_entries,
+                            source_field_names,
+                        )
                         if "source_type" in mapped_row
                         else None
                     ) or require_canonical_material_source_type(
@@ -446,7 +509,13 @@ class MaterialSyncService:
                     if current_user is not None:
                         apply_create_audit(payload, current_user)
                     material = Material(**payload)
-                    _apply_material_extra_scalars(material, mapped_row, [])
+                    _apply_material_extra_scalars(
+                        material,
+                        mapped_row,
+                        [],
+                        conversion_entries=conversion_entries,
+                        source_field_names=source_field_names,
+                    )
                     to_create.append(material)
             except Exception as exc:
                 failed += 1

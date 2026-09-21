@@ -54,8 +54,11 @@ import {
 } from '../../sales-management/shared/documentLineMaterialsPreview';
 import { UniAuditBatchMenuButton, UniCapabilityBatchButton } from '../../../../../components/uni-batch';
 import { SyncFreshnessBadge } from '../../../../../components/sync-from-source-modal/SyncFreshnessBadge';
+import { SyncPushHubButton } from '../../../../../components/sync-push-hub';
+import { useToolbarSyncPushFlags } from '../../../../../hooks/useToolbarSyncPushFlags';
 import { renderExternalSyncPrimaryExtra } from '../../../../../components/external-sync-source/ExternalSyncSourceIcon';
 import PurchaseOrderSyncFromSourceModal from './PurchaseOrderSyncFromSourceModal';
+import PurchaseOrderDocumentPushPanel from './PurchaseOrderDocumentPushPanel';
 import {
   ListPageTemplate,
   DetailDrawerActions,
@@ -373,6 +376,7 @@ const PurchaseOrdersPage: React.FC = () => {
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const purchaseOrderAuditEnabled = useAuditRequired('purchase_order', false);
   const purchaseOrderPerms = useResourcePermissions(PURCHASE_ORDER_RESOURCE);
+  const toolbarSyncPush = useToolbarSyncPushFlags('purchase');
   const purchaseOrderChangePerms = useResourcePermissions('kuaizhizao:purchase-order-change');
   const { token } = theme.useToken();
   const purchaseOrderDetailDrawerZIndex = token.zIndexPopupBase;
@@ -3753,17 +3757,55 @@ const PurchaseOrdersPage: React.FC = () => {
               messageApi.error(error?.message || t('common.exportFailed'));
             }
           }}
-          showSyncButton={viewTypeState !== 'detailTable' && purchaseOrderPerms.canCreate}
-          onSync={() => setSyncModalVisible(true)}
+          showSyncButton={
+            viewTypeState !== 'detailTable' &&
+            purchaseOrderPerms.canCreate &&
+            toolbarSyncPush.hubVisible
+          }
+          onSync={() => undefined}
           syncToolbarExtra={
-            viewTypeState !== 'detailTable' && purchaseOrderPerms.canCreate
-              ? (syncButton) => (
-                  <SyncFreshnessBadge
-                    getBinding={loadPurchaseOrderSyncBinding}
-                    refreshKey={syncFreshnessKey}
-                  >
-                    {syncButton}
-                  </SyncFreshnessBadge>
+            viewTypeState !== 'detailTable' &&
+            purchaseOrderPerms.canCreate &&
+            toolbarSyncPush.hubVisible
+              ? () => (
+                  <SyncPushHubButton
+                    syncEnabled={toolbarSyncPush.syncEnabled}
+                    pushEnabled={toolbarSyncPush.pushEnabled}
+                    size="middle"
+                    wrapButton={(hubButton) => (
+                      <SyncFreshnessBadge
+                        getBinding={loadPurchaseOrderSyncBinding}
+                        refreshKey={syncFreshnessKey}
+                      >
+                        {hubButton}
+                      </SyncFreshnessBadge>
+                    )}
+                    renderSyncPanel={({ active, close }) => (
+                      <PurchaseOrderSyncFromSourceModal
+                        contentOnly
+                        open={active}
+                        onClose={close}
+                        onComplete={() => {
+                          handleSyncComplete();
+                          close();
+                        }}
+                      />
+                    )}
+                    renderPushPanel={({ active, close }) => (
+                      <PurchaseOrderDocumentPushPanel
+                        embedded
+                        open={active}
+                        onClose={close}
+                        orderIds={selectedOrdersForBatch
+                          .map((o) => Number(o.id))
+                          .filter((id) => Number.isFinite(id) && id > 0)}
+                        onComplete={() => {
+                          handleSyncComplete();
+                          close();
+                        }}
+                      />
+                    )}
+                  />
                 )
               : undefined
           }
