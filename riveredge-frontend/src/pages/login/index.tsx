@@ -46,7 +46,7 @@ import { switchTenant } from '../../services/auth';
 import { setToken, setTenantId, setUserInfo, getTenantId, getToken } from '../../utils/auth';
 import { LANGUAGE_TOOLBAR_SHORT, SUPPORTED_UI_LANGUAGES, normalizeUiLanguage } from '../../utils/localeBootstrap';
 import { resolvePostLoginNavigatePath } from '../../utils/tenantHomePath';
-import { buildTenantLoginPathForHistoryReplace, isDomainVerificationPathSegment, resolvePlatformAdminLoginPathFromUrl, resolveTenantDomainFromUrl } from '../../utils/tenantDomainAccess';
+import { buildTenantLoginPathForHistoryReplace, resolvePlatformAdminLoginPathFromUrl, resolveTenantDomainFromUrl } from '../../utils/tenantDomainAccess';
 import { captureLoginEntryFromCurrentUrl } from '../../utils/loginEntry';
 const TenantSelectionModal = lazy(() => import('../../components/tenant-selection-modal'));
 const TermsModal = lazy(() => import('../../components/terms-modal'));
@@ -146,21 +146,31 @@ export default function LoginPage() {
     const adminLoginPath = resolvePlatformAdminLoginPathFromUrl();
     if (adminLoginPath) {
       navigate(adminLoginPath, { replace: true });
-      return;
-    }
-    // 历史误跳转会留下 ?tenant_domain=xxx.txt；须从地址栏清掉，否则看起来仍在「识别为组织」
-    try {
-      const params = new URLSearchParams(window.location.search);
-      const raw = (params.get('tenant_domain') || '').trim();
-      if (raw && isDomainVerificationPathSegment(raw)) {
-        params.delete('tenant_domain');
-        const q = params.toString();
-        navigate(q ? `/login?${q}` : '/login', { replace: true });
-      }
-    } catch {
-      /* ignore */
     }
   }, [navigate]);
+
+  /** 组织入口 /{domain}：不存在则提示并清空路径回到 / */
+  useEffect(() => {
+    const domain = resolveTenantDomainFromUrl();
+    if (!domain) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const check = await checkTenantDomain(domain);
+        if (cancelled) return;
+        if (!check.exists) {
+          message.error(t('pages.login.tenantDomainNotFound', { domain }));
+          navigate('/', { replace: true });
+        }
+      } catch {
+        if (cancelled) return;
+        message.error(t('pages.login.tenantDomainCheckFailed', { domain }));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [navigate, message, t]);
 
   /** 登录成功：先写 localStorage（会话真源）。主应用会话模块不得静态进入本页，否则登录 MPA 会打进整包 i18n。 */
   const syncUserStateAfterLogin = useCallback((userInfo: Parameters<typeof setUserInfo>[0]) => {

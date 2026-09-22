@@ -64,7 +64,7 @@ import {
 } from './utils/activityUtils';
 import { useTouchScreen } from './hooks/useTouchScreen';
 import { initDocumentStatusCache } from './services/enums';
-import { buildLoginRedirectPath, resolveTenantDomainFromUrl } from './utils/tenantDomainAccess';
+import { isStaticLikePathname, isTenantEntryPathname, resolveTenantDomainFromUrl } from './utils/tenantDomainAccess';
 import { isPlatformAdminLoginPathname, isPlatformInfraPath, isPlatformInfraPublicPath } from './utils/platformScope';
 import { isKuaireportSharedBrowsePath } from './utils/kuaireportSharedPath';
 import { redirectAfterLogout } from './utils/loginEntry';
@@ -110,7 +110,7 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
 
   // 公开页面：根路径、登录、初始化向导、分享页等，无需鉴权即可访问
   const pathname = location.pathname;
-  const tenantDomainFromPath = resolveTenantDomainFromUrl({ pathname, search: location.search });
+  const tenantDomainFromPath = resolveTenantDomainFromUrl({ pathname });
   const isKuaireportSharedPath = isKuaireportSharedBrowsePath(pathname);
   const isPublicPath = pathname === '/' ||
     pathname.startsWith('/login') ||
@@ -120,7 +120,9 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
     pathname.startsWith('/docs') ||
     pathname.startsWith('/debug/') ||
     pathname.startsWith('/qrcode/') ||
-    isKuaireportSharedPath;
+    isKuaireportSharedPath ||
+    isTenantEntryPathname(pathname) ||
+    isStaticLikePathname(pathname);
   const isInfraLoginPage = isPlatformAdminLoginPathname(pathname);
 
   // 分享页凭 URL token 访问，清除残留登录态，避免 401 被全局拦截器重定向到登录页。
@@ -596,8 +598,11 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
       if (isInfraLoginPage && currentUser.is_infra_admin) {
         return '/infra/operation';
       }
-      // 普通用户已登录仍访问登录页：走 / 由 TenantHomeRedirect 解析有效首页
+      // 普通用户已登录仍访问登录页或组织入口：走 / 由 TenantHomeRedirect 解析有效首页
       if (location.pathname === '/login' && !currentUser.is_infra_admin) {
+        return '/';
+      }
+      if (tenantDomainFromPath && !currentUser.is_infra_admin) {
         return '/';
       }
     }
@@ -609,10 +614,7 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
       if (isPlatformInfraPath(location.pathname)) {
         return '/infra/login';
       }
-      if (tenantDomainFromPath) {
-        return buildLoginRedirectPath();
-      }
-      // 系统级路由重定向到用户登录页
+      // 系统级路由重定向到用户登录页（组织入口已是 isPublicPath，不会改写 URL）
       return '/login';
     }
 

@@ -605,7 +605,9 @@ export default {
   'pages.login.wechatLoginFailed': '微信登录失败，请稍后重试',
   'pages.login.wecomSelectTenant': '请选择组织后再使用企业微信登录',
   'pages.login.wecomSelectTenantModalTitle': '选择组织',
-  'pages.login.wecomSelectTenantModalHint': '企业微信登录需先确定组织。可搜索组织名称或组织代码（如 default），也可在地址栏使用 /login?tenant_id=1',
+  'pages.login.wecomSelectTenantModalHint': '企业微信登录需先确定组织。可搜索组织名称或组织代码（如 default），也可在地址栏使用 /组织域名',
+  'pages.login.tenantDomainNotFound': '组织「{{domain}}」不存在',
+  'pages.login.tenantDomainCheckFailed': '无法校验组织「{{domain}}」，请检查网络后重试',
   'pages.login.wecomSelectTenantConfirm': '继续企业微信登录',
   'pages.login.wecomTenantDomainPlaceholder': '输入组织名称或组织代码搜索',
   'pages.login.wecomNotConfigured': '未配置企业微信连接器，请联系管理员在应用连接中启用 type=wecom',
@@ -31011,6 +31013,10 @@ export default {
     '基础应用与扩展模块边界解耦',
   'pages.dashboard.updateLog.entries.application-layer-host-capabilities.description':
     '快制造与轻办公列表不再编译依赖行业包；扩展对照与清单改由平台 host-capabilities 接口按租户已启用模块动态解析。',
+  'pages.dashboard.updateLog.entries.tenant-path-entry-literal-r01.title':
+    '组织入口保持 /组织域名 不改写登录 query',
+  'pages.dashboard.updateLog.entries.tenant-path-entry-literal-r01.description':
+    '未登录访问 /kuaige 等组织路径时地址栏不变；废除 login?tenant_domain= 入口。组织不存在时提示后回到 /。校验 *.txt 不当组织。/infra 保留。',
   'pages.dashboard.updateLog.entries.domain-verify-txt-query-not-tenant-r02.title':
     '校验文件 query 不再误判为组织域名',
   'pages.dashboard.updateLog.entries.domain-verify-txt-query-not-tenant-r02.description':

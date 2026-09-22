@@ -3,8 +3,8 @@
  */
 
 import { navigateTo } from './navigation';
-import { buildLoginRedirectPath } from './tenantDomainAccess';
-import { isPlatformAdminEntryPathname, isPlatformAdminTenantDomain } from './reservedTenantDomain';
+import { buildLoginRedirectPath, resolveTenantDomainFromPathname } from './tenantDomainAccess';
+import { isPlatformAdminEntryPathname } from './reservedTenantDomain';
 import { isPlatformInfraPath } from './platformScope';
 
 const LOGIN_ENTRY_STORAGE_KEY = 'riveredge-login-entry';
@@ -37,18 +37,10 @@ function sanitizeLoginUrl(url: URL, kind: LoginEntryKind): LoginEntrySnapshot {
     url.searchParams.delete(key);
   }
   url.searchParams.delete('redirect');
+  // 组织入口不以 query 为真源，不持久化 tenant_domain
+  url.searchParams.delete('tenant_domain');
 
-  if (kind === 'infra') {
-    return {
-      origin: url.origin,
-      pathname: '/infra/login',
-      search: '',
-      kind,
-    };
-  }
-
-  const queryTenantDomain = (url.searchParams.get('tenant_domain') || '').trim().toLowerCase();
-  if (isPlatformAdminTenantDomain(queryTenantDomain) || isPlatformAdminEntryPathname(url.pathname)) {
+  if (kind === 'infra' || isPlatformAdminEntryPathname(url.pathname)) {
     return {
       origin: url.origin,
       pathname: '/infra/login',
@@ -57,9 +49,19 @@ function sanitizeLoginUrl(url: URL, kind: LoginEntryKind): LoginEntrySnapshot {
     };
   }
 
+  const domain = resolveTenantDomainFromPathname(url.pathname);
+  if (domain) {
+    return {
+      origin: url.origin,
+      pathname: `/${domain}`,
+      search: '',
+      kind: 'tenant',
+    };
+  }
+
   return {
     origin: url.origin,
-    pathname: url.pathname,
+    pathname: url.pathname.startsWith('/login') ? '/login' : url.pathname,
     search: normalizeSearch(url.search),
     kind,
   };

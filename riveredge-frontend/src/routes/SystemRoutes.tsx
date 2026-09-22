@@ -21,6 +21,7 @@ import { hasAnyPermission } from '../utils/permission';
 import { useRedirectIfSystemDashboardOff } from '../hooks/useRedirectIfSystemDashboardOff';
 import DefaultHomeRouteGate from '../components/default-home-route-gate';
 import { useCurrentUser } from '../hooks/useCurrentUser';
+import TenantDomainLoginRoute from './TenantDomainLoginRoute';
 
 // 核心页面（立即加载，首屏必需）
 import IndexPage from '../pages';
@@ -194,6 +195,8 @@ const SystemRoutes: React.FC = () => (
     <Route path="/init/template-select" element={<Suspense fallback={<PageSkeleton />}><TemplateSelectPage /></Suspense>} />
     <Route path="/qrcode/scan" element={<Suspense fallback={<PageSkeleton />}><QRCodeScanPage /></Suspense>} />
     <Route path="/docs" element={<Suspense fallback={<PageSkeleton />}><DocsPage /></Suspense>} />
+    {/* 组织入口唯一真源：/{tenantDomain}（须排在单段静态公开路由之后） */}
+    <Route path="/:tenantDomain" element={<TenantDomainLoginRoute />} />
 
     <Route path="/system/dashboard" element={<Navigate to="/system/dashboard/workplace" replace />} />
     <Route

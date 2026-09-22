@@ -19,6 +19,7 @@ import { Routes, Route, useLocation } from 'react-router-dom';
 import BasicLayout from '../layouts/BasicLayout';
 import PlatformInfraPathNormalizer from '../components/PlatformInfraPathNormalizer';
 import { isPlatformInfraPublicPath } from '../utils/platformScope';
+import { isStaticLikePathname, isTenantEntryPathname } from '../utils/tenantDomainAccess';
 // 系统核心路由（不依赖应用加载）
 import SystemRoutes from './SystemRoutes';
 // 应用业务路由（异步加载，隔离错误）
@@ -63,6 +64,11 @@ const useShouldRenderLayout = (): boolean => {
 
   // 检查是否是公开路由（平台 /infra 入口大小写不敏感）
   if (isPlatformInfraPublicPath(pathname)) {
+    return false;
+  }
+
+  // 组织入口 /{tenant}、静态样路径：无壳登录 / 由 Caddy 处理
+  if (isTenantEntryPathname(pathname) || isStaticLikePathname(pathname)) {
     return false;
   }
 
