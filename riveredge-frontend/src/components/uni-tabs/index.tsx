@@ -592,6 +592,9 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
   const navigateRef = useRef(navigate);
   navigateRef.current = navigate;
 
+  const activeKeyRef = useRef(activeKey);
+  activeKeyRef.current = activeKey;
+
   useEffect(() => {
     const pendingKey = pendingDefaultHomeCloseRef.current;
     if (!pendingKey || !homePathReady) return;
@@ -641,17 +644,15 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
       prevTenantHomePathRef.current = tenantHomePath;
     }
 
-    setActiveKey((ak) => {
-      if (isTenantDefaultHomePath(ak) && ak !== tenantHomePath) {
-        navigateRef.current(tenantHomePath, { replace: true });
-        return tenantHomePath;
-      }
-      if (homePathChanged && prev && ak === prev) {
-        navigateRef.current(tenantHomePath, { replace: true });
-        return tenantHomePath;
-      }
-      return ak;
-    });
+    const ak = activeKeyRef.current;
+    const shouldRedirectToHome =
+      (isTenantDefaultHomePath(ak) && ak !== tenantHomePath) ||
+      (homePathChanged && prev && ak === prev);
+
+    if (shouldRedirectToHome) {
+      setActiveKey(tenantHomePath);
+      navigateRef.current(tenantHomePath, { replace: true });
+    }
   }, [homePathReady, tenantHomePath, getTabTitle]);
 
   /**

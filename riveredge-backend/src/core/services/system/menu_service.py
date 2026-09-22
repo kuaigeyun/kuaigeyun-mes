@@ -1945,6 +1945,12 @@ class MenuService:
             is_installed=True,
             is_active=True,
         )
+        # 菜单结构真源是磁盘 manifest；库内 menu_config 可能落后于发版，同步时以 manifest 为准并回写，避免旧 icon 等反复污染 core_menus。
+        manifest_by_code = {
+            str(plugin.get("code") or "").strip(): plugin
+            for plugin in ApplicationService._scan_plugin_manifests()
+            if plugin.get("code")
+        }
         total = await MenuService._sync_builtin_system_menu_tree(tenant_id=tenant_id)
         need_permission_sync = False
         synced_app_codes: List[str] = []
@@ -1972,6 +1978,41 @@ class MenuService:
             if is_industry_pack_shell_code(app_code):
                 industry_module_seen = True
                 continue
+
+            manifest = manifest_by_code.get(app_code) if app_code else None
+            manifest_menu = (
+                ApplicationService._normalize_menu_config_field(manifest.get("menu_config"))
+                if manifest
+                else None
+            )
+            if manifest_menu:
+                if (
+                    ApplicationService.stable_menu_config_digest(menu_config)
+                    != ApplicationService.stable_menu_config_digest(manifest_menu)
+                ):
+                    try:
+                        from infra.infrastructure.database.database import get_db_connection
+
+                        conn = await get_db_connection()
+                        try:
+                            await conn.execute(
+                                """
+                                UPDATE core_applications
+                                SET menu_config = $3::jsonb, updated_at = NOW()
+                                WHERE tenant_id = $1 AND uuid = $2 AND deleted_at IS NULL
+                                """,
+                                tenant_id,
+                                str(app_uuid),
+                                json.dumps(manifest_menu, ensure_ascii=False),
+                            )
+                        finally:
+                            await conn.close()
+                    except Exception as e:
+                        logger.warning(
+                            f"回写应用 {app_code} menu_config 自 manifest 失败: {e}"
+                        )
+                menu_config = manifest_menu
+
             if menu_config and app_uuid:
                 try:
                     from core.services.application.application_dedicated_binding_service import (

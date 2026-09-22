@@ -1753,8 +1753,63 @@ class CostCalculationService(AppBaseService[CostCalculation]):
         return breakdown
 
     async def _get_manufacturing_cost_breakdown(self, tenant_id: int, work_order: WorkOrder) -> List[Dict[str, Any]]:
-        # 简化版制造费用明细
-        return [{"item": "工得分摊制造费用", "amount": float(await self._calculate_manufacturing_cost(tenant_id, work_order))}]
+        """制造费用明细：与 `_calculate_manufacturing_cost` 同源（成本规则 × 报工工时/材料比例）。"""
+        rules = await CostRule.filter(
+            tenant_id=tenant_id,
+            rule_type="制造费用",
+            is_active=True,
+            deleted_at__isnull=True,
+        ).all()
+        reporting_records = await ReportingRecord.filter(
+            tenant_id=tenant_id,
+            work_order_id=work_order.id,
+            status="approved",
+            deleted_at__isnull=True,
+        ).all()
+        breakdown: List[Dict[str, Any]] = []
+        for rule in rules:
+            if rule.calculation_method == "按工时":
+                for record in reporting_records:
+                    hours = Decimal(str(record.work_hours or 0))
+                    if hours <= 0:
+                        continue
+                    wc_id = await self._resolve_reporting_work_center_id(
+                        tenant_id, work_order, record
+                    )
+                    if not wc_id:
+                        raise ValidationError(
+                            f"报工「{record.operation_name or record.operation_code or record.id}」"
+                            f"无法解析工作中心，无法按工时核算制造费用（规则「{rule.name}」）"
+                        )
+                    rate = await self._get_standard_value(
+                        tenant_id, "work_center", int(wc_id), "overhead_rate"
+                    )
+                    line_amount = hours * rate
+                    if line_amount <= 0:
+                        continue
+                    breakdown.append({
+                        "rule_name": rule.name,
+                        "calculation_method": "按工时",
+                        "operation_name": record.operation_name,
+                        "work_center_id": int(wc_id),
+                        "hours": float(hours),
+                        "overhead_rate": float(rate),
+                        "amount": float(line_amount),
+                    })
+            elif rule.calculation_method == "按比例":
+                material_cost = await self._calculate_material_cost(tenant_id, work_order)
+                rate = self._rule_overhead_ratio(rule)
+                line_amount = material_cost * rate
+                if line_amount <= 0:
+                    continue
+                breakdown.append({
+                    "rule_name": rule.name,
+                    "calculation_method": "按比例",
+                    "ratio": float(rate),
+                    "base_material_cost": float(material_cost),
+                    "amount": float(line_amount),
+                })
+        return breakdown
 
     async def _get_product_material_cost_breakdown(self, tenant_id: int, product: Material, quantity: Decimal) -> List[Dict[str, Any]]:
         from apps.kuaicaiwu.services.inventory_cost_service import InventoryCostService

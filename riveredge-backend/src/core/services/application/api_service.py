@@ -81,6 +81,7 @@ class APIService:
                 "description",
                 "path",
                 "method",
+                "sync_direction",
                 "request_headers",
                 "request_params",
                 "request_body",
@@ -619,6 +620,7 @@ class APIService:
         page_size: int = 20,
         search: Optional[str] = None,
         method: Optional[str] = None,
+        sync_direction: Optional[str] = None,
         is_active: Optional[bool] = None,
         sort_by: Optional[str] = None,
         sort_order: Optional[str] = None,
@@ -634,6 +636,7 @@ class APIService:
             page_size: 每页数量
             search: 搜索关键词（名称、代码、路径）
             method: 请求方法筛选
+            sync_direction: 同步方向筛选（pull/push/bidirectional）
             is_active: 是否启用筛选
             
         Returns:
@@ -656,6 +659,15 @@ class APIService:
         # 方法筛选
         if method:
             query = query.filter(method=method.upper())
+
+        if sync_direction:
+            from core.schemas.api import normalize_api_sync_direction
+
+            try:
+                normalized_direction = normalize_api_sync_direction(sync_direction)
+            except ValueError as exc:
+                raise ValidationError(str(exc)) from exc
+            query = query.filter(sync_direction=normalized_direction)
         
         # 启用状态筛选
         if is_active is not None:
@@ -685,6 +697,7 @@ class APIService:
             "code",
             "path",
             "method",
+            "sync_direction",
             "created_at",
             "updated_at",
             "is_active",

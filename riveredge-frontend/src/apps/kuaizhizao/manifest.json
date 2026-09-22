@@ -993,7 +993,7 @@
                 "path": "/apps/master-data/materials/serials",
                 "permission": "master-data:material-serial:read",
                 "sort_order": 4,
-                "icon": "hash"
+                "icon": "key"
               },
               {
                 "title": "app.kuaizhizao.menu.warehouse-management.line-side-warehouse",

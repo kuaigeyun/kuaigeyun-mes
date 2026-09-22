@@ -36,6 +36,139 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
   {
+    id: 'domain-verify-txt-not-tenant-r01',
+    date: '2026-09-22',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.domain-verify-txt-not-tenant-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.domain-verify-txt-not-tenant-r01.description',
+  },
+  {
+    id: 'cost-calc-result-i18n-overhead-r01',
+    date: '2026-09-22',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.cost-calc-result-i18n-overhead-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.cost-calc-result-i18n-overhead-r01.description',
+  },
+  {
+    id: 'scheduling-card-border-scenario-r01',
+    date: '2026-09-22',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.scheduling-card-border-scenario-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.scheduling-card-border-scenario-r01.description',
+  },
+  {
+    id: 'scheduling-toolbar-settings-pin-order-r01',
+    date: '2026-09-22',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.scheduling-toolbar-settings-pin-order-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.scheduling-toolbar-settings-pin-order-r01.description',
+  },
+  {
+    id: 'scheduling-card-expand-label-r01',
+    date: '2026-09-22',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.scheduling-card-expand-label-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.scheduling-card-expand-label-r01.description',
+  },
+  {
+    id: 'serial-menu-icon-hash-rootfix-r01',
+    date: '2026-09-22',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.serial-menu-icon-hash-rootfix-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.serial-menu-icon-hash-rootfix-r01.description',
+  },
+  {
+    id: 'scheduling-card-lane-expand-global-r01',
+    date: '2026-09-22',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.scheduling-card-lane-expand-global-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.scheduling-card-lane-expand-global-r01.description',
+  },
+  {
+    id: 'scheduling-card-lane-expand-r01',
+    date: '2026-09-22',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.scheduling-card-lane-expand-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.scheduling-card-lane-expand-r01.description',
+  },
+  {
+    id: 'unitabs-navigate-in-render-r01',
+    date: '2026-09-22',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.unitabs-navigate-in-render-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.unitabs-navigate-in-render-r01.description',
+  },
+  {
+    id: 'serial-inventory-menu-icon-r01',
+    date: '2026-09-22',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.serial-inventory-menu-icon-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.serial-inventory-menu-icon-r01.description',
+  },
+  {
+    id: 'multi-tab-card-divider-dedupe-r01',
+    date: '2026-09-22',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.multi-tab-card-divider-dedupe-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.multi-tab-card-divider-dedupe-r01.description',
+  },
+  {
+    id: 'fai-drawing-under-attachments-r01',
+    date: '2026-09-22',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.fai-drawing-under-attachments-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.fai-drawing-under-attachments-r01.description',
+  },
+  {
+    id: 'file-manager-hide-platform-folders-r01',
+    date: '2026-09-22',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.file-manager-hide-platform-folders-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.file-manager-hide-platform-folders-r01.description',
+  },
+  {
+    id: 'resource-category-tree-inline-actions-r01',
+    date: '2026-09-22',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.resource-category-tree-inline-actions-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.resource-category-tree-inline-actions-r01.description',
+  },
+  {
+    id: 'resource-category-tree-switcher-align-r01',
+    date: '2026-09-22',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.resource-category-tree-switcher-align-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.resource-category-tree-switcher-align-r01.description',
+  },
+  {
+    id: 'api-sync-direction-r01',
+    date: '2026-09-22',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.api-sync-direction-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.api-sync-direction-r01.description',
+  },
+  {
+    id: 'dedicated-oa-master-data-menus-r01',
+    date: '2026-09-21',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.dedicated-oa-master-data-menus-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.dedicated-oa-master-data-menus-r01.description',
+  },
+  {
     id: 'project-proposal-funide-menu-route-r01',
     date: '2026-09-21',
     type: 'fix',

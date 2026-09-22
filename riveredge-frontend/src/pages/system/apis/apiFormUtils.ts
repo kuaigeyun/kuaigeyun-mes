@@ -70,6 +70,7 @@ export interface ApiFormRawValues {
   category_uuid?: string;
   path: string;
   method: string;
+  sync_direction?: 'pull' | 'push' | 'bidirectional';
   is_active?: boolean;
   is_system?: boolean;
   request_headers?: ApiKeyValueRow[];
@@ -92,6 +93,7 @@ export interface ApiFormSubmitValues {
   category_uuid?: string | null;
   path: string;
   method: string;
+  sync_direction: 'pull' | 'push' | 'bidirectional';
   is_active?: boolean;
   is_system?: boolean;
   request_headers: Record<string, unknown>;
@@ -112,6 +114,7 @@ export function transformApiFormValues(values: ApiFormRawValues): ApiFormSubmitV
     category_uuid: values.category_uuid ?? null,
     path: values.path,
     method: values.method,
+    sync_direction: values.sync_direction || 'pull',
     is_active: values.is_active,
     is_system: values.is_system,
     request_headers: keyValueListToObject(values.request_headers),

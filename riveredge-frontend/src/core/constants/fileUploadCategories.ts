@@ -53,6 +53,8 @@ export const DOCUMENT_ATTACHMENT_MENU_PATHS: Record<string, string> = {
   nonconforming_ledger_attachments: '/apps/kuaizhizao/quality-management/nonconforming-ledger',
   quality_8d_report_attachments: '/apps/kuaizhizao/quality-management/eight-d-reports',
   inspection_plan_attachments: '/apps/kuaizhizao/quality-management/inspection-plans',
+  'fai-drawing': '/apps/kuaizhizao/quality-management/fai-orders',
+  fai_order_attachments: '/apps/kuaizhizao/quality-management/fai-orders',
   equipment_attachments: '/apps/kuaizhizao/equipment-management/equipment',
   equipment_photo: '/apps/kuaizhizao/equipment-management/equipment',
   equipment_calibration_attachments: '/apps/kuaizhizao/equipment-management/equipment',
@@ -153,6 +155,8 @@ export const DOCUMENT_ATTACHMENT_CATEGORIES: readonly string[] = [
   'nonconforming_ledger_attachments',
   'quality_8d_report_attachments',
   'inspection_plan_attachments',
+  'fai-drawing',
+  'fai_order_attachments',
   'equipment_attachments',
   'equipment_photo',
   'equipment_calibration_attachments',
@@ -235,11 +239,26 @@ export const FILE_PRIVATE_FILES_GROUP_KEY = '@private-files';
 /** 归入「保密文件」的 category（文件管理浏览须二次密码） */
 export const PRIVATE_FILE_CATEGORIES: readonly string[] = ['company-seal'];
 
+/**
+ * 平台级品牌图 category（infra 平台设置专用）。
+ * 租户「文件管理」侧栏与列表不展示，避免与站点 Logo 等租户资源混淆。
+ */
+export const PLATFORM_FILE_CATEGORIES: readonly string[] = [
+  'platform-logo',
+  'platform-favicon',
+];
+
 export function isPrivateFileCategory(category: string | undefined): boolean {
   const raw = (category || '').trim();
   if (!raw) return false;
   if (raw === FILE_PRIVATE_FILES_GROUP_KEY) return true;
   return PRIVATE_FILE_CATEGORIES.includes(raw);
+}
+
+export function isPlatformFileCategory(category: string | undefined): boolean {
+  const raw = (category || '').trim();
+  if (!raw) return false;
+  return PLATFORM_FILE_CATEGORIES.includes(raw);
 }
 
 /** 侧栏虚拟节点（非 DB category） */
@@ -254,11 +273,12 @@ export function isUserFolderCategory(category: string | undefined): boolean {
   return /[\u4e00-\u9fff]/.test(raw);
 }
 
-/** 系统文件夹（含附件子目录、Logo/头像等业务 category；不含保密文件） */
+/** 系统文件夹（含附件子目录、站点 Logo/头像等业务 category；不含保密文件与平台级目录） */
 export function isSystemFolderCategory(category: string | undefined): boolean {
   const raw = (category || '').trim();
   if (!raw || isVirtualFileTreeKey(raw)) return false;
   if (isPrivateFileCategory(raw)) return false;
+  if (isPlatformFileCategory(raw)) return false;
   return !isUserFolderCategory(raw);
 }
 

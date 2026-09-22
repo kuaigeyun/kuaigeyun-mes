@@ -411,7 +411,23 @@ export const ApiFormModal: React.FC<ApiFormModalProps> = ({
         <Col span={24}>
           <div className="api-form-url-bar">
             <Row gutter={8} align="bottom">
-              <Col flex="120px">
+              <Col span={6}>
+                <SafeProFormSelect
+                  name="sync_direction"
+                  label={t('pages.system.apis.labelSyncDirection')}
+                  rules={[{ required: true, message: t('pages.system.apis.syncDirectionRequired') }]}
+                  options={[
+                    { label: t('pages.system.apis.syncDirection.pull'), value: 'pull' },
+                    { label: t('pages.system.apis.syncDirection.push'), value: 'push' },
+                    {
+                      label: t('pages.system.apis.syncDirection.bidirectional'),
+                      value: 'bidirectional',
+                    },
+                  ]}
+                  placeholder={t('pages.system.apis.syncDirectionPlaceholder')}
+                />
+              </Col>
+              <Col span={6}>
                 <SafeProFormSelect
                   name="method"
                   label={t('pages.system.apis.labelMethod')}
@@ -425,7 +441,7 @@ export const ApiFormModal: React.FC<ApiFormModalProps> = ({
                   ]}
                 />
               </Col>
-              <Col flex="auto">
+              <Col span={12}>
                 <ProFormDependency name={['connection_uuid']}>
                   {({ connection_uuid }) => (
                     <ProFormText
@@ -485,6 +501,7 @@ export function normalizeApiFormInitialValues(
     category_uuid?: string | null;
     path: string;
     method: string;
+    sync_direction?: 'pull' | 'push' | 'bidirectional';
     is_active?: boolean;
     is_system?: boolean;
     request_headers?: Record<string, unknown>;
@@ -503,6 +520,7 @@ export function normalizeApiFormInitialValues(
     category_uuid: detail.category_uuid || undefined,
     path: detail.path,
     method: detail.method,
+    sync_direction: detail.sync_direction || 'pull',
     is_active: detail.is_active,
     is_system: detail.is_system,
     request_headers: objectToKeyValueList(detail.request_headers ?? undefined),

@@ -12760,10 +12760,13 @@ export default {
   'app.kuaizhizao.scheduling.cardBoard.unsupportedLevel': '当前资源视角不支持卡片视图，请切换到工位、设备或人员视角',
   'app.kuaizhizao.scheduling.cardBoard.empty': '暂无可展示的排产卡片',
   'app.kuaizhizao.scheduling.cardBoard.rowIdle': '暂无排产任务',
+  'app.kuaizhizao.scheduling.cardBoard.expandLane': '展开卡片',
+  'app.kuaizhizao.scheduling.cardBoard.collapseLane': '收起卡片',
   'app.kuaizhizao.scheduling.cardBoard.summaryHours': '{{hours}}h',
   'app.kuaizhizao.scheduling.cardBoard.summaryTasks': '{{count}} 道工序',
   'app.kuaizhizao.scheduling.cardBoard.idleGap': '空闲 {{minutes}}min',
   'app.kuaizhizao.scheduling.cardBoard.tagFrozen': '冻结',
+  'app.kuaizhizao.scheduling.cardBoard.tagDraft': '草稿',
   'app.kuaizhizao.scheduling.cardBoard.tagMaterial': '缺料',
   'app.kuaizhizao.scheduling.cardBoard.tagOnMachine': '上机',
   'app.kuaizhizao.scheduling.cardBoard.tagOverdue': '逾期',
@@ -19123,6 +19126,42 @@ export default {
   'app.kuaicaiwu.costCommon.optional': '可选',
   'app.kuaicaiwu.costCommon.resultTitle': '核算结果',
   'app.kuaicaiwu.costCommon.costDetails': '成本明细',
+  'app.kuaicaiwu.structuredCost.empty': '暂无数据',
+  'app.kuaicaiwu.structuredCost.field.date': '核算日期',
+  'app.kuaicaiwu.structuredCost.field.materialCost': '材料成本',
+  'app.kuaicaiwu.structuredCost.field.laborCost': '人工成本',
+  'app.kuaicaiwu.structuredCost.field.manufacturingCost': '制造费用',
+  'app.kuaicaiwu.structuredCost.field.totalCost': '总成本',
+  'app.kuaicaiwu.structuredCost.field.unitCost': '单位成本',
+  'app.kuaicaiwu.structuredCost.field.quantity': '数量',
+  'app.kuaicaiwu.structuredCost.field.code': '编码',
+  'app.kuaicaiwu.structuredCost.field.name': '名称',
+  'app.kuaicaiwu.structuredCost.field.amount': '金额',
+  'app.kuaicaiwu.structuredCost.field.price': '单价',
+  'app.kuaicaiwu.structuredCost.field.total': '合计',
+  'app.kuaicaiwu.structuredCost.field.hours': '工时',
+  'app.kuaicaiwu.structuredCost.field.item': '费用项',
+  'app.kuaicaiwu.structuredCost.field.materialCostBreakdown': '材料成本明细',
+  'app.kuaicaiwu.structuredCost.field.laborCostBreakdown': '人工成本明细',
+  'app.kuaicaiwu.structuredCost.field.manufacturingCostBreakdown': '制造费用明细',
+  'app.kuaicaiwu.structuredCost.field.operationName': '工序',
+  'app.kuaicaiwu.structuredCost.field.standardTimeHours': '标准工时(h)',
+  'app.kuaicaiwu.structuredCost.field.hourlyRate': '工时单价',
+  'app.kuaicaiwu.structuredCost.field.overheadRate': '制造费率',
+  'app.kuaicaiwu.structuredCost.field.workCenterId': '工作中心',
+  'app.kuaicaiwu.structuredCost.field.workerName': '作业员',
+  'app.kuaicaiwu.structuredCost.field.ruleName': '核算规则',
+  'app.kuaicaiwu.structuredCost.field.calculationMethod': '计算方法',
+  'app.kuaicaiwu.structuredCost.field.ratio': '分摊比例',
+  'app.kuaicaiwu.structuredCost.field.baseMaterialCost': '材料成本基数',
+  'app.kuaicaiwu.structuredCost.field.source': '数据来源',
+  'app.kuaicaiwu.structuredCost.field.unitPrice': '单价',
+  'app.kuaicaiwu.structuredCost.field.materialCode': '物料编码',
+  'app.kuaicaiwu.structuredCost.field.materialName': '物料名称',
+  'app.kuaicaiwu.structuredCost.value.byHours': '按工时',
+  'app.kuaicaiwu.structuredCost.value.byRatio': '按比例',
+  'app.kuaicaiwu.structuredCost.value.historicalReportingHours': '历史报工工时',
+  'app.kuaicaiwu.structuredCost.value.laborHoursOverheadAllocation': '工时分摊制造费用',
   'app.kuaicaiwu.costCommon.standardCost': '标准成本',
   'app.kuaicaiwu.costCommon.actualCost': '实际成本',
   'app.kuaicaiwu.costCommon.calculationTypeLabel': '核算类型：{{type}}',
@@ -27260,6 +27299,7 @@ export default {
   'pages.system.apis.columnName': '接口名称',
   'pages.system.apis.columnCode': '接口代码',
   'pages.system.apis.columnMethod': '请求方法',
+  'pages.system.apis.columnSyncDirection': '同步方向',
   'pages.system.apis.columnPath': '接口路径',
   'pages.system.apis.columnActive': '启用状态',
   'pages.system.apis.columnSystem': '系统接口',
@@ -27337,6 +27377,12 @@ export default {
   'pages.system.apis.modalEdit': '编辑接口',
   'pages.system.apis.modalCreate': '新建接口',
   'pages.system.apis.tabParams': '参数',
+  'pages.system.apis.labelSyncDirection': '同步方向',
+  'pages.system.apis.syncDirectionRequired': '请选择同步方向',
+  'pages.system.apis.syncDirectionPlaceholder': '请选择同步方向',
+  'pages.system.apis.syncDirection.pull': '入站同步',
+  'pages.system.apis.syncDirection.push': '出站同步',
+  'pages.system.apis.syncDirection.bidirectional': '双向同步',
   'pages.system.apis.tabHeaders': '请求头',
   'pages.system.apis.tabBody': '请求体',
   'pages.system.apis.tabResponse': '响应',
@@ -30961,6 +31007,74 @@ export default {
     '基础应用与扩展模块边界解耦',
   'pages.dashboard.updateLog.entries.application-layer-host-capabilities.description':
     '快制造与轻办公列表不再编译依赖行业包；扩展对照与清单改由平台 host-capabilities 接口按租户已启用模块动态解析。',
+  'pages.dashboard.updateLog.entries.domain-verify-txt-not-tenant-r01.title':
+    '域名校验 txt 不再误判为组织域名',
+  'pages.dashboard.updateLog.entries.domain-verify-txt-not-tenant-r01.description':
+    '根路径 *.txt / MP_verify* 不再当作组织入口；Caddy 对根路径校验文件只直出、不回落 SPA，避免微信业务域名校验拿到 index.html。',
+  'pages.dashboard.updateLog.entries.cost-calc-result-i18n-overhead-r01.title':
+    '成本核算结果明细 i18n 与制造费用来源对齐',
+  'pages.dashboard.updateLog.entries.cost-calc-result-i18n-overhead-r01.description':
+    '核算结果弹窗结构化明细表头改为中文 i18n；制造费用明细按成本规则（按工时/按比例）展开，与汇总计算同源，不再用笼统的工得分摊一行。',
+  'pages.dashboard.updateLog.entries.scheduling-card-border-scenario-r01.title':
+    '可视排产卡片框线按场景着色',
+  'pages.dashboard.updateLog.entries.scheduling-card-border-scenario-r01.description':
+    '卡片视图边框加粗为 2px，并按逾期、缺料、冻结、草稿、上机/下机、正常等场景使用不同框线色，便于一眼区分状态。',
+  'pages.dashboard.updateLog.entries.scheduling-toolbar-settings-pin-order-r01.title':
+    '可视排产工具栏设置与钉选位置调整',
+  'pages.dashboard.updateLog.entries.scheduling-toolbar-settings-pin-order-r01.description':
+    '设置按钮移至工具栏行末；钉选当前与仅看钉选移到平移选中之后，操作区与视图切换区更清晰。',
+  'pages.dashboard.updateLog.entries.scheduling-card-expand-label-r01.title':
+    '可视排产展开按钮显示文案',
+  'pages.dashboard.updateLog.entries.scheduling-card-expand-label-r01.description':
+    '卡片视图「任务」标题行展开控件改为「展开卡片 / 收起卡片」文字按钮，避免用户看不懂仅图标。',
+  'pages.dashboard.updateLog.entries.serial-menu-icon-hash-rootfix-r01.title':
+    '序列号菜单图标从库内清单根治',
+  'pages.dashboard.updateLog.entries.serial-menu-icon-hash-rootfix-r01.description':
+    '同步菜单改为优先采用磁盘 manifest 并回写 menu_config；回填库内仍含 hash 的清单与菜单行为预置键 key，避免旧 icon 再次污染侧栏。',
+  'pages.dashboard.updateLog.entries.scheduling-card-lane-expand-global-r01.title':
+    '可视排产卡片视图改为标题行统一展开',
+  'pages.dashboard.updateLog.entries.scheduling-card-lane-expand-global-r01.description':
+    '「任务」标题行右侧一键展开/收起，所有工位泳道同步换行展示或恢复单行横滑，不再逐行控制。',
+  'pages.dashboard.updateLog.entries.scheduling-card-lane-expand-r01.title':
+    '可视排产卡片泳道支持展开换行',
+  'pages.dashboard.updateLog.entries.scheduling-card-lane-expand-r01.description':
+    '卡片视图任务行溢出时在右侧显示展开按钮，点击后卡片换行全部展示，再次点击收起为单行横滑。',
+  'pages.dashboard.updateLog.entries.unitabs-navigate-in-render-r01.title':
+    '标签栏首页归一不再在 render 中导航',
+  'pages.dashboard.updateLog.entries.unitabs-navigate-in-render-r01.description':
+    '租户首页 path 变化时，将 replace 导航移出 setActiveKey updater，消除「Cannot update BrowserRouter while rendering UniTabs」控制台警告。',
+  'pages.dashboard.updateLog.entries.serial-inventory-menu-icon-r01.title':
+    '序列号库存查询菜单图标修正',
+  'pages.dashboard.updateLog.entries.serial-inventory-menu-icon-r01.description':
+    '仓储管理「序列号库存查询」manifest 图标由未登记的 hash 改为已登记 key，快捷入口与侧栏可正常渲染。',
+  'pages.dashboard.updateLog.entries.multi-tab-card-divider-dedupe-r01.title':
+    '多标签页去掉重复底部分割线',
+  'pages.dashboard.updateLog.entries.multi-tab-card-divider-dedupe-r01.description':
+    '多标签列表模板仅保留 Tabs 自带底线，去掉 Card 头额外 1px 边，消除与选中指示条叠线的割裂感。',
+  'pages.dashboard.updateLog.entries.fai-drawing-under-attachments-r01.title':
+    '首件检验图纸归入附件文件夹',
+  'pages.dashboard.updateLog.entries.fai-drawing-under-attachments-r01.description':
+    '文件管理侧栏将 fai-drawing 按附件分类挂到「附件」下，不再与站点 Logo 等系统目录同级。',
+  'pages.dashboard.updateLog.entries.file-manager-hide-platform-folders-r01.title':
+    '文件管理隐藏平台级文件夹',
+  'pages.dashboard.updateLog.entries.file-manager-hide-platform-folders-r01.description':
+    '平台 Logo、平台图标仅供平台设置使用，不再出现在租户文件管理侧栏与全部文件列表中；站点 Logo 等租户目录不受影响。',
+  'pages.dashboard.updateLog.entries.resource-category-tree-inline-actions-r01.title':
+    '分类树直接显示编辑删除',
+  'pages.dashboard.updateLog.entries.resource-category-tree-inline-actions-r01.description':
+    '接口与数据集左侧分类树对可维护节点常显编辑、删除按钮，无需右键猜测是否可改。',
+  'pages.dashboard.updateLog.entries.resource-category-tree-switcher-align-r01.title':
+    '接口分类树展开箭头对齐',
+  'pages.dashboard.updateLog.entries.resource-category-tree-switcher-align-r01.description':
+    '接口与数据集左侧分类树展开小三角的 hover 背景改为与文件管理侧栏树同一套垂直居中规则，避免相对选中行错位。',
+  'pages.dashboard.updateLog.entries.api-sync-direction-r01.title':
+    '接口管理支持同步方向',
+  'pages.dashboard.updateLog.entries.api-sync-direction-r01.description':
+    '接口可标记入站同步、出站同步或双向同步；列表可筛选与展示，新建默认入站同步。',
+  'pages.dashboard.updateLog.entries.dedicated-oa-master-data-menus-r01.title':
+    '定制 OA 侧栏纳入主数据菜单',
+  'pages.dashboard.updateLog.entries.dedicated-oa-master-data-menus-r01.description':
+    '启用定制壳后主数据应用侧栏不再单独出现。工厂、仓库、物料、工艺、客户供应商入口挂到定制应用菜单，仍打开原主数据页面；图纸、发放、借阅与 SOP 继续留在受控文件。',
   'pages.dashboard.updateLog.entries.project-proposal-funide-menu-route-r01.title':
     '定制 OA 项目建议书菜单指向定制页',
   'pages.dashboard.updateLog.entries.project-proposal-funide-menu-route-r01.description':

@@ -12,7 +12,8 @@ import {
   type DragStartEvent,
 } from '@dnd-kit/core';
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
-import { Empty, Spin, Typography } from 'antd';
+import { DownOutlined, UpOutlined } from '@ant-design/icons';
+import { Button, Empty, Spin, Typography } from 'antd';
 import type { TFunction } from 'i18next';
 import type {
   GanttTaskLevel,
@@ -182,6 +183,7 @@ export default function SchedulingCardBoard({
 
   const [activeOperationId, setActiveOperationId] = useState<number | null>(null);
   const [activeDropLaneId, setActiveDropLaneId] = useState<number | null>(null);
+  const [lanesExpanded, setLanesExpanded] = useState(false);
 
   const activeOperation = activeOperationId != null ? operationById.get(activeOperationId) : undefined;
 
@@ -276,6 +278,18 @@ export default function SchedulingCardBoard({
         </div>
         <div className="scheduling-card-board__lane-body scheduling-card-board__lane-body--header">
           <Typography.Text type="secondary">{t('app.kuaizhizao.scheduling.cardBoard.taskLane')}</Typography.Text>
+          <Button
+            type="text"
+            size="small"
+            className="scheduling-card-board__header-expand"
+            icon={lanesExpanded ? <UpOutlined /> : <DownOutlined />}
+            aria-expanded={lanesExpanded}
+            onClick={() => setLanesExpanded((prev) => !prev)}
+          >
+            {lanesExpanded
+              ? t('app.kuaizhizao.scheduling.cardBoard.collapseLane')
+              : t('app.kuaizhizao.scheduling.cardBoard.expandLane')}
+          </Button>
         </div>
       </div>
 
@@ -296,6 +310,7 @@ export default function SchedulingCardBoard({
                 t={t}
                 resourceId={row.resourceId}
                 operations={operations}
+                expanded={lanesExpanded}
                 canUpdate={canUpdate}
                 dropActive={activeDropLaneId === row.resourceId}
                 selectedWorkOrderIds={selectedSet}

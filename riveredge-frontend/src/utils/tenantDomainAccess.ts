@@ -26,6 +26,18 @@ export const TENANT_PATH_RESERVED_SEGMENTS = new Set([
   'm',
 ]);
 
+/**
+ * 根路径域名校验文件（微信业务域名、各类 *.txt 校验）：不得当作组织域名。
+ * 例：/6UYpYZscD0.txt、/MP_verify_xxx.txt
+ */
+export function isDomainVerificationPathSegment(segment: string): boolean {
+  const s = (segment || '').trim().toLowerCase();
+  if (!s) return false;
+  if (s.endsWith('.txt')) return true;
+  if (s.startsWith('mp_verify')) return true;
+  return false;
+}
+
 export type TenantLocationParts = {
   pathname?: string;
   search?: string;
@@ -41,11 +53,19 @@ export function resolveTenantDomainFromPathname(pathname: string): string | null
   if (!segments.length) return null;
 
   const firstLower = segments[0].toLowerCase();
+  if (isDomainVerificationPathSegment(firstLower)) {
+    return null;
+  }
   if (!TENANT_PATH_RESERVED_SEGMENTS.has(firstLower)) {
     const domain = firstLower;
     return isReservedTenantDomain(domain) ? null : domain;
   }
-  if (firstLower === 'login' && segments[1] && !TENANT_PATH_RESERVED_SEGMENTS.has(segments[1].toLowerCase())) {
+  if (
+    firstLower === 'login' &&
+    segments[1] &&
+    !TENANT_PATH_RESERVED_SEGMENTS.has(segments[1].toLowerCase()) &&
+    !isDomainVerificationPathSegment(segments[1])
+  ) {
     const domain = segments[1].toLowerCase();
     return isReservedTenantDomain(domain) ? null : domain;
   }

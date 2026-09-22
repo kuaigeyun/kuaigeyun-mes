@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import { Typography } from 'antd';
@@ -10,6 +10,8 @@ interface SchedulingCardLaneProps {
   t: TFunction;
   resourceId: number;
   operations: SchedulingCardOperationItem[];
+  /** 全局展开：卡片换行全部展示；收起时单行横滑 */
+  expanded?: boolean;
   canUpdate?: boolean;
   dropActive?: boolean;
   selectedWorkOrderIds: Set<number>;
@@ -21,6 +23,7 @@ export default function SchedulingCardLane({
   t,
   resourceId,
   operations,
+  expanded = false,
   canUpdate = false,
   dropActive = false,
   selectedWorkOrderIds,
@@ -33,6 +36,13 @@ export default function SchedulingCardLane({
   });
 
   const highlight = dropActive || isOver;
+
+  const setCardsNodeRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      setNodeRef(node);
+    },
+    [setNodeRef],
+  );
 
   if (operations.length === 0) {
     return (
@@ -49,25 +59,33 @@ export default function SchedulingCardLane({
   }
 
   return (
-    <SortableContext items={operations.map((op) => op.operationId)} strategy={horizontalListSortingStrategy}>
+    <div
+      className={`scheduling-card-board__lane-track${expanded ? ' scheduling-card-board__lane-track--expanded' : ''}`}
+    >
       <div
-        ref={setNodeRef}
-        className={`scheduling-card-board__cards${highlight ? ' scheduling-card-board__cards--drop-target' : ''}`}
-        data-resource-id={resourceId}
+        className={`scheduling-card-board__cards-viewport${expanded ? ' scheduling-card-board__cards-viewport--expanded' : ''}`}
       >
-        {operations.map((item) => (
-          <SortableTaskCard
-            key={item.focusTaskId}
-            t={t}
-            item={item}
-            resourceId={resourceId}
-            selected={selectedWorkOrderIds.has(item.workOrderId)}
-            canUpdate={canUpdate}
-            onSelectWorkOrder={onSelectWorkOrder}
-            onOperationUpdate={onOperationUpdate}
-          />
-        ))}
+        <SortableContext items={operations.map((op) => op.operationId)} strategy={horizontalListSortingStrategy}>
+          <div
+            ref={setCardsNodeRef}
+            className={`scheduling-card-board__cards${expanded ? ' scheduling-card-board__cards--expanded' : ''}${highlight ? ' scheduling-card-board__cards--drop-target' : ''}`}
+            data-resource-id={resourceId}
+          >
+            {operations.map((item) => (
+              <SortableTaskCard
+                key={item.focusTaskId}
+                t={t}
+                item={item}
+                resourceId={resourceId}
+                selected={selectedWorkOrderIds.has(item.workOrderId)}
+                canUpdate={canUpdate}
+                onSelectWorkOrder={onSelectWorkOrder}
+                onOperationUpdate={onOperationUpdate}
+              />
+            ))}
+          </div>
+        </SortableContext>
       </div>
-    </SortableContext>
+    </div>
   );
 }

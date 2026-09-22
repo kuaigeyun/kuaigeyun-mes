@@ -4,10 +4,20 @@
 定义接口相关的 Pydantic Schema，用于数据验证和序列化。
 """
 
-from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, Dict, Any, List
+from pydantic import BaseModel, Field, ConfigDict, field_validator
+from typing import Optional, Dict, Any, List, Literal
 from datetime import datetime
 from uuid import UUID
+
+ApiSyncDirection = Literal["pull", "push", "bidirectional"]
+VALID_API_SYNC_DIRECTIONS = frozenset({"pull", "push", "bidirectional"})
+
+
+def normalize_api_sync_direction(value: Optional[str]) -> ApiSyncDirection:
+    direction = (value or "pull").strip() or "pull"
+    if direction not in VALID_API_SYNC_DIRECTIONS:
+        raise ValueError("同步方向须为 pull、push 或 bidirectional")
+    return direction  # type: ignore[return-value]
 
 
 class APIBase(BaseModel):
@@ -17,6 +27,10 @@ class APIBase(BaseModel):
     description: Optional[str] = Field(None, description="接口描述")
     path: str = Field(..., max_length=500, description="接口路径")
     method: str = Field(..., max_length=10, description="请求方法")
+    sync_direction: ApiSyncDirection = Field(
+        default="pull",
+        description="同步方向：pull 入站、push 出站、bidirectional 双向",
+    )
     connection_uuid: Optional[UUID] = Field(None, description="关联应用连接器 UUID（可选）")
     category_uuid: Optional[UUID] = Field(None, description="所属分类 UUID（可选）")
     request_headers: Optional[Dict[str, Any]] = Field(None, description="请求头")
@@ -31,6 +45,11 @@ class APIBase(BaseModel):
     is_active: bool = Field(True, description="是否启用")
     is_system: bool = Field(False, description="是否系统接口")
 
+    @field_validator("sync_direction", mode="before")
+    @classmethod
+    def _validate_sync_direction(cls, value: Optional[str]) -> ApiSyncDirection:
+        return normalize_api_sync_direction(value)
+
 
 class APICreate(APIBase):
     """创建接口 Schema"""
@@ -44,6 +63,10 @@ class APIUpdate(BaseModel):
     description: Optional[str] = Field(None, description="接口描述")
     path: Optional[str] = Field(None, max_length=500, description="接口路径")
     method: Optional[str] = Field(None, max_length=10, description="请求方法")
+    sync_direction: Optional[ApiSyncDirection] = Field(
+        None,
+        description="同步方向：pull 入站、push 出站、bidirectional 双向",
+    )
     connection_uuid: Optional[UUID] = Field(None, description="关联应用连接器 UUID（可选，传 null 清除绑定）")
     category_uuid: Optional[UUID] = Field(None, description="所属分类 UUID（可选，传 null 清除分类）")
     request_headers: Optional[Dict[str, Any]] = Field(None, description="请求头")
@@ -56,6 +79,13 @@ class APIUpdate(BaseModel):
         description='来源类型编码转换映射（如金蝶 FErpClsID: {"1":"Buy"}），用于物料同步时自动转换编码',
     )
     is_active: Optional[bool] = Field(None, description="是否启用")
+
+    @field_validator("sync_direction", mode="before")
+    @classmethod
+    def _validate_sync_direction(cls, value: Optional[str]) -> Optional[ApiSyncDirection]:
+        if value is None:
+            return None
+        return normalize_api_sync_direction(value)
 
 
 class APIResponse(APIBase):

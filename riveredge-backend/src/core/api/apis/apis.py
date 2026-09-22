@@ -114,8 +114,15 @@ async def list_apis(
     page_size: int = Query(20, ge=1, le=100, description="每页数量"),
     search: Optional[str] = Query(None, description="搜索关键词（名称、代码、路径）"),
     method: Optional[str] = Query(None, description="请求方法筛选"),
+    sync_direction: Optional[str] = Query(
+        None,
+        description="同步方向筛选：pull / push / bidirectional",
+    ),
     is_active: Optional[bool] = Query(None, description="是否启用筛选"),
-    sort_by: Optional[str] = Query(None, description="排序字段：name/code/path/method/created_at/updated_at/is_active"),
+    sort_by: Optional[str] = Query(
+        None,
+        description="排序字段：name/code/path/method/sync_direction/created_at/updated_at/is_active",
+    ),
     sort_order: Optional[str] = Query(None, description="排序方向：asc 或 desc"),
     category_uuid: Optional[UUID] = Query(None, description="分类 UUID 筛选"),
     no_category: bool = Query(False, description="仅未分类"),
@@ -132,6 +139,7 @@ async def list_apis(
         page_size: 每页数量
         search: 搜索关键词（名称、代码、路径）
         method: 请求方法筛选
+        sync_direction: 同步方向筛选
         is_active: 是否启用筛选
         current_user: 当前用户（依赖注入）
         tenant_id: 当前组织ID（依赖注入）
@@ -157,6 +165,7 @@ async def list_apis(
             page_size=page_size,
             search=search,
             method=method,
+            sync_direction=sync_direction,
             is_active=is_active,
             sort_by=sort_by,
             sort_order=sort_order,
@@ -170,6 +179,11 @@ async def list_apis(
             "page": page,
             "page_size": page_size,
         }
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
+        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

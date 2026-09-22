@@ -23,10 +23,37 @@ export interface SchedulingCardOperationItem {
   plannedEnd: string;
   progress: number;
   machineSessionState?: 'none' | 'on_machine' | 'off_machine' | null;
+  /** 工单状态（如 draft / released / in_progress） */
+  workOrderStatus?: string;
   hasMaterialIssue: boolean;
   isFrozen: boolean;
   isOverdue: boolean;
   focusTaskId: string;
+}
+
+/** 卡片框线场景：严重度靠前，用于单一边框色 */
+export type SchedulingCardBorderScenario =
+  | 'overdue'
+  | 'material'
+  | 'frozen'
+  | 'draft'
+  | 'on_machine'
+  | 'off_machine'
+  | 'normal';
+
+export function resolveSchedulingCardBorderScenario(
+  item: Pick<
+    SchedulingCardOperationItem,
+    'isOverdue' | 'hasMaterialIssue' | 'isFrozen' | 'workOrderStatus' | 'machineSessionState'
+  >,
+): SchedulingCardBorderScenario {
+  if (item.isOverdue) return 'overdue';
+  if (item.hasMaterialIssue) return 'material';
+  if (item.isFrozen) return 'frozen';
+  if (String(item.workOrderStatus || '').toLowerCase() === 'draft') return 'draft';
+  if (item.machineSessionState === 'on_machine') return 'on_machine';
+  if (item.machineSessionState === 'off_machine') return 'off_machine';
+  return 'normal';
 }
 
 export interface SchedulingCardIdleItem {
@@ -223,6 +250,7 @@ function buildTimelineItems(
       plannedEnd: op.planned_end_date!,
       progress: operationProgress(wo),
       machineSessionState: op.machine_session_state ?? 'none',
+      workOrderStatus: wo.status,
       hasMaterialIssue: materialIssueWorkOrderIds.has(wo.id),
       isFrozen: Boolean(wo.is_frozen),
       isOverdue: end.isBefore(dayjs()) && wo.status !== 'completed',

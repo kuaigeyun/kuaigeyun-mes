@@ -144,6 +144,7 @@ const APIListPage: React.FC = () => {
         : undefined
     setFormInitialValues({
       method: 'GET',
+      sync_direction: 'pull',
       is_active: true,
       is_system: false,
       category_uuid: presetCategoryUuid,
@@ -204,6 +205,22 @@ const APIListPage: React.FC = () => {
         title: t('pages.system.apis.detailColumnMethod'),
         dataIndex: 'method',
         render: (_dom, entity: API) => <Tag color="blue">{entity.method}</Tag>,
+      },
+      {
+        title: t('pages.system.apis.columnSyncDirection'),
+        dataIndex: 'sync_direction',
+        render: (_dom, entity: API) => {
+          const direction = entity.sync_direction || 'pull'
+          const colors: Record<string, string> = {
+            pull: 'processing',
+            push: 'warning',
+            bidirectional: 'purple',
+          }
+          return renderSystemTypeMarker(
+            t(`pages.system.apis.syncDirection.${direction}`),
+            colors[direction] || 'default',
+          )
+        },
       },
       { title: t('pages.system.apis.detailColumnPath'), dataIndex: 'path' },
       {
@@ -396,6 +413,7 @@ const APIListPage: React.FC = () => {
           category_uuid: values.category_uuid ?? null,
           path: values.path,
           method: values.method,
+          sync_direction: values.sync_direction,
           request_headers: values.request_headers,
           request_params: values.request_params,
           request_body: values.request_body,
@@ -414,6 +432,7 @@ const APIListPage: React.FC = () => {
           category_uuid: values.category_uuid || undefined,
           path: values.path,
           method: values.method,
+          sync_direction: values.sync_direction,
           request_headers: values.request_headers,
           request_params: values.request_params,
           request_body: values.request_body,
@@ -483,6 +502,29 @@ const APIListPage: React.FC = () => {
           PATCH: 'default',
         }
         return renderSystemTypeMarker(record.method, methodColors[record.method] || 'default')
+      },
+    },
+    {
+      title: t('pages.system.apis.columnSyncDirection'),
+      dataIndex: 'sync_direction',
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+      valueType: 'select',
+      valueEnum: {
+        pull: { text: t('pages.system.apis.syncDirection.pull') },
+        push: { text: t('pages.system.apis.syncDirection.push') },
+        bidirectional: { text: t('pages.system.apis.syncDirection.bidirectional') },
+      },
+      render: (_, record) => {
+        const direction = record.sync_direction || 'pull'
+        const colors: Record<string, string> = {
+          pull: 'processing',
+          push: 'warning',
+          bidirectional: 'purple',
+        }
+        return renderSystemTypeMarker(
+          t(`pages.system.apis.syncDirection.${direction}`),
+          colors[direction] || 'default',
+        )
       },
     },
     {
@@ -580,7 +622,7 @@ const APIListPage: React.FC = () => {
             <UniTable<API>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('system.apis')}
-          columnPersistenceId="pages.system.apis.list-v5"
+          columnPersistenceId="pages.system.apis.list-v6"
           tanstackQuery={{ queryKeyPrefix: ['pages.system.apis.list', selectedCategoryKey] }}
           actionRef={actionRef}
           columns={columns}
@@ -604,6 +646,10 @@ const APIListPage: React.FC = () => {
             // 方法筛选
             if (searchFormValues?.method) {
               apiParams.method = searchFormValues.method
+            }
+
+            if (searchFormValues?.sync_direction) {
+              apiParams.sync_direction = searchFormValues.sync_direction
             }
 
             // 启用状态筛选
@@ -664,10 +710,19 @@ const APIListPage: React.FC = () => {
             t('pages.system.apis.columnCode'),
             t('pages.system.apis.columnPath'),
             t('pages.system.apis.columnMethod'),
+            t('pages.system.apis.columnSyncDirection'),
             t('common.remark'),
             t('pages.system.apis.columnActive'),
           ]}
-          importExampleRow={['示例接口', 'example_api', '/api/v1/example', 'GET', '', 'true']}
+          importExampleRow={[
+            '示例接口',
+            'example_api',
+            '/api/v1/example',
+            'GET',
+            'pull',
+            '',
+            'true',
+          ]}
           importFieldMap={{
             [t('pages.system.apis.columnName')]: 'name',
             接口名称: 'name',
@@ -681,6 +736,9 @@ const APIListPage: React.FC = () => {
             [t('pages.system.apis.columnMethod')]: 'method',
             请求方法: 'method',
             method: 'method',
+            [t('pages.system.apis.columnSyncDirection')]: 'sync_direction',
+            同步方向: 'sync_direction',
+            sync_direction: 'sync_direction',
             [t('common.remark')]: 'description',
             描述: 'description',
             description: 'description',
@@ -714,12 +772,26 @@ const APIListPage: React.FC = () => {
               [t('pages.system.apis.columnMethod')]: 'method',
               请求方法: 'method',
               method: 'method',
+              [t('pages.system.apis.columnSyncDirection')]: 'sync_direction',
+              同步方向: 'sync_direction',
+              sync_direction: 'sync_direction',
               [t('common.remark')]: 'description',
               描述: 'description',
               description: 'description',
               [t('pages.system.apis.columnActive')]: 'is_active',
               启用状态: 'is_active',
               is_active: 'is_active',
+            }
+            const syncDirectionLabelMap: Record<string, 'pull' | 'push' | 'bidirectional'> = {
+              pull: 'pull',
+              push: 'push',
+              bidirectional: 'bidirectional',
+              [t('pages.system.apis.syncDirection.pull')]: 'pull',
+              [t('pages.system.apis.syncDirection.push')]: 'push',
+              [t('pages.system.apis.syncDirection.bidirectional')]: 'bidirectional',
+              入站同步: 'pull',
+              出站同步: 'push',
+              双向同步: 'bidirectional',
             }
             let done = 0
             for (const row of rows) {
@@ -729,6 +801,11 @@ const APIListPage: React.FC = () => {
                 if (field && row[i] != null) obj[field] = row[i]
               })
               if (obj.name && obj.code && obj.path && obj.method) {
+                const rawDirection = String(obj.sync_direction || 'pull').trim()
+                const syncDirection =
+                  syncDirectionLabelMap[rawDirection] ||
+                  syncDirectionLabelMap[rawDirection.toLowerCase()] ||
+                  'pull'
                 await createAPI({
                   name: String(obj.name),
                   code: String(obj.code)
@@ -736,6 +813,7 @@ const APIListPage: React.FC = () => {
                     .toLowerCase(),
                   path: String(obj.path),
                   method: String(obj.method).toUpperCase() || 'GET',
+                  sync_direction: syncDirection,
                   description: obj.description ? String(obj.description) : undefined,
                   is_active:
                     obj.is_active !== 'false' && obj.is_active !== '0' && obj.is_active !== '',

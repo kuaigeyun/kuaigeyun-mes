@@ -238,9 +238,6 @@ function buildSchedulingGanttToolbar({
               {t('app.kuaizhizao.scheduling.ganttToolbar.editOperation')}
             </Button>
           ) : null}
-          <Tooltip title={t('app.kuaizhizao.scheduling.ganttToolbar.settings')}>
-            <Button size="small" icon={<SettingOutlined />} aria-label={t('app.kuaizhizao.scheduling.ganttToolbar.settings')} onClick={onOpenConfig} />
-          </Tooltip>
           <Button
             size="small"
             icon={<LockOutlined />}
@@ -277,6 +274,33 @@ function buildSchedulingGanttToolbar({
               {t('app.kuaizhizao.scheduling.ganttToolbar.shiftSelected')}
             </Button>
           </Space.Compact>
+        </>
+      ) : null}
+      {ganttTaskLevel === 'station' || ganttTaskLevel === 'equipment' || ganttTaskLevel === 'worker' ? (
+        <>
+          <Tooltip title={t('app.kuaizhizao.scheduling.ganttToolbar.pinManagerTip')}>
+            <Button
+              size="small"
+              icon={pinnedResourceCount > 0 ? <PushpinFilled /> : <PushpinOutlined />}
+              onClick={onOpenPinManager}
+            >
+              {t('app.kuaizhizao.scheduling.ganttToolbar.pinManager')}
+              {pinnedResourceCount > 0 ? ` (${pinnedResourceCount})` : ''}
+            </Button>
+          </Tooltip>
+          <Tooltip title={t('app.kuaizhizao.scheduling.ganttToolbar.showPinnedOnlyTip')}>
+            <Space size={4} align="center">
+              <Switch
+                size="small"
+                checked={showPinnedOnly}
+                disabled={pinnedResourceCount === 0}
+                onChange={(checked) => onShowPinnedOnlyChange?.(checked)}
+              />
+              <Typography.Text type="secondary">
+                {t('app.kuaizhizao.scheduling.ganttToolbar.showPinnedOnly')}
+              </Typography.Text>
+            </Space>
+          </Tooltip>
         </>
       ) : null}
     </Space>
@@ -334,31 +358,6 @@ function buildSchedulingGanttToolbar({
           />
         </>
       ) : null}
-      {ganttTaskLevel === 'station' || ganttTaskLevel === 'equipment' || ganttTaskLevel === 'worker' ? (
-        <>
-          <Tooltip title={t('app.kuaizhizao.scheduling.ganttToolbar.pinManagerTip')}>
-            <Button
-              size="small"
-              icon={pinnedResourceCount > 0 ? <PushpinFilled /> : <PushpinOutlined />}
-              onClick={onOpenPinManager}
-            >
-              {t('app.kuaizhizao.scheduling.ganttToolbar.pinManager')}
-              {pinnedResourceCount > 0 ? ` (${pinnedResourceCount})` : ''}
-            </Button>
-          </Tooltip>
-          <Tooltip title={t('app.kuaizhizao.scheduling.ganttToolbar.showPinnedOnlyTip')}>
-            <Switch
-              size="small"
-              checked={showPinnedOnly}
-              disabled={pinnedResourceCount === 0}
-              onChange={(checked) => onShowPinnedOnlyChange?.(checked)}
-            />
-          </Tooltip>
-          <Typography.Text type="secondary">
-            {t('app.kuaizhizao.scheduling.ganttToolbar.showPinnedOnly')}
-          </Typography.Text>
-        </>
-      ) : null}
       {boardMainView === 'gantt' ? (
         <>
           <span className="scheduling-gantt-toolbar__label">{t('app.kuaizhizao.scheduling.ganttToolbar.viewLabel')}</span>
@@ -380,6 +379,16 @@ function buildSchedulingGanttToolbar({
       ) : boardMainView === 'loadTable' ? (
         <Tooltip title={t('app.kuaizhizao.scheduling.ganttToolbar.loadTableHint')}>
           <QuestionCircleOutlined className="scheduling-gantt-toolbar__help-icon" aria-label={t('app.kuaizhizao.scheduling.ganttToolbar.loadTableHint')} />
+        </Tooltip>
+      ) : null}
+      {canUpdate ? (
+        <Tooltip title={t('app.kuaizhizao.scheduling.ganttToolbar.settings')}>
+          <Button
+            size="small"
+            icon={<SettingOutlined />}
+            aria-label={t('app.kuaizhizao.scheduling.ganttToolbar.settings')}
+            onClick={onOpenConfig}
+          />
         </Tooltip>
       ) : null}
     </Space>

@@ -72,6 +72,7 @@ import {
   PRIVATE_FILE_CATEGORIES,
   collectDocumentAttachmentCategories,
   isDocumentAttachmentCategory,
+  isPlatformFileCategory,
   isPrivateFileCategory,
   isSystemFolderCategory,
   isUserFolderCategory,
@@ -358,7 +359,7 @@ const FileListPage: React.FC = () => {
 
       if (!key) {
         setAllFiles(response.items);
-        setFileList(response.items);
+        setFileList(response.items.filter(file => !isPlatformFileCategory(file.category)));
         return;
       }
 
@@ -395,6 +396,11 @@ const FileListPage: React.FC = () => {
 
       if (key === FILE_PRIVATE_FILES_GROUP_KEY) {
         setFileList(response.items);
+        return;
+      }
+
+      if (isPlatformFileCategory(key)) {
+        setFileList([]);
         return;
       }
 
@@ -491,6 +497,9 @@ const FileListPage: React.FC = () => {
     const systemCategories: string[] = [];
     const userCategories: string[] = [];
     categories.forEach(category => {
+      if (isPlatformFileCategory(category)) {
+        return;
+      }
       if (isUserFolderCategory(category)) {
         userCategories.push(category);
       } else if (!isDocumentAttachmentCategory(category) && !isPrivateFileCategory(category)) {

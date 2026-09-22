@@ -347,9 +347,8 @@ async def sync_all_menus(
     tenant_id: int = Depends(get_current_tenant),
 ):
     """
-    根据已安装应用的菜单配置，重新同步所有菜单到数据库。
-    用于 manifest 更新后，确保菜单与数据库一致。
-    已存在菜单行的启用/关闭（is_active）由租户在菜单管理维护，同步仅更新结构字段，不覆盖 is_active。
+    根据已安装应用同步菜单。优先用磁盘 manifest 的 menu_config（落后于发版的库内清单会回写），
+    再写入 core_menus。已存在菜单行的启用/关闭（is_active）由租户在菜单管理维护，同步仅更新结构字段。
     """
     count = await MenuService.sync_all_menus_from_applications(tenant_id)
     return {"success": True, "message": f"已同步 {count} 个应用菜单", "count": count}

@@ -15,6 +15,8 @@ export interface API {
   description?: string;
   path: string;
   method: string;
+  /** 同步方向：pull 入站 / push 出站 / bidirectional 双向 */
+  sync_direction?: 'pull' | 'push' | 'bidirectional';
   connection_uuid?: string | null;
   connection_name?: string | null;
   connection_type?: string | null;
@@ -36,11 +38,14 @@ export interface API {
   updated_at: string;
 }
 
+export type ApiSyncDirection = 'pull' | 'push' | 'bidirectional';
+
 export interface APIListParams {
   page?: number;
   page_size?: number;
   search?: string;
   method?: string;
+  sync_direction?: ApiSyncDirection;
   is_active?: boolean;
   sort_by?: string;
   sort_order?: 'asc' | 'desc';
@@ -61,6 +66,7 @@ export interface CreateAPIData {
   description?: string;
   path: string;
   method: string;
+  sync_direction?: ApiSyncDirection;
   connection_uuid?: string | null;
   category_uuid?: string | null;
   request_headers?: Record<string, any>;
@@ -82,6 +88,7 @@ export interface UpdateAPIData {
   description?: string;
   path?: string;
   method?: string;
+  sync_direction?: ApiSyncDirection;
   connection_uuid?: string | null;
   category_uuid?: string | null;
   request_headers?: Record<string, any>;

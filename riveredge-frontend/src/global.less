@@ -346,8 +346,12 @@
   flex-direction: column;
   min-height: 0;
 
+  /* Card 默认 head 底边 1px + Tabs nav::before 1px；flex 后 marginBottom:-1 叠线失效，
+     与 ink-bar(2px) 错位形成割裂。只保留 Tabs 自带分割线。 */
   > .ant-card-head {
     flex-shrink: 0;
+    margin-bottom: 0;
+    border-bottom: none;
   }
 
   > .ant-card-body {
@@ -969,96 +973,176 @@ code {
   white-space: nowrap !important;
 }
 
-/* 文件管理侧栏树：展开箭头 hover 背景与行内图标/标题垂直居中 */
-.left-panel-scroll-container .file-manager-tree.ant-tree .ant-tree-treenode,
-.two-column-layout-left-tree .file-manager-tree.ant-tree .ant-tree-treenode {
+/* 文件管理 / 资源分类侧栏树：展开箭头 hover 背景与行内图标/标题垂直居中 */
+.left-panel-scroll-container,
+.two-column-layout-left-tree {
+  .file-manager-tree.ant-tree,
+  .resource-category-tree.ant-tree {
+    .ant-tree-treenode {
+      display: flex !important;
+      align-items: center !important;
+      padding: 2px 0 !important;
+      margin: 2px 4px !important;
+      height: auto !important;
+      line-height: normal !important;
+    }
+
+    .ant-tree-switcher {
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      align-self: center !important;
+      flex-shrink: 0 !important;
+      width: 20px !important;
+      height: 20px !important;
+      margin-inline-end: 4px !important;
+      line-height: 1 !important;
+      background: transparent !important;
+
+      /* hover 背景仅由 ant 的 ::before 绘制，避免与容器背景叠加 */
+      &:hover {
+        background-color: transparent !important;
+      }
+
+      &::before {
+        top: 0 !important;
+        left: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+        transform: none !important;
+        border-radius: 4px !important;
+      }
+    }
+
+    .ant-tree-switcher .ant-tree-switcher-icon {
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      line-height: 1 !important;
+      vertical-align: middle !important;
+    }
+
+    .ant-tree-switcher-noop {
+      /* 叶子节点保留展开箭头占位，保证同级文件夹图标/标题对齐 */
+      display: inline-flex !important;
+      width: 20px !important;
+      min-width: 20px !important;
+      height: 20px !important;
+      margin-inline-end: 4px !important;
+      padding: 0 !important;
+      visibility: hidden !important;
+      pointer-events: none !important;
+    }
+
+    .ant-tree-node-content-wrapper {
+      display: flex !important;
+      flex-direction: row !important;
+      flex-wrap: nowrap !important;
+      align-items: center !important;
+      flex: 1;
+      min-width: 0 !important;
+      min-height: 28px !important;
+      line-height: 1.5 !important;
+    }
+
+    .ant-tree-node-content-wrapper > .ant-tree-iconEle {
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      align-self: center !important;
+      width: 20px !important;
+      min-width: 20px !important;
+      margin-inline-end: 4px !important;
+    }
+
+    .ant-tree-title {
+      flex: 1 !important;
+      min-width: 0 !important;
+      display: block !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+      white-space: nowrap !important;
+    }
+  }
+}
+
+/* 资源分类树：可编辑节点行内编辑/删除，避免仅靠右键 */
+.two-column-layout-left-tree .resource-category-tree.ant-tree .ant-tree-node-content-wrapper:has(.resource-category-tree-title),
+.left-panel-scroll-container .resource-category-tree.ant-tree .ant-tree-node-content-wrapper:has(.resource-category-tree-title) {
+  align-items: center !important;
+}
+
+.two-column-layout-left-tree .resource-category-tree.ant-tree .ant-tree-title:has(.resource-category-tree-title),
+.left-panel-scroll-container .resource-category-tree.ant-tree .ant-tree-title:has(.resource-category-tree-title) {
   display: flex !important;
   align-items: center !important;
-  padding: 2px 0 !important;
-  margin: 2px 4px !important;
-}
-
-.left-panel-scroll-container .file-manager-tree.ant-tree .ant-tree-switcher,
-.two-column-layout-left-tree .file-manager-tree.ant-tree .ant-tree-switcher {
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  align-self: center !important;
-  flex-shrink: 0 !important;
-  width: 20px !important;
-  height: 20px !important;
-  margin-inline-end: 0 !important;
-  line-height: 1 !important;
-  background: transparent !important;
-
-  /* hover 背景仅由 ant 的 ::before 绘制，避免与容器背景叠加 */
-  &:hover {
-    background-color: transparent !important;
-  }
-
-  &::before {
-    top: 0 !important;
-    left: 0 !important;
-    width: 100% !important;
-    height: 100% !important;
-    transform: none !important;
-    border-radius: 4px !important;
-  }
-}
-
-.left-panel-scroll-container .file-manager-tree.ant-tree .ant-tree-switcher .ant-tree-switcher-icon,
-.two-column-layout-left-tree .file-manager-tree.ant-tree .ant-tree-switcher .ant-tree-switcher-icon {
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  line-height: 1 !important;
-  vertical-align: middle !important;
-}
-
-.left-panel-scroll-container .file-manager-tree.ant-tree .ant-tree-switcher-noop,
-.two-column-layout-left-tree .file-manager-tree.ant-tree .ant-tree-switcher-noop {
-  /* 叶子节点保留展开箭头占位，保证同级文件夹图标/标题对齐 */
-  display: inline-flex !important;
-  width: 20px !important;
-  min-width: 20px !important;
-  height: 20px !important;
-  margin-inline-end: 0 !important;
-  padding: 0 !important;
-  visibility: hidden !important;
-  pointer-events: none !important;
-}
-
-.left-panel-scroll-container .file-manager-tree.ant-tree .ant-tree-node-content-wrapper,
-.two-column-layout-left-tree .file-manager-tree.ant-tree .ant-tree-node-content-wrapper {
-  display: flex !important;
-  flex-direction: row !important;
-  flex-wrap: nowrap !important;
-  align-items: center !important;
-  flex: 1;
-  min-width: 0 !important;
+  align-self: stretch !important;
+  height: 100% !important;
   min-height: 28px !important;
-  line-height: 1.5 !important;
+  line-height: 1 !important;
+  overflow: hidden !important;
+  text-overflow: clip !important;
+  white-space: normal !important;
 }
 
-.left-panel-scroll-container .file-manager-tree.ant-tree .ant-tree-node-content-wrapper > .ant-tree-iconEle,
-.two-column-layout-left-tree .file-manager-tree.ant-tree .ant-tree-node-content-wrapper > .ant-tree-iconEle {
+.two-column-layout-left-tree .resource-category-tree.ant-tree .resource-category-tree-title,
+.left-panel-scroll-container .resource-category-tree.ant-tree .resource-category-tree-title {
+  display: flex !important;
+  align-items: center !important;
+  align-self: stretch !important;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+  min-height: 28px;
+  line-height: 1;
+}
+
+.two-column-layout-left-tree .resource-category-tree.ant-tree .resource-category-tree-title-text,
+.left-panel-scroll-container .resource-category-tree.ant-tree .resource-category-tree-title-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 28px;
+}
+
+.two-column-layout-left-tree .resource-category-tree.ant-tree .resource-category-tree-title-actions,
+.left-panel-scroll-container .resource-category-tree.ant-tree .resource-category-tree-title-actions {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
+  height: 22px;
+  line-height: 1;
+}
+
+.two-column-layout-left-tree .resource-category-tree.ant-tree .resource-category-tree-title-actions .ant-space,
+.left-panel-scroll-container .resource-category-tree.ant-tree .resource-category-tree-title-actions .ant-space {
+  display: inline-flex !important;
+  align-items: center !important;
+}
+
+.two-column-layout-left-tree .resource-category-tree.ant-tree .resource-category-tree-title-actions .ant-btn,
+.left-panel-scroll-container .resource-category-tree.ant-tree .resource-category-tree-title-actions .ant-btn {
+  width: 22px !important;
+  height: 22px !important;
+  min-width: 22px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  line-height: 1 !important;
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
-  align-self: center !important;
-  width: 20px !important;
-  min-width: 20px !important;
-  margin-inline-end: 4px !important;
 }
 
-.left-panel-scroll-container .file-manager-tree.ant-tree .ant-tree-title,
-.two-column-layout-left-tree .file-manager-tree.ant-tree .ant-tree-title {
-  flex: 1 !important;
-  min-width: 0 !important;
-  display: block !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-  white-space: nowrap !important;
+.two-column-layout-left-tree .resource-category-tree.ant-tree .resource-category-tree-title-actions .ant-btn .anticon,
+.left-panel-scroll-container .resource-category-tree.ant-tree .resource-category-tree-title-actions .ant-btn .anticon {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  line-height: 1 !important;
+  font-size: 12px !important;
 }
 
 /* 排除弹窗中的树组件 */

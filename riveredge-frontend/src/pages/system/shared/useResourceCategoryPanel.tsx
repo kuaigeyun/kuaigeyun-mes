@@ -4,7 +4,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { App, Button, Dropdown } from 'antd';
+import { App, Button, Dropdown, Space, Tooltip } from 'antd';
 import { DeleteOutlined, EditOutlined, FolderOutlined, PlusOutlined } from '@ant-design/icons';
 import type { DataNode, TreeProps } from 'antd/es/tree';
 import type { MenuProps } from 'antd';
@@ -40,6 +40,11 @@ export interface UseResourceCategoryPanelResult {
 
 function withCount(label: string, count?: number): string {
   return typeof count === 'number' && Number.isFinite(count) ? `${label} (${count})` : label;
+}
+
+function stopTreeNodeActionEvent(event: React.MouseEvent | React.KeyboardEvent) {
+  event.preventDefault();
+  event.stopPropagation();
 }
 
 export function useResourceCategoryPanel(
@@ -144,6 +149,50 @@ export function useResourceCategoryPanel(
     [confirmDeleteCategory, handleEditCategory, t],
   );
 
+  const renderCategoryTitle = useCallback(
+    (category: ResourceCategory) => (
+      <span className="resource-category-tree-title">
+        <span className="resource-category-tree-title-text">
+          {withCount(category.name, category.item_count)}
+        </span>
+        <span
+          className="resource-category-tree-title-actions"
+          onClick={stopTreeNodeActionEvent}
+          onMouseDown={stopTreeNodeActionEvent}
+        >
+          <Space size={0} align="center">
+            <Tooltip title={t('common.edit')}>
+              <Button
+                type="text"
+                size="small"
+                icon={<EditOutlined />}
+                aria-label={t('common.edit')}
+                onClick={event => {
+                  stopTreeNodeActionEvent(event);
+                  handleEditCategory(category);
+                }}
+              />
+            </Tooltip>
+            <Tooltip title={t('common.delete')}>
+              <Button
+                type="text"
+                size="small"
+                danger
+                icon={<DeleteOutlined />}
+                aria-label={t('common.delete')}
+                onClick={event => {
+                  stopTreeNodeActionEvent(event);
+                  confirmDeleteCategory(category);
+                }}
+              />
+            </Tooltip>
+          </Space>
+        </span>
+      </span>
+    ),
+    [confirmDeleteCategory, handleEditCategory, t],
+  );
+
   const treeData = useMemo((): DataNode[] => {
     const keyword = searchValue.trim().toLowerCase();
     const filteredCategories = categories.filter(category => {
@@ -167,7 +216,7 @@ export function useResourceCategoryPanel(
         icon: <FolderOutlined />,
         children: [
           ...filteredCategories.map(category => ({
-            title: withCount(category.name, category.item_count),
+            title: renderCategoryTitle(category),
             key: category.uuid,
             icon: <FolderOutlined />,
             isLeaf: true,
@@ -181,7 +230,7 @@ export function useResourceCategoryPanel(
         ],
       },
     ];
-  }, [categories, searchValue, t, totalCount, uncategorizedCount]);
+  }, [categories, renderCategoryTitle, searchValue, t, totalCount, uncategorizedCount]);
 
   const [contextMenuCategory, setContextMenuCategory] = useState<ResourceCategory | null>(null);
   const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number } | null>(null);
@@ -241,6 +290,8 @@ export function useResourceCategoryPanel(
       blockNode: true,
       loading,
       loadingTip: t('pages.system.resourceCategory.loading'),
+      // 与文件管理侧栏树共用展开箭头垂直居中样式（global.less）
+      className: 'resource-category-tree',
       onRightClick: info => {
         const key = String(info.node.key);
         const category = categories.find(item => item.uuid === key);

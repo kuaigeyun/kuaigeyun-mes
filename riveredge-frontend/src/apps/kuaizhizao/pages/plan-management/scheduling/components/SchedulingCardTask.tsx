@@ -6,6 +6,7 @@ import { EditOutlined, HolderOutlined } from '@ant-design/icons';
 import type { TFunction } from 'i18next';
 import dayjs, { type Dayjs } from 'dayjs';
 import type { SchedulingCardOperationDateUpdate, SchedulingCardOperationItem } from '../schedulingCardViewUtils';
+import { resolveSchedulingCardBorderScenario } from '../schedulingCardViewUtils';
 import { formatDateTime } from '../../../../../../utils/format';
 import { toApiDateTimeString } from '../../../../../../utils/formDate';
 
@@ -114,9 +115,12 @@ function TaskCardContent({
         ? ' scheduling-card-board__task--off-machine'
         : '';
 
+  const borderScenario = resolveSchedulingCardBorderScenario(item);
+
   return (
     <div
-      className={`scheduling-card-board__task${sessionClass}${selected ? ' scheduling-card-board__task--selected' : ''}${item.isOverdue ? ' scheduling-card-board__task--overdue' : ''}${item.isFrozen ? ' scheduling-card-board__task--locked' : ''}`}
+      className={`scheduling-card-board__task scheduling-card-board__task--scenario-${borderScenario}${sessionClass}${selected ? ' scheduling-card-board__task--selected' : ''}${item.isFrozen ? ' scheduling-card-board__task--locked' : ''}`}
+      data-scenario={borderScenario}
     >
       <div
         className="scheduling-card-board__task-body"
@@ -138,6 +142,9 @@ function TaskCardContent({
           <div className="scheduling-card-board__task-tags">
             {item.isFrozen ? (
               <Tag variant="filled">{t('app.kuaizhizao.scheduling.cardBoard.tagFrozen')}</Tag>
+            ) : null}
+            {String(item.workOrderStatus || '').toLowerCase() === 'draft' ? (
+              <Tag variant="filled">{t('app.kuaizhizao.scheduling.cardBoard.tagDraft')}</Tag>
             ) : null}
             {item.hasMaterialIssue ? (
               <Tag color="warning" variant="filled">

@@ -812,22 +812,41 @@
 }
 
 .scheduling-card-board__lane-body {
+  display: flex;
+  align-items: stretch;
   min-width: 0;
   padding: 8px;
   background: #fff;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: thin;
+  overflow: visible;
   pointer-events: auto;
 }
 
 .scheduling-card-board__lane-body--header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   padding-block: 6px;
   overflow: hidden;
   font-size: 12px;
   background: var(--ant-color-bg-container, #fff);
+}
+
+.scheduling-card-board__header-expand.ant-btn {
+  flex-shrink: 0;
+  height: 24px;
+  padding: 0 8px;
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 6px;
+  background: #f7f8fa;
+}
+
+.scheduling-card-board__header-expand.ant-btn:hover {
+  color: var(--ant-color-primary, #1677ff);
+  border-color: color-mix(in srgb, var(--ant-color-primary, #1677ff) 35%, transparent);
+  background: var(--ant-color-primary-bg, #e6f4ff);
 }
 
 .scheduling-card-board__resource-name {
@@ -861,6 +880,30 @@
   padding-inline: 12px;
 }
 
+.scheduling-card-board__lane-track {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+}
+
+.scheduling-card-board__lane-track--expanded {
+  align-items: flex-start;
+}
+
+.scheduling-card-board__cards-viewport {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+
+.scheduling-card-board__cards-viewport--expanded {
+  overflow: visible;
+}
+
 .scheduling-card-board__cards {
   display: flex;
   flex-wrap: nowrap;
@@ -868,6 +911,11 @@
   align-items: stretch;
   width: max-content;
   min-width: 100%;
+}
+
+.scheduling-card-board__cards--expanded {
+  flex-wrap: wrap;
+  width: 100%;
 }
 
 .scheduling-card-board__cards--empty {
@@ -902,13 +950,43 @@
 .scheduling-card-board__task {
   width: 208px;
   min-height: 112px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 2px solid rgba(0, 0, 0, 0.14);
   border-radius: 6px;
   background: #fff;
   text-align: left;
   overflow: hidden;
   box-sizing: border-box;
   pointer-events: auto;
+}
+
+.scheduling-card-board__task--scenario-normal {
+  border-color: #91caff;
+}
+
+.scheduling-card-board__task--scenario-draft {
+  border-color: #bfbfbf;
+  border-style: dashed;
+}
+
+.scheduling-card-board__task--scenario-material {
+  border-color: #faad14;
+}
+
+.scheduling-card-board__task--scenario-frozen {
+  border-color: #722ed1;
+}
+
+.scheduling-card-board__task--scenario-overdue {
+  border-color: #ff4d4f;
+}
+
+.scheduling-card-board__task--scenario-on_machine {
+  border-color: #13c2c2;
+  background: rgba(19, 194, 194, 0.06);
+}
+
+.scheduling-card-board__task--scenario-off_machine {
+  border-color: #52c41a;
 }
 
 .scheduling-card-board__task-body {
@@ -929,8 +1007,7 @@
 }
 
 .scheduling-card-board__task:hover {
-  border-color: rgba(22, 119, 255, 0.45);
-  box-shadow: 0 2px 8px rgba(22, 119, 255, 0.08);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .scheduling-card-board__task-body:focus-visible {
@@ -939,26 +1016,25 @@
 }
 
 .scheduling-card-board__task--selected {
-  border-color: #1677ff;
-  box-shadow: 0 0 0 1px rgba(22, 119, 255, 0.2);
+  box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.35);
 }
 
 .scheduling-card-board__task--overdue {
-  border-color: rgba(255, 77, 79, 0.35);
+  border-color: #ff4d4f;
 }
 
 .scheduling-card-board__task--on-machine {
-  border-color: rgba(19, 194, 194, 0.55);
+  border-color: #13c2c2;
   background: rgba(19, 194, 194, 0.06);
 }
 
 .scheduling-card-board__task--off-machine {
-  border-color: rgba(82, 196, 26, 0.45);
+  border-color: #52c41a;
 }
 
 .scheduling-card-board__task--locked {
   cursor: not-allowed;
-  opacity: 0.72;
+  opacity: 0.85;
 }
 
 .scheduling-card-board__task-wrap--dragging .scheduling-card-board__task {
@@ -1254,6 +1330,18 @@
 
   .scheduling-card-board__lane-body {
     background: var(--ant-color-bg-container, #141414);
+  }
+
+  .scheduling-card-board__header-expand.ant-btn {
+    color: rgba(255, 255, 255, 0.65);
+    border-color: rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  .scheduling-card-board__header-expand.ant-btn:hover {
+    color: var(--ant-color-primary, #1677ff);
+    border-color: color-mix(in srgb, var(--ant-color-primary, #1677ff) 45%, transparent);
+    background: var(--ant-color-primary-bg, rgba(22, 119, 255, 0.15));
   }
 
   .scheduling-card-board__task {
