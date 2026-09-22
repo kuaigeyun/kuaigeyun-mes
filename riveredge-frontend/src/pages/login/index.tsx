@@ -1613,7 +1613,23 @@ export default function LoginPage() {
 
     try {
       setIsSubmitting(true);
-      const response = await login(values);
+      // 组织入口 /{domain}：锁定 tenant_id，非本组织账号由后端提示
+      let tenantId: number | undefined;
+      const domain = resolveTenantDomainFromUrl();
+      if (domain) {
+        const check = await checkTenantDomain(domain);
+        if (!check.exists || !check.tenant_id) {
+          message.error(t('pages.login.tenantDomainNotFound', { domain }));
+          navigate('/', { replace: true });
+          return;
+        }
+        tenantId = check.tenant_id;
+      }
+      const response = await login({
+        username: values.username,
+        password: values.password,
+        ...(tenantId != null ? { tenant_id: tenantId } : {}),
+      });
       // 登录成功，清除所有记录和验证状态
       setLoginFailTimes([]);
       setLoginFailCount(0);
@@ -1624,24 +1640,32 @@ export default function LoginPage() {
       localStorage.removeItem(VERIFIED_KEY);
       handleLoginSuccess(response, values);
     } catch (error: any) {
+      const httpStatus = error?.response?.status as number | undefined;
+      const isRateLimited = httpStatus === 429;
+
       // 登录失败，清除验证状态（验证后只允许一次尝试）
       if (isVerified) {
         setIsVerified(false);
         localStorage.removeItem(VERIFIED_KEY);
-        message.warning(t('pages.login.verifyRetry'));
+        if (!isRateLimited) {
+          message.warning(t('pages.login.verifyRetry'));
+        }
       }
-      
-      // 记录失败时间和次数
-      const now = Date.now();
-      const updatedFailTimes = [...loginFailTimes, now];
-      setLoginFailTimes(updatedFailTimes);
-      setLoginFailCount(prev => prev + 1);
-      
-      // 检查是否需要验证（使用更新后的失败时间数组）
-      const needVerify = checkRequireVerification(updatedFailTimes);
-      
+
+      // 服务端已限流：不计入本地 UX 失败次数
+      let needVerify = requireVerification;
+      if (!isRateLimited) {
+        const now = Date.now();
+        const updatedFailTimes = [...loginFailTimes, now];
+        setLoginFailTimes(updatedFailTimes);
+        setLoginFailCount(prev => prev + 1);
+        needVerify = checkRequireVerification(updatedFailTimes);
+      }
+
       // 提取错误信息（支持多种错误格式）
-      let errorMessage = t('pages.login.loginFailed');
+      let errorMessage = isRateLimited
+        ? t('pages.login.rateLimited')
+        : t('pages.login.loginFailed');
 
       if (error?.response?.data) {
         const errorData = error.response.data;

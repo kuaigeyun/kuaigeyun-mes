@@ -36,6 +36,22 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
   {
+    id: 'login-brute-force-guard-r01',
+    date: '2026-09-22',
+    type: 'security',
+    titleKey: 'pages.dashboard.updateLog.entries.login-brute-force-guard-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.login-brute-force-guard-r01.description',
+  },
+  {
+    id: 'login-password-match-tenants-r01',
+    date: '2026-09-22',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.login-password-match-tenants-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.login-password-match-tenants-r01.description',
+  },
+  {
     id: 'tenant-path-entry-literal-r01',
     date: '2026-09-22',
     type: 'fix',

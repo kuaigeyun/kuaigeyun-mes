@@ -490,6 +490,7 @@ export default {
   'pages.login.verifyRetryTip': '检测到频繁操作，请完成长按验证后重试',
   'pages.login.loading': '正在登录...',
   'pages.login.loginFailed': '登录失败，请稍后重试',
+  'pages.login.rateLimited': '尝试过多，请稍后再试',
   'pages.login.loginFailedCheck': '登录失败，请检查用户名和密码',
   'pages.login.registerSuccessLogin': '注册成功，正在自动登录...',
   'pages.login.registerSuccessManual': '注册成功，但自动登录失败，请手动登录',
@@ -31013,6 +31014,14 @@ export default {
     '基础应用与扩展模块边界解耦',
   'pages.dashboard.updateLog.entries.application-layer-host-capabilities.description':
     '快制造与轻办公列表不再编译依赖行业包；扩展对照与清单改由平台 host-capabilities 接口按租户已启用模块动态解析。',
+  'pages.dashboard.updateLog.entries.login-brute-force-guard-r01.title':
+    '登录接口服务端防暴力破解',
+  'pages.dashboard.updateLog.entries.login-brute-force-guard-r01.description':
+    '按 IP 与账号双维度在 PG 缓存计数，超限返回 429 并临时锁定；密码校验前拦截，成功登录清除账号计数。前端长按验证仅保留体验，不作安全门控。',
+  'pages.dashboard.updateLog.entries.login-password-match-tenants-r01.title':
+    '登录按密码匹配组织并锁定组织入口',
+  'pages.dashboard.updateLog.entries.login-password-match-tenants-r01.description':
+    '总入口：用户名/手机种子后按手机号桥接，仅密码验过的组织可进/可出现在选择列表；组织路径入口锁定本组织，非本组织账号提示从总入口或正确地址登录。',
   'pages.dashboard.updateLog.entries.tenant-path-entry-literal-r01.title':
     '组织入口保持 /组织域名 不改写登录 query',
   'pages.dashboard.updateLog.entries.tenant-path-entry-literal-r01.description':

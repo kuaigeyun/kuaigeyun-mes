@@ -36,6 +36,7 @@ from infra.domain.security.security import (
 from infra.domain.tenant_context import set_current_tenant_id
 from infra.domain.tenant.guest_tenant_admin import guest_may_be_tenant_admin
 from infra.exceptions.exceptions import RiverEdgeException
+from infra.services.login_brute_force_guard import LoginBruteForceGuard, normalize_login_identity
 from infra.services.tenant_service import TenantService
 from core.services.authorization.user_permission_service import UserPermissionService
 from core.services.authorization.permission_version_service import PermissionVersionService
@@ -109,74 +110,42 @@ class AuthService:
             queryset = queryset.filter(tenant_id=tenant_id)
         return await queryset.all()
 
-    async def _resolve_login_user(
-        self,
-        username_or_phone: str,
-        password: str,
-        tenant_id: Optional[int] = None,
-    ) -> User:
-        """
-        解析登录用户：先校验密码，再要求所属组织存在且为激活状态。
+    async def _expand_candidates_by_phone(self, seed: list[User]) -> list[User]:
+        """总入口：用种子账号上的手机号桥接同号各租户用户行。"""
+        if not seed:
+            return []
+        by_id = {u.id: u for u in seed}
+        phones = { (u.phone or "").strip() for u in seed if (u.phone or "").strip() }
+        if not phones:
+            return list(by_id.values())
+        expanded = await User.filter(
+            phone__in=list(phones),
+            is_active=True,
+            deleted_at__isnull=True,
+        ).all()
+        for u in expanded:
+            by_id[u.id] = u
+        return list(by_id.values())
 
-        避免「密码正确但组织未激活/已删除」被误报为用户名或密码错误。
-        """
-        all_users = await self._lookup_users_by_account(username_or_phone, tenant_id)
-        if not all_users:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="用户名或密码错误",
-            )
-
-        matched = [u for u in all_users if verify_password(password, u.password_hash)]
-        if not matched:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="用户名或密码错误",
-            )
-
-        valid = await self._filter_users_with_active_tenant(matched)
-        if not valid:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="账号密码正确，但没有可登录的组织（组织已删除或未激活）",
-            )
-
-        if tenant_id is not None:
-            for u in valid:
-                if u.tenant_id == tenant_id:
-                    return u
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="用户不属于指定的组织",
-            )
-
-        return valid[0]
-
-    async def _find_login_candidate_users(
+    async def _collect_login_candidates(
         self,
         username_or_phone: str,
         tenant_id: Optional[int] = None,
     ) -> list[User]:
-        """按账号查找可登录用户，且所属组织必须存在且为激活状态。"""
-        q = Q(username=username_or_phone) | Q(phone=username_or_phone)
-        queryset = User.filter(q, is_active=True, deleted_at__isnull=True)
-        if tenant_id is not None:
-            queryset = queryset.filter(tenant_id=tenant_id)
-        users = await queryset.all()
-        return await self._filter_users_with_active_tenant(users)
+        """
+        收集登录候选用户行。
 
-    async def _build_user_tenants(self, user: User) -> list[dict]:
-        """构建当前账号可访问组织列表（仅返回激活组织）。"""
-        q = Q(username=user.username)
-        if user.phone:
-            q = q | Q(phone=user.phone)
-        users_with_same_account = await User.filter(
-            q,
-            is_active=True,
-            deleted_at__isnull=True,
-        ).all()
-        users_with_same_account = await self._filter_users_with_active_tenant(users_with_same_account)
-        tenant_ids = [u.tenant_id for u in users_with_same_account if u.tenant_id is not None]
+        - 指定组织：仅该组织内 username/phone 命中（不跨租户桥接）
+        - 总入口：username/phone 种子 + 同手机号跨租户扩展
+        """
+        seed = await self._lookup_users_by_account(username_or_phone, tenant_id)
+        if tenant_id is not None:
+            return seed
+        return await self._expand_candidates_by_phone(seed)
+
+    async def _tenants_payload_from_users(self, users: list[User]) -> list[dict]:
+        """由用户行生成可登录组织列表（仅可运营组织）。"""
+        tenant_ids = [u.tenant_id for u in users if u.tenant_id is not None]
         if not tenant_ids:
             return []
         from infra.domain.tenant.tenant_access import filter_operational_tenant_ids
@@ -195,6 +164,91 @@ class AuthService:
             }
             for tenant in tenants
         ]
+
+    async def _resolve_login_user(
+        self,
+        username_or_phone: str,
+        password: str,
+        tenant_id: Optional[int] = None,
+    ) -> tuple[User, list[User]]:
+        """
+        解析登录用户，返回 (用于签发 Token 的用户, 本次密码验过的全部用户行)。
+
+        总入口：种子 → 手机桥接 → 验密；组织列表仅来自验密通过的行。
+        组织入口：只在该组织内查；账号不在本组织但存在于其它组织时明确提示。
+        """
+        if tenant_id is not None:
+            in_tenant = await self._collect_login_candidates(username_or_phone, tenant_id)
+            if not in_tenant:
+                elsewhere = await self._collect_login_candidates(username_or_phone, None)
+                elsewhere = [u for u in elsewhere if u.tenant_id != tenant_id]
+                if elsewhere:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="该账号不属于当前组织，请从总入口登录或使用正确的组织地址",
+                    )
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="用户名或密码错误",
+                )
+            matched = [u for u in in_tenant if verify_password(password, u.password_hash)]
+            if not matched:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="用户名或密码错误",
+                )
+            valid = await self._filter_users_with_active_tenant(matched)
+            if not valid:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="账号密码正确，但没有可登录的组织（组织已删除或未激活）",
+                )
+            return valid[0], valid
+
+        candidates = await self._collect_login_candidates(username_or_phone, None)
+        if not candidates:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="用户名或密码错误",
+            )
+
+        matched = [u for u in candidates if verify_password(password, u.password_hash)]
+        if not matched:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="用户名或密码错误",
+            )
+
+        valid = await self._filter_users_with_active_tenant(matched)
+        if not valid:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="账号密码正确，但没有可登录的组织（组织已删除或未激活）",
+            )
+
+        return valid[0], valid
+
+    async def _find_login_candidate_users(
+        self,
+        username_or_phone: str,
+        tenant_id: Optional[int] = None,
+    ) -> list[User]:
+        """按账号查找可登录用户，且所属组织必须存在且为激活状态。"""
+        users = await self._collect_login_candidates(username_or_phone, tenant_id)
+        return await self._filter_users_with_active_tenant(users)
+
+    async def _build_user_tenants(self, user: User) -> list[dict]:
+        """构建当前账号可访问组织列表（同 username/phone 桥接，仅激活组织）。"""
+        q = Q(username=user.username)
+        if user.phone:
+            q = q | Q(phone=user.phone)
+        users_with_same_account = await User.filter(
+            q,
+            is_active=True,
+            deleted_at__isnull=True,
+        ).all()
+        users_with_same_account = await self._filter_users_with_active_tenant(users_with_same_account)
+        return await self._tenants_payload_from_users(users_with_same_account)
 
     async def get_accessible_tenants(self, current_user: User) -> list[dict]:
         """获取当前登录账号可访问组织列表。"""
@@ -693,6 +747,10 @@ class AuthService:
 
         logger.info(f"开始登录: username_or_phone={data.username}, tenant_id={getattr(data, 'tenant_id', None)}")
 
+        client_ip = get_client_ip(request) if request else ""
+        login_identity = normalize_login_identity(data.username, data.tenant_id)
+        await LoginBruteForceGuard.check(client_ip, login_identity)
+
         # 若指定了 tenant_id，先校验组织状态与到期时间
         if data.tenant_id is not None:
             from infra.domain.tenant.tenant_access import require_operational_tenant_by_id
@@ -706,17 +764,19 @@ class AuthService:
             is_infra_admin=True,
             deleted_at__isnull=True
         )
+        password_matched_users: Optional[list[User]] = None
 
         # 如果不是系统级超级管理员，按账号解析登录用户
         if not user:
             try:
-                user = await self._resolve_login_user(
+                user, password_matched_users = await self._resolve_login_user(
                     data.username,
                     data.password,
                     data.tenant_id,
                 )
             except HTTPException as exc:
                 if request and exc.status_code == status.HTTP_401_UNAUTHORIZED:
+                    await LoginBruteForceGuard.record_failure(client_ip, login_identity)
                     asyncio.create_task(self._log_login_attempt(
                         tenant_id=data.tenant_id,
                         user_id=None,
@@ -737,6 +797,7 @@ class AuthService:
                 raise
         
         if not user:
+            await LoginBruteForceGuard.record_failure(client_ip, login_identity)
             if request:
                 asyncio.create_task(self._log_login_attempt(
                     tenant_id=None,
@@ -750,6 +811,23 @@ class AuthService:
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="用户名或密码错误"
             )
+
+        # 平台超管：验密（与租户用户同一套口令校验）
+        if user.is_infra_admin and not verify_password(data.password, user.password_hash):
+            await LoginBruteForceGuard.record_failure(client_ip, login_identity)
+            if request:
+                asyncio.create_task(self._log_login_attempt(
+                    tenant_id=None,
+                    user_id=user.id,
+                    username=data.username,
+                    login_status="failed",
+                    failure_reason="用户名或密码错误",
+                    request=request,
+                ))
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="用户名或密码错误",
+            )
         
         is_infra_admin = user.is_infra_admin
         
@@ -760,8 +838,14 @@ class AuthService:
 
             await require_operational_tenant_by_id(final_tenant_id)
         
-        # 6. 生成登录结果
-        result = await self.generate_login_result(user, request, final_tenant_id)
+        # 6. 生成登录结果（总入口组织列表仅含本次密码验过的租户）
+        result = await self.generate_login_result(
+            user,
+            request,
+            final_tenant_id,
+            password_matched_users=password_matched_users,
+        )
+        await LoginBruteForceGuard.clear_identity(login_identity)
         return result
 
     async def generate_login_result(
@@ -771,6 +855,7 @@ class AuthService:
         tenant_id: Optional[int] = None,
         *,
         record_login_audit: bool = True,
+        password_matched_users: Optional[list[User]] = None,
     ) -> dict:
         """
         生成登录成功的响应数据（Token 和用户信息）
@@ -823,40 +908,29 @@ class AuthService:
         from infra.config.infra_config import infra_settings as settings
         expires_in = settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60
         
-        # 3. 构建用户组织列表（仅包含所属组织仍有效且激活的账号）
+        # 3. 构建用户组织列表
+        # 账密登录传入 password_matched_users 时：仅列出本次密码验过的组织（总入口丝滑、少误显）
+        # 切换组织等未传时：仍按同 username/phone 桥接可访问组织
         user_tenants_list = []
         if not is_infra_admin:
-            q = Q(username=user.username)
-            if user.phone:
-                q = q | Q(phone=user.phone)
-            users_with_same_username = await User.filter(
-                q,
-                is_active=True,
-                deleted_at__isnull=True,
-            ).all()
-            users_with_same_username = await self._filter_users_with_active_tenant(
-                users_with_same_username
-            )
+            if password_matched_users is not None:
+                matched_active = await self._filter_users_with_active_tenant(password_matched_users)
+                user_tenants_list = await self._tenants_payload_from_users(matched_active)
+            else:
+                q = Q(username=user.username)
+                if user.phone:
+                    q = q | Q(phone=user.phone)
+                users_with_same_username = await User.filter(
+                    q,
+                    is_active=True,
+                    deleted_at__isnull=True,
+                ).all()
+                users_with_same_username = await self._filter_users_with_active_tenant(
+                    users_with_same_username
+                )
+                user_tenants_list = await self._tenants_payload_from_users(users_with_same_username)
 
-            tenant_ids = [
-                u.tenant_id for u in users_with_same_username if u.tenant_id is not None
-            ]
-            if tenant_ids:
-                from infra.domain.tenant.tenant_access import filter_operational_tenant_ids
-
-                operational_ids = await filter_operational_tenant_ids(set(tenant_ids))
-                tenants_queryset = await Tenant.filter(id__in=operational_ids).all()
-                user_tenants_list = [
-                    {
-                        "id": tenant.id,
-                        "uuid": str(tenant.uuid),
-                        "name": tenant.name,
-                        "domain": tenant.domain,
-                        "status": tenant.status.value,
-                    }
-                    for tenant in tenants_queryset
-                ]
-            elif final_tenant_id:
+            if not user_tenants_list and final_tenant_id:
                 from infra.domain.tenant.tenant_access import require_operational_tenant_by_id
 
                 try:

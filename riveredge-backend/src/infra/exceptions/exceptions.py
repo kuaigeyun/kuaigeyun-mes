@@ -138,6 +138,14 @@ class RateLimitError(RiverEdgeException):
         super().__init__(message, "RATE_LIMIT_ERROR", 429, details)
 
 
+def login_brute_force_blocked(retry_minutes: int) -> RateLimitError:
+    """登录尝试过多，临时锁定。"""
+    return RateLimitError(
+        f"尝试过多，请 {retry_minutes} 分钟后再试",
+        details={"retry_after_minutes": retry_minutes},
+    )
+
+
 # 便捷的异常工厂函数
 
 def user_not_found(user_id: Optional[int] = None) -> NotFoundError:

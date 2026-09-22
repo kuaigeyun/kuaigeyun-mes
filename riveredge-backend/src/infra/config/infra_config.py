@@ -126,6 +126,24 @@ class InfraSettings(BaseSettings):
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=30, description="访问令牌过期时间（分钟）")
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = Field(default=7, description="刷新令牌过期时间（天）")
 
+    # 登录防暴力破解（PG Cache 计数真源）
+    LOGIN_BRUTE_FORCE_IDENT_MAX_FAILURES: int = Field(
+        default=5,
+        description="单账号窗口内允许的最大失败次数，超限临时锁定",
+    )
+    LOGIN_BRUTE_FORCE_IP_MAX_FAILURES: int = Field(
+        default=30,
+        description="单 IP 窗口内允许的最大失败次数，超限临时锁定",
+    )
+    LOGIN_BRUTE_FORCE_WINDOW_SECONDS: int = Field(
+        default=900,
+        description="失败计数滑动窗口（秒），默认 15 分钟",
+    )
+    LOGIN_BRUTE_FORCE_LOCK_SECONDS: int = Field(
+        default=900,
+        description="超限后锁定持续时间（秒），默认 15 分钟",
+    )
+
     # 前端服务配置
     FRONTEND_HOST: str = Field(default="127.0.0.1", description="前端服务主机地址")
     FRONTEND_PORT: int = Field(default=8100, description="前端服务端口")
