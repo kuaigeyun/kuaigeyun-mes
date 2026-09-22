@@ -210,6 +210,102 @@ async def _sync_operation_completion_status(
     )
 
 
+async def _compute_operation_reportable_remaining(
+    tenant_id: int,
+    work_order: WorkOrder,
+    work_order_operation: WorkOrderOperation,
+) -> Decimal:
+    """本次可报上限：min(计划剩余, 物料剩余)，与拉源 reportable_quantity_max 一致。"""
+    from apps.kuaizhizao.models.process_inspection import ProcessInspection
+    from apps.kuaizhizao.services.over_report_rules import (
+        remaining_completed_headroom,
+        tuple_from_model,
+    )
+    from apps.kuaizhizao.services.operation_transfer_service import (
+        build_operation_policy_cache,
+        material_consumed_against_incoming,
+        resolve_ipqc_for_work_order_operation,
+        resolve_operation_transfer_qualified,
+        sum_process_inspection_quality_quantities,
+    )
+    from apps.kuaizhizao.services.inspection_policy_service import get_quality_effective_config
+
+    plan_qty = Decimal(str(work_order.quantity or 0))
+    om, ov = tuple_from_model(work_order_operation)
+    completed = Decimal(str(work_order_operation.completed_quantity or 0))
+    plan_remaining = remaining_completed_headroom(plan_qty, completed, om, ov)
+
+    ops = await WorkOrderOperation.filter(
+        tenant_id=tenant_id,
+        work_order_id=int(work_order.id),
+        deleted_at__isnull=True,
+    ).order_by("sequence", "id").all()
+    op_index = 0
+    for i, op in enumerate(ops):
+        if int(op.id) == int(work_order_operation.id):
+            op_index = i
+            break
+
+    if op_index == 0:
+        prev_transfer = plan_qty
+    else:
+        prev_transfer = await resolve_operation_transfer_qualified(
+            tenant_id, int(work_order.id), ops[op_index - 1]
+        )
+
+    master_id = int(work_order_operation.operation_id) if work_order_operation.operation_id else 0
+    mode = "none"
+    insp_q, insp_u = Decimal("0"), Decimal("0")
+    if master_id > 0:
+        policy_cache = await build_operation_policy_cache(tenant_id, [master_id])
+        quality_cfg = await get_quality_effective_config(tenant_id)
+        mode, _, _ = resolve_ipqc_for_work_order_operation(
+            quality_cfg,
+            work_order_operation,
+            policy_cache.get(master_id, ("none", None, "default_none")),
+        )
+        if mode == "plan":
+            inspections = await ProcessInspection.filter(
+                tenant_id=tenant_id,
+                work_order_id=int(work_order.id),
+                operation_id=master_id,
+                deleted_at__isnull=True,
+            ).all()
+            insp_q, insp_u = sum_process_inspection_quality_quantities(inspections)
+
+    qualified = Decimal(str(work_order_operation.qualified_quantity or 0))
+    scrap_qty = Decimal("0")
+    master_op_id_for_scrap = (
+        int(work_order_operation.operation_id) if work_order_operation.operation_id else 0
+    )
+    if master_op_id_for_scrap > 0:
+        from apps.kuaizhizao.models.scrap_record import ScrapRecord
+
+        scrap_rows = await ScrapRecord.filter(
+            tenant_id=tenant_id,
+            work_order_id=int(work_order.id),
+            operation_id=master_op_id_for_scrap,
+            status__in=["draft", "confirmed"],
+            deleted_at__isnull=True,
+        ).all()
+        for sr in scrap_rows:
+            scrap_qty += Decimal(str(sr.scrap_quantity or 0))
+
+    material_consumed = material_consumed_against_incoming(
+        is_first_operation=op_index == 0,
+        inspection_mode=mode,
+        completed=completed,
+        qualified=qualified,
+        inspection_qualified=insp_q,
+        inspection_unqualified=insp_u,
+        scrap_qty=scrap_qty,
+    )
+    material_remaining = prev_transfer - material_consumed
+    if material_remaining < 0:
+        material_remaining = Decimal("0")
+    return min(plan_remaining, material_remaining)
+
+
 def _operation_assignee_user_ids(operation: WorkOrderOperation) -> List[int]:
     """工单工序指派人（多人派工优先，兼容主责字段）。"""
     out: List[int] = []
@@ -390,14 +486,24 @@ async def sync_work_order_operations_completion(
             actor = None
             if work_order.updated_by:
                 actor = await User.get_or_none(id=work_order.updated_by, tenant_id=tenant_id)
-            await DeliveryProjectService().apply_work_order_completed(
+            # P2-09：幂等键 `{wo_id}:delivery_completed`；apply 本身进度只升不降
+            idem = f"{int(work_order_id)}:delivery_completed"
+            updated = await DeliveryProjectService().apply_work_order_completed(
                 tenant_id, work_order_id, actor_user=actor
             )
-        except Exception as exc:
-            logger.warning(
-                "工单完工回写交付节点失败 tenant={} wo={}: {}",
+            logger.info(
+                "工单完工回写交付节点完成 tenant={} wo={} idem={} updated={}",
                 tenant_id,
                 work_order_id,
+                idem,
+                updated,
+            )
+        except Exception as exc:
+            logger.error(
+                "工单完工回写交付节点失败 tenant={} wo={} idem={}: {}",
+                tenant_id,
+                work_order_id,
+                f"{int(work_order_id)}:delivery_completed",
                 exc,
             )
     elif (
@@ -577,7 +683,10 @@ class ReportingService(AppBaseService[ReportingRecord]):
         reporting_record_id: int,
         revoked_by: int,
     ) -> None:
-        """报工撤回审核时，级联撤回关联成品/半成品入库确认，避免库存双计。"""
+        """报工撤回审核时，级联撤回关联成品/半成品入库确认，避免库存双计。
+
+        已入库单据撤回失败须向上抛出；未入库（无可冲减库存）可跳过。
+        """
         relations = await DocumentRelation.filter(
             tenant_id=tenant_id,
             source_type="reporting_record",
@@ -590,33 +699,79 @@ class ReportingService(AppBaseService[ReportingRecord]):
         from apps.kuaizhizao.services.semi_finished_goods_receipt_service import (
             SemiFinishedGoodsReceiptService,
         )
+        from apps.kuaizhizao.models.finished_goods_receipt import FinishedGoodsReceipt
+        from apps.kuaizhizao.models.semi_finished_goods_receipt import SemiFinishedGoodsReceipt
 
         fg_svc = FinishedGoodsReceiptService()
         semi_svc = SemiFinishedGoodsReceiptService()
+        failures: list[str] = []
         for rel in relations:
             try:
                 if rel.target_type == "finished_goods_receipt":
+                    receipt = await FinishedGoodsReceipt.get_or_none(
+                        tenant_id=tenant_id,
+                        id=int(rel.target_id),
+                        deleted_at__isnull=True,
+                    )
+                    if not receipt:
+                        continue
+                    # 未入库：无库存可冲，跳过
+                    if str(receipt.status or "").strip() != "已入库":
+                        logger.info(
+                            "报工撤回级联跳过未入库成品单 reporting={} receipt={} status={}",
+                            reporting_record_id,
+                            rel.target_id,
+                            receipt.status,
+                        )
+                        continue
                     await fg_svc.withdraw_receipt_confirmation(
                         tenant_id=tenant_id,
                         receipt_id=int(rel.target_id),
                         updated_by=revoked_by,
                     )
                 elif rel.target_type == "semi_finished_goods_receipt":
-                    if hasattr(semi_svc, "withdraw_receipt_confirmation"):
-                        await semi_svc.withdraw_receipt_confirmation(
-                            tenant_id=tenant_id,
-                            receipt_id=int(rel.target_id),
-                            updated_by=revoked_by,
+                    receipt = await SemiFinishedGoodsReceipt.get_or_none(
+                        tenant_id=tenant_id,
+                        id=int(rel.target_id),
+                        deleted_at__isnull=True,
+                    )
+                    if not receipt:
+                        continue
+                    if str(receipt.status or "").strip() != "已入库":
+                        logger.info(
+                            "报工撤回级联跳过未入库半成品单 reporting={} receipt={} status={}",
+                            reporting_record_id,
+                            rel.target_id,
+                            receipt.status,
                         )
+                        continue
+                    if not hasattr(semi_svc, "withdraw_receipt_confirmation"):
+                        failures.append(
+                            f"semi_finished_goods_receipt:{rel.target_id}:无撤回方法"
+                        )
+                        continue
+                    await semi_svc.withdraw_receipt_confirmation(
+                        tenant_id=tenant_id,
+                        receipt_id=int(rel.target_id),
+                        updated_by=revoked_by,
+                    )
             except Exception as exc:
-                # 未确认入库单可能无法撤回——改为软提示，不阻断报工撤回
-                logger.warning(
+                logger.error(
                     "报工撤回级联入库撤回失败 reporting={} target={}:{} err={}",
                     reporting_record_id,
                     rel.target_type,
                     rel.target_id,
                     exc,
                 )
+                failures.append(f"{rel.target_type}:{rel.target_id}:{exc}")
+
+        if failures:
+            from infra.exceptions.exceptions import BusinessLogicError
+
+            raise BusinessLogicError(
+                "报工撤回失败：关联入库撤回失败，报工须保持已审核以避免库存双计。"
+                f" 失败明细：{'; '.join(failures)}"
+            )
 
     async def _sync_pending_inbound_receipts_if_needed(
         self,
@@ -1308,11 +1463,10 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 )
                 reporting_data.work_hours = wh
 
-            # 数量报工：累计完成不可超过「计划+超报」上限（不允许超报时即计划数）
+            # 数量报工：本次可报 = min(计划剩余, 物料剩余)，与拉源/前端口径一致
             if reporting_type == "quantity":
                 from apps.kuaizhizao.services.over_report_rules import (
                     max_completed_quantity_for_plan,
-                    remaining_completed_headroom,
                     tuple_from_model,
                 )
 
@@ -1320,8 +1474,8 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 om, ov = tuple_from_model(work_order_operation)
                 max_completed = max_completed_quantity_for_plan(plan_qty, om, ov)
                 current_completed = Decimal(str(work_order_operation.completed_quantity or 0))
-                allowed_additional = remaining_completed_headroom(
-                    plan_qty, current_completed, om, ov
+                allowed_additional = await _compute_operation_reportable_remaining(
+                    tenant_id, work_order, work_order_operation
                 )
                 if reported_quantity_dec > allowed_additional:
                     raise BusinessLogicError(
@@ -1329,7 +1483,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
                         f"（计划 {plan_qty}，超报规则 {om}，允许累计完成 {max_completed}，"
                         f"当前已报完成 {current_completed}），本次报工 {reported_quantity_dec}"
                     )
-            
+
             if reporting_type != "status":
                 # 按数量报工：需要验证数量合理性
                 if reporting_data.reported_quantity <= 0:
@@ -1572,14 +1726,23 @@ class ReportingService(AppBaseService[ReportingRecord]):
                         actor = await User.get_or_none(
                             id=work_order.updated_by, tenant_id=tenant_id
                         )
-                    await DeliveryProjectService().apply_work_order_completed(
+                    idem = f"{int(work_order.id)}:delivery_completed"
+                    updated = await DeliveryProjectService().apply_work_order_completed(
                         tenant_id, work_order.id, actor_user=actor
                     )
-                except Exception as exc:
-                    logger.warning(
-                        "工单完工回写交付节点失败 tenant={} wo={}: {}",
+                    logger.info(
+                        "工单完工回写交付节点完成 tenant={} wo={} idem={} updated={}",
                         tenant_id,
                         work_order.id,
+                        idem,
+                        updated,
+                    )
+                except Exception as exc:
+                    logger.error(
+                        "工单完工回写交付节点失败 tenant={} wo={} idem={}: {}",
+                        tenant_id,
+                        work_order.id,
+                        f"{int(work_order.id)}:delivery_completed",
                         exc,
                     )
 
@@ -1680,7 +1843,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
             and reporting_record.status == "pending"
         ):
             return await self.approve_reporting_record(
-                tenant_id, reporting_record.id, reported_by
+                tenant_id, reporting_record.id, reported_by, is_auto_approve=True
             )
 
         await self._sync_pending_inbound_receipts_if_needed(
@@ -1833,6 +1996,22 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 continue
             inspections_by_wo_op[(int(wid), int(mid))].append(insp)
 
+        from apps.kuaizhizao.models.scrap_record import ScrapRecord
+
+        scrap_records = await ScrapRecord.filter(
+            tenant_id=tenant_id,
+            work_order_id__in=wo_ids,
+            status__in=["draft", "confirmed"],
+            deleted_at__isnull=True,
+        ).all()
+        scrap_by_wo_op: Dict[tuple[int, int], Decimal] = defaultdict(lambda: Decimal("0"))
+        for sr in scrap_records:
+            mid = getattr(sr, "operation_id", None)
+            wid = getattr(sr, "work_order_id", None)
+            if mid is None or wid is None:
+                continue
+            scrap_by_wo_op[(int(wid), int(mid))] += Decimal(str(sr.scrap_quantity or 0))
+
         kw_lower = kw.lower()
         rows: List[ReportingPullCandidateItem] = []
         # 保持与工单排序一致
@@ -1878,6 +2057,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
                     qualified=qualified,
                     inspection_qualified=insp_q,
                     inspection_unqualified=insp_u,
+                    scrap_qty=scrap_by_wo_op.get((wo_id, master_id), Decimal("0")),
                 )
 
                 material_remaining = prev_transfer - material_consumed
@@ -2081,7 +2261,9 @@ class ReportingService(AppBaseService[ReportingRecord]):
         tenant_id: int,
         record_id: int,
         approved_by: int,
-        rejection_reason: Optional[str] = None
+        rejection_reason: Optional[str] = None,
+        *,
+        is_auto_approve: bool = False,
     ) -> ReportingRecordResponse:
         """
         审核报工记录
@@ -2091,6 +2273,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
             record_id: 报工记录ID
             approved_by: 审核人ID
             rejection_reason: 驳回原因（驳回时填写）
+            is_auto_approve: 关审/自动审核路径，跳过自审拦截与待审实例硬门禁
 
         Returns:
             ReportingRecordResponse: 更新后的报工记录信息
@@ -2125,6 +2308,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 audit_required=audit_required,
                 doc_label="报工记录",
                 verb="驳回" if rejection_reason else "审核",
+                is_auto_approve=is_auto_approve,
             )
 
             # 获取审核人信息
@@ -2143,38 +2327,39 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 record.status = 'rejected'
                 record.rejection_reason = str(rejection_reason).strip()
             else:
-                # 审核分离：报工人 / 录入人 / 小组成员不可自审通过
-                blocked_ids: set[int] = set()
-                worker_id = getattr(record, "worker_id", None)
-                if worker_id is not None:
-                    try:
-                        blocked_ids.add(int(worker_id))
-                    except (TypeError, ValueError):
-                        pass
-                recorded_by = getattr(record, "recorded_by", None)
-                if recorded_by is not None:
-                    try:
-                        blocked_ids.add(int(recorded_by))
-                    except (TypeError, ValueError):
-                        pass
-                team_id = getattr(record, "team_id", None)
-                if team_id is not None:
-                    from apps.master_data.models.factory import WorkGroupMember
-
-                    member_rows = await WorkGroupMember.filter(
-                        tenant_id=tenant_id,
-                        work_group_id=int(team_id),
-                        deleted_at__isnull=True,
-                    ).all()
-                    for row in member_rows:
+                # 人工审核：报工人 / 录入人 / 小组成员不可自审通过；关审自动通过不拦截
+                if not is_auto_approve:
+                    blocked_ids: set[int] = set()
+                    worker_id = getattr(record, "worker_id", None)
+                    if worker_id is not None:
                         try:
-                            blocked_ids.add(int(row.employee_id))
+                            blocked_ids.add(int(worker_id))
                         except (TypeError, ValueError):
                             pass
-                if int(approved_by) in blocked_ids:
-                    raise BusinessLogicError(
-                        "报工人/录入人或小组成员不能审核通过自己的报工记录"
-                    )
+                    recorded_by = getattr(record, "recorded_by", None)
+                    if recorded_by is not None:
+                        try:
+                            blocked_ids.add(int(recorded_by))
+                        except (TypeError, ValueError):
+                            pass
+                    team_id = getattr(record, "team_id", None)
+                    if team_id is not None:
+                        from apps.master_data.models.factory import WorkGroupMember
+
+                        member_rows = await WorkGroupMember.filter(
+                            tenant_id=tenant_id,
+                            work_group_id=int(team_id),
+                            deleted_at__isnull=True,
+                        ).all()
+                        for row in member_rows:
+                            try:
+                                blocked_ids.add(int(row.employee_id))
+                            except (TypeError, ValueError):
+                                pass
+                    if int(approved_by) in blocked_ids:
+                        raise BusinessLogicError(
+                            "报工人/录入人或小组成员不能审核通过自己的报工记录"
+                        )
                 record.status = 'approved'
                 # 状态切回通过时，清理历史驳回原因，避免脏字段残留
                 record.rejection_reason = None
@@ -2297,6 +2482,12 @@ class ReportingService(AppBaseService[ReportingRecord]):
             if record.status != 'approved':
                 raise ValidationError("只有已审核通过的报工记录才可以撤回审核")
 
+            # 级联失败时回滚到已审核所需快照（事务外补偿）
+            prev_approved_at = record.approved_at
+            prev_approved_by = record.approved_by
+            prev_approved_by_name = record.approved_by_name
+            prev_remarks = record.remarks
+
             from core.services.approval.approval_instance_service import ApprovalInstanceService
             from core.services.approval.audit_transition import (
                 resolve_revoke_to_draft_landing_phase,
@@ -2335,12 +2526,33 @@ class ReportingService(AppBaseService[ReportingRecord]):
 
             response = ReportingRecordResponse.model_validate(record)
 
-        # 事务提交后级联撤回关联入库，避免嵌套独立事务与库存双计
-        await self._cascade_revoke_direct_inbound_for_reporting(
-            tenant_id=tenant_id,
-            reporting_record_id=record_id,
-            revoked_by=revoked_by,
-        )
+        # 事务提交后级联撤回关联入库；失败则恢复已审核，避免库存双计窗口
+        try:
+            await self._cascade_revoke_direct_inbound_for_reporting(
+                tenant_id=tenant_id,
+                reporting_record_id=record_id,
+                revoked_by=revoked_by,
+            )
+        except Exception as cascade_exc:
+            async with in_transaction():
+                restore = await ReportingRecord.get_or_none(
+                    id=record_id, tenant_id=tenant_id
+                )
+                if restore and restore.status == "draft":
+                    restore.status = "approved"
+                    restore.approved_at = prev_approved_at
+                    restore.approved_by = prev_approved_by
+                    restore.approved_by_name = prev_approved_by_name
+                    restore.remarks = prev_remarks
+                    await restore.save()
+                    await self._update_work_order_progress(tenant_id, restore.work_order_id)
+            from infra.exceptions.exceptions import BusinessLogicError
+
+            if isinstance(cascade_exc, BusinessLogicError):
+                raise
+            raise BusinessLogicError(
+                f"报工撤回失败：关联入库撤回异常，已恢复为已审核。原因：{cascade_exc}"
+            ) from cascade_exc
         logger.info(f"撤回报工审核成功：报工记录ID {record_id}，操作人 {revoked_by}")
         return response
 
@@ -2360,8 +2572,16 @@ class ReportingService(AppBaseService[ReportingRecord]):
             tenant_id, "reporting_record"
         )
         if not audit_required:
-            # 关审：提交即自动通过（与创建时 auto 路径一致）
-            return await self.approve_reporting_record(tenant_id, record_id, submitted_by)
+            # 关审：draft/rejected → pending → approved（对齐 audit_transition 自动审）
+            record.status = "pending"
+            record.rejection_reason = None
+            await record.save()
+            return await self.approve_reporting_record(
+                tenant_id,
+                record_id,
+                submitted_by,
+                is_auto_approve=True,
+            )
 
         from core.services.approval.audit_flow_guard import (
             approval_instance_finished_on_submit,
@@ -2386,7 +2606,12 @@ class ReportingService(AppBaseService[ReportingRecord]):
         record.rejection_reason = None
         await record.save()
         if approval_instance_finished_on_submit(instance):
-            return await self.approve_reporting_record(tenant_id, record_id, submitted_by)
+            return await self.approve_reporting_record(
+                tenant_id,
+                record_id,
+                submitted_by,
+                is_auto_approve=True,
+            )
         return ReportingRecordResponse.model_validate(record)
 
     async def batch_revoke_reporting_approval(
@@ -2396,83 +2621,35 @@ class ReportingService(AppBaseService[ReportingRecord]):
         revoked_by: int
     ) -> dict:
         """
-        批量撤回报工操作（撤销审核）
+        批量撤回报工操作（撤销审核）。
 
-        Args:
-            tenant_id: 组织ID
-            record_ids: 报工记录ID列表
-            revoked_by: 撤回人ID
-
-        Returns:
-            dict: 操作结果统计
+        逐条复用 revoke_reporting_approval（含事务后级联入库撤回与失败恢复已审核），
+        避免批量路径漏级联导致「报工 draft + 入库已入库」库存双计。
         """
         if not record_ids:
             raise ValidationError("报工记录ID列表不能为空")
         if any((not isinstance(rid, int)) or rid <= 0 for rid in record_ids):
             raise ValidationError("报工记录ID必须为正整数")
 
-        results = {
+        results: dict = {
             "total": len(record_ids),
             "success": 0,
             "failed": 0,
-            "details": []
+            "details": [],
         }
 
-        # 获取用户信息
-        user_info = await self.get_user_info(revoked_by)
-        revoked_by_name = user_info['name']
-        now_str = to_api_isoformat(resolve_business_datetime())
-
-        # 记录受影响的工单ID，用于最后刷新进度
-        affected_work_order_ids = set()
-
-        async with in_transaction():
-            for rid in record_ids:
-                try:
-                    record = await ReportingRecord.get_or_none(id=rid, tenant_id=tenant_id)
-                    if not record:
-                        results["failed"] += 1
-                        results["details"].append({"id": rid, "status": "failed", "reason": "记录不存在"})
-                        continue
-
-                    if record.status != 'approved':
-                        results["failed"] += 1
-                        results["details"].append({"id": rid, "status": "failed", "reason": f"当前状态为 {record.status}，无法撤回审核"})
-                        continue
-
-                    # 更新记录状态：一律草稿
-                    record.status = 'draft'
-                    record.approved_at = None
-                    record.approved_by = None
-                    record.approved_by_name = None
-                    record.rejection_reason = None
-                    
-                    revocation_note = f"\n[批量撤回审核] {now_str} 由 {revoked_by_name} 撤回审核"
-                    if record.remarks:
-                        record.remarks += revocation_note
-                    else:
-                        record.remarks = revocation_note
-
-                    await record.save()
-                    from core.services.approval.approval_instance_service import ApprovalInstanceService
-
-                    await ApprovalInstanceService.cancel_approval(
-                        tenant_id=tenant_id,
-                        entity_type="reporting_record",
-                        entity_id=int(rid),
-                        operator_id=revoked_by,
-                    )
-                    affected_work_order_ids.add(record.work_order_id)
-                    
-                    results["success"] += 1
-                    results["details"].append({"id": rid, "status": "success"})
-                except Exception as e:
-                    results["failed"] += 1
-                    results["details"].append({"id": rid, "status": "failed", "reason": str(e)})
-
-            # 批量刷新受影响工单的进度
-            for wo_id in affected_work_order_ids:
-                await self._update_work_order_progress(tenant_id, wo_id)
+        for rid in record_ids:
+            try:
+                await self.revoke_reporting_approval(
+                    tenant_id=tenant_id,
+                    record_id=int(rid),
+                    revoked_by=revoked_by,
+                )
+                results["success"] += 1
+                results["details"].append({"id": rid, "status": "success"})
+            except Exception as e:
+                results["failed"] += 1
+                results["details"].append({"id": rid, "status": "failed", "reason": str(e)})
 
         return results
 
@@ -3257,6 +3434,52 @@ class ReportingService(AppBaseService[ReportingRecord]):
             ):
                 raise ValidationError("合格数与不合格数之和不能超过报工数量")
 
+            # 数量报工修正：修正后本条报工数不得超过「本条原数量 + 当前本次可报」
+            work_order_for_correct = await WorkOrder.get_or_none(
+                id=reporting_record.work_order_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            )
+            work_order_operation_for_correct = await _resolve_work_order_operation_for_reporting(
+                tenant_id=tenant_id,
+                work_order_id=int(reporting_record.work_order_id),
+                operation_id=int(reporting_record.operation_id),
+            )
+            reporting_type_for_correct = (
+                str(getattr(work_order_operation_for_correct, "reporting_type", None) or "quantity")
+                .strip()
+                .lower()
+                if work_order_operation_for_correct
+                else "quantity"
+            )
+            old_reported = Decimal(str(reporting_record.reported_quantity or 0))
+            old_qualified = Decimal(str(reporting_record.qualified_quantity or 0))
+            old_unqualified = Decimal(str(reporting_record.unqualified_quantity or 0))
+            new_reported = Decimal(str(reported_qty if reported_qty is not None else old_reported))
+            new_qualified = Decimal(str(qualified_qty if qualified_qty is not None else old_qualified))
+            new_unqualified = Decimal(
+                str(unqualified_qty if unqualified_qty is not None else old_unqualified)
+            )
+            if (
+                reporting_type_for_correct == "quantity"
+                and work_order_for_correct
+                and work_order_operation_for_correct
+                and any(
+                    field in update_data
+                    for field in ("reported_quantity", "qualified_quantity", "unqualified_quantity")
+                )
+            ):
+                effective_remaining = await _compute_operation_reportable_remaining(
+                    tenant_id, work_order_for_correct, work_order_operation_for_correct
+                )
+                max_for_record = old_reported + effective_remaining
+                if new_reported > max_for_record:
+                    raise BusinessLogicError(
+                        f"修正后报工数量超限：本条最多可改为 {max_for_record}"
+                        f"（原数量 {old_reported}，当前本次可报 {effective_remaining}），"
+                        f"修正为 {new_reported}"
+                    )
+
             producer_fields = {"worker_id", "worker_name", "team_id", "team_name"}
             old_worker_id = reporting_record.worker_id
             old_reported_at = reporting_record.reported_at
@@ -3342,14 +3565,32 @@ class ReportingService(AppBaseService[ReportingRecord]):
             if not updated_record:
                 raise NotFoundError(f"报工记录不存在: {record_id}")
 
-            # 如果修正了数量相关字段，重新计算工单进度
-            # 检查是否修改了数量相关字段
+            # 如果修正了数量相关字段，同步工序累计并重算完成态
             quantity_fields = ['reported_quantity', 'qualified_quantity', 'unqualified_quantity']
             update_data_dict = correct_data.model_dump(exclude_unset=True)
             has_quantity_change = any(field in update_data_dict for field in quantity_fields)
-            
-            if has_quantity_change:
-                # 如果修正了数量，重新计算工单进度
+
+            if has_quantity_change and work_order_operation_for_correct:
+                def _dec_non_negative(value: Decimal) -> Decimal:
+                    return value if value >= Decimal("0") else Decimal("0")
+
+                delta_reported = new_reported - old_reported
+                delta_qualified = new_qualified - old_qualified
+                delta_unqualified = new_unqualified - old_unqualified
+                work_order_operation_for_correct.completed_quantity = _dec_non_negative(
+                    Decimal(str(work_order_operation_for_correct.completed_quantity or 0))
+                    + delta_reported
+                )
+                work_order_operation_for_correct.qualified_quantity = _dec_non_negative(
+                    Decimal(str(work_order_operation_for_correct.qualified_quantity or 0))
+                    + delta_qualified
+                )
+                work_order_operation_for_correct.unqualified_quantity = _dec_non_negative(
+                    Decimal(str(work_order_operation_for_correct.unqualified_quantity or 0))
+                    + delta_unqualified
+                )
+                await work_order_operation_for_correct.save()
+
                 await self._update_work_order_progress(
                     tenant_id=tenant_id,
                     work_order_id=updated_record.work_order_id
@@ -3360,7 +3601,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
             reported_at_changed = "reported_at" in update_data_dict
 
             if producer_changed:
-                work_order_operation = await _resolve_work_order_operation_for_reporting(
+                work_order_operation = work_order_operation_for_correct or await _resolve_work_order_operation_for_reporting(
                     tenant_id=tenant_id,
                     work_order_id=int(updated_record.work_order_id),
                     operation_id=int(updated_record.operation_id),

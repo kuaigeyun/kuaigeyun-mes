@@ -475,7 +475,7 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
         receipt_id: int,
         updated_by: int,
     ) -> SemiFinishedGoodsReceiptWithItemsResponse:
-        async with in_transaction():
+        async with reuse_or_begin_transaction():
             receipt = await SemiFinishedGoodsReceipt.get_or_none(
                 tenant_id=tenant_id, id=receipt_id, deleted_at__isnull=True
             )

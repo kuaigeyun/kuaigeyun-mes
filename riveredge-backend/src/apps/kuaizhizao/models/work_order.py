@@ -105,7 +105,7 @@ class WorkOrder(BaseModel):
     work_center_name = fields.CharField(max_length=200, null=True, description="工作中心名称")
 
     # 状态和优先级
-    status = fields.CharField(max_length=20, description="工单状态", default="draft")
+    status = fields.CharField(max_length=20, description="工单状态", default="DRAFT")
     priority = fields.CharField(max_length=10, description="优先级", default="normal")
 
     # 审核信息（UniAudit；默认关闭时创建写已通过，开启后走提交/审驳）

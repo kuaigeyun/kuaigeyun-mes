@@ -49,9 +49,10 @@ class SalesDelivery(BaseModel):
     reviewer_id = fields.IntField(null=True, description="审核人ID")
     reviewer_name = fields.CharField(max_length=100, null=True, description="审核人姓名")
     review_time = fields.DatetimeField(null=True, description="审核时间")
-    review_status = fields.CharField(max_length=20, default="待审核", description="审核状态")
+    review_status = fields.CharField(max_length=20, default="PENDING", description="审核状态（ReviewStatus.PENDING；兼容待审核）")
     review_remarks = fields.TextField(null=True, description="审核备注")
 
+    # 出库业务态保留中文（待出库/已出库），非 DocumentStatus 草稿域
     status = fields.CharField(max_length=20, default="待出库", description="出库状态")
     total_quantity = fields.DecimalField(max_digits=12, decimal_places=4, default=0, description="总出库数量")
     total_amount = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="总金额")

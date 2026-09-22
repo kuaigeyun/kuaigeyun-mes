@@ -494,6 +494,8 @@ const ReportingPage: React.FC = () => {
   const [correctModalVisible, setCorrectModalVisible] = useState(false);
   const [currentReportingRecordForCorrect, setCurrentReportingRecordForCorrect] = useState<ReportingRecord | null>(null);
   const [correctFormInitialValues, setCorrectFormInitialValues] = useState<Record<string, unknown> | undefined>();
+  /** 修正后本条报工数上限 = 本条原数量 + 当前本次可报 */
+  const [correctMaxReportedQuantity, setCorrectMaxReportedQuantity] = useState<number | null>(null);
   const correctFormRef = useRef<any>(null);
 
   // 新建报工状态（工单、工序列表）
@@ -1105,6 +1107,7 @@ const ReportingPage: React.FC = () => {
       const d = detail as ReportingRecord;
       correctModalProxyWorkerRef.current = null;
       correctModalTeamRef.current = null;
+      setCorrectMaxReportedQuantity(null);
 
       const initialValues: Record<string, unknown> = {
         reported_quantity: d.reported_quantity,
@@ -1153,6 +1156,32 @@ const ReportingPage: React.FC = () => {
         initialValues.producer_mode = 'worker';
       }
 
+      // 加载工序可报：修正上限 = 本条原报工数 + 当前本次可报
+      try {
+        const woId = Number(d.work_order_id);
+        const opId = Number(d.operation_id);
+        if (Number.isFinite(woId) && woId > 0 && Number.isFinite(opId) && opId > 0) {
+          const [wo, opsRes] = await Promise.all([
+            workOrderApi.get(String(woId)),
+            workOrderApi.getOperations(String(woId)),
+          ]);
+          const ops = Array.isArray(opsRes) ? opsRes : (opsRes as { data?: unknown[] })?.data || [];
+          const operation =
+            (ops as any[]).find((o) => Number(o.operation_id) === opId) ||
+            (ops as any[]).find((o) => Number(o.id) === opId);
+          const planQty = parseFloat(String((wo as any)?.quantity ?? 0)) || 0;
+          const oldReported = Number(d.reported_quantity) || 0;
+          if (operation && String(operation.reporting_type || 'quantity') !== 'status') {
+            const remaining = getRemainingReportableQuantity(operation, planQty);
+            setCorrectMaxReportedQuantity(Math.max(0, oldReported + remaining));
+          } else {
+            setCorrectMaxReportedQuantity(null);
+          }
+        }
+      } catch {
+        setCorrectMaxReportedQuantity(null);
+      }
+
       setCorrectFormInitialValues(initialValues);
       setCurrentReportingRecordForCorrect(d);
       setCorrectModalVisible(true);
@@ -1173,6 +1202,23 @@ const ReportingPage: React.FC = () => {
       if (!values.correction_reason || !values.correction_reason.trim()) {
         messageApi.error(t('app.kuaizhizao.workReporting.correctionReasonRequired'));
         throw new Error(t('app.kuaizhizao.workReporting.correctionReasonEmpty'));
+      }
+
+      const newReported = Number(values.reported_quantity) || 0;
+      if (
+        correctMaxReportedQuantity != null &&
+        newReported > correctMaxReportedQuantity + 1e-9
+      ) {
+        messageApi.warning(
+          t('apps.kuaizhizao.workOrder.quickReport.exceedEffectiveSubmit', {
+            max: correctMaxReportedQuantity,
+          }),
+        );
+        throw new Error(
+          t('apps.kuaizhizao.workOrder.quickReport.exceedEffectiveSubmit', {
+            max: correctMaxReportedQuantity,
+          }),
+        );
       }
 
       const correctedId = currentReportingRecordForCorrect.id;
@@ -1226,6 +1272,7 @@ const ReportingPage: React.FC = () => {
       setCorrectModalVisible(false);
       setCurrentReportingRecordForCorrect(null);
       setCorrectFormInitialValues(undefined);
+      setCorrectMaxReportedQuantity(null);
       correctFormRef.current?.resetFields();
       invalidateMenuBadgeCounts();
 
@@ -1246,6 +1293,13 @@ const ReportingPage: React.FC = () => {
         t('app.kuaizhizao.workReporting.formWorkGroupRequired'),
         t('app.kuaizhizao.workOrder.formWorkerPlaceholder'),
       ];
+      const exceedMsg =
+        correctMaxReportedQuantity != null
+          ? t('apps.kuaizhizao.workOrder.quickReport.exceedEffectiveSubmit', {
+              max: correctMaxReportedQuantity,
+            })
+          : '';
+      if (exceedMsg) skipMessages.push(exceedMsg);
       if (!skipMessages.includes(error.message)) {
         const detail = error?.response?.data?.detail;
         const msg =
@@ -2438,6 +2492,7 @@ const ReportingPage: React.FC = () => {
           setCorrectModalVisible(false);
           setCurrentReportingRecordForCorrect(null);
           setCorrectFormInitialValues(undefined);
+          setCorrectMaxReportedQuantity(null);
           correctModalProxyWorkerRef.current = null;
           correctModalTeamRef.current = null;
           correctFormRef.current?.resetFields();
@@ -2495,8 +2550,29 @@ const ReportingPage: React.FC = () => {
               name="reported_quantity"
               label={t('app.kuaizhizao.workReporting.colReportedQty')}
               placeholder={t('app.kuaizhizao.workReporting.formReportedQtyRequired')}
-              rules={[{ required: true, message: t('app.kuaizhizao.workReporting.formReportedQtyRequired') }]}
+              rules={[
+                { required: true, message: t('app.kuaizhizao.workReporting.formReportedQtyRequired') },
+                {
+                  validator: (_: unknown, value: number) => {
+                    if (
+                      correctMaxReportedQuantity != null &&
+                      value != null &&
+                      Number(value) > correctMaxReportedQuantity + 1e-9
+                    ) {
+                      return Promise.reject(
+                        new Error(
+                          t('apps.kuaizhizao.workOrder.quickReport.exceedEffectiveSubmit', {
+                            max: correctMaxReportedQuantity,
+                          }),
+                        ),
+                      );
+                    }
+                    return Promise.resolve();
+                  },
+                },
+              ]}
               min={0}
+              max={correctMaxReportedQuantity ?? undefined}
               fieldProps={{ precision: 2 }}
               colProps={{ span: 8 }}
             />
@@ -2517,6 +2593,7 @@ const ReportingPage: React.FC = () => {
                 }),
               ]}
               min={0}
+              max={correctMaxReportedQuantity ?? undefined}
               fieldProps={{ precision: 2 }}
               colProps={{ span: 8 }}
             />
@@ -2526,6 +2603,7 @@ const ReportingPage: React.FC = () => {
               placeholder={t('app.kuaizhizao.workReporting.unqualifiedQtyRequired')}
               rules={[{ required: true, message: t('app.kuaizhizao.workReporting.unqualifiedQtyRequired') }]}
               min={0}
+              max={correctMaxReportedQuantity ?? undefined}
               fieldProps={{ precision: 2 }}
               colProps={{ span: 8 }}
             />

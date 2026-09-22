@@ -1658,6 +1658,8 @@ const InventoryTransferPage: React.FC = () => {
             );
           }}
         />
+        <AntForm.Item name="material_code" hidden />
+        <AntForm.Item name="material_name" hidden />
         <ProFormDigit
           name="quantity"
           label={t('app.kuaizhizao.inventoryTransfer.formTransferQty')}

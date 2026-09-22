@@ -1156,11 +1156,29 @@ const ReworkOrdersPage: React.FC = () => {
   const handleAdvanceNext = async (record: ReworkOrder) => {
     if (!record.id || !record.original_work_order_id) return;
     try {
-      const ops = await workOrderApi.getOperations(String(record.original_work_order_id));
-      const options = (ops || []).map((op: any) => ({
+      const [opsRaw, detail] = await Promise.all([
+        workOrderApi.getOperations(String(record.original_work_order_id)),
+        reworkOrderApi.get(String(record.id)).catch(() => null),
+      ]);
+      const ops = Array.isArray(opsRaw) ? opsRaw : (opsRaw as any)?.data || [];
+      const routeOps =
+        (detail as ReworkOrder | null)?.rework_operations || record.rework_operations || [];
+      const usedIds = new Set(
+        routeOps.map((x) => Number(x.work_order_operation_id)).filter((id) => id > 0),
+      );
+      const sortedOps = [...ops].sort(
+        (a: any, b: any) => Number(a.sequence ?? a.operation_sequence ?? 0) - Number(b.sequence ?? b.operation_sequence ?? 0),
+      );
+      const available = sortedOps.filter((op: any) => !usedIds.has(Number(op.id)));
+      if (available.length === 0) {
+        messageApi.warning(t('app.kuaizhizao.reworkOrder.advanceNextNoAvailable'));
+        return;
+      }
+      const options = available.map((op: any) => ({
         label: `${op.operation_code || ''} ${op.operation_name || ''}`.trim(),
         value: op.id,
       }));
+      // 默认取原工单路线上「已用工序之后」的第一道可用工序，避免默认到已完成的起始工序触发唯一约束
       let nextOpId = options[0]?.value as number | undefined;
       getAntdModal().confirm({
         title: t('app.kuaizhizao.reworkOrder.actionAdvanceNext'),
@@ -1179,7 +1197,7 @@ const ReworkOrdersPage: React.FC = () => {
             next_work_order_operation_id: nextOpId,
           });
           messageApi.success(t('app.kuaizhizao.reworkOrder.advanceNextSuccess'));
-    actionRef.current?.reload();
+          actionRef.current?.reload();
           if (reworkOrderDetail?.id === record.id) await refreshReworkDetail(record.id);
         },
       });

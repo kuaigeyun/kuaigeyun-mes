@@ -7125,6 +7125,7 @@ export default {
   'app.kuaizhizao.reworkOrder.colVerificationRequired': '需要复检',
   'app.kuaizhizao.reworkOrder.releaseSuccess': '下达成功',
   'app.kuaizhizao.reworkOrder.advanceNextSuccess': '已追加下一工序',
+  'app.kuaizhizao.reworkOrder.advanceNextNoAvailable': '原工单工序均已在返工路线中，请申请完修或检查路线',
   'app.kuaizhizao.reworkOrder.requestCompleteSuccess': '已申请完修',
   'app.kuaizhizao.reworkOrder.qualityReleaseSuccess': '质量放行成功',
   'app.kuaizhizao.reworkOrder.financeSignSuccess': '财务会签成功',
@@ -9688,6 +9689,8 @@ export default {
   'app.kuaizhizao.salesOrder.deleteConfirm': '确定要删除选中 {{count}} 个销售订单吗？此操作不可恢复。',
   'app.kuaizhizao.salesOrder.deleteSuccess': '成功删除 {{count}} 个销售订单',
   'app.kuaizhizao.salesOrder.deletePartial': '删除完成：成功 {{success}} 个，失败 {{failed}} 个',
+  'app.kuaizhizao.salesOrder.deletePartialWithReason':
+    '删除完成：成功 {{success}} 个，失败 {{failed}} 个（{{reason}}）',
   'app.kuaizhizao.salesOrder.syncSuccess': '已同步 {{count}} 条销售订单',
   'app.kuaizhizao.salesOrder.syncFromSource': '同步销售订单',
   'app.kuaizhizao.salesOrder.syncMasterDataFirstHint':
@@ -34938,6 +34941,7 @@ export default {
   'app.kuaizhizao.salesOrder.orderCodeRequired': '请输入订单编号',
   'app.kuaizhizao.salesOrder.orderDateRequired': '请选择订单日期',
   'app.kuaizhizao.salesOrder.deliveryDateRequired': '请选择交货日期',
+  'app.kuaizhizao.salesOrder.deliveryDateBeforeOrderDate': '交货日期不能早于订单日期',
   'app.kuaizhizao.salesOrder.selectCustomer': '请选择客户',
   'app.kuaizhizao.salesOrder.selectCustomerRequired': '请选择客户',
   'app.kuaizhizao.salesOrder.contactPlaceholder': '请输入联系人',
@@ -34948,6 +34952,7 @@ export default {
   'app.kuaizhizao.salesOrder.selectPaymentTerms': '请选择付款条件',
   'app.kuaizhizao.salesOrder.selectMaterial': '请选择产品',
   'app.kuaizhizao.salesOrder.quantityMinHint': '>0',
+  'app.kuaizhizao.salesOrder.quantityOrPriceTooLarge': '数量或单价过大，请缩小后再保存',
   'app.kuaizhizao.salesOrder.feeDetailsFormLabel': '费用明细',
   'app.kuaizhizao.salesOrder.attachments': '附件',
   'app.kuaizhizao.salesOrder.notesPlaceholder': '请输入备注',

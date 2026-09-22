@@ -29,7 +29,8 @@ async def reuse_or_begin_transaction():
         try:
             yield conn
         except BaseException:
-            if not conn._finalized:
+            # Tortoise 0.21：勿直接读私有 _finalized（缺属性会 AttributeError 遮蔽原异常）
+            if not getattr(conn, "_finalized", False):
                 await conn.rollback()
             raise
     else:

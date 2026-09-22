@@ -190,7 +190,14 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
     setSubmitting(true);
     void inst
       .validateFields()
-      .then((values) => onFinish(values))
+      .then((values) => {
+        // fillMapping / setFieldValue 写入但未挂 Form.Item 的字段不会出现在 validateFields 结果里
+        const allValues =
+          typeof inst.getFieldsValue === 'function'
+            ? { ...(inst.getFieldsValue(true) as Record<string, unknown>), ...values }
+            : values;
+        return onFinish(allValues);
+      })
       .catch((err: { errorFields?: Array<{ errors?: string[]; name?: unknown }>; message?: string }) => {
         if (err?.errorFields?.length) {
           reportFinishFailed(err.errorFields);

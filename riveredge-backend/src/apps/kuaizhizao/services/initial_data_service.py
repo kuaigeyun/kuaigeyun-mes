@@ -277,6 +277,30 @@ class InitialDataService:
                 
             try:
                 async with in_transaction():
+                    snapshot_label = (
+                        to_api_isoformat(snapshot_time)
+                        if snapshot_time
+                        else "未指定"
+                    )
+                    # 期初幂等：同租户+仓库+快照时间+期初来源 已存在则跳过（防重跑翻倍）
+                    existing = await PurchaseReceipt.filter(
+                        tenant_id=tenant_id,
+                        warehouse_id=warehouse.id,
+                        purchase_order_code="期初库存",
+                        supplier_name="期初库存导入",
+                        notes__contains=f"快照时间点：{snapshot_label}",
+                        deleted_at__isnull=True,
+                    ).first()
+                    if existing:
+                        logger.info(
+                            "期初库存导入幂等跳过 tenant={} warehouse={} receipt={}",
+                            tenant_id,
+                            warehouse.id,
+                            existing.receipt_code,
+                        )
+                        success_count += len(items)
+                        continue
+
                     # 生成入库单编码
                     today = today_site_str()
                     from apps.common.base_service import AppBaseService
@@ -287,10 +311,14 @@ class InitialDataService:
                         prefix=f"INIT-INV{today}"
                     )
                     
-                    # 计算总数量和总金额
-                    total_quantity = sum(item['quantity'] for item in items)
-                    total_amount = sum(item['amount'] for item in items)
-                    
+                    # 计算总数量和总金额（保持 Decimal，禁止 float 落库）
+                    total_quantity = sum(
+                        (item["quantity"] for item in items), Decimal("0")
+                    )
+                    total_amount = sum(
+                        (item["amount"] for item in items), Decimal("0")
+                    )
+
                     # 创建期初库存入库单（标记为"期初库存"）
                     receipt = await PurchaseReceipt.create(
                         tenant_id=tenant_id,
@@ -305,9 +333,9 @@ class InitialDataService:
                         receipt_time=snapshot_time or resolve_business_datetime(),
                         status="已入库",  # 期初库存直接标记为已入库
                         review_status="已审核",  # 期初库存直接标记为已审核
-                        total_quantity=float(total_quantity),
-                        total_amount=float(total_amount),
-                        notes=f"期初库存导入（快照时间点：{to_api_isoformat(snapshot_time) if snapshot_time else '未指定'}）",
+                        total_quantity=total_quantity,
+                        total_amount=total_amount,
+                        notes=f"期初库存导入（快照时间点：{snapshot_label}）",
                         created_by=created_by,
                         updated_by=created_by,
                     )

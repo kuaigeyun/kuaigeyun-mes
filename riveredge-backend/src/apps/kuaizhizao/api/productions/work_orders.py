@@ -655,6 +655,7 @@ async def list_work_orders(
         True,
         description="是否计算当前页完工下推进度（方案质检口径，较重；首屏可传 false）",
     ),
+    column_filters: Optional[str] = Query(None, description="列筛选 JSON（高级搜索）"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -699,6 +700,7 @@ async def list_work_orders(
             include_readiness=include_readiness,
             include_scores=include_scores,
             include_downstream_push_progress=include_downstream_push_progress,
+            column_filters=column_filters,
         )
         return {
             "data": result,

@@ -130,17 +130,18 @@ def derive_sales_return_capabilities(
 
     submit_allowed = False
     submit_reason = "sales_return.submit.not_draft"
-    if _is_cancelled(status) or _is_returned(status):
-        submit_reason = "sales_return.submit.not_draft"
-    elif not _is_editable_business_status(status):
+    if _is_cancelled(status):
         submit_reason = "sales_return.submit.not_draft"
     elif not has_items:
         submit_reason = "sales_return.submit.no_items"
     elif _is_review_pending(review_status) or _is_review_approved(review_status):
         submit_reason = "sales_return.submit.not_draft"
     elif _is_review_draft(review_status) or _is_review_rejected(review_status):
-        submit_allowed = True
-        submit_reason = None
+        if _is_editable_business_status(status) or _is_returned(status):
+            submit_allowed = True
+            submit_reason = None
+        else:
+            submit_reason = "sales_return.submit.not_draft"
     submit_cap = _cap(submit_allowed, submit_reason)
 
     withdraw_submit_cap = _cap(

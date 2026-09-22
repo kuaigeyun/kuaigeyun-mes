@@ -490,7 +490,7 @@ class ProductionControlService:
         """人机效同屏：设备稼动趋势 + 人员报工工时排行。"""
         from apps.kuaizhizao.models.equipment import Equipment
         from apps.kuaizhizao.services.equipment_oee_service import EquipmentOEEService
-        from apps.kuaizhizao.utils.scheduling_work_hours import load_scheduling_work_context
+        from apps.kuaizhizao.utils.working_time import load_scheduling_work_context
 
         span_days = max(1, min(int(days or 7), 30))
         now = resolve_business_datetime()

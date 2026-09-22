@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from decimal import Decimal
+from typing import Any, Optional, Union
 
 from infra.exceptions.exceptions import BusinessLogicError
 
@@ -25,6 +26,17 @@ _APPROVED_REVIEW_STATUSES = frozenset({
     "审核通过",
     "已审核",
 })
+
+_Qty = Union[Decimal, float, int, str, None]
+
+
+def _as_dec(value: _Qty) -> Decimal:
+    """数量统一 Decimal 量化，避免 float 尾差影响余量判断。"""
+    if value is None:
+        return Decimal("0")
+    if isinstance(value, Decimal):
+        return value
+    return Decimal(str(value))
 
 
 def _cap(allowed: bool, reason: Optional[str] = None) -> ActionCapability:
@@ -73,7 +85,7 @@ def _fqc_inbound_push_ready(inspection: Any, *, audit_required: bool) -> bool:
     st = _norm(getattr(inspection, "status", None))
     if st not in ("已检验", "已审核"):
         return False
-    qualified = float(getattr(inspection, "qualified_quantity", 0) or 0)
+    qualified = _as_dec(getattr(inspection, "qualified_quantity", 0))
     if qualified <= 0:
         return False
     if audit_required:
@@ -87,9 +99,9 @@ def derive_quality_inspection_capabilities(
     supports_purchase_return: bool = False,
     supports_push_rework: bool = False,
     supports_push_inbound: bool = False,
-    pushed_purchase_return_quantity: float = 0.0,
-    pushed_rework_quantity: float = 0.0,
-    pushed_inbound_quantity: float = 0.0,
+    pushed_purchase_return_quantity: _Qty = 0,
+    pushed_rework_quantity: _Qty = 0,
+    pushed_inbound_quantity: _Qty = 0,
     certificate_issued: bool = False,
     fqc_audit_required: bool = False,
 ) -> QualityInspectionCapabilities:
@@ -97,7 +109,7 @@ def derive_quality_inspection_capabilities(
     review_status = _norm(getattr(inspection, "review_status", None))
     quality_status = _norm(getattr(inspection, "quality_status", None))
     inspection_result = _norm(getattr(inspection, "inspection_result", None))
-    unqualified_qty = float(getattr(inspection, "unqualified_quantity", 0) or 0)
+    unqualified_qty = _as_dec(getattr(inspection, "unqualified_quantity", 0))
 
     conduct_allowed = can_conduct_quality_inspection(status, inspection_result, review_status)
     conduct_cap = _cap(
@@ -119,13 +131,13 @@ def derive_quality_inspection_capabilities(
 
     revoke_conduct_allowed = can_revoke_quality_inspection_conduct(status, inspection_result)
     if revoke_conduct_allowed:
-        if supports_purchase_return and float(pushed_purchase_return_quantity or 0) > 0:
+        if supports_purchase_return and _as_dec(pushed_purchase_return_quantity) > 0:
             revoke_conduct_allowed = False
             revoke_conduct_reason = "quality_inspection.revoke_conduct.has_downstream"
-        elif supports_push_rework and float(pushed_rework_quantity or 0) > 0:
+        elif supports_push_rework and _as_dec(pushed_rework_quantity) > 0:
             revoke_conduct_allowed = False
             revoke_conduct_reason = "quality_inspection.revoke_conduct.has_downstream"
-        elif supports_push_inbound and float(pushed_inbound_quantity or 0) > 0:
+        elif supports_push_inbound and _as_dec(pushed_inbound_quantity) > 0:
             revoke_conduct_allowed = False
             revoke_conduct_reason = "quality_inspection.revoke_conduct.has_downstream"
         elif certificate_issued:
@@ -156,8 +168,8 @@ def derive_quality_inspection_capabilities(
 
     push_return_cap = _cap(False, "quality_inspection.push_purchase_return.not_allowed")
     if supports_purchase_return:
-        pushed_return_qty = max(0.0, float(pushed_purchase_return_quantity or 0))
-        max_push_return = max(0.0, unqualified_qty - pushed_return_qty)
+        pushed_return_qty = max(Decimal("0"), _as_dec(pushed_purchase_return_quantity))
+        max_push_return = max(Decimal("0"), unqualified_qty - pushed_return_qty)
         if defect_allowed and max_push_return > 0:
             push_return_cap = _cap(True)
         elif defect_allowed and max_push_return <= 0:
@@ -182,8 +194,8 @@ def derive_quality_inspection_capabilities(
 
     push_rework_cap = _cap(False, "finished_goods_inspection.push_rework.not_allowed")
     if supports_push_rework:
-        pushed_qty = max(0.0, float(pushed_rework_quantity or 0))
-        max_push = max(0.0, unqualified_qty - pushed_qty)
+        pushed_qty = max(Decimal("0"), _as_dec(pushed_rework_quantity))
+        max_push = max(Decimal("0"), unqualified_qty - pushed_qty)
         if defect_allowed and max_push > 0:
             push_rework_cap = _cap(True)
         elif defect_allowed and max_push <= 0:
@@ -195,9 +207,9 @@ def derive_quality_inspection_capabilities(
 
     push_inbound_cap = _cap(False, "finished_goods_inspection.push_inbound.not_allowed")
     if supports_push_inbound:
-        qualified_qty = max(0.0, float(getattr(inspection, "qualified_quantity", 0) or 0))
-        pushed_inbound_qty = max(0.0, float(pushed_inbound_quantity or 0))
-        max_push_inbound = max(0.0, qualified_qty - pushed_inbound_qty)
+        qualified_qty = max(Decimal("0"), _as_dec(getattr(inspection, "qualified_quantity", 0)))
+        pushed_inbound_qty = max(Decimal("0"), _as_dec(pushed_inbound_quantity))
+        max_push_inbound = max(Decimal("0"), qualified_qty - pushed_inbound_qty)
         inbound_ready = _fqc_inbound_push_ready(inspection, audit_required=fqc_audit_required)
         has_work_order = bool(getattr(inspection, "work_order_id", None))
         source_type = _norm(getattr(inspection, "source_type", None))
@@ -254,9 +266,9 @@ def assert_quality_inspection_capability(
     supports_purchase_return: bool = False,
     supports_push_rework: bool = False,
     supports_push_inbound: bool = False,
-    pushed_purchase_return_quantity: float = 0.0,
-    pushed_rework_quantity: float = 0.0,
-    pushed_inbound_quantity: float = 0.0,
+    pushed_purchase_return_quantity: _Qty = 0,
+    pushed_rework_quantity: _Qty = 0,
+    pushed_inbound_quantity: _Qty = 0,
     certificate_issued: bool = False,
     fqc_audit_required: bool = False,
 ) -> None:

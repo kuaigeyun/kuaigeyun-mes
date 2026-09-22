@@ -263,6 +263,7 @@ const SALES_ORDER_STAGE_I18N_BY_KEY: Record<string, string> = {
   delivered: 'app.kuaizhizao.salesOrder.lifecycleDelivered',
   invoicing: 'app.kuaizhizao.salesOrder.lifecycleInvoicing',
   completed: 'app.kuaizhizao.salesOrder.lifecycleCompleted',
+  closed: 'app.kuaizhizao.salesOrder.lifecycleClosed',
 };
 
 const SHIPPABLE_ELIGIBLE_STAGES = new Set(['执行中', '已生效', '发货出库', '已交货']);

@@ -126,9 +126,17 @@ async def create_sales_order(
             created_by=current_user.id
         )
         return result
-    except ValidationError as e:
+    except (ValidationError, BusinessLogicError) as e:
         raise _http_exception_with_trace(http_status.HTTP_422_UNPROCESSABLE_ENTITY, str(e), "/sales-orders", tenant_id)
     except Exception as e:
+        err_msg = str(e).lower()
+        if "numeric" in err_msg or "out of range" in err_msg or "overflow" in err_msg:
+            raise _http_exception_with_trace(
+                http_status.HTTP_422_UNPROCESSABLE_ENTITY,
+                "订单数量或金额过大，请检查明细数量与单价",
+                "/sales-orders",
+                tenant_id,
+            )
         logger.exception("创建销售订单失败: {}", e)
         raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "创建销售订单失败", "/sales-orders", tenant_id)
 
@@ -1958,13 +1966,14 @@ async def bulk_delete_sales_orders(
     """
     批量删除销售订单
     
-    只有“草稿”状态的订单可以删除。
-    返回成功删除的数量和失败的详情。
+    仅草稿/待审核/已提交且无下游单据的订单可删；审核通过等状态会计入失败并返回原因。
+    返回 success_count / failed_count / failed_items。
     """
     try:
         result = await sales_order_service.bulk_delete_sales_orders(
             tenant_id=tenant_id,
-            sales_order_ids=ids
+            sales_order_ids=ids,
+            current_user=current_user,
         )
         return result
     except Exception as e:

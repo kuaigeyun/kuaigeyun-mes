@@ -13,11 +13,11 @@ from apps.kuaizhizao.services.document_action_policy.types import (
     WorkOrderCapabilities,
 )
 
-_DRAFT = frozenset({"draft", "草稿"})
-_RELEASED = frozenset({"released", "已下达"})
-_IN_PROGRESS = frozenset({"in_progress", "执行中"})
-_COMPLETED = frozenset({"completed", "已完成"})
-_CANCELLED = frozenset({"cancelled", "已取消"})
+_DRAFT = frozenset({"draft", "草稿", "DRAFT"})
+_RELEASED = frozenset({"released", "已下达", "RELEASED"})
+_IN_PROGRESS = frozenset({"in_progress", "执行中", "IN_PROGRESS"})
+_COMPLETED = frozenset({"completed", "已完成", "COMPLETED"})
+_CANCELLED = frozenset({"cancelled", "已取消", "CANCELLED"})
 _SPLIT = frozenset({"split", "已拆分"})
 _REVIEW_APPROVED = frozenset({"已通过", "审核通过", "approved", "通过", "已审核"})
 _REVIEW_PENDING = frozenset({"待审核", "pending_review", "pending_approval", "pending", "已提交"})

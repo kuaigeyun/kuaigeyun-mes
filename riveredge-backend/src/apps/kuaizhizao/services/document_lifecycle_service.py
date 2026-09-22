@@ -371,14 +371,12 @@ def get_sales_order_lifecycle(
             milestones=milestones,
         )
     if _is_closed(status):
-        return {
-            "current_stage_key": "completed",
-            "current_stage_name": "已关闭",
-            "status": "normal",
-            "main_stages": _build_main_stages(SALES_ORDER_MAIN_STAGES, "completed"),
-            "sub_stages": None,
-            "next_step_suggestions": [],
-        }
+        # 关闭是终态异常（部分履约终止），不可伪装成 completed，否则前端会盖成「已完成」
+        return _mode_a_terminal_exception_lifecycle(
+            "已关闭",
+            SALES_ORDER_MAIN_STAGES,
+            milestones=milestones,
+        )
 
     if _mode_a_is_audit_pre_effective(status, review_status, business_effective=effective):
         sugg_key = (

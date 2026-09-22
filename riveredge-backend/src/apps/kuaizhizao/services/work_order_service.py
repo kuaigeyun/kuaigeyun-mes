@@ -2528,6 +2528,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         include_readiness: bool = False,
         include_scores: bool = False,
         include_downstream_push_progress: bool = True,
+        column_filters: Optional[str] = None,
     ) -> Tuple[List[WorkOrderListResponse], int]:
         """
         获取工单列表
@@ -2550,6 +2551,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             planned_end_from/to: 计划结束日期范围
             order_by: 排序，如 code、-created_at
             include_readiness: 为 True 时强制重算当前页并写库；默认 False 时列表读 work_orders.readiness_rate 持久化字段
+            column_filters: 高级搜索列筛选 JSON
 
         Returns:
             Tuple[List[WorkOrderListResponse], int]: (工单列表, 总数)
@@ -2573,6 +2575,44 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             current_user=current_user,
             resource="kuaizhizao:work-order",
         )
+
+        # 高级搜索：先解析，关联字段（客户/组编码）抽出后与扁平参数合并
+        column_filter_rows: List[Dict[str, Any]] = []
+        if column_filters:
+            from apps.kuaizhizao.utils.column_filters import parse_column_filters_param
+
+            column_filter_rows = parse_column_filters_param(column_filters)
+            model_filters: List[Dict[str, Any]] = []
+            for flt in column_filter_rows:
+                field = str(flt.get("field") or "").strip()
+                if field == "customer_name" and not (customer_name and str(customer_name).strip()):
+                    val = flt.get("value")
+                    if val is not None and str(val).strip():
+                        customer_name = str(val).strip()
+                    continue
+                if field == "group_code":
+                    val = flt.get("value")
+                    op = str(flt.get("op") or "contains").strip()
+                    if val is not None and str(val).strip():
+                        from apps.kuaizhizao.models.work_order_group import WorkOrderGroup
+
+                        gq = WorkOrderGroup.filter(
+                            tenant_id=tenant_id,
+                            deleted_at__isnull=True,
+                        )
+                        text = str(val).strip()
+                        if op in ("eq", "equals", "exact"):
+                            gq = gq.filter(group_code=text)
+                        else:
+                            gq = gq.filter(group_code__icontains=text)
+                        group_ids = list(await gq.values_list("id", flat=True))
+                        if group_ids:
+                            query = query.filter(work_order_group_id__in=group_ids)
+                        else:
+                            query = query.filter(id__in=[])
+                    continue
+                model_filters.append(flt)
+            column_filter_rows = model_filters
 
         # 添加筛选条件
         if code:
@@ -2662,6 +2702,30 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 query = query.filter(planned_end_date__lte=dt)
             except (ValueError, TypeError):
                 pass
+
+        if column_filter_rows:
+            from apps.kuaizhizao.utils.column_filters import apply_column_filters_to_queryset
+
+            query = apply_column_filters_to_queryset(
+                query,
+                column_filter_rows,
+                allowed_fields={
+                    "code",
+                    "name",
+                    "product_name",
+                    "product_code",
+                    "status",
+                    "priority",
+                    "production_mode",
+                    "sales_order_code",
+                    "sales_order_name",
+                    "planned_start_date",
+                    "planned_end_date",
+                    "workshop_id",
+                    "work_center_id",
+                    "quantity",
+                },
+            )
 
         # 获取总数（用于分页）
         total = await query.count()
@@ -5835,6 +5899,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 qualified=qualified,
                 inspection_qualified=insp_q,
                 inspection_unqualified=insp_u,
+                scrap_qty=Decimal(str(scrap_by_op.get(op.operation_id) or 0)),
             )
             material_remaining = prev_transfer - material_consumed
             if material_remaining < 0:

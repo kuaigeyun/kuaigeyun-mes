@@ -1390,11 +1390,11 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
         self,
         tenant_id: int,
         inspection_id: int,
-    ) -> float:
+    ) -> Decimal:
         pushed_map = await self._pushed_purchase_return_qty_by_inspection_ids(
             tenant_id, [inspection_id]
         )
-        return float(pushed_map.get(int(inspection_id), 0))
+        return Decimal(str(pushed_map.get(int(inspection_id), 0) or 0))
 
     async def preview_push_to_purchase_return(self, tenant_id: int, inspection_id: int) -> dict:
         """来料检验不合格下推采购退货单预览（不实际创建）。"""
@@ -1413,8 +1413,9 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             pushed_purchase_return_quantity=pushed,
         )
         push_cap = caps.push_purchase_return
+        # preview 仅展示：可用 float；落库路径 push_to_purchase_return 必须 Decimal
         unqualified = float(inspection.unqualified_quantity or 0)
-        max_push = max(0.0, unqualified - pushed)
+        max_push = max(0.0, unqualified - float(pushed))
         preview_items = []
         if max_push > 0:
             preview_items.append(
@@ -1456,7 +1457,7 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
         inspection_id: int,
         created_by: int,
         *,
-        quantity: Optional[float] = None,
+        quantity: Optional[Decimal] = None,
     ) -> dict:
         """来料检验不合格 -> 按可下推数量生成采购退货单"""
         from apps.kuaizhizao.services.document_action_policy.quality_inspection_record import (
@@ -1476,15 +1477,15 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             pushed_purchase_return_quantity=pushed,
         )
 
-        unqualified = float(inspection.unqualified_quantity or 0)
-        max_push = max(0.0, unqualified - pushed)
+        unqualified = Decimal(str(inspection.unqualified_quantity or 0))
+        max_push = max(Decimal("0"), unqualified - Decimal(str(pushed or 0)))
         if max_push <= 0:
             raise BusinessLogicError("不合格数量已全部下推采购退货，无可下推数量")
 
         if quantity is None:
             push_qty = max_push
         else:
-            push_qty = float(quantity)
+            push_qty = Decimal(str(quantity))
         if push_qty <= 0:
             raise BusinessLogicError("退货数量必须大于 0")
         if push_qty > max_push:
@@ -1516,7 +1517,9 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             deleted_at__isnull=True,
         ).order_by("id").first()
 
-        unit_price = float(receipt_item.unit_price or 0) if receipt_item else 0.0
+        unit_price = (
+            Decimal(str(receipt_item.unit_price or 0)) if receipt_item else Decimal("0")
+        )
         if unit_price <= 0 and receipt_item is not None:
             poi_id = getattr(receipt_item, "purchase_order_item_id", None)
             if poi_id:
@@ -1524,8 +1527,8 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
 
                 poi = await PurchaseOrderItem.get_or_none(tenant_id=tenant_id, id=int(poi_id))
                 if poi is not None:
-                    unit_price = float(poi.unit_price or 0)
-        total_amount = float(push_qty) * unit_price
+                    unit_price = Decimal(str(poi.unit_price or 0))
+        total_amount = push_qty * unit_price
 
         supplier_id = inspection.supplier_id or receipt.supplier_id
         supplier_name = str(inspection.supplier_name or receipt.supplier_name or "").strip()
@@ -1698,11 +1701,11 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
         self,
         tenant_id: int,
         inspection_id: int,
-    ) -> float:
+    ) -> Decimal:
         pushed_map = await self._pushed_inbound_qty_by_inspection_ids(
             tenant_id, [inspection_id]
         )
-        return float(pushed_map.get(int(inspection_id), 0))
+        return Decimal(str(pushed_map.get(int(inspection_id), 0) or 0))
 
     async def _iqc_push_inbound_context(self, tenant_id: int, inspection_id: int) -> dict:
         return {
@@ -5030,11 +5033,11 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
         self,
         tenant_id: int,
         inspection_id: int,
-    ) -> float:
+    ) -> Decimal:
         pushed_map = await self._pushed_rework_qty_by_inspection_ids(
             tenant_id, [inspection_id]
         )
-        return float(pushed_map.get(int(inspection_id), 0))
+        return Decimal(str(pushed_map.get(int(inspection_id), 0) or 0))
 
     async def _pushed_inbound_qty_by_inspection_ids(
         self,
@@ -5115,11 +5118,11 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
         self,
         tenant_id: int,
         inspection_id: int,
-    ) -> float:
+    ) -> Decimal:
         pushed_map = await self._pushed_inbound_qty_by_inspection_ids(
             tenant_id, [inspection_id]
         )
-        return float(pushed_map.get(int(inspection_id), 0))
+        return Decimal(str(pushed_map.get(int(inspection_id), 0) or 0))
 
     async def _resolve_fqc_push_inbound_max_quantity(
         self,
@@ -5174,8 +5177,8 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
         return {
             "supports_push_rework": True,
             "supports_push_inbound": True,
-            "pushed_rework_quantity": pushed_rework,
-            "pushed_inbound_quantity": pushed_inbound,
+            "pushed_rework_quantity": Decimal(str(pushed_rework or 0)),
+            "pushed_inbound_quantity": Decimal(str(pushed_inbound or 0)),
             "fqc_audit_required": audit_required,
         }
 
@@ -5202,8 +5205,9 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
             pushed_rework_quantity=pushed,
         )
         push_cap = caps.push_rework
+        # preview 仅展示；落库 push_to_rework 已用 Decimal
         unqualified = float(inspection.unqualified_quantity or 0)
-        max_push = max(0.0, unqualified - pushed)
+        max_push = max(0.0, unqualified - float(pushed))
         preview_items: List[Dict[str, Any]] = []
         if max_push > 0:
             preview_items.append(

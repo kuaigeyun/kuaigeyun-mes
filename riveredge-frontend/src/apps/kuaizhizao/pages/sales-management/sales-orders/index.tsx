@@ -553,6 +553,9 @@ const SalesOrderSalesmanField: React.FC<{ userList: User[]; loading: boolean }> 
 const SalesOrdersPage: React.FC = () => {
   const { t } = useTranslation();
   const { quantity: quantityDecimals, price: priceDecimals, amount: amountDecimals } = useNumericPrecision();
+  /** 与后端 SalesOrderItem DECIMAL(14,4) 对齐，避免超大数提交后库溢出 */
+  const salesOrderQtyMax = 9_999_999_999.9999;
+  const salesOrderPriceMax = 9_999_999_999.9999;
   const { message: messageApi, modal: modalApi } = App.useApp();
   const kuaiaiAvailable = useKuaiaiEntryAvailable();
   const salesCommonFormLabels = useMemo(() => getSalesCommonFormLabels(t), [t]);
@@ -1411,11 +1414,23 @@ const SalesOrdersPage: React.FC = () => {
     }
     try {
       const res = await bulkDeleteSalesOrders(orderIds);
-      if (res.failed_count === 0) {
-        messageApi.success(t('app.kuaizhizao.salesOrder.deleteSuccess', { count: res.success_count }));
+      const successCount = Number(res?.success_count ?? 0);
+      const failedCount = Number(res?.failed_count ?? 0);
+      if (failedCount === 0) {
+        messageApi.success(t('app.kuaizhizao.salesOrder.deleteSuccess', { count: successCount }));
       } else {
+        const firstReason = res?.failed_items?.[0]?.reason;
         messageApi.warning(
-          t('app.kuaizhizao.salesOrder.deletePartial', { success: res.success_count, failed: res.failed_count }),
+          firstReason
+            ? t('app.kuaizhizao.salesOrder.deletePartialWithReason', {
+                success: successCount,
+                failed: failedCount,
+                reason: firstReason,
+              })
+            : t('app.kuaizhizao.salesOrder.deletePartial', {
+                success: successCount,
+                failed: failedCount,
+              }),
         );
       }
       invalidateMenuBadge();
@@ -1548,6 +1563,14 @@ const SalesOrdersPage: React.FC = () => {
       values.order_date = toApiDateString(values.order_date);
       values.delivery_date = toApiDateString(values.delivery_date);
       values.currency_code = values.currency_code ?? defaultSalesOrderCurrency;
+      if (
+        values.order_date &&
+        values.delivery_date &&
+        String(values.delivery_date) < String(values.order_date)
+      ) {
+        messageApi.warning(t('app.kuaizhizao.salesOrder.deliveryDateBeforeOrderDate'));
+        return;
+      }
 
       const mainDeliveryStr = toApiDateString(values.delivery_date);
       values.items = validItems.map((it: SalesOrderItem) => {
@@ -1557,6 +1580,13 @@ const SalesOrdersPage: React.FC = () => {
         const material = materials.find((m) => m.id === Number((it as any).material_id));
         const conversionFactor = resolveSaleUnitConversionFactor(material, (it as any).material_unit);
         const deliveryDateStr = toApiDateString((it as any).delivery_date) ?? mainDeliveryStr;
+        if (
+          values.order_date &&
+          deliveryDateStr &&
+          String(deliveryDateStr) < String(values.order_date)
+        ) {
+          throw new Error(t('app.kuaizhizao.salesOrder.deliveryDateBeforeOrderDate'));
+        }
         const giftFields = mapGiftFieldsForSubmit(it as any);
         return {
           material_id: (it as any).material_id,
@@ -4295,7 +4325,18 @@ const SalesOrdersPage: React.FC = () => {
             name="order_date"
             label={t('app.kuaizhizao.salesOrder.orderDate')}
             rules={[{ required: true, message: t('app.kuaizhizao.salesOrder.orderDateRequired') }]}
-            fieldProps={{ style: { width: '100%' } }}
+            fieldProps={{
+              style: { width: '100%' },
+              onChange: (value: unknown) => {
+                const orderDay = coerceFormDate(value);
+                const deliveryDay = coerceFormDate(formRef.current?.getFieldValue('delivery_date'));
+                if (orderDay && deliveryDay && deliveryDay.isBefore(orderDay, 'day')) {
+                  formRef.current?.setFieldValue?.('delivery_date', orderDay);
+                  applyHeaderDeliveryToItemLines(orderDay);
+                }
+                formRef.current?.validateFields?.(['delivery_date']).catch(() => undefined);
+              },
+            }}
           />
         </Col>
       </Row>
@@ -4306,7 +4347,18 @@ const SalesOrdersPage: React.FC = () => {
           <ProFormDatePicker
             name="delivery_date"
             label={t('app.kuaizhizao.salesOrder.deliveryDate')}
-            rules={[{ required: true, message: t('app.kuaizhizao.salesOrder.deliveryDateRequired') }]}
+            rules={[
+              { required: true, message: t('app.kuaizhizao.salesOrder.deliveryDateRequired') },
+              {
+                validator: async (_, value) => {
+                  const deliveryDay = coerceFormDate(value);
+                  const orderDay = coerceFormDate(formRef.current?.getFieldValue('order_date'));
+                  if (deliveryDay && orderDay && deliveryDay.isBefore(orderDay, 'day')) {
+                    throw new Error(t('app.kuaizhizao.salesOrder.deliveryDateBeforeOrderDate'));
+                  }
+                },
+              },
+            ]}
             fieldProps={buildFutureDateShortcutFieldProps({
               getForm: () => formRef.current,
               fieldName: 'delivery_date',
@@ -4542,8 +4594,27 @@ const SalesOrdersPage: React.FC = () => {
                       width: DOCUMENT_DETAIL_COL_WIDTH.quantity,
                       ...DOCUMENT_DETAIL_NUM_COL,
                       render: (_: any, __: any, index: number) => (
-                        <AntForm.Item name={[index, 'required_quantity']} rules={[{ required: true, message: t('common.required') }, { type: 'number', min: 0.01, message: t('app.kuaizhizao.salesOrder.quantityMinHint') }]} style={{ margin: 0 }}>
-                          <InputNumber placeholder={t('common.quantity')} min={0} precision={quantityDecimals} style={{ width: '100%' }} size={DOCUMENT_DETAIL_CONTROL_SIZE} />
+                        <AntForm.Item
+                          name={[index, 'required_quantity']}
+                          rules={[
+                            { required: true, message: t('common.required') },
+                            { type: 'number', min: 0.01, message: t('app.kuaizhizao.salesOrder.quantityMinHint') },
+                            {
+                              type: 'number',
+                              max: salesOrderQtyMax,
+                              message: t('app.kuaizhizao.salesOrder.quantityOrPriceTooLarge'),
+                            },
+                          ]}
+                          style={{ margin: 0 }}
+                        >
+                          <InputNumber
+                            placeholder={t('common.quantity')}
+                            min={0}
+                            max={salesOrderQtyMax}
+                            precision={quantityDecimals}
+                            style={{ width: '100%' }}
+                            size={DOCUMENT_DETAIL_CONTROL_SIZE}
+                          />
                         </AntForm.Item>
                       ),
                     },
@@ -4615,7 +4686,17 @@ const SalesOrdersPage: React.FC = () => {
                                 <AntForm.Item name={[index, 'item_amount']} hidden>
                                   <InputNumber />
                                 </AntForm.Item>
-                                <AntForm.Item name={[index, 'unit_price']} style={{ margin: 0 }}>
+                                <AntForm.Item
+                                  name={[index, 'unit_price']}
+                                  style={{ margin: 0 }}
+                                  rules={[
+                                    {
+                                      type: 'number',
+                                      max: salesOrderPriceMax,
+                                      message: t('app.kuaizhizao.salesOrder.quantityOrPriceTooLarge'),
+                                    },
+                                  ]}
+                                >
                                   <LineUnitPriceWithTrendTrigger
                                     side="sales"
                                     materialId={row.material_id}
@@ -4626,6 +4707,7 @@ const SalesOrdersPage: React.FC = () => {
                                         : t('app.kuaizhizao.salesOrder.unitPricePlaceholder')
                                     }
                                     min={0}
+                                    max={salesOrderPriceMax}
                                     precision={priceDecimals}
                                     prefix="¥"
                                     size={DOCUMENT_DETAIL_CONTROL_SIZE}
@@ -4835,6 +4917,16 @@ const SalesOrdersPage: React.FC = () => {
                                 const headerDelivery = coerceFormDate(formRef.current?.getFieldValue('delivery_date'));
                                 if (coerceFormDate(value) != null || headerDelivery != null) return;
                                 throw new Error(t('common.required'));
+                              },
+                            },
+                            {
+                              validator: async (_, value) => {
+                                const deliveryDay = coerceFormDate(value);
+                                if (!deliveryDay) return;
+                                const orderDay = coerceFormDate(formRef.current?.getFieldValue('order_date'));
+                                if (orderDay && deliveryDay.isBefore(orderDay, 'day')) {
+                                  throw new Error(t('app.kuaizhizao.salesOrder.deliveryDateBeforeOrderDate'));
+                                }
                               },
                             },
                           ]}

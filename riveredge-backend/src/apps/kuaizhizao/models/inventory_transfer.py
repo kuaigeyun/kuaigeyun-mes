@@ -73,7 +73,7 @@ class InventoryTransfer(BaseModel):
 
     # 调拨信息
     transfer_date = fields.DatetimeField(description="调拨日期")
-    status = fields.CharField(max_length=20, default="draft", description="状态（draft/in_progress/completed/cancelled）")
+    status = fields.CharField(max_length=20, default="DRAFT", description="状态（DRAFT/IN_PROGRESS/COMPLETED/CANCELLED；兼容 draft）")
 
     # 统计信息
     total_items = fields.IntField(default=0, description="调拨物料总数")

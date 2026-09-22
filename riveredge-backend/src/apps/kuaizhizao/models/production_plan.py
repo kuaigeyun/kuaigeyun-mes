@@ -33,8 +33,8 @@ class ProductionPlan(BaseModel):
     plan_start_date = fields.DateField(description="计划开始日期")
     plan_end_date = fields.DateField(description="计划结束日期")
 
-    # 状态
-    status = fields.CharField(max_length=20, default="草稿", description="计划状态")
+    # 状态（DocumentStatus / ReviewStatus 英文枚举；兼容中文存量）
+    status = fields.CharField(max_length=20, default="DRAFT", description="计划状态（DocumentStatus.DRAFT）")
     execution_status = fields.CharField(max_length=20, default="未执行", description="执行状态")
     # 计划先行流程状态：draft=草稿, submitted=已提交, approved=已审核, locked=已锁定, executing=执行中
     plan_status = fields.CharField(max_length=20, default="draft", null=True, description="计划流程状态")
@@ -50,7 +50,7 @@ class ProductionPlan(BaseModel):
     reviewer_id = fields.IntField(null=True, description="审核人ID")
     reviewer_name = fields.CharField(max_length=100, null=True, description="审核人姓名")
     review_time = fields.DatetimeField(null=True, description="审核时间")
-    review_status = fields.CharField(max_length=20, default="待审核", description="审核状态")
+    review_status = fields.CharField(max_length=20, default="PENDING", description="审核状态（ReviewStatus.PENDING）")
     review_remarks = fields.TextField(null=True, description="审核备注")
 
     notes = fields.TextField(null=True, description="备注")

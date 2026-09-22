@@ -125,6 +125,74 @@ def test_sum_process_inspection_quality_quantities():
     assert u == Decimal("1")
 
 
+def test_material_consumed_first_op_includes_scrap():
+    """首道不合格默认不占；报废后永久占用。"""
+    from apps.kuaizhizao.services.operation_transfer_service import (
+        material_consumed_against_incoming,
+    )
+
+    base = material_consumed_against_incoming(
+        is_first_operation=True,
+        inspection_mode="none",
+        completed=Decimal("10"),
+        qualified=Decimal("8"),
+    )
+    assert base == Decimal("8")
+
+    with_scrap = material_consumed_against_incoming(
+        is_first_operation=True,
+        inspection_mode="none",
+        completed=Decimal("10"),
+        qualified=Decimal("8"),
+        scrap_qty=Decimal("2"),
+    )
+    assert with_scrap == Decimal("10")
+
+
+def test_material_consumed_later_op_does_not_double_count_scrap():
+    """后道 completed 已含不良，报废不重复扣。"""
+    from apps.kuaizhizao.services.operation_transfer_service import (
+        material_consumed_against_incoming,
+    )
+
+    consumed = material_consumed_against_incoming(
+        is_first_operation=False,
+        inspection_mode="none",
+        completed=Decimal("10"),
+        qualified=Decimal("8"),
+        scrap_qty=Decimal("2"),
+    )
+    assert consumed == Decimal("10")
+
+
+def test_material_consumed_plan_mode_scrap_reoccupies_released_unqualified():
+    """方案质检释放的检验不良，报废后重新占用。"""
+    from apps.kuaizhizao.services.operation_transfer_service import (
+        material_consumed_against_incoming,
+    )
+
+    released = material_consumed_against_incoming(
+        is_first_operation=False,
+        inspection_mode="plan",
+        completed=Decimal("10"),
+        qualified=Decimal("8"),
+        inspection_qualified=Decimal("8"),
+        inspection_unqualified=Decimal("2"),
+    )
+    assert released == Decimal("8")
+
+    with_scrap = material_consumed_against_incoming(
+        is_first_operation=False,
+        inspection_mode="plan",
+        completed=Decimal("10"),
+        qualified=Decimal("8"),
+        inspection_qualified=Decimal("8"),
+        inspection_unqualified=Decimal("2"),
+        scrap_qty=Decimal("2"),
+    )
+    assert with_scrap == Decimal("10")
+
+
 @pytest.mark.asyncio
 async def test_ipqc_passed_without_audit_when_conducted():
     with patch(

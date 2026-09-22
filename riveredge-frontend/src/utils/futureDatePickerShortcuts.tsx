@@ -76,6 +76,13 @@ export function buildFutureDateShortcutPickerProps(options: {
     showToday: false,
     ...fieldProps,
     style: { width: '100%', ...fieldProps?.style },
+    disabledDate: (current) => {
+      if (fieldProps?.disabledDate?.(current)) return true;
+      if (!baseFieldName || !current) return false;
+      const base = coerceDayjsBase(getForm()?.getFieldValue?.(baseFieldName));
+      if (!base) return false;
+      return current.startOf('day').isBefore(base, 'day');
+    },
     renderExtraFooter: () =>
       renderShortcutFooter(t, () => resolveFormDateBase(getForm(), baseFieldName), onApply),
   };

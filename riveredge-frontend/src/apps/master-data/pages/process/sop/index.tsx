@@ -1351,6 +1351,8 @@ const SOPPage: React.FC<SOPPageProps> = ({ fixedSopDomain = 'pe' }) => {
             material_uuid: listParams.material_uuid as string | undefined,
             material_group_uuid: listParams.material_group_uuid as string | undefined,
             route_uuid: listParams.route_uuid as string | undefined,
+            carrier: listParams.carrier as string | undefined,
+            controlStatus: listParams.controlStatus as string | undefined,
             keyword: listParams.keyword as string | undefined,
             code: listParams.code as string | undefined,
             name: listParams.name as string | undefined,

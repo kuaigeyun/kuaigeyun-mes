@@ -486,6 +486,10 @@ function buildWorkOrderListApiParams(
     if (start) apiParams.planned_end_from = formatDateTime(start, 'YYYY-MM-DD')
     if (end) apiParams.planned_end_to = formatDateTime(end, 'YYYY-MM-DD')
   }
+  // 高级搜索条件组：与销售订单一致，透传 column_filters JSON
+  if (typeof s.column_filters === 'string' && s.column_filters.trim()) {
+    apiParams.column_filters = s.column_filters.trim()
+  }
   if (sort && Object.keys(sort).length > 0) {
     const { sortBy, sortOrder } = extractProTableSort(sort)
     if (sortBy && sortOrder) {

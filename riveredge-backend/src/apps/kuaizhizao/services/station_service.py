@@ -1237,8 +1237,22 @@ class StationService(WorkOrderService):
             reported_at__gte=shift_start,
             reported_at__lte=end,
         )
-        # workstation 过滤：报工记录若无工位字段则按安灯/停机侧统计为主
         reports = await report_q.all()
+        # P2-13：指定工位时仅统计 device_info 带本工位的报工，避免全厂混算膨胀
+        if workstation_id is not None:
+            wid = int(workstation_id)
+
+            def _report_on_station(r) -> bool:
+                info = getattr(r, "device_info", None)
+                if not isinstance(info, dict):
+                    return False
+                raw = info.get("workstation_id", info.get("station_id"))
+                try:
+                    return int(raw) == wid
+                except (TypeError, ValueError):
+                    return False
+
+            reports = [r for r in reports if _report_on_station(r)]
         completed = sum((Decimal(str(r.qualified_quantity or 0)) for r in reports), Decimal("0"))
         unqualified = sum((Decimal(str(r.unqualified_quantity or 0)) for r in reports), Decimal("0"))
         planned = sum((Decimal(str(r.reported_quantity or 0)) for r in reports), Decimal("0"))
@@ -1249,7 +1263,16 @@ class StationService(WorkOrderService):
             started_at__gte=shift_start,
             started_at__lte=end,
         )
+        # 停机表无工位列：指定工位时用 remarks 标记 `workstation_id=<id>` 或跳过无法归属记录
         downtimes = await dt_q.all()
+        if workstation_id is not None:
+            tag = f"workstation_id={int(workstation_id)}"
+            tag2 = f"station_id={int(workstation_id)}"
+            downtimes = [
+                d
+                for d in downtimes
+                if tag in str(d.remarks or "") or tag2 in str(d.remarks or "")
+            ]
         downtime_minutes = Decimal("0")
         for d in downtimes:
             ended = d.ended_at or end
@@ -1276,6 +1299,7 @@ class StationService(WorkOrderService):
             "downtime_minutes": downtime_minutes.quantize(Decimal("0.01")),
             "andon_count": andon_count,
             "reporting_count": len(reports),
+            "scope": "workstation" if workstation_id is not None else "plant",
         }
 
     async def confirm_shift_handover(
@@ -1357,6 +1381,10 @@ class StationService(WorkOrderService):
 
             user_info = await self.get_user_info(operator_id)
             label = DOWNTIME_REASON_LABELS.get(data.reason_code, data.reason_code)
+            remarks = data.remarks or ""
+            if getattr(data, "workstation_id", None) is not None:
+                tag = f"workstation_id={int(data.workstation_id)}"
+                remarks = f"{remarks} {tag}".strip() if remarks else tag
             record = await StationOperationDowntime.create(
                 tenant_id=tenant_id,
                 work_order_id=work_order_id,
@@ -1366,7 +1394,7 @@ class StationService(WorkOrderService):
                 started_at=resolve_business_datetime(),
                 operator_id=operator_id,
                 operator_name=user_info["name"],
-                remarks=data.remarks,
+                remarks=remarks or None,
             )
             # 停机记录 + 工序状态一并落库，否则 PC/H5 刷新后仍显示「进行中」
             op.status = "paused"

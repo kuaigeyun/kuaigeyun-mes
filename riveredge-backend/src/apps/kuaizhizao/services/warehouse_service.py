@@ -4454,21 +4454,23 @@ class ProductionReturnService(AppBaseService[ProductionReturn]):
                 await ProductionReturn.get(tenant_id=tenant_id, id=return_id)
             )
 
+    @serialize_stock_document("production_return", "return_id")
     async def delete_production_return(self, tenant_id: int, return_id: int) -> bool:
         """删除生产退料单"""
-        ret = await ProductionReturn.get_or_none(
-            tenant_id=tenant_id, id=return_id, deleted_at__isnull=True
-        )
-        if not ret:
-            raise NotFoundError(f"生产退料单不存在: {return_id}")
-        if ret.status not in ("待退料", "已取消"):
-            raise BusinessLogicError("只能删除待退料或已取消状态的生产退料单")
+        async with reuse_or_begin_transaction():
+            ret = await ProductionReturn.filter(
+                tenant_id=tenant_id, id=return_id, deleted_at__isnull=True
+            ).select_for_update().first()
+            if not ret:
+                raise NotFoundError(f"生产退料单不存在: {return_id}")
+            if ret.status not in ("待退料", "已取消"):
+                raise BusinessLogicError("只能删除待退料或已取消状态的生产退料单")
 
-        await ProductionReturn.filter(tenant_id=tenant_id, id=return_id).update(
-            is_active=False,
-            deleted_at=resolve_business_datetime()
-        )
-        return True
+            await ProductionReturn.filter(tenant_id=tenant_id, id=return_id).update(
+                is_active=False,
+                deleted_at=resolve_business_datetime()
+            )
+            return True
 
     @serialize_stock_document("production_return", "return_id")
     async def confirm_return(
@@ -5251,7 +5253,7 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
         updated_by: int,
     ) -> FinishedGoodsReceiptWithItemsResponse:
         """撤回已确认的成品入库：冲减即时库存，单据回到待入库。"""
-        async with in_transaction():
+        async with reuse_or_begin_transaction():
             receipt = await FinishedGoodsReceipt.get_or_none(
                 tenant_id=tenant_id, id=receipt_id, deleted_at__isnull=True
             )
@@ -5312,16 +5314,17 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
 
             return await self.get_finished_goods_receipt_by_id(tenant_id, receipt_id)
 
+    @serialize_stock_document("finished_goods_receipt", "receipt_id")
     async def delete_finished_goods_receipt(self, tenant_id: int, receipt_id: int) -> bool:
         """
         软删除成品入库单（仅草稿/待入库；未确认入库不影响库存）。
         若存在未删除的装箱绑定则禁止删除。
         """
         deletable_statuses = ("草稿", "draft", "DRAFT", "待入库")
-        async with in_transaction():
-            receipt = await FinishedGoodsReceipt.get_or_none(
+        async with reuse_or_begin_transaction():
+            receipt = await FinishedGoodsReceipt.filter(
                 tenant_id=tenant_id, id=receipt_id, deleted_at__isnull=True
-            )
+            ).select_for_update().first()
             if not receipt:
                 raise NotFoundError(f"成品入库单不存在: {receipt_id}")
             if receipt.status not in deletable_statuses:
@@ -6714,6 +6717,7 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
 
             return await self.get_sales_delivery_by_id(tenant_id, delivery_id)
 
+    @serialize_stock_document("sales_delivery", "delivery_id")
     async def delete_sales_delivery(self, tenant_id: int, delivery_id: int) -> None:
         """删除销售出库单（软删除：未审核/草稿/已取消可删；审核通过后须先撤销审核）。"""
         from apps.kuaizhizao.models.delivery_notice import DeliveryNotice
@@ -6722,30 +6726,30 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             assert_outbound_hub_delete,
         )
 
-        delivery = await SalesDelivery.get_or_none(
-            id=delivery_id,
-            tenant_id=tenant_id,
-            deleted_at__isnull=True,
-        )
-        if not delivery:
-            raise NotFoundError(f"销售出库单不存在: {delivery_id}")
-        await assert_outbound_hub_delete(tenant_id, delivery, "sales_delivery")
+        async with reuse_or_begin_transaction():
+            delivery = await SalesDelivery.filter(
+                id=delivery_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            ).select_for_update().first()
+            if not delivery:
+                raise NotFoundError(f"销售出库单不存在: {delivery_id}")
+            await assert_outbound_hub_delete(tenant_id, delivery, "sales_delivery")
 
-        if await DeliveryNotice.filter(
-            tenant_id=tenant_id,
-            sales_delivery_id=delivery_id,
-            deleted_at__isnull=True,
-        ).exclude(status="待发送").exists():
-            raise BusinessLogicError("存在非待发送状态的送货单，请先处理后再删除销售出库单")
+            if await DeliveryNotice.filter(
+                tenant_id=tenant_id,
+                sales_delivery_id=delivery_id,
+                deleted_at__isnull=True,
+            ).exclude(status="待发送").exists():
+                raise BusinessLogicError("存在非待发送状态的送货单，请先处理后再删除销售出库单")
 
-        if await SalesReturn.filter(
-            tenant_id=tenant_id,
-            sales_delivery_id=delivery_id,
-            deleted_at__isnull=True,
-        ).exclude(status__in=["待退货", "draft", "草稿", "已取消", "cancelled"]).exists():
-            raise BusinessLogicError("存在已确认的销售退货单，无法删除销售出库单")
+            if await SalesReturn.filter(
+                tenant_id=tenant_id,
+                sales_delivery_id=delivery_id,
+                deleted_at__isnull=True,
+            ).exclude(status__in=["待退货", "draft", "草稿", "已取消", "cancelled"]).exists():
+                raise BusinessLogicError("存在已确认的销售退货单，无法删除销售出库单")
 
-        async with in_transaction():
             now = resolve_business_datetime()
             # 关联发货通知须一并软删：仅重置为「待发货」时通知行仍占用可下推量，会导致销售订单无法再次下推出库。
             await ShipmentNotice.filter(
@@ -8373,7 +8377,6 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                     tenant_id=tenant_id, id=item_data.item_id, delivery_id=delivery_id
                 ).update(**item_update)
 
-    @serialize_stock_document("sales_delivery", "delivery_id")
     async def confirm_delivery(
         self,
         tenant_id: int,
@@ -8383,8 +8386,60 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         confirm_request: Optional[SalesDeliveryConfirmRequest] = None,
         item_batches: Optional[List[SalesDeliveryConfirmItemBatch]] = None,
     ) -> SalesDeliveryResponse:
-        """确认出库"""
-        async with in_transaction():
+        """确认出库。
+
+        P2-11：OQC / 授信在 advisory lock 外预校验，缩短锁持有时间；
+        锁内 `_confirm_delivery_locked` 重读状态兜底。
+        """
+        delivery = await self.get_sales_delivery_by_id(tenant_id, delivery_id)
+
+        from apps.kuaizhizao.services.document_action_policy.warehouse_outbound_hub import (
+            assert_outbound_hub_capability,
+        )
+
+        assert_outbound_hub_capability(delivery, "confirm", outbound_type="sales_delivery")
+
+        if delivery.status != "待出库":
+            raise BusinessLogicError("只有待出库状态的销售出库单才能确认出库")
+
+        await assert_oqc_before_sales_delivery_confirm(
+            tenant_id,
+            sales_order_id=delivery.sales_order_id,
+            customer_id=delivery.customer_id,
+            delivery_items=list(delivery.items or []),
+            sales_delivery_id=delivery_id,
+        )
+
+        from apps.kuaicaiwu.services.credit_limit_service import CreditLimitService
+
+        await CreditLimitService().validate_customer_exposure(
+            tenant_id=tenant_id,
+            customer_id=delivery.customer_id,
+            customer_name=delivery.customer_name,
+            additional_amount=Decimal(str(delivery.total_amount or 0)),
+            scene="销售出库确认",
+        )
+
+        return await self._confirm_delivery_locked(
+            tenant_id=tenant_id,
+            delivery_id=delivery_id,
+            confirmed_by=confirmed_by,
+            confirm_request=confirm_request,
+            item_batches=item_batches,
+        )
+
+    @serialize_stock_document("sales_delivery", "delivery_id")
+    async def _confirm_delivery_locked(
+        self,
+        tenant_id: int,
+        delivery_id: int,
+        confirmed_by: int,
+        *,
+        confirm_request: Optional[SalesDeliveryConfirmRequest] = None,
+        item_batches: Optional[List[SalesDeliveryConfirmItemBatch]] = None,
+    ) -> SalesDeliveryResponse:
+        """确认出库写路径（已在锁外完成 OQC/授信预校验）。"""
+        async with reuse_or_begin_transaction():
             delivery = await self.get_sales_delivery_by_id(tenant_id, delivery_id)
 
             from apps.kuaizhizao.services.document_action_policy.warehouse_outbound_hub import (
@@ -8393,25 +8448,8 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
 
             assert_outbound_hub_capability(delivery, "confirm", outbound_type="sales_delivery")
 
-            if delivery.status != '待出库':
+            if delivery.status != "待出库":
                 raise BusinessLogicError("只有待出库状态的销售出库单才能确认出库")
-
-            await assert_oqc_before_sales_delivery_confirm(
-                tenant_id,
-                sales_order_id=delivery.sales_order_id,
-                customer_id=delivery.customer_id,
-                delivery_items=list(delivery.items or []),
-                sales_delivery_id=delivery_id,
-            )
-
-            from apps.kuaicaiwu.services.credit_limit_service import CreditLimitService
-            await CreditLimitService().validate_customer_exposure(
-                tenant_id=tenant_id,
-                customer_id=delivery.customer_id,
-                customer_name=delivery.customer_name,
-                additional_amount=Decimal(str(delivery.total_amount or 0)),
-                scene="销售出库确认",
-            )
 
             resolved_item_batches = item_batches
             if confirm_request and confirm_request.item_batches is not None:
@@ -10617,6 +10655,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
             await sync_purchase_order_receipt_quantities(tenant_id, po_id)
         return await self.get_purchase_receipt_by_id(tenant_id, receipt_id)
 
+    @serialize_stock_document("purchase_receipt", "receipt_id")
     async def delete_purchase_receipt(self, tenant_id: int, receipt_id: int) -> bool:
         """
         软删除采购入库单（仅草稿/待入库；未确认入库不影响库存）。
@@ -10624,10 +10663,10 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
         撤回确认后残留的入库来源应付单一并清理（有付款/发票则拒绝删除）。
         """
         deletable_statuses = ("草稿", "draft", "DRAFT", "待入库")
-        async with in_transaction():
-            receipt = await PurchaseReceipt.get_or_none(
+        async with reuse_or_begin_transaction():
+            receipt = await PurchaseReceipt.filter(
                 tenant_id=tenant_id, id=receipt_id, deleted_at__isnull=True
-            )
+            ).select_for_update().first()
             if not receipt:
                 raise NotFoundError(f"采购入库单不存在: {receipt_id}")
             if receipt.status not in deletable_statuses:
@@ -12868,6 +12907,20 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                 return_time=receipt_time,
                 updated_by=confirmed_by,
                 updated_by_name=confirmer_name,
+                **(
+                    {
+                        "review_status": "审核通过",
+                        "reviewer_id": confirmed_by,
+                        "reviewer_name": confirmer_name,
+                        "review_time": receipt_time,
+                    }
+                    if (
+                        not audit_required
+                        and str(getattr(return_obj, "review_status", None) or "").strip()
+                        not in ("审核通过", "已通过")
+                    )
+                    else {}
+                ),
             )
             await SalesReturnItem.filter(tenant_id=tenant_id, return_id=return_id).update(
                 status='已退货', 
@@ -14591,14 +14644,23 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
 
             returner_name = await self.get_user_name(confirmed_by)
 
-            await PurchaseReturn.filter(tenant_id=tenant_id, id=return_id).update(
-                status='已退货',
-                returner_id=confirmed_by,
-                returner_name=returner_name,
-                return_time=resolve_business_datetime(),
-                updated_by=confirmed_by,
-                updated_by_name=returner_name,
-            )
+            confirm_update: Dict[str, Any] = {
+                "status": "已退货",
+                "returner_id": confirmed_by,
+                "returner_name": returner_name,
+                "return_time": resolve_business_datetime(),
+                "updated_by": confirmed_by,
+                "updated_by_name": returner_name,
+            }
+            # 自动通过模式：确认退货时同步盖审核通过，避免业务已退货而审核永久停在草稿
+            review_raw = str(getattr(return_obj, "review_status", None) or "").strip()
+            if not audit_required and review_raw not in ("审核通过", "已通过"):
+                confirm_update["review_status"] = "审核通过"
+                confirm_update["reviewer_id"] = confirmed_by
+                confirm_update["reviewer_name"] = returner_name
+                confirm_update["review_time"] = resolve_business_datetime()
+
+            await PurchaseReturn.filter(tenant_id=tenant_id, id=return_id).update(**confirm_update)
             await PurchaseReturnItem.filter(tenant_id=tenant_id, return_id=return_id).update(
                 status="已退货",
             )
@@ -15147,19 +15209,25 @@ class OtherInboundService(AppBaseService[OtherInbound]):
                 await OtherInbound.get(tenant_id=tenant_id, id=inbound_id)
             )
 
+    @serialize_stock_document("other_inbound", "inbound_id")
     async def delete_other_inbound(self, tenant_id: int, inbound_id: int) -> bool:
         """删除其他入库单"""
-        inbound = await OtherInbound.get_or_none(tenant_id=tenant_id, id=inbound_id)
-        if not inbound:
-            raise NotFoundError(f"其他入库单不存在: {inbound_id}")
-        if inbound.status not in ("待入库", "已取消"):
-            raise BusinessLogicError("只能删除待入库或已取消状态的其他入库单")
+        async with reuse_or_begin_transaction():
+            inbound = await OtherInbound.filter(
+                tenant_id=tenant_id, id=inbound_id
+            ).select_for_update().first()
+            if not inbound:
+                raise NotFoundError(f"其他入库单不存在: {inbound_id}")
+            if inbound.deleted_at is not None:
+                raise NotFoundError(f"其他入库单不存在: {inbound_id}")
+            if inbound.status not in ("待入库", "已取消"):
+                raise BusinessLogicError("只能删除待入库或已取消状态的其他入库单")
 
-        await OtherInbound.filter(tenant_id=tenant_id, id=inbound_id).update(
-            is_active=False,
-            deleted_at=resolve_business_datetime()
-        )
-        return True
+            await OtherInbound.filter(tenant_id=tenant_id, id=inbound_id).update(
+                is_active=False,
+                deleted_at=resolve_business_datetime()
+            )
+            return True
 
     async def repair_deleted_other_inbound_inventory(
         self,

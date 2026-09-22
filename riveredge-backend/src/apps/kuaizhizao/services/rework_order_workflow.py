@@ -6,6 +6,7 @@ import uuid
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 
+from tortoise.exceptions import IntegrityError
 from tortoise.transactions import in_transaction
 
 from core.utils.timezone_utils import resolve_business_datetime
@@ -305,6 +306,17 @@ async def advance_next_operation(
     if not op:
         raise ValidationError("下一道工序不属于原工单或不存在")
 
+    already_on_route = next(
+        (
+            l
+            for l in ctx["links"]
+            if int(l.work_order_operation_id) == int(request.next_work_order_operation_id)
+        ),
+        None,
+    )
+    if already_on_route:
+        raise BusinessLogicError("该工序已在返工路线中，请选择其他工序")
+
     current_link = ctx["current_link"]
     input_qty = _dec(request.input_quantity) if request.input_quantity is not None else _dec(
         current_link.qualified_quantity if current_link else rework_order.quantity
@@ -314,19 +326,22 @@ async def advance_next_operation(
 
     async with in_transaction():
         max_seq = max((l.sequence for l in ctx["links"]), default=0)
-        new_link = await ReworkOrderOperation.create(
-            tenant_id=tenant_id,
-            uuid=str(uuid.uuid4()),
-            rework_order_id=rework_order.id,
-            work_order_operation_id=request.next_work_order_operation_id,
-            sequence=max_seq + 1,
-            role=OPERATION_ROLE_DYNAMIC,
-            status=OPERATION_STATUS_PENDING,
-            decision_reason=request.decision_reason,
-            decided_by=actor_id,
-            decided_by_name=actor_name,
-            decided_at=resolve_business_datetime(),
-        )
+        try:
+            new_link = await ReworkOrderOperation.create(
+                tenant_id=tenant_id,
+                uuid=str(uuid.uuid4()),
+                rework_order_id=rework_order.id,
+                work_order_operation_id=request.next_work_order_operation_id,
+                sequence=max_seq + 1,
+                role=OPERATION_ROLE_DYNAMIC,
+                status=OPERATION_STATUS_PENDING,
+                decision_reason=request.decision_reason,
+                decided_by=actor_id,
+                decided_by_name=actor_name,
+                decided_at=resolve_business_datetime(),
+            )
+        except IntegrityError as exc:
+            raise BusinessLogicError("该工序已在返工路线中，请选择其他工序") from exc
         await activate_operation_link(
             tenant_id,
             rework_order,

@@ -83,15 +83,22 @@ async def dispatch_work_order_score_recalc(
     scenarios: Optional[List[str]] = None,
     include_kitting: bool = True,
 ) -> None:
-    """事件驱动：单工单打分重算（失败不阻断主流程）。"""
+    """事件驱动：单工单打分重算（失败不阻断主流程）。
+
+    幂等键：`{work_order_id}:score_recalc`（写入 event.id / data.idempotency_key），
+    便于 Taskiq / 处理器去重，避免短窗双投部分成功。
+    """
+    idem = f"{int(work_order_id)}:score_recalc"
     try:
         await dispatch_event(
             TaskEvent(
                 name="work-order/score-recalc-one",
+                id=idem,
                 data={
                     "work_order_id": work_order_id,
                     "scenarios": scenarios,
                     "include_kitting": include_kitting,
+                    "idempotency_key": idem,
                 },
             )
         )

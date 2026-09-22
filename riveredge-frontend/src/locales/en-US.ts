@@ -4641,6 +4641,8 @@ export default {
   'app.kuaizhizao.reworkOrder.colVerificationRequired': 'Re-inspection required',
   'app.kuaizhizao.reworkOrder.releaseSuccess': 'Released successfully',
   'app.kuaizhizao.reworkOrder.advanceNextSuccess': 'Next operation added',
+  'app.kuaizhizao.reworkOrder.advanceNextNoAvailable':
+    'All work-order operations are already on the rework route; request completion or check the route',
   'app.kuaizhizao.reworkOrder.requestCompleteSuccess': 'Repair completion requested',
   'app.kuaizhizao.reworkOrder.qualityReleaseSuccess': 'Quality release completed',
   'app.kuaizhizao.reworkOrder.closeSuccess': 'Closed successfully',
@@ -6771,6 +6773,8 @@ export default {
   'app.kuaizhizao.salesOrder.deleteConfirm': 'Are you sure to delete {{count}} selected sales order(s)? This action cannot be undone.',
   'app.kuaizhizao.salesOrder.deleteSuccess': 'Successfully deleted {{count}} sales order(s)',
   'app.kuaizhizao.salesOrder.deletePartial': 'Delete completed: {{success}} succeeded, {{failed}} failed',
+  'app.kuaizhizao.salesOrder.deletePartialWithReason':
+    'Delete completed: {{success}} succeeded, {{failed}} failed ({{reason}})',
   'app.kuaizhizao.salesOrder.syncSuccess': 'Synced {{count}} sales order(s)',
   'app.kuaizhizao.salesOrder.importSuccess': 'Import completed! Successfully imported {{count}} sales order(s)',
   'app.kuaizhizao.salesOrder.detailFailed': 'Failed to get sales order detail',
@@ -25784,6 +25788,8 @@ export default {
   'app.kuaizhizao.salesOrder.orderCodeRequired': 'Enter order code',
   'app.kuaizhizao.salesOrder.orderDateRequired': 'Select order date',
   'app.kuaizhizao.salesOrder.deliveryDateRequired': 'Select delivery date',
+  'app.kuaizhizao.salesOrder.deliveryDateBeforeOrderDate':
+    'Delivery date cannot be earlier than order date',
   'app.kuaizhizao.salesOrder.selectCustomer': 'Select customer',
   'app.kuaizhizao.salesOrder.selectCustomerRequired': 'Select customer',
   'app.kuaizhizao.salesOrder.contactPlaceholder': 'Enter contact',
@@ -25794,6 +25800,8 @@ export default {
   'app.kuaizhizao.salesOrder.selectPaymentTerms': 'Select payment terms',
   'app.kuaizhizao.salesOrder.selectMaterial': 'Select product',
   'app.kuaizhizao.salesOrder.quantityMinHint': '>0',
+  'app.kuaizhizao.salesOrder.quantityOrPriceTooLarge':
+    'Quantity or unit price is too large; reduce it before saving',
   'app.kuaizhizao.salesOrder.feeDetailsFormLabel': 'Fee details',
   'app.kuaizhizao.salesOrder.attachments': 'Attachments',
   'app.kuaizhizao.salesOrder.notesPlaceholder': 'Enter notes',

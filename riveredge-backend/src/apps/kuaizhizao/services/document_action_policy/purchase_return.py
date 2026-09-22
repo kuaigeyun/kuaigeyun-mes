@@ -129,17 +129,19 @@ def derive_purchase_return_capabilities(
 
     submit_allowed = False
     submit_reason = "purchase_return.submit.not_draft"
-    if _is_cancelled(status) or _is_returned(status):
-        submit_reason = "purchase_return.submit.not_draft"
-    elif not _is_editable_business_status(status):
+    if _is_cancelled(status):
         submit_reason = "purchase_return.submit.not_draft"
     elif not has_items:
         submit_reason = "purchase_return.submit.no_items"
     elif _is_review_pending(review_status) or _is_review_approved(review_status):
         submit_reason = "purchase_return.submit.not_draft"
     elif _is_review_draft(review_status) or _is_review_rejected(review_status):
-        submit_allowed = True
-        submit_reason = None
+        # 待退货可提审；已退货仍草稿（自动审确认未盖章的历史单）允许补提交以解锁审核态
+        if _is_editable_business_status(status) or _is_returned(status):
+            submit_allowed = True
+            submit_reason = None
+        else:
+            submit_reason = "purchase_return.submit.not_draft"
     submit_cap = _cap(submit_allowed, submit_reason)
 
     withdraw_submit_cap = _cap(

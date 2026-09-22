@@ -70,6 +70,7 @@ class StationSopAckCheckResponse(BaseModel):
 class OperationPauseRequest(BaseModel):
     reason_code: str = Field(..., description="停机原因码")
     remarks: Optional[str] = None
+    workstation_id: Optional[int] = Field(None, description="工位ID（交接班统计归属）")
 
 
 class OperationCompleteRequest(BaseModel):

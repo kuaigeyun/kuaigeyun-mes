@@ -30,18 +30,23 @@ def material_consumed_against_incoming(
     qualified: Decimal,
     inspection_qualified: Decimal = Decimal("0"),
     inspection_unqualified: Decimal = Decimal("0"),
+    scrap_qty: Decimal = Decimal("0"),
 ) -> Decimal:
     """本道已占用的在制数量。
 
-    首道按合格数扣计划在制，本次可报仍由计划完成数封顶。
-    后道合格与不良都占用上道转入：上道合格 81、本道 76 合格 + 5 不良时剩余为 0。
-    方案质检已出结果时，检验不合格不占转入，允许补报。
+    首道按合格数扣计划在制，本次可报仍由计划完成数封顶；不合格默认不占，
+    但已报废数量永久占用（否则报废后物料剩余不降）。
+    后道合格与不良都占用上道转入：上道合格 81、本道 76 合格 + 5 不良时剩余为 0；
+    报废为不合格处置，completed 已含不良，不再重复扣。
+    方案质检已出结果时，检验不合格不占转入、允许补报；已报废则重新占用。
     """
+    scrap = scrap_qty if scrap_qty > 0 else Decimal("0")
     if inspection_mode == "plan" and inspection_qualified + inspection_unqualified > 0:
-        consumed = completed - inspection_unqualified
+        consumed = completed - inspection_unqualified + scrap
         return consumed if consumed > 0 else Decimal("0")
     if is_first_operation:
-        return qualified if qualified > 0 else Decimal("0")
+        base = qualified if qualified > 0 else Decimal("0")
+        return base + scrap
     return completed if completed > 0 else Decimal("0")
 
 
