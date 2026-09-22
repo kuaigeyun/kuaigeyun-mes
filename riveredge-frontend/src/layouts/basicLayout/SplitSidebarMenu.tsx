@@ -14,6 +14,8 @@ import { buildSplitSecondaryMenuItems } from './splitSidebarMenuItems';
 export type SplitSidebarMenuProps = {
   roots: MenuDataItem[];
   currentPath: string;
+  /** location.search，用于匹配带 query 的菜单 path */
+  currentSearch?: string;
   collapsed: boolean;
   selectedKeys: string[];
   openKeys: string[];
@@ -129,6 +131,7 @@ const SplitSecondaryMenu = memo(function SplitSecondaryMenu({
 const SplitSidebarMenu: React.FC<SplitSidebarMenuProps> = ({
   roots,
   currentPath,
+  currentSearch = '',
   collapsed,
   selectedKeys,
   openKeys,
@@ -137,11 +140,13 @@ const SplitSidebarMenu: React.FC<SplitSidebarMenuProps> = ({
   menuItemRender,
   onNavigate,
 }) => {
-  const [activeRootKey, setActiveRootKey] = useState(() => findActiveRootKey(roots, currentPath));
+  const [activeRootKey, setActiveRootKey] = useState(() =>
+    findActiveRootKey(roots, currentPath, currentSearch),
+  );
 
   useEffect(() => {
-    setActiveRootKey(findActiveRootKey(roots, currentPath));
-  }, [currentPath, roots]);
+    setActiveRootKey(findActiveRootKey(roots, currentPath, currentSearch));
+  }, [currentPath, currentSearch, roots]);
 
   const activeRoot = useMemo(
     () => roots.find((item) => menuItemKey(item) === activeRootKey) ?? roots[0],

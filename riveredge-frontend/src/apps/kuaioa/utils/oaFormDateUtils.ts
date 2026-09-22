@@ -17,8 +17,20 @@ export function mapOaRecordToFormValues(
   const values: Record<string, unknown> = { ...record };
   for (const field of fields) {
     const raw = record[field.name];
-    if (field.type === 'date' || field.type === 'datetime') {
-      values[field.name] = raw ? dayjs(String(raw)) : undefined;
+    if (
+      field.type === 'date' ||
+      field.type === 'datetime' ||
+      field.type === 'month' ||
+      field.type === 'year'
+    ) {
+      if (raw == null || raw === '') {
+        values[field.name] = undefined;
+      } else if (field.type === 'year') {
+        const y = String(raw).trim();
+        values[field.name] = dayjs(y.length === 4 ? `${y}-01-01` : y);
+      } else {
+        values[field.name] = dayjs(String(raw));
+      }
     }
   }
   return values;
@@ -44,13 +56,25 @@ export function mapOaFormValuesToPayload(
   const payload: Record<string, unknown> = { ...values };
   for (const field of fields) {
     const raw = values[field.name];
-    if (field.type === 'date' || field.type === 'datetime') {
+    if (
+      field.type === 'date' ||
+      field.type === 'datetime' ||
+      field.type === 'month' ||
+      field.type === 'year'
+    ) {
       if (raw == null || raw === '') {
         payload[field.name] = null;
       } else if (dayjs.isDayjs(raw)) {
-        payload[field.name] = (raw as Dayjs).format(
-          field.type === 'date' ? 'YYYY-MM-DD' : 'YYYY-MM-DD HH:mm:ss',
-        );
+        const format =
+          field.type === 'year'
+            ? 'YYYY'
+            : field.type === 'month'
+              ? 'YYYY-MM'
+              : field.type === 'date'
+                ? 'YYYY-MM-DD'
+                : 'YYYY-MM-DD HH:mm:ss';
+        const formatted = (raw as Dayjs).format(format);
+        payload[field.name] = field.type === 'year' ? Number(formatted) : formatted;
       }
       continue;
     }

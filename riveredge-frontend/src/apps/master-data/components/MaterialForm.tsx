@@ -20,7 +20,7 @@ import { UniTableStackedPrimaryCell } from '../../../components/uni-table/stacke
 import { useCustomFields } from '../../../hooks/useCustomFields';
 import { CustomFieldsFormSection } from '../../../components/custom-fields';
 import { MaterialDedupCreateGuard } from './MaterialDedupAssistant';
-import { FormModalTemplate, DocumentFormPageLayout, DocumentFormPageHeaderActions, DetailDrawerSection } from '../../../components/layout-templates';
+import { FormModalTemplate, DocumentFormPageLayout, DocumentFormPageHeaderActions, DetailDrawerSection, useStackedOverlayZIndex } from '../../../components/layout-templates';
 import {
   MODAL_CONFIG,
   MODAL_NESTED_ABOVE_PARENT_OFFSET,
@@ -216,7 +216,8 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
-  const { token } = theme.useToken();
+  const formModalZIndex = useStackedOverlayZIndex();
+  const nestedQuickCreateZIndex = formModalZIndex + MODAL_NESTED_ABOVE_PARENT_OFFSET;
   const formRef = useRef<ProFormInstance>();
   const [localMaterialGroups, setLocalMaterialGroups] = useState<MaterialGroup[]>(materialGroups);
   const [groupFormModalOpen, setGroupFormModalOpen] = useState(false);
@@ -1433,6 +1434,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
                   variantManaged={variantManaged}
                   onVariantManagedChange={handleVariantManagedChange}
                   onQuickAddMaterialGroup={() => setGroupFormModalOpen(true)}
+                  nestedModalZIndex={nestedQuickCreateZIndex}
                 />
 
                 <MaterialSourceTab
@@ -1469,6 +1471,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
                   suspendedModalReturnPath={pageSuspendPath}
                   customFields={[]}
                   customFieldValues={{}}
+                  nestedModalZIndex={nestedQuickCreateZIndex}
                 />
               </>
             ),
@@ -1720,6 +1723,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
           isEdit={isEdit}
           loading={loading}
           width={MODAL_CONFIG.LARGE_WIDTH}
+          zIndex={formModalZIndex}
           formRef={formRef}
           modalRender={(modal) => (
             <div data-smart-suggestion-anchor="material-form">{modal}</div>
@@ -1738,7 +1742,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         onClose={() => setGroupFormModalOpen(false)}
         onSuccess={handleMaterialGroupQuickCreateSuccess}
         materialGroups={localMaterialGroups}
-        zIndex={token.zIndexPopupBase + MODAL_NESTED_ABOVE_PARENT_OFFSET}
+        zIndex={nestedQuickCreateZIndex}
       />
       ) : null}
       {routeFormModalOpen ? (
@@ -1747,7 +1751,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         onClose={() => setRouteFormModalOpen(false)}
         editUuid={null}
         onSuccess={handleProcessRouteQuickCreateSuccess}
-        zIndex={token.zIndexPopupBase + MODAL_NESTED_ABOVE_PARENT_OFFSET}
+        zIndex={nestedQuickCreateZIndex}
       />
       ) : null}
       {supplierFormModalOpen ? (
@@ -1756,7 +1760,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         onClose={() => setSupplierFormModalOpen(false)}
         editUuid={null}
         onSuccess={handleSupplierQuickCreateSuccess}
-        zIndex={token.zIndexPopupBase + MODAL_NESTED_ABOVE_PARENT_OFFSET}
+        zIndex={nestedQuickCreateZIndex}
       />
       ) : null}
       {operationFormModalOpen ? (
@@ -1765,7 +1769,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         onClose={() => setOperationFormModalOpen(false)}
         editUuid={null}
         onSuccess={handleOperationQuickCreateSuccess}
-        zIndex={token.zIndexPopupBase + MODAL_NESTED_ABOVE_PARENT_OFFSET}
+        zIndex={nestedQuickCreateZIndex}
       />
       ) : null}
     </>
@@ -1794,6 +1798,8 @@ interface BasicInfoTabProps {
   variantManaged?: boolean;
   onVariantManagedChange?: (checked: boolean) => void;
   onQuickAddMaterialGroup?: () => void;
+  /** 宿主物料弹窗之上的嵌套快速新建 zIndex */
+  nestedModalZIndex?: number;
 }
 
 const MaterialInspectionTab: React.FC<MaterialInspectionTabProps> = () => {
@@ -2129,6 +2135,7 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
   variantManaged,
   onVariantManagedChange,
   onQuickAddMaterialGroup,
+  nestedModalZIndex,
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -2137,7 +2144,8 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
   const [serialRules, setSerialRules] = useState<{ id: number; name: string; code: string }[]>([]);
   const [batchRuleQuickAddOpen, setBatchRuleQuickAddOpen] = useState(false);
   const [serialRuleQuickAddOpen, setSerialRuleQuickAddOpen] = useState(false);
-  const ruleQuickAddZIndex = token.zIndexPopupBase + MODAL_NESTED_ABOVE_PARENT_OFFSET;
+  const ruleQuickAddZIndex =
+    nestedModalZIndex ?? token.zIndexPopupBase + MODAL_NESTED_ABOVE_PARENT_OFFSET;
 
   const loadRules = useCallback(async () => {
     try {

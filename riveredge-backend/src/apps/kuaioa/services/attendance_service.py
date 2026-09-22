@@ -181,18 +181,22 @@ class AttendanceService:
         wb = Workbook()
         ws = wb.active
         ws.title = "考勤"
-        ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=2 + last_day)
+        ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=6 + last_day)
         ws.cell(row=1, column=1, value=f"{sheet.year_month} {sheet.workshop_name} 考勤表")
         ws.cell(row=1, column=1).font = Font(bold=True)
 
-        headers = ["序号", "姓名", "行"] + [str(d) for d in day_keys]
+        headers = ["序号", "姓名", "行"] + [str(d) for d in day_keys] + ["正班", "加班", "考勤合计", "员工签字"]
         for col, h in enumerate(headers, start=1):
             cell = ws.cell(row=2, column=col, value=h)
             cell.font = Font(bold=True)
             cell.alignment = Alignment(horizontal="center")
 
+        from openpyxl.utils import get_column_letter
+
         row_idx = 3
+        summary_col = 3 + last_day
         for seq, (eid, bucket) in enumerate(sorted(by_emp.items(), key=lambda x: str(x[1]["name"])), 1):
+            time_row = row_idx
             ws.cell(row=row_idx, column=1, value=seq)
             ws.cell(row=row_idx, column=2, value=bucket["name"])
             ws.cell(row=row_idx, column=3, value="时间")
@@ -211,6 +215,7 @@ class AttendanceService:
                     val = str(reg) if reg > 0 else ""
                 ws.cell(row=row_idx, column=3 + day_num, value=val)
             row_idx += 1
+            ot_row = row_idx
             ws.cell(row=row_idx, column=3, value="加班")
             for day_num in day_keys:
                 cell = bucket["days"].get(day_num)
@@ -224,6 +229,26 @@ class AttendanceService:
                     night = cell and cell.get("is_night")
                     ws.cell(row=row_idx, column=3 + day_num, value="☆" if night else "")
                 row_idx += 1
+            time_end = 3 + last_day
+            ws.cell(
+                row=time_row,
+                column=summary_col + 1,
+                value=f"=SUM({get_column_letter(4)}{time_row}:{get_column_letter(time_end)}{time_row})",
+            )
+            ws.cell(
+                row=time_row,
+                column=summary_col + 2,
+                value=f"=SUM({get_column_letter(4)}{ot_row}:{get_column_letter(time_end)}{ot_row})",
+            )
+            ws.cell(
+                row=time_row,
+                column=summary_col + 3,
+                value=(
+                    f"={get_column_letter(summary_col + 1)}{time_row}"
+                    f"+{get_column_letter(summary_col + 2)}{time_row}"
+                ),
+            )
+            ws.cell(row=time_row, column=summary_col + 4, value="")
 
         stream = BytesIO()
         wb.save(stream)
@@ -437,7 +462,13 @@ class AttendanceService:
     async def apply_leave_to_attendance(
         self, tenant_id: int, leave: KuaioaLeaveRequest, user_id: int
     ) -> int:
-        """请假审批通过后回写未提交考勤日格。返回更新格数。"""
+        """请假审批通过后回写未提交考勤日格。返回更新格数。
+
+        满勤日（≥标准工时）标记 leave（X）并清零工时；不足一天则保留 normal，
+        正常工时 = 标准 − 请假小时。扣款写入首个受影响日格。
+        """
+        from apps.kuaioa.services.leave_service import leave_hours_for_date
+
         if not leave.start_at or not leave.end_at:
             return 0
         start = to_site_date(leave.start_at)
@@ -461,7 +492,14 @@ class AttendanceService:
         if not emp:
             return 0
 
+        deduct_amount = None
+        if getattr(leave, "deduct_enabled", False) and leave.deduct_amount is not None:
+            deduct_amount = Decimal(str(leave.deduct_amount))
+            if deduct_amount < 0:
+                deduct_amount = None
+
         updated = 0
+        deduct_applied = False
         cur = start
         while cur <= end:
             days = await KuaioaAttendanceDay.filter(
@@ -476,10 +514,22 @@ class AttendanceService:
                 )
                 if not sheet or sheet.status == "submitted":
                     continue
-                day.mark = "leave"
-                day.regular_hours = Decimal("0")
-                day.ot_hours = Decimal("0")
+                standard = Decimal(str(sheet.standard_hours or _DEFAULT_HOURS))
+                hours = leave_hours_for_date(leave, cur, standard)
+                if hours <= 0:
+                    continue
+                if hours >= standard:
+                    day.mark = "leave"
+                    day.regular_hours = Decimal("0")
+                    day.ot_hours = Decimal("0")
+                else:
+                    day.mark = "normal"
+                    day.regular_hours = max(standard - hours, Decimal("0"))
+                    day.ot_hours = Decimal("0")
                 day.leave_request_id = int(leave.id)
+                if deduct_amount is not None and not deduct_applied:
+                    day.leave_deduct_amount = deduct_amount
+                    deduct_applied = True
                 await touch_updated(day, user_id)
                 await day.save()
                 updated += 1

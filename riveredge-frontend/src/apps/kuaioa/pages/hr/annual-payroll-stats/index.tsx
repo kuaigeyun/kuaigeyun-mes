@@ -1,11 +1,14 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { App, Button, Input, InputNumber, Space, Table, Typography } from 'antd';
+import { App, Button, DatePicker, Input, Select, Space, Table, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
+import type { Dayjs } from 'dayjs';
+import dayjs from 'dayjs';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { loadOaWorkshopNameOptions } from '../../../utils/oaWorkshopOptions';
 import { listAnnualPayrollStats } from '../../../services/payroll';
 
 type Row = Record<string, unknown>;
@@ -14,22 +17,36 @@ const AnnualPayrollStatsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const perms = useResourcePermissions('kuaioa:payroll');
-  const [year, setYear] = useState<number | null>(new Date().getFullYear());
-  const [workshop, setWorkshop] = useState('');
+  const [year, setYear] = useState<Dayjs>(() => dayjs());
+  const [workshop, setWorkshop] = useState<string | undefined>();
+  const [workshopOptions, setWorkshopOptions] = useState<Array<{ label: string; value: string }>>(
+    [],
+  );
   const [keyword, setKeyword] = useState('');
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState<Row[]>([]);
 
+  useEffect(() => {
+    void (async () => {
+      setWorkshopOptions(await loadOaWorkshopNameOptions());
+    })();
+  }, []);
+
   const load = useCallback(async () => {
-    if (!year || year < 2000 || year > 2100) {
+    if (!year?.isValid()) {
+      message.error(t('app.kuaioa.annualStats.yearInvalid'));
+      return;
+    }
+    const y = year.year();
+    if (y < 2000 || y > 2100) {
       message.error(t('app.kuaioa.annualStats.yearInvalid'));
       return;
     }
     setLoading(true);
     try {
       const res = await listAnnualPayrollStats({
-        year,
-        workshop_name: workshop.trim() || undefined,
+        year: y,
+        workshop_name: workshop || undefined,
         keyword: keyword.trim() || undefined,
       });
       setRows(res.items);
@@ -63,17 +80,34 @@ const AnnualPayrollStatsPage: React.FC = () => {
         render: money,
       });
     }
+    const insuranceCols: ColumnsType<Row> = [];
+    for (let m = 1; m <= 12; m += 1) {
+      const key = `insurance_m${String(m).padStart(2, '0')}`;
+      insuranceCols.push({
+        title: t('app.kuaioa.annualStats.monthInsurance', { month: m }),
+        dataIndex: key,
+        width: 96,
+        render: money,
+      });
+    }
     return [
       {
-        title: t('app.kuaioa.attendance.workshop'),
-        dataIndex: 'workshop_name',
-        width: 120,
+        title: t('app.kuaioa.annualStats.seq'),
+        key: 'seq',
+        width: 64,
         fixed: 'left',
+        render: (_v, _r, index) => index + 1,
       },
       {
         title: t('app.kuaioa.employee.fullName'),
         dataIndex: 'employee_name',
         width: 110,
+        fixed: 'left',
+      },
+      {
+        title: t('app.kuaioa.annualStats.unit'),
+        dataIndex: 'workshop_name',
+        width: 120,
         fixed: 'left',
       },
       ...monthCols,
@@ -90,6 +124,31 @@ const AnnualPayrollStatsPage: React.FC = () => {
         render: money,
       },
       ...livingCols,
+      {
+        title: t('app.kuaioa.annualStats.rentUtility'),
+        dataIndex: 'rent_utility',
+        width: 110,
+        render: money,
+      },
+      {
+        title: t('app.kuaioa.annualStats.livingTotal'),
+        dataIndex: 'living_total',
+        width: 120,
+        render: money,
+      },
+      ...insuranceCols,
+      {
+        title: t('app.kuaioa.annualStats.insuranceTotal'),
+        dataIndex: 'insurance_total',
+        width: 110,
+        render: money,
+      },
+      {
+        title: t('app.kuaioa.annualStats.balanceTotal'),
+        dataIndex: 'balance_total',
+        width: 110,
+        render: money,
+      },
     ];
   }, [t]);
 
@@ -98,19 +157,25 @@ const AnnualPayrollStatsPage: React.FC = () => {
       title={t('app.kuaioa.annualStats.title')}
       toolbarExtra={
         <Space wrap>
-          <InputNumber
+          <DatePicker
+            picker="year"
+            allowClear={false}
+            value={year}
+            onChange={(v) => {
+              if (v) setYear(v);
+            }}
+            style={{ width: 120 }}
             placeholder={t('app.kuaioa.welfare.year')}
-            value={year ?? undefined}
-            min={2000}
-            max={2100}
-            onChange={(v) => setYear(typeof v === 'number' ? v : null)}
-            style={{ width: 100 }}
           />
-          <Input
+          <Select
+            allowClear
+            showSearch
+            optionFilterProp="label"
             placeholder={t('app.kuaioa.attendance.workshop')}
+            options={workshopOptions}
             value={workshop}
-            onChange={(e) => setWorkshop(e.target.value)}
-            style={{ width: 140 }}
+            onChange={setWorkshop}
+            style={{ width: 160 }}
           />
           <Input
             placeholder={t('app.kuaioa.employee.fullName')}

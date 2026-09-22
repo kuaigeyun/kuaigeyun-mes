@@ -55,6 +55,8 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   /** 备件编号（台账名/码叠列身份） */
   part_no: 10,
   name_code: 10,
+  /** 轻办公员工档案编号（须先于 phone，避免电话排第一） */
+  employee_code: 10,
   calculation_no: 10,
   order_code: 10,
   quotation_code: 10,
@@ -138,6 +140,8 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   forecast_name: 10.3,
   name: 10.4,
   title: 10.4,
+  /** 轻办公员工档案姓名 */
+  full_name: 10.45,
   shortName: 10.5,
   source_code: 10.6,
   /** 报工等：工单名称/编号叠列（列上须设 key=workOrderStacked） */
@@ -876,13 +880,18 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   contact_person: 77,
   contactPerson: 77,
   contactTitle: 77.1,
+  /** 部门先于电话：员工档案等主数据更合理；联系人仍在 77 */
+  department_name: 77.15,
+  position_name: 77.18,
+  /** 员工档案：部门后用工/计薪，再电话与入职日 */
+  employment_type: 77.16,
+  pay_method: 77.17,
   phone: 77.2,
   contact_phone: 77.2,
   mobile: 77.3,
   email: 77.4,
   address: 77.5,
-  department_name: 78,
-  position_name: 78.1,
+  hire_date: 77.55,
   warehouse_name: 78.5,
   product_code: 79,
   product_name: 79.1,

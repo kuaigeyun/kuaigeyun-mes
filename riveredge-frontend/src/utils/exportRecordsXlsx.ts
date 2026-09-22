@@ -80,27 +80,37 @@ function inferColumns(records: Record<string, unknown>[]): ExportXlsxColumn[] {
 
 /**
  * 将对象数组导出为 XLSX 并触发下载。
+ * 调用约定：`downloadRecordsAsXlsx(rows, columns, fileName)`。
  */
 export async function downloadRecordsAsXlsx(
   records: Array<Record<string, unknown>>,
-  fileName: string,
-  options?: {
-    columns?: ExportXlsxColumn[];
-    sheetName?: string;
-  },
+  columnsOrFileName: ExportXlsxColumn[] | string,
+  fileNameOrOptions?: string | { columns?: ExportXlsxColumn[]; sheetName?: string },
 ): Promise<void> {
   if (!records.length) {
     throw new Error('没有可导出的数据');
   }
+  let columns: ExportXlsxColumn[];
+  let fileName: string;
+  let sheetName = '导出数据';
+  if (Array.isArray(columnsOrFileName)) {
+    columns = columnsOrFileName;
+    fileName = typeof fileNameOrOptions === 'string' ? fileNameOrOptions : 'export';
+  } else {
+    fileName = columnsOrFileName;
+    const options =
+      fileNameOrOptions && typeof fileNameOrOptions === 'object' ? fileNameOrOptions : undefined;
+    columns = options?.columns?.length ? options.columns : inferColumns(records);
+    if (options?.sheetName) sheetName = options.sheetName;
+  }
   const XLSX = await import('xlsx');
-  const columns = options?.columns?.length ? options.columns : inferColumns(records);
   const header = columns.map((c) => c.title);
   const body = records.map((record) =>
     columns.map((col) => cellValue(getByPath(record, col.key))),
   );
   const sheet = XLSX.utils.aoa_to_sheet([header, ...body]);
   const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, sheet, options?.sheetName || '导出数据');
+  XLSX.utils.book_append_sheet(workbook, sheet, sheetName);
   const safeName = fileName.endsWith('.xlsx') ? fileName : `${fileName}.xlsx`;
   XLSX.writeFile(workbook, safeName);
 }

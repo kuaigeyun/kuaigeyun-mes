@@ -36,6 +36,102 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
   {
+    id: 'kuaioa-living-advance-form-editable-r01',
+    date: '2026-09-23',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-living-advance-form-editable-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-living-advance-form-editable-r01.description',
+  },
+  {
+    id: 'kuaioa-living-advance-list-restore-r01',
+    date: '2026-09-23',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-living-advance-list-restore-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-living-advance-list-restore-r01.description',
+  },
+  {
+    id: 'kuaioa-living-advance-modal-excel-fields-r01',
+    date: '2026-09-23',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.kuaioa-living-advance-modal-excel-fields-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-living-advance-modal-excel-fields-r01.description',
+  },
+  {
+    id: 'kuaioa-living-advance-show-payout-r01',
+    date: '2026-09-23',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-living-advance-show-payout-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-living-advance-show-payout-r01.description',
+  },
+  {
+    id: 'kuaioa-hr-excel-field-align-r01',
+    date: '2026-09-23',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-hr-excel-field-align-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-hr-excel-field-align-r01.description',
+  },
+  {
+    id: 'kuaioa-payroll-fields-picker-r01',
+    date: '2026-09-23',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-payroll-fields-picker-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-payroll-fields-picker-r01.description',
+  },
+  {
+    id: 'sidebar-menu-query-path-openkeys-r01',
+    date: '2026-09-23',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sidebar-menu-query-path-openkeys-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sidebar-menu-query-path-openkeys-r01.description',
+  },
+  {
+    id: 'kuaioa-attendance-year-month-picker-r01',
+    date: '2026-09-23',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-attendance-year-month-picker-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-attendance-year-month-picker-r01.description',
+  },
+  {
+    id: 'kuaioa-employee-movements-filters-r01',
+    date: '2026-09-23',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-employee-movements-filters-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-employee-movements-filters-r01.description',
+  },
+  {
+    id: 'kuaioa-employee-list-rank-status-r01',
+    date: '2026-09-23',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-employee-list-rank-status-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-employee-list-rank-status-r01.description',
+  },
+  {
+    id: 'kuaioa-hr-gap-closure-r01',
+    date: '2026-09-22',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-hr-gap-closure-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.kuaioa-hr-gap-closure-r01.description',
+  },
+  {
+    id: 'demand-computation-push-granularity-r01',
+    date: '2026-09-22',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.demand-computation-push-granularity-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.demand-computation-push-granularity-r01.description',
+  },
+  {
     id: 'login-brute-force-guard-r01',
     date: '2026-09-22',
     type: 'security',

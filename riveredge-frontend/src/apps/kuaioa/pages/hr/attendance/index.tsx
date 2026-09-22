@@ -32,6 +32,7 @@ const AttendanceListPage: React.FC = () => {
       {
         name: 'year_month',
         labelKey: 'app.kuaioa.attendance.yearMonth',
+        type: 'month' as const,
         required: true,
         width: 110,
       },

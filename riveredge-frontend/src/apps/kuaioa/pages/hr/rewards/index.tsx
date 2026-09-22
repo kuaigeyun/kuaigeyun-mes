@@ -34,6 +34,7 @@ const RewardsPage: React.FC = () => {
       {
         name: 'year_month',
         labelKey: 'app.kuaioa.payroll.yearMonth',
+        type: 'month' as const,
         required: true,
         width: 100,
       },

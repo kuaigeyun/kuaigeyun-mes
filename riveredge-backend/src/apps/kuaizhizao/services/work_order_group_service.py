@@ -168,6 +168,7 @@ class WorkOrderGroupService(AppBaseService):
         allow_draft: bool,
         failed_validation_material_ids: Set[int],
         already_pushed_keys: Set[Tuple[Optional[int], int]],
+        selected_computation_item_ids: Optional[Set[int]] = None,
     ) -> Dict[str, List[Dict[str, Any]]]:
         """
         按 demand_item_bom_trees 生成工单组及成员工单。
@@ -202,6 +203,7 @@ class WorkOrderGroupService(AppBaseService):
                 allow_draft=allow_draft,
                 failed_validation_material_ids=failed_validation_material_ids,
                 already_pushed_keys=already_pushed_keys,
+                selected_computation_item_ids=selected_computation_item_ids,
                 dc_service=dc_service,
             )
             if group_result:
@@ -227,6 +229,7 @@ class WorkOrderGroupService(AppBaseService):
         allow_draft: bool,
         failed_validation_material_ids: Set[int],
         already_pushed_keys: Set[Tuple[Optional[int], int]],
+        selected_computation_item_ids: Optional[Set[int]] = None,
         dc_service: Any,
     ) -> Optional[Dict[str, Any]]:
         demand_item_id = int(tree["demand_item_id"])
@@ -275,6 +278,11 @@ class WorkOrderGroupService(AppBaseService):
             mid = int(node["material_id"])
             comp_item = item_by_material.get(mid)
             if not comp_item:
+                continue
+            if (
+                selected_computation_item_ids is not None
+                and int(comp_item.id) not in selected_computation_item_ids
+            ):
                 continue
 
             total_gross = float(comp_item.gross_requirement or comp_item.required_quantity or 0)

@@ -13,6 +13,17 @@ class KuaioaLeaveRequest(BaseModel):
     start_at = fields.DatetimeField(description="开始时间")
     end_at = fields.DatetimeField(description="结束时间")
     days = fields.DecimalField(max_digits=8, decimal_places=2, null=True, description="天数")
+    leave_hours = fields.DecimalField(
+        max_digits=8, decimal_places=2, null=True, description="请假小时（不足一天）"
+    )
+    deduct_enabled = fields.BooleanField(default=False, description="是否扣钱")
+    deduct_amount = fields.DecimalField(
+        max_digits=12, decimal_places=2, null=True, description="扣款金额"
+    )
+    workshop_name = fields.CharField(max_length=100, null=True, description="车间")
+    production_line_name = fields.CharField(max_length=100, null=True, description="产线")
+    employee_id = fields.IntField(null=True, description="档案员工ID")
+    employee_name = fields.CharField(max_length=100, null=True, description="档案员工姓名")
     destination = fields.CharField(max_length=200, null=True, description="出差目的地")
     reason = fields.TextField(null=True, description="事由")
     status = fields.CharField(max_length=30, default="draft", description="状态")

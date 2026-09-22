@@ -156,6 +156,7 @@ export function mapPartnerReferenceDisplayItem(item: ReferenceDisplayItem): {
   salesmanId?: number;
   salesmanName?: string;
   paymentTermsDays?: number;
+  settlementMethodCode?: string;
   buyerId?: number;
   buyerName?: string;
 } {
@@ -175,6 +176,7 @@ export function mapPartnerReferenceDisplayItem(item: ReferenceDisplayItem): {
     salesmanId: extraNum(extra, 'salesman_id', 'salesmanId'),
     salesmanName: extraStr(extra, 'salesman_name', 'salesmanName'),
     paymentTermsDays: extraNum(extra, 'payment_terms_days', 'paymentTermsDays'),
+    settlementMethodCode: extraStr(extra, 'settlement_method_code', 'settlementMethodCode'),
     buyerId: extraNum(extra, 'buyer_id', 'buyerId'),
     buyerName: extraStr(extra, 'buyer_name', 'buyerName'),
   };

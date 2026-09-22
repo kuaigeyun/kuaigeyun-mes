@@ -10,12 +10,21 @@ class LivingAdvanceCreate(BaseModel):
     year_month: str = Field(..., min_length=7, max_length=7)
     employee_id: int
     amount: Decimal
+    # 选人后从档案带出，允许本单修改；银行/卡号回写档案
+    workshop_name: Optional[str] = Field(None, max_length=100)
+    base_living: Optional[Decimal] = None
+    bank_name: Optional[str] = Field(None, max_length=100)
+    bank_account: Optional[str] = Field(None, max_length=50)
     reason: Optional[str] = Field(None, max_length=200)
     notes: Optional[str] = None
 
 
 class LivingAdvanceUpdate(BaseModel):
     amount: Optional[Decimal] = None
+    workshop_name: Optional[str] = Field(None, max_length=100)
+    base_living: Optional[Decimal] = None
+    bank_name: Optional[str] = Field(None, max_length=100)
+    bank_account: Optional[str] = Field(None, max_length=50)
     reason: Optional[str] = Field(None, max_length=200)
     status: Optional[str] = Field(None, max_length=20)
     notes: Optional[str] = None
@@ -62,6 +71,7 @@ class PayrollSettlementLineUpdate(BaseModel):
     post_allowance: Optional[Decimal] = None
     allowance: Optional[Decimal] = None
     living_deduct: Optional[Decimal] = None
+    rent_utility_deduct: Optional[Decimal] = None
     insurance_deduct: Optional[Decimal] = None
     leave_deduct: Optional[Decimal] = None
     compensation: Optional[Decimal] = None

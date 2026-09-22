@@ -1791,6 +1791,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         // 稳定 key：避免无 dataIndex 时用列下标，columnsState / sticky 右固定错位
         const operationColumnKey = String(rest.key ?? 'option')
         // 宽度真源是实测内容宽；页面自写的 pageWidth 已在此丢弃（禁止第二真源）
+        // 首帧预算只用默认槽位：页面 minPrimaryVisible 只管直出/折叠，勿灌进预算否则多直出页留白
         // 空表无动作条：用紧凑表头宽，禁止三槽最坏预算把右固定组撑出大块留白
         const resolvedWidth =
           measuredOperationWidths[operationColumnKey] ??
@@ -1798,7 +1799,6 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
             ? resolveUniTableEmptyOperationColumnWidth()
             : resolveUniTableOperationColumnWidth({
                 fixed: rest.fixed,
-                uniActionRenderOptions,
               }))
         return {
           ...rest,

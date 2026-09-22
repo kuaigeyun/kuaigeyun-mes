@@ -125,6 +125,9 @@ class KuaioaPayrollSettlementLine(BaseModel):
     living_deduct = fields.DecimalField(
         max_digits=12, decimal_places=2, default=0, description="生活费专项（标准+预支）"
     )
+    rent_utility_deduct = fields.DecimalField(
+        max_digits=12, decimal_places=2, default=0, description="房租电费扣除"
+    )
     insurance_deduct = fields.DecimalField(max_digits=12, decimal_places=2, default=0)
     leave_deduct = fields.DecimalField(max_digits=12, decimal_places=2, default=0)
     compensation = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="赔款")

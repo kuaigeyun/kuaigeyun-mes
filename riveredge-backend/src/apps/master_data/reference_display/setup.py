@@ -72,6 +72,7 @@ def _customer_display_row(entity: Any) -> dict[str, Any]:
         salesman_id=getattr(entity, "salesman_id", None),
         salesman_name=getattr(entity, "salesman_name", None),
         payment_terms_days=getattr(entity, "payment_terms_days", None),
+        settlement_method_code=getattr(entity, "settlement_method_code", None),
     )
 
 

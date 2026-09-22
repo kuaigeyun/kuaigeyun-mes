@@ -28,6 +28,14 @@ export function buildOaAssetStatusEnum(t: TFunction) {
   };
 }
 
+/** 员工档案在职/离职 */
+export function buildOaEmployeeStatusEnum(t: TFunction) {
+  return {
+    active: { text: t('app.kuaioa.employee.status.active'), status: 'Success' as const },
+    left: { text: t('app.kuaioa.employee.status.left'), status: 'Default' as const },
+  };
+}
+
 export function buildLicenseTypeOptions(t: TFunction) {
   return [
     { label: t('app.kuaioa.license.type.vehicle_group_insurance'), value: 'vehicle_group_insurance' },

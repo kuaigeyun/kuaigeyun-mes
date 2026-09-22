@@ -95,6 +95,19 @@ const PayrollSettlementDetailPage: React.FC = () => {
 
   const columns: ColumnsType<LineRow> = [
     {
+      title: t('app.kuaioa.payroll.seq'),
+      key: 'seq',
+      fixed: 'left',
+      width: 64,
+      render: (_v, _row, index) => index + 1,
+    },
+    {
+      title: t('app.kuaioa.payroll.lineSeq'),
+      key: 'line_seq',
+      width: 72,
+      render: (_v, _row, index) => index + 1,
+    },
+    {
       title: t('app.kuaioa.employee.fullName'),
       dataIndex: 'employee_name',
       fixed: 'left',
@@ -102,21 +115,28 @@ const PayrollSettlementDetailPage: React.FC = () => {
     },
     moneyCol('basic_wage', 'app.kuaioa.payroll.basicWage'),
     moneyCol('post_wage', 'app.kuaioa.employee.postWage'),
-    moneyCol('time_wage', 'app.kuaioa.payroll.timeWage'),
     moneyCol('piece_wage', 'app.kuaioa.payroll.pieceWage'),
     moneyCol('night_subsidy', 'app.kuaioa.payroll.nightSubsidy'),
     moneyCol('heat_subsidy', 'app.kuaioa.payroll.heatSubsidy'),
     moneyCol('post_allowance', 'app.kuaioa.payroll.postAllowance'),
-    moneyCol('allowance', 'app.kuaioa.payroll.allowance'),
     moneyCol('earning_subtotal', 'app.kuaioa.payroll.earningSubtotal', false),
     moneyCol('living_deduct', 'app.kuaioa.payroll.livingDeduct'),
     moneyCol('insurance_deduct', 'app.kuaioa.payroll.insuranceDeduct'),
     moneyCol('leave_deduct', 'app.kuaioa.payroll.leaveDeduct'),
-    moneyCol('compensation', 'app.kuaioa.payroll.compensation'),
     moneyCol('tax_deduct', 'app.kuaioa.payroll.taxDeduct'),
     moneyCol('deduct_subtotal', 'app.kuaioa.payroll.deductSubtotal', false),
     moneyCol('card_pay', 'app.kuaioa.payroll.cardPay'),
     moneyCol('balance', 'app.kuaioa.payroll.balance', false),
+    {
+      title: t('app.kuaioa.payroll.sign'),
+      key: 'sign',
+      width: 80,
+      render: () => '',
+    },
+    moneyCol('time_wage', 'app.kuaioa.payroll.timeWage'),
+    moneyCol('allowance', 'app.kuaioa.payroll.allowance'),
+    moneyCol('rent_utility_deduct', 'app.kuaioa.payroll.rentUtilityDeduct'),
+    moneyCol('compensation', 'app.kuaioa.payroll.compensation'),
   ];
 
   const handleImportFile = async (file: File) => {
@@ -205,7 +225,7 @@ const PayrollSettlementDetailPage: React.FC = () => {
               {t('app.kuaioa.payroll.reopen')}
             </Button>
           ) : null}
-          <Button onClick={() => window.print()}>{t('common.print')}</Button>
+          <Button onClick={() => window.print()}>{t('app.kuaioa.payroll.exportPdf')}</Button>
         </Space>
       }
     >

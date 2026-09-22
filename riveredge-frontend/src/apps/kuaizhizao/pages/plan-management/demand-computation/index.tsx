@@ -875,6 +875,7 @@ const DemandComputationPage: React.FC = () => {
   const [pushPanelSubmitting, setPushPanelSubmitting] = useState(false)
   const [pushPreviewLoadError, setPushPreviewLoadError] = useState<string | null>(null)
   const [pushMode, setPushMode] = useState<'draft' | 'confirm'>('draft')
+  const [workOrderGranularity, setWorkOrderGranularity] = useState<'grouped' | 'individual'>('grouped')
   const [pushSelectedItemIds, setPushSelectedItemIds] = useState<number[]>([])
   const [pushPreviewFilters, setPushPreviewFilters] = useState<DemandPushPreviewFilters>(
     EMPTY_DEMAND_PUSH_PREVIEW_FILTERS,
@@ -888,6 +889,17 @@ const DemandComputationPage: React.FC = () => {
     () => (pushPreviewData ? buildDemandPushPreviewSummary(pushPreviewData, t) : null),
     [pushPreviewData, t],
   )
+  const pushPanelConfirmHint = useMemo(() => {
+    const segments: string[] = []
+    if (pushConfig.production === 'work_order') {
+      segments.push(t('app.kuaizhizao.demandComputation.pushOutsourceHint'))
+    }
+    const tip = pushPreviewData?.tip?.trim()
+    if (tip) {
+      segments.push(tip)
+    }
+    return segments.length > 0 ? segments.join('') : null
+  }, [pushConfig.production, pushPreviewData?.tip, t])
   const sourceSalesOrderAttachmentsPreview = pushPreviewData?.source_sales_order_attachments
   const showIncludeSalesOrderAttachmentsOption = Boolean(
     pushConfig.purchase && sourceSalesOrderAttachmentsPreview?.available,
@@ -925,6 +937,9 @@ const DemandComputationPage: React.FC = () => {
           purchase: preset?.purchase
             ?? (preset?.production ? undefined : opts.purchase_choices.length > 0 ? opts.default_purchase : undefined),
         })
+        setWorkOrderGranularity(
+          opts.default_work_order_granularity === 'individual' ? 'individual' : 'grouped',
+        )
       } catch (e) {
         messageApi.error(t('app.kuaizhizao.demandComputation.loadPushConfigFailed'))
       } finally {
@@ -942,10 +957,12 @@ const DemandComputationPage: React.FC = () => {
       purchase?: 'requisition' | 'purchase_order'
       generate_mode?: 'work_order_only'
       push_mode?: 'draft' | 'confirm'
+      work_order_granularity?: 'grouped' | 'individual'
     } = {}
     if (pushConfig.production) {
       params.production = pushConfig.production
       params.generate_mode = 'work_order_only'
+      params.work_order_granularity = workOrderGranularity
     }
     if (pushConfig.purchase) params.purchase = pushConfig.purchase
     if (pushConfig.purchase === 'purchase_order') params.push_mode = pushMode
@@ -968,7 +985,15 @@ const DemandComputationPage: React.FC = () => {
         setPushPreviewData(null)
         setPushPreviewLoadError(e?.response?.data?.detail || e?.message || t('app.kuaizhizao.demandComputation.pushPreviewFailed'))
       })
-  }, [pushPanelRecord?.id, pushPanelLoading, pushConfig.production, pushConfig.purchase, pushMode, t])
+  }, [
+    pushPanelRecord?.id,
+    pushPanelLoading,
+    pushConfig.production,
+    pushConfig.purchase,
+    pushMode,
+    workOrderGranularity,
+    t,
+  ])
 
   const handleSourcePullPreviewSuccess = useCallback(
     (res: { computation_code?: string } | null | undefined, kind: SourcePullPreviewKind) => {
@@ -2129,6 +2154,9 @@ const DemandComputationPage: React.FC = () => {
           purchase_order_item_ids: purchaseOrderItemIds,
           include_sales_order_attachments:
             showIncludeSalesOrderAttachmentsOption && includeSalesOrderAttachments,
+          work_order_granularity: pushConfig.production === 'work_order'
+            ? workOrderGranularity
+            : undefined,
         })
         if (hasProduction && hasPurchase) {
           messageApi.success(t('app.kuaizhizao.demandComputation.pushSuccess'))
@@ -3146,6 +3174,7 @@ const DemandComputationPage: React.FC = () => {
           setPushPreviewData(null)
           setPushPreviewLoadError(null)
           setPushMode('draft')
+          setWorkOrderGranularity('grouped')
           setPushConfig({})
           setPushSelectedItemIds([])
           setPushPreviewFilters(EMPTY_DEMAND_PUSH_PREVIEW_FILTERS)
@@ -3171,48 +3200,85 @@ const DemandComputationPage: React.FC = () => {
             ) : null}
             {pushOptions && (
               <>
-                {pushOptions.production_choices.length > 0 && (
-                  <div>
-                    <div style={{ fontWeight: 'bold', marginBottom: 8 }}>{t('app.kuaizhizao.demandComputation.productionPath')}</div>
-                    <div style={{ color: '#666' }}>{t('app.kuaizhizao.demandComputation.productionPathDesc')}</div>
-                  </div>
-                )}
-                <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 24 }}>
-                  {pushOptions.purchase_choices.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {pushOptions.production_choices.length > 0 ? (
+                    <div>
+                      <div style={{ fontWeight: 'bold', marginBottom: 8 }}>
+                        {t('app.kuaizhizao.demandComputation.productionPath')}
+                      </div>
+                      <div style={{ color: '#666' }}>
+                        {t('app.kuaizhizao.demandComputation.productionPathDesc')}
+                      </div>
+                    </div>
+                  ) : null}
+                  <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 24 }}>
+                    {pushOptions.production_choices.length > 0 ? (
+                      <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+                        <span style={{ fontWeight: 'bold' }}>
+                          {t('app.kuaizhizao.demandComputation.workOrderGranularityLabel')}
+                        </span>
+                        <ThemedSegmented
+                          size="small"
+                          value={workOrderGranularity}
+                          onChange={(val) =>
+                            setWorkOrderGranularity(val as 'grouped' | 'individual')
+                          }
+                          options={[
+                            {
+                              label: t('app.kuaizhizao.demandComputation.workOrderGranularityGrouped'),
+                              value: 'grouped',
+                              disabled: !pushOptions.has_demand_item_bom_trees,
+                            },
+                            {
+                              label: t('app.kuaizhizao.demandComputation.workOrderGranularityIndividual'),
+                              value: 'individual',
+                            },
+                          ]}
+                        />
+                      </div>
+                    ) : null}
                     <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-                      <span style={{ fontWeight: 'bold' }}>{t('app.kuaizhizao.demandComputation.purchasePath')}</span>
+                      <span style={{ fontWeight: 'bold' }}>
+                        {t('app.kuaizhizao.demandComputation.pushModeLabel')}
+                      </span>
                       <ThemedSegmented
                         size="small"
-                        value={pushConfig.purchase ?? pushOptions.default_purchase ?? 'requisition'}
-                        onChange={(val) =>
-                          setPushConfig((c) => ({
-                            ...c,
-                            purchase: val as 'requisition' | 'purchase_order',
-                          }))
-                        }
+                        value={pushMode}
+                        onChange={(val) => setPushMode(val as 'draft' | 'confirm')}
                         options={[
-                          { label: t('app.kuaizhizao.demandComputation.purchaseRequisition'), value: 'requisition' },
-                          { label: t('app.kuaizhizao.demandComputation.purchaseOrderOnly'), value: 'purchase_order' },
+                          { label: t('app.kuaizhizao.salesOrder.pushModeDraft'), value: 'draft' },
+                          { label: t('app.kuaizhizao.salesOrder.pushModeConfirm'), value: 'confirm' },
                         ]}
                       />
                     </div>
-                  )}
-                  <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-                    <span>{t('app.kuaizhizao.salesOrder.pushModeLabel')}</span>
-                    <ThemedSegmented
-                      size="small"
-                      value={pushMode}
-                      onChange={(val) => setPushMode(val as 'draft' | 'confirm')}
-                      options={[
-                        { label: t('app.kuaizhizao.salesOrder.pushModeDraft'), value: 'draft' },
-                        { label: t('app.kuaizhizao.salesOrder.pushModeConfirm'), value: 'confirm' },
-                      ]}
-                    />
+                    {pushOptions.purchase_choices.length > 0 ? (
+                      <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+                        <span style={{ fontWeight: 'bold' }}>
+                          {t('app.kuaizhizao.demandComputation.purchasePath')}
+                        </span>
+                        <ThemedSegmented
+                          size="small"
+                          value={pushConfig.purchase ?? pushOptions.default_purchase ?? 'requisition'}
+                          onChange={(val) =>
+                            setPushConfig((c) => ({
+                              ...c,
+                              purchase: val as 'requisition' | 'purchase_order',
+                            }))
+                          }
+                          options={[
+                            { label: t('app.kuaizhizao.demandComputation.purchaseRequisition'), value: 'requisition' },
+                            { label: t('app.kuaizhizao.demandComputation.purchaseOrderOnly'), value: 'purchase_order' },
+                          ]}
+                        />
+                      </div>
+                    ) : null}
                   </div>
+                  {pushOptions.production_choices.length > 0 && !pushOptions.has_demand_item_bom_trees ? (
+                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                      {t('app.kuaizhizao.demandComputation.workOrderGranularityGroupedHint')}
+                    </Typography.Text>
+                  ) : null}
                 </div>
-                <p style={{ fontSize: 12, color: '#666' }}>
-                  {t('app.kuaizhizao.demandComputation.pushOutsourceHint')}
-                </p>
                 {showIncludeSalesOrderAttachmentsOption && sourceSalesOrderAttachmentsPreview ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                     <Checkbox
@@ -3258,56 +3324,64 @@ const DemandComputationPage: React.FC = () => {
                 ) : null}
                 {(pushPreviewData.items?.length ?? 0) > 0 ? (
                   <>
-                    <Row gutter={[12, 8]} align="middle">
-                      <Col xs={24} sm={8}>
-                        <Input
-                          allowClear
-                          placeholder={t(
-                            'app.kuaizhizao.demandComputation.pushPreviewFilterMaterialName',
-                          )}
-                          value={pushPreviewFilters.materialName}
-                          onChange={(event) =>
-                            setPushPreviewFilters((current) => ({
-                              ...current,
-                              materialName: event.target.value,
-                            }))
-                          }
-                        />
-                      </Col>
-                      <Col xs={24} sm={8}>
-                        <Input
-                          allowClear
-                          placeholder={t(
-                            'app.kuaizhizao.demandComputation.pushPreviewFilterMaterialGroup',
-                          )}
-                          value={pushPreviewFilters.materialGroupName}
-                          onChange={(event) =>
-                            setPushPreviewFilters((current) => ({
-                              ...current,
-                              materialGroupName: event.target.value,
-                            }))
-                          }
-                        />
-                      </Col>
-                      <Col xs={24} sm={8}>
-                        <Input
-                          allowClear
-                          placeholder={t(
-                            'app.kuaizhizao.demandComputation.pushPreviewFilterMaterialSpec',
-                          )}
-                          value={pushPreviewFilters.materialSpec}
-                          onChange={(event) =>
-                            setPushPreviewFilters((current) => ({
-                              ...current,
-                              materialSpec: event.target.value,
-                            }))
-                          }
-                        />
-                      </Col>
-                    </Row>
-                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                      {t('app.kuaizhizao.demandComputation.pushPreviewFilterHint')}
-                    </Typography.Text>
+                    <div
+                      style={{
+                        border: '1px solid rgba(0, 0, 0, 0.06)',
+                        borderRadius: 6,
+                        background: '#f7f8fa',
+                        padding: '10px 12px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
+                        gap: 12,
+                      }}
+                    >
+                      <MarkerTag color="processing">
+                        {t('app.kuaizhizao.demandComputation.pushPreviewFilterTitle')}
+                      </MarkerTag>
+                      <Input
+                        allowClear
+                        style={{ flex: '1 1 160px', minWidth: 140 }}
+                        placeholder={t(
+                          'app.kuaizhizao.demandComputation.pushPreviewFilterMaterialName',
+                        )}
+                        value={pushPreviewFilters.materialName}
+                        onChange={(event) =>
+                          setPushPreviewFilters((current) => ({
+                            ...current,
+                            materialName: event.target.value,
+                          }))
+                        }
+                      />
+                      <Input
+                        allowClear
+                        style={{ flex: '1 1 160px', minWidth: 140 }}
+                        placeholder={t(
+                          'app.kuaizhizao.demandComputation.pushPreviewFilterMaterialGroup',
+                        )}
+                        value={pushPreviewFilters.materialGroupName}
+                        onChange={(event) =>
+                          setPushPreviewFilters((current) => ({
+                            ...current,
+                            materialGroupName: event.target.value,
+                          }))
+                        }
+                      />
+                      <Input
+                        allowClear
+                        style={{ flex: '1 1 160px', minWidth: 140 }}
+                        placeholder={t(
+                          'app.kuaizhizao.demandComputation.pushPreviewFilterMaterialSpec',
+                        )}
+                        value={pushPreviewFilters.materialSpec}
+                        onChange={(event) =>
+                          setPushPreviewFilters((current) => ({
+                            ...current,
+                            materialSpec: event.target.value,
+                          }))
+                        }
+                      />
+                    </div>
                     <Table
                     size="small"
                     dataSource={pushPreviewFilteredItems}
@@ -3423,8 +3497,8 @@ const DemandComputationPage: React.FC = () => {
                     }
                   />
                 )}
-                {pushPreviewData.tip ? (
-                  <p style={{ marginBottom: 0, fontSize: 12, color: '#666' }}>{pushPreviewData.tip}</p>
+                {pushPanelConfirmHint ? (
+                  <p style={{ marginBottom: 0, fontSize: 12, color: '#666' }}>{pushPanelConfirmHint}</p>
                 ) : null}
               </div>
             )}

@@ -308,7 +308,11 @@ class AnnualPayrollStatsService:
                     "workshop_name": workshop_by_sid.get(sid),
                     "year": y,
                     "wage_months": [ZERO] * 12,
+                    "deduct_months": [ZERO] * 12,
+                    "balance_months": [ZERO] * 12,
                     "living_months": [ZERO] * 12,
+                    "insurance_months": [ZERO] * 12,
+                    "rent_utility_total": ZERO,
                     "tax_total": ZERO,
                 },
             )
@@ -318,8 +322,12 @@ class AnnualPayrollStatsService:
                 bucket["employee_code"] = line.employee_code
             if not bucket.get("workshop_name"):
                 bucket["workshop_name"] = workshop_by_sid.get(sid)
-            bucket["wage_months"][month - 1] += _d(line.balance)
+            bucket["wage_months"][month - 1] += _d(line.earning_subtotal)
+            bucket["deduct_months"][month - 1] += _d(line.deduct_subtotal)
+            bucket["balance_months"][month - 1] += _d(line.balance)
             bucket["living_months"][month - 1] += _d(line.living_deduct)
+            bucket["insurance_months"][month - 1] += _d(line.insurance_deduct)
+            bucket["rent_utility_total"] += _d(getattr(line, "rent_utility_deduct", None))
             bucket["tax_total"] += _d(line.tax_deduct)
 
         emp_ids = list(buckets.keys())
@@ -345,8 +353,14 @@ class AnnualPayrollStatsService:
                 if kw not in name and kw not in code:
                     continue
             wages = b["wage_months"]
+            deducts = b["deduct_months"]
+            balances = b["balance_months"]
             livings = b["living_months"]
+            insurances = b["insurance_months"]
             annual = sum(wages, ZERO)
+            living_total = sum(livings, ZERO)
+            insurance_total = sum(insurances, ZERO)
+            balance_total = sum(balances, ZERO)
             item: dict[str, Any] = {
                 "employee_id": eid,
                 "employee_code": b.get("employee_code"),
@@ -354,12 +368,19 @@ class AnnualPayrollStatsService:
                 "workshop_name": b.get("workshop_name"),
                 "year": y,
                 "annual_wage": annual,
+                "living_total": living_total,
+                "balance_total": balance_total,
                 "tax_total": b["tax_total"],
+                "rent_utility": b["rent_utility_total"],
+                "insurance_total": insurance_total,
             }
             for i in range(12):
                 m = i + 1
                 item[f"wage_m{m:02d}"] = wages[i]
+                item[f"deduct_m{m:02d}"] = deducts[i]
+                item[f"balance_m{m:02d}"] = balances[i]
                 item[f"living_m{m:02d}"] = livings[i]
+                item[f"insurance_m{m:02d}"] = insurances[i]
             rows.append(item)
 
         rows.sort(

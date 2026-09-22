@@ -1,12 +1,14 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { App, Button, Input, Select, Space, Table, Typography } from 'antd';
+import { App, Button, DatePicker, Select, Space, Table, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
+import type { Dayjs } from 'dayjs';
+import dayjs from 'dayjs';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
-import { listEmployeeMovements } from '../../../services/employees';
+import { listEmployeeMovements, listEmployees } from '../../../services/employees';
 
 type Row = Record<string, unknown>;
 
@@ -14,9 +16,10 @@ const EmployeeMovementsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const perms = useResourcePermissions('kuaioa:employee');
-  const [yearMonth, setYearMonth] = useState('');
-  const [workshop, setWorkshop] = useState('');
+  const [yearMonth, setYearMonth] = useState<Dayjs>(() => dayjs());
+  const [workshop, setWorkshop] = useState<string | undefined>();
   const [movementType, setMovementType] = useState<string | undefined>();
+  const [workshopOptions, setWorkshopOptions] = useState<{ label: string; value: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState<Row[]>([]);
 
@@ -28,16 +31,40 @@ const EmployeeMovementsPage: React.FC = () => {
     [t],
   );
 
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await listEmployees();
+        if (cancelled) return;
+        const names = Array.from(
+          new Set(
+            res.items
+              .map((e) => String(e.workshop_name ?? '').trim())
+              .filter(Boolean),
+          ),
+        ).sort((a, b) => a.localeCompare(b, 'zh-CN'));
+        setWorkshopOptions(names.map((name) => ({ label: name, value: name })));
+      } catch {
+        if (!cancelled) setWorkshopOptions([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const load = useCallback(async () => {
-    if (!/^\d{4}-\d{2}$/.test(yearMonth.trim())) {
+    if (!yearMonth?.isValid()) {
       message.error(t('app.kuaioa.payroll.yearMonthInvalid'));
       return;
     }
+    const ym = yearMonth.format('YYYY-MM');
     setLoading(true);
     try {
       const res = await listEmployeeMovements({
-        year_month: yearMonth.trim(),
-        workshop_name: workshop.trim() || undefined,
+        year_month: ym,
+        workshop_name: workshop || undefined,
         movement_type: movementType,
       });
       setRows(res.items);
@@ -47,6 +74,10 @@ const EmployeeMovementsPage: React.FC = () => {
       setLoading(false);
     }
   }, [message, movementType, t, workshop, yearMonth]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   const exportColumns = useMemo(
     () => [
@@ -85,20 +116,27 @@ const EmployeeMovementsPage: React.FC = () => {
 
   return (
     <ListPageTemplate
-      title={t('app.kuaioa.movement.title')}
       toolbarExtra={
         <Space wrap>
-          <Input
-            placeholder={t('app.kuaioa.payroll.yearMonth')}
+          <DatePicker
+            picker="month"
+            allowClear={false}
             value={yearMonth}
-            onChange={(e) => setYearMonth(e.target.value)}
-            style={{ width: 120 }}
-          />
-          <Input
-            placeholder={t('app.kuaioa.attendance.workshop')}
-            value={workshop}
-            onChange={(e) => setWorkshop(e.target.value)}
+            onChange={(v) => {
+              if (v) setYearMonth(v);
+            }}
             style={{ width: 140 }}
+            placeholder={t('app.kuaioa.payroll.yearMonth')}
+          />
+          <Select
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            placeholder={t('app.kuaioa.attendance.workshop')}
+            options={workshopOptions}
+            value={workshop}
+            onChange={setWorkshop}
+            style={{ width: 160 }}
           />
           <Select
             allowClear

@@ -930,6 +930,10 @@ async def get_push_preview(
         None,
         description="下推模式：draft=草稿，confirm=正式；采购单预览时控制是否要求默认供应商",
     ),
+    work_order_granularity: Optional[str] = Query(
+        None,
+        description="工单下推粒度：grouped=组工单，individual=独立工单",
+    ),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -942,6 +946,8 @@ async def get_push_preview(
             push_config["purchase"] = purchase
         if outsource_only:
             push_config["outsource_only"] = True
+        if work_order_granularity:
+            push_config["work_order_granularity"] = work_order_granularity
         return await computation_service.get_push_preview(
             tenant_id=tenant_id,
             computation_id=computation_id,
@@ -980,6 +986,7 @@ async def push_all(
             production_item_ids=b.get("production_item_ids"),
             purchase_order_item_ids=b.get("purchase_order_item_ids"),
             include_sales_order_attachments=bool(b.get("include_sales_order_attachments")),
+            work_order_granularity=b.get("work_order_granularity"),
         )
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))

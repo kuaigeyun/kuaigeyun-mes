@@ -101,6 +101,18 @@
                 "path": "/apps/kuaioa/hr/attendance",
                 "permission": "kuaioa:attendance:read",
                 "sort_order": 3
+              },
+              {
+                "title": "app.kuaioa.menu.attendance-rest",
+                "path": "/apps/kuaioa/hr/attendance/day-register?mode=rest",
+                "permission": "kuaioa:attendance:update",
+                "sort_order": 4
+              },
+              {
+                "title": "app.kuaioa.menu.attendance-night",
+                "path": "/apps/kuaioa/hr/attendance/day-register?mode=night",
+                "permission": "kuaioa:attendance:update",
+                "sort_order": 5
               }
             ]
           },
@@ -110,57 +122,57 @@
             "sort_order": 1,
             "children": [
               {
-                "title": "app.kuaioa.menu.living-advances",
-                "path": "/apps/kuaioa/hr/living-advances",
-                "permission": "kuaioa:living-advance:read",
-                "sort_order": 0
-              },
-              {
-                "title": "app.kuaioa.menu.rewards",
-                "path": "/apps/kuaioa/hr/rewards",
-                "permission": "kuaioa:reward:read",
-                "sort_order": 1
-              },
-              {
-                "title": "app.kuaioa.menu.payroll-settlements",
-                "path": "/apps/kuaioa/hr/payroll-settlements",
-                "permission": "kuaioa:payroll:read",
-                "sort_order": 2
-              },
-              {
-                "title": "app.kuaioa.menu.living-payout",
-                "path": "/apps/kuaioa/hr/living-payout",
-                "permission": "kuaioa:living-advance:read",
-                "sort_order": 3
-              },
-              {
-                "title": "app.kuaioa.menu.welfare-batches",
-                "path": "/apps/kuaioa/hr/welfare-batches",
-                "permission": "kuaioa:welfare:read",
-                "sort_order": 4
-              },
-              {
-                "title": "app.kuaioa.menu.annual-payroll-stats",
-                "path": "/apps/kuaioa/hr/annual-payroll-stats",
-                "permission": "kuaioa:payroll:read",
-                "sort_order": 5
-              },
-              {
-                "title": "app.kuaioa.menu.personal-payroll",
-                "path": "/apps/kuaioa/hr/personal-payroll",
-                "permission": "kuaioa:payroll:read",
-                "sort_order": 6
-              },
-              {
                 "title": "app.kuaioa.menu.post-subsidies",
                 "path": "/apps/kuaioa/hr/post-subsidies",
                 "permission": "kuaioa:post-subsidy:read",
-                "sort_order": 7
+                "sort_order": 0
               },
               {
                 "title": "app.kuaioa.menu.minimum-wage",
                 "path": "/apps/kuaioa/hr/minimum-wage",
                 "permission": "kuaioa:minimum-wage:read",
+                "sort_order": 1
+              },
+              {
+                "title": "app.kuaioa.menu.living-advances",
+                "path": "/apps/kuaioa/hr/living-advances",
+                "permission": "kuaioa:living-advance:read",
+                "sort_order": 2
+              },
+              {
+                "title": "app.kuaioa.menu.rewards",
+                "path": "/apps/kuaioa/hr/rewards",
+                "permission": "kuaioa:reward:read",
+                "sort_order": 3
+              },
+              {
+                "title": "app.kuaioa.menu.payroll-settlements",
+                "path": "/apps/kuaioa/hr/payroll-settlements",
+                "permission": "kuaioa:payroll:read",
+                "sort_order": 4
+              },
+              {
+                "title": "app.kuaioa.menu.welfare-batches",
+                "path": "/apps/kuaioa/hr/welfare-batches",
+                "permission": "kuaioa:welfare:read",
+                "sort_order": 5
+              },
+              {
+                "title": "app.kuaioa.menu.living-payout",
+                "path": "/apps/kuaioa/hr/living-payout",
+                "permission": "kuaioa:living-advance:read",
+                "sort_order": 6
+              },
+              {
+                "title": "app.kuaioa.menu.personal-payroll",
+                "path": "/apps/kuaioa/hr/personal-payroll",
+                "permission": "kuaioa:payroll:read",
+                "sort_order": 7
+              },
+              {
+                "title": "app.kuaioa.menu.annual-payroll-stats",
+                "path": "/apps/kuaioa/hr/annual-payroll-stats",
+                "permission": "kuaioa:payroll:read",
                 "sort_order": 8
               }
             ]

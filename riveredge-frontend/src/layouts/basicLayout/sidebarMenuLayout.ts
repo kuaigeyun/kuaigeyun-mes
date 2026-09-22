@@ -143,20 +143,42 @@ export function menuItemKey(item: MenuDataItem): string {
   return String(item.key ?? item.path ?? item.name ?? '');
 }
 
-function treeContainsPath(items: MenuDataItem[], path: string): boolean {
+/**
+ * 菜单 path 可含 query（如 /apps/…/day-register?mode=rest）。
+ * 与 location.pathname + search 对齐；无 query 的菜单项只比 pathname。
+ */
+export function menuPathMatchesLocation(
+  menuPath: string | undefined | null,
+  pathname: string,
+  search = '',
+): boolean {
+  if (!menuPath) return false;
+  const qIndex = menuPath.indexOf('?');
+  const pathPart = qIndex >= 0 ? menuPath.slice(0, qIndex) : menuPath;
+  if (pathPart !== pathname) return false;
+  if (qIndex < 0) return true;
+  const required = new URLSearchParams(menuPath.slice(qIndex + 1));
+  const actual = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search);
+  for (const [key, value] of required.entries()) {
+    if (actual.get(key) !== value) return false;
+  }
+  return true;
+}
+
+function treeContainsPath(items: MenuDataItem[], pathname: string, search = ''): boolean {
   for (const item of items) {
-    if (item.path === path) return true;
-    if (item.children?.length && treeContainsPath(item.children, path)) return true;
+    if (menuPathMatchesLocation(item.path, pathname, search)) return true;
+    if (item.children?.length && treeContainsPath(item.children, pathname, search)) return true;
   }
   return false;
 }
 
-export function findActiveRootKey(roots: MenuDataItem[], currentPath: string): string {
+export function findActiveRootKey(roots: MenuDataItem[], currentPath: string, search = ''): string {
   for (const root of roots) {
     const key = menuItemKey(root);
     if (!key) continue;
-    if (root.path === currentPath) return key;
-    if (root.children?.length && treeContainsPath(root.children, currentPath)) {
+    if (menuPathMatchesLocation(root.path, currentPath, search)) return key;
+    if (root.children?.length && treeContainsPath(root.children, currentPath, search)) {
       return key;
     }
   }
@@ -208,10 +230,11 @@ export function buildSplitMenuRoots(items: MenuDataItem[]): MenuDataItem[] {
 export function computeSplitSecondaryOpenKeys(
   roots: MenuDataItem[],
   currentPath: string,
-  computeOpenKeys: (items: MenuDataItem[], path: string) => string[],
+  computeOpenKeys: (items: MenuDataItem[], path: string, search?: string) => string[],
+  search = '',
 ): string[] {
-  const activeKey = findActiveRootKey(roots, currentPath);
+  const activeKey = findActiveRootKey(roots, currentPath, search);
   const activeRoot = roots.find((item) => menuItemKey(item) === activeKey);
   if (!activeRoot?.children?.length) return [];
-  return computeOpenKeys(activeRoot.children, currentPath);
+  return computeOpenKeys(activeRoot.children, currentPath, search);
 }

@@ -3,6 +3,7 @@ import { App } from 'antd';
 import { useTranslation } from 'react-i18next';
 import KuaioaCrudListPage from '../../../components/KuaioaCrudListPage';
 import { runKuaioaListExport } from '../../../utils/kuaioaListExport';
+import { buildOaEmployeeStatusEnum } from '../../../utils/oaFormEnums';
 import {
   createEmployee,
   deleteEmployee,
@@ -40,6 +41,8 @@ const EmployeesPage: React.FC = () => {
     [t],
   );
 
+  const statusEnum = useMemo(() => buildOaEmployeeStatusEnum(t), [t]);
+
   const fields = useMemo(
     () => [
       { name: 'employee_code', labelKey: 'app.kuaioa.employee.code', width: 140 },
@@ -49,7 +52,6 @@ const EmployeesPage: React.FC = () => {
         required: true,
         width: 120,
       },
-      { name: 'phone', labelKey: 'app.kuaioa.employee.phone', width: 120 },
       {
         name: 'department_name',
         labelKey: 'app.kuaioa.common.department',
@@ -83,6 +85,7 @@ const EmployeesPage: React.FC = () => {
         required: true,
         width: 100,
       },
+      { name: 'phone', labelKey: 'app.kuaioa.employee.phone', width: 120 },
       {
         name: 'hourly_rate',
         labelKey: 'app.kuaioa.employee.hourlyRate',
@@ -150,6 +153,13 @@ const EmployeesPage: React.FC = () => {
         hideInTable: true,
       },
       {
+        name: 'rent_utility',
+        labelKey: 'app.kuaioa.employee.rentUtility',
+        type: 'number' as const,
+        width: 100,
+        hideInTable: true,
+      },
+      {
         name: 'welfare_dragon_boat',
         labelKey: 'app.kuaioa.employee.welfareDragonBoat',
         type: 'number' as const,
@@ -192,9 +202,10 @@ const EmployeesPage: React.FC = () => {
       nameField="full_name"
       autoGenerateCode
       statusPresentation="marker"
+      statusEnum={statusEnum}
       detailVariant="master"
       getDetailFn={getEmployee}
-      columnPersistenceId="apps.kuaioa.employee.list-v1"
+      columnPersistenceId="apps.kuaioa.employee.list-v2"
       fields={fields}
       listFn={listEmployees}
       createFn={createEmployee}

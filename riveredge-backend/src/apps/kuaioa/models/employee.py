@@ -40,6 +40,9 @@ class KuaioaEmployeeProfile(BaseModel):
     housing_fund = fields.DecimalField(
         max_digits=12, decimal_places=2, null=True, description="住房公积金"
     )
+    rent_utility = fields.DecimalField(
+        max_digits=12, decimal_places=2, null=True, description="房租电费标准"
+    )
     welfare_dragon_boat = fields.DecimalField(
         max_digits=12, decimal_places=2, null=True, description="端午福利标准"
     )

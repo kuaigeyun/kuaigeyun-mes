@@ -553,6 +553,9 @@ export interface PushOptions {
   purchase_choices: ('requisition' | 'purchase_order')[]
   /** 组织配置「下推默认生成方式」：draft | confirm */
   push_mode_default?: 'draft' | 'confirm' | string
+  has_demand_item_bom_trees?: boolean
+  default_work_order_granularity?: 'grouped' | 'individual'
+  work_order_granularity_choices?: Array<'grouped' | 'individual'>
 }
 
 export async function getPushOptions(id: number): Promise<PushOptions> {
@@ -587,10 +590,14 @@ export interface SourceSalesOrderAttachmentsPreview {
   source_order_count: number
 }
 
+export type WorkOrderGranularity = 'grouped' | 'individual'
+
 export interface PushPreview {
   computation_id: number
   computation_code?: string
   work_order_count: number
+  work_order_group_count?: number
+  work_order_granularity?: WorkOrderGranularity
   outsource_work_order_count: number
   purchase_requisition_count: number
   purchase_order_count: number
@@ -616,6 +623,7 @@ export async function getPushPreview(
     outsource_only?: boolean
     generate_mode?: 'work_order_only' | 'all' | 'purchase_only' | 'outsource_only'
     push_mode?: 'draft' | 'confirm'
+    work_order_granularity?: WorkOrderGranularity
   },
 ): Promise<PushPreview> {
   return apiRequest<PushPreview>(`/apps/kuaizhizao/demand-computations/${id}/push-preview`, {
@@ -636,6 +644,7 @@ export async function pushAll(
     production_item_ids?: number[];
     purchase_order_item_ids?: number[];
     include_sales_order_attachments?: boolean;
+    work_order_granularity?: WorkOrderGranularity;
   }
 ): Promise<{ success: boolean; message: string; results: Record<string, any> }> {
   return apiRequest(`/apps/kuaizhizao/demand-computations/${id}/push-all`, {

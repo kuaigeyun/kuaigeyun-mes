@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { App, Button, InputNumber, Select, Space, Table, Typography } from 'antd';
+import { App, Button, DatePicker, Select, Space, Table, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
+import type { Dayjs } from 'dayjs';
+import dayjs from 'dayjs';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
@@ -11,15 +13,16 @@ import { getPersonalPayrollStats } from '../../../services/payroll';
 
 type MonthRow = {
   month: number;
+  wage: number;
+  expense: number;
   balance: number;
-  living: number;
 };
 
 const PersonalPayrollPage: React.FC = () => {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const perms = useResourcePermissions('kuaioa:payroll');
-  const [year, setYear] = useState<number | null>(new Date().getFullYear());
+  const [year, setYear] = useState<Dayjs>(() => dayjs());
   const [employeeId, setEmployeeId] = useState<number | null>(null);
   const [employeeOptions, setEmployeeOptions] = useState<Array<{ label: string; value: number }>>(
     [],
@@ -41,22 +44,27 @@ const PersonalPayrollPage: React.FC = () => {
   }, []);
 
   const load = useCallback(async () => {
-    if (!year || year < 2000 || !employeeId) {
+    if (!year?.isValid() || !employeeId) {
+      message.error(t('app.kuaioa.personalPayroll.needEmployee'));
+      return;
+    }
+    const y = year.year();
+    if (y < 2000) {
       message.error(t('app.kuaioa.personalPayroll.needEmployee'));
       return;
     }
     setLoading(true);
     try {
-      const data = await getPersonalPayrollStats({ employee_id: employeeId, year });
+      const data = await getPersonalPayrollStats({ employee_id: employeeId, year: y });
       setStats(data);
       const rows: MonthRow[] = [];
       for (let m = 1; m <= 12; m += 1) {
-        const wageKey = `wage_m${String(m).padStart(2, '0')}`;
-        const livingKey = `living_m${String(m).padStart(2, '0')}`;
+        const pad = String(m).padStart(2, '0');
         rows.push({
           month: m,
-          balance: Number(data[wageKey] || 0),
-          living: Number(data[livingKey] || 0),
+          wage: Number(data[`wage_m${pad}`] || 0),
+          expense: Number(data[`deduct_m${pad}`] || 0),
+          balance: Number(data[`balance_m${pad}`] || 0),
         });
       }
       setMonthRows(rows);
@@ -71,8 +79,9 @@ const PersonalPayrollPage: React.FC = () => {
     () =>
       monthRows.map((r) => ({
         month: r.month,
+        wage: r.wage.toFixed(2),
+        expense: r.expense.toFixed(2),
         balance: r.balance.toFixed(2),
-        living: r.living.toFixed(2),
       })),
     [monthRows],
   );
@@ -85,14 +94,20 @@ const PersonalPayrollPage: React.FC = () => {
       render: (m) => t('app.kuaioa.annualStats.monthWage', { month: m }),
     },
     {
-      title: t('app.kuaioa.personalPayroll.balance'),
-      dataIndex: 'balance',
+      title: t('app.kuaioa.personalPayroll.wage'),
+      dataIndex: 'wage',
       width: 120,
       render: (v) => Number(v).toFixed(2),
     },
     {
-      title: t('app.kuaioa.payroll.livingDeduct'),
-      dataIndex: 'living',
+      title: t('app.kuaioa.personalPayroll.expense'),
+      dataIndex: 'expense',
+      width: 120,
+      render: (v) => Number(v).toFixed(2),
+    },
+    {
+      title: t('app.kuaioa.personalPayroll.balance'),
+      dataIndex: 'balance',
       width: 120,
       render: (v) => Number(v).toFixed(2),
     },
@@ -103,12 +118,15 @@ const PersonalPayrollPage: React.FC = () => {
       title={t('app.kuaioa.personalPayroll.title')}
       toolbarExtra={
         <Space wrap className="no-print">
-          <InputNumber
-            min={2000}
-            max={2100}
-            value={year ?? undefined}
-            onChange={(v) => setYear(typeof v === 'number' ? v : null)}
-            style={{ width: 100 }}
+          <DatePicker
+            picker="year"
+            allowClear={false}
+            value={year}
+            onChange={(v) => {
+              if (v) setYear(v);
+            }}
+            style={{ width: 120 }}
+            placeholder={t('app.kuaioa.welfare.year')}
           />
           <Select
             showSearch
@@ -129,8 +147,9 @@ const PersonalPayrollPage: React.FC = () => {
                   exportRows,
                   [
                     { key: 'month', title: t('app.kuaioa.personalPayroll.month') },
+                    { key: 'wage', title: t('app.kuaioa.personalPayroll.wage') },
+                    { key: 'expense', title: t('app.kuaioa.personalPayroll.expense') },
                     { key: 'balance', title: t('app.kuaioa.personalPayroll.balance') },
-                    { key: 'living', title: t('app.kuaioa.payroll.livingDeduct') },
                   ],
                   t('app.kuaioa.personalPayroll.exportFileName'),
                 )
@@ -140,7 +159,7 @@ const PersonalPayrollPage: React.FC = () => {
             </Button>
           ) : null}
           {monthRows.length > 0 ? (
-            <Button onClick={() => window.print()}>{t('common.print')}</Button>
+            <Button onClick={() => window.print()}>{t('app.kuaioa.payroll.exportPdf')}</Button>
           ) : null}
         </Space>
       }
@@ -148,8 +167,9 @@ const PersonalPayrollPage: React.FC = () => {
       <Typography.Paragraph type="secondary">{t('app.kuaioa.personalPayroll.hint')}</Typography.Paragraph>
       {stats ? (
         <Typography.Paragraph>
-          {String(stats.employee_name || '')} {year}{' '}
-          {t('app.kuaioa.annualStats.annualWage')}: {Number(stats.annual_wage || 0).toFixed(2)}
+          {String(stats.employee_name || '')} {year.year()}{' '}
+          {t('app.kuaioa.annualStats.annualWage')}: {Number(stats.annual_wage || 0).toFixed(2)}；
+          {t('app.kuaioa.annualStats.balanceTotal')}: {Number(stats.balance_total || 0).toFixed(2)}
         </Typography.Paragraph>
       ) : null}
       <Table<MonthRow>

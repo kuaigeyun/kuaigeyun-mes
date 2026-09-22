@@ -8,6 +8,13 @@ export function buildDemandPushPreviewSummary(data: PushPreview, t: TFunction): 
   if (data.work_order_count > 0) {
     docParts.push(t('app.kuaizhizao.demandComputation.pushWorkOrders', { count: data.work_order_count }))
   }
+  if ((data.work_order_group_count ?? 0) > 0) {
+    docParts.push(
+      t('app.kuaizhizao.demandComputation.pushWorkOrderGroups', {
+        count: data.work_order_group_count,
+      }),
+    )
+  }
   if (data.outsource_work_order_count > 0) {
     let label = t('app.kuaizhizao.demandComputation.pushOutsourceWorkOrders', {
       count: data.outsource_work_order_count,

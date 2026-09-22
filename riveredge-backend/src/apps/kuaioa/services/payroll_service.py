@@ -68,6 +68,7 @@ def _recalc_line(line: KuaioaPayrollSettlementLine) -> None:
     )
     deduct = (
         _d(line.living_deduct)
+        + _d(getattr(line, "rent_utility_deduct", None))
         + _d(line.insurance_deduct)
         + _d(line.leave_deduct)
         + _d(line.compensation)
@@ -78,6 +79,44 @@ def _recalc_line(line: KuaioaPayrollSettlementLine) -> None:
     line.balance = earning - deduct - _d(line.card_pay)
 
 
+async def _apply_living_advance_profile_overrides(
+    emp: KuaioaEmployeeProfile,
+    *,
+    workshop_name: Optional[str] = None,
+    base_living: Optional[Decimal] = None,
+    bank_name: Optional[str] = None,
+    bank_account: Optional[str] = None,
+) -> tuple[Optional[str], Optional[Decimal]]:
+    """档案字段可被本单覆盖；银行/卡号/车间/固定生活费回写员工档案真源。"""
+    dirty = False
+    if workshop_name is not None:
+        ws = workshop_name.strip() or None
+        if ws != emp.workshop_name:
+            emp.workshop_name = ws
+            dirty = True
+    if base_living is not None:
+        if _d(base_living) != _d(emp.living_allowance):
+            emp.living_allowance = base_living
+            dirty = True
+    if bank_name is not None:
+        bn = bank_name.strip() or None
+        if bn != emp.bank_name:
+            emp.bank_name = bn
+            dirty = True
+    if bank_account is not None:
+        ba = bank_account.strip() or None
+        if ba != emp.bank_account:
+            emp.bank_account = ba
+            dirty = True
+    if dirty:
+        await emp.save()
+    workshop = emp.workshop_name
+    if workshop_name is not None:
+        workshop = workshop_name.strip() or None
+    base = emp.living_allowance if base_living is None else base_living
+    return workshop, base
+
+
 async def _get_employee(tenant_id: int, employee_id: int) -> KuaioaEmployeeProfile:
     emp = await KuaioaEmployeeProfile.get_or_none(
         id=employee_id, tenant_id=tenant_id, deleted_at__isnull=True
@@ -85,6 +124,32 @@ async def _get_employee(tenant_id: int, employee_id: int) -> KuaioaEmployeeProfi
     if not emp:
         raise NotFoundError("员工档案不存在")
     return emp
+
+
+async def _employee_remaining_wage(tenant_id: int, employee_id: int) -> Optional[Decimal]:
+    """已确认结算行结余合计；无结算记录时返回 None（不拦预支）。"""
+    settlements = await KuaioaPayrollSettlement.filter(
+        tenant_id=tenant_id, status="confirmed", deleted_at__isnull=True
+    ).only("id")
+    if not settlements:
+        return None
+    sids = [int(s.id) for s in settlements]
+    lines = await KuaioaPayrollSettlementLine.filter(
+        tenant_id=tenant_id,
+        settlement_id__in=sids,
+        employee_id=employee_id,
+        deleted_at__isnull=True,
+    ).only("balance")
+    if not lines:
+        return None
+    return sum((_d(l.balance) for l in lines), ZERO)
+
+
+def _assert_advance_within_remaining(amount: Decimal, remaining: Optional[Decimal]) -> None:
+    if remaining is None:
+        return
+    if amount > remaining:
+        raise BusinessLogicError(f"预支金额超过剩余工资（剩余 {remaining}）")
 
 
 class LivingAdvanceService:
@@ -121,6 +186,15 @@ class LivingAdvanceService:
         if _d(data.amount) <= 0:
             raise BusinessLogicError("预支金额须大于 0")
         emp = await _get_employee(tenant_id, data.employee_id)
+        remaining = await _employee_remaining_wage(tenant_id, int(emp.id))
+        _assert_advance_within_remaining(_d(data.amount), remaining)
+        workshop, base_living = await _apply_living_advance_profile_overrides(
+            emp,
+            workshop_name=data.workshop_name,
+            base_living=data.base_living,
+            bank_name=data.bank_name,
+            bank_account=data.bank_account,
+        )
         code = await generate_daily_code(
             KuaioaLivingAdvance, tenant_id, "LVA", code_field="advance_code"
         )
@@ -131,8 +205,8 @@ class LivingAdvanceService:
             "employee_id": int(emp.id),
             "employee_code": emp.employee_code,
             "employee_name": emp.full_name,
-            "workshop_name": emp.workshop_name,
-            "base_living": emp.living_allowance,
+            "workshop_name": workshop,
+            "base_living": base_living,
             "amount": data.amount,
             "reason": data.reason,
             "status": "confirmed",
@@ -153,8 +227,27 @@ class LivingAdvanceService:
         payload = data.model_dump(exclude_unset=True)
         if "amount" in payload and _d(payload["amount"]) <= 0:
             raise BusinessLogicError("预支金额须大于 0")
+        if "amount" in payload:
+            remaining = await _employee_remaining_wage(tenant_id, int(row.employee_id))
+            _assert_advance_within_remaining(_d(payload["amount"]), remaining)
         if "status" in payload and payload["status"] not in ("confirmed", "void"):
             raise BusinessLogicError("状态无效")
+        fields_set = data.model_fields_set
+        payload.pop("bank_name", None)
+        payload.pop("bank_account", None)
+        if fields_set & {"workshop_name", "base_living", "bank_name", "bank_account"}:
+            emp = await _get_employee(tenant_id, int(row.employee_id))
+            workshop, base_living = await _apply_living_advance_profile_overrides(
+                emp,
+                workshop_name=data.workshop_name if "workshop_name" in fields_set else None,
+                base_living=data.base_living if "base_living" in fields_set else None,
+                bank_name=data.bank_name if "bank_name" in fields_set else None,
+                bank_account=data.bank_account if "bank_account" in fields_set else None,
+            )
+            if "workshop_name" in fields_set:
+                payload["workshop_name"] = workshop
+            if "base_living" in fields_set:
+                payload["base_living"] = base_living
         for k, v in payload.items():
             setattr(row, k, v)
         await touch_updated(row, user_id)
@@ -586,6 +679,7 @@ class PayrollSettlementService:
             living_adv = adv_map.get(eid, ZERO)
             living_deduct = living_base + living_adv
             insurance = _d(emp.social_insurance) + _d(emp.housing_fund)
+            rent_utility_deduct = _d(getattr(emp, "rent_utility", None))
             allowance = reward_map.get(eid, ZERO)
             post_allowance = post_sub_map.get(eid, ZERO)
             leave_deduct = _d(hours.get("leave_deduct"))
@@ -621,6 +715,7 @@ class PayrollSettlementService:
                 post_allowance=post_allowance,
                 allowance=allowance,
                 living_deduct=living_deduct,
+                rent_utility_deduct=rent_utility_deduct,
                 insurance_deduct=insurance,
                 leave_deduct=leave_deduct,
                 compensation=ZERO,
@@ -707,11 +802,14 @@ class PayrollSettlementService:
             "workshop_name": emp.workshop_name,
             "year": year,
             "annual_wage": ZERO,
+            "living_total": ZERO,
+            "balance_total": ZERO,
             "tax_total": ZERO,
         }
         for m in range(1, 13):
-            key = f"wage_m{m:02d}"
-            empty[key] = ZERO
+            empty[f"wage_m{m:02d}"] = ZERO
+            empty[f"deduct_m{m:02d}"] = ZERO
+            empty[f"balance_m{m:02d}"] = ZERO
             empty[f"living_m{m:02d}"] = ZERO
         return empty
 

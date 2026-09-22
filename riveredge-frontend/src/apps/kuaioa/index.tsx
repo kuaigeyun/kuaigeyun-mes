@@ -30,6 +30,7 @@ const LeavePage = lazy(() => import('./pages/hr/leave/index'));
 const EmployeesPage = lazy(() => import('./pages/hr/employees/index'));
 const AttendanceListPage = lazy(() => import('./pages/hr/attendance/index'));
 const AttendanceFillPage = lazy(() => import('./pages/hr/attendance/fill'));
+const AttendanceDayRegisterPage = lazy(() => import('./pages/hr/attendance/day-register'));
 const LivingAdvancesPage = lazy(() => import('./pages/hr/living-advances/index'));
 const RewardsPage = lazy(() => import('./pages/hr/rewards/index'));
 const PayrollSettlementsPage = lazy(() => import('./pages/hr/payroll-settlements/index'));
@@ -80,6 +81,7 @@ const KuaioaApp: React.FC = () => (
     <Route path="hr/employees" element={withPageSuspense(EmployeesPage)} />
     <Route path="hr/employee-movements" element={withPageSuspense(EmployeeMovementsPage)} />
     <Route path="hr/attendance" element={withPageSuspense(AttendanceListPage)} />
+    <Route path="hr/attendance/day-register" element={withPageSuspense(AttendanceDayRegisterPage)} />
     <Route path="hr/attendance/:id" element={withPageSuspense(AttendanceFillPage)} />
     <Route path="hr/living-advances" element={withPageSuspense(LivingAdvancesPage)} />
     <Route path="hr/rewards" element={withPageSuspense(RewardsPage)} />

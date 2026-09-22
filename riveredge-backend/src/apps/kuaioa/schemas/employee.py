@@ -23,6 +23,7 @@ class EmployeeProfileCreate(BaseModel):
     post_wage: Optional[Decimal] = None
     social_insurance: Optional[Decimal] = None
     housing_fund: Optional[Decimal] = None
+    rent_utility: Optional[Decimal] = None
     welfare_dragon_boat: Optional[Decimal] = None
     welfare_mid_autumn: Optional[Decimal] = None
     welfare_spring_festival: Optional[Decimal] = None
@@ -49,6 +50,7 @@ class EmployeeProfileUpdate(BaseModel):
     post_wage: Optional[Decimal] = None
     social_insurance: Optional[Decimal] = None
     housing_fund: Optional[Decimal] = None
+    rent_utility: Optional[Decimal] = None
     welfare_dragon_boat: Optional[Decimal] = None
     welfare_mid_autumn: Optional[Decimal] = None
     welfare_spring_festival: Optional[Decimal] = None

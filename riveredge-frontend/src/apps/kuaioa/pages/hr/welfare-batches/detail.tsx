@@ -4,9 +4,9 @@ import { useTranslation } from 'react-i18next';
 import { App, Button, InputNumber, Space, Switch, Table, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
-import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { exportWelfareRegisterXlsx } from '../../../utils/exportWelfareRegisterXlsx';
 import {
   confirmWelfareBatch,
   getWelfareBatch,
@@ -63,6 +63,12 @@ const WelfareBatchDetailPage: React.FC = () => {
 
   const columns: ColumnsType<LineRow> = [
     {
+      title: t('app.kuaioa.welfare.seq'),
+      key: 'seq',
+      width: 64,
+      render: (_v, _r, index) => index + 1,
+    },
+    {
       title: t('app.kuaioa.employee.fullName'),
       dataIndex: 'employee_name',
       width: 120,
@@ -97,6 +103,12 @@ const WelfareBatchDetailPage: React.FC = () => {
         ),
     },
     {
+      title: t('app.kuaioa.welfare.sign'),
+      key: 'sign',
+      width: 100,
+      render: () => '',
+    },
+    {
       title: t('app.kuaioa.welfare.received'),
       dataIndex: 'received',
       width: 100,
@@ -115,7 +127,10 @@ const WelfareBatchDetailPage: React.FC = () => {
 
   return (
     <ListPageTemplate
-      title={`${t('app.kuaioa.welfare.detailTitle')} ${batch?.year || ''} ${festivalLabel} ${batch?.workshop_name || ''}`}
+      title={t('app.kuaioa.welfare.sheetTitle', {
+        year: batch?.year || '',
+        festival: festivalLabel,
+      })}
       toolbarExtra={
         <Space wrap>
           <Button onClick={() => navigate('/apps/kuaioa/hr/welfare-batches')}>
@@ -170,16 +185,22 @@ const WelfareBatchDetailPage: React.FC = () => {
           {perms.canExport && lines.length > 0 ? (
             <Button
               onClick={() =>
-                void downloadRecordsAsXlsx(
-                  lines,
-                  [
-                    { key: 'employee_name', title: t('app.kuaioa.employee.fullName') },
-                    { key: 'standard_amount', title: t('app.kuaioa.welfare.standardAmount') },
-                    { key: 'amount', title: t('app.kuaioa.welfare.amount') },
-                    { key: 'received', title: t('app.kuaioa.welfare.received') },
-                  ],
-                  `${t('app.kuaioa.welfare.exportFileName')}_${batch?.year || ''}_${festivalLabel}`,
-                )
+                void exportWelfareRegisterXlsx(lines, {
+                  title: t('app.kuaioa.welfare.sheetTitle', {
+                    year: batch?.year || '',
+                    festival: festivalLabel,
+                  }),
+                  departmentLabel: t('app.kuaioa.welfare.departmentLabel', {
+                    name: String(batch?.workshop_name || ''),
+                  }),
+                  headers: {
+                    seq: t('app.kuaioa.welfare.seq'),
+                    name: t('app.kuaioa.employee.fullName'),
+                    amount: t('app.kuaioa.welfare.amount'),
+                    sign: t('app.kuaioa.welfare.sign'),
+                  },
+                  fileName: `${t('app.kuaioa.welfare.exportFileName')}_${batch?.year || ''}_${festivalLabel}`,
+                }).catch((error) => message.error(getApiErrorMessage(error)))
               }
             >
               {t('common.export')}
@@ -188,8 +209,10 @@ const WelfareBatchDetailPage: React.FC = () => {
         </Space>
       }
     >
-      <Typography.Paragraph type="secondary">
-        {t('app.kuaioa.welfare.detailHint')}
+      <Typography.Paragraph>
+        {t('app.kuaioa.welfare.departmentLabel', {
+          name: String(batch?.workshop_name || ''),
+        })}
       </Typography.Paragraph>
       <Space style={{ marginBottom: 12 }}>
         <Typography.Text>

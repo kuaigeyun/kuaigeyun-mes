@@ -726,6 +726,8 @@ export const DEMAND_COMPUTATION_CAPABILITY_REASON_MESSAGES: Record<string, strin
   'demand_computation.push.covered_by_supply': '净需求已被库存/在途冲抵，无需下推工单或采购；也不会展开 BOM 子件',
   'demand_computation.push.no_suggested_qty': '计算结果无建议下推数量，无需下推工单或采购',
   'demand_computation.push_work_order.no_pushable_items': '可下推明细均已占用，无可新建工单',
+  'demand_computation.push_work_order.grouped_requires_bom_trees':
+    '组工单下推需要需求行 BOM 生产树，请重新执行 MRP 后再试',
   'demand_computation.push_work_order.no_production_items': '需求计算中无生产件可生成工单',
   'demand_computation.push_work_order.requires_production_plan': '当前配置要求经生产计划生成工单，请先下推到生产计划',
   'demand_computation.push_purchase_order.no_purchase_items': '无已配置默认供应商的采购件，无法下推采购订单',

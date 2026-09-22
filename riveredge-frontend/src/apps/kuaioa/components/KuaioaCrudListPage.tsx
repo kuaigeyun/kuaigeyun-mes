@@ -65,6 +65,8 @@ export type KuaioaFieldConfig = {
     | 'number'
     | 'date'
     | 'datetime'
+    | 'month'
+    | 'year'
     | 'file'
     | 'user'
     | 'userIds'
@@ -76,6 +78,8 @@ export type KuaioaFieldConfig = {
   options?: Array<{ label: string; value: string | number | boolean }>;
   /** select / userIds 多选 */
   mode?: 'multiple';
+  /** 表单只读展示（如选人后回填原生活费） */
+  readonly?: boolean;
   required?: boolean;
   hideInTable?: boolean;
   hideInForm?: boolean;
@@ -791,6 +795,30 @@ const KuaioaCrudListPage: React.FC<Props> = ({
                   />
                 );
               }
+              if (field.type === 'month') {
+                return (
+                  <ProFormDatePicker
+                    key={field.name}
+                    name={field.name}
+                    label={label}
+                    rules={rules}
+                    colProps={colProps}
+                    fieldProps={{ ...fieldWidth, picker: 'month', format: 'YYYY-MM' }}
+                  />
+                );
+              }
+              if (field.type === 'year') {
+                return (
+                  <ProFormDatePicker
+                    key={field.name}
+                    name={field.name}
+                    label={label}
+                    rules={rules}
+                    colProps={colProps}
+                    fieldProps={{ ...fieldWidth, picker: 'year', format: 'YYYY' }}
+                  />
+                );
+              }
               if (field.type === 'datetime') {
                 return (
                   <ProFormDatePicker
@@ -838,7 +866,10 @@ const KuaioaCrudListPage: React.FC<Props> = ({
                     colProps={colProps}
                     options={field.options}
                     mode={field.mode}
-                    allowClear
+                    allowClear={!field.readonly}
+                    showSearch
+                    optionFilterProp="label"
+                    disabled={field.readonly}
                   />
                 );
               }
@@ -881,6 +912,7 @@ const KuaioaCrudListPage: React.FC<Props> = ({
                     label={label}
                     rules={rules}
                     colProps={colProps}
+                    disabled={field.readonly}
                     fieldProps={fieldWidth}
                   />
                 );
@@ -892,6 +924,7 @@ const KuaioaCrudListPage: React.FC<Props> = ({
                   label={label}
                   rules={rules}
                   colProps={colProps}
+                  disabled={field.readonly}
                 />
               );
             })}

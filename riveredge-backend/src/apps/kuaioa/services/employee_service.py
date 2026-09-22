@@ -110,6 +110,7 @@ class EmployeeProfileService:
             "post_wage": data.post_wage,
             "social_insurance": data.social_insurance,
             "housing_fund": data.housing_fund,
+            "rent_utility": data.rent_utility,
             "welfare_dragon_boat": data.welfare_dragon_boat,
             "welfare_mid_autumn": data.welfare_mid_autumn,
             "welfare_spring_festival": data.welfare_spring_festival,

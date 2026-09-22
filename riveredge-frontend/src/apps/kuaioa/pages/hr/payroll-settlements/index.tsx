@@ -1,8 +1,9 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { App } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { runKuaioaListExport } from '../../../utils/kuaioaListExport';
+import { loadOaWorkshopNameOptions } from '../../../utils/oaWorkshopOptions';
 import KuaioaCrudListPage from '../../../components/KuaioaCrudListPage';
 import {
   confirmPayrollSettlement,
@@ -20,6 +21,15 @@ const PayrollSettlementsPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
   const perms = useResourcePermissions('kuaioa:payroll');
+  const [workshopOptions, setWorkshopOptions] = useState<Array<{ label: string; value: string }>>(
+    [],
+  );
+
+  useEffect(() => {
+    void (async () => {
+      setWorkshopOptions(await loadOaWorkshopNameOptions());
+    })();
+  }, []);
 
   const statusOptions = useMemo(
     () => [
@@ -35,12 +45,15 @@ const PayrollSettlementsPage: React.FC = () => {
       {
         name: 'year_month',
         labelKey: 'app.kuaioa.payroll.yearMonth',
+        type: 'month' as const,
         required: true,
         width: 100,
       },
       {
         name: 'workshop_name',
         labelKey: 'app.kuaioa.attendance.workshop',
+        type: 'select' as const,
+        options: workshopOptions,
         required: true,
         width: 140,
       },
@@ -56,10 +69,11 @@ const PayrollSettlementsPage: React.FC = () => {
         type: 'select' as const,
         options: statusOptions,
         width: 100,
+        hideInForm: true,
       },
       { name: 'notes', labelKey: 'common.remark', type: 'textarea' as const, hideInTable: true },
     ],
-    [statusOptions],
+    [statusOptions, workshopOptions],
   );
 
   return (
