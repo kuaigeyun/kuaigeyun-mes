@@ -1284,14 +1284,86 @@ class ApplicationService:
             globally_bound = await ApplicationDedicatedBindingService.fetch_globally_bound_app_codes()
             await ApplicationService.reconcile_is_dedicated_with_manifest(tenant_id, result)
             result = await ApplicationService._filter_apps_by_package_whitelist(tenant_id, result)
-            return ApplicationService._filter_dedicated_for_viewer(
+            result = ApplicationService._filter_dedicated_for_viewer(
                 result,
                 bound_codes=bound,
                 globally_bound_codes=globally_bound,
             )
+            # 定制壳菜单深链到 requires_apps（如 haoligo→kuaioa）：启用列表必须含依赖应用，
+            # 否则前端 AppRoutes 不注册 /apps/kuaioa/*，人事等内容区纯白。
+            if is_active is True:
+                result = await ApplicationService._ensure_requires_apps_in_installed_list(
+                    tenant_id, result
+                )
+            return result
         finally:
             await conn.close()
     
+    @staticmethod
+    async def _ensure_requires_apps_in_installed_list(
+        tenant_id: int,
+        applications: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        """
+        已启用应用列表补齐 requires_apps 闭包。
+
+        定制壳（如 haoligo）菜单可深链到依赖应用（kuaioa）路径；若依赖应用未在
+        is_active=true 列表中，前端不会注册对应 /apps/* 路由，内容区纯白。
+        此处按 manifest 拉起并启用缺失依赖，再并入返回列表。
+        """
+        from core.services.application.enabled_apps import expand_requires_apps
+
+        if not applications:
+            return applications
+
+        present = {str(a.get("code") or "") for a in applications if a.get("code")}
+        needed = expand_requires_apps(set(present))
+        missing = sorted(code for code in needed if code and code not in present)
+        if not missing:
+            return applications
+
+        for code in missing:
+            try:
+                row = await ApplicationService.get_application_by_code(tenant_id, code)
+                if not row:
+                    # 清单中无记录时从 manifest 注册（仍须再安装/启用）
+                    row = await ApplicationService.ensure_application_registered_from_manifest(
+                        tenant_id, code
+                    )
+                if not row:
+                    logger.warning(
+                        "requires_apps 依赖 {} 未在租户 {} 应用清单中找到，跳过补齐",
+                        code,
+                        tenant_id,
+                    )
+                    continue
+                uuid = str(row.get("uuid") or "")
+                if not uuid:
+                    continue
+                if not row.get("is_installed"):
+                    await ApplicationService.install_application(
+                        tenant_id, uuid, sync_menus_after_install=False
+                    )
+                if not row.get("is_active"):
+                    # enable 会递归 requires，并写入 is_active
+                    row = await ApplicationService.enable_application(tenant_id, uuid)
+                else:
+                    row = await ApplicationService.get_application_by_code(tenant_id, code)
+                if row and row.get("is_active"):
+                    code_now = str(row.get("code") or "")
+                    if code_now and code_now not in present:
+                        applications.append(row)
+                        present.add(code_now)
+            except Exception as e:  # noqa: BLE001 — 列表接口不可因单个依赖失败而整体 500
+                logger.warning(
+                    "补齐 requires_apps 失败 tenant_id={} code={}: {}",
+                    tenant_id,
+                    code,
+                    e,
+                )
+
+        return applications
+
     @staticmethod
     async def count_applications(deleted_at_is_null: bool = True) -> int:
         """

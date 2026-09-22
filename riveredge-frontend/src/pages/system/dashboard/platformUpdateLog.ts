@@ -36,6 +36,22 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
   {
+    id: 'kuaioa-hr-blank-requires-apps-route-r01',
+    date: '2026-09-23',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-hr-blank-requires-apps-route-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-hr-blank-requires-apps-route-r01.description',
+  },
+  {
+    id: 'uni-im-notify-channel-split-r01',
+    date: '2026-09-23',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.uni-im-notify-channel-split-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.uni-im-notify-channel-split-r01.description',
+  },
+  {
     id: 'kuaioa-living-advance-form-editable-r01',
     date: '2026-09-23',
     type: 'improvement',

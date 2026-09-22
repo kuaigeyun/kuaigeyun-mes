@@ -3138,6 +3138,8 @@ export default {
   'app.kuaioa.menu.training-templates': '培训模板',
   'app.kuaioa.menu.leave': '请假出差',
   'app.kuaioa.menu.employees': '员工档案',
+  'app.kuaioa.route.notFoundTitle': '页面不存在',
+  'app.kuaioa.route.notFoundHint': '当前轻办公路径未注册，请检查菜单 path 是否指向已有页面。',
   'app.kuaioa.menu.attendance': '月度考勤',
   'app.kuaioa.menu.attendance-rest': '休息登记',
   'app.kuaioa.menu.attendance-night': '夜班登记',
@@ -31075,6 +31077,14 @@ export default {
     '基础应用与扩展模块边界解耦',
   'pages.dashboard.updateLog.entries.application-layer-host-capabilities.description':
     '快制造与轻办公列表不再编译依赖行业包；扩展对照与清单改由平台 host-capabilities 接口按租户已启用模块动态解析。',
+  'pages.dashboard.updateLog.entries.kuaioa-hr-blank-requires-apps-route-r01.title':
+    '修复人事等深链页内容空白',
+  'pages.dashboard.updateLog.entries.kuaioa-hr-blank-requires-apps-route-r01.description':
+    '定制壳菜单指向轻办公人事时，若依赖应用未出现在已启用列表则前端不注册路由导致内容纯白；现自动补齐 requires_apps 并消除静默空组件。',
+  'pages.dashboard.updateLog.entries.uni-im-notify-channel-split-r01.title':
+    '修复在线消息系统通知串入个人频道',
+  'pages.dashboard.updateLog.entries.uni-im-notify-channel-split-r01.description':
+    '厂内维保等「待审核/提交待审」站内信归入「审批」；已通过/已创建等仍在「消息」。个人列表不再展示标题形如【业务通知】的异常私聊会话。',
   'pages.dashboard.updateLog.entries.kuaioa-living-advance-form-editable-r01.title':
     '轻办公生活费预支选人带出字段可改',
   'pages.dashboard.updateLog.entries.kuaioa-living-advance-form-editable-r01.description':
@@ -34140,6 +34150,11 @@ export default {
   'appRoutes.currentPath': '当前路径',
   'appRoutes.loadedRoutesCount': '已加载的应用路由数',
   'appRoutes.noAppRoutesHint': '如果这是应用路径，请检查应用是否正确安装和启用',
+  'appRoutes.missingComponent': '应用组件未正确加载',
+  'appRoutes.missingComponentHint': '已启用应用未导出可渲染入口。请强制刷新（Ctrl+F5）后重试；若仍失败请重新扫描并启用该应用。',
+  'appRoutes.unmatchedAppPath': '未匹配到应用路由',
+  'appRoutes.unmatchedAppPathHint':
+    '当前路径对应的应用可能未安装或未启用（例如定制壳菜单深链到轻办公人事，但轻办公未启用）。请到应用中心启用依赖应用后刷新。',
   'appRoutes.troubleshootTitle': '排查步骤',
   'appRoutes.troubleshoot1': '打开浏览器控制台（F12），查看是否有错误信息',
   'appRoutes.troubleshoot2': '访问"系统管理 → 应用管理"页面，点击"扫描应用"按钮，扫描并注册应用',

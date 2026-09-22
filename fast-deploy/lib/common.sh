@@ -5742,7 +5742,8 @@ _read_custom_projects_from_workspace_yaml() {
 
 prompt_custom_projects_selection() {
     # 交互选择 registry 中的定制项目 → 写入 deploy.env；结果写入 REPLY
-    local custom_path="${1:-}" py gen pid desc choice picked n i
+    # 已有 CUSTOM_PROJECTS 时仍列出选项；回车默认保持当前（或仅一项时自动选中）
+    local custom_path="${1:-}" py gen pid desc choice picked n i cur default_choice
     REPLY=""
     custom_path="${custom_path:-$(read_deploy_env_value CUSTOM_REPO_PATH || true)}"
     [ -n "$custom_path" ] || custom_path="$(_custom_default_repo_path)"
@@ -5768,6 +5769,7 @@ prompt_custom_projects_selection() {
         return 1
     fi
 
+    cur="$(read_deploy_env_value CUSTOM_PROJECTS || true)"
     if [ "$n" -eq 1 ]; then
         picked="${ids[0]}"
         set_deploy_env_value CUSTOM_PROJECTS "$picked"
@@ -5776,9 +5778,29 @@ prompt_custom_projects_selection() {
         return 0
     fi
 
+    default_choice="1"
+    if [ -n "$cur" ]; then
+        i=0
+        while [ "$i" -lt "$n" ]; do
+            if [ "${ids[$i]}" = "$cur" ]; then
+                default_choice="$((i + 1))"
+                break
+            fi
+            # 当前为逗号全装时，默认 A
+            if [ "$cur" = "$(IFS=,; echo "${ids[*]}")" ]; then
+                default_choice="A"
+                break
+            fi
+            i=$((i + 1))
+        done
+    fi
+
     {
         echo ""
         log_info "请选择本机要组装的定制项目（写入 deploy.env CUSTOM_PROJECTS）"
+        if [ -n "$cur" ]; then
+            printf '  当前已配置: %s（回车保持默认 %s）\n' "$cur" "$default_choice"
+        fi
         printf '  A) 全装（组装 %s）\n' "$(IFS=,; echo "${ids[*]}")"
         i=0
         while [ "$i" -lt "$n" ]; do
@@ -5786,8 +5808,8 @@ prompt_custom_projects_selection() {
             i=$((i + 1))
         done
     } >&2
-    read -rp "请选择 [A/1-${n}]（默认 1）: " choice || true
-    choice="${choice:-1}"
+    read -rp "请选择 [A/1-${n}]（默认 ${default_choice}）: " choice || true
+    choice="${choice:-$default_choice}"
     case "${choice^^}" in
         A)
             picked="$(IFS=,; echo "${ids[*]}")"
@@ -6023,6 +6045,11 @@ cmd_install_extension_apps() {
         set_deploy_env_value CUSTOM_GIT_BRANCH "$custom_branch"
         sync_sibling_git_repo "kuaigeyun-custom" "$custom_url" "$custom_path" "$custom_branch" "$custom_token" || return 1
         set_deploy_env_value CUSTOM_ENABLED "1"
+        # 安装/更新定制包：同步完 registry 后必弹项目选择（交互终端）；禁止静默沿用导致「没法选」
+        # 主仓 update 路径不弹（COMPOSING_FROM_MAIN_UPDATE=1）
+        if [ -t 0 ] && [ "${COMPOSING_FROM_MAIN_UPDATE:-0}" != "1" ]; then
+            prompt_custom_projects_selection "$custom_path" || return 1
+        fi
     fi
 
     # compose 时保留「先前已启用、本次未改」的另一侧（scope=pro 时不因缺 CUSTOM_PROJECTS 阻断）

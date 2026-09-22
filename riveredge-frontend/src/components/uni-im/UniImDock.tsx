@@ -31,6 +31,7 @@ import { useUserAvatarUrl } from '../../hooks/useUserAvatarUrl';
 import {
   isApprovalUserMessage,
   isUnreadMessage,
+  looksLikeSystemNotifyTitle,
   messageSnippet,
 } from '../../pages/personal/messages/messageHelpers';
 import {
@@ -495,6 +496,13 @@ export default function UniImPanel({
     const orphanRows: DirectListRow[] = items
       .filter((item) => {
         if (item.kind !== 'direct' || matched.has(item.uuid)) {
+          return false;
+        }
+        // 站内信主题误落成私聊会话标题时，不在「个人」展示（应只出现在「消息/审批」）
+        if (
+          looksLikeSystemNotifyTitle(item.title) ||
+          looksLikeSystemNotifyTitle(item.last_message_preview)
+        ) {
           return false;
         }
         if (!keyword) {

@@ -772,6 +772,7 @@ wizard_run_ext_pro() {
 wizard_run_ext_custom() {
     echo ""
     wizard_reload_deploy_libs
+    wizard_say "安装/更新定制包前会列出 registry 项目供选择（回车可保持当前 CUSTOM_PROJECTS）。"
     if cmd_install_extension_apps custom; then
         wizard_say_ok "定制包已同步并组装。请重启服务后同步菜单；租户侧按需启用应用。"
         return 0

@@ -246,7 +246,18 @@ class BusinessNotificationService:
                 continue
 
             if "message_category" not in vars_payload:
-                vars_payload["message_category"] = "process"
+                # 待审/驳回/催办/抄送/撤审 → 在线消息「审批」；其余为普通流程通知进「消息」
+                approval_actions = {
+                    "pending",
+                    "submitted",
+                    "rejected",
+                    "urge",
+                    "cc",
+                    "revoked",
+                }
+                vars_payload["message_category"] = (
+                    "approval" if action.lower() in approval_actions else "process"
+                )
 
             channels = await BusinessNotificationService._resolve_channels(tenant_id, rule)
             if not channels:

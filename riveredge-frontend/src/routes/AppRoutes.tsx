@@ -41,13 +41,6 @@ const DelayedFallback: React.FC<{ delayMs?: number }> = ({ delayMs = 0 }) => {
   return show ? <PageSkeleton variant="content" /> : null;
 };
 
-/** 为单个应用创建按需加载的懒组件（仅在该路由被访问时才加载 chunk） */
-function createLazyApp(app: Application) {
-  return React.lazy(() =>
-    loadPlugin(app).then((routes) => ({ default: routes[0]?.component ?? (() => null) }))
-  );
-}
-
 const appErrorPanelStyle: React.CSSProperties = {
   // 左右留白由 UniTabs `.uni-tabs-content-page-outer` 承担；此处只保留面板内边距，勿再叠 margin 16
   margin: 0,
@@ -56,6 +49,46 @@ const appErrorPanelStyle: React.CSSProperties = {
   border: '1px solid #ffccc7',
   boxSizing: 'border-box',
 };
+
+/** 插件路由组件缺失时的可见占位（禁止 silent `() => null` 造成内容区纯白） */
+const MissingAppRoute: React.FC<{ appCode: string; appName: string }> = ({ appCode, appName }) => {
+  const { t } = useTranslation();
+  return (
+    <div style={appErrorPanelStyle}>
+      <h3 style={{ color: '#cf1322', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <CircleX size={20} strokeWidth={1.75} aria-hidden />
+        {t('appRoutes.missingComponent')}
+      </h3>
+      <p>
+        <strong>{t('appRoutes.app')}:</strong> {appName} ({appCode})
+      </p>
+      <p>{t('appRoutes.missingComponentHint')}</p>
+      <Button style={{ marginTop: 10 }} onClick={() => window.location.reload()}>
+        {t('appRoutes.reload')}
+      </Button>
+    </div>
+  );
+};
+
+/** 为单个应用创建按需加载的懒组件（仅在该路由被访问时才加载 chunk） */
+function createLazyApp(app: Application) {
+  return React.lazy(() =>
+    loadPlugin(app).then((routes) => {
+      const component = routes[0]?.component;
+      if (!component) {
+        console.error(`❌ [AppRoutes] 应用 ${app.code} 未导出可渲染组件`, {
+          routeCount: routes.length,
+          entry_point: app.entry_point,
+          route_path: app.route_path,
+        });
+        return {
+          default: () => <MissingAppRoute appCode={app.code} appName={app.name || app.code} />,
+        };
+      }
+      return { default: component };
+    }),
+  );
+}
 
 /** 应用内崩溃 UI（仅由真正的 React Error Boundary 触发，勿监听 window.error） */
 const AppErrorFallback: React.FC<{
@@ -202,16 +235,20 @@ const AppRoutes: React.FC = () => {
     if (!applications.length) return [];
     const routes: React.ReactNode[] = [];
     for (const app of applications) {
-      if (!app.entry_point || !app.route_path) {
-        console.warn(`⚠️ [AppRoutes] 应用 ${app.code} 缺少 entry_point 或 route_path`);
+      // 缺省时按约定补齐，避免 DB 空 entry_point 导致整应用无路由、菜单点进去内容纯白
+      const entryPoint = (app.entry_point || '').trim() || `../apps/${app.code}/index.tsx`;
+      const routePath = (app.route_path || '').trim() || `/apps/${app.code}`;
+      const appForLoad: Application = { ...app, entry_point: entryPoint, route_path: routePath };
+      const relativePath = routePath.startsWith('/apps/')
+        ? routePath.replace('/apps/', '')
+        : routePath;
+      if (!relativePath || relativePath.includes('..')) {
+        console.warn(`⚠️ [AppRoutes] 应用 ${app.code} route_path 非法: ${routePath}`);
         continue;
       }
-      const relativePath = app.route_path.startsWith('/apps/')
-        ? app.route_path.replace('/apps/', '')
-        : app.route_path;
       // 复用已有的 lazy 实例，避免重新创建导致子树重新挂载
       if (!lazyAppsCache.current.has(app.code)) {
-        lazyAppsCache.current.set(app.code, createLazyApp(app));
+        lazyAppsCache.current.set(app.code, createLazyApp(appForLoad));
       }
       const LazyApp = lazyAppsCache.current.get(app.code)!;
       const isProLocked = app.is_pro && !app.can_access;
@@ -233,8 +270,27 @@ const AppRoutes: React.FC = () => {
         />
       );
     }
+    // 已启用应用列表未包含目标 app（如定制壳菜单深链到依赖应用）时给出可见提示，禁止纯白
+    routes.push(
+      <Route
+        key="app-unmatched"
+        path="*"
+        element={
+          <div style={{ ...appErrorPanelStyle, background: '#fffbe6', border: '1px solid #ffe58f' }}>
+            <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <AlertTriangle size={20} strokeWidth={1.75} aria-hidden />
+              {t('appRoutes.unmatchedAppPath')}
+            </h3>
+            <p>
+              {t('appRoutes.currentPath')}: {typeof window !== 'undefined' ? window.location.pathname : ''}
+            </p>
+            <p>{t('appRoutes.unmatchedAppPathHint')}</p>
+          </div>
+        }
+      />,
+    );
     return routes;
-  }, [applications]);
+  }, [applications, t]);
 
   // 加载中状态（应用列表加载中）
   if (isAuthenticated && loading) {

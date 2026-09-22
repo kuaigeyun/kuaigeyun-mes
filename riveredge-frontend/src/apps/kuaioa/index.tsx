@@ -4,6 +4,7 @@
 
 import React, { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import PageSkeleton from '../../components/page-skeleton';
 
 const withPageSuspense = (LazyComponent: React.LazyExoticComponent<React.ComponentType<any>>) => (
@@ -60,6 +61,16 @@ const AssetPurchasesPage = lazy(() => import('./pages/assets/purchases/index'));
 const AssetsRegistryPage = lazy(() => import('./pages/assets/registry/index'));
 const AnnouncementsPage = lazy(() => import('./pages/admin/announcements/index'));
 const SealPage = lazy(() => import('./pages/admin/seal/index'));
+
+const KuaioaPageNotFound: React.FC = () => {
+  const { t } = useTranslation();
+  return (
+    <div style={{ padding: 24 }}>
+      <h3>{t('app.kuaioa.route.notFoundTitle')}</h3>
+      <p>{t('app.kuaioa.route.notFoundHint')}</p>
+    </div>
+  );
+};
 
 const KuaioaApp: React.FC = () => (
   <Routes>
@@ -119,6 +130,7 @@ const KuaioaApp: React.FC = () => (
     <Route path="admin/announcements" element={withPageSuspense(AnnouncementsPage)} />
     <Route path="admin/seal" element={withPageSuspense(SealPage)} />
     <Route path="" element={<Navigate to="workbench" replace />} />
+    <Route path="*" element={<KuaioaPageNotFound />} />
   </Routes>
 );
 

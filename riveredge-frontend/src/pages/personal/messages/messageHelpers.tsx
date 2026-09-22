@@ -7,7 +7,7 @@ export function isUnreadMessage(message: UserMessage): boolean {
   return message.status === 'pending' || message.status === 'sending' || message.status === 'success';
 }
 
-/** 站内信是否属于审批类（与个人消息「审批」分类一致） */
+/** 站内信是否属于审批类（与在线消息「审批」分类 / 个人消息审批箱一致） */
 export function isApprovalUserMessage(message: UserMessage): boolean {
   const vars = message.variables || {};
   const category = String(vars.message_category || '').trim().toLowerCase();
@@ -15,14 +15,35 @@ export function isApprovalUserMessage(message: UserMessage): boolean {
     return true;
   }
   const action = String(vars.trigger_action || '').trim().toLowerCase();
-  if (action === 'pending' || action === 'rejected' || action === 'urge' || action === 'cc') {
+  // 平台 pending + 好力 GO / 业务配置 submitted（提交待审）等
+  if (
+    action === 'pending' ||
+    action === 'submitted' ||
+    action === 'rejected' ||
+    action === 'urge' ||
+    action === 'cc' ||
+    action === 'revoked'
+  ) {
     return true;
   }
   const subject = String(message.subject || '').trim();
-  if (/^待审批[:：]/.test(subject) || subject.includes('待审批')) {
+  if (
+    /^待审批[:：]/.test(subject) ||
+    subject.includes('待审批') ||
+    subject.includes('待审核') ||
+    /【[^】]*待审/.test(subject)
+  ) {
     return true;
   }
   return false;
+}
+
+/** 会话标题是否像站内信主题（不应出现在「个人」私聊列表） */
+export function looksLikeSystemNotifyTitle(title: string | null | undefined): boolean {
+  const text = String(title || '').trim();
+  if (!text) return false;
+  // 【厂内维保单·已通过】WX… / 【待审批】…
+  return /^【[^】]{1,40}】/.test(text);
 }
 
 export function getStatusTag(status: string, t: TFunction) {
