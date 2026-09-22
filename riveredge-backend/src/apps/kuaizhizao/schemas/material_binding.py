@@ -60,17 +60,21 @@ class MaterialBindingCreateFromReporting(BaseModel):
     """
     binding_type: str = Field(..., description="绑定类型（feeding/discharging）")
     material_id: int = Field(..., description="物料ID")
-    material_code: Optional[str] = Field(None, description="物料编码（可选，如果提供则使用，否则自动获取）")
-    material_name: Optional[str] = Field(None, description="物料名称（可选，如果提供则使用，否则自动获取）")
+    material_code: Optional[str] = Field(None, description="物料编码（可选，服务端以主数据为准）")
+    material_name: Optional[str] = Field(None, description="物料名称（可选，服务端以主数据为准）")
     quantity: Decimal = Field(..., gt=0, description="绑定数量")
     warehouse_id: Optional[int] = Field(None, description="仓库ID")
     warehouse_name: Optional[str] = Field(None, description="仓库名称（可选）")
     location_id: Optional[int] = Field(None, description="库位ID（可选）")
     location_code: Optional[str] = Field(None, description="库位编码（可选）")
     batch_no: Optional[str] = Field(None, description="批次号（可选）")
+    serial_nos: Optional[list[str]] = Field(None, description="序列号列表（可选，交由库存服务校验）")
+    ownership_type: Optional[str] = Field(None, description="权属类型（可选，交由库存服务校验）")
+    customer_id: Optional[int] = Field(None, description="客户ID（客供料时可选）")
     barcode: Optional[str] = Field(None, description="条码（可选，用于扫码绑定）")
     binding_method: str = Field("manual", description="绑定方式（scan/manual）")
     remarks: Optional[str] = Field(None, description="备注")
+    bound_at: Optional[datetime] = Field(None, description="绑定时间（可选，默认当前业务时间）")
 
 
 class MaterialBindingUpdate(BaseModel):

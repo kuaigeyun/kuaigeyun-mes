@@ -832,7 +832,8 @@ async def delete_material_binding(
     try:
         await material_binding_service.delete_material_binding(
             tenant_id=tenant_id,
-            binding_id=binding_id
+            binding_id=binding_id,
+            operator_id=current_user.id,
         )
     except NotFoundError as e:
         raise _http_exception_with_trace(404, str(e), "/material-binding/{binding_id}", tenant_id)

@@ -33,7 +33,8 @@ from infra.services.business_config_service import BusinessConfigService
 _BATCH_ORDER_ENFORCEMENT_EXEMPT_SOURCE_TYPES = frozenset({
     "purchase_return",
 })
-from infra.exceptions.exceptions import BusinessLogicError
+from infra.exceptions.exceptions import BusinessLogicError, ValidationError
+from tortoise.exceptions import IntegrityError
 
 
 class InventoryService:
@@ -674,12 +675,14 @@ class InventoryService:
                     use_line_side = True
 
             from apps.master_data.models.material import Material
-            from infra.exceptions.exceptions import BusinessLogicError
+            from infra.exceptions.exceptions import BusinessLogicError, ValidationError
+            from tortoise.exceptions import IntegrityError, OperationalError
 
             batch_management_enabled, serial_management_enabled = False, False
             try:
                 batch_management_enabled, serial_management_enabled = await InventoryService._get_warehouse_management_flags(tenant_id)
-            except Exception as _flag_exc:
+            except (BusinessLogicError, ValidationError, OperationalError, OSError, TimeoutError, ConnectionError) as _flag_exc:
+                # 配置读取失败可降级：跳过强制批号/序列号校验，不阻断入库
                 logger.warning(f"获取仓库管理标志失败（跳过批号/序列号强制校验）: {_flag_exc}")
             material = await Material.get_or_none(tenant_id=tenant_id, id=material_id, deleted_at__isnull=True)
 
@@ -716,7 +719,8 @@ class InventoryService:
                         if not serial_nos or len(serial_nos) <= 0:
                             material_code = getattr(material, "main_code", None) or getattr(material, "code", "")
                             raise BusinessLogicError(f"物料 {material.name}（{material_code}）启用了序列号管理，入库必须提供序列号")
-                        if abs(float(quantity) - len(serial_nos)) > 0.001:
+                        expected = Decimal(len(serial_nos))
+                        if abs(Decimal(str(quantity)) - expected) > Decimal("0.001"):
                             raise BusinessLogicError(f"入库数量（{quantity}）与序列号数量（{len(serial_nos)}）不一致")
 
                 if (
@@ -906,7 +910,11 @@ class InventoryService:
 
             notify_inventory_changed(tenant_id, material_id)
             return True
+        except (BusinessLogicError, ValidationError, IntegrityError) as e:
+            logger.error(f"InventoryService.increase_stock 失败: {e}")
+            raise
         except Exception as e:
+            # 库存变动必须回滚，不可静默
             logger.error(f"InventoryService.increase_stock 失败: {e}")
             raise
 
@@ -1619,6 +1627,9 @@ class InventoryService:
 
             notify_inventory_changed(tenant_id, material_id)
             return True
+        except (BusinessLogicError, ValidationError, IntegrityError) as e:
+            logger.error(f"InventoryService.decrease_stock 失败: {e}")
+            raise
         except Exception as e:
             logger.error(f"InventoryService.decrease_stock 失败: {e}")
             raise
@@ -1784,6 +1795,9 @@ class InventoryService:
 
             notify_inventory_changed(tenant_id, material_id)
             return True
+        except (BusinessLogicError, ValidationError, IntegrityError) as e:
+            logger.error(f"InventoryService.adjust_inventory 失败: {e}")
+            raise
         except Exception as e:
             logger.error(f"InventoryService.adjust_inventory 失败: {e}")
             raise

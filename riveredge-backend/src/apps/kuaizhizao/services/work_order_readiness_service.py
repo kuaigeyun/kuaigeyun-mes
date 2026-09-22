@@ -17,6 +17,8 @@ from loguru import logger
 from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaizhizao.schemas.work_order import WorkOrderKittingAnalysisResponse
 from core.utils.timezone_utils import now_utc
+from infra.exceptions.exceptions import BusinessLogicError, ValidationError
+from tortoise.exceptions import IntegrityError
 
 READINESS_ACTIVE_STATUSES = ("draft", "released", "in_progress", "草稿", "已下达", "执行中")
 
@@ -108,7 +110,8 @@ class WorkOrderReadinessService:
 
             try:
                 await wo_svc.get_work_order_kitting_analysis(tenant_id, wo.id)
-            except Exception as exc:
+            except (BusinessLogicError, ValidationError, IntegrityError, OSError, TimeoutError, ConnectionError, Exception) as exc:
+                # 齐套计算失败可降级：清空缓存字段，不阻断库存/工单主流程
                 logger.warning(f"工单 {wo.id} 齐套率计算失败: {exc}")
                 wo.readiness_rate = None
                 wo.readiness_component_ids = []
@@ -220,6 +223,9 @@ async def _flush_debounced_material_refresh(tenant_id: int) -> None:
             logger.debug(
                 f"库存变动刷新齐套率: tenant={tenant_id} materials={len(material_ids)} work_orders={count}"
             )
+    except (BusinessLogicError, ValidationError, IntegrityError, OSError, TimeoutError, ConnectionError) as exc:
+        # 齐套率刷新为可降级副作用，不阻断库存主事务
+        logger.warning(f"库存变动刷新齐套率失败 tenant={tenant_id}: {exc}")
     except Exception as exc:
         logger.warning(f"库存变动刷新齐套率失败 tenant={tenant_id}: {exc}")
 
@@ -227,6 +233,8 @@ async def _flush_debounced_material_refresh(tenant_id: int) -> None:
 async def _safe_refresh_work_orders(tenant_id: int, work_order_ids: List[int]) -> None:
     try:
         await WorkOrderReadinessService().refresh_work_orders(tenant_id, work_order_ids)
+    except (BusinessLogicError, ValidationError, IntegrityError, OSError, TimeoutError, ConnectionError) as exc:
+        logger.warning(f"工单齐套率刷新失败 ids={work_order_ids}: {exc}")
     except Exception as exc:
         logger.warning(f"工单齐套率刷新失败 ids={work_order_ids}: {exc}")
 

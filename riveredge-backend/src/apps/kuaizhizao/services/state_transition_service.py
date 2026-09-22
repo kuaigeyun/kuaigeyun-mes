@@ -102,6 +102,60 @@ class StateTransitionService:
         "demand_computation": DEFAULT_DEMAND_COMPUTATION_TRANSITIONS,
     }
     
+    async def _ensure_rule_authorization(
+        self,
+        tenant_id: int,
+        operator_id: Optional[int],
+        required_permission: Optional[str],
+        required_role: Optional[str],
+    ) -> None:
+        """DB 规则配置了权限/角色时校验操作者；两者皆空则放行（向后兼容）。"""
+        perm = (required_permission or "").strip()
+        role_req = (required_role or "").strip()
+        if not perm and not role_req:
+            return
+
+        if operator_id is None:
+            missing = []
+            if perm:
+                missing.append(f"权限 {perm}")
+            if role_req:
+                missing.append(f"角色 {role_req}")
+            raise BusinessLogicError(f"状态流转需要操作人且缺少{'、'.join(missing)}")
+
+        from core.services.authorization.user_permission_service import UserPermissionService
+
+        if perm:
+            has_perm = await UserPermissionService.has_permission(
+                user_id=operator_id,
+                tenant_id=tenant_id,
+                permission_code=perm,
+            )
+            if not has_perm:
+                raise BusinessLogicError(f"状态流转缺少权限: {perm}")
+
+        if role_req:
+            roles = await UserPermissionService.get_user_roles(
+                user_id=operator_id,
+                tenant_id=tenant_id,
+            )
+            role_req_norm = role_req.strip().lower()
+            matched = any(
+                (r.code or "").strip().lower() == role_req_norm
+                or (r.name or "").strip().lower() == role_req_norm
+                for r in roles
+            )
+            if not matched:
+                # 管理员旁路与权限体系一致
+                from infra.models.user import User
+
+                user = await User.get_or_none(id=operator_id)
+                if not (
+                    user
+                    and await UserPermissionService.is_admin_bypass(user, tenant_id)
+                ):
+                    raise BusinessLogicError(f"状态流转缺少角色: {role_req}")
+
     async def can_transition(
         self,
         tenant_id: int,
@@ -122,6 +176,9 @@ class StateTransitionService:
             
         Returns:
             bool: 是否可以流转
+
+        Raises:
+            BusinessLogicError: 命中规则但操作者缺少 required_permission / required_role
         """
         # 检查是否有明确的流转规则（StateTransitionRule 无 deleted_at 软删除字段）
         rule = await StateTransitionRule.filter(
@@ -133,7 +190,12 @@ class StateTransitionService:
         ).first()
         
         if rule:
-            # 有规则，检查权限（TODO: 实现权限检查）
+            await self._ensure_rule_authorization(
+                tenant_id=tenant_id,
+                operator_id=operator_id,
+                required_permission=getattr(rule, "required_permission", None),
+                required_role=getattr(rule, "required_role", None),
+            )
             return True
 
         # 无 DB 规则时，使用内置默认（支持更多单据类型）

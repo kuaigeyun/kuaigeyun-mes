@@ -75,7 +75,11 @@ interface WorkOrder {
   product_unit?: string;
   base_unit?: string;
   unit_to_base_factor?: number;
+  is_frozen?: boolean;
+  freeze_reason?: string | null;
 }
+
+const WORK_ORDER_PAGE_SIZE = 50;
 
 const operationHasSimpleInspection = (operation: any) => {
   if (!operation) return false;
@@ -89,6 +93,9 @@ const WorkOrdersKioskPage: React.FC = () => {
   const { t } = useTranslation()
     const { token } = theme.useToken();
     const [loading, setLoading] = useState(false);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [hasMoreWorkOrders, setHasMoreWorkOrders] = useState(true);
+    const [workOrderSkip, setWorkOrderSkip] = useState(0);
     const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
     const [searchKeyword, setSearchKeyword] = useState('');
     const [stationInfo, setStationInfo] = useState<StationInfo | null>(null);
@@ -159,23 +166,45 @@ const WorkOrdersKioskPage: React.FC = () => {
     }, [defectModalVisible, activeOperation]);
 
 
-    const loadWorkOrders = async (workCenterId?: number, filterOverride?: 'all' | 'station' | 'currentUser') => {
-        setLoading(true);
+    const loadWorkOrders = async (
+        workCenterId?: number,
+        filterOverride?: 'all' | 'station' | 'currentUser',
+        options?: { append?: boolean },
+    ) => {
+        const append = Boolean(options?.append);
+        if (append) {
+            setLoadingMore(true);
+        } else {
+            setLoading(true);
+            setHasMoreWorkOrders(true);
+            setWorkOrderSkip(0);
+        }
         setLoadError(null);
         try {
             const effectiveFilter = filterOverride ?? workOrderFilter;
-            const params: any = { skip: 0, limit: 200, include_readiness: false };
+            const skip = append ? workOrderSkip : 0;
+            const params: any = {
+                skip,
+                limit: WORK_ORDER_PAGE_SIZE,
+                include_readiness: false,
+            };
             // 仅在选择「只看本机台」时按工作中心筛选；「全部」时显示所有工单（含未设置工作中心的）
             if (effectiveFilter === 'station' && workCenterId) params.work_center_id = workCenterId;
             if (effectiveFilter === 'currentUser' && userInfo?.id) params.assigned_worker_id = userInfo.id;
             const response = await workOrderApi.list(params);
             const data = response?.data ?? (Array.isArray(response) ? response : []);
             const list = Array.isArray(data) ? data : [];
-            const filtered = list.filter((wo: WorkOrder) => ['released', 'in_progress'].includes(wo.status || ''));
-            setWorkOrders(filtered);
+            setWorkOrderSkip(skip + list.length);
+            setHasMoreWorkOrders(list.length >= WORK_ORDER_PAGE_SIZE);
+            const filtered = list.filter(
+                (wo: WorkOrder) =>
+                    ['released', 'in_progress'].includes(wo.status || '') &&
+                    wo.is_frozen !== true,
+            );
+            setWorkOrders((prev) => (append ? [...prev, ...filtered] : filtered));
 
             if (selectedWorkOrder) {
-                const updated = data.find((wo: WorkOrder) => wo.id === selectedWorkOrder.id);
+                const updated = list.find((wo: WorkOrder) => wo.id === selectedWorkOrder.id);
                 if (updated) setSelectedWorkOrder(updated);
             }
         } catch (error) {
@@ -184,6 +213,7 @@ const WorkOrdersKioskPage: React.FC = () => {
             message.error(t('app.kuaizhizao.workOrder.kioskLoadListFailed'));
         } finally {
             setLoading(false);
+            setLoadingMore(false);
         }
     };
 
@@ -230,6 +260,14 @@ const WorkOrdersKioskPage: React.FC = () => {
 
     const handleStart = async () => {
         if (!selectedWorkOrder?.id || !activeOperation?.id) return;
+        if (selectedWorkOrder.is_frozen === true) {
+            message.warning(
+                t('app.kuaizhizao.workOrder.kioskFrozenCannotOperate', {
+                    reason: selectedWorkOrder.freeze_reason || '—',
+                }),
+            );
+            return;
+        }
         const st = String(selectedWorkOrder.status || '').trim().toLowerCase();
         if (st !== 'released' && st !== 'in_progress' && st !== '已下达' && st !== '执行中') {
             message.warning(t('app.kuaizhizao.workOrder.msgReleaseBeforeStart'));
@@ -320,6 +358,14 @@ const WorkOrdersKioskPage: React.FC = () => {
 
     const handleReport = async () => {
         try {
+            if (selectedWorkOrder?.is_frozen === true) {
+                message.warning(
+                    t('app.kuaizhizao.workOrder.kioskFrozenCannotOperate', {
+                        reason: selectedWorkOrder.freeze_reason || '—',
+                    }),
+                );
+                return;
+            }
             const values = await form.validateFields();
             if (!activeOperation || !selectedWorkOrder) return;
             const qualified = Number(values.qualified_quantity) || 0;
@@ -494,7 +540,8 @@ const WorkOrdersKioskPage: React.FC = () => {
                         description={<span style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>选择工位后加载工单</span>}
                     />
                 ) : (
-                    filteredWorkOrders.map((wo) => {
+                    <>
+                    {filteredWorkOrders.map((wo) => {
                         const isSelected = selectedWorkOrder?.id === wo.id;
                         const pct = Math.round(((wo.completed_quantity || 0) / (wo.quantity || 1)) * 100);
                         const isComplete = wo.status === 'completed';
@@ -527,7 +574,23 @@ const WorkOrdersKioskPage: React.FC = () => {
                                 }
                             />
                         );
-                    })
+                    })}
+                    <div style={{ textAlign: 'center', padding: '12px 0 4px' }}>
+                        {hasMoreWorkOrders ? (
+                            <Button
+                                size="large"
+                                loading={loadingMore}
+                                onClick={() => loadWorkOrders(stationInfo?.workCenterId, undefined, { append: true })}
+                            >
+                                {t('app.kuaizhizao.workOrder.kioskLoadMore')}
+                            </Button>
+                        ) : (
+                            <span style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>
+                                {t('app.kuaizhizao.workOrder.kioskNoMore')}
+                            </span>
+                        )}
+                    </div>
+                    </>
                 )}
             </div>
         </Card>
@@ -862,9 +925,15 @@ const WorkOrdersKioskPage: React.FC = () => {
                                             <Form.Item label={<span style={{ color: HMI_DESIGN_TOKENS.TEXT_SECONDARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>&nbsp;</span>}>
                                                 <Button
                                                     size="large"
-                                                    {...touchButtonProps({ variant: 'success', size: 'action', loading: opsLoading })}
+                                                    {...touchButtonProps({
+                                                      variant: 'success',
+                                                      size: 'action',
+                                                      loading: opsLoading,
+                                                      disabled: isWorkOrderFrozen,
+                                                    })}
                                                     icon={<CheckCircleOutlined />}
                                                     onClick={handleReport}
+                                                    title={frozenOperateHint}
                                                 >
                                                     确认报工
                                                 </Button>
@@ -950,6 +1019,12 @@ const WorkOrdersKioskPage: React.FC = () => {
     );
 
     const isRunning = activeOperation?.status === 'processing';
+    const isWorkOrderFrozen = selectedWorkOrder?.is_frozen === true;
+    const frozenOperateHint = isWorkOrderFrozen
+        ? t('app.kuaizhizao.workOrder.kioskFrozenCannotOperate', {
+            reason: selectedWorkOrder?.freeze_reason || '—',
+          })
+        : undefined;
     const handleStartEnd = () => {
         if (isRunning) {
             addRecentOp('结束', activeOperation?.name);
@@ -1126,6 +1201,14 @@ const WorkOrdersKioskPage: React.FC = () => {
                         style={{ flexShrink: 0 }}
                     />
                 )}
+                {isWorkOrderFrozen && frozenOperateHint && (
+                    <Alert
+                        type="warning"
+                        title={frozenOperateHint}
+                        showIcon
+                        style={{ flexShrink: 0 }}
+                    />
+                )}
                 {/* 指标条：统一底条，轻量分隔线 */}
                 <div
                     onClick={() => setFocusedNumField(null)}
@@ -1191,21 +1274,27 @@ const WorkOrdersKioskPage: React.FC = () => {
                     <Button
                         size="large"
                         {...touchButtonProps({
-                          variant: !selectedWorkOrder ? 'default' : isRunning ? 'primary' : 'success',
+                          variant: !selectedWorkOrder || isWorkOrderFrozen ? 'default' : isRunning ? 'primary' : 'success',
                           size: 'action',
-                          disabled: !selectedWorkOrder,
+                          disabled: !selectedWorkOrder || isWorkOrderFrozen,
                         })}
                         icon={isRunning ? <StopOutlined /> : <PlayCircleOutlined />}
                         onClick={handleStartEnd}
+                        title={frozenOperateHint}
                     >
                         {isRunning ? '结束' : '开始'}
                     </Button>
                     {activeOperation?.status === 'processing' && (
                         <Button
                             size="large"
-                            {...touchButtonProps({ variant: 'success', size: 'action' })}
+                            {...touchButtonProps({
+                              variant: 'success',
+                              size: 'action',
+                              disabled: isWorkOrderFrozen,
+                            })}
                             icon={<CheckCircleOutlined />}
                             onClick={handleReport}
+                            title={frozenOperateHint}
                         >
                             完成报工
                         </Button>
