@@ -312,8 +312,36 @@ class DataScopeService:
                 part = await custom(ctx)
                 if part is not None:
                     return queryset.filter(part)
-        # 默认数据权限为“全部”：只有显式配置策略时才收敛数据范围。
-        return queryset
+        # TEN-01：无显式策略时默认收敛为本人（created_by / applicant），全量需显式 ALL 策略。
+        from core.models.model_fields import model_has_field
+        from core.services.authorization.data_scope_resolvers import resolve_scope_self
+        from core.services.authorization.data_scope_resource_registry import DataScopeResourceProfile
+
+        model = queryset.model
+        applicant = (getattr(profile, "applicant_user_id_field", None) or "").strip()
+        created_field = (getattr(profile, "created_by_user_id_field", None) or "").strip()
+        scope_profile = profile
+        if not (
+            (applicant and model_has_field(model, applicant))
+            or (created_field and model_has_field(model, created_field))
+        ):
+            if model_has_field(model, "created_by"):
+                scope_profile = DataScopeResourceProfile(applicant_user_id_field="created_by")
+            else:
+                return queryset.filter(id=-1)
+        ctx = ScopeResolveContext(
+            tenant_id=tenant_id,
+            user_id=user.id,
+            resource=resource_key,
+            profile=scope_profile,
+            scope_payload=None,
+            department_uuid=None,
+            department_user_ids=[user.id],
+        )
+        part = await resolve_scope_self(ctx)
+        if part is None:
+            return queryset
+        return queryset.filter(part)
 
     @classmethod
     async def apply(

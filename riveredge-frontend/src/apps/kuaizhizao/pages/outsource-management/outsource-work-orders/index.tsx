@@ -316,12 +316,11 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
 
   const refreshLocalStats = useCallback(async () => {
     try {
-      const response = await outsourceWorkOrderApi.list({ skip: 0, limit: 1000 });
-      const list = response.data ?? [];
+      const stats = await outsourceWorkOrderApi.statistics();
       setLocalStats({
-        total: list.length,
-        draft: list.filter((x: OutsourceWorkOrder) => (x.status || '').trim() === 'draft').length,
-        inProgress: list.filter((x: OutsourceWorkOrder) => (x.status || '').trim() === 'in_progress').length,
+        total: stats.total,
+        draft: stats.draft,
+        inProgress: stats.in_progress,
       });
     } catch {
       setLocalStats({ total: 0, draft: 0, inProgress: 0 });

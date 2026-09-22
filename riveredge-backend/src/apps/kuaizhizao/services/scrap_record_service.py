@@ -12,8 +12,9 @@ from typing import List, Optional, Dict, Any
 from decimal import Decimal
 
 from tortoise.queryset import Q
-from tortoise.transactions import in_transaction
 from loguru import logger
+
+from apps.kuaizhizao.utils.stock_posting import reuse_or_begin_transaction
 
 from apps.kuaizhizao.models.scrap_record import ScrapRecord
 from apps.kuaizhizao.models.work_order import WorkOrder
@@ -66,7 +67,8 @@ class ScrapRecordService(AppBaseService[ScrapRecord]):
             ValidationError: 数据验证失败
             BusinessLogicError: 业务逻辑错误
         """
-        async with in_transaction():
+        # 可能被不合格台账处置外层事务调用：复用外层，避免 NestedTransaction 独立提交/死锁
+        async with reuse_or_begin_transaction():
             # 获取报废记录
             scrap_record = await ScrapRecord.get_or_none(
                 id=scrap_id,

@@ -3731,6 +3731,8 @@
     "kuaizhizao:work-order:revoke",
     "kuaizhizao:work-order:submit",
     "kuaizhizao:work-order:update",
+    "kuaizhizao:work-order:execute",
+    "kuaizhizao:app-management:reset-data",
     "kuaizhizao:production-daily:read",
     "kuaizhizao:production-daily:create",
     "kuaizhizao:production-daily:update",

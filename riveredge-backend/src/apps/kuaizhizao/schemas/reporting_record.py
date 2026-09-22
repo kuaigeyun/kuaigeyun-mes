@@ -48,6 +48,9 @@ class ReportingRecordBase(BaseSchema):
     sop_parameters: Optional[Any] = Field(None, description="SOP参数数据（JSON格式，存储报工时收集的SOP参数）")
     inbound_warehouse_id: Optional[int] = Field(None, description="末道工序入库仓库 ID")
     inbound_warehouse_name: Optional[str] = Field(None, description="末道工序入库仓库名称")
+    idempotency_key: Optional[str] = Field(
+        None, max_length=200, description="客户端幂等键（可选，防重复提交）"
+    )
 
 
 class ReportingRecordCreate(ReportingRecordBase):

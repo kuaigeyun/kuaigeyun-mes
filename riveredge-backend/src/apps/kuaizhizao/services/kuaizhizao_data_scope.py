@@ -78,10 +78,14 @@ async def apply_sales_order_child_list_scope(
     linked: Q | None = None
     if order_ids:
         linked = Q(**{f"{order_id_field}__in": order_ids})
+
+    # TEN-04：无 orphan_resource 时，无源单行按本人 created_by 收敛，不再 id=-1 误隐藏
+    orphan_self = Q(**{f"{order_id_field}__isnull": True}) & Q(created_by=current_user.id)
+
     if not orphan_resource:
         if linked is None:
-            return query.filter(id=-1)
-        return query.filter(linked)
+            return query.filter(orphan_self)
+        return query.filter(linked | orphan_self)
 
     orphan_qs = query.filter(**{f"{order_id_field}__isnull": True})
     orphan_scoped = await DataScopeService.apply(
@@ -97,7 +101,7 @@ async def apply_sales_order_child_list_scope(
     if orphan_ids:
         clauses.append(Q(id__in=orphan_ids))
     if not clauses:
-        return query.filter(id=-1)
+        return query.filter(orphan_self)
     combined = clauses[0]
     for part in clauses[1:]:
         combined |= part
@@ -181,18 +185,61 @@ async def allow_sales_order_detail_quality_linked_read(
     user_id: int,
     sales_order_id: int,
 ) -> bool:
-    """质检关联只读：无销售订单 read 时，仍允许打开被 FQC/OQC 引用的销售订单详情。"""
+    """质检关联只读：无销售订单 read 时，仍允许打开被 FQC/OQC 引用的销售订单详情。
+
+    TEN-03：须叠加销售订单数据范围——仅当源单对用户可见，或用户本人创建的质检单引用了该订单时放行。
+    """
     if int(sales_order_id) <= 0:
         return False
     if not await _sales_order_linked_from_quality_inspection(tenant_id, sales_order_id):
         return False
     from core.services.authorization.user_permission_service import UserPermissionService
 
-    return await UserPermissionService.has_any_permission(
+    if not await UserPermissionService.has_any_permission(
         user_id,
         tenant_id,
         _quality_inspection_read_codes_for_sales_order_link(),
+    ):
+        return False
+
+    from apps.kuaizhizao.models.sales_order import SalesOrder
+    from infra.models.user import User
+
+    so = await SalesOrder.get_or_none(
+        id=int(sales_order_id),
+        tenant_id=tenant_id,
+        deleted_at__isnull=True,
     )
+    if so is None:
+        return False
+    user = await User.get_or_none(id=int(user_id), deleted_at__isnull=True)
+    if user is None:
+        return False
+    if await DataScopeService.row_visible(
+        so,
+        tenant_id=tenant_id,
+        user=user,
+        resource=SALES_ORDER_SCOPE_RESOURCE,
+    ):
+        return True
+    # 源单数据范围不可见：仅本人创建的质检引用可放行（缩小跨岗位泄露面）
+    from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection
+    from apps.kuaizhizao.models.oqc_inspection import OQCInspection
+
+    own_fqc = await FinishedGoodsInspection.filter(
+        tenant_id=tenant_id,
+        sales_order_id=int(sales_order_id),
+        created_by=int(user_id),
+        deleted_at__isnull=True,
+    ).exists()
+    if own_fqc:
+        return True
+    return await OQCInspection.filter(
+        tenant_id=tenant_id,
+        sales_order_id=int(sales_order_id),
+        created_by=int(user_id),
+        deleted_at__isnull=True,
+    ).exists()
 
 
 async def allow_work_order_detail_quality_linked_read(
@@ -200,18 +247,60 @@ async def allow_work_order_detail_quality_linked_read(
     user_id: int,
     work_order_id: int,
 ) -> bool:
-    """质检关联只读：无工单 read 时，仍允许打开被质检单引用的工单详情。"""
+    """质检关联只读：无工单 read 时，仍允许打开被质检单引用的工单详情。
+
+    TEN-03：须叠加工单数据范围；源单不可见时仅本人创建的质检引用可放行。
+    """
     if int(work_order_id) <= 0:
         return False
     if not await _work_order_linked_from_quality_inspection(tenant_id, work_order_id):
         return False
     from core.services.authorization.user_permission_service import UserPermissionService
 
-    return await UserPermissionService.has_any_permission(
+    if not await UserPermissionService.has_any_permission(
         user_id,
         tenant_id,
         _quality_inspection_read_codes_for_work_order_link(),
+    ):
+        return False
+
+    from apps.kuaizhizao.models.work_order import WorkOrder
+    from infra.models.user import User
+
+    wo = await WorkOrder.get_or_none(
+        id=int(work_order_id),
+        tenant_id=tenant_id,
+        deleted_at__isnull=True,
     )
+    if wo is None:
+        return False
+    user = await User.get_or_none(id=int(user_id), deleted_at__isnull=True)
+    if user is None:
+        return False
+    if await DataScopeService.row_visible(
+        wo,
+        tenant_id=tenant_id,
+        user=user,
+        resource="kuaizhizao:work-order",
+    ):
+        return True
+    from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection
+    from apps.kuaizhizao.models.process_inspection import ProcessInspection
+
+    own_fqc = await FinishedGoodsInspection.filter(
+        tenant_id=tenant_id,
+        work_order_id=int(work_order_id),
+        created_by=int(user_id),
+        deleted_at__isnull=True,
+    ).exists()
+    if own_fqc:
+        return True
+    return await ProcessInspection.filter(
+        tenant_id=tenant_id,
+        work_order_id=int(work_order_id),
+        created_by=int(user_id),
+        deleted_at__isnull=True,
+    ).exists()
 
 
 async def assert_sales_order_row_visible_or_quality_linked(

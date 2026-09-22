@@ -1166,6 +1166,17 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             assert_quality_inspection_capability,
         )
 
+        # B3-R3：已检验后禁止改写原始检验结果字段（仅允许备注/附件等）
+        RAW_INSPECTION_FIELDS = frozenset({
+            "qualified_quantity",
+            "unqualified_quantity",
+            "inspector_id",
+            "inspector_name",
+            "inspection_time",
+            "inspection_result",
+            "quality_status",
+        })
+
         async with in_transaction():
             inspection_model = await IncomingInspection.get_or_none(tenant_id=tenant_id, id=inspection_id)
             if not inspection_model:
@@ -1173,6 +1184,13 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             assert_quality_inspection_capability(inspection_model, "update")
             user_info = await self.get_user_info(updated_by)
             update_data = inspection_data.model_dump(exclude_unset=True, exclude={'updated_by'})
+            conducted = str(getattr(inspection_model, "inspection_result", "") or "").strip() == "已检验"
+            if conducted:
+                locked = sorted(k for k in update_data if k in RAW_INSPECTION_FIELDS)
+                if locked:
+                    raise ValidationError(
+                        f"已检验单据不可改写原始检验字段: {', '.join(locked)}"
+                    )
             update_data['updated_by'] = updated_by
             update_data['updated_by_name'] = user_info['name']
 

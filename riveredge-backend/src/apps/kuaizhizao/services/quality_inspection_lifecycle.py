@@ -46,17 +46,19 @@ def build_quality_inspection_revoke_conduct_fields(
     updated_by_name: str,
     inspection: Any = None,
 ) -> Dict[str, Any]:
-    """构建撤回检验后写入 ORM 的字段（四类检验单共用核心字段）。"""
+    """构建撤回检验后写入 ORM 的字段（四类检验单共用核心字段）。
+
+    B3-R3：只回退状态机字段；不改写合格/不合格数量、检验人、检验时间等原始记录。
+    若传入 inspection，将当前原始结果写入 revoke_snapshot（附加到 remarks），供追溯。
+    """
     from apps.kuaizhizao.services.inspection_step_spec import strip_inspection_template_conduct
+    from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
+    import json
+
     fields: Dict[str, Any] = {
         "status": "待检验",
         "inspection_result": "待检验",
         "quality_status": "待判定",
-        "qualified_quantity": Decimal("0"),
-        "unqualified_quantity": Decimal("0"),
-        "inspector_id": None,
-        "inspector_name": None,
-        "inspection_time": None,
         "review_status": "",
         "reviewer_id": None,
         "reviewer_name": None,
@@ -68,6 +70,29 @@ def build_quality_inspection_revoke_conduct_fields(
         "updated_by": updated_by,
         "updated_by_name": updated_by_name,
     }
+
+    if inspection is not None:
+        revoke_snapshot = {
+            "qualified_quantity": str(getattr(inspection, "qualified_quantity", None)),
+            "unqualified_quantity": str(getattr(inspection, "unqualified_quantity", None)),
+            "inspector_id": getattr(inspection, "inspector_id", None),
+            "inspector_name": getattr(inspection, "inspector_name", None),
+            "inspection_time": (
+                to_api_isoformat(getattr(inspection, "inspection_time", None))
+                if getattr(inspection, "inspection_time", None)
+                else None
+            ),
+            "revoked_at": to_api_isoformat(resolve_business_datetime()),
+            "revoked_by": updated_by,
+            "revoked_by_name": updated_by_name,
+        }
+        note = f"\n[revoke_snapshot]{json.dumps(revoke_snapshot, ensure_ascii=False)}"
+        existing_remarks = getattr(inspection, "remarks", None) or getattr(inspection, "notes", None) or ""
+        remark_field = "remarks" if hasattr(inspection, "remarks") else (
+            "notes" if hasattr(inspection, "notes") else None
+        )
+        if remark_field:
+            fields[remark_field] = f"{existing_remarks}{note}".strip()
 
     if entity_type == "incoming_inspection":
         fields.update(

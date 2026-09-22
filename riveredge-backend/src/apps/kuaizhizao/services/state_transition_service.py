@@ -268,6 +268,148 @@ class StateTransitionService:
             logger.info(f"状态流转: {entity_type}:{entity_id} {from_state} -> {to_state} (操作人: {operator_name})")
             
             return log
+
+    # 工单 to_state → document_action_policy capability
+    _WORK_ORDER_STATE_CAPABILITY = {
+        "released": "release",
+        "cancelled": "cancel",
+    }
+    _WORK_ORDER_ALLOWED_STATES = frozenset(WORK_ORDER_STATES.keys())
+    _DEMAND_ALLOWED_STATES = frozenset(DEMAND_STATES.keys())
+
+    async def apply_entity_transition(
+        self,
+        tenant_id: int,
+        entity_type: str,
+        entity_id: int,
+        to_state: str,
+        operator_id: int,
+        operator_name: str,
+        transition_reason: Optional[str] = None,
+        transition_comment: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        领域入口：校验白名单 + can_transition + capability，同事务写日志并更新实体状态。
+        禁止路由层直接 filter.update(status)。
+        """
+        to_state_norm = _normalize_state(str(to_state or "").strip())
+        async with in_transaction():
+            # IDEM-01：同实体同目标态、同操作人、3 秒内已成功流转则幂等返回
+            from datetime import timedelta
+
+            recent_since = resolve_business_datetime() - timedelta(seconds=3)
+            recent = await StateTransitionLog.filter(
+                tenant_id=tenant_id,
+                entity_type=entity_type,
+                entity_id=entity_id,
+                to_state__in=[to_state, to_state_norm],
+                operator_id=operator_id,
+                transition_time__gte=recent_since,
+            ).order_by("-id").first()
+            if recent is not None:
+                return {
+                    "idempotent": True,
+                    "entity_type": entity_type,
+                    "entity_id": entity_id,
+                    "from_state": recent.from_state,
+                    "to_state": recent.to_state,
+                    "log_id": recent.id,
+                }
+
+            if entity_type == "demand":
+                from apps.kuaizhizao.models.demand import Demand
+
+                if to_state_norm not in self._DEMAND_ALLOWED_STATES and to_state not in self._DEMAND_ALLOWED_STATES:
+                    # 需求状态可能是中文键
+                    if to_state not in self.DEMAND_STATES and to_state_norm not in self.DEMAND_STATES:
+                        raise ValidationError(f"目标状态不在白名单: {to_state}")
+                entity = await Demand.get_or_none(
+                    tenant_id=tenant_id, id=entity_id, deleted_at__isnull=True
+                )
+                if not entity:
+                    raise NotFoundError(f"需求不存在: {entity_id}")
+                from_state = entity.status
+                target = to_state if to_state in self.DEMAND_STATES else to_state_norm
+                if not await self.can_transition(
+                    tenant_id, entity_type, from_state, target, operator_id
+                ):
+                    raise BusinessLogicError(f"不允许从状态 {from_state} 流转到 {target}")
+                log = await StateTransitionLog.create(
+                    tenant_id=tenant_id,
+                    entity_type=entity_type,
+                    entity_id=entity_id,
+                    from_state=from_state,
+                    to_state=target,
+                    transition_reason=transition_reason,
+                    transition_comment=transition_comment,
+                    operator_id=operator_id,
+                    operator_name=operator_name,
+                    transition_time=resolve_business_datetime(),
+                )
+                entity.status = target
+                await entity.save(update_fields=["status", "updated_at"])
+            elif entity_type == "work_order":
+                from apps.kuaizhizao.models.work_order import WorkOrder
+                from apps.kuaizhizao.services.document_action_policy.work_order import (
+                    assert_work_order_capability,
+                )
+
+                if to_state_norm not in self._WORK_ORDER_ALLOWED_STATES:
+                    raise ValidationError(f"目标状态不在白名单: {to_state}")
+                entity = await WorkOrder.get_or_none(
+                    tenant_id=tenant_id, id=entity_id, deleted_at__isnull=True
+                )
+                if not entity:
+                    raise NotFoundError(f"工单不存在: {entity_id}")
+                from_state = entity.status
+                if not await self.can_transition(
+                    tenant_id, entity_type, from_state, to_state_norm, operator_id
+                ):
+                    raise BusinessLogicError(
+                        f"不允许从状态 {from_state} 流转到 {to_state_norm}"
+                    )
+                cap = self._WORK_ORDER_STATE_CAPABILITY.get(to_state_norm)
+                if cap:
+                    assert_work_order_capability(entity, cap)
+                log = await StateTransitionLog.create(
+                    tenant_id=tenant_id,
+                    entity_type=entity_type,
+                    entity_id=entity_id,
+                    from_state=from_state,
+                    to_state=to_state_norm,
+                    transition_reason=transition_reason,
+                    transition_comment=transition_comment,
+                    operator_id=operator_id,
+                    operator_name=operator_name,
+                    transition_time=resolve_business_datetime(),
+                )
+                entity.status = to_state_norm
+                now = resolve_business_datetime()
+                update_fields = ["status", "updated_at"]
+                if to_state_norm == "in_progress" and not entity.actual_start_date:
+                    entity.actual_start_date = now
+                    update_fields.append("actual_start_date")
+                elif to_state_norm == "completed" and not entity.actual_end_date:
+                    entity.actual_end_date = now
+                    update_fields.append("actual_end_date")
+                await entity.save(update_fields=update_fields)
+                target = to_state_norm
+            else:
+                raise ValidationError(f"不支持的实体类型: {entity_type}")
+
+            logger.info(
+                f"状态流转已应用: {entity_type}:{entity_id} {from_state} -> {target} "
+                f"(操作人: {operator_name})"
+            )
+            return {
+                "success": True,
+                "transition_log_id": log.id,
+                "from_state": from_state,
+                "to_state": target,
+                "transition_time": to_api_isoformat(log.transition_time)
+                if log.transition_time
+                else None,
+            }
     
     async def get_transition_history(
         self,

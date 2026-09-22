@@ -1521,15 +1521,16 @@ class SalesOrderService(AppBaseService[SalesOrder]):
             if items_data:
                 for item_data in items_data:
                     order_quantity = item_data.get('order_quantity') or item_data.get('required_quantity') or item_data.get('quantity') or 0
-                    order_quantity = float(order_quantity) if order_quantity is not None else 0
-                    delivered_quantity = float(item_data.get('delivered_quantity') or 0)
+                    order_quantity = Decimal(str(order_quantity or 0))
+                    delivered_quantity = Decimal(str(item_data.get('delivered_quantity') or 0))
                     remaining_quantity = item_data.get('remaining_quantity')
                     if remaining_quantity is not None:
-                        remaining_quantity = float(remaining_quantity)
+                        remaining_quantity = Decimal(str(remaining_quantity))
                     else:
                         remaining_quantity = order_quantity - delivered_quantity
+                    unit_price = Decimal(str(item_data.get('unit_price') or 0))
                     total_amt = item_data.get('total_amount') if item_data.get('total_amount') is not None else item_data.get('item_amount')
-                    total_amt = float(total_amt) if total_amt is not None else (order_quantity * float(item_data.get('unit_price') or 0))
+                    total_amt = Decimal(str(total_amt)) if total_amt is not None else (order_quantity * unit_price)
                     delivery_date = item_data.get('delivery_date')
                     if delivery_date is None:
                         delivery_date = order_dict.get('delivery_date')
@@ -1552,7 +1553,7 @@ class SalesOrderService(AppBaseService[SalesOrder]):
                         order_quantity=order_quantity,
                         delivered_quantity=delivered_quantity,
                         remaining_quantity=remaining_quantity,
-                        unit_price=float(item_data.get('unit_price') or 0),
+                        unit_price=unit_price,
                         total_amount=total_amt,
                         delivery_date=delivery_date,
                         delivery_status=item_data.get('delivery_status') or '待交货',
@@ -1812,9 +1813,9 @@ class SalesOrderService(AppBaseService[SalesOrder]):
                 material_code=item.material_code or '',
                 material_name=item.material_name or '',
                 material_unit=item.material_unit or '件',
-                delivery_quantity=float(delivery_quantity),
-                unit_price=float(item.unit_price or 0),
-                total_amount=float(delivery_quantity * Decimal(str(item.unit_price or 0)))
+                delivery_quantity=delivery_quantity,
+                unit_price=Decimal(str(item.unit_price or 0)),
+                total_amount=delivery_quantity * Decimal(str(item.unit_price or 0)),
             ))
         
         if not delivery_items:

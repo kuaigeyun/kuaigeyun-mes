@@ -1316,6 +1316,26 @@ class SalesOrderService:
         if not self._is_review_approved(order.review_status):
             raise BusinessLogicError("只有已审核通过的订单才能关闭")
 
+    async def _assert_no_open_downstream_work_orders(
+        self, tenant_id: int, sales_order_id: int
+    ) -> None:
+        """关闭前：阻止存在未完工已下推工单（released/in_progress）。"""
+        from apps.kuaizhizao.models.work_order import WorkOrder
+
+        open_statuses = ("released", "in_progress", "已下达", "执行中")
+        open_wo = await WorkOrder.filter(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id,
+            deleted_at__isnull=True,
+            status__in=list(open_statuses),
+        ).count()
+        if open_wo > 0:
+            raise BusinessLogicError(
+                f"销售订单仍有 {open_wo} 张未完工工单（已下达/执行中），"
+                "请先完工、取消或冻结相关工单后再关闭订单"
+            )
+
+
     async def _validate_customer_credit_limit_before_release(
         self,
         *,
@@ -4735,6 +4755,7 @@ class SalesOrderService:
         if not order:
             raise NotFoundError(f"销售订单不存在: {sales_order_id}")
         await self._assert_sales_order_capability_for_order(tenant_id, order, "close")
+        await self._assert_no_open_downstream_work_orders(tenant_id, sales_order_id)
 
         from apps.common.base_service import AppBaseService
         closer_name = await AppBaseService().get_user_name(closed_by)

@@ -31,6 +31,8 @@ STANDARD_ACTIONS: set[str] = {
     "dispatch",
     "recall",
     "confirm_adjustment",
+    # 应用管理破坏性操作（须搭配 RBAC + 二次确认）
+    "reset-data",
 }
 
 def canonical_action(action: str) -> str:
@@ -62,6 +64,7 @@ ACTION_DISPLAY_LABELS: dict[str, str] = {
     "dispatch": "发出",
     "confirm_adjustment": "确认调整",
     "recall": "确认收回",
+    "reset-data": "重置数据",
     "claim": "认领",
     "recycle": "回收",
     "release": "释放",

@@ -1649,6 +1649,21 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         if st in (DocumentStatus.DRAFT.value, "草稿"):
             raise BusinessLogicError("草稿采购订单请使用删除，不能关闭")
 
+        from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+
+        open_receipts = await PurchaseReceipt.filter(
+            tenant_id=tenant_id,
+            purchase_order_id=order_id,
+            deleted_at__isnull=True,
+        ).exclude(
+            status__in=["已入库", "cancelled", "已取消", "作废", "closed", "已关闭"]
+        ).count()
+        if open_receipts > 0:
+            raise BusinessLogicError(
+                f"采购订单仍有 {open_receipts} 张未完结入库单，"
+                "请先确认/作废相关入库单后再关闭订单"
+            )
+
         await PurchaseOrder.filter(tenant_id=tenant_id, id=order_id).update(
             status=DocumentStatus.CLOSED.value,
             updated_by=closed_by,

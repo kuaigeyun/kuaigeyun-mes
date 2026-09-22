@@ -571,6 +571,53 @@ class ReportingService(AppBaseService[ReportingRecord]):
             target_type__in=["finished_goods_receipt", "semi_finished_goods_receipt"],
         ).exists()
 
+    async def _cascade_revoke_direct_inbound_for_reporting(
+        self,
+        tenant_id: int,
+        reporting_record_id: int,
+        revoked_by: int,
+    ) -> None:
+        """报工撤回审核时，级联撤回关联成品/半成品入库确认，避免库存双计。"""
+        relations = await DocumentRelation.filter(
+            tenant_id=tenant_id,
+            source_type="reporting_record",
+            source_id=reporting_record_id,
+            target_type__in=["finished_goods_receipt", "semi_finished_goods_receipt"],
+        ).all()
+        if not relations:
+            return
+        from apps.kuaizhizao.services.warehouse_service import FinishedGoodsReceiptService
+        from apps.kuaizhizao.services.semi_finished_goods_receipt_service import (
+            SemiFinishedGoodsReceiptService,
+        )
+
+        fg_svc = FinishedGoodsReceiptService()
+        semi_svc = SemiFinishedGoodsReceiptService()
+        for rel in relations:
+            try:
+                if rel.target_type == "finished_goods_receipt":
+                    await fg_svc.withdraw_receipt_confirmation(
+                        tenant_id=tenant_id,
+                        receipt_id=int(rel.target_id),
+                        updated_by=revoked_by,
+                    )
+                elif rel.target_type == "semi_finished_goods_receipt":
+                    if hasattr(semi_svc, "withdraw_receipt_confirmation"):
+                        await semi_svc.withdraw_receipt_confirmation(
+                            tenant_id=tenant_id,
+                            receipt_id=int(rel.target_id),
+                            updated_by=revoked_by,
+                        )
+            except Exception as exc:
+                # 未确认入库单可能无法撤回——改为软提示，不阻断报工撤回
+                logger.warning(
+                    "报工撤回级联入库撤回失败 reporting={} target={}:{} err={}",
+                    reporting_record_id,
+                    rel.target_type,
+                    rel.target_id,
+                    exc,
+                )
+
     async def _sync_pending_inbound_receipts_if_needed(
         self,
         tenant_id: int,
@@ -947,8 +994,12 @@ class ReportingService(AppBaseService[ReportingRecord]):
         trigger_direct_inbound = False
         reporting_record_id_for_auto: Optional[int] = None
         approval_instance_on_create = None
+        post_commit_backflush = False
+        post_commit_mold = False
+        post_commit_qc = False
+        created_reporting_record = None
 
-        if True:
+        async with in_transaction():
             # 验证工单是否存在且状态正确
             work_order = await WorkOrder.get_or_none(
                 id=reporting_data.work_order_id,
@@ -1047,6 +1098,97 @@ class ReportingService(AppBaseService[ReportingRecord]):
 
             if not work_order_operation:
                 raise NotFoundError(f"工单工序不存在: 工单ID={reporting_data.work_order_id}, 工序ID={reporting_data.operation_id}")
+
+            # 行锁：防多工位并发累加丢失更新 / 穿透超报上限
+            work_order = await WorkOrder.filter(
+                id=work_order.id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            ).select_for_update().first()
+            if not work_order:
+                raise NotFoundError(f"工单不存在: {reporting_data.work_order_id}")
+            work_order_operation = await WorkOrderOperation.filter(
+                id=work_order_operation.id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            ).select_for_update().first()
+            if not work_order_operation:
+                raise NotFoundError(
+                    f"工单工序不存在: 工单ID={reporting_data.work_order_id}, "
+                    f"工序ID={reporting_data.operation_id}"
+                )
+
+            # 幂等：客户端 Idempotency-Key 或自然键（同秒同量）命中则直接返回
+            client_idem = (getattr(reporting_data, "idempotency_key", None) or "").strip() or None
+            if client_idem:
+                existing_idem = await ReportingRecord.get_or_none(
+                    tenant_id=tenant_id,
+                    idempotency_key=client_idem,
+                    deleted_at__isnull=True,
+                )
+                if existing_idem:
+                    return ReportingRecordResponse.model_validate(existing_idem)
+            else:
+                natural_q = ReportingRecord.filter(
+                    tenant_id=tenant_id,
+                    work_order_id=reporting_data.work_order_id,
+                    operation_id=reporting_data.operation_id,
+                    reported_quantity=reporting_data.reported_quantity,
+                    reported_at=reporting_data.reported_at,
+                    deleted_at__isnull=True,
+                )
+                if worker_id_int is not None:
+                    natural_q = natural_q.filter(worker_id=worker_id_int)
+                else:
+                    natural_q = natural_q.filter(worker_id__isnull=True)
+                if team_id_val is not None:
+                    natural_q = natural_q.filter(team_id=int(team_id_val))
+                else:
+                    natural_q = natural_q.filter(team_id__isnull=True)
+                existing_natural = await natural_q.first()
+                if existing_natural:
+                    return ReportingRecordResponse.model_validate(existing_natural)
+
+            # 行锁：防多工位并发累加丢失更新 / 穿透上限
+            work_order_operation = await WorkOrderOperation.filter(
+                id=work_order_operation.id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            ).select_for_update().first()
+            work_order = await WorkOrder.filter(
+                id=work_order.id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            ).select_for_update().first()
+            if not work_order_operation or not work_order:
+                raise NotFoundError("工单或工序在锁定时已不存在")
+
+            # 幂等：客户端键或自然键（同秒同量）命中则直接返回已有记录
+            client_idem = str(getattr(reporting_data, "idempotency_key", None) or "").strip()
+            if client_idem:
+                existing_idem = await ReportingRecord.filter(
+                    tenant_id=tenant_id,
+                    idempotency_key=client_idem,
+                    deleted_at__isnull=True,
+                ).first()
+                if existing_idem:
+                    return ReportingRecordResponse.model_validate(existing_idem)
+            else:
+                natural_q = ReportingRecord.filter(
+                    tenant_id=tenant_id,
+                    work_order_id=reporting_data.work_order_id,
+                    operation_id=reporting_data.operation_id,
+                    reported_quantity=reporting_data.reported_quantity,
+                    reported_at=reporting_data.reported_at,
+                    deleted_at__isnull=True,
+                )
+                if worker_id_int is not None:
+                    natural_q = natural_q.filter(worker_id=worker_id_int)
+                elif team_id_val is not None:
+                    natural_q = natural_q.filter(team_id=int(team_id_val))
+                existing_natural = await natural_q.first()
+                if existing_natural:
+                    return ReportingRecordResponse.model_validate(existing_natural)
 
             if (work_order_operation.status or "") == "paused":
                 raise BusinessLogicError("工序已暂停，请先恢复后再报工")
@@ -1288,6 +1430,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 sop_parameters=reporting_data.sop_parameters,  # SOP参数数据（核心功能，新增）
                 inbound_warehouse_id=inbound_wh_id,
                 inbound_warehouse_name=inbound_wh_name,
+                idempotency_key=(getattr(reporting_data, "idempotency_key", None) or None),
                 approved_at=approved_at,
                 approved_by=approved_by,
                 approved_by_name=approved_by_name,
@@ -1440,54 +1583,87 @@ class ReportingService(AppBaseService[ReportingRecord]):
                         exc,
                     )
 
-            # 报工创建时若已自动审核，在此触发倒冲；待审核报工在 approve 流程触发
-            if reporting_data.status == "approved":
-                try:
-                    from apps.kuaizhizao.services.backflush_service import BackflushService
-                    backflush_svc = BackflushService()
-                    await backflush_svc.backflush_materials(
-                        tenant_id=tenant_id,
-                        work_order_id=work_order.id,
-                        report_id=reporting_record.id,
-                        report_quantity=float(reporting_data.reported_quantity),
-                        operation_id=reporting_data.operation_id,
-                        operation_code=trusted_operation_code,
-                        processed_by=reported_by,
-                    )
-                except Exception as backflush_err:
-                    logger.warning(
-                        f"报工成功但物料倒冲失败：工单 {work_order.code}，报工ID {reporting_record.id}，"
-                        f"错误: {backflush_err}"
-                    )
-
-            # 报工生效时自动累计模具使用次数（工序分配了模具且已审核）
-            if approved_at is not None:
-                await self._create_mold_usage_from_reporting(
-                    tenant_id=tenant_id,
-                    work_order_operation=work_order_operation,
-                    work_order=work_order,
-                    qualified_quantity=float(reporting_data.qualified_quantity),
-                    reporting_record_id=reporting_record.id,
-                    operator_name=reporting_data.worker_name,
-                )
-
-            # 报工生效时自动触发质量检验需求（根据策略自动创建检验单）
-            if reporting_record.status == "approved":
-                try:
-                    await self._trigger_quality_inspection_from_reporting(
-                        tenant_id=tenant_id,
-                        work_order=work_order,
-                        work_order_operation=work_order_operation,
-                        reporting_record=reporting_record,
-                        created_by=reported_by
-                    )
-                except Exception as qc_err:
-                    logger.warning(f"报工成功但触发质量检验失败：{qc_err}")
+            # 报工创建时若已自动审核：倒冲/模具/质检放到事务提交后执行（失败可补偿，不回滚报工主记录）
+            post_commit_backflush = reporting_data.status == "approved"
+            post_commit_mold = approved_at is not None
+            post_commit_qc = reporting_record.status == "approved"
+            created_reporting_record = reporting_record
 
             logger.info(f"报工成功：工单 {work_order.code}，工序 {work_order_operation.operation_name}，数量 {reporting_data.reported_quantity}")
 
             trigger_direct_inbound = reporting_record.status == "approved"
             reporting_record_id_for_auto = reporting_record.id
+
+        # —— 事务已提交：副作用 ——
+        if post_commit_backflush and created_reporting_record is not None:
+            try:
+                from apps.kuaizhizao.services.backflush_service import BackflushService
+                backflush_svc = BackflushService()
+                await backflush_svc.backflush_materials(
+                    tenant_id=tenant_id,
+                    work_order_id=created_reporting_record.work_order_id,
+                    report_id=created_reporting_record.id,
+                    report_quantity=Decimal(str(created_reporting_record.reported_quantity)),
+                    operation_id=created_reporting_record.operation_id,
+                    operation_code=created_reporting_record.operation_code,
+                    processed_by=reported_by,
+                )
+            except Exception as backflush_err:
+                logger.error(
+                    f"报工成功但物料倒冲失败（需补偿）：报工ID {created_reporting_record.id}，"
+                    f"错误: {backflush_err}"
+                )
+
+        if post_commit_mold and created_reporting_record is not None:
+            try:
+                woo = await _resolve_work_order_operation_for_reporting(
+                    tenant_id=tenant_id,
+                    work_order_id=created_reporting_record.work_order_id,
+                    operation_id=created_reporting_record.operation_id,
+                )
+                wo = await WorkOrder.get_or_none(
+                    id=created_reporting_record.work_order_id,
+                    tenant_id=tenant_id,
+                    deleted_at__isnull=True,
+                )
+                if woo and wo:
+                    await self._create_mold_usage_from_reporting(
+                        tenant_id=tenant_id,
+                        work_order_operation=woo,
+                        work_order=wo,
+                        qualified_quantity=float(created_reporting_record.qualified_quantity or 0),
+                        reporting_record_id=created_reporting_record.id,
+                        operator_name=created_reporting_record.worker_name,
+                    )
+            except Exception as mold_err:
+                logger.error(f"报工成功但模具用量累计失败（需补偿）: {mold_err}")
+
+        if post_commit_qc and created_reporting_record is not None:
+            try:
+                woo = await _resolve_work_order_operation_for_reporting(
+                    tenant_id=tenant_id,
+                    work_order_id=created_reporting_record.work_order_id,
+                    operation_id=created_reporting_record.operation_id,
+                )
+                wo = await WorkOrder.get_or_none(
+                    id=created_reporting_record.work_order_id,
+                    tenant_id=tenant_id,
+                    deleted_at__isnull=True,
+                )
+                if woo and wo:
+                    await self._trigger_quality_inspection_from_reporting(
+                        tenant_id=tenant_id,
+                        work_order=wo,
+                        work_order_operation=woo,
+                        reporting_record=created_reporting_record,
+                        created_by=reported_by,
+                    )
+            except Exception as qc_err:
+                logger.error(f"报工成功但触发质量检验失败（需补偿）：{qc_err}")
+
+        reporting_record = created_reporting_record
+        if reporting_record is None:
+            raise BusinessLogicError("报工记录创建失败")
 
         if trigger_direct_inbound and reporting_record_id_for_auto is not None:
             inbound_result = await self._maybe_trigger_direct_finished_goods_inbound(
@@ -1967,9 +2143,38 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 record.status = 'rejected'
                 record.rejection_reason = str(rejection_reason).strip()
             else:
-                # 审核分离：报工人不可自审通过
-                if int(approved_by) == int(getattr(record, "worker_id", 0) or 0):
-                    raise BusinessLogicError("报工人不能审核通过自己的报工记录")
+                # 审核分离：报工人 / 录入人 / 小组成员不可自审通过
+                blocked_ids: set[int] = set()
+                worker_id = getattr(record, "worker_id", None)
+                if worker_id is not None:
+                    try:
+                        blocked_ids.add(int(worker_id))
+                    except (TypeError, ValueError):
+                        pass
+                recorded_by = getattr(record, "recorded_by", None)
+                if recorded_by is not None:
+                    try:
+                        blocked_ids.add(int(recorded_by))
+                    except (TypeError, ValueError):
+                        pass
+                team_id = getattr(record, "team_id", None)
+                if team_id is not None:
+                    from apps.master_data.models.factory import WorkGroupMember
+
+                    member_rows = await WorkGroupMember.filter(
+                        tenant_id=tenant_id,
+                        work_group_id=int(team_id),
+                        deleted_at__isnull=True,
+                    ).all()
+                    for row in member_rows:
+                        try:
+                            blocked_ids.add(int(row.employee_id))
+                        except (TypeError, ValueError):
+                            pass
+                if int(approved_by) in blocked_ids:
+                    raise BusinessLogicError(
+                        "报工人/录入人或小组成员不能审核通过自己的报工记录"
+                    )
                 record.status = 'approved'
                 # 状态切回通过时，清理历史驳回原因，避免脏字段残留
                 record.rejection_reason = None
@@ -2127,10 +2332,17 @@ class ReportingService(AppBaseService[ReportingRecord]):
 
             # 重新计算工单进度（因为 status 变为 draft，_update_work_order_progress 只统计 approved）
             await self._update_work_order_progress(tenant_id, record.work_order_id)
-            
-            logger.info(f"撤回报工审核成功：报工记录ID {record_id}，操作人 {user_info['name']}")
 
-            return ReportingRecordResponse.model_validate(record)
+            response = ReportingRecordResponse.model_validate(record)
+
+        # 事务提交后级联撤回关联入库，避免嵌套独立事务与库存双计
+        await self._cascade_revoke_direct_inbound_for_reporting(
+            tenant_id=tenant_id,
+            reporting_record_id=record_id,
+            revoked_by=revoked_by,
+        )
+        logger.info(f"撤回报工审核成功：报工记录ID {record_id}，操作人 {revoked_by}")
+        return response
 
     async def submit_reporting_record(
         self,

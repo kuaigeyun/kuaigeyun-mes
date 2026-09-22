@@ -74,8 +74,10 @@ class DefectRecordService(AppBaseService[DefectRecord]):
             ValidationError: 数据验证失败
             BusinessLogicError: 业务逻辑错误
         """
+        # 入库 confirm 走 serialize_stock_document，必须在外层事务外执行，
+        # 避免 advisory lock 在外层事务内膨胀（B3-R2 / Tortoise 嵌套边界）。
+        pending_inbound_warehouse_id: Optional[int] = None
         async with in_transaction():
-            # 获取不良品记录
             defect_record = await DefectRecord.get_or_none(
                 id=defect_id,
                 tenant_id=tenant_id,
@@ -85,23 +87,18 @@ class DefectRecordService(AppBaseService[DefectRecord]):
             if not defect_record:
                 raise NotFoundError(f"不良品记录不存在: {defect_id}")
 
-            # 验证处理方式必须是accept（让步接收）
             if defect_record.disposition != 'accept':
                 raise BusinessLogicError(f"只能审批处理方式为'让步接收'的不良品记录，当前处理方式：{defect_record.disposition}")
 
-            # 台账更新处置已闭环放行时幂等返回，避免双写库存
             if defect_record.status == 'processed':
                 return DefectRecordResponse.model_validate(defect_record)
 
-            # 验证状态
             if defect_record.status != 'draft':
                 raise BusinessLogicError(f"只能审批草稿状态的不良品记录，当前状态：{defect_record.status}")
 
-            # 获取审批人信息
             user_info = await self.get_user_info(approved_by)
 
             if approved:
-                # 审批同意：更新状态为processed，允许继续下一工序
                 defect_record.status = 'processed'
                 defect_record.processed_at = resolve_business_datetime()
                 defect_record.processed_by = approved_by
@@ -113,45 +110,66 @@ class DefectRecordService(AppBaseService[DefectRecord]):
                         tenant_id,
                         defect_record,
                     )
-                    await self._execute_accept_concession_inbound(
-                        tenant_id=tenant_id,
-                        defect_record=defect_record,
-                        updated_by=approved_by,
-                        stock_warehouse_id=int(wh_id),
-                    )
+                    pending_inbound_warehouse_id = int(wh_id)
+
                 await self._close_linked_quality_exceptions_after_disposition(
                     defect_record, approved_by
                 )
 
-                # 获取工单和工序信息
                 work_order = await WorkOrder.get_or_none(
                     id=defect_record.work_order_id,
                     tenant_id=tenant_id,
                     deleted_at__isnull=True
                 )
-
                 if work_order:
-                    # 让步接收后，允许继续下一工序（不需要特殊处理，因为不良品已经记录）
-                    # 可以在这里添加日志记录或其他业务逻辑
                     logger.info(
                         f"不良品记录 {defect_record.code} 让步接收审批通过，"
                         f"工单: {work_order.code}, 工序: {defect_record.operation_name}, "
                         f"允许继续下一工序"
                     )
-
                 logger.info(f"不良品记录 {defect_record.code} 让步接收审批通过，审批人: {user_info['name']}")
             else:
-                # 审批不同意：更新状态为cancelled
                 if not rejection_reason or not rejection_reason.strip():
                     raise ValidationError("驳回时必须填写驳回原因")
 
                 defect_record.status = 'cancelled'
                 defect_record.remarks = (defect_record.remarks or '') + f"\n[让步接收审批驳回] {to_api_isoformat(resolve_business_datetime())} 由 {user_info['name']} 驳回，原因：{rejection_reason}"
                 await defect_record.save()
-
                 logger.info(f"不良品记录 {defect_record.code} 让步接收审批驳回，审批人: {user_info['name']}, 原因: {rejection_reason}")
 
-            return DefectRecordResponse.model_validate(defect_record)
+            response = DefectRecordResponse.model_validate(defect_record)
+
+        if pending_inbound_warehouse_id is not None:
+            try:
+                defect_for_inbound = await DefectRecord.get(
+                    id=defect_id,
+                    tenant_id=tenant_id,
+                    deleted_at__isnull=True,
+                )
+                await self._execute_accept_concession_inbound(
+                    tenant_id=tenant_id,
+                    defect_record=defect_for_inbound,
+                    updated_by=approved_by,
+                    stock_warehouse_id=pending_inbound_warehouse_id,
+                )
+                await defect_for_inbound.refresh_from_db()
+                response = DefectRecordResponse.model_validate(defect_for_inbound)
+            except Exception:
+                # 入库失败则回滚审批态，避免"已处理但无库存"悬挂
+                defect_for_inbound = await DefectRecord.get_or_none(
+                    id=defect_id,
+                    tenant_id=tenant_id,
+                    deleted_at__isnull=True,
+                )
+                if defect_for_inbound and defect_for_inbound.status == 'processed':
+                    defect_for_inbound.status = 'draft'
+                    defect_for_inbound.processed_at = None
+                    defect_for_inbound.processed_by = None
+                    defect_for_inbound.processed_by_name = None
+                    await defect_for_inbound.save()
+                raise
+
+        return response
 
     async def get_defect_statistics(
         self,

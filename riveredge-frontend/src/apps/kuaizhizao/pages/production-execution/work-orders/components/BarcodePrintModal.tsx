@@ -78,16 +78,15 @@ const BarcodePrintModal: React.FC<BarcodePrintModalProps> = ({
 
     try {
       setLoading(true);
-      // Logic for printing: 
-      // Usually opening a specific URL or calling a render API
-      // For now, we simulate by opening a print window if possible,
-      // or just show a success message.
-      
       const printUrl = level === 'work_order' 
         ? `/api/v1/apps/kuaizhizao/work-orders/${workOrderId}/print?template_uuid=${selectedTemplate}`
         : `/api/v1/apps/kuaizhizao/work-orders/${workOrderId}/operations/${operationId}/print?template_uuid=${selectedTemplate}`;
       
-      window.open(printUrl, '_blank');
+      const printWindow = window.open(printUrl, '_blank');
+      if (!printWindow) {
+        message.error(t('app.kuaizhizao.workOrder.msgPrintPopupBlocked'));
+        return;
+      }
       message.success(t('app.kuaizhizao.workOrder.msgPrintRequestSent'));
       onCancel();
     } catch (error) {

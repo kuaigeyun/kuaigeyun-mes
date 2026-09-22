@@ -179,7 +179,30 @@ class BusinessNotificationService:
         except (TypeError, ValueError):
             entity_id_int = None
 
+        # IDEM：同一实体同一触发动作已成功发送则跳过（去重窗口：成功记录存在即幂等）
+        if entity_id_int and entity_id_int > 0:
+            from core.models.message_log import MessageLog
+
+            already = await MessageLog.filter(
+                tenant_id=tenant_id,
+                business_document=doc,
+                business_action=action,
+                entity_id=entity_id_int,
+                status="success",
+                deleted_at__isnull=True,
+            ).exists()
+            if already:
+                logger.info(
+                    "业务消息提醒幂等跳过 tenant={} doc={} action={} entity_id={}",
+                    tenant_id,
+                    doc,
+                    action,
+                    entity_id_int,
+                )
+                return 0
+
         sent = 0
+        dispatch_errors: list[str] = []
         for rule in rules:
             if rule.get("enabled") is False:
                 continue
@@ -271,6 +294,8 @@ class BusinessNotificationService:
                         if result.success:
                             sent += 1
                         else:
+                            err = str(result.error or "send_failed")
+                            dispatch_errors.append(err)
                             logger.error(
                                 "业务消息提醒发送失败 tenant={} doc={} action={} user={} channel={} err={}",
                                 tenant_id,
@@ -281,6 +306,7 @@ class BusinessNotificationService:
                                 result.error,
                             )
                     except Exception as e:
+                        dispatch_errors.append(str(e))
                         logger.error(
                             "业务消息提醒发送异常 tenant={} doc={} action={} user={} channel={}: {}",
                             tenant_id,
@@ -290,6 +316,10 @@ class BusinessNotificationService:
                             channel_type,
                             e,
                         )
+        if sent == 0 and dispatch_errors:
+            raise RuntimeError(
+                f"业务消息提醒全部发送失败 doc={doc} action={action}: {dispatch_errors[0]}"
+            )
         return sent
 
     @staticmethod

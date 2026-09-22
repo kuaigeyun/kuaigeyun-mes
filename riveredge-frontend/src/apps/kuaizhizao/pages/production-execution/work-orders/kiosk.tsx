@@ -117,6 +117,7 @@ const WorkOrdersKioskPage: React.FC = () => {
     const [defectModalVisible, setDefectModalVisible] = useState(false);
     const [defectTypeOptions, setDefectTypeOptions] = useState<Array<{ code: string; name: string }>>([]);
     const [selectedDefectType, setSelectedDefectType] = useState<string | null>(null);
+    const [defectConfirmed, setDefectConfirmed] = useState(false);
     // 作业指导书弹窗
     const [sopModalVisible, setSopModalVisible] = useState(false);
     const [sopModalTab, setSopModalTab] = useState<'static' | 'guided'>('static');
@@ -375,8 +376,9 @@ const WorkOrdersKioskPage: React.FC = () => {
                 message.warning(t('app.kuaizhizao.workOrder.kioskQtySumMustBePositive'));
                 return;
             }
-            if (unqualified > 0 && defectTypeOptions.length > 0 && !selectedDefectType) {
+            if (unqualified > 0 && defectTypeOptions.length > 0 && (!selectedDefectType || !defectConfirmed)) {
                 message.warning(t('app.kuaizhizao.workOrder.kioskSelectDefectType'));
+                setDefectModalVisible(true);
                 return;
             }
             setOpsLoading(true);
@@ -1346,6 +1348,8 @@ const WorkOrdersKioskPage: React.FC = () => {
                 getContainer={() => document.querySelector('.premium-terminal-fullscreen-wrap') || document.body}
                 onCancel={() => {
                     setDefectModalVisible(false);
+                    setSelectedDefectType(null);
+                    setDefectConfirmed(false);
                 }}
                 styles={{
                     header: { background: 'transparent', borderBottom: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`, color: HMI_DESIGN_TOKENS.TEXT_PRIMARY },
@@ -1353,12 +1357,17 @@ const WorkOrdersKioskPage: React.FC = () => {
                     footer: { background: 'transparent', borderTop: `1px solid ${HMI_DESIGN_TOKENS.BORDER}` },
                 }}
                 footer={[
-                    <Button key="cancel" onClick={() => setDefectModalVisible(false)}>取消</Button>,
+                    <Button key="cancel" onClick={() => {
+                        setDefectModalVisible(false);
+                        setSelectedDefectType(null);
+                        setDefectConfirmed(false);
+                    }}>取消</Button>,
                     <Button
                         key="ok"
                         type="primary"
                         onClick={() => {
                             if (selectedDefectType) {
+                                setDefectConfirmed(true);
                                 setDefectModalVisible(false);
                             } else {
                                 message.warning(t('app.kuaizhizao.workOrder.kioskSelectDefectType'));

@@ -184,6 +184,19 @@ export const outsourceWorkOrderApi = {
     };
   },
 
+  /** 服务端聚合统计（避免 list limit=1000 封顶失真） */
+  statistics: async (): Promise<{ total: number; draft: number; in_progress: number }> => {
+    const raw = await apiRequest<Record<string, unknown>>(
+      '/apps/kuaizhizao/outsource-work-orders/statistics',
+      { method: 'GET' },
+    );
+    return {
+      total: Number(raw?.total ?? 0) || 0,
+      draft: Number(raw?.draft ?? 0) || 0,
+      in_progress: Number(raw?.in_progress ?? 0) || 0,
+    };
+  },
+
   // 创建委外工单
   create: async (data: any) => {
     return apiRequest('/apps/kuaizhizao/outsource-work-orders', { method: 'POST', data });

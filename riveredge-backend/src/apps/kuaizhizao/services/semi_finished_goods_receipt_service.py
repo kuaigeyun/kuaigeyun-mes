@@ -4,7 +4,10 @@
 
 from __future__ import annotations
 
-from apps.kuaizhizao.utils.stock_posting import serialize_stock_document
+from apps.kuaizhizao.utils.stock_posting import (
+    reuse_or_begin_transaction,
+    serialize_stock_document,
+)
 import json
 import uuid
 from datetime import datetime
@@ -84,7 +87,8 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
                 float(total_quantity or 0),
             )
 
-        async with in_transaction():
+        # 让步接收等外层事务内创建：复用外层，避免 NestedTransaction 提前独立提交
+        async with reuse_or_begin_transaction():
             receipt = await SemiFinishedGoodsReceipt.create(
                 tenant_id=tenant_id,
                 uuid=str(uuid.uuid4()),
@@ -294,7 +298,8 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
         confirmed_by: int,
         confirmation_data: Optional[InboundConfirmationRequest] = None,
     ) -> SemiFinishedGoodsReceiptWithItemsResponse:
-        async with in_transaction():
+        # serialize 已开事务；复用外层，避免 NestedTransaction 抢不可重入锁
+        async with reuse_or_begin_transaction():
             receipt = await SemiFinishedGoodsReceipt.get_or_none(tenant_id=tenant_id, id=receipt_id)
             if not receipt:
                 raise NotFoundError(f"半成品入库单不存在: {receipt_id}")

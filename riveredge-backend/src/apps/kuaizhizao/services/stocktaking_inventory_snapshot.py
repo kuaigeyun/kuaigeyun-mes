@@ -48,7 +48,7 @@ async def build_inventory_snapshot(
         include_expired=False,
     )
     if not include_zero_stock:
-        rows = [r for r in rows if float(r.get("quantity") or 0) > 0]
+        rows = [r for r in rows if Decimal(str(r.get("quantity") or 0)) > 0]
 
     if granularity == "material":
         grouped: dict[int, dict] = {}

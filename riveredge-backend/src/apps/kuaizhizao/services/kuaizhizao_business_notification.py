@@ -70,36 +70,28 @@ async def dispatch_kuaizhizao_notification(
     message_category: str = "process",
 ) -> int:
     """
-    按租户「消息提醒」规则发送站内信。无匹配规则或未配置接收人时返回 0。
+    按租户「消息提醒」规则发送站内信。
+    返回成功发送条数；无匹配规则或未配置接收人时返回 0。
+    发送通道异常会向上抛出（SIDE-01：不再静默吞成 0）。
     """
     vars_payload = dict(variables or {})
     vars_payload.setdefault("message_category", message_category)
-    try:
-        sent = await BusinessNotificationService.dispatch(
-            tenant_id,
-            trigger_document=trigger_document,
-            trigger_action=trigger_action,
-            variables=vars_payload,
-            context=context,
-        )
-        if sent:
-            logger.info(
-                "快制造消息提醒已发送 tenant={} doc={} action={} count={}",
-                tenant_id,
-                trigger_document,
-                trigger_action,
-                sent,
-            )
-        return sent
-    except Exception as exc:
-        logger.error(
-            "快制造消息提醒派发失败 tenant={} doc={} action={}: {}",
+    sent = await BusinessNotificationService.dispatch(
+        tenant_id,
+        trigger_document=trigger_document,
+        trigger_action=trigger_action,
+        variables=vars_payload,
+        context=context,
+    )
+    if sent:
+        logger.info(
+            "快制造消息提醒已发送 tenant={} doc={} action={} count={}",
             tenant_id,
             trigger_document,
             trigger_action,
-            exc,
+            sent,
         )
-        return 0
+    return sent
 
 
 async def notify_sales_order_approved(

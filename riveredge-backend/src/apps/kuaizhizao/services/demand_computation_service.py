@@ -6300,7 +6300,7 @@ class DemandComputationService(AppBaseService):
             work_order_data = WorkOrderCreate(
                 code_rule="WORK_ORDER_CODE",
                 product_id=item.material_id,
-                quantity=float(item.suggested_work_order_quantity or 0),
+                quantity=item.suggested_work_order_quantity or Decimal("0"),
                 production_mode=production_mode,
                 sales_order_id=sales_order_id,
                 sales_order_code=sales_order_code,
@@ -6321,7 +6321,7 @@ class DemandComputationService(AppBaseService):
                 "code": work_order.code,
                 "product_code": item.material_code,
                 "product_name": item.material_name,
-                "quantity": float(item.suggested_work_order_quantity or 0),
+                "quantity": item.suggested_work_order_quantity or Decimal("0"),
             }
         except Exception as e:
             logger.error(f"创建工单失败: {e}")
@@ -6404,9 +6404,9 @@ class DemandComputationService(AppBaseService):
             supplier_code = getattr(supplier, "code", None) or str(outsource_supplier_id)
             supplier_name = getattr(supplier, "name", None) or mc.get("outsource_supplier_name", "待指定")
             
-            quantity = float(item.suggested_work_order_quantity or 0)
+            quantity = item.suggested_work_order_quantity or Decimal("0")
             unit_price = Decimal(str(mc.get("outsource_price") or 0))
-            total_amount = Decimal(str(quantity)) * unit_price
+            total_amount = quantity * unit_price
             
             schedule_direction = normalize_schedule_direction(
                 (computation.computation_params or {}).get("schedule_direction")
@@ -6602,9 +6602,9 @@ class DemandComputationService(AppBaseService):
             apply_create_audit(order_data, user)
             purchase_order = await PurchaseOrder.create(**order_data)
             
-            # 计算总价
-            quantity = float(item.suggested_purchase_order_quantity or 0)
-            total_price = float(unit_price) * quantity
+            # 计算总价（全程 Decimal，禁止 float 中转后再 Decimal(str)）
+            quantity = item.suggested_purchase_order_quantity or Decimal("0")
+            total_price = Decimal(str(unit_price or 0)) * quantity
             
             # 创建采购订单行
             item_data: Dict[str, Any] = {
@@ -6614,11 +6614,11 @@ class DemandComputationService(AppBaseService):
                 "material_code": item.material_code,
                 "material_name": item.material_name,
                 "material_spec": item.material_spec,
-                "ordered_quantity": Decimal(str(quantity)),
-                "outstanding_quantity": Decimal(str(quantity)),
+                "ordered_quantity": quantity,
+                "outstanding_quantity": quantity,
                 "unit": item.material_unit,
                 "unit_price": unit_price,
-                "total_price": Decimal(str(total_price)),
+                "total_price": total_price,
                 "required_date": delivery_date,
                 "inspection_required": True,
                 "source_type": "demand_computation",
@@ -6635,7 +6635,7 @@ class DemandComputationService(AppBaseService):
                 "material_name": item.material_name,
                 "quantity": quantity,
                 "supplier_name": supplier_name,
-                "unit_price": float(unit_price),
+                "unit_price": unit_price,
                 "total_price": total_price,
             }
         except Exception as e:

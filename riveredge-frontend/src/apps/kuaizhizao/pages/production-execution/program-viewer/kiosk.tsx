@@ -151,28 +151,31 @@ const ProgramViewerKioskPage: React.FC = () => {
   const highlightCode = useCallback((code: string, keyword: string = '') => {
     if (!code) return '';
 
+    const escapeHtml = (raw: string) =>
+      raw
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+
     const lines = code.split('\n');
     const lowerKeyword = keyword.toLowerCase();
 
     return lines.map((line, index) => {
-      let highlightedLine = line;
+      // 先转义源码，再插入高亮标签，避免搜索词/程序内容注入 XSS（F2-07）
+      let highlightedLine = escapeHtml(line);
 
-      // 高亮搜索关键词
       if (keyword && lowerKeyword) {
-        const regex = new RegExp(`(${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+        const escapedKeyword = escapeHtml(keyword).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regex = new RegExp(`(${escapedKeyword})`, 'gi');
         highlightedLine = highlightedLine.replace(regex, '<mark>$1</mark>');
       }
 
-      // 简单的G代码高亮
-      // G代码（G00-G99）
       highlightedLine = highlightedLine.replace(/\b(G\d{1,2})\b/gi, '<span class="g-code">$1</span>');
-      // M代码（M00-M99）
       highlightedLine = highlightedLine.replace(/\b(M\d{1,2})\b/gi, '<span class="m-code">$1</span>');
-      // 坐标（X, Y, Z等）
       highlightedLine = highlightedLine.replace(/\b([XYZUVW])(-?\d+\.?\d*)\b/gi, '<span class="coordinate">$1$2</span>');
-      // 注释（; 或 ( )）
       highlightedLine = highlightedLine.replace(/(;.*$|\(.*?\))/g, '<span class="comment">$1</span>');
-      // 数字
       highlightedLine = highlightedLine.replace(/\b(\d+\.?\d*)\b/g, '<span class="number">$1</span>');
 
       const isSearchMatch = keyword && line.toLowerCase().includes(lowerKeyword);

@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, Query, Path, HTTPException, status, Body
 from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
-from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
+from core.api.deps.access import require_permission_codes
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
@@ -23,7 +23,10 @@ router = APIRouter(prefix="/state-transitions", tags=["App - Kuaige Zhizao - Sta
 state_transition_service = StateTransitionService()
 
 
-@router.post("/{entity_type}/{entity_id}", summary="Run state transition")
+@router.post(
+    "/{entity_type}/{entity_id}",
+    summary="Run state transition",
+)
 async def transition_state(
     entity_type: str = Path(..., description="实体类型"),
     entity_id: int = Path(..., description="实体ID"),
@@ -35,64 +38,77 @@ async def transition_state(
 ):
     """
     执行状态流转
-    
+
     支持从当前状态流转到目标状态，并记录流转日志。
+    工单/需求状态更新走领域 service，禁止路由层直写 filter.update。
     """
     try:
-        # 获取当前状态（需要根据实体类型查询）
-        from apps.kuaizhizao.models.demand import Demand
-        from apps.kuaizhizao.models.work_order import WorkOrder
-        
-        if entity_type == "demand":
-            entity = await Demand.get_or_none(tenant_id=tenant_id, id=entity_id)
-            if not entity:
-                raise NotFoundError(f"需求不存在: {entity_id}")
-            from_state = entity.status
-        elif entity_type == "work_order":
-            entity = await WorkOrder.get_or_none(tenant_id=tenant_id, id=entity_id)
-            if not entity:
-                raise NotFoundError(f"工单不存在: {entity_id}")
-            from_state = entity.status
+        # 按实体类型挂权限码（须先鉴权再改状态）
+        if entity_type == "work_order":
+            # FastAPI Depends 无法按 path 动态挂载，此处显式校验
+            from core.api.deps.access import get_auth_context, ensure_permission_codes
+            from fastapi import Request
+            # ensure via UserPermissionService
+            from core.services.authorization.user_permission_service import UserPermissionService
+
+            has = await UserPermissionService.has_permission(
+                user_id=current_user.id,
+                tenant_id=tenant_id,
+                permission_code="kuaizhizao:work-order:execute",
+            )
+            if not has:
+                # 兼容：持有 update 也可执行流转（向后兼容存量角色）
+                has = await UserPermissionService.has_permission(
+                    user_id=current_user.id,
+                    tenant_id=tenant_id,
+                    permission_code="kuaizhizao:work-order:update",
+                )
+            if not has and not (
+                getattr(current_user, "is_tenant_admin", False)
+                or getattr(current_user, "is_infra_admin", False)
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="缺少权限: kuaizhizao:work-order:execute",
+                )
+        elif entity_type == "demand":
+            from core.services.authorization.user_permission_service import UserPermissionService
+
+            has = await UserPermissionService.has_permission(
+                user_id=current_user.id,
+                tenant_id=tenant_id,
+                permission_code="kuaizhizao:plan-management-demand-management:update",
+            )
+            if not has and not (
+                getattr(current_user, "is_tenant_admin", False)
+                or getattr(current_user, "is_infra_admin", False)
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="缺少权限: 需求状态流转",
+                )
         else:
             raise ValidationError(f"不支持的实体类型: {entity_type}")
-        
-        log = await state_transition_service.transition_state(
+
+        result = await state_transition_service.apply_entity_transition(
             tenant_id=tenant_id,
             entity_type=entity_type,
             entity_id=entity_id,
-            from_state=from_state,
             to_state=to_state,
             operator_id=current_user.id,
             operator_name=current_user.username or f"用户{current_user.id}",
             transition_reason=transition_reason,
-            transition_comment=transition_comment
+            transition_comment=transition_comment,
         )
-        
-        # 更新实体状态
-        if entity_type == "demand":
-            await Demand.filter(tenant_id=tenant_id, id=entity_id).update(status=to_state)
-        elif entity_type == "work_order":
-            # 工单状态流转时，需要更新相关时间字段
-            update_data = {"status": to_state}
-            if to_state == "in_progress" and not entity.actual_start_date:
-                from datetime import datetime
-                update_data["actual_start_date"] = resolve_business_datetime()
-            elif to_state == "completed" and not entity.actual_end_date:
-                from datetime import datetime
-                update_data["actual_end_date"] = resolve_business_datetime()
-            await WorkOrder.filter(tenant_id=tenant_id, id=entity_id).update(**update_data)
-        
-        return {
-            "success": True,
-            "transition_log_id": log.id,
-            "from_state": from_state,
-            "to_state": to_state,
-            "transition_time": to_api_isoformat(log.transition_time) if log.transition_time else None
-        }
+        return result
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except BusinessLogicError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"执行状态流转失败: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="执行状态流转失败")
@@ -107,7 +123,7 @@ async def get_transition_history(
 ):
     """
     获取状态流转历史
-    
+
     返回实体的所有状态流转记录。
     """
     try:
@@ -130,7 +146,7 @@ async def get_available_transitions(
 ):
     """
     获取可用状态流转选项
-    
+
     返回从当前状态可以流转到的所有状态选项。
     """
     try:

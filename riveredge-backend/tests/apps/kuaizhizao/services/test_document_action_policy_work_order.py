@@ -81,7 +81,9 @@ def test_completed_manual_can_revoke_without_downstream():
         _wo(status="completed", manually_completed=True),
         has_downstream_documents=False,
     )
-    assert caps.revoke.allowed
+    # 指定结束撤回走独立 capability，不再复用 revoke
+    assert caps.withdraw_manual_complete.allowed
+    assert not caps.revoke.allowed
 
 
 def test_completed_normal_cannot_revoke():

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from statistics import mean, pstdev
 from typing import Any, Dict, List, Optional
 
@@ -36,26 +37,40 @@ FAI_TRIGGERS = {"new_part", "ecn", "changeover", "restart", "customer"}
 EDITABLE_STATUSES = {"draft", "in_progress", "rejected"}
 
 
+def _dec(value: Any) -> Optional[Decimal]:
+    if value is None:
+        return None
+    try:
+        return Decimal(str(value))
+    except Exception:
+        return None
+
+
 def judge_measured(
     measured: Optional[float],
     nominal: Optional[float],
     upper: Optional[float],
     lower: Optional[float],
 ) -> str:
+    """实测值判定：边界比较全程 Decimal，避免 float 边界误判。"""
     if measured is None:
         return "pending"
+    m = Decimal(str(measured))
+    n = Decimal(str(nominal)) if nominal is not None else None
+    u = Decimal(str(upper)) if upper is not None else None
+    lo_tol = Decimal(str(lower)) if lower is not None else None
     lo = None
     hi = None
-    if nominal is not None:
-        if lower is not None:
-            lo = nominal + lower if lower < 0 else nominal - abs(lower)
-        if upper is not None:
-            hi = nominal + upper
+    if n is not None:
+        if lo_tol is not None:
+            lo = n + lo_tol if lo_tol < 0 else n - abs(lo_tol)
+        if u is not None:
+            hi = n + u
     else:
-        lo, hi = lower, upper
-    if lo is not None and measured < lo:
+        lo, hi = lo_tol, u
+    if lo is not None and m < lo:
         return "fail"
-    if hi is not None and measured > hi:
+    if hi is not None and m > hi:
         return "fail"
     if lo is None and hi is None:
         return "pending"

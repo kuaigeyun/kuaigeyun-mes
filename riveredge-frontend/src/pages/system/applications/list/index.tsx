@@ -1817,9 +1817,23 @@ const ApplicationListPage: React.FC = () => {
                     if (resetConfirmText !== resetConfirmPhrase) return;
                     try {
                       setSubmitting(true);
+                      const prepared = await apiRequest<{
+                        confirmation_token: string;
+                        expires_in?: number;
+                      }>('/apps/kuaizhizao/management/reset-data/prepare', {
+                        method: 'POST',
+                      });
+                      const token = prepared?.confirmation_token;
+                      if (!token) {
+                        messageApi.error('获取二次确认令牌失败，请重试');
+                        return;
+                      }
                       const result = await apiRequest<{ success: boolean; message?: string }>(
                         '/apps/kuaizhizao/management/reset-data',
-                        { method: 'POST' },
+                        {
+                          method: 'POST',
+                          data: { confirmation_token: token },
+                        },
                       );
                       if (result?.success) {
                         messageApi.success(result.message || '重置成功并已自动备份');

@@ -63,6 +63,7 @@ class ReportingRecord(BaseModel):
             ("approved_at",),
             ("created_at",),
             ("kingdee_push_status", "kingdee_push_next_at"),
+            ("tenant_id", "idempotency_key"),
         ]
 
     # 主键（BaseModel 不包含 id 字段，需要自己定义）
@@ -120,6 +121,11 @@ class ReportingRecord(BaseModel):
     inbound_warehouse_name = fields.CharField(max_length=200, null=True, description="末道工序入库仓库名称")
     remarks = fields.TextField(null=True, description="备注")
     device_info = fields.JSONField(null=True, description="设备信息（JSON格式）")
+    idempotency_key = fields.CharField(
+        max_length=200,
+        null=True,
+        description="客户端幂等键（防重复提交）",
+    )
     
     # SOP参数数据（核心功能，新增）
     sop_parameters = fields.JSONField(null=True, description="SOP参数数据（JSON格式，存储报工时收集的SOP参数）")

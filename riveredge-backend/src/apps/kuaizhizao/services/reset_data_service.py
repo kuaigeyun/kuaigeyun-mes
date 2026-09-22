@@ -1,4 +1,7 @@
 import asyncio
+import hashlib
+import hmac
+import time
 from typing import List, Optional
 from datetime import datetime
 from loguru import logger
@@ -8,11 +11,79 @@ from core.services.system.data_backup_service import DataBackupService
 from core.schemas.data_backup import DataBackupCreate
 from core.utils.timezone_utils import resolve_business_datetime
 
+
 class ResetDataService:
     """
     快制造应用数据重置服务
     """
-    
+
+    @staticmethod
+    def _token_secret() -> str:
+        try:
+            from infra.config.settings import settings
+
+            return str(
+                getattr(settings, "JWT_SECRET_KEY", None)
+                or getattr(settings, "SECRET_KEY", None)
+                or "kuaizhizao-reset-data"
+            )
+        except Exception:
+            return "kuaizhizao-reset-data"
+
+    @classmethod
+    def issue_confirmation_token(
+        cls,
+        *,
+        tenant_id: int,
+        operator_id: int,
+        ttl_seconds: int = 300,
+    ) -> str:
+        """签发短时二次确认 token：payload.timestamp.signature。"""
+        issued_at = int(time.time())
+        payload = f"{tenant_id}:{operator_id}:{issued_at}:{ttl_seconds}"
+        sig = hmac.new(
+            cls._token_secret().encode("utf-8"),
+            payload.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+        return f"{payload}.{sig}"
+
+    @classmethod
+    def verify_confirmation_token(
+        cls,
+        *,
+        tenant_id: int,
+        operator_id: int,
+        token: str,
+        ttl_seconds: int = 300,
+    ) -> None:
+        raw = (token or "").strip()
+        if not raw or "." not in raw:
+            raise ValueError("二次确认 token 无效")
+        payload, sig = raw.rsplit(".", 1)
+        parts = payload.split(":")
+        if len(parts) != 4:
+            raise ValueError("二次确认 token 格式错误")
+        try:
+            tok_tenant = int(parts[0])
+            tok_op = int(parts[1])
+            issued_at = int(parts[2])
+            tok_ttl = int(parts[3])
+        except ValueError as exc:
+            raise ValueError("二次确认 token 内容无效") from exc
+        if tok_tenant != int(tenant_id) or tok_op != int(operator_id):
+            raise ValueError("二次确认 token 与当前操作人不匹配")
+        expected = hmac.new(
+            cls._token_secret().encode("utf-8"),
+            payload.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+        if not hmac.compare_digest(expected, sig):
+            raise ValueError("二次确认 token 校验失败")
+        effective_ttl = min(int(ttl_seconds), tok_ttl) if tok_ttl > 0 else int(ttl_seconds)
+        if int(time.time()) - issued_at > effective_ttl:
+            raise ValueError("二次确认 token 已过期，请重新获取")
+
     # 业务数据表名单 (Transactional Data)
     BUSINESS_TABLES = [
         # 销售与需求

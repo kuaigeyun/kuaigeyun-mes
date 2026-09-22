@@ -7,7 +7,10 @@ Author: Luigi Lu
 Date: 2025-12-30
 """
 
-from apps.kuaizhizao.utils.stock_posting import serialize_stock_document
+from apps.kuaizhizao.utils.stock_posting import (
+    reuse_or_begin_transaction,
+    serialize_stock_document,
+)
 from typing import List, Optional, Dict, Any, Tuple, Iterable
 from datetime import datetime, date, timedelta
 from decimal import Decimal
@@ -4838,7 +4841,8 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
                 float(total_quantity or 0),
             )
 
-        async with in_transaction():
+        # 让步接收等外层事务内创建：复用外层，避免 NestedTransaction 提前独立提交
+        async with reuse_or_begin_transaction():
             receipt = await FinishedGoodsReceipt.create(
                 tenant_id=tenant_id,
                 uuid=str(uuid.uuid4()),
@@ -5047,7 +5051,8 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
         confirmation_data: Optional[InboundConfirmationRequest] = None,
     ) -> FinishedGoodsReceiptResponse:
         """确认入库"""
-        async with in_transaction():
+        # serialize 已开事务；复用外层，避免 NestedTransaction 抢不可重入锁
+        async with reuse_or_begin_transaction():
             receipt = await FinishedGoodsReceipt.get_or_none(tenant_id=tenant_id, id=receipt_id)
             if not receipt:
                 raise NotFoundError(f"成品入库单不存在: {receipt_id}")
@@ -9039,7 +9044,8 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
         """创建采购入库单"""
         created_receipt_id: Optional[int] = None
         response: Optional[PurchaseReceiptResponse] = None
-        async with in_transaction():
+        # 让步接收等外层事务内创建：复用外层，避免 NestedTransaction 提前独立提交
+        async with reuse_or_begin_transaction():
             user_info = await self.get_user_info(created_by)
             today = today_site_str()
             code = await self.generate_code(tenant_id, "PURCHASE_RECEIPT_CODE", prefix=f"PR{today}")
@@ -10203,7 +10209,8 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
         confirmation_data: Optional[InboundConfirmationRequest] = None,
     ) -> None:
         """采购入库过账：库存增加并置已入库（由 serialize_stock_document 串行）。"""
-        async with in_transaction():
+        # serialize 已开事务；复用外层，避免 NestedTransaction 抢不可重入锁
+        async with reuse_or_begin_transaction():
             receipt = await PurchaseReceipt.get_or_none(tenant_id=tenant_id, id=receipt_id)
             if not receipt:
                 raise NotFoundError(f"采购入库单不存在: {receipt_id}")
@@ -14955,7 +14962,8 @@ class OtherInboundService(AppBaseService[OtherInbound]):
         is_enabled = await self.business_config_service.check_node_enabled(tenant_id, "inbound")
         if not is_enabled:
             raise BusinessLogicError("入库管理节点未启用，无法创建其他入库单")
-        async with in_transaction():
+        # 让步接收等外层事务内创建：复用外层，避免 NestedTransaction 提前独立提交
+        async with reuse_or_begin_transaction():
             user_info = await self.get_user_info(created_by)
             today = today_site_str()
             code = await self.generate_code(tenant_id, "OTHER_INBOUND_CODE", prefix=f"OI{today}")
@@ -15237,7 +15245,8 @@ class OtherInboundService(AppBaseService[OtherInbound]):
         confirmation_data: Optional[InboundConfirmationRequest] = None,
     ) -> OtherInboundResponse:
         """确认入库"""
-        async with in_transaction():
+        # 可能被不合格台账让步接收外层事务调用：复用外层
+        async with reuse_or_begin_transaction():
             inbound = await OtherInbound.get_or_none(tenant_id=tenant_id, id=inbound_id)
             if not inbound:
                 raise NotFoundError(f"其他入库单不存在: {inbound_id}")

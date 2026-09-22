@@ -100,7 +100,6 @@ class OutsourceMaterialIssueService(AppBaseService[OutsourceMaterialIssue]):
             )
 
         user_info = await self.get_user_info(created_by)
-        stock_payload: Optional[Dict[str, Any]] = None
         response: Optional[OutsourceMaterialIssueResponse] = None
 
         async with in_transaction():
@@ -180,31 +179,31 @@ class OutsourceMaterialIssueService(AppBaseService[OutsourceMaterialIssue]):
 
             logger.info(f"创建委外发料单成功: {code}")
 
-            await material_issue.refresh_from_db()
-            response = OutsourceMaterialIssueResponse.model_validate(material_issue)
-            stock_payload = {
-                "tenant_id": tenant_id,
-                "material_id": issue_data.material_id,
-                "quantity": issue_data.quantity,
-                "warehouse_id": issue_data.warehouse_id,
-                "batch_no": getattr(issue_data, "batch_number", None),
-                "source_type": "outsource_material_issue",
-                "source_doc_id": material_issue.id,
-                "source_doc_code": code,
-                "movement_type": "outsource_issue",
-                "from_warehouse_id": issue_data.warehouse_id,
-                "from_warehouse_name": issue_data.warehouse_name,
-                "work_order_id": issue_data.outsource_work_order_id,
-                "work_order_code": issue_data.outsource_work_order_code,
-                "operator_id": created_by,
-                "operator_name": user_info["name"],
-                "idempotency_key": f"outsource_material_issue:{material_issue.id}:dec",
-            }
-
-        if stock_payload:
+            # 库存扣减与发料单创建同事务（OWO select_for_update 串行），避免并发双扣
             from apps.kuaizhizao.services.inventory_service import InventoryService
 
-            await InventoryService.decrease_stock(**stock_payload)
+            await InventoryService.decrease_stock(
+                tenant_id=tenant_id,
+                material_id=issue_data.material_id,
+                quantity=issue_data.quantity,
+                warehouse_id=issue_data.warehouse_id,
+                batch_no=getattr(issue_data, "batch_number", None),
+                source_type="outsource_material_issue",
+                source_doc_id=material_issue.id,
+                source_doc_code=code,
+                movement_type="outsource_issue",
+                from_warehouse_id=issue_data.warehouse_id,
+                from_warehouse_name=issue_data.warehouse_name,
+                work_order_id=issue_data.outsource_work_order_id,
+                work_order_code=issue_data.outsource_work_order_code,
+                operator_id=created_by,
+                operator_name=user_info["name"],
+                idempotency_key=f"outsource_material_issue:{material_issue.id}:dec",
+            )
+
+            await material_issue.refresh_from_db()
+            response = OutsourceMaterialIssueResponse.model_validate(material_issue)
+
         if response is None:
             raise BusinessLogicError("委外发料创建失败")
         issue_row = await OutsourceMaterialIssue.get_or_none(

@@ -2567,6 +2567,56 @@ async def execute_disassembly_order(
 
 # ==================== 工单委外管理 API ====================
 
+@router.get("/outsource-work-orders/statistics", summary="Outsource work order statistics (KPI cards)")
+async def get_outsource_work_order_statistics(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    """委外工单 KPI：全量 SQL 聚合，避免前端 1000 行封顶失真（F1-02）。"""
+    total_count = 0
+    draft_count = 0
+    in_progress_count = 0
+    sql_ok = False
+    try:
+        from tortoise import Tortoise
+
+        conn = Tortoise.get_connection("default")
+        if hasattr(conn, "execute_query_dict"):
+            rows = await conn.execute_query_dict(
+                """
+                SELECT
+                    COUNT(*) AS total_count,
+                    COUNT(*) FILTER (WHERE status = 'draft') AS draft_count,
+                    COUNT(*) FILTER (WHERE status = 'in_progress') AS in_progress_count
+                FROM apps_kuaizhizao_outsource_work_orders
+                WHERE tenant_id = $1 AND deleted_at IS NULL
+                """,
+                [tenant_id],
+            )
+            if rows:
+                r = rows[0]
+                total_count = int(r.get("total_count", 0) or 0)
+                draft_count = int(r.get("draft_count", 0) or 0)
+                in_progress_count = int(r.get("in_progress_count", 0) or 0)
+                sql_ok = True
+    except Exception as e:
+        logger.warning(f"outsource-work-order-statistics 聚合失败，回退分次查询: {e}")
+
+    if not sql_ok:
+        from apps.kuaizhizao.models.outsource_work_order import OutsourceWorkOrder
+
+        base = OutsourceWorkOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        total_count = await base.count()
+        draft_count = await base.filter(status="draft").count()
+        in_progress_count = await base.filter(status="in_progress").count()
+
+    return {
+        "total": total_count,
+        "draft": draft_count,
+        "in_progress": in_progress_count,
+    }
+
+
 @router.post("/outsource-work-orders", response_model=OutsourceWorkOrderResponse, summary="Create outsourced work order")
 async def create_outsource_work_order(
     data: OutsourceWorkOrderCreate,
