@@ -36,6 +36,14 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
   {
+    id: 'domain-verify-txt-query-not-tenant-r02',
+    date: '2026-09-22',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.domain-verify-txt-query-not-tenant-r02.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.domain-verify-txt-query-not-tenant-r02.description',
+  },
+  {
     id: 'domain-verify-txt-not-tenant-r01',
     date: '2026-09-22',
     type: 'fix',

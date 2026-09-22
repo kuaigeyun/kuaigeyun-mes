@@ -1226,9 +1226,7 @@ export default function LoginPage() {
     if (storedTenantId && storedTenantId > 0) {
       return storedTenantId;
     }
-    const domainFromQuery = urlParams.get('tenant_domain')?.trim().toLowerCase();
-    const domainFromContext = resolveTenantDomainFromUrl();
-    const domain = domainFromQuery || domainFromContext;
+    const domain = resolveTenantDomainFromUrl();
     if (domain) {
       try {
         const check = await checkTenantDomain(domain);

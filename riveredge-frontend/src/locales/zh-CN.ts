@@ -31007,6 +31007,10 @@ export default {
     '基础应用与扩展模块边界解耦',
   'pages.dashboard.updateLog.entries.application-layer-host-capabilities.description':
     '快制造与轻办公列表不再编译依赖行业包；扩展对照与清单改由平台 host-capabilities 接口按租户已启用模块动态解析。',
+  'pages.dashboard.updateLog.entries.domain-verify-txt-query-not-tenant-r02.title':
+    '校验文件 query 不再误判为组织域名',
+  'pages.dashboard.updateLog.entries.domain-verify-txt-query-not-tenant-r02.description':
+    '修复 /login?tenant_domain=xxx.txt 仍被当成组织入口；路径与查询参数统一拒绝 *.txt / MP_verify* 校验文件名。',
   'pages.dashboard.updateLog.entries.domain-verify-txt-not-tenant-r01.title':
     '域名校验 txt 不再误判为组织域名',
   'pages.dashboard.updateLog.entries.domain-verify-txt-not-tenant-r01.description':

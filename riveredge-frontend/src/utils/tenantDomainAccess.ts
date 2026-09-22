@@ -45,7 +45,10 @@ export type TenantLocationParts = {
 
 function normalizeTenantDomain(value: string | null | undefined): string | null {
   const normalized = (value || '').trim().toLowerCase();
-  return normalized || null;
+  if (!normalized) return null;
+  // 校验文件名不得进入组织域名（含 ?tenant_domain=xxx.txt 历史误跳转）
+  if (isDomainVerificationPathSegment(normalized)) return null;
+  return normalized;
 }
 
 export function resolveTenantDomainFromPathname(pathname: string): string | null {
@@ -57,17 +60,16 @@ export function resolveTenantDomainFromPathname(pathname: string): string | null
     return null;
   }
   if (!TENANT_PATH_RESERVED_SEGMENTS.has(firstLower)) {
-    const domain = firstLower;
-    return isReservedTenantDomain(domain) ? null : domain;
+    const domain = normalizeTenantDomain(firstLower);
+    return domain && !isReservedTenantDomain(domain) ? domain : null;
   }
   if (
     firstLower === 'login' &&
     segments[1] &&
-    !TENANT_PATH_RESERVED_SEGMENTS.has(segments[1].toLowerCase()) &&
-    !isDomainVerificationPathSegment(segments[1])
+    !TENANT_PATH_RESERVED_SEGMENTS.has(segments[1].toLowerCase())
   ) {
-    const domain = segments[1].toLowerCase();
-    return isReservedTenantDomain(domain) ? null : domain;
+    const domain = normalizeTenantDomain(segments[1]);
+    return domain && !isReservedTenantDomain(domain) ? domain : null;
   }
   return null;
 }
