@@ -2711,8 +2711,9 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 
                 await work_order.save()
 
-            # 当前仍为物理删除；表已具备 deleted_at，后续可改为软删除并统一查询过滤
-            await record.delete()
+            # P2-23 B1-#8：软删除（deleted_at），统计/列表已统一 deleted_at__isnull=True
+            record.deleted_at = resolve_business_datetime()
+            await record.save(update_fields=["deleted_at", "updated_at"])
             
             # 最后再次同步一次工单进度（确保稳健）
             await self._update_work_order_progress(tenant_id, record.work_order_id)

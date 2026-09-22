@@ -21,18 +21,12 @@ async def reuse_or_begin_transaction():
 
     Tortoise 0.21 嵌套 in_transaction 走 NestedTransactionPooledContext：
     - `_trxlock` 不可重入，嵌套调用会死锁；
-    - 内层异常会直接 rollback 整段外层连接。
-    因此凡可能被外层单据事务调用的写路径，统一走本上下文，避免独立提交/死锁。
+    - 内层主动 rollback 会连带回滚外层未提交写入（P2-18）。
+    因此复用分支只 yield，异常交由外层事务处理；独立新建分支仍用 in_transaction。
     """
     conn = connections.get("default")
     if isinstance(conn, BaseTransactionWrapper):
-        try:
-            yield conn
-        except BaseException:
-            # Tortoise 0.21：勿直接读私有 _finalized（缺属性会 AttributeError 遮蔽原异常）
-            if not getattr(conn, "_finalized", False):
-                await conn.rollback()
-            raise
+        yield conn
     else:
         async with in_transaction() as conn:
             yield conn
@@ -75,11 +69,14 @@ def idempotent_stock_change(func):
 
         async with reuse_or_begin_transaction() as conn:
             await _lock(conn, f"stock-posting:{tenant_id}:{key}")
-            # 预检覆盖原键与全部分片（#p{n} / #neg{n}），避免部分成功重试漏检已写分片。
-            if await MaterialStockMovement.filter(
+            # 预检：精确键或任意分片（#p{n}/#neg{n}）。
+            # P2-21：分片与主过账同处 advisory lock + 同一事务，部分成功窗口仅理论上存在于
+            # 历史异常数据；命中任一分片即视为整键已完成，避免重试双计。运营侧用补偿工具修残留。
+            existing = await MaterialStockMovement.filter(
                 Q(tenant_id=tenant_id)
                 & (Q(idempotency_key=key) | Q(idempotency_key__startswith=f"{key}#")),
-            ).using_db(conn).exists():
+            ).using_db(conn).values_list("idempotency_key", flat=True)
+            if existing:
                 return True
             return await func(*bound.args, **bound.kwargs)
 

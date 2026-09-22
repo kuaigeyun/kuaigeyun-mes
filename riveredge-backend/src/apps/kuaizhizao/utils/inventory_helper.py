@@ -1312,5 +1312,5 @@ async def assert_outbound_warehouse_stock_available(
 
     raise BusinessLogicError(
         f"出库失败：{material_label} 在 {selected_wh_name} 可用库存 {available:g}，"
-        f"不足本次出库 {need:g}{batch_hint}"
+        f"不足本次出库 {need:g}{batch_hint}（截至查询时刻，并发下以锁内重读为准）"
     )

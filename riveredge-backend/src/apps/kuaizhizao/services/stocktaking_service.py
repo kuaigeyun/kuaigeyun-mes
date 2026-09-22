@@ -16,6 +16,10 @@ from tortoise.queryset import Q
 from tortoise.transactions import in_transaction
 
 from apps.kuaizhizao.models.stocktaking import Stocktaking, StocktakingItem
+from apps.kuaizhizao.utils.stock_posting import (
+    reuse_or_begin_transaction,
+    serialize_stock_document,
+)
 from apps.kuaizhizao.schemas.stocktaking import (
     StocktakingCreate,
     StocktakingUpdate,
@@ -705,6 +709,7 @@ class StocktakingService(AppBaseService[Stocktaking]):
             completed_by=adjusted_by,
         )
 
+    @serialize_stock_document("stocktaking", "stocktaking_id")
     async def complete_stocktaking(
         self,
         tenant_id: int,
@@ -712,12 +717,12 @@ class StocktakingService(AppBaseService[Stocktaking]):
         completed_by: int,
     ) -> StocktakingResponse:
         """完成盘点：校验全部已盘点，有差异则调库存，无差异直接结案"""
-        async with in_transaction():
-            stocktaking = await Stocktaking.get_or_none(
+        async with reuse_or_begin_transaction():
+            stocktaking = await Stocktaking.filter(
                 id=stocktaking_id,
                 tenant_id=tenant_id,
                 deleted_at__isnull=True
-            )
+            ).select_for_update().first()
 
             if not stocktaking:
                 raise NotFoundError(f"盘点单不存在: {stocktaking_id}")

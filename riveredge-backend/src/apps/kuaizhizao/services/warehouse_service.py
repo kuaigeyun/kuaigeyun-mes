@@ -10,6 +10,7 @@ Date: 2025-12-30
 from apps.kuaizhizao.utils.stock_posting import (
     reuse_or_begin_transaction,
     serialize_stock_document,
+    serialize_stock_create,
 )
 from typing import List, Optional, Dict, Any, Tuple, Iterable
 from datetime import datetime, date, timedelta
@@ -4822,6 +4823,19 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
 
     async def create_finished_goods_receipt(self, tenant_id: int, receipt_data: FinishedGoodsReceiptCreate, created_by: int, items: Optional[List[FinishedGoodsReceiptItemCreate]] = None) -> FinishedGoodsReceiptResponse:
         """创建成品入库单"""
+        return await self._create_finished_goods_receipt_impl(
+            tenant_id, receipt_data, created_by, items
+        )
+
+    @serialize_stock_create("finished_goods_receipt")
+    async def _create_finished_goods_receipt_impl(
+        self,
+        tenant_id: int,
+        receipt_data: FinishedGoodsReceiptCreate,
+        created_by: int,
+        items: Optional[List[FinishedGoodsReceiptItemCreate]] = None,
+    ) -> FinishedGoodsReceiptResponse:
+        """创建成品入库单（serialize_stock_create 串行新建→确认短窗口）。"""
         user_info = await self.get_user_info(created_by)
         # 发号须在业务事务外：generate_code 自带 FOR UPDATE；嵌套外层事务易致 PostgreSQL 挂起（504）。
         if receipt_data.receipt_code:
@@ -9078,6 +9092,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
         super().__init__(PurchaseReceipt)
         self.business_config_service = BusinessConfigService()
 
+    @serialize_stock_create("purchase_receipt")
     async def create_purchase_receipt(self, tenant_id: int, receipt_data: PurchaseReceiptCreate, created_by: int) -> PurchaseReceiptResponse:
         """创建采购入库单"""
         created_receipt_id: Optional[int] = None
@@ -15014,6 +15029,7 @@ class OtherInboundService(AppBaseService[OtherInbound]):
         super().__init__(OtherInbound)
         self.business_config_service = BusinessConfigService()
 
+    @serialize_stock_create("other_inbound")
     async def create_other_inbound(
         self,
         tenant_id: int,

@@ -21,20 +21,19 @@ from typing import Optional, Dict, Any
 from datetime import date
 from loguru import logger
 from tortoise.transactions import in_transaction
+from tortoise.queryset import Q
+from tortoise.exceptions import IntegrityError
 
-from apps.kuaizhizao.models.material_stock_movement import (
-    MaterialStockMovement,
-)
+from apps.kuaizhizao.models.material_stock_movement import MaterialStockMovement
 from apps.kuaizhizao.utils.inventory_helper import get_material_inventory_info
 from apps.master_data.constants.batch_quality_status import QUALIFIED
 from infra.services.business_config_service import BusinessConfigService
+from infra.exceptions.exceptions import BusinessLogicError, ValidationError
 
 # 按原单批号追溯的逆向扣减：不适用 FIFO/LIFO「须先领更早/更新批次」防呆
 _BATCH_ORDER_ENFORCEMENT_EXEMPT_SOURCE_TYPES = frozenset({
     "purchase_return",
 })
-from infra.exceptions.exceptions import BusinessLogicError, ValidationError
-from tortoise.exceptions import IntegrityError
 
 
 class InventoryService:
@@ -1167,7 +1166,7 @@ class InventoryService:
                             ) or "无"
                             raise BusinessLogicError(
                                 f"库存不足：批号 {ledger_bn} 需求 {quantity}，可用 0；"
-                                f"其他可用：{available_hint}"
+                                f"其他可用：{available_hint}（截至查询时刻）"
                             )
                         wh_name = (
                             from_wh_name
@@ -1513,9 +1512,15 @@ class InventoryService:
                     deleted_at__isnull=True,
                     status="available",
                 )
-                if batch_no:
-                    inv_filter["batch_no"] = batch_no
-                inv = await LineSideInventory.filter(**inv_filter).select_for_update().first()
+                # P2-16：空串与 None 同义，禁止 batch_no="" 与 None 双口径漏命中
+                _bn = (str(batch_no).strip() if batch_no is not None else "") or None
+                if _bn:
+                    inv_filter["batch_no"] = _bn
+                    inv = await LineSideInventory.filter(**inv_filter).select_for_update().first()
+                else:
+                    inv = await LineSideInventory.filter(**inv_filter).filter(
+                        Q(batch_no__isnull=True) | Q(batch_no="")
+                    ).select_for_update().first()
                 if not inv:
                     if not allow_negative:
                         raise BusinessLogicError(
@@ -1545,7 +1550,7 @@ class InventoryService:
                             else ""
                         ),
                         material_name=getattr(mat, "name", "") if mat else "",
-                        batch_no=batch_no or "",
+                        batch_no=_bn,
                         quantity=next_qty,
                         reserved_quantity=Decimal(0),
                         status="available",

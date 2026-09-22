@@ -4259,6 +4259,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             submitter_name = await self.get_user_name(submitted_by)
             await WorkOrder.filter(tenant_id=tenant_id, id=work_order_id).update(
                 review_status="已通过",
+                review_remarks=None,
                 reviewer_id=submitted_by,
                 reviewer_name=submitter_name,
                 review_time=resolve_business_datetime(),
@@ -4284,6 +4285,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             )
         await WorkOrder.filter(tenant_id=tenant_id, id=work_order_id).update(
             review_status="待审核",
+            review_remarks=None,
             updated_by=submitted_by,
         )
         from core.services.approval.audit_flow_guard import approval_instance_finished_on_submit

@@ -28,12 +28,16 @@ STATUS_MAP = {
     "已通过": "AUDITED",
     "已驳回": "REJECTED",
     "已确认": "CONFIRMED",
+    "已生效": "AUDITED",
     "已取消": "CANCELLED",
     "cancelled": "CANCELLED",
     "已关闭": "CLOSED",
     "closed": "CLOSED",
     "已完成": "COMPLETED",
     "completed": "COMPLETED",
+    "processing": "IN_PROGRESS",
+    "进行中": "IN_PROGRESS",
+    "执行中": "IN_PROGRESS",
 }
 
 # review_status：中文 / 旧同义词 → ReviewStatus

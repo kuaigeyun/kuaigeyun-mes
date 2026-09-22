@@ -487,7 +487,10 @@ class BackflushService(AppBaseService[BackflushRecord]):
 
         total_picked = sum(p["pick_quantity"] for p in pick_list)
         if total_picked < required:
-            failed.error_message = f"重试仍失败：库存不足，需 {required}，可用 {total_picked}"
+            failed.error_message = (
+                f"重试仍失败：库存不足，需 {required}，可用 {total_picked}（截至查询时刻）；"
+                f"可改批次后重试"
+            )
             user = await User.get_or_none(id=processed_by) if processed_by else None
             apply_update_audit(failed, user)
             await failed.save()

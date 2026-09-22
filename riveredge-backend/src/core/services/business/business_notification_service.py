@@ -179,10 +179,25 @@ class BusinessNotificationService:
         except (TypeError, ValueError):
             entity_id_int = None
 
-        # IDEM：同一实体同一触发动作已成功发送则跳过（去重窗口：成功记录存在即幂等）
-        if entity_id_int and entity_id_int > 0:
+        # IDEM：同一实体同一触发动作已成功发送则跳过。
+        # P2-20：可重复动作（质检失败/异常/驳回/触发类）不加永久去重，避免合法二次提醒被吞。
+        _REPEATABLE_ACTIONS = frozenset({
+            "abnormal_detected",
+            "rejected",
+            "triggered",
+            "failed",
+            "quality_failed",
+            "inspection_failed",
+            "alert",
+            "reminder",
+        })
+        if entity_id_int and entity_id_int > 0 and action not in _REPEATABLE_ACTIONS:
             from core.models.message_log import MessageLog
+            from datetime import timedelta
+            from core.utils.timezone_utils import resolve_business_datetime
 
+            # created/approved 等：24h 窗口内成功记录去重
+            since = resolve_business_datetime() - timedelta(hours=24)
             already = await MessageLog.filter(
                 tenant_id=tenant_id,
                 business_document=doc,
@@ -190,6 +205,7 @@ class BusinessNotificationService:
                 entity_id=entity_id_int,
                 status="success",
                 deleted_at__isnull=True,
+                created_at__gte=since,
             ).exists()
             if already:
                 logger.info(

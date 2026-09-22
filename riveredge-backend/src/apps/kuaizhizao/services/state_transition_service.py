@@ -309,11 +309,13 @@ class StateTransitionService:
             if recent is not None:
                 return {
                     "idempotent": True,
+                    "deduplicated": True,
                     "entity_type": entity_type,
                     "entity_id": entity_id,
                     "from_state": recent.from_state,
                     "to_state": recent.to_state,
                     "log_id": recent.id,
+                    "message": "已去重，未重复执行",
                 }
 
             if entity_type == "demand":

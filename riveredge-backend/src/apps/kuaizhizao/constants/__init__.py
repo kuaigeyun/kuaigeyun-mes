@@ -56,7 +56,7 @@ STATE_ALIASES: dict[str, str] = {
     "已取消": DocumentStatus.CANCELLED.value,
     "已关闭": DocumentStatus.CLOSED.value,
     "已确认": DocumentStatus.CONFIRMED.value,
-    "已生效": "EFFECTIVE",
+    "已生效": DocumentStatus.AUDITED.value,  # P2-24 A-02：与枚举对齐（非孤立 EFFECTIVE）
     "已完成": DocumentStatus.COMPLETED.value,
     "已通过": DocumentStatus.AUDITED.value,  # 采购申请审核通过
     "部分转单": DocumentStatus.PARTIAL_CONVERTED.value,
@@ -64,11 +64,14 @@ STATE_ALIASES: dict[str, str] = {
     "draft": DocumentStatus.DRAFT.value,
     "released": DocumentStatus.RELEASED.value,
     "in_progress": DocumentStatus.IN_PROGRESS.value,
+    "processing": DocumentStatus.IN_PROGRESS.value,  # P2-24 B-03：幽灵态别名
     "completed": DocumentStatus.COMPLETED.value,
     "cancelled": DocumentStatus.CANCELLED.value,
     "closed": DocumentStatus.CLOSED.value,
     "split": "SPLIT",
     "已拆分": "SPLIT",
+    "执行中": DocumentStatus.IN_PROGRESS.value,
+    "进行中": DocumentStatus.IN_PROGRESS.value,
 }
 
 # review_status 别名：中文 <-> ReviewStatus 枚举

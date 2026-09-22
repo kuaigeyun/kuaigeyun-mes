@@ -16,6 +16,8 @@ from collections import defaultdict
 from tortoise.queryset import Q
 from tortoise.transactions import in_transaction
 
+from apps.kuaizhizao.utils.stock_posting import serialize_stock_create
+
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
 from infra.models.user import User
@@ -136,6 +138,7 @@ class OutsourceService(AppBaseService[OutsourceOrder]):
             )
         return options
 
+    @serialize_stock_create("outsource_order")
     async def create_outsource_order(
         self,
         tenant_id: int,
