@@ -57,9 +57,14 @@ riveredge-backend/backups/
 
 # ===== IDE / Agent 本地产物 =====
 .agent/
+.agent-teams/
+.argo/
 .cursor/
 .trae/
 .vscode/
+# 架构/编排临时产物（应放仓库外，如 D:\kuaigeyun-pro\_out-of-repo\）
+design/
+*.qea
 # CI：工作流在团队仓库中不跟踪（本地可自建 .github/workflows）
 .github/workflows/
 nul
