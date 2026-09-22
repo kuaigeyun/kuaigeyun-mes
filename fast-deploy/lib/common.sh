@@ -5462,7 +5462,8 @@ recompose_extension_apps_if_enabled() {
         log_warn "扩展仓同步失败，主仓更新继续。请用菜单 [4] 单独安装/更新专业包或定制包。"
         return 0
     fi
-    run_workspace_compose all || {
+    # 主仓更新不得交互询问定制项目（缺 CUSTOM_PROJECTS 时跳过组装，由菜单 [4] 配置）
+    COMPOSING_FROM_MAIN_UPDATE=1 run_workspace_compose all || {
         log_warn "扩展应用组装失败，主仓更新继续。请检查 CUSTOM_PROJECTS、私仓路径与 PyYAML，或菜单 [4] 重试。"
         return 0
     }
@@ -5836,6 +5837,12 @@ _ensure_custom_projects_for_compose() {
 
     custom_path="$(read_deploy_env_value CUSTOM_REPO_PATH || true)"
     [ -n "$custom_path" ] || custom_path="$(_custom_default_repo_path)"
+    # 主程序 update 路径：禁止弹「选择定制项目」；缺配置则跳过，勿打断主仓更新
+    if [ "${COMPOSING_FROM_MAIN_UPDATE:-0}" = "1" ]; then
+        log_warn "CUSTOM_ENABLED=1 但未设置 CUSTOM_PROJECTS，跳过本次扩展组装"
+        log_warn "请在 deploy.env 写入 CUSTOM_PROJECTS，或用菜单 [4]→定制包 配置（与主程序更新无关）"
+        return 1
+    fi
     if [ -t 0 ]; then
         prompt_custom_projects_selection "$custom_path"
         return $?
