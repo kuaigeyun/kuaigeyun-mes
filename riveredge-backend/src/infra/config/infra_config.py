@@ -51,6 +51,47 @@ class InfraSettings(BaseSettings):
         default=True,
         description="是否启用 ReDoc 与 OpenAPI schema（生产小内存可关闭以省约 MB 级常驻内存）",
     )
+    CLIENT_CHANNEL_WRITE_GUARD_ENABLED: bool = Field(
+        default=True,
+        description="是否对 /api 写请求强制要求官方 X-Client-Channel（pc/android/…/integration）",
+    )
+    API_WRITE_RATE_LIMIT_ENABLED: bool = Field(
+        default=True,
+        description="是否对 /api 写请求启用进程内按用户限流",
+    )
+    API_WRITE_RATE_LIMIT_PER_MINUTE: int = Field(
+        default=120,
+        description="普通写接口每用户每分钟上限",
+    )
+    API_CRITICAL_WRITE_RATE_LIMIT_PER_MINUTE: int = Field(
+        default=30,
+        description="关键写（审核/下推/确认等）每用户每分钟上限",
+    )
+    API_IDEMPOTENCY_GUARD_ENABLED: bool = Field(
+        default=True,
+        description="是否启用写接口幂等（Idempotency-Key + 关键路径短窗去重）",
+    )
+    API_IDEMPOTENCY_TTL_SECONDS: float = Field(
+        default=300.0,
+        description="显式 Idempotency-Key 结果缓存秒数",
+    )
+    API_IDEMPOTENCY_SOFT_TTL_SECONDS: float = Field(
+        default=2.5,
+        description="关键路径无幂等键时的连点去重窗口秒数",
+    )
+    INTEGRATION_CLIENT_IP_ALLOWLIST_STR: str = Field(
+        default="",
+        alias="INTEGRATION_CLIENT_IP_ALLOWLIST",
+        description="integration 渠道允许的客户端 IP（逗号分隔，空=不限制）",
+    )
+
+    @property
+    def INTEGRATION_CLIENT_IP_ALLOWLIST(self) -> list[str]:
+        raw = (self.INTEGRATION_CLIENT_IP_ALLOWLIST_STR or "").strip()
+        if not raw:
+            return []
+        return [p.strip() for p in raw.split(",") if p.strip()]
+
     ENVIRONMENT: str = Field(default="development", description="运行环境")
     GIT_SHA: str = Field(
         default="",

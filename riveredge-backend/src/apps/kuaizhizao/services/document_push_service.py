@@ -494,6 +494,7 @@ class DocumentPushService:
 
         from core.services.integration.document_push_guard import (
             document_push_guard,
+            document_push_source_inflight,
             resolve_push_dimensions,
         )
         from core.services.integration.document_push_slo import document_push_slo
@@ -513,24 +514,52 @@ class DocumentPushService:
         if handler is None:
             raise ValidationError(f"未实现的推送适配: {source_type}/{target_profile}")
 
-        try:
-            result = await handler(
-                tenant_id=tenant_id,
-                acting_user_id=acting_user_id,
-                source_type=source_type,
-                source_id=int(source_id),
-                target_profile=target_profile,
-                connection_code=connection_code,
-                save_api_uuid=save_api_uuid,
-                dry_run=dry_run,
-            )
-        except Exception:
+        with document_push_source_inflight.hold(
+            tenant_id,
+            source_type=source_type,
+            source_id=int(source_id),
+            target_profile=target_profile,
+            dry_run=dry_run,
+        ):
+            try:
+                result = await handler(
+                    tenant_id=tenant_id,
+                    acting_user_id=acting_user_id,
+                    source_type=source_type,
+                    source_id=int(source_id),
+                    target_profile=target_profile,
+                    connection_code=connection_code,
+                    save_api_uuid=save_api_uuid,
+                    dry_run=dry_run,
+                )
+            except Exception:
+                document_push_guard.record_outcome(
+                    tenant_id,
+                    category=category,
+                    connector_type=connector_type,
+                    target_profile=profile,
+                    success=False,
+                    dry_run=dry_run,
+                )
+                if dry_run:
+                    document_push_slo.record(
+                        category=category,
+                        connector_type=connector_type,
+                        target_profile=profile,
+                        success=False,
+                        dry_run=True,
+                    )
+                raise
+
+            success = bool(result.get("success")) if isinstance(result, dict) else True
+            if isinstance(result, dict) and result.get("skipped"):
+                success = True
             document_push_guard.record_outcome(
                 tenant_id,
                 category=category,
                 connector_type=connector_type,
                 target_profile=profile,
-                success=False,
+                success=success,
                 dry_run=dry_run,
             )
             if dry_run:
@@ -538,31 +567,10 @@ class DocumentPushService:
                     category=category,
                     connector_type=connector_type,
                     target_profile=profile,
-                    success=False,
+                    success=True,
                     dry_run=True,
                 )
-            raise
-
-        success = bool(result.get("success")) if isinstance(result, dict) else True
-        if isinstance(result, dict) and result.get("skipped"):
-            success = True
-        document_push_guard.record_outcome(
-            tenant_id,
-            category=category,
-            connector_type=connector_type,
-            target_profile=profile,
-            success=success,
-            dry_run=dry_run,
-        )
-        if dry_run:
-            document_push_slo.record(
-                category=category,
-                connector_type=connector_type,
-                target_profile=profile,
-                success=True,
-                dry_run=True,
-            )
-        return result
+            return result
 
     async def _push_reporting(
         self,

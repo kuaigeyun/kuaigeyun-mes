@@ -556,6 +556,16 @@ app.add_middleware(SelectiveGZipMiddleware, minimum_size=500)
 from core.middleware.sensitive_word_middleware import SensitiveWordMiddleware
 app.add_middleware(SensitiveWordMiddleware)
 
+# 写接口官方客户端渠道门禁（后注册先执行，先于敏感词扫 body）
+from core.middleware.client_channel_write_guard_middleware import ClientChannelWriteGuardMiddleware
+app.add_middleware(ClientChannelWriteGuardMiddleware)
+
+# 写限流 / 幂等（内存、不读 body；置于渠道门禁之外侧以便拒掉头后仍可计数——实际后注册先执行）
+from core.middleware.api_write_rate_limit_middleware import ApiWriteRateLimitMiddleware
+app.add_middleware(ApiWriteRateLimitMiddleware)
+from core.middleware.api_idempotency_middleware import ApiIdempotencyMiddleware
+app.add_middleware(ApiIdempotencyMiddleware)
+
 # 注册统一异常处理中间件（应该在其他中间件之前注册）
 from core.middleware.exception_handler_middleware import ExceptionHandlerMiddleware
 app.add_middleware(ExceptionHandlerMiddleware)

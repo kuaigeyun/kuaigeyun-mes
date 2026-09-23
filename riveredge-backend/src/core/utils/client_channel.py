@@ -20,6 +20,7 @@ CLIENT_CHANNEL_DEVICE_LABELS: dict[str, str] = {
     "ios": "iOS端",
     "mobile_h5": "手机H5",
     "miniprogram": "微信小程序",
+    "integration": "系统对接",
 }
 
 # 报工列表「报工来源」聚合展示（口语：小程序 / App / 终端 / PC）
@@ -63,6 +64,9 @@ def normalize_client_channel(raw: Optional[str]) -> Optional[str]:
         "wechat": "miniprogram",
         "weixin": "miniprogram",
         "mp": "miniprogram",
+        "api": "integration",
+        "sync": "integration",
+        "connector": "integration",
     }
     return aliases.get(code)
 

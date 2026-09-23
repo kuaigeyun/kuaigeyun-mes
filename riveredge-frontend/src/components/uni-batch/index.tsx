@@ -173,9 +173,23 @@ export const UniBatchMenuButton: React.FC<UniBatchMenuButtonProps> = ({
   disabled: disabledProp,
 }) => {
   const { t } = useTranslation();
+  const [open, setOpen] = React.useState(false);
   const count = selectedRowKeys.length;
   const emptyDisabled = count === 0 || menuItems.length === 0;
   const disabled = disabledProp ?? emptyDisabled;
+
+  // 批量成功后会清空选中 → Dropdown disabled；受控关闭，避免浮层挂住不消失
+  React.useEffect(() => {
+    if (disabled) setOpen(false);
+  }, [disabled]);
+
+  const closeThenRun = React.useCallback(
+    (run: () => void) => {
+      setOpen(false);
+      run();
+    },
+    [],
+  );
 
   const dropdownMenu: MenuProps = {
     items: menuItems.map((it) => {
@@ -194,20 +208,32 @@ export const UniBatchMenuButton: React.FC<UniBatchMenuButtonProps> = ({
           <ActionConfirmPopconfirm
             title={confirmTitle}
             description={confirmDescription}
-            onConfirm={run}
+            onConfirm={() => closeThenRun(run)}
           >
             <span onClick={(e) => e.stopPropagation()}>{it.label}</span>
           </ActionConfirmPopconfirm>
         ) : (
           it.label
         ),
-        onClick: it.requireConfirm ? undefined : () => run(),
+        onClick: it.requireConfirm ? undefined : () => closeThenRun(run),
       };
     }),
   };
 
   return (
-    <Dropdown menu={dropdownMenu} trigger={['click']} disabled={disabled}>
+    <Dropdown
+      menu={dropdownMenu}
+      trigger={['click']}
+      disabled={disabled}
+      open={open}
+      onOpenChange={(next) => {
+        if (disabled) {
+          setOpen(false);
+          return;
+        }
+        setOpen(next);
+      }}
+    >
       <Button type="default" disabled={disabled} size={toolBarButtonSize}>
         {buttonText ?? t('components.uniBatch.batchActions')}
         <DownOutlined style={{ fontSize: 10, marginLeft: 4, opacity: 0.75 }} />

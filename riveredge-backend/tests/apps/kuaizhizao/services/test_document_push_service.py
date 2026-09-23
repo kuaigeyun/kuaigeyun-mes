@@ -242,6 +242,24 @@ def test_guard_quota_and_circuit_ignore_dry_run():
     guard2.assert_allowed(1, dry_run=True, **dims)
 
 
+def test_source_inflight_rejects_duplicate_same_document():
+    from core.services.integration.document_push_guard import DocumentPushSourceInflight
+
+    inflight = DocumentPushSourceInflight()
+    kwargs = dict(source_type="sales_order", source_id=42, target_profile=SO_PROFILE)
+    with inflight.hold(1, dry_run=False, **kwargs):
+        with pytest.raises(ValidationError) as exc:
+            with inflight.hold(1, dry_run=False, **kwargs):
+                pass
+        assert "正在推送" in str(exc.value)
+        # dry_run 不占锁
+        with inflight.hold(1, dry_run=True, **kwargs):
+            pass
+    # 释放后可再次获取
+    with inflight.hold(1, dry_run=False, **kwargs):
+        pass
+
+
 def test_slo_snapshot_three_dimensions():
     from core.services.integration.document_push_slo import DocumentPushSloRegistry
 

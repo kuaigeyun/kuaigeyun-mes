@@ -85,6 +85,9 @@ class OperationLogMiddleware(BaseHTTPMiddleware):
         )
 
         if is_mutation:
+            channel = request.headers.get("X-Client-Channel") or request.headers.get("x-client-channel") or "-"
+            idem = request.headers.get("Idempotency-Key") or request.headers.get("idempotency-key") or ""
+            idem_part = f" idem={idem[:36]}" if idem else ""
             payload = {
                 "tenant_id": tenant_id,
                 "user_id": user_id,
@@ -95,7 +98,7 @@ class OperationLogMiddleware(BaseHTTPMiddleware):
                 "operation_content": (
                     f"{request.method} {request.url.path} - "
                     f"{'成功' if response.status_code < 400 else '失败'} "
-                    f"(状态码: {response.status_code})"
+                    f"(状态码: {response.status_code}, channel={channel}{idem_part})"
                 ),
                 "ip_address": ip_address,
                 "user_agent": request.headers.get("User-Agent", ""),

@@ -256,6 +256,18 @@ export async function apiRequest<T = any>(
   // 客户端渠道（登录日志设备识别；PC / 工位由 VITE_CLIENT_CHANNEL 区分）
   Object.assign(headers, webClientChannelHeaders());
 
+  // 写请求自动带幂等键（后端可回放/去重；调用方已传则不覆盖）
+  const method = String(options?.method || 'GET').toUpperCase();
+  const isWriteMethod = method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE';
+  const hasIdempotency = Object.keys(headers).some((k) => k.toLowerCase() === 'idempotency-key');
+  if (isWriteMethod && !hasIdempotency && !isPublicEndpoint) {
+    const uuid =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `idemp-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    headers['Idempotency-Key'] = uuid;
+  }
+
   // Authorization（公开接口不需要）
   if (token && !isPublicEndpoint) {
     headers['Authorization'] = `Bearer ${token}`;

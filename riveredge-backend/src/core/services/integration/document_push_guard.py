@@ -1,20 +1,22 @@
-"""外推熔断 / 配额（进程内最小可用）。
+"""外推熔断 / 配额 / 同单 in-flight（进程内最小可用）。
 
 维度键：tenant_id × category × connector_type × target_profile。
-dry_run 不占配额、不触发熔断。
+dry_run 不占配额、不触发熔断、不占同单锁。
 """
 
 from __future__ import annotations
 
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass
 from threading import Lock
-from typing import Dict, Tuple
+from typing import Dict, Iterator, Set, Tuple
 
 from infra.exceptions.exceptions import ValidationError
 from infra.utils.simple_rate_limit import SlidingWindowRateLimiter
 
 DimKey = Tuple[int, str, str, str]
+SourceInflightKey = Tuple[int, str, int, str]
 
 
 @dataclass
@@ -123,6 +125,69 @@ class DocumentPushGuard:
 
 
 document_push_guard = DocumentPushGuard()
+
+
+class DocumentPushSourceInflight:
+    """同一源单据 × 目标 profile 外推互斥，拒绝并发重复请求。"""
+
+    def __init__(self) -> None:
+        self._lock = Lock()
+        self._inflight: Set[SourceInflightKey] = set()
+
+    @staticmethod
+    def key(
+        tenant_id: int,
+        *,
+        source_type: str,
+        source_id: int,
+        target_profile: str,
+    ) -> SourceInflightKey:
+        return (
+            int(tenant_id),
+            str(source_type or "").strip(),
+            int(source_id),
+            str(target_profile or "").strip(),
+        )
+
+    def try_acquire(self, key: SourceInflightKey) -> bool:
+        with self._lock:
+            if key in self._inflight:
+                return False
+            self._inflight.add(key)
+            return True
+
+    def release(self, key: SourceInflightKey) -> None:
+        with self._lock:
+            self._inflight.discard(key)
+
+    @contextmanager
+    def hold(
+        self,
+        tenant_id: int,
+        *,
+        source_type: str,
+        source_id: int,
+        target_profile: str,
+        dry_run: bool = False,
+    ) -> Iterator[None]:
+        if dry_run:
+            yield
+            return
+        key = self.key(
+            tenant_id,
+            source_type=source_type,
+            source_id=source_id,
+            target_profile=target_profile,
+        )
+        if not self.try_acquire(key):
+            raise ValidationError("该单据正在推送中，请勿重复提交")
+        try:
+            yield
+        finally:
+            self.release(key)
+
+
+document_push_source_inflight = DocumentPushSourceInflight()
 
 
 def resolve_push_dimensions(

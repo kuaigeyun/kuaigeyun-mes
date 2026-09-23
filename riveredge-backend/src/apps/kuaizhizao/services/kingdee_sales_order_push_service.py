@@ -8,6 +8,8 @@ from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
 from loguru import logger
+from tortoise.exceptions import IntegrityError
+from tortoise.transactions import in_transaction
 
 from apps.kuaizhizao.models.document_relation import DocumentRelation
 from apps.kuaizhizao.models.sales_order import SalesOrder
@@ -38,6 +40,11 @@ TARGET_PROFILE = "kingdee_sal_saleorder"
 SOURCE_TYPE = "sales_order"
 PUSHABLE_STATUSES = frozenset({"AUDITED", "CONFIRMED", "APPROVED", "RELEASED", "IN_PROGRESS", "COMPLETED"})
 PUSH_DISABLED_MESSAGE = "金蝶销售订单推送未启用"
+# 外推占位关联：跨进程串行同单推送；成功后回写真实 bill_id，失败删除
+PUSHING_TARGET_ID = -1
+PUSHING_TARGET_CODE = "__pushing__"
+PUSHING_STALE_SECONDS = 600
+PUSHING_IN_PROGRESS_MESSAGE = "该单据正在推送中，请勿重复提交"
 
 
 def sales_order_push_skip_reason(
@@ -57,6 +64,126 @@ def sales_order_push_skip_reason(
     if items is not None and not items:
         return "销售订单无明细行"
     return None
+
+
+def _relation_is_stale_pushing(rel: DocumentRelation) -> bool:
+    notes = str(getattr(rel, "notes", None) or "").strip()
+    if not notes:
+        return True
+    try:
+        started = datetime.fromisoformat(notes.replace("Z", "+00:00"))
+        if started.tzinfo is not None:
+            started = started.replace(tzinfo=None)
+        age = (datetime.utcnow() - started).total_seconds()
+        return age >= PUSHING_STALE_SECONDS
+    except Exception:
+        return True
+
+
+async def _claim_sales_order_push_slot(
+    *,
+    tenant_id: int,
+    sales_order_id: int,
+    order: SalesOrder,
+    acting_user_id: int,
+) -> Optional[str]:
+    """同事务锁订单并占位推送关联。返回 skip 文案；None 表示已占位可推。"""
+    async with in_transaction():
+        locked = (
+            await SalesOrder.filter(
+                tenant_id=tenant_id,
+                id=sales_order_id,
+                deleted_at__isnull=True,
+            )
+            .select_for_update()
+            .first()
+        )
+        if not locked:
+            return "销售订单不存在"
+
+        rels = await DocumentRelation.filter(
+            tenant_id=tenant_id,
+            source_type=SOURCE_TYPE,
+            source_id=sales_order_id,
+            target_type=TARGET_TYPE,
+        )
+        for rel in rels:
+            if int(rel.target_id or 0) == PUSHING_TARGET_ID:
+                if _relation_is_stale_pushing(rel):
+                    await rel.delete()
+                    continue
+                return PUSHING_IN_PROGRESS_MESSAGE
+            return "已推送过金蝶销售订单"
+
+        try:
+            await DocumentRelation.create(
+                tenant_id=tenant_id,
+                source_type=SOURCE_TYPE,
+                source_id=sales_order_id,
+                source_code=order.order_code,
+                source_name=order.order_code,
+                target_type=TARGET_TYPE,
+                target_id=PUSHING_TARGET_ID,
+                target_code=PUSHING_TARGET_CODE,
+                target_name="金蝶销售订单",
+                relation_type="source",
+                relation_mode="push",
+                relation_desc="销售订单推送金蝶销售订单（进行中）",
+                notes=to_api_isoformat(datetime.utcnow()),
+                created_by=acting_user_id,
+            )
+        except IntegrityError:
+            return PUSHING_IN_PROGRESS_MESSAGE
+    return None
+
+
+async def _finalize_sales_order_push_relation(
+    *,
+    tenant_id: int,
+    sales_order_id: int,
+    order: SalesOrder,
+    acting_user_id: int,
+    result: Dict[str, Any],
+) -> None:
+    pending = await DocumentRelation.filter(
+        tenant_id=tenant_id,
+        source_type=SOURCE_TYPE,
+        source_id=sales_order_id,
+        target_type=TARGET_TYPE,
+        target_id=PUSHING_TARGET_ID,
+    ).first()
+    bill_id = int(result.get("bill_id") or 0)
+    payload = {
+        "source_type": str(result.get("source_type") or SOURCE_TYPE),
+        "source_id": int(result.get("source_id") or order.id),
+        "source_code": result.get("source_code") or order.order_code,
+        "source_name": result.get("source_name") or order.order_code,
+        "target_type": str(result.get("target_type") or TARGET_TYPE),
+        "target_id": bill_id,
+        "target_code": (result.get("bill_no") or None),
+        "target_name": str(result.get("target_name") or "金蝶销售订单"),
+        "relation_type": "source",
+        "relation_mode": "push",
+        "relation_desc": str(result.get("relation_desc") or "销售订单推送金蝶销售订单"),
+        "notes": to_api_isoformat(datetime.utcnow()),
+        "created_by": acting_user_id,
+    }
+    if pending:
+        for key, value in payload.items():
+            setattr(pending, key, value)
+        await pending.save()
+        return
+    await DocumentRelation.create(tenant_id=tenant_id, **payload)
+
+
+async def _clear_sales_order_push_slot(*, tenant_id: int, sales_order_id: int) -> None:
+    await DocumentRelation.filter(
+        tenant_id=tenant_id,
+        source_type=SOURCE_TYPE,
+        source_id=sales_order_id,
+        target_type=TARGET_TYPE,
+        target_id=PUSHING_TARGET_ID,
+    ).delete()
 
 
 def _to_float(value: Any) -> float:
@@ -233,7 +360,7 @@ class KingdeeSalesOrderPushService:
             source_type=SOURCE_TYPE,
             source_id=sales_order_id,
             target_type=TARGET_TYPE,
-        ).exists()
+        ).exclude(target_id=PUSHING_TARGET_ID).exists()
         skip_reason = sales_order_push_skip_reason(
             order,
             already_pushed=already_pushed,
@@ -242,8 +369,20 @@ class KingdeeSalesOrderPushService:
         if skip_reason:
             return {"success": True, "skipped": True, "message": skip_reason}
 
+        claimed = False
+        if not dry_run:
+            claim_skip = await _claim_sales_order_push_slot(
+                tenant_id=tenant_id,
+                sales_order_id=sales_order_id,
+                order=order,
+                acting_user_id=acting_user_id,
+            )
+            if claim_skip:
+                return {"success": True, "skipped": True, "message": claim_skip}
+            claimed = True
+
         try:
-            return await self._push_now(
+            result = await self._push_now(
                 tenant_id=tenant_id,
                 order=order,
                 items=list(items),
@@ -251,7 +390,20 @@ class KingdeeSalesOrderPushService:
                 config=config,
                 dry_run=dry_run,
             )
+            if (
+                claimed
+                and isinstance(result, dict)
+                and result.get("success") is False
+            ):
+                await _clear_sales_order_push_slot(
+                    tenant_id=tenant_id, sales_order_id=sales_order_id
+                )
+            return result
         except Exception as exc:
+            if claimed:
+                await _clear_sales_order_push_slot(
+                    tenant_id=tenant_id, sales_order_id=sales_order_id
+                )
             logger.warning(
                 "销售订单推送金蝶失败 tenant_id={} sales_order_id={} err={}",
                 tenant_id,
@@ -325,27 +477,25 @@ class KingdeeSalesOrderPushService:
         )
 
         async def _persist(result: Dict[str, Any]) -> None:
-            await DocumentRelation.create(
+            await _finalize_sales_order_push_relation(
                 tenant_id=tenant_id,
-                source_type=str(result.get("source_type") or SOURCE_TYPE),
-                source_id=int(result.get("source_id") or order.id),
-                source_code=result.get("source_code") or order.order_code,
-                source_name=result.get("source_name") or order.order_code,
-                target_type=str(result.get("target_type") or TARGET_TYPE),
-                target_id=int(result.get("bill_id") or 0),
-                target_code=(result.get("bill_no") or None),
-                target_name=str(result.get("target_name") or "金蝶销售订单"),
-                relation_type="source",
-                relation_mode="push",
-                relation_desc=str(result.get("relation_desc") or "销售订单推送金蝶销售订单"),
-                notes=to_api_isoformat(datetime.utcnow()),
-                created_by=acting_user_id,
+                sales_order_id=int(order.id),
+                order=order,
+                acting_user_id=acting_user_id,
+                result=result,
             )
 
-        return await DocumentPushPipeline().push(
-            tenant_id=tenant_id,
-            acting_user_id=acting_user_id,
-            request=request,
-            prepared=prepared,
-            persist_relation=None if dry_run else _persist,
-        )
+        try:
+            return await DocumentPushPipeline().push(
+                tenant_id=tenant_id,
+                acting_user_id=acting_user_id,
+                request=request,
+                prepared=prepared,
+                persist_relation=None if dry_run else _persist,
+            )
+        except Exception:
+            if not dry_run:
+                await _clear_sales_order_push_slot(
+                    tenant_id=tenant_id, sales_order_id=int(order.id)
+                )
+            raise

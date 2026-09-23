@@ -11,7 +11,7 @@ from typing import Optional, Dict, Any, List
 from datetime import date, datetime, timedelta
 import zoneinfo
 import uuid
-from fastapi import APIRouter, Depends, Query, status as http_status, Path, HTTPException, Body, UploadFile, File
+from fastapi import APIRouter, Depends, Query, status as http_status, Path, HTTPException, Body, UploadFile, File, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from loguru import logger
 from tortoise.exceptions import FieldError
@@ -19,10 +19,19 @@ from tortoise.exceptions import FieldError
 from core.api.deps import get_current_user, get_current_tenant
 from core.api.deps.access import require_permission_codes
 from core.ai.deps import AiAuth, get_ai_auth
+from core.utils.interactive_client_guard import (
+    assert_allowed_sales_order_create,
+    sales_order_create_has_upstream,
+)
 from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_sales_order_access
 from core.services.authorization.permission_policy_service import PermissionPolicyService
 from infra.models.user import User
-from infra.exceptions.exceptions import ValidationError, NotFoundError, BusinessLogicError
+from infra.exceptions.exceptions import (
+    ValidationError,
+    NotFoundError,
+    BusinessLogicError,
+    AuthorizationError,
+)
 
 from apps.kuaizhizao.services.sales_order_service import SalesOrderService
 from apps.kuaizhizao.schemas.delivery_project import (
@@ -111,6 +120,7 @@ def _http_exception_with_trace(
 @router.post("", response_model=SalesOrderResponse, summary="Create sales order")
 async def create_sales_order(
     sales_order_data: SalesOrderCreate,
+    request: Request,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -118,14 +128,25 @@ async def create_sales_order(
     创建销售订单
     
     销售订单编码会自动生成：SO-YYYYMMDD-序号
+
+    客户端门禁：无官方 X-Client-Channel 且无上游关联时拒绝（403）；
+    前端/App 带白名单渠道不受影响；合同等上游对接写入仍允许。
     """
     try:
+        assert_allowed_sales_order_create(
+            request,
+            has_upstream=sales_order_create_has_upstream(sales_order_data),
+        )
         result = await sales_order_service.create_sales_order(
             tenant_id=tenant_id,
             sales_order_data=sales_order_data,
             created_by=current_user.id
         )
         return result
+    except AuthorizationError as e:
+        raise _http_exception_with_trace(
+            http_status.HTTP_403_FORBIDDEN, str(e), "/sales-orders", tenant_id
+        )
     except (ValidationError, BusinessLogicError) as e:
         raise _http_exception_with_trace(http_status.HTTP_422_UNPROCESSABLE_ENTITY, str(e), "/sales-orders", tenant_id)
     except Exception as e:
