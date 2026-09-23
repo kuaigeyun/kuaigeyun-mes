@@ -240,18 +240,11 @@ class DataScopeService:
     ) -> list[Any]:
         from core.services.authorization.permission_policy_service import PermissionPolicyService
 
-        granted: list[Any] = []
-        for role in roles:
-            role_uuid = (getattr(role, "uuid", None) or "").strip()
-            if not role_uuid:
-                continue
-            role_resources = await PermissionPolicyService._collect_role_granted_function_resources(
-                tenant_id,
-                role_uuid,
-            )
-            if resource_key in role_resources:
-                granted.append(role)
-        return granted
+        return await PermissionPolicyService.filter_roles_granting_resource(
+            tenant_id,
+            roles,
+            resource_key,
+        )
 
     @classmethod
     async def _external_partner_q_for_role(

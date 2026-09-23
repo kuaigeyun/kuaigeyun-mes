@@ -45,6 +45,20 @@ async def test_apply_no_explicit_policies_is_all_for_internal():
 
 
 @pytest.mark.asyncio
+async def test_filter_roles_granting_resource_batches_instead_of_per_role_collect():
+    """多角色时须一次筛资源，禁止对每角色调用 _collect_role_granted_function_resources。"""
+    import inspect
+
+    from core.services.authorization.data_scope_service import DataScopeService
+    from core.services.authorization.permission_policy_service import PermissionPolicyService
+
+    src = inspect.getsource(DataScopeService._filter_roles_with_function_resource)
+    assert "_collect_role_granted_function_resources" not in src
+    assert "filter_roles_granting_resource" in src
+    assert hasattr(PermissionPolicyService, "filter_roles_granting_resource")
+
+
+@pytest.mark.asyncio
 async def test_apply_implicit_all_role_unions_over_restrictive_role():
     qs = MagicMock()
     qs.filter.return_value = qs

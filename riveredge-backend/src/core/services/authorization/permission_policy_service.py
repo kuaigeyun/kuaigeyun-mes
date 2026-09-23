@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from uuid import uuid4
-from typing import Any, Iterable
+from typing import Any, Iterable, Sequence
 
 from core.config.field_permission_resource_registry import (
     field_names_for_resource,
@@ -243,6 +243,106 @@ class PermissionPolicyService:
         return cls._resource_keys_from_permission_codes(granted_codes) & allowed
 
     @classmethod
+    async def filter_roles_granting_resource(
+        cls,
+        tenant_id: int,
+        roles: Sequence[Any],
+        resource: str,
+    ) -> list[Any]:
+        """
+        筛出已授予指定 app:resource 功能权限的角色（一次 collect_definitions + 批量读权限）。
+
+        DataScope 列表热路径禁止按角色循环调用 _collect_role_granted_function_resources，
+        否则多角色用户（十几个角色 × 满授权限）每次列表/下拉都会放大成上万次权限行扫描。
+        """
+        from core.services.authorization.menu_resource_resolver import (
+            normalize_permission_code,
+        )
+        from core.services.authorization.role_service import RoleService
+
+        normalized = cls._normalize_resource(resource)
+        if not normalized or not roles:
+            return []
+
+        defs = await PermissionRegistryService.collect_definitions(tenant_id=tenant_id)
+        allowed = cls._resource_keys_from_permission_codes(defs.keys())
+        if normalized not in allowed:
+            return []
+
+        uuid_to_role: dict[str, Any] = {}
+        for role in roles:
+            role_uuid = (getattr(role, "uuid", None) or "").strip()
+            if role_uuid:
+                uuid_to_role[role_uuid] = role
+        if not uuid_to_role:
+            return []
+
+        db_roles = await Role.filter(
+            uuid__in=list(uuid_to_role.keys()),
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).all()
+        if not db_roles:
+            return []
+
+        granted_uuids: set[str] = set()
+        need_perm_check: list[Any] = []
+        for role in db_roles:
+            role_uuid = (getattr(role, "uuid", None) or "").strip()
+            if not role_uuid:
+                continue
+            if RoleService._is_admin_system_role(role):
+                granted_uuids.add(role_uuid)
+            else:
+                need_perm_check.append(role)
+
+        if need_perm_check:
+            role_ids = [int(role.id) for role in need_perm_check]
+            id_to_uuid = {
+                int(role.id): (getattr(role, "uuid", None) or "").strip()
+                for role in need_perm_check
+            }
+            role_permissions = await RolePermission.filter(role_id__in=role_ids).all()
+            perm_ids_by_role: dict[int, set[int]] = {}
+            all_perm_ids: set[int] = set()
+            for rp in role_permissions:
+                rid = int(rp.role_id)
+                pid = int(rp.permission_id)
+                perm_ids_by_role.setdefault(rid, set()).add(pid)
+                all_perm_ids.add(pid)
+
+            code_by_perm_id: dict[int, str] = {}
+            if all_perm_ids:
+                pool_codes = set(defs.keys())
+                perms = await Permission.filter(
+                    id__in=list(all_perm_ids),
+                    tenant_id=tenant_id,
+                    deleted_at__isnull=True,
+                    deprecated_at__isnull=True,
+                    permission_type=PermissionType.FUNCTION,
+                ).only("id", "code")
+                for perm in perms:
+                    code = normalize_permission_code(perm.code or "")
+                    if code and code in pool_codes:
+                        code_by_perm_id[int(perm.id)] = code
+
+            for rid, pids in perm_ids_by_role.items():
+                role_uuid = id_to_uuid.get(rid) or ""
+                if not role_uuid or role_uuid in granted_uuids:
+                    continue
+                for pid in pids:
+                    code = code_by_perm_id.get(pid)
+                    if not code:
+                        continue
+                    key = cls._permission_code_to_resource_key(code)
+                    if key and cls._normalize_resource(key) == normalized:
+                        granted_uuids.add(role_uuid)
+                        break
+
+        # 保持入参顺序
+        return [uuid_to_role[u] for u in uuid_to_role if u in granted_uuids]
+
+    @classmethod
     async def _user_has_granted_function_resource(
         cls,
         tenant_id: int,
@@ -250,18 +350,10 @@ class PermissionPolicyService:
         resource: str,
     ) -> bool:
         """当前用户任一角色是否已授予指定 app:resource 的功能权限（列表脱敏快路径）。"""
-        from core.services.authorization.menu_resource_resolver import (
-            normalize_permission_code,
-        )
         from core.services.authorization.role_service import RoleService
 
         normalized = cls._normalize_resource(resource)
         if not normalized:
-            return False
-
-        defs = await PermissionRegistryService.collect_definitions(tenant_id=tenant_id)
-        allowed = cls._resource_keys_from_permission_codes(defs.keys())
-        if normalized not in allowed:
             return False
 
         roles = await Role.filter(
@@ -271,32 +363,10 @@ class PermissionPolicyService:
         ).all()
         if not roles:
             return False
-
         if any(RoleService._is_admin_system_role(role) for role in roles):
             return True
-
-        role_ids = [role.id for role in roles]
-        role_permissions = await RolePermission.filter(role_id__in=role_ids).all()
-        permission_ids = list({rp.permission_id for rp in role_permissions})
-        if not permission_ids:
-            return False
-
-        pool_codes = set(defs.keys())
-        perms = await Permission.filter(
-            id__in=permission_ids,
-            tenant_id=tenant_id,
-            deleted_at__isnull=True,
-            deprecated_at__isnull=True,
-            permission_type=PermissionType.FUNCTION,
-        ).only("code")
-        for perm in perms:
-            code = normalize_permission_code(perm.code or "")
-            if not code or code not in pool_codes:
-                continue
-            key = cls._permission_code_to_resource_key(code)
-            if key and cls._normalize_resource(key) == normalized:
-                return True
-        return False
+        granted = await cls.filter_roles_granting_resource(tenant_id, roles, normalized)
+        return bool(granted)
 
     @classmethod
     async def list_data_policies(cls, tenant_id: int, role_uuid: str) -> list[DataPermissionPolicyResponse]:

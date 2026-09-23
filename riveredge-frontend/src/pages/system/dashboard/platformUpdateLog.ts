@@ -36,6 +36,14 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
   {
+    id: 'data-scope-multi-role-batch-grant-r01',
+    date: '2026-09-23',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.data-scope-multi-role-batch-grant-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.data-scope-multi-role-batch-grant-r01.description',
+  },
+  {
     id: 'menu-badge-sales-valueslist-iterable-r01',
     date: '2026-09-23',
     type: 'fix',

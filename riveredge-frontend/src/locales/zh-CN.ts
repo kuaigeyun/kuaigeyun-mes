@@ -31166,6 +31166,10 @@ export default {
     '侧栏菜单带查询参数时不再收起分组',
   'pages.dashboard.updateLog.entries.sidebar-menu-query-path-openkeys-r01.description':
     '修复休息登记等带 ?mode= 的菜单项：选中与展开按 pathname+search 匹配，进入后父级分组保持展开。',
+  'pages.dashboard.updateLog.entries.data-scope-multi-role-batch-grant-r01.title':
+    '修复多角色用户进单据页网关超时',
+  'pages.dashboard.updateLog.entries.data-scope-multi-role-batch-grant-r01.description':
+    '数据权限筛选曾按角色逐个全量扫功能权限，挂十余个角色的账号打开报价单等页时 display-search/列表可达十余秒并触发 504；现改为一次批量判定角色是否授予资源。',
   'pages.dashboard.updateLog.entries.menu-badge-sales-valueslist-iterable-r01.title':
     '修复菜单徽章销售段异常导致网关超时',
   'pages.dashboard.updateLog.entries.menu-badge-sales-valueslist-iterable-r01.description':
