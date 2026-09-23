@@ -388,6 +388,7 @@ class PermissionSyncService:
                 "dry_run": 1 if dry_run else 0,
             }
             cls._last_run_stats[tenant_id] = result
+            PermissionRegistryService.invalidate_definitions_cache(tenant_id)
             logger.info(
                 "权限治理同步完成 tenant_id={} result={}",
                 tenant_id,

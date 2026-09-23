@@ -250,10 +250,10 @@ class PermissionPolicyService:
         resource: str,
     ) -> list[Any]:
         """
-        筛出已授予指定 app:resource 功能权限的角色（一次 collect_definitions + 批量读权限）。
+        筛出已授予指定 app:resource 功能权限的角色。
 
-        DataScope 列表热路径禁止按角色循环调用 _collect_role_granted_function_resources，
-        否则多角色用户（十几个角色 × 满授权限）每次列表/下拉都会放大成上万次权限行扫描。
+        热路径（列表 DataScope、菜单徽章数十次 apply）只查「映射到该资源的权限码」
+        （通常十余个 action），禁止把角色上全部权限行（可数千）拉进内存再过滤。
         """
         from core.services.authorization.menu_resource_resolver import (
             normalize_permission_code,
@@ -265,8 +265,13 @@ class PermissionPolicyService:
             return []
 
         defs = await PermissionRegistryService.collect_definitions(tenant_id=tenant_id)
-        allowed = cls._resource_keys_from_permission_codes(defs.keys())
-        if normalized not in allowed:
+        resource_codes = {
+            normalize_permission_code(code)
+            for code in defs.keys()
+            if cls._permission_code_to_resource_key(code) == normalized
+        }
+        resource_codes.discard("")
+        if not resource_codes:
             return []
 
         uuid_to_role: dict[str, Any] = {}
@@ -302,44 +307,24 @@ class PermissionPolicyService:
                 int(role.id): (getattr(role, "uuid", None) or "").strip()
                 for role in need_perm_check
             }
-            role_permissions = await RolePermission.filter(role_id__in=role_ids).all()
-            perm_ids_by_role: dict[int, set[int]] = {}
-            all_perm_ids: set[int] = set()
-            for rp in role_permissions:
-                rid = int(rp.role_id)
-                pid = int(rp.permission_id)
-                perm_ids_by_role.setdefault(rid, set()).add(pid)
-                all_perm_ids.add(pid)
-
-            code_by_perm_id: dict[int, str] = {}
-            if all_perm_ids:
-                pool_codes = set(defs.keys())
-                perms = await Permission.filter(
-                    id__in=list(all_perm_ids),
-                    tenant_id=tenant_id,
-                    deleted_at__isnull=True,
-                    deprecated_at__isnull=True,
-                    permission_type=PermissionType.FUNCTION,
-                ).only("id", "code")
-                for perm in perms:
-                    code = normalize_permission_code(perm.code or "")
-                    if code and code in pool_codes:
-                        code_by_perm_id[int(perm.id)] = code
-
-            for rid, pids in perm_ids_by_role.items():
-                role_uuid = id_to_uuid.get(rid) or ""
-                if not role_uuid or role_uuid in granted_uuids:
-                    continue
-                for pid in pids:
-                    code = code_by_perm_id.get(pid)
-                    if not code:
-                        continue
-                    key = cls._permission_code_to_resource_key(code)
-                    if key and cls._normalize_resource(key) == normalized:
+            resource_perm_ids = await Permission.filter(
+                tenant_id=tenant_id,
+                code__in=list(resource_codes),
+                deleted_at__isnull=True,
+                deprecated_at__isnull=True,
+                permission_type=PermissionType.FUNCTION,
+            ).values_list("id", flat=True)
+            perm_id_list = [int(pid) for pid in resource_perm_ids]
+            if perm_id_list:
+                hit_role_ids = await RolePermission.filter(
+                    role_id__in=role_ids,
+                    permission_id__in=perm_id_list,
+                ).distinct().values_list("role_id", flat=True)
+                for rid in hit_role_ids:
+                    role_uuid = id_to_uuid.get(int(rid)) or ""
+                    if role_uuid:
                         granted_uuids.add(role_uuid)
-                        break
 
-        # 保持入参顺序
         return [uuid_to_role[u] for u in uuid_to_role if u in granted_uuids]
 
     @classmethod

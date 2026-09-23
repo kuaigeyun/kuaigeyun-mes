@@ -36,6 +36,15 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
   {
+    id: 'permission-hotpath-definitions-scope-memo-r01',
+    date: '2026-09-23',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.permission-hotpath-definitions-scope-memo-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.permission-hotpath-definitions-scope-memo-r01.description',
+  },
+  {
     id: 'data-scope-multi-role-batch-grant-r01',
     date: '2026-09-23',
     type: 'fix',

@@ -1018,8 +1018,12 @@ class ApplicationService:
         application['is_active'] = True
 
         from core.services.application.enabled_apps import clear_enabled_apps_cache
+        from core.services.authorization.permission_registry_service import (
+            PermissionRegistryService,
+        )
 
         clear_enabled_apps_cache()
+        PermissionRegistryService.invalidate_definitions_cache(tenant_id)
         
         if is_industry_module_app_code(app_code):
             from core.services.application.industry_pack_menu_service import IndustryPackMenuService
@@ -1163,8 +1167,12 @@ class ApplicationService:
         application['is_active'] = False
 
         from core.services.application.enabled_apps import clear_enabled_apps_cache
+        from core.services.authorization.permission_registry_service import (
+            PermissionRegistryService,
+        )
 
         clear_enabled_apps_cache()
+        PermissionRegistryService.invalidate_definitions_cache(tenant_id)
 
         from core.services.system.menu_service import MenuService
         from core.services.system.menu_takeover_service import MenuTakeoverService

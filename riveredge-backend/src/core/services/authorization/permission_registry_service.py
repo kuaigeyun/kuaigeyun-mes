@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -197,26 +198,58 @@ class PermissionRegistryService:
         merged.update(cls.BASELINE_PERMISSION_CODES)
         return merged
 
+    # 租户权限定义热路径缓存：列表/徽章每次 DataScope 都会 collect；
+    # 定义仅在权限同步/启停应用时变化，短 TTL + 显式失效即可，禁止每次扫全量 manifest。
+    _DEFINITIONS_CACHE: dict[int, tuple[float, dict[str, PermissionDefinition]]] = {}
+    _DEFINITIONS_CACHE_TTL_SEC = 60.0
+    _DEFINITIONS_CACHE_LOCK = asyncio.Lock()
+
+    @classmethod
+    def invalidate_definitions_cache(cls, tenant_id: int | None = None) -> None:
+        """权限同步或应用启停后失效缓存；tenant_id 为空则清空全部。"""
+        if tenant_id is None:
+            cls._DEFINITIONS_CACHE.clear()
+            return
+        cls._DEFINITIONS_CACHE.pop(int(tenant_id), None)
+
     @classmethod
     async def collect_definitions(cls, tenant_id: int) -> dict[str, PermissionDefinition]:
-        definitions: dict[str, PermissionDefinition] = {}
-        for idx, code in enumerate(cls.CORE_PERMISSION_CODES):
-            definitions[code] = PermissionDefinition(
-                code=code,
-                source_type="core",
-                source_path="builtin",
-                manifest_index=idx,
-            )
+        import time
 
-        enabled_apps = await cls._get_enabled_app_codes(tenant_id=tenant_id)
-        for item in cls._load_manifest_permissions(enabled_apps=enabled_apps):
-            definitions[item.code] = item
+        tid = int(tenant_id)
+        now = time.monotonic()
+        hit = cls._DEFINITIONS_CACHE.get(tid)
+        if hit is not None:
+            cached_at, cached_defs = hit
+            if now - cached_at < cls._DEFINITIONS_CACHE_TTL_SEC:
+                return cached_defs
 
-        for item in cls._load_reference_display_permissions(enabled_apps=enabled_apps):
-            if item.code not in definitions:
+        async with cls._DEFINITIONS_CACHE_LOCK:
+            hit = cls._DEFINITIONS_CACHE.get(tid)
+            if hit is not None:
+                cached_at, cached_defs = hit
+                if time.monotonic() - cached_at < cls._DEFINITIONS_CACHE_TTL_SEC:
+                    return cached_defs
+
+            definitions: dict[str, PermissionDefinition] = {}
+            for idx, code in enumerate(cls.CORE_PERMISSION_CODES):
+                definitions[code] = PermissionDefinition(
+                    code=code,
+                    source_type="core",
+                    source_path="builtin",
+                    manifest_index=idx,
+                )
+
+            enabled_apps = await cls._get_enabled_app_codes(tenant_id=tid)
+            for item in cls._load_manifest_permissions(enabled_apps=enabled_apps):
                 definitions[item.code] = item
 
-        return definitions
+            for item in cls._load_reference_display_permissions(enabled_apps=enabled_apps):
+                if item.code not in definitions:
+                    definitions[item.code] = item
+
+            cls._DEFINITIONS_CACHE[tid] = (time.monotonic(), definitions)
+            return definitions
 
     @classmethod
     async def manifest_permission_order(cls, tenant_id: int) -> dict[str, int]:

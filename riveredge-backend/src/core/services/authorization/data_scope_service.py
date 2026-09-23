@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from contextvars import ContextVar
 from typing import Any, Iterable, Optional, Type
 
 from fastapi import HTTPException, status
@@ -35,6 +36,20 @@ from infra.models.user import User
 
 _BUILTIN_REGISTERED = False
 
+# 同一请求内（菜单徽章会对多资源反复 apply）复用角色/策略加载结果，禁止叠补丁式跳过鉴权。
+_DATA_SCOPE_REQUEST_MEMO: ContextVar[dict[str, Any] | None] = ContextVar(
+    "data_scope_request_memo",
+    default=None,
+)
+
+
+def _request_memo() -> dict[str, Any]:
+    memo = _DATA_SCOPE_REQUEST_MEMO.get()
+    if memo is None:
+        memo = {}
+        _DATA_SCOPE_REQUEST_MEMO.set(memo)
+    return memo
+
 
 class DataScopeService:
     @classmethod
@@ -46,7 +61,14 @@ class DataScopeService:
 
     @classmethod
     async def _admin_bypass(cls, user: User, tenant_id: int) -> bool:
-        return await UserPermissionService.is_admin_bypass(user, tenant_id)
+        memo = _request_memo()
+        cache_key = f"admin:{int(user.id)}:{int(tenant_id)}"
+        cached = memo.get(cache_key)
+        if cached is not None:
+            return bool(cached)
+        result = await UserPermissionService.is_admin_bypass(user, tenant_id)
+        memo[cache_key] = result
+        return result
 
     @classmethod
     async def _load_role_uuids(cls, user_id: int, tenant_id: int) -> list[str]:
@@ -63,6 +85,12 @@ class DataScopeService:
 
     @classmethod
     async def _load_active_roles(cls, user_id: int, tenant_id: int) -> list[Any]:
+        memo = _request_memo()
+        cache_key = f"roles:{int(user_id)}:{int(tenant_id)}"
+        cached = memo.get(cache_key)
+        if cached is not None:
+            return cached
+
         user_roles = await UserRole.filter(user_id=user_id).prefetch_related("role").all()
         roles: list[Any] = []
         for ur in user_roles:
@@ -70,6 +98,7 @@ class DataScopeService:
             if not role or role.tenant_id != tenant_id or not role.is_active:
                 continue
             roles.append(role)
+        memo[cache_key] = roles
         return roles
 
     @classmethod
@@ -129,24 +158,43 @@ class DataScopeService:
         if not role_uuids:
             return []
         resource_key = normalize_resource_key(resource)
+        memo = _request_memo()
+        uuids_key = ",".join(sorted({(u or "").strip() for u in role_uuids if (u or "").strip()}))
+        cache_key = f"policies:{int(tenant_id)}:{resource_key}:{uuids_key}"
+        cached = memo.get(cache_key)
+        if cached is not None:
+            return cached
+
         rows = await DataPermissionPolicy.filter(
             tenant_id=tenant_id,
             role_uuid__in=role_uuids,
             resource=resource_key,
             deleted_at__isnull=True,
         ).all()
-        return list(rows)
+        result = list(rows)
+        memo[cache_key] = result
+        return result
 
     @classmethod
     async def _department_context(cls, tenant_id: int, user: User) -> tuple[str | None, list[int]]:
+        memo = _request_memo()
+        cache_key = f"dept:{int(tenant_id)}:{int(user.id)}"
+        cached = memo.get(cache_key)
+        if cached is not None:
+            return cached
+
         await user.fetch_related("department")
         dept = getattr(user, "department", None)
         if not dept:
-            return None, [user.id]
+            result: tuple[str | None, list[int]] = (None, [user.id])
+            memo[cache_key] = result
+            return result
         dept_uuid = str(getattr(dept, "uuid", "") or "").strip() or None
         dept_id = getattr(user, "department_id", None)
         if dept_id is None:
-            return dept_uuid, [user.id]
+            result = (dept_uuid, [user.id])
+            memo[cache_key] = result
+            return result
         user_ids = await User.filter(
             tenant_id=tenant_id,
             department_id=dept_id,
@@ -154,7 +202,9 @@ class DataScopeService:
             is_active=True,
         ).values_list("id", flat=True)
         ids = [int(x) for x in user_ids] if user_ids else [user.id]
-        return dept_uuid, ids
+        result = (dept_uuid, ids)
+        memo[cache_key] = result
+        return result
 
     @classmethod
     async def _policy_to_q(
@@ -240,11 +290,26 @@ class DataScopeService:
     ) -> list[Any]:
         from core.services.authorization.permission_policy_service import PermissionPolicyService
 
-        return await PermissionPolicyService.filter_roles_granting_resource(
+        memo = _request_memo()
+        role_uuids = sorted(
+            {
+                (getattr(role, "uuid", None) or "").strip()
+                for role in roles
+                if (getattr(role, "uuid", None) or "").strip()
+            }
+        )
+        cache_key = f"grant:{int(tenant_id)}:{resource_key}:{','.join(role_uuids)}"
+        cached = memo.get(cache_key)
+        if cached is not None:
+            return cached
+
+        granted = await PermissionPolicyService.filter_roles_granting_resource(
             tenant_id,
             roles,
             resource_key,
         )
+        memo[cache_key] = granted
+        return granted
 
     @classmethod
     async def _external_partner_q_for_role(
