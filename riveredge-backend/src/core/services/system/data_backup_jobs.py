@@ -1,7 +1,8 @@
 """
 数据备份与恢复任务实现（同步/异步工具函数）
 
-供后台事件处理器调用：pg_dump、打包 zip、pg_restore、租户 ID 替换等。
+供后台事件处理器调用：asyncpg CSV 导出、打包 zip、恢复（租户 CSV / 全量 pg_restore）、租户 ID 替换等。
+备份创建不依赖本机 psql/pg_dump；恢复全量二进制包时才可能需要 pg 客户端。
 """
 
 from __future__ import annotations
@@ -47,6 +48,42 @@ TENANT_JUNCTION_TABLES = frozenset(
     }
 )
 
+_PG_BIN_CACHE: dict[str, str] = {}
+
+
+def resolve_pg_client_bin(name: str) -> str:
+    """
+    解析 psql / pg_restore 命令名（仅恢复旧版二进制包时使用）。
+
+    备份创建走 asyncpg，连接部署库（DB_*），不依赖本机客户端、不写死安装路径。
+    恢复若需客户端：优先 PATH；可选 PG_BIN_DIR（部署机配置的相对/环境路径，禁止写死本机绝对路径）。
+    """
+    key = (name or "").strip().lower()
+    if not key:
+        raise ValueError("pg client name is empty")
+    if key in _PG_BIN_CACHE:
+        return _PG_BIN_CACHE[key]
+
+    exe = f"{key}.exe" if os.name == "nt" else key
+    configured = (
+        os.environ.get("PG_BIN_DIR")
+        or getattr(infra_settings, "PG_BIN_DIR", "")
+        or ""
+    ).strip()
+    if configured:
+        candidate = os.path.join(configured, exe)
+        if os.path.isfile(candidate):
+            _PG_BIN_CACHE[key] = candidate
+            return candidate
+
+    which = shutil.which(key) or shutil.which(exe)
+    if which:
+        _PG_BIN_CACHE[key] = which
+        return which
+
+    _PG_BIN_CACHE[key] = key
+    return key
+
 
 def _is_platform_level_table(table: str) -> bool:
     return any(table.startswith(prefix) for prefix in TENANT_BACKUP_EXCLUDED_TABLE_PREFIXES)
@@ -78,13 +115,40 @@ def zip_has_upload_entries(zip_path: str) -> bool:
         return False
 
 
-def _load_core_user_fk_children(*, export_tables: list[str], env: dict[str, str]) -> dict[str, str]:
+
+def _pg_dsn() -> str:
+    from urllib.parse import quote_plus
+    user = quote_plus(infra_settings.DB_USER)
+    password = quote_plus(infra_settings.DB_PASSWORD) if infra_settings.DB_PASSWORD else ""
+    host = infra_settings.DB_HOST
+    if host == "localhost":
+        host = "127.0.0.1"
+    auth = f"{user}:{password}" if password else user
+    return f"postgresql://{auth}@{host}:{infra_settings.DB_PORT}/{infra_settings.DB_NAME}"
+
+
+async def _asyncpg_connect():
+    import asyncpg
+    return await asyncpg.connect(_pg_dsn(), command_timeout=600)
+
+
+async def _copy_query_to_csv_text(conn, select_sql: str) -> str:
+    """用 asyncpg COPY 导出 CSV（含表头），无需本机 psql。"""
+    import io
+    buf = io.BytesIO()
+    await conn.copy_from_query(
+        select_sql,
+        output=buf,
+        format="csv",
+        header=True,
+    )
+    return buf.getvalue().decode("utf-8", errors="replace")
+
+
+async def _load_core_user_fk_children_async(conn, *, export_tables: list[str]) -> dict[str, str]:
     """返回带 tenant_id 且 FK 指向 core_users.id 的子表映射 {table: column}。"""
-    db_user = infra_settings.DB_USER
-    db_host = infra_settings.DB_HOST
-    db_port = infra_settings.DB_PORT
-    db_name = infra_settings.DB_NAME
-    fk_query = """
+    rows = await conn.fetch(
+        """
         SELECT tc.table_name AS child_table, kcu.column_name AS child_column
         FROM information_schema.table_constraints tc
         JOIN information_schema.key_column_usage kcu
@@ -102,36 +166,13 @@ def _load_core_user_fk_children(*, export_tables: list[str], env: dict[str, str]
           AND tc.table_schema = 'public'
           AND ccu.table_name = 'core_users'
           AND ccu.column_name = 'id'
-    """
-    cmd = [
-        "psql",
-        "-h",
-        db_host,
-        "-p",
-        str(db_port),
-        "-U",
-        db_user,
-        "-d",
-        db_name,
-        "-t",
-        "-A",
-        "-F",
-        "|",
-        "-c",
-        fk_query,
-    ]
-    result = subprocess.run(cmd, env=env, capture_output=True, text=True)
-    if result.returncode != 0:
-        logger.warning("查询 core_users 外键引用失败: {}", result.stderr)
-        return {}
-
+        """
+    )
     export_set = set(export_tables)
     mapping: dict[str, str] = {}
-    for line in result.stdout.splitlines():
-        parts = line.strip().split("|")
-        if len(parts) != 2:
-            continue
-        child_table, child_column = parts[0].strip(), parts[1].strip()
+    for row in rows:
+        child_table = row["child_table"]
+        child_column = row["child_column"]
         if not child_table or not child_column or child_table not in export_set:
             continue
         if child_table == "core_users":
@@ -155,42 +196,20 @@ def _build_tenant_user_reference_subqueries(
     return subqueries
 
 
-def _load_tenant_tables_with_user_id_column(*, export_tables: list[str], env: dict[str, str]) -> set[str]:
-    """返回备份范围内声明了 user_id 列的表名。"""
+async def _load_tenant_tables_with_user_id_column_async(conn, *, export_tables: list[str]) -> set[str]:
     if not export_tables:
         return set()
-    db_user = infra_settings.DB_USER
-    db_host = infra_settings.DB_HOST
-    db_port = infra_settings.DB_PORT
-    db_name = infra_settings.DB_NAME
-    table_list = ", ".join(f"'{t}'" for t in sorted(export_tables))
-    query = f"""
+    rows = await conn.fetch(
+        """
         SELECT DISTINCT table_name
         FROM information_schema.columns
         WHERE table_schema = 'public'
           AND column_name = 'user_id'
-          AND table_name IN ({table_list})
-    """
-    cmd = [
-        "psql",
-        "-h",
-        db_host,
-        "-p",
-        str(db_port),
-        "-U",
-        db_user,
-        "-d",
-        db_name,
-        "-t",
-        "-A",
-        "-c",
-        query,
-    ]
-    result = subprocess.run(cmd, env=env, capture_output=True, text=True)
-    if result.returncode != 0:
-        logger.warning("查询 user_id 列失败: {}", result.stderr)
-        return set()
-    return {line.strip() for line in result.stdout.splitlines() if line.strip()}
+          AND table_name = ANY($1::text[])
+        """,
+        export_tables,
+    )
+    return {r["table_name"] for r in rows if r["table_name"]}
 
 
 def _resolve_user_ref_column_for_table(
@@ -280,206 +299,30 @@ def _append_tenant_junction_deletes(script_lines: list[str], tenant_ids: set[int
     )
 
 
-def run_backup_dump_and_zip_sync(
+def _pack_backup_zip(
     *,
-    backup_uuid: str,
+    backup_dir: str,
     backup_name: str,
+    dump_path: str,
+    backup_scope: str,
     source_tenant_id: Optional[int],
     tenant_id: Optional[int],
-    backup_type: str,
-    backup_scope: str,
-    include_files: Optional[bool] = None,
+    pack_uploads: bool,
 ) -> str:
-    """
-    执行数据库转储并打成 zip，返回最终 zip 绝对路径。
-    """
-    pack_uploads = resolve_include_files(include_files=include_files, backup_type=backup_type)
-    db_user = infra_settings.DB_USER
-    db_password = infra_settings.DB_PASSWORD
-    db_host = infra_settings.DB_HOST
-    db_port = infra_settings.DB_PORT
-    db_name = infra_settings.DB_NAME
-
-    env = os.environ.copy()
-    env["PGPASSWORD"] = db_password
-
-    backup_dir = resolve_data_backup_dir()
-    temp_dir = os.path.join(backup_dir, f"temp_{backup_uuid}")
-    db_dump_file = os.path.join(temp_dir, "db_dump.dump")
-
-    os.makedirs(temp_dir, exist_ok=True)
-
-    if backup_scope == "tenant" and tenant_id is None:
-        raise ValueError("租户隔离备份缺少 tenant_id，已拒绝执行以避免回退到全量备份")
-
-    if backup_scope == "tenant" and tenant_id is not None:
-        logger.info(f"开始执行租户隔离备份: tenant_id={tenant_id}")
-        db_dump_path = os.path.join(temp_dir, "db_dump.sql")
-
-        get_tables_cmd = [
-            "psql",
-            "-h",
-            db_host,
-            "-p",
-            str(db_port),
-            "-U",
-            db_user,
-            "-d",
-            db_name,
-            "-t",
-            "-c",
-            "SELECT table_name FROM information_schema.columns WHERE column_name = 'tenant_id' AND table_schema = 'public'",
-        ]
-        result = subprocess.run(get_tables_cmd, env=env, capture_output=True, text=True)
-        if result.returncode != 0:
-            raise RuntimeError(f"获取表列表失败: {result.stderr}")
-
-        discovered_tables = [t.strip() for t in result.stdout.split("\n") if t.strip()]
-        tables = [
-            t
-            for t in discovered_tables
-            if t not in TENANT_BACKUP_EXCLUDED_TABLES and not _is_platform_level_table(t)
-        ]
-        skipped_tables = [
-            t
-            for t in discovered_tables
-            if t in TENANT_BACKUP_EXCLUDED_TABLES or _is_platform_level_table(t)
-        ]
-        logger.info(
-            "租户隔离备份表统计: discovered={} export={} skipped={}",
-            len(discovered_tables),
-            len(tables),
-            len(skipped_tables),
-        )
-        if skipped_tables:
-            logger.info("租户隔离备份跳过表: {}", skipped_tables)
-
-        user_fk_children = _load_core_user_fk_children(export_tables=tables, env=env)
-        tables_with_user_id = _load_tenant_tables_with_user_id_column(export_tables=tables, env=env)
-        user_ref_subqueries = _build_tenant_user_reference_subqueries(
-            tenant_id=int(tenant_id),
-            user_fk_children=user_fk_children,
-        )
-        if user_ref_subqueries:
-            logger.info("core_users 导出将包含 {} 个子表引用的用户 ID", len(user_ref_subqueries))
-
-        with open(db_dump_path, "w", encoding="utf-8") as f:
-            f.write("-- Tenant Isolated Backup\n")
-            f.write(f"-- Tenant ID: {tenant_id}\n")
-            f.write(f"-- Date: {resolve_business_datetime()}\n\n")
-            if skipped_tables:
-                f.write(f"-- Skipped tables: {', '.join(skipped_tables)}\n\n")
-
-            for index, table in enumerate(tables, start=1):
-                logger.info(
-                    "租户隔离备份导出表 [{}/{}]: {}",
-                    index,
-                    len(tables),
-                    table,
-                )
-                copy_cmd = [
-                    "psql",
-                    "-h",
-                    db_host,
-                    "-p",
-                    str(db_port),
-                    "-U",
-                    db_user,
-                    "-d",
-                    db_name,
-                    "-c",
-                    f'COPY ({_build_tenant_table_copy_sql(table, int(tenant_id), user_ref_subqueries, user_fk_children, tables_with_user_id)}) '
-                    "TO STDOUT WITH (FORMAT CSV, HEADER, ENCODING 'UTF8')",
-                ]
-                logger.debug(f"正在导出表: {table}")
-                table_result = subprocess.run(copy_cmd, env=env, capture_output=True, text=True)
-                if table_result.returncode == 0:
-                    f.write(f"-- Data for table: {table}\n")
-                    f.write(f"--- TABLE: {table} ---\n")
-                    f.write(table_result.stdout)
-                    f.write("\n\n")
-                    logger.info(
-                        "租户隔离备份导出完成表 {}，bytes={}",
-                        table,
-                        len(table_result.stdout.encode("utf-8", errors="ignore")),
-                    )
-                else:
-                    logger.error(f"导出表 {table} 失败: {table_result.stderr}")
-
-            junction_tables = sorted(TENANT_JUNCTION_TABLES)
-            for index, table in enumerate(junction_tables, start=1):
-                logger.info(
-                    "租户隔离备份导出关联表 [{}/{}]: {}",
-                    index,
-                    len(junction_tables),
-                    table,
-                )
-                copy_cmd = [
-                    "psql",
-                    "-h",
-                    db_host,
-                    "-p",
-                    str(db_port),
-                    "-U",
-                    db_user,
-                    "-d",
-                    db_name,
-                    "-c",
-                    f'COPY ({_build_tenant_junction_copy_sql(table, int(tenant_id))}) '
-                    "TO STDOUT WITH (FORMAT CSV, HEADER, ENCODING 'UTF8')",
-                ]
-                table_result = subprocess.run(copy_cmd, env=env, capture_output=True, text=True)
-                if table_result.returncode == 0:
-                    f.write(f"-- Data for table: {table}\n")
-                    f.write(f"--- TABLE: {table} ---\n")
-                    f.write(table_result.stdout)
-                    f.write("\n\n")
-                    logger.info(
-                        "租户隔离备份导出完成关联表 {}，bytes={}",
-                        table,
-                        len(table_result.stdout.encode("utf-8", errors="ignore")),
-                    )
-                else:
-                    err = (table_result.stderr or table_result.stdout or "").strip()
-                    raise RuntimeError(f"导出关联表 {table} 失败: {err[:2000]}")
-    else:
-        cmd = [
-            "pg_dump",
-            "-h",
-            db_host,
-            "-p",
-            str(db_port),
-            "-U",
-            db_user,
-            "-F",
-            "c",
-            "-b",
-            "-v",
-            "-f",
-            db_dump_file,
-            db_name,
-        ]
-        logger.info(f"执行数据库全量转储: {' '.join(cmd)}")
-        result = subprocess.run(cmd, env=env, capture_output=True, text=True)
-        if result.returncode != 0:
-            raise RuntimeError(f"pg_dump 失败: {result.stderr}")
-
     final_zip_name = f"{backup_name}_{resolve_business_datetime().strftime('%Y%m%d%H%M%S')}.zip"
     final_zip_path = os.path.join(backup_dir, final_zip_name)
-
-    dump_path = db_dump_file if backup_scope != "tenant" else os.path.join(temp_dir, "db_dump.sql")
     with zipfile.ZipFile(final_zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
         zipf.write(dump_path, "database.dump")
         metadata: dict[str, Any] = {
             "source_tenant_id": source_tenant_id,
             "backup_scope": backup_scope,
             "include_files": pack_uploads,
+            "engine": "asyncpg-csv",
         }
         zipf.writestr("backup_metadata.json", json.dumps(metadata, ensure_ascii=False, indent=2))
         if pack_uploads:
             upload_dir = infra_settings.FILE_UPLOAD_DIR
             if upload_dir and os.path.exists(upload_dir):
-                # 租户隔离备份：仅打包当前租户 uploads 子目录；全量备份仍保留全部 uploads。
                 if backup_scope == "tenant" and tenant_id is not None:
                     tenant_upload_dir = os.path.join(upload_dir, str(tenant_id))
                     if os.path.exists(tenant_upload_dir):
@@ -491,78 +334,205 @@ def run_backup_dump_and_zip_sync(
                                     os.path.relpath(file_path, upload_dir),
                                 )
                                 zipf.write(file_path, arcname)
-                        logger.info(
-                            "租户隔离备份仅打包 uploads 子目录: {}",
-                            tenant_upload_dir,
-                        )
+                        logger.info("租户隔离备份仅打包 uploads 子目录: {}", tenant_upload_dir)
                     else:
-                        logger.info(
-                            "租户隔离备份未发现 uploads 子目录，跳过: {}",
-                            tenant_upload_dir,
-                        )
+                        logger.info("租户隔离备份未发现 uploads 子目录，跳过: {}", tenant_upload_dir)
                 elif backup_scope == "tenant":
-                    raise ValueError(
-                        "租户隔离备份缺少 tenant_id，已拒绝执行 uploads 打包以避免串租户"
-                    )
+                    raise ValueError("租户隔离备份缺少 tenant_id，已拒绝执行 uploads 打包以避免串租户")
                 else:
                     for root, _dirs, files in os.walk(upload_dir):
                         for file in files:
                             file_path = os.path.join(root, file)
                             arcname = os.path.join("uploads", os.path.relpath(file_path, upload_dir))
                             zipf.write(file_path, arcname)
-
     return final_zip_path
 
 
-def run_full_backup_dump_and_zip(backup_dir: str, temp_dir: str, backup_name: str) -> str:
-    """执行全量备份（pg_dump + zip），返回最终 zip 路径。用于恢复前的自动备份。"""
-    db_user = infra_settings.DB_USER
-    db_password = infra_settings.DB_PASSWORD
-    db_host = infra_settings.DB_HOST
-    db_port = infra_settings.DB_PORT
-    db_name = infra_settings.DB_NAME
-    env = os.environ.copy()
-    env["PGPASSWORD"] = db_password
-
-    os.makedirs(temp_dir, exist_ok=True)
-    db_dump_file = os.path.join(temp_dir, "db_dump.dump")
-
-    cmd = [
-        "pg_dump",
-        "-h",
-        db_host,
-        "-p",
-        str(db_port),
-        "-U",
-        db_user,
-        "-F",
-        "c",
-        "-b",
-        "-v",
-        "-f",
-        db_dump_file,
-        db_name,
+async def _export_tenant_csv_dump(conn, *, tenant_id: int, db_dump_path: str) -> None:
+    logger.info("开始执行租户隔离备份(asyncpg): tenant_id={}", tenant_id)
+    rows = await conn.fetch(
+        """
+        SELECT table_name
+        FROM information_schema.columns
+        WHERE column_name = 'tenant_id' AND table_schema = 'public'
+        ORDER BY table_name
+        """
+    )
+    discovered_tables = [r["table_name"] for r in rows]
+    tables = [
+        t
+        for t in discovered_tables
+        if t not in TENANT_BACKUP_EXCLUDED_TABLES and not _is_platform_level_table(t)
     ]
-    logger.info("执行恢复前备份: pg_dump ...")
-    result = subprocess.run(cmd, env=env, capture_output=True, text=True)
-    if result.returncode != 0:
-        raise RuntimeError(f"pg_dump 失败: {result.stderr}")
+    skipped_tables = [
+        t
+        for t in discovered_tables
+        if t in TENANT_BACKUP_EXCLUDED_TABLES or _is_platform_level_table(t)
+    ]
+    logger.info(
+        "租户隔离备份表统计: discovered={} export={} skipped={}",
+        len(discovered_tables),
+        len(tables),
+        len(skipped_tables),
+    )
 
-    ts = resolve_business_datetime().strftime("%Y%m%d%H%M%S")
-    final_zip_name = f"{backup_name}_{ts}.zip"
-    final_zip_path = os.path.join(backup_dir, final_zip_name)
+    user_fk_children = await _load_core_user_fk_children_async(conn, export_tables=tables)
+    tables_with_user_id = await _load_tenant_tables_with_user_id_column_async(conn, export_tables=tables)
+    user_ref_subqueries = _build_tenant_user_reference_subqueries(
+        tenant_id=int(tenant_id),
+        user_fk_children=user_fk_children,
+    )
+    if user_ref_subqueries:
+        logger.info("core_users 导出将包含 {} 个子表引用的用户 ID", len(user_ref_subqueries))
 
-    with zipfile.ZipFile(final_zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
-        zipf.write(db_dump_file, "database.dump")
-        upload_dir = infra_settings.FILE_UPLOAD_DIR
-        if upload_dir and os.path.exists(upload_dir):
-            for root, _dirs, files in os.walk(upload_dir):
-                for file in files:
-                    file_path = os.path.join(root, file)
-                    arcname = os.path.join("uploads", os.path.relpath(file_path, upload_dir))
-                    zipf.write(file_path, arcname)
+    with open(db_dump_path, "w", encoding="utf-8") as f:
+        f.write("-- Tenant Isolated Backup\n")
+        f.write(f"-- Tenant ID: {tenant_id}\n")
+        f.write(f"-- Engine: asyncpg\n")
+        f.write(f"-- Date: {resolve_business_datetime()}\n\n")
+        if skipped_tables:
+            f.write(f"-- Skipped tables: {', '.join(skipped_tables)}\n\n")
 
-    return final_zip_path
+        for index, table in enumerate(tables, start=1):
+            logger.info("租户隔离备份导出表 [{}/{}]: {}", index, len(tables), table)
+            select_sql = _build_tenant_table_copy_sql(
+                table, int(tenant_id), user_ref_subqueries, user_fk_children, tables_with_user_id
+            )
+            try:
+                csv_text = await _copy_query_to_csv_text(conn, select_sql) or ""
+            except Exception as e:
+                logger.error("导出表 {} 失败: {}", table, e)
+                continue
+            f.write(f"-- Data for table: {table}\n")
+            f.write(f"--- TABLE: {table} ---\n")
+            f.write(csv_text)
+            if not csv_text.endswith("\n"):
+                f.write("\n")
+            f.write("\n")
+            logger.info(
+                "租户隔离备份导出完成表 {}，bytes={}",
+                table,
+                len(csv_text.encode("utf-8", errors="ignore")),
+            )
+
+        junction_tables = sorted(TENANT_JUNCTION_TABLES)
+        for index, table in enumerate(junction_tables, start=1):
+            logger.info("租户隔离备份导出关联表 [{}/{}]: {}", index, len(junction_tables), table)
+            select_sql = _build_tenant_junction_copy_sql(table, int(tenant_id))
+            try:
+                csv_text = await _copy_query_to_csv_text(conn, select_sql) or ""
+            except Exception as e:
+                raise RuntimeError(f"导出关联表 {table} 失败: {e}") from e
+            f.write(f"-- Data for table: {table}\n")
+            f.write(f"--- TABLE: {table} ---\n")
+            f.write(csv_text)
+            if not csv_text.endswith("\n"):
+                f.write("\n")
+            f.write("\n")
+            logger.info(
+                "租户隔离备份导出完成关联表 {}，bytes={}",
+                table,
+                len(csv_text.encode("utf-8", errors="ignore")),
+            )
+
+
+async def _export_all_csv_dump(conn, *, db_dump_path: str) -> None:
+    """全量逻辑备份：导出 public 下全部业务表（跳过 infra_），同样不依赖本机 pg_dump。"""
+    logger.info("开始执行全量逻辑备份(asyncpg CSV)")
+    rows = await conn.fetch(
+        """
+        SELECT table_name
+        FROM information_schema.tables
+        WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+        ORDER BY table_name
+        """
+    )
+    tables = [
+        r["table_name"]
+        for r in rows
+        if r["table_name"] not in TENANT_BACKUP_EXCLUDED_TABLES
+        and not _is_platform_level_table(r["table_name"])
+    ]
+    with open(db_dump_path, "w", encoding="utf-8") as f:
+        f.write("-- Full Logical Backup (asyncpg CSV)\n")
+        f.write(f"-- Date: {resolve_business_datetime()}\n\n")
+        for index, table in enumerate(tables, start=1):
+            logger.info("全量备份导出表 [{}/{}]: {}", index, len(tables), table)
+            try:
+                csv_text = await _copy_query_to_csv_text(conn, f'SELECT * FROM "{table}"') or ""
+            except Exception as e:
+                logger.error("导出表 {} 失败: {}", table, e)
+                continue
+            f.write(f"-- Data for table: {table}\n")
+            f.write(f"--- TABLE: {table} ---\n")
+            f.write(csv_text)
+            if not csv_text.endswith("\n"):
+                f.write("\n")
+            f.write("\n")
+
+
+async def run_backup_dump_and_zip(
+    *,
+    backup_uuid: str,
+    backup_name: str,
+    source_tenant_id: Optional[int],
+    tenant_id: Optional[int],
+    backup_type: str,
+    backup_scope: str,
+    include_files: Optional[bool] = None,
+) -> str:
+    """
+    执行数据库转储并打成 zip（纯 asyncpg，不依赖本机 psql/pg_dump）。
+    """
+    pack_uploads = resolve_include_files(include_files=include_files, backup_type=backup_type)
+    backup_dir = resolve_data_backup_dir()
+    temp_dir = os.path.join(backup_dir, f"temp_{backup_uuid}")
+    os.makedirs(temp_dir, exist_ok=True)
+
+    if backup_scope == "tenant" and tenant_id is None:
+        raise ValueError("租户隔离备份缺少 tenant_id，已拒绝执行以避免回退到全量备份")
+
+    db_dump_path = os.path.join(temp_dir, "db_dump.sql")
+    conn = await _asyncpg_connect()
+    try:
+        if backup_scope == "tenant":
+            await _export_tenant_csv_dump(conn, tenant_id=int(tenant_id), db_dump_path=db_dump_path)
+        else:
+            await _export_all_csv_dump(conn, db_dump_path=db_dump_path)
+    finally:
+        await conn.close()
+
+    return _pack_backup_zip(
+        backup_dir=backup_dir,
+        backup_name=backup_name,
+        dump_path=db_dump_path,
+        backup_scope=backup_scope if backup_scope in ("tenant", "all", "table") else "all",
+        source_tenant_id=source_tenant_id,
+        tenant_id=tenant_id,
+        pack_uploads=pack_uploads,
+    )
+
+
+def is_tenant_sql_dump(dump_path: str) -> bool:
+    """是否为「租户隔离」逻辑 CSV dump（非 pg_dump 二进制、非全量逻辑包）。"""
+    try:
+        with open(dump_path, "r", encoding="utf-8", errors="ignore") as f:
+            head = f.read(4096)
+    except OSError:
+        return False
+    if "Full Logical Backup" in head:
+        return False
+    return "Tenant Isolated Backup" in head
+
+
+def is_full_logical_csv_dump(dump_path: str) -> bool:
+    """是否为全量逻辑 CSV dump（asyncpg 导出，尚无一键全库恢复路径）。"""
+    try:
+        with open(dump_path, "r", encoding="utf-8", errors="ignore") as f:
+            head = f.read(4096)
+    except OSError:
+        return False
+    return "Full Logical Backup" in head
 
 
 async def run_tenant_id_replacement(source_tenant_id: int, target_tenant_id: int) -> int:
@@ -616,16 +586,6 @@ def resolve_backup_scope_for_restore(
         if candidate in ("tenant", "all", "table"):
             return candidate
     return "all"
-
-
-def is_tenant_sql_dump(dump_path: str) -> bool:
-    """租户级备份 database.dump 为 CSV 分表文本，而非 pg_dump 二进制。"""
-    try:
-        with open(dump_path, "r", encoding="utf-8", errors="ignore") as f:
-            head = f.read(4096)
-    except OSError:
-        return False
-    return "--- TABLE:" in head or "Tenant Isolated Backup" in head
 
 
 def _parse_tenant_dump_sections(dump_path: str) -> dict[str, str]:
@@ -1047,7 +1007,7 @@ def _psql_env() -> dict[str, str]:
 
 def _psql_base_cmd() -> list[str]:
     return [
-        "psql",
+        resolve_pg_client_bin("psql"),
         "-h",
         infra_settings.DB_HOST,
         "-p",
@@ -1401,7 +1361,7 @@ def _run_psql_copy_from_stdin(
         copy_sql = f'COPY "{table}" FROM STDIN WITH (FORMAT CSV, HEADER, ENCODING \'UTF8\')'
 
     cmd = [
-        "psql",
+        resolve_pg_client_bin("psql"),
         "-h",
         db_host,
         "-p",
@@ -1631,7 +1591,7 @@ def run_pg_restore(dump_path: str, backup_scope: str) -> None:
     env = os.environ.copy()
     env["PGPASSWORD"] = db_password
 
-    check_cmd = ["pg_restore", "-l", "-h", db_host, "-p", str(db_port), "-U", db_user, dump_path]
+    check_cmd = [resolve_pg_client_bin("pg_restore"), "-l", "-h", db_host, "-p", str(db_port), "-U", db_user, dump_path]
     check = subprocess.run(check_cmd, env=env, capture_output=True, text=True)
     if check.returncode != 0:
         raise ValueError("备份文件不是 pg_dump 格式，可能为租户隔离备份。请使用全量备份恢复。")
@@ -1643,7 +1603,7 @@ def run_pg_restore(dump_path: str, backup_scope: str) -> None:
         GRANT ALL ON SCHEMA public TO public;
     """
     drop_cmd = [
-        "psql",
+        resolve_pg_client_bin("psql"),
         "-h",
         db_host,
         "-p",
@@ -1663,7 +1623,7 @@ def run_pg_restore(dump_path: str, backup_scope: str) -> None:
         raise RuntimeError(f"清空 schema 失败: {drop_result.stderr or drop_result.stdout}")
 
     cmd = [
-        "pg_restore",
+        resolve_pg_client_bin("pg_restore"),
         "-h",
         db_host,
         "-p",

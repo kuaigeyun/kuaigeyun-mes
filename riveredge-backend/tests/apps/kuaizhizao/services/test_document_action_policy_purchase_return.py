@@ -17,6 +17,26 @@ def _r(**kwargs):
     return SimpleNamespace(**defaults)
 
 
+def test_confirm_requires_approved_review_even_when_audit_disabled():
+    """未审核（草稿/待审核）禁止确认；与是否开启人工审核无关。"""
+    for review in ("草稿", "待审核", ""):
+        caps = derive_purchase_return_capabilities(
+            _r(review_status=review),
+            has_items=True,
+            audit_required=False,
+        )
+        assert not caps.confirm.allowed
+        assert caps.confirm.reason == "purchase_return.confirm.not_audited"
+
+    with pytest.raises(BusinessLogicError):
+        assert_purchase_return_capability(
+            _r(review_status="草稿"),
+            "confirm",
+            has_items=True,
+            audit_required=False,
+        )
+
+
 def test_confirm_requires_audit_when_enabled():
     caps = derive_purchase_return_capabilities(
         _r(review_status="草稿"),
@@ -35,20 +55,14 @@ def test_confirm_requires_audit_when_enabled():
         )
 
 
-def test_confirm_allowed_when_audited_or_auto_mode():
-    approved = derive_purchase_return_capabilities(
-        _r(review_status="审核通过"),
-        has_items=True,
-        audit_required=True,
-    )
-    assert approved.confirm.allowed
-
-    auto = derive_purchase_return_capabilities(
-        _r(review_status="草稿"),
-        has_items=True,
-        audit_required=False,
-    )
-    assert auto.confirm.allowed
+def test_confirm_allowed_when_review_approved():
+    for audit_required in (True, False):
+        approved = derive_purchase_return_capabilities(
+            _r(review_status="审核通过"),
+            has_items=True,
+            audit_required=audit_required,
+        )
+        assert approved.confirm.allowed
 
 
 def test_returned_draft_can_submit_to_unlock_audit():

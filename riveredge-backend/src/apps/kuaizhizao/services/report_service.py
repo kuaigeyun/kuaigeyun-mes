@@ -3114,6 +3114,7 @@ class ReportService:
             })
         for l in line_items:
             qty = float((l.quantity or 0) - (l.reserved_quantity or 0))
+            line_wh_id = int(getattr(l, "warehouse_id", 0) or 0) or None
             items.append({
                 "id": 2000000 + l.id, 
                 "material_id": l.material_id, 
@@ -3124,7 +3125,8 @@ class ReportService:
                 "expiry_date": to_api_isoformat(l.expiry_date) if l.expiry_date else None,
                 "supplier_batch_no": None,
                 "quantity": qty, 
-                "status": "在库" if qty > 0 else "无库存", 
+                "status": "在库" if qty > 0 else "无库存",
+                "warehouse_id": line_wh_id,
                 "warehouse_name": self._normalize_warehouse_display_name(getattr(l, "warehouse_name", None)),
                 "ownership_type": getattr(l, "ownership_type", None) or "company_owned",
                 "customer_id": int(getattr(l, "customer_id", 0) or 0),

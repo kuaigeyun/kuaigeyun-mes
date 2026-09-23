@@ -10,7 +10,6 @@ from __future__ import annotations
 import os
 import shutil
 import zipfile
-from datetime import datetime
 from typing import Optional
 
 from loguru import logger
@@ -24,14 +23,14 @@ from core.services.system.backup_storage import (
 from core.services.system.data_backup_jobs import (
     read_backup_metadata,
     resolve_backup_scope_for_restore,
+    is_full_logical_csv_dump,
     is_tenant_sql_dump,
     restore_tenant_backup_from_dump,
     restore_tenant_uploads_from_zip,
     repair_tenant_scoped_file_paths,
     log_missing_upload_files_after_restore,
     restore_uploads_from_zip,
-    run_backup_dump_and_zip_sync,
-    run_full_backup_dump_and_zip,
+    run_backup_dump_and_zip,
     run_pg_restore,
     run_tenant_id_replacement,
 )
@@ -71,7 +70,8 @@ async def handle_database_backup_requested(ctx: TaskContext, step: TaskStep) -> 
     backup_uuid = event_data.get("backup_uuid")
     tenant_id = event_data.get("tenant_id")
     backup_type = event_data.get("backup_type", "full")
-    backup_scope = event_data.get("backup_scope", "full")
+    # 注意：scope 默认应为 tenant/all，不能用 type 的 "full"
+    backup_scope = event_data.get("backup_scope") or "tenant"
     include_files = event_data.get("include_files")
 
     backup_dir = resolve_data_backup_dir()
@@ -83,6 +83,10 @@ async def handle_database_backup_requested(ctx: TaskContext, step: TaskStep) -> 
     except Exception as e:
         logger.exception(f"备份任务无法加载记录（例如 ORM 未初始化）: {e}")
         return
+
+    # 事件缺 tenant_id 时回退到备份记录，避免租户级备份误拒
+    if tenant_id is None:
+        tenant_id = backup.tenant_id
 
     if include_files is None:
         include_files = backup.include_files
@@ -98,8 +102,8 @@ async def handle_database_backup_requested(ctx: TaskContext, step: TaskStep) -> 
 
     try:
 
-        def dump_and_create_zip() -> str:
-            return run_backup_dump_and_zip_sync(
+        async def dump_and_create_zip() -> str:
+            return await run_backup_dump_and_zip(
                 backup_uuid=str(backup_uuid),
                 backup_name=backup.name,
                 source_tenant_id=backup.tenant_id,
@@ -179,9 +183,9 @@ async def handle_database_restore_requested(ctx: TaskContext, step: TaskStep) ->
         pre_restore_name = "恢复前备份"
         temp_dir = os.path.join(backup_dir, f"temp_pre_restore_{backup_uuid}")
 
-        def do_pre_restore_backup() -> str:
+        async def do_pre_restore_backup() -> str:
             if backup_scope == "tenant" and target_tenant_id is not None:
-                return run_backup_dump_and_zip_sync(
+                return await run_backup_dump_and_zip(
                     backup_uuid=f"pre_restore_{backup_uuid}",
                     backup_name=pre_restore_name,
                     source_tenant_id=int(target_tenant_id),
@@ -189,7 +193,15 @@ async def handle_database_restore_requested(ctx: TaskContext, step: TaskStep) ->
                     backup_type="full",
                     backup_scope="tenant",
                 )
-            return run_full_backup_dump_and_zip(backup_dir, temp_dir, pre_restore_name)
+            return await run_backup_dump_and_zip(
+                backup_uuid=f"pre_restore_{backup_uuid}",
+                backup_name=pre_restore_name,
+                source_tenant_id=None,
+                tenant_id=None,
+                backup_type="full",
+                backup_scope="all",
+                include_files=True,
+            )
 
         try:
             final_zip_path = await step.run("create_pre_restore_backup", do_pre_restore_backup)
@@ -244,6 +256,11 @@ async def handle_database_restore_requested(ctx: TaskContext, step: TaskStep) ->
             raise ValueError(
                 "备份文件为租户级 CSV 格式，但元数据/记录范围为全量。"
                 "请确认 backup_metadata.json 中 backup_scope=tenant，或重新创建租户级备份。"
+            )
+        if backup_scope != "tenant" and is_full_logical_csv_dump(db_dump_path):
+            raise ValueError(
+                "该备份为全量逻辑 CSV（asyncpg）格式，暂不支持一键全库恢复。"
+                "请使用租户级备份恢复，或使用 pg_dump 自定义格式备份后再恢复。"
             )
 
         if backup_scope == "tenant":

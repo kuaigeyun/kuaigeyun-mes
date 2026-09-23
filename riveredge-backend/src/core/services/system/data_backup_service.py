@@ -126,10 +126,15 @@ class DataBackupService:
             raise ValueError("备份不存在")
 
     @staticmethod
-    async def create_backup_task(tenant_id: int, data: DataBackupCreate) -> DataBackup:
+    async def create_backup_task(tenant_id: Optional[int], data: DataBackupCreate) -> DataBackup:
         """
         创建备份任务记录并通过 PostgreSQL 队列异步执行备份
         """
+        if data.backup_scope == "tenant" and tenant_id is None:
+            raise ValueError(
+                "租户级备份缺少 tenant_id：请在租户上下文中创建，或改用 backup_scope=all"
+            )
+
         # 1. 创建备份记录
         backup = await DataBackup.create(
             tenant_id=tenant_id,

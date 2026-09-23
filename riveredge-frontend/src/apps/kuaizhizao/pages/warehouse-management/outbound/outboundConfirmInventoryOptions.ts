@@ -68,7 +68,10 @@ export function isValidOutboundBatchSelection(
   return options.some((o) => o.value === raw || o.value === normalized);
 }
 
-function isOutboundDeductibleInventoryRow(row: Record<string, unknown>): boolean {
+function isOutboundDeductibleInventoryRow(
+  row: Record<string, unknown>,
+  opts?: { includeLineSide?: boolean },
+): boolean {
   const qty = Number(row.quantity ?? 0);
   if (!(qty > 0)) return false;
   const status = String(row.status ?? '').trim();
@@ -80,7 +83,9 @@ function isOutboundDeductibleInventoryRow(row: Record<string, unknown>): boolean
     return false;
   }
   const rowId = Number(row.id ?? 0);
-  if (rowId >= 2_000_000) return false; // 线边仓不计入主仓出库预览
+  // 线边行（id>=2e6）：未指定仓的全仓汇总不计入，避免虚高；
+  // 出库单仓库本身是线边仓时，后端只返回该仓 LineSideInventory，必须计入，否则库存数量恒为 0。
+  if (rowId >= 2_000_000 && !opts?.includeLineSide) return false;
   return status === 'in_stock' || status === '在库' || status === '';
 }
 
@@ -88,10 +93,11 @@ function rowsToBatchOptionMap(
   rows: Record<string, unknown>[],
   labelFn?: (batch: string, qty: number, warehouseName?: string) => string,
   fifoMode: WarehouseFifoMode = 'batch_id',
+  opts?: { includeLineSide?: boolean },
 ): Record<number, InventoryPickOption[]> {
   const map: Record<number, InventoryPickOption[]> = {};
   for (const row of rows) {
-    if (!isOutboundDeductibleInventoryRow(row)) continue;
+    if (!isOutboundDeductibleInventoryRow(row, opts)) continue;
     const mid = row.material_id as number;
     if (!mid) continue;
     const qty = Number(row.quantity ?? 0);
@@ -135,10 +141,13 @@ function rowsToBatchOptionMap(
   return map;
 }
 
-function sumDeductibleQtyByMaterialId(rows: Record<string, unknown>[]): Record<number, number> {
+function sumDeductibleQtyByMaterialId(
+  rows: Record<string, unknown>[],
+  opts?: { includeLineSide?: boolean },
+): Record<number, number> {
   const out: Record<number, number> = {};
   for (const row of rows) {
-    if (!isOutboundDeductibleInventoryRow(row)) continue;
+    if (!isOutboundDeductibleInventoryRow(row, opts)) continue;
     const mid = Number(row.material_id);
     if (!Number.isFinite(mid) || mid <= 0) continue;
     out[mid] = (out[mid] ?? 0) + (Number(row.quantity) || 0);
@@ -196,11 +205,12 @@ export async function loadBatchOptionsByMaterialId(
 ): Promise<Record<number, InventoryPickOption[]>> {
   if (!materialIds.length) return {};
 
+  const includeLineSide = warehouseId != null && warehouseId > 0;
   const [rows, fifoMode] = await Promise.all([
     fetchBatchQueryRows(materialIds, warehouseId, { companyOwnedOnly: true }),
     resolveWarehouseFifoMode(),
   ]);
-  return rowsToBatchOptionMap(rows, labelFn, fifoMode);
+  return rowsToBatchOptionMap(rows, labelFn, fifoMode, { includeLineSide });
 }
 
 /** 出库预览：汇总物料在库可用数量（各批号 quantity 之和） */
@@ -218,8 +228,10 @@ export async function loadAvailableQtyByMaterialId(
   warehouseId?: number,
 ): Promise<Record<number, number>> {
   if (!materialIds.length) return {};
+  // 指定出库仓时后端已按仓过滤；线边仓场景只返回 LineSideInventory，必须计入。
+  const includeLineSide = warehouseId != null && warehouseId > 0;
   const rows = await fetchBatchQueryRows(materialIds, warehouseId, { companyOwnedOnly: true });
-  const out = sumDeductibleQtyByMaterialId(rows);
+  const out = sumDeductibleQtyByMaterialId(rows, { includeLineSide });
   for (const mid of materialIds) {
     if (out[mid] == null) out[mid] = 0;
   }
@@ -240,7 +252,8 @@ export async function loadAvailableQtyByMaterialWarehouse(
     out[mid] = {};
   }
   for (const row of rows) {
-    if (!isOutboundDeductibleInventoryRow(row)) continue;
+    // 按仓汇总：线边行带 warehouse_id 时计入对应仓（与确认过账按仓类型扣减一致）
+    if (!isOutboundDeductibleInventoryRow(row, { includeLineSide: true })) continue;
     const mid = Number(row.material_id);
     const wid = Number(row.warehouse_id);
     if (!Number.isFinite(mid) || mid <= 0) continue;

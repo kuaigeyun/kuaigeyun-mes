@@ -115,7 +115,8 @@ def derive_purchase_return_capabilities(
         confirm_reason = "purchase_return.confirm.not_pending"
     elif not has_items:
         confirm_reason = "purchase_return.confirm.no_items"
-    elif audit_required and not _is_review_approved(review_status):
+    elif not _is_review_approved(review_status):
+        # 无论是否开启人工审核：须先审核通过（自动审模式下先点提交即盖章）
         confirm_reason = "purchase_return.confirm.not_audited"
     else:
         confirm_allowed = True

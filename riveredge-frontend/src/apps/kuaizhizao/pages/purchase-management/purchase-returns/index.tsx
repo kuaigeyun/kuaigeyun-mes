@@ -253,10 +253,11 @@ function buildDictFallbackOptions(t: TFunction, values: string[]) {
   });
 }
 
-/** 行/抽屉「确认退货」：capabilities + 业务态 + 人工审核相位（与后端 assert 同源）。 */
+/** 行/抽屉「确认退货」：capabilities + 业务态 + 审核相位（与后端 assert 同源）。 */
 function canShowPurchaseReturnConfirm(
   record: {
     status?: string | null;
+    review_status?: string | null;
     capabilities?: PurchaseReturn['capabilities'];
     audit?: PurchaseReturn['audit'];
   },
@@ -264,9 +265,14 @@ function canShowPurchaseReturnConfirm(
 ): boolean {
   if (!canSubmit) return false;
   if (record.capabilities?.confirm?.allowed !== true) return false;
-  // 人工审核开启时须已通过；自动通过模式仍可在草稿相位确认
-  if (isManualAuditEnabled(record.audit) && String(record.audit?.phase ?? '') !== 'approved') {
-    return false;
+  // 须审核通过：优先看 audit.phase；无 audit 时回退 review_status
+  const auditPhase = String(record.audit?.phase ?? '').trim();
+  if (auditPhase) {
+    if (auditPhase !== 'approved') return false;
+  } else {
+    const review = String(record.review_status ?? '').trim();
+    const approved = review === '审核通过' || review === '已通过' || review.toLowerCase() === 'approved';
+    if (!approved) return false;
   }
   const status = String(record.status ?? '').trim();
   if (

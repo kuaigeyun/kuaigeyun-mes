@@ -200,10 +200,17 @@ const DataBackupsPage: React.FC = () => {
   const handleCreate = async (values: Pick<CreateDataBackupData, 'name' | 'include_files'>) => {
     setSubmitting(true);
     try {
+      const tenantId = currentUser?.tenant_id ?? getTenantId();
+      const isInfraAdmin = Boolean(currentUser?.is_infra_admin);
+      // 无租户上下文时：平台管理员走全量备份，普通用户直接提示
+      if (tenantId == null && !isInfraAdmin) {
+        messageApi.error('当前未绑定租户，无法创建租户级备份');
+        return;
+      }
       await createBackup({
         name: values.name,
         backup_type: 'full',
-        backup_scope: 'tenant',
+        backup_scope: tenantId != null ? 'tenant' : 'all',
         include_files: values.include_files ?? true,
       });
       messageApi.success(t('pages.system.dataBackups.createSuccess'));

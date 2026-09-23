@@ -4,6 +4,7 @@ Taskiq 入口：PostgreSQL broker（taskiq-pg / AsyncpgBroker）+ PG 持久化�
 API 进程与 worker 进程均需能 import 本模块以注册任务。
 """
 
+import asyncio
 import os
 from urllib.parse import quote_plus
 
@@ -106,6 +107,88 @@ async def _on_worker_startup(_state: TaskiqState) -> None:
         logger.info("Taskiq worker 已注册任务: {}", names)
     except Exception as e:  # pragma: no cover
         logger.warning("枚举 Taskiq 任务失败: {}", e)
+
+    # taskiq-pg 仅靠 LISTEN/NOTIFY：Worker 重启/断连期间入队的消息会永久 pending。
+    # 启动时回收卡住的 processing，清理过期 tick 积压，并延迟 NOTIFY（等 listen 就绪）。
+    try:
+        asyncio.create_task(_recover_stale_taskiq_messages_delayed())
+    except Exception as e:  # pragma: no cover
+        logger.warning("Taskiq 消息回收调度失败: {}", e)
+
+
+async def _recover_stale_taskiq_messages_delayed() -> None:
+    # listen() 在 WORKER_STARTUP 之后才开始消费；稍延迟再 NOTIFY，避免通知丢失
+    await asyncio.sleep(3)
+    try:
+        await _recover_stale_taskiq_messages()
+    except Exception as e:  # pragma: no cover
+        logger.warning("Taskiq 消息回收失败: {}", e)
+
+
+async def _recover_stale_taskiq_messages() -> None:
+    """回收卡住队列，避免备份等业务任务永久 pending。"""
+    import asyncpg
+
+    table = "riveredge_taskiq_messages"
+    channel = "riveredge_taskiq"
+    dsn = get_taskiq_postgres_dsn()
+    conn = await asyncpg.connect(dsn)
+    try:
+        # 1) 崩溃后卡在 processing 的消息改回 pending
+        reset_n = await conn.fetchval(
+            f"""
+            WITH updated AS (
+              UPDATE {table}
+              SET status = 'pending'
+              WHERE status = 'processing'
+                AND created_at < NOW() - INTERVAL '10 minutes'
+              RETURNING 1
+            )
+            SELECT count(*) FROM updated
+            """
+        )
+        if reset_n:
+            logger.warning("已回收卡住的 Taskiq processing 消息: {}", reset_n)
+
+        # 2) 过期 cron tick 无重跑价值，直接删掉减轻积压
+        purged = await conn.fetchval(
+            f"""
+            WITH deleted AS (
+              DELETE FROM {table}
+              WHERE status = 'pending'
+                AND created_at < NOW() - INTERVAL '30 minutes'
+                AND (
+                  task_name LIKE '%\\_tick' ESCAPE '\\'
+                  OR task_name LIKE '%online_user_cleanup_task'
+                )
+              RETURNING 1
+            )
+            SELECT count(*) FROM deleted
+            """
+        )
+        if purged:
+            logger.warning("已清理过期 Taskiq tick 积压: {}", purged)
+
+        # 3) 对仍 pending 的业务消息补发 NOTIFY（含备份）
+        rows = await conn.fetch(
+            f"""
+            SELECT id FROM {table}
+            WHERE status = 'pending'
+              AND (
+                task_name LIKE '%run_event_pipeline%'
+                OR message::text LIKE '%backup.requested%'
+                OR message::text LIKE '%restore.requested%'
+              )
+            ORDER BY id
+            LIMIT 500
+            """
+        )
+        for row in rows:
+            await conn.execute(f"NOTIFY {channel}, '{int(row['id'])}'")
+        if rows:
+            logger.info("已补发 Taskiq NOTIFY（业务 pending）: {}", len(rows))
+    finally:
+        await conn.close()
 
 
 async def _on_worker_shutdown(_state: TaskiqState) -> None:

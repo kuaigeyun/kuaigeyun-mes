@@ -16,6 +16,7 @@ async def test_restore_requires_requested_prebackup(monkeypatch, tmp_path, reque
     monkeypatch.setattr(worker, "read_backup_metadata", lambda p: {})
     monkeypatch.setattr(worker, "resolve_backup_scope_for_restore", lambda *a, **kw: "all")
     monkeypatch.setattr(worker, "is_tenant_sql_dump", lambda p: False)
+    monkeypatch.setattr(worker, "is_full_logical_csv_dump", lambda p: False)
     monkeypatch.setattr(worker.DataBackup, "create", AsyncMock(return_value=SimpleNamespace(uuid="fixture")))
     mark = AsyncMock()
     monkeypatch.setattr(worker, "_mark_restore_status", mark)

@@ -23,7 +23,10 @@ class TaskStep:
     async def run(self, _name: str, fn: Callable[[], Any]) -> Any:
         if inspect.iscoroutinefunction(fn):
             return await fn()
-        return fn()
+        result = fn()
+        if inspect.isawaitable(result):
+            return await result
+        return result
 
 
 _handlers: dict[str, list[Callable[..., Awaitable[Any]]]] = defaultdict(list)

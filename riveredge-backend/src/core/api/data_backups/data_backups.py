@@ -208,7 +208,12 @@ async def create_backup(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="权限不足：仅平台管理员可创建全量备份（包含所有租户数据）。"
         )
-        
+    if data.backup_scope == "tenant" and current_user.tenant_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="租户级备份需要当前登录用户绑定租户；平台管理员请切换到目标租户后创建，或改用全量备份（backup_scope=all）。",
+        )
+
     backup = await DataBackupService.create_backup_task(current_user.tenant_id, data)
     return DataBackupService.to_response(backup)
 
