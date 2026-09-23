@@ -923,19 +923,29 @@ async def batch_delete_work_orders(
 
     - **ids**: 要删除的工单ID列表（最多100条）
     
-    注意：只能删除草稿状态的工单
+    每条工单复用单条删除服务的状态、报工及下游数据校验。
     """
-    def validate_work_order(work_order):
-        """验证工单是否可以删除"""
-        if work_order.status != "草稿":
-            raise BusinessLogicError(f"工单 {work_order.id} 状态为 {work_order.status}，无法删除。只有草稿状态的工单才能删除。")
-    
-    result = await BatchOperationService().batch_delete(
-        tenant_id=tenant_id,
-        model_class=WorkOrder,
-        record_ids=request.ids,
-        validate_func=validate_work_order
-    )
+    success_records = []
+    failed_records = []
+
+    for index, work_order_id in enumerate(dict.fromkeys(request.ids)):
+        try:
+            await work_order_service.delete_work_order(tenant_id, work_order_id)
+            success_records.append({"index": index, "id": work_order_id})
+        except Exception as exc:
+            logger.error(f"批量删除工单失败，索引 {index}, ID {work_order_id}: {exc}")
+            failed_records.append({
+                "index": index,
+                "id": work_order_id,
+                "error": str(exc),
+            })
+
+    result = {
+        "success_count": len(success_records),
+        "failed_count": len(failed_records),
+        "success_records": success_records,
+        "failed_records": failed_records,
+    }
     
     return BatchResponse(
         success=result["failed_count"] == 0,

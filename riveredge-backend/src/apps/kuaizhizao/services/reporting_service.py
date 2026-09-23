@@ -2740,7 +2740,11 @@ class ReportingService(AppBaseService[ReportingRecord]):
         from tortoise.functions import Count, Sum
         from apps.kuaizhizao.services.first_pass_yield_service import compute_first_pass_yield_rate
 
-        query = ReportingRecord.filter(tenant_id=tenant_id)
+        query = ReportingRecord.filter(
+            tenant_id=tenant_id,
+            status="approved",
+            deleted_at__isnull=True,
+        )
         if date_start:
             query = query.filter(reported_at__gte=date_start)
         if date_end:
