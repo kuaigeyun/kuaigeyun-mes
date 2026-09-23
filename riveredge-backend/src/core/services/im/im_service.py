@@ -172,7 +172,12 @@ class ImService:
 
     @staticmethod
     async def ensure_public_group(*, tenant_id: int, user_id: int) -> ImConversation:
-        """确保租户有默认公共群，并把当前用户加入成员。"""
+        """
+        确保租户有默认公共群，并把「属于该组织」的当前用户加入成员。
+
+        平台超管软切换组织时 JWT/头里的 tenant_id 会变、user_id 仍是主组织账号：
+        禁止把外组织 user_id 写入本组织成员表，否则产生跨组织会话残留。
+        """
         conv = await ImConversation.filter(
             tenant_id=tenant_id,
             kind="group",
@@ -206,6 +211,16 @@ class ImService:
                 await ImConversationMember.bulk_create(members)
             return conv
 
+        member_user = await User.filter(
+            id=user_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            is_active=True,
+        ).first()
+        if not member_user:
+            # 当前账号不属于本组织：只保证群存在，不写入成员（避免跨组织残留）
+            return conv
+
         existing = await ImConversationMember.filter(
             tenant_id=tenant_id,
             conversation_id=conv.id,
@@ -221,6 +236,38 @@ class ImService:
                 is_pinned=True,
             )
         return conv
+
+    @staticmethod
+    async def purge_cross_tenant_memberships(*, tenant_id: int | None = None) -> int:
+        """
+        清理成员表中「成员用户所属组织 ≠ 会话组织」的脏行（软删）。
+        tenant_id 为空则全库扫描；返回处理条数。
+        """
+        now = resolve_business_datetime()
+        member_q = ImConversationMember.filter(deleted_at__isnull=True)
+        if tenant_id is not None:
+            member_q = member_q.filter(tenant_id=tenant_id)
+        rows = await member_q.all()
+        if not rows:
+            return 0
+        user_ids = sorted({int(m.user_id) for m in rows if m.user_id})
+        users = await User.filter(id__in=user_ids).only("id", "tenant_id")
+        home_by_id = {int(u.id): int(u.tenant_id) for u in users}
+        purged = 0
+        for row in rows:
+            home = home_by_id.get(int(row.user_id))
+            if home is None or home == int(row.tenant_id):
+                continue
+            row.deleted_at = now
+            await row.save(update_fields=["deleted_at", "updated_at"])
+            purged += 1
+        if purged:
+            logger.info(
+                "im_purged_cross_tenant_memberships count={} tenant_id={}",
+                purged,
+                tenant_id,
+            )
+        return purged
 
     @staticmethod
     async def list_conversations(

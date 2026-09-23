@@ -31166,6 +31166,10 @@ export default {
     '侧栏菜单带查询参数时不再收起分组',
   'pages.dashboard.updateLog.entries.sidebar-menu-query-path-openkeys-r01.description':
     '修复休息登记等带 ?mode= 的菜单项：选中与展开按 pathname+search 匹配，进入后父级分组保持展开。',
+  'pages.dashboard.updateLog.entries.uni-im-cross-tenant-residue-r01.title':
+    '清理在线消息跨组织会话残留',
+  'pages.dashboard.updateLog.entries.uni-im-cross-tenant-residue-r01.description':
+    '平台超管切换组织时不得把主组织账号写入他组织公共群成员；会话与联系人缓存按组织隔离。已清理跨组织脏成员，并软删除误建入本组织的「组织名」幽灵账号。',
   'pages.dashboard.updateLog.entries.effective-access-merge-then-auth-r01.title':
     '多角色权限改为先合并再鉴权',
   'pages.dashboard.updateLog.entries.effective-access-merge-then-auth-r01.description':

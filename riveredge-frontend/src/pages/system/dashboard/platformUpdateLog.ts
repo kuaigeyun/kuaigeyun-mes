@@ -36,6 +36,14 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
   {
+    id: 'uni-im-cross-tenant-residue-r01',
+    date: '2026-09-23',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.uni-im-cross-tenant-residue-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.uni-im-cross-tenant-residue-r01.description',
+  },
+  {
     id: 'effective-access-merge-then-auth-r01',
     date: '2026-09-23',
     type: 'improvement',

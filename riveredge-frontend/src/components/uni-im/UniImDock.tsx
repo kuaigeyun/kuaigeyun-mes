@@ -248,6 +248,7 @@ export default function UniImPanel({
   const queryClient = useQueryClient();
   const { token } = theme.useToken();
   const currentUser = useCurrentUser();
+  const tenantId = currentUser?.tenant_id ?? null;
   const documentVisible = useDocumentVisible();
   const { avatarUrl, setImageFailed, showTextAvatar } = useUserAvatarUrl(currentUser);
   const [activeSection, setActiveSection] = React.useState<ImNavSection>('direct');
@@ -314,9 +315,9 @@ export default function UniImPanel({
   const isTaskSection = TASK_SECTIONS.has(activeSection);
 
   const { data: conversations, isLoading: convLoading } = useQuery({
-    queryKey: ['imConversations'],
+    queryKey: ['imConversations', tenantId],
     queryFn: () => listImConversations({ page: 1, page_size: 50 }),
-    enabled,
+    enabled: enabled && tenantId != null,
     staleTime: 5_000,
     refetchInterval: enabled && open ? 10_000 : false,
     refetchIntervalInBackground: false,
@@ -329,7 +330,7 @@ export default function UniImPanel({
     isError: directUsersError,
     error: directUsersQueryError,
   } = useQuery({
-    queryKey: ['imDirectContacts', contactKeyword.trim()],
+    queryKey: ['imDirectContacts', tenantId, contactKeyword.trim()],
     queryFn: () =>
       searchUserDisplay({
         page: 1,
@@ -338,7 +339,7 @@ export default function UniImPanel({
         keyword: contactKeyword.trim() || undefined,
         host_resource: 'system:user-message',
       }),
-    enabled: enabled && open && activeSection === 'direct',
+    enabled: enabled && open && activeSection === 'direct' && tenantId != null,
     staleTime: 60_000,
     retry: (failureCount, error) => {
       if (error instanceof ReferenceDisplayAccessError && error.status === 403) {
