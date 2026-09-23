@@ -331,27 +331,17 @@ class PermissionPolicyService:
     async def _user_has_granted_function_resource(
         cls,
         tenant_id: int,
-        role_uuids: Iterable[str],
+        user_id: int,
         resource: str,
     ) -> bool:
-        """当前用户任一角色是否已授予指定 app:resource 的功能权限（列表脱敏快路径）。"""
-        from core.services.authorization.role_service import RoleService
+        """当前用户（多角色并集）是否已授予指定 app:resource 的功能权限。"""
+        from core.services.authorization.effective_access_service import EffectiveAccessService
 
         normalized = cls._normalize_resource(resource)
         if not normalized:
             return False
-
-        roles = await Role.filter(
-            uuid__in=list(role_uuids),
-            tenant_id=tenant_id,
-            deleted_at__isnull=True,
-        ).all()
-        if not roles:
-            return False
-        if any(RoleService._is_admin_system_role(role) for role in roles):
-            return True
-        granted = await cls.filter_roles_granting_resource(tenant_id, roles, normalized)
-        return bool(granted)
+        access = await EffectiveAccessService.get(user_id, tenant_id)
+        return access.grants_resource(normalized)
 
     @classmethod
     async def list_data_policies(cls, tenant_id: int, role_uuid: str) -> list[DataPermissionPolicyResponse]:
@@ -926,17 +916,20 @@ class PermissionPolicyService:
 
     @classmethod
     async def _collect_user_granted_field_policy_resources(
-        cls, tenant_id: int, role_uuids: Iterable[str]
+        cls, tenant_id: int, user_id: int
     ) -> set[str]:
-        """用户全部角色已勾选、且 manifest 真源存在的 app:resource（字段权限默认 full 的范围）。"""
+        """用户多角色并集已授、且 manifest 真源存在的 app:resource（字段权限默认 full 的范围）。"""
+        from core.services.authorization.effective_access_service import (
+            ALL_RESOURCES_MARKER,
+            EffectiveAccessService,
+        )
+
         allowed = await cls._collect_allowed_function_resources(tenant_id=tenant_id)
-        out: set[str] = set()
-        for role_uuid in role_uuids:
-            role_resources = await cls._collect_role_granted_function_resources(
-                tenant_id, role_uuid
-            )
-            out |= role_resources
-        return out & allowed
+        access = await EffectiveAccessService.get(user_id, tenant_id)
+        granted = access.granted_resource_keys()
+        if ALL_RESOURCES_MARKER in granted or access.is_admin_bypass:
+            return set(allowed)
+        return set(granted) & allowed
 
     @classmethod
     def _merge_field_mask_levels(
@@ -972,12 +965,12 @@ class PermissionPolicyService:
         if resource:
             normalized_filter = cls._normalize_resource(resource)
             has_resource = await cls._user_has_granted_function_resource(
-                tenant_id, role_uuids, normalized_filter
+                tenant_id, user_id, normalized_filter
             )
             user_resources = {normalized_filter} if has_resource else set()
         else:
             user_resources = await cls._collect_user_granted_field_policy_resources(
-                tenant_id, role_uuids
+                tenant_id, user_id
             )
 
         nested: dict[str, dict[str, str]] = {}

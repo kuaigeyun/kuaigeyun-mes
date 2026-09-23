@@ -31166,6 +31166,10 @@ export default {
     '侧栏菜单带查询参数时不再收起分组',
   'pages.dashboard.updateLog.entries.sidebar-menu-query-path-openkeys-r01.description':
     '修复休息登记等带 ?mode= 的菜单项：选中与展开按 pathname+search 匹配，进入后父级分组保持展开。',
+  'pages.dashboard.updateLog.entries.effective-access-merge-then-auth-r01.title':
+    '多角色权限改为先合并再鉴权',
+  'pages.dashboard.updateLog.entries.effective-access-merge-then-auth-r01.description':
+    '功能权限、数据范围与字段脱敏统一先把用户全部角色并集成有效访问，再据此判定；列表与菜单徽章不再按角色反复扫授权表，从根源消除多角色账号权限阻塞。',
   'pages.dashboard.updateLog.entries.permission-hotpath-definitions-scope-memo-r01.title':
     '加快多角色账号打开销售订单等列表',
   'pages.dashboard.updateLog.entries.permission-hotpath-definitions-scope-memo-r01.description':

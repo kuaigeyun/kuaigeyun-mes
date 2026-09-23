@@ -85,21 +85,10 @@ class DataScopeService:
 
     @classmethod
     async def _load_active_roles(cls, user_id: int, tenant_id: int) -> list[Any]:
-        memo = _request_memo()
-        cache_key = f"roles:{int(user_id)}:{int(tenant_id)}"
-        cached = memo.get(cache_key)
-        if cached is not None:
-            return cached
+        from core.services.authorization.effective_access_service import EffectiveAccessService
 
-        user_roles = await UserRole.filter(user_id=user_id).prefetch_related("role").all()
-        roles: list[Any] = []
-        for ur in user_roles:
-            role = ur.role
-            if not role or role.tenant_id != tenant_id or not role.is_active:
-                continue
-            roles.append(role)
-        memo[cache_key] = roles
-        return roles
+        access = await EffectiveAccessService.get(user_id, tenant_id)
+        return list(access.roles)
 
     @classmethod
     async def serialize_active_roles(cls, user_id: int, tenant_id: int | None) -> list[dict[str, Any]]:
@@ -383,19 +372,26 @@ class DataScopeService:
         user: User,
         resource: str,
     ):
+        """
+        对 QuerySet 施加数据权限。
+
+        多角色唯一路径：EffectiveAccessService 先并集角色授权，再按授予该资源的角色
+        合并数据策略（任一 ALL / 无策略厂内 = 全部；否则 OR），禁止按角色循环扫权限表。
+        """
+        from core.services.authorization.effective_access_service import EffectiveAccessService
+
         cls._ensure_builtin_resolvers()
-        if await cls._admin_bypass(user, tenant_id):
+        access = await EffectiveAccessService.get(
+            user.id,
+            tenant_id,
+            user=user,
+        )
+        if access.is_admin_bypass:
             return queryset
 
         resource_key = normalize_resource_key(resource)
         profile = get_resource_profile(resource_key)
-        roles = await cls._load_active_roles(user.id, tenant_id)
-        granted_roles = await cls._filter_roles_with_function_resource(
-            tenant_id,
-            roles,
-            resource_key,
-        )
-        roles_for_scope = granted_roles if granted_roles else roles
+        roles_for_scope = access.roles_for_data_scope(resource_key)
 
         granted_role_uuids = [
             (getattr(role, "uuid", None) or "").strip()

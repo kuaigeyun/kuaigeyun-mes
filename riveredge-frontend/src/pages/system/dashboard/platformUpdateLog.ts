@@ -36,6 +36,14 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
   {
+    id: 'effective-access-merge-then-auth-r01',
+    date: '2026-09-23',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.effective-access-merge-then-auth-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.effective-access-merge-then-auth-r01.description',
+  },
+  {
     id: 'permission-hotpath-definitions-scope-memo-r01',
     date: '2026-09-23',
     type: 'improvement',

@@ -10,13 +10,10 @@ Date: 2026-01-27
 from typing import List, Set
 
 from core.models.user_role import UserRole
-from core.models.role_permission import RolePermission
 from core.models.role import Role
 from core.models.permission import Permission
-from core.services.authorization.permission_version_service import PermissionVersionService
 from infra.models.user import User
 from infra.exceptions.exceptions import AuthorizationError
-from infra.infrastructure.cache.cache_manager import cache_manager
 
 
 class UserPermissionService:
@@ -45,12 +42,10 @@ class UserPermissionService:
         """平台/组织管理员 + 系统管理员角色（无 User 对象时的第三路径）。"""
         if is_infra_admin or is_tenant_admin:
             return True
-        roles = await cls.get_user_roles(user_id, tenant_id)
-        return any(
-            (r.code or "").strip().upper() in cls.ADMIN_ROLE_CODES
-            or (r.name or "").strip() == cls.ADMIN_ROLE_NAME
-            for r in roles
-        )
+        from core.services.authorization.effective_access_service import EffectiveAccessService
+
+        access = await EffectiveAccessService.get(user_id, tenant_id)
+        return access.is_admin_bypass
 
     @classmethod
     async def is_admin_bypass(cls, user: User, tenant_id: int) -> bool:
@@ -92,88 +87,18 @@ class UserPermissionService:
         include_inactive_roles: bool = False
     ) -> Set[str]:
         """
-        获取用户的所有权限代码
-        
-        Args:
-            user_id: 用户ID
-            tenant_id: 租户ID
-            include_inactive_roles: 是否包含非激活角色的权限
-            
-        Returns:
-            Set[str]: 权限代码集合
+        获取用户的所有权限代码（多角色并集）。
+
+        唯一真源：EffectiveAccessService（先合并角色授权，再供鉴权读取）。
         """
-        version = await PermissionVersionService.get_version(tenant_id=tenant_id, user_id=user_id)
-        cache_key = f"{tenant_id}:{user_id}:v{version}:inactive:{int(include_inactive_roles)}"
-        cached = await cache_manager.get("permissions", cache_key)
-        if isinstance(cached, list):
-            return set(cached)
+        from core.services.authorization.effective_access_service import EffectiveAccessService
 
-        # 根因修复：组织管理员/平台管理员必须在权限集合层面获得全量权限，避免任意上层页面或依赖误拦。
-        user = await User.get_or_none(id=user_id)
-        if user and await UserPermissionService.is_admin_bypass(user, tenant_id):
-            all_permission_codes = await UserPermissionService._get_all_tenant_permission_codes(
-                tenant_id
-            )
-            await cache_manager.set(
-                "permissions",
-                cache_key,
-                sorted(all_permission_codes),
-                ttl=1800,
-            )
-            return all_permission_codes
-
-        # 获取用户的所有角色（通过UserRole关联表）
-        user_roles_query = UserRole.filter(user_id=user_id)
-        user_roles = await user_roles_query.prefetch_related("role").all()
-
-        # 过滤出当前租户的角色
-        user_roles = [ur for ur in user_roles if ur.role and ur.role.tenant_id == tenant_id]
-
-        if not include_inactive_roles:
-            user_roles = [ur for ur in user_roles if ur.role.is_active]
-
-        if not user_roles:
-            await cache_manager.set("permissions", cache_key, [], ttl=1800)
-            return set()
-
-        role_ids = [ur.role_id for ur in user_roles]
-        role_permissions_query = RolePermission.filter(role_id__in=role_ids)
-        role_permissions = await role_permissions_query.prefetch_related("permission").all()
-        role_permissions = [rp for rp in role_permissions if rp.permission and rp.permission.tenant_id == tenant_id]
-
-        permission_codes = set()
-        for rp in role_permissions:
-            if rp.permission and rp.permission.deleted_at is None:
-                normalized = UserPermissionService._normalize_permission_code(rp.permission.code or "")
-                if normalized:
-                    permission_codes.add(normalized)
-
-        # 拥有「系统管理员」角色时始终合并租户下全部权限，与组织管理员行为一致，保证应用级菜单等全部可见
-        has_admin_role = any(
-            ur.role
-            and (
-                (ur.role.code or "").strip().upper() in UserPermissionService.ADMIN_ROLE_CODES
-                or (ur.role.name or "").strip() == UserPermissionService.ADMIN_ROLE_NAME
-            )
-            for ur in user_roles
+        access = await EffectiveAccessService.get(
+            user_id,
+            tenant_id,
+            include_inactive_roles=include_inactive_roles,
         )
-        if has_admin_role:
-            permission_codes |= await UserPermissionService._get_all_tenant_permission_codes(
-                tenant_id
-            )
-        else:
-            # 有角色的登录用户始终具备个人中心基线（与角色矩阵强制授予一致）
-            from core.services.authorization.permission_registry_service import (
-                PermissionRegistryService,
-            )
-
-            permission_codes = PermissionRegistryService.merge_baseline_permission_codes(
-                permission_codes
-            )
-
-        await cache_manager.set("permissions", cache_key, sorted(permission_codes), ttl=1800)
-        return permission_codes
-    
+        return set(access.permission_codes)    
     @staticmethod
     async def has_permission(
         user_id: int,
