@@ -178,7 +178,7 @@ const InventoryPage: React.FC = () => {
   const warehouseFilterRef = useRef(warehouseFilter);
   includeZeroStockRef.current = includeZeroStock;
   warehouseFilterRef.current = warehouseFilter;
-  const [summary, setSummary] = useState<InventorySummary>({
+  const [summary, setSummary] = useState<InventorySummary | undefined>({
     total_records: 0,
     total_quantity: 0,
     in_stock_count: 0,
@@ -502,6 +502,8 @@ const InventoryPage: React.FC = () => {
         success: true,
       };
     } catch (error: any) {
+      // F1-12：summary 失败显「-」，避免 undefined/NaN
+      setSummary(undefined);
       messageApi.error(error?.message || t('app.kuaizhizao.warehouseCommon.queryFailed'));
       return { data: [], total: 0, success: false };
     }
@@ -540,16 +542,16 @@ const InventoryPage: React.FC = () => {
 
   const statCards: StatCard[] = useMemo(
     () => [
-      { title: t('app.kuaizhizao.warehouseCommon.statRecords'), value: summary.total_records },
+      { title: t('app.kuaizhizao.warehouseCommon.statRecords'), value: summary?.total_records ?? '-' },
       {
         title: t('app.kuaizhizao.warehouseCommon.statTotalQty'),
-        value: summary.total_quantity,
-        precision: 2,
+        value: summary?.total_quantity ?? '-',
+        precision: summary == null ? undefined : 2,
       },
-      { title: t('app.kuaizhizao.warehouseCommon.statInStock'), value: summary.in_stock_count },
-      { title: t('app.kuaizhizao.warehouseCommon.statZeroStock'), value: summary.zero_stock_count },
-      { title: t('app.kuaizhizao.warehouseCommon.statNearExpiry'), value: summary.near_expiry_count },
-      { title: t('app.kuaizhizao.warehouseCommon.statExpired'), value: summary.expired_count },
+      { title: t('app.kuaizhizao.warehouseCommon.statInStock'), value: summary?.in_stock_count ?? '-' },
+      { title: t('app.kuaizhizao.warehouseCommon.statZeroStock'), value: summary?.zero_stock_count ?? '-' },
+      { title: t('app.kuaizhizao.warehouseCommon.statNearExpiry'), value: summary?.near_expiry_count ?? '-' },
+      { title: t('app.kuaizhizao.warehouseCommon.statExpired'), value: summary?.expired_count ?? '-' },
     ],
     [summary, t],
   );

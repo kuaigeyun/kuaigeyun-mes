@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Button,
   Card,
@@ -56,6 +56,8 @@ const LogisticsTrackingPage: React.FC = () => {
   const [queryPhone, setQueryPhone] = useState('');
   const [addingEvent, setAddingEvent] = useState(false);
   const [deletingEventId, setDeletingEventId] = useState<number | null>(null);
+  // F1-11：快速切换订单时丢弃过期 loadDetail 结果
+  const detailRequestIdRef = useRef(0);
 
   const canAddEvent = perms.canUpdate || perms.canAction?.('execute');
 
@@ -105,21 +107,26 @@ const LogisticsTrackingPage: React.FC = () => {
 
   const loadDetail = useCallback(
     async (id: number) => {
+      const requestId = ++detailRequestIdRef.current;
       setDetailLoading(true);
       setExternalEvents([]);
       setExternalError(null);
       try {
         const detail = await getFreightOrder(id);
+        if (requestId !== detailRequestIdRef.current) return;
         const phone = detail.query_phone?.trim() || '';
         setSelectedOrder(detail);
         setSelectedId(id);
         setQueryPhone(phone);
         await loadExternalTrack(detail, phone);
       } catch (error) {
+        if (requestId !== detailRequestIdRef.current) return;
         messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.logistics.message.loadDetailFailed')));
         setSelectedOrder(null);
       } finally {
-        setDetailLoading(false);
+        if (requestId === detailRequestIdRef.current) {
+          setDetailLoading(false);
+        }
       }
     },
     [loadExternalTrack, messageApi, t],

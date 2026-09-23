@@ -1,11 +1,22 @@
 import type { LifecycleResult, SubStage } from '../../../components/uni-lifecycle/types';
 import {
   getGlobalLifecycleStageLabelKeys,
+  LIFECYCLE_ZH_LABEL_TO_KEY,
   resolveLifecycleStageI18nKey,
+  translateLifecycleStageByKey,
   type LifecycleTranslateFn,
 } from '../../../utils/globalLifecycleI18n';
 
 export type { LifecycleTranslateFn };
+
+const TERMINAL_EXCEPTION_STAGE_NAMES = new Set([
+  '已关闭',
+  '已取消',
+  '已驳回',
+  'closed',
+  'cancelled',
+  'rejected',
+]);
 
 /** 禁止兜底：翻译缺失或与 key 相同时直接抛错 */
 export function requireI18nText(t: LifecycleTranslateFn, key: string): string {
@@ -60,10 +71,20 @@ export function applyLifecycleI18n(
   const backendStageName = (result.stageName ?? '').trim();
   const isPreEffective =
     !backendStageName || backendStageName === '-' || backendStageName === '—';
+  /** 终态异常（已关闭/已取消等）：禁止用主轴末节点 completed 盖成「已完成」 */
+  const isTerminalException =
+    result.status === 'exception' || TERMINAL_EXCEPTION_STAGE_NAMES.has(backendStageName);
 
   let stageName = result.stageName;
   if (isPreEffective) {
     stageName = backendStageName || '—';
+  } else if (isTerminalException && backendStageName) {
+    const mappedKey = LIFECYCLE_ZH_LABEL_TO_KEY[backendStageName] ?? backendStageName;
+    if (mergedKeys[mappedKey]) {
+      stageName = requireI18nText(t, mergedKeys[mappedKey]!);
+    } else {
+      stageName = translateLifecycleStageByKey(t, mappedKey, backendStageName);
+    }
   } else if (terminalKey && mergedKeys[terminalKey]) {
     stageName = requireI18nText(t, mergedKeys[terminalKey]!);
   } else if (terminalKey) {

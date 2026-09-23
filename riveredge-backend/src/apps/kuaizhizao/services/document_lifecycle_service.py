@@ -128,10 +128,11 @@ def _mode_a_terminal_exception_lifecycle(
     *,
     milestones: Optional[List[Dict[str, Any]]] = None,
     sub_stages: Optional[List[Dict[str, Any]]] = None,
+    stage_key: str = "",
 ) -> Dict[str, Any]:
-    """模式 A：业务终态异常（已取消等），当前阶段展示业务终态名，主轴全 pending。"""
+    """模式 A：业务终态异常（已取消/已关闭等），当前阶段展示业务终态名，主轴全 pending。"""
     return {
-        "current_stage_key": "",
+        "current_stage_key": stage_key,
         "current_stage_name": stage_name,
         "status": "exception",
         "main_stages": [{"key": s["key"], "label": s["label"], "status": "pending"} for s in stage_defs],
@@ -369,6 +370,7 @@ def get_sales_order_lifecycle(
             "已取消",
             SALES_ORDER_MAIN_STAGES,
             milestones=milestones,
+            stage_key="cancelled",
         )
     if _is_closed(status):
         # 关闭是终态异常（部分履约终止），不可伪装成 completed，否则前端会盖成「已完成」
@@ -376,6 +378,7 @@ def get_sales_order_lifecycle(
             "已关闭",
             SALES_ORDER_MAIN_STAGES,
             milestones=milestones,
+            stage_key="closed",
         )
 
     if _mode_a_is_audit_pre_effective(status, review_status, business_effective=effective):

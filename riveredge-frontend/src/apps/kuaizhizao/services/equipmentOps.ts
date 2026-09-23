@@ -3,20 +3,7 @@
  */
 
 import { apiRequest } from '../../../services/api';
-
-const BASE = '/apps/kuaizhizao';
-
-function crudApi(basePath: string) {
-  return {
-    list: (params?: Record<string, unknown>) =>
-      apiRequest(`${BASE}/${basePath}`, { method: 'GET', params }),
-    get: (id: number) => apiRequest(`${BASE}/${basePath}/${id}`, { method: 'GET' }),
-    create: (data: unknown) => apiRequest(`${BASE}/${basePath}`, { method: 'POST', data }),
-    update: (id: number, data: unknown) =>
-      apiRequest(`${BASE}/${basePath}/${id}`, { method: 'PUT', data }),
-    delete: (id: number) => apiRequest(`${BASE}/${basePath}/${id}`, { method: 'DELETE' }),
-  };
-}
+import { KUAIZHIZAO_API_BASE as BASE, crudApi } from './crudFactory';
 
 export const inspectionItemsApi = crudApi('equipment-inspection-items');
 export const inspectionSchemesApi = crudApi('equipment-inspection-schemes');

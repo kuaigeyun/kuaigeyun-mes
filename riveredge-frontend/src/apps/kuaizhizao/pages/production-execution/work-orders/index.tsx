@@ -370,6 +370,7 @@ import { UniWorkflowActions } from '../../../../../components/uni-workflow-actio
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired'
 import { isManualAuditEnabled } from '../../../../../utils/auditMode'
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 const getFirstNonEmptyString = (...candidates: Array<unknown>): string | undefined => {
   for (const candidate of candidates) {
     if (typeof candidate === 'string') {
@@ -1582,6 +1583,19 @@ const WorkOrdersPage: React.FC = () => {
     const params = { [LIST_LIFECYCLE_STAGE_FIELD]: stage }
     commitListPageSearchParams(tableSearchParamsRef, params)
     tableSearchFormRef.current?.setFieldsValue?.(params)
+    actionRef.current?.reload?.()
+  }, [])
+
+  /** F1-14：逾期卡 = 进行中 + 计划结束日早于今天 */
+  const applyWorkOrderOverdueListFilter = useCallback(() => {
+    const endBeforeToday = dayjs().subtract(1, 'day').endOf('day')
+    const params = {
+      [LIST_LIFECYCLE_STAGE_FIELD]: 'in_progress',
+      planned_end_date: [dayjs('1970-01-01').startOf('day'), endBeforeToday],
+    }
+    commitListPageSearchParams(tableSearchParamsRef, params)
+    tableSearchFormRef.current?.setFieldsValue?.(params)
+    setHighlightPlannedEndOverdue(true)
     actionRef.current?.reload?.()
   }, [])
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
@@ -5233,7 +5247,7 @@ const WorkOrdersPage: React.FC = () => {
       resetWorkOrderFormFieldValues()
       invalidateStatistics(); actionRef.current?.reload()
     } catch (error: any) {
-      messageApi.error(error.message || '操作失败')
+      messageApi.error(getApiErrorMessage(error, t('common.operationFailed')))
       throw error
     }
   }
@@ -8009,7 +8023,7 @@ const WorkOrdersPage: React.FC = () => {
           onClick:
             (statistics.overdue_count ?? 0) > 0
               ? () => {
-                  applyWorkOrderListLifecycleFilter('in_progress')
+                  applyWorkOrderOverdueListFilter()
                 }
               : undefined,
         },
@@ -11039,7 +11053,7 @@ const WorkOrdersPage: React.FC = () => {
             applyWorkOrderExpandBundle(panelWorkOrderId, bundle, workOrderDetail)
             setWorkOrderOperations(bundle.operations || [])
           } catch (error: any) {
-            messageApi.error(error.message || '操作失败')
+            messageApi.error(getApiErrorMessage(error, t('common.operationFailed')))
             throw error
           }
         }}

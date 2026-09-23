@@ -26,7 +26,7 @@ import {
   isValidOutboundBatchAllocations,
   type OutboundBatchAllocation,
 } from '../outbound/outboundBatchAllocation';
-import { useNumericPrecisionPlaces } from '../../../../../hooks/useNumericPrecision';
+import { useNumericPrecisionPlaces, buildNumericInputNumberProps, buildNumericFormRules } from '../../../../../hooks/useNumericPrecision';
 import { useSearchParams } from 'react-router-dom';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormDigit } from '@ant-design/pro-components';
@@ -1389,10 +1389,18 @@ const InventoryTransferPage: React.FC = () => {
                     render: (_: unknown, __: unknown, index: number) => (
                       <AntForm.Item
                         name={[index, 'quantity']}
-                        rules={[{ required: true, message: t('app.kuaizhizao.warehouseCommon.required') }, { type: 'number', min: 0.01, message: t('app.kuaizhizao.batchingCenter.qtyGtZero') }]}
+                        rules={buildNumericFormRules('quantity', t, {
+                          required: true,
+                          min: 0.01,
+                          requiredMessage: t('app.kuaizhizao.warehouseCommon.required'),
+                          minMessage: t('app.kuaizhizao.batchingCenter.qtyGtZero'),
+                        })}
                         style={{ margin: 0 }}
                       >
-                        <InputNumber placeholder={t('common.quantity')} min={0} precision={quantityDecimals} style={{ width: '100%' }} size="small" />
+                        <InputNumber
+                          placeholder={t('common.quantity')}
+                          {...buildNumericInputNumberProps('quantity', quantityDecimals, { size: 'small' })}
+                        />
                       </AntForm.Item>
                     ),
                   },

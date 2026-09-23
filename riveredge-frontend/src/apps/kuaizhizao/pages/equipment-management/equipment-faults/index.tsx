@@ -318,19 +318,30 @@ const EquipmentFaultsPage: React.FC = () => {
    * 处理批量删除故障记录（keys 为 uuid 数组）
    */
   const handleDelete = async (keys: React.Key[]) => {
-    try {
-          for (const uuid of keys) {
-            await equipmentFaultApi.delete(String(uuid));
-          }
-    messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
-          setSelectedRowKeys([]);
-          if (faultDetail?.uuid && keys.map(String).includes(String(faultDetail.uuid))) {
-            closeDetail();
-          }
+    let done = 0;
+    let fail = 0;
+    for (const uuid of keys) {
+      try {
+        await equipmentFaultApi.delete(String(uuid));
+        done += 1;
+      } catch {
+        fail += 1;
+      }
+    }
+    if (fail === 0) {
+      messageApi.success(t('pages.system.equipmentFaults.batchDeleteSuccess', { count: done }));
+    } else if (done === 0) {
+      messageApi.error(t('common.deleteFailed'));
+    } else {
+      messageApi.warning(
+        t('pages.system.equipmentFaults.batchDeletePartial', { done, fail }),
+      );
+    }
+    setSelectedRowKeys([]);
+    if (faultDetail?.uuid && keys.map(String).includes(String(faultDetail.uuid))) {
+      closeDetail();
+    }
     actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error.message || t('common.deleteFailed'));
-        }
   };
 
   /**

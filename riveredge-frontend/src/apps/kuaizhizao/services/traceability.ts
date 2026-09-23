@@ -2,7 +2,7 @@
  * 追溯管理 API
  */
 
-import { api } from '../../../services/api';
+import { api, buildAuthTenantHeaders } from '../../../services/api';
 
 export type TraceDirection = 'forward' | 'backward' | 'both';
 
@@ -91,15 +91,10 @@ export const traceabilityApi = {
   },
 
   downloadReport: async (code: string, direction: TraceDirection = 'both'): Promise<void> => {
-    const token = localStorage.getItem('token');
-    const tenantId = localStorage.getItem('tenant_id');
     const params = new URLSearchParams({ code, direction, format: 'pdf' });
     const response = await fetch(`/api/v1/apps/kuaizhizao/traceability/report?${params.toString()}`, {
       method: 'GET',
-      headers: {
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...(tenantId ? { 'X-Tenant-ID': tenantId } : {}),
-      },
+      headers: buildAuthTenantHeaders(),
       cache: 'no-store',
     });
     if (!response.ok) {

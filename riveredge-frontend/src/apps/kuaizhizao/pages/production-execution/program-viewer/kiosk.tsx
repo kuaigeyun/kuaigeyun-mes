@@ -16,6 +16,7 @@ import { TouchScreenTemplate } from '../../../../../components/layout-templates/
 import { CODE_FONT_FAMILY } from '../../../../../constants/fonts';
 import { useTouchScreen } from '../../../../../hooks/useTouchScreen';
 import { App } from 'antd';
+import { useTranslation } from 'react-i18next';
 
 const { Search } = Input;
 
@@ -23,6 +24,7 @@ const { Search } = Input;
  * 加工程序查看 - 工位机触屏模式页面
  */
 const ProgramViewerKioskPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const touchScreen = useTouchScreen();
   const [loading, setLoading] = useState(false);
@@ -44,14 +46,14 @@ const ProgramViewerKioskPage: React.FC = () => {
 
     if (code) {
       setProgramCode(code);
-      setProgramName(name || '加工程序');
+      setProgramName(name || t('app.kuaizhizao.programViewer.defaultName'));
     } else if (programCode) {
       setProgramCode(programCode);
-      setProgramName(name || '加工程序');
+      setProgramName(name || t('app.kuaizhizao.programViewer.defaultName'));
     } else if (programUrl) {
       loadProgramFromUrl(programUrl);
     } else {
-      messageApi.warning('请提供程序代码或程序URL');
+      messageApi.warning(t('app.kuaizhizao.programViewer.needCodeOrUrl'));
     }
   }, []);
 
@@ -63,13 +65,13 @@ const ProgramViewerKioskPage: React.FC = () => {
     try {
       const response = await fetch(url);
       if (!response.ok) {
-        throw new Error('加载程序失败');
+        throw new Error(t('app.kuaizhizao.programViewer.loadFailed'));
       }
       const text = await response.text();
       setProgramCode(text);
-      setProgramName('加工程序');
+      setProgramName(t('app.kuaizhizao.programViewer.defaultName'));
     } catch (error: any) {
-      messageApi.error(error.message || '加载程序失败');
+      messageApi.error(error.message || t('app.kuaizhizao.programViewer.loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -100,11 +102,11 @@ const ProgramViewerKioskPage: React.FC = () => {
 
     if (results.length > 0) {
       scrollToLine(results[0]);
-      messageApi.success(`找到 ${results.length} 个匹配项`);
+      messageApi.success(t('app.kuaizhizao.programViewer.searchFound', { count: results.length }));
     } else {
-      messageApi.warning('未找到匹配项');
+      messageApi.warning(t('app.kuaizhizao.programViewer.searchEmpty'));
     }
-  }, [programCode, messageApi]);
+  }, [programCode, messageApi, t]);
 
   /**
    * 滚动到指定行
@@ -146,40 +148,63 @@ const ProgramViewerKioskPage: React.FC = () => {
   }, [searchResults, currentSearchIndex, scrollToLine]);
 
   /**
-   * 高亮代码（简单的G代码高亮）
+   * 将纯文本按 G/M/坐标等规则切成 React 节点（不经 HTML 字符串）
+   */
+  const tokenizePlain = useCallback((text: string): React.ReactNode[] => {
+    const re =
+      /\b(G\d{1,2})\b|\b(M\d{1,2})\b|\b([XYZUVW])(-?\d+\.?\d*)\b|(;.*$|\(.*?\))|\b(\d+\.?\d*)\b/gi;
+    const nodes: React.ReactNode[] = [];
+    let last = 0;
+    let key = 0;
+    for (const m of text.matchAll(re)) {
+      const idx = m.index ?? 0;
+      if (idx > last) nodes.push(text.slice(last, idx));
+      if (m[1]) nodes.push(<span key={key++} className="g-code">{m[1]}</span>);
+      else if (m[2]) nodes.push(<span key={key++} className="m-code">{m[2]}</span>);
+      else if (m[3]) nodes.push(<span key={key++} className="coordinate">{m[3]}{m[4]}</span>);
+      else if (m[5]) nodes.push(<span key={key++} className="comment">{m[5]}</span>);
+      else if (m[6]) nodes.push(<span key={key++} className="number">{m[6]}</span>);
+      last = idx + m[0].length;
+    }
+    if (last < text.length) nodes.push(text.slice(last));
+    return nodes.length > 0 ? nodes : [text || ' '];
+  }, []);
+
+  /**
+   * 高亮代码：按行 React 节点渲染 + mark 插高亮（P3-06：禁止 HTML 字符串注入）
    */
   const highlightCode = useCallback((code: string, keyword: string = '') => {
-    if (!code) return '';
-
-    const escapeHtml = (raw: string) =>
-      raw
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
+    if (!code) return null;
 
     const lines = code.split('\n');
     const lowerKeyword = keyword.toLowerCase();
 
-    return lines.map((line, index) => {
-      // 先转义源码，再插入高亮标签，避免搜索词/程序内容注入 XSS（F2-07）
-      let highlightedLine = escapeHtml(line);
-
-      if (keyword && lowerKeyword) {
-        const escapedKeyword = escapeHtml(keyword).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const regex = new RegExp(`(${escapedKeyword})`, 'gi');
-        highlightedLine = highlightedLine.replace(regex, '<mark>$1</mark>');
+    const renderLineBody = (line: string): React.ReactNode => {
+      if (!keyword || !lowerKeyword) {
+        return <>{tokenizePlain(line)}</>;
       }
+      const escapedKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(`(${escapedKeyword})`, 'gi');
+      const parts = line.split(regex);
+      return (
+        <>
+          {parts.map((part, i) =>
+            part.toLowerCase() === lowerKeyword ? (
+              <mark key={i}>{part}</mark>
+            ) : (
+              <React.Fragment key={i}>{tokenizePlain(part)}</React.Fragment>
+            ),
+          )}
+        </>
+      );
+    };
 
-      highlightedLine = highlightedLine.replace(/\b(G\d{1,2})\b/gi, '<span class="g-code">$1</span>');
-      highlightedLine = highlightedLine.replace(/\b(M\d{1,2})\b/gi, '<span class="m-code">$1</span>');
-      highlightedLine = highlightedLine.replace(/\b([XYZUVW])(-?\d+\.?\d*)\b/gi, '<span class="coordinate">$1$2</span>');
-      highlightedLine = highlightedLine.replace(/(;.*$|\(.*?\))/g, '<span class="comment">$1</span>');
-      highlightedLine = highlightedLine.replace(/\b(\d+\.?\d*)\b/g, '<span class="number">$1</span>');
-
-      const isSearchMatch = keyword && line.toLowerCase().includes(lowerKeyword);
-      const isCurrentSearch = searchResults.length > 0 && currentSearchIndex >= 0 && searchResults[currentSearchIndex] === index;
+    return lines.map((line, index) => {
+      const isSearchMatch = Boolean(keyword && line.toLowerCase().includes(lowerKeyword));
+      const isCurrentSearch =
+        searchResults.length > 0 &&
+        currentSearchIndex >= 0 &&
+        searchResults[currentSearchIndex] === index;
 
       return (
         <div
@@ -214,19 +239,20 @@ const ProgramViewerKioskPage: React.FC = () => {
               whiteSpace: 'pre-wrap',
               wordBreak: 'break-all',
             }}
-            dangerouslySetInnerHTML={{ __html: highlightedLine || ' ' }}
-          />
+          >
+            {renderLineBody(line)}
+          </span>
         </div>
       );
     });
-  }, [searchKeyword, searchResults, currentSearchIndex]);
+  }, [searchKeyword, searchResults, currentSearchIndex, tokenizePlain]);
 
   /**
    * 处理下载程序
    */
   const handleDownload = useCallback(() => {
     if (!programCode) {
-      messageApi.warning('没有程序可下载');
+      messageApi.warning(t('app.kuaizhizao.programViewer.noDownload'));
       return;
     }
 
@@ -240,11 +266,11 @@ const ProgramViewerKioskPage: React.FC = () => {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-      messageApi.success('程序下载成功');
+      messageApi.success(t('app.kuaizhizao.programViewer.downloadSuccess'));
     } catch (error: any) {
-      messageApi.error(`下载程序失败: ${error.message || '未知错误'}`);
+      messageApi.error(t('app.kuaizhizao.programViewer.downloadFailed', { message: error.message || t('app.kuaizhizao.programViewer.unknownError') }));
     }
-  }, [programCode, programName, messageApi]);
+  }, [programCode, programName, messageApi, t]);
 
   /**
    * 处理进入全屏
@@ -252,19 +278,19 @@ const ProgramViewerKioskPage: React.FC = () => {
   const handleEnterFullscreen = useCallback(async () => {
     try {
       await touchScreen.enterFullscreen();
-      messageApi.success('已进入全屏模式');
+      messageApi.success(t('app.kuaizhizao.programViewer.fullscreenOk'));
     } catch (error: any) {
-      messageApi.error(`进入全屏失败: ${error.message || '未知错误'}`);
+      messageApi.error(t('app.kuaizhizao.programViewer.fullscreenFailed', { message: error.message || t('app.kuaizhizao.programViewer.unknownError') }));
     }
-  }, [touchScreen, messageApi]);
+  }, [touchScreen, messageApi, t]);
 
   return (
     <TouchScreenTemplate
-      title={programName || '加工程序查看'}
+      title={programName || t('app.kuaizhizao.programViewer.pageTitle')}
       fullscreen={true}
       footerButtons={[
         {
-          title: '上一个',
+          title: t('app.kuaizhizao.programViewer.prev'),
           type: 'default',
           icon: <UpOutlined />,
           onClick: handlePreviousSearch,
@@ -272,14 +298,14 @@ const ProgramViewerKioskPage: React.FC = () => {
           block: false,
         },
         {
-          title: `搜索 (${searchResults.length > 0 ? `${currentSearchIndex + 1}/${searchResults.length}` : '0'})`,
+          title: t('app.kuaizhizao.programViewer.searchBtn', { label: searchResults.length > 0 ? `${currentSearchIndex + 1}/${searchResults.length}` : '0' }),
           type: 'default',
           icon: <SearchOutlined />,
           onClick: () => searchInputRef.current?.focus(),
           block: false,
         },
         {
-          title: '下一个',
+          title: t('app.kuaizhizao.programViewer.next'),
           type: 'default',
           icon: <DownOutlined />,
           onClick: handleNextSearch,
@@ -287,14 +313,14 @@ const ProgramViewerKioskPage: React.FC = () => {
           block: false,
         },
         {
-          title: '下载',
+          title: t('app.kuaizhizao.programViewer.download'),
           type: 'default',
           icon: <DownloadOutlined />,
           onClick: handleDownload,
           block: false,
         },
         {
-          title: '全屏',
+          title: t('app.kuaizhizao.programViewer.fullscreen'),
           type: 'primary',
           icon: <FullscreenOutlined />,
           onClick: handleEnterFullscreen,
@@ -304,7 +330,7 @@ const ProgramViewerKioskPage: React.FC = () => {
     >
       <Spin spinning={loading}>
         {!programCode ? (
-          <Empty description="未找到程序数据" />
+          <Empty description={t('app.kuaizhizao.programViewer.empty')} />
         ) : (
           <div
             style={{
@@ -318,17 +344,17 @@ const ProgramViewerKioskPage: React.FC = () => {
             <Card size="small" style={{ marginBottom: 24, backgroundColor: '#f5f5f5' }}>
               <Space orientation="vertical" size="small" style={{ width: '100%' }}>
                 <div>
-                  <strong>程序名称：</strong>
-                  <span>{programName || '加工程序'}</span>
+                  <strong>{t('app.kuaizhizao.programViewer.nameLabel')}</strong>
+                  <span>{programName || t('app.kuaizhizao.programViewer.defaultName')}</span>
                 </div>
                 <div>
-                  <strong>总行数：</strong>
+                  <strong>{t('app.kuaizhizao.programViewer.lineCountLabel')}</strong>
                   <Tag color="blue">{programCode.split('\n').length}</Tag>
                 </div>
                 {searchResults.length > 0 && (
                   <div>
-                    <strong>搜索结果：</strong>
-                    <Tag color="green">{searchResults.length} 个匹配项</Tag>
+                    <strong>{t('app.kuaizhizao.programViewer.searchResultLabel')}</strong>
+                    <Tag color="green">{t('app.kuaizhizao.programViewer.matchCount', { count: searchResults.length })}</Tag>
                   </div>
                 )}
               </Space>
@@ -338,7 +364,7 @@ const ProgramViewerKioskPage: React.FC = () => {
             <Card size="small" style={{ marginBottom: 24 }}>
               <Search
                 ref={searchInputRef}
-                placeholder="搜索程序内容（支持G代码、M代码、坐标等）"
+                placeholder={t('app.kuaizhizao.programViewer.searchPlaceholder')}
                 size="large"
                 value={searchKeyword}
                 onChange={(e) => setSearchKeyword(e.target.value)}
@@ -351,7 +377,7 @@ const ProgramViewerKioskPage: React.FC = () => {
 
             {/* 程序代码显示区域 */}
             <Card
-              title="程序代码"
+              title={t('app.kuaizhizao.programViewer.codeTitle')}
               style={{ flex: 1, display: 'flex', flexDirection: 'column', marginBottom: 24 }}
               styles={{ body: { flex: 1, overflow: 'auto', padding: 0 } }}
             >

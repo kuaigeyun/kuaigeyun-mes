@@ -4,12 +4,23 @@ import { LifecycleStageBadge } from '../../../../../components/uni-lifecycle';
 import type { LifecycleResult } from '../../../../../components/uni-lifecycle/types';
 import { translateLifecycleResult } from '../../../../../utils/globalLifecycleI18n';
 
-/** 列表展示：active 节点 → stageName（含完结态）→ 最后一个 done 节点 */
+/** 列表展示：终态异常优先 stageName → active → stageName → 最后一个 done */
 export function resolveLifecycleDisplayLabel(lifecycle: LifecycleResult): string {
+  const stageName = (lifecycle.stageName ?? '').trim();
+  const isTerminalException =
+    lifecycle.status === 'exception' ||
+    stageName === '已关闭' ||
+    stageName === '已取消' ||
+    stageName === '已驳回' ||
+    stageName === 'closed' ||
+    stageName === 'cancelled' ||
+    stageName === 'rejected';
+  if (isTerminalException && stageName) return stageName;
+
   const stages = lifecycle.mainStages ?? [];
   const active = stages.find((s) => s.status === 'active');
   if (active) return active.label;
-  if (lifecycle.stageName) return lifecycle.stageName;
+  if (stageName) return stageName;
   return stages.filter((s) => s.status === 'done').at(-1)?.label ?? '-';
 }
 

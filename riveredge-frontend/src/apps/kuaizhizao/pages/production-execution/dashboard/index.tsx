@@ -37,16 +37,17 @@ import type {
   ModuleKpiDef,
   ModuleShortcutDef,
 } from '../../../components/module-center';
-import { translateWorkOrderLifecycleStatus } from '../../../utils/workOrderLifecycle';
+import { translateWorkOrderLifecycleStatus, normalizeWorkOrderStatusKey } from '../../../utils/workOrderLifecycle';
 
 const MfgStatusPie = lazy(async () => {
   const { Pie } = await import('@ant-design/charts');
   return { default: (props: React.ComponentProps<typeof Pie>) => <Pie {...props} /> };
 });
 
-const WIP_STATUSES = new Set(['released', 'in_progress', '已下达', '执行中', 'RELEASED', 'IN_PROGRESS']);
-const PENDING_SCHEDULING_STATUSES = new Set(['draft', '草稿', 'DRAFT', 'pending', '待排产', '待下达']);
-const COMPLETED_STATUSES = new Set(['completed', 'cancelled', '已完成', '已取消', 'COMPLETED', 'CANCELLED']);
+/** F1-15：与模型 status 枚举对齐，仅用归一化后的英文 key */
+const WIP_STATUS_KEYS = new Set(['released', 'in_progress']);
+const PENDING_SCHEDULING_STATUS_KEYS = new Set(['draft']);
+const COMPLETED_STATUS_KEYS = new Set(['completed', 'cancelled']);
 
 type WorkOrderRow = {
   id: number;
@@ -89,13 +90,13 @@ function renderDashboardWorkOrderStackedCell(
 }
 
 function isWipWorkOrder(row: WorkOrderRow): boolean {
-  return WIP_STATUSES.has(String(row.status ?? ''));
+  return WIP_STATUS_KEYS.has(normalizeWorkOrderStatusKey(row.status));
 }
 
 function isOverdueWorkOrder(row: WorkOrderRow): boolean {
-  const status = String(row.status ?? '');
-  if (COMPLETED_STATUSES.has(status)) return false;
-  if (!WIP_STATUSES.has(status) && status !== 'draft' && status !== '草稿') return false;
+  const key = normalizeWorkOrderStatusKey(row.status);
+  if (COMPLETED_STATUS_KEYS.has(key)) return false;
+  if (!WIP_STATUS_KEYS.has(key) && key !== 'draft') return false;
   if (!row.planned_end_date) return false;
   return dayjs(row.planned_end_date).isBefore(dayjs(), 'day');
 }
@@ -146,7 +147,7 @@ const ManufacturingDashboard: React.FC = () => {
         .filter(
           (row) =>
             isDashboardWorkOrderRow(row) &&
-            PENDING_SCHEDULING_STATUSES.has(String(row.status ?? '')),
+            PENDING_SCHEDULING_STATUS_KEYS.has(normalizeWorkOrderStatusKey(row.status)),
         )
         .slice(0, 6),
     [allWorkOrders],

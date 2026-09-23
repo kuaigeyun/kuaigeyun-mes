@@ -260,7 +260,9 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
 
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [statsVersion, setStatsVersion] = useState(0);
-  const [localStats, setLocalStats] = useState({ total: 0, draft: 0, inProgress: 0 });
+  const [localStats, setLocalStats] = useState<
+    { total: number; draft: number; inProgress: number } | undefined
+  >({ total: 0, draft: 0, inProgress: 0 });
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
 
@@ -323,7 +325,8 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         inProgress: stats.in_progress,
       });
     } catch {
-      setLocalStats({ total: 0, draft: 0, inProgress: 0 });
+      // P3-04：失败显「-」，避免统计卡归 0 误导
+      setLocalStats(undefined);
     }
   }, []);
 
@@ -1846,24 +1849,24 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
     () => [
       {
         title: t('app.kuaizhizao.outsourceWorkOrder.statTotal'),
-        value: localStats.total,
+        value: localStats?.total ?? '-',
         valueStyle: { color: token.colorPrimary },
         backgroundChart: <SimpleSparkline data={OWO_STAT_SPARK_1} color={token.colorPrimary} />,
       },
       {
         title: t('app.kuaizhizao.outsourceWorkOrder.statDraft'),
-        value: localStats.draft,
+        value: localStats?.draft ?? '-',
         valueStyle: { color: token.colorWarning },
         backgroundChart: <SimpleSparkline data={OWO_STAT_SPARK_2} color={token.colorWarning} />,
       },
       {
         title: t('app.kuaizhizao.outsourceWorkOrder.statInProgress'),
-        value: localStats.inProgress,
+        value: localStats?.inProgress ?? '-',
         valueStyle: { color: token.colorSuccess },
         backgroundChart: <SimpleSparkline data={OWO_STAT_SPARK_3} color={token.colorSuccess} />,
       },
     ],
-    [localStats.draft, localStats.inProgress, localStats.total, t, token.colorPrimary, token.colorSuccess, token.colorWarning],
+    [localStats, t, token.colorPrimary, token.colorSuccess, token.colorWarning],
   );
 
   const timeconfigBasicItems0 = useDetailDrawerDescriptionItems(

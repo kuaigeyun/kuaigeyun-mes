@@ -16,6 +16,13 @@ from tortoise.exceptions import IntegrityError
 from tortoise.transactions import in_transaction
 from loguru import logger
 
+from core.utils.decimal_limits import (
+    AMOUNT_DIGITS,
+    PRICE_DIGITS,
+    QUANTITY_DIGITS,
+    assert_decimal_fits,
+)
+
 from apps.kuaizhizao.models.sales_order import SalesOrder
 from apps.master_data.models.material import Material, BOM
 from apps.master_data.models.factory import WorkCenter
@@ -277,16 +284,14 @@ class SalesOrderService:
 
     @staticmethod
     def _decimal_abs_limit(max_digits: int, decimal_places: int) -> Decimal:
-        """NUMERIC(max_digits, decimal_places) 可存的最大绝对值。"""
-        return (Decimal(10) ** (max_digits - decimal_places)) - (Decimal(10) ** -decimal_places)
+        from core.utils.decimal_limits import decimal_abs_limit
 
-    # 与 SalesOrder / SalesOrderItem 模型及销售合同精度对齐
-    _SO_QTY_MAX_DIGITS = 14
-    _SO_QTY_DECIMAL_PLACES = 4
-    _SO_PRICE_MAX_DIGITS = 14
-    _SO_PRICE_DECIMAL_PLACES = 4
-    _SO_AMOUNT_MAX_DIGITS = 16
-    _SO_AMOUNT_DECIMAL_PLACES = 4
+        return decimal_abs_limit(max_digits, decimal_places)
+
+    # 与 core.utils.decimal_limits 对齐；销售订单表字段已扩至至少该口径
+    _SO_QTY_MAX_DIGITS, _SO_QTY_DECIMAL_PLACES = QUANTITY_DIGITS
+    _SO_PRICE_MAX_DIGITS, _SO_PRICE_DECIMAL_PLACES = PRICE_DIGITS
+    _SO_AMOUNT_MAX_DIGITS, _SO_AMOUNT_DECIMAL_PLACES = AMOUNT_DIGITS
 
     @classmethod
     def _assert_decimal_fits(
@@ -297,17 +302,12 @@ class SalesOrderService:
         decimal_places: int,
         field_label: str,
     ) -> None:
-        if value is None:
-            return
-        d = Decimal(str(value))
-        if not d.is_finite():
-            raise ValidationError(f"{field_label}无效")
-        limit = cls._decimal_abs_limit(max_digits, decimal_places)
-        if d.copy_abs() > limit:
-            int_digits = max_digits - decimal_places
-            raise ValidationError(
-                f"{field_label}过大（最多{int_digits}位整数、{decimal_places}位小数）"
-            )
+        assert_decimal_fits(
+            value,
+            max_digits=max_digits,
+            decimal_places=decimal_places,
+            field_label=field_label,
+        )
 
     @classmethod
     def _validate_sales_item_decimal_limits(
@@ -1074,7 +1074,9 @@ class SalesOrderService:
         hint = shippable_hint or {}
         base["has_shippable_products"] = bool(hint.get("has_shippable_products"))
         base["shippable_quantity"] = float(hint.get("shippable_quantity") or 0.0)
-        if base["has_shippable_products"]:
+        # 已关闭/已取消/已完成：禁止可发货覆盖生命周期阶段名（否则「已关闭」被盖掉）
+        _terminal_for_ship_overlay = self._is_terminal_business_status(order.status)
+        if base["has_shippable_products"] and not _terminal_for_ship_overlay:
             lifecycle = dict(lifecycle)
             lifecycle["current_stage_name"] = "可发货"
             lifecycle["status"] = "success"

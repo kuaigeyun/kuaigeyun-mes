@@ -47,6 +47,7 @@ import { getAvatarText } from '../../../../../utils/avatar';
 import { getCurrentUser, CurrentUser } from '../../../../../services/auth';
 import dayjs from 'dayjs';
 import { formatDateTime } from '../../../../../utils/format';
+import { formatReportingDateTime } from '../../../utils/reportingWorkTime';
 import { formatOperationInspectionSummary, getOperationCardPhase, getOperationProgressPercent, getOperationQualityMetrics, getProcessInspectionCardStatus, isOperationEffectivelyCompleted } from '../../../utils/workOrderReporting';
 import { fetchKuaiiotFillContext } from '../../../../../utils/kuaiiotFillContext';
 import { equipmentApi } from '../../../services/equipment';
@@ -405,7 +406,8 @@ const WorkOrdersKioskPage: React.FC = () => {
                 unqualified_quantity: unqualifiedQtyBase,
                 work_hours: Number(values.work_hours) || 0,
                 status: 'pending',
-                reported_at: new Date().toISOString(),
+                // F2-11：与 PC 报工页一致，用站点本地时区而非 UTC ISO
+                reported_at: formatReportingDateTime(dayjs()),
                 remarks: values.remarks,
                 sop_parameters: Object.keys(sopParams).length ? sopParams : undefined,
             });
@@ -447,8 +449,8 @@ const WorkOrdersKioskPage: React.FC = () => {
                 // setMaterialBindingModalVisible(true);
             }
             
-            // Refresh
-            loadWorkOrders(stationInfo?.workCenterId);
+            // Refresh：append 保留列表，避免重置丢失当前选中「已报」视觉（F2-15）
+            loadWorkOrders(stationInfo?.workCenterId, undefined, { append: true });
             if (selectedWorkOrder.id) {
                 const ops = await workOrderApi.getOperations(selectedWorkOrder.id.toString());
                 setOperations(ops || []);
@@ -865,7 +867,7 @@ const WorkOrdersKioskPage: React.FC = () => {
                                                 <Button size="large" {...touchButtonProps({ size: 'header' })} disabled={!lastReportingRecordId} onClick={() => setMaterialBindingModalVisible(true)}>
                                                     物料绑定
                                                 </Button>
-                                                <Button size="large" {...touchButtonProps({ size: 'header' })} disabled={!activeOperation} onClick={() => { setBarcodePrintLevel('operation'); setBarcodePrintModalVisible(true); }}>
+                                                <Button size="large" {...touchButtonProps({ size: 'header' })} disabled={!activeOperation?.id} onClick={() => { setBarcodePrintLevel('operation'); setBarcodePrintModalVisible(true); }}>
                                                     条码打印
                                                 </Button>
                                                 <Button size="large" {...touchButtonProps({ size: 'header' })} disabled={!activeOperation} onClick={() => setProcessInspectionModalVisible(true)}>
@@ -1030,7 +1032,10 @@ const WorkOrdersKioskPage: React.FC = () => {
     const handleStartEnd = () => {
         if (isRunning) {
             addRecentOp('结束', activeOperation?.name);
-            message.info('结束操作（可在此接入结束逻辑）');
+            // F2-12：结束接口尚未接入，明确占位提示（非伪成功）
+            message.info(t('app.kuaizhizao.workOrder.kioskEndPlaceholder', {
+              defaultValue: '结束（占位）：尚未接入工序结束接口',
+            }));
         } else {
             handleStart();
         }
@@ -1038,17 +1043,26 @@ const WorkOrdersKioskPage: React.FC = () => {
     const handlePauseResume = () => {
         setIsPaused(p => !p);
         addRecentOp(isPaused ? '继续' : '暂停');
-        message.info(isPaused ? '已继续' : '已暂停');
+        // F2-13：暂停/继续本地态占位，无后端持久化
+        message.info(
+          isPaused
+            ? t('app.kuaizhizao.workOrder.kioskResumePlaceholder', { defaultValue: '已继续（占位，未持久化）' })
+            : t('app.kuaizhizao.workOrder.kioskPausePlaceholder', { defaultValue: '已暂停（占位，未持久化）' }),
+        );
     };
     const handleCall = () => {
         addRecentOp('呼叫');
-        message.info('已发起呼叫');
+        // F2-13：呼叫占位
+        message.info(t('app.kuaizhizao.workOrder.kioskCallPlaceholder', {
+          defaultValue: '已发起呼叫（占位，未接后端）',
+        }));
     };
 
     const handleKeypadInput = (field: string, action: 'digit' | 'backspace' | 'clear', value?: string) => {
         const v = form.getFieldValue(field);
         const str = String(v ?? '');
         let next: string;
+        // F2-07：清空置 0（非空串）为有意设计——数字小键盘后续输入可正确替换前导 0
         if (action === 'clear') next = '0';
         else if (action === 'backspace') next = str.length <= 1 ? '0' : str.slice(0, -1);
         else if (value === '.') {
@@ -1065,6 +1079,7 @@ const WorkOrdersKioskPage: React.FC = () => {
                 setDefectModalVisible(true);
             } else {
                 setSelectedDefectType(null);
+                setDefectConfirmed(false);
             }
         }
     };

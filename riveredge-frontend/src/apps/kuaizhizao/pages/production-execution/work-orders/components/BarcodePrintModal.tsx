@@ -43,6 +43,7 @@ const BarcodePrintModal: React.FC<BarcodePrintModalProps> = ({
 }) => {
   const { t } = useTranslation()
   const [loading, setLoading] = useState(false);
+  const [printLoading, setPrintLoading] = useState(false);
   const [templates, setTemplates] = useState<PrintTemplate[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
 
@@ -75,9 +76,16 @@ const BarcodePrintModal: React.FC<BarcodePrintModalProps> = ({
       message.warning(t('app.kuaizhizao.workOrder.msgSelectPrintTemplatePlaceholder'));
       return;
     }
+    // F2-14：工序级必须有 operationId，避免 URL 拼出 undefined
+    if (level === 'operation' && (operationId == null || operationId === '')) {
+      message.warning(t('app.kuaizhizao.workOrder.msgSelectOperationFirst', {
+        defaultValue: '请先选择工序',
+      }));
+      return;
+    }
 
     try {
-      setLoading(true);
+      setPrintLoading(true);
       const printUrl = level === 'work_order' 
         ? `/api/v1/apps/kuaizhizao/work-orders/${workOrderId}/print?template_uuid=${selectedTemplate}`
         : `/api/v1/apps/kuaizhizao/work-orders/${workOrderId}/operations/${operationId}/print?template_uuid=${selectedTemplate}`;
@@ -93,7 +101,7 @@ const BarcodePrintModal: React.FC<BarcodePrintModalProps> = ({
       console.error('Print failed', error);
       message.error(t('app.kuaizhizao.workOrder.msgPrintFailed'));
     } finally {
-      setLoading(false);
+      setPrintLoading(false);
     }
   };
 
@@ -187,10 +195,10 @@ const BarcodePrintModal: React.FC<BarcodePrintModalProps> = ({
             <Button 
               type="primary"
               size="large" 
-              loading={loading}
+              loading={printLoading}
               onClick={handlePrint}
               icon={<PrinterOutlined />}
-              disabled={!selectedTemplate}
+              disabled={!selectedTemplate || (level === 'operation' && (operationId == null || operationId === ''))}
               style={{ 
                 flex: 2,
                 height: 60, 

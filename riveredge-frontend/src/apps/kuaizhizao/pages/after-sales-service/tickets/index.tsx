@@ -281,11 +281,27 @@ const AfterSalesTicketsPage: React.FC = () => {
   };
 
   const handleBatchDelete = async (ids: React.Key[]) => {
+    let success = 0;
+    let failed = 0;
     for (const id of ids) {
-      await afterSalesTicketApi.delete(Number(id));
+      try {
+        await afterSalesTicketApi.delete(Number(id));
+        success += 1;
+      } catch {
+        failed += 1;
+      }
     }
     setSelectedRowKeys([]);
     reloadTable();
+    if (failed === 0) {
+      message.success(t('common.batchDeleteSuccess', { count: success }));
+    } else if (success === 0) {
+      message.error(t('common.batchDeleteFailed'));
+    } else {
+      message.warning(
+        t('components.uniBatch.capability.partial', { success, failed }),
+      );
+    }
   };
 
   const permDeniedTitle = t('common.noPermission', { defaultValue: '无权限' });

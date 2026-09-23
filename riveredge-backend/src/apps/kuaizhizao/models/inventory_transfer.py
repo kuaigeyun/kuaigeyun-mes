@@ -77,8 +77,8 @@ class InventoryTransfer(BaseModel):
 
     # 统计信息
     total_items = fields.IntField(default=0, description="调拨物料总数")
-    total_quantity = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="调拨总数量")
-    total_amount = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="调拨总金额")
+    total_quantity = fields.DecimalField(max_digits=18, decimal_places=4, default=0, description="调拨总数量")
+    total_amount = fields.DecimalField(max_digits=18, decimal_places=4, default=0, description="调拨总金额")
 
     # 调拨原因和备注
     transfer_reason = fields.TextField(null=True, description="调拨原因")
@@ -174,12 +174,12 @@ class InventoryTransferItem(BaseModel):
     # 批次信息
     batch_no = fields.CharField(max_length=100, null=True, description="批次号（可选）")
 
-    # 数量信息
-    quantity = fields.DecimalField(max_digits=14, decimal_places=4, description="调拨数量")
+    # 数量信息（与 decimal_limits / 库存 DECIMAL(18,4) 对齐）
+    quantity = fields.DecimalField(max_digits=18, decimal_places=4, description="调拨数量")
 
     # 金额信息
-    unit_price = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="单价")
-    amount = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="金额")
+    unit_price = fields.DecimalField(max_digits=18, decimal_places=4, default=0, description="单价")
+    amount = fields.DecimalField(max_digits=18, decimal_places=4, default=0, description="金额")
 
     # 状态
     status = fields.CharField(max_length=20, default="pending", description="状态（pending/transferred）")

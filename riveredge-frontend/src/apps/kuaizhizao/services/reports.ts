@@ -7,9 +7,8 @@
  * @date 2025-12-29
  */
 
-import { getToken } from '../../../utils/auth';
 import { updateLastActivity, incrementPendingRequests, decrementPendingRequests } from '../../../utils/activityUtils';
-import { apiRequest } from '../../../services/api';
+import { apiRequest, buildAuthTenantHeaders } from '../../../services/api';
 import { todaySiteDateString } from '../../../utils/format';
 
 /**
@@ -518,9 +517,8 @@ export async function exportDomainReport(domain: string, params: ReportParams = 
     const response = await fetch(`/api/v1/apps/kuaizhizao/reports/${encodeURIComponent(domain)}/export`, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${getToken()}`,
+        ...buildAuthTenantHeaders(),
         'Content-Type': 'application/json',
-        'X-Tenant-ID': localStorage.getItem('tenant_id') || '',
       },
       body: JSON.stringify(normalizeExportBody(params)),
     });

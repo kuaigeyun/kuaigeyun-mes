@@ -17,7 +17,7 @@ import { KUAIZHIZAO_SALES_ORDER_FIELD_RESOURCE as SO } from '../../../../constan
 import { MaterialUnitLabel } from '../../../../../../components/material-unit-label';
 import { MaterialBomIndicator } from '../../../../components/MaterialBomIndicator';
 import { MaterialInventoryIndicator } from '../../../../components/MaterialInventoryIndicator';
-import { UniLifecycleStepper } from '../../../../../../components/uni-lifecycle';
+import { LifecycleStageBadge, UniLifecycleStepper } from '../../../../../../components/uni-lifecycle';
 import { DetailAuditPhaseTitleExtra } from '../../../../../../components/uni-audit/DetailAuditPhaseRow';
 import type { LifecycleResult } from '../../../../../../components/uni-lifecycle/types';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../../components/document-tracking-panel';
@@ -506,9 +506,21 @@ export const SalesOrderDetailCollaborationPane: React.FC = () => {
   const mainStages = lifecycle.mainStages ?? [];
   const subStages = lifecycle.subStages ?? [];
   const hideStepperNext = Boolean(lifecycle.nextStepSuggestions?.length);
+  const showExceptionBadge =
+    lifecycle.status === 'exception' &&
+    Boolean(lifecycle.stageName) &&
+    lifecycle.stageName !== '-' &&
+    lifecycle.stageName !== '—';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {showExceptionBadge ? (
+        <LifecycleStageBadge
+          stageName={lifecycle.stageName}
+          status={lifecycle.status}
+          percent={lifecycle.percent}
+        />
+      ) : null}
       {mainStages.length > 0 && (
         <UniLifecycleStepper
           steps={mainStages}

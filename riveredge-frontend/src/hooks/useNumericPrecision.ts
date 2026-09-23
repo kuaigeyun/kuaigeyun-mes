@@ -63,3 +63,12 @@ export function useNumericPrecisionPlaces(kind: NumericPrecisionKind): number {
   const settings = useNumericPrecision();
   return settings[kind];
 }
+
+/** 数量/单价/金额 InputNumber 通用上限（与后端 decimal_limits 对齐） */
+export {
+  NUMERIC_INPUT_ABS_MAX,
+  getNumericAbsMax,
+  buildNumericInputNumberProps,
+  buildNumericFormRules,
+} from '../utils/numericFieldLimits';
+export type { NumericFieldKind } from '../utils/numericFieldLimits';

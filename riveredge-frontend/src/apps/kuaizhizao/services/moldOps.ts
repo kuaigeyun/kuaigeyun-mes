@@ -3,34 +3,7 @@
  */
 
 import { apiRequest } from '../../../services/api';
-
-const BASE = '/apps/kuaizhizao';
-
-function crudApi(basePath: string) {
-  return {
-    list: (params?: Record<string, unknown>) =>
-      apiRequest(`${BASE}/${basePath}`, { method: 'GET', params }),
-    get: (id: number) => apiRequest(`${BASE}/${basePath}/${id}`, { method: 'GET' }),
-    create: (data: unknown) => apiRequest(`${BASE}/${basePath}`, { method: 'POST', data }),
-    update: (id: number, data: unknown) =>
-      apiRequest(`${BASE}/${basePath}/${id}`, { method: 'PUT', data }),
-    delete: (id: number) => apiRequest(`${BASE}/${basePath}/${id}`, { method: 'DELETE' }),
-  };
-}
-
-function workflowDocApi(basePath: string) {
-  return {
-    ...crudApi(basePath),
-    previewLines: (params: { mold_id: number; scheme_id?: number }) =>
-      apiRequest(`${BASE}/${basePath}/preview-lines`, { method: 'GET', params }),
-    submit: (id: number) => apiRequest(`${BASE}/${basePath}/${id}/submit`, { method: 'POST' }),
-    approve: (id: number) => apiRequest(`${BASE}/${basePath}/${id}/approve`, { method: 'POST' }),
-    reject: (id: number, data: { reject_reason: string }) =>
-      apiRequest(`${BASE}/${basePath}/${id}/reject`, { method: 'POST', data }),
-    complete: (id: number, data?: unknown) =>
-      apiRequest(`${BASE}/${basePath}/${id}/complete`, { method: 'POST', data }),
-  };
-}
+import { KUAIZHIZAO_API_BASE as BASE, crudApi, workflowDocApi } from './crudFactory';
 
 export const maintenanceItemsApi = crudApi('mold-maintenance-items');
 export const maintenanceSchemesApi = crudApi('mold-maintenance-schemes');

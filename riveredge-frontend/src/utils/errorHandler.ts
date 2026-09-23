@@ -52,12 +52,21 @@ export function formatFastApiDetail(detail: unknown): string {
 }
 
 /**
- * 优先使用 apiRequest 抛出的 Error.message；否则从 response.data.detail 解析。
+ * 优先使用 apiRequest 抛出的 Error.message；否则从统一 envelope / detail 解析。
+ * fallback 建议传 t('common.operationFailed')（P3-D-D）。
  */
 export function getApiErrorMessage(error: any, fallback = '操作失败'): string {
   const m = error?.message;
   if (typeof m === 'string' && m.trim()) return m;
-  const fromDetail = formatFastApiDetail(error?.response?.data?.detail);
+  const data = error?.response?.data;
+  const envelopeMsg = data?.error?.message;
+  if (typeof envelopeMsg === 'string' && envelopeMsg.trim()) return envelopeMsg;
+  const details = data?.error?.details;
+  if (typeof details === 'string' && details.trim()) return details;
+  if (details && typeof details === 'object' && typeof details.message === 'string' && details.message.trim()) {
+    return details.message;
+  }
+  const fromDetail = formatFastApiDetail(data?.detail);
   return fromDetail || fallback;
 }
 

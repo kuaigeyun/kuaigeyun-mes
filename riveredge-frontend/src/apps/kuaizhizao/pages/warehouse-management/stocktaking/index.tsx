@@ -12,7 +12,7 @@ import { useTranslation } from 'react-i18next';
 import {
   useWarehouseTrackingFlags,
 } from '../shared/warehouseTrackingFlags';
-import { useNumericPrecisionPlaces } from '../../../../../hooks/useNumericPrecision';
+import { useNumericPrecisionPlaces, buildNumericInputNumberProps } from '../../../../../hooks/useNumericPrecision';
 import { useSearchParams } from 'react-router-dom';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
@@ -854,9 +854,7 @@ const StocktakingPage: React.FC = () => {
         return (
           <InputNumber
             size="small"
-            min={0}
-            precision={quantityDecimals}
-            style={{ width: '100%' }}
+            {...buildNumericInputNumberProps('quantity', quantityDecimals, { size: 'small' })}
             value={editingActualQty[itemId] ?? item.actual_quantity ?? item.book_quantity ?? 0}
             onChange={(val) => {
               setEditingActualQty((prev) => ({ ...prev, [itemId]: Number(val ?? 0) }));

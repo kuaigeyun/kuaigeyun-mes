@@ -27,7 +27,7 @@ export const API_BASE_URL = '/api/v1';
  *
  * @returns 组织ID 或 null
  */
-function getCurrentTenantId(): string | null {
+export function getCurrentTenantId(): string | null {
   try {
     // 优先从 localStorage 的 tenant_id 获取
     const tenantId = localStorage.getItem('tenant_id');
@@ -64,6 +64,23 @@ function getCurrentTenantId(): string | null {
   }
   
   return null;
+}
+
+/**
+ * P3-D-X：非 apiRequest 的 raw fetch 统一拼 Authorization + X-Tenant-ID
+ *（禁止业务页/服务各自手写 localStorage 租户头）
+ */
+export function buildAuthTenantHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {};
+  const token = getToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  const tenantId = getCurrentTenantId();
+  if (tenantId) {
+    headers['X-Tenant-ID'] = tenantId;
+  }
+  return headers;
 }
 
 /**

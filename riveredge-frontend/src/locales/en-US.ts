@@ -1710,6 +1710,8 @@ export default {
   'common.importDetail': 'Import lines',
   'common.autoCodePlaceholder': 'Auto-generated',
   'common.required': 'Required',
+  'common.numericValueTooLarge': 'Value is too large; please reduce it',
+  'common.numericValueTooSmall': 'Value is too small',
   'common.importResult': 'Import completed: {{success_count}} success, {{failure_count}} failure',
   'common.importSuccess': 'Import successful: {{count}} items',
   'common.importFailed': 'Import failed',

@@ -22,6 +22,7 @@ from apps.kuaizhizao.utils.stock_posting import (
     reuse_or_begin_transaction,
     serialize_stock_document,
 )
+from core.utils.decimal_limits import assert_amount, assert_price, assert_quantity
 from apps.kuaizhizao.schemas.inventory_transfer import (
     InventoryTransferCreate,
     InventoryTransferCreateWithItems,
@@ -138,7 +139,10 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
         if not material_code or not material_name:
             raise ValidationError("物料编码/名称不能为空，请重新选择物料")
 
-        amount = item_data.quantity * item_data.unit_price
+        assert_quantity(item_data.quantity, "调拨数量")
+        assert_price(item_data.unit_price or Decimal("0"), "调拨单价")
+        amount = item_data.quantity * (item_data.unit_price or Decimal("0"))
+        assert_amount(amount, "调拨金额")
         return await InventoryTransferItem.create(
             tenant_id=tenant_id,
             uuid=str(uuid.uuid4()),

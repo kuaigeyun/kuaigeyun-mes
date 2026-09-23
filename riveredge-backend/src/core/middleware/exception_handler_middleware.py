@@ -154,6 +154,35 @@ class ExceptionHandlerMiddleware(BaseHTTPMiddleware):
                 detail = str(detail)
             return JSONResponse(status_code=e.status_code, content={"detail": detail})
         except Exception as e:
+            from core.utils.decimal_limits import (
+                NUMERIC_OVERFLOW_USER_MESSAGE,
+                is_numeric_overflow_error,
+            )
+
+            if is_numeric_overflow_error(e):
+                error_response = {
+                    "success": False,
+                    "error": {
+                        "code": "VALIDATION_ERROR",
+                        "message": NUMERIC_OVERFLOW_USER_MESSAGE,
+                        "details": {
+                            "type": type(e).__name__,
+                            "message": str(e),
+                        },
+                    },
+                    "timestamp": to_api_isoformat(now_utc()),
+                }
+                logger.warning(
+                    "数值溢出已转为校验错误: {} path={} method={}",
+                    e,
+                    request.url.path,
+                    request.method,
+                )
+                return JSONResponse(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    content=error_response,
+                )
+
             # 未预期的异常
             error_response = {
                 "success": False,

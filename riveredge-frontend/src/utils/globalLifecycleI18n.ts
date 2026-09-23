@@ -416,9 +416,24 @@ export function translateLifecycleResult(
     backendStageName === '-' ||
     backendStageName === '—' ||
     backendStageName === '--';
+  /** 终态异常：禁止用主轴末节点 completed 盖成「已完成」 */
+  const isTerminalException =
+    result.status === 'exception' ||
+    backendStageName === '已关闭' ||
+    backendStageName === '已取消' ||
+    backendStageName === '已驳回' ||
+    backendStageName === 'closed' ||
+    backendStageName === 'cancelled' ||
+    backendStageName === 'rejected';
 
   if (isPreEffective) {
     stageName = '—';
+  } else if (isTerminalException && backendStageName) {
+    stageName = translateLifecycleStageByKey(
+      t,
+      LIFECYCLE_ZH_LABEL_TO_KEY[backendStageName],
+      backendStageName,
+    );
   } else if (terminalKey && moduleStageLabelKeys?.[terminalKey]) {
     const translated = t(moduleStageLabelKeys[terminalKey]!);
     if (translated && translated !== moduleStageLabelKeys[terminalKey]) {

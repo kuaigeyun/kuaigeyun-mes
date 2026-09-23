@@ -47,8 +47,7 @@ const ReportingStatisticsPage: React.FC = () => {
 
   useEffect(() => {
     void loadStatistics();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [loadStatistics]);
 
   const handleDateRangeChange = (
     dates: NoUndefinedRangeValueType<Dayjs> | null,

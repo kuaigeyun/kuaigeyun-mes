@@ -279,7 +279,7 @@ import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../s
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useLeaveFormTab } from '../../../../../components/uni-tabs/navigateClosingTab';
 import { useTranslation } from 'react-i18next';
-import { useNumericPrecision } from '../../../../../hooks/useNumericPrecision';
+import { useNumericPrecision, getNumericAbsMax, buildNumericFormRules } from '../../../../../hooks/useNumericPrecision';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDeferAfterPaint } from '../../../../../hooks/useDeferAfterPaint';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
@@ -553,9 +553,8 @@ const SalesOrderSalesmanField: React.FC<{ userList: User[]; loading: boolean }> 
 const SalesOrdersPage: React.FC = () => {
   const { t } = useTranslation();
   const { quantity: quantityDecimals, price: priceDecimals, amount: amountDecimals } = useNumericPrecision();
-  /** 与后端 SalesOrderItem DECIMAL(14,4) 对齐，避免超大数提交后库溢出 */
-  const salesOrderQtyMax = 9_999_999_999.9999;
-  const salesOrderPriceMax = 9_999_999_999.9999;
+  const salesOrderQtyMax = getNumericAbsMax('quantity');
+  const salesOrderPriceMax = getNumericAbsMax('price');
   const { message: messageApi, modal: modalApi } = App.useApp();
   const kuaiaiAvailable = useKuaiaiEntryAvailable();
   const salesCommonFormLabels = useMemo(() => getSalesCommonFormLabels(t), [t]);
@@ -4596,15 +4595,11 @@ const SalesOrdersPage: React.FC = () => {
                       render: (_: any, __: any, index: number) => (
                         <AntForm.Item
                           name={[index, 'required_quantity']}
-                          rules={[
-                            { required: true, message: t('common.required') },
-                            { type: 'number', min: 0.01, message: t('app.kuaizhizao.salesOrder.quantityMinHint') },
-                            {
-                              type: 'number',
-                              max: salesOrderQtyMax,
-                              message: t('app.kuaizhizao.salesOrder.quantityOrPriceTooLarge'),
-                            },
-                          ]}
+                          rules={buildNumericFormRules('quantity', t, {
+                            required: true,
+                            min: 0.01,
+                            minMessage: t('app.kuaizhizao.salesOrder.quantityMinHint'),
+                          })}
                           style={{ margin: 0 }}
                         >
                           <InputNumber
@@ -4689,13 +4684,7 @@ const SalesOrdersPage: React.FC = () => {
                                 <AntForm.Item
                                   name={[index, 'unit_price']}
                                   style={{ margin: 0 }}
-                                  rules={[
-                                    {
-                                      type: 'number',
-                                      max: salesOrderPriceMax,
-                                      message: t('app.kuaizhizao.salesOrder.quantityOrPriceTooLarge'),
-                                    },
-                                  ]}
+                                  rules={buildNumericFormRules('price', t)}
                                 >
                                   <LineUnitPriceWithTrendTrigger
                                     side="sales"

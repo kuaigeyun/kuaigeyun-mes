@@ -25,6 +25,7 @@ STATUS_DISPLAY: Dict[str, Dict[str, str]] = {
     DocumentStatus.REJECTED.value: {"text": "已驳回", "color": "error"},
     DocumentStatus.CONFIRMED.value: {"text": "已确认", "color": "success"},
     DocumentStatus.CANCELLED.value: {"text": "已取消", "color": "error"},
+    DocumentStatus.CLOSED.value: {"text": "已关闭", "color": "default"},
     DocumentStatus.RELEASED.value: {"text": "已下达", "color": "processing"},
     DocumentStatus.IN_PROGRESS.value: {"text": "执行中", "color": "processing"},
     DocumentStatus.COMPLETED.value: {"text": "已完成", "color": "success"},

@@ -1,5 +1,4 @@
-import { apiRequest, API_BASE_URL } from '../../../services/api';
-import { getToken } from '../../../utils/auth';
+import { apiRequest, API_BASE_URL, buildAuthTenantHeaders } from '../../../services/api';
 
 export interface PurchaseOrderOcrItem {
   materialCode?: string | null;
@@ -41,14 +40,9 @@ export async function parsePurchaseOrderFromText(
 export async function extractPurchaseOrderFromImage(file: File): Promise<PurchaseOrderOcrResult> {
   const form = new FormData();
   form.append('file', file);
-  const headers: Record<string, string> = {};
-  const token = getToken();
-  if (token) headers.Authorization = `Bearer ${token}`;
-  const tenantId = localStorage.getItem('tenant_id');
-  if (tenantId?.trim()) headers['X-Tenant-ID'] = tenantId.trim();
   const res = await fetch(`${API_BASE_URL}${BASE}/ocr-extract`, {
     method: 'POST',
-    headers,
+    headers: buildAuthTenantHeaders(),
     body: form,
   });
   if (!res.ok) {
