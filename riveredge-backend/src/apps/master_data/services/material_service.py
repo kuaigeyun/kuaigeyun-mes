@@ -2929,8 +2929,13 @@ class MaterialService:
             
         Raises:
             NotFoundError: 当物料不存在时抛出
-            ValidationError: 当物料被BOM使用时抛出
+            ValidationError: 当物料存在库存数量或被 BOM / 业务单据引用时抛出（只能停用）
         """
+        from apps.master_data.services.material_main_code_editability import (
+            format_material_delete_blocked_message,
+            summarize_material_delete_blockers,
+        )
+
         material = await Material.filter(
             tenant_id=tenant_id,
             uuid=material_uuid,
@@ -2939,22 +2944,12 @@ class MaterialService:
         
         if not material:
             raise NotFoundError(f"物料 {material_uuid} 不存在")
-        
-        # 检查是否被BOM使用（作为主物料或子物料）
-        bom_as_material_count = await BOM.filter(
-            tenant_id=tenant_id,
-            material_id=material.id,
-            deleted_at__isnull=True
-        ).count()
-        
-        bom_as_component_count = await BOM.filter(
-            tenant_id=tenant_id,
-            component_id=material.id,
-            deleted_at__isnull=True
-        ).count()
-        
-        if bom_as_material_count > 0 or bom_as_component_count > 0:
-            raise ValidationError(f"物料被 {bom_as_material_count + bom_as_component_count} 个BOM使用，无法删除")
+
+        blockers = await summarize_material_delete_blockers(
+            tenant_id, material.id, stop_on_first=False
+        )
+        if not blockers.get("deletable"):
+            raise ValidationError(format_material_delete_blocked_message(blockers))
         
         # 软删除
         from tortoise import timezone
@@ -2967,9 +2962,13 @@ class MaterialService:
         data: MaterialBatchDeleteRequest,
     ) -> MaterialBatchDeleteResponse:
         """
-        批量软删除物料：一次加载物料、一次 BOM 占用检查、一次 UPDATE，避免 N 次单条删除接口。
+        批量软删除物料：一次加载、统一门禁（库存/BOM/业务单据）、一次 UPDATE。
+        有引用或库存的物料进入 failed_items，不得静默跳过门禁。
         """
         from tortoise import timezone
+        from apps.master_data.services.material_main_code_editability import (
+            collect_material_delete_block_reasons,
+        )
 
         raw = [str(u).strip() for u in data.material_uuids if u is not None and str(u).strip()]
         uuids = list(dict.fromkeys(raw))
@@ -2991,30 +2990,16 @@ class MaterialService:
                 failed_items.append(MaterialBatchDeleteFailedItem(uuid=u, reason="物料不存在"))
 
         material_ids = list(id_to_uuid.keys())
-        blocked_ids: set[int] = set()
-        if material_ids:
-            conflict_rows = await BOM.filter(
-                tenant_id=tenant_id,
-                deleted_at__isnull=True,
-            ).filter(
-                Q(material_id__in=material_ids) | Q(component_id__in=material_ids)
-            ).only("material_id", "component_id")
-            id_set = set(material_ids)
-            for row in conflict_rows:
-                if row.material_id in id_set:
-                    blocked_ids.add(row.material_id)
-                if row.component_id in id_set:
-                    blocked_ids.add(row.component_id)
-
-        for mid in blocked_ids:
+        blocked = await collect_material_delete_block_reasons(tenant_id, material_ids)
+        for mid, reason in blocked.items():
             failed_items.append(
                 MaterialBatchDeleteFailedItem(
                     uuid=id_to_uuid[mid],
-                    reason="物料被 BOM 使用，无法删除",
+                    reason=reason,
                 )
             )
 
-        to_delete_ids = [mid for mid in material_ids if mid not in blocked_ids]
+        to_delete_ids = [mid for mid in material_ids if mid not in blocked]
         now = timezone.now()
         if to_delete_ids:
             await Material.filter(tenant_id=tenant_id, id__in=to_delete_ids).update(

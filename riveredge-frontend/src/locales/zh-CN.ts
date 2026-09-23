@@ -21096,7 +21096,8 @@ export default {
   'app.master-data.materials.texture': '材质',
   'app.master-data.materials.enabledStatus': '启用状态',
   'app.master-data.materials.deleteMaterialConfirm': '确定要删除这个物料吗？',
-  'app.master-data.materials.deleteMaterialDesc': '删除物料前需要检查是否有关联的BOM',
+  'app.master-data.materials.deleteMaterialDesc':
+    '有业务单据或库存数量的物料不能删除，只能停用；无引用且无库存时可删除',
   'app.master-data.materials.searchGroup': '搜索物料分组',
   'app.master-data.materials.expandGroup': '展开物料分组',
   'app.master-data.materials.collapseGroup': '收起物料分组',
@@ -31165,6 +31166,18 @@ export default {
     '侧栏菜单带查询参数时不再收起分组',
   'pages.dashboard.updateLog.entries.sidebar-menu-query-path-openkeys-r01.description':
     '修复休息登记等带 ?mode= 的菜单项：选中与展开按 pathname+search 匹配，进入后父级分组保持展开。',
+  'pages.dashboard.updateLog.entries.menu-badge-sales-valueslist-iterable-r01.title':
+    '修复菜单徽章销售段异常导致网关超时',
+  'pages.dashboard.updateLog.entries.menu-badge-sales-valueslist-iterable-r01.description':
+    '登录后菜单徽章接口把未物化的 ValuesListQuery 直接用于销售订单计数，抛出不可迭代异常并易拖成 504「服务器暂时不可用」；现改为先取出订单 ID 再计数，与列表数据权限仍一致。',
+  'pages.dashboard.updateLog.entries.data-scope-default-all-no-policy-r01.title':
+    '数据权限未配置时默认全部并生效',
+  'pages.dashboard.updateLog.entries.data-scope-default-all-no-policy-r01.description':
+    '角色矩阵展示「默认：全部」但引擎曾把未落库策略收敛为本人，导致须再点保存才看到单据。现未显式配置时与矩阵一致按全部开放；收紧须显式选本人/部门/自定义。外协与带默认画像的资源仍按原约定收敛。',
+  'pages.dashboard.updateLog.entries.material-delete-gate-docs-stock-r01.title':
+    '物料删除门禁：有单据或库存只能停用',
+  'pages.dashboard.updateLog.entries.material-delete-gate-docs-stock-r01.description':
+    '物料管理单条/批量删除时，若存在库存数量、BOM 或销售采购出入库等业务单据引用，将拒绝删除并提示改为停用，避免误删导致单据选不到物料。',
   'pages.dashboard.updateLog.entries.demand-computation-group-one-per-order-r01.title':
     '需求计算组工单按订单合并为 1 组',
   'pages.dashboard.updateLog.entries.demand-computation-group-one-per-order-r01.description':

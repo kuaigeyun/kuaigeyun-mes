@@ -36,6 +36,30 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
   {
+    id: 'menu-badge-sales-valueslist-iterable-r01',
+    date: '2026-09-23',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.menu-badge-sales-valueslist-iterable-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.menu-badge-sales-valueslist-iterable-r01.description',
+  },
+  {
+    id: 'data-scope-default-all-no-policy-r01',
+    date: '2026-09-23',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.data-scope-default-all-no-policy-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.data-scope-default-all-no-policy-r01.description',
+  },
+  {
+    id: 'material-delete-gate-docs-stock-r01',
+    date: '2026-09-23',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.material-delete-gate-docs-stock-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.material-delete-gate-docs-stock-r01.description',
+  },
+  {
     id: 'demand-computation-group-one-per-order-r01',
     date: '2026-09-23',
     type: 'fix',

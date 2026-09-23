@@ -1,8 +1,10 @@
 """
-物料主编号可编辑性（唯一路径）
+物料主编号可编辑性 / 删除门禁（引用真源唯一路径）
 
-规则：同一 main_code 家族内任一物料被 BOM / 批次 / 业务单据引用 → 主编号不可改。
-无引用时允许改主编号（改时同步整族 main_code，且 code==旧主编号的行同步 code）。
+- 主编号：同一 main_code 家族内任一物料被 BOM / 批次 / 业务单据引用 → 主编号不可改。
+- 删除：单物料存在库存数量（批号 quantity≠0）或被 BOM / 业务单据引用 → 不可删，只能停用。
+
+业务单据清单见 `_doc_ref_specs`，禁止页面或删除接口另起一套对照表。
 """
 
 from __future__ import annotations
@@ -10,6 +12,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Type
 
 from tortoise import Model
+from tortoise.expressions import Q
 
 from apps.master_data.models.material import BOM, Material
 from apps.master_data.models.material_batch import MaterialBatch
@@ -373,6 +376,167 @@ def format_main_code_locked_message(summary: Dict[str, Any]) -> str:
     if len(items) > 5:
         text = f"{text} 等"
     return f"该物料已被业务引用（{text}），主编号不可修改"
+
+
+def format_material_delete_blocked_message(summary: Dict[str, Any]) -> str:
+    """将删除门禁汇总格式化为面向用户的错误文案（引导停用，禁止静默删）。"""
+    items = summary.get("items") or []
+    if not items:
+        return "该物料已被业务引用或存在库存，无法删除，请改为停用"
+    labels: List[str] = []
+    for it in items:
+        label = str(it.get("label") or "").strip()
+        if label and label not in labels:
+            labels.append(label)
+    top = labels[:5]
+    text = "、".join(top)
+    if len(labels) > 5:
+        text = f"{text} 等"
+    return f"该物料存在{text}，无法删除，请改为停用"
+
+
+async def summarize_material_delete_blockers(
+    tenant_id: int,
+    material_id: int,
+    *,
+    stop_on_first: bool = False,
+) -> Dict[str, Any]:
+    """
+    汇总单物料删除门禁原因（仅本物料 id，不扩 main_code 家族）。
+
+    Returns:
+        {"deletable": bool, "items": [{"key","label","count"}, ...], "total": int}
+    """
+    material_ids = [int(material_id)]
+    items: List[Dict[str, Any]] = []
+    total = 0
+
+    # 1) 库存数量：批号当前 quantity ≠ 0
+    inv_count = await MaterialBatch.filter(
+        tenant_id=tenant_id,
+        material_id__in=material_ids,
+        deleted_at__isnull=True,
+    ).filter(Q(quantity__gt=0) | Q(quantity__lt=0)).count()
+    if inv_count > 0:
+        items.append({"key": "inventory_qty", "label": "库存数量", "count": int(inv_count)})
+        total += int(inv_count)
+        if stop_on_first:
+            return {"deletable": False, "items": items, "total": total}
+
+    # 2) BOM
+    bom_parent = await BOM.filter(
+        tenant_id=tenant_id,
+        material_id__in=material_ids,
+        deleted_at__isnull=True,
+    ).count()
+    bom_child = await BOM.filter(
+        tenant_id=tenant_id,
+        component_id__in=material_ids,
+        deleted_at__isnull=True,
+    ).count()
+    bom_count = int(bom_parent) + int(bom_child)
+    if bom_count > 0:
+        items.append({"key": "bom", "label": "BOM", "count": bom_count})
+        total += bom_count
+        if stop_on_first:
+            return {"deletable": False, "items": items, "total": total}
+
+    # 3) 业务单据（与主编号锁定同一清单）
+    for key, label, loader, field in _doc_ref_specs():
+        try:
+            model = loader()
+        except Exception:
+            continue
+        count = await _count_material_refs(
+            model,
+            tenant_id=tenant_id,
+            material_ids=material_ids,
+            material_field=field,
+        )
+        if count <= 0:
+            continue
+        items.append({"key": key, "label": label, "count": count})
+        total += count
+        if stop_on_first:
+            return {"deletable": False, "items": items, "total": total}
+
+    items.sort(key=lambda x: (-x["count"], x["label"]))
+    return {"deletable": total <= 0, "items": items, "total": total}
+
+
+async def collect_material_delete_block_reasons(
+    tenant_id: int,
+    material_ids: Sequence[int],
+) -> Dict[int, str]:
+    """
+    批量删除门禁：返回不可删除的 material_id → 原因文案。
+    每个物料只取首个阻断原因（库存 → BOM → 业务单据），避免 N×单据表全扫放大。
+    """
+    ids = [int(mid) for mid in material_ids if mid is not None]
+    if not ids:
+        return {}
+
+    blocked: Dict[int, str] = {}
+    remaining = set(ids)
+
+    inv_rows = await MaterialBatch.filter(
+        tenant_id=tenant_id,
+        material_id__in=list(remaining),
+        deleted_at__isnull=True,
+    ).filter(Q(quantity__gt=0) | Q(quantity__lt=0)).only("material_id")
+    for row in inv_rows:
+        mid = int(row.material_id)
+        if mid in remaining and mid not in blocked:
+            blocked[mid] = format_material_delete_blocked_message(
+                {"items": [{"key": "inventory_qty", "label": "库存数量", "count": 1}]}
+            )
+            remaining.discard(mid)
+
+    if not remaining:
+        return blocked
+
+    bom_rows = await BOM.filter(
+        tenant_id=tenant_id,
+        deleted_at__isnull=True,
+    ).filter(
+        Q(material_id__in=list(remaining)) | Q(component_id__in=list(remaining))
+    ).only("material_id", "component_id")
+    for row in bom_rows:
+        for mid in (int(row.material_id), int(row.component_id)):
+            if mid in remaining and mid not in blocked:
+                blocked[mid] = format_material_delete_blocked_message(
+                    {"items": [{"key": "bom", "label": "BOM", "count": 1}]}
+                )
+                remaining.discard(mid)
+
+    if not remaining:
+        return blocked
+
+    for key, label, loader, field in _doc_ref_specs():
+        if not remaining:
+            break
+        try:
+            model = loader()
+        except Exception:
+            continue
+        fields_map = getattr(getattr(model, "_meta", None), "fields_map", {}) or {}
+        if field not in fields_map:
+            continue
+        filters: Dict[str, Any] = {f"{field}__in": list(remaining)}
+        if "tenant_id" in fields_map:
+            filters["tenant_id"] = tenant_id
+        if "deleted_at" in fields_map:
+            filters["deleted_at__isnull"] = True
+        hit_ids = await model.filter(**filters).distinct().values_list(field, flat=True)
+        for raw_mid in hit_ids:
+            mid = int(raw_mid)
+            if mid in remaining and mid not in blocked:
+                blocked[mid] = format_material_delete_blocked_message(
+                    {"items": [{"key": key, "label": label, "count": 1}]}
+                )
+                remaining.discard(mid)
+
+    return blocked
 
 
 async def apply_family_main_code_change(

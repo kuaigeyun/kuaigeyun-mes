@@ -2312,7 +2312,7 @@ async def delete_material(
     
     - **material_uuid**: 物料UUID
     
-    注意：删除物料前需要检查是否被BOM使用
+    门禁：存在库存数量、BOM 或业务单据引用时拒绝删除（只能停用）。
     """
     try:
         await MaterialService.delete_material(tenant_id, material_uuid)

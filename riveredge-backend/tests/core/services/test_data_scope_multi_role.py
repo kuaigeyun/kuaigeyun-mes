@@ -9,6 +9,42 @@ from core.services.authorization.data_scope_service import DataScopeService
 
 
 @pytest.mark.asyncio
+async def test_apply_no_explicit_policies_is_all_for_internal():
+    """未落库策略时厂内角色默认全部，与矩阵「默认：全部」一致，不得静默收敛为本人。"""
+    qs = MagicMock()
+    qs.filter.return_value = qs
+
+    role = SimpleNamespace(uuid="role-a", role_type="internal", external_partner_type=None)
+
+    with patch.object(DataScopeService, "_admin_bypass", new=AsyncMock(return_value=False)), patch.object(
+        DataScopeService,
+        "_load_active_roles",
+        new=AsyncMock(return_value=[role]),
+    ), patch.object(
+        DataScopeService,
+        "_filter_roles_with_function_resource",
+        new=AsyncMock(return_value=[role]),
+    ), patch.object(
+        DataScopeService,
+        "_load_policies",
+        new=AsyncMock(return_value=[]),
+    ), patch.object(
+        DataScopeService,
+        "_default_external_partner_q",
+        new=AsyncMock(return_value=None),
+    ):
+        result = await DataScopeService.apply(
+            qs,
+            tenant_id=1,
+            user=SimpleNamespace(id=1),
+            resource="kuaizhizao:work-order",
+        )
+
+    assert result is qs
+    qs.filter.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_apply_implicit_all_role_unions_over_restrictive_role():
     qs = MagicMock()
     qs.filter.return_value = qs
