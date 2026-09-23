@@ -141,7 +141,7 @@ import {
   renderPullQueryReviewStatus,
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query';
-import { UniAuditBatchMenuButton, UniBatchButton, UniCapabilityBatchButton, runCapabilityBatchBulk, type UniBatchMenuItem } from '../../../../../components/uni-batch';
+import { UniAuditBatchMenuButton, UniBatchButton, UniCapabilityBatchButton, type UniBatchMenuItem } from '../../../../../components/uni-batch';
 import { buildUniPushMenuItems, buildUniPushToolbarDisabledReason, UniPushToolbarButton } from '../../../../../components/uni-push';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import {
@@ -3265,6 +3265,11 @@ const SalesOrdersPage: React.FC = () => {
     setTableOrders(data);
   }, []);
 
+  /** 明细视图扁平行不含完整 capabilities；列表请求时始终缓存订单级数据供批量操作 */
+  const cacheListOrdersForBatch = useCallback((orders: SalesOrder[]) => {
+    setTableOrders(orders);
+  }, []);
+
   const selectedOrdersForBatch = useMemo(
     () => resolveSelectedOrders(selectedRowKeys),
     [resolveSelectedOrders, selectedRowKeys],
@@ -3279,21 +3284,47 @@ const SalesOrdersPage: React.FC = () => {
         disabled: !salesOrderBatchCloseAllowed(selectedOrdersForBatch, salesOrderPerms.canUpdate),
         requireConfirm: true,
         confirmTitle: t('app.kuaizhizao.salesOrder.batchCloseConfirmTitle'),
-        confirmDescription: (c) =>
-          t('app.kuaizhizao.salesOrder.batchCloseConfirmDescription', { count: c }),
-        onClick: async (keys) => {
-          await runCapabilityBatchBulk({
-            keys,
-            records: selectedOrdersForBatch,
-            capabilityKey: 'close',
-            permAllowed: salesOrderPerms.canUpdate,
-            resolveId: (key) => resolveSalesOrderBatchId(key),
-            notAllowedMessage: t('app.kuaizhizao.salesOrder.batchCloseNotAllowed'),
-            onRunBulk: bulkCloseSalesOrders,
-            onSuccess: handleBulkCapabilityBatchSuccess,
-            message: messageApi,
-            t,
-          });
+        confirmDescription: () =>
+          t('app.kuaizhizao.salesOrder.batchCloseConfirmDescription', {
+            count: selectedOrdersForBatch.filter((o) => o.capabilities?.close?.allowed === true)
+              .length,
+          }),
+        onClick: async (_keys) => {
+          const eligible = selectedOrdersForBatch.filter(
+            (o) =>
+              o.id != null &&
+              Number(o.id) > 0 &&
+              salesOrderPerms.canUpdate &&
+              o.capabilities?.close?.allowed === true,
+          );
+          const orderIds = [...new Set(eligible.map((o) => Number(o.id)))];
+          if (orderIds.length === 0) {
+            messageApi.warning(t('app.kuaizhizao.salesOrder.batchCloseNotAllowed'));
+            return;
+          }
+          try {
+            const res = await bulkCloseSalesOrders(orderIds);
+            const success = res.success_count ?? 0;
+            const failed = res.failed_count ?? 0;
+            if (failed === 0 && success > 0) {
+              messageApi.success(t('components.uniBatch.capability.success', { count: success }));
+            } else if (success > 0 || failed > 0) {
+              const reason = res.failed_items?.[0]?.reason;
+              messageApi.warning(
+                reason
+                  ? t('components.uniBatch.capability.partialWithReason', {
+                      success,
+                      failed,
+                      reason,
+                    })
+                  : t('components.uniBatch.capability.partial', { success, failed }),
+              );
+            }
+            handleBulkCapabilityBatchSuccess();
+          } catch (e: unknown) {
+            const err = e as { message?: string };
+            messageApi.error(err?.message || t('components.uniBatch.capability.failed'));
+          }
         },
       },
       {
@@ -3303,28 +3334,53 @@ const SalesOrdersPage: React.FC = () => {
         disabled: !salesOrderBatchReopenAllowed(selectedOrdersForBatch, salesOrderPerms.canUpdate),
         requireConfirm: true,
         confirmTitle: t('app.kuaizhizao.salesOrder.batchReopenConfirmTitle'),
-        confirmDescription: (c) =>
-          t('app.kuaizhizao.salesOrder.batchReopenConfirmDescription', { count: c }),
-        onClick: async (keys) => {
-          await runCapabilityBatchBulk({
-            keys,
-            records: selectedOrdersForBatch,
-            capabilityKey: 'reopen',
-            permAllowed: salesOrderPerms.canUpdate,
-            resolveId: (key) => resolveSalesOrderBatchId(key),
-            notAllowedMessage: t('app.kuaizhizao.salesOrder.batchReopenNotAllowed'),
-            onRunBulk: bulkReopenSalesOrders,
-            onSuccess: handleBulkCapabilityBatchSuccess,
-            message: messageApi,
-            t,
-          });
+        confirmDescription: () =>
+          t('app.kuaizhizao.salesOrder.batchReopenConfirmDescription', {
+            count: selectedOrdersForBatch.filter((o) => o.capabilities?.reopen?.allowed === true)
+              .length,
+          }),
+        onClick: async (_keys) => {
+          const eligible = selectedOrdersForBatch.filter(
+            (o) =>
+              o.id != null &&
+              Number(o.id) > 0 &&
+              salesOrderPerms.canUpdate &&
+              o.capabilities?.reopen?.allowed === true,
+          );
+          const orderIds = [...new Set(eligible.map((o) => Number(o.id)))];
+          if (orderIds.length === 0) {
+            messageApi.warning(t('app.kuaizhizao.salesOrder.batchReopenNotAllowed'));
+            return;
+          }
+          try {
+            const res = await bulkReopenSalesOrders(orderIds);
+            const success = res.success_count ?? 0;
+            const failed = res.failed_count ?? 0;
+            if (failed === 0 && success > 0) {
+              messageApi.success(t('components.uniBatch.capability.success', { count: success }));
+            } else if (success > 0 || failed > 0) {
+              const reason = res.failed_items?.[0]?.reason;
+              messageApi.warning(
+                reason
+                  ? t('components.uniBatch.capability.partialWithReason', {
+                      success,
+                      failed,
+                      reason,
+                    })
+                  : t('components.uniBatch.capability.partial', { success, failed }),
+              );
+            }
+            handleBulkCapabilityBatchSuccess();
+          } catch (e: unknown) {
+            const err = e as { message?: string };
+            messageApi.error(err?.message || t('components.uniBatch.capability.failed'));
+          }
         },
       },
     ],
     [
       handleBulkCapabilityBatchSuccess,
       messageApi,
-      resolveSalesOrderBatchId,
       salesOrderPerms.canUpdate,
       selectedOrdersForBatch,
       t,
@@ -5391,6 +5447,9 @@ const SalesOrdersPage: React.FC = () => {
                 ? response
                 : (response as any).data || [];
               const total: number = (response as any).total ?? orders.length;
+              if (!isPrefetch) {
+                cacheListOrdersForBatch(orders);
+              }
               return formatOrdersListResponse(orders, total);
             } catch (error: any) {
               messageApi.error(error?.message || t('app.kuaizhizao.salesOrder.getListFailed'));

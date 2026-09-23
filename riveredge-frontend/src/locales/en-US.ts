@@ -1942,6 +1942,7 @@ export default {
   'components.uniBatch.capability.success': 'Succeeded: {{count}}',
   'components.uniBatch.capability.partial': 'Completed: {{success}} succeeded, {{failed}} failed',
   'components.uniBatch.capability.partialWithReason': 'Completed: {{success}} succeeded, {{failed}} failed ({{reason}})',
+  'components.uniBatch.capability.failed': 'Batch operation failed',
   'components.uniPush.push': 'Push',
   'components.uniPush.toolbarSelectOneFirst': 'Please select one record first',
   'components.uniPush.toolbarPushSingleOnly': 'Push supports a single record only. Keep one row selected.',

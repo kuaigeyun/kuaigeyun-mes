@@ -50,14 +50,17 @@ export async function runCapabilityBatchLoop(
   } = options;
 
   const eligibleIds: number[] = [];
+  const seen = new Set<number>();
   for (const key of keys) {
-    const id = resolveId
+    const resolved = resolveId
       ? resolveId(key, records.find((r) => String(r.id) === String(key)))
       : Number(key);
-    if (!Number.isFinite(id) || id <= 0) continue;
+    const id = resolved == null ? NaN : Number(resolved);
+    if (!Number.isFinite(id) || id <= 0 || seen.has(id)) continue;
     const record = records.find((r) => Number(r.id) === id);
     if (!record || !permAllowed) continue;
     if (pickCapability(record, capabilityKey)?.allowed !== true) continue;
+    seen.add(id);
     eligibleIds.push(id);
   }
 
@@ -115,14 +118,17 @@ export async function runCapabilityBatchBulk(
   } = options;
 
   const eligibleIds: number[] = [];
+  const seen = new Set<number>();
   for (const key of keys) {
-    const id = resolveId
+    const resolved = resolveId
       ? resolveId(key, records.find((r) => String(r.id) === String(key)))
       : Number(key);
-    if (!Number.isFinite(id) || id <= 0) continue;
+    const id = resolved == null ? NaN : Number(resolved);
+    if (!Number.isFinite(id) || id <= 0 || seen.has(id)) continue;
     const record = records.find((r) => Number(r.id) === id);
     if (!record || !permAllowed) continue;
     if (pickCapability(record, capabilityKey)?.allowed !== true) continue;
+    seen.add(id);
     eligibleIds.push(id);
   }
 

@@ -2164,6 +2164,7 @@ export default {
   'components.uniBatch.capability.success': '操作成功：{{count}} 条',
   'components.uniBatch.capability.partial': '操作完成：成功 {{success}} 条，失败 {{failed}} 条',
   'components.uniBatch.capability.partialWithReason': '操作完成：成功 {{success}} 条，失败 {{failed}} 条（{{reason}}）',
+  'components.uniBatch.capability.failed': '批量操作失败',
   'components.uniPush.push': '下推',
   'components.uniPush.toolbarSelectOneFirst': '请先选择一条记录',
   'components.uniPush.toolbarPushSingleOnly': '下推仅支持单条记录，请只保留一条选中',

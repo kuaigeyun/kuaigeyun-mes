@@ -163,12 +163,14 @@ export function useAuditBatchRunner<T extends { id?: number }>(
       }
 
       const eligibleIds: number[] = [];
+      const seen = new Set<number>();
       for (const key of keys) {
         const id = resolveBatchRecordId(key, records, resolveIdFromKey);
-        if (id == null) continue;
+        if (id == null || seen.has(id)) continue;
         const record = records.find((r) => Number(r.id) === id);
         if (!record || !canPerm) continue;
         if (pickCapability(record, capKey)?.allowed !== true) continue;
+        seen.add(id);
         eligibleIds.push(id);
       }
 

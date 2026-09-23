@@ -4878,12 +4878,25 @@ class SalesOrderService:
         operation_func,
         **kwargs,
     ) -> Dict[str, Any]:
-        """通用批量操作包装器"""
+        """通用批量操作包装器（订单 ID 去重，避免明细多选重复执行）。"""
         success_count = 0
         failed_count = 0
         failed_items = []
+        seen: set[int] = set()
+        unique_ids: List[int] = []
+        for raw in sales_order_ids:
+            try:
+                oid = int(raw)
+            except (TypeError, ValueError):
+                failed_count += 1
+                failed_items.append({"id": raw, "reason": "无效的销售订单ID"})
+                continue
+            if oid <= 0 or oid in seen:
+                continue
+            seen.add(oid)
+            unique_ids.append(oid)
 
-        for oid in sales_order_ids:
+        for oid in unique_ids:
             try:
                 await operation_func(tenant_id, oid, operator_id, **kwargs)
                 success_count += 1
@@ -4895,7 +4908,7 @@ class SalesOrderService:
             "success_count": success_count,
             "failed_count": failed_count,
             "failed_items": failed_items,
-            "total": len(sales_order_ids),
+            "total": len(unique_ids),
             "success": True,
         }
 
@@ -4949,8 +4962,13 @@ class SalesOrderService:
         sales_order_id: int,
         closed_by: int,
         reason: Optional[str] = None,
-    ) -> SalesOrderResponse:
-        """关闭销售订单：终止剩余未执行部分，已交货/已开票数据保留。"""
+        *,
+        assemble_response: bool = True,
+    ) -> Optional[SalesOrderResponse]:
+        """关闭销售订单：终止剩余未执行部分，已交货/已开票数据保留。
+
+        assemble_response=False 用于批量关闭，跳过昂贵的详情组装，避免列表卡死。
+        """
         order = await SalesOrder.get_or_none(
             tenant_id=tenant_id, id=sales_order_id, deleted_at__isnull=True
         )
@@ -4979,6 +4997,9 @@ class SalesOrderService:
                 close_reason,
             )
 
+        if not assemble_response:
+            return None
+
         # 关闭已落库；详情组装失败不得回滚业务结果（历史曾因枚举缺 CLOSED / 自动修复误伤）
         try:
             return await self.get_sales_order_by_id(tenant_id, sales_order_id)
@@ -4994,9 +5015,13 @@ class SalesOrderService:
         sales_order_ids: List[int],
         closed_by: int,
     ) -> Dict[str, Any]:
-        """批量关闭销售订单"""
+        """批量关闭销售订单（不组装详情，避免 N 次全量查询卡住前端）"""
         return await self._bulk_operation_wrapper(
-            tenant_id, sales_order_ids, closed_by, self.close_sales_order
+            tenant_id,
+            sales_order_ids,
+            closed_by,
+            self.close_sales_order,
+            assemble_response=False,
         )
 
     async def _resolve_status_before_close(
@@ -5032,8 +5057,13 @@ class SalesOrderService:
         sales_order_id: int,
         reopened_by: int,
         reason: Optional[str] = None,
-    ) -> SalesOrderResponse:
-        """撤回关闭：将已关闭订单恢复为关闭前状态，继续履约。"""
+        *,
+        assemble_response: bool = True,
+    ) -> Optional[SalesOrderResponse]:
+        """撤回关闭：将已关闭订单恢复为关闭前状态，继续履约。
+
+        assemble_response=False 用于批量撤回关闭，跳过昂贵的详情组装。
+        """
         order = await SalesOrder.get_or_none(
             tenant_id=tenant_id, id=sales_order_id, deleted_at__isnull=True
         )
@@ -5063,6 +5093,9 @@ class SalesOrderService:
                 reopen_reason,
             )
 
+        if not assemble_response:
+            return None
+
         try:
             return await self.get_sales_order_by_id(tenant_id, sales_order_id)
         except Exception as e:
@@ -5077,9 +5110,13 @@ class SalesOrderService:
         sales_order_ids: List[int],
         reopened_by: int,
     ) -> Dict[str, Any]:
-        """批量撤回关闭销售订单"""
+        """批量撤回关闭销售订单（不组装详情）"""
         return await self._bulk_operation_wrapper(
-            tenant_id, sales_order_ids, reopened_by, self.reopen_sales_order
+            tenant_id,
+            sales_order_ids,
+            reopened_by,
+            self.reopen_sales_order,
+            assemble_response=False,
         )
 
     async def bulk_delete_sales_orders(
