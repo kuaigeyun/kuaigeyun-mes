@@ -5760,6 +5760,7 @@ export default {
   'app.haoligo.equipment.documents.acceptance.colInstallLocation': '安装位置',
   'app.haoligo.equipment.documents.acceptance.colCurrentRound': '当前轮次',
   'app.haoligo.equipment.documents.acceptance.colArrivedAt': '进场时间',
+  'app.haoligo.equipment.documents.acceptance.colUpdatedAt': '最后更新时间',
   'app.haoligo.equipment.documents.acceptance.workflow.draft': '草稿',
   'app.haoligo.equipment.documents.acceptance.workflow.commissioning': '调试中',
   'app.haoligo.equipment.documents.acceptance.workflow.pending_trial': '待试产',
@@ -31107,6 +31108,10 @@ export default {
     '基础应用与扩展模块边界解耦',
   'pages.dashboard.updateLog.entries.application-layer-host-capabilities.description':
     '快制造与轻办公列表不再编译依赖行业包；扩展对照与清单改由平台 host-capabilities 接口按租户已启用模块动态解析。',
+  'pages.dashboard.updateLog.entries.uni-im-direct-no-orphan-notify-r02.title':
+    '修复在线消息切回个人仍见系统通知',
+  'pages.dashboard.updateLog.entries.uni-im-direct-no-orphan-notify-r02.description':
+    '个人频道只保留通讯录联系人与 KU-AI，不再挂无对端孤儿私聊；切栏强制重挂列表并修正联系人查询首帧加载态，避免从「消息」切回时残留系统通知条目。',
   'pages.dashboard.updateLog.entries.kuaioa-hr-blank-requires-apps-route-r01.title':
     '修复人事等深链页内容空白',
   'pages.dashboard.updateLog.entries.kuaioa-hr-blank-requires-apps-route-r01.description':
@@ -31159,6 +31164,10 @@ export default {
     '侧栏菜单带查询参数时不再收起分组',
   'pages.dashboard.updateLog.entries.sidebar-menu-query-path-openkeys-r01.description':
     '修复休息登记等带 ?mode= 的菜单项：选中与展开按 pathname+search 匹配，进入后父级分组保持展开。',
+  'pages.dashboard.updateLog.entries.demand-computation-group-one-per-order-r01.title':
+    '需求计算组工单按订单合并为 1 组',
+  'pages.dashboard.updateLog.entries.demand-computation-group-one-per-order-r01.description':
+    '修复 MRP 组工单下推时同一销售订单每条需求行各生成 1 个工单组的问题；现一次下推只编 1 个工单组，多行成品为平级成员。',
   'pages.dashboard.updateLog.entries.demand-computation-push-granularity-r01.title':
     '需求计算下推可选组工单或独立工单',
   'pages.dashboard.updateLog.entries.demand-computation-push-granularity-r01.description':

@@ -1,7 +1,7 @@
 """
 工单组数据模型
 
-按需求行（成品）将 BOM 展开的多张生产/委外工单编为一组。
+按需求计算/订单将 BOM 展开的多张生产/委外工单编为一组。
 """
 
 from tortoise import fields
@@ -10,7 +10,7 @@ from core.models.base import BaseModel
 
 class WorkOrderGroup(BaseModel):
     """
-    工单组：一次需求行 BOM 展开产生的成品 + 半成品 + 委外工单集合。
+    工单组：一次需求计算/订单下推产生的成品 + 半成品 + 委外工单集合。
     """
 
     class Meta:

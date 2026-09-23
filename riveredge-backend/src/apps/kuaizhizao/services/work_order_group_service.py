@@ -157,6 +157,56 @@ class WorkOrderGroupService(AppBaseService):
             **audit_response_fields(group),
         }
 
+    @staticmethod
+    def _collect_pending_production_nodes(
+        tree: Dict[str, Any],
+        demand_item_id: int,
+        *,
+        generate_mode: str,
+        already_pushed_keys: Set[Tuple[Optional[int], int]],
+    ) -> List[Dict[str, Any]]:
+        if generate_mode == "purchase_only":
+            return []
+        nodes = flatten_production_tree(tree)
+        wo_nodes = [
+            n
+            for n in nodes
+            if n.get("source_type")
+            in (SOURCE_TYPE_MAKE, SOURCE_TYPE_CONFIGURE, SOURCE_TYPE_OUTSOURCE)
+            and float(n.get("required_quantity") or 0) > 0
+        ]
+        return [
+            n
+            for n in wo_nodes
+            if (demand_item_id, int(n["material_id"])) not in already_pushed_keys
+        ]
+
+    @staticmethod
+    def count_pushable_groups_for_computation(
+        trees: List[Dict[str, Any]],
+        *,
+        generate_mode: str,
+        already_pushed_keys: Set[Tuple[Optional[int], int]],
+        item_by_material: Dict[int, DemandComputationItem],
+    ) -> int:
+        """组工单下推：一次需求计算/订单只生成 1 个工单组。"""
+        del item_by_material
+        if generate_mode == "purchase_only":
+            return 0
+        for tree in trees:
+            demand_item_id = tree.get("demand_item_id")
+            if demand_item_id is None:
+                continue
+            pending = WorkOrderGroupService._collect_pending_production_nodes(
+                tree,
+                int(demand_item_id),
+                generate_mode=generate_mode,
+                already_pushed_keys=already_pushed_keys,
+            )
+            if pending:
+                return 1
+        return 0
+
     async def generate_groups_from_computation(
         self,
         tenant_id: int,
@@ -172,6 +222,7 @@ class WorkOrderGroupService(AppBaseService):
     ) -> Dict[str, List[Dict[str, Any]]]:
         """
         按 demand_item_bom_trees 生成工单组及成员工单。
+        同一需求计算只编 1 个工单组，多需求行成品工单为平级成员。
         already_pushed_keys: (demand_item_id, material_id) 已下推键集合。
         """
         trees = computation.demand_item_bom_trees or []
@@ -189,14 +240,85 @@ class WorkOrderGroupService(AppBaseService):
 
         dc_service = DemandComputationService()
 
+        contributing_trees: List[Tuple[Dict[str, Any], List[Dict[str, Any]], int]] = []
+        total_new_roots = 0
         for tree in trees:
             demand_item_id = tree.get("demand_item_id")
             if demand_item_id is None:
                 continue
-            group_result = await self._generate_one_group(
+            pending = self._collect_pending_production_nodes(
+                tree,
+                int(demand_item_id),
+                generate_mode=generate_mode,
+                already_pushed_keys=already_pushed_keys,
+            )
+            if not pending:
+                continue
+            new_roots = sum(1 for n in pending if int(n.get("bom_level") or 0) == 0)
+            contributing_trees.append((tree, pending, new_roots))
+            total_new_roots += new_roots
+
+        if not contributing_trees:
+            return {
+                "work_order_groups": [],
+                "work_orders": [],
+                "outsource_work_orders": [],
+            }
+
+        group = await WorkOrderGroup.filter(
+            tenant_id=tenant_id,
+            demand_computation_id=computation.id,
+            deleted_at__isnull=True,
+        ).order_by("id").first()
+
+        created_new_group = False
+        sales_order_id = await self._resolve_sales_order_id(tenant_id, computation)
+        if not group:
+            created_new_group = True
+            first_tree = contributing_trees[0][0]
+            peer_mode = total_new_roots > 1 or len(contributing_trees) > 1
+            group_name = (
+                await self._build_computation_group_name(
+                    tenant_id,
+                    computation,
+                    sales_order_id,
+                    len(contributing_trees),
+                )
+                if peer_mode
+                else f"{first_tree.get('material_name')} 工单组"
+            )
+            group_code = await self.generate_code(tenant_id, "WORK_ORDER_CODE", prefix="WG")
+            group = await WorkOrderGroup.create(
                 tenant_id=tenant_id,
+                group_code=group_code,
+                group_name=group_name,
+                root_demand_item_id=None if peer_mode else int(first_tree["demand_item_id"]),
+                root_material_id=int(first_tree["material_id"]),
+                root_material_code=first_tree.get("material_code") or "",
+                root_material_name=first_tree.get("material_name") or "",
+                demand_id=computation.demand_id,
+                demand_computation_id=computation.id,
+                sales_order_id=sales_order_id,
+                status="draft",
+                has_direct_supply=any(tree_has_direct_supply(t[0]) for t in contributing_trees),
+                created_by=created_by,
+            )
+
+        existing_root_wo_count = await WorkOrder.filter(
+            tenant_id=tenant_id,
+            work_order_group_id=group.id,
+            bom_parent_work_order_id__isnull=True,
+            deleted_at__isnull=True,
+        ).count()
+        peer_mode = (existing_root_wo_count + total_new_roots) > 1
+
+        for tree, pending, _new_roots in contributing_trees:
+            tree_result = await self._add_tree_members_to_group(
+                tenant_id=tenant_id,
+                group=group,
                 computation=computation,
                 tree=tree,
+                pending_nodes=pending,
                 item_by_material=item_by_material,
                 created_by=created_by,
                 generate_mode=generate_mode,
@@ -205,11 +327,38 @@ class WorkOrderGroupService(AppBaseService):
                 already_pushed_keys=already_pushed_keys,
                 selected_computation_item_ids=selected_computation_item_ids,
                 dc_service=dc_service,
+                peer_mode=peer_mode,
             )
-            if group_result:
-                groups_created.append(group_result["group"])
-                work_orders.extend(group_result["work_orders"])
-                outsource_work_orders.extend(group_result["outsource_work_orders"])
+            if tree_result:
+                work_orders.extend(tree_result["work_orders"])
+                outsource_work_orders.extend(tree_result["outsource_work_orders"])
+
+        await self._finalize_group_layout(tenant_id, group.id, peer_mode=peer_mode)
+
+        member_count = await WorkOrder.filter(
+            tenant_id=tenant_id,
+            work_order_group_id=group.id,
+            deleted_at__isnull=True,
+        ).count()
+        member_count += await OutsourceWorkOrder.filter(
+            tenant_id=tenant_id,
+            work_order_group_id=group.id,
+            deleted_at__isnull=True,
+        ).count()
+        await WorkOrderGroup.filter(tenant_id=tenant_id, id=group.id).update(
+            member_count=member_count
+        )
+        group.member_count = member_count
+
+        if created_new_group:
+            groups_created.append(
+                {
+                    "id": group.id,
+                    "group_code": group.group_code,
+                    "root_material_name": group.root_material_name,
+                    "member_count": member_count,
+                }
+            )
 
         return {
             "work_order_groups": groups_created,
@@ -217,11 +366,13 @@ class WorkOrderGroupService(AppBaseService):
             "outsource_work_orders": outsource_work_orders,
         }
 
-    async def _generate_one_group(
+    async def _add_tree_members_to_group(
         self,
         tenant_id: int,
+        group: WorkOrderGroup,
         computation: DemandComputation,
         tree: Dict[str, Any],
+        pending_nodes: List[Dict[str, Any]],
         item_by_material: Dict[int, DemandComputationItem],
         created_by: int,
         *,
@@ -231,50 +382,15 @@ class WorkOrderGroupService(AppBaseService):
         already_pushed_keys: Set[Tuple[Optional[int], int]],
         selected_computation_item_ids: Optional[Set[int]] = None,
         dc_service: Any,
+        peer_mode: bool,
     ) -> Optional[Dict[str, Any]]:
         demand_item_id = int(tree["demand_item_id"])
-        nodes = flatten_production_tree(tree)
-        wo_nodes = [
-            n for n in nodes
-            if n.get("source_type") in (SOURCE_TYPE_MAKE, SOURCE_TYPE_CONFIGURE, SOURCE_TYPE_OUTSOURCE)
-            and float(n.get("required_quantity") or 0) > 0
-        ]
-        if not wo_nodes:
-            return None
-
-        if generate_mode == "purchase_only":
-            return None
-
-        pending = [
-            n for n in wo_nodes
-            if (demand_item_id, int(n["material_id"])) not in already_pushed_keys
-        ]
-        if not pending:
-            return None
-
-        group_code = await self.generate_code(tenant_id, "WORK_ORDER_CODE", prefix="WG")
-        group = await WorkOrderGroup.create(
-            tenant_id=tenant_id,
-            group_code=group_code,
-            group_name=f"{tree.get('material_name')} 工单组",
-            root_demand_item_id=demand_item_id,
-            root_material_id=int(tree["material_id"]),
-            root_material_code=tree.get("material_code") or "",
-            root_material_name=tree.get("material_name") or "",
-            demand_id=computation.demand_id,
-            demand_computation_id=computation.id,
-            sales_order_id=await self._resolve_sales_order_id(tenant_id, computation),
-            status="draft",
-            has_direct_supply=tree_has_direct_supply(tree),
-            created_by=created_by,
-        )
-
         material_to_wo_id: Dict[int, int] = {}
         work_orders: List[Dict[str, Any]] = []
         outsource_work_orders: List[Dict[str, Any]] = []
-        member_count = 0
+        members_added = 0
 
-        for node in pending:
+        for node in pending_nodes:
             mid = int(node["material_id"])
             comp_item = item_by_material.get(mid)
             if not comp_item:
@@ -307,9 +423,12 @@ class WorkOrderGroupService(AppBaseService):
                 else None
             )
             bom_level = int(node.get("bom_level") or 0)
-            group_role = "root" if bom_level == 0 else (
-                "outsource_component" if st == SOURCE_TYPE_OUTSOURCE else "component"
-            )
+            if bom_level == 0:
+                group_role = "component" if peer_mode else "root"
+            else:
+                group_role = (
+                    "outsource_component" if st == SOURCE_TYPE_OUTSOURCE else "component"
+                )
             supply_mode = node.get("supply_mode") or "stocked"
 
             agg_item = self._synthetic_item(comp_item, qty_dec, demand_item_id=demand_item_id)
@@ -348,29 +467,72 @@ class WorkOrderGroupService(AppBaseService):
                 )
                 material_to_wo_id[mid] = wo_info["id"]
                 work_orders.append(wo_info)
-                if bom_level == 0:
-                    await WorkOrderGroup.filter(tenant_id=tenant_id, id=group.id).update(
-                        root_work_order_id=wo_info["id"]
-                    )
 
             already_pushed_keys.add((demand_item_id, mid))
-            member_count += 1
+            members_added += 1
 
-        await WorkOrderGroup.filter(tenant_id=tenant_id, id=group.id).update(
-            member_count=member_count
-        )
-        group.member_count = member_count
+        if members_added == 0:
+            return None
 
         return {
-            "group": {
-                "id": group.id,
-                "group_code": group.group_code,
-                "root_material_name": group.root_material_name,
-                "member_count": member_count,
-            },
             "work_orders": work_orders,
             "outsource_work_orders": outsource_work_orders,
         }
+
+    async def _finalize_group_layout(
+        self,
+        tenant_id: int,
+        group_id: int,
+        *,
+        peer_mode: bool,
+    ) -> None:
+        if peer_mode:
+            await WorkOrderGroup.filter(tenant_id=tenant_id, id=group_id).update(
+                root_work_order_id=None,
+                root_demand_item_id=None,
+            )
+            await WorkOrder.filter(
+                tenant_id=tenant_id,
+                work_order_group_id=group_id,
+                bom_parent_work_order_id__isnull=True,
+                deleted_at__isnull=True,
+            ).update(group_role="component")
+            return
+
+        root_wo = (
+            await WorkOrder.filter(
+                tenant_id=tenant_id,
+                work_order_group_id=group_id,
+                bom_parent_work_order_id__isnull=True,
+                deleted_at__isnull=True,
+            )
+            .order_by("id")
+            .first()
+        )
+        if not root_wo:
+            return
+        await WorkOrderGroup.filter(tenant_id=tenant_id, id=group_id).update(
+            root_work_order_id=root_wo.id
+        )
+        await WorkOrder.filter(tenant_id=tenant_id, id=root_wo.id).update(group_role="root")
+
+    async def _build_computation_group_name(
+        self,
+        tenant_id: int,
+        computation: DemandComputation,
+        sales_order_id: Optional[int],
+        line_count: int,
+    ) -> str:
+        if sales_order_id:
+            from apps.kuaizhizao.models.sales_order import SalesOrder
+
+            sales_order = await SalesOrder.get_or_none(tenant_id=tenant_id, id=sales_order_id)
+            if sales_order and sales_order.order_code:
+                return f"订单 {sales_order.order_code} 工单组"
+        computation_code = getattr(computation, "computation_code", None)
+        if computation_code:
+            return f"需求计算 {computation_code} 工单组"
+        return f"平级工单组（{line_count} 张）"
 
     @staticmethod
     def _synthetic_item(

@@ -324,7 +324,8 @@ export default function UniImPanel({
 
   const {
     data: directUsersData,
-    isLoading: directUsersLoading,
+    isPending: directUsersPending,
+    isFetching: directUsersFetching,
     isError: directUsersError,
     error: directUsersQueryError,
   } = useQuery({
@@ -346,6 +347,12 @@ export default function UniImPanel({
       return failureCount < 1;
     },
   });
+  // enabled 从 false→true 的首帧 isLoading 可能仍为 false；无缓存时须等联系人返回再画列表，
+  // 避免切回「个人」时仍短暂/错误地沿用上一栏（消息）的 DOM。
+  const directUsersLoading =
+    activeSection === 'direct' &&
+    directUsersData == null &&
+    (directUsersPending || directUsersFetching);
 
   const { data: userInbox, isLoading: userInboxLoading } = useQuery({
     queryKey: ['userInboxMessages'],
@@ -435,6 +442,18 @@ export default function UniImPanel({
     };
     for (const item of items) {
       const kind = item.kind as ImNavSection;
+      if (kind === 'direct') {
+        // 无对端或通知标题脏会话不计入「个人」未读
+        if (
+          item.peer_user_id == null ||
+          looksLikeSystemNotifyTitle(item.title) ||
+          looksLikeSystemNotifyTitle(item.last_message_preview)
+        ) {
+          continue;
+        }
+        counts.direct += item.unread_count || 0;
+        continue;
+      }
       if (kind in counts && kind !== 'system' && kind !== 'approval' && !TASK_SECTIONS.has(kind)) {
         counts[kind] += item.unread_count || 0;
       }
@@ -478,74 +497,41 @@ export default function UniImPanel({
     return rows;
   }, [currentUser?.id, directUsersData?.items]);
 
-  type DirectListRow =
-    | { type: 'user'; user: UserDisplayItem; conv?: ImConversation }
-    | { type: 'orphan'; conv: ImConversation };
+  type DirectListRow = { type: 'user'; user: UserDisplayItem; conv?: ImConversation };
 
   const directListRows = useMemo((): DirectListRow[] => {
-    const matched = new Set<string>();
+    // 「个人」只展示通讯录联系人（+ KU-AI），不挂无对端的孤儿私聊。
+    // 标题形如【厂内维保单…】的脏会话曾混进本栏；切「消息」再切回时尤其明显。
     const userRows: DirectListRow[] = directContactUsers.map((user) => {
       const conv = resolveDirectConversationForUser(user, directByPeerId);
-      if (conv) {
-        matched.add(conv.uuid);
-      }
       return { type: 'user', user, conv };
     });
 
     const keyword = contactKeyword.trim().toLowerCase();
-    const orphanRows: DirectListRow[] = items
-      .filter((item) => {
-        if (item.kind !== 'direct' || matched.has(item.uuid)) {
-          return false;
-        }
-        // 站内信主题误落成私聊会话标题时，不在「个人」展示（应只出现在「消息/审批」）
-        if (
-          looksLikeSystemNotifyTitle(item.title) ||
-          looksLikeSystemNotifyTitle(item.last_message_preview)
-        ) {
-          return false;
-        }
-        if (!keyword) {
-          return true;
-        }
-        const title = (item.title || '').toLowerCase();
-        const preview = (item.last_message_preview || '').toLowerCase();
-        return title.includes(keyword) || preview.includes(keyword);
-      })
-      .map((conv) => ({ type: 'orphan' as const, conv }));
+    const filtered = keyword
+      ? userRows.filter((row) => {
+          const label = (row.user.label || '').toLowerCase();
+          const username = (row.user.username || '').toLowerCase();
+          return label.includes(keyword) || username.includes(keyword);
+        })
+      : userRows;
 
-    return [...userRows, ...orphanRows].sort((a, b) => {
-      const left =
-        a.type === 'user'
-          ? {
-              pinned: !!a.conv?.is_pinned,
-              unread: a.conv?.unread_count ?? 0,
-              time: a.conv?.last_message_at ? dayjs(a.conv.last_message_at).valueOf() : 0,
-              label: a.user.label,
-            }
-          : {
-              pinned: !!a.conv.is_pinned,
-              unread: a.conv.unread_count ?? 0,
-              time: a.conv.last_message_at ? dayjs(a.conv.last_message_at).valueOf() : 0,
-              label: a.conv.title || a.conv.uuid,
-            };
-      const right =
-        b.type === 'user'
-          ? {
-              pinned: !!b.conv?.is_pinned,
-              unread: b.conv?.unread_count ?? 0,
-              time: b.conv?.last_message_at ? dayjs(b.conv.last_message_at).valueOf() : 0,
-              label: b.user.label,
-            }
-          : {
-              pinned: !!b.conv.is_pinned,
-              unread: b.conv.unread_count ?? 0,
-              time: b.conv.last_message_at ? dayjs(b.conv.last_message_at).valueOf() : 0,
-              label: b.conv.title || b.conv.uuid,
-            };
+    return filtered.sort((a, b) => {
+      const left = {
+        pinned: !!a.conv?.is_pinned,
+        unread: a.conv?.unread_count ?? 0,
+        time: a.conv?.last_message_at ? dayjs(a.conv.last_message_at).valueOf() : 0,
+        label: a.user.label,
+      };
+      const right = {
+        pinned: !!b.conv?.is_pinned,
+        unread: b.conv?.unread_count ?? 0,
+        time: b.conv?.last_message_at ? dayjs(b.conv.last_message_at).valueOf() : 0,
+        label: b.user.label,
+      };
       return compareDirectListOrder(left, right);
     });
-  }, [contactKeyword, directContactUsers, directByPeerId, items]);
+  }, [contactKeyword, directContactUsers, directByPeerId]);
 
   const directListHasRows = directListRows.length > 0;
 
@@ -1772,7 +1758,9 @@ export default function UniImPanel({
                   </Button>
                 ) : null}
               </div>
-              <div className={styles.convList}>
+              <div className={styles.convList} data-im-section={activeSection}>
+                {/* key：切栏强制重挂列表，避免「消息」DOM 残留到「个人」 */}
+                <div key={activeSection} className={styles.convListSection}>
                 {listLoading ? (
                   <div className={styles.emptyChat}>{t('common.loading')}</div>
                 ) : isTaskSection ? (
@@ -1814,23 +1802,30 @@ export default function UniImPanel({
                       ) : null
                     ) : (
                       directListRows.map((row) =>
-                        row.type === 'orphan'
-                          ? renderConversationItem(row.conv)
-                          : renderDirectContactItem(row.user, row.conv),
+                        renderDirectContactItem(row.user, row.conv),
                       )
                     )}
                   </>
+                ) : activeSection === 'approval' || activeSection === 'system' ? (
+                  listEmpty ? (
+                    <Empty
+                      image={Empty.PRESENTED_IMAGE_SIMPLE}
+                      description={emptyListDescription}
+                      style={{ marginTop: 48 }}
+                    />
+                  ) : (
+                    sectionNotifyItems.map(renderNotifyItem)
+                  )
                 ) : listEmpty ? (
                   <Empty
                     image={Empty.PRESENTED_IMAGE_SIMPLE}
                     description={emptyListDescription}
                     style={{ marginTop: 48 }}
                   />
-                ) : isNotifySection ? (
-                  sectionNotifyItems.map(renderNotifyItem)
                 ) : (
                   filteredItems.map(renderConversationItem)
                 )}
+                </div>
               </div>
             </aside>
             <div

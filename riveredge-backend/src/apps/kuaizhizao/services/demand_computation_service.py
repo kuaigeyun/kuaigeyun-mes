@@ -3679,7 +3679,7 @@ class DemandComputationService(AppBaseService):
 
     @staticmethod
     def normalize_work_order_granularity(value: Optional[str]) -> str:
-        """需求计算下推工单粒度：grouped=按需求行编组，individual=独立工单。"""
+        """需求计算下推工单粒度：grouped=按订单/计算编组，individual=独立工单。"""
         raw = (value or "").strip().lower()
         if raw in ("individual", "single", "flat"):
             return "individual"
@@ -6085,43 +6085,18 @@ class DemandComputationService(AppBaseService):
                 from apps.kuaizhizao.services.work_order_group_service import (
                     WorkOrderGroupService,
                 )
-                from apps.kuaizhizao.utils.work_order_group_bom_tree import (
-                    flatten_production_tree,
-                )
 
                 group_svc = WorkOrderGroupService()
                 already_pushed_keys = await group_svc.collect_pushed_keys(
                     tenant_id, computation.id
                 )
                 item_by_material = {i.material_id: i for i in items}
-                for tree in computation.demand_item_bom_trees or []:
-                    demand_item_id = tree.get("demand_item_id")
-                    if demand_item_id is None:
-                        continue
-                    has_pushable = False
-                    for node in flatten_production_tree(tree):
-                        st = node.get("source_type")
-                        if st not in (
-                            SOURCE_TYPE_MAKE,
-                            SOURCE_TYPE_CONFIGURE,
-                            SOURCE_TYPE_OUTSOURCE,
-                        ):
-                            continue
-                        if float(node.get("required_quantity") or 0) <= 0:
-                            continue
-                        mid = int(node["material_id"])
-                        if (int(demand_item_id), mid) in already_pushed_keys or (
-                            None,
-                            mid,
-                        ) in already_pushed_keys:
-                            continue
-                        comp_item = item_by_material.get(mid)
-                        if not comp_item:
-                            continue
-                        has_pushable = True
-                        break
-                    if has_pushable:
-                        work_order_group_count += 1
+                work_order_group_count = WorkOrderGroupService.count_pushable_groups_for_computation(
+                    computation.demand_item_bom_trees or [],
+                    generate_mode=mode,
+                    already_pushed_keys=already_pushed_keys,
+                    item_by_material=item_by_material,
+                )
             pushable_wo_count = work_order_count + outsource_work_order_count
             preview_summary_parts.append(
                 f"需求计算 {computation.computation_code}：{pushable_wo_count}/{len(wo_items)} 条可下推生成工单"
@@ -6134,7 +6109,7 @@ class DemandComputationService(AppBaseService):
                 )
             if wo_granularity == "grouped":
                 preview_tip_parts.append(
-                    "确认后将按需求行编组生成工单组及成员工单（含委外工单）。"
+                    "确认后将本单可下推生产工单编入同一工单组（含委外工单）。"
                 )
             else:
                 preview_tip_parts.append("确认后将按可下推数量生成独立生产工单/委外工单。")

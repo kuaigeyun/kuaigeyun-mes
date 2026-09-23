@@ -36,6 +36,22 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
   {
+    id: 'demand-computation-group-one-per-order-r01',
+    date: '2026-09-23',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.demand-computation-group-one-per-order-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.demand-computation-group-one-per-order-r01.description',
+  },
+  {
+    id: 'uni-im-direct-no-orphan-notify-r02',
+    date: '2026-09-23',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.uni-im-direct-no-orphan-notify-r02.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.uni-im-direct-no-orphan-notify-r02.description',
+  },
+  {
     id: 'kuaioa-hr-blank-requires-apps-route-r01',
     date: '2026-09-23',
     type: 'fix',

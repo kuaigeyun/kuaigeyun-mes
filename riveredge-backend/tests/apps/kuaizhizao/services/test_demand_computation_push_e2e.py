@@ -411,6 +411,35 @@ def test_group_preview_item_id_is_computation_item_id(monkeypatch):
     assert rows[0]["max_push_quantity"] == 10
 
 
+def test_grouped_push_counts_one_group_for_multi_line_order():
+    from apps.kuaizhizao.services.work_order_group_service import WorkOrderGroupService
+
+    trees = [
+        {
+            "demand_item_id": idx,
+            "material_id": 100 + idx,
+            "material_code": f"FG-{idx}",
+            "material_name": "成品",
+            "source_type": SOURCE_TYPE_MAKE,
+            "required_quantity": 10,
+            "bom_level": 0,
+            "children": [],
+        }
+        for idx in range(1, 6)
+    ]
+    item_by_material = {
+        100 + idx: SimpleNamespace(material_id=100 + idx)
+        for idx in range(1, 6)
+    }
+    count = WorkOrderGroupService.count_pushable_groups_for_computation(
+        trees,
+        generate_mode="work_order_only",
+        already_pushed_keys=set(),
+        item_by_material=item_by_material,
+    )
+    assert count == 1
+
+
 def test_resolve_production_selected_computation_item_ids():
     items = [
         SimpleNamespace(

@@ -416,6 +416,10 @@
   min-height: 0;
 }
 
+.convListSection {
+  min-height: 100%;
+}
+
 .convItem {
   display: flex;
   align-items: center;
