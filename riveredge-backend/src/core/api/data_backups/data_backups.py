@@ -200,59 +200,21 @@ async def create_backup(
     current_user: User = Depends(get_current_user)
 ) -> Any:
     """
-    创建备份任务。
-
-    平台管理员（tenant_id 为空）可选择：
-    - backup_scope=all：全量备份
-    - backup_scope=tenant + target_tenant_id：备份指定租户
-    普通租户用户仅能备份当前绑定租户。
+    创建备份任务
     """
+    # 核心安全校验：非系统管理员严禁尝试全量备份（backup_scope='all'）
     if data.backup_scope == "all" and not current_user.is_infra_admin_user():
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="权限不足：仅平台管理员可创建全量备份（包含所有租户数据）。"
         )
+    if data.backup_scope == "tenant" and current_user.tenant_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="租户级备份需要当前登录用户绑定租户；平台管理员请切换到目标租户后创建，或改用全量备份（backup_scope=all）。",
+        )
 
-    effective_tenant_id = current_user.tenant_id
-    if data.backup_scope == "tenant":
-        if current_user.is_infra_admin_user():
-            target = data.target_tenant_id
-            if target is None and current_user.tenant_id is not None:
-                target = current_user.tenant_id
-            if target is None:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="平台管理员创建租户级备份时请指定 target_tenant_id，或改用全量备份（backup_scope=all）。",
-                )
-            from infra.models.tenant import Tenant
-
-            tenant = await Tenant.get_or_none(id=int(target))
-            if tenant is None:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"目标租户不存在：{target}",
-                )
-            effective_tenant_id = int(target)
-        else:
-            if data.target_tenant_id is not None and int(data.target_tenant_id) != int(
-                current_user.tenant_id or 0
-            ):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="无权为其他租户创建备份",
-                )
-            if current_user.tenant_id is None:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="租户级备份需要当前登录用户绑定租户。",
-                )
-            effective_tenant_id = current_user.tenant_id
-    elif data.backup_scope == "all":
-        effective_tenant_id = None
-
-    # 非平台管理员不得通过 target_tenant_id 串租户
-    create_payload = data.model_copy(update={"target_tenant_id": None})
-    backup = await DataBackupService.create_backup_task(effective_tenant_id, create_payload)
+    backup = await DataBackupService.create_backup_task(current_user.tenant_id, data)
     return DataBackupService.to_response(backup)
 
 

@@ -143,7 +143,9 @@ class DataBackupService:
             backup_scope=data.backup_scope,
             include_files=data.include_files,
             backup_tables=data.backup_tables,
-            status="pending"
+            status="pending",
+            progress=0,
+            progress_message="等待执行",
         )
         
         # 2. 分发后台任务

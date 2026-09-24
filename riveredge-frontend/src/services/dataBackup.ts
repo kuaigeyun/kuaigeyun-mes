@@ -25,6 +25,10 @@ export interface DataBackup {
   file_size?: number;
   source_type?: 'generated' | 'uploaded';
   status: string;
+  /** 备份进度 0-100 */
+  progress?: number;
+  /** 进度说明 */
+  progress_message?: string | null;
   /** 异步任务 ID（Taskiq）；历史字段名 inngest_run_id 保持不变以兼容 API */
   inngest_run_id?: string;
   started_at?: string;
@@ -61,8 +65,6 @@ export interface CreateDataBackupData {
   backup_scope: 'all' | 'tenant' | 'table';
   include_files?: boolean;
   backup_tables?: string[];
-  /** 平台超管指定租户备份时使用 */
-  target_tenant_id?: number;
 }
 
 export interface RestoreBackupRequest {

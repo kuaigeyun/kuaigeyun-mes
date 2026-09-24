@@ -5,7 +5,7 @@
  * 支持创建备份、恢复备份、删除备份等功能。
  */
 
-import React, { useState, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import dayjs from 'dayjs';
 import { rowActionKind, rowActionLabelKeep } from '../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
@@ -15,7 +15,6 @@ import {
   ProColumns,
   ProForm,
   ProFormText,
-  ProFormDependency,
   type ProDescriptionsItemProps,
 } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../components/safe-pro-form-select';
@@ -42,8 +41,7 @@ import {
   BackupWorkerHealth,
   CreateDataBackupData,
 } from '../../../services/dataBackup';
-import { getTenantList, TenantStatus } from '../../../services/tenant';
-import { getTenantId, isInfraSuperAdminUser } from '../../../utils/auth';
+import { getTenantId } from '../../../utils/auth';
 import { formatDateTime, todaySiteDateString } from '../../../utils/format';
 import { downloadRecordsAsXlsx } from '../../../utils/exportRecordsXlsx';
 import { buildListPageHelpViewConfig } from '../../../components/page-help-wiki';
@@ -66,38 +64,7 @@ const DataBackupsPage: React.FC = () => {
   const { token } = theme.useToken();
   const { Text } = Typography;
   const currentUser = useCurrentUser();
-  // 与后端 is_infra_admin_user() 对齐：超管 JWT，或 is_infra_admin 且无租户绑定
-  const isPlatformSuperAdmin = useMemo(() => {
-    if (isInfraSuperAdminUser(currentUser)) return true;
-    return Boolean(currentUser?.is_infra_admin) && currentUser?.tenant_id == null;
-  }, [currentUser]);
   const actionRef = React.useRef<ActionType>(null);
-  const [tenantOptions, setTenantOptions] = useState<{ label: string; value: number }[]>([]);
-  const [tenantOptionsLoading, setTenantOptionsLoading] = useState(false);
-
-  const loadTenantOptions = useCallback(async () => {
-    if (!isPlatformSuperAdmin) {
-      setTenantOptions([]);
-      return;
-    }
-    setTenantOptionsLoading(true);
-    try {
-      const res = await getTenantList(
-        { page: 1, page_size: 200, status: TenantStatus.ACTIVE, sort: 'id', order: 'asc' },
-        true,
-      );
-      setTenantOptions(
-        (res.items ?? []).map((item) => ({
-          label: `${item.name} (#${item.id})`,
-          value: Number(item.id),
-        })),
-      );
-    } catch {
-      setTenantOptions([]);
-    } finally {
-      setTenantOptionsLoading(false);
-    }
-  }, [isPlatformSuperAdmin]);
 
   const getStatusInfo = (status: string): { status: 'success' | 'error' | 'processing' | 'default'; text: string } => {
     const statusMap: Record<string, { status: 'success' | 'error' | 'processing' | 'default'; text: string }> = {
@@ -142,6 +109,7 @@ const DataBackupsPage: React.FC = () => {
   const [workerHealth, setWorkerHealth] = useState<BackupWorkerHealth | null>(null);
   const [workerHealthLoading, setWorkerHealthLoading] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [hasActiveBackupJobs, setHasActiveBackupJobs] = useState(false);
 
   const loadWorkerHealth = React.useCallback(async (silent: boolean = true) => {
     if (!silent) {
@@ -168,6 +136,15 @@ const DataBackupsPage: React.FC = () => {
     }, 30000);
     return () => window.clearInterval(timer);
   }, [loadWorkerHealth]);
+
+  // 有进行中的备份时刷新列表，驱动进度条更新
+  React.useEffect(() => {
+    if (!hasActiveBackupJobs) return;
+    const timer = window.setInterval(() => {
+      actionRef.current?.reload();
+    }, 2500);
+    return () => window.clearInterval(timer);
+  }, [hasActiveBackupJobs]);
 
   const workerHealthMeta = useMemo(() => {
     if (!workerHealth) {
@@ -217,53 +194,26 @@ const DataBackupsPage: React.FC = () => {
   /**
    * 创建备份
    */
-  const handleCreate = async (
-    values: Pick<CreateDataBackupData, 'name' | 'include_files'> & {
-      backup_scope?: CreateDataBackupData['backup_scope'];
-      target_tenant_id?: number;
-    },
-  ) => {
+  const handleCreate = async (values: Pick<CreateDataBackupData, 'name' | 'include_files'>) => {
     setSubmitting(true);
     try {
-      const includeFiles = values.include_files ?? true;
-      if (isPlatformSuperAdmin) {
-        const scope = values.backup_scope === 'tenant' ? 'tenant' : 'all';
-        if (scope === 'tenant') {
-          if (values.target_tenant_id == null) {
-            messageApi.error(t('pages.system.dataBackups.targetTenantRequired'));
-            return;
-          }
-          await createBackup({
-            name: values.name,
-            backup_type: 'full',
-            backup_scope: 'tenant',
-            target_tenant_id: Number(values.target_tenant_id),
-            include_files: includeFiles,
-          });
-        } else {
-          await createBackup({
-            name: values.name,
-            backup_type: 'full',
-            backup_scope: 'all',
-            include_files: includeFiles,
-          });
-        }
-      } else {
-        const tenantId = currentUser?.tenant_id ?? getTenantId();
-        if (tenantId == null) {
-          messageApi.error(t('pages.system.dataBackups.createNeedTenant'));
-          return;
-        }
-        await createBackup({
-          name: values.name,
-          backup_type: 'full',
-          backup_scope: 'tenant',
-          include_files: includeFiles,
-        });
+      const tenantId = currentUser?.tenant_id ?? getTenantId();
+      const isInfraAdmin = Boolean(currentUser?.is_infra_admin);
+      // 无租户上下文时：平台管理员走全量备份，普通用户直接提示
+      if (tenantId == null && !isInfraAdmin) {
+        messageApi.error(t('pages.system.dataBackups.createNeedTenant'));
+        return;
       }
+      await createBackup({
+        name: values.name,
+        backup_type: 'full',
+        backup_scope: tenantId != null ? 'tenant' : 'all',
+        include_files: values.include_files ?? true,
+      });
       messageApi.success(t('pages.system.dataBackups.createSuccess'));
       setCreateModalVisible(false);
       form.resetFields();
+      setHasActiveBackupJobs(true);
       actionRef.current?.reload();
       loadWorkerHealth(true);
     } catch (error: any) {
@@ -406,6 +356,40 @@ const DataBackupsPage: React.FC = () => {
     const statusInfo = statusMap[status] || { color: 'default', text: status };
     return renderSystemStatusTag(statusInfo.text, statusInfo.color);
   };
+
+  const renderBackupProgress = React.useCallback((record: DataBackup) => {
+    const isActive = record.status === 'pending' || record.status === 'running';
+    if (!isActive && record.status !== 'success' && record.status !== 'failed') {
+      return <Text type="secondary">-</Text>;
+    }
+    const percent =
+      record.status === 'success'
+        ? 100
+        : record.status === 'failed'
+          ? Math.max(0, Number(record.progress) || 0)
+          : record.status === 'pending'
+            ? Math.max(0, Number(record.progress) || 0)
+            : Math.min(99, Math.max(0, Number(record.progress) || 0));
+    const status =
+      record.status === 'success' ? 'success' : record.status === 'failed' ? 'exception' : 'active';
+    return (
+      <Tooltip title={record.progress_message || undefined}>
+        <div style={{ minWidth: 120 }}>
+          <Progress
+            percent={percent}
+            size="small"
+            status={status}
+            format={(p) => `${p ?? 0}%`}
+          />
+          {(isActive || record.status === 'failed') && record.progress_message ? (
+            <Text type="secondary" style={{ fontSize: 11 }} ellipsis>
+              {record.progress_message}
+            </Text>
+          ) : null}
+        </div>
+      </Tooltip>
+    );
+  }, []);
 
   const getBackupTypeInfo = (backupType: string) => {
     const typeMap: Record<string, { color: string; text: string }> = {
@@ -589,9 +573,7 @@ const DataBackupsPage: React.FC = () => {
               </div>
             )}
             
-            {backup.status === 'running' && (
-              <Progress percent={50} status="active" size="small" />
-            )}
+            {renderBackupProgress(backup)}
             
             {backup.error_message && (
               <Alert
@@ -715,6 +697,18 @@ const DataBackupsPage: React.FC = () => {
       hideInSearch: true,
     },
     {
+      title: t('pages.system.dataBackups.columnProgress'),
+      dataIndex: 'progress',
+      key: 'progress',
+      search: false,
+      width: 160,
+      minWidth: 160,
+      uniTableKeepWidth: true,
+      resizable: false,
+      fixed: 'right',
+      render: (_: unknown, record: DataBackup) => renderBackupProgress(record),
+    },
+    {
       title: t('common.actions'),
       key: 'action',
       fixed: 'right',
@@ -759,7 +753,7 @@ const DataBackupsPage: React.FC = () => {
         return actions;
       },
     },
-  ], GLOBAL_DOC_LIST_FIELD_RANK), [t, handleViewDetail, handleDownload, handleRestore, handleDelete]);
+  ], GLOBAL_DOC_LIST_FIELD_RANK), [t, handleViewDetail, handleDownload, handleRestore, handleDelete, renderBackupProgress]);
 
   /**
    * 详情列定义
@@ -782,6 +776,11 @@ const DataBackupsPage: React.FC = () => {
       render: (_, r) => (r.source_tenant_id != null ? r.source_tenant_id : '-'),
     },
     { title: t('common.status'), dataIndex: 'status', render: (_, r) => getStatusTag(r.status) },
+    {
+      title: t('pages.system.dataBackups.columnProgress'),
+      dataIndex: 'progress',
+      render: (_, r) => renderBackupProgress(r),
+    },
     { title: t('pages.system.dataBackups.columnRestoreStatus'), dataIndex: 'restore_status', render: (_, r) => getRestoreStatusTag(r.restore_status, r.restore_error_message) },
     { title: t('pages.system.dataBackups.columnFilePath'), dataIndex: 'file_path', render: (_, r) => r.file_path || '-' },
     { title: t('pages.system.dataBackups.columnFileSize'), dataIndex: 'file_size', render: (_, r) => formatFileSize(r.file_size) },
@@ -834,7 +833,7 @@ const DataBackupsPage: React.FC = () => {
               };
             }
             
-            const { current, pageSize, backup_type, backup_scope, status, ...rest } = params;
+            const { current, pageSize, backup_type, backup_scope, status } = params;
             
             try {
               // 获取当前页数据
@@ -846,6 +845,8 @@ const DataBackupsPage: React.FC = () => {
                 status: status as string | undefined,
               });
               
+              const isActiveJob = (item: DataBackup) =>
+                item.status === 'pending' || item.status === 'running';
               // 同时获取所有数据用于统计（如果当前页是第一页，获取所有数据）
               if ((current || 1) === 1) {
                 try {
@@ -854,9 +855,12 @@ const DataBackupsPage: React.FC = () => {
                     page_size: 1000,
                   });
                   setAllBackups(allResponse.items);
+                  setHasActiveBackupJobs(allResponse.items.some(isActiveJob));
                 } catch (e) {
-                  // 忽略统计数据的错误
+                  setHasActiveBackupJobs(response.items.some(isActiveJob));
                 }
+              } else {
+                setHasActiveBackupJobs(response.items.some(isActiveJob));
               }
               
               return {
@@ -885,20 +889,7 @@ const DataBackupsPage: React.FC = () => {
           showAdvancedSearch={true}
           showCreateButton
           createButtonText={t('pages.system.dataBackups.createButton')}
-          onCreate={() => {
-            form.resetFields();
-            if (isPlatformSuperAdmin) {
-              form.setFieldsValue({
-                backup_scope: 'all',
-                include_files: true,
-                target_tenant_id: undefined,
-              });
-              void loadTenantOptions();
-            } else {
-              form.setFieldsValue({ include_files: true });
-            }
-            setCreateModalVisible(true);
-          }}
+          onCreate={() => setCreateModalVisible(true)}
           showDeleteButton
           onDelete={handleBatchDelete}
           deleteButtonText={t('common.batchDelete')}
@@ -999,54 +990,6 @@ const DataBackupsPage: React.FC = () => {
           rules={[{ required: true, message: t('pages.system.dataBackups.nameRequired') }]}
           placeholder={t('pages.system.dataBackups.namePlaceholder')}
         />
-        {isPlatformSuperAdmin ? (
-          <>
-            <SafeProFormSelect
-              name="backup_scope"
-              label={t('pages.system.dataBackups.labelScopeField')}
-              rules={[{ required: true, message: t('pages.system.dataBackups.scopeRequired') }]}
-              initialValue="all"
-              options={[
-                { label: t('pages.system.dataBackups.scopeAllLabel'), value: 'all' },
-                { label: t('pages.system.dataBackups.scopeTenantLabel'), value: 'tenant' },
-              ]}
-              placeholder={t('pages.system.dataBackups.scopePlaceholder')}
-              fieldProps={{
-                onChange: (value: string) => {
-                  if (value !== 'tenant') {
-                    form.setFieldValue('target_tenant_id', undefined);
-                  } else if (tenantOptions.length === 0) {
-                    void loadTenantOptions();
-                  }
-                },
-              }}
-            />
-            <ProFormDependency name={['backup_scope']}>
-              {({ backup_scope }) =>
-                backup_scope === 'tenant' ? (
-                  <SafeProFormSelect
-                    name="target_tenant_id"
-                    label={t('pages.system.dataBackups.targetTenantLabel')}
-                    rules={[
-                      {
-                        required: true,
-                        message: t('pages.system.dataBackups.targetTenantRequired'),
-                      },
-                    ]}
-                    options={tenantOptions}
-                    placeholder={t('pages.system.dataBackups.targetTenantPlaceholder')}
-                    fieldProps={{
-                      showSearch: true,
-                      optionFilterProp: 'label',
-                      loading: tenantOptionsLoading,
-                      allowClear: true,
-                    }}
-                  />
-                ) : null
-              }
-            </ProFormDependency>
-          </>
-        ) : null}
         <SafeProFormSelect
           name="include_files"
           label={t('pages.system.dataBackups.labelContentScope')}

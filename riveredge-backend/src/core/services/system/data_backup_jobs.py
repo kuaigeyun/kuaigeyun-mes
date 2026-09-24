@@ -13,10 +13,11 @@ import os
 import shutil
 import subprocess
 import tempfile
+import time
 import zipfile
 from collections import defaultdict, deque
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Awaitable, Callable, Optional
 
 from loguru import logger
 from tortoise import Tortoise
@@ -24,6 +25,8 @@ from tortoise import Tortoise
 from core.services.system.backup_storage import resolve_data_backup_dir
 from infra.config.infra_config import infra_settings
 from core.utils.timezone_utils import resolve_business_datetime
+
+ProgressCallback = Callable[[int, str], Awaitable[None]]
 
 TENANT_BACKUP_EXCLUDED_TABLES = {
     # 超大运行日志表：对业务恢复价值有限，但会显著拖慢租户级备份
@@ -47,6 +50,54 @@ TENANT_JUNCTION_TABLES = frozenset(
         "core_policy_bindings",
     }
 )
+
+
+class BackupProgressReporter:
+    """节流回写备份进度，避免每张表都打库拖慢导出。"""
+
+    def __init__(
+        self,
+        backup_uuid: str,
+        *,
+        min_interval_sec: float = 1.0,
+        min_step: int = 1,
+    ) -> None:
+        self.backup_uuid = str(backup_uuid)
+        self.min_interval_sec = min_interval_sec
+        self.min_step = min_step
+        self._last_pct = -1
+        self._last_at = 0.0
+        self._last_msg: Optional[str] = None
+
+    async def report(self, percent: int, message: str = "", *, force: bool = False) -> None:
+        pct = max(0, min(100, int(percent)))
+        msg = (message or "").strip()
+        now = time.monotonic()
+        if not force:
+            if pct < self._last_pct:
+                return
+            same_msg = msg == (self._last_msg or "")
+            if same_msg and pct == self._last_pct:
+                return
+            if (
+                same_msg
+                and (pct - self._last_pct) < self.min_step
+                and (now - self._last_at) < self.min_interval_sec
+            ):
+                return
+        self._last_pct = pct
+        self._last_at = now
+        self._last_msg = msg
+        try:
+            from core.models.data_backup import DataBackup
+
+            await DataBackup.filter(uuid=self.backup_uuid).update(
+                progress=pct,
+                progress_message=(msg[:255] if msg else None),
+            )
+        except Exception as e:
+            logger.debug("备份进度回写失败 uuid={}: {}", self.backup_uuid, e)
+
 
 _PG_BIN_CACHE: dict[str, str] = {}
 
@@ -348,8 +399,16 @@ def _pack_backup_zip(
     return final_zip_path
 
 
-async def _export_tenant_csv_dump(conn, *, tenant_id: int, db_dump_path: str) -> None:
+async def _export_tenant_csv_dump(
+    conn,
+    *,
+    tenant_id: int,
+    db_dump_path: str,
+    on_progress: Optional[ProgressCallback] = None,
+) -> None:
     logger.info("开始执行租户隔离备份(asyncpg): tenant_id={}", tenant_id)
+    if on_progress:
+        await on_progress(5, "正在扫描租户表…")
     rows = await conn.fetch(
         """
         SELECT table_name
@@ -385,6 +444,9 @@ async def _export_tenant_csv_dump(conn, *, tenant_id: int, db_dump_path: str) ->
     if user_ref_subqueries:
         logger.info("core_users 导出将包含 {} 个子表引用的用户 ID", len(user_ref_subqueries))
 
+    total_tables = max(len(tables), 1)
+    junction_tables = sorted(TENANT_JUNCTION_TABLES)
+
     with open(db_dump_path, "w", encoding="utf-8") as f:
         f.write("-- Tenant Isolated Backup\n")
         f.write(f"-- Tenant ID: {tenant_id}\n")
@@ -395,6 +457,10 @@ async def _export_tenant_csv_dump(conn, *, tenant_id: int, db_dump_path: str) ->
 
         for index, table in enumerate(tables, start=1):
             logger.info("租户隔离备份导出表 [{}/{}]: {}", index, len(tables), table)
+            if on_progress:
+                # 导出表占 8%～88%
+                pct = 8 + int(index * 80 / total_tables)
+                await on_progress(pct, f"导出表 {index}/{len(tables)}: {table}")
             select_sql = _build_tenant_table_copy_sql(
                 table, int(tenant_id), user_ref_subqueries, user_fk_children, tables_with_user_id
             )
@@ -415,9 +481,11 @@ async def _export_tenant_csv_dump(conn, *, tenant_id: int, db_dump_path: str) ->
                 len(csv_text.encode("utf-8", errors="ignore")),
             )
 
-        junction_tables = sorted(TENANT_JUNCTION_TABLES)
         for index, table in enumerate(junction_tables, start=1):
             logger.info("租户隔离备份导出关联表 [{}/{}]: {}", index, len(junction_tables), table)
+            if on_progress:
+                pct = 88 + int(index * 4 / max(len(junction_tables), 1))
+                await on_progress(pct, f"导出关联表 {index}/{len(junction_tables)}: {table}")
             select_sql = _build_tenant_junction_copy_sql(table, int(tenant_id))
             try:
                 csv_text = await _copy_query_to_csv_text(conn, select_sql) or ""
@@ -434,11 +502,20 @@ async def _export_tenant_csv_dump(conn, *, tenant_id: int, db_dump_path: str) ->
                 table,
                 len(csv_text.encode("utf-8", errors="ignore")),
             )
+    if on_progress:
+        await on_progress(92, "数据导出完成，准备打包…")
 
 
-async def _export_all_csv_dump(conn, *, db_dump_path: str) -> None:
+async def _export_all_csv_dump(
+    conn,
+    *,
+    db_dump_path: str,
+    on_progress: Optional[ProgressCallback] = None,
+) -> None:
     """全量逻辑备份：导出 public 下全部业务表（跳过 infra_），同样不依赖本机 pg_dump。"""
     logger.info("开始执行全量逻辑备份(asyncpg CSV)")
+    if on_progress:
+        await on_progress(5, "正在扫描全库表…")
     rows = await conn.fetch(
         """
         SELECT table_name
@@ -453,11 +530,15 @@ async def _export_all_csv_dump(conn, *, db_dump_path: str) -> None:
         if r["table_name"] not in TENANT_BACKUP_EXCLUDED_TABLES
         and not _is_platform_level_table(r["table_name"])
     ]
+    total_tables = max(len(tables), 1)
     with open(db_dump_path, "w", encoding="utf-8") as f:
         f.write("-- Full Logical Backup (asyncpg CSV)\n")
         f.write(f"-- Date: {resolve_business_datetime()}\n\n")
         for index, table in enumerate(tables, start=1):
             logger.info("全量备份导出表 [{}/{}]: {}", index, len(tables), table)
+            if on_progress:
+                pct = 8 + int(index * 84 / total_tables)
+                await on_progress(pct, f"导出表 {index}/{len(tables)}: {table}")
             try:
                 csv_text = await _copy_query_to_csv_text(conn, f'SELECT * FROM "{table}"') or ""
             except Exception as e:
@@ -469,6 +550,8 @@ async def _export_all_csv_dump(conn, *, db_dump_path: str) -> None:
             if not csv_text.endswith("\n"):
                 f.write("\n")
             f.write("\n")
+    if on_progress:
+        await on_progress(92, "数据导出完成，准备打包…")
 
 
 async def run_backup_dump_and_zip(
@@ -480,6 +563,7 @@ async def run_backup_dump_and_zip(
     backup_type: str,
     backup_scope: str,
     include_files: Optional[bool] = None,
+    on_progress: Optional[ProgressCallback] = None,
 ) -> str:
     """
     执行数据库转储并打成 zip（纯 asyncpg，不依赖本机 psql/pg_dump）。
@@ -492,17 +576,28 @@ async def run_backup_dump_and_zip(
     if backup_scope == "tenant" and tenant_id is None:
         raise ValueError("租户隔离备份缺少 tenant_id，已拒绝执行以避免回退到全量备份")
 
+    if on_progress:
+        await on_progress(2, "正在连接数据库…")
+
     db_dump_path = os.path.join(temp_dir, "db_dump.sql")
     conn = await _asyncpg_connect()
     try:
         if backup_scope == "tenant":
-            await _export_tenant_csv_dump(conn, tenant_id=int(tenant_id), db_dump_path=db_dump_path)
+            await _export_tenant_csv_dump(
+                conn,
+                tenant_id=int(tenant_id),
+                db_dump_path=db_dump_path,
+                on_progress=on_progress,
+            )
         else:
-            await _export_all_csv_dump(conn, db_dump_path=db_dump_path)
+            await _export_all_csv_dump(conn, db_dump_path=db_dump_path, on_progress=on_progress)
     finally:
         await conn.close()
 
-    return _pack_backup_zip(
+    if on_progress:
+        await on_progress(94, "正在打包备份文件…" if pack_uploads else "正在生成备份包…")
+
+    zip_path = _pack_backup_zip(
         backup_dir=backup_dir,
         backup_name=backup_name,
         dump_path=db_dump_path,
@@ -511,6 +606,9 @@ async def run_backup_dump_and_zip(
         tenant_id=tenant_id,
         pack_uploads=pack_uploads,
     )
+    if on_progress:
+        await on_progress(99, "打包完成")
+    return zip_path
 
 
 def is_tenant_sql_dump(dump_path: str) -> bool:

@@ -21,6 +21,7 @@ from core.services.system.backup_storage import (
     resolve_backup_file_path,
 )
 from core.services.system.data_backup_jobs import (
+    BackupProgressReporter,
     read_backup_metadata,
     resolve_backup_scope_for_restore,
     is_full_logical_csv_dump,
@@ -93,12 +94,17 @@ async def handle_database_backup_requested(ctx: TaskContext, step: TaskStep) -> 
 
     try:
         backup.status = "running"
+        backup.progress = 0
+        backup.progress_message = "任务已开始"
         backup.started_at = resolve_business_datetime()
         backup.inngest_run_id = ctx.run_id
+        backup.error_message = None
         await backup.save()
     except Exception as e:
         logger.exception(f"备份任务进入 running 状态失败: {e}")
         return
+
+    progress = BackupProgressReporter(str(backup_uuid))
 
     try:
 
@@ -111,11 +117,14 @@ async def handle_database_backup_requested(ctx: TaskContext, step: TaskStep) -> 
                 backup_type=backup_type,
                 backup_scope=backup_scope,
                 include_files=bool(include_files),
+                on_progress=progress.report,
             )
 
         final_zip_path = await step.run("dump_and_create_zip", dump_and_create_zip)
 
         backup.status = "success"
+        backup.progress = 100
+        backup.progress_message = "备份完成"
         backup.completed_at = resolve_business_datetime()
         backup.file_path = store_backup_file_path(final_zip_path)
         backup.file_size = os.path.getsize(final_zip_path)
@@ -126,6 +135,7 @@ async def handle_database_backup_requested(ctx: TaskContext, step: TaskStep) -> 
         if backup is not None:
             backup.status = "failed"
             backup.error_message = str(e)
+            backup.progress_message = "备份失败"
             backup.completed_at = resolve_business_datetime()
             try:
                 await backup.save()
