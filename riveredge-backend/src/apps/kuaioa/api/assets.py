@@ -13,7 +13,7 @@ from apps.kuaioa.schemas.asset import (
     AssetUpdate,
 )
 from apps.kuaioa.services.asset_service import AssetPurchaseService, AssetRegistryService
-from core.api.deps.access import require_access
+from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
@@ -33,7 +33,7 @@ class AssetAssignRequest(BaseModel):
 async def list_asset_purchases(
     keyword: Optional[str] = Query(None),
     status_filter: Optional[str] = Query(None, alias="status"),
-    _auth=Depends(require_access("kuaioa.asset-purchase", "read", required_permissions=["kuaioa:asset-purchase:read"])),
+    _auth=Depends(require_permission_codes("kuaioa:asset-purchase:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     rows = await purchase_service.list_purchases(tenant_id, keyword=keyword, status=status_filter)
@@ -44,7 +44,7 @@ async def list_asset_purchases(
 async def create_asset_purchase(
     data: AssetPurchaseCreate,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.asset-purchase", "create", required_permissions=["kuaioa:asset-purchase:create"])),
+    _auth=Depends(require_permission_codes("kuaioa:asset-purchase:create")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     row = await purchase_service.create_purchase(tenant_id, data, current_user)
@@ -54,7 +54,7 @@ async def create_asset_purchase(
 @router.get("/purchases/{purchase_id}", summary="Get asset purchase")
 async def get_asset_purchase(
     purchase_id: int = Path(..., ge=1),
-    _auth=Depends(require_access("kuaioa.asset-purchase", "read", required_permissions=["kuaioa:asset-purchase:read"])),
+    _auth=Depends(require_permission_codes("kuaioa:asset-purchase:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -69,7 +69,7 @@ async def update_asset_purchase(
     data: AssetPurchaseUpdate,
     purchase_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.asset-purchase", "update", required_permissions=["kuaioa:asset-purchase:update"])),
+    _auth=Depends(require_permission_codes("kuaioa:asset-purchase:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -84,7 +84,7 @@ async def update_asset_purchase(
 async def delete_asset_purchase(
     purchase_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.asset-purchase", "delete", required_permissions=["kuaioa:asset-purchase:delete"])),
+    _auth=Depends(require_permission_codes("kuaioa:asset-purchase:delete")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -99,7 +99,7 @@ async def delete_asset_purchase(
 async def submit_asset_purchase(
     purchase_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.asset-purchase", "submit", required_permissions=["kuaioa:asset-purchase:submit"])),
+    _auth=Depends(require_permission_codes("kuaioa:asset-purchase:submit")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -114,7 +114,7 @@ async def submit_asset_purchase(
 async def revoke_asset_purchase(
     purchase_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.asset-purchase", "revoke", required_permissions=["kuaioa:asset-purchase:revoke"])),
+    _auth=Depends(require_permission_codes("kuaioa:asset-purchase:revoke")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -129,7 +129,7 @@ async def revoke_asset_purchase(
 async def register_asset_from_purchase(
     purchase_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.asset", "create", required_permissions=["kuaioa:asset:create"])),
+    _auth=Depends(require_permission_codes("kuaioa:asset:create")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -145,7 +145,7 @@ async def advance_asset_purchase_lifecycle(
     data: AssetLifecycleAdvance,
     purchase_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.asset-purchase", "update", required_permissions=["kuaioa:asset-purchase:update"])),
+    _auth=Depends(require_permission_codes("kuaioa:asset-purchase:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -160,7 +160,7 @@ async def advance_asset_purchase_lifecycle(
 async def list_assets(
     keyword: Optional[str] = Query(None),
     status_filter: Optional[str] = Query(None, alias="status"),
-    _auth=Depends(require_access("kuaioa.asset", "read", required_permissions=["kuaioa:asset:read"])),
+    _auth=Depends(require_permission_codes("kuaioa:asset:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     rows = await asset_service.list_assets(tenant_id, keyword=keyword, status=status_filter)
@@ -171,7 +171,7 @@ async def list_assets(
 async def create_asset(
     data: AssetCreate,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.asset", "create", required_permissions=["kuaioa:asset:create"])),
+    _auth=Depends(require_permission_codes("kuaioa:asset:create")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     row = await asset_service.create_asset(tenant_id, data, current_user.id)
@@ -181,7 +181,7 @@ async def create_asset(
 @router.get("/registry/{asset_id}", summary="Get fixed asset")
 async def get_asset(
     asset_id: int = Path(..., ge=1),
-    _auth=Depends(require_access("kuaioa.asset", "read", required_permissions=["kuaioa:asset:read"])),
+    _auth=Depends(require_permission_codes("kuaioa:asset:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -196,7 +196,7 @@ async def update_asset(
     data: AssetUpdate,
     asset_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.asset", "update", required_permissions=["kuaioa:asset:update"])),
+    _auth=Depends(require_permission_codes("kuaioa:asset:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -210,7 +210,7 @@ async def update_asset(
 async def delete_asset(
     asset_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.asset", "delete", required_permissions=["kuaioa:asset:delete"])),
+    _auth=Depends(require_permission_codes("kuaioa:asset:delete")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -225,7 +225,7 @@ async def assign_asset(
     data: AssetAssignRequest,
     asset_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.asset", "update", required_permissions=["kuaioa:asset:update"])),
+    _auth=Depends(require_permission_codes("kuaioa:asset:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -245,7 +245,7 @@ async def assign_asset(
 async def return_asset(
     asset_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.asset", "update", required_permissions=["kuaioa:asset:update"])),
+    _auth=Depends(require_permission_codes("kuaioa:asset:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -259,7 +259,7 @@ async def return_asset(
 async def scrap_asset(
     asset_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.asset", "update", required_permissions=["kuaioa:asset:update"])),
+    _auth=Depends(require_permission_codes("kuaioa:asset:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -273,7 +273,7 @@ async def scrap_asset(
 async def finance_audit_asset(
     asset_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.asset", "update", required_permissions=["kuaioa:asset:update"])),
+    _auth=Depends(require_permission_codes("kuaioa:asset:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -288,7 +288,7 @@ async def finance_audit_asset(
 async def write_off_asset(
     asset_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.asset", "update", required_permissions=["kuaioa:asset:update"])),
+    _auth=Depends(require_permission_codes("kuaioa:asset:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:

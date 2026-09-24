@@ -14,7 +14,7 @@ from apps.kuaioa.schemas.forms import (
     FormTemplateUpdate,
 )
 from apps.kuaioa.services.form_service import FormRequestService, FormTemplateService
-from core.api.deps.access import require_access
+from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
@@ -27,13 +27,7 @@ request_service = FormRequestService()
 
 @router.get("/business-types", summary="List general signoff business types")
 async def list_form_business_types(
-    _auth=Depends(
-        require_access(
-            "kuaioa.form-template",
-            "read",
-            required_permissions=["kuaioa:form-template:read"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:form-template:read")),
 ):
     rows = list_general_signoff_business_types()
     return {"data": rows, "total": len(rows), "success": True}
@@ -45,7 +39,7 @@ async def list_form_templates(
     category: Optional[str] = Query(None),
     business_type: Optional[str] = Query(None),
     is_active: Optional[bool] = Query(None),
-    _auth=Depends(require_access("kuaioa.form-template", "read", required_permissions=["kuaioa:form-template:read"])),
+    _auth=Depends(require_permission_codes("kuaioa:form-template:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     rows = await template_service.list_templates(
@@ -62,7 +56,7 @@ async def list_form_templates(
 async def create_form_template(
     data: FormTemplateCreate,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.form-template", "create", required_permissions=["kuaioa:form-template:create"])),
+    _auth=Depends(require_permission_codes("kuaioa:form-template:create")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -77,7 +71,7 @@ async def create_form_template(
 @router.get("/templates/by-code/{template_code}", summary="Get form template by code")
 async def get_form_template_by_code(
     template_code: str = Path(..., min_length=1, max_length=50),
-    _auth=Depends(require_access("kuaioa.form-request", "read", required_permissions=["kuaioa:form-request:read"])),
+    _auth=Depends(require_permission_codes("kuaioa:form-request:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -90,7 +84,7 @@ async def get_form_template_by_code(
 @router.get("/templates/{template_id}", summary="Get form template")
 async def get_form_template(
     template_id: int = Path(..., ge=1),
-    _auth=Depends(require_access("kuaioa.form-template", "read", required_permissions=["kuaioa:form-template:read"])),
+    _auth=Depends(require_permission_codes("kuaioa:form-template:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -105,7 +99,7 @@ async def update_form_template(
     data: FormTemplateUpdate,
     template_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.form-template", "update", required_permissions=["kuaioa:form-template:update"])),
+    _auth=Depends(require_permission_codes("kuaioa:form-template:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -121,7 +115,7 @@ async def update_form_template(
 async def delete_form_template(
     template_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.form-template", "delete", required_permissions=["kuaioa:form-template:delete"])),
+    _auth=Depends(require_permission_codes("kuaioa:form-template:delete")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -137,7 +131,7 @@ async def list_form_requests(
     status_filter: Optional[str] = Query(None, alias="status"),
     template_id: Optional[int] = Query(None),
     business_type: Optional[str] = Query(None),
-    _auth=Depends(require_access("kuaioa.form-request", "read", required_permissions=["kuaioa:form-request:read"])),
+    _auth=Depends(require_permission_codes("kuaioa:form-request:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     rows = await request_service.list_requests(
@@ -153,7 +147,7 @@ async def list_form_requests(
 @router.get("/requests/{request_id}", summary="Get form request")
 async def get_form_request(
     request_id: int = Path(..., ge=1),
-    _auth=Depends(require_access("kuaioa.form-request", "read", required_permissions=["kuaioa:form-request:read"])),
+    _auth=Depends(require_permission_codes("kuaioa:form-request:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -167,7 +161,7 @@ async def get_form_request(
 async def create_form_request(
     data: FormRequestCreate,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.form-request", "create", required_permissions=["kuaioa:form-request:create"])),
+    _auth=Depends(require_permission_codes("kuaioa:form-request:create")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     row = await request_service.create_request(tenant_id, data, current_user)
@@ -179,7 +173,7 @@ async def update_form_request(
     data: FormRequestUpdate,
     request_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.form-request", "update", required_permissions=["kuaioa:form-request:update"])),
+    _auth=Depends(require_permission_codes("kuaioa:form-request:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -194,7 +188,7 @@ async def update_form_request(
 async def delete_form_request(
     request_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.form-request", "delete", required_permissions=["kuaioa:form-request:delete"])),
+    _auth=Depends(require_permission_codes("kuaioa:form-request:delete")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -209,7 +203,7 @@ async def delete_form_request(
 async def submit_form_request(
     request_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.form-request", "submit", required_permissions=["kuaioa:form-request:submit"])),
+    _auth=Depends(require_permission_codes("kuaioa:form-request:submit")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -224,7 +218,7 @@ async def submit_form_request(
 async def revoke_form_request(
     request_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.form-request", "revoke", required_permissions=["kuaioa:form-request:revoke"])),
+    _auth=Depends(require_permission_codes("kuaioa:form-request:revoke")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:

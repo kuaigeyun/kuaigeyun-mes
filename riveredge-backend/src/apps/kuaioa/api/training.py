@@ -28,7 +28,7 @@ from apps.kuaioa.services.training_workflow_service import (
     DeptTrainingApplicationService,
     SpecialWorkQualificationService,
 )
-from core.api.deps.access import require_access
+from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
@@ -59,7 +59,7 @@ def _http_error(exc: Exception) -> HTTPException:
 async def list_training_plans(
     keyword: Optional[str] = Query(None),
     status_filter: Optional[str] = Query(None, alias="status"),
-    _auth=Depends(require_access("kuaioa.training-plan", "read", required_permissions=["kuaioa:training-plan:read"])),
+    _auth=Depends(require_permission_codes("kuaioa:training-plan:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     rows = await plan_service.list_plans(tenant_id, keyword=keyword, status=status_filter)
@@ -69,7 +69,7 @@ async def list_training_plans(
 @router.get("/plans/{plan_id}", summary="Get training plan")
 async def get_training_plan(
     plan_id: int = Path(..., ge=1),
-    _auth=Depends(require_access("kuaioa.training-plan", "read", required_permissions=["kuaioa:training-plan:read"])),
+    _auth=Depends(require_permission_codes("kuaioa:training-plan:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -83,7 +83,7 @@ async def get_training_plan(
 async def create_training_plan(
     data: TrainingPlanCreate,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.training-plan", "create", required_permissions=["kuaioa:training-plan:create"])),
+    _auth=Depends(require_permission_codes("kuaioa:training-plan:create")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     row = await plan_service.create_plan(tenant_id, data, current_user)
@@ -95,7 +95,7 @@ async def update_training_plan(
     data: TrainingPlanUpdate,
     plan_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.training-plan", "update", required_permissions=["kuaioa:training-plan:update"])),
+    _auth=Depends(require_permission_codes("kuaioa:training-plan:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -109,7 +109,7 @@ async def update_training_plan(
 async def delete_training_plan(
     plan_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.training-plan", "delete", required_permissions=["kuaioa:training-plan:delete"])),
+    _auth=Depends(require_permission_codes("kuaioa:training-plan:delete")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -123,7 +123,7 @@ async def delete_training_plan(
 async def submit_training_plan(
     plan_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.training-plan", "submit", required_permissions=["kuaioa:training-plan:submit"])),
+    _auth=Depends(require_permission_codes("kuaioa:training-plan:submit")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -137,7 +137,7 @@ async def submit_training_plan(
 async def revoke_training_plan(
     plan_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.training-plan", "revoke", required_permissions=["kuaioa:training-plan:revoke"])),
+    _auth=Depends(require_permission_codes("kuaioa:training-plan:revoke")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -155,7 +155,7 @@ async def list_training_records(
     keyword: Optional[str] = Query(None),
     plan_id: Optional[int] = Query(None),
     record_kind: Optional[str] = Query(None),
-    _auth=Depends(require_access("kuaioa.training-record", "read", required_permissions=["kuaioa:training-record:read"])),
+    _auth=Depends(require_permission_codes("kuaioa:training-record:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     rows = await record_service.list_records(
@@ -167,7 +167,7 @@ async def list_training_records(
 @router.get("/records/{record_id}", summary="Get training record")
 async def get_training_record(
     record_id: int = Path(..., ge=1),
-    _auth=Depends(require_access("kuaioa.training-record", "read", required_permissions=["kuaioa:training-record:read"])),
+    _auth=Depends(require_permission_codes("kuaioa:training-record:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -181,7 +181,7 @@ async def get_training_record(
 async def create_training_record(
     data: TrainingRecordCreate,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.training-record", "create", required_permissions=["kuaioa:training-record:create"])),
+    _auth=Depends(require_permission_codes("kuaioa:training-record:create")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     row = await record_service.create_record(tenant_id, data, current_user.id)
@@ -193,7 +193,7 @@ async def update_training_record(
     data: TrainingRecordUpdate,
     record_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.training-record", "update", required_permissions=["kuaioa:training-record:update"])),
+    _auth=Depends(require_permission_codes("kuaioa:training-record:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -207,7 +207,7 @@ async def update_training_record(
 async def confirm_training_record_hr(
     record_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.training-record", "update", required_permissions=["kuaioa:training-record:update"])),
+    _auth=Depends(require_permission_codes("kuaioa:training-record:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -221,7 +221,7 @@ async def confirm_training_record_hr(
 async def delete_training_record(
     record_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.training-record", "delete", required_permissions=["kuaioa:training-record:delete"])),
+    _auth=Depends(require_permission_codes("kuaioa:training-record:delete")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -238,7 +238,7 @@ async def delete_training_record(
 async def list_work_licenses(
     keyword: Optional[str] = Query(None),
     status_filter: Optional[str] = Query(None, alias="status"),
-    _auth=Depends(require_access("kuaioa.work-license", "read", required_permissions=["kuaioa:work-license:read"])),
+    _auth=Depends(require_permission_codes("kuaioa:work-license:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     rows = await license_service.list_licenses(tenant_id, keyword=keyword, status=status_filter)
@@ -248,7 +248,7 @@ async def list_work_licenses(
 @router.get("/work-licenses/expiring", summary="List expiring work licenses")
 async def list_expiring_work_licenses(
     within_days: int = Query(30, ge=1, le=365),
-    _auth=Depends(require_access("kuaioa.work-license", "read", required_permissions=["kuaioa:work-license:read"])),
+    _auth=Depends(require_permission_codes("kuaioa:work-license:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     rows = await license_service.list_expiring(tenant_id, within_days=within_days)
@@ -258,7 +258,7 @@ async def list_expiring_work_licenses(
 @router.get("/work-licenses/{license_id}", summary="Get work license")
 async def get_work_license(
     license_id: int = Path(..., ge=1),
-    _auth=Depends(require_access("kuaioa.work-license", "read", required_permissions=["kuaioa:work-license:read"])),
+    _auth=Depends(require_permission_codes("kuaioa:work-license:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -272,7 +272,7 @@ async def get_work_license(
 async def create_work_license(
     data: WorkLicenseCreate,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.work-license", "create", required_permissions=["kuaioa:work-license:create"])),
+    _auth=Depends(require_permission_codes("kuaioa:work-license:create")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     row = await license_service.create_license(tenant_id, data, current_user.id)
@@ -284,7 +284,7 @@ async def update_work_license(
     data: WorkLicenseUpdate,
     license_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.work-license", "update", required_permissions=["kuaioa:work-license:update"])),
+    _auth=Depends(require_permission_codes("kuaioa:work-license:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -298,7 +298,7 @@ async def update_work_license(
 async def delete_work_license(
     license_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.work-license", "delete", required_permissions=["kuaioa:work-license:delete"])),
+    _auth=Depends(require_permission_codes("kuaioa:work-license:delete")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -311,7 +311,7 @@ async def delete_work_license(
 @router.get("/work-licenses/{license_id}/print", summary="Print work license payload")
 async def print_work_license(
     license_id: int = Path(..., ge=1),
-    _auth=Depends(require_access("kuaioa.work-license", "print", required_permissions=["kuaioa:work-license:print"])),
+    _auth=Depends(require_permission_codes("kuaioa:work-license:print")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -328,13 +328,7 @@ async def print_work_license(
 async def list_dept_applications(
     keyword: Optional[str] = Query(None),
     status_filter: Optional[str] = Query(None, alias="status"),
-    _auth=Depends(
-        require_access(
-            "kuaioa.dept-training-application",
-            "read",
-            required_permissions=["kuaioa:dept-training-application:read"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:dept-training-application:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     rows = await dept_app_service.list_requests(tenant_id, keyword=keyword, status=status_filter)
@@ -344,13 +338,7 @@ async def list_dept_applications(
 @router.get("/dept-applications/{request_id}", summary="Get department training application")
 async def get_dept_application(
     request_id: int = Path(..., ge=1),
-    _auth=Depends(
-        require_access(
-            "kuaioa.dept-training-application",
-            "read",
-            required_permissions=["kuaioa:dept-training-application:read"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:dept-training-application:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -368,13 +356,7 @@ async def get_dept_application(
 async def create_dept_application(
     data: DeptTrainingApplicationCreate,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaioa.dept-training-application",
-            "create",
-            required_permissions=["kuaioa:dept-training-application:create"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:dept-training-application:create")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     row = await dept_app_service.create_request(tenant_id, data, current_user)
@@ -386,13 +368,7 @@ async def update_dept_application(
     data: DeptTrainingApplicationUpdate,
     request_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaioa.dept-training-application",
-            "update",
-            required_permissions=["kuaioa:dept-training-application:update"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:dept-training-application:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -406,13 +382,7 @@ async def update_dept_application(
 async def delete_dept_application(
     request_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaioa.dept-training-application",
-            "delete",
-            required_permissions=["kuaioa:dept-training-application:delete"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:dept-training-application:delete")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -426,13 +396,7 @@ async def delete_dept_application(
 async def submit_dept_application(
     request_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaioa.dept-training-application",
-            "submit",
-            required_permissions=["kuaioa:dept-training-application:submit"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:dept-training-application:submit")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -446,13 +410,7 @@ async def submit_dept_application(
 async def revoke_dept_application(
     request_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaioa.dept-training-application",
-            "revoke",
-            required_permissions=["kuaioa:dept-training-application:revoke"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:dept-training-application:revoke")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -469,13 +427,7 @@ async def revoke_dept_application(
 async def list_special_work(
     keyword: Optional[str] = Query(None),
     status_filter: Optional[str] = Query(None, alias="status"),
-    _auth=Depends(
-        require_access(
-            "kuaioa.special-work-qualification",
-            "read",
-            required_permissions=["kuaioa:special-work-qualification:read"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:special-work-qualification:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     rows = await special_work_service.list_requests(tenant_id, keyword=keyword, status=status_filter)
@@ -485,13 +437,7 @@ async def list_special_work(
 @router.get("/special-work-qualifications/{request_id}", summary="Get special work qualification")
 async def get_special_work(
     request_id: int = Path(..., ge=1),
-    _auth=Depends(
-        require_access(
-            "kuaioa.special-work-qualification",
-            "read",
-            required_permissions=["kuaioa:special-work-qualification:read"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:special-work-qualification:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -509,13 +455,7 @@ async def get_special_work(
 async def create_special_work(
     data: SpecialWorkQualificationCreate,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaioa.special-work-qualification",
-            "create",
-            required_permissions=["kuaioa:special-work-qualification:create"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:special-work-qualification:create")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     row = await special_work_service.create_request(tenant_id, data, current_user)
@@ -527,13 +467,7 @@ async def update_special_work(
     data: SpecialWorkQualificationUpdate,
     request_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaioa.special-work-qualification",
-            "update",
-            required_permissions=["kuaioa:special-work-qualification:update"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:special-work-qualification:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -550,13 +484,7 @@ async def update_special_work(
 async def delete_special_work(
     request_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaioa.special-work-qualification",
-            "delete",
-            required_permissions=["kuaioa:special-work-qualification:delete"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:special-work-qualification:delete")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -573,13 +501,7 @@ async def delete_special_work(
 async def submit_special_work(
     request_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaioa.special-work-qualification",
-            "submit",
-            required_permissions=["kuaioa:special-work-qualification:submit"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:special-work-qualification:submit")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -596,13 +518,7 @@ async def submit_special_work(
 async def revoke_special_work(
     request_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaioa.special-work-qualification",
-            "revoke",
-            required_permissions=["kuaioa:special-work-qualification:revoke"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:special-work-qualification:revoke")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -619,13 +535,7 @@ async def revoke_special_work(
 async def list_training_templates(
     keyword: Optional[str] = Query(None),
     template_kind: Optional[str] = Query(None),
-    _auth=Depends(
-        require_access(
-            "kuaioa.training-template",
-            "read",
-            required_permissions=["kuaioa:training-template:read"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:training-template:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     rows = await template_service.list_templates(
@@ -637,13 +547,7 @@ async def list_training_templates(
 @router.get("/templates/{template_id}", summary="Get training template")
 async def get_training_template(
     template_id: int = Path(..., ge=1),
-    _auth=Depends(
-        require_access(
-            "kuaioa.training-template",
-            "read",
-            required_permissions=["kuaioa:training-template:read"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:training-template:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -657,13 +561,7 @@ async def get_training_template(
 async def create_training_template(
     data: TrainingTemplateCreate,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaioa.training-template",
-            "create",
-            required_permissions=["kuaioa:training-template:create"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:training-template:create")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -678,13 +576,7 @@ async def update_training_template(
     data: TrainingTemplateUpdate,
     template_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaioa.training-template",
-            "update",
-            required_permissions=["kuaioa:training-template:update"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:training-template:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -700,13 +592,7 @@ async def update_training_template(
 async def delete_training_template(
     template_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaioa.training-template",
-            "delete",
-            required_permissions=["kuaioa:training-template:delete"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:training-template:delete")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:

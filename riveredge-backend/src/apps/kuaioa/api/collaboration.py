@@ -17,7 +17,7 @@ from apps.kuaioa.services.collaboration_service import (
     ProcessDeviationService,
     SpecialPriceRequestService,
 )
-from core.api.deps.access import require_access
+from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
@@ -42,7 +42,7 @@ def _http_error(e: Exception) -> HTTPException:
 async def list_special_price(
     keyword: Optional[str] = Query(None),
     status_filter: Optional[str] = Query(None, alias="status"),
-    _auth=Depends(require_access("kuaioa.special-price", "read", required_permissions=["kuaioa:special-price:read"])),
+    _auth=Depends(require_permission_codes("kuaioa:special-price:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     rows = await special_price_service.list_requests(tenant_id, keyword=keyword, status=status_filter)
@@ -52,7 +52,7 @@ async def list_special_price(
 @router.get("/special-price/{request_id}", summary="Get special price request")
 async def get_special_price(
     request_id: int = Path(..., ge=1),
-    _auth=Depends(require_access("kuaioa.special-price", "read", required_permissions=["kuaioa:special-price:read"])),
+    _auth=Depends(require_permission_codes("kuaioa:special-price:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -65,7 +65,7 @@ async def get_special_price(
 async def create_special_price(
     data: SpecialPriceRequestCreate,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.special-price", "create", required_permissions=["kuaioa:special-price:create"])),
+    _auth=Depends(require_permission_codes("kuaioa:special-price:create")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     row = await special_price_service.create_request(tenant_id, data, current_user)
@@ -77,7 +77,7 @@ async def update_special_price(
     data: SpecialPriceRequestUpdate,
     request_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.special-price", "update", required_permissions=["kuaioa:special-price:update"])),
+    _auth=Depends(require_permission_codes("kuaioa:special-price:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -90,7 +90,7 @@ async def update_special_price(
 async def delete_special_price(
     request_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.special-price", "delete", required_permissions=["kuaioa:special-price:delete"])),
+    _auth=Depends(require_permission_codes("kuaioa:special-price:delete")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -104,7 +104,7 @@ async def delete_special_price(
 async def submit_special_price(
     request_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.special-price", "submit", required_permissions=["kuaioa:special-price:submit"])),
+    _auth=Depends(require_permission_codes("kuaioa:special-price:submit")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -117,7 +117,7 @@ async def submit_special_price(
 async def revoke_special_price(
     request_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.special-price", "revoke", required_permissions=["kuaioa:special-price:revoke"])),
+    _auth=Depends(require_permission_codes("kuaioa:special-price:revoke")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -133,7 +133,7 @@ async def revoke_special_price(
 async def list_concession(
     keyword: Optional[str] = Query(None),
     status_filter: Optional[str] = Query(None, alias="status"),
-    _auth=Depends(require_access("kuaioa.concession", "read", required_permissions=["kuaioa:concession:read"])),
+    _auth=Depends(require_permission_codes("kuaioa:concession:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     rows = await concession_service.list_requests(tenant_id, keyword=keyword, status=status_filter)
@@ -143,7 +143,7 @@ async def list_concession(
 @router.get("/concession/{request_id}", summary="Get concession request")
 async def get_concession(
     request_id: int = Path(..., ge=1),
-    _auth=Depends(require_access("kuaioa.concession", "read", required_permissions=["kuaioa:concession:read"])),
+    _auth=Depends(require_permission_codes("kuaioa:concession:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -156,7 +156,7 @@ async def get_concession(
 async def create_concession(
     data: ConcessionRequestCreate,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.concession", "create", required_permissions=["kuaioa:concession:create"])),
+    _auth=Depends(require_permission_codes("kuaioa:concession:create")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     row = await concession_service.create_request(tenant_id, data, current_user)
@@ -168,7 +168,7 @@ async def update_concession(
     data: ConcessionRequestUpdate,
     request_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.concession", "update", required_permissions=["kuaioa:concession:update"])),
+    _auth=Depends(require_permission_codes("kuaioa:concession:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -181,7 +181,7 @@ async def update_concession(
 async def delete_concession(
     request_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.concession", "delete", required_permissions=["kuaioa:concession:delete"])),
+    _auth=Depends(require_permission_codes("kuaioa:concession:delete")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -195,7 +195,7 @@ async def delete_concession(
 async def submit_concession(
     request_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.concession", "submit", required_permissions=["kuaioa:concession:submit"])),
+    _auth=Depends(require_permission_codes("kuaioa:concession:submit")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -208,7 +208,7 @@ async def submit_concession(
 async def revoke_concession(
     request_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.concession", "revoke", required_permissions=["kuaioa:concession:revoke"])),
+    _auth=Depends(require_permission_codes("kuaioa:concession:revoke")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -224,7 +224,7 @@ async def revoke_concession(
 async def list_process_deviation(
     keyword: Optional[str] = Query(None),
     status_filter: Optional[str] = Query(None, alias="status"),
-    _auth=Depends(require_access("kuaioa.process-deviation", "read", required_permissions=["kuaioa:process-deviation:read"])),
+    _auth=Depends(require_permission_codes("kuaioa:process-deviation:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     rows = await process_deviation_service.list_requests(tenant_id, keyword=keyword, status=status_filter)
@@ -234,7 +234,7 @@ async def list_process_deviation(
 @router.get("/process-deviation/{request_id}", summary="Get process deviation request")
 async def get_process_deviation(
     request_id: int = Path(..., ge=1),
-    _auth=Depends(require_access("kuaioa.process-deviation", "read", required_permissions=["kuaioa:process-deviation:read"])),
+    _auth=Depends(require_permission_codes("kuaioa:process-deviation:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -247,7 +247,7 @@ async def get_process_deviation(
 async def create_process_deviation(
     data: ProcessDeviationCreate,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.process-deviation", "create", required_permissions=["kuaioa:process-deviation:create"])),
+    _auth=Depends(require_permission_codes("kuaioa:process-deviation:create")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     row = await process_deviation_service.create_request(tenant_id, data, current_user)
@@ -259,7 +259,7 @@ async def update_process_deviation(
     data: ProcessDeviationUpdate,
     request_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.process-deviation", "update", required_permissions=["kuaioa:process-deviation:update"])),
+    _auth=Depends(require_permission_codes("kuaioa:process-deviation:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -272,7 +272,7 @@ async def update_process_deviation(
 async def delete_process_deviation(
     request_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.process-deviation", "delete", required_permissions=["kuaioa:process-deviation:delete"])),
+    _auth=Depends(require_permission_codes("kuaioa:process-deviation:delete")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -286,7 +286,7 @@ async def delete_process_deviation(
 async def submit_process_deviation(
     request_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.process-deviation", "submit", required_permissions=["kuaioa:process-deviation:submit"])),
+    _auth=Depends(require_permission_codes("kuaioa:process-deviation:submit")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -299,7 +299,7 @@ async def submit_process_deviation(
 async def revoke_process_deviation(
     request_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.process-deviation", "revoke", required_permissions=["kuaioa:process-deviation:revoke"])),
+    _auth=Depends(require_permission_codes("kuaioa:process-deviation:revoke")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:

@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 
 from apps.kuaioa.schemas.seal import SealRequestCreate, SealRequestUpdate
 from apps.kuaioa.services.seal_service import SealRequestService
-from core.api.deps.access import require_access
+from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
@@ -20,7 +20,7 @@ service = SealRequestService()
 async def list_seal_requests(
     keyword: Optional[str] = Query(None),
     status_filter: Optional[str] = Query(None, alias="status"),
-    _auth=Depends(require_access("kuaioa.seal", "read", required_permissions=["kuaioa:seal:read"])),
+    _auth=Depends(require_permission_codes("kuaioa:seal:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     rows = await service.list_requests(tenant_id, keyword=keyword, status=status_filter)
@@ -30,7 +30,7 @@ async def list_seal_requests(
 @router.get("/requests/{request_id}", summary="Get seal request")
 async def get_seal_request(
     request_id: int = Path(..., ge=1),
-    _auth=Depends(require_access("kuaioa.seal", "read", required_permissions=["kuaioa:seal:read"])),
+    _auth=Depends(require_permission_codes("kuaioa:seal:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -44,7 +44,7 @@ async def get_seal_request(
 async def create_seal_request(
     data: SealRequestCreate,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.seal", "create", required_permissions=["kuaioa:seal:create"])),
+    _auth=Depends(require_permission_codes("kuaioa:seal:create")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     row = await service.create_request(tenant_id, data, current_user)
@@ -56,7 +56,7 @@ async def update_seal_request(
     data: SealRequestUpdate,
     request_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.seal", "update", required_permissions=["kuaioa:seal:update"])),
+    _auth=Depends(require_permission_codes("kuaioa:seal:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -71,7 +71,7 @@ async def update_seal_request(
 async def delete_seal_request(
     request_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.seal", "delete", required_permissions=["kuaioa:seal:delete"])),
+    _auth=Depends(require_permission_codes("kuaioa:seal:delete")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -86,7 +86,7 @@ async def delete_seal_request(
 async def submit_seal_request(
     request_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.seal", "submit", required_permissions=["kuaioa:seal:submit"])),
+    _auth=Depends(require_permission_codes("kuaioa:seal:submit")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -101,7 +101,7 @@ async def submit_seal_request(
 async def revoke_seal_request(
     request_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.seal", "revoke", required_permissions=["kuaioa:seal:revoke"])),
+    _auth=Depends(require_permission_codes("kuaioa:seal:revoke")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:

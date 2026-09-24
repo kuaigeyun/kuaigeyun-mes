@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 
 from apps.kuaioa.schemas.leave import LeaveRequestCreate, LeaveRequestUpdate
 from apps.kuaioa.services.leave_service import LeaveRequestService
-from core.api.deps.access import require_access
+from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
@@ -20,7 +20,7 @@ service = LeaveRequestService()
 async def list_leave_requests(
     keyword: Optional[str] = Query(None),
     status_filter: Optional[str] = Query(None, alias="status"),
-    _auth=Depends(require_access("kuaioa.leave", "read", required_permissions=["kuaioa:leave:read"])),
+    _auth=Depends(require_permission_codes("kuaioa:leave:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     rows = await service.list_requests(tenant_id, keyword=keyword, status=status_filter)
@@ -30,7 +30,7 @@ async def list_leave_requests(
 @router.get("/requests/{request_id}", summary="Get leave request")
 async def get_leave_request(
     request_id: int = Path(..., ge=1),
-    _auth=Depends(require_access("kuaioa.leave", "read", required_permissions=["kuaioa:leave:read"])),
+    _auth=Depends(require_permission_codes("kuaioa:leave:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -44,7 +44,7 @@ async def get_leave_request(
 async def create_leave_request(
     data: LeaveRequestCreate,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.leave", "create", required_permissions=["kuaioa:leave:create"])),
+    _auth=Depends(require_permission_codes("kuaioa:leave:create")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     row = await service.create_request(tenant_id, data, current_user)
@@ -56,7 +56,7 @@ async def update_leave_request(
     data: LeaveRequestUpdate,
     request_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.leave", "update", required_permissions=["kuaioa:leave:update"])),
+    _auth=Depends(require_permission_codes("kuaioa:leave:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -71,7 +71,7 @@ async def update_leave_request(
 async def delete_leave_request(
     request_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.leave", "delete", required_permissions=["kuaioa:leave:delete"])),
+    _auth=Depends(require_permission_codes("kuaioa:leave:delete")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -86,7 +86,7 @@ async def delete_leave_request(
 async def submit_leave_request(
     request_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.leave", "submit", required_permissions=["kuaioa:leave:submit"])),
+    _auth=Depends(require_permission_codes("kuaioa:leave:submit")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -101,7 +101,7 @@ async def submit_leave_request(
 async def revoke_leave_request(
     request_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.leave", "revoke", required_permissions=["kuaioa:leave:revoke"])),
+    _auth=Depends(require_permission_codes("kuaioa:leave:revoke")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:

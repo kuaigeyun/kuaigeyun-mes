@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 
 from apps.kuaioa.schemas.announcement import AnnouncementCreate, AnnouncementUpdate
 from apps.kuaioa.services.announcement_service import AnnouncementService
-from core.api.deps.access import require_access
+from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
@@ -21,7 +21,7 @@ async def list_announcements(
     keyword: Optional[str] = Query(None),
     status_filter: Optional[str] = Query(None, alias="status"),
     published_only: bool = Query(False),
-    _auth=Depends(require_access("kuaioa.announcement", "read", required_permissions=["kuaioa:announcement:read"])),
+    _auth=Depends(require_permission_codes("kuaioa:announcement:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     rows = await service.list_announcements(
@@ -33,7 +33,7 @@ async def list_announcements(
 @router.get("/{announcement_id}", summary="Get announcement")
 async def get_announcement(
     announcement_id: int = Path(..., ge=1),
-    _auth=Depends(require_access("kuaioa.announcement", "read", required_permissions=["kuaioa:announcement:read"])),
+    _auth=Depends(require_permission_codes("kuaioa:announcement:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -47,7 +47,7 @@ async def get_announcement(
 async def create_announcement(
     data: AnnouncementCreate,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.announcement", "create", required_permissions=["kuaioa:announcement:create"])),
+    _auth=Depends(require_permission_codes("kuaioa:announcement:create")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     row = await service.create_announcement(tenant_id, data, current_user)
@@ -59,7 +59,7 @@ async def update_announcement(
     data: AnnouncementUpdate,
     announcement_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.announcement", "update", required_permissions=["kuaioa:announcement:update"])),
+    _auth=Depends(require_permission_codes("kuaioa:announcement:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -74,7 +74,7 @@ async def update_announcement(
 async def delete_announcement(
     announcement_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.announcement", "delete", required_permissions=["kuaioa:announcement:delete"])),
+    _auth=Depends(require_permission_codes("kuaioa:announcement:delete")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -89,7 +89,7 @@ async def delete_announcement(
 async def publish_announcement(
     announcement_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaioa.announcement", "publish", required_permissions=["kuaioa:announcement:publish"])),
+    _auth=Depends(require_permission_codes("kuaioa:announcement:publish")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:

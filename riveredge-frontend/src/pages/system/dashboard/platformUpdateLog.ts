@@ -44,6 +44,14 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'permission-require-codes-migrate-r04',
+    date: '2026-09-24',
+    type: 'security',
+    titleKey: 'pages.dashboard.updateLog.entries.permission-require-codes-migrate-r04.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.permission-require-codes-migrate-r04.description',
+  },
+  {
     id: 'permission-require-codes-migrate-r03',
     date: '2026-09-24',
     type: 'security',
@@ -73,6 +81,13 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
     type: 'security',
     titleKey: 'pages.dashboard.updateLog.entries.permission-governance-p0-r01.title',
     descriptionKey: 'pages.dashboard.updateLog.entries.permission-governance-p0-r01.description',
+  },
+  {
+    id: 'drawing-file-content-missing-r01',
+    date: '2026-09-24',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.drawing-file-content-missing-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.drawing-file-content-missing-r01.description',
   },
   {
     id: 'drawing-vault-tree-counts-r01',
