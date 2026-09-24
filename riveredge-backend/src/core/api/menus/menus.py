@@ -23,7 +23,7 @@ from core.schemas.menu import (
 )
 from core.services.system.menu_service import MenuService, NAV_TREE_CACHE_SUFFIX
 from core.api.deps.deps import get_current_tenant
-from core.api.deps.access import require_access
+from core.api.deps.access import require_permission_codes
 from infra.api.deps.deps import get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError
@@ -51,7 +51,7 @@ def _menu_cache_enabled() -> bool:
 @router.post("", response_model=MenuResponse, status_code=status.HTTP_201_CREATED)
 async def create_menu(
     data: MenuCreate,
-    _auth: object = Depends(require_access("system.menu", "create")),
+    _auth: object = Depends(require_permission_codes("system:menu:create")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -76,7 +76,7 @@ async def get_menus(
     parent_uuid: Optional[str] = Query(None, description="父菜单UUID过滤"),
     application_uuid: Optional[str] = Query(None, description="应用UUID过滤"),
     is_active: Optional[bool] = Query(None, description="是否启用过滤"),
-    _auth: object = Depends(require_access("system.menu", "read")),
+    _auth: object = Depends(require_permission_codes("system:menu:read")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -110,12 +110,12 @@ async def get_menu_tree(
     parent_uuid: Optional[str] = Query(None, description="父菜单UUID（可选，如果提供则从该菜单开始构建树）"),
     application_uuid: Optional[str] = Query(None, description="应用UUID过滤"),
     is_active: Optional[bool] = Query(None, description="是否启用过滤"),
-    _auth: object = Depends(require_access("system.menu", "read")),
+    _auth: object = Depends(require_permission_codes("system:menu:read")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     """
-    获取菜单树（菜单管理 / 权限配置用，需 system.menu:read）
+    获取菜单树（菜单管理 / 权限配置用，需 system:menu:read）
     """
     use_cache = _menu_cache_enabled()
 
@@ -162,7 +162,7 @@ async def get_custom_menu_layout(
     获取租户级自组菜单布局配置。
 
     任意登录用户可读（与 navigation-tree 一致），供侧栏/工作台应用租户级菜单映射；
-    写入仍须 system.menu:update。
+    写入仍须 system:menu:update。
     """
     return await MenuService.get_custom_menu_layout(tenant_id=tenant_id)
 
@@ -170,7 +170,7 @@ async def get_custom_menu_layout(
 @router.put("/custom-layout", response_model=CustomMenuLayoutResponse)
 async def update_custom_menu_layout(
     data: CustomMenuLayoutUpdate,
-    _auth: object = Depends(require_access("system.menu", "update")),
+    _auth: object = Depends(require_permission_codes("system:menu:update")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -214,7 +214,7 @@ async def get_effective_home(
 
 @router.delete("/backend-home", status_code=status.HTTP_204_NO_CONTENT, summary="清除后台首页配置")
 async def clear_backend_home(
-    _auth: object = Depends(require_access("system.menu", "update")),
+    _auth: object = Depends(require_permission_codes("system:menu:update")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -229,7 +229,7 @@ async def clear_backend_home(
 )
 async def set_menu_as_backend_home(
     uuid: str,
-    _auth: object = Depends(require_access("system.menu", "update")),
+    _auth: object = Depends(require_permission_codes("system:menu:update")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -248,7 +248,7 @@ async def set_menu_as_backend_home(
 @router.get("/{uuid}", response_model=MenuResponse)
 async def get_menu(
     uuid: str,
-    _auth: object = Depends(require_access("system.menu", "read")),
+    _auth: object = Depends(require_permission_codes("system:menu:read")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -280,7 +280,7 @@ async def get_menu(
 async def update_menu(
     uuid: str,
     data: MenuUpdate,
-    _auth: object = Depends(require_access("system.menu", "update")),
+    _auth: object = Depends(require_permission_codes("system:menu:update")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -311,7 +311,7 @@ async def update_menu(
 @router.delete("/{uuid}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_menu(
     uuid: str,
-    _auth: object = Depends(require_access("system.menu", "delete")),
+    _auth: object = Depends(require_permission_codes("system:menu:delete")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -342,7 +342,7 @@ async def delete_menu(
 
 @router.post("/sync-all", status_code=status.HTTP_200_OK)
 async def sync_all_menus(
-    _auth: object = Depends(require_access("system.menu", "update")),
+    _auth: object = Depends(require_permission_codes("system:menu:update")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -357,7 +357,7 @@ async def sync_all_menus(
 @router.post("/update-order", status_code=status.HTTP_200_OK)
 async def update_menu_order(
     menu_orders: List[Dict[str, Any]] = Body(..., description="菜单排序列表"),
-    _auth: object = Depends(require_access("system.menu", "update")),
+    _auth: object = Depends(require_permission_codes("system:menu:update")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):

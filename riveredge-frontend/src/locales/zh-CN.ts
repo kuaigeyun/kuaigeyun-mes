@@ -28406,6 +28406,10 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.permission-require-codes-migrate-r01.title':
+    '权限调用面收敛：菜单/角色与 PLM 关键 API 改为显式权限码',
+  'pages.dashboard.updateLog.entries.permission-require-codes-migrate-r01.description':
+    '菜单/角色/用户管理由 require_access（含错误的 system.menu 点号资源）改为 system:menu / system:role / system:user 显式码；实验委托、产品固件、工艺文件 API 同步迁为 require_permission_codes。逐文件手工迁移，未跑批量脚本。',
   'pages.dashboard.updateLog.entries.permission-governance-p0-r01.title':
     '权限治理：菜单精确匹配、状态机与数据范围收紧、强制下线鉴权',
   'pages.dashboard.updateLog.entries.permission-governance-p0-r01.description':

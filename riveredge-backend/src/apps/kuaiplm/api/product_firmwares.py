@@ -15,7 +15,7 @@ from apps.kuaiplm.schemas.product_firmware import (
     ProductFirmwareUpdate,
 )
 from apps.kuaiplm.services.product_firmware_service import ProductFirmwareService
-from core.api.deps.access import require_access
+from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from core.services.authorization.user_permission_service import UserPermissionService
 from infra.api.deps.deps import get_current_user
@@ -54,13 +54,7 @@ async def list_product_firmwares(
         False, description="生产下载：仅已发布版本（INF-05 PRODUCTION）"
     ),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.product-firmware",
-            "read",
-            required_permissions=["kuaiplm:product-firmware:read"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:product-firmware:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -89,13 +83,7 @@ async def list_product_firmwares(
 async def create_product_firmware(
     data: ProductFirmwareCreate,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.product-firmware",
-            "create",
-            required_permissions=["kuaiplm:product-firmware:create"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:product-firmware:create")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -109,13 +97,7 @@ async def get_product_firmware(
     firmware_id: int,
     production_view: bool = Query(False, description="生产上下文可见性"),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.product-firmware",
-            "read",
-            required_permissions=["kuaiplm:product-firmware:read"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:product-firmware:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -136,13 +118,7 @@ async def update_product_firmware(
     firmware_id: int,
     data: ProductFirmwareUpdate,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.product-firmware",
-            "update",
-            required_permissions=["kuaiplm:product-firmware:update"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:product-firmware:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -155,13 +131,7 @@ async def update_product_firmware(
 async def submit_product_firmware(
     firmware_id: int,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.product-firmware",
-            "submit",
-            required_permissions=["kuaiplm:product-firmware:submit"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:product-firmware:submit")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -174,13 +144,7 @@ async def submit_product_firmware(
 async def approve_product_firmware(
     firmware_id: int,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.product-firmware",
-            "approve",
-            required_permissions=["kuaiplm:product-firmware:approve"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:product-firmware:approve")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -193,13 +157,7 @@ async def approve_product_firmware(
 async def reject_product_firmware(
     firmware_id: int,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.product-firmware",
-            "reject",
-            required_permissions=["kuaiplm:product-firmware:reject"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:product-firmware:reject")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -217,13 +175,7 @@ async def download_product_firmware(
     firmware_id: int,
     production_view: bool = Query(False, description="生产上下文可见性"),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.product-firmware",
-            "read",
-            required_permissions=["kuaiplm:product-firmware:read"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:product-firmware:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -244,13 +196,7 @@ async def revise_product_firmware(
     firmware_id: int,
     data: ProductFirmwareReviseRequest,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.product-firmware",
-            "update",
-            required_permissions=["kuaiplm:product-firmware:update"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:product-firmware:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -263,13 +209,7 @@ async def revise_product_firmware(
 async def release_product_firmware(
     firmware_id: int,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.product-firmware",
-            "execute",
-            required_permissions=["kuaiplm:product-firmware:execute"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:product-firmware:execute")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -282,13 +222,7 @@ async def release_product_firmware(
 async def obsolete_product_firmware(
     firmware_id: int,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.product-firmware",
-            "update",
-            required_permissions=["kuaiplm:product-firmware:update"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:product-firmware:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -301,13 +235,7 @@ async def obsolete_product_firmware(
 async def delete_product_firmware(
     firmware_id: int,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.product-firmware",
-            "delete",
-            required_permissions=["kuaiplm:product-firmware:delete"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:product-firmware:delete")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
