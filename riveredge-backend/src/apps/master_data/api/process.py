@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field, ConfigDict
 from loguru import logger
 
 from core.api.deps.deps import get_current_user, get_current_tenant
-from core.api.deps.access import require_access
+from core.api.deps.access import require_permission_codes
 from core.services.authorization.user_permission_service import UserPermissionService
 from apps.master_data.api._master_data_route_access import require_master_data_module_access
 from infra.models.user import User
@@ -1302,69 +1302,15 @@ async def get_process_route_tree(
 # 注意：/sop/batch-create-from-route、/sop/for-material 等具体路径必须定义在 /sop/{sop_uuid} 之前，
 # 否则会被路径参数匹配导致 405 Method Not Allowed
 
-_SOP_SUBMIT = Depends(
-    require_access(
-        "master-data.process.sop",
-        "submit",
-        required_permissions=["master-data:process:sop:submit"],
-    )
-)
-_SOP_APPROVE = Depends(
-    require_access(
-        "master-data.process.sop",
-        "approve",
-        required_permissions=["master-data:process:sop:approve"],
-    )
-)
-_SOP_REJECT = Depends(
-    require_access(
-        "master-data.process.sop",
-        "reject",
-        required_permissions=["master-data:process:sop:reject"],
-    )
-)
-_SOP_REVOKE = Depends(
-    require_access(
-        "master-data.process.sop",
-        "revoke",
-        required_permissions=["master-data:process:sop:revoke"],
-    )
-)
-_SOP_PUBLISH = Depends(
-    require_access(
-        "master-data.process.sop",
-        "publish",
-        required_permissions=["master-data:process:sop:publish"],
-    )
-)
-_SOP_OBSOLETE = Depends(
-    require_access(
-        "master-data.process.sop",
-        "obsolete",
-        required_permissions=["master-data:process:sop:obsolete"],
-    )
-)
-_SOP_DISPATCH = Depends(
-    require_access(
-        "master-data.process.sop",
-        "dispatch",
-        required_permissions=["master-data:process:sop:dispatch"],
-    )
-)
-_SOP_RECALL = Depends(
-    require_access(
-        "master-data.process.sop",
-        "recall",
-        required_permissions=["master-data:process:sop:recall"],
-    )
-)
-_SOP_PRINT = Depends(
-    require_access(
-        "master-data.process.sop",
-        "print",
-        required_permissions=["master-data:process:sop:print"],
-    )
-)
+_SOP_SUBMIT = Depends(require_permission_codes("master-data:process:sop:submit"))
+_SOP_APPROVE = Depends(require_permission_codes("master-data:process:sop:approve"))
+_SOP_REJECT = Depends(require_permission_codes("master-data:process:sop:reject"))
+_SOP_REVOKE = Depends(require_permission_codes("master-data:process:sop:revoke"))
+_SOP_PUBLISH = Depends(require_permission_codes("master-data:process:sop:publish"))
+_SOP_OBSOLETE = Depends(require_permission_codes("master-data:process:sop:obsolete"))
+_SOP_DISPATCH = Depends(require_permission_codes("master-data:process:sop:dispatch"))
+_SOP_RECALL = Depends(require_permission_codes("master-data:process:sop:recall"))
+_SOP_PRINT = Depends(require_permission_codes("master-data:process:sop:print"))
 
 @router.post("/sop/batch-create-from-route", response_model=List[SOPResponse], summary="Batch create SOPs from process route")
 async def batch_create_sops_from_route(
@@ -1665,13 +1611,7 @@ async def revise_sop(
     body: SopReviseRequest,
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
-    _access=Depends(
-        require_access(
-            "master-data.process.sop",
-            "update",
-            required_permissions=["master-data:process:sop:update"],
-        )
-    ),
+    _access=Depends(require_permission_codes("master-data:process:sop:update")),
 ):
     try:
         return await SopControlService.revise(tenant_id, sop_uuid, body, current_user=current_user)

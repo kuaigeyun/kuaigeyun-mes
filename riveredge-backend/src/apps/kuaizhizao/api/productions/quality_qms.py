@@ -40,7 +40,7 @@ from apps.kuaizhizao.services.quality_qms_service import (
     QmsSystemDocumentService,
 )
 from core.api.deps import get_current_tenant, get_current_user
-from core.api.deps.access import require_access
+from core.api.deps.access import require_permission_codes
 from core.services.authorization.user_permission_service import UserPermissionService
 from infra.models.user import User
 
@@ -50,149 +50,29 @@ doc_service = QmsSystemDocumentService()
 audit_service = QmsInternalAuditService()
 review_service = QmsManagementReviewService()
 
-_DOC_READ = Depends(
-    require_access(
-        "kuaizhizao.quality-management-system-documents",
-        "read",
-        required_permissions=["kuaizhizao:quality-management-system-documents:read"],
-    )
-)
-_DOC_CREATE = Depends(
-    require_access(
-        "kuaizhizao.quality-management-system-documents",
-        "create",
-        required_permissions=["kuaizhizao:quality-management-system-documents:create"],
-    )
-)
-_DOC_UPDATE = Depends(
-    require_access(
-        "kuaizhizao.quality-management-system-documents",
-        "update",
-        required_permissions=["kuaizhizao:quality-management-system-documents:update"],
-    )
-)
-_DOC_DELETE = Depends(
-    require_access(
-        "kuaizhizao.quality-management-system-documents",
-        "delete",
-        required_permissions=["kuaizhizao:quality-management-system-documents:delete"],
-    )
-)
-_DOC_PUBLISH = Depends(
-    require_access(
-        "kuaizhizao.quality-management-system-documents",
-        "publish",
-        required_permissions=["kuaizhizao:quality-management-system-documents:publish"],
-    )
-)
-_DOC_REJECT = Depends(
-    require_access(
-        "kuaizhizao.quality-management-system-documents",
-        "reject",
-        required_permissions=["kuaizhizao:quality-management-system-documents:reject"],
-    )
-)
-_DOC_OBSOLETE = Depends(
-    require_access(
-        "kuaizhizao.quality-management-system-documents",
-        "obsolete",
-        required_permissions=["kuaizhizao:quality-management-system-documents:obsolete"],
-    )
-)
+_DOC_READ = Depends(require_permission_codes("kuaizhizao:quality-management-system-documents:read"))
+_DOC_CREATE = Depends(require_permission_codes("kuaizhizao:quality-management-system-documents:create"))
+_DOC_UPDATE = Depends(require_permission_codes("kuaizhizao:quality-management-system-documents:update"))
+_DOC_DELETE = Depends(require_permission_codes("kuaizhizao:quality-management-system-documents:delete"))
+_DOC_PUBLISH = Depends(require_permission_codes("kuaizhizao:quality-management-system-documents:publish"))
+_DOC_REJECT = Depends(require_permission_codes("kuaizhizao:quality-management-system-documents:reject"))
+_DOC_OBSOLETE = Depends(require_permission_codes("kuaizhizao:quality-management-system-documents:obsolete"))
 
-_AUDIT_READ = Depends(
-    require_access(
-        "kuaizhizao.quality-management-internal-audits",
-        "read",
-        required_permissions=["kuaizhizao:quality-management-internal-audits:read"],
-    )
-)
-_AUDIT_CREATE = Depends(
-    require_access(
-        "kuaizhizao.quality-management-internal-audits",
-        "create",
-        required_permissions=["kuaizhizao:quality-management-internal-audits:create"],
-    )
-)
-_AUDIT_UPDATE = Depends(
-    require_access(
-        "kuaizhizao.quality-management-internal-audits",
-        "update",
-        required_permissions=["kuaizhizao:quality-management-internal-audits:update"],
-    )
-)
-_AUDIT_DELETE = Depends(
-    require_access(
-        "kuaizhizao.quality-management-internal-audits",
-        "delete",
-        required_permissions=["kuaizhizao:quality-management-internal-audits:delete"],
-    )
-)
+_AUDIT_READ = Depends(require_permission_codes("kuaizhizao:quality-management-internal-audits:read"))
+_AUDIT_CREATE = Depends(require_permission_codes("kuaizhizao:quality-management-internal-audits:create"))
+_AUDIT_UPDATE = Depends(require_permission_codes("kuaizhizao:quality-management-internal-audits:update"))
+_AUDIT_DELETE = Depends(require_permission_codes("kuaizhizao:quality-management-internal-audits:delete"))
 
-_REVIEW_READ = Depends(
-    require_access(
-        "kuaizhizao.quality-management-management-reviews",
-        "read",
-        required_permissions=["kuaizhizao:quality-management-management-reviews:read"],
-    )
-)
-_REVIEW_CREATE = Depends(
-    require_access(
-        "kuaizhizao.quality-management-management-reviews",
-        "create",
-        required_permissions=["kuaizhizao:quality-management-management-reviews:create"],
-    )
-)
-_REVIEW_UPDATE = Depends(
-    require_access(
-        "kuaizhizao.quality-management-management-reviews",
-        "update",
-        required_permissions=["kuaizhizao:quality-management-management-reviews:update"],
-    )
-)
-_REVIEW_DELETE = Depends(
-    require_access(
-        "kuaizhizao.quality-management-management-reviews",
-        "delete",
-        required_permissions=["kuaizhizao:quality-management-management-reviews:delete"],
-    )
-)
+_REVIEW_READ = Depends(require_permission_codes("kuaizhizao:quality-management-management-reviews:read"))
+_REVIEW_CREATE = Depends(require_permission_codes("kuaizhizao:quality-management-management-reviews:create"))
+_REVIEW_UPDATE = Depends(require_permission_codes("kuaizhizao:quality-management-management-reviews:update"))
+_REVIEW_DELETE = Depends(require_permission_codes("kuaizhizao:quality-management-management-reviews:delete"))
 
-_CLAUSE_READ = Depends(
-    require_access(
-        "kuaizhizao.quality-management-iso-clauses",
-        "read",
-        required_permissions=["kuaizhizao:quality-management-iso-clauses:read"],
-    )
-)
-_CLAUSE_CREATE = Depends(
-    require_access(
-        "kuaizhizao.quality-management-iso-clauses",
-        "create",
-        required_permissions=["kuaizhizao:quality-management-iso-clauses:create"],
-    )
-)
-_CLAUSE_UPDATE = Depends(
-    require_access(
-        "kuaizhizao.quality-management-iso-clauses",
-        "update",
-        required_permissions=["kuaizhizao:quality-management-iso-clauses:update"],
-    )
-)
-_CLAUSE_DELETE = Depends(
-    require_access(
-        "kuaizhizao.quality-management-iso-clauses",
-        "delete",
-        required_permissions=["kuaizhizao:quality-management-iso-clauses:delete"],
-    )
-)
-_CLAUSE_EXPORT = Depends(
-    require_access(
-        "kuaizhizao.quality-management-iso-clauses",
-        "export",
-        required_permissions=["kuaizhizao:quality-management-iso-clauses:export"],
-    )
-)
+_CLAUSE_READ = Depends(require_permission_codes("kuaizhizao:quality-management-iso-clauses:read"))
+_CLAUSE_CREATE = Depends(require_permission_codes("kuaizhizao:quality-management-iso-clauses:create"))
+_CLAUSE_UPDATE = Depends(require_permission_codes("kuaizhizao:quality-management-iso-clauses:update"))
+_CLAUSE_DELETE = Depends(require_permission_codes("kuaizhizao:quality-management-iso-clauses:delete"))
+_CLAUSE_EXPORT = Depends(require_permission_codes("kuaizhizao:quality-management-iso-clauses:export"))
 
 
 @router.post("/qms/system-documents", response_model=QmsSystemDocumentResponse, summary="Create system document")

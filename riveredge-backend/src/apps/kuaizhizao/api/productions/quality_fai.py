@@ -18,7 +18,7 @@ from apps.kuaizhizao.schemas.quality_fai import (
 from apps.kuaizhizao.services.fai_balloon_ocr_service import FaiBalloonOcrService
 from apps.kuaizhizao.services.quality_fai_service import FaiOrderService
 from core.api.deps import get_current_tenant, get_current_user
-from core.api.deps.access import require_access
+from core.api.deps.access import require_permission_codes
 from infra.exceptions.exceptions import ValidationError
 from infra.models.user import User
 
@@ -26,62 +26,14 @@ router = APIRouter(tags=["App - Kuaige Zhizao - FAI"])
 
 fai_service = FaiOrderService()
 
-_READ = Depends(
-    require_access(
-        "kuaizhizao.quality-management-fai-orders",
-        "read",
-        required_permissions=["kuaizhizao:quality-management-fai-orders:read"],
-    )
-)
-_CREATE = Depends(
-    require_access(
-        "kuaizhizao.quality-management-fai-orders",
-        "create",
-        required_permissions=["kuaizhizao:quality-management-fai-orders:create"],
-    )
-)
-_UPDATE = Depends(
-    require_access(
-        "kuaizhizao.quality-management-fai-orders",
-        "update",
-        required_permissions=["kuaizhizao:quality-management-fai-orders:update"],
-    )
-)
-_DELETE = Depends(
-    require_access(
-        "kuaizhizao.quality-management-fai-orders",
-        "delete",
-        required_permissions=["kuaizhizao:quality-management-fai-orders:delete"],
-    )
-)
-_SUBMIT = Depends(
-    require_access(
-        "kuaizhizao.quality-management-fai-orders",
-        "submit",
-        required_permissions=["kuaizhizao:quality-management-fai-orders:submit"],
-    )
-)
-_APPROVE = Depends(
-    require_access(
-        "kuaizhizao.quality-management-fai-orders",
-        "approve",
-        required_permissions=["kuaizhizao:quality-management-fai-orders:approve"],
-    )
-)
-_REJECT = Depends(
-    require_access(
-        "kuaizhizao.quality-management-fai-orders",
-        "reject",
-        required_permissions=["kuaizhizao:quality-management-fai-orders:reject"],
-    )
-)
-_EXPORT = Depends(
-    require_access(
-        "kuaizhizao.quality-management-fai-orders",
-        "export",
-        required_permissions=["kuaizhizao:quality-management-fai-orders:export"],
-    )
-)
+_READ = Depends(require_permission_codes("kuaizhizao:quality-management-fai-orders:read"))
+_CREATE = Depends(require_permission_codes("kuaizhizao:quality-management-fai-orders:create"))
+_UPDATE = Depends(require_permission_codes("kuaizhizao:quality-management-fai-orders:update"))
+_DELETE = Depends(require_permission_codes("kuaizhizao:quality-management-fai-orders:delete"))
+_SUBMIT = Depends(require_permission_codes("kuaizhizao:quality-management-fai-orders:submit"))
+_APPROVE = Depends(require_permission_codes("kuaizhizao:quality-management-fai-orders:approve"))
+_REJECT = Depends(require_permission_codes("kuaizhizao:quality-management-fai-orders:reject"))
+_EXPORT = Depends(require_permission_codes("kuaizhizao:quality-management-fai-orders:export"))
 
 
 @router.post("/fai-orders", response_model=FaiOrderResponse, summary="Create FAI order")

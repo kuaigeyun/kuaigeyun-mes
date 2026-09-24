@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
-from core.api.deps.access import require_access, require_permission_codes
+from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from core.services.application.industry_extension_runtime_service import (
     IndustryExtensionRuntimeService,
@@ -40,13 +40,7 @@ class EsdCatalogUpdateRequest(BaseModel):
     "/health",
     summary="Industry module health",
     dependencies=[
-        Depends(
-            require_access(
-                "ind-electronics.entry",
-                "read",
-                required_permissions=["ind-electronics:entry:read"],
-            )
-        )
+        Depends(require_permission_codes("ind-electronics:entry:read"))
     ],
 )
 async def health(tenant_id: int = Depends(get_current_tenant)) -> dict:
@@ -57,13 +51,7 @@ async def health(tenant_id: int = Depends(get_current_tenant)) -> dict:
     "/extensions/summary",
     summary="Industry extension summary for current tenant",
     dependencies=[
-        Depends(
-            require_access(
-                "ind-electronics.entry",
-                "read",
-                required_permissions=["ind-electronics:entry:read"],
-            )
-        )
+        Depends(require_permission_codes("ind-electronics:entry:read"))
     ],
 )
 async def extensions_summary(tenant_id: int = Depends(get_current_tenant)) -> dict:

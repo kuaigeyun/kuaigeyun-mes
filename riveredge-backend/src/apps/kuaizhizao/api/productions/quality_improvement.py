@@ -34,7 +34,7 @@ from apps.kuaizhizao.schemas.quality_improvement import (
 from apps.kuaizhizao.services.spc_list_core import SPC_SAMPLE_SORTABLE_FIELDS
 from apps.kuaizhizao.services.defect_record_service import DefectRecordService
 from apps.kuaizhizao.services.quality_improvement_service import OQCInspectionService, Quality8DService, SPCService
-from core.api.deps.access import require_access, get_auth_context, ensure_permission_codes, AuthContext
+from core.api.deps.access import require_permission_codes, get_auth_context, ensure_permission_codes, AuthContext
 from core.api.deps import get_current_tenant, get_current_user
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
 from infra.models.user import User
@@ -69,121 +69,27 @@ defect_record_service = DefectRecordService()
 oqc_service = OQCInspectionService()
 spc_service = SPCService()
 
-_8D_READ = Depends(
-    require_access(
-        "kuaizhizao.quality-management-eight-d-reports",
-        "read",
-        required_permissions=["kuaizhizao:quality-management-eight-d-reports:read"],
-    )
-)
-_8D_CREATE = Depends(
-    require_access(
-        "kuaizhizao.quality-management-eight-d-reports",
-        "create",
-        required_permissions=["kuaizhizao:quality-management-eight-d-reports:create"],
-    )
-)
+_8D_READ = Depends(require_permission_codes("kuaizhizao:quality-management-eight-d-reports:read"))
+_8D_CREATE = Depends(require_permission_codes("kuaizhizao:quality-management-eight-d-reports:create"))
 _8D_UPDATE_OR_CLOSE = Depends(
-    require_access(
-        "kuaizhizao.quality-management-eight-d-reports",
-        "update",
-        required_permissions=[
-            "kuaizhizao:quality-management-eight-d-reports:update",
-            "kuaizhizao:quality-management-eight-d-reports:close",
-        ],
+    require_permission_codes(
+        "kuaizhizao:quality-management-eight-d-reports:update",
+        "kuaizhizao:quality-management-eight-d-reports:close",
     )
 )
-_8D_DELETE = Depends(
-    require_access(
-        "kuaizhizao.quality-management-eight-d-reports",
-        "delete",
-        required_permissions=["kuaizhizao:quality-management-eight-d-reports:delete"],
-    )
-)
-_8D_PRINT = Depends(
-    require_access(
-        "kuaizhizao.quality-management-eight-d-reports",
-        "print",
-        required_permissions=["kuaizhizao:quality-management-eight-d-reports:print"],
-    )
-)
-_NC_READ = Depends(
-    require_access(
-        "kuaizhizao.quality-management-nonconforming-ledger",
-        "read",
-        required_permissions=["kuaizhizao:quality-management-nonconforming-ledger:read"],
-    )
-)
-_NC_UPDATE = Depends(
-    require_access(
-        "kuaizhizao.quality-management-nonconforming-ledger",
-        "update",
-        required_permissions=["kuaizhizao:quality-management-nonconforming-ledger:update"],
-    )
-)
-_OQC_READ = Depends(
-    require_access(
-        "kuaizhizao.quality-management-oqc-inspection",
-        "read",
-        required_permissions=["kuaizhizao:quality-management-oqc-inspection:read"],
-    )
-)
-_OQC_CREATE = Depends(
-    require_access(
-        "kuaizhizao.quality-management-oqc-inspection",
-        "create",
-        required_permissions=["kuaizhizao:quality-management-oqc-inspection:create"],
-    )
-)
-_OQC_UPDATE = Depends(
-    require_access(
-        "kuaizhizao.quality-management-oqc-inspection",
-        "update",
-        required_permissions=["kuaizhizao:quality-management-oqc-inspection:update"],
-    )
-)
-_OQC_EXECUTE = Depends(
-    require_access(
-        "kuaizhizao.quality-management-oqc-inspection",
-        "execute",
-        required_permissions=["kuaizhizao:quality-management-oqc-inspection:execute"],
-    )
-)
-_OQC_DELETE = Depends(
-    require_access(
-        "kuaizhizao.quality-management-oqc-inspection",
-        "delete",
-        required_permissions=["kuaizhizao:quality-management-oqc-inspection:delete"],
-    )
-)
-_OQC_EXPORT = Depends(
-    require_access(
-        "kuaizhizao.quality-management-oqc-inspection",
-        "export",
-        required_permissions=["kuaizhizao:quality-management-oqc-inspection:export"],
-    )
-)
-_OQC_REVOKE = Depends(
-    require_access(
-        "kuaizhizao.quality-management-oqc-inspection",
-        "revoke",
-        required_permissions=["kuaizhizao:quality-management-oqc-inspection:revoke"],
-    )
-)
-_SPC_READ = Depends(
-    require_access(
-        "kuaizhizao.quality-management-spc-monitor",
-        "read",
-        required_permissions=["kuaizhizao:quality-management-spc-monitor:read"],
-    )
-)
-_SPC_CREATE = Depends(
-    require_access(
-        "kuaizhizao.quality-management-spc-monitor",
-        "create",
-        required_permissions=["kuaizhizao:quality-management-spc-monitor:create"],
-    )
-)
+_8D_DELETE = Depends(require_permission_codes("kuaizhizao:quality-management-eight-d-reports:delete"))
+_8D_PRINT = Depends(require_permission_codes("kuaizhizao:quality-management-eight-d-reports:print"))
+_NC_READ = Depends(require_permission_codes("kuaizhizao:quality-management-nonconforming-ledger:read"))
+_NC_UPDATE = Depends(require_permission_codes("kuaizhizao:quality-management-nonconforming-ledger:update"))
+_OQC_READ = Depends(require_permission_codes("kuaizhizao:quality-management-oqc-inspection:read"))
+_OQC_CREATE = Depends(require_permission_codes("kuaizhizao:quality-management-oqc-inspection:create"))
+_OQC_UPDATE = Depends(require_permission_codes("kuaizhizao:quality-management-oqc-inspection:update"))
+_OQC_EXECUTE = Depends(require_permission_codes("kuaizhizao:quality-management-oqc-inspection:execute"))
+_OQC_DELETE = Depends(require_permission_codes("kuaizhizao:quality-management-oqc-inspection:delete"))
+_OQC_EXPORT = Depends(require_permission_codes("kuaizhizao:quality-management-oqc-inspection:export"))
+_OQC_REVOKE = Depends(require_permission_codes("kuaizhizao:quality-management-oqc-inspection:revoke"))
+_SPC_READ = Depends(require_permission_codes("kuaizhizao:quality-management-spc-monitor:read"))
+_SPC_CREATE = Depends(require_permission_codes("kuaizhizao:quality-management-spc-monitor:create"))
 
 
 @router.get("/quality-8d-reports", response_model=Quality8DListResponse, summary="List 8D reports")

@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, Query, status
 from typing import Optional
 
 from core.api.deps.deps import get_current_tenant
-from core.api.deps.access import require_access
+from core.api.deps.access import require_permission_codes
 from infra.api.deps.deps import get_current_user
 
 from apps.spoke_wheel.schemas import (
@@ -30,7 +30,7 @@ router = APIRouter(prefix="", tags=["App - Spoke Wheel MES - 辐条轮毂总装"
     "/assemblies",
     response_model=SpokeWheelAssemblyOut,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_access("spoke-wheel.assembly", "create", required_permissions=["spoke-wheel:assembly:create"]))],
+    dependencies=[Depends(require_permission_codes("spoke-wheel:assembly:create"))],
 )
 async def api_create_assembly(
     payload: SpokeWheelAssemblyCreate,
@@ -44,7 +44,7 @@ async def api_create_assembly(
 @router.get(
     "/assemblies",
     response_model=list[SpokeWheelAssemblyOut],
-    dependencies=[Depends(require_access("spoke-wheel.assembly", "read", required_permissions=["spoke-wheel:assembly:read"]))],
+    dependencies=[Depends(require_permission_codes("spoke-wheel:assembly:read"))],
 )
 async def api_list_assemblies(
     status_filter: Optional[str] = Query(None, alias="status"),
@@ -60,7 +60,7 @@ async def api_list_assemblies(
 @router.get(
     "/assemblies/{assembly_id}",
     response_model=SpokeWheelAssemblyOut,
-    dependencies=[Depends(require_access("spoke-wheel.assembly", "read", required_permissions=["spoke-wheel:assembly:read"]))],
+    dependencies=[Depends(require_permission_codes("spoke-wheel:assembly:read"))],
 )
 async def api_get_assembly(
     assembly_id: int,
@@ -72,7 +72,7 @@ async def api_get_assembly(
 @router.patch(
     "/assemblies/{assembly_id}",
     response_model=SpokeWheelAssemblyOut,
-    dependencies=[Depends(require_access("spoke-wheel.assembly", "update", required_permissions=["spoke-wheel:assembly:update"]))],
+    dependencies=[Depends(require_permission_codes("spoke-wheel:assembly:update"))],
 )
 async def api_update_assembly(
     assembly_id: int,
@@ -87,7 +87,7 @@ async def api_update_assembly(
     "/concentricity-checks",
     response_model=ConcentricityCheckOut,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_access("spoke-wheel.concentricity", "create", required_permissions=["spoke-wheel:concentricity:create"]))],
+    dependencies=[Depends(require_permission_codes("spoke-wheel:concentricity:create"))],
 )
 async def api_create_check(
     payload: ConcentricityCheckCreate,
@@ -101,7 +101,7 @@ async def api_create_check(
 @router.get(
     "/concentricity-checks/by-assembly/{assembly_id}",
     response_model=list[ConcentricityCheckOut],
-    dependencies=[Depends(require_access("spoke-wheel.concentricity", "read", required_permissions=["spoke-wheel:concentricity:read"]))],
+    dependencies=[Depends(require_permission_codes("spoke-wheel:concentricity:read"))],
 )
 async def api_list_checks(
     assembly_id: int,

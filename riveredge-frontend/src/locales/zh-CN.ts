@@ -28406,6 +28406,10 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.permission-require-codes-migrate-r07.title':
+    '权限调用面收敛：质检/客户池/SOP/行业包 API 改为显式权限码',
+  'pages.dashboard.updateLog.entries.permission-require-codes-migrate-r07.description':
+    '快制造 FAI/QMS/8D/OQC/SPC、客户池、主数据 SOP 控制、辐条轮毂与电子行业包入口等 API 已逐文件迁为 require_permission_codes；业务路由层 require_access 调用清零（仅保留 deps 定义）。',
   'pages.dashboard.updateLog.entries.permission-require-codes-migrate-r06.title':
     '权限调用面收敛：核心权限/策略/文件 API 改为显式权限码',
   'pages.dashboard.updateLog.entries.permission-require-codes-migrate-r06.description':
