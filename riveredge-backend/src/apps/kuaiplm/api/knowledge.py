@@ -21,7 +21,7 @@ from apps.kuaiplm.schemas.knowledge_base import (
     KbSpaceUpdate,
 )
 from apps.kuaiplm.services.kb_service import KbService
-from core.api.deps.access import require_access
+from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.exceptions.exceptions import NotFoundError
@@ -40,7 +40,7 @@ def _err(status_code: int, message: str, route: str) -> HTTPException:
 @router.get("/spaces", summary="List KB spaces")
 async def list_spaces(
     include_inactive: bool = Query(False),
-    _auth=Depends(require_access("kuaiplm.knowledge", "read", required_permissions=["kuaiplm:knowledge:read"])),
+    _auth=Depends(require_permission_codes("kuaiplm:knowledge:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     rows = await service.list_spaces(tenant_id, include_inactive=include_inactive)
@@ -51,7 +51,7 @@ async def list_spaces(
 async def create_space(
     data: KbSpaceCreate,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.knowledge", "create", required_permissions=["kuaiplm:knowledge:create"])),
+    _auth=Depends(require_permission_codes("kuaiplm:knowledge:create")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     return await service.create_space(tenant_id, data, current_user.id)
@@ -62,7 +62,7 @@ async def update_space(
     data: KbSpaceUpdate,
     space_id: int = Path(...),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.knowledge", "update", required_permissions=["kuaiplm:knowledge:update"])),
+    _auth=Depends(require_permission_codes("kuaiplm:knowledge:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -75,7 +75,7 @@ async def update_space(
 async def delete_space(
     space_id: int = Path(...),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.knowledge", "delete", required_permissions=["kuaiplm:knowledge:delete"])),
+    _auth=Depends(require_permission_codes("kuaiplm:knowledge:delete")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -92,7 +92,7 @@ async def list_articles(
     tag: Optional[str] = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
-    _auth=Depends(require_access("kuaiplm.knowledge", "read", required_permissions=["kuaiplm:knowledge:read"])),
+    _auth=Depends(require_permission_codes("kuaiplm:knowledge:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     rows, total = await service.list_articles(
@@ -112,7 +112,7 @@ async def search_articles(
     keyword: str = Query(..., min_length=1),
     space_id: Optional[int] = Query(None),
     limit: int = Query(20, ge=1, le=100),
-    _auth=Depends(require_access("kuaiplm.knowledge", "read", required_permissions=["kuaiplm:knowledge:read"])),
+    _auth=Depends(require_permission_codes("kuaiplm:knowledge:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     return await service.search_articles(tenant_id, keyword, space_id=space_id, limit=limit)
@@ -122,7 +122,7 @@ async def search_articles(
 async def create_article(
     data: KbArticleCreate,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.knowledge", "create", required_permissions=["kuaiplm:knowledge:create"])),
+    _auth=Depends(require_permission_codes("kuaiplm:knowledge:create")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -134,7 +134,7 @@ async def create_article(
 @router.get("/articles/{article_id}", response_model=KbArticleResponse, summary="Get article")
 async def get_article(
     article_id: int = Path(...),
-    _auth=Depends(require_access("kuaiplm.knowledge", "read", required_permissions=["kuaiplm:knowledge:read"])),
+    _auth=Depends(require_permission_codes("kuaiplm:knowledge:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -148,7 +148,7 @@ async def update_article(
     data: KbArticleUpdate,
     article_id: int = Path(...),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.knowledge", "update", required_permissions=["kuaiplm:knowledge:update"])),
+    _auth=Depends(require_permission_codes("kuaiplm:knowledge:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -161,7 +161,7 @@ async def update_article(
 async def delete_article(
     article_id: int = Path(...),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.knowledge", "delete", required_permissions=["kuaiplm:knowledge:delete"])),
+    _auth=Depends(require_permission_codes("kuaiplm:knowledge:delete")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:

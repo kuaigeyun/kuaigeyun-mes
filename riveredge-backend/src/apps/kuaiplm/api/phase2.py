@@ -23,7 +23,7 @@ from apps.kuaiplm.schemas.phase2 import (
     RdRequirementUpdate,
 )
 from apps.kuaiplm.services.phase2_service import Phase2Service
-from core.api.deps.access import require_access
+from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.exceptions.exceptions import NotFoundError
@@ -56,7 +56,7 @@ async def list_requirements(
     created_end_date: Optional[str] = Query(None),
     updated_start_date: Optional[str] = Query(None),
     updated_end_date: Optional[str] = Query(None),
-    _auth=Depends(require_access("kuaiplm.requirement", "read", required_permissions=["kuaiplm:requirement:read"])),
+    _auth=Depends(require_permission_codes("kuaiplm:requirement:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     rows, total = await service.list_requirements(
@@ -82,7 +82,7 @@ async def list_requirements(
 async def create_requirement(
     data: RdRequirementCreate,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.requirement", "create", required_permissions=["kuaiplm:requirement:create"])),
+    _auth=Depends(require_permission_codes("kuaiplm:requirement:create")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     return await service.create_requirement(tenant_id, data, current_user.id)
@@ -93,7 +93,7 @@ async def update_requirement(
     data: RdRequirementUpdate,
     requirement_id: int = Path(...),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.requirement", "update", required_permissions=["kuaiplm:requirement:update"])),
+    _auth=Depends(require_permission_codes("kuaiplm:requirement:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -106,7 +106,7 @@ async def update_requirement(
 async def delete_requirement(
     requirement_id: int = Path(...),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.requirement", "delete", required_permissions=["kuaiplm:requirement:delete"])),
+    _auth=Depends(require_permission_codes("kuaiplm:requirement:delete")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -132,7 +132,7 @@ async def list_design_reviews(
     created_end_date: Optional[str] = Query(None),
     updated_start_date: Optional[str] = Query(None),
     updated_end_date: Optional[str] = Query(None),
-    _auth=Depends(require_access("kuaiplm.design-review", "read", required_permissions=["kuaiplm:design-review:read"])),
+    _auth=Depends(require_permission_codes("kuaiplm:design-review:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     rows, total = await service.list_design_reviews(
@@ -158,7 +158,7 @@ async def list_design_reviews(
 async def create_design_review(
     data: RdDesignReviewCreate,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.design-review", "create", required_permissions=["kuaiplm:design-review:create"])),
+    _auth=Depends(require_permission_codes("kuaiplm:design-review:create")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     return await service.create_design_review(tenant_id, data, current_user.id)
@@ -169,7 +169,7 @@ async def update_design_review(
     data: RdDesignReviewUpdate,
     review_id: int = Path(...),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.design-review", "update", required_permissions=["kuaiplm:design-review:update"])),
+    _auth=Depends(require_permission_codes("kuaiplm:design-review:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -182,7 +182,7 @@ async def update_design_review(
 async def delete_design_review(
     review_id: int = Path(...),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.design-review", "delete", required_permissions=["kuaiplm:design-review:delete"])),
+    _auth=Depends(require_permission_codes("kuaiplm:design-review:delete")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -209,7 +209,7 @@ async def list_fmea_records(
     created_end_date: Optional[str] = Query(None),
     updated_start_date: Optional[str] = Query(None),
     updated_end_date: Optional[str] = Query(None),
-    _auth=Depends(require_access("kuaiplm.fmea", "read", required_permissions=["kuaiplm:fmea:read"])),
+    _auth=Depends(require_permission_codes("kuaiplm:fmea:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     rows, total = await service.list_fmea_records(
@@ -236,7 +236,7 @@ async def list_fmea_records(
 async def create_fmea_record(
     data: RdFmeaRecordCreate,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.fmea", "create", required_permissions=["kuaiplm:fmea:create"])),
+    _auth=Depends(require_permission_codes("kuaiplm:fmea:create")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     return await service.create_fmea_record(tenant_id, data, current_user.id)
@@ -247,7 +247,7 @@ async def update_fmea_record(
     data: RdFmeaRecordUpdate,
     fmea_id: int = Path(...),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.fmea", "update", required_permissions=["kuaiplm:fmea:update"])),
+    _auth=Depends(require_permission_codes("kuaiplm:fmea:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -260,7 +260,7 @@ async def update_fmea_record(
 async def delete_fmea_record(
     fmea_id: int = Path(...),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.fmea", "delete", required_permissions=["kuaiplm:fmea:delete"])),
+    _auth=Depends(require_permission_codes("kuaiplm:fmea:delete")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:

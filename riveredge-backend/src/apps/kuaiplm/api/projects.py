@@ -42,7 +42,7 @@ from apps.kuaiplm.schemas.rd_project import (
 )
 from apps.kuaiplm.services.rd_project_service import RdProjectService
 from apps.kuaiplm.services.rd_project_system_archive_service import RdProjectSystemArchiveService
-from core.api.deps.access import require_access
+from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from core.services.authorization.user_permission_service import UserPermissionService
 from infra.api.deps.deps import get_current_user
@@ -83,7 +83,7 @@ async def list_projects(
     created_end_date: Optional[str] = Query(None),
     updated_start_date: Optional[str] = Query(None),
     updated_end_date: Optional[str] = Query(None),
-    _auth=Depends(require_access("kuaiplm.project", "read", required_permissions=["kuaiplm:project:read"])),
+    _auth=Depends(require_permission_codes("kuaiplm:project:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     rows, total = await service.list_projects(
@@ -109,7 +109,7 @@ async def list_projects(
 async def create_project(
     data: RdProjectCreate,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.project", "create", required_permissions=["kuaiplm:project:create"])),
+    _auth=Depends(require_permission_codes("kuaiplm:project:create")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -121,7 +121,7 @@ async def create_project(
 @router.get("/{project_id}", response_model=RdProjectResponse, summary="Get RD project")
 async def get_project(
     project_id: int = Path(...),
-    _auth=Depends(require_access("kuaiplm.project", "read", required_permissions=["kuaiplm:project:read"])),
+    _auth=Depends(require_permission_codes("kuaiplm:project:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -133,7 +133,7 @@ async def get_project(
 @router.get("/{project_id}/workbench", response_model=RdProjectWorkbenchResponse, summary="Get project workbench")
 async def get_workbench(
     project_id: int = Path(...),
-    _auth=Depends(require_access("kuaiplm.project", "read", required_permissions=["kuaiplm:project:read"])),
+    _auth=Depends(require_permission_codes("kuaiplm:project:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -147,7 +147,7 @@ async def update_project(
     data: RdProjectUpdate,
     project_id: int = Path(...),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.project", "update", required_permissions=["kuaiplm:project:update"])),
+    _auth=Depends(require_permission_codes("kuaiplm:project:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -160,7 +160,7 @@ async def update_project(
 async def withdraw_project(
     project_id: int = Path(...),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.project", "update", required_permissions=["kuaiplm:project:update"])),
+    _auth=Depends(require_permission_codes("kuaiplm:project:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -175,7 +175,7 @@ async def withdraw_project(
 async def delete_project(
     project_id: int = Path(...),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.project", "delete", required_permissions=["kuaiplm:project:delete"])),
+    _auth=Depends(require_permission_codes("kuaiplm:project:delete")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -190,7 +190,7 @@ async def update_gate(
     project_id: int = Path(...),
     gate_id: int = Path(...),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.project", "update", required_permissions=["kuaiplm:project:update"])),
+    _auth=Depends(require_permission_codes("kuaiplm:project:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -206,7 +206,7 @@ async def create_task(
     data: RdProjectTaskCreate,
     project_id: int = Path(...),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.project", "create", required_permissions=["kuaiplm:project:create"])),
+    _auth=Depends(require_permission_codes("kuaiplm:project:create")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -223,7 +223,7 @@ async def update_task(
     project_id: int = Path(...),
     task_id: int = Path(...),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.project", "update", required_permissions=["kuaiplm:project:update"])),
+    _auth=Depends(require_permission_codes("kuaiplm:project:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -239,7 +239,7 @@ async def delete_task(
     project_id: int = Path(...),
     task_id: int = Path(...),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.project", "delete", required_permissions=["kuaiplm:project:delete"])),
+    _auth=Depends(require_permission_codes("kuaiplm:project:delete")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -253,7 +253,7 @@ async def create_deliverable(
     data: RdProjectDeliverableCreate,
     project_id: int = Path(...),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.project", "create", required_permissions=["kuaiplm:project:create"])),
+    _auth=Depends(require_permission_codes("kuaiplm:project:create")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -277,7 +277,7 @@ async def update_deliverable(
     project_id: int = Path(...),
     deliverable_id: int = Path(...),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.project", "update", required_permissions=["kuaiplm:project:update"])),
+    _auth=Depends(require_permission_codes("kuaiplm:project:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -305,7 +305,7 @@ async def delete_deliverable(
     project_id: int = Path(...),
     deliverable_id: int = Path(...),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.project", "delete", required_permissions=["kuaiplm:project:delete"])),
+    _auth=Depends(require_permission_codes("kuaiplm:project:delete")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -323,7 +323,7 @@ async def list_deliverable_versions(
     project_id: int = Path(...),
     deliverable_id: int = Path(...),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.project", "read", required_permissions=["kuaiplm:project:read"])),
+    _auth=Depends(require_permission_codes("kuaiplm:project:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -359,7 +359,7 @@ async def revise_deliverable(
     project_id: int = Path(...),
     deliverable_id: int = Path(...),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.project", "update", required_permissions=["kuaiplm:project:update"])),
+    _auth=Depends(require_permission_codes("kuaiplm:project:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -385,13 +385,7 @@ async def submit_deliverable(
     project_id: int = Path(...),
     deliverable_id: int = Path(...),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.project",
-            "submit",
-            required_permissions=["kuaiplm:project:submit"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:project:submit")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -417,13 +411,7 @@ async def approve_deliverable(
     project_id: int = Path(...),
     deliverable_id: int = Path(...),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.project",
-            "approve",
-            required_permissions=["kuaiplm:project:approve"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:project:approve")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -456,7 +444,7 @@ async def reject_deliverable(
     project_id: int = Path(...),
     deliverable_id: int = Path(...),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.project", "update", required_permissions=["kuaiplm:project:update"])),
+    _auth=Depends(require_permission_codes("kuaiplm:project:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -478,7 +466,7 @@ async def create_link(
     data: RdProjectLinkCreate,
     project_id: int = Path(...),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.project", "create", required_permissions=["kuaiplm:project:create"])),
+    _auth=Depends(require_permission_codes("kuaiplm:project:create")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -491,7 +479,7 @@ async def create_link(
 async def delete_link(
     project_id: int = Path(...),
     link_id: int = Path(...),
-    _auth=Depends(require_access("kuaiplm.project", "delete", required_permissions=["kuaiplm:project:delete"])),
+    _auth=Depends(require_permission_codes("kuaiplm:project:delete")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -509,7 +497,7 @@ async def push_trial_work_order(
     data: PushTrialWorkOrderRequest,
     project_id: int = Path(...),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.project", "create", required_permissions=["kuaiplm:project:create"])),
+    _auth=Depends(require_permission_codes("kuaiplm:project:create")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -526,7 +514,7 @@ async def push_trial_work_order(
 async def spawn_delivery_project(
     project_id: int = Path(...),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.project", "create", required_permissions=["kuaiplm:project:create"])),
+    _auth=Depends(require_permission_codes("kuaiplm:project:create")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -543,7 +531,7 @@ async def spawn_delivery_project(
 async def list_system_archive(
     project_id: int = Path(...),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.project", "read", required_permissions=["kuaiplm:project:read"])),
+    _auth=Depends(require_permission_codes("kuaiplm:project:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     del current_user
@@ -562,7 +550,7 @@ async def upload_system_archive(
     project_id: int = Path(...),
     item_id: int = Path(...),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.project", "update", required_permissions=["kuaiplm:project:update"])),
+    _auth=Depends(require_permission_codes("kuaiplm:project:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -596,7 +584,7 @@ async def link_system_archive(
     project_id: int = Path(...),
     item_id: int = Path(...),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.project", "update", required_permissions=["kuaiplm:project:update"])),
+    _auth=Depends(require_permission_codes("kuaiplm:project:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -632,7 +620,7 @@ async def mark_system_archive_missing(
     project_id: int = Path(...),
     item_id: int = Path(...),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.project", "update", required_permissions=["kuaiplm:project:update"])),
+    _auth=Depends(require_permission_codes("kuaiplm:project:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -662,7 +650,7 @@ async def clear_system_archive(
     project_id: int = Path(...),
     item_id: int = Path(...),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.project", "update", required_permissions=["kuaiplm:project:update"])),
+    _auth=Depends(require_permission_codes("kuaiplm:project:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -690,7 +678,7 @@ async def accept_system_archive(
     project_id: int = Path(...),
     item_id: int = Path(...),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.project", "update", required_permissions=["kuaiplm:project:update"])),
+    _auth=Depends(require_permission_codes("kuaiplm:project:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -721,7 +709,7 @@ async def reject_system_archive(
     project_id: int = Path(...),
     item_id: int = Path(...),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.project", "update", required_permissions=["kuaiplm:project:update"])),
+    _auth=Depends(require_permission_codes("kuaiplm:project:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:

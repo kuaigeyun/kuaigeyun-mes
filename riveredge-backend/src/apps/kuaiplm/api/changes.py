@@ -23,7 +23,7 @@ from apps.kuaiplm.schemas.change_desk import (
     ChangeSubmitRequest,
 )
 from apps.kuaiplm.services.change_desk_service import ChangeDeskService
-from core.api.deps.access import require_access
+from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.exceptions.exceptions import NotFoundError, ValidationError
@@ -52,7 +52,7 @@ async def list_changes(
     updated_end_date: Optional[str] = Query(None, description="更新结束日期 YYYY-MM-DD"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    _auth=Depends(require_access("kuaiplm.change", "read", required_permissions=["kuaiplm:change:read"])),
+    _auth=Depends(require_permission_codes("kuaiplm:change:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     return await service.list_changes(
@@ -75,7 +75,7 @@ async def list_changes(
 async def create_change(
     data: ChangeCreateRequest,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.change", "create", required_permissions=["kuaiplm:change:create"])),
+    _auth=Depends(require_permission_codes("kuaiplm:change:create")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -91,7 +91,7 @@ async def create_change(
 async def get_change(
     change_uuid: str = Path(...),
     change_type: str = Query(..., description="bom | process_route | drawing | ecn"),
-    _auth=Depends(require_access("kuaiplm.change", "read", required_permissions=["kuaiplm:change:read"])),
+    _auth=Depends(require_permission_codes("kuaiplm:change:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -107,7 +107,7 @@ async def submit_change(
     data: ChangeSubmitRequest,
     change_uuid: str = Path(...),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.change", "submit", required_permissions=["kuaiplm:change:submit"])),
+    _auth=Depends(require_permission_codes("kuaiplm:change:submit")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -122,7 +122,7 @@ async def approve_change(
     data: ChangeApproveRequest,
     change_uuid: str = Path(...),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.change", "approve", required_permissions=["kuaiplm:change:approve"])),
+    _auth=Depends(require_permission_codes("kuaiplm:change:approve")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -137,7 +137,7 @@ async def execute_change(
     data: ChangeExecuteRequest,
     change_uuid: str = Path(...),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.change", "update", required_permissions=["kuaiplm:change:update"])),
+    _auth=Depends(require_permission_codes("kuaiplm:change:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -152,7 +152,7 @@ async def delete_change(
     change_uuid: str = Path(...),
     change_type: str = Query(..., description="bom | process_route | drawing | ecn"),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.change", "update", required_permissions=["kuaiplm:change:update"])),
+    _auth=Depends(require_permission_codes("kuaiplm:change:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -170,7 +170,7 @@ async def delete_change(
 async def batch_approve_changes(
     data: ChangeBatchApproveRequest,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.change", "approve", required_permissions=["kuaiplm:change:approve"])),
+    _auth=Depends(require_permission_codes("kuaiplm:change:approve")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     return await service.batch_approve_changes(
@@ -186,7 +186,7 @@ async def batch_approve_changes(
 async def batch_execute_changes(
     data: ChangeBatchExecuteRequest,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.change", "update", required_permissions=["kuaiplm:change:update"])),
+    _auth=Depends(require_permission_codes("kuaiplm:change:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     return await service.batch_execute_changes(
@@ -200,7 +200,7 @@ async def batch_execute_changes(
 async def batch_delete_changes(
     data: ChangeBatchDeleteRequest,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.change", "update", required_permissions=["kuaiplm:change:update"])),
+    _auth=Depends(require_permission_codes("kuaiplm:change:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     return await service.batch_delete_changes(

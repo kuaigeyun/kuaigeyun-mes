@@ -28406,6 +28406,10 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.permission-require-codes-migrate-r02.title':
+    '权限调用面收敛：快研发项目/阶段二/知识库等 API 改为显式权限码',
+  'pages.dashboard.updateLog.entries.permission-require-codes-migrate-r02.description':
+    '研发项目、需求/设计评审/FMEA、知识库、变更、门控模板、研发仪表盘由 require_access 逐文件迁为 require_permission_codes；未使用批量脚本。',
   'pages.dashboard.updateLog.entries.permission-require-codes-migrate-r01.title':
     '权限调用面收敛：菜单/角色与 PLM 关键 API 改为显式权限码',
   'pages.dashboard.updateLog.entries.permission-require-codes-migrate-r01.description':

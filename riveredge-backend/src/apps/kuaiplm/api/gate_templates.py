@@ -19,7 +19,7 @@ from apps.kuaiplm.schemas.gate_template import (
     GateTemplateUpdate,
 )
 from apps.kuaiplm.services.gate_template_service import RdGateTemplateService
-from core.api.deps.access import require_access
+from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
@@ -45,7 +45,7 @@ def _err(status_code: int, message: str, route: str, tenant_id: Optional[int] = 
 async def list_gate_templates(
     project_type: Optional[str] = Query(None, description="RD | DELIVERY"),
     is_active: Optional[bool] = Query(None),
-    _auth=Depends(require_access("kuaiplm.gate-template", "read", required_permissions=["kuaiplm:gate-template:read"])),
+    _auth=Depends(require_permission_codes("kuaiplm:gate-template:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     rows = await service.list_templates(tenant_id, project_type=project_type, is_active=is_active)
@@ -55,7 +55,7 @@ async def list_gate_templates(
 @router.get("/{template_id}", response_model=GateTemplateDetailResponse, summary="Get gate template")
 async def get_gate_template(
     template_id: int = Path(..., ge=1),
-    _auth=Depends(require_access("kuaiplm.gate-template", "read", required_permissions=["kuaiplm:gate-template:read"])),
+    _auth=Depends(require_permission_codes("kuaiplm:gate-template:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -68,7 +68,7 @@ async def get_gate_template(
 async def create_gate_template(
     data: GateTemplateCreate,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.gate-template", "create", required_permissions=["kuaiplm:gate-template:create"])),
+    _auth=Depends(require_permission_codes("kuaiplm:gate-template:create")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -82,7 +82,7 @@ async def update_gate_template(
     data: GateTemplateUpdate,
     template_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.gate-template", "update", required_permissions=["kuaiplm:gate-template:update"])),
+    _auth=Depends(require_permission_codes("kuaiplm:gate-template:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -98,7 +98,7 @@ async def save_gate_template_stages(
     data: GateTemplateStagesSave,
     template_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.gate-template", "update", required_permissions=["kuaiplm:gate-template:update"])),
+    _auth=Depends(require_permission_codes("kuaiplm:gate-template:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -113,7 +113,7 @@ async def save_gate_template_stages(
 async def set_default_gate_template(
     template_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.gate-template", "update", required_permissions=["kuaiplm:gate-template:update"])),
+    _auth=Depends(require_permission_codes("kuaiplm:gate-template:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -128,7 +128,7 @@ async def set_default_gate_template(
 async def delete_gate_template(
     template_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.gate-template", "delete", required_permissions=["kuaiplm:gate-template:delete"])),
+    _auth=Depends(require_permission_codes("kuaiplm:gate-template:delete")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:

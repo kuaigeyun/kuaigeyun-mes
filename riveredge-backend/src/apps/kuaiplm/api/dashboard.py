@@ -13,7 +13,7 @@ from apps.kuaiplm.schemas.change_desk import DashboardSummaryResponse
 from apps.kuaiplm.schemas.rd_project import PendingInboxListResponse
 from apps.kuaiplm.services.dashboard_service import DashboardService
 from apps.kuaiplm.services.pending_inbox_service import PendingInboxService
-from core.api.deps.access import require_access
+from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.models.user import User
@@ -25,7 +25,7 @@ inbox_service = PendingInboxService()
 
 @router.get("/summary", response_model=DashboardSummaryResponse, summary="Dashboard summary")
 async def get_summary(
-    _auth=Depends(require_access("kuaiplm.dashboard", "read", required_permissions=["kuaiplm:dashboard:read"])),
+    _auth=Depends(require_permission_codes("kuaiplm:dashboard:read")),
     tenant_id: int = Depends(get_current_tenant),
     current_user: User = Depends(get_current_user),
 ):
@@ -43,13 +43,7 @@ async def list_pending_inbox(
     limit: int = Query(50, ge=1, le=200),
     project_id: Optional[int] = Query(None),
     doc_type: Optional[str] = Query(None),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.dashboard",
-            "read",
-            required_permissions=["kuaiplm:dashboard:read"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:dashboard:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     return await inbox_service.list(
