@@ -1,9 +1,9 @@
 """图纸仓库文件夹 API"""
 
 import uuid
-from typing import Annotated
+from typing import Annotated, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException as FastAPIHTTPException, status
+from fastapi import APIRouter, Depends, HTTPException as FastAPIHTTPException, Query, status
 
 from apps.master_data.api._master_data_route_access import require_master_data_module_access
 from apps.master_data.schemas.drawing_folder_schemas import (
@@ -42,9 +42,22 @@ def _http_exception(status_code: int, message: str) -> FastAPIHTTPException:
 @router.get("/tree", response_model=DrawingFolderTreeResponse, response_model_by_alias=True, summary="Drawing folder tree")
 async def list_drawing_folder_tree(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
+    drawing_type: Optional[str] = Query(None, alias="drawingType"),
+    exclude_drawing_types: Optional[str] = Query(None, alias="excludeDrawingTypes"),
 ):
-    data = await DrawingFolderService.list_tree(tenant_id)
-    return DrawingFolderTreeResponse(data=data)
+    exclude_types: Optional[List[str]] = None
+    if exclude_drawing_types:
+        exclude_types = [part.strip() for part in exclude_drawing_types.split(",") if part.strip()]
+    data, total_count, unclassified_count = await DrawingFolderService.list_tree(
+        tenant_id,
+        drawing_type=drawing_type,
+        exclude_drawing_types=exclude_types,
+    )
+    return DrawingFolderTreeResponse(
+        data=data,
+        total_drawing_count=total_count,
+        unclassified_drawing_count=unclassified_count,
+    )
 
 
 @router.post(

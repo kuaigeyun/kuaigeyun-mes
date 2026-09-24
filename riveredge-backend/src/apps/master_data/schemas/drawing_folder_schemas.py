@@ -55,12 +55,15 @@ class DrawingFolderResponse(BaseModel):
     created_at: datetime = Field(..., alias="createdAt")
     updated_at: datetime = Field(..., alias="updatedAt")
     children: List["DrawingFolderResponse"] = Field(default_factory=list)
+    drawing_count: int = Field(0, alias="drawingCount", description="含下级文件夹的图纸数量")
 
     model_config = ConfigDict(populate_by_name=True, from_attributes=True)
 
 
 class DrawingFolderTreeResponse(BaseModel):
     data: List[DrawingFolderResponse]
+    total_drawing_count: int = Field(..., alias="totalDrawingCount")
+    unclassified_drawing_count: int = Field(..., alias="unclassifiedDrawingCount")
 
 
 class DrawingMoveFolderRequest(BaseModel):

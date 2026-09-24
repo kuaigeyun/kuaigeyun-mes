@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, Iterable, List, Optional
+from typing import Dict, Iterable, List, Optional, Sequence
 
 from apps.common.audit_actor import apply_create_audit, apply_update_audit
 from apps.master_data.models.drawing import DrawingFolder, EngineeringDrawing
@@ -135,7 +135,31 @@ class DrawingFolderService:
         )
 
     @staticmethod
-    async def list_tree(tenant_id: int) -> List[DrawingFolderResponse]:
+    def _apply_drawing_counts(
+        roots: List[DrawingFolderResponse],
+        parent_of: Dict[int, Optional[int]],
+        direct_counts: Dict[Optional[int], int],
+    ) -> None:
+        def subtree_count(folder_id: int) -> int:
+            return sum(
+                direct_counts.get(folder_id_in_scope, 0)
+                for folder_id_in_scope in collect_descendant_ids(folder_id, parent_of)
+            )
+
+        def walk(nodes: List[DrawingFolderResponse]) -> None:
+            for node in nodes:
+                if node.children:
+                    walk(node.children)
+                node.drawing_count = subtree_count(node.id)
+
+        walk(roots)
+
+    @staticmethod
+    async def list_tree(
+        tenant_id: int,
+        drawing_type: Optional[str] = None,
+        exclude_drawing_types: Optional[Sequence[str]] = None,
+    ) -> tuple[List[DrawingFolderResponse], int, int]:
         rows = await DrawingFolder.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True,
@@ -152,7 +176,28 @@ class DrawingFolderService:
                 nodes[row.parent_id].children.append(node)
             else:
                 roots.append(node)
-        return roots
+
+        drawing_query = EngineeringDrawing.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        )
+        if drawing_type:
+            drawing_query = drawing_query.filter(drawing_type=drawing_type)
+        if exclude_drawing_types:
+            drawing_query = drawing_query.exclude(drawing_type__in=list(exclude_drawing_types))
+
+        drawing_rows = await drawing_query.values("folder_id")
+        direct_counts: Dict[Optional[int], int] = {}
+        for row in drawing_rows:
+            folder_id = row["folder_id"]
+            direct_counts[folder_id] = direct_counts.get(folder_id, 0) + 1
+
+        parent_of = {row.id: row.parent_id for row in rows}
+        DrawingFolderService._apply_drawing_counts(roots, parent_of, direct_counts)
+
+        total_count = len(drawing_rows)
+        unclassified_count = direct_counts.get(None, 0)
+        return roots, total_count, unclassified_count
 
     @staticmethod
     async def create_folder(

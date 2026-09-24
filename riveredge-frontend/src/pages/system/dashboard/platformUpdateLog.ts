@@ -44,6 +44,13 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'drawing-vault-tree-counts-r01',
+    date: '2026-09-24',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.drawing-vault-tree-counts-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.drawing-vault-tree-counts-r01.description',
+  },
+  {
     id: 'drawing-vault-folder-inline-actions-r01',
     date: '2026-09-24',
     type: 'improvement',

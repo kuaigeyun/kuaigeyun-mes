@@ -73,6 +73,7 @@ import {
   inferNavModeFromTreeKey,
   isVaultTreeKey,
   treeKeyBelongsToMode,
+  withDrawingTreeCount,
   type DrawingNavMode,
 } from './drawingTreeNav';
 import { drawingFolderApi, type DrawingFolder } from '../../../services/drawingFolder';
@@ -311,6 +312,10 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
   const [materialsLoaded, setMaterialsLoaded] = useState(false);
   const [routesLoaded, setRoutesLoaded] = useState(false);
   const [folders, setFolders] = useState<DrawingFolder[]>([]);
+  const [folderTreeSummary, setFolderTreeSummary] = useState({
+    totalDrawingCount: 0,
+    unclassifiedDrawingCount: 0,
+  });
   const [treeFilter, setTreeFilter] = useState<DrawingTreeFilter>({});
   const [folderForm, setFolderForm] = useState<{
     open: boolean;
@@ -422,13 +427,22 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
   const loadFolders = useCallback(async () => {
     setTreeLoading(true);
     try {
-      setFolders(await drawingFolderApi.tree());
+      const result = await drawingFolderApi.tree({
+        drawingType: fixedCatalogDrawingType,
+        excludeDrawingTypes: excludeCatalogDrawingTypes,
+      });
+      setFolders(result.data);
+      setFolderTreeSummary({
+        totalDrawingCount: result.totalDrawingCount,
+        unclassifiedDrawingCount: result.unclassifiedDrawingCount,
+      });
     } catch {
       setFolders([]);
+      setFolderTreeSummary({ totalDrawingCount: 0, unclassifiedDrawingCount: 0 });
     } finally {
       setTreeLoading(false);
     }
-  }, []);
+  }, [excludeCatalogDrawingTypes, fixedCatalogDrawingType]);
 
   useEffect(() => {
     void loadFolders();
@@ -442,9 +456,9 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
   const treeData: DataNode[] = useMemo(
     () =>
       paneMode === 'vault'
-        ? buildDrawingVaultTree(t, folders, treeSearch)
+        ? buildDrawingVaultTree(t, folders, treeSearch, folderTreeSummary)
         : buildDrawingNavTree(navMode, t, materialsNav, routesNav, treeSearch),
-    [paneMode, t, folders, treeSearch, navMode, materialsNav, routesNav],
+    [paneMode, t, folders, treeSearch, navMode, materialsNav, routesNav, folderTreeSummary],
   );
 
   const collectTreeExpandableKeys = useCallback((nodes: DataNode[]): React.Key[] => {
@@ -597,12 +611,13 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
       if (!folder) {
         return node.title as React.ReactNode;
       }
+      const folderLabel = withDrawingTreeCount(folder.name, folder.drawingCount);
       if (!canUpdate && !canDelete) {
-        return folder.name;
+        return folderLabel;
       }
       return (
         <span className="drawing-vault-folder-tree-title">
-          <span className="drawing-vault-folder-tree-title-text">{folder.name}</span>
+          <span className="drawing-vault-folder-tree-title-text">{folderLabel}</span>
           <span
             className="drawing-vault-folder-tree-title-actions"
             onClick={stopVaultFolderTreeActionEvent}
@@ -2030,7 +2045,8 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
         currentFolderUuid={moveFolder.currentFolderUuid}
         onClose={() => setMoveFolder({ open: false, drawingUuid: null })}
         onSuccess={() => {
-    actionRef.current?.reload();
+          actionRef.current?.reload();
+          void loadFolders();
           if (detail?.uuid && detail.uuid === moveFolder.drawingUuid) {
             void loadDetail(detail.uuid);
           }
@@ -2051,6 +2067,7 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
         }}
         onSuccess={() => {
           actionRef.current?.reload();
+          void loadFolders();
         }}
       />
 
@@ -2061,6 +2078,7 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
         onClose={() => setBatchUploadOpen(false)}
         onSuccess={() => {
           actionRef.current?.reload();
+          void loadFolders();
         }}
       />
 

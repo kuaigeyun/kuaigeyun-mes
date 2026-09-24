@@ -28406,6 +28406,10 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.drawing-vault-tree-counts-r01.title':
+    '图档库树形菜单显示图纸数量',
+  'pages.dashboard.updateLog.entries.drawing-vault-tree-counts-r01.description':
+    '图档库侧栏在全部图纸、各文件夹与未分类节点旁展示当前 Tab 范围内的图纸数量，文件夹数量含下级汇总。',
   'pages.dashboard.updateLog.entries.drawing-vault-folder-inline-actions-r01.title':
     '图档库文件夹行内编辑删除',
   'pages.dashboard.updateLog.entries.drawing-vault-folder-inline-actions-r01.description':

@@ -13,7 +13,19 @@ export interface DrawingFolder {
   parentUuid?: string | null;
   sortOrder: number;
   isActive: boolean;
+  drawingCount?: number;
   children?: DrawingFolder[];
+}
+
+export interface DrawingFolderTreeResult {
+  data: DrawingFolder[];
+  totalDrawingCount: number;
+  unclassifiedDrawingCount: number;
+}
+
+export interface DrawingFolderTreeQuery {
+  drawingType?: string;
+  excludeDrawingTypes?: string;
 }
 
 export interface DrawingFolderCreate {
@@ -30,9 +42,15 @@ export interface DrawingFolderUpdate {
 }
 
 export const drawingFolderApi = {
-  tree: async (): Promise<DrawingFolder[]> => {
-    const res = await api.get<{ data: DrawingFolder[] }>('/apps/master-data/process/drawing-folders/tree');
-    return res?.data ?? [];
+  tree: async (query?: DrawingFolderTreeQuery): Promise<DrawingFolderTreeResult> => {
+    const res = await api.get<DrawingFolderTreeResult>('/apps/master-data/process/drawing-folders/tree', {
+      params: query,
+    });
+    return {
+      data: res?.data ?? [],
+      totalDrawingCount: res?.totalDrawingCount ?? 0,
+      unclassifiedDrawingCount: res?.unclassifiedDrawingCount ?? 0,
+    };
   },
 
   create: async (data: DrawingFolderCreate): Promise<DrawingFolder> => {

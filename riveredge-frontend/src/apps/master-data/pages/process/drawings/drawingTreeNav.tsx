@@ -68,6 +68,15 @@ function matchSearch(text: string, search: string): boolean {
   return text.toLowerCase().includes(q);
 }
 
+export function withDrawingTreeCount(label: string, count?: number): string {
+  return typeof count === 'number' && Number.isFinite(count) ? `${label} (${count})` : label;
+}
+
+export interface DrawingVaultTreeSummary {
+  totalDrawingCount?: number;
+  unclassifiedDrawingCount?: number;
+}
+
 export function treeKeyBelongsToMode(key: string, mode: DrawingNavMode): boolean {
   if (!key || key === DRAWING_TREE_ALL_KEY) return true;
   if (mode === 'type') return key.startsWith('type:');
@@ -213,11 +222,12 @@ function mapFolderNodes(folders: DrawingFolder[], search: string): DataNode[] {
   return folders
     .map((folder) => {
       const children = mapFolderNodes(folder.children ?? [], search);
-      const selfMatch = matchSearch(folder.name, search);
+      const folderLabel = withDrawingTreeCount(folder.name, folder.drawingCount);
+      const selfMatch = matchSearch(folder.name, search) || matchSearch(folderLabel, search);
       if (!selfMatch && !children.length) return null;
       return {
         key: `folder:${folder.uuid}`,
-        title: folder.name,
+        title: folderLabel,
         icon: <FolderOutlined />,
         isLeaf: !children.length,
         children: children.length ? children : undefined,
@@ -230,9 +240,16 @@ export function buildDrawingVaultTree(
   t: TFunction,
   folders: DrawingFolder[],
   search = '',
+  summary?: DrawingVaultTreeSummary,
 ): DataNode[] {
-  const allLabel = t('app.master-data.drawings.tree.all');
-  const unclassifiedLabel = t('app.master-data.drawings.tree.unclassified');
+  const allLabel = withDrawingTreeCount(
+    t('app.master-data.drawings.tree.all'),
+    summary?.totalDrawingCount,
+  );
+  const unclassifiedLabel = withDrawingTreeCount(
+    t('app.master-data.drawings.tree.unclassified'),
+    summary?.unclassifiedDrawingCount,
+  );
   const nodes: DataNode[] = [];
 
   if (matchSearch(allLabel, search)) {
