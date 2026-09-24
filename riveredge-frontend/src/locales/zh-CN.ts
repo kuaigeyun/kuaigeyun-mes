@@ -2114,6 +2114,7 @@ export default {
   'components.uniImport.emptySheet': '表格中没有有效数据，请先通过上传 Excel 或粘贴导入数据',
   'components.uniImport.emptySheetAllBlank': '表格中没有有效数据（所有行都为空），请先通过上传 Excel 或粘贴导入数据',
   'components.uniImport.sheetMatrixMissing': '尚未载入可导入数据，请先下载模板填写后上传，或从 Excel 粘贴',
+  'components.uniImport.sheetReadFailed': '读取在线表格失败：{{message}}',
   'components.uniImport.pasteFailed': '粘贴失败，请改用「上传 Excel」以保留完整精度',
   'components.uniImport.sheetLoadedWithPasteHint': '表格已加载。从 Excel 粘贴会保留完整小数；更稳妥请用「上传 Excel」',
   'components.uniImport.sheetLoadedHeaderOnly': '表格已加载，表头已自动填充，请上传 Excel 或粘贴数据（从第 3 行起）',
@@ -3305,6 +3306,31 @@ export default {
   'app.kuaioa.employee.welfareSpringFestival': '春节福利标准',
   'app.kuaioa.employee.status.active': '在职',
   'app.kuaioa.employee.status.left': '离职',
+  'app.kuaioa.employee.importTitle': '导入员工档案',
+  'app.kuaioa.employee.importSuccess': '成功导入 {{count}} 条员工档案',
+  'app.kuaioa.employee.importEmpty': '导入数据为空',
+  'app.kuaioa.employee.importNoRows': '没有可导入的数据行',
+  'app.kuaioa.employee.importMissingField': '缺少必填列：{{field}}',
+  'app.kuaioa.employee.importNameRequired': '姓名不能为空',
+  'app.kuaioa.employee.importEmploymentInvalid': '用工类型无效',
+  'app.kuaioa.employee.importPayMethodInvalid': '计薪方式无效',
+  'app.kuaioa.employee.importStatusInvalid': '状态无效',
+  'app.kuaioa.employee.importValidationTitle': '导入数据校验失败',
+  'app.kuaioa.employee.importValidationIntro': '请修正以下问题后重新导入：',
+  'app.kuaioa.employee.importPartialTitle': '导入完成（部分失败）',
+  'app.kuaioa.employee.importPartialIntro': '导入结果：成功 {{success}} 条，失败 {{failure}} 条',
+  'app.kuaioa.employee.rowError': '第 {{row}} 行：{{message}}',
+  'app.kuaioa.employee.importExample.fullName': '张三',
+  'app.kuaioa.employee.importExample.department': '生产部',
+  'app.kuaioa.employee.importExample.workshop': '一车间',
+  'app.kuaioa.employee.importExample.productionLine': 'A线',
+  'app.kuaioa.employee.importExample.phone': '13800000000',
+  'app.kuaioa.employee.importExample.hourlyRate': '25',
+  'app.kuaioa.employee.importExample.hireDate': '2026-01-15',
+  'app.kuaioa.employee.importExample.bankAccount': '6222020000000000',
+  'app.kuaioa.employee.importExample.bankName': '工商银行',
+  'app.kuaioa.employee.importExample.bankBranch': '某某支行',
+  'app.kuaioa.employee.importExample.livingAllowance': '800',
   'app.kuaioa.attendance.createButton': '新建考勤单',
   'app.kuaioa.attendance.code': '考勤单号',
   'app.kuaioa.attendance.yearMonth': '年月',
@@ -20079,6 +20105,8 @@ export default {
   'app.master-data.drawings.type': '图纸类型',
   'app.master-data.drawings.file': '主文件',
   'app.master-data.drawings.supplementaryFiles': '附加文件',
+  'app.master-data.drawings.project': '关联项目',
+  'app.master-data.drawings.projectPlaceholder': '选择项目或手填项目代号',
   'app.master-data.drawings.materials': '关联物料',
   'app.master-data.drawings.routes': '关联工艺路线',
   'app.master-data.drawings.operations': '关联工序',
@@ -20116,7 +20144,11 @@ export default {
   'app.master-data.drawings.uploadSupplementary': '上传附加页',
   'app.master-data.drawings.uploadDragHint': '点击或拖拽文件到此处上传',
   'app.master-data.drawings.uploadDragSubHint': '支持 PDF、DWG、DXF、STEP、STP、PNG、JPG',
+  'app.master-data.drawings.uploadDragSubHintWithLimit':
+    '支持 PDF、DWG、DXF、STEP、STP、PNG、JPG 等，单文件不超过 {{maxMb}} MB',
   'app.master-data.drawings.uploadSupplementaryDragSubHint': '支持上传多个附加页，格式同上',
+  'app.master-data.drawings.uploadSupplementaryDragSubHintWithLimit':
+    '支持上传多个附加页，格式同上，单文件不超过 {{maxMb}} MB',
   'app.master-data.drawings.listFailed': '获取图纸列表失败',
   'app.master-data.drawings.getDetailFailed': '获取图纸详情失败',
   'app.master-data.drawings.tree.all': '全部图纸',
@@ -23932,6 +23964,11 @@ export default {
   'pages.system.configCenter.category.sales_qualityDesc': '销售订单、质量管理参数',
   'pages.system.configCenter.category.system': '系统设置',
   'pages.system.configCenter.category.systemDesc': '系统必备初始项的统一加载与补全',
+  'pages.system.configCenter.category.master_data': '基础数据',
+  'pages.system.configCenter.category.master_dataDesc': '主数据与文控相关参数',
+  'pages.system.configCenter.param.master_data_drawing_max_upload_size_mb': '图纸主文件上传大小',
+  'pages.system.configCenter.param.master_data_drawing_max_upload_size_mb_desc':
+    '新建、编辑与批量上传图纸时，主文件与附加页单文件大小上限（MB）；不超过平台文件服务硬上限 100 MB。',
   'pages.system.configCenter.tenantInit.alertTitle': '系统初始项加载',
   'pages.system.configCenter.tenantInit.alertDesc':
     '新建组织时由平台完成应用安装/启用；租户侧可在此补全语言、字典、参数、编码规则、审批/消息/打印模板，并同步已安装应用的菜单。可重复执行，已存在的数据会同步更新。',
@@ -28406,6 +28443,74 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.material-bulk-import-throughput-r01.title':
+    '物料批量导入吞吐提升',
+  'pages.dashboard.updateLog.entries.material-bulk-import-throughput-r01.description':
+    '物料 batch-create 改为分组/主编码预取、片内并发创建，并跳过导入不需要的详情响应拼装，大幅缩短大批量导入耗时。',
+  'pages.dashboard.updateLog.entries.material-import-progress-feedback-r01.title':
+    '物料批量导入进度反馈更及时',
+  'pages.dashboard.updateLog.entries.material-import-progress-feedback-r01.description':
+    '分片导入在发起每批请求前即更新进度文案与百分比，物料主数据单批改为约 30 条，避免长时间停在「准备导入」无反馈。',
+  'pages.dashboard.updateLog.entries.uni-import-live-sheet-precheck-r03.title':
+    '修复导入「预检并继续」点击无反应',
+  'pages.dashboard.updateLog.entries.uni-import-live-sheet-precheck-r03.description':
+    '确认预检改为只读取有内容的数据区并限制行数上界，避免按整表最大行数同步扫格卡住页面；失败时给出明确提示。',
+  'pages.dashboard.updateLog.entries.uni-import-live-sheet-precheck-r02.title':
+    '导入预检正确读取在线表改格',
+  'pages.dashboard.updateLog.entries.uni-import-live-sheet-precheck-r02.description':
+    '修复确认导入时误用不存在的 getRowCount 导致读表失败、回落上传 Excel 缓存的问题；改为 getMaxRows 并以表格显示值（含下拉「编号 - 名称」）做预检。',
+  'pages.dashboard.updateLog.entries.uni-import-live-sheet-precheck-r01.title':
+    '导入预检改为读取在线表格',
+  'pages.dashboard.updateLog.entries.uni-import-live-sheet-precheck-r01.description':
+    '确认导入与预检改为读取 Univer 当前格子（含手工修改与下拉选择），不再只校验上传时的 Excel 缓存矩阵。',
+  'pages.dashboard.updateLog.entries.kuaioa-employee-batch-import-r01.title':
+    '人事档案支持批量导入',
+  'pages.dashboard.updateLog.entries.kuaioa-employee-batch-import-r01.description':
+    '轻办公人事档案列表开放 UniImport 批量导入：下载模板填写后可一次新建多条员工档案，员工编号仍由系统自动生成；角色需具备「导入」权限（同步权限后生效）。',
+  'pages.dashboard.updateLog.entries.delivery-project-sales-order-item-filter-r01.title':
+    '交付项目工作台销售订单明细过滤修复',
+  'pages.dashboard.updateLog.entries.delivery-project-sales-order-item-filter-r01.description':
+    '节点关联销售订单汇总进度时改为按 sales_order_id 查询明细，修复私有部署报 Unknown filter param order_id__in。',
+  'pages.dashboard.updateLog.entries.purchase-requisition-edit-formref-r01.title':
+    '采购申请编辑页加载错误修复',
+  'pages.dashboard.updateLog.entries.purchase-requisition-edit-formref-r01.description':
+    '修复明细行交期日期控件误引用未定义的 formRef，导致部分采购申请进入编辑页时报「formRef is not defined」。',
+  'pages.dashboard.updateLog.entries.standard-cost-edit-save-r01.title':
+    '标准成本库二次编辑可正常保存',
+  'pages.dashboard.updateLog.entries.standard-cost-edit-save-r01.description':
+    '编辑已有标准成本点保存不再因回传审核相位等响应字段导致服务器内部错误；表单提交统一剥离列表回显元数据。',
+  'pages.dashboard.updateLog.entries.drawing-watermark-switch-order-r01.title':
+    '水印开关移到模板之后',
+  'pages.dashboard.updateLog.entries.drawing-watermark-switch-order-r01.description':
+    '打印水印设置中「启用打印水印」与「打印强制带水印」排在水印模板下方。',
+  'pages.dashboard.updateLog.entries.drawing-watermark-policy-columns-r01.title':
+    '修复图纸水印设置缺列报错',
+  'pages.dashboard.updateLog.entries.drawing-watermark-policy-columns-r01.description':
+    '水印策略表补齐创建人与业务编号列，打开水印设置不再报 created_by 不存在。',
+  'pages.dashboard.updateLog.entries.drawing-watermark-preview-layout-r01.title':
+    '水印设置左右分栏与 A4 预览',
+  'pages.dashboard.updateLog.entries.drawing-watermark-preview-layout-r01.description':
+    '打印水印设置弹窗左侧为参数与模板，右侧按 A4 纵向比例实时预览叠字效果。',
+  'pages.dashboard.updateLog.entries.drawing-upload-size-config-r01.title':
+    '图纸上传大小可在业务配置调整',
+  'pages.dashboard.updateLog.entries.drawing-upload-size-config-r01.description':
+    '配置中心基础数据增加「图纸主文件上传大小」，默认 100 MB；新建、编辑与批量上传前后端均按该上限校验。',
+  'pages.dashboard.updateLog.entries.drawing-watermark-policy-orm-r01.title':
+    '修复图纸水印设置无法打开',
+  'pages.dashboard.updateLog.entries.drawing-watermark-policy-orm-r01.description':
+    '补注册图纸水印策略 ORM 模块，打开「水印设置」不再报 default_connection 错误。',
+  'pages.dashboard.updateLog.entries.drawing-project-ref-grid-r01.title':
+    '修复图纸关联项目字段对齐',
+  'pages.dashboard.updateLog.entries.drawing-project-ref-grid-r01.description':
+    '新建编辑图纸弹窗中「关联项目」改走 ProFormField 栅格，标签与输入框与其它字段对齐。',
+  'pages.dashboard.updateLog.entries.drawing-watermark-settings-r01.title':
+    '图纸打印水印可配置',
+  'pages.dashboard.updateLog.entries.drawing-watermark-settings-r01.description':
+    '图纸管理工具栏增加「水印设置」，可按密级配置打印水印模板与透明度、角度、位置等样式；仍仅作用于浏览器打印叠字。',
+  'pages.dashboard.updateLog.entries.drawing-project-ref-r01.title':
+    '图纸可关联研发项目',
+  'pages.dashboard.updateLog.entries.drawing-project-ref-r01.description':
+    '新建与编辑图纸增加「关联项目」，可下拉选择研发项目或手填项目代号，不必填，排在关联物料之前。',
   'pages.dashboard.updateLog.entries.permission-governance-p2-r01.title':
     '权限治理：停用别名映射、统一管理员判定、对齐模块鉴权 ABAC',
   'pages.dashboard.updateLog.entries.permission-governance-p2-r01.description':
@@ -28442,6 +28547,14 @@ export default {
     '权限治理：菜单精确匹配、状态机与数据范围收紧、强制下线鉴权',
   'pages.dashboard.updateLog.entries.permission-governance-p0-r01.description':
     '侧栏菜单改为与按钮一致的精确权限码匹配；状态流转库表规则未配权限/角色时拒绝执行；无功能授予时数据范围不再回退全部角色；在线用户强制下线需 system:online-user:execute；切回窗口重拉权限；新增 manifest 权限声明扫描。',
+  'pages.dashboard.updateLog.entries.drawing-batch-move-folder-r01.title':
+    '图纸批量移动到文件夹',
+  'pages.dashboard.updateLog.entries.drawing-batch-move-folder-r01.description':
+    '行操作中的「移动到文件夹」改为工具栏「批量操作」下的「批量移动」，勾选多条图纸后一次移入目标文件夹。',
+  'pages.dashboard.updateLog.entries.drawing-type-dictionary-r01.title':
+    '图纸类型改为可维护字典',
+  'pages.dashboard.updateLog.entries.drawing-type-dictionary-r01.description':
+    '新建与批量上传图纸的类型下拉改为系统字典「图纸类型」，可在下拉里快速新增；列表与分类筛选按字典名称展示。',
   'pages.dashboard.updateLog.entries.drawing-file-content-missing-r01.title':
     '工程图纸预览文件丢失提示修复',
   'pages.dashboard.updateLog.entries.drawing-file-content-missing-r01.description':
@@ -37128,6 +37241,29 @@ export default {
   'app.master-data.drawings.approveConfirm': '确认审核通过该图纸？',
   'app.master-data.drawings.approveSuccess': '图纸已审核通过',
   'app.master-data.drawings.batchActions': '批量操作',
+  'app.master-data.drawings.watermark.settingsButton': '水印设置',
+  'app.master-data.drawings.watermark.settingsTitle': '打印水印设置',
+  'app.master-data.drawings.watermark.isEnabled': '启用打印水印',
+  'app.master-data.drawings.watermark.forceOnPrint': '打印强制带水印',
+  'app.master-data.drawings.watermark.opacity': '透明度',
+  'app.master-data.drawings.watermark.angle': '旋转角度',
+  'app.master-data.drawings.watermark.fontSize': '字号',
+  'app.master-data.drawings.watermark.color': '颜色',
+  'app.master-data.drawings.watermark.position.label': '位置',
+  'app.master-data.drawings.watermark.position.diagonal': '对角',
+  'app.master-data.drawings.watermark.position.center': '居中',
+  'app.master-data.drawings.watermark.position.topLeft': '左上',
+  'app.master-data.drawings.watermark.position.topRight': '右上',
+  'app.master-data.drawings.watermark.position.bottomLeft': '左下',
+  'app.master-data.drawings.watermark.position.bottomRight': '右下',
+  'app.master-data.drawings.watermark.templateLabel': '水印模板',
+  'app.master-data.drawings.watermark.placeholderHint':
+    '占位符：{user} 操作人、{time} 打印时刻、{code} 图号、{revision} 修订版、{securityLevel} 密级、{siteName} 站点名称',
+  'app.master-data.drawings.watermark.preview': '预览',
+  'app.master-data.drawings.watermark.previewA4Hint': 'A4 纵向页面比例预览',
+  'app.master-data.drawings.watermark.previewDisabled': '水印已关闭',
+  'app.master-data.drawings.watermark.previewUser': '体验用户',
+  'app.master-data.drawings.watermark.previewSiteName': '示例站点',
   'app.master-data.drawings.batchApprove': '批量审核',
   'app.master-data.drawings.batchApproveConfirm': '确认审核通过选中的 {{count}} 条图纸？仅待审核状态会执行。',
   'app.master-data.drawings.batchApproveNotAllowed': '当前选中图纸不可批量审核（仅待审核状态可操作）。',

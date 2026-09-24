@@ -9,6 +9,17 @@ import type { BatchImportResult } from './batchOperations';
 
 export const DEFAULT_IMPORT_CHUNK_SIZE = 100;
 
+/** 让出一帧，确保进度 Modal 能先画出「正在导入第 x–y 批」再发请求 */
+function yieldForProgressPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => resolve());
+    } else {
+      queueMicrotask(() => resolve());
+    }
+  });
+}
+
 export interface ChunkBulkFailedItem {
   /** 相对本 chunk 的下标（从 0） */
   index: number;
@@ -64,6 +75,7 @@ export async function importInChunks<T>(
   }
 
   const size = Math.max(1, Math.min(200, Math.trunc(chunkSize) || DEFAULT_IMPORT_CHUNK_SIZE));
+  const totalChunks = Math.ceil(items.length / size);
   const progressModal = getAntdModal().info({
     title,
     width: 600,
@@ -79,6 +91,29 @@ export async function importInChunks<T>(
   try {
     for (let offset = 0; offset < items.length; offset += size) {
       const chunk = items.slice(offset, offset + size);
+      const chunkIndex = Math.floor(offset / size) + 1;
+      const rangeStart = offset + 1;
+      const rangeEnd = Math.min(offset + chunk.length, items.length);
+      // 发请求前先刷新进度，避免首批长时间无反馈（看起来像卡在「准备导入」）
+      const startedPercent = Math.min(
+        99,
+        Math.round(((offset + chunk.length * 0.15) / items.length) * 100),
+      );
+      progressModal.update({
+        content: (
+          <div>
+            <Progress percent={startedPercent} status="active" />
+            <p style={{ marginTop: 16 }}>
+              正在导入第 {rangeStart}–{rangeEnd} / {items.length} 条（第 {chunkIndex}/{totalChunks} 批）…
+            </p>
+            <p style={{ marginTop: 8, color: '#52c41a' }}>
+              成功：{result.successCount} 条 | 失败：{result.failureCount} 条
+            </p>
+          </div>
+        ),
+      });
+      await yieldForProgressPaint();
+
       const chunkRes = await importChunk(chunk, offset);
       const created = Math.max(0, Number(chunkRes.createdCount) || 0);
       result.successCount += created;
@@ -248,6 +283,7 @@ export async function importExcelMatrixInChunks(config: {
   }
 
   const size = Math.max(1, Math.min(200, Math.trunc(chunkSize) || DEFAULT_IMPORT_CHUNK_SIZE));
+  const totalChunks = Math.ceil(dataRows.length / size);
   const progressModal = getAntdModal().info({
     title,
     width: 600,
@@ -263,6 +299,29 @@ export async function importExcelMatrixInChunks(config: {
   try {
     for (let offset = 0; offset < dataRows.length; offset += size) {
       const chunk = dataRows.slice(offset, offset + size);
+      const chunkIndex = Math.floor(offset / size) + 1;
+      const rangeStart = offset + 1;
+      const rangeEnd = Math.min(offset + chunk.length, dataRows.length);
+      const startedPercent = Math.min(
+        99,
+        Math.round(((offset + chunk.length * 0.15) / dataRows.length) * 100),
+      );
+      progressModal.update({
+        content: (
+          <div>
+            <Progress percent={startedPercent} status="active" />
+            <p style={{ marginTop: 16 }}>
+              正在导入第 {rangeStart}–{rangeEnd} / {dataRows.length} 条（第 {chunkIndex}/
+              {totalChunks} 批）…
+            </p>
+            <p style={{ marginTop: 8, color: '#52c41a' }}>
+              成功：{aggregated.success_count} 条 | 失败：{aggregated.failure_count} 条
+            </p>
+          </div>
+        ),
+      });
+      await yieldForProgressPaint();
+
       const matrix: any[][] =
         example !== undefined ? [header, example, ...chunk] : [header, ...chunk];
       const normalized = normalizeExcelMatrixChunkResult(await importChunk(matrix));

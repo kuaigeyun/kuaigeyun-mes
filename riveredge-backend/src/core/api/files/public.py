@@ -32,7 +32,11 @@ async def _resolve_public_branding_file(uuid: str, category: str):
 
     categories = PUBLIC_BRANDING_CATEGORY_ALIASES.get(category, [category])
     for cat in categories:
-        file = await File.get_or_none(uuid=uuid, category=cat)
+        file = await File.filter(
+            uuid=uuid,
+            category=cat,
+            deleted_at__isnull=True,
+        ).first()
         if file:
             return file
     return None
@@ -71,41 +75,44 @@ async def get_file_preview_public(
         
         file = await _resolve_public_branding_file(uuid, category)
         if not file:
-            raise NotFoundError(f"文件不存在: {uuid} (category: {category})")
-        
-        # 生成预览URL（使用文件所属的tenant_id）
-        # 对于平台LOGO，tenant_id应该已经设置（上传时自动设置）
+            raise NotFoundError("文件")
+
         tenant_id = file.tenant_id
         if tenant_id is None:
-            # 如果tenant_id为None，尝试使用默认租户
             from infra.services.tenant_service import TenantService
+
             try:
                 tenant_service = TenantService()
                 default_tenant = await tenant_service.get_tenant_by_domain(
                     "default",
-                    skip_tenant_filter=True
+                    skip_tenant_filter=True,
                 )
                 tenant_id = default_tenant.id if default_tenant else 1
             except Exception:
                 tenant_id = 1
-        
+
+        if not await FileService.file_content_available(tenant_id, file):
+            raise NotFoundError("文件内容不存在，请重新上传")
+
         preview_info = await FilePreviewService.get_preview_info(
             file_uuid=uuid,
             tenant_id=tenant_id,
             thumbnail_size=size,
         )
-        
+
         return FilePreviewResponse(**preview_info)
-        
+
     except NotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
+            detail=str(e),
         )
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"获取文件预览失败: {e}")
+        logger.exception("获取公开文件预览失败 uuid={} category={}", uuid, category)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"获取文件预览失败: {str(e)}"
+            detail="获取文件预览失败",
         )
 

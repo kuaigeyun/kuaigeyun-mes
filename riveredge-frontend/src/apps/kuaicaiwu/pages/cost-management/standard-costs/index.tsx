@@ -401,14 +401,25 @@ const StandardCostsPage: React.FC = () => {
         width={MODAL_CONFIG.STANDARD_WIDTH}
         onFinish={async (values) => {
           if (editing) {
-            await standardCostService.update(editing.id, values);
+            await standardCostService.update(editing.id, {
+              target_code: values.target_code,
+              target_name: values.target_name,
+              standard_value: values.standard_value,
+              currency: values.currency,
+              unit: values.unit,
+              version: values.version,
+              effective_date: values.effective_date,
+              expiry_date: values.expiry_date,
+              is_active: values.is_active,
+              description: values.description,
+            });
             messageApi.success(t('common.updateSuccess'));
           } else {
             await standardCostService.create(values);
             messageApi.success(t('common.createSuccess'));
           }
           setModalVisible(false);
-    actionRef.current?.reload();
+          actionRef.current?.reload();
         }}
         initialValues={editing ?? createInitialValues}
       >

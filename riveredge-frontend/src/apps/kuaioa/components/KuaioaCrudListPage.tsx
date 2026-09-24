@@ -168,6 +168,14 @@ type Props = {
     selectedRowKeys?: React.Key[],
     pageData?: Record<string, unknown>[],
   ) => Promise<void>;
+  /** 列表批量导入（须 manifest import 权限 + 完整模板） */
+  showImportButton?: boolean;
+  onImport?: (data: unknown[][]) => void | boolean | Promise<void | boolean>;
+  importHeaders?: string[];
+  importExampleRow?: string[];
+  importColumnOptions?: Array<string[] | undefined>;
+  importFieldMap?: Record<string, string>;
+  importTemplateName?: string;
 };
 
 type KuaioaListScope = 'all' | 'expiring';
@@ -216,6 +224,13 @@ const KuaioaCrudListPage: React.FC<Props> = ({
   toolBarActionsBeforeCreate,
   showExportButton = false,
   onExport,
+  showImportButton = false,
+  onImport,
+  importHeaders,
+  importExampleRow,
+  importColumnOptions,
+  importFieldMap,
+  importTemplateName,
 }) => {
   const { t } = useTranslation();
   const currentUser = useCurrentUser();
@@ -723,6 +738,21 @@ const KuaioaCrudListPage: React.FC<Props> = ({
         deleteConfirmDescription={(count) => t('common.confirmBatchDeleteContent', { count })}
         showExportButton={showExportButton}
         onExport={onExport}
+        showImportButton={showImportButton}
+        onImport={
+          onImport
+            ? async (data) => {
+                const result = await onImport(data);
+                reloadTable();
+                return result;
+              }
+            : undefined
+        }
+        importHeaders={importHeaders}
+        importExampleRow={importExampleRow}
+        importColumnOptions={importColumnOptions}
+        importFieldMap={importFieldMap}
+        importTemplateName={importTemplateName}
       />
 
       <FormModalTemplate

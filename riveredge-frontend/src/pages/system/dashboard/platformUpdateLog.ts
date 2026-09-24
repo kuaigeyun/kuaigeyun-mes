@@ -44,6 +44,151 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'drawing-watermark-switch-order-r01',
+    date: '2026-09-24',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.drawing-watermark-switch-order-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.drawing-watermark-switch-order-r01.description',
+  },
+  {
+    id: 'drawing-watermark-policy-columns-r01',
+    date: '2026-09-24',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.drawing-watermark-policy-columns-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.drawing-watermark-policy-columns-r01.description',
+  },
+  {
+    id: 'drawing-watermark-preview-layout-r01',
+    date: '2026-09-24',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.drawing-watermark-preview-layout-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.drawing-watermark-preview-layout-r01.description',
+  },
+  {
+    id: 'material-bulk-import-throughput-r01',
+    date: '2026-09-24',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.material-bulk-import-throughput-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.material-bulk-import-throughput-r01.description',
+  },
+  {
+    id: 'material-import-progress-feedback-r01',
+    date: '2026-09-24',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.material-import-progress-feedback-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.material-import-progress-feedback-r01.description',
+  },
+  {
+    id: 'uni-import-live-sheet-precheck-r03',
+    date: '2026-09-24',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.uni-import-live-sheet-precheck-r03.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.uni-import-live-sheet-precheck-r03.description',
+  },
+  {
+    id: 'uni-import-live-sheet-precheck-r02',
+    date: '2026-09-24',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.uni-import-live-sheet-precheck-r02.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.uni-import-live-sheet-precheck-r02.description',
+  },
+  {
+    id: 'uni-import-live-sheet-precheck-r01',
+    date: '2026-09-24',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.uni-import-live-sheet-precheck-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.uni-import-live-sheet-precheck-r01.description',
+  },
+  {
+    id: 'kuaioa-employee-batch-import-r01',
+    date: '2026-09-24',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-employee-batch-import-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-employee-batch-import-r01.description',
+  },
+  {
+    id: 'drawing-upload-size-config-r01',
+    date: '2026-09-24',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.drawing-upload-size-config-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.drawing-upload-size-config-r01.description',
+  },
+  {
+    id: 'drawing-watermark-policy-orm-r01',
+    date: '2026-09-24',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.drawing-watermark-policy-orm-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.drawing-watermark-policy-orm-r01.description',
+  },
+  {
+    id: 'drawing-project-ref-grid-r01',
+    date: '2026-09-24',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.drawing-project-ref-grid-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.drawing-project-ref-grid-r01.description',
+  },
+  {
+    id: 'delivery-project-sales-order-item-filter-r01',
+    date: '2026-09-24',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.delivery-project-sales-order-item-filter-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.delivery-project-sales-order-item-filter-r01.description',
+  },
+  {
+    id: 'purchase-requisition-edit-formref-r01',
+    date: '2026-09-24',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-requisition-edit-formref-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-requisition-edit-formref-r01.description',
+  },
+  {
+    id: 'drawing-watermark-settings-r01',
+    date: '2026-09-24',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.drawing-watermark-settings-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.drawing-watermark-settings-r01.description',
+  },
+  {
+    id: 'standard-cost-edit-save-r01',
+    date: '2026-09-24',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.standard-cost-edit-save-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.standard-cost-edit-save-r01.description',
+  },
+  {
+    id: 'drawing-project-ref-r01',
+    date: '2026-09-24',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.drawing-project-ref-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.drawing-project-ref-r01.description',
+  },
+  {
+    id: 'drawing-batch-move-folder-r01',
+    date: '2026-09-24',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.drawing-batch-move-folder-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.drawing-batch-move-folder-r01.description',
+  },
+  {
+    id: 'drawing-type-dictionary-r01',
+    date: '2026-09-24',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.drawing-type-dictionary-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.drawing-type-dictionary-r01.description',
+  },
+  {
     id: 'permission-governance-p2-r01',
     date: '2026-09-24',
     type: 'security',

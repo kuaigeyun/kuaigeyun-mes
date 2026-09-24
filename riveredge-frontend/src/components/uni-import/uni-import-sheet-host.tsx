@@ -80,8 +80,8 @@ export interface UniImportSheetHostProps {
   instanceRef: React.MutableRefObject<UniverSheetInstance | null>;
   messageApi: MessageInstance;
   /**
-   * 同步字符串矩阵（唯一确认数据源）。
-   * init / 上传重建 / 粘贴后都会回调；禁止确认时再从 Univer scrape。
+   * 同步字符串矩阵（上传 / 粘贴 / 初始模板）。
+   * 确认导入时还会再读一遍在线表显示值（见 readImportSheetStringMatrix），以覆盖手工改格。
    */
   onSheetRowsChange?: (rows: string[][]) => void;
 }

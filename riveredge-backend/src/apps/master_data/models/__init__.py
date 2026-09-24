@@ -23,6 +23,7 @@ from .drawing_distribution import (
     DrawingDistributionLine,
     DrawingDistributionPolicy,
 )
+from .drawing_watermark import DrawingWatermarkPolicy
 from .drawing_loan import DrawingLoan, DrawingLoanLine
 from .customer import Customer
 from .supplier import Supplier
@@ -72,6 +73,7 @@ __all__ = [
     "DrawingDistribution",
     "DrawingDistributionLine",
     "DrawingDistributionPolicy",
+    "DrawingWatermarkPolicy",
     "DrawingLoan",
     "DrawingLoanLine",
     "Customer",

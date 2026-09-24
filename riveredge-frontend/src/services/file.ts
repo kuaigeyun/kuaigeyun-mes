@@ -410,6 +410,11 @@ function isHttp404(error: unknown): boolean {
   );
 }
 
+function isHttp404Or500(error: unknown): boolean {
+  const status = (error as { response?: { status?: number } })?.response?.status;
+  return status === 404 || status === 500;
+}
+
 /**
  * 站点/平台 Logo 预览（公开分类接口，支持跨租户 logo 文件与缩略图）。
  * 仅当后端明确返回 404（文件不存在）时返回 null，由调用方回退默认 Logo；
@@ -448,7 +453,7 @@ export async function getSiteLogoPreview(
         return result;
       }
     } catch (error) {
-      if (!isHttp404(error)) {
+      if (!isHttp404Or500(error)) {
         throw error;
       }
     }
@@ -499,6 +504,15 @@ export function invalidateCompanySealPreviewCache(fileUuid?: string): void {
   }
 }
 
+/** 清除指定文件的预览 URL 会话缓存（404 / 重新上传后调用） */
+export function invalidateFilePreviewCache(fileUuid?: string): void {
+  for (const key of [...previewUrlCache.keys()]) {
+    if (!fileUuid || key.startsWith(`${fileUuid}_`)) {
+      previewUrlCache.delete(key);
+    }
+  }
+}
+
 /**
  * 获取文件预览信息
  *
@@ -532,6 +546,7 @@ export async function getFilePreview(
     previewUrlCache.set(cacheKey, result);
     return result;
   } catch (error) {
+    invalidateFilePreviewCache(fileUuid);
     throw error;
   }
 }

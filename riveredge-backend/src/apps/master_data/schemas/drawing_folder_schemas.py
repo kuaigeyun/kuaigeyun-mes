@@ -65,6 +65,8 @@ class DrawingFolderTreeResponse(BaseModel):
     total_drawing_count: int = Field(..., alias="totalDrawingCount")
     unclassified_drawing_count: int = Field(..., alias="unclassifiedDrawingCount")
 
+    model_config = ConfigDict(populate_by_name=True)
+
 
 class DrawingMoveFolderRequest(BaseModel):
     folder_uuid: Optional[str] = Field(None, alias="folderUuid")

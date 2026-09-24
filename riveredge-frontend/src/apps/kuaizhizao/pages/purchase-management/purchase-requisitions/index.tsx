@@ -2084,11 +2084,11 @@ const PurchaseRequisitionsPage: React.FC = () => {
                           size="small"
                           style={{ width: '100%' }}
                           placeholder={t('app.kuaizhizao.purchaseRequisition.form.optional')}
-                          getForm={() => formRef.current}
+                          getForm={() => createFormRef.current}
                           baseFieldName="requisition_date"
                           t={t}
                           onApply={(date) =>
-                            formRef.current?.setFieldValue?.(['items', index, 'required_date'], date)
+                            createFormRef.current?.setFieldValue?.(['items', index, 'required_date'], date)
                           }
                         />
                       </AntForm.Item>

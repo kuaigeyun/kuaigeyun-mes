@@ -286,6 +286,7 @@ TORTOISE_ORM = {
                 "apps.master_data.models.drawing",  # 工程图纸 / 仓库 / 密级授权
                 "apps.master_data.models.drawing_change",  # 图纸工程变更
                 "apps.master_data.models.drawing_distribution",  # 图档发放
+                "apps.master_data.models.drawing_watermark",  # 图纸打印水印策略
                 "apps.master_data.models.drawing_loan",  # 图档借阅
                 # 快格轻制造模型
                 "apps.kuaizhizao.models.work_order",  # 工单模型

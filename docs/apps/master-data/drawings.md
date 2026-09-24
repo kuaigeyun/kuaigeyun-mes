@@ -58,6 +58,7 @@ Released --revision--> Draft（新修订）
 - **图档借阅** `/apps/master-data/process/drawing-loans`，资源 `master-data:process:drawing-loan`。`complete` = 归还。
 - 借阅状态：`Draft → Pending → Borrowed → Returned`。借阅不提升密级，只能借已能看见的已发布图纸。
 - 密级授权：`GET/PUT/DELETE /process/drawing-clearances`，写操作走 `drawing-loan:update` / `delete`。
-- 打印：`GET /process/drawings/{uuid}/print-data`（`drawing:print`）。水印为「姓名 站点时刻 图号-修订 密级」。秘密/机密须另有进行中的借阅单。
+- 打印：`GET /process/drawings/{uuid}/print-data`（`drawing:print`）。水印由租户策略渲染（默认模板 `{user} {time} {code}-{revision} {securityLevel}`），可在图纸列表「水印设置」按密级配置模板与样式；关闭策略则不叠水印。秘密/机密须另有进行中的借阅单。
+- 水印策略：`GET/PUT /process/drawings/watermark-policy`（`drawing:read` / `drawing:update`）。占位符 `{user}` `{time}` `{code}` `{revision}` `{securityLevel}` `{siteName}`。
 
 升级后现有图纸为内部。未授权用户只能看到公开图纸；需在借阅页授予内部及以上密级。

@@ -7,8 +7,10 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from apps.master_data.schemas.drawing_watermark_schemas import DrawingWatermarkStyleResponse
 
-DRAWING_TYPES = {"part", "assembly", "process", "other", "product_spec"}
+
+DRAWING_TYPE_MAX_LENGTH = 20
 DRAWING_STATUSES = {"Draft", "Editing", "Pending", "Released", "Obsolete"}
 DRAWING_WORKING_STATUSES = {"Draft", "Editing", "Pending"}
 DRAWING_SECURITY_LEVELS = {"public", "internal", "secret", "confidential"}
@@ -88,6 +90,8 @@ class EngineeringDrawingBase(BaseModel):
     supplementary_file_uuids: Optional[List[str]] = Field(
         None, alias="supplementaryFileUuids", description="附加文件 UUID 列表"
     )
+    project_id: Optional[int] = Field(None, alias="projectId", description="关联研发项目ID")
+    project_code: Optional[str] = Field(None, alias="projectCode", max_length=50, description="关联项目代号（手填）")
     material_uuids: Optional[List[str]] = Field(None, alias="materialUuids")
     process_route_uuids: Optional[List[str]] = Field(None, alias="processRouteUuids")
     operation_uuids: Optional[List[str]] = Field(None, alias="operationUuids")
@@ -122,9 +126,13 @@ class EngineeringDrawingBase(BaseModel):
     @field_validator("drawing_type")
     @classmethod
     def validate_drawing_type(cls, v: str) -> str:
-        val = (v or "part").strip().lower()
-        if val not in DRAWING_TYPES:
-            raise ValueError(f"图纸类型无效，允许: {', '.join(sorted(DRAWING_TYPES))}")
+        val = (v or "part").strip()
+        if not val:
+            raise ValueError("图纸类型不能为空")
+        if val.isascii():
+            val = val.lower()
+        if len(val) > DRAWING_TYPE_MAX_LENGTH:
+            raise ValueError(f"图纸类型最长 {DRAWING_TYPE_MAX_LENGTH} 个字符")
         return val
 
     @field_validator("security_level")
@@ -145,6 +153,8 @@ class EngineeringDrawingUpdate(BaseModel):
     drawing_type: Optional[str] = Field(None, alias="drawingType")
     file_uuid: Optional[str] = Field(None, alias="fileUuid", max_length=36)
     supplementary_file_uuids: Optional[List[str]] = Field(None, alias="supplementaryFileUuids")
+    project_id: Optional[int] = Field(None, alias="projectId")
+    project_code: Optional[str] = Field(None, alias="projectCode", max_length=50)
     material_uuids: Optional[List[str]] = Field(None, alias="materialUuids")
     process_route_uuids: Optional[List[str]] = Field(None, alias="processRouteUuids")
     operation_uuids: Optional[List[str]] = Field(None, alias="operationUuids")
@@ -153,6 +163,13 @@ class EngineeringDrawingUpdate(BaseModel):
     description: Optional[str] = None
 
     model_config = ConfigDict(populate_by_name=True)
+
+    @field_validator("drawing_type")
+    @classmethod
+    def validate_drawing_type(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        return EngineeringDrawingBase.validate_drawing_type(v)
 
     @field_validator("security_level")
     @classmethod
@@ -192,6 +209,7 @@ class EngineeringDrawingResponse(EngineeringDrawingBase):
     checkout_comment: Optional[str] = Field(None, alias="checkoutComment")
     folder_id: Optional[int] = Field(None, alias="folderId")
     folder_name: Optional[str] = Field(None, alias="folderName")
+    project_name: Optional[str] = Field(None, alias="projectName")
     materials: Optional[List[AssociatedMaterialBrief]] = None
     process_routes: Optional[List[AssociatedProcessRouteBrief]] = Field(None, alias="processRoutes")
     operations: Optional[List[AssociatedOperationBrief]] = None
@@ -211,6 +229,9 @@ class EngineeringDrawingPrintDataResponse(BaseModel):
     revision: str
     security_level: str = Field(..., alias="securityLevel")
     watermark: str
+    watermark_style: Optional[DrawingWatermarkStyleResponse] = Field(
+        None, alias="watermarkStyle"
+    )
     preview_url: Optional[str] = Field(None, alias="previewUrl")
     file_name: Optional[str] = Field(None, alias="fileName")
 

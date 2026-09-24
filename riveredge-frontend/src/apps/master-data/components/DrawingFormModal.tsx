@@ -11,17 +11,29 @@ import {
   ProFormUploadDragger,
   ProFormInstance,
 } from '@ant-design/pro-components';
-import { App } from 'antd';
+import { App, Upload } from 'antd';
 import { InboxOutlined } from '@ant-design/icons';
 import type { UploadChangeParam, UploadFile } from 'antd/es/upload/interface';
 import { FormModalTemplate } from '../../../components/layout-templates';
 import { MODAL_CONFIG } from '../../../components/layout-templates/constants';
-import { drawingApi, type EngineeringDrawing, type EngineeringDrawingCreate } from '../services/drawing';
+import { drawingApi, DRAWING_TYPE_DICTIONARY_CODE, type EngineeringDrawing, type EngineeringDrawingCreate } from '../services/drawing';
+import { DictionarySelect } from '../../../components/dictionary-select';
 import type { DrawingFolder } from '../services/drawingFolder';
 import { FolderTreeSelectField } from '../pages/process/drawings/drawingFolderModals';
+import {
+  formatProjectRefLabel,
+  Phase2ProjectSelect,
+  resolveProjectRefPick,
+} from '../../kuaiplm/components/Phase2ProjectSelect';
 import { materialApi } from '../services/material';
 import { operationApi, processRouteApi, unwrapProcessPagedList } from '../services/process';
 import { uploadMultipleFiles, buildImageUploadFileUrls } from '../../../services/file';
+import {
+  getBusinessConfig,
+  resolveDrawingMaxUploadBytes,
+  resolveDrawingMaxUploadSizeMb,
+  type BusinessConfig,
+} from '../../../services/businessConfig';
 import { generateCode, getCodeRulePageConfig, testGenerateCode } from '../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../utils/codeRulePage';
 import { useCustomFields } from '../../../hooks/useCustomFields';
@@ -82,14 +94,18 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const formRef = useRef<ProFormInstance>();
+  const projectRefIdMapRef = useRef(new Map<string, number>());
   const [formLoading, setFormLoading] = useState(false);
   const [previewCode, setPreviewCode] = useState<string | null>(null);
   const [effectiveRuleCode, setEffectiveRuleCode] = useState<string | null>(null);
   const [materialOptions, setMaterialOptions] = useState<{ label: string; value: string }[]>([]);
   const [routeOptions, setRouteOptions] = useState<{ label: string; value: string }[]>([]);
   const [operationOptions, setOperationOptions] = useState<{ label: string; value: string }[]>([]);
+  const [businessConfig, setBusinessConfig] = useState<BusinessConfig | null>(null);
 
   const isEdit = Boolean(editUuid);
+  const drawingMaxUploadMb = resolveDrawingMaxUploadSizeMb(businessConfig);
+  const drawingMaxUploadBytes = resolveDrawingMaxUploadBytes(businessConfig);
 
   const {
     customFields,
@@ -100,14 +116,27 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
     resetFieldValues,
   } = useCustomFields({ tableName: CUSTOM_FIELD_TABLE, loadWhenOpen: true, open });
 
-  const drawingTypeOptions = [
-    { label: t('app.master-data.drawings.type.part'), value: 'part' },
-    { label: t('app.master-data.drawings.type.assembly'), value: 'assembly' },
-    { label: t('app.master-data.drawings.type.process'), value: 'process' },
-    { label: t('app.master-data.drawings.type.other'), value: 'other' },
-    { label: t('app.master-data.drawings.type.product_spec'), value: 'product_spec' },
-  ];
   const defaultType = fixedDrawingType ?? 'part';
+
+  useEffect(() => {
+    if (!open) {
+      setBusinessConfig(null);
+      return;
+    }
+    void getBusinessConfig()
+      .then(setBusinessConfig)
+      .catch(() => setBusinessConfig(null));
+  }, [open]);
+
+  const rejectOversizedDrawingFile = (file: File) => {
+    if (file.size <= drawingMaxUploadBytes) {
+      return false;
+    }
+    messageApi.error(
+      t('components.fileUpload.sizeExceeded', { size: drawingMaxUploadMb }),
+    );
+    return Upload.LIST_IGNORE;
+  };
 
   const loadRelationOptions = async () => {
     try {
@@ -134,6 +163,7 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
 
   useEffect(() => {
     if (!open) return;
+    projectRefIdMapRef.current = new Map();
     loadRelationOptions();
     formRef.current?.resetFields();
     formRef.current?.setFieldsValue({
@@ -167,6 +197,7 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
                 revision: 'A',
                 drawingType: defaultType,
                 securityLevel: 'internal',
+                folderUuid: defaultFolderUuid ?? undefined,
               });
             })
             .catch(() => setPreviewCode(null));
@@ -187,6 +218,10 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
         const suppFiles = detail.supplementaryFileUuids?.length
           ? await uuidsToUploadFiles(detail.supplementaryFileUuids)
           : [];
+        if (detail.projectId != null) {
+          const label = formatProjectRefLabel(detail.projectCode, detail.projectName);
+          if (label) projectRefIdMapRef.current.set(label, detail.projectId);
+        }
         formRef.current?.setFieldsValue({
           code: detail.code,
           name: detail.name,
@@ -195,6 +230,9 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
           securityLevel: detail.securityLevel || 'internal',
           mainFile: mainFiles,
           supplementaryFiles: suppFiles,
+          projectRef: detail.projectId
+            ? formatProjectRefLabel(detail.projectCode, detail.projectName)
+            : detail.projectCode || undefined,
           materialUuids: detail.materialUuids ?? [],
           processRouteUuids: detail.processRouteUuids ?? [],
           operationUuids: detail.operationUuids ?? [],
@@ -222,6 +260,7 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
     multiple,
     maxCount: multiple ? undefined : 1,
     style: { width: '100%' },
+    beforeUpload: rejectOversizedDrawingFile,
     onChange: syncUploadField(fieldName),
     customRequest: async (options: any) => {
       try {
@@ -257,6 +296,10 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
     const suppUuids = extractUploadFileUuids(
       resolveUploadFieldList('supplementaryFiles', standardValues),
     );
+    const projectPick = resolveProjectRefPick(
+      standardValues.projectRef,
+      projectRefIdMapRef.current,
+    );
 
     try {
       setFormLoading(true);
@@ -266,6 +309,8 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
           drawingType: standardValues.drawingType as EngineeringDrawingCreate['drawingType'],
           fileUuid: mainUuids[0],
           supplementaryFileUuids: suppUuids.length ? suppUuids : [],
+          projectId: projectPick.project_id ?? null,
+          projectCode: projectPick.project_code ?? null,
           materialUuids: (standardValues.materialUuids as string[]) ?? [],
           processRouteUuids: (standardValues.processRouteUuids as string[]) ?? [],
           operationUuids: (standardValues.operationUuids as string[]) ?? [],
@@ -299,6 +344,8 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
           drawingType: (standardValues.drawingType as EngineeringDrawingCreate['drawingType']) || 'part',
           fileUuid: mainUuids[0],
           supplementaryFileUuids: suppUuids.length ? suppUuids : undefined,
+          projectId: projectPick.project_id ?? null,
+          projectCode: projectPick.project_code ?? null,
           materialUuids: (standardValues.materialUuids as string[]) ?? undefined,
           processRouteUuids: (standardValues.processRouteUuids as string[]) ?? undefined,
           operationUuids: (standardValues.operationUuids as string[]) ?? undefined,
@@ -340,7 +387,12 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
       formRef={formRef as React.RefObject<ProFormInstance>}
       layout="vertical"
       grid
-      initialValues={{ revision: 'A', drawingType: defaultType, securityLevel: 'internal' }}
+      initialValues={{
+        revision: 'A',
+        drawingType: defaultType,
+        securityLevel: 'internal',
+        folderUuid: defaultFolderUuid ?? undefined,
+      }}
     >
       <ProFormText
         name="code"
@@ -368,11 +420,14 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
       {fixedDrawingType ? (
         <ProFormText name="drawingType" hidden initialValue={fixedDrawingType} />
       ) : (
-        <ProFormSelect
+        <DictionarySelect
           name="drawingType"
           label={t('app.master-data.drawings.type')}
-          options={drawingTypeOptions}
-          rules={[{ required: true }]}
+          dictionaryCode={DRAWING_TYPE_DICTIONARY_CODE}
+          required
+          simpleQuickCreate
+          formRef={formRef}
+          hostResource="master-data:process:drawing"
           colProps={{ span: 12 }}
         />
       )}
@@ -396,7 +451,9 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
         max={1}
         icon={<InboxOutlined />}
         title={t('app.master-data.drawings.uploadDragHint')}
-        description={t('app.master-data.drawings.uploadDragSubHint')}
+        description={t('app.master-data.drawings.uploadDragSubHintWithLimit', {
+          maxMb: drawingMaxUploadMb,
+        })}
         fieldProps={makeUploadFieldProps(false, 'mainFile')}
         rules={[
           {
@@ -421,8 +478,18 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
         label={t('app.master-data.drawings.uploadSupplementary')}
         icon={<InboxOutlined />}
         title={t('app.master-data.drawings.uploadDragHint')}
-        description={t('app.master-data.drawings.uploadSupplementaryDragSubHint')}
+        description={t('app.master-data.drawings.uploadSupplementaryDragSubHintWithLimit', {
+          maxMb: drawingMaxUploadMb,
+        })}
         fieldProps={makeUploadFieldProps(true, 'supplementaryFiles')}
+        colProps={{ span: 12 }}
+      />
+      <Phase2ProjectSelect
+        name="projectRef"
+        label={t('app.master-data.drawings.project')}
+        allowManualProjectCode
+        idByLabelRef={projectRefIdMapRef}
+        placeholder={t('app.master-data.drawings.projectPlaceholder')}
         colProps={{ span: 12 }}
       />
       <ProFormSelect

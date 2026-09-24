@@ -137,6 +137,10 @@ PARAMETER_REGISTRY_CATEGORY_META: Dict[str, Dict[str, str]] = {
         "labelKey": "pages.system.configCenter.category.production",
         "descriptionKey": "pages.system.configCenter.category.productionDesc",
     },
+    "master_data": {
+        "labelKey": "pages.system.configCenter.category.master_data",
+        "descriptionKey": "pages.system.configCenter.category.master_dataDesc",
+    },
 }
 
 # 参数控件元数据（默认 boolean，可按 full key 覆盖为 number/string/color 并附 min/max）
@@ -285,6 +289,7 @@ REGISTRY_PARAM_CONTROL_META: Dict[str, Dict[str, Any]] = {
             },
         ],
     },
+    "parameters.master_data.drawing_max_upload_size_mb": {"type": "number", "min": 1, "max": 100},
     "parameters.warehouse.fifo_mode": {
         "type": "select",
         "options": [
@@ -389,6 +394,7 @@ PARAMETER_KEYS = {
     "parameters.sales.sales_review",
     "parameters.procurement.arrival_imminent_days",
     "parameters.automation.push_default_mode",
+    "parameters.master_data.drawing_max_upload_size_mb",
 }
 
 # 已实装并在后端有明确生效点的配置项（用于前端禁用"假开关"）
@@ -466,6 +472,7 @@ IMPLEMENTED_PARAMETER_KEYS = {
     "parameters.sales.contract_auto_close_on_full_release",
     "parameters.sales.sales_review",
     "parameters.automation.push_default_mode",
+    "parameters.master_data.drawing_max_upload_size_mb",
 }
 
 # 默认仓管/生产领料确认角色
@@ -507,6 +514,30 @@ def coerce_detail_full_chain_mode(raw: Any) -> str:
     if isinstance(raw, str) and raw in DETAIL_FULL_CHAIN_MODES:
         return raw
     return "documents_only"
+
+
+def _global_max_upload_size_mb() -> int:
+    from infra.config.infra_config import infra_settings
+
+    return max(1, int(infra_settings.MAX_FILE_SIZE // (1024 * 1024)))
+
+
+def coerce_drawing_max_upload_size_mb(raw: Any, *, default: int = 100) -> int:
+    """图纸主文件上传大小（MB），钳制在 1～平台 MAX_FILE_SIZE。"""
+    global_max_mb = _global_max_upload_size_mb()
+    try:
+        mb = int(raw)
+    except (TypeError, ValueError):
+        mb = default
+    return max(1, min(global_max_mb, mb))
+
+
+def coerce_master_data_parameters(master_data: Dict[str, Any]) -> Dict[str, Any]:
+    data = dict(master_data or {})
+    data["drawing_max_upload_size_mb"] = coerce_drawing_max_upload_size_mb(
+        data.get("drawing_max_upload_size_mb")
+    )
+    return data
 
 
 def coerce_common_detail_drawer_params(common: Dict[str, Any]) -> Dict[str, Any]:
@@ -716,6 +747,9 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
     },
     "bom": {
         "bom_multi_version_allowed": True,
+    },
+    "master_data": {
+        "drawing_max_upload_size_mb": 100,
     },
     "finance": {
         "auto_write_off_precision_limit": 0,
@@ -954,6 +988,9 @@ class BusinessConfigService:
 
         if "common" in merged:
             merged["common"] = coerce_common_detail_drawer_params(dict(merged["common"] or {}))
+
+        if "master_data" in merged:
+            merged["master_data"] = coerce_master_data_parameters(dict(merged["master_data"] or {}))
 
         return {"parameters": merged}
 
@@ -1312,6 +1349,14 @@ class BusinessConfigService:
         v = str(raw or "auto").strip()
         return v if v in ("current_user", "operation_assigned", "auto") else "auto"
 
+    async def get_drawing_max_upload_size_bytes(self, tenant_id: int) -> int:
+        """图纸 engineering_drawing 分类上传大小上限（字节，默认 100MB）。"""
+        config = await self.get_business_config(tenant_id)
+        mb = coerce_drawing_max_upload_size_mb(
+            config["parameters"].get("master_data", {}).get("drawing_max_upload_size_mb")
+        )
+        return mb * 1024 * 1024
+
     async def get_reporting_default_quantity_mode(self, tenant_id: int) -> str:
         """报工弹窗合格/不合格数量默认值：reportable=本次可报，zero=0。"""
         config = await self.get_business_config(tenant_id)
@@ -1345,6 +1390,10 @@ class BusinessConfigService:
         business_config.setdefault("parameters", {})
         business_config["parameters"].setdefault(category, {})
         business_config["parameters"][category][parameter_key] = value
+        if category == "master_data":
+            business_config["parameters"]["master_data"] = coerce_master_data_parameters(
+                dict(business_config["parameters"].get("master_data") or {})
+            )
         if "finance" in business_config["parameters"]:
             business_config["parameters"]["finance"] = coerce_finance_parameter_dict(
                 business_config["parameters"]["finance"]
@@ -1385,6 +1434,10 @@ class BusinessConfigService:
 
             merged_quality = business_config["parameters"].get("quality") or {}
             validate_quality_business_parameters(merged_quality)
+        if "master_data" in business_config["parameters"]:
+            business_config["parameters"]["master_data"] = coerce_master_data_parameters(
+                dict(business_config["parameters"]["master_data"] or {})
+            )
         if "finance" in business_config["parameters"]:
             business_config["parameters"]["finance"] = coerce_finance_parameter_dict(
                 business_config["parameters"]["finance"]

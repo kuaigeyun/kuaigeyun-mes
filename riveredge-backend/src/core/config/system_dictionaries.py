@@ -588,6 +588,18 @@ SYSTEM_DICTIONARIES: List[Dict[str, Any]] = [
         ],
     },
     {
+        "code": "DRAWING_TYPE",
+        "name": "图纸类型",
+        "description": "工程图纸类型；可在数据字典中维护，表单支持快速新增",
+        "items": [
+            {"label": "零件图", "value": "part", "description": "零件图纸", "sort_order": 1},
+            {"label": "装配图", "value": "assembly", "description": "装配图纸", "sort_order": 2},
+            {"label": "工艺图", "value": "process", "description": "工艺图纸", "sort_order": 3},
+            {"label": "其他", "value": "other", "description": "其他图纸", "sort_order": 4},
+            {"label": "产品规格书", "value": "product_spec", "description": "产品规格书", "sort_order": 5},
+        ],
+    },
+    {
         "code": "DISPOSAL_METHOD",
         "name": "不合格处置方式",
         "description": "来料/过程/成品检验及不良品台账的处置方式（value 为英文码，与质检业务一致）",

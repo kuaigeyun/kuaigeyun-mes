@@ -107,8 +107,8 @@ class SiteSettingService:
     @staticmethod
     async def _resolve_site_logo_value(tenant_id: int, logo: Any) -> str:
         """
-        校验 site_logo：URL 原样返回；UUID 须对应存在文件（本租户或 logo 分类跨租户）。
-        无效 UUID 返回空串，避免前端反复请求已删除文件。
+        校验 site_logo：URL 原样返回；UUID 须为 site-logo / platform-logo 且存储可读。
+        无效 UUID（含误绑工程图纸等业务附件）返回空串，避免顶栏反复请求 preview/public。
         """
         if not logo or not isinstance(logo, str):
             return ""
@@ -121,22 +121,31 @@ class SiteSettingService:
         from core.models.file import File
         from core.services.file.file_service import FileService
 
-        try:
-            await FileService.get_file_by_uuid(tenant_id, logo)
-            return logo
-        except NotFoundError:
-            pass
+        async def _is_valid_logo_file(file: File) -> bool:
+            category = str(file.category or "").strip().lower()
+            if category not in _LOGO_FILE_CATEGORIES:
+                return False
+            return await FileService.file_content_available(file.tenant_id, file)
 
-        file = await File.filter(
+        tenant_file = await File.filter(
+            uuid=logo,
+            tenant_id=tenant_id,
+            category__in=_LOGO_FILE_CATEGORIES,
+            deleted_at__isnull=True,
+        ).first()
+        if tenant_file and await _is_valid_logo_file(tenant_file):
+            return logo
+
+        shared_file = await File.filter(
             uuid=logo,
             category__in=_LOGO_FILE_CATEGORIES,
             deleted_at__isnull=True,
         ).first()
-        if file:
+        if shared_file and await _is_valid_logo_file(shared_file):
             return logo
 
         logger.warning(
-            "site_logo 引用无效（文件不存在）: tenant_id={} uuid={}",
+            "site_logo 引用无效（非 Logo 分类或文件不可读）: tenant_id={} uuid={}",
             tenant_id,
             logo,
         )

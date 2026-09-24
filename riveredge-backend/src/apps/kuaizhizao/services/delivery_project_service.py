@@ -2196,10 +2196,10 @@ class DeliveryProjectService(AppBaseService[DeliveryProject]):
             if orders:
                 order_ids = [int(o.id) for o in orders if o.id is not None]
                 item_rows = await SalesOrderItem.filter(
-                    tenant_id=tenant_id, order_id__in=order_ids
+                    tenant_id=tenant_id, sales_order_id__in=order_ids
                 ).all()
                 for item in item_rows:
-                    items_by_order.setdefault(int(item.order_id), []).append(item)
+                    items_by_order.setdefault(int(item.sales_order_id), []).append(item)
             sales_order_service = SalesOrderService()
             shipped_by_order = await sales_order_service._shipped_qty_by_sales_order(
                 tenant_id, [int(o.id) for o in orders if o.id is not None]

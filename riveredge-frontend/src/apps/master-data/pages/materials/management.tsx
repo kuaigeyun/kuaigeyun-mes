@@ -2806,7 +2806,8 @@ const MaterialsManagementPage: React.FC = () => {
     try {
       const result = await importInChunks({
         items: masterItems,
-        chunkSize: 100,
+        // 后端片内已并发创建；单请求 80 条在网关超时内更稳
+        chunkSize: 80,
         title,
         showResultModal: false,
         rowNumberForIndex: (_i, item) => item.rowNum ?? _i + 1,

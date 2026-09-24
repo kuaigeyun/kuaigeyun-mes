@@ -6,7 +6,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import List, Optional
 
-from pydantic import Field
+from pydantic import BaseModel, Field
 
 from core.schemas.base import BaseSchema
 
@@ -31,7 +31,8 @@ class StandardCostCreate(StandardCostBase):
     pass
 
 
-class StandardCostUpdate(BaseSchema):
+# 写库 DTO：不继承 BaseSchema，避免响应专用 audit 进入 Tortoise update
+class StandardCostUpdate(BaseModel):
     target_code: Optional[str] = Field(None, max_length=50)
     target_name: Optional[str] = Field(None, max_length=200)
     standard_value: Optional[Decimal] = Field(None, ge=0)

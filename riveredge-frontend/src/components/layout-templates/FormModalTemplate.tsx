@@ -29,6 +29,34 @@ export function FormModalGridBlock({
   return <Col span={span}>{children}</Col>;
 }
 
+/**
+ * 列表/详情回显进 initialValues 后，getFieldsValue(true) 会带回响应元数据。
+ * 提交时剥离，避免审计相位等字段进入写库 payload（标准成本二次编辑 500）。
+ */
+const FORM_SUBMIT_RESPONSE_META_KEYS = new Set([
+  'audit',
+  'tenant_id',
+  'created_at',
+  'updated_at',
+  'deleted_at',
+  'created_by',
+  'updated_by',
+  'created_by_name',
+  'updated_by_name',
+]);
+
+function stripFormSubmitResponseMeta(
+  values: Record<string, unknown>,
+): Record<string, unknown> {
+  const next: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(values)) {
+    if (!FORM_SUBMIT_RESPONSE_META_KEYS.has(key)) {
+      next[key] = value;
+    }
+  }
+  return next;
+}
+
 export interface FormModalTemplateProps {
   title: ReactNode;
   open: boolean;
@@ -147,7 +175,7 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
     async (values: any) => {
       setSubmitting(true);
       try {
-        await onFinish(values);
+        await onFinish(stripFormSubmitResponseMeta(values as Record<string, unknown>));
       } finally {
         setSubmitting(false);
       }
@@ -194,8 +222,11 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
         // fillMapping / setFieldValue 写入但未挂 Form.Item 的字段不会出现在 validateFields 结果里
         const allValues =
           typeof inst.getFieldsValue === 'function'
-            ? { ...(inst.getFieldsValue(true) as Record<string, unknown>), ...values }
-            : values;
+            ? stripFormSubmitResponseMeta({
+                ...(inst.getFieldsValue(true) as Record<string, unknown>),
+                ...values,
+              })
+            : stripFormSubmitResponseMeta(values as Record<string, unknown>);
         return onFinish(allValues);
       })
       .catch((err: { errorFields?: Array<{ errors?: string[]; name?: unknown }>; message?: string }) => {

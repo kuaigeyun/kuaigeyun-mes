@@ -86,6 +86,9 @@ class EngineeringDrawing(BaseModel):
         null=True,
         description="附加页文件 UUID 列表",
     )
+    project_id = fields.IntField(null=True, description="关联研发项目ID（可空；存量项目可仅填代号）")
+    project_code = fields.CharField(max_length=50, null=True, description="关联项目代号快照")
+    project_name = fields.CharField(max_length=200, null=True, description="关联项目名称快照")
     material_uuids = fields.JSONField(null=True, description="关联物料 UUID 列表")
     process_route_uuids = fields.JSONField(null=True, description="关联工艺路线 UUID 列表")
     operation_uuids = fields.JSONField(null=True, description="关联工序 UUID 列表")

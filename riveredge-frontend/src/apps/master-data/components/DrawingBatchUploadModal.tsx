@@ -5,15 +5,22 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ProFormSelect, ProFormUploadDragger, ProFormInstance } from '@ant-design/pro-components';
-import { App, Progress } from 'antd';
+import { App, Progress, Upload } from 'antd';
 import { InboxOutlined } from '@ant-design/icons';
 import type { UploadChangeParam, UploadFile } from 'antd/es/upload/interface';
 import { FormModalTemplate } from '../../../components/layout-templates';
 import { MODAL_CONFIG } from '../../../components/layout-templates/constants';
-import { drawingApi, type EngineeringDrawingCreate } from '../services/drawing';
+import { drawingApi, DRAWING_TYPE_DICTIONARY_CODE, type EngineeringDrawingCreate } from '../services/drawing';
+import { DictionarySelect } from '../../../components/dictionary-select';
 import type { DrawingFolder } from '../services/drawingFolder';
 import { FolderTreeSelectField } from '../pages/process/drawings/drawingFolderModals';
 import { uploadMultipleFiles } from '../../../services/file';
+import {
+  getBusinessConfig,
+  resolveDrawingMaxUploadBytes,
+  resolveDrawingMaxUploadSizeMb,
+  type BusinessConfig,
+} from '../../../services/businessConfig';
 import { generateCode, getCodeRulePageConfig } from '../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../utils/codeRulePage';
 import { getApiErrorMessage } from '../../../utils/errorHandler';
@@ -57,12 +64,20 @@ export const DrawingBatchUploadModal: React.FC<DrawingBatchUploadModalProps> = (
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [effectiveRuleCode, setEffectiveRuleCode] = useState<string | null>(null);
   const [autoGenerate, setAutoGenerate] = useState(isAutoGenerateEnabled(PAGE_CODE));
+  const [businessConfig, setBusinessConfig] = useState<BusinessConfig | null>(null);
+
+  const drawingMaxUploadMb = resolveDrawingMaxUploadSizeMb(businessConfig);
+  const drawingMaxUploadBytes = resolveDrawingMaxUploadBytes(businessConfig);
 
   useEffect(() => {
     if (!open) {
       setProgress(null);
+      setBusinessConfig(null);
       return;
     }
+    void getBusinessConfig()
+      .then(setBusinessConfig)
+      .catch(() => setBusinessConfig(null));
     formRef.current?.resetFields();
     formRef.current?.setFieldsValue({
       drawingType: 'part',
@@ -120,6 +135,13 @@ export const DrawingBatchUploadModal: React.FC<DrawingBatchUploadModalProps> = (
     }
     if (fileList.some((item) => item.status === 'uploading')) {
       messageApi.error(t('app.master-data.drawings.fileUploading'));
+      return;
+    }
+    const oversized = pendingFiles.find((file) => file.size > drawingMaxUploadBytes);
+    if (oversized) {
+      messageApi.error(
+        t('components.fileUpload.sizeExceeded', { size: drawingMaxUploadMb }),
+      );
       return;
     }
 
@@ -205,16 +227,14 @@ export const DrawingBatchUploadModal: React.FC<DrawingBatchUploadModalProps> = (
       grid
       initialValues={{ drawingType: 'part', securityLevel: 'internal' }}
     >
-      <ProFormSelect
+      <DictionarySelect
         name="drawingType"
         label={t('app.master-data.drawings.type')}
-        rules={[{ required: true }]}
-        options={[
-          { label: t('app.master-data.drawings.type.part'), value: 'part' },
-          { label: t('app.master-data.drawings.type.assembly'), value: 'assembly' },
-          { label: t('app.master-data.drawings.type.process'), value: 'process' },
-          { label: t('app.master-data.drawings.type.other'), value: 'other' },
-        ]}
+        dictionaryCode={DRAWING_TYPE_DICTIONARY_CODE}
+        required
+        simpleQuickCreate
+        formRef={formRef}
+        hostResource="master-data:process:drawing"
         colProps={{ span: 12 }}
       />
       <ProFormSelect
@@ -235,11 +255,21 @@ export const DrawingBatchUploadModal: React.FC<DrawingBatchUploadModalProps> = (
         label={t('app.master-data.drawings.batchUploadFiles')}
         rules={[{ required: true, message: t('app.master-data.drawings.batchUploadFilesRequired') }]}
         icon={<InboxOutlined />}
-        description={t('app.master-data.drawings.uploadDragSubHint')}
+        description={t('app.master-data.drawings.uploadDragSubHintWithLimit', {
+          maxMb: drawingMaxUploadMb,
+        })}
         fieldProps={{
           accept: DRAWING_ACCEPT,
           multiple: true,
-          beforeUpload: () => false,
+          beforeUpload: (file) => {
+            if (file.size > drawingMaxUploadBytes) {
+              messageApi.error(
+                t('components.fileUpload.sizeExceeded', { size: drawingMaxUploadMb }),
+              );
+              return Upload.LIST_IGNORE;
+            }
+            return false;
+          },
           onChange: syncFiles,
           listType: 'text',
         }}

@@ -166,6 +166,8 @@ class FilePreviewService:
         from core.services.file.file_service import FileService
 
         file = await FileService.get_file_by_uuid(tenant_id, file_uuid)
+        if not await FileService.file_content_available(tenant_id, file):
+            raise NotFoundError("文件内容不存在，请重新上传")
 
         avatar_thumbnail_size = 128
         resolved_size = thumbnail_size

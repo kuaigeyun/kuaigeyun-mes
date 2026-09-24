@@ -59,7 +59,8 @@ class StandardCostService(AppBaseService[StandardCost]):
                 created_by_name=user_info["name"],
                 updated_by=created_by,
                 updated_by_name=user_info["name"],
-                **data.model_dump(exclude_unset=True),
+                # BaseSchema.audit 为响应派生字段，不得写入 ORM
+                **data.model_dump(exclude_unset=True, exclude={"audit"}),
             )
             return StandardCostResponse.model_validate(row)
 
@@ -135,7 +136,7 @@ class StandardCostService(AppBaseService[StandardCost]):
             if not row:
                 raise NotFoundError(f"标准成本不存在: {standard_cost_id}")
 
-            update_data = data.model_dump(exclude_unset=True)
+            update_data = data.model_dump(exclude_unset=True, exclude={"audit"})
             if updated_by is not None:
                 user_info = await self.get_user_info(updated_by)
                 update_data["updated_by"] = updated_by

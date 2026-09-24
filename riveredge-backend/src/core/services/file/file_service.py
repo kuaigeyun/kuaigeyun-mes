@@ -242,6 +242,21 @@ class FileService:
             raise NotFoundError("文件")
         
         return file
+
+    @staticmethod
+    async def file_content_available(tenant_id: int, file: File) -> bool:
+        """元数据存在且存储后端上可读（本地磁盘或对象存储）。"""
+        from core.services.file.storage import resolve_storage_for_file
+
+        backend = str(getattr(file, "storage_backend", None) or "local").strip().lower()
+        if backend in ("", "local"):
+            full_path, _ = FileService.resolve_physical_file_path(tenant_id, file.file_path)
+            return full_path is not None
+        try:
+            storage = await resolve_storage_for_file(tenant_id, file)
+            return await storage.exists(file.file_path)
+        except Exception:
+            return False
     
     @staticmethod
     async def _linked_file_uuids_for_category(tenant_id: int, category: str) -> List[str]:
@@ -577,10 +592,17 @@ class FileService:
                 tags=tags,
             )
 
-        # 检查文件大小
+        # 检查文件大小（图纸走业务配置 parameters.master_data.drawing_max_upload_size_mb）
         file_size = len(file_content)
-        if file_size > FileService.MAX_FILE_SIZE:
-            raise ValidationError(f"文件大小超过限制（最大 {FileService.MAX_FILE_SIZE / 1024 / 1024}MB）")
+        max_bytes = FileService.MAX_FILE_SIZE
+        if category == "engineering_drawing":
+            from infra.services.business_config_service import BusinessConfigService
+
+            max_bytes = await BusinessConfigService().get_drawing_max_upload_size_bytes(tenant_id)
+        if file_size > max_bytes:
+            raise ValidationError(
+                f"文件大小超过限制（最大 {max_bytes / 1024 / 1024:.0f}MB）"
+            )
         
         # 检查文件后缀安全性
         file_extension = FileService._get_file_extension(original_name).lower()
@@ -692,6 +714,8 @@ class FileService:
             NotFoundError: 当文件不存在时抛出
         """
         file = await FileService.get_file_by_uuid(tenant_id, uuid)
+        if not await FileService.file_content_available(tenant_id, file):
+            raise NotFoundError("文件内容不存在，请重新上传")
         from core.services.file.storage import resolve_storage_for_file
 
         backend_name = str(getattr(file, "storage_backend", None) or "local").strip().lower()
@@ -700,7 +724,7 @@ class FileService:
                 tenant_id, file.file_path
             )
             if not full_path:
-                raise NotFoundError("文件")
+                raise NotFoundError("文件内容不存在，请重新上传")
 
             if corrected_rel and corrected_rel != file.file_path:
                 await File.filter(id=file.id).update(file_path=corrected_rel)

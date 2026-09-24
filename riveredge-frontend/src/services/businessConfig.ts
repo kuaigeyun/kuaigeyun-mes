@@ -55,6 +55,30 @@ export async function getBusinessConfig(): Promise<BusinessConfig> {
   });
 }
 
+/** 平台文件上传硬上限（与后端 infra MAX_FILE_SIZE 默认一致，单位 MB） */
+export const PLATFORM_MAX_UPLOAD_SIZE_MB = 100;
+
+/** 图纸主文件/附件上传大小上限（MB，默认 100） */
+export function resolveDrawingMaxUploadSizeMb(
+  config: BusinessConfig | null | undefined,
+): number {
+  const raw = config?.parameters?.master_data?.drawing_max_upload_size_mb;
+  let mb = PLATFORM_MAX_UPLOAD_SIZE_MB;
+  if (raw != null) {
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed)) {
+      mb = Math.floor(parsed);
+    }
+  }
+  return Math.max(1, Math.min(PLATFORM_MAX_UPLOAD_SIZE_MB, mb));
+}
+
+export function resolveDrawingMaxUploadBytes(
+  config: BusinessConfig | null | undefined,
+): number {
+  return resolveDrawingMaxUploadSizeMb(config) * 1024 * 1024;
+}
+
 /** 是否开启试运营模式（读取 parameters.common.trial_run_mode，默认 false） */
 export function isTrialRunModeEnabled(config: BusinessConfig | null | undefined): boolean {
   return Boolean(config?.parameters?.common?.trial_run_mode);

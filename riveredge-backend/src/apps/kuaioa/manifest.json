@@ -419,6 +419,7 @@
     "kuaioa:employee:create",
     "kuaioa:employee:update",
     "kuaioa:employee:delete",
+    "kuaioa:employee:import",
     "kuaioa:employee:export",
     "kuaioa:attendance:read",
     "kuaioa:attendance:create",

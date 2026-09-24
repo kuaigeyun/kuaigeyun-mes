@@ -98,6 +98,7 @@ _SYSTEM_DICTIONARY_REQUIRES_APPS: Dict[str, FrozenSet[str]] = {
     "CUSTOMER_LEVEL": frozenset({"master-data"}),
     "CUSTOMER_CATEGORY": frozenset({"master-data"}),
     "CONTACT_TITLE": frozenset({"master-data"}),
+    "DRAWING_TYPE": frozenset({"master-data"}),
     "SALES_FOLLOW_UP_TYPE": frozenset({"master-data"}),
     "SALES_OPPORTUNITY_STAGE": frozenset({"master-data"}),
     "SHIPPING_METHOD": frozenset({"kuaizhizao"}),

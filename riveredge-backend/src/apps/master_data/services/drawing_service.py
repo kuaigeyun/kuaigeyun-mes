@@ -243,6 +243,8 @@ async def _file_brief(tenant_id: int, file_uuid: str) -> Optional[FileBriefRespo
         f = await FileService.get_file_by_uuid(tenant_id, file_uuid)
     except NotFoundError:
         return None
+    if not await FileService.file_content_available(tenant_id, f):
+        return None
     preview_url = None
     try:
         from core.services.file.file_preview_service import FilePreviewService
@@ -284,6 +286,9 @@ async def _to_response(
         "status": drawing.status,
         "file_uuid": drawing.file_uuid,
         "supplementary_file_uuids": supp_uuids or None,
+        "project_id": drawing.project_id,
+        "project_code": drawing.project_code,
+        "project_name": drawing.project_name,
         "material_uuids": _norm_uuid_list(drawing.material_uuids) or None,
         "process_route_uuids": _norm_uuid_list(drawing.process_route_uuids) or None,
         "operation_uuids": _norm_uuid_list(drawing.operation_uuids) or None,
@@ -329,6 +334,26 @@ async def _to_responses(
     return [await _to_response(tenant_id, d, maps) for d in drawings]
 
 
+async def _resolve_drawing_project(
+    tenant_id: int,
+    project_id: Optional[int],
+    project_code: Optional[str],
+) -> tuple[Optional[int], Optional[str], Optional[str]]:
+    if project_id is not None:
+        from apps.kuaiplm.models.rd_project import RdProject
+
+        project = await RdProject.filter(
+            tenant_id=tenant_id, id=int(project_id), deleted_at__isnull=True
+        ).first()
+        if not project:
+            raise ValidationError("研发项目不存在")
+        return project.id, project.project_code, project.project_name
+    code = str(project_code or "").strip()
+    if not code:
+        return None, None, None
+    return None, code, code
+
+
 class DrawingService:
     @staticmethod
     async def create_drawing(
@@ -350,6 +375,9 @@ class DrawingService:
         if exists:
             raise ValidationError(f"图号 {data.code} 修订版 {data.revision} 已存在")
 
+        project_id, project_code, project_name = await _resolve_drawing_project(
+            tenant_id, data.project_id, data.project_code
+        )
         payload = {
             "tenant_id": tenant_id,
             "code": data.code,
@@ -359,6 +387,9 @@ class DrawingService:
             "status": "Draft",
             "file_uuid": data.file_uuid,
             "supplementary_file_uuids": supp or None,
+            "project_id": project_id,
+            "project_code": project_code,
+            "project_name": project_name,
             "material_uuids": _norm_uuid_list(data.material_uuids) or None,
             "process_route_uuids": _norm_uuid_list(data.process_route_uuids) or None,
             "operation_uuids": _norm_uuid_list(data.operation_uuids) or None,
@@ -403,6 +434,15 @@ class DrawingService:
             update_data["security_level"] = normalize_security_level(update_data["security_level"])
         if "description" in update_data:
             update_data["description"] = (update_data["description"] or "").strip() or None
+        if "project_id" in update_data or "project_code" in update_data:
+            project_id, project_code, project_name = await _resolve_drawing_project(
+                tenant_id,
+                update_data.pop("project_id", None),
+                update_data.pop("project_code", None),
+            )
+            update_data["project_id"] = project_id
+            update_data["project_code"] = project_code
+            update_data["project_name"] = project_name
 
         for k, v in update_data.items():
             setattr(drawing, k, v)
@@ -1103,6 +1143,9 @@ class DrawingService:
             "status": "Draft",
             "file_uuid": file_uuid,
             "supplementary_file_uuids": supp or None,
+            "project_id": source.project_id,
+            "project_code": source.project_code,
+            "project_name": source.project_name,
             "material_uuids": _norm_uuid_list(source.material_uuids) or None,
             "process_route_uuids": _norm_uuid_list(source.process_route_uuids) or None,
             "operation_uuids": _norm_uuid_list(source.operation_uuids) or None,
@@ -1169,15 +1212,34 @@ class DrawingService:
             if not borrowed:
                 raise AuthorizationError("秘密/机密图纸须先完成借阅审批才能打印")
         file_brief = await _file_brief(tenant_id, drawing.file_uuid)
+        from apps.master_data.services.drawing_watermark_service import (
+            DrawingWatermarkService,
+            WatermarkRenderContext,
+        )
+
         stamp = to_api_isoformat(resolve_business_datetime())
         user_name = operator_name_from_user(current_user) or (current_user.username or "")
-        watermark = f"{user_name} {stamp} {drawing.code}-{drawing.revision} {SECURITY_LEVEL_LABELS[level]}"
+        site_name = await DrawingWatermarkService.resolve_site_name(tenant_id)
+        ctx = WatermarkRenderContext(
+            user=user_name,
+            time=stamp,
+            code=drawing.code,
+            revision=drawing.revision,
+            security_level=level,
+            site_name=site_name,
+        )
+        watermark, watermark_style = await DrawingWatermarkService.build_print_watermark(
+            tenant_id,
+            security_level=level,
+            ctx=ctx,
+        )
         return EngineeringDrawingPrintDataResponse(
             code=drawing.code,
             name=drawing.name,
             revision=drawing.revision,
             security_level=level,
             watermark=watermark,
+            watermark_style=watermark_style,
             preview_url=file_brief.preview_url if file_brief else None,
             file_name=file_brief.original_name if file_brief else None,
         )

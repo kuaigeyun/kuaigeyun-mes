@@ -101,7 +101,7 @@ export const DrawingFolderFormModal: React.FC<FolderFormModalProps> = ({
 
 type MoveFolderModalProps = {
   open: boolean;
-  drawingUuid: string | null;
+  drawingUuids: string[];
   folders: DrawingFolder[];
   currentFolderUuid?: string | null;
   onClose: () => void;
@@ -110,7 +110,7 @@ type MoveFolderModalProps = {
 
 export const DrawingMoveFolderModal: React.FC<MoveFolderModalProps> = ({
   open,
-  drawingUuid,
+  drawingUuids,
   folders,
   currentFolderUuid,
   onClose,
@@ -123,19 +123,32 @@ export const DrawingMoveFolderModal: React.FC<MoveFolderModalProps> = ({
 
   useEffect(() => {
     if (!open) return;
-    formRef.current?.setFieldsValue({ folderUuid: currentFolderUuid ?? undefined });
+    formRef.current?.setFieldsValue({ folderUuid: currentFolderUuid ?? null });
   }, [open, currentFolderUuid]);
 
   const handleFinish = async (values: { folderUuid?: string }) => {
-    if (!drawingUuid) return;
+    if (!drawingUuids.length) return;
     try {
       setLoading(true);
-      await drawingApi.moveFolder(drawingUuid, values.folderUuid ?? null);
-      messageApi.success(t('app.master-data.drawings.folder.moveSuccess'));
-      onSuccess();
-      onClose();
-    } catch (error) {
-      messageApi.error(getApiErrorMessage(error, t('common.operationFailed')));
+      let failed = 0;
+      let lastError: unknown = null;
+      for (const uuid of drawingUuids) {
+        try {
+          await drawingApi.moveFolder(uuid, values.folderUuid ?? null);
+        } catch (error) {
+          failed += 1;
+          lastError = error;
+        }
+      }
+      const success = drawingUuids.length - failed;
+      if (success > 0) {
+        messageApi.success(t('app.master-data.drawings.folder.batchMoveSuccess', { count: success }));
+        onSuccess();
+        onClose();
+      }
+      if (failed > 0) {
+        messageApi.error(getApiErrorMessage(lastError, t('app.master-data.drawings.folder.batchMovePartial', { count: failed })));
+      }
     } finally {
       setLoading(false);
     }
@@ -143,7 +156,7 @@ export const DrawingMoveFolderModal: React.FC<MoveFolderModalProps> = ({
 
   return (
     <FormModalTemplate
-      title={t('app.master-data.drawings.folder.move')}
+      title={t('app.master-data.drawings.folder.batchMove')}
       open={open}
       onClose={onClose}
       onFinish={handleFinish}

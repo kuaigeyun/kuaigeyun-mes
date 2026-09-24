@@ -6,6 +6,7 @@ ORM_MODEL_MODULES: list[str] = [
     "apps.master_data.models.drawing",
     "apps.master_data.models.drawing_change",
     "apps.master_data.models.drawing_distribution",
+    "apps.master_data.models.drawing_watermark",
     "apps.master_data.models.drawing_loan",
     "apps.master_data.models.employee_performance",
     "apps.master_data.models.factory",

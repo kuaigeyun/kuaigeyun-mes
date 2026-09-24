@@ -39,6 +39,7 @@ import {
   type ImportPrecheckResult,
 } from './uni-import-preview-modal';
 import { getImportDataRows } from './import-preview-utils';
+import { readImportSheetStringMatrix, mergeLiveImportRowsWithPrecisionCache } from './read-import-sheet-matrix';
 import { translatePathTitle } from '../../utils/menuTranslation';
 import { resolveSystemFieldKey } from './apply-import-mapping';
 import { useUserPreferenceStore } from '../../stores/userPreferenceStore';
@@ -258,6 +259,7 @@ export const UniImport: React.FC<UniImportProps> = ({
   const [precheckLoading, setPrecheckLoading] = useState(false);
   const [precheckResult, setPrecheckResult] = useState<ImportPrecheckResult | null>(null);
   const [commitLoading, setCommitLoading] = useState(false);
+  const [confirmBusy, setConfirmBusy] = useState(false);
   const univerInstanceRef = useRef<UniverSheetInstance | null>(null);
   const headersRef = useRef<string[] | undefined>(headers);
   const exampleRowRef = useRef<string[] | undefined>(exampleRow);
@@ -939,15 +941,47 @@ export const UniImport: React.FC<UniImportProps> = ({
   };
 
   /**
-   * 确认导入：只认 sheet-host 同步的字符串矩阵（上传 / 粘贴 / 初始模板）。
+   * 确认导入：以在线 Univer 表当前格子为准（含手工改格 / 下拉），
+   * 读不到时再回落上传/粘贴缓存矩阵。
    */
   const handleConfirm = () => {
-    const uploaded = uploadedSheetRowsRef.current;
-    if (!uploaded || uploaded.length === 0) {
-      messageApi.warning(t('components.uniImport.sheetMatrixMissing'));
-      return;
-    }
-    submitParsedImportRows(uploaded.map((row) => row.map((cell) => String(cell ?? ''))));
+    if (loading || xlsxBusy || confirmBusy) return;
+    setConfirmBusy(true);
+    // 让按钮先进入 loading，再同步 scrape（大表时避免「点了无反应」）
+    window.setTimeout(() => {
+      try {
+        const cached = uploadedSheetRowsRef.current;
+        const hintRows = cached?.length ?? 0;
+        const hintCols = Math.max(
+          headersRef.current?.length ?? 0,
+          cached?.[0]?.length ?? 0,
+        );
+        const liveRows = readImportSheetStringMatrix(univerInstanceRef.current?.univerAPI, {
+          minColumnCount: hintCols,
+          hintRowCount: hintRows,
+          hintColumnCount: hintCols,
+        });
+
+        let rows: string[][] | null = null;
+        if (liveRows && liveRows.length > 0) {
+          rows = mergeLiveImportRowsWithPrecisionCache(liveRows, cached);
+          uploadedSheetRowsRef.current = rows;
+        } else if (cached && cached.length > 0) {
+          rows = cached;
+        }
+
+        if (!rows || rows.length === 0) {
+          messageApi.warning(t('components.uniImport.sheetMatrixMissing'));
+          return;
+        }
+        submitParsedImportRows(rows.map((row) => row.map((cell) => String(cell ?? ''))));
+      } catch (error: unknown) {
+        const msg = error instanceof Error ? error.message : String(error ?? '');
+        messageApi.error(t('components.uniImport.sheetReadFailed', { message: msg || t('common.unknownError') }));
+      } finally {
+        setConfirmBusy(false);
+      }
+    }, 0);
   };
 
   return (
@@ -1089,8 +1123,8 @@ export const UniImport: React.FC<UniImportProps> = ({
                   type="primary"
                   icon={<CheckOutlined />}
                   onClick={handleConfirm}
-                  loading={loading}
-                  disabled={xlsxBusy}
+                  loading={loading || confirmBusy || commitLoading || precheckLoading}
+                  disabled={xlsxBusy || confirmBusy}
                 >
                   {enableImportPreview
                     ? t('components.uniImport.previewNextStep')

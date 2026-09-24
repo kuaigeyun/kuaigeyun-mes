@@ -4,7 +4,10 @@
 
 import { api } from '../../../services/api';
 
-export type DrawingType = 'part' | 'assembly' | 'process' | 'other' | 'product_spec';
+/** 图纸类型：系统字典 DRAWING_TYPE 的 value，允许租户新增 */
+export type DrawingType = string;
+
+export const DRAWING_TYPE_DICTIONARY_CODE = 'DRAWING_TYPE';
 
 export type DrawingCatalogTab = 'engineering' | 'product_spec';
 export type DrawingStatus = 'Draft' | 'Editing' | 'Pending' | 'Released' | 'Obsolete';
@@ -97,6 +100,9 @@ export interface EngineeringDrawing {
   file?: FileBrief | null;
   supplementaryFileUuids?: string[];
   supplementaryFiles?: FileBrief[];
+  projectId?: number | null;
+  projectCode?: string | null;
+  projectName?: string | null;
   materialUuids?: string[];
   processRouteUuids?: string[];
   operationUuids?: string[];
@@ -130,6 +136,13 @@ export interface EngineeringDrawingPrintData {
   revision: string;
   securityLevel: DrawingSecurityLevel;
   watermark: string;
+  watermarkStyle?: {
+    opacity: number;
+    angle: number;
+    fontSize: number;
+    color: string;
+    position: 'diagonal' | 'center' | 'topLeft' | 'topRight' | 'bottomLeft' | 'bottomRight';
+  };
   previewUrl?: string;
   fileName?: string;
 }
@@ -141,6 +154,8 @@ export interface EngineeringDrawingCreate {
   drawingType?: DrawingType;
   fileUuid: string;
   supplementaryFileUuids?: string[];
+  projectId?: number | null;
+  projectCode?: string | null;
   materialUuids?: string[];
   processRouteUuids?: string[];
   operationUuids?: string[];
@@ -154,6 +169,8 @@ export interface EngineeringDrawingUpdate {
   drawingType?: DrawingType;
   fileUuid?: string;
   supplementaryFileUuids?: string[];
+  projectId?: number | null;
+  projectCode?: string | null;
   materialUuids?: string[];
   processRouteUuids?: string[];
   operationUuids?: string[];

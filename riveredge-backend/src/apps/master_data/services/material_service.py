@@ -1056,6 +1056,8 @@ class MaterialService:
         current_user: Optional[User] = None,
         *,
         skip_duplicate_scan: bool = False,
+        response_mode: str = "full",
+        prefetched_group: Optional[MaterialGroup] = None,
     ) -> MaterialResponse:
         """
         创建物料
@@ -1064,6 +1066,8 @@ class MaterialService:
             tenant_id: 租户ID
             data: 物料创建数据
             skip_duplicate_scan: 批量导入时跳过名称模糊防重扫描（仍做 main_code 唯一校验）
+            response_mode: full=详情增强响应；minimal=仅 ORM 字段（批量导入用，避免逐条拼装）
+            prefetched_group: 批量导入预取的分组，避免逐条查库
             
         Returns:
             MaterialResponse: 创建的物料对象
@@ -1074,11 +1078,17 @@ class MaterialService:
         # 如果指定了分组，检查分组是否存在并获取分组信息
         group = None
         if data.group_id:
-            group = await MaterialGroup.filter(
-                tenant_id=tenant_id,
-                id=data.group_id,
-                deleted_at__isnull=True
-            ).first()
+            if (
+                prefetched_group is not None
+                and int(getattr(prefetched_group, "id", 0) or 0) == int(data.group_id)
+            ):
+                group = prefetched_group
+            else:
+                group = await MaterialGroup.filter(
+                    tenant_id=tenant_id,
+                    id=data.group_id,
+                    deleted_at__isnull=True
+                ).first()
             
             if not group:
                 raise ValidationError(f"物料分组 {data.group_id} 不存在")
@@ -1115,14 +1125,16 @@ class MaterialService:
                     rule_code=material_page_config["rule_code"],
                     context=context,
                 )
-                logger.info(f"使用编码规则生成物料主编码: {data.main_code}")
+                if (response_mode or "full").strip().lower() != "minimal":
+                    logger.info(f"使用编码规则生成物料主编码: {data.main_code}")
             else:
                 data.main_code = await MaterialCodeService.generate_main_code(
                     tenant_id=tenant_id,
                     material_type=_source_type_to_type_code(getattr(data, "source_type", None)),
                 )
         else:
-            logger.info(f"使用用户手动输入的物料主编码: {data.main_code}")
+            if (response_mode or "full").strip().lower() != "minimal":
+                logger.info(f"使用用户手动输入的物料主编码: {data.main_code}")
         
         # 属性管理相关验证
         master_material = None
@@ -1472,7 +1484,13 @@ class MaterialService:
                 except ValidationError as e:
                     logger.warning(f"创建供应商编码别名失败: {e}")
         
-        # 构建响应
+        # 构建响应：批量导入用 minimal，跳过别名/可编辑性等重查询
+        if (response_mode or "full").strip().lower() == "minimal":
+            from apps.master_data.schemas.material_schemas import MaterialResponse
+
+            resp_data = _material_to_response_data(material)
+            resp_data["code_aliases"] = []
+            return MaterialResponse.model_validate(resp_data)
         return await _build_material_response(tenant_id, material)
 
     @staticmethod
@@ -1484,8 +1502,8 @@ class MaterialService:
         """
         批量创建物料（导入分片）。
 
-        跳过逐条名称模糊防重扫描；仍做 main_code 唯一与业务校验。
-        单条失败不中断整批，返回失败明细。
+        跳过逐条名称模糊防重扫描与详情响应拼装；分组/已存在主编码预取；
+        片内受限并发创建，显著缩短导入耗时。
         """
         from apps.master_data.schemas.material_schemas import (
             MaterialBulkCreateFailedItem,
@@ -1496,44 +1514,125 @@ class MaterialService:
         created_uuids: List[str] = []
         failed_items: List[MaterialBulkCreateFailedItem] = []
 
-        for index, item in enumerate(items):
-            main_code_hint: Optional[str] = None
+        group_ids = {
+            int(gid)
+            for gid in (getattr(item, "group_id", None) for item in items)
+            if gid is not None
+        }
+        groups_by_id: Dict[int, MaterialGroup] = {}
+        if group_ids:
+            group_rows = await MaterialGroup.filter(
+                tenant_id=tenant_id,
+                id__in=list(group_ids),
+                deleted_at__isnull=True,
+            ).all()
+            groups_by_id = {int(g.id): g for g in group_rows}
+
+        def _norm_main_code(raw: Any) -> Optional[str]:
+            if raw is None:
+                return None
+            text = str(raw).strip()
+            return text or None
+
+        requested_codes = [
+            code
+            for code in (_norm_main_code(getattr(item, "main_code", None)) for item in items)
+            if code
+        ]
+        existing_codes: set[str] = set()
+        if requested_codes:
+            existing_rows = await Material.filter(
+                tenant_id=tenant_id,
+                main_code__in=list(set(requested_codes)),
+                deleted_at__isnull=True,
+            ).values_list("main_code", flat=True)
+            existing_codes = {str(c) for c in existing_rows if c}
+
+        # 片内并发：避免单连接打爆；仍比纯串行快一个数量级
+        concurrency = min(12, max(1, len(items)))
+        sem = asyncio.Semaphore(concurrency)
+        code_lock = asyncio.Lock()
+        in_flight_codes: set[str] = set()
+
+        async def _create_one(index: int, item: Any) -> tuple[int, Optional[str], Optional[str], Optional[str]]:
+            main_code_hint = _norm_main_code(getattr(item, "main_code", None))
+            group_id = getattr(item, "group_id", None)
+            prefetched = groups_by_id.get(int(group_id)) if group_id is not None else None
+
+            if group_id is not None and prefetched is None:
+                return (
+                    index,
+                    None,
+                    main_code_hint,
+                    f"物料分组 {group_id} 不存在",
+                )
+
+            async with code_lock:
+                if main_code_hint and main_code_hint in existing_codes:
+                    return (
+                        index,
+                        None,
+                        main_code_hint,
+                        f"物料主编码 {main_code_hint} 已存在",
+                    )
+                if main_code_hint and main_code_hint in in_flight_codes:
+                    return (
+                        index,
+                        None,
+                        main_code_hint,
+                        f"本批次内物料主编码重复：{main_code_hint}",
+                    )
+                if main_code_hint:
+                    in_flight_codes.add(main_code_hint)
+
             try:
-                main_code_hint = getattr(item, "main_code", None)
-                if isinstance(main_code_hint, str):
-                    main_code_hint = main_code_hint.strip() or None
-                resp = await MaterialService.create_material(
-                    tenant_id,
-                    item,
-                    current_user=current_user,
-                    skip_duplicate_scan=True,
-                )
-                created_uuids.append(str(resp.uuid))
+                async with sem:
+                    resp = await MaterialService.create_material(
+                        tenant_id,
+                        item,
+                        current_user=current_user,
+                        skip_duplicate_scan=True,
+                        response_mode="minimal",
+                        prefetched_group=prefetched,
+                    )
+                uuid_str = str(resp.uuid)
+                async with code_lock:
+                    if main_code_hint:
+                        existing_codes.add(main_code_hint)
+                        in_flight_codes.discard(main_code_hint)
+                return index, uuid_str, main_code_hint, None
             except ValidationError as exc:
-                failed_items.append(
-                    MaterialBulkCreateFailedItem(
-                        index=index,
-                        reason=str(exc),
-                        main_code=main_code_hint,
-                    )
-                )
+                async with code_lock:
+                    if main_code_hint:
+                        in_flight_codes.discard(main_code_hint)
+                return index, None, main_code_hint, str(exc)
             except NotFoundError as exc:
-                failed_items.append(
-                    MaterialBulkCreateFailedItem(
-                        index=index,
-                        reason=str(exc),
-                        main_code=main_code_hint,
-                    )
-                )
+                async with code_lock:
+                    if main_code_hint:
+                        in_flight_codes.discard(main_code_hint)
+                return index, None, main_code_hint, str(exc)
             except Exception as exc:
+                async with code_lock:
+                    if main_code_hint:
+                        in_flight_codes.discard(main_code_hint)
                 logger.exception("bulk_create_materials failed index=%s", index)
+                return index, None, main_code_hint, f"创建失败: {exc}"
+
+        outcomes = await asyncio.gather(
+            *[_create_one(index, item) for index, item in enumerate(items)]
+        )
+        # 按请求下标稳定输出
+        for index, uuid_str, main_code_hint, error in sorted(outcomes, key=lambda x: x[0]):
+            if error:
                 failed_items.append(
                     MaterialBulkCreateFailedItem(
                         index=index,
-                        reason=f"创建失败: {exc}",
+                        reason=error,
                         main_code=main_code_hint,
                     )
                 )
+            elif uuid_str:
+                created_uuids.append(uuid_str)
 
         return MaterialBulkCreateResponse(
             created_count=len(created_uuids),

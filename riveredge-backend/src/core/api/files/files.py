@@ -576,6 +576,8 @@ async def download_file(
         
         # 获取文件
         file = await FileService.get_file_by_uuid(tenant_id, uuid)
+        if not await FileService.file_content_available(tenant_id, file):
+            raise NotFoundError("文件内容不存在，请重新上传")
 
         # 图片档位与原文件同一存储后端（本地或 COS），禁止本机 sidecar 旁路 COS。
         if size and ImageTierService.is_tier_eligible_image(file.file_type, file.file_extension):

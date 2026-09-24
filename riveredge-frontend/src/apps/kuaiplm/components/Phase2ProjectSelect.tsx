@@ -3,7 +3,7 @@
  */
 
 import React, { useCallback, useRef, useState } from 'react';
-import { ProFormItem, ProFormSelect } from '@ant-design/pro-components';
+import { ProFormField, ProFormSelect } from '@ant-design/pro-components';
 import type { ProFormSelectProps } from '@ant-design/pro-components';
 import { AutoComplete } from 'antd';
 import { useTranslation } from 'react-i18next';
@@ -55,7 +55,9 @@ const Phase2ProjectComboField: React.FC<{
   disabled?: boolean;
   placeholder?: string;
   idByLabelRef: React.MutableRefObject<Map<string, number>>;
-}> = ({ disabled, placeholder, idByLabelRef }) => {
+  value?: string;
+  onChange?: (value: string) => void;
+}> = ({ disabled, placeholder, idByLabelRef, value, onChange }) => {
   const [options, setOptions] = useState<{ value: string }[]>([]);
 
   const loadOptions = useCallback(async (keyword?: string) => {
@@ -64,7 +66,7 @@ const Phase2ProjectComboField: React.FC<{
       limit: 50,
       project_type: 'RD',
     });
-    const nextMap = new Map<string, number>();
+    const nextMap = new Map(idByLabelRef.current);
     const nextOptions = (res.items ?? []).map((item) => {
       const label = formatProjectRefLabel(item.project_code, item.project_name);
       if (item.id != null) {
@@ -82,6 +84,8 @@ const Phase2ProjectComboField: React.FC<{
       allowClear
       options={options}
       placeholder={placeholder}
+      value={value}
+      onChange={onChange}
       onFocus={() => void loadOptions()}
       onSearch={(kw) => void loadOptions(kw)}
     />
@@ -96,6 +100,7 @@ export const Phase2ProjectSelect: React.FC<Phase2ProjectSelectProps> = ({
   rules,
   disabled,
   placeholder,
+  colProps,
   ...rest
 }) => {
   const { t } = useTranslation();
@@ -106,20 +111,27 @@ export const Phase2ProjectSelect: React.FC<Phase2ProjectSelectProps> = ({
     label ?? t('app.kuaiplm.phase2.requirements.columns.project');
 
   if (allowManualProjectCode) {
+    const resolvedName = fieldName === 'project_id' ? 'project_ref' : fieldName;
     return (
-      <ProFormItem
-        name={fieldName === 'project_id' ? 'project_ref' : fieldName}
+      <ProFormField
+        name={resolvedName}
         label={fieldLabel}
         rules={rules}
-      >
-        <Phase2ProjectComboField
-          disabled={disabled}
-          placeholder={
-            placeholder ?? t('app.kuaiplm.phase2.projectRefPlaceholder')
-          }
-          idByLabelRef={idByLabelRef}
-        />
-      </ProFormItem>
+        colProps={colProps}
+        disabled={disabled}
+        renderFormItem={(_, { fieldProps }) => (
+          <Phase2ProjectComboField
+            disabled={disabled}
+            placeholder={
+              placeholder ?? t('app.kuaiplm.phase2.projectRefPlaceholder')
+            }
+            idByLabelRef={idByLabelRef}
+            value={fieldProps?.value as string | undefined}
+            onChange={fieldProps?.onChange as ((value: string) => void) | undefined}
+          />
+        )}
+        {...rest}
+      />
     );
   }
 
@@ -144,6 +156,7 @@ export const Phase2ProjectSelect: React.FC<Phase2ProjectSelectProps> = ({
       rules={rules}
       disabled={disabled}
       placeholder={placeholder}
+      colProps={colProps}
       {...rest}
     />
   );

@@ -44,9 +44,14 @@ export const DRAWING_NAV_MODES: {
 ];
 
 const DRAWING_TYPES: DrawingType[] = ['part', 'assembly', 'process', 'other', 'product_spec'];
+
+export interface DrawingTypeNavItem {
+  value: string;
+  label: string;
+}
 const DRAWING_STATUSES: DrawingStatus[] = ['Draft', 'Editing', 'Pending', 'Released', 'Obsolete'];
 
-const TYPE_ICONS: Record<DrawingType, React.ReactNode> = {
+const TYPE_ICONS: Record<string, React.ReactNode> = {
   part: <BlockOutlined />,
   assembly: <BuildOutlined />,
   process: <ToolOutlined />,
@@ -121,6 +126,7 @@ export function buildDrawingNavTree(
   materials: DrawingTreeNavItem[],
   routes: DrawingTreeNavItem[],
   search = '',
+  typeItems: DrawingTypeNavItem[] = [],
 ): DataNode[] {
   const allLabel = t('app.master-data.drawings.tree.all');
   const nodes: DataNode[] = [];
@@ -135,13 +141,18 @@ export function buildDrawingNavTree(
   }
 
   if (mode === 'type') {
-    DRAWING_TYPES.forEach((type) => {
-      const title = t(`app.master-data.drawings.type.${type}`);
-      if (!matchSearch(title, search)) return;
+    const items = typeItems.length
+      ? typeItems
+      : DRAWING_TYPES.map((type) => ({
+          value: type,
+          label: t(`app.master-data.drawings.type.${type}`),
+        }));
+    items.forEach((item) => {
+      if (!matchSearch(item.label, search)) return;
       nodes.push({
-        key: `type:${type}`,
-        title,
-        icon: TYPE_ICONS[type],
+        key: `type:${item.value}`,
+        title: item.label,
+        icon: TYPE_ICONS[item.value] ?? <FileOutlined />,
         isLeaf: true,
       });
     });
