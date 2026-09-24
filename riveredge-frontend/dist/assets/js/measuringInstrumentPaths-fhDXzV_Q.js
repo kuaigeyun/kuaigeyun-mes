@@ -1,0 +1,1 @@
+const a="/apps/kuaizhizao/equipment-management/measuring-instruments";function i(n,e){const t=`${a}/${n}`;return e?`${t}?tab=${encodeURIComponent(e)}`:t}function r(n){return n==="calibrations"?"calibrations":"info"}export{a as K,i as b,r};

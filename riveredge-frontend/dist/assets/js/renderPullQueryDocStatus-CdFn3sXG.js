@@ -1,0 +1,1 @@
+import{bS as u,bT as i,bv as s,bU as o}from"./main-Be9a8SNQ.js";function f(n,a){const e=String(a??"").trim();if(!e)return"—";const t=u(e),r=i(n,t,e);return!r||r==="-"||r==="—"||r===e&&!/[\u4e00-\u9fff]/.test(e)?"—":s(r,e)}function y(n,a){const e=String(a??"").trim();if(!e)return"—";const t=o(n,e);return!t||t==="—"?"—":s(t,e)}export{y as a,f as r};

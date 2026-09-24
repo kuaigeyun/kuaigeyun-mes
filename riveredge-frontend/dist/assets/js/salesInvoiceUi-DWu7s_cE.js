@@ -1,0 +1,1 @@
+const n=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;function i(t){return!t||typeof t!="string"?!1:n.test(t.trim())}function a(t){return i(t.invoice_code)?`#${t.id}`:String(t.invoice_code??"—")}const s=new Set(["已审核","已开票","已作废","已红冲"]);function r(t){const e=String(t.status||"").trim();return e?!s.has(e):!1}export{r as c,a as d};

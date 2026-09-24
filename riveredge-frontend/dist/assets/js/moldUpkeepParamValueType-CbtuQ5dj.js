@@ -1,0 +1,1 @@
+import{f as r,p as l}from"./inspectionParamValueType-BjspzJaV.js";function i(e){const t=(e??"text").trim().toLowerCase();return t==="multiselect"||t==="multi_select"||t==="multi"||t==="多选"?"multiselect":"text"}function s(e,t){return i(e)!=="multiselect"?t==null||t===""?null:String(t).trim()||null:Array.isArray(t)?r(t.map(String)):r(l(String(t??"")))}export{s as a,i as n};

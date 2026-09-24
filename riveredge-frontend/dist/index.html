@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RiverEdge SaaS</title>
+
+    <meta name="theme-color" content="#141414" />
+
+    <!-- SVAR 甘特图图标字体改为按需加载（utils/loadGanttIconsCss.ts），
+         仅在用户打开甘特图组件时注入，减少默认首屏/登录页的外链资源与握手成本。 -->
+  <script type="module" crossorigin src="/assets/js/main-Be9a8SNQ.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/js/vendor-uT4iT2mY.js">
+  <link rel="stylesheet" crossorigin href="/assets/css/clientRelease-ASj4GZNz.css">
+  <link rel="stylesheet" crossorigin href="/assets/css/main-RpFZOJa_.css">
+</head>
+
+<body>
+    <div id="root">
+        <!--
+          首屏占位：保持最简洁，不再渲染后台壳骨架（顶部栏/侧边栏/正文条纹）。
+          React 挂载后会替换 #root 子节点；若 main 未执行，看门狗会自动重试或提示错误。
+        -->
+        <div class="app-first-paint" data-app-first-paint aria-busy="true" aria-label="应用启动"></div>
+    </div>
+    <!--
+      首屏加载看门狗：
+      - module script error（如 /assets/ 404）→ 立即硬错误
+      - 15s 内仍为静态首屏且主 JS 未送达 → sessionStorage 最多自动 reload 2 次（reload 前不盖全屏白罩，避免闪一下）
+      - main.tsx 已开始执行（__RE_APP_BOOT_STARTED__）或 first-paint 已卸 → 禁止整页 reload；等待 React 挂载，超时仅硬错误
+      - 主 JS 已下载但未执行 → 继续等待，不 reload
+      - first-paint 被卸掉 / React 已挂载 → 清除重试计数与定时器
+      - 每次自动 reload 原因写入 localStorage['re:last-auto-reload']
+    -->
+    <script>
+      (function () {
+        var RETRY_KEY = 're_app_boot_retry';
+        var MAX_AUTO_RELOAD = 2;
+        var timeoutMs = 15000;
+        // 主 JS 已送达但未挂载时的额外等待（解析/执行慢的机器），到点仍未挂载才报错
+        var EXTENDED_WAIT_MS = 30000;
+        var hardErrorShown = false;
+        var timer = null;
+
+        function clearRetryCount() {
+          try { sessionStorage.removeItem(RETRY_KEY); } catch (e) { /* ignore */ }
+        }
+
+        function getRetryCount() {
+          try {
+            var n = parseInt(sessionStorage.getItem(RETRY_KEY) || '0', 10);
+            return isNaN(n) ? 0 : n;
+          } catch (e) {
+            return 0;
+          }
+        }
+
+        function setRetryCount(n) {
+          try { sessionStorage.setItem(RETRY_KEY, String(n)); } catch (e) { /* ignore */ }
+        }
+
+        function isBootStarted() {
+          return !!window.__RE_APP_BOOT_STARTED__;
+        }
+
+        function firstPaintStillPresent() {
+          var root = document.getElementById('root');
+          var fp = root && root.querySelector('[data-app-first-paint]');
+          return !!(fp && fp.isConnected);
+        }
+
+        function reactHasMounted() {
+          var root = document.getElementById('root');
+          if (!root) return false;
+          for (var i = 0; i < root.children.length; i++) {
+            var child = root.children[i];
+            if (!child.getAttribute || child.getAttribute('data-app-first-paint') == null) {
+              return true;
+            }
+          }
+          return false;
+        }
+
+        function bootProgressed() {
+          return isBootStarted() || !firstPaintStillPresent() || reactHasMounted();
+        }
+
+        // 入口 module script 是否已完整下达。已到位说明是解析/执行或运行时问题，
+        // 再 reload 只会原样重来；只有真的没拿到资源时刷新才有意义。
+        function entryScriptDelivered() {
+          try {
+            var el = document.querySelector('script[type="module"][src]');
+            if (!el || !performance || !performance.getEntriesByType) return false;
+            var src = el.getAttribute('src') || '';
+            var entries = performance.getEntriesByType('resource');
+            for (var i = 0; i < entries.length; i++) {
+              var e = entries[i];
+              if (e.name.indexOf(src.replace(/^\.\//, '')) === -1) continue;
+              if (e.responseEnd > 0 && e.decodedBodySize !== 0) return true;
+            }
+            return false;
+          } catch (err) {
+            return false;
+          }
+        }
+
+        function recordAutoReloadReason(reason, detail) {
+          try {
+            localStorage.setItem('re:last-auto-reload', JSON.stringify({
+              at: new Date().toISOString(),
+              reason: reason,
+              detail: detail,
+              from: location.href
+            }));
+          } catch (e) { /* ignore */ }
+        }
+
+        function showHardError() {
+          if (hardErrorShown || document.getElementById('app-load-timeout')) return;
+          if (reactHasMounted()) return;
+          hardErrorShown = true;
+          if (timer) { clearTimeout(timer); timer = null; }
+          var wrap = document.createElement('div');
+          wrap.id = 'app-load-timeout';
+          wrap.style.cssText = 'position:fixed;inset:0;background:#fff;display:flex;align-items:center;justify-content:center;font-family:system-ui,sans-serif;z-index:9999;';
+          wrap.innerHTML = '<div style="text-align:center;color:#666;max-width:320px;padding:16px;"><p style="margin-bottom:12px;">页面未能完成加载，请检查网络或静态资源路径（如 /assets/ 是否可访问）</p><p><a href="javascript:location.reload()" style="color:#1890ff;">点击重试</a></p></div>';
+          document.body.appendChild(wrap);
+        }
+
+        function scheduleExtendedMountWait(reasonDetail) {
+          recordAutoReloadReason('boot-slow-no-reload', reasonDetail);
+          if (timer) { clearTimeout(timer); }
+          timer = setTimeout(function () {
+            if (!reactHasMounted()) showHardError();
+          }, EXTENDED_WAIT_MS);
+        }
+
+        function onBootTimeout() {
+          if (hardErrorShown) return;
+
+          // main 已开始或首屏占位已卸：禁止整页 reload，避免盖住 App 内 Spin/Lottie
+          if (bootProgressed()) {
+            if (!reactHasMounted()) {
+              scheduleExtendedMountWait(
+                '主程序已开始执行，' + timeoutMs + 'ms 内 React 未挂载，未自动刷新'
+              );
+            }
+            return;
+          }
+
+          // 仍为 index.html 静态占位：主 JS 已下载则继续等执行，不 reload
+          if (entryScriptDelivered()) {
+            scheduleExtendedMountWait(
+              '主 JS 已下载完成，' + timeoutMs + 'ms 内 main 未执行，未自动刷新'
+            );
+            return;
+          }
+
+          var count = getRetryCount();
+          if (count < MAX_AUTO_RELOAD) {
+            setRetryCount(count + 1);
+            recordAutoReloadReason('boot-timeout', '未取到主 JS，第 ' + (count + 1) + '/' + MAX_AUTO_RELOAD + ' 次自动重试');
+            location.reload();
+            return;
+          }
+          showHardError();
+        }
+
+        function onReactMounted() {
+          clearRetryCount();
+          if (timer) { clearTimeout(timer); timer = null; }
+          var err = document.getElementById('app-load-timeout');
+          if (err) err.remove();
+          if (mo) mo.disconnect();
+          if (bootPoll) clearInterval(bootPoll);
+        }
+
+        // React 挂载成功时清定时器；仅 boot 已开始但未挂载时不打断 15s/延长等待链
+        var root = document.getElementById('root');
+        var mo = null;
+        var bootPoll = null;
+        if (root && typeof MutationObserver !== 'undefined') {
+          mo = new MutationObserver(function () {
+            if (reactHasMounted()) onReactMounted();
+          });
+          mo.observe(root, { childList: true, subtree: true });
+        }
+
+        if (typeof window !== 'undefined') {
+          bootPoll = setInterval(function () {
+            if (reactHasMounted()) onReactMounted();
+          }, 200);
+        }
+
+        timer = setTimeout(onBootTimeout, timeoutMs);
+
+        // module script 加载失败（404 等）→ 立即硬错误，不走自动重试空转
+        window.addEventListener('error', function (e) {
+          var t = e && e.target;
+          if (!t || t.tagName !== 'SCRIPT') return;
+          clearRetryCount();
+          showHardError();
+        }, true);
+      })();
+    </script>
+    <!-- 外链样式：避免 Windows + preserveSymlinks 下 Vite html-inline-proxy 对 <style> 解析失败 -->
+</body>
+
+</html>
