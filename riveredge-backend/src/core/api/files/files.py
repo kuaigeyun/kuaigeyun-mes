@@ -44,7 +44,7 @@ from core.schemas.private_file_vault import (
     PrivateFileVaultUnlockResponse,
 )
 from core.api.deps.deps import get_current_tenant
-from core.api.deps.access import AuthContext, require_access
+from core.api.deps.access import AuthContext, require_permission_codes
 from core.api.deps.file_upload_access import require_file_upload_access
 from infra.api.deps.deps import get_current_user
 from infra.models.user import User
@@ -259,7 +259,7 @@ async def list_files(
     file_type: Optional[str] = Query(None, description="文件类型筛选"),
     include_preview_url: bool = Query(False, description="是否包含预览URL（缩略图）"),
     x_private_vault_token: Optional[str] = Header(None, alias=VAULT_TOKEN_HEADER),
-    _auth: object = Depends(require_access("system.file", "read")),
+    _auth: object = Depends(require_permission_codes("system:file:read")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -329,7 +329,7 @@ async def backfill_image_tiers(
     offset: int = Query(0, ge=0, description="偏移量"),
     category: Optional[str] = Query(None, description="仅处理指定分类"),
     force: bool = Query(False, description="强制重新生成已有档位"),
-    _auth: object = Depends(require_access("system.file", "update")),
+    _auth: object = Depends(require_permission_codes("system:file:update")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -349,7 +349,7 @@ async def backfill_image_tiers(
 
 @router.get("/storage-settings", response_model=FileStorageSettings)
 async def get_storage_settings(
-    _auth: object = Depends(require_access("system.file", "read")),
+    _auth: object = Depends(require_permission_codes("system:file:read")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -361,7 +361,7 @@ async def get_storage_settings(
 @router.put("/storage-settings", response_model=FileStorageSettings)
 async def put_storage_settings(
     data: FileStorageSettings,
-    _auth: object = Depends(require_access("system.file", "update")),
+    _auth: object = Depends(require_permission_codes("system:file:update")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -376,7 +376,7 @@ async def put_storage_settings(
 @router.post("/storage-migrate", response_model=FileStorageMigrateResponse)
 async def migrate_storage_to_object_storage(
     data: FileStorageMigrateRequest,
-    _auth: object = Depends(require_access("system.file", "update")),
+    _auth: object = Depends(require_permission_codes("system:file:update")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -399,7 +399,7 @@ async def migrate_storage_to_object_storage(
 
 @router.get("/private-vault/status", response_model=PrivateFileVaultStatusResponse)
 async def get_private_vault_status(
-    _auth: object = Depends(require_access("system.file", "read")),
+    _auth: object = Depends(require_permission_codes("system:file:read")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -410,7 +410,7 @@ async def get_private_vault_status(
 @router.post("/private-vault/set-password", status_code=status.HTTP_204_NO_CONTENT)
 async def set_private_vault_password(
     data: PrivateFileVaultSetPasswordRequest,
-    _auth: object = Depends(require_access("system.file", "update")),
+    _auth: object = Depends(require_permission_codes("system:file:update")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -421,7 +421,7 @@ async def set_private_vault_password(
 @router.post("/private-vault/change-password", status_code=status.HTTP_204_NO_CONTENT)
 async def change_private_vault_password(
     data: PrivateFileVaultChangePasswordRequest,
-    _auth: object = Depends(require_access("system.file", "update")),
+    _auth: object = Depends(require_permission_codes("system:file:update")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -432,7 +432,7 @@ async def change_private_vault_password(
 @router.post("/private-vault/unlock", response_model=PrivateFileVaultUnlockResponse)
 async def unlock_private_vault(
     data: PrivateFileVaultUnlockRequest,
-    _auth: object = Depends(require_access("system.file", "read")),
+    _auth: object = Depends(require_permission_codes("system:file:read")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -444,7 +444,7 @@ async def unlock_private_vault(
 @router.get("/{uuid}", response_model=FileResponse)
 async def get_file(
     uuid: str,
-    _auth: object = Depends(require_access("system.file", "read")),
+    _auth: object = Depends(require_permission_codes("system:file:read")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -719,7 +719,7 @@ async def update_file(
     data: FileUpdate,
     x_private_vault_token: Optional[str] = Header(None, alias=VAULT_TOKEN_HEADER),
     x_private_vault_scope: Optional[str] = Header(None, alias=VAULT_SCOPE_HEADER),
-    _auth: object = Depends(require_access("system.file", "update")),
+    _auth: object = Depends(require_permission_codes("system:file:update")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -774,7 +774,7 @@ async def delete_file(
     uuid: str,
     x_private_vault_token: Optional[str] = Header(None, alias=VAULT_TOKEN_HEADER),
     x_private_vault_scope: Optional[str] = Header(None, alias=VAULT_SCOPE_HEADER),
-    _auth: object = Depends(require_access("system.file", "delete")),
+    _auth: object = Depends(require_permission_codes("system:file:delete")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -815,7 +815,7 @@ async def batch_delete_files(
     uuids: List[str],
     x_private_vault_token: Optional[str] = Header(None, alias=VAULT_TOKEN_HEADER),
     x_private_vault_scope: Optional[str] = Header(None, alias=VAULT_SCOPE_HEADER),
-    _auth: object = Depends(require_access("system.file", "delete")),
+    _auth: object = Depends(require_permission_codes("system:file:delete")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):

@@ -18,7 +18,7 @@ from core.services.authorization.permission_policy_service import PermissionPoli
 from core.services.authorization.permission_sync_service import PermissionSyncService
 from core.config.permission_action_spec import STANDARD_ACTIONS
 from core.api.deps.deps import get_current_tenant
-from core.api.deps.access import require_access
+from core.api.deps.access import require_permission_codes
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError
@@ -39,7 +39,7 @@ async def get_permission_list(
     sort_by: Optional[str] = Query(None, description="排序字段：code/name/resource/action/permission_type/created_at/updated_at"),
     sort_order: Optional[str] = Query(None, description="排序方向：asc 或 desc"),
     dry_run: bool = Query(False, description="仅执行权限治理模拟，不落库"),
-    _auth: object = Depends(require_access("system.permission", "read")),
+    _auth: object = Depends(require_permission_codes("system:permission:read")),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -90,7 +90,7 @@ async def sync_permission_governance(
     force: bool = Query(True, description="是否强制执行治理"),
     dry_run: bool = Query(False, description="是否仅模拟运行"),
     prune: bool = Query(True, description="是否执行废弃清理"),
-    _auth: object = Depends(require_access("system.permission", "read")),
+    _auth: object = Depends(require_permission_codes("system:permission:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     result = await PermissionSyncService.ensure_permissions(
@@ -106,7 +106,7 @@ async def sync_permission_governance(
 async def sync_permission_governance_all_tenants(
     dry_run: bool = Query(False, description="是否仅模拟运行"),
     prune: bool = Query(True, description="是否执行废弃清理"),
-    _auth: object = Depends(require_access("system.permission", "read")),
+    _auth: object = Depends(require_permission_codes("system:permission:read")),
 ):
     return await PermissionSyncService.sync_all_active_tenants(
         dry_run=dry_run,
@@ -116,7 +116,7 @@ async def sync_permission_governance_all_tenants(
 
 @router.get("/governance/report")
 async def get_permission_governance_report(
-    _auth: object = Depends(require_access("system.permission", "read")),
+    _auth: object = Depends(require_permission_codes("system:permission:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     return await PermissionSyncService.get_governance_report(tenant_id=tenant_id)
@@ -124,7 +124,7 @@ async def get_permission_governance_report(
 
 @router.get("/metadata")
 async def get_permission_metadata(
-    _auth: object = Depends(require_access("system.permission", "read")),
+    _auth: object = Depends(require_permission_codes("system:permission:read")),
     current_user: User = Depends(soil_get_current_user),
 ):
     """
@@ -146,7 +146,7 @@ async def get_permission_metadata(
 
 @router.get("/metadata/layers")
 async def get_permission_layer_metadata(
-    _auth: object = Depends(require_access("system.permission", "read")),
+    _auth: object = Depends(require_permission_codes("system:permission:read")),
 ):
     return {
         "function": {
@@ -167,7 +167,7 @@ async def get_permission_layer_metadata(
 @router.get("/{permission_uuid}", response_model=PermissionResponse)
 async def get_permission(
     permission_uuid: str,
-    _auth: object = Depends(require_access("system.permission", "read")),
+    _auth: object = Depends(require_permission_codes("system:permission:read")),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):

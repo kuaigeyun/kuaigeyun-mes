@@ -6,7 +6,7 @@ from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from core.api.deps.access import require_access
+from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.models.user import User
 from core.schemas.permission_policy import (
@@ -38,7 +38,7 @@ async def get_my_field_masks(
 @router.get("/roles/{role_uuid}/data", response_model=List[DataPermissionPolicyResponse])
 async def list_role_data_policies(
     role_uuid: str,
-    _auth: object = Depends(require_access("system.permission", "read")),
+    _auth: object = Depends(require_permission_codes("system:permission:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     return await PermissionPolicyService.list_data_policies(tenant_id=tenant_id, role_uuid=role_uuid)
@@ -48,7 +48,7 @@ async def list_role_data_policies(
 async def replace_role_data_policies(
     role_uuid: str,
     items: List[DataPermissionPolicyUpsert],
-    _auth: object = Depends(require_access("system.permission", "update")),
+    _auth: object = Depends(require_permission_codes("system:permission:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -69,7 +69,7 @@ async def replace_role_data_policies(
 @router.get("/roles/{role_uuid}/field", response_model=List[FieldPermissionPolicyResponse])
 async def list_role_field_policies(
     role_uuid: str,
-    _auth: object = Depends(require_access("system.permission", "read")),
+    _auth: object = Depends(require_permission_codes("system:permission:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     return await PermissionPolicyService.list_field_policies(tenant_id=tenant_id, role_uuid=role_uuid)
@@ -79,7 +79,7 @@ async def list_role_field_policies(
 async def replace_role_field_policies(
     role_uuid: str,
     items: List[FieldPermissionPolicyUpsert],
-    _auth: object = Depends(require_access("system.permission", "update")),
+    _auth: object = Depends(require_permission_codes("system:permission:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -100,7 +100,7 @@ async def replace_role_field_policies(
 @router.post("/governance/field-canonicalize")
 async def canonicalize_field_policies(
     role_uuid: str | None = None,
-    _auth: object = Depends(require_access("system.permission", "update")),
+    _auth: object = Depends(require_permission_codes("system:permission:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     """字段权限命名治理：归一化同义字段并合并重复记录（保留最新 updated_at）。"""

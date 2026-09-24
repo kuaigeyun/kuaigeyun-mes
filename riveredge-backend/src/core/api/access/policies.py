@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from core.api.deps.access import require_access
+from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from core.models.policy_binding import PolicyBinding
 from core.schemas.access_policy import AccessPolicyCreate, AccessPolicyResponse, AccessPolicyUpdate
@@ -33,7 +33,7 @@ async def _to_policy_response(item) -> AccessPolicyResponse:
 
 @router.get("", response_model=list[AccessPolicyResponse])
 async def list_policies(
-    _: object = Depends(require_access("system.policy", "read")),
+    _: object = Depends(require_permission_codes("system:policy:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     items = await AccessPolicyService.list_policies(tenant_id=tenant_id)
@@ -43,7 +43,7 @@ async def list_policies(
 @router.post("", response_model=AccessPolicyResponse, status_code=status.HTTP_201_CREATED)
 async def create_policy(
     data: AccessPolicyCreate,
-    _: object = Depends(require_access("system.policy", "create")),
+    _: object = Depends(require_permission_codes("system:policy:create")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -57,7 +57,7 @@ async def create_policy(
 async def update_policy(
     policy_uuid: str,
     data: AccessPolicyUpdate,
-    _: object = Depends(require_access("system.policy", "update")),
+    _: object = Depends(require_permission_codes("system:policy:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -72,7 +72,7 @@ async def update_policy(
 @router.delete("/{policy_uuid}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_policy(
     policy_uuid: str,
-    _: object = Depends(require_access("system.policy", "delete")),
+    _: object = Depends(require_permission_codes("system:policy:delete")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:

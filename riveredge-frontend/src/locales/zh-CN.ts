@@ -28406,6 +28406,10 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.permission-require-codes-migrate-r06.title':
+    '权限调用面收敛：核心权限/策略/文件 API 改为显式权限码',
+  'pages.dashboard.updateLog.entries.permission-require-codes-migrate-r06.description':
+    '权限目录、权限策略、访问策略、数据范围绑定与文件管理 API 由 require_access（含 system.file 点号资源）改为 system:permission / system:policy / system:user / system:file 显式码；核心 API 层 require_access 清零。',
   'pages.dashboard.updateLog.entries.permission-require-codes-migrate-r05.title':
     '权限调用面收敛：轻办公人事薪资 API 改为显式权限码',
   'pages.dashboard.updateLog.entries.permission-require-codes-migrate-r05.description':
@@ -28430,10 +28434,6 @@ export default {
     '权限治理：菜单精确匹配、状态机与数据范围收紧、强制下线鉴权',
   'pages.dashboard.updateLog.entries.permission-governance-p0-r01.description':
     '侧栏菜单改为与按钮一致的精确权限码匹配；状态流转库表规则未配权限/角色时拒绝执行；无功能授予时数据范围不再回退全部角色；在线用户强制下线需 system:online-user:execute；切回窗口重拉权限；新增 manifest 权限声明扫描。',
-  'pages.dashboard.updateLog.entries.site-logo-invalid-file-ref-r01.title':
-    '站点 Logo 误绑业务文件不再反复报错',
-  'pages.dashboard.updateLog.entries.site-logo-invalid-file-ref-r01.description':
-    '站点 Logo 配置若误填工程图纸等业务文件 UUID，读取设置时将自动清空并回退默认 Logo，不再请求 preview/public 导致 500。',
   'pages.dashboard.updateLog.entries.drawing-file-content-missing-r01.title':
     '工程图纸预览文件丢失提示修复',
   'pages.dashboard.updateLog.entries.drawing-file-content-missing-r01.description':

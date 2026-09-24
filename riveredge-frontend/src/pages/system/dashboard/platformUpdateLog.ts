@@ -44,6 +44,14 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'permission-require-codes-migrate-r06',
+    date: '2026-09-24',
+    type: 'security',
+    titleKey: 'pages.dashboard.updateLog.entries.permission-require-codes-migrate-r06.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.permission-require-codes-migrate-r06.description',
+  },
+  {
     id: 'permission-require-codes-migrate-r05',
     date: '2026-09-24',
     type: 'security',

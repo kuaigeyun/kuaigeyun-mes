@@ -6,7 +6,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from core.api.deps.access import require_access
+from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from core.schemas.user_data_scope_binding import UserDataScopeBindingItem, UserDataScopeBindingReplace
 from core.services.authorization.user_data_scope_binding_service import UserDataScopeBindingService
@@ -39,7 +39,7 @@ async def _resolve_user_id_by_uuid(tenant_id: int, user_uuid: str) -> int:
 async def list_user_data_scope_bindings(
     user_id: int,
     dimension: Optional[str] = Query(None, description="按维度筛选，如 outsourced_unit"),
-    _auth: object = Depends(require_access("system:user", "read")),
+    _auth: object = Depends(require_permission_codes("system:user:read")),
     tenant_id: int = Depends(get_current_tenant),
     _: User = Depends(soil_get_current_user),
 ):
@@ -55,7 +55,7 @@ async def list_user_data_scope_bindings(
 async def replace_user_data_scope_bindings(
     user_id: int,
     body: UserDataScopeBindingReplace,
-    _auth: object = Depends(require_access("system:user", "update")),
+    _auth: object = Depends(require_permission_codes("system:user:update")),
     tenant_id: int = Depends(get_current_tenant),
     _: User = Depends(soil_get_current_user),
 ):
@@ -76,7 +76,7 @@ async def replace_user_data_scope_bindings(
 async def list_user_data_scope_bindings_by_uuid(
     user_uuid: str,
     dimension: Optional[str] = Query(None, description="按维度筛选，如 supplier/customer/manufacturer"),
-    _auth: object = Depends(require_access("system:user", "read")),
+    _auth: object = Depends(require_permission_codes("system:user:read")),
     tenant_id: int = Depends(get_current_tenant),
     _: User = Depends(soil_get_current_user),
 ):
@@ -92,7 +92,7 @@ async def list_user_data_scope_bindings_by_uuid(
 async def replace_user_data_scope_bindings_by_uuid(
     user_uuid: str,
     body: UserDataScopeBindingReplace,
-    _auth: object = Depends(require_access("system:user", "update")),
+    _auth: object = Depends(require_permission_codes("system:user:update")),
     tenant_id: int = Depends(get_current_tenant),
     _: User = Depends(soil_get_current_user),
 ):
