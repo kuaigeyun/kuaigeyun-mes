@@ -434,32 +434,13 @@ class PermissionSyncService:
             for entry in entries:
                 if entry["id"] == keep["id"]:
                     continue
-                old_code = str(entry["code"])
                 await cls._migrate_role_permissions(
                     conn=conn,
                     tenant_id=tenant_id,
                     from_permission_id=int(entry["id"]),
                     to_permission_id=int(keep["id"]),
                 )
-                await conn.execute(
-                    """
-                    INSERT INTO core_permission_aliases
-                    (uuid, tenant_id, old_code, canonical_code, reason, created_at, updated_at)
-                    VALUES ($1, $2, $3, $4, $5, $6, $6)
-                    ON CONFLICT (tenant_id, old_code)
-                    DO UPDATE SET
-                        canonical_code = EXCLUDED.canonical_code,
-                        reason = EXCLUDED.reason,
-                        deleted_at = NULL,
-                        updated_at = EXCLUDED.updated_at
-                    """,
-                    str(uuid4()),
-                    tenant_id,
-                    old_code,
-                    str(keep["code"]),
-                    "duplicate-merge",
-                    now,
-                )
+                # 不写 PermissionAlias：鉴权只认规范码；角色授权已迁到 keep，旧码行直接废弃
                 await conn.execute(
                     """
                     UPDATE core_permissions

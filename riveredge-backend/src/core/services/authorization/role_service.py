@@ -96,10 +96,11 @@ class RoleService:
         判断是否为“系统管理员”角色（允许管理权限）。
 
         仅对该角色放开系统角色的权限编辑限制，避免影响其他系统内置角色。
+        真源：UserPermissionService.is_admin_system_role
         """
-        role_code = (role.code or "").strip().upper()
-        role_name = (role.name or "").strip()
-        return role_code in {"ADMIN", "SYSTEM_ADMIN", "SUPER_ADMIN"} or role_name == "系统管理员"
+        from core.services.authorization.user_permission_service import UserPermissionService
+
+        return UserPermissionService.is_admin_system_role(role)
 
     @staticmethod
     async def create_role(

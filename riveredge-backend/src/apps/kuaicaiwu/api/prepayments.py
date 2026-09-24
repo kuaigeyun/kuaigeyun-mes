@@ -8,7 +8,6 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import Field
 
-from apps.kuaicaiwu.api._kuaicaiwu_route_access import require_kuaicaiwu_module_access
 from apps.kuaicaiwu.services.prepayment_service import PrepaymentService
 from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_user
@@ -18,7 +17,6 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
 router = APIRouter(
     prefix="/prepayments",
     tags=["App - Kuaicaiwu - Prepayments"],
-    dependencies=[Depends(require_kuaicaiwu_module_access("prepayment"))],
 )
 service = PrepaymentService()
 

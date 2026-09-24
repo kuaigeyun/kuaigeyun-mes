@@ -25,7 +25,6 @@ from apps.kuaizhizao.services.customer_pool_list_core import CUSTOMER_POOL_SORTA
 from apps.kuaizhizao.services.customer_pool_service import CustomerPoolService
 from core.api.deps import get_current_tenant, get_current_user
 from core.api.deps.access import require_permission_codes
-from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_module_access
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
 
@@ -60,7 +59,7 @@ async def list_customer_pool(
     order_by: Optional[str] = Query(None, description="排序字段，如 code、-last_follow_up_at"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-    _auth: object = Depends(require_kuaizhizao_module_access("customer-pool")),
+    _auth: object = Depends(require_permission_codes("kuaizhizao:customer-pool:read")),
 ):
     safe_order_by = None
     if order_by:
@@ -211,7 +210,7 @@ async def recycle_customer(
 async def get_pool_rules(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-    _auth: object = Depends(require_kuaizhizao_module_access("customer-pool")),
+    _auth: object = Depends(require_permission_codes("kuaizhizao:customer-pool:read")),
 ):
     return await CustomerPoolService.get_rule(tenant_id=tenant_id)
 
@@ -245,7 +244,7 @@ async def list_customer_collaborators(
     customer_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-    _auth: object = Depends(require_kuaizhizao_module_access("customer-pool")),
+    _auth: object = Depends(require_permission_codes("kuaizhizao:customer-pool:read")),
 ):
     try:
         return await CustomerPoolService.list_collaborators(
@@ -298,7 +297,7 @@ async def list_customer_pool_logs(
     customer_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-    _auth: object = Depends(require_kuaizhizao_module_access("customer-pool")),
+    _auth: object = Depends(require_permission_codes("kuaizhizao:customer-pool:read")),
 ):
     try:
         return await CustomerPoolService.list_pool_logs(

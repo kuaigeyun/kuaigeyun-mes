@@ -92,60 +92,13 @@ def require_access(
     required_permissions: list[str] | None = None,
     require_tenant: bool = True,
 ):
-    async def dependency(
-        request: Request,
-        auth: AuthContext = Depends(get_auth_context),
-        tenant_id: Optional[int] = Depends(get_current_tenant),
-    ) -> AuthContext:
-        if require_tenant and tenant_id is None:
-            _make_error(
-                http_status=status.HTTP_400_BAD_REQUEST,
-                code="TENANT_CONTEXT_REQUIRED",
-                message="组织上下文未设置",
-                request_id=auth.request_id,
-                reason="missing_tenant",
-            )
+    """已废止：禁止再挂点号 resource / 路径推断式鉴权。
 
-        if tenant_id is None:
-            _make_error(
-                http_status=status.HTTP_400_BAD_REQUEST,
-                code="TENANT_CONTEXT_REQUIRED",
-                message="请求缺少租户上下文",
-                request_id=auth.request_id,
-                reason="tenant_none",
-            )
-
-        env = {
-            "method": request.method,
-            "path": request.url.path,
-            "client_ip": request.client.host if request.client else None,
-        }
-        decision = await AccessControlService.check_access(
-            user_id=auth.user_id,
-            tenant_id=tenant_id,
-            resource=resource,
-            action=action,
-            is_infra_admin=auth.is_infra_admin,
-            is_tenant_admin=auth.is_tenant_admin,
-            check_abac=check_abac,
-            require_all=require_all,
-            required_permissions=required_permissions,
-            env=env,
-        )
-        if not decision.allowed:
-            _make_error(
-                http_status=status.HTTP_403_FORBIDDEN,
-                code="ACCESS_DENIED",
-                message="权限不足",
-                request_id=auth.request_id,
-                reason=decision.reason,
-                required=decision.required,
-            )
-        auth.tenant_id = tenant_id
-        return auth
-
-    return dependency
-
+    请改用 ``require_permission_codes("app:module:action")``。
+    """
+    raise RuntimeError(
+        "require_access 已废止，请改用 require_permission_codes(\"app:module:action\")"
+    )
 
 async def ensure_permission_codes(
     auth: AuthContext,

@@ -196,7 +196,7 @@ def _extract_work_order_quality_linked_id(request: Request) -> int | None:
 def require_kuaizhizao_module_access(
     module_code: str,
     *,
-    check_abac: bool = True,
+    check_abac: bool = False,
     collection_create_permissions: list[str] | None = None,
     resolve_print: bool = True,
 ):
@@ -235,7 +235,7 @@ def require_kuaizhizao_module_access(
 
 def require_kuaizhizao_sales_order_access(
     *,
-    check_abac: bool = True,
+    check_abac: bool = False,
     collection_create_permissions: list[str] | None = None,
     resolve_print: bool = True,
 ):
@@ -308,7 +308,7 @@ def resolve_kuaizhizao_quality_execution_module(path: str) -> str:
 
 def require_kuaizhizao_quality_execution_access(
     *,
-    check_abac: bool = True,
+    check_abac: bool = False,
     collection_create_permissions: list[str] | None = None,
     resolve_print: bool = True,
 ):
@@ -402,7 +402,7 @@ def resolve_kuaizhizao_productions_module(path: str) -> str:
 
 def require_kuaizhizao_productions_access(
     *,
-    check_abac: bool = True,
+    check_abac: bool = False,
     collection_create_permissions: list[str] | None = None,
     resolve_print: bool = True,
 ):
@@ -455,7 +455,7 @@ def resolve_kuaizhizao_work_order_module(path: str) -> str:
 
 def require_kuaizhizao_work_order_access(
     *,
-    check_abac: bool = True,
+    check_abac: bool = False,
     collection_create_permissions: list[str] | None = None,
     resolve_print: bool = True,
 ):
@@ -554,7 +554,7 @@ _INBOUND_HUB_CONFIRM_ACCEPT_INBOUND_EXECUTE = frozenset({
 
 def require_kuaizhizao_warehouse_execution_access(
     *,
-    check_abac: bool = True,
+    check_abac: bool = False,
     collection_create_permissions: list[str] | None = None,
     resolve_print: bool = True,
 ):

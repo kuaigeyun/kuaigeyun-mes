@@ -23,12 +23,24 @@ class UserPermissionService:
     提供用户权限检查功能，基于RBAC模型。
     """
 
-    ADMIN_ROLE_CODES = {"ADMIN", "SYSTEM_ADMIN", "SUPER_ADMIN"}
+    ADMIN_ROLE_CODES = frozenset({"ADMIN", "SYSTEM_ADMIN", "SUPER_ADMIN"})
     ADMIN_ROLE_NAME = "系统管理员"
 
     @staticmethod
     def is_platform_or_tenant_admin(user: User) -> bool:
-        return bool(getattr(user, "is_tenant_admin", False) or getattr(user, "is_infra_admin", False))
+        """平台超管 / 平台管理员 / 组织管理员标志位（不含系统管理员角色）。"""
+        return bool(
+            getattr(user, "is_tenant_admin", False)
+            or getattr(user, "is_infra_admin", False)
+            or getattr(user, "_is_infra_superadmin", False)
+        )
+
+    @classmethod
+    def is_admin_system_role(cls, role: object) -> bool:
+        """系统管理员角色（与 RoleService / EffectiveAccess 共用）。"""
+        code = (getattr(role, "code", None) or "").strip().upper()
+        name = (getattr(role, "name", None) or "").strip()
+        return code in cls.ADMIN_ROLE_CODES or name == cls.ADMIN_ROLE_NAME
 
     @classmethod
     async def is_admin_bypass_flags(
@@ -50,13 +62,10 @@ class UserPermissionService:
     @classmethod
     async def is_admin_bypass(cls, user: User, tenant_id: int) -> bool:
         """平台/组织管理员 + 系统管理员角色（与 permission-responsibility 三路径合一）。"""
-        is_infra = bool(getattr(user, "is_infra_admin", False)) or bool(
-            getattr(user, "_is_infra_superadmin", False)
-        )
         return await cls.is_admin_bypass_flags(
             user.id,
             tenant_id,
-            is_infra_admin=is_infra,
+            is_infra_admin=cls.is_platform_or_tenant_admin(user),
             is_tenant_admin=bool(getattr(user, "is_tenant_admin", False)),
         )
 

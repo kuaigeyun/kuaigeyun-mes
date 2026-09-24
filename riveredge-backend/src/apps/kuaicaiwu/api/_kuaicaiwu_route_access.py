@@ -80,7 +80,7 @@ def resolve_kuaicaiwu_module_action(
 def require_kuaicaiwu_module_access(
     module_code: str,
     *,
-    check_abac: bool = True,
+    check_abac: bool = False,
     collection_create_permissions: list[str] | None = None,
     resolve_print: bool = True,
 ):

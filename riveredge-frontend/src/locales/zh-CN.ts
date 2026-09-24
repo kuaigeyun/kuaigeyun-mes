@@ -28406,6 +28406,10 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.permission-governance-p2-r01.title':
+    '权限治理：停用别名映射、统一管理员判定、对齐模块鉴权 ABAC',
+  'pages.dashboard.updateLog.entries.permission-governance-p2-r01.description':
+    '权限同步合并重复码时不再写入 PermissionAlias；管理员 bypass 收敛到 UserPermissionService；应用 module_access 默认关闭 ABAC；废止 require_access；客户池与部分财务只读 API 改为显式权限码。',
   'pages.dashboard.updateLog.entries.permission-require-codes-migrate-r07.title':
     '权限调用面收敛：质检/客户池/SOP/行业包 API 改为显式权限码',
   'pages.dashboard.updateLog.entries.permission-require-codes-migrate-r07.description':
@@ -37153,6 +37157,9 @@ export default {
   'app.master-data.drawings.folder.deleteConfirm': '确认删除该文件夹？',
   'app.master-data.drawings.folder.move': '移动到文件夹',
   'app.master-data.drawings.folder.moveSuccess': '已移动到目标文件夹',
+  'app.master-data.drawings.folder.batchMove': '批量移动',
+  'app.master-data.drawings.folder.batchMoveSuccess': '已移动 {{count}} 条图纸',
+  'app.master-data.drawings.folder.batchMovePartial': '{{count}} 条图纸移动失败',
   'app.master-data.drawings.folder.name': '文件夹名称',
   'app.master-data.drawings.folder.rename': '重命名',
   'app.master-data.drawings.folder.renameHint': '修改当前选中文件夹名称',

@@ -6,7 +6,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends
 
-from apps.kuaicaiwu.api._kuaicaiwu_route_access import require_kuaicaiwu_module_access
+from core.api.deps.access import require_permission_codes
 from apps.kuaicaiwu.models.cost_calculation import CostCalculation
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user as soil_get_current_user
@@ -17,7 +17,7 @@ from core.utils.timezone_utils import resolve_business_datetime
 router = APIRouter(
     prefix="/cost",
     tags=["App - Kuaicaiwu - Cost Center"],
-    dependencies=[Depends(require_kuaicaiwu_module_access("finance-dashboard"))],
+    dependencies=[Depends(require_permission_codes("kuaicaiwu:finance-dashboard:read"))],
 )
 
 

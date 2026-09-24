@@ -121,7 +121,7 @@ def resolve_master_data_module_action(
 def require_master_data_module_access(
     module_code: str,
     *,
-    check_abac: bool = True,
+    check_abac: bool = False,
     collection_create_permissions: list[str] | None = None,
     resolve_print: bool = True,
 ):

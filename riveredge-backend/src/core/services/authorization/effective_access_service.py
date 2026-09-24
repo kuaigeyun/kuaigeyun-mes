@@ -21,6 +21,7 @@ from core.services.authorization.menu_resource_resolver import (
 )
 from core.services.authorization.permission_registry_service import PermissionRegistryService
 from core.services.authorization.permission_version_service import PermissionVersionService
+from core.services.authorization.user_permission_service import UserPermissionService
 from infra.infrastructure.cache.cache_manager import cache_manager
 from infra.models.user import User
 
@@ -29,9 +30,7 @@ _REQUEST_MEMO: ContextVar[dict[str, Any] | None] = ContextVar(
     default=None,
 )
 
-# 系统管理员角色：该角色视为授予全部功能资源（与 RoleService._is_admin_system_role 一致）
-_ADMIN_ROLE_CODES = frozenset({"ADMIN", "SYSTEM_ADMIN", "SUPER_ADMIN"})
-_ADMIN_ROLE_NAME = "系统管理员"
+# 系统管理员角色：该角色视为授予全部功能资源（判定真源 UserPermissionService.is_admin_system_role）
 ALL_RESOURCES_MARKER = "*"
 
 
@@ -58,9 +57,7 @@ def _permission_code_to_resource_key(code: str) -> str | None:
 
 
 def _is_admin_system_role(role: Any) -> bool:
-    code = (getattr(role, "code", None) or "").strip().upper()
-    name = (getattr(role, "name", None) or "").strip()
-    return code in _ADMIN_ROLE_CODES or name == _ADMIN_ROLE_NAME
+    return UserPermissionService.is_admin_system_role(role)
 
 
 @dataclass(frozen=True)
@@ -225,11 +222,7 @@ class EffectiveAccessService:
 
     @classmethod
     def _user_flag_admin(cls, user: User) -> bool:
-        return bool(
-            getattr(user, "is_tenant_admin", False)
-            or getattr(user, "is_infra_admin", False)
-            or getattr(user, "_is_infra_superadmin", False)
-        )
+        return UserPermissionService.is_platform_or_tenant_admin(user)
 
     @classmethod
     async def _load(
