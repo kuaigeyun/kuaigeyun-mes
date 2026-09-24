@@ -14,7 +14,7 @@ from apps.kuaiplm.schemas.project_proposal import (
     ProjectProposalUpdate,
 )
 from apps.kuaiplm.services.project_proposal_service import ProjectProposalService
-from core.api.deps.access import require_access
+from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
@@ -39,13 +39,7 @@ async def list_project_proposals(
     keyword: Optional[str] = Query(None),
     status_filter: Optional[str] = Query(None, alias="status"),
     project_id: Optional[int] = Query(None),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.project-proposal",
-            "read",
-            required_permissions=["kuaiplm:project-proposal:read"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:project-proposal:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -70,13 +64,7 @@ async def list_project_proposals(
 async def create_project_proposal(
     data: ProjectProposalCreate,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.project-proposal",
-            "create",
-            required_permissions=["kuaiplm:project-proposal:create"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:project-proposal:create")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -88,13 +76,7 @@ async def create_project_proposal(
 @router.get("/{proposal_id}", response_model=ProjectProposalResponse, summary="Get")
 async def get_project_proposal(
     proposal_id: int,
-    _auth=Depends(
-        require_access(
-            "kuaiplm.project-proposal",
-            "read",
-            required_permissions=["kuaiplm:project-proposal:read"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:project-proposal:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -108,13 +90,7 @@ async def update_project_proposal(
     proposal_id: int,
     data: ProjectProposalUpdate,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.project-proposal",
-            "update",
-            required_permissions=["kuaiplm:project-proposal:update"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:project-proposal:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -132,13 +108,7 @@ async def fill_project_proposal_supplier(
     proposal_id: int,
     data: ProjectProposalSupplierFill,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.project-proposal",
-            "update",
-            required_permissions=["kuaiplm:project-proposal:update"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:project-proposal:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -151,13 +121,7 @@ async def fill_project_proposal_supplier(
 async def submit_project_proposal(
     proposal_id: int,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.project-proposal",
-            "submit",
-            required_permissions=["kuaiplm:project-proposal:submit"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:project-proposal:submit")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -170,13 +134,7 @@ async def submit_project_proposal(
 async def approve_project_proposal(
     proposal_id: int,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.project-proposal",
-            "approve",
-            required_permissions=["kuaiplm:project-proposal:approve"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:project-proposal:approve")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -189,13 +147,7 @@ async def approve_project_proposal(
 async def reject_project_proposal(
     proposal_id: int,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.project-proposal",
-            "reject",
-            required_permissions=["kuaiplm:project-proposal:reject"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:project-proposal:reject")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -212,13 +164,7 @@ async def reject_project_proposal(
 async def issue_project_proposal(
     proposal_id: int,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.project-proposal",
-            "execute",
-            required_permissions=["kuaiplm:project-proposal:execute"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:project-proposal:execute")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -235,13 +181,7 @@ async def issue_project_proposal(
 async def delete_project_proposal(
     proposal_id: int,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.project-proposal",
-            "delete",
-            required_permissions=["kuaiplm:project-proposal:delete"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:project-proposal:delete")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:

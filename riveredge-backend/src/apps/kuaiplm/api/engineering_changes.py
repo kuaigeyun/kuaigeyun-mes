@@ -15,7 +15,7 @@ from apps.kuaiplm.schemas.engineering_change import (
     EngineeringChangeUpdate,
 )
 from apps.kuaiplm.services.engineering_change_service import EngineeringChangeService
-from core.api.deps.access import require_access
+from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from core.services.authorization.user_permission_service import UserPermissionService
 from infra.api.deps.deps import get_current_user
@@ -40,13 +40,7 @@ def _http(exc: Exception) -> HTTPException:
     summary="ECN form profile (generic or industry)",
 )
 async def get_ecn_form_profile(
-    _auth=Depends(
-        require_access(
-            "kuaiplm.ecn",
-            "read",
-            required_permissions=["kuaiplm:ecn:read"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:ecn:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -63,13 +57,7 @@ async def list_engineering_changes(
     status_filter: Optional[str] = Query(None, alias="status"),
     change_kind: Optional[str] = Query(None),
     project_id: Optional[int] = Query(None),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.ecn",
-            "read",
-            required_permissions=["kuaiplm:ecn:read"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:ecn:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -90,13 +78,7 @@ async def list_engineering_changes(
 async def create_engineering_change(
     data: EngineeringChangeCreate,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.ecn",
-            "create",
-            required_permissions=["kuaiplm:ecn:create"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:ecn:create")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -114,13 +96,7 @@ async def create_engineering_change(
 @router.get("/{ecn_id}", response_model=EngineeringChangeResponse)
 async def get_engineering_change(
     ecn_id: int,
-    _auth=Depends(
-        require_access(
-            "kuaiplm.ecn",
-            "read",
-            required_permissions=["kuaiplm:ecn:read"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:ecn:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -134,13 +110,7 @@ async def update_engineering_change(
     ecn_id: int,
     data: EngineeringChangeUpdate,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.ecn",
-            "update",
-            required_permissions=["kuaiplm:ecn:update"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:ecn:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -153,13 +123,7 @@ async def update_engineering_change(
 async def submit_engineering_change(
     ecn_id: int,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.ecn",
-            "submit",
-            required_permissions=["kuaiplm:ecn:submit"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:ecn:submit")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -172,13 +136,7 @@ async def submit_engineering_change(
 async def approve_engineering_change(
     ecn_id: int,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.ecn",
-            "approve",
-            required_permissions=["kuaiplm:ecn:approve"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:ecn:approve")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -191,13 +149,7 @@ async def approve_engineering_change(
 async def reject_engineering_change(
     ecn_id: int,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.ecn",
-            "reject",
-            required_permissions=["kuaiplm:ecn:reject"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:ecn:reject")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -211,13 +163,7 @@ async def erp_audit_engineering_change(
     ecn_id: int,
     data: EngineeringChangeErpAudit,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.ecn",
-            "execute",
-            required_permissions=["kuaiplm:ecn:execute"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:ecn:execute")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -230,13 +176,7 @@ async def erp_audit_engineering_change(
 async def delete_engineering_change(
     ecn_id: int,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.ecn",
-            "delete",
-            required_permissions=["kuaiplm:ecn:delete"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:ecn:delete")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:

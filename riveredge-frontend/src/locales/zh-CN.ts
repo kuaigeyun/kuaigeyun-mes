@@ -28406,6 +28406,10 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.permission-require-codes-migrate-r03.title':
+    '权限调用面收敛：快研发剩余单据 API 改为显式权限码',
+  'pages.dashboard.updateLog.entries.permission-require-codes-migrate-r03.description':
+    'BOM 协同、试流、打样工艺、样机试制单、项目提案、工程变更、物料评审、模具样件单等 API 已逐文件迁为 require_permission_codes；快研发后端 require_access 清零。',
   'pages.dashboard.updateLog.entries.permission-require-codes-migrate-r02.title':
     '权限调用面收敛：快研发项目/阶段二/知识库等 API 改为显式权限码',
   'pages.dashboard.updateLog.entries.permission-require-codes-migrate-r02.description':

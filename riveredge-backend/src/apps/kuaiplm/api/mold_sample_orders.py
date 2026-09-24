@@ -13,7 +13,7 @@ from apps.kuaiplm.schemas.mold_sample_order import (
     MoldSampleOrderUpdate,
 )
 from apps.kuaiplm.services.mold_sample_order_service import MoldSampleOrderService
-from core.api.deps.access import require_access
+from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
@@ -39,13 +39,7 @@ async def list_mold_sample_orders(
     status_filter: Optional[str] = Query(None, alias="status"),
     doc_kind: Optional[str] = Query(None),
     project_id: Optional[int] = Query(None),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.mold-sample",
-            "read",
-            required_permissions=["kuaiplm:mold-sample:read"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:mold-sample:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -71,13 +65,7 @@ async def list_mold_sample_orders(
 async def create_mold_sample_order(
     data: MoldSampleOrderCreate,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.mold-sample",
-            "create",
-            required_permissions=["kuaiplm:mold-sample:create"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:mold-sample:create")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -89,13 +77,7 @@ async def create_mold_sample_order(
 @router.get("/{order_id}", response_model=MoldSampleOrderResponse, summary="Get one")
 async def get_mold_sample_order(
     order_id: int,
-    _auth=Depends(
-        require_access(
-            "kuaiplm.mold-sample",
-            "read",
-            required_permissions=["kuaiplm:mold-sample:read"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:mold-sample:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -109,13 +91,7 @@ async def update_mold_sample_order(
     order_id: int,
     data: MoldSampleOrderUpdate,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.mold-sample",
-            "update",
-            required_permissions=["kuaiplm:mold-sample:update"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:mold-sample:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -128,13 +104,7 @@ async def update_mold_sample_order(
 async def submit_mold_sample_order(
     order_id: int,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.mold-sample",
-            "submit",
-            required_permissions=["kuaiplm:mold-sample:submit"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:mold-sample:submit")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -147,13 +117,7 @@ async def submit_mold_sample_order(
 async def approve_mold_sample_order(
     order_id: int,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.mold-sample",
-            "approve",
-            required_permissions=["kuaiplm:mold-sample:approve"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:mold-sample:approve")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -166,13 +130,7 @@ async def approve_mold_sample_order(
 async def reject_mold_sample_order(
     order_id: int,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.mold-sample",
-            "reject",
-            required_permissions=["kuaiplm:mold-sample:reject"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:mold-sample:reject")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -185,13 +143,7 @@ async def reject_mold_sample_order(
 async def seal_mold_sample_order(
     order_id: int,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.mold-sample",
-            "execute",
-            required_permissions=["kuaiplm:mold-sample:execute"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:mold-sample:execute")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -204,13 +156,7 @@ async def seal_mold_sample_order(
 async def archive_mold_sample_order(
     order_id: int,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.mold-sample",
-            "complete",
-            required_permissions=["kuaiplm:mold-sample:complete"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:mold-sample:complete")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -227,13 +173,7 @@ async def archive_mold_sample_order(
 async def delete_mold_sample_order(
     order_id: int,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.mold-sample",
-            "delete",
-            required_permissions=["kuaiplm:mold-sample:delete"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:mold-sample:delete")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:

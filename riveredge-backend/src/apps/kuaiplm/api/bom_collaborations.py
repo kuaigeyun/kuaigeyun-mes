@@ -16,7 +16,7 @@ from apps.kuaiplm.schemas.bom_collaboration import (
     BomCollabUpdate,
 )
 from apps.kuaiplm.services.bom_collaboration_service import BomCollaborationService
-from core.api.deps.access import require_access
+from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
@@ -40,13 +40,7 @@ def _http(exc: Exception) -> HTTPException:
     summary="BOM collab form profile (section labels)",
 )
 async def get_bom_collab_form_profile(
-    _auth=Depends(
-        require_access(
-            "kuaiplm.bom-collab",
-            "read",
-            required_permissions=["kuaiplm:bom-collab:read"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:bom-collab:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -62,13 +56,7 @@ async def list_bom_collaborations(
     keyword: Optional[str] = Query(None),
     status_filter: Optional[str] = Query(None, alias="status"),
     project_id: Optional[int] = Query(None),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.bom-collab",
-            "read",
-            required_permissions=["kuaiplm:bom-collab:read"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:bom-collab:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -93,13 +81,7 @@ async def list_bom_collaborations(
 async def create_bom_collaboration(
     data: BomCollabCreate,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.bom-collab",
-            "create",
-            required_permissions=["kuaiplm:bom-collab:create"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:bom-collab:create")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -111,13 +93,7 @@ async def create_bom_collaboration(
 @router.get("/{collab_id}", response_model=BomCollabResponse, summary="Get BOM collaboration")
 async def get_bom_collaboration(
     collab_id: int,
-    _auth=Depends(
-        require_access(
-            "kuaiplm.bom-collab",
-            "read",
-            required_permissions=["kuaiplm:bom-collab:read"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:bom-collab:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -131,13 +107,7 @@ async def update_bom_collaboration(
     collab_id: int,
     data: BomCollabUpdate,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.bom-collab",
-            "update",
-            required_permissions=["kuaiplm:bom-collab:update"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:bom-collab:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -156,13 +126,7 @@ async def update_bom_collaboration_section(
     data: BomCollabSectionUpdate,
     section: str = Path(..., description="electronics | structure"),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.bom-collab",
-            "update",
-            required_permissions=["kuaiplm:bom-collab:update"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:bom-collab:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -175,13 +139,7 @@ async def update_bom_collaboration_section(
 async def submit_bom_collaboration(
     collab_id: int,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.bom-collab",
-            "submit",
-            required_permissions=["kuaiplm:bom-collab:submit"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:bom-collab:submit")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -194,13 +152,7 @@ async def submit_bom_collaboration(
 async def approve_bom_collaboration(
     collab_id: int,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.bom-collab",
-            "approve",
-            required_permissions=["kuaiplm:bom-collab:approve"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:bom-collab:approve")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -213,13 +165,7 @@ async def approve_bom_collaboration(
 async def reject_bom_collaboration(
     collab_id: int,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.bom-collab",
-            "reject",
-            required_permissions=["kuaiplm:bom-collab:reject"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:bom-collab:reject")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -237,13 +183,7 @@ async def enter_bom_collaboration(
     collab_id: int,
     data: BomCollabEnter,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.bom-collab",
-            "execute",
-            required_permissions=["kuaiplm:bom-collab:execute"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:bom-collab:execute")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -256,13 +196,7 @@ async def enter_bom_collaboration(
 async def delete_bom_collaboration(
     collab_id: int,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.bom-collab",
-            "delete",
-            required_permissions=["kuaiplm:bom-collab:delete"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:bom-collab:delete")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:

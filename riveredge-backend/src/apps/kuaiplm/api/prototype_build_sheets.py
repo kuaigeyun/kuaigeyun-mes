@@ -15,7 +15,7 @@ from apps.kuaiplm.schemas.prototype_build_sheet import (
     PrototypeBuildSignoffUpdate,
 )
 from apps.kuaiplm.services.prototype_build_sheet_service import PrototypeBuildSheetService
-from core.api.deps.access import require_access
+from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
@@ -44,13 +44,7 @@ async def list_prototype_build_sheets(
     status_filter: Optional[str] = Query(None, alias="status"),
     project_id: Optional[int] = Query(None),
     round_key: Optional[str] = Query(None),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.prototype-build-sheet",
-            "read",
-            required_permissions=["kuaiplm:prototype-build-sheet:read"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:prototype-build-sheet:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -76,13 +70,7 @@ async def list_prototype_build_sheets(
 async def create_prototype_build_sheet(
     data: PrototypeBuildSheetCreate,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.prototype-build-sheet",
-            "create",
-            required_permissions=["kuaiplm:prototype-build-sheet:create"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:prototype-build-sheet:create")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -98,13 +86,7 @@ async def create_prototype_build_sheet(
 )
 async def get_prototype_build_sheet(
     sheet_id: int = Path(..., ge=1),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.prototype-build-sheet",
-            "read",
-            required_permissions=["kuaiplm:prototype-build-sheet:read"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:prototype-build-sheet:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -122,13 +104,7 @@ async def update_prototype_build_sheet(
     data: PrototypeBuildSheetUpdate,
     sheet_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.prototype-build-sheet",
-            "update",
-            required_permissions=["kuaiplm:prototype-build-sheet:update"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:prototype-build-sheet:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -147,13 +123,7 @@ async def update_prototype_build_section(
     sheet_id: int = Path(..., ge=1),
     section: str = Path(...),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.prototype-build-sheet",
-            "update",
-            required_permissions=["kuaiplm:prototype-build-sheet:update"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:prototype-build-sheet:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -171,13 +141,7 @@ async def update_prototype_build_signoff(
     data: PrototypeBuildSignoffUpdate,
     sheet_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.prototype-build-sheet",
-            "update",
-            required_permissions=["kuaiplm:prototype-build-sheet:update"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:prototype-build-sheet:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -194,13 +158,7 @@ async def update_prototype_build_signoff(
 async def submit_prototype_build_sheet(
     sheet_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.prototype-build-sheet",
-            "submit",
-            required_permissions=["kuaiplm:prototype-build-sheet:submit"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:prototype-build-sheet:submit")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -217,13 +175,7 @@ async def submit_prototype_build_sheet(
 async def approve_prototype_build_sheet(
     sheet_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.prototype-build-sheet",
-            "approve",
-            required_permissions=["kuaiplm:prototype-build-sheet:approve"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:prototype-build-sheet:approve")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -240,13 +192,7 @@ async def approve_prototype_build_sheet(
 async def reject_prototype_build_sheet(
     sheet_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.prototype-build-sheet",
-            "reject",
-            required_permissions=["kuaiplm:prototype-build-sheet:reject"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:prototype-build-sheet:reject")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -263,13 +209,7 @@ async def reject_prototype_build_sheet(
 async def issue_prototype_build_sheet(
     sheet_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.prototype-build-sheet",
-            "execute",
-            required_permissions=["kuaiplm:prototype-build-sheet:execute"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:prototype-build-sheet:execute")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -286,13 +226,7 @@ async def issue_prototype_build_sheet(
 async def close_prototype_build_sheet(
     sheet_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.prototype-build-sheet",
-            "complete",
-            required_permissions=["kuaiplm:prototype-build-sheet:complete"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:prototype-build-sheet:complete")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -309,13 +243,7 @@ async def close_prototype_build_sheet(
 async def delete_prototype_build_sheet(
     sheet_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.prototype-build-sheet",
-            "delete",
-            required_permissions=["kuaiplm:prototype-build-sheet:delete"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:prototype-build-sheet:delete")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:

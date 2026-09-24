@@ -14,7 +14,7 @@ from apps.kuaiplm.schemas.sample_process import (
     SampleProcessUpdate,
 )
 from apps.kuaiplm.services.sample_process_service import SampleProcessService
-from core.api.deps.access import require_access
+from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
@@ -38,13 +38,7 @@ def _http(exc: Exception) -> HTTPException:
     summary="Sample process form profile (generic or industry)",
 )
 async def get_sample_process_form_profile(
-    _auth=Depends(
-        require_access(
-            "kuaiplm.sample-process",
-            "read",
-            required_permissions=["kuaiplm:sample-process:read"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:sample-process:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -61,13 +55,7 @@ async def list_sample_process_applications(
     status_filter: Optional[str] = Query(None, alias="status"),
     project_id: Optional[int] = Query(None),
     request_kind: Optional[str] = Query(None),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.sample-process",
-            "read",
-            required_permissions=["kuaiplm:sample-process:read"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:sample-process:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -93,13 +81,7 @@ async def list_sample_process_applications(
 async def create_sample_process_application(
     data: SampleProcessCreate,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.sample-process",
-            "create",
-            required_permissions=["kuaiplm:sample-process:create"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:sample-process:create")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -115,13 +97,7 @@ async def create_sample_process_application(
 )
 async def get_sample_process_application(
     application_id: int,
-    _auth=Depends(
-        require_access(
-            "kuaiplm.sample-process",
-            "read",
-            required_permissions=["kuaiplm:sample-process:read"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:sample-process:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -139,13 +115,7 @@ async def update_sample_process_application(
     application_id: int,
     data: SampleProcessUpdate,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.sample-process",
-            "update",
-            required_permissions=["kuaiplm:sample-process:update"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:sample-process:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -162,13 +132,7 @@ async def update_sample_process_application(
 async def submit_sample_process_application(
     application_id: int,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.sample-process",
-            "submit",
-            required_permissions=["kuaiplm:sample-process:submit"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:sample-process:submit")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -185,13 +149,7 @@ async def submit_sample_process_application(
 async def approve_sample_process_application(
     application_id: int,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.sample-process",
-            "approve",
-            required_permissions=["kuaiplm:sample-process:approve"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:sample-process:approve")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -208,13 +166,7 @@ async def approve_sample_process_application(
 async def reject_sample_process_application(
     application_id: int,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.sample-process",
-            "reject",
-            required_permissions=["kuaiplm:sample-process:reject"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:sample-process:reject")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -231,13 +183,7 @@ async def reject_sample_process_application(
 async def close_sample_process_application(
     application_id: int,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.sample-process",
-            "execute",
-            required_permissions=["kuaiplm:sample-process:execute"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:sample-process:execute")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -254,13 +200,7 @@ async def close_sample_process_application(
 async def delete_sample_process_application(
     application_id: int,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.sample-process",
-            "delete",
-            required_permissions=["kuaiplm:sample-process:delete"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:sample-process:delete")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:

@@ -13,7 +13,7 @@ from apps.kuaiplm.schemas.material_review import (
     MaterialReviewUpdate,
 )
 from apps.kuaiplm.services.material_review_service import MaterialReviewService
-from core.api.deps.access import require_access
+from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
@@ -38,13 +38,7 @@ async def list_material_reviews(
     keyword: Optional[str] = Query(None),
     status_filter: Optional[str] = Query(None, alias="status"),
     project_id: Optional[int] = Query(None),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.material-review",
-            "read",
-            required_permissions=["kuaiplm:material-review:read"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:material-review:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -69,13 +63,7 @@ async def list_material_reviews(
 async def create_material_review(
     data: MaterialReviewCreate,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.material-review",
-            "create",
-            required_permissions=["kuaiplm:material-review:create"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:material-review:create")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -87,13 +75,7 @@ async def create_material_review(
 @router.get("/{review_id}", response_model=MaterialReviewResponse, summary="Get material review")
 async def get_material_review(
     review_id: int,
-    _auth=Depends(
-        require_access(
-            "kuaiplm.material-review",
-            "read",
-            required_permissions=["kuaiplm:material-review:read"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:material-review:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -107,13 +89,7 @@ async def update_material_review(
     review_id: int,
     data: MaterialReviewUpdate,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.material-review",
-            "update",
-            required_permissions=["kuaiplm:material-review:update"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:material-review:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -126,13 +102,7 @@ async def update_material_review(
 async def submit_material_review(
     review_id: int,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.material-review",
-            "submit",
-            required_permissions=["kuaiplm:material-review:submit"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:material-review:submit")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -145,13 +115,7 @@ async def submit_material_review(
 async def approve_material_review(
     review_id: int,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.material-review",
-            "approve",
-            required_permissions=["kuaiplm:material-review:approve"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:material-review:approve")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -164,13 +128,7 @@ async def approve_material_review(
 async def reject_material_review(
     review_id: int,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.material-review",
-            "reject",
-            required_permissions=["kuaiplm:material-review:reject"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:material-review:reject")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -187,13 +145,7 @@ async def reject_material_review(
 async def delete_material_review(
     review_id: int,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.material-review",
-            "delete",
-            required_permissions=["kuaiplm:material-review:delete"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:material-review:delete")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:

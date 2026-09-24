@@ -16,7 +16,7 @@ from apps.kuaiplm.schemas.trial_flow import (
     TrialFlowUpdate,
 )
 from apps.kuaiplm.services.trial_flow_service import TrialFlowService
-from core.api.deps.access import require_access
+from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
@@ -40,13 +40,7 @@ def _http(exc: Exception) -> HTTPException:
     summary="Trial flow form profile (generic or industry)",
 )
 async def get_trial_flow_form_profile(
-    _auth=Depends(
-        require_access(
-            "kuaiplm.trial-flow",
-            "read",
-            required_permissions=["kuaiplm:trial-flow:read"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:trial-flow:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -63,13 +57,7 @@ async def list_trial_flows(
     status_filter: Optional[str] = Query(None, alias="status"),
     business_type: Optional[str] = Query(None),
     project_id: Optional[int] = Query(None),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.trial-flow",
-            "read",
-            required_permissions=["kuaiplm:trial-flow:read"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:trial-flow:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -90,13 +78,7 @@ async def list_trial_flows(
 async def create_trial_flow(
     data: TrialFlowCreate,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.trial-flow",
-            "create",
-            required_permissions=["kuaiplm:trial-flow:create"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:trial-flow:create")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -108,13 +90,7 @@ async def create_trial_flow(
 @router.get("/{trial_id}", response_model=TrialFlowResponse)
 async def get_trial_flow(
     trial_id: int,
-    _auth=Depends(
-        require_access(
-            "kuaiplm.trial-flow",
-            "read",
-            required_permissions=["kuaiplm:trial-flow:read"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:trial-flow:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -128,13 +104,7 @@ async def update_trial_flow(
     trial_id: int,
     data: TrialFlowUpdate,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.trial-flow",
-            "update",
-            required_permissions=["kuaiplm:trial-flow:update"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:trial-flow:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -147,13 +117,7 @@ async def update_trial_flow(
 async def submit_trial_flow(
     trial_id: int,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.trial-flow",
-            "submit",
-            required_permissions=["kuaiplm:trial-flow:submit"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:trial-flow:submit")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -166,13 +130,7 @@ async def submit_trial_flow(
 async def approve_trial_flow(
     trial_id: int,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.trial-flow",
-            "approve",
-            required_permissions=["kuaiplm:trial-flow:approve"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:trial-flow:approve")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -185,13 +143,7 @@ async def approve_trial_flow(
 async def reject_trial_flow(
     trial_id: int,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.trial-flow",
-            "reject",
-            required_permissions=["kuaiplm:trial-flow:reject"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:trial-flow:reject")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -206,13 +158,7 @@ async def fill_trial_flow_step(
     step_key: str,
     data: TrialFlowStepFill,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.trial-flow",
-            "execute",
-            required_permissions=["kuaiplm:trial-flow:execute"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:trial-flow:execute")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -226,13 +172,7 @@ async def conclude_trial_flow(
     trial_id: int,
     data: TrialFlowConclude,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.trial-flow",
-            "execute",
-            required_permissions=["kuaiplm:trial-flow:execute"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:trial-flow:execute")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -245,13 +185,7 @@ async def conclude_trial_flow(
 async def close_trial_flow(
     trial_id: int,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.trial-flow",
-            "execute",
-            required_permissions=["kuaiplm:trial-flow:execute"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:trial-flow:execute")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -264,13 +198,7 @@ async def close_trial_flow(
 async def delete_trial_flow(
     trial_id: int,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.trial-flow",
-            "delete",
-            required_permissions=["kuaiplm:trial-flow:delete"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:trial-flow:delete")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
