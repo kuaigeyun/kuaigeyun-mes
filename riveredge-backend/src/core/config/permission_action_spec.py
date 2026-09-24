@@ -31,6 +31,8 @@ STANDARD_ACTIONS: set[str] = {
     "dispatch",
     "recall",
     "confirm_adjustment",
+    # PLM 项目零件规格上传
+    "upload-part-spec",
     # 应用管理破坏性操作（须搭配 RBAC + 二次确认）
     "reset-data",
 }
@@ -72,6 +74,7 @@ ACTION_DISPLAY_LABELS: dict[str, str] = {
     "publish": "发布",
     "close": "关闭",
     "obsolete": "作废",
+    "upload-part-spec": "上传零件规格",
 }
 
 PERMISSION_CODE_DISPLAY_LABELS: dict[str, str] = {

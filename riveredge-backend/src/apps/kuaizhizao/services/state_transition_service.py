@@ -109,11 +109,13 @@ class StateTransitionService:
         required_permission: Optional[str],
         required_role: Optional[str],
     ) -> None:
-        """DB 规则配置了权限/角色时校验操作者；两者皆空则放行（向后兼容）。"""
+        """DB 规则必须配置 required_permission 或 required_role；皆空则拒绝（禁止兼容放行）。"""
         perm = (required_permission or "").strip()
         role_req = (required_role or "").strip()
         if not perm and not role_req:
-            return
+            raise BusinessLogicError(
+                "状态流转规则未配置 required_permission / required_role，拒绝执行"
+            )
 
         if operator_id is None:
             missing = []

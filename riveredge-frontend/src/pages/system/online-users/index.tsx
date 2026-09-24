@@ -16,6 +16,7 @@ import { ListPageTemplate } from '../../../components/layout-templates';
 import { SystemMasterDetailDrawer } from '../shared/systemMasterDetailDrawer';
 import { useListPageStatCardsVisible } from '../../../components/layout-templates/listPageStatCardsContext';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
+import { useResourcePermissions } from '../../../hooks/useResourcePermissions';
 import {
   getOnlineUsers,
   getOnlineUserStats,
@@ -44,6 +45,8 @@ const OnlineUsersPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const { token } = useToken();
   const currentUser = useCurrentUser();
+  const { canAction } = useResourcePermissions('system:online-user');
+  const canForceLogout = Boolean(canAction?.('execute'));
   const statCardsVisible = useListPageStatCardsVisible();
   const actionRef = useRef<ActionType>(null);
   const [stats, setStats] = useState<OnlineUserStats | null>(null);
@@ -192,33 +195,38 @@ const OnlineUsersPage: React.FC = () => {
    */
   const renderCard = (user: OnlineUser, index: number) => {
     const userStatus = getUserStatus(user);
+    const cardActions = [
+      <Tooltip key="view" title={t('pages.system.onlineUsers.viewDetail')}>
+        <EyeOutlined
+          onClick={() => handleViewDetail(user)}
+          style={{ fontSize: 16 }}
+        />
+      </Tooltip>,
+    ];
+    if (canForceLogout) {
+      cardActions.push(
+        <Popconfirm
+          key="logout"
+          title={t('pages.system.onlineUsers.forceLogoutConfirm')}
+          onConfirm={() => handleForceLogout(user)}
+          okText={t('common.confirm')}
+          cancelText={t('common.cancel')}
+        >
+          <Tooltip title={t('pages.system.onlineUsers.forceLogout')}>
+            <LogoutOutlined
+              style={{ fontSize: 16, color: '#ff4d4f' }}
+            />
+          </Tooltip>
+        </Popconfirm>,
+      );
+    }
     
     return (
       <Card
         key={user.user_id}
         hoverable
         style={{ height: '100%' }}
-        actions={[
-          <Tooltip key="view" title={t('pages.system.onlineUsers.viewDetail')}>
-            <EyeOutlined
-              onClick={() => handleViewDetail(user)}
-              style={{ fontSize: 16 }}
-            />
-          </Tooltip>,
-          <Popconfirm
-            key="logout"
-            title={t('pages.system.onlineUsers.forceLogoutConfirm')}
-            onConfirm={() => handleForceLogout(user)}
-            okText={t('common.confirm')}
-            cancelText={t('common.cancel')}
-          >
-            <Tooltip title={t('pages.system.onlineUsers.forceLogout')}>
-              <LogoutOutlined
-                style={{ fontSize: 16, color: '#ff4d4f' }}
-              />
-            </Tooltip>
-          </Popconfirm>,
-        ]}
+        actions={cardActions}
       >
         <div style={{ marginBottom: 16 }}>
           <Space orientation="vertical" size="small" style={{ width: '100%' }}>

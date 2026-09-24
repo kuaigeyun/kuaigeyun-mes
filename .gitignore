@@ -118,6 +118,11 @@ scripts/
 riveredge-backend/scripts/*
 !riveredge-backend/scripts/pack_sensitive_words.py
 !riveredge-backend/scripts/run_dev_server.py
+# 契约扫描（权限/时区/旁路）须入库，供本地与 CI --fail-on high
+!riveredge-backend/scripts/scan_permission_bypass.py
+!riveredge-backend/scripts/scan_manifest_permissions.py
+!riveredge-backend/scripts/scan_timezone_contract.py
+!riveredge-backend/scripts/scan_document_action_bypass.py
 
 # 部署面板脚本（勿被根目录 scripts/ 规则误伤）
 riveredge-panel/

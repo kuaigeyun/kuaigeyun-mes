@@ -42,9 +42,12 @@ export const layoutShellQueryOptions = {
   refetchOnWindowFocus: false,
 } as const;
 
-/** 当前用户：权限变更仍由 permission_version 驱动菜单失效 */
+/**
+ * 当前用户：切回窗口时重拉 /auth/me，使他人改矩阵后的 permission_version / permissions 及时生效；
+ * 版本变化仍由 app / useUnifiedMenuData 使菜单失效。
+ */
 export const currentUserQueryOptions = {
   staleTime: 5 * 60 * 1000,
   gcTime: 10 * 60 * 1000,
-  refetchOnWindowFocus: false,
+  refetchOnWindowFocus: true,
 } as const;

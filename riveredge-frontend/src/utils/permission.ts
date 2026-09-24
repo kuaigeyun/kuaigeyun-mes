@@ -140,19 +140,10 @@ function isGenericMenuPermissionCode(code: string): boolean {
   return GENERIC_MENU_RESOURCES.has(resource) || resource === app;
 }
 
-/** 用户是否满足菜单项所需权限（精确匹配 + 同 resource 任意 action） */
+/** 用户是否满足菜单项所需权限：与按钮门控一致，仅精确匹配权限码（禁止同 resource 任意 action 放宽）。 */
 function userHasMenuPermission(user: CurrentUser, permissionCode: string): boolean {
-  if (hasPermission(user, permissionCode)) return true;
   if (isGenericMenuPermissionCode(permissionCode)) return false;
-  const norm = normalizePermissionCode(permissionCode);
-  const parts = norm.split(':').filter(Boolean);
-  if (parts.length < 3) return false;
-  const resourcePrefix = parts.slice(0, -1).join(':');
-  const userPerms = buildUserPermissionSet(user);
-  for (const p of userPerms) {
-    if (p.startsWith(`${resourcePrefix}:`)) return true;
-  }
-  return false;
+  return hasPermission(user, permissionCode);
 }
 
 function hasAnyMenuPermission(user: CurrentUser | undefined, permissionCodes: string[]): boolean {

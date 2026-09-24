@@ -392,6 +392,9 @@ class DataScopeService:
         resource_key = normalize_resource_key(resource)
         profile = get_resource_profile(resource_key)
         roles_for_scope = access.roles_for_data_scope(resource_key)
+        if not roles_for_scope:
+            # 无角色授予该资源功能：拒绝行可见（禁止再走「无策略=全部」）
+            return queryset.filter(id=-1)
 
         granted_role_uuids = [
             (getattr(role, "uuid", None) or "").strip()

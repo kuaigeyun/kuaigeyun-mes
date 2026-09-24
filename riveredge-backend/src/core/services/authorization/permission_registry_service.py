@@ -152,6 +152,7 @@ class PermissionRegistryService:
         "system:operation-log:read",
         "system:login-log:read",
         "system:online-user:read",
+        "system:online-user:execute",
         "system:data-backup:read",
         "system:onboarding-wizard:read",
         "system:onboarding-wizard:update",

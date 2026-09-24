@@ -28406,6 +28406,10 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.permission-governance-p0-r01.title':
+    '权限治理：菜单精确匹配、状态机与数据范围收紧、强制下线鉴权',
+  'pages.dashboard.updateLog.entries.permission-governance-p0-r01.description':
+    '侧栏菜单改为与按钮一致的精确权限码匹配；状态流转库表规则未配权限/角色时拒绝执行；无功能授予时数据范围不再回退全部角色；在线用户强制下线需 system:online-user:execute；切回窗口重拉权限；新增 manifest 权限声明扫描。',
   'pages.dashboard.updateLog.entries.drawing-vault-tree-counts-r01.title':
     '图档库树形菜单显示图纸数量',
   'pages.dashboard.updateLog.entries.drawing-vault-tree-counts-r01.description':

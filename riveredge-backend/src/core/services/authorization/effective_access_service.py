@@ -89,7 +89,7 @@ class EffectiveUserAccess:
     def roles_for_data_scope(self, resource: str) -> list[Any]:
         """
         参与数据范围并集的角色：仅「已授该资源功能」的角色。
-        若无一角色授予（异常配置），回退全部角色，与历史行为一致。
+        无一角色授予时返回空列表（由 DataScopeService 拒绝行可见），禁止回退全部角色。
         """
         key = normalize_resource_key(resource)
         granted: list[Any] = []
@@ -100,7 +100,7 @@ class EffectiveUserAccess:
             keys = self.role_resource_keys.get(role_uuid) or frozenset()
             if ALL_RESOURCES_MARKER in keys or key in keys:
                 granted.append(role)
-        return granted if granted else list(self.roles)
+        return granted
 
     def granted_resource_keys(self) -> frozenset[str]:
         if self.is_admin_bypass or any(

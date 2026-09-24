@@ -14,17 +14,21 @@ from core.schemas.online_user import (
 )
 from core.services.logging.online_user_service import OnlineUserService
 from core.api.deps.deps import get_current_tenant
+from core.api.deps.access import require_permission_codes
 from core.utils.timezone_utils import to_api_isoformat
 from infra.api.deps.deps import get_current_user
 from infra.models.user import User
-from infra.exceptions.exceptions import NotFoundError
 from core.models.user_activity import UserActivity
 from loguru import logger
 
 router = APIRouter(prefix="/online-users", tags=["Core - Online Users"])
 
 
-@router.get("", response_model=OnlineUserListResponse)
+@router.get(
+    "",
+    response_model=OnlineUserListResponse,
+    dependencies=[Depends(require_permission_codes("system:online-user:read"))],
+)
 async def list_online_users(
     tenant_id: Optional[int] = Query(None, description="组织ID（可选，管理员可以查看其他组织）"),
     _current_user: User = Depends(get_current_user),
@@ -52,7 +56,11 @@ async def list_online_users(
     )
 
 
-@router.get("/statistics", response_model=OnlineUserStatisticsResponse)
+@router.get(
+    "/statistics",
+    response_model=OnlineUserStatisticsResponse,
+    dependencies=[Depends(require_permission_codes("system:online-user:read"))],
+)
 async def get_online_user_statistics(
     tenant_id: Optional[int] = Query(None, description="组织ID（可选）"),
     current_user: User = Depends(get_current_user),
@@ -75,7 +83,11 @@ async def get_online_user_statistics(
     return await OnlineUserService.get_online_user_statistics(tenant_id=tenant_id)
 
 
-@router.get("/{user_id}", response_model=OnlineUserResponse)
+@router.get(
+    "/{user_id}",
+    response_model=OnlineUserResponse,
+    dependencies=[Depends(require_permission_codes("system:online-user:read"))],
+)
 async def get_online_user_by_user_id(
     user_id: int,
     current_user: User = Depends(get_current_user),
@@ -109,7 +121,11 @@ async def get_online_user_by_user_id(
     return online_user
 
 
-@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{user_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_permission_codes("system:online-user:execute"))],
+)
 async def force_logout(
     user_id: int,
     current_user: User = Depends(get_current_user),
@@ -126,8 +142,6 @@ async def force_logout(
     Raises:
         HTTPException: 当强制下线失败时抛出
     """
-    # TODO: 权限检查（只有管理员可以强制下线）
-    
     success = await OnlineUserService.force_logout(
         tenant_id=current_tenant_id,
         user_id=user_id,
@@ -140,7 +154,11 @@ async def force_logout(
         )
 
 
-@router.post("/debug/test-write", response_model=Dict[str, Any])
+@router.post(
+    "/debug/test-write",
+    response_model=Dict[str, Any],
+    dependencies=[Depends(require_permission_codes("system:online-user:execute"))],
+)
 async def debug_test_write(
     current_user: User = Depends(get_current_user),
     current_tenant_id: int = Depends(get_current_tenant),
@@ -188,7 +206,11 @@ async def debug_test_write(
         }
 
 
-@router.get("/debug/activity-status", response_model=Dict[str, Any])
+@router.get(
+    "/debug/activity-status",
+    response_model=Dict[str, Any],
+    dependencies=[Depends(require_permission_codes("system:online-user:execute"))],
+)
 async def debug_activity_status(
     current_user: User = Depends(get_current_user),
     current_tenant_id: int = Depends(get_current_tenant),
@@ -234,4 +256,3 @@ async def debug_activity_status(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"获取活动状态失败: {e}",
         )
-

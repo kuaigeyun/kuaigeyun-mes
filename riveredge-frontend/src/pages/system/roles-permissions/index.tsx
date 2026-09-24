@@ -1462,7 +1462,11 @@ const RolesPermissionsPage: React.FC = () => {
       // 重新加载角色列表（更新权限数）
       await loadRoles();
 
-      if (permissionLayer === 'function' || permissionLayer === 'field') {
+      if (
+        permissionLayer === 'function' ||
+        permissionLayer === 'field' ||
+        permissionLayer === 'data'
+      ) {
         try {
           await refreshCurrentUserInStore();
         } catch {

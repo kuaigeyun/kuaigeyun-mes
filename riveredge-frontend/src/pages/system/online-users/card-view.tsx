@@ -10,6 +10,7 @@ import { App, Card, Avatar, Tag, Space, Button, Modal, Descriptions, Popconfirm,
 import { EyeOutlined, LogoutOutlined, ReloadOutlined, UserOutlined, ClockCircleOutlined, GlobalOutlined } from '@ant-design/icons';
 import { PageContainer } from '@ant-design/pro-components';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
+import { useResourcePermissions } from '../../../hooks/useResourcePermissions';
 import {
   getOnlineUsers,
   getOnlineUserStats,
@@ -38,6 +39,8 @@ const CardView: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const { token } = useToken();
   const currentUser = useCurrentUser();
+  const { canAction } = useResourcePermissions('system:online-user');
+  const canForceLogout = Boolean(canAction?.('execute'));
   const [loading, setLoading] = useState(false);
   const [users, setUsers] = useState<OnlineUser[]>([]);
   const [stats, setStats] = useState<OnlineUserStats | null>(null);
@@ -251,26 +254,29 @@ const CardView: React.FC = () => {
                       hoverable
                       style={{ height: '100%' }}
                       actions={[
-                        <Tooltip title={t('pages.system.onlineUsers.viewDetail')}>
+                        <Tooltip key="view" title={t('pages.system.onlineUsers.viewDetail')}>
                           <EyeOutlined
-                            key="view"
                             onClick={() => handleViewDetail(user)}
                             style={{ fontSize: 16 }}
                           />
                         </Tooltip>,
-                        <Popconfirm
-                          key="logout"
-                          title={t('pages.system.onlineUsers.forceLogoutConfirm')}
-                          onConfirm={() => handleForceLogout(user)}
-                          okText={t('common.confirm')}
-                          cancelText={t('common.cancel')}
-                        >
-                          <Tooltip title={t('pages.system.onlineUsers.forceLogout')}>
-                            <LogoutOutlined
-                              style={{ fontSize: 16, color: '#ff4d4f' }}
-                            />
-                          </Tooltip>
-                        </Popconfirm>,
+                        ...(canForceLogout
+                          ? [
+                              <Popconfirm
+                                key="logout"
+                                title={t('pages.system.onlineUsers.forceLogoutConfirm')}
+                                onConfirm={() => handleForceLogout(user)}
+                                okText={t('common.confirm')}
+                                cancelText={t('common.cancel')}
+                              >
+                                <Tooltip title={t('pages.system.onlineUsers.forceLogout')}>
+                                  <LogoutOutlined
+                                    style={{ fontSize: 16, color: '#ff4d4f' }}
+                                  />
+                                </Tooltip>
+                              </Popconfirm>,
+                            ]
+                          : []),
                       ]}
                     >
                       <div style={{ textAlign: 'center', marginBottom: 16 }}>

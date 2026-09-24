@@ -44,6 +44,13 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'permission-governance-p0-r01',
+    date: '2026-09-24',
+    type: 'security',
+    titleKey: 'pages.dashboard.updateLog.entries.permission-governance-p0-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.permission-governance-p0-r01.description',
+  },
+  {
     id: 'drawing-vault-tree-counts-r01',
     date: '2026-09-24',
     type: 'improvement',
