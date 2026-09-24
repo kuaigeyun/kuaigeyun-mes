@@ -2896,6 +2896,28 @@ class ApprovalInstanceService:
                     await svc.reject(tenant_id, int(entity_id), approver)
                 logger.info(f"产品固件 {entity_id} 审批回调完成: {approval_instance.status}")
 
+            async def _handle_lab_request() -> None:
+                from apps.kuaiplm.schemas.lab_request import LabRequestRejectRequest
+                from apps.kuaiplm.services.lab_request_service import LabRequestService
+                from infra.models.user import User
+
+                if not entity_id:
+                    return
+                approver = await User.get_or_none(id=approver_id)
+                if not approver:
+                    return
+                svc = LabRequestService()
+                if approval_instance.status == "approved":
+                    await svc.approve(tenant_id, int(entity_id), approver)
+                elif approval_instance.status == "rejected":
+                    await svc.reject(
+                        tenant_id,
+                        int(entity_id),
+                        LabRequestRejectRequest(reason="审批驳回"),
+                        approver,
+                    )
+                logger.info(f"实验委托 {entity_id} 审批回调完成: {approval_instance.status}")
+
             async def _handle_production_file() -> None:
                 from apps.kuaiplm.services.production_file_service import ProductionFileService
                 from infra.models.user import User
@@ -3257,6 +3279,7 @@ class ApprovalInstanceService:
                 "receivable": _handle_receivable,
                 "purchase_invoice": _handle_purchase_invoice,
                 "product_firmware": _handle_product_firmware,
+                "lab_request": _handle_lab_request,
                 "production_file": _handle_production_file,
                 "trial_flow": _handle_trial_flow,
                 "rework_order": _handle_rework_order,

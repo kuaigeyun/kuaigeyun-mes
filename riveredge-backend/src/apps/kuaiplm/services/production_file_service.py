@@ -34,6 +34,7 @@ from apps.kuaiplm.schemas.production_file import (
     ProductionFileAccessLogResponse,
     ProductionFileAccessRequest,
     ProductionFileCreate,
+    ProductionFileDownloadResponse,
     ProductionFileIssueRequest,
     ProductionFileListResponse,
     ProductionFileResponse,
@@ -42,7 +43,9 @@ from apps.kuaiplm.schemas.production_file import (
     ProductionFileVersionListResponse,
     ProductionFileVersionResponse,
 )
+from apps.kuaiplm.utils.firmware_version import is_firmware_file_uuid
 from core.services.approval.approval_instance_service import ApprovalInstanceService
+from core.services.file.file_service import FileService
 from core.services.approval.audit_binding_service import AuditBindingService
 from core.services.file.document_version_policy import (
     DOCUMENT_GLOBAL_VIEW_PERMISSION,
@@ -130,6 +133,31 @@ class ProductionFileService(AppBaseService[ProductionFile]):
             raise ValidationError("研发项目不存在")
         return project
 
+    async def _resolve_project_snapshot(
+        self,
+        tenant_id: int,
+        *,
+        project_id: Optional[int],
+        project_code: Optional[str],
+        project_name: Optional[str],
+    ) -> tuple[Optional[int], str, str]:
+        if project_id is not None:
+            project = await self._require_project(tenant_id, int(project_id))
+            return project.id, project.project_code, project.project_name
+        code = str(project_code or "").strip()
+        name = str(project_name or "").strip() or code
+        return None, code or None, name or None
+
+    @staticmethod
+    async def _ensure_attached_file(tenant_id: int, file_uuid: Optional[str]) -> None:
+        uid = str(file_uuid or "").strip()
+        if not uid:
+            return
+        try:
+            await FileService.get_file_by_uuid(tenant_id, uid)
+        except NotFoundError as exc:
+            raise ValidationError("文件不存在，请重新上传") from exc
+
     def _validate_catalog_fields(
         self,
         *,
@@ -137,7 +165,6 @@ class ProductionFileService(AppBaseService[ProductionFile]):
         file_type: str,
         process_code: Optional[str],
         product_model: Optional[str],
-        project_id: Optional[int],
     ) -> None:
         if catalog_kind not in CATALOG_KINDS:
             raise ValidationError("非法目录策略")
@@ -153,8 +180,6 @@ class ProductionFileService(AppBaseService[ProductionFile]):
         else:
             if file_type not in RD_FILE_TYPES:
                 raise ValidationError("研发工具/产测类型不匹配")
-            if not project_id:
-                raise ValidationError("研发工具/产测须关联项目")
 
     async def _current_version_row(
         self, tenant_id: int, file_id: int, version: str
@@ -177,16 +202,17 @@ class ProductionFileService(AppBaseService[ProductionFile]):
             file_type=file_type,
             process_code=data.get("process_code"),
             product_model=data.get("product_model"),
-            project_id=data.get("project_id"),
         )
-        project_code = None
-        project_name = None
-        project_id = data.get("project_id")
+        project_id: Optional[int] = None
+        project_code: Optional[str] = None
+        project_name: Optional[str] = None
         if catalog_kind == CATALOG_RD:
-            project = await self._require_project(tenant_id, int(project_id))
-            project_id = project.id
-            project_code = project.project_code
-            project_name = project.project_name
+            project_id, project_code, project_name = await self._resolve_project_snapshot(
+                tenant_id,
+                project_id=data.get("project_id"),
+                project_code=data.get("project_code"),
+                project_name=data.get("project_name"),
+            )
 
         file_code = await self._ensure_code(tenant_id, data.get("file_code"))
         exists = await ProductionFile.filter(
@@ -208,6 +234,7 @@ class ProductionFileService(AppBaseService[ProductionFile]):
                 raise BusinessLogicError("同工序同型号同类型已有生产文件目录，请升版")
 
         version = (data.get("version") or "A0").strip() or "A0"
+        await self._ensure_attached_file(tenant_id, data.get("file_uuid"))
         row = ProductionFile(
             tenant_id=tenant_id,
             file_code=file_code,
@@ -336,6 +363,8 @@ class ProductionFileService(AppBaseService[ProductionFile]):
                 raise ValidationError("PE 生产软件类型不匹配")
             if row.catalog_kind == CATALOG_RD and data["file_type"] not in RD_FILE_TYPES:
                 raise ValidationError("研发工具/产测类型不匹配")
+        if "file_uuid" in data:
+            await self._ensure_attached_file(tenant_id, data.get("file_uuid"))
         for key, value in data.items():
             setattr(row, key, value)
         apply_update_audit(row, user)
@@ -377,6 +406,7 @@ class ProductionFileService(AppBaseService[ProductionFile]):
             raise BusinessLogicError("仅草稿或驳回可提交")
         if not row.file_uuid:
             raise ValidationError("提交前须上传文件")
+        await self._ensure_attached_file(tenant_id, row.file_uuid)
         now = resolve_business_datetime()
         row.status = "pending"
         row.submitted_at = now
@@ -452,6 +482,9 @@ class ProductionFileService(AppBaseService[ProductionFile]):
             ver = await self._current_version_row(tenant_id, row.id, row.version)
             if not ver:
                 raise BusinessLogicError("缺少当前版本链记录")
+            if not ver.file_uuid:
+                raise ValidationError("审核通过前须上传文件")
+            await self._ensure_attached_file(tenant_id, ver.file_uuid)
             old_versions = (
                 await ProductionFileVersion.filter(
                     tenant_id=tenant_id,
@@ -564,6 +597,17 @@ class ProductionFileService(AppBaseService[ProductionFile]):
             raise BusinessLogicError(f"版本号已存在: {new_version}")
 
         data = payload.model_dump(exclude_unset=True)
+        if "file_uuid" in data:
+            file_uuid = data.get("file_uuid")
+            file_name = data.get("file_name")
+        elif is_firmware_file_uuid(row.file_uuid):
+            file_uuid = row.file_uuid
+            file_name = row.file_name
+        else:
+            file_uuid = None
+            file_name = None
+        if file_uuid:
+            await self._ensure_attached_file(tenant_id, file_uuid)
         async with in_transaction():
             await ProductionFileVersion.create(
                 tenant_id=tenant_id,
@@ -576,9 +620,9 @@ class ProductionFileService(AppBaseService[ProductionFile]):
                 title=data.get("title") or row.title,
                 file_type=row.file_type,
                 release_date=data.get("release_date") or row.release_date,
-                file_uuid=data.get("file_uuid") or row.file_uuid,
-                file_name=data.get("file_name") or row.file_name,
-                checksum=data.get("checksum") or row.checksum,
+                file_uuid=file_uuid,
+                file_name=file_name,
+                checksum=data.get("checksum") if "checksum" in data else row.checksum,
                 change_summary=data.get("change_summary"),
                 created_by=user.id,
                 created_by_name=getattr(user, "display_name", None)
@@ -593,10 +637,8 @@ class ProductionFileService(AppBaseService[ProductionFile]):
                 row.title = data["title"]
             if "release_date" in data:
                 row.release_date = data["release_date"]
-            if "file_uuid" in data:
-                row.file_uuid = data["file_uuid"]
-            if "file_name" in data:
-                row.file_name = data["file_name"]
+            row.file_uuid = file_uuid
+            row.file_name = file_name
             if "checksum" in data:
                 row.checksum = data["checksum"]
             if "change_summary" in data:
@@ -744,6 +786,67 @@ class ProductionFileService(AppBaseService[ProductionFile]):
                 return ver
         raise BusinessLogicError("无权访问该历史版本")
 
+    async def resolve_download(
+        self,
+        tenant_id: int,
+        file_id: int,
+        user: User,
+        *,
+        version_id: Optional[int] = None,
+        permission_codes: Optional[List[str]] = None,
+        production_view: bool = False,
+    ) -> ProductionFileDownloadResponse:
+        row = await self._get_row(tenant_id, file_id)
+        if version_id is not None:
+            ver = await self._assert_version_visible(
+                tenant_id,
+                file_id,
+                version_id,
+                user=user,
+                permission_codes=permission_codes,
+                production_view=production_view,
+            )
+        else:
+            ver = await self._current_version_row(tenant_id, row.id, row.version)
+            if not ver:
+                raise NotFoundError("版本不存在")
+            visible = await self.list_versions(
+                tenant_id,
+                file_id,
+                current_user_id=user.id,
+                permission_codes=permission_codes,
+                production_view=production_view,
+            )
+            if ver.id not in {item.id for item in visible.items}:
+                raise BusinessLogicError("无权下载该文件")
+        if not ver.file_uuid:
+            raise ValidationError("该版本尚未上传文件")
+        await self._ensure_attached_file(tenant_id, ver.file_uuid)
+
+        from core.services.file.file_preview_service import FilePreviewService
+
+        preview_url = await FilePreviewService.generate_simple_preview_url(
+            file_uuid=str(ver.file_uuid).strip(),
+            tenant_id=tenant_id,
+        )
+        log = ProductionFileAccessLog(
+            tenant_id=tenant_id,
+            file_id=row.id,
+            file_code=row.file_code,
+            version_id=ver.id,
+            version=ver.version,
+            action="download",
+            actor_user_id=user.id,
+            actor_name=getattr(user, "display_name", None) or getattr(user, "username", None),
+        )
+        apply_create_audit(log, user)
+        await log.save()
+        return ProductionFileDownloadResponse(
+            preview_url=preview_url,
+            file_name=ver.file_name,
+            version_id=ver.id,
+        )
+
     async def record_access(
         self,
         tenant_id: int,
@@ -774,6 +877,8 @@ class ProductionFileService(AppBaseService[ProductionFile]):
         )
         if action == "download" and not ver.file_uuid:
             raise ValidationError("该版本无附件可下载")
+        if action == "download":
+            await self._ensure_attached_file(tenant_id, ver.file_uuid)
         log = ProductionFileAccessLog(
             tenant_id=tenant_id,
             file_id=row.id,

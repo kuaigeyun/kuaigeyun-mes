@@ -13,15 +13,23 @@ from apps.kuaiplm.models.product_firmware import ProductFirmware
 from apps.kuaiplm.models.rd_project import RdProject
 from apps.kuaiplm.schemas.product_firmware import (
     ProductFirmwareCreate,
+    ProductFirmwareDownloadResponse,
     ProductFirmwareListResponse,
     ProductFirmwareResponse,
+    ProductFirmwareReviseRequest,
     ProductFirmwareUpdate,
 )
-from apps.kuaiplm.utils.firmware_version import firmware_policy_row
+from apps.kuaiplm.utils.firmware_version import (
+    bump_firmware_version,
+    firmware_policy_row,
+    is_firmware_file_uuid,
+)
 from core.services.approval.approval_instance_service import ApprovalInstanceService
 from core.services.approval.audit_binding_service import AuditBindingService
+from core.services.file.file_service import FileService
 from core.services.file.document_version_policy import (
     DOCUMENT_GLOBAL_VIEW_PERMISSION,
+    DOCUMENT_SENIOR_AUTHOR_PERMISSION,
     DocumentVersionAudience,
     filter_version_rows,
     resolve_audience,
@@ -32,6 +40,7 @@ from infra.models.user import User
 
 AUDIT_NODE = "product_firmware"
 ALLOWED_STATUS = {"draft", "pending", "approved", "released", "obsolete"}
+DOWNLOADABLE_STATUS = frozenset({"approved", "released"})
 MANAGE_ACTIONS = frozenset(
     {"create", "update", "delete", "submit", "approve", "reject", "execute"}
 )
@@ -81,22 +90,66 @@ class ProductFirmwareService(AppBaseService[ProductFirmware]):
             raise ValidationError("研发项目不存在")
         return project
 
+    @staticmethod
+    async def _ensure_firmware_file(tenant_id: int, file_uuid: Optional[str]) -> None:
+        uid = str(file_uuid or "").strip()
+        if not uid:
+            return
+        try:
+            await FileService.get_file_by_uuid(tenant_id, uid)
+        except NotFoundError as exc:
+            raise ValidationError("固件文件不存在，请重新上传") from exc
+
+    @staticmethod
+    def _project_scope_key(project_id: Optional[int], project_code: Optional[str]) -> str:
+        if project_id is not None:
+            return f"id:{int(project_id)}"
+        code = str(project_code or "").strip()
+        if code:
+            return f"code:{code}"
+        return "none:"
+
+    def _apply_same_project_scope(self, query, *, project_id: Optional[int], project_code: Optional[str]):
+        if project_id is not None:
+            return query.filter(project_id=project_id)
+        return query.filter(
+            project_id__isnull=True,
+            project_code=str(project_code or "").strip(),
+        )
+
     async def _latest_released_ids(
-        self, tenant_id: int, project_ids: Sequence[int]
+        self,
+        tenant_id: int,
+        scope_keys: Optional[Set[str]] = None,
     ) -> Set[int]:
-        if not project_ids:
-            return set()
         released = await ProductFirmware.filter(
             tenant_id=tenant_id,
-            project_id__in=list(project_ids),
             status="released",
             deleted_at__isnull=True,
         ).order_by("-released_at", "-id")
-        latest: dict[int, int] = {}
+        latest_by_scope: dict[str, int] = {}
         for row in released:
-            if row.project_id not in latest:
-                latest[row.project_id] = row.id
-        return set(latest.values())
+            key = self._project_scope_key(row.project_id, row.project_code)
+            if scope_keys is not None and key not in scope_keys:
+                continue
+            if key not in latest_by_scope:
+                latest_by_scope[key] = int(row.id)
+        return set(latest_by_scope.values())
+
+    async def _resolve_project_snapshot(
+        self,
+        tenant_id: int,
+        *,
+        project_id: Optional[int],
+        project_code: Optional[str],
+        project_name: Optional[str],
+    ) -> tuple[Optional[int], str, str]:
+        if project_id is not None:
+            project = await self._require_project(tenant_id, int(project_id))
+            return project.id, project.project_code, project.project_name
+        code = str(project_code or "").strip()
+        name = str(project_name or "").strip() or code
+        return None, code, name
 
     def _resolve_audience(
         self,
@@ -109,9 +162,11 @@ class ProductFirmwareService(AppBaseService[ProductFirmware]):
                 permission_codes=permission_codes,
                 production_context=True,
             )
+        if resolve_audience(permission_codes=permission_codes) == DocumentVersionAudience.GLOBAL_VIEWER:
+            return DocumentVersionAudience.GLOBAL_VIEWER
         if _can_manage(permission_codes):
             return DocumentVersionAudience.GLOBAL_VIEWER
-        # 使用方：仅最新已发布；制定方通过 filter 的 created_by 看到自己的草稿/待审
+        # 研发制定方：本人草稿/待审 + INF-05 可见版本；非资深默认仅最新 released
         return DocumentVersionAudience.AUTHOR
 
     def _visible_ids(
@@ -141,7 +196,8 @@ class ProductFirmwareService(AppBaseService[ProductFirmware]):
         permission_codes: Optional[Sequence[str]],
         production_view: bool = False,
     ) -> None:
-        latest = await self._latest_released_ids(tenant_id, [row.project_id])
+        scope = self._project_scope_key(row.project_id, row.project_code)
+        latest = await self._latest_released_ids(tenant_id, {scope})
         audience = self._resolve_audience(
             permission_codes=permission_codes,
             production_view=production_view,
@@ -158,8 +214,13 @@ class ProductFirmwareService(AppBaseService[ProductFirmware]):
     async def create(
         self, tenant_id: int, payload: ProductFirmwareCreate, user: User
     ) -> ProductFirmwareResponse:
-        project = await self._require_project(tenant_id, payload.project_id)
         data = payload.model_dump(exclude_unset=False)
+        project_id, project_code, project_name = await self._resolve_project_snapshot(
+            tenant_id,
+            project_id=data.get("project_id"),
+            project_code=data.get("project_code"),
+            project_name=data.get("project_name"),
+        )
         data["firmware_code"] = await self._ensure_code(tenant_id, data.get("firmware_code"))
         exists = await ProductFirmware.filter(
             tenant_id=tenant_id,
@@ -168,21 +229,26 @@ class ProductFirmwareService(AppBaseService[ProductFirmware]):
         ).exists()
         if exists:
             raise BusinessLogicError("固件单号已存在")
-        clash = await ProductFirmware.filter(
-            tenant_id=tenant_id,
-            project_id=project.id,
-            version=data["version"],
-            deleted_at__isnull=True,
-        ).exists()
-        if clash:
+        clash_q = self._apply_same_project_scope(
+            ProductFirmware.filter(
+                tenant_id=tenant_id,
+                version=data["version"],
+                deleted_at__isnull=True,
+            ),
+            project_id=project_id,
+            project_code=project_code,
+        )
+        if await clash_q.exists():
             raise BusinessLogicError("同一项目下固件版本号已存在")
+
+        await self._ensure_firmware_file(tenant_id, data.get("file_uuid"))
 
         row = ProductFirmware(
             tenant_id=tenant_id,
             firmware_code=data["firmware_code"],
-            project_id=project.id,
-            project_code=project.project_code,
-            project_name=project.project_name,
+            project_id=project_id,
+            project_code=project_code,
+            project_name=project_name,
             version=data["version"],
             title=data["title"],
             release_date=data.get("release_date"),
@@ -214,7 +280,11 @@ class ProductFirmwareService(AppBaseService[ProductFirmware]):
         codes = {
             str(c or "").strip().lower() for c in (permission_codes or []) if str(c or "").strip()
         }
-        is_global = DOCUMENT_GLOBAL_VIEW_PERMISSION in codes or manage
+        is_global = (
+            DOCUMENT_GLOBAL_VIEW_PERMISSION in codes
+            or DOCUMENT_SENIOR_AUTHOR_PERMISSION in codes
+            or manage
+        )
 
         query = ProductFirmware.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if production_download_only:
@@ -238,8 +308,10 @@ class ProductFirmwareService(AppBaseService[ProductFirmware]):
 
         # 先取候选再按 INF-05 过滤，再分页（固件量级可控）
         candidates = await query.order_by("-updated_at", "-id")
-        project_ids = list({r.project_id for r in candidates})
-        latest_ids = await self._latest_released_ids(tenant_id, project_ids)
+        scope_keys = {
+            self._project_scope_key(r.project_id, r.project_code) for r in candidates
+        }
+        latest_ids = await self._latest_released_ids(tenant_id, scope_keys)
         audience = self._resolve_audience(
             permission_codes=permission_codes,
             production_view=production_download_only,
@@ -289,14 +361,20 @@ class ProductFirmwareService(AppBaseService[ProductFirmware]):
             raise BusinessLogicError("仅草稿或待审固件可编辑")
         data = payload.model_dump(exclude_unset=True)
         if "version" in data and data["version"] != row.version:
-            clash = await ProductFirmware.filter(
-                tenant_id=tenant_id,
+            clash_q = self._apply_same_project_scope(
+                ProductFirmware.filter(
+                    tenant_id=tenant_id,
+                    version=data["version"],
+                    deleted_at__isnull=True,
+                ).exclude(id=firmware_id),
                 project_id=row.project_id,
-                version=data["version"],
-                deleted_at__isnull=True,
-            ).exclude(id=firmware_id).exists()
+                project_code=row.project_code,
+            )
+            clash = await clash_q.exists()
             if clash:
                 raise BusinessLogicError("同一项目下固件版本号已存在")
+        if "file_uuid" in data:
+            await self._ensure_firmware_file(tenant_id, data.get("file_uuid"))
         for key, value in data.items():
             setattr(row, key, value)
         apply_update_audit(row, user)
@@ -311,6 +389,7 @@ class ProductFirmwareService(AppBaseService[ProductFirmware]):
             raise BusinessLogicError("仅草稿可提交审核")
         if not row.file_uuid:
             raise ValidationError("提交前须上传固件文件")
+        await self._ensure_firmware_file(tenant_id, row.file_uuid)
 
         row.status = "pending"
         row.submitted_at = resolve_business_datetime()
@@ -439,13 +518,19 @@ class ProductFirmwareService(AppBaseService[ProductFirmware]):
                 raise NotFoundError("产品固件不存在")
             if row.status != "approved":
                 raise BusinessLogicError("仅已审核固件可发布给生产下载")
+            if not row.file_uuid:
+                raise ValidationError("发布前须上传固件文件")
+            await self._ensure_firmware_file(tenant_id, row.file_uuid)
 
-            siblings = await ProductFirmware.filter(
-                tenant_id=tenant_id,
+            siblings = await self._apply_same_project_scope(
+                ProductFirmware.filter(
+                    tenant_id=tenant_id,
+                    status="released",
+                    deleted_at__isnull=True,
+                ).exclude(id=row.id),
                 project_id=row.project_id,
-                status="released",
-                deleted_at__isnull=True,
-            ).exclude(id=row.id)
+                project_code=row.project_code,
+            )
             now = resolve_business_datetime()
             for old in siblings:
                 old.status = "obsolete"
@@ -460,6 +545,106 @@ class ProductFirmwareService(AppBaseService[ProductFirmware]):
             apply_update_audit(row, user)
             await row.save()
             return ProductFirmwareResponse.model_validate(row)
+
+    async def resolve_download(
+        self,
+        tenant_id: int,
+        firmware_id: int,
+        *,
+        current_user_id: Optional[int] = None,
+        permission_codes: Optional[List[str]] = None,
+        production_view: bool = False,
+    ) -> ProductFirmwareDownloadResponse:
+        row = await self._get_row(tenant_id, firmware_id)
+        await self._assert_visible(
+            tenant_id,
+            row,
+            current_user_id=current_user_id,
+            permission_codes=permission_codes,
+            production_view=production_view,
+        )
+        if row.status not in DOWNLOADABLE_STATUS:
+            raise BusinessLogicError("当前状态不可下载固件")
+        if not row.file_uuid:
+            raise ValidationError("固件尚未上传文件")
+        await self._ensure_firmware_file(tenant_id, row.file_uuid)
+
+        from core.services.file.file_preview_service import FilePreviewService
+
+        preview_url = await FilePreviewService.generate_simple_preview_url(
+            file_uuid=str(row.file_uuid).strip(),
+            tenant_id=tenant_id,
+        )
+        return ProductFirmwareDownloadResponse(
+            preview_url=preview_url,
+            file_name=row.file_name,
+        )
+
+    async def revise(
+        self,
+        tenant_id: int,
+        firmware_id: int,
+        payload: ProductFirmwareReviseRequest,
+        user: User,
+    ) -> ProductFirmwareResponse:
+        """基于最新已发布固件创建升版草稿（保留历史行）。"""
+        src = await self._get_row(tenant_id, firmware_id)
+        if src.status != "released":
+            raise BusinessLogicError("仅已发布固件可升版")
+        scope = self._project_scope_key(src.project_id, src.project_code)
+        latest_ids = await self._latest_released_ids(tenant_id, {scope})
+        if src.id not in latest_ids:
+            raise BusinessLogicError("仅最新已发布固件可升版")
+
+        data = payload.model_dump(exclude_unset=True)
+        new_version = (data.get("version") or "").strip() or bump_firmware_version(src.version)
+        clash_q = self._apply_same_project_scope(
+            ProductFirmware.filter(
+                tenant_id=tenant_id,
+                version=new_version,
+                deleted_at__isnull=True,
+            ),
+            project_id=src.project_id,
+            project_code=src.project_code,
+        )
+        if await clash_q.exists():
+            raise BusinessLogicError("同一项目下固件版本号已存在")
+
+        if "file_uuid" in data:
+            file_uuid = data.get("file_uuid")
+            file_name = data.get("file_name")
+        elif is_firmware_file_uuid(src.file_uuid):
+            file_uuid = src.file_uuid
+            file_name = src.file_name
+        else:
+            file_uuid = None
+            file_name = None
+        if file_uuid:
+            await self._ensure_firmware_file(tenant_id, file_uuid)
+
+        title = (data.get("title") or src.title or "").strip()
+        if not title:
+            raise ValidationError("固件标题不能为空")
+
+        row = ProductFirmware(
+            tenant_id=tenant_id,
+            firmware_code=await self._ensure_code(tenant_id, None),
+            project_id=src.project_id,
+            project_code=src.project_code,
+            project_name=src.project_name,
+            version=new_version,
+            title=title,
+            release_date=data.get("release_date") if "release_date" in data else None,
+            status="draft",
+            file_uuid=file_uuid,
+            file_name=file_name,
+            checksum=data.get("checksum") if "checksum" in data else src.checksum,
+            change_summary=data.get("change_summary"),
+            remarks=src.remarks,
+        )
+        apply_create_audit(row, user)
+        await row.save()
+        return ProductFirmwareResponse.model_validate(row)
 
     async def obsolete(
         self, tenant_id: int, firmware_id: int, user: User

@@ -581,6 +581,8 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   source_type: 20.3,
   version_no: 20.5,
   version: 20.5,
+  /** 研发/项目单据业务日期（发布日、期望日等；列 key 统一 business_date） */
+  business_date: 20.52,
   change_version: 20.55,
   /** 报价单列表：明细物料名预览（版本后、总数量前） */
   quotation_line_materials: 30.5,
@@ -838,6 +840,7 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   computation_start_time: 65.1,
   computation_end_time: 65.2,
   started_at: 65.1,
+  expected_complete_at: 65.15,
   finished_at: 65.2,
   /** 需求变更：创建时间（非固定列末位，列用 key 避开全局 created_at=93） */
   task_created_at: 88,
@@ -1143,6 +1146,7 @@ export const GLOBAL_DOC_DETAIL_BASIC_FIELD_RANK = {
   warranty_start_at: 14.08,
   warranty_end_at: 14.09,
   started_at: 14.12,
+  expected_complete_at: 14.14,
   checkin_at: 14.13,
   visited_at: 14.16,
   closed_at: 14.22,

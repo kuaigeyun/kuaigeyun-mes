@@ -12,7 +12,13 @@ import { Empty, Modal, Tabs } from 'antd';
 
 import type { TFunction } from 'i18next';
 
+import { useQuery } from '@tanstack/react-query';
+
+import { layoutShellQueryOptions } from '../../../config/reactQuery';
+
 import { MarkerTag } from '../../../constants/statusBadges';
+
+import { getInstalledApplicationList } from '../../../services/application';
 
 import {
 
@@ -26,11 +32,17 @@ import {
 
   filterPlatformUpdates,
 
+  filterVisiblePlatformUpdates,
+
   getAvailableUpdateLogTabs,
 
   getUpdateTypeMarkerColor,
 
   groupPlatformUpdatesByDate,
+
+  isDedicatedPlatformUpdateEntry,
+
+  resolveEnabledDedicatedAppCodes,
 
   resolveUpdateLogText,
 
@@ -503,6 +515,15 @@ function UpdateLogTimelineRow({ entry, t }: { entry: PlatformUpdateLogEntry; t: 
 
         </MarkerTag>
 
+        {isDedicatedPlatformUpdateEntry(entry) ? (
+          <MarkerTag
+            color="purple"
+            className="dashboard-update-log-item__type dashboard-update-log-item__scope-dedicated"
+          >
+            {t('pages.dashboard.updateLog.badge.dedicated')}
+          </MarkerTag>
+        ) : null}
+
         <span className="dashboard-update-log-item__title">{title}</span>
 
       </div>
@@ -826,7 +847,31 @@ export function DashboardUpdateLogModal({ open, onClose, t }: DashboardUpdateLog
 
   const [activeTab, setActiveTab] = useState<PlatformUpdateTabKey>('all');
 
+  const { data: installedApps } = useQuery({
 
+    queryKey: ['installedApplications', { is_active: true }],
+
+    queryFn: () => getInstalledApplicationList({ is_active: true }),
+
+    ...layoutShellQueryOptions,
+
+  });
+
+  const enabledDedicatedAppCodes = useMemo(
+
+    () => resolveEnabledDedicatedAppCodes(installedApps ?? []),
+
+    [installedApps],
+
+  );
+
+  const visibleEntries = useMemo(
+
+    () => filterVisiblePlatformUpdates(PLATFORM_UPDATE_LOG, enabledDedicatedAppCodes),
+
+    [enabledDedicatedAppCodes],
+
+  );
 
   useEffect(() => {
 
@@ -836,7 +881,7 @@ export function DashboardUpdateLogModal({ open, onClose, t }: DashboardUpdateLog
 
 
 
-  const availableTabs = useMemo(() => getAvailableUpdateLogTabs(), []);
+  const availableTabs = useMemo(() => getAvailableUpdateLogTabs(visibleEntries), [visibleEntries]);
 
 
 
@@ -854,13 +899,17 @@ export function DashboardUpdateLogModal({ open, onClose, t }: DashboardUpdateLog
 
             ? t('pages.dashboard.updateLogTab.all')
 
-            : t(`pages.dashboard.updateLogType.${tabKey}`),
+            : tabKey === 'dedicated'
+
+              ? t('pages.dashboard.updateLogTab.dedicated')
+
+              : t(`pages.dashboard.updateLogType.${tabKey}`),
 
         children: (
 
           <UpdateLogTimeline
 
-            entries={filterPlatformUpdates(tabKey)}
+            entries={filterPlatformUpdates(tabKey, visibleEntries)}
 
             resetKey={`${open}-${tabKey}`}
 
@@ -872,7 +921,7 @@ export function DashboardUpdateLogModal({ open, onClose, t }: DashboardUpdateLog
 
       })),
 
-    [availableTabs, open, t],
+    [availableTabs, open, t, visibleEntries],
 
   );
 
@@ -910,7 +959,7 @@ export function DashboardUpdateLogModal({ open, onClose, t }: DashboardUpdateLog
 
     >
 
-      {PLATFORM_UPDATE_LOG.length === 0 ? (
+      {visibleEntries.length === 0 ? (
 
         <Empty description={t('pages.dashboard.updateLogEmpty')} />
 

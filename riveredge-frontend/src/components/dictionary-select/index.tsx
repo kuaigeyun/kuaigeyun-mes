@@ -28,6 +28,7 @@ import {
   dedupeDictionaryOptionsByValue,
   findExistingDictionaryOption,
 } from '../../utils/dictionaryQuickCreate';
+import { resolveSystemDictionaryValueLabel } from '../../utils/systemDictionaryI18n';
 
 type DictionaryOption = { label: string; value: string };
 
@@ -46,8 +47,10 @@ const DictionarySelectField = forwardRef<
     loadedOptions: DictionaryOption[];
     hookOnChange?: (v: any, opt: any) => void;
     multiple?: boolean;
+    /** 字典尚未返回时，用系统字典 locale 解析已选值文案，避免先闪英文码 */
+    resolvePendingLabel?: (value: string) => string | undefined;
   }
->(({ loadedOptions, hookOnChange, onChange, value, multiple = false, ...rest }, ref) => {
+>(({ loadedOptions, hookOnChange, onChange, value, multiple = false, resolvePendingLabel, ...rest }, ref) => {
   const displayOptions = useMemo(() => {
     const selected = resolveSelectedValues(value, multiple);
     if (!selected.length) {
@@ -55,9 +58,12 @@ const DictionarySelectField = forwardRef<
     }
     const extra = selected
       .filter((strVal) => !loadedOptions.some((o) => String(o.value) === strVal))
-      .map((strVal) => ({ value: strVal, label: strVal }));
+      .map((strVal) => ({
+        value: strVal,
+        label: resolvePendingLabel?.(strVal) ?? strVal,
+      }));
     return extra.length ? [...loadedOptions, ...extra] : loadedOptions;
-  }, [loadedOptions, value, multiple]);
+  }, [loadedOptions, value, multiple, resolvePendingLabel]);
 
   const handleChange = useCallback(
     (v: any, opt: any) => {
@@ -70,7 +76,6 @@ const DictionarySelectField = forwardRef<
   return <UniDropdown ref={ref} {...rest} options={displayOptions} value={value} onChange={handleChange} />;
 });
 DictionarySelectField.displayName = 'DictionarySelectField';
-
 /**
  * 数据字典选择组件属性
  */
@@ -172,6 +177,10 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
   const isReadonlyMode = useProFormReadonlyMode(readonly);
   const [options, setOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [loading, setLoading] = useState(false);
+  const resolvePendingLabel = useCallback(
+    (strVal: string) => resolveSystemDictionaryValueLabel(dictionaryCode, strVal, t),
+    [dictionaryCode, t],
+  );
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [createForm] = Form.useForm<{ displayLabel: string; storedValue?: string; description?: string }>();
   const [creating, setCreating] = useState(false);
@@ -334,7 +343,12 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
   if (isReadonlyMode && noStyle) {
     const selected = resolveSelectedValues(value, multiple);
     if (!selected.length) return <span>-</span>;
-    const labels = selected.map((strVal) => options.find((o) => o.value === strVal)?.label ?? strVal);
+    const labels = selected.map(
+      (strVal) =>
+        options.find((o) => o.value === strVal)?.label ??
+        resolvePendingLabel(strVal) ??
+        strVal,
+    );
     return <span>{multiple ? labels.join('、') : labels[0]}</span>;
   }
 
@@ -386,6 +400,7 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
   const dropdown = (
     <DictionarySelectField
       {...baseFieldProps}
+      resolvePendingLabel={resolvePendingLabel}
       hookOnChange={onChange}
       {...(noStyle ? { value } : {})}
     />

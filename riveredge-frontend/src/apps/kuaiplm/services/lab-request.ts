@@ -16,6 +16,7 @@ export type LabRequestBusinessType =
 
 export type LabRequestStatus =
   | 'draft'
+  | 'pending_review'
   | 'pending'
   | 'in_lab'
   | 'completed'
@@ -61,6 +62,7 @@ export interface LabRequest {
   priority?: string;
   project_id?: number | null;
   project_code?: string | null;
+  material_id?: number | null;
   material_code?: string | null;
   material_name?: string | null;
   sample_desc?: string | null;
@@ -73,6 +75,10 @@ export interface LabRequest {
   requester_name?: string | null;
   lab_owner_name?: string | null;
   expected_complete_at?: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+  submitted_at?: string | null;
+  accepted_at?: string | null;
   result_summary?: string | null;
   judgment?: string | null;
   report_url?: string | null;
@@ -90,6 +96,7 @@ export interface LabRequest {
   reject_reason?: string | null;
   measure_items?: LabRequestMeasureItem[];
   has_ng?: boolean;
+  created_by?: number;
   created_by_name?: string;
   updated_by_name?: string;
   created_at?: string;
@@ -130,6 +137,8 @@ export const labRequestApi = {
   delete: async (id: string | number) => api.delete(`${BASE}/${id}`),
   submit: async (id: string | number) =>
     (await api.post(`${BASE}/${id}/submit`)) as LabRequest,
+  approve: async (id: string | number) =>
+    (await api.post(`${BASE}/${id}/approve`)) as LabRequest,
   fillOutsourcePrice: async (id: string | number, outsource_price: number | string) =>
     (await api.post(`${BASE}/${id}/fill-outsource-price`, { outsource_price })) as LabRequest,
   accept: async (id: string | number) =>

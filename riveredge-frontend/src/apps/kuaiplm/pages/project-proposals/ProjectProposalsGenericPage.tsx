@@ -128,14 +128,20 @@ const ProjectProposalsGenericPage: React.FC = () => {
         dataIndex: 'proposal_code',
         key: 'document_code',
         width: 140,
+        minWidth: 140,
         copyable: true,
         uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
       },
       {
         title: t('app.kuaiplm.projectProposal.fields.project'),
         dataIndex: 'project_name',
         key: 'project_name',
         width: 180,
+        minWidth: 180,
+        uniTableKeepWidth: true,
+        resizable: false,
         ellipsis: true,
         render: (_, r) => `${r.project_name || ''} (${r.project_code || ''})`,
       },
@@ -143,8 +149,10 @@ const ProjectProposalsGenericPage: React.FC = () => {
         title: t('app.kuaiplm.projectProposal.fields.title'),
         dataIndex: 'title',
         key: 'title',
-        ellipsis: true,
+        minWidth: 160,
+        uniTablePrimaryFlex: true,
         uniTableRemainderFlex: true,
+        ellipsis: true,
       },
       {
         title: t('app.kuaiplm.projectProposal.fields.customer'),
@@ -168,7 +176,9 @@ const ProjectProposalsGenericPage: React.FC = () => {
         dataIndex: 'expected_date',
         key: 'business_date',
         width: 120,
+        minWidth: 120,
         uniTableKeepWidth: true,
+        resizable: false,
         render: (_, r) => formatDateBySiteSetting(r.expected_date) || '—',
       },
       {
@@ -192,7 +202,7 @@ const ProjectProposalsGenericPage: React.FC = () => {
               key="detail"
               type="link"
               size="small"
-              {...rowActionKind('detail')}
+              {...rowActionKind('read')}
               onClick={() => void openDetail(row)}
             />,
           ];
@@ -202,7 +212,7 @@ const ProjectProposalsGenericPage: React.FC = () => {
                 key="edit"
                 type="link"
                 size="small"
-                {...rowActionKind('edit')}
+                {...rowActionKind('update')}
                 onClick={() => {
                   setEditing(row);
                   setModalOpen(true);
@@ -400,7 +410,7 @@ const ProjectProposalsGenericPage: React.FC = () => {
           tableRowsRef.current = rows;
         }}
         columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
-        columnPersistenceId="apps.kuaiplm.pages.project-proposals.v3-neutral"
+        columnPersistenceId="apps.kuaiplm.pages.project-proposals.width-v4-neutral"
         showCreateButton={perms.canCreate}
         createButtonText={t('app.kuaiplm.projectProposal.createButton') + NEW_SHORTCUT_HINT}
         onCreate={openCreate}

@@ -135,6 +135,10 @@ const STATUS_SEMANTIC_ALIASES: Record<string, DocumentStatusSemantic> = {
   scheduled: 'active',
   shipped: 'active',
   in_transit: 'active',
+  in_lab: 'active',
+  实验中: 'active',
+  待受理: 'pending',
+  待经理审核: 'pending',
 
   // —— success ——
   已审核: 'success',

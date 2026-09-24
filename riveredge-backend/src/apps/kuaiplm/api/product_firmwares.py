@@ -8,8 +8,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from apps.kuaiplm.schemas.product_firmware import (
     ProductFirmwareCreate,
+    ProductFirmwareDownloadResponse,
     ProductFirmwareListResponse,
     ProductFirmwareResponse,
+    ProductFirmwareReviseRequest,
     ProductFirmwareUpdate,
 )
 from apps.kuaiplm.services.product_firmware_service import ProductFirmwareService
@@ -202,6 +204,57 @@ async def reject_product_firmware(
 ):
     try:
         return await service.reject(tenant_id, firmware_id, current_user)
+    except Exception as e:
+        raise _http(e)
+
+
+@router.get(
+    "/{firmware_id}/download",
+    response_model=ProductFirmwareDownloadResponse,
+    summary="Download firmware file",
+)
+async def download_product_firmware(
+    firmware_id: int,
+    production_view: bool = Query(False, description="生产上下文可见性"),
+    current_user: User = Depends(get_current_user),
+    _auth=Depends(
+        require_access(
+            "kuaiplm.product-firmware",
+            "read",
+            required_permissions=["kuaiplm:product-firmware:read"],
+        )
+    ),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        codes = await _permission_codes(current_user, tenant_id)
+        return await service.resolve_download(
+            tenant_id,
+            firmware_id,
+            current_user_id=current_user.id,
+            permission_codes=codes,
+            production_view=production_view,
+        )
+    except Exception as e:
+        raise _http(e)
+
+
+@router.post("/{firmware_id}/revise", response_model=ProductFirmwareResponse, summary="Revise")
+async def revise_product_firmware(
+    firmware_id: int,
+    data: ProductFirmwareReviseRequest,
+    current_user: User = Depends(get_current_user),
+    _auth=Depends(
+        require_access(
+            "kuaiplm.product-firmware",
+            "update",
+            required_permissions=["kuaiplm:product-firmware:update"],
+        )
+    ),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await service.revise(tenant_id, firmware_id, data, current_user)
     except Exception as e:
         raise _http(e)
 

@@ -196,9 +196,11 @@ class LabRequestListItem(BaseModel):
     requester_name: Optional[str] = None
     lab_owner_name: Optional[str] = None
     expected_complete_at: Optional[datetime] = None
+    started_at: Optional[datetime] = None
     judgment: Optional[str] = None
     report_status: str = "none"
     has_ng: bool = False
+    created_by: Optional[int] = None
     created_by_name: Optional[str] = None
     updated_by_name: Optional[str] = None
     created_at: datetime

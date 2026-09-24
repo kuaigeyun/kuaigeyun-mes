@@ -67,6 +67,13 @@ const VISUAL_PROFILE_LABEL_FALLBACK: Record<RowActionVisualProfile, string> = {
   'tax-red-flush': '红冲',
   'open-workbench': '工作台',
   'withdraw-project': '撤回',
+  'compile-lab-report': '编制报告',
+  'submit-lab-report': '提交报告审批',
+  'approve-lab-report': '批准报告',
+  'reject-lab-report': '驳回报告',
+  'view-lab-report': '查看报告',
+  'download-lab-report': '下载报告',
+  'download-firmware': '下载',
 }
 
 const ROW_ACTION_I18N_KEY: Partial<Record<RowActionPermissionKind, string>> = {
@@ -123,6 +130,13 @@ const VISUAL_PROFILE_I18N_KEY: Record<RowActionVisualProfile, string> = {
   'tax-red-flush': 'components.uniAction.taxRedFlush',
   'open-workbench': 'components.uniAction.openWorkbench',
   'withdraw-project': 'components.uniAction.withdrawProject',
+  'compile-lab-report': 'components.uniAction.compileLabReport',
+  'submit-lab-report': 'components.uniAction.submitLabReport',
+  'approve-lab-report': 'components.uniAction.approveLabReport',
+  'reject-lab-report': 'components.uniAction.rejectLabReport',
+  'view-lab-report': 'components.uniAction.viewLabReport',
+  'download-lab-report': 'components.uniAction.downloadLabReport',
+  'download-firmware': 'components.uniAction.downloadFirmware',
 }
 
 /** 行内操作排序（细于 detail/edit/delete 三分法；与 overflow 直出/折叠一致） */
@@ -181,6 +195,14 @@ const VISUAL_PROFILE_SORT_RANK: Record<RowActionVisualProfile, number> = {
   'reset-password': 990,
   'open-workbench': 10,
   'withdraw-project': 45,
+  /** 实验委托报告流：完成实验(201) → 编制 → 提交 → 批准/驳回 → 查看/下载 */
+  'compile-lab-report': 202.5,
+  'submit-lab-report': 203,
+  'approve-lab-report': 204,
+  'reject-lab-report': 205,
+  'view-lab-report': 206,
+  'download-lab-report': 207,
+  'download-firmware': 207,
 }
 
 export function rowActionLabel(kind: RowActionPermissionKind): string {

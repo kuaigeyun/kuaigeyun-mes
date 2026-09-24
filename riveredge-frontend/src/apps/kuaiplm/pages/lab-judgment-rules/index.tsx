@@ -12,11 +12,8 @@ import {
 } from '@ant-design/pro-components';
 import { App, Col, Row } from 'antd';
 import { UniTable } from '../../../../components/uni-table';
-import {
-  UniTableStackedPrimaryCell,
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-} from '../../../../components/uni-table/stackedPrimaryColumn';
-import { rowActionKind } from '../../../../components/uni-action';
+import { UniTableStackedPrimaryCell } from '../../../../components/uni-table/stackedPrimaryColumn';
+import { rowActionCopyCreate, rowActionKind } from '../../../../components/uni-action';
 import {
   FormModalTemplate,
   ListPageTemplate,
@@ -120,7 +117,10 @@ const LabJudgmentRulesPage: React.FC = () => {
             title: t('app.kuaiplm.labJudgmentRule.colRule'),
             dataIndex: 'rule_name',
             key: 'rule_name',
-            ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+            minWidth: 160,
+            uniTablePrimaryFlex: true,
+            uniTableRemainderFlex: true,
+            ellipsis: true,
             render: (_, record) => (
               <UniTableStackedPrimaryCell
                 primary={record.rule_name}
@@ -133,15 +133,20 @@ const LabJudgmentRulesPage: React.FC = () => {
             dataIndex: 'version',
             key: 'version',
             width: 88,
+            minWidth: 88,
             search: false,
             uniTableKeepWidth: true,
+            resizable: false,
           },
           {
             title: t('app.kuaiplm.labJudgmentRule.colCompareType'),
             dataIndex: 'compare_type',
             key: 'compare_type',
             width: 100,
+            minWidth: 100,
             search: false,
+            uniTableKeepWidth: true,
+            resizable: false,
             render: (_, record) =>
               t(`app.kuaiplm.labRequest.compare.${record.compare_type || 'range'}`),
           },
@@ -150,7 +155,10 @@ const LabJudgmentRulesPage: React.FC = () => {
             dataIndex: 'standard_value',
             key: 'standard_value',
             width: 160,
+            minWidth: 160,
             search: false,
+            uniTableKeepWidth: true,
+            resizable: false,
             ellipsis: true,
             render: (_, record) => {
               if (record.compare_type === 'eq') return record.standard_value || '-';
@@ -199,20 +207,20 @@ const LabJudgmentRulesPage: React.FC = () => {
               [
                 {
                   key: 'detail',
-                  ...rowActionKind('detail'),
+                  ...rowActionKind('read'),
                   onClick: () => openDetail(record),
                 },
                 perms.canUpdate
                   ? {
                       key: 'edit',
-                      ...rowActionKind('edit'),
+                      ...rowActionKind('update'),
                       onClick: () => void openEdit(record),
                     }
                   : null,
                 perms.canCreate
                   ? {
                       key: 'revise',
-                      ...rowActionKind('copy-create'),
+                      ...rowActionCopyCreate('create'),
                       text: t('app.kuaiplm.labJudgmentRule.actions.revise'),
                       confirm: {
                         title: t('app.kuaiplm.labJudgmentRule.reviseConfirm'),
@@ -326,7 +334,7 @@ const LabJudgmentRulesPage: React.FC = () => {
         columns={columns}
         rowKey="id"
         headerTitle={t('app.kuaiplm.menu.lab-judgment-rules')}
-        columnPersistenceId="apps.kuaiplm.pages.lab-judgment-rules-v1"
+        columnPersistenceId="apps.kuaiplm.pages.lab-judgment-rules.width-v2"
         createButtonText={
           perms.canCreate ? t('app.kuaiplm.labJudgmentRule.createButton') : undefined
         }

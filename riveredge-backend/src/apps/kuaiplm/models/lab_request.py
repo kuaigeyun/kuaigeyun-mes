@@ -31,7 +31,7 @@ class LabRequest(BaseModel):
     status = fields.CharField(
         max_length=30,
         default="draft",
-        description="draft/pending/in_lab/completed/rejected/revoked",
+        description="draft/pending_review/pending/in_lab/completed/rejected/revoked",
     )
     priority = fields.CharField(max_length=20, default="normal", description="normal/urgent")
     project_id = fields.IntField(null=True, description="研发项目ID")

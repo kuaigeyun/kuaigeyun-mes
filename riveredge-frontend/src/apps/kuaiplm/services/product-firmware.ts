@@ -17,7 +17,7 @@ export interface ProductFirmware {
   uuid: string;
   id?: number;
   firmware_code: string;
-  project_id: number;
+  project_id?: number | null;
   project_code: string;
   project_name: string;
   version: string;
@@ -40,7 +40,9 @@ export interface ProductFirmware {
 }
 
 export interface ProductFirmwarePayload {
-  project_id: number;
+  project_id?: number | null;
+  project_code?: string | null;
+  project_name?: string | null;
   version: string;
   title: string;
   release_date?: string | null;
@@ -70,9 +72,17 @@ export const productFirmwareApi = {
     const res = await api.get(BASE, { params });
     return unwrapList(res);
   },
-  get: async (id: number) => {
-    const res = await api.get(`${BASE}/${id}`);
+  get: async (id: number, options?: { production_view?: boolean }) => {
+    const res = await api.get(`${BASE}/${id}`, {
+      params: options?.production_view ? { production_view: true } : undefined,
+    });
     return res as ProductFirmware;
+  },
+  getDownloadUrl: async (id: number, options?: { production_view?: boolean }) => {
+    const res = await api.get(`${BASE}/${id}/download`, {
+      params: options?.production_view ? { production_view: true } : undefined,
+    });
+    return res as { preview_url: string; file_name?: string | null };
   },
   create: async (data: ProductFirmwarePayload) => {
     const res = await api.post(BASE, data);
@@ -100,6 +110,21 @@ export const productFirmwareApi = {
   },
   obsolete: async (id: number) => {
     const res = await api.post(`${BASE}/${id}/obsolete`);
+    return res as ProductFirmware;
+  },
+  revise: async (
+    id: number,
+    data?: {
+      version?: string;
+      title?: string;
+      release_date?: string | null;
+      file_uuid?: string | null;
+      file_name?: string | null;
+      checksum?: string | null;
+      change_summary?: string | null;
+    },
+  ) => {
+    const res = await api.post(`${BASE}/${id}/revise`, data || {});
     return res as ProductFirmware;
   },
   remove: async (id: number) => {

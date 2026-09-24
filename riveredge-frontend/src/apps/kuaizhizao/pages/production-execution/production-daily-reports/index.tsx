@@ -145,17 +145,27 @@ const ProductionDailyReportsPage: React.FC = () => {
             valueType: 'option',
             fixed: 'right',
             render: (_, record) => {
-              const actions = [
-                <Button key="detail" type="link" size="small" onClick={() => void openEdit(record)}>
-                  {record.status === 'draft' && perms.canUpdate ? t('common.edit') : t('common.detail')}
-                </Button>,
-              ];
+              const actions =
+                record.status === 'draft' && perms.canUpdate
+                  ? [
+                      <Button
+                        key="edit"
+                        {...rowActionKind('update')}
+                        onClick={() => void openEdit(record)}
+                      />,
+                    ]
+                  : [
+                      <Button
+                        key="read"
+                        {...rowActionKind('read')}
+                        onClick={() => void openEdit(record)}
+                      />,
+                    ];
               if (record.status === 'draft' && perms.canUpdate) {
                 actions.push(
                   <Button
                     key="submit"
-                    type="link"
-                    size="small"
+                    {...rowActionKind('submit')}
                     onClick={async () => {
                       try {
                         await productionDailyReportApi.submit(record.id);
@@ -165,9 +175,7 @@ const ProductionDailyReportsPage: React.FC = () => {
                         message.error(getApiErrorMessage(error, t('common.failed')));
                       }
                     }}
-                  >
-                    {t('common.submit')}
-                  </Button>,
+                  />,
                 );
               }
               return actions;

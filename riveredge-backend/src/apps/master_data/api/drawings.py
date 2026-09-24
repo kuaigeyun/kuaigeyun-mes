@@ -90,13 +90,23 @@ async def list_drawings(
     sort_by: Optional[str] = Query(None, alias="sortBy"),
     sort_order: Optional[str] = Query(None, alias="sortOrder"),
     view: str = Query("current", description="current=现行有效版, all=全部修订版"),
+    production_view: bool = Query(False, alias="productionView", description="生产下载：仅已发布现行版"),
+    exclude_drawing_types: Optional[str] = Query(
+        None, alias="excludeDrawingTypes", description="排除的图纸类型，逗号分隔"
+    ),
 ):
+    excluded = (
+        [t.strip() for t in exclude_drawing_types.split(",") if t.strip()]
+        if exclude_drawing_types
+        else None
+    )
     items, total = await DrawingService.list_drawings(
         tenant_id,
         skip=skip,
         limit=limit,
         status=status,
         drawing_type=drawing_type,
+        exclude_drawing_types=excluded,
         security_level=security_level,
         keyword=keyword,
         material_uuid=material_uuid,
@@ -107,6 +117,7 @@ async def list_drawings(
         sort_by=sort_by,
         sort_order=sort_order,
         view=view,
+        production_view=production_view,
         current_user=current_user,
     )
     return EngineeringDrawingListResponse(data=items, total=total)

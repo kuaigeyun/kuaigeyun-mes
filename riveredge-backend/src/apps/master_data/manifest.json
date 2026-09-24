@@ -1178,5 +1178,15 @@
       "module": "快格轻制造",
       "module_icon": "production"
     }
+  ],
+  "audit": [
+    {
+      "node_key": "engineering_drawing",
+      "entity_type": "engineering_drawing",
+      "resource": "master-data:process:drawing",
+      "name": "工程图纸审核",
+      "template": "simple",
+      "config_category": "common"
+    }
   ]
 }

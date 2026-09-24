@@ -33,11 +33,13 @@ DELAY_HOURS_BY_ENTITY = {
     "rd_deliverable": 8,
     "product_firmware": 24,
     "production_file": 24,
+    "engineering_drawing": 24,
 }
 
 ENTITY_RD_DELIVERABLE = "rd_deliverable"
 ENTITY_PRODUCT_FIRMWARE = "product_firmware"
 ENTITY_PRODUCTION_FILE = "production_file"
+ENTITY_ENGINEERING_DRAWING = "engineering_drawing"
 
 
 def approval_delay_hours(entity_type: str) -> int:
@@ -161,6 +163,12 @@ async def _load_pending_row(tenant_id: int, entity_type: str, entity_id: int):
         return await ProductionFile.filter(
             tenant_id=tenant_id, id=entity_id, deleted_at__isnull=True
         ).first()
+    if entity_type == ENTITY_ENGINEERING_DRAWING:
+        from apps.master_data.models.drawing import EngineeringDrawing
+
+        return await EngineeringDrawing.filter(
+            tenant_id=tenant_id, id=entity_id, deleted_at__isnull=True
+        ).first()
     return None
 
 
@@ -169,6 +177,8 @@ def _is_still_pending(entity_type: str, row) -> bool:
         return False
     if entity_type == ENTITY_RD_DELIVERABLE:
         return row.status == RdDeliverableStatus.SUBMITTED.value
+    if entity_type == ENTITY_ENGINEERING_DRAWING:
+        return (row.status or "") == "Pending"
     return (row.status or "") == "pending"
 
 
@@ -201,6 +211,8 @@ async def dispatch_plm_pending_approval_reminder(
             doc_code = row.firmware_code or f"固件#{row.id}"
         elif entity_type == ENTITY_PRODUCTION_FILE:
             doc_code = row.file_code or f"文件#{row.id}"
+        elif entity_type == ENTITY_ENGINEERING_DRAWING:
+            doc_code = f"{row.code}-{row.revision}" if row.code else f"图纸#{row.id}"
     if not title:
         title = getattr(row, "title", None) or getattr(row, "name", None) or doc_code
     if entity_type == ENTITY_RD_DELIVERABLE and not project_code:

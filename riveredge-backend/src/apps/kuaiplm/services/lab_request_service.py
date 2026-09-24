@@ -10,8 +10,12 @@ from apps.common.audit_actor import apply_create_audit, apply_update_audit
 from apps.common.base_service import AppBaseService
 from apps.kuaiplm.constants.lab_request_types import (
     LAB_REQUEST_PRIORITIES,
+    LAB_REQUEST_STATUS_DRAFT,
+    LAB_REQUEST_STATUS_PENDING,
+    LAB_REQUEST_STATUS_PENDING_REVIEW,
     LAB_REQUEST_TYPE_DEFAULT,
     LAB_REQUEST_TYPES,
+    LAB_REQUEST_TYPES_REQUIRE_MANAGER_REVIEW,
 )
 from apps.kuaiplm.models.lab_request import LabRequest, LabRequestMeasureItem
 from apps.kuaiplm.schemas.lab_request import (
@@ -49,10 +53,29 @@ class LabRequestService(AppBaseService[LabRequest]):
     code_field = "code"
     rule_code = "KUAI_PLM_LAB_REQUEST_CODE"
     code_prefix = "SY"
+    AUDIT_NODE = "lab_request"
 
     def __init__(self) -> None:
         super().__init__(LabRequest)
         self.model = LabRequest
+
+    def _requires_manager_review(self, business_type: str) -> bool:
+        return (business_type or "").strip().lower() in LAB_REQUEST_TYPES_REQUIRE_MANAGER_REVIEW
+
+    async def _notify_lab_pending(
+        self, tenant_id: int, row: LabRequest
+    ) -> None:
+        from apps.kuaiplm.services.kuaiplm_business_notification import (
+            notify_lab_request_submitted,
+        )
+
+        await notify_lab_request_submitted(
+            tenant_id,
+            request_id=row.id,
+            code=row.code,
+            title=row.title or row.code,
+            creator_user_id=row.created_by,
+        )
 
     async def _ensure_code(self, tenant_id: int, code: Optional[str]) -> str:
         raw = (code or "").strip()
@@ -236,11 +259,17 @@ class LabRequestService(AppBaseService[LabRequest]):
         business_type: Optional[str] = None,
         priority: Optional[str] = None,
         board: bool = False,
+        mine: bool = False,
+        current_user: Optional[User] = None,
         order_by: str = "-created_at",
     ) -> LabRequestListResponse:
         query = LabRequest.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if board:
             query = query.filter(status__in=["pending", "in_lab"])
+        if mine:
+            if current_user is None or current_user.id is None:
+                raise ValidationError("查询我的实验委托须登录用户")
+            query = query.filter(created_by=current_user.id)
         if status:
             query = query.filter(status=status.strip().lower())
         if business_type:
@@ -267,7 +296,14 @@ class LabRequestService(AppBaseService[LabRequest]):
             order = (
                 order_by
                 if order_by.lstrip("-")
-                in {"created_at", "updated_at", "code", "expected_complete_at", "priority"}
+                in {
+                    "created_at",
+                    "updated_at",
+                    "code",
+                    "expected_complete_at",
+                    "started_at",
+                    "priority",
+                }
                 else "-created_at"
             )
             rows = await query.order_by(order).offset(skip).limit(limit)
@@ -458,12 +494,73 @@ class LabRequestService(AppBaseService[LabRequest]):
             raise BusinessLogicError("仅草稿或已驳回状态可提交")
         if not (row.title or "").strip():
             raise ValidationError("试验名称不能为空")
-        row.status = "pending"
-        row.submitted_at = resolve_business_datetime()
+
+        now = resolve_business_datetime()
+        row.submitted_at = now
         row.reject_reason = None
         row.rejected_at = None
         apply_update_audit(row, current_user)
+
+        if self._requires_manager_review(row.business_type):
+            row.status = LAB_REQUEST_STATUS_PENDING_REVIEW
+            await row.save()
+
+            approval_instance = None
+            from core.services.approval.approval_instance_service import (
+                ApprovalInstanceService,
+            )
+            from core.services.approval.audit_binding_service import AuditBindingService
+
+            if await AuditBindingService.is_audit_enabled(tenant_id, self.AUDIT_NODE):
+                approval_instance = await ApprovalInstanceService.start_approval_for_node(
+                    tenant_id=tenant_id,
+                    user_id=current_user.id,
+                    node_key=self.AUDIT_NODE,
+                    entity_type="lab_request",
+                    entity_id=row.id,
+                    entity_uuid=str(row.uuid),
+                    title=f"实验委托审核 {row.code}",
+                    content=row.title,
+                    business_type=row.business_type or "",
+                    send_notification=True,
+                )
+                if approval_instance is None:
+                    raise ValidationError(
+                        f"审核已开启但未找到可用审批流程，请检查 {self.AUDIT_NODE} 绑定"
+                    )
+
+            from apps.kuaiplm.services.plm_audit_flow_sync import submit_instance_auto_passed
+
+            if submit_instance_auto_passed(approval_instance):
+                return await self.approve(tenant_id, request_id, current_user)
+            return await self._to_response(row)
+
+        row.status = LAB_REQUEST_STATUS_PENDING
         await row.save()
+        await self._notify_lab_pending(tenant_id, row)
+        return await self._to_response(row)
+
+    async def approve(
+        self, tenant_id: int, request_id: int, current_user: User
+    ) -> LabRequestResponse:
+        """研发经理审核通过：进入实验室待受理。"""
+        row = await self._get_row(tenant_id, request_id)
+        if row.status != LAB_REQUEST_STATUS_PENDING_REVIEW:
+            raise BusinessLogicError("仅待经理审核状态可通过")
+        from apps.kuaiplm.services.plm_audit_flow_sync import assert_plm_manual_approval_action
+
+        await assert_plm_manual_approval_action(
+            tenant_id,
+            audit_node=self.AUDIT_NODE,
+            entity_type="lab_request",
+            entity_id=request_id,
+            doc_label="实验委托",
+            verb="审核",
+        )
+        row.status = LAB_REQUEST_STATUS_PENDING
+        apply_update_audit(row, current_user)
+        await row.save()
+        await self._notify_lab_pending(tenant_id, row)
         return await self._to_response(row)
 
     async def fill_outsource_price(
@@ -542,6 +639,18 @@ class LabRequestService(AppBaseService[LabRequest]):
         row.completed_at = resolve_business_datetime()
         apply_update_audit(row, current_user)
         await row.save()
+        from apps.kuaiplm.services.kuaiplm_business_notification import (
+            notify_lab_request_completed,
+        )
+
+        await notify_lab_request_completed(
+            tenant_id,
+            request_id=row.id,
+            code=row.code,
+            title=row.title or row.code,
+            creator_user_id=row.created_by,
+            judgment=row.judgment,
+        )
         return await self._to_response(row)
 
     async def reject(
@@ -552,8 +661,23 @@ class LabRequestService(AppBaseService[LabRequest]):
         current_user: User,
     ) -> LabRequestResponse:
         row = await self._get_row(tenant_id, request_id)
-        if row.status not in ("pending", "in_lab"):
-            raise BusinessLogicError("仅待受理或实验中状态可驳回")
+        if row.status not in (
+            LAB_REQUEST_STATUS_PENDING_REVIEW,
+            "pending",
+            "in_lab",
+        ):
+            raise BusinessLogicError("仅待经理审核、待受理或实验中状态可驳回")
+        if row.status == LAB_REQUEST_STATUS_PENDING_REVIEW:
+            from apps.kuaiplm.services.plm_audit_flow_sync import assert_plm_manual_approval_action
+
+            await assert_plm_manual_approval_action(
+                tenant_id,
+                audit_node=self.AUDIT_NODE,
+                entity_type="lab_request",
+                entity_id=request_id,
+                doc_label="实验委托",
+                verb="驳回",
+            )
         row.status = "rejected"
         row.rejected_at = resolve_business_datetime()
         row.reject_reason = (data.reason or "").strip() or None
@@ -571,10 +695,21 @@ class LabRequestService(AppBaseService[LabRequest]):
     def _assert_report_editable(self, row: LabRequest) -> None:
         if row.status not in ("in_lab", "completed"):
             raise BusinessLogicError("仅实验中或已完成状态可编制实验报告")
-        if (row.report_status or "none") == "approved":
-            raise BusinessLogicError("报告已批准，不可再改")
-        if (row.report_status or "none") == "pending":
+        status = row.report_status or "none"
+        if status == "pending":
             raise BusinessLogicError("报告审批中，请先驳回后再修改")
+        if status == "approved":
+            has_doc = bool(
+                (row.report_url or "").strip() or (row.report_file_uuid or "").strip()
+            )
+            if has_doc:
+                raise BusinessLogicError("报告已批准，不可再改")
+            # 已批准但未上传报告文件：允许补传真实报告
+
+    def _report_has_document(self, row: LabRequest) -> bool:
+        return bool(
+            (row.report_url or "").strip() or (row.report_file_uuid or "").strip()
+        )
 
     async def save_report(
         self,
@@ -624,14 +759,9 @@ class LabRequestService(AppBaseService[LabRequest]):
             row.report_file_uuid = (data.report_file_uuid or "").strip() or None
         if data.report_url is not None:
             row.report_url = (data.report_url or "").strip() or None
-        has_body = bool(
-            (row.report_url or "").strip()
-            or (row.report_file_uuid or "").strip()
-            or (row.result_summary or "").strip()
-            or (row.report_title or "").strip()
-        )
-        if not has_body:
-            raise ValidationError("提交报告审批前须填写报告标题、摘要或附件/链接")
+        has_doc = self._report_has_document(row)
+        if not has_doc:
+            raise ValidationError("提交报告审批前须上传报告文件或填写报告链接")
         now = resolve_business_datetime()
         row.report_status = "pending"
         row.report_submitted_at = now
@@ -662,6 +792,8 @@ class LabRequestService(AppBaseService[LabRequest]):
         row = await self._get_row(tenant_id, request_id)
         if (row.report_status or "none") != "pending":
             raise BusinessLogicError("仅待审报告可批准")
+        if not self._report_has_document(row):
+            raise ValidationError("报告未上传文件也未填写链接，不能批准为正式报告")
         now = resolve_business_datetime()
         row.report_status = "approved"
         row.report_approved_at = now
@@ -779,13 +911,37 @@ class LabRequestService(AppBaseService[LabRequest]):
         data: LabRequestRevokeRequest,
         current_user: User,
     ) -> LabRequestResponse:
+        """撤销审核：回到草稿，须重新提交再审（与全站撤销审核契约一致）。"""
         row = await self._get_row(tenant_id, request_id)
-        if row.status in ("completed", "revoked"):
-            raise BusinessLogicError("已完成或已撤销单据不可再撤销")
+        if row.status in ("completed", "draft"):
+            raise BusinessLogicError("草稿或已完成单据不可撤销审核")
+        if row.status == "revoked":
+            raise BusinessLogicError("单据已是撤销终态，请直接编辑或删除")
         reason = (data.reason or "").strip()
         if not reason:
             raise ValidationError("撤销原因不能为空")
-        row.status = "revoked"
+
+        from core.services.approval.approval_instance_service import ApprovalInstanceService
+
+        try:
+            await ApprovalInstanceService.cancel_approval(
+                tenant_id=tenant_id,
+                entity_type="lab_request",
+                entity_id=request_id,
+                operator_id=current_user.id,
+            )
+        except Exception:
+            # 无待审实例或已结束：仍允许单据回草稿
+            pass
+
+        row.status = LAB_REQUEST_STATUS_DRAFT
+        row.submitted_at = None
+        row.accepted_at = None
+        row.started_at = None
+        row.completed_at = None
+        row.rejected_at = None
+        row.reject_reason = None
+        row.lab_owner_name = None
         row.revoked_at = resolve_business_datetime()
         row.revoke_reason = reason
         apply_update_audit(row, current_user)

@@ -31,15 +31,31 @@ export function normalizeUploadFileList(value: unknown): UploadFile[] {
   );
 }
 
+/** 从 Upload file.response 解析真实文件 UUID（支持单对象或 multiple 上传误写入的数组） */
+function uuidFromUploadResponse(response: unknown): string | null {
+  if (response == null) return null;
+  if (Array.isArray(response)) {
+    for (const item of response) {
+      const nested = uuidFromUploadResponse(item);
+      if (nested) return nested;
+    }
+    return null;
+  }
+  if (typeof response === 'object' && 'uuid' in response) {
+    const raw = (response as { uuid?: unknown }).uuid;
+    if (typeof raw === 'string' && UUID_RE.test(raw)) return raw;
+  }
+  return null;
+}
+
 /** 从 Upload fileList 提取已上传文件的 UUID */
 export function extractUploadFileUuids(fileList: UploadFile[] | undefined): string[] {
   const list = normalizeUploadFileList(fileList);
   if (!list.length) return [];
   const out: string[] = [];
   for (const file of list) {
-    const res = file.response as { uuid?: string } | undefined;
     const uid =
-      res?.uuid ??
+      uuidFromUploadResponse(file.response) ??
       (typeof file.uid === 'string' && UUID_RE.test(file.uid) ? file.uid : null);
     if (uid) out.push(uid);
   }

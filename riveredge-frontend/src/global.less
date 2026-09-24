@@ -940,9 +940,33 @@ code {
   margin: 2px 4px !important;
 }
 
-.two-column-layout-left-tree .drawing-nav-tree.ant-tree .ant-tree-switcher {
-  width: 0 !important;
-  margin: 0 !important;
+.two-column-layout-left-tree .drawing-nav-tree.ant-tree:not(.ant-tree-show-line) .ant-tree-indent-unit {
+  width: 10px !important;
+}
+
+.two-column-layout-left-tree .drawing-nav-tree.ant-tree:not(.ant-tree-show-line) .ant-tree-switcher {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  align-self: center !important;
+  width: 18px !important;
+  height: 18px !important;
+  margin-right: 0 !important;
+  line-height: 1 !important;
+  border-radius: 4px !important;
+  transition: all 0.2s;
+  cursor: pointer;
+
+  &:hover {
+    background-color: rgba(0, 0, 0, 0.06) !important;
+  }
+}
+
+.two-column-layout-left-tree .drawing-nav-tree.ant-tree:not(.ant-tree-show-line) .ant-tree-switcher .ant-tree-switcher-icon {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 10px !important;
 }
 
 .two-column-layout-left-tree .drawing-nav-tree.ant-tree .ant-tree-node-content-wrapper {
@@ -971,6 +995,85 @@ code {
   overflow: hidden !important;
   text-overflow: ellipsis !important;
   white-space: nowrap !important;
+}
+
+/* 图档库文件夹：行内编辑/删除（对齐资源分类树 resource-category-tree） */
+.two-column-layout-left-tree .drawing-nav-tree.ant-tree .ant-tree-node-content-wrapper:has(.drawing-vault-folder-tree-title),
+.left-panel-scroll-container .drawing-nav-tree.ant-tree .ant-tree-node-content-wrapper:has(.drawing-vault-folder-tree-title) {
+  align-items: center !important;
+}
+
+.two-column-layout-left-tree .drawing-nav-tree.ant-tree .ant-tree-title:has(.drawing-vault-folder-tree-title),
+.left-panel-scroll-container .drawing-nav-tree.ant-tree .ant-tree-title:has(.drawing-vault-folder-tree-title) {
+  display: flex !important;
+  align-items: center !important;
+  align-self: stretch !important;
+  height: 100% !important;
+  min-height: 28px !important;
+  line-height: 1 !important;
+  overflow: hidden !important;
+  text-overflow: clip !important;
+  white-space: normal !important;
+}
+
+.two-column-layout-left-tree .drawing-nav-tree.ant-tree .drawing-vault-folder-tree-title,
+.left-panel-scroll-container .drawing-nav-tree.ant-tree .drawing-vault-folder-tree-title {
+  display: flex !important;
+  align-items: center !important;
+  align-self: stretch !important;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+  min-height: 28px;
+  line-height: 1;
+}
+
+.two-column-layout-left-tree .drawing-nav-tree.ant-tree .drawing-vault-folder-tree-title-text,
+.left-panel-scroll-container .drawing-nav-tree.ant-tree .drawing-vault-folder-tree-title-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 28px;
+}
+
+.two-column-layout-left-tree .drawing-nav-tree.ant-tree .drawing-vault-folder-tree-title-actions,
+.left-panel-scroll-container .drawing-nav-tree.ant-tree .drawing-vault-folder-tree-title-actions {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
+  height: 22px;
+  line-height: 1;
+}
+
+.two-column-layout-left-tree .drawing-nav-tree.ant-tree .drawing-vault-folder-tree-title-actions .ant-space,
+.left-panel-scroll-container .drawing-nav-tree.ant-tree .drawing-vault-folder-tree-title-actions .ant-space {
+  display: inline-flex !important;
+  align-items: center !important;
+}
+
+.two-column-layout-left-tree .drawing-nav-tree.ant-tree .drawing-vault-folder-tree-title-actions .ant-btn,
+.left-panel-scroll-container .drawing-nav-tree.ant-tree .drawing-vault-folder-tree-title-actions .ant-btn {
+  width: 22px !important;
+  height: 22px !important;
+  min-width: 22px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  line-height: 1 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.two-column-layout-left-tree .drawing-nav-tree.ant-tree .drawing-vault-folder-tree-title-actions .ant-btn .anticon,
+.left-panel-scroll-container .drawing-nav-tree.ant-tree .drawing-vault-folder-tree-title-actions .ant-btn .anticon {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  line-height: 1 !important;
+  font-size: 12px !important;
 }
 
 /* 文件管理 / 资源分类侧栏树：展开箭头 hover 背景与行内图标/标题垂直居中 */
@@ -3167,6 +3270,11 @@ code {
   flex-shrink: 0;
   margin: 0;
   font-size: 11px;
+}
+.dashboard-update-log-item__scope-dedicated.re-marker-tag.ant-tag {
+  color: var(--ant-color-purple, #722ed1);
+  background: var(--ant-color-purple-bg, #f9f0ff);
+  border: 1px solid var(--ant-color-purple-border, #d3adf7);
 }
 .dashboard-update-log-item__title {
   flex: 1;

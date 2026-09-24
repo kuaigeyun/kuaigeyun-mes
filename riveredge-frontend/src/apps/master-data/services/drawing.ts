@@ -4,7 +4,9 @@
 
 import { api } from '../../../services/api';
 
-export type DrawingType = 'part' | 'assembly' | 'process' | 'other';
+export type DrawingType = 'part' | 'assembly' | 'process' | 'other' | 'product_spec';
+
+export type DrawingCatalogTab = 'engineering' | 'product_spec';
 export type DrawingStatus = 'Draft' | 'Editing' | 'Pending' | 'Released' | 'Obsolete';
 export type DrawingSecurityLevel = 'public' | 'internal' | 'secret' | 'confidential';
 
@@ -175,6 +177,8 @@ export interface EngineeringDrawingListParams {
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
   view?: DrawingListView;
+  productionView?: boolean;
+  excludeDrawingTypes?: string;
 }
 
 export interface EngineeringDrawingListResponse {

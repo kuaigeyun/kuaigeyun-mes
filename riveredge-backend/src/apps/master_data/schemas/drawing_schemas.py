@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
-DRAWING_TYPES = {"part", "assembly", "process", "other"}
+DRAWING_TYPES = {"part", "assembly", "process", "other", "product_spec"}
 DRAWING_STATUSES = {"Draft", "Editing", "Pending", "Released", "Obsolete"}
 DRAWING_WORKING_STATUSES = {"Draft", "Editing", "Pending"}
 DRAWING_SECURITY_LEVELS = {"public", "internal", "secret", "confidential"}

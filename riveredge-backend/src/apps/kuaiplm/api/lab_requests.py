@@ -50,7 +50,9 @@ async def list_lab_requests(
     business_type: Optional[str] = None,
     priority: Optional[str] = None,
     board: bool = Query(False, description="待检看板：仅 pending/in_lab"),
+    mine: bool = Query(False, description="我的实验委托：仅当前用户创建"),
     order_by: str = Query("-created_at"),
+    current_user: User = Depends(get_current_user),
     _auth=Depends(
         require_access(
             "kuaiplm.lab-request",
@@ -70,6 +72,8 @@ async def list_lab_requests(
             business_type=business_type,
             priority=priority,
             board=board,
+            mine=mine,
+            current_user=current_user,
             order_by=order_by,
         )
     except Exception as e:
@@ -168,6 +172,26 @@ async def submit_lab_request(
 ):
     try:
         return await service.submit(tenant_id, request_id, current_user)
+    except Exception as e:
+        raise _http(e) from e
+
+
+@router.post("/{request_id}/approve", response_model=LabRequestResponse)
+async def approve_lab_request(
+    request_id: int,
+    current_user: User = Depends(get_current_user),
+    _auth=Depends(
+        require_access(
+            "kuaiplm.lab-request",
+            "approve",
+            required_permissions=["kuaiplm:lab-request:approve"],
+        )
+    ),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """研发经理审核通过，进入实验室待受理。"""
+    try:
+        return await service.approve(tenant_id, request_id, current_user)
     except Exception as e:
         raise _http(e) from e
 

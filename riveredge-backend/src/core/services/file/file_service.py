@@ -52,7 +52,9 @@ class FileService:
         "pdf", "dwg", "dxf", "step", "stp", "pcbdoc", "schdoc",  # 物料/SOP附件常用：PDF、2D/3D CAD、Altium PCB/原理图
         "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "csv", "json", # 文档
         "zip", "rar", "7z", "tar", "gz", # 压缩包
-        "mp3", "wav", "mp4", "mov", "avi" # 多媒体
+        "mp3", "wav", "mp4", "mov", "avi", # 多媒体
+        # 产品固件 / 烧录产测：原始固件与常见烧录镜像（非脚本可执行后缀）
+        "bin", "hex", "s19", "srec", "img", "fw",
     }
 
     # 危险黑名单：绝对禁止上传的后缀

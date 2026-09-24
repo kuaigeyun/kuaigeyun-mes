@@ -24,7 +24,7 @@ export interface UniTableScrollPolicyInput {
   tableDataLength: number
   /** 当前分页大小 */
   currentPageSize: number
-  /** 列表 request 进行中：保持与满页一致的 scroll.y，避免 natural-height ↔ 限高切换 */
+  /** 列表 request 进行中：满页时保持限高，避免 natural ↔ scroll.y 来回切；未装满/空表保持 natural，避免纵条闪现后消失 */
   requestInFlight?: boolean
 }
 
@@ -39,9 +39,17 @@ export function shouldUseUniTableNaturalHeight(input: UniTableScrollPolicyInput)
   if (input.fillViewportBody) return false
   if (input.allowCustomScrollY) return false
   if (input.virtualized || input.restTableVirtual) return false
-  if (input.requestInFlight) return false
 
-  if (input.tableDataLength === 0 || input.tableDataLength < input.currentPageSize) {
+  const pageSparse =
+    input.tableDataLength === 0 || input.tableDataLength < input.currentPageSize
+
+  if (input.requestInFlight) {
+    // 满页刷新：保持 scroll.y，避免加载中塌成 natural 再撑回限高。
+    // 空表/未装满：保持 natural，避免先闪出 overflow-y:scroll 空槽再关掉。
+    return pageSparse
+  }
+
+  if (pageSparse) {
     return true
   }
 

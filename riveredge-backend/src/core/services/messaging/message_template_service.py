@@ -1144,6 +1144,39 @@ class MessageTemplateService:
             "is_active": True,
         },
         {
+            "name": "实验委托待受理",
+            "code": "PLM_LAB_REQUEST_SUBMITTED",
+            "type": "internal",
+            "description": "实验委托进入实验室待受理后通知实验室",
+            "subject": "【实验委托待受理】{lab_code} {title}",
+            "content": (
+                "实验委托 {lab_code}（{title}）已进入待受理，请实验室尽快受理并安排实验。"
+            ),
+            "variables": {
+                "lab_code": "委托单号",
+                "title": "试验名称",
+                "detail_path": "详情路径",
+            },
+            "is_active": True,
+        },
+        {
+            "name": "实验委托已完成",
+            "code": "PLM_LAB_REQUEST_COMPLETED",
+            "type": "internal",
+            "description": "实验委托完成后通知申请人查看结果",
+            "subject": "【实验委托已完成】{lab_code} {title}",
+            "content": (
+                "实验委托 {lab_code}（{title}）已完成，判定：{judgment}。请登录系统查看实验结果与报告。"
+            ),
+            "variables": {
+                "lab_code": "委托单号",
+                "title": "试验名称",
+                "judgment": "判定结果",
+                "detail_path": "详情路径",
+            },
+            "is_active": True,
+        },
+        {
             "name": "实验报告待批准",
             "code": "PLM_LAB_REPORT_SUBMITTED",
             "type": "internal",

@@ -1272,5 +1272,35 @@
         "desc": "Customer acceptance sign-off"
       }
     }
+  },
+  "LAB_REQUEST_BUSINESS_TYPE": {
+    "name": "Lab Request Type",
+    "desc": "Business type for R&D lab request documents (IQC / RD / material / product / outsource / general)",
+    "items": {
+      "iqc": {
+        "label": "IQC Request",
+        "desc": "Incoming quality lab request"
+      },
+      "rd": {
+        "label": "R&D Request",
+        "desc": "R&D lab request (manager review required)"
+      },
+      "project_material": {
+        "label": "Material Test",
+        "desc": "Project material lab test"
+      },
+      "project_product": {
+        "label": "Product Periodic Test",
+        "desc": "Complete-machine periodic lab test"
+      },
+      "outsource": {
+        "label": "Outsourced Test",
+        "desc": "Outsourced lab test (price required before accept)"
+      },
+      "general": {
+        "label": "General Request",
+        "desc": "General lab request"
+      }
+    }
   }
 }

@@ -4,22 +4,29 @@
  * 不替代产品固件（R-15）与 R-16 扫码打印。
  */
 
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import {
   ActionType,
   ProFormDatePicker,
+  ProFormDependency,
   ProFormInstance,
   ProFormSelect,
   ProFormText,
   ProFormTextArea,
   ProFormUploadDragger,
 } from '@ant-design/pro-components';
-import { App, Button, Descriptions, Input, Modal, Result, Table } from 'antd';
+import { Alert, App, Button, Col, Descriptions, Input, Modal, Result, Row, Table } from 'antd';
 import { InboxOutlined } from '@ant-design/icons';
+import { ActionConfirmPopconfirm } from '../../../../components/action-confirm';
 import { UniTable } from '../../../../components/uni-table';
-import { rowActionKind } from '../../../../components/uni-action';
+import {
+  rowActionDownloadFirmware,
+  rowActionKind,
+  rowActionLabelKeep,
+} from '../../../../components/uni-action';
+import { ThemedSegmented } from '../../../../components/themed-segmented';
 import {
   DetailDrawerTemplate,
   FormModalTemplate,
@@ -38,7 +45,14 @@ import { downloadRecordsAsXlsx, type ExportXlsxColumn } from '../../../../utils/
 import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
 import { renderDocumentStatusTag } from '../../../../utils/documentLifecycleStatusTag';
 import { MarkerTag } from '../../../../constants/statusBadges';
-import { uploadMultipleFiles } from '../../../../services/file';
+import { normalizeFilePreviewUrl, uploadMultipleFiles } from '../../../../services/file';
+import {
+  extractUploadFileUuids,
+  normalizeCustomFieldFileUuids,
+  normalizeUploadFileList,
+} from '../../../../components/custom-fields/customFieldFileUtils';
+import { useCurrentUser } from '../../../../hooks/useCurrentUser';
+import { canViewDocumentHistory } from '../../../../utils/permissionContract';
 import {
   alignDescriptionColumns,
   alignProColumns,
@@ -47,13 +61,18 @@ import {
 } from '../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../../kuaizhizao/pages/shared/documentAuditColumns';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../utils/uniTableLayoutColumns';
+import { formDateFormItemProps, toApiDateString } from '../../../../utils/formDate';
 import { NEW_SHORTCUT_HINT } from '../../../../utils/globalNewShortcut';
-import Phase2ProjectSelect from '../../components/Phase2ProjectSelect';
+import Phase2ProjectSelect, {
+  formatProjectRefLabel,
+  resolveProjectRefPick,
+} from '../../components/Phase2ProjectSelect';
 import {
   productionFileApi,
   type ProductionFile,
   type ProductionFileAccessLog,
   type ProductionFileCatalogKind,
+  type ProductionFilePayload,
   type ProductionFileStatus,
   type ProductionFileVersion,
 } from '../../services/production-file';
@@ -61,7 +80,8 @@ import {
 const RESOURCE = 'kuaiplm:production-file';
 const FILE_CATEGORY = 'production_file';
 
-const PE_TYPES = ['burn', 'laser', 'bluetooth_ir', 'aoi', 'label_template', 'other_pe'] as const;
+/** PE 签不含 burn：烧录工具已在「烧录工具」研发 Tab（rd_burn_tool） */
+const PE_TYPES = ['laser', 'bluetooth_ir', 'aoi', 'label_template', 'other_pe'] as const;
 const RD_TYPES = ['rd_burn_tool', 'rd_prod_test', 'other_rd'] as const;
 const STATUS_KEYS: ProductionFileStatus[] = [
   'draft',
@@ -91,15 +111,117 @@ const EXPORT_COLUMNS: ExportXlsxColumn[] = [
   { key: 'updated_at', title: '更新时间' },
 ];
 
+const DOWNLOADABLE_STATUSES: ProductionFileStatus[] = ['effective'];
+
+function sanitizeOptionalProjectId(value: unknown): number | undefined {
+  if (value === null || value === undefined || value === '') return undefined;
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+/** 页顶 Tab：与客户样例文件夹「烧录工具 / 产测文件」对齐；PE 仍保留第三签 */
+type ProductionFilePageTab = 'rd_burn_tool' | 'rd_prod_test' | 'pe_production';
+
+const PRODUCTION_FILE_PAGE_TABS: ProductionFilePageTab[] = [
+  'rd_burn_tool',
+  'rd_prod_test',
+  'pe_production',
+];
+
+function pageTabCatalogKind(tab: ProductionFilePageTab): ProductionFileCatalogKind {
+  return tab === 'pe_production' ? 'pe_production' : 'rd_tool';
+}
+
+function pageTabFixedFileType(tab: ProductionFilePageTab): string | undefined {
+  if (tab === 'rd_burn_tool' || tab === 'rd_prod_test') {
+    return tab;
+  }
+  return undefined;
+}
+
+function pageTabIsRd(tab: ProductionFilePageTab): boolean {
+  return tab !== 'pe_production';
+}
+
+function defaultFileTypeForPageTab(tab: ProductionFilePageTab): string {
+  if (tab === 'rd_prod_test') return 'rd_prod_test';
+  if (tab === 'pe_production') return 'laser';
+  return 'rd_burn_tool';
+}
+
+function pageTabLabel(
+  tab: ProductionFilePageTab,
+  typeLabel: (code: string) => string,
+  catalogLabel: (code: string) => string,
+): string {
+  if (tab === 'pe_production') {
+    return catalogLabel('pe_production');
+  }
+  return typeLabel(tab);
+}
+
+function stripFileExtension(name: string): string {
+  return String(name || '').replace(/\.[^.\\/]+$/, '').trim();
+}
+
+/** 上传区标签与提示：与客户提供样例文件夹名（烧录工具 / 产测文件等）一致 */
+function resolveProductionFileUploadFieldMeta(
+  fileType: string | undefined,
+  typeLabel: (code: string) => string,
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
+  const code = String(fileType || '').trim();
+  if (!code) {
+    return {
+      label: t('app.kuaiplm.productionFile.fields.file'),
+      hint: t('app.kuaiplm.productionFile.fields.fileUploadHint'),
+      subHint: t('app.kuaiplm.productionFile.fields.fileUploadSubHint'),
+    };
+  }
+  const folderLabel = typeLabel(code);
+  return {
+    label: folderLabel,
+    hint: t('app.kuaiplm.productionFile.fields.fileUploadHintByType', { folder: folderLabel }),
+    subHint: t('app.kuaiplm.productionFile.fields.fileUploadSubHintByType', {
+      folder: folderLabel,
+    }),
+  };
+}
+
+function suggestTitleAndVersionFromFileName(
+  fileName: string,
+  defaults: { title?: string; version?: string },
+): { title?: string; version?: string } {
+  const baseName = stripFileExtension(fileName);
+  if (!baseName) {
+    return {};
+  }
+  const next: { title?: string; version?: string } = {};
+  if (!String(defaults.title || '').trim()) {
+    next.title = baseName;
+  }
+  const versionMatch = baseName.match(/[Vv](\d+(?:\.\d+)?)/);
+  if (versionMatch && !String(defaults.version || '').trim()) {
+    next.version = `V${versionMatch[1]}`;
+  }
+  return next;
+}
+
 const ProductionFilesPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi, modal } = App.useApp();
   const perms = useResourcePermissions(RESOURCE);
+  const currentUser = useCurrentUser();
+  const canViewHistory = canViewDocumentHistory(currentUser);
 
-  const [catalogKind, setCatalogKind] = useState<ProductionFileCatalogKind>('pe_production');
+  const [activePageTab, setActivePageTab] = useState<ProductionFilePageTab>('rd_burn_tool');
+  const [rdListViewScope, setRdListViewScope] = useState<'all' | 'production'>('all');
+  const listScopeReadyRef = useRef(false);
   const actionRef = useRef<ActionType>(null);
   const tableRowsRef = useRef<ProductionFile[]>([]);
   const formRef = useRef<ProFormInstance | undefined>(undefined);
+  const projectRefIdMapRef = useRef(new Map<string, number>());
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<ProductionFile | null>(null);
   const [detail, setDetail] = useState<ProductionFile | null>(null);
@@ -113,7 +235,24 @@ const ProductionFilesPage: React.FC = () => {
   const [receiverNames, setReceiverNames] = useState('');
 
   const reload = useCallback(() => actionRef.current?.reload(), []);
-  const isPe = catalogKind === 'pe_production';
+
+  /** 新建首版不展示更改明细；编辑或升版草稿时展示 */
+  const showChangeSummary = useMemo(() => Boolean(editing), [editing, modalOpen]);
+
+  const catalogKind = pageTabCatalogKind(activePageTab);
+  const fixedFileType = pageTabFixedFileType(activePageTab);
+  const isPe = activePageTab === 'pe_production';
+  const isRdTab = pageTabIsRd(activePageTab);
+  const rdProductionView = rdListViewScope === 'production';
+
+  useEffect(() => {
+    if (!isRdTab) return;
+    if (!listScopeReadyRef.current) {
+      listScopeReadyRef.current = true;
+      return;
+    }
+    reload();
+  }, [activePageTab, isRdTab, rdListViewScope, reload]);
 
   const statusLabel = useCallback(
     (s: string) => t(`app.kuaiplm.productionFile.status.${s}`, { defaultValue: s }),
@@ -133,13 +272,40 @@ const ProductionFilesPage: React.FC = () => {
     setModalOpen(true);
   }, []);
 
-  const loadDetailExtras = useCallback(async (id: number) => {
-    const [verRes, logRes] = await Promise.all([
-      productionFileApi.listVersions(id, false),
-      productionFileApi.listAccessLogs(id, { limit: 50 }),
-    ]);
-    setVersions(verRes.items);
-    setAccessLogs(logRes.items);
+  const loadDetailExtras = useCallback(
+    async (id: number, productionView = false) => {
+      const [verRes, logRes] = await Promise.all([
+        productionFileApi.listVersions(id, productionView),
+        productionFileApi.listAccessLogs(id, { limit: 50 }),
+      ]);
+      setVersions(verRes.items);
+      setAccessLogs(logRes.items);
+    },
+    [],
+  );
+
+  const downloadProductionFile = useCallback(
+    async (row: ProductionFile, versionId?: number) => {
+      if (!row.id) return;
+      const productionView = row.catalog_kind === 'rd_tool' && rdProductionView;
+      try {
+        const { preview_url } = await productionFileApi.getDownloadUrl(row.id, {
+          version_id: versionId,
+          production_view: productionView,
+        });
+        window.open(normalizeFilePreviewUrl(preview_url), '_blank', 'noopener,noreferrer');
+        if (detail?.id === row.id) {
+          await loadDetailExtras(row.id, productionView);
+        }
+      } catch (e) {
+        messageApi.error(getApiErrorMessage(e));
+      }
+    },
+    [detail?.id, loadDetailExtras, messageApi, rdProductionView],
+  );
+
+  const canDownloadRow = useCallback((row: ProductionFile) => {
+    return DOWNLOADABLE_STATUSES.includes(row.status);
   }, []);
 
   const openDetail = useCallback(
@@ -153,14 +319,15 @@ const ProductionFilesPage: React.FC = () => {
       try {
         const full = await productionFileApi.get(row.id);
         setDetail(full);
-        await loadDetailExtras(row.id);
+        const productionView = row.catalog_kind === 'rd_tool' && rdProductionView;
+        await loadDetailExtras(row.id, productionView);
       } catch (e) {
         setDetailError(getApiErrorMessage(e));
       } finally {
         setDetailLoading(false);
       }
     },
-    [loadDetailExtras],
+    [loadDetailExtras, rdProductionView],
   );
 
   const columns = useMemo<ProColumns<ProductionFile>[]>(() => {
@@ -170,15 +337,20 @@ const ProductionFilesPage: React.FC = () => {
         dataIndex: 'file_code',
         key: 'document_code',
         width: 140,
+        minWidth: 140,
         copyable: true,
         uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
       },
       {
         title: t('app.kuaiplm.productionFile.fields.fileType'),
         dataIndex: 'file_type',
         key: 'doc_type',
         width: 120,
+        minWidth: 120,
         uniTableKeepWidth: true,
+        resizable: false,
         render: (_, r) => (
           <MarkerTag>{typeLabel(r.file_type)}</MarkerTag>
         ),
@@ -187,8 +359,10 @@ const ProductionFilesPage: React.FC = () => {
         title: t('app.kuaiplm.productionFile.fields.title'),
         dataIndex: 'title',
         key: 'title',
-        ellipsis: true,
+        minWidth: 160,
+        uniTablePrimaryFlex: true,
         uniTableRemainderFlex: true,
+        ellipsis: true,
       },
     ];
     if (isPe) {
@@ -198,6 +372,9 @@ const ProductionFilesPage: React.FC = () => {
           dataIndex: 'process_name',
           key: 'process_name',
           width: 140,
+          minWidth: 140,
+          uniTableKeepWidth: true,
+          resizable: false,
           ellipsis: true,
           render: (_, r) => r.process_name || r.process_code || '—',
         },
@@ -206,6 +383,9 @@ const ProductionFilesPage: React.FC = () => {
           dataIndex: 'product_model',
           key: 'product_model',
           width: 140,
+          minWidth: 140,
+          uniTableKeepWidth: true,
+          resizable: false,
           ellipsis: true,
         },
       );
@@ -216,6 +396,9 @@ const ProductionFilesPage: React.FC = () => {
           dataIndex: 'project_name',
           key: 'project_name',
           width: 180,
+          minWidth: 180,
+          uniTableKeepWidth: true,
+          resizable: false,
           ellipsis: true,
           render: (_, r) =>
             r.project_name ? `${r.project_name} (${r.project_code || ''})` : r.project_code || '—',
@@ -225,7 +408,9 @@ const ProductionFilesPage: React.FC = () => {
           dataIndex: 'release_date',
           key: 'business_date',
           width: 120,
+          minWidth: 120,
           uniTableKeepWidth: true,
+          resizable: false,
           render: (_, r) => formatDateBySiteSetting(r.release_date) || '—',
         },
       );
@@ -236,7 +421,10 @@ const ProductionFilesPage: React.FC = () => {
         dataIndex: 'version',
         key: 'version',
         width: 90,
+        minWidth: 90,
         uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
       },
       {
         ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
@@ -259,7 +447,7 @@ const ProductionFilesPage: React.FC = () => {
               key="detail"
               type="link"
               size="small"
-              {...rowActionKind('detail')}
+              {...rowActionKind('read')}
               onClick={() => void openDetail(row)}
             />,
           ];
@@ -269,7 +457,7 @@ const ProductionFilesPage: React.FC = () => {
                 key="edit"
                 type="link"
                 size="small"
-                {...rowActionKind('edit')}
+                {...rowActionKind('update')}
                 onClick={() => {
                   setEditing(row);
                   setModalOpen(true);
@@ -337,32 +525,44 @@ const ProductionFilesPage: React.FC = () => {
               />,
             );
           }
-          if (row.status === 'effective' && perms.canUpdate) {
+          if (canDownloadRow(row) && perms.canRead) {
             actions.push(
               <Button
-                key="revise"
+                key="download"
                 type="link"
                 size="small"
-                {...rowActionKind('edit')}
-                onClick={() => {
-                  modal.confirm({
-                    title: t('app.kuaiplm.productionFile.messages.reviseConfirm'),
-                    onOk: async () => {
-                      try {
-                        await productionFileApi.revise(row.id, {
-                          change_summary: t('app.kuaiplm.productionFile.messages.reviseDefault'),
-                        });
-                        messageApi.success(t('app.kuaiplm.productionFile.messages.reviseSuccess'));
-                        reload();
-                      } catch (e) {
-                        messageApi.error(getApiErrorMessage(e));
-                      }
-                    },
-                  });
+                {...rowActionDownloadFirmware('read')}
+                onClick={() => void downloadProductionFile(row)}
+              />,
+            );
+          }
+          if (row.status === 'effective' && perms.canUpdate) {
+            actions.push(
+              <ActionConfirmPopconfirm
+                key="revise"
+                title={t('app.kuaiplm.productionFile.messages.reviseConfirm')}
+                onConfirm={async () => {
+                  try {
+                    const draft = await productionFileApi.revise(row.id, {});
+                    messageApi.success(t('app.kuaiplm.productionFile.messages.reviseSuccess'));
+                    reload();
+                    setEditing(draft);
+                    setModalOpen(true);
+                  } catch (e) {
+                    messageApi.error(getApiErrorMessage(e));
+                  }
                 }}
               >
-                {t('app.kuaiplm.productionFile.actions.revise')}
-              </Button>,
+                <Button
+                  type="link"
+                  size="small"
+                  {...rowActionKind('update')}
+                  {...rowActionLabelKeep()}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {t('app.kuaiplm.productionFile.actions.revise')}
+                </Button>
+              </ActionConfirmPopconfirm>,
             );
           }
           if (row.status === 'effective' && perms.canAction?.('execute')) {
@@ -424,6 +624,8 @@ const ProductionFilesPage: React.FC = () => {
     messageApi,
     reload,
     modal,
+    canDownloadRow,
+    downloadProductionFile,
   ]);
 
   const basicColumns = useMemo(() => {
@@ -513,14 +715,26 @@ const ProductionFilesPage: React.FC = () => {
     return keys.map((k) => ({ label: typeLabel(k), value: k }));
   }, [isPe, typeLabel]);
 
-  const renderCatalogTable = (kind: ProductionFileCatalogKind) => (
-    <UniTable<ProductionFile>
-      key={kind}
+  const renderCatalogTable = (pageTab: ProductionFilePageTab) => {
+    const kind = pageTabCatalogKind(pageTab);
+    const fileTypeFilter = pageTabFixedFileType(pageTab);
+    return (
+    <>
+      {pageTabIsRd(pageTab) && !canViewHistory && rdListViewScope === 'all' ? (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 12 }}
+          title={t('app.kuaiplm.productionFile.messages.latestVersionOnlyHint')}
+        />
+      ) : null}
+      <UniTable<ProductionFile>
+      key={`${pageTab}-${pageTabIsRd(pageTab) ? rdListViewScope : 'default'}`}
       actionRef={actionRef}
       rowKey="id"
       columns={columns}
       permissionResource={RESOURCE}
-      columnPersistenceId={`apps.kuaiplm.pages.production-files.${kind}.v2`}
+      columnPersistenceId={`apps.kuaiplm.pages.production-files.${pageTab}.width-v5`}
       enableRowSelection
       selectedRowKeys={selectedRowKeys}
       onSelectedRowKeysChange={setSelectedRowKeys}
@@ -533,7 +747,12 @@ const ProductionFilesPage: React.FC = () => {
       showExportButton={perms.canAction?.('export')}
       onExport={async () => {
         const items = await fetchAllListItems((skip, limit) =>
-          productionFileApi.list({ skip, limit, catalog_kind: kind }),
+          productionFileApi.list({
+            skip,
+            limit,
+            catalog_kind: kind,
+            file_type: fileTypeFilter,
+          }),
         );
         if (!items.length) {
           messageApi.warning(t('app.kuaiplm.productionFile.messages.noExportData'));
@@ -550,6 +769,23 @@ const ProductionFilesPage: React.FC = () => {
           `production-files-${kind}-${todaySiteDateString()}.xlsx`,
         );
       }}
+      beforeSearchButtons={
+        pageTabIsRd(pageTab) ? (
+          <ThemedSegmented
+            surfaceBackground
+            size="medium"
+            value={rdListViewScope}
+            onChange={(v) => setRdListViewScope(v as 'all' | 'production')}
+            options={[
+              { label: t('app.kuaiplm.productionFile.viewScope.all'), value: 'all' },
+              {
+                label: t('app.kuaiplm.productionFile.viewScope.production'),
+                value: 'production',
+              },
+            ]}
+          />
+        ) : undefined
+      }
       toolBarRender={() => []}
       headerTitle={t('app.kuaiplm.productionFile.title')}
       request={async (params) => {
@@ -559,36 +795,34 @@ const ProductionFilesPage: React.FC = () => {
           keyword: params.keyword as string | undefined,
           status: params.status as string | undefined,
           catalog_kind: kind,
+          file_type: fileTypeFilter,
+          production_view: pageTabIsRd(pageTab) && rdListViewScope === 'production',
         });
         return { data: res.items, success: true, total: res.total };
       }}
       search={{ labelWidth: 'auto' }}
     />
+    </>
   );
+  };
 
   return (
     <>
       <MultiTabListPageTemplate
-        activeTabKey={catalogKind}
+        activeTabKey={activePageTab}
         onTabChange={(key) => {
-          setCatalogKind(key as ProductionFileCatalogKind);
+          setActivePageTab(key as ProductionFilePageTab);
           setSelectedRowKeys([]);
         }}
-        tabs={[
-          {
-            key: 'pe_production',
-            label: catalogLabel('pe_production'),
-            children: renderCatalogTable('pe_production'),
-          },
-          {
-            key: 'rd_tool',
-            label: catalogLabel('rd_tool'),
-            children: renderCatalogTable('rd_tool'),
-          },
-        ]}
+        tabs={PRODUCTION_FILE_PAGE_TABS.map((tab) => ({
+          key: tab,
+          label: pageTabLabel(tab, typeLabel, catalogLabel),
+          children: renderCatalogTable(tab),
+        }))}
       />
 
       <FormModalTemplate
+        key={editing?.uuid ?? 'create'}
         title={
           editing
             ? t('app.kuaiplm.productionFile.editTitle')
@@ -597,12 +831,19 @@ const ProductionFilesPage: React.FC = () => {
         open={modalOpen}
         onOpenChange={setModalOpen}
         formRef={formRef}
-        grid
+        grid={false}
+        width={960}
         initialValues={
           editing
             ? {
                 ...editing,
                 catalog_kind: editing.catalog_kind,
+                project_ref:
+                  editing.catalog_kind === 'rd_tool'
+                    ? editing.project_id
+                      ? formatProjectRefLabel(editing.project_code, editing.project_name)
+                      : editing.project_code || ''
+                    : undefined,
                 file_upload: editing.file_uuid
                   ? [
                       {
@@ -620,38 +861,55 @@ const ProductionFilesPage: React.FC = () => {
             : {
                 catalog_kind: catalogKind,
                 version: 'A0',
-                file_type: isPe ? 'burn' : 'rd_burn_tool',
+                file_type: fixedFileType ?? defaultFileTypeForPageTab(activePageTab),
                 file_upload: [],
               }
         }
         onFinish={async (values) => {
           try {
-            const uploadList = Array.isArray(values.file_upload) ? values.file_upload : [];
-            const done = uploadList.find(
-              (f: { status?: string }) => f.status === 'done' || !f.status,
-            );
+            const uploadList = normalizeUploadFileList(values.file_upload);
+            const uploadedUuids = extractUploadFileUuids(uploadList);
+            const fileUuid =
+              uploadedUuids[0] ?? normalizeCustomFieldFileUuids(values.file_uuid)[0] ?? null;
+            const done = uploadList.find((f) => f.status === 'done' || !f.status);
             const response = done?.response as
               | { uuid?: string; original_name?: string; name?: string }
               | undefined;
-            const fileUuid =
-              response?.uuid || done?.uid || values.file_uuid || null;
             const fileName =
-              response?.original_name || response?.name || done?.name || values.file_name || null;
-            const payload = {
+              response?.original_name ||
+              response?.name ||
+              done?.name ||
+              (typeof values.file_name === 'string' ? values.file_name : null) ||
+              null;
+            const payload: ProductionFilePayload = {
               catalog_kind: catalogKind,
-              file_type: values.file_type,
+              file_type: fixedFileType ?? values.file_type,
               title: values.title,
               version: values.version,
               process_code: values.process_code,
               process_name: values.process_name,
               product_model: values.product_model,
-              project_id: values.project_id,
-              release_date: values.release_date,
+              release_date: toApiDateString(values.release_date) ?? null,
               file_uuid: fileUuid,
               file_name: fileName,
-              change_summary: values.change_summary,
+              change_summary: showChangeSummary
+                ? String(values.change_summary || '').trim() || null
+                : null,
               remarks: values.remarks,
             };
+            if (!isPe) {
+              const projectFields = resolveProjectRefPick(
+                values.project_ref,
+                projectRefIdMapRef.current,
+              );
+              const projectId = sanitizeOptionalProjectId(projectFields.project_id);
+              const projectCode = String(projectFields.project_code ?? '').trim() || undefined;
+              if (projectId !== undefined) {
+                payload.project_id = projectId;
+              } else if (projectCode) {
+                payload.project_code = projectCode;
+              }
+            }
             if (!payload.file_uuid) {
               messageApi.error(t('app.kuaiplm.productionFile.messages.fileRequired'));
               return false;
@@ -674,97 +932,155 @@ const ProductionFilesPage: React.FC = () => {
         <ProFormText name="catalog_kind" hidden />
         <ProFormText name="file_uuid" hidden />
         <ProFormText name="file_name" hidden />
-        <ProFormSelect
-          name="file_type"
-          label={t('app.kuaiplm.productionFile.fields.fileType')}
-          options={typeOptions}
-          rules={[{ required: true }]}
-          colProps={{ span: 12 }}
-        />
-        <ProFormText
-          name="title"
-          label={t('app.kuaiplm.productionFile.fields.title')}
-          rules={[{ required: true }]}
-          colProps={{ span: 12 }}
-          fieldProps={{ placeholder: NEW_SHORTCUT_HINT }}
-        />
-        <ProFormText
-          name="version"
-          label={t('app.kuaiplm.productionFile.fields.version')}
-          rules={[{ required: true }]}
-          colProps={{ span: 12 }}
-          disabled={Boolean(editing)}
-        />
-        {isPe ? (
-          <>
+        {fixedFileType ? <ProFormText name="file_type" hidden /> : null}
+        <Row gutter={16}>
+          {!fixedFileType ? (
+            <Col span={12}>
+              <ProFormSelect
+                name="file_type"
+                label={t('app.kuaiplm.productionFile.fields.fileType')}
+                options={typeOptions}
+                rules={[{ required: true }]}
+              />
+            </Col>
+          ) : null}
+          <Col span={12}>
             <ProFormText
-              name="process_code"
-              label={t('app.kuaiplm.productionFile.fields.processCode')}
+              name="title"
+              label={t('app.kuaiplm.productionFile.fields.title')}
               rules={[{ required: true }]}
-              colProps={{ span: 12 }}
+              fieldProps={{ placeholder: NEW_SHORTCUT_HINT }}
             />
+          </Col>
+          <Col span={12}>
             <ProFormText
-              name="process_name"
-              label={t('app.kuaiplm.productionFile.fields.process')}
-              colProps={{ span: 12 }}
-            />
-            <ProFormText
-              name="product_model"
-              label={t('app.kuaiplm.productionFile.fields.productModel')}
+              name="version"
+              label={t('app.kuaiplm.productionFile.fields.version')}
               rules={[{ required: true }]}
-              colProps={{ span: 12 }}
+              disabled={Boolean(editing)}
             />
-          </>
-        ) : (
-          <>
-            <Phase2ProjectSelect
-              name="project_id"
-              label={t('app.kuaiplm.productionFile.fields.project')}
-              rules={[{ required: true }]}
-              colProps={{ span: 12 }}
-            />
-            <ProFormDatePicker
-              name="release_date"
-              label={t('app.kuaiplm.productionFile.fields.releaseDate')}
-              colProps={{ span: 12 }}
-              fieldProps={{ style: { width: '100%' } }}
-            />
-          </>
-        )}
-        <ProFormUploadDragger
-          name="file_upload"
-          label={t('app.kuaiplm.productionFile.fields.file')}
-          max={1}
-          colProps={{ span: 24 }}
-          icon={<InboxOutlined />}
-          title={t('app.kuaiplm.productionFile.fields.fileUploadHint')}
-          description={t('app.kuaiplm.productionFile.fields.fileUploadSubHint')}
-          fieldProps={{
-            multiple: false,
-            maxCount: 1,
-            style: { width: '100%' },
-            customRequest: async (options) => {
-              try {
-                const res = await uploadMultipleFiles([options.file as File], {
-                  category: FILE_CATEGORY,
-                });
-                options.onSuccess?.(res[0], options.file as File);
-              } catch (err) {
-                options.onError?.(err as Error);
-              }
-            },
+          </Col>
+          {isPe ? (
+            <>
+              <Col span={12}>
+                <ProFormText
+                  name="process_code"
+                  label={t('app.kuaiplm.productionFile.fields.processCode')}
+                  rules={[{ required: true }]}
+                />
+              </Col>
+              <Col span={12}>
+                <ProFormText
+                  name="process_name"
+                  label={t('app.kuaiplm.productionFile.fields.process')}
+                />
+              </Col>
+              <Col span={12}>
+                <ProFormText
+                  name="product_model"
+                  label={t('app.kuaiplm.productionFile.fields.productModel')}
+                  rules={[{ required: true }]}
+                />
+              </Col>
+            </>
+          ) : (
+            <>
+              <Col span={12}>
+                <Phase2ProjectSelect
+                  allowManualProjectCode
+                  idByLabelRef={projectRefIdMapRef}
+                  label={t('app.kuaiplm.productionFile.fields.project')}
+                  disabled={!!editing}
+                />
+              </Col>
+              <Col span={12}>
+                <ProFormDatePicker
+                  name="release_date"
+                  label={t('app.kuaiplm.productionFile.fields.releaseDate')}
+                  formItemProps={formDateFormItemProps}
+                  fieldProps={{ style: { width: '100%' }, format: 'YYYY-MM-DD' }}
+                />
+              </Col>
+            </>
+          )}
+        </Row>
+        <ProFormDependency name={['file_type']}>
+          {({ file_type: selectedFileType }) => {
+            const effectiveFileType = fixedFileType ?? selectedFileType;
+            const uploadMeta = resolveProductionFileUploadFieldMeta(
+              effectiveFileType,
+              typeLabel,
+              t,
+            );
+            return (
+              <ProFormUploadDragger
+                name="file_upload"
+                label={uploadMeta.label}
+                max={1}
+                icon={<InboxOutlined />}
+                title={uploadMeta.hint}
+                description={uploadMeta.subHint}
+                fieldProps={{
+                  multiple: false,
+                  maxCount: 1,
+                  style: { width: '100%' },
+                  customRequest: async (options) => {
+                    try {
+                      const raw = options.file as File;
+                      const res = await uploadMultipleFiles([raw], {
+                        category: FILE_CATEGORY,
+                      });
+                      const uuid = String(res[0]?.uuid || '').trim();
+                      const uploadedName =
+                        res[0]?.original_name || res[0]?.name || raw.name || '';
+                      if (uuid) {
+                        const curTitle = formRef.current?.getFieldValue?.('title');
+                        const curVersion = String(
+                          formRef.current?.getFieldValue?.('version') || '',
+                        ).trim();
+                        const versionUnset =
+                          !curVersion || (!editing && curVersion === 'A0');
+                        const suggested = suggestTitleAndVersionFromFileName(uploadedName, {
+                          title: curTitle,
+                          version: versionUnset ? '' : curVersion,
+                        });
+                        formRef.current?.setFieldsValue?.({
+                          file_uuid: uuid,
+                          file_name: uploadedName,
+                          ...suggested,
+                        });
+                      }
+                      options.onSuccess?.(res[0], raw);
+                    } catch (err) {
+                      options.onError?.(err as Error);
+                    }
+                  },
+                  onRemove: () => {
+                    formRef.current?.setFieldsValue?.({
+                      file_uuid: undefined,
+                      file_name: undefined,
+                    });
+                    return true;
+                  },
+                }}
+              />
+            );
           }}
-        />
-        <ProFormTextArea
-          name="change_summary"
-          label={t('app.kuaiplm.productionFile.fields.changeSummary')}
-          colProps={{ span: 24 }}
-        />
-        <ProFormTextArea
-          name="remarks"
-          label={t('common.remark')}
-          colProps={{ span: 24 }}
-        />
+        </ProFormDependency>
+        <Row gutter={16}>
+          {showChangeSummary ? (
+            <Col span={24}>
+              <ProFormTextArea
+                name="change_summary"
+                label={t('app.kuaiplm.productionFile.fields.changeSummary')}
+                rules={[{ required: true, message: t('common.required') }]}
+              />
+            </Col>
+          ) : null}
+          <Col span={24}>
+            <ProFormTextArea name="remarks" label={t('common.remark')} />
+          </Col>
+        </Row>
       </FormModalTemplate>
 
       <DetailDrawerTemplate
@@ -775,6 +1091,13 @@ const ProductionFilesPage: React.FC = () => {
         }}
         title={detail?.file_code || t('app.kuaiplm.productionFile.title')}
         loading={detailLoading}
+        extra={
+          detail && !detailError && canDownloadRow(detail) && perms.canRead ? (
+            <Button type="primary" onClick={() => void downloadProductionFile(detail)}>
+              {t('app.kuaiplm.productionFile.actions.download')}
+            </Button>
+          ) : null
+        }
         plainBody={
           detailError ? (
             <Result
@@ -850,20 +1173,7 @@ const ProductionFilesPage: React.FC = () => {
                           <Button
                             type="link"
                             size="small"
-                            onClick={async () => {
-                              try {
-                                await productionFileApi.recordAccess(detail.id, {
-                                  action: 'download',
-                                  version_id: ver.id,
-                                });
-                                messageApi.success(
-                                  t('app.kuaiplm.productionFile.messages.downloadLogged'),
-                                );
-                                await loadDetailExtras(detail.id);
-                              } catch (e) {
-                                messageApi.error(getApiErrorMessage(e));
-                              }
-                            }}
+                            onClick={() => void downloadProductionFile(detail, ver.id)}
                           >
                             {t('app.kuaiplm.productionFile.actions.download')}
                           </Button>

@@ -326,14 +326,20 @@ const BomCollaborationsPage: React.FC = () => {
         dataIndex: 'collab_code',
         key: 'document_code',
         width: 140,
+        minWidth: 140,
         copyable: true,
         uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
       },
       {
         title: t('app.kuaiplm.bomCollab.fields.project'),
         dataIndex: 'project_name',
         key: 'project_name',
         width: 180,
+        minWidth: 180,
+        uniTableKeepWidth: true,
+        resizable: false,
         ellipsis: true,
         render: (_, r) => `${r.project_name || ''} (${r.project_code || ''})`,
       },
@@ -341,8 +347,10 @@ const BomCollaborationsPage: React.FC = () => {
         title: t('app.kuaiplm.bomCollab.fields.title'),
         dataIndex: 'title',
         key: 'title',
-        ellipsis: true,
+        minWidth: 160,
+        uniTablePrimaryFlex: true,
         uniTableRemainderFlex: true,
+        ellipsis: true,
       },
       {
         ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
@@ -391,7 +399,7 @@ const BomCollaborationsPage: React.FC = () => {
               key="detail"
               type="link"
               size="small"
-              {...rowActionKind('detail')}
+              {...rowActionKind('read')}
               onClick={() => void openDetail(row)}
             />,
           ];
@@ -401,7 +409,7 @@ const BomCollaborationsPage: React.FC = () => {
                 key="edit"
                 type="link"
                 size="small"
-                {...rowActionKind('edit')}
+                {...rowActionKind('update')}
                 onClick={() => void openEdit(row)}
               />,
             );
@@ -573,7 +581,7 @@ const BomCollaborationsPage: React.FC = () => {
           tableRowsRef.current = rows;
         }}
         columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
-        columnPersistenceId="apps.kuaiplm.pages.bom-collaborations.v2"
+        columnPersistenceId="apps.kuaiplm.pages.bom-collaborations.width-v3"
         showCreateButton={perms.canCreate}
         createButtonText={t('app.kuaiplm.bomCollab.createButton') + NEW_SHORTCUT_HINT}
         onCreate={openCreate}

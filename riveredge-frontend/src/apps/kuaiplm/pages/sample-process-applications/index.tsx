@@ -241,14 +241,20 @@ const SampleProcessApplicationsPage: React.FC = () => {
         dataIndex: 'application_code',
         key: 'document_code',
         width: 140,
+        minWidth: 140,
         copyable: true,
         uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
       },
       {
         title: t('app.kuaiplm.sampleProcess.fields.project'),
         dataIndex: 'project_name',
         key: 'project_name',
         width: 180,
+        minWidth: 180,
+        uniTableKeepWidth: true,
+        resizable: false,
         ellipsis: true,
         render: (_, r) => `${r.project_name || ''} (${r.project_code || ''})`,
       },
@@ -264,15 +270,19 @@ const SampleProcessApplicationsPage: React.FC = () => {
         title: t('app.kuaiplm.sampleProcess.fields.title'),
         dataIndex: 'title',
         key: 'title',
-        ellipsis: true,
+        minWidth: 160,
+        uniTablePrimaryFlex: true,
         uniTableRemainderFlex: true,
+        ellipsis: true,
       },
       {
         title: materialCodeLabel,
         dataIndex: 'material_code',
         key: 'material_code',
         width: 140,
+        minWidth: 140,
         uniTableKeepWidth: true,
+        resizable: false,
         ellipsis: true,
       },
       {
@@ -280,7 +290,9 @@ const SampleProcessApplicationsPage: React.FC = () => {
         dataIndex: 'release_date',
         key: 'business_date',
         width: 120,
+        minWidth: 120,
         uniTableKeepWidth: true,
+        resizable: false,
         render: (_, r) => formatDateBySiteSetting(r.release_date) || '—',
       },
       {
@@ -304,7 +316,7 @@ const SampleProcessApplicationsPage: React.FC = () => {
               key="detail"
               type="link"
               size="small"
-              {...rowActionKind('detail')}
+              {...rowActionKind('read')}
               onClick={() => void openDetail(row)}
             />,
           ];
@@ -314,7 +326,7 @@ const SampleProcessApplicationsPage: React.FC = () => {
                 key="edit"
                 type="link"
                 size="small"
-                {...rowActionKind('edit')}
+                {...rowActionKind('update')}
                 onClick={() => {
                   setEditing(row);
                   setModalOpen(true);
@@ -501,7 +513,7 @@ const SampleProcessApplicationsPage: React.FC = () => {
           tableRowsRef.current = rows;
         }}
         columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
-        columnPersistenceId="apps.kuaiplm.pages.sample-process-applications.v2"
+        columnPersistenceId="apps.kuaiplm.pages.sample-process-applications.width-v3"
         showCreateButton={perms.canCreate}
         createButtonText={t('app.kuaiplm.sampleProcess.createButton') + NEW_SHORTCUT_HINT}
         onCreate={openCreate}

@@ -76,6 +76,13 @@ export type RowActionVisualProfile =
   | 'tax-red-flush'
   | 'open-workbench'
   | 'withdraw-project'
+  | 'compile-lab-report'
+  | 'submit-lab-report'
+  | 'approve-lab-report'
+  | 'reject-lab-report'
+  | 'view-lab-report'
+  | 'download-lab-report'
+  | 'download-firmware'
 
 /** 项目工作台：行内双字「工作台」；RBAC 默认 read */
 export function rowActionOpenWorkbench(
@@ -100,6 +107,97 @@ export function rowActionWithdrawProject(
   return {
     [ROW_ACTION_KIND_ATTR]: permission,
     [ROW_ACTION_VISUAL_PROFILE_ATTR]: 'withdraw-project',
+  }
+}
+
+/** 实验委托编制报告：排在完成实验之后、提交报告审批之前 */
+export function rowActionCompileLabReport(
+  permission: 'execute' | 'skip' = 'execute',
+): {
+  [ROW_ACTION_KIND_ATTR]: RowActionPermissionKind
+  [ROW_ACTION_VISUAL_PROFILE_ATTR]: RowActionVisualProfile
+} {
+  return {
+    [ROW_ACTION_KIND_ATTR]: permission,
+    [ROW_ACTION_VISUAL_PROFILE_ATTR]: 'compile-lab-report',
+  }
+}
+
+/** 实验委托提交报告审批：须排在编制报告之后 */
+export function rowActionSubmitLabReport(
+  permission: 'submit' | 'skip' = 'submit',
+): {
+  [ROW_ACTION_KIND_ATTR]: RowActionPermissionKind
+  [ROW_ACTION_VISUAL_PROFILE_ATTR]: RowActionVisualProfile
+} {
+  return {
+    [ROW_ACTION_KIND_ATTR]: permission,
+    [ROW_ACTION_VISUAL_PROFILE_ATTR]: 'submit-lab-report',
+  }
+}
+
+/** 实验委托批准报告 */
+export function rowActionApproveLabReport(
+  permission: 'approve' | 'skip' = 'approve',
+): {
+  [ROW_ACTION_KIND_ATTR]: RowActionPermissionKind
+  [ROW_ACTION_VISUAL_PROFILE_ATTR]: RowActionVisualProfile
+} {
+  return {
+    [ROW_ACTION_KIND_ATTR]: permission,
+    [ROW_ACTION_VISUAL_PROFILE_ATTR]: 'approve-lab-report',
+  }
+}
+
+/** 实验委托驳回报告 */
+export function rowActionRejectLabReport(
+  permission: 'reject' | 'skip' = 'reject',
+): {
+  [ROW_ACTION_KIND_ATTR]: RowActionPermissionKind
+  [ROW_ACTION_VISUAL_PROFILE_ATTR]: RowActionVisualProfile
+} {
+  return {
+    [ROW_ACTION_KIND_ATTR]: permission,
+    [ROW_ACTION_VISUAL_PROFILE_ATTR]: 'reject-lab-report',
+  }
+}
+
+/** 实验委托查看已批准报告 */
+export function rowActionViewLabReport(
+  permission: 'read' | 'skip' = 'read',
+): {
+  [ROW_ACTION_KIND_ATTR]: RowActionPermissionKind
+  [ROW_ACTION_VISUAL_PROFILE_ATTR]: RowActionVisualProfile
+} {
+  return {
+    [ROW_ACTION_KIND_ATTR]: permission,
+    [ROW_ACTION_VISUAL_PROFILE_ATTR]: 'view-lab-report',
+  }
+}
+
+/** 实验委托下载已批准报告 */
+export function rowActionDownloadLabReport(
+  permission: 'export' | 'read' | 'skip' = 'read',
+): {
+  [ROW_ACTION_KIND_ATTR]: RowActionPermissionKind
+  [ROW_ACTION_VISUAL_PROFILE_ATTR]: RowActionVisualProfile
+} {
+  return {
+    [ROW_ACTION_KIND_ATTR]: permission,
+    [ROW_ACTION_VISUAL_PROFILE_ATTR]: 'download-lab-report',
+  }
+}
+
+/** 产品固件下载已审核/已发布文件 */
+export function rowActionDownloadFirmware(
+  permission: 'export' | 'read' | 'skip' = 'read',
+): {
+  [ROW_ACTION_KIND_ATTR]: RowActionPermissionKind
+  [ROW_ACTION_VISUAL_PROFILE_ATTR]: RowActionVisualProfile
+} {
+  return {
+    [ROW_ACTION_KIND_ATTR]: permission,
+    [ROW_ACTION_VISUAL_PROFILE_ATTR]: 'download-firmware',
   }
 }
 
@@ -450,7 +548,14 @@ export function readActionVisualProfile(node: React.ReactNode): RowActionVisualP
     raw === 'tax-transfer-out' ||
     raw === 'tax-red-flush' ||
     raw === 'open-workbench' ||
-    raw === 'withdraw-project'
+    raw === 'withdraw-project' ||
+    raw === 'compile-lab-report' ||
+    raw === 'submit-lab-report' ||
+    raw === 'approve-lab-report' ||
+    raw === 'reject-lab-report' ||
+    raw === 'view-lab-report' ||
+    raw === 'download-lab-report' ||
+    raw === 'download-firmware'
   ) {
     return raw
   }

@@ -1928,6 +1928,13 @@ export default {
   'components.uniAction.read': '详情',
   'components.uniAction.openWorkbench': '工作台',
   'components.uniAction.withdrawProject': '撤回',
+  'components.uniAction.compileLabReport': '编制报告',
+  'components.uniAction.submitLabReport': '提交报告审批',
+  'components.uniAction.approveLabReport': '批准报告',
+  'components.uniAction.rejectLabReport': '驳回报告',
+  'components.uniAction.viewLabReport': '查看报告',
+  'components.uniAction.downloadLabReport': '下载报告',
+  'components.uniAction.downloadFirmware': '下载',
   'components.uniAction.display': '展示',
   'components.uniAction.create': '新建',
   'components.uniAction.update': '编辑',
@@ -3869,6 +3876,7 @@ export default {
   'app.kuaiplm.menu.dashboard': '研发看板',
   'app.kuaiplm.menu.group.project-center': '研发项目',
   'app.kuaiplm.menu.group.project-docs': '项目单据',
+  'app.kuaiplm.menu.group.sample-build': '样品打样',
   'app.kuaiplm.menu.rd-projects': '研发项目',
   'app.kuaiplm.menu.gate-templates': '阶段管理',
   'app.kuaiplm.menu.pending-inbox': '跨项目待办',
@@ -3966,12 +3974,29 @@ export default {
   'app.kuaiplm.labRequest.fields.businessType': '委托类型',
   'app.kuaiplm.labRequest.fields.priority': '优先级',
   'app.kuaiplm.labRequest.fields.projectCode': '项目代号',
+  'app.kuaiplm.labRequest.fields.material': '物料',
   'app.kuaiplm.labRequest.fields.materialCode': '物料编码',
   'app.kuaiplm.labRequest.fields.materialName': '物料名称',
   'app.kuaiplm.labRequest.fields.requesterName': '委托人',
   'app.kuaiplm.labRequest.fields.delegateDept': '委托部门',
   'app.kuaiplm.labRequest.fields.testDept': '检测部门',
   'app.kuaiplm.labRequest.fields.inspectionSlipNo': '检验单号',
+  'app.kuaiplm.labRequest.fields.customerName': '客户',
+  'app.kuaiplm.labRequest.fields.supplierName': '供应商',
+  'app.kuaiplm.labRequest.fields.sampleQty': '试验数量',
+  'app.kuaiplm.labRequest.fields.provideSample': '提供样品',
+  'app.kuaiplm.labRequest.fields.needReport': '是否要报告',
+  'app.kuaiplm.labRequest.fields.needFeedback': '是否要反馈',
+  'app.kuaiplm.labRequest.fields.chargeRequired': '是否收费',
+  'app.kuaiplm.labRequest.fields.chargeAmount': '收费金额',
+  'app.kuaiplm.labRequest.fields.payer': '付款方',
+  'app.kuaiplm.labRequest.payer.company': '本厂',
+  'app.kuaiplm.labRequest.payer.supplier': '供应商',
+  'app.kuaiplm.labRequest.payer.customer': '客户',
+  'app.kuaiplm.labRequest.cert.sectionTitle': '认证与费用',
+  'app.kuaiplm.labRequest.cert.addLine': '添加认证项',
+  'app.kuaiplm.labRequest.cert.certName': '认证名称',
+  'app.kuaiplm.labRequest.cert.fee': '费用',
   'app.kuaiplm.labRequest.fields.sampleDesc': '样品说明',
   'app.kuaiplm.labRequest.fields.testItems': '试验项目',
   'app.kuaiplm.labRequest.fields.testReason': '试验原由',
@@ -3980,6 +4005,7 @@ export default {
   'app.kuaiplm.labRequest.actions.fillOutsourcePrice': '填写委外价格',
   'app.kuaiplm.labRequest.messages.outsourcePriceRequired': '请填写大于 0 的委外试验价格',
   'app.kuaiplm.labRequest.fields.expectedCompleteAt': '预计完成',
+  'app.kuaiplm.labRequest.fields.startedAt': '开始时间',
   'app.kuaiplm.labRequest.fields.resultSummary': '结果摘要',
   'app.kuaiplm.labRequest.fields.judgment': '判定',
   'app.kuaiplm.labRequest.fields.ngFlag': '不合格',
@@ -3997,16 +4023,52 @@ export default {
   'app.kuaiplm.labRequest.report.sectionTitle': '实验报告',
   'app.kuaiplm.labRequest.measure.exceptionLinked': '已关联异常',
   'app.kuaiplm.labRequest.actions.editReport': '编制报告',
+  'app.kuaiplm.labRequest.actions.saveReportDraft': '保存草稿',
+  'app.kuaiplm.labRequest.actions.saveReportFile': '保存报告文件',
+  'app.kuaiplm.labRequest.actions.saveAndSubmitReport': '保存并提交审批',
   'app.kuaiplm.labRequest.actions.submitReport': '提交报告审批',
   'app.kuaiplm.labRequest.actions.approveReport': '批准报告',
   'app.kuaiplm.labRequest.actions.rejectReport': '驳回报告',
+  'app.kuaiplm.labRequest.actions.viewReport': '查看报告',
+  'app.kuaiplm.labRequest.actions.downloadReport': '下载报告',
+  'app.kuaiplm.labRequest.actions.openReportFile': '打开报告文件',
+  'app.kuaiplm.labRequest.actions.reuploadReport': '补传报告文件',
   'app.kuaiplm.labRequest.actions.linkException': '关联异常',
+  'app.kuaiplm.labRequest.fields.reportAttachment': '报告文件',
   'app.kuaiplm.labRequest.messages.reportSaved': '实验报告已保存',
   'app.kuaiplm.labRequest.messages.reportSubmitted': '实验报告已提交审批',
   'app.kuaiplm.labRequest.messages.reportApproved': '实验报告已批准',
   'app.kuaiplm.labRequest.messages.reportRejected': '实验报告已驳回',
   'app.kuaiplm.labRequest.messages.reportRejectReason': '请输入报告驳回原因',
+  'app.kuaiplm.labRequest.messages.reportRejectReasonRequired': '报告驳回原因不能为空',
+  'app.kuaiplm.labRequest.placeholders.reportRejectReason': '请说明驳回原因',
+  'app.kuaiplm.labRequest.messages.reportFlowHint':
+    '须上传报告文件（或填写外链）后提交审批；仅标题/摘要不能作为正式报告。',
+  'app.kuaiplm.labRequest.messages.reportUploadHint':
+    '正式报告以实验室上传的文件为准。保存草稿可不传文件，后续再补；提交审批前须上传 PDF/Office 等报告原件。标题与摘要仅作说明，不能代替报告文件。',
+  'app.kuaiplm.labRequest.messages.reportUploadDrag': '点击或拖拽上传实验报告文件',
+  'app.kuaiplm.labRequest.messages.reportUploadFormats':
+    '支持 PDF、Word、Excel、PPT、图片或 ZIP',
+  'app.kuaiplm.labRequest.messages.reportDocumentRequired':
+    '请先上传报告文件，或填写可打开的报告链接后再提交审批',
+  'app.kuaiplm.labRequest.messages.reportDocumentRequiredForPatch':
+    '已批准的报告须补传文件或填写可打开的报告链接后再保存',
+  'app.kuaiplm.labRequest.messages.reportNotApprovedYet': '报告尚未批准，无法查看或下载',
+  'app.kuaiplm.labRequest.messages.reportNoDownloadable':
+    '尚未上传报告文件也未填写报告链接。请点「补传报告文件」上传后再查看/下载',
+  'app.kuaiplm.labRequest.messages.reportHasAttachment': '已上传附件（请点打开/下载）',
+  'app.kuaiplm.labRequest.messages.reportFileReady': '已上传报告文件，请打开或下载原件',
+  'app.kuaiplm.labRequest.messages.reportLinkReady': '报告为外部链接，请打开查看',
+  'app.kuaiplm.labRequest.messages.reportNotEditableStatus': '仅实验中或已完成状态可编制实验报告',
+  'app.kuaiplm.labRequest.messages.reportPendingLocked': '报告审批中，请先驳回后再修改',
+  'app.kuaiplm.labRequest.messages.reportApprovedLocked': '报告已批准，不可再改',
   'app.kuaiplm.labRequest.messages.exceptionLinked': '已创建并关联质量异常',
+  'app.kuaiplm.labRequest.report.defaultTitle': '{{subject}} 实验报告',
+  'app.kuaiplm.labRequest.report.defaultTitleFallback': '实验报告',
+  'app.kuaiplm.labRequest.report.summaryHeaderJudgment': '整单判定：{{judgment}}',
+  'app.kuaiplm.labRequest.report.summaryMeasureLine':
+    '{{name}}：检验结果 {{measured}}，试验结论 {{judgment}}',
+  'app.kuaiplm.labRequest.placeholders.reportUrlOptional': '选填；有附件时可自动带入下载地址',
 
   'app.kuaiplm.labRequest.judgment.pass': '合格',
   'app.kuaiplm.labRequest.judgment.fail': '不合格',
@@ -4019,20 +4081,13 @@ export default {
   'app.kuaiplm.labRequest.compare.na': '不判定',
   'app.kuaiplm.labRequest.measure.sectionTitle': '试验项与标准',
   'app.kuaiplm.labRequest.measure.addItem': '添加试验项',
+  'app.kuaiplm.labRequest.measure.itemName': '试验/检测项目',
+  'app.kuaiplm.labRequest.measure.itemNamePlaceholder': '请输入试验或检测项目',
+  'app.kuaiplm.labRequest.measure.standard': '试验标准',
+  'app.kuaiplm.labRequest.measure.standardPlaceholder': '请输入试验标准要求',
   'app.kuaiplm.labRequest.measure.judgmentRule': '判定规则',
-  'app.kuaiplm.labRequest.measure.judgmentRulePlaceholder': '选用规则（可选）',
-  'app.kuaiplm.labRequest.measure.itemName': '试验项',
-  'app.kuaiplm.labRequest.measure.itemCode': '项编码',
-  'app.kuaiplm.labRequest.measure.compareType': '比较方式',
-  'app.kuaiplm.labRequest.measure.standardMin': '下限',
-  'app.kuaiplm.labRequest.measure.standardMax': '上限',
-  'app.kuaiplm.labRequest.measure.standardValue': '标准值',
-  'app.kuaiplm.labRequest.measure.unit': '单位',
-  'app.kuaiplm.labRequest.measure.standard': '标准',
-  'app.kuaiplm.labRequest.measure.measuredValue': '实测值',
-  'app.kuaiplm.labRequest.measure.autoJudgment': '自动判定',
-  'app.kuaiplm.labRequest.measure.finalJudgment': '最终判定',
-  'app.kuaiplm.labRequest.measure.ruleVersion': '规则版本',
+  'app.kuaiplm.labRequest.measure.measuredValue': '检验结果',
+  'app.kuaiplm.labRequest.measure.finalJudgment': '试验结论',
   'app.kuaiplm.labRequest.measure.manualReason': '复核原因',
   'app.kuaiplm.labRequest.measure.empty': '暂无试验项',
   'app.kuaiplm.labRequest.type.iqc': 'IQC委托',
@@ -4042,23 +4097,36 @@ export default {
   'app.kuaiplm.labRequest.type.outsource': '委外试验',
   'app.kuaiplm.labRequest.type.general': '通用委托',
   'app.kuaiplm.labRequest.status.draft': '草稿',
+  'app.kuaiplm.labRequest.status.pending_review': '待经理审核',
   'app.kuaiplm.labRequest.status.pending': '待受理',
   'app.kuaiplm.labRequest.status.in_lab': '实验中',
   'app.kuaiplm.labRequest.status.completed': '已完成',
   'app.kuaiplm.labRequest.status.rejected': '已驳回',
   'app.kuaiplm.labRequest.status.revoked': '已撤销',
+  'app.kuaiplm.labRequest.scope.all': '全部委托',
+  'app.kuaiplm.labRequest.scope.mine': '我的实验委托',
   'app.kuaiplm.labRequest.priority.normal': '普通',
   'app.kuaiplm.labRequest.priority.urgent': '紧急',
   'app.kuaiplm.labRequest.actions.accept': '受理',
   'app.kuaiplm.labRequest.actions.complete': '完成实验',
   'app.kuaiplm.labRequest.actions.saveMeasures': '保存实测判定',
   'app.kuaiplm.labRequest.actions.override': '人工复核',
-  'app.kuaiplm.labRequest.messages.submitSuccess': '已提交实验室',
+  'app.kuaiplm.labRequest.messages.submitSuccess': '已提交',
+  'app.kuaiplm.labRequest.messages.approveSuccess': '经理已审核，已进入实验室待受理',
   'app.kuaiplm.labRequest.messages.acceptSuccess': '实验室已受理',
   'app.kuaiplm.labRequest.messages.completeSuccess': '实验已完成',
+  'app.kuaiplm.labRequest.messages.measuresRequiredBeforeComplete':
+    '尚有试验项未完成实测判定，请先填写并保存实测后再完成实验',
+  'app.kuaiplm.labRequest.messages.completeByMeasuresHint':
+    '请在下方填写各试验项检验结果；确认后将先保存实测判定，再按行汇总整单判定（NG > 不合格 > 合格 > 不适用）并完成实验。',
+  'app.kuaiplm.labRequest.messages.judgmentRequired': '请选择判定结果',
+  'app.kuaiplm.labRequest.placeholders.resultSummaryOptional': '选填结果摘要',
   'app.kuaiplm.labRequest.messages.rejectSuccess': '已驳回',
-  'app.kuaiplm.labRequest.messages.revokeSuccess': '已撤销',
+  'app.kuaiplm.labRequest.messages.revokeSuccess': '已撤销审核，单据已回到草稿',
   'app.kuaiplm.labRequest.messages.revokeReason': '请输入撤销原因',
+  'app.kuaiplm.labRequest.messages.revokeReasonRequired': '撤销原因不能为空',
+  'app.kuaiplm.labRequest.placeholders.revokeReason': '请说明撤销原因',
+  'app.kuaiplm.labRequest.actions.revoke': '撤销审核',
   'app.kuaiplm.labRequest.messages.measureSaved': '实测已保存，判定结果已按规则版本冻结',
   'app.kuaiplm.labRequest.messages.overrideSuccess': '人工复核已保存',
   'app.kuaiplm.labRequest.messages.overrideReasonRequired': '人工复核必须填写原因',
@@ -4276,8 +4344,19 @@ export default {
   'app.kuaiplm.common.messages.batchDeleteSuccess': '已删除 {{count}} 条变更',
   'app.kuaiplm.productFirmware.title': '产品固件',
   'app.kuaiplm.productFirmware.createButton': '新建产品固件',
+  'app.kuaiplm.productFirmware.modal.createTitle': '新建产品固件',
+  'app.kuaiplm.productFirmware.modal.editTitle': '编辑产品固件',
+  'app.kuaiplm.productFirmware.viewScope.all': '研发视图',
+  'app.kuaiplm.productFirmware.viewScope.production': '生产下载',
+  'app.kuaiplm.productFirmware.actions.downloadFirmware': '下载固件',
+  'app.kuaiplm.productFirmware.actions.release': '发布',
+  'app.kuaiplm.productFirmware.actions.revise': '升版',
+  'app.kuaiplm.productFirmware.messages.fileNoDownloadable': '该固件尚未上传文件，无法下载',
+  'app.kuaiplm.productFirmware.messages.latestVersionOnlyHint':
+    '当前账号仅可查看各项目最新已发布版本；具备资深制定方权限可查看全部历史版本',
   'app.kuaiplm.productFirmware.fields.code': '固件单号',
   'app.kuaiplm.productFirmware.fields.project': '研发项目',
+  'app.kuaiplm.phase2.projectRefPlaceholder': '选择项目或手填项目代号',
   'app.kuaiplm.productFirmware.fields.version': '版本号',
   'app.kuaiplm.productFirmware.fields.title': '标题',
   'app.kuaiplm.productFirmware.fields.releaseDate': '发布日期',
@@ -4296,6 +4375,9 @@ export default {
   'app.kuaiplm.productFirmware.messages.rejectSuccess': '已驳回',
   'app.kuaiplm.productFirmware.messages.noExportData': '暂无可导出的产品固件',
   'app.kuaiplm.productFirmware.messages.releaseSuccess': '已发布，可供生产下载',
+  'app.kuaiplm.productFirmware.messages.reviseConfirm': '确认为当前已发布固件创建新版本草稿？',
+  'app.kuaiplm.productFirmware.messages.reviseDefault': '升版',
+  'app.kuaiplm.productFirmware.messages.reviseSuccess': '已创建升版草稿，请上传新固件并提交审核',
   'app.kuaiplm.productFirmware.messages.deleteOnlyDraft': '仅草稿可删除，请重新勾选',
   'app.kuaiplm.productionFile.title': '生产文件',
   'app.kuaiplm.productionFile.createButton': '新建生产文件',
@@ -4303,6 +4385,10 @@ export default {
   'app.kuaiplm.productionFile.editTitle': '编辑生产文件',
   'app.kuaiplm.productionFile.catalog.pe_production': 'PE生产软件',
   'app.kuaiplm.productionFile.catalog.rd_tool': '研发工具与产测',
+  'app.kuaiplm.productionFile.viewScope.all': '研发视图',
+  'app.kuaiplm.productionFile.viewScope.production': '生产下载',
+  'app.kuaiplm.productionFile.messages.latestVersionOnlyHint':
+    '当前为研发视图：非资深制定方默认仅见各项目最新已生效版本（及本人草稿/待审/驳回）；切换「生产下载」可模拟产线视角。',
   'app.kuaiplm.productionFile.fields.code': '文件单号',
   'app.kuaiplm.productionFile.fields.fileType': '文件类型',
   'app.kuaiplm.productionFile.fields.title': '标题',
@@ -4315,6 +4401,9 @@ export default {
   'app.kuaiplm.productionFile.fields.file': '附件',
   'app.kuaiplm.productionFile.fields.fileUploadHint': '点击或拖拽文件到此处',
   'app.kuaiplm.productionFile.fields.fileUploadSubHint': '仅支持单个文件；提交审核前必须上传',
+  'app.kuaiplm.productionFile.fields.fileUploadHintByType': '点击或拖拽{{folder}}到此处',
+  'app.kuaiplm.productionFile.fields.fileUploadSubHintByType':
+    '命名可参考样例文件夹「{{folder}}」内文件；仅支持单个文件，提交审核前必须上传',
   'app.kuaiplm.productionFile.fields.changeSummary': '更改明细',
   'app.kuaiplm.productionFile.fields.issuedBy': '发放人',
   'app.kuaiplm.productionFile.fields.receivers': '接收人',
@@ -4337,7 +4426,7 @@ export default {
   'app.kuaiplm.productionFile.status.rejected': '已驳回',
   'app.kuaiplm.productionFile.actions.revise': '升版',
   'app.kuaiplm.productionFile.actions.issue': '发放',
-  'app.kuaiplm.productionFile.actions.download': '登记下载',
+  'app.kuaiplm.productionFile.actions.download': '下载',
   'app.kuaiplm.productionFile.sections.versions': '版本履历',
   'app.kuaiplm.productionFile.sections.accessLogs': '发放与调阅记录',
   'app.kuaiplm.productionFile.accessAction.view': '调阅',
@@ -5175,8 +5264,23 @@ export default {
   // 福尼特 OA（funide-oa）专用定制应用
   'app.funide-oa.name': '福尼特OA',
   'app.funide-oa.menu.workbench': '工作台',
+  'app.funide-oa.menu.dept.rdElectronics': '研发电子',
+  'app.funide-oa.menu.dept.rdProject': '研发项目',
+  'app.funide-oa.menu.dept.laboratory': '实验部门',
+  'app.funide-oa.menu.dept.quality': '质量管理',
+  'app.funide-oa.menu.dept.production': '生产作业',
+  'app.funide-oa.menu.dept.processEquipment': '工艺装备',
+  'app.funide-oa.menu.dept.equipmentManagement': '设备管理',
+  'app.funide-oa.menu.dept.training': '培训认证',
+  'app.funide-oa.menu.dept.systemQuality': '质量体系',
+  'app.funide-oa.menu.dept.procurementAssets': '采购资产',
+  'app.funide-oa.menu.dept.sampleFlow': '样品试流',
+  'app.funide-oa.menu.docControl': '文控资料',
+  'app.funide-oa.menu.basicData': '基础数据',
   'app.funide-oa.menu.controlledDocs': '受控文件',
   'app.funide-oa.menu.rdCollab': '研发协同',
+  'app.funide-oa.menu.projectDocs': '项目单据',
+  'app.funide-oa.menu.sampleBuild': '样品打样',
   'app.funide-oa.menu.lab': '实验管理',
   'app.funide-oa.menu.qualityLoop': '质量闭环',
   'app.funide-oa.menu.signoff': '会签审批',
@@ -5185,6 +5289,10 @@ export default {
   'app.funide-oa.menu.production': '生产作业',
   'app.funide-oa.menu.production.dailySummary': '日报汇总',
   'app.funide-oa.menu.equipment': '设备工装',
+  'app.funide-oa.menu.processEquipment.equipment': '设备',
+  'app.funide-oa.menu.processEquipment.molds': '模具',
+  'app.funide-oa.menu.processEquipment.tooling': '工装',
+  'app.funide-oa.menu.processEquipment.metrology': '计量',
   'app.funide-oa.menu.equipment.ledger': '台账与验收',
   'app.funide-oa.menu.equipment.maintenance': '点检保养维修',
   'app.funide-oa.menu.equipment.calibration': '计量外校',
@@ -5213,7 +5321,7 @@ export default {
   'app.funide-oa.menu.r01.drawings': '工程图纸',
   'app.funide-oa.menu.r01.drawingDistributions': '图纸下发',
   'app.funide-oa.menu.r01.drawingLoans': '图纸借用',
-  'app.funide-oa.menu.r01.peSop': 'PE SOP',
+  'app.funide-oa.menu.r01.peSop': '工艺 SOP',
   'app.funide-oa.menu.r01.qcSop': 'QC SOP',
   'app.funide-oa.menu.r01.systemDocuments': '体系文件',
   'app.funide-oa.menu.r01.knowledgeBase': '知识库与体系归档',
@@ -5228,7 +5336,7 @@ export default {
   'app.funide-oa.menu.r05.complaints': '质量投诉',
   'app.funide-oa.menu.r05.complaintAnalysis': '投诉月度分析',
   'app.funide-oa.menu.r06.productFirmwares': '产品固件',
-  'app.funide-oa.menu.r06.productionFiles': '产测与烧录文件',
+  'app.funide-oa.menu.r06.productionFiles': '生产软件',
   'app.funide-oa.menu.r07.annualLabPlans': '年度例试计划',
   'app.funide-oa.menu.r08.trialFlows': '试流单',
   'app.funide-oa.menu.r08.prototypeBuild': '样机制作书',
@@ -5339,9 +5447,11 @@ export default {
   'app.funide-oa.projectProposal.messages.deleteOnlyDraft': '仅草稿或已驳回可删除，请重新勾选',
   'app.funide-oa.workbench.title': 'OA 工作台',
   'app.funide-oa.workbench.description':
-    '工作台为研发看板。请从左侧菜单进入受控文件、研发协同、实验、质量、会签、生产、设备、培训与证照。',
-  'app.funide-oa.workbench.hint.controlledDocs': '体系文件、图纸、SOP、产测文件与知识库。',
-  'app.funide-oa.workbench.hint.rdCollab': '项目、跨项目待办、BOM、工程变更、试流与打样。',
+    '工作台为研发看板。请从左侧菜单进入受控文件、研发协同、样品打样、实验、质量、会签、生产、设备、培训与证照。',
+  'app.funide-oa.workbench.hint.controlledDocs': '体系文件、图纸、SOP 与知识库。',
+  'app.funide-oa.workbench.hint.rdCollab': '项目、跨项目待办、项目建议书、BOM 与工程变更。',
+  'app.funide-oa.workbench.hint.sampleBuild': '样机制作、试流、样品检验、物料评审与打样订单。',
+  'app.funide-oa.workbench.hint.projectDocs': '生产软件、产品固件。',
   'app.funide-oa.workbench.hint.lab': '实验委托、看板、判定规则与年度例试。',
   'app.funide-oa.workbench.hint.qualityLoop': '返工、返工策划、投诉、8D、供方评价与让步放行。',
   'app.funide-oa.workbench.hint.signoff': '会签模板与会签申请。',
@@ -19978,6 +20088,14 @@ export default {
   'app.master-data.drawings.type.assembly': '装配图',
   'app.master-data.drawings.type.process': '工艺图',
   'app.master-data.drawings.type.other': '其他',
+  'app.master-data.drawings.type.product_spec': '产品规格书',
+  'app.master-data.drawings.catalogTab.engineering': '工程图纸',
+  'app.master-data.drawings.catalogTab.productSpec': '产品规格书',
+  'app.master-data.drawings.viewScope.all': '研发视图',
+  'app.master-data.drawings.viewScope.production': '生产下载',
+  'app.master-data.drawings.messages.latestVersionOnlyHint': '非资深制定方默认仅见各图号最新已发布版及本人流程中单据',
+  'app.master-data.drawings.fields.changeSummary': '更改明细',
+  'app.master-data.drawings.fields.changeSummaryRequired': '升版后须填写更改明细',
   'app.master-data.drawings.status.Draft': '草稿',
   'app.master-data.drawings.status.Released': '已发布',
   'app.master-data.drawings.status.Obsolete': '已作废',
@@ -28286,6 +28404,32 @@ export default {
   'pages.dashboard.updateLogButton': '更新日志',
   'pages.dashboard.updateLogModalTitle': '更新日志',
   'pages.dashboard.updateLogTab.all': '全部',
+  'pages.dashboard.updateLogTab.dedicated': '定制',
+  'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.drawing-vault-folder-inline-actions-r01.title':
+    '图档库文件夹行内编辑删除',
+  'pages.dashboard.updateLog.entries.drawing-vault-folder-inline-actions-r01.description':
+    '图档库侧栏移除单独重命名按钮，文件夹节点行内显示编辑与删除，交互对齐接口管理与数据集管理分类树。',
+  'pages.dashboard.updateLog.entries.drawing-vault-tree-expand-r01.title':
+    '图纸管理图档库文件夹可展开',
+  'pages.dashboard.updateLog.entries.drawing-vault-tree-expand-r01.description':
+    '修复图档库侧栏树展开箭头被隐藏导致无法展开子文件夹的问题，并支持一键展开或收起全部文件夹。',
+  'pages.dashboard.updateLog.entries.update-log-dedicated-tab-r01.title':
+    '更新日志增加定制 Tab',
+  'pages.dashboard.updateLog.entries.update-log-dedicated-tab-r01.description':
+    '已启用定制应用时，更新日志顶栏在类型 Tab 后增加「定制」，仅展示当前租户可见的定制更新条目。',
+  'pages.dashboard.updateLog.entries.update-log-dedicated-badge-visible-r01.title':
+    '更新日志定制徽章与条目可见性修复',
+  'pages.dashboard.updateLog.entries.update-log-dedicated-badge-visible-r01.description':
+    '已启用定制应用时，定制更新条目并入对应日期分组并在类型旁显示紫色「定制」徽章；不再依赖 is_dedicated 字段漏显。',
+  'pages.dashboard.updateLog.entries.update-log-remove-haolisales-legacy-r01.title':
+    '更新日志移除已下线 haolisales 条目',
+  'pages.dashboard.updateLog.entries.update-log-remove-haolisales-legacy-r01.description':
+    '销售跟踪专用应用 haolisales 已并入好力 GO，工作台更新日志不再保留其历史定制条目。',
+  'pages.dashboard.updateLog.entries.update-log-dedicated-scope-filter-r01.title':
+    '更新日志区分通用与定制',
+  'pages.dashboard.updateLog.entries.update-log-dedicated-scope-filter-r01.description':
+    '工作台更新日志拆为通用与定制两类；定制条目绑定应用 code 且仅在该定制应用已启用时可见，并显示「定制」徽章，避免 A 客户定制记录出现在 B 客户租户。',
   'pages.dashboard.updateLogDateNavAria': '更新日志日期导航',
   'pages.dashboard.updateLogLatestTitle': '最新更新',
   'pages.dashboard.updateLogEmpty': '暂无更新记录',
@@ -31170,6 +31314,266 @@ export default {
     '侧栏菜单带查询参数时不再收起分组',
   'pages.dashboard.updateLog.entries.sidebar-menu-query-path-openkeys-r01.description':
     '修复休息登记等带 ?mode= 的菜单项：选中与展开按 pathname+search 匹配，进入后父级分组保持展开。',
+  'pages.dashboard.updateLog.entries.file-upload-allow-firmware-bin-r01.title':
+    '文件上传支持固件 bin 等格式',
+  'pages.dashboard.updateLog.entries.file-upload-allow-firmware-bin-r01.description':
+    '文件服务白名单增加 bin、hex、s19、srec、img、fw，产品固件与烧录产测可上传常见固件镜像，不再报「暂不支持上传 bin」。',
+  'pages.dashboard.updateLog.entries.product-firmware-upload-uuid-sync-r01.title':
+    '产品固件上传后仍提示请上传修复',
+  'pages.dashboard.updateLog.entries.product-firmware-upload-uuid-sync-r01.description':
+    '编辑/升版保存时界面已显示固件文件仍报「请上传固件文件」：上传改为单文件接口并回写 file_uuid，提交优先读取表单真源与隐藏字段，避免 Upload 临时态导致误判。',
+  'pages.dashboard.updateLog.entries.production-file-optional-project-backend-r01.title':
+    '生产文件研发项目后端可选',
+  'pages.dashboard.updateLog.entries.production-file-optional-project-backend-r01.description':
+    '移除「研发工具/产测须关联项目」后端校验，与产品固件一致允许不选项目；须重启后端后生效。',
+  'pages.dashboard.updateLog.entries.production-file-release-date-api-format-r01.title':
+    '生产文件保存发布日期格式修复',
+  'pages.dashboard.updateLog.entries.production-file-release-date-api-format-r01.description':
+    '新建/编辑生产文件保存时，发布日期改为提交 YYYY-MM-DD 纯日期，不再因带时分秒被后端校验拒绝。',
+  'pages.dashboard.updateLog.entries.production-file-change-summary-on-edit-r01.title':
+    '生产文件新建隐藏更改明细',
+  'pages.dashboard.updateLog.entries.production-file-change-summary-on-edit-r01.description':
+    '新建生产文件弹窗不再展示「更改明细」；编辑或升版草稿时须填写后再保存，升版不再预填默认说明。',
+  'pages.dashboard.updateLog.entries.engineering-drawing-l33-funide-r01.title':
+    '工程图纸 L33 双 Tab 与生产下载',
+  'pages.dashboard.updateLog.entries.engineering-drawing-l33-funide-r01.description':
+    '文控资料工程图纸页增加工程图纸与产品规格书分栏、研发视图与生产下载切换，接入 engineering_drawing 审批链与升版更改明细校验，对齐 L31/L32 联调要点。',
+  'pages.dashboard.updateLog.entries.funide-oa-menu-production-software-r01.title':
+    '福尼特OA菜单更名为生产软件',
+  'pages.dashboard.updateLog.entries.funide-oa-menu-production-software-r01.description':
+    '研发电子侧栏「产测与烧录文件」改为「生产软件」，与工作台提示文案一致；改后须在应用中心执行菜单同步。',
+  'pages.dashboard.updateLog.entries.production-file-pe-tab-no-burn-type-r01.title':
+    'PE生产软件签去掉烧录类型',
+  'pages.dashboard.updateLog.entries.production-file-pe-tab-no-burn-type-r01.description':
+    '「PE生产软件」Tab 新建时文件类型不再含烧录软件；烧录工具仅在「烧录工具」Tab 维护，避免两类目录重复选项。',
+  'pages.dashboard.updateLog.entries.production-file-modal-grid-like-firmware-r01.title':
+    '生产文件新建弹窗栅格对齐固件',
+  'pages.dashboard.updateLog.entries.production-file-modal-grid-like-firmware-r01.description':
+    '新建/编辑生产文件弹窗改为与产品固件一致的 Row/Col 两列布局，研发项目与发布日期不再错位叠行。',
+  'pages.dashboard.updateLog.entries.production-file-optional-manual-project-r01.title':
+    '生产文件研发项目可选手填',
+  'pages.dashboard.updateLog.entries.production-file-optional-manual-project-r01.description':
+    '新建生产文件时「研发项目」与产品固件一致：不必填，可从项目列表选择或手填项目代号；编辑时项目不可改。',
+  'pages.dashboard.updateLog.entries.production-file-upload-label-by-sample-folder-r01.title':
+    '产测烧录页签对齐样例文件夹',
+  'pages.dashboard.updateLog.entries.production-file-upload-label-by-sample-folder-r01.description':
+    '生产文件页顶签改为「烧录工具」「产测文件」（对齐客户样例目录），PE 生产软件保留第三签；各签列表仅展示对应类型，新建时类型固定且上传区同名。',
+  'pages.dashboard.updateLog.entries.product-firmware-change-summary-on-revise-r01.title':
+    '产品固件新建隐藏变更说明',
+  'pages.dashboard.updateLog.entries.product-firmware-change-summary-on-revise-r01.description':
+    '新建产品固件弹窗不再展示「变更说明」；升版生成的新版本草稿须填写变更说明后再保存。',
+  'pages.dashboard.updateLog.entries.app-menu-sync-client-channel-r01.title':
+    '修复应用中心菜单同步被客户端门禁拦截',
+  'pages.dashboard.updateLog.entries.app-menu-sync-client-channel-r01.description':
+    '应用中心「一键同步菜单」与单应用菜单同步改为携带官方 X-Client-Channel 请求头，不再误报「非官方客户端禁止调用写接口」。',
+  'pages.dashboard.updateLog.entries.funide-oa-signoff-menu-penultimate-r01.title':
+    '福尼特 OA 会签审批移至倒数第二',
+  'pages.dashboard.updateLog.entries.funide-oa-signoff-menu-penultimate-r01.description':
+    '侧栏「会签审批」调整至「基础数据」之前（采购资产之后），便于主数据维护前集中处理审批事项。请菜单同步后刷新。',
+  'pages.dashboard.updateLog.entries.funide-oa-equipment-management-menu-r01.title':
+    '福尼特 OA 设备管理对齐通用菜单',
+  'pages.dashboard.updateLog.entries.funide-oa-equipment-management-menu-r01.description':
+    '工艺装备改为单一「设备管理」，子菜单照搬快设备通用结构（运维看板、设备资料、单据与报表）；模具、工装、计量暂不展示，需要时再引入。请菜单同步后刷新。',
+  'pages.dashboard.updateLog.entries.funide-oa-process-equipment-menu-r01.title':
+    '工艺装备菜单按资产类型重组',
+  'pages.dashboard.updateLog.entries.funide-oa-process-equipment-menu-r01.description':
+    '福尼特 OA 工艺装备下设设备、模具、工装、计量四类：设备含台账点检保养巡检与 ESD；模具含台账与归还；工装含台账与借还；计量含器具与外校提醒。请菜单同步后刷新。',
+  'pages.dashboard.updateLog.entries.funide-oa-remove-duplicate-label-oem-r01.title':
+    '生产作业去掉重复的标签菜单',
+  'pages.dashboard.updateLog.entries.funide-oa-remove-duplicate-label-oem-r01.description':
+    '福尼特 OA 生产作业仅保留「标签打印工位」；OEM 签样已由该入口自动替代，不再单独挂「OEM 标签签样」。请菜单同步后刷新。',
+  'pages.dashboard.updateLog.entries.funide-oa-project-proposal-menu-first-r01.title':
+    '研发项目菜单项目建议书置顶',
+  'pages.dashboard.updateLog.entries.funide-oa-project-proposal-menu-first-r01.description':
+    '福尼特 OA 研发项目分组内，项目建议书作为立项源头排在首位，其后为研发项目、跨项目待办与 BOM 协同。请菜单同步后刷新。',
+  'pages.dashboard.updateLog.entries.funide-oa-menu-business-flow-r01.title':
+    '福尼特 OA 侧栏按业务流重排一级菜单',
+  'pages.dashboard.updateLog.entries.funide-oa-menu-business-flow-r01.description':
+    '取消跨部协同壳：实验委托并入实验部门，样品试流、会签审批、文控资料升为一级；让步放行归入质量管理；菜单顺序按项目→电子→实验→样品→会签→文控→质量→生产→工艺装备→支撑→基础数据。请菜单同步后刷新。',
+  'pages.dashboard.updateLog.entries.funide-oa-cross-dept-submenu-r01.title':
+    '福尼特 OA 跨部协同前置并分子组',
+  'pages.dashboard.updateLog.entries.funide-oa-cross-dept-submenu-r01.description':
+    '跨部协同移至工作台下方，下设实验例试、样品试流、会签审批、文控资料等子菜单，让步放行仍在本组末位。请执行菜单同步后刷新。',
+  'pages.dashboard.updateLog.entries.funide-oa-menu-dept-reorder-r01.title':
+    '福尼特 OA 侧栏按部门重组菜单',
+  'pages.dashboard.updateLog.entries.funide-oa-menu-dept-reorder-r01.description':
+    '定制应用侧栏一级菜单按 Excel 部门划分（研发电子、研发项目、实验部门、质量管理等），多部门共用入口集中于跨部协同，工艺部门设备归入工艺装备，末位主数据改为基础数据。请在应用中心对福尼特 OA 执行菜单同步后刷新页面。',
+  'pages.dashboard.updateLog.entries.production-file-rd-tool-l32-r01.title':
+    '研发烧录工具产测联调完善',
+  'pages.dashboard.updateLog.entries.production-file-rd-tool-l32-r01.description':
+    '产测与烧录文件研发 Tab 对齐产品固件：真实下载走单据 ID、上传 UUID 校验、升版 Popconfirm 并开编辑、研发视图与生产下载切换；详情版本表可下历史版。',
+  'pages.dashboard.updateLog.entries.product-firmware-revise-popconfirm-r01.title':
+    '产品固件升版确认改为气泡',
+  'pages.dashboard.updateLog.entries.product-firmware-revise-popconfirm-r01.description':
+    '升版无表单输入，确认由 Modal 改为 ActionConfirmPopconfirm 气泡，避免遮罩整页。',
+  'pages.dashboard.updateLog.entries.product-firmware-download-restore-r01.title':
+    '产品固件下载与升版并存修复',
+  'pages.dashboard.updateLog.entries.product-firmware-download-restore-r01.description':
+    '修复已发布固件因前端校验 file_uuid 格式而隐藏下载按钮的问题：下载改走固件 ID 服务端解析，与升版行操作同时展示。',
+  'pages.dashboard.updateLog.entries.product-firmware-revise-r01.title':
+    '产品固件支持升版',
+  'pages.dashboard.updateLog.entries.product-firmware-revise-r01.description':
+    '已发布固件可一键升版：自动递增版本号并创建新草稿行，保留历史版本；升版后可直接编辑上传新固件并走审核发布。',
+  'pages.dashboard.updateLog.entries.product-firmware-download-file-fix-r01.title':
+    '产品固件下载文件不存在修复',
+  'pages.dashboard.updateLog.entries.product-firmware-download-file-fix-r01.description':
+    '修复保存固件时误把 Upload 临时 uid 写入 file_uuid 导致已发布固件下载报「文件不存在」：前端仅接受真实上传 UUID，提交/发布前服务端校验文件存在。',
+  'pages.dashboard.updateLog.entries.product-firmware-download-row-action-r01.title':
+    '产品固件下载行操作文案与图标修复',
+  'pages.dashboard.updateLog.entries.product-firmware-download-row-action-r01.description':
+    '修复已发布固件行内第二按钮误显示为详情的问题：uni-action 目录补全 download-firmware 视觉配置识别与下载图标，行操作正确显示「下载」。',
+  'pages.dashboard.updateLog.entries.funide-oa-list-three-bucket-layout-r02.title':
+    '列表余量列 RemainderFlex 真正生效',
+  'pages.dashboard.updateLog.entries.funide-oa-list-three-bucket-layout-r02.description':
+    '修复快研发/福尼特单据列表只写 uniTableRemainderFlex 未写 uniTablePrimaryFlex，布局引擎不分配余量、发布日期与审计列间出现大段空白的问题；产品固件等页已补双 flag 并 bump 列宽缓存。',
+  'pages.dashboard.updateLog.entries.funide-oa-list-three-bucket-layout-r01.title':
+    '福尼特OA列表列宽三桶对齐',
+  'pages.dashboard.updateLog.entries.funide-oa-list-three-bucket-layout-r01.description':
+    '产品固件等福尼特菜单可达列表：business_date 进全局列序 rank，标题 RemainderFlex、项目/版本/日期 KeepWidth，修复发布日期排到审计列后的大段空白；同批修正产测文件、样品打样、实验与项目单据等页并 bump 列宽缓存。',
+  'pages.dashboard.updateLog.entries.funide-oa-host-list-row-actions-r02.title':
+    '质量闭环与生产作业列表行操作恢复',
+  'pages.dashboard.updateLog.entries.funide-oa-host-list-row-actions-r02.description':
+    '返工策划模板、生产日报与日报模板列表行操作对齐 manifest 标准 read/update/submit，修复福尼特OA侧栏进入后操作列为空的问题。',
+  'pages.dashboard.updateLog.entries.funide-oa-host-list-row-actions-r01.title':
+    '福尼特OA菜单可达列表行操作恢复',
+  'pages.dashboard.updateLog.entries.funide-oa-host-list-row-actions-r01.description':
+    '快研发产测文件、样机制作、试流、样品检验、物料评审、打样订单、BOM协同、年度例试、判定规则、跨项目待办等列表，行操作由 detail/edit 对齐为 manifest 标准 read/update，避免定制壳侧栏进入后操作列为空。',
+  'pages.dashboard.updateLog.entries.product-firmware-row-actions-r01.title':
+    '产品固件列表操作列恢复',
+  'pages.dashboard.updateLog.entries.product-firmware-row-actions-r01.description':
+    '修复产品固件行操作被权限过滤导致操作列为空的问题：详情/编辑/删除/提交/审核等改走 manifest 标准 action；列表 API 补回 id 字段供详情与工作流调用。',
+  'pages.dashboard.updateLog.entries.product-firmware-create-payload-r01.title':
+    '产品固件新建保存校验修复',
+  'pages.dashboard.updateLog.entries.product-firmware-create-payload-r01.description':
+    '修复新建产品固件时研发项目留空或发布日期选站点日历日导致保存失败的问题：提交按 YYYY-MM-DD 传发布日期，未选项目时不传空 project_id。',
+  'pages.dashboard.updateLog.entries.product-firmware-menu-project-docs-r01.title':
+    '福尼特OA产品固件菜单归入项目单据',
+  'pages.dashboard.updateLog.entries.product-firmware-menu-project-docs-r01.description':
+    '福尼特OA定制侧栏新增「项目单据」分组，产测与烧录文件、产品固件从受控文件/样品打样迁入并并列展示，便于研发上传与生产下载同一入口查找。',
+  'pages.dashboard.updateLog.entries.product-firmware-optional-project-ref-r01.title':
+    '产品固件研发项目可手填代号',
+  'pages.dashboard.updateLog.entries.product-firmware-optional-project-ref-r01.description':
+    '新建产品固件时研发项目改为非必填：可从项目库下拉选择，也可直接手填存量项目代号，无需补录主数据。',
+  'pages.dashboard.updateLog.entries.product-firmware-l31-download-r01.title':
+    '产品固件支持下载与生产视角',
+  'pages.dashboard.updateLog.entries.product-firmware-l31-download-r01.description':
+    '列表与详情可下载已审核/已发布固件；切换「生产下载」仅见各项目最新已发布版；资深制定方可查看全部历史版本。',
+  'pages.dashboard.updateLog.entries.lab-request-report-draft-primary-r01.title':
+    '编制报告以保存草稿为主操作',
+  'pages.dashboard.updateLog.entries.lab-request-report-draft-primary-r01.description':
+    '「保存草稿」改为主按钮且不强制上传；蓝色主操作不再误触「提交审批」。仅提交审批或已批准补传时才校验报告文件。',
+  'pages.dashboard.updateLog.entries.lab-request-report-draft-optional-file-r01.title':
+    '编制报告保存草稿可不传文件',
+  'pages.dashboard.updateLog.entries.lab-request-report-draft-optional-file-r01.description':
+    '编制报告去掉草稿必填星号：可不填文件与标题先存草稿，后续再补；仅「保存并提交审批」仍要求已有报告文件或链接。',
+  'pages.dashboard.updateLog.entries.lab-request-form-field-group-r01.title':
+    '实验委托表单按功能分组排序',
+  'pages.dashboard.updateLog.entries.lab-request-form-field-group-r01.description':
+    '新建/编辑委托单字段重排为：单据与项目 → 组织人员 → 物料客商 → 计划与样品 → 试验说明 → 交付开关 → 试验项与标准。',
+  'pages.dashboard.updateLog.entries.lab-request-switches-before-measures-r01.title':
+    '实验委托开关字段移到试验项之前',
+  'pages.dashboard.updateLog.entries.lab-request-switches-before-measures-r01.description':
+    '提供样品、是否要报告、是否要反馈、是否收费四个开关调到「试验项与标准」明细表正上方。',
+  'pages.dashboard.updateLog.entries.lab-request-business-type-options-r01.title':
+    '新建委托单委托类型选项齐全',
+  'pages.dashboard.updateLog.entries.lab-request-business-type-options-r01.description':
+    '委托类型改用页面字典选项（首帧用系统字典中文），打开下拉即可看到 IQC/研发/材料/整机/委外/通用，不再只剩默认「通用委托」。',
+  'pages.dashboard.updateLog.entries.lab-request-product-special-test-oneline-r01.title':
+    '整机例试特殊试验说明改为一行高度',
+  'pages.dashboard.updateLog.entries.lab-request-product-special-test-oneline-r01.description':
+    '整机例试时「结构特殊试验说明」「电子特殊试验说明」与样品说明等一致，使用一行高度的多行文本框。',
+  'pages.dashboard.updateLog.entries.dictionary-select-pending-i18n-label-r01.title':
+    '字典下拉默认值不再先闪英文码',
+  'pages.dashboard.updateLog.entries.dictionary-select-pending-i18n-label-r01.description':
+    'DictionarySelect 在字典项未返回前，用系统字典中文文案展示已选值（如委托类型「通用委托」），避免先出现 general 再跳变。',
+  'pages.dashboard.updateLog.entries.lab-request-requester-default-r01.title':
+    '新建实验委托委托人默认当前用户',
+  'pages.dashboard.updateLog.entries.lab-request-requester-default-r01.description':
+    '新建委托单时委托人预填登录用户（有部门则同步委托部门），仍可下拉改选其他人。',
+  'pages.dashboard.updateLog.entries.lab-request-revoke-to-draft-r01.title':
+    '实验委托撤销审核后回到草稿',
+  'pages.dashboard.updateLog.entries.lab-request-revoke-to-draft-r01.description':
+    '撤销审核不再落入「已撤销」终态，与全站契约一致回到草稿并取消待审流程，可重新编辑提交。',
+  'pages.dashboard.updateLog.entries.lab-request-marker-colors-r01.title':
+    '实验委托列表优先级类型报告状态徽章区分颜色',
+  'pages.dashboard.updateLog.entries.lab-request-marker-colors-r01.description':
+    '优先级、委托类型、报告状态、不合格等非状态徽章按语义着色（仍用 filled MarkerTag），不再清一色灰；流程状态列保持右侧 solid。',
+  'pages.dashboard.updateLog.entries.lab-request-reason-modal-r01.title':
+    '实验委托撤销与报告驳回改为弹窗填写原因',
+  'pages.dashboard.updateLog.entries.lab-request-reason-modal-r01.description':
+    '撤销、驳回报告不再调用浏览器原生输入框，改为系统 Modal 填写原因，样式与交互与其它单据一致。',
+  'pages.dashboard.updateLog.entries.unitable-sparse-scroll-flash-r01.title':
+    '修复列表未装满时纵滚条短暂闪现',
+  'pages.dashboard.updateLog.entries.unitable-sparse-scroll-flash-r01.description':
+    'UniTable 在请求进行中对空表/未装满页不再强制限高滚动；避免加载瞬间出现纵滚条、数据回来后又立刻消失。',
+  'pages.dashboard.updateLog.entries.lab-request-report-file-required-r01.title':
+    '实验委托正式报告改为必须上传文件',
+  'pages.dashboard.updateLog.entries.lab-request-report-file-required-r01.description':
+    '编制报告支持拖拽上传报告原件；提交/批准须有文件或外链。查看报告打开真实文件，不能再用标题摘要冒充报告；已批准但无文件的可补传。',
+  'pages.dashboard.updateLog.entries.lab-request-report-view-download-r01.title':
+    '实验委托已批准报告可查看与下载',
+  'pages.dashboard.updateLog.entries.lab-request-report-view-download-r01.description':
+    '报告状态为已批准时，列表与详情提供查看报告、下载报告；查看展示标题/判定/摘要/链接，下载优先打开附件或报告链接。',
+  'pages.dashboard.updateLog.entries.lab-request-report-action-order-r01.title':
+    '实验委托操作列编制报告排在提交审批之前',
+  'pages.dashboard.updateLog.entries.lab-request-report-action-order-r01.description':
+    '报告相关行操作用独立视觉档位排序：编制报告 → 提交报告审批 → 批准/驳回，不再被单据「提交」档位插到编制前面。',
+  'pages.dashboard.updateLog.entries.lab-request-report-submit-row-r01.title':
+    '实验委托报告可提交审批并批准出正式稿',
+  'pages.dashboard.updateLog.entries.lab-request-report-submit-row-r01.description':
+    '编制报告弹窗支持「保存并提交审批」；列表操作列增加提交报告审批、批准报告、驳回报告，草稿可进入待批准再批准为正式报告。',
+  'pages.dashboard.updateLog.entries.lab-request-report-row-autofill-r01.title':
+    '实验委托编制报告进操作列并自动带入内容',
+  'pages.dashboard.updateLog.entries.lab-request-report-row-autofill-r01.description':
+    '列表操作列可直接编制报告；标题按单号/试验名称/物料带入，结果摘要按整单判定与各试验项实测汇总，已有附件时链接可带入下载地址。',
+  'pages.dashboard.updateLog.entries.lab-request-complete-inline-measures-r01.title':
+    '完成实验弹窗可直接录入实测',
+  'pages.dashboard.updateLog.entries.lab-request-complete-inline-measures-r01.description':
+    '实验委托「完成实验」不再强制先去详情保存；弹窗内填写检验结果，确认时先保存实测判定再完成实验。',
+  'pages.dashboard.updateLog.entries.lab-request-scope-segmented-toolbar-r01.title':
+    '实验委托列表范围分段改为工具栏普通高度',
+  'pages.dashboard.updateLog.entries.lab-request-scope-segmented-toolbar-r01.description':
+    '「全部委托 / 我的实验委托」对齐销售订单列表工具栏分段：surfaceBackground + medium，与模糊搜索框同高。',
+  'pages.dashboard.updateLog.entries.lab-request-list-width-v5-r01.title':
+    '实验委托列表列宽按三桶契约整理',
+  'pages.dashboard.updateLog.entries.lab-request-list-width-v5-r01.description':
+    '试验名称改为余量列吸收空白；单号/项目/物料/时间为定宽 KeepWidth；类型与优先级等徽章列走全局窄列默认，减少假横滚。',
+  'pages.dashboard.updateLog.entries.lab-request-complete-columns-filter-r01.title':
+    '修复实验委托完成实验时报 columns.filter 错误',
+  'pages.dashboard.updateLog.entries.lab-request-complete-columns-filter-r01.description':
+    '详情基本信息误把对象当作列数组传入，打开详情或完成实验（需先补实测）时整页报错；已改为正确的 Descriptions 渲染。',
+  'pages.dashboard.updateLog.entries.lab-request-measure-two-cols-r01.title':
+    '实验委托试验项按纸质申请表改为两列',
+  'pages.dashboard.updateLog.entries.lab-request-measure-two-cols-r01.description':
+    '新建委托单试验项与标准仅保留「试验/检测项目」「试验标准」；去掉判定规则、比较方式、上下限等未在客户模板中的列。',
+  'pages.dashboard.updateLog.entries.lab-request-type-fields-r01.title':
+    '实验委托按类型补齐模板字段',
+  'pages.dashboard.updateLog.entries.lab-request-type-fields-r01.description':
+    '对照委托试验/委外检测模板，补齐客户、供应商、试验数量、是否要报告与反馈、收费、付款方及委外认证费用行；表单与详情按委托类型显隐对应字段。',
+  'pages.dashboard.updateLog.entries.lab-request-complete-by-measures-r01.title':
+    '完成实验改为按试验项汇总判定',
+  'pages.dashboard.updateLog.entries.lab-request-complete-by-measures-r01.description':
+    '有试验项时整单判定只读展示各行最终判定汇总，须先保存实测；无试验项时用合格/不合格等下拉选择，不再手输 pass。',
+  'pages.dashboard.updateLog.entries.lab-request-complete-label-r01.title':
+    '修复实验委托「完修」误用文案',
+  'pages.dashboard.updateLog.entries.lab-request-complete-label-r01.description':
+    '实验中委托单行操作误显示设备维修用语「完修」；已改为本页「完成实验」，权限码仍为 complete。',
+  'pages.dashboard.updateLog.entries.lab-request-form-selects-r01.title':
+    '实验委托表单支持主数据下拉选择',
+  'pages.dashboard.updateLog.entries.lab-request-form-selects-r01.description':
+    '新建/编辑委托单时，项目代号、物料、委托人、委托部门、检测部门改为可搜索下拉；选委托人时可带出所属部门。',
+  'pages.dashboard.updateLog.entries.lab-request-business-type-dict-r01.title':
+    '实验委托类型接入数据字典',
+  'pages.dashboard.updateLog.entries.lab-request-business-type-dict-r01.description':
+    '委托类型改为系统字典 LAB_REQUEST_BUSINESS_TYPE 维护与选择；列表、表单、详情统一读字典标签，业务码（研发委托经理审核、委外填价等）保持不变。',
+  'pages.dashboard.updateLog.entries.kuaiplm-menu-sample-build-group-r01.title':
+    '快研发样品打样独立一级菜单',
+  'pages.dashboard.updateLog.entries.kuaiplm-menu-sample-build-group-r01.description':
+    '将样机制作书、产品固件、试流、样品加工、物料评审与开模打样从项目单据中拆出，单独归入「样品打样」一级菜单，与项目协同区分。',
+  'pages.dashboard.updateLog.entries.lab-request-rd-mine-manager-r30.title':
+    '实验委托支持我的列表与研发经理审核',
+  'pages.dashboard.updateLog.entries.lab-request-rd-mine-manager-r30.description':
+    '研发类委托提交后先经经理审核再进实验室；列表可切换「我的实验委托」并展示开始时间与预计完成；完成与进入待受理时按消息规则通知申请人/实验室。',
   'pages.dashboard.updateLog.entries.uni-im-cross-tenant-residue-r01.title':
     '清理在线消息跨组织会话残留',
   'pages.dashboard.updateLog.entries.uni-im-cross-tenant-residue-r01.description':
@@ -31198,6 +31602,10 @@ export default {
     '物料删除门禁：有单据或库存只能停用',
   'pages.dashboard.updateLog.entries.material-delete-gate-docs-stock-r01.description':
     '物料管理单条/批量删除时，若存在库存数量、BOM 或销售采购出入库等业务单据引用，将拒绝删除并提示改为停用，避免误删导致单据选不到物料。',
+  'pages.dashboard.updateLog.entries.login-phone-last4-disambiguation-r01.title':
+    '总入口登录增加手机号后四位核验',
+  'pages.dashboard.updateLog.entries.login-phone-last4-disambiguation-r01.description':
+    '同名同密且跨租户手机号不一致时，须输入绑定手机号后四位才能继续；均未绑号或手机号相同仍视为同一实体可选组织。切换组织亦按同实体规则限制。',
   'pages.dashboard.updateLog.entries.demand-computation-group-one-per-order-r01.title':
     '需求计算组工单按订单合并为 1 组',
   'pages.dashboard.updateLog.entries.demand-computation-group-one-per-order-r01.description':
@@ -31421,18 +31829,6 @@ export default {
     '定制应用未绑定时全员可见',
   'pages.dashboard.updateLog.entries.dedicated-app-unbound-visible-r01.description':
     '应用中心定制分类：尚未绑定任何组织的专用应用对所有租户展示；绑定过至少一个组织后，仅已绑定租户可见。',
-  'pages.dashboard.updateLog.entries.haolisales-requirement-gap-r03.title':
-    '销售跟踪对齐客户答疑四项规则',
-  'pages.dashboard.updateLog.entries.haolisales-requirement-gap-r03.description':
-    '月度台账改为未开票总数；订单跟踪增加指定人与账期到期日；交期与账期到期提醒发给指定人；款到发货须收款且发货完成后再提交生产。',
-  'pages.dashboard.updateLog.entries.haolisales-order-tracking-complete-r02.title':
-    '销售跟踪订单台账功能完善',
-  'pages.dashboard.updateLog.entries.haolisales-order-tracking-complete-r02.description':
-    '订单跟踪与月度工厂台账支持合同与客户要求附件、分角色字段与提交生产、未付余额与交期提醒列表展示、款到发货校验及 CSV 导出。',
-  'pages.dashboard.updateLog.entries.haolisales-dedicated-app-r01.title':
-    '新增销售跟踪专用应用',
-  'pages.dashboard.updateLog.entries.haolisales-dedicated-app-r01.description':
-    '与好力 GO 平级启用 haolisales：订单跟踪台账与月度工厂台账独立录入，共用主数据客商与物料，不回写快制造销售订单。',
   'pages.dashboard.updateLog.entries.site-logo-round-crop-alpha-r01.title':
     '圆形剪裁 Logo 背景保持透明',
   'pages.dashboard.updateLog.entries.site-logo-round-crop-alpha-r01.description':
@@ -34237,6 +34633,11 @@ export default {
   'appRoutes.troubleshootTip': '提示：系统已自动尝试扫描应用。如果仍然没有应用，请手动在"应用管理"页面扫描应用。',
 
   // 组织选择弹窗
+  'components.phoneVerification.title': '验证手机号',
+  'components.phoneVerification.hint':
+    '检测到多个组织存在相同用户名与密码。请输入您绑定手机号的后四位以确认身份；若各组织均未绑定手机号或手机号相同，则无需此步骤。',
+  'components.phoneVerification.placeholder': '手机号后四位',
+  'components.phoneVerification.failed': '手机号后四位不正确，请重试',
   'components.tenantSelection.title': '选择组织',
   'components.tenantSelection.hint': '您属于多个组织，请选择要进入的组织：',
   'components.tenantSelection.statusActive': '激活',

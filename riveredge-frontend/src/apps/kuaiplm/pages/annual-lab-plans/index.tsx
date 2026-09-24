@@ -12,10 +12,7 @@ import {
 import { App, Button, Col, Descriptions, Input, Modal, Result, Row, Select, Table } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { UniTable } from '../../../../components/uni-table';
-import {
-  UniTableStackedPrimaryCell,
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-} from '../../../../components/uni-table/stackedPrimaryColumn';
+import { UniTableStackedPrimaryCell } from '../../../../components/uni-table/stackedPrimaryColumn';
 import { rowActionKind } from '../../../../components/uni-action';
 import {
   DetailDrawerTemplate,
@@ -156,7 +153,10 @@ const AnnualLabPlansPage: React.FC = () => {
             title: t('app.kuaiplm.annualLabPlan.colPlan'),
             dataIndex: 'title',
             key: 'title',
-            ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+            minWidth: 160,
+            uniTablePrimaryFlex: true,
+            uniTableRemainderFlex: true,
+            ellipsis: true,
             render: (_, record) => (
               <UniTableStackedPrimaryCell
                 primary={record.title}
@@ -169,15 +169,19 @@ const AnnualLabPlansPage: React.FC = () => {
             dataIndex: 'plan_year',
             key: 'plan_year',
             width: 88,
+            minWidth: 88,
             uniTableKeepWidth: true,
+            resizable: false,
           },
           {
             title: t('app.kuaiplm.annualLabPlan.colProgress'),
             dataIndex: 'completed_months',
             key: 'completed_months',
             width: 110,
+            minWidth: 110,
             search: false,
             uniTableKeepWidth: true,
+            resizable: false,
             render: (_, record) =>
               `${record.completed_months || 0}/${record.total_months || 12}`,
           },
@@ -186,7 +190,11 @@ const AnnualLabPlansPage: React.FC = () => {
             dataIndex: 'owner_user_name',
             key: 'owner_user_name',
             width: 120,
+            minWidth: 120,
             search: false,
+            uniTableKeepWidth: true,
+            resizable: false,
+            ellipsis: true,
           },
           {
             title: t('app.kuaiplm.annualLabPlan.colStatus'),
@@ -211,14 +219,14 @@ const AnnualLabPlansPage: React.FC = () => {
               [
                 {
                   key: 'detail',
-                  ...rowActionKind('detail'),
+                  ...rowActionKind('read'),
                   onClick: () => openDetail(record),
                 },
                 perms.canUpdate &&
                 (record.status === 'draft' || record.status === 'rejected')
                   ? {
                       key: 'edit',
-                      ...rowActionKind('edit'),
+                      ...rowActionKind('update'),
                       onClick: () => void openEdit(record),
                     }
                   : null,
@@ -512,7 +520,7 @@ const AnnualLabPlansPage: React.FC = () => {
         columns={columns}
         rowKey="id"
         headerTitle={t('app.kuaiplm.menu.annual-lab-plans')}
-        columnPersistenceId="apps.kuaiplm.pages.annual-lab-plans-v1"
+        columnPersistenceId="apps.kuaiplm.pages.annual-lab-plans.width-v2"
         createButtonText={
           perms.canCreate ? t('app.kuaiplm.annualLabPlan.createButton') : undefined
         }

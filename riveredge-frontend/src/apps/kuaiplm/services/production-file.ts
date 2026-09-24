@@ -70,6 +70,8 @@ export interface ProductionFilePayload {
   process_name?: string | null;
   product_model?: string | null;
   project_id?: number | null;
+  project_code?: string | null;
+  project_name?: string | null;
   release_date?: string | null;
   file_uuid?: string | null;
   file_name?: string | null;
@@ -136,6 +138,18 @@ export const productionFileApi = {
   get: async (id: number) => {
     const res = await api.get(`${BASE}/${id}`);
     return res as ProductionFile;
+  },
+  getDownloadUrl: async (
+    id: number,
+    options?: { version_id?: number; production_view?: boolean },
+  ) => {
+    const res = await api.get(`${BASE}/${id}/download`, {
+      params: {
+        version_id: options?.version_id,
+        production_view: options?.production_view ? true : undefined,
+      },
+    });
+    return res as { preview_url: string; file_name?: string | null; version_id?: number | null };
   },
   create: async (data: ProductionFilePayload) => {
     const res = await api.post(BASE, data);

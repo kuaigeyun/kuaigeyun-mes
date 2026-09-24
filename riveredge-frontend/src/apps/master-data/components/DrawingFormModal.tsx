@@ -63,6 +63,10 @@ export interface DrawingFormModalProps {
   onSuccess: (drawing: EngineeringDrawing) => void;
   folders?: DrawingFolder[];
   defaultFolderUuid?: string | null;
+  /** 页内 Tab 固定类型（L33 产品规格书 Tab） */
+  fixedDrawingType?: EngineeringDrawingCreate['drawingType'];
+  /** 升版草稿：备注作为更改明细必填 */
+  requireChangeSummary?: boolean;
 }
 
 export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
@@ -72,6 +76,8 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
   onSuccess,
   folders = [],
   defaultFolderUuid,
+  fixedDrawingType,
+  requireChangeSummary = false,
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -99,7 +105,9 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
     { label: t('app.master-data.drawings.type.assembly'), value: 'assembly' },
     { label: t('app.master-data.drawings.type.process'), value: 'process' },
     { label: t('app.master-data.drawings.type.other'), value: 'other' },
+    { label: t('app.master-data.drawings.type.product_spec'), value: 'product_spec' },
   ];
+  const defaultType = fixedDrawingType ?? 'part';
 
   const loadRelationOptions = async () => {
     try {
@@ -130,7 +138,7 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
     formRef.current?.resetFields();
     formRef.current?.setFieldsValue({
       revision: 'A',
-      drawingType: 'part',
+      drawingType: defaultType,
       securityLevel: 'internal',
       folderUuid: defaultFolderUuid ?? undefined,
     });
@@ -157,7 +165,7 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
               formRef.current?.setFieldsValue({
                 code: res.code,
                 revision: 'A',
-                drawingType: 'part',
+                drawingType: defaultType,
                 securityLevel: 'internal',
               });
             })
@@ -332,7 +340,7 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
       formRef={formRef as React.RefObject<ProFormInstance>}
       layout="vertical"
       grid
-      initialValues={{ revision: 'A', drawingType: 'part', securityLevel: 'internal' }}
+      initialValues={{ revision: 'A', drawingType: defaultType, securityLevel: 'internal' }}
     >
       <ProFormText
         name="code"
@@ -357,13 +365,17 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
         fieldProps={{ maxLength: 20 }}
         colProps={{ span: 12 }}
       />
-      <ProFormSelect
-        name="drawingType"
-        label={t('app.master-data.drawings.type')}
-        options={drawingTypeOptions}
-        rules={[{ required: true }]}
-        colProps={{ span: 12 }}
-      />
+      {fixedDrawingType ? (
+        <ProFormText name="drawingType" hidden initialValue={fixedDrawingType} />
+      ) : (
+        <ProFormSelect
+          name="drawingType"
+          label={t('app.master-data.drawings.type')}
+          options={drawingTypeOptions}
+          rules={[{ required: true }]}
+          colProps={{ span: 12 }}
+        />
+      )}
       <ProFormSelect
         name="securityLevel"
         label={t('app.master-data.drawings.securityLevel')}
@@ -440,12 +452,28 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
         fieldProps={{ optionFilterProp: 'label' }}
         colProps={{ span: 12 }}
       />
-      <ProFormTextArea
-        name="description"
-        label={t('common.remark')}
-        fieldProps={{ rows: 3 }}
-        colProps={{ span: 24 }}
-      />
+      {requireChangeSummary || isEdit ? (
+        <ProFormTextArea
+          name="description"
+          label={
+            requireChangeSummary
+              ? t('app.master-data.drawings.fields.changeSummary')
+              : t('common.remark')
+          }
+          rules={
+            requireChangeSummary
+              ? [
+                  {
+                    required: true,
+                    message: t('app.master-data.drawings.fields.changeSummaryRequired'),
+                  },
+                ]
+              : undefined
+          }
+          fieldProps={{ rows: 3 }}
+          colProps={{ span: 24 }}
+        />
+      ) : null}
     </FormModalTemplate>
   );
 };

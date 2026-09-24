@@ -172,13 +172,13 @@ const ReworkPositionPlanTemplatesPage: React.FC = () => {
             render: (_, record) => [
               {
                 key: 'detail',
-                ...rowActionKind('detail'),
+                ...rowActionKind('read'),
                 onClick: () => openDetail(record),
               },
               perms.canUpdate
                 ? {
                     key: 'edit',
-                    ...rowActionKind('edit'),
+                    ...rowActionKind('update'),
                     onClick: () => void openEdit(record),
                   }
                 : null,

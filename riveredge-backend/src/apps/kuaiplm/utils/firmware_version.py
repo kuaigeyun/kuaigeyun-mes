@@ -2,7 +2,28 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any, Dict, Optional, Set
+
+_FILE_UUID_RE = re.compile(r"^[0-9a-f-]{36}$", re.I)
+
+
+def is_firmware_file_uuid(value: Optional[str]) -> bool:
+    return bool(value and _FILE_UUID_RE.match(str(value).strip()))
+
+
+def bump_firmware_version(current: str) -> str:
+    """固件版本号递增（V1.01→V1.02；A0→A1；其余追加 .1）。"""
+    raw = (current or "V1.00").strip() or "V1.00"
+    dotted = re.match(r"^([Vv])(\d+)\.(\d+)$", raw)
+    if dotted:
+        minor = int(dotted.group(3)) + 1
+        width = len(dotted.group(3))
+        return f"V{dotted.group(2)}.{minor:0{width}d}"
+    alpha_num = re.match(r"^([A-Za-z]+)(\d+)$", raw)
+    if alpha_num:
+        return f"{alpha_num.group(1)}{int(alpha_num.group(2)) + 1}"
+    return f"{raw}.1"
 
 
 def firmware_policy_status(business_status: str) -> str:

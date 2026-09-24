@@ -18,6 +18,7 @@ import {
   CopyOutlined,
   PrinterOutlined,
   ExportOutlined,
+  DownloadOutlined,
   ImportOutlined,
   BellOutlined,
   PlusOutlined,
@@ -174,6 +175,12 @@ function defaultIconForRowActionWithKind(
   }
   if (readActionVisualProfile(node) === 'tax-red-flush') {
     return <StopOutlined />
+  }
+  if (readActionVisualProfile(node) === 'download-lab-report') {
+    return <DownloadOutlined />
+  }
+  if (readActionVisualProfile(node) === 'download-firmware') {
+    return <DownloadOutlined />
   }
   const explicit = readExplicitActionKind(node) ?? inheritedExplicit ?? null
   if (explicit === 'read' || explicit === 'display') return <EyeOutlined />

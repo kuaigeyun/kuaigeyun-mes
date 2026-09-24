@@ -49,6 +49,7 @@ import { resolvePostLoginNavigatePath } from '../../utils/tenantHomePath';
 import { buildTenantLoginPathForHistoryReplace, resolvePlatformAdminLoginPathFromUrl, resolveTenantDomainFromUrl } from '../../utils/tenantDomainAccess';
 import { captureLoginEntryFromCurrentUrl } from '../../utils/loginEntry';
 const TenantSelectionModal = lazy(() => import('../../components/tenant-selection-modal'));
+const PhoneVerificationModal = lazy(() => import('../../components/phone-verification-modal'));
 const TermsModal = lazy(() => import('../../components/terms-modal'));
 const LongPressVerify = lazy(() => import('../../components/long-press-verify'));
 import { Spin } from 'antd';
@@ -638,6 +639,9 @@ export default function LoginPage() {
   const [tenantSelectionVisible, setTenantSelectionVisible] = useState(false);
   const [loginResponse, setLoginResponse] = useState<LoginResponse | null>(null);
   const [loginCredentials, setLoginCredentials] = useState<LoginFormData | null>(null);
+  const [phoneVerificationVisible, setPhoneVerificationVisible] = useState(false);
+  const [phoneVerifySubmitting, setPhoneVerifySubmitting] = useState(false);
+  const [verifiedPhoneLast4, setVerifiedPhoneLast4] = useState<string | null>(null);
 
   // 条款弹窗状态
   const [termsModalVisible, setTermsModalVisible] = useState(false);
@@ -1025,6 +1029,14 @@ export default function LoginPage() {
    * @param credentials - 登录凭据（用于多组织选择后重新登录）
    */
   const handleLoginSuccess = (response: LoginResponse, credentials?: LoginFormData) => {
+    if (response?.requires_phone_verification) {
+      if (credentials) {
+        setLoginCredentials(credentials);
+      }
+      setPhoneVerificationVisible(true);
+      return;
+    }
+
     if (!response || !response.access_token) {
       message.error(t('pages.login.loginFailedCheck'));
       return;
@@ -1774,6 +1786,34 @@ export default function LoginPage() {
   };
 
   /**
+   * 同名同密跨租户：核验手机号后四位后继续登录。
+   */
+  const handlePhoneVerificationSubmit = async (phoneLast4: string) => {
+    if (!loginCredentials) {
+      message.error(t('pages.login.loginFailedCheck'));
+      return;
+    }
+    try {
+      setPhoneVerifySubmitting(true);
+      const response = await login({
+        username: loginCredentials.username,
+        password: loginCredentials.password,
+        phone_last4: phoneLast4,
+      });
+      setVerifiedPhoneLast4(phoneLast4);
+      setPhoneVerificationVisible(false);
+      handleLoginSuccess(response, loginCredentials);
+    } catch (error: any) {
+      const detail = error?.response?.data?.detail;
+      message.error(
+        typeof detail === 'string' ? detail : t('components.phoneVerification.failed'),
+      );
+    } finally {
+      setPhoneVerifySubmitting(false);
+    }
+  };
+
+  /**
    * 处理组织选择
    *
    * 用户选择组织后，使用选中的 tenant_id 重新登录以获取包含该组织的 Token
@@ -1792,6 +1832,7 @@ export default function LoginPage() {
             username: loginCredentials.username,
             password: loginCredentials.password,
             tenant_id: tenantId,
+            ...(verifiedPhoneLast4 ? { phone_last4: verifiedPhoneLast4 } : {}),
           })
         : await switchTenant(tenantId);
 
@@ -2623,6 +2664,21 @@ export default function LoginPage() {
           <Input placeholder={t('pages.login.wecomTenantDomainPlaceholder')} />
         </AutoComplete>
       </Modal>
+
+      {/* 手机号后四位核验（同名同密跨租户歧义） */}
+      <Suspense fallback={null}>
+        <PhoneVerificationModal
+          open={phoneVerificationVisible}
+          loading={phoneVerifySubmitting}
+          onSubmit={handlePhoneVerificationSubmit}
+          onCancel={() => {
+            setPhoneVerificationVisible(false);
+            setLoginCredentials(null);
+            setVerifiedPhoneLast4(null);
+            message.info(t('pages.login.pleaseLoginAgain'));
+          }}
+        />
+      </Suspense>
 
       {/* 组织选择弹窗 - 懒加载，仅多组织登录时加载 */}
       {loginResponse && (

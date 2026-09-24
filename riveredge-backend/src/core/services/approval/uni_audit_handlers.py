@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Any, Awaitable, Callable, Dict, Optional
 
-from infra.exceptions.exceptions import ValidationError
+from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 DispatchFn = Callable[..., Awaitable[Any]]
 
@@ -833,6 +833,35 @@ async def _dispatch_product_firmware(
     _unsupported("product_firmware", action)
 
 
+async def _dispatch_lab_request(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaiplm.schemas.lab_request import LabRequestRejectRequest
+    from apps.kuaiplm.services.lab_request_service import LabRequestService
+
+    svc = LabRequestService()
+    user = await _resolve_user_or_raise(user_id)
+    if action == "submit":
+        return await svc.submit(tenant_id, entity_id, user)
+    if action == "approve":
+        return await svc.approve(tenant_id, entity_id, user)
+    if action == "reject":
+        return await svc.reject(
+            tenant_id,
+            entity_id,
+            LabRequestRejectRequest(reason=(reason or "").strip() or "审批驳回"),
+            user,
+        )
+    if action in ("withdraw", "revoke"):
+        _unsupported("lab_request", action)
+    _unsupported("lab_request", action)
+
+
 async def _dispatch_production_file(
     action: str,
     *,
@@ -854,6 +883,34 @@ async def _dispatch_production_file(
     if action in ("withdraw", "revoke"):
         _unsupported("production_file", action)
     _unsupported("production_file", action)
+
+
+async def _dispatch_engineering_drawing(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.master_data.models.drawing import EngineeringDrawing
+    from apps.master_data.services.drawing_service import DrawingService
+
+    user = await _resolve_user_or_raise(user_id)
+    row = await EngineeringDrawing.get_or_none(tenant_id=tenant_id, id=entity_id)
+    if not row:
+        raise NotFoundError("工程图纸不存在")
+    if action == "submit":
+        return await DrawingService.submit_drawing(tenant_id, row.uuid, user)
+    if action == "approve":
+        return await DrawingService.approve_drawing(tenant_id, row.uuid, user)
+    if action == "reject":
+        return await DrawingService.reject_drawing(
+            tenant_id, row.uuid, user, reason=reason
+        )
+    if action in ("withdraw", "revoke"):
+        return await DrawingService.revoke_drawing(tenant_id, row.uuid, user)
+    _unsupported("engineering_drawing", action)
 
 
 async def _dispatch_trial_flow(
@@ -1398,7 +1455,9 @@ HANDLERS: Dict[str, DispatchFn] = {
     "process_route_change": _dispatch_process_route_change,
     "drawing_change": _dispatch_drawing_change,
     "product_firmware": _dispatch_product_firmware,
+    "lab_request": _dispatch_lab_request,
     "production_file": _dispatch_production_file,
+    "engineering_drawing": _dispatch_engineering_drawing,
     "trial_flow": _dispatch_trial_flow,
     "rework_order": _dispatch_rework_order,
     "quality_complaint": _dispatch_quality_complaint,

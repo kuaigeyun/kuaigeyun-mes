@@ -43,7 +43,7 @@ export const DRAWING_NAV_MODES: {
   { mode: 'route', icon: BranchesOutlined, labelKey: 'app.master-data.drawings.tree.byRoute' },
 ];
 
-const DRAWING_TYPES: DrawingType[] = ['part', 'assembly', 'process', 'other'];
+const DRAWING_TYPES: DrawingType[] = ['part', 'assembly', 'process', 'other', 'product_spec'];
 const DRAWING_STATUSES: DrawingStatus[] = ['Draft', 'Editing', 'Pending', 'Released', 'Obsolete'];
 
 const TYPE_ICONS: Record<DrawingType, React.ReactNode> = {
@@ -51,6 +51,7 @@ const TYPE_ICONS: Record<DrawingType, React.ReactNode> = {
   assembly: <BuildOutlined />,
   process: <ToolOutlined />,
   other: <FileOutlined />,
+  product_spec: <FileOutlined />,
 };
 
 const STATUS_ICONS: Record<DrawingStatus, React.ReactNode> = {
@@ -242,6 +243,7 @@ export function buildDrawingVaultTree(
       isLeaf: true,
     });
   }
+  nodes.push(...mapFolderNodes(folders, search));
   if (matchSearch(unclassifiedLabel, search)) {
     nodes.push({
       key: DRAWING_TREE_UNCLASSIFIED_KEY,
@@ -250,7 +252,6 @@ export function buildDrawingVaultTree(
       isLeaf: true,
     });
   }
-  nodes.push(...mapFolderNodes(folders, search));
   return nodes.length
     ? nodes
     : [

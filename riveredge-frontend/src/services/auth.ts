@@ -13,6 +13,8 @@ export interface LoginRequest {
   username: string;
   password: string;
   tenant_id?: number; // 可选，用于多组织登录选择
+  /** 总入口同名同密跨租户歧义时，提交手机号后四位 */
+  phone_last4?: string;
 }
 
 /**
@@ -28,10 +30,10 @@ export interface LoginRequest {
  * - requires_tenant_selection: 是否需要选择组织（当用户有多个组织时）
  */
 export interface LoginResponse {
-  access_token: string;
+  access_token?: string | null;
   token_type: string;
   expires_in: number;
-  user: {
+  user?: {
     id: number;
     uuid: string;
     username: string;
@@ -56,6 +58,8 @@ export interface LoginResponse {
   }>;
   default_tenant_id?: number;
   requires_tenant_selection?: boolean;
+  /** 同名同密跨租户且手机号不一致时，须先核验后四位再签发 Token */
+  requires_phone_verification?: boolean;
 }
 
 export interface TenantSwitchOption {

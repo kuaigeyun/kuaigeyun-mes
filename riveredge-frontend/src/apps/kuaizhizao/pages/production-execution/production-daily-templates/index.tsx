@@ -209,11 +209,12 @@ const ProductionDailyTemplatesPage: React.FC = () => {
             title: t('common.action'),
             valueType: 'option',
             fixed: 'right',
-            render: (_, record) => [
-              <Button key="edit" type="link" size="small" disabled={!perms.canUpdate} onClick={() => void openEdit(record)}>
-                {t('common.edit')}
-              </Button>,
-            ],
+            render: (_, record) =>
+              [
+                perms.canUpdate ? (
+                  <Button key="edit" {...rowActionKind('update')} onClick={() => void openEdit(record)} />
+                ) : null,
+              ].filter(Boolean),
           },
         ],
         GLOBAL_DOC_LIST_FIELD_RANK,

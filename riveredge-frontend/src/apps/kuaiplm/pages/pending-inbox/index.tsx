@@ -87,21 +87,29 @@ const PendingInboxPage: React.FC = () => {
         dataIndex: 'doc_code',
         key: 'document_code',
         width: 140,
+        minWidth: 140,
         copyable: true,
         uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
       },
       {
         title: t('app.kuaiplm.pendingInbox.fields.title'),
         dataIndex: 'title',
         key: 'title',
-        ellipsis: true,
+        minWidth: 160,
+        uniTablePrimaryFlex: true,
         uniTableRemainderFlex: true,
+        ellipsis: true,
       },
       {
         title: t('app.kuaiplm.pendingInbox.fields.project'),
         dataIndex: 'project_name',
         key: 'project_name',
         width: 180,
+        minWidth: 180,
+        uniTableKeepWidth: true,
+        resizable: false,
         ellipsis: true,
         render: (_, r) =>
           r.project_name
@@ -136,7 +144,7 @@ const PendingInboxPage: React.FC = () => {
             key="open"
             type="link"
             size="small"
-            {...rowActionKind('detail')}
+            {...rowActionKind('read')}
             onClick={() => openDoc(row)}
           >
             {t('app.kuaiplm.pendingInbox.actions.open')}
@@ -156,7 +164,7 @@ const PendingInboxPage: React.FC = () => {
         permissionResource="kuaiplm:dashboard"
         enableRowSelection={false}
         columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
-        columnPersistenceId="apps.kuaiplm.pages.pending-inbox.v1"
+        columnPersistenceId="apps.kuaiplm.pages.pending-inbox.width-v2"
         showCreateButton={false}
         showDeleteButton={false}
         request={async (params) => {

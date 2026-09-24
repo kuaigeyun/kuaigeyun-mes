@@ -238,7 +238,9 @@ class AuthService:
         return await self._filter_users_with_active_tenant(users)
 
     async def _build_user_tenants(self, user: User) -> list[dict]:
-        """构建当前账号可访问组织列表（同 username/phone 桥接，仅激活组织）。"""
+        """构建当前账号可访问组织列表（同 username 且同登录实体，仅激活组织）。"""
+        from infra.domain.security.login_phone_disambiguation import filter_same_entity_users
+
         q = Q(username=user.username)
         if user.phone:
             q = q | Q(phone=user.phone)
@@ -247,6 +249,7 @@ class AuthService:
             is_active=True,
             deleted_at__isnull=True,
         ).all()
+        users_with_same_account = filter_same_entity_users(user, users_with_same_account)
         users_with_same_account = await self._filter_users_with_active_tenant(users_with_same_account)
         return await self._tenants_payload_from_users(users_with_same_account)
 
@@ -294,11 +297,22 @@ class AuthService:
             deleted_at__isnull=True,
         ).all()
         candidate_users = await self._filter_users_with_active_tenant(candidate_users)
+        from infra.domain.security.login_phone_disambiguation import (
+            filter_same_entity_users,
+            phones_same_entity,
+        )
+
+        candidate_users = filter_same_entity_users(current_user, candidate_users)
         target_user = next((u for u in candidate_users if u.tenant_id == target_tenant_id), None)
         if not target_user:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="当前账号不属于目标组织，无法切换",
+            )
+        if not phones_same_entity(current_user.phone, target_user.phone):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="当前账号与目标组织绑定的手机号不一致，无法切换",
             )
 
         return await self.generate_login_result(
@@ -830,6 +844,49 @@ class AuthService:
             )
         
         is_infra_admin = user.is_infra_admin
+
+        if (
+            not is_infra_admin
+            and password_matched_users
+            and data.tenant_id is None
+        ):
+            from infra.domain.security.login_phone_disambiguation import (
+                apply_phone_disambiguation,
+                needs_phone_disambiguation,
+            )
+
+            if needs_phone_disambiguation(password_matched_users):
+                if not data.phone_last4:
+                    return {
+                        "access_token": None,
+                        "token_type": "bearer",
+                        "expires_in": 0,
+                        "user": None,
+                        "tenants": None,
+                        "default_tenant_id": None,
+                        "requires_tenant_selection": False,
+                        "requires_phone_verification": True,
+                    }
+                password_matched_users, disambiguated_user = apply_phone_disambiguation(
+                    password_matched_users,
+                    data.phone_last4,
+                )
+                if not disambiguated_user:
+                    await LoginBruteForceGuard.record_failure(client_ip, login_identity)
+                    if request:
+                        asyncio.create_task(self._log_login_attempt(
+                            tenant_id=data.tenant_id,
+                            user_id=None,
+                            username=data.username,
+                            login_status="failed",
+                            failure_reason="手机号后四位不正确",
+                            request=request,
+                        ))
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail="手机号后四位不正确",
+                    )
+                user = disambiguated_user
         
         final_tenant_id = data.tenant_id if data.tenant_id is not None else user.tenant_id
 
@@ -917,6 +974,8 @@ class AuthService:
                 matched_active = await self._filter_users_with_active_tenant(password_matched_users)
                 user_tenants_list = await self._tenants_payload_from_users(matched_active)
             else:
+                from infra.domain.security.login_phone_disambiguation import filter_same_entity_users
+
                 q = Q(username=user.username)
                 if user.phone:
                     q = q | Q(phone=user.phone)
@@ -925,6 +984,7 @@ class AuthService:
                     is_active=True,
                     deleted_at__isnull=True,
                 ).all()
+                users_with_same_username = filter_same_entity_users(user, users_with_same_username)
                 users_with_same_username = await self._filter_users_with_active_tenant(
                     users_with_same_username
                 )
@@ -1036,6 +1096,7 @@ class AuthService:
             "tenants": user_tenants_list if user_tenants_list else None,
             "default_tenant_id": final_tenant_id,
             "requires_tenant_selection": requires_tenant_selection,
+            "requires_phone_verification": False,
         }
 
         from datetime import datetime, timezone

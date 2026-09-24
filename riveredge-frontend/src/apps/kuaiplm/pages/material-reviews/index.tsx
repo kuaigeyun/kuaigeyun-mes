@@ -255,14 +255,20 @@ const MaterialReviewsPage: React.FC = () => {
         dataIndex: 'review_code',
         key: 'document_code',
         width: 140,
+        minWidth: 140,
         copyable: true,
         uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
       },
       {
         title: t('app.kuaiplm.materialReview.fields.project'),
         dataIndex: 'project_name',
         key: 'project_name',
         width: 180,
+        minWidth: 180,
+        uniTableKeepWidth: true,
+        resizable: false,
         ellipsis: true,
         render: (_, r) => `${r.project_name || ''} (${r.project_code || ''})`,
       },
@@ -270,15 +276,19 @@ const MaterialReviewsPage: React.FC = () => {
         title: t('app.kuaiplm.materialReview.fields.title'),
         dataIndex: 'title',
         key: 'title',
-        ellipsis: true,
+        minWidth: 160,
+        uniTablePrimaryFlex: true,
         uniTableRemainderFlex: true,
+        ellipsis: true,
       },
       {
         title: t('app.kuaiplm.materialReview.fields.lineCount'),
         dataIndex: 'line_count',
         key: 'line_count',
         width: 90,
+        minWidth: 90,
         uniTableKeepWidth: true,
+        resizable: false,
         hideInSearch: true,
       },
       {
@@ -302,7 +312,7 @@ const MaterialReviewsPage: React.FC = () => {
               key="detail"
               type="link"
               size="small"
-              {...rowActionKind('detail')}
+              {...rowActionKind('read')}
               onClick={() => void openDetail(row)}
             />,
           ];
@@ -312,7 +322,7 @@ const MaterialReviewsPage: React.FC = () => {
                 key="edit"
                 type="link"
                 size="small"
-                {...rowActionKind('edit')}
+                {...rowActionKind('update')}
                 onClick={() => void openEdit(row)}
               />,
             );
@@ -435,7 +445,7 @@ const MaterialReviewsPage: React.FC = () => {
           tableRowsRef.current = rows;
         }}
         columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
-        columnPersistenceId="apps.kuaiplm.pages.material-reviews.v1"
+        columnPersistenceId="apps.kuaiplm.pages.material-reviews.width-v2"
         showCreateButton={perms.canCreate}
         createButtonText={t('app.kuaiplm.materialReview.createButton') + NEW_SHORTCUT_HINT}
         onCreate={() => {

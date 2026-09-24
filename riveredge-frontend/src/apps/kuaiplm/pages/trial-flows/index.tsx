@@ -192,14 +192,20 @@ const TrialFlowsPage: React.FC = () => {
         dataIndex: 'trial_code',
         key: 'document_code',
         width: 140,
+        minWidth: 140,
         copyable: true,
         uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
       },
       {
         title: t('app.kuaiplm.trialFlow.fields.project'),
         dataIndex: 'project_name',
         key: 'project_name',
         width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
         ellipsis: true,
         render: (_, r) => `${r.project_name || ''} (${r.project_code || ''})`,
       },
@@ -208,22 +214,28 @@ const TrialFlowsPage: React.FC = () => {
         dataIndex: 'business_type',
         key: 'business_type',
         width: 110,
+        minWidth: 110,
         uniTableKeepWidth: true,
+        resizable: false,
         render: (_, r) => <MarkerTag>{typeLabel(r.business_type)}</MarkerTag>,
       },
       {
         title: t('app.kuaiplm.trialFlow.fields.title'),
         dataIndex: 'title',
         key: 'title',
-        ellipsis: true,
+        minWidth: 160,
+        uniTablePrimaryFlex: true,
         uniTableRemainderFlex: true,
+        ellipsis: true,
       },
       {
         title: t('app.kuaiplm.trialFlow.fields.currentStep'),
         dataIndex: 'current_step_key',
         key: 'current_step_key',
         width: 100,
+        minWidth: 100,
         uniTableKeepWidth: true,
+        resizable: false,
         render: (_, r) => r.current_step_key || '—',
       },
       {
@@ -247,7 +259,7 @@ const TrialFlowsPage: React.FC = () => {
               key="detail"
               type="link"
               size="small"
-              {...rowActionKind('detail')}
+              {...rowActionKind('read')}
               onClick={() => void openDetail(row)}
             />,
           ];
@@ -257,7 +269,7 @@ const TrialFlowsPage: React.FC = () => {
                 key="edit"
                 type="link"
                 size="small"
-                {...rowActionKind('edit')}
+                {...rowActionKind('update')}
                 onClick={() => void openEdit(row)}
               />,
             );
@@ -391,7 +403,7 @@ const TrialFlowsPage: React.FC = () => {
           tableRowsRef.current = rows;
         }}
         columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
-        columnPersistenceId="apps.kuaiplm.pages.trial-flows.v1"
+        columnPersistenceId="apps.kuaiplm.pages.trial-flows.width-v2"
         showCreateButton={perms.canCreate}
         createButtonText={t('app.kuaiplm.trialFlow.createButton') + NEW_SHORTCUT_HINT}
         onCreate={openCreate}

@@ -19,6 +19,8 @@ ACTION_TRIAL_APPROVAL_OVERDUE = "approval_overdue"
 ACTION_TRIAL_STEP_OVERDUE = "step_overdue"
 
 TRIGGER_LAB_REQUEST = "lab_request"
+ACTION_LAB_SUBMITTED = "submitted"
+ACTION_LAB_COMPLETED = "completed"
 ACTION_LAB_REPORT_SUBMITTED = "report_submitted"
 ACTION_LAB_REPORT_APPROVED = "report_approved"
 ACTION_LAB_REPORT_REJECTED = "report_rejected"
@@ -210,6 +212,60 @@ async def notify_ecn_closed(
             "entity_id": ecn_id,
             "creator_user_id": creator_user_id,
             "ecn_close_recipient_user_ids": recipient_ids,
+        },
+    )
+
+
+async def notify_lab_request_submitted(
+    tenant_id: int,
+    *,
+    request_id: int,
+    code: str,
+    title: str,
+    creator_user_id: Optional[int],
+) -> int:
+    """委托进入实验室待受理：通知实验室侧（规则可指定接收人）。"""
+    return await dispatch_kuaiplm_notification(
+        tenant_id,
+        trigger_document=TRIGGER_LAB_REQUEST,
+        trigger_action=ACTION_LAB_SUBMITTED,
+        variables={
+            "lab_code": code,
+            "title": title,
+            "detail_path": _lab_request_detail_path(request_id),
+        },
+        context={
+            "entity_type": "lab_request",
+            "entity_id": request_id,
+            "creator_user_id": creator_user_id,
+        },
+    )
+
+
+async def notify_lab_request_completed(
+    tenant_id: int,
+    *,
+    request_id: int,
+    code: str,
+    title: str,
+    creator_user_id: Optional[int],
+    judgment: Optional[str] = None,
+) -> int:
+    """实验完成：通知申请人查看结果。"""
+    return await dispatch_kuaiplm_notification(
+        tenant_id,
+        trigger_document=TRIGGER_LAB_REQUEST,
+        trigger_action=ACTION_LAB_COMPLETED,
+        variables={
+            "lab_code": code,
+            "title": title,
+            "judgment": judgment or "",
+            "detail_path": _lab_request_detail_path(request_id),
+        },
+        context={
+            "entity_type": "lab_request",
+            "entity_id": request_id,
+            "creator_user_id": creator_user_id,
         },
     )
 

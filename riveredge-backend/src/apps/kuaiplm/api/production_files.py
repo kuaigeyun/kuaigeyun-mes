@@ -11,6 +11,7 @@ from apps.kuaiplm.schemas.production_file import (
     ProductionFileAccessLogResponse,
     ProductionFileAccessRequest,
     ProductionFileCreate,
+    ProductionFileDownloadResponse,
     ProductionFileIssueRequest,
     ProductionFileListResponse,
     ProductionFileResponse,
@@ -244,6 +245,39 @@ async def obsolete_production_file(
 ):
     try:
         return await service.obsolete(tenant_id, file_id, current_user)
+    except Exception as e:
+        raise _http(e)
+
+
+@router.get(
+    "/{file_id}/download",
+    response_model=ProductionFileDownloadResponse,
+    summary="Download production file",
+)
+async def download_production_file(
+    file_id: int,
+    version_id: Optional[int] = Query(None),
+    production_view: bool = Query(False, description="生产使用视图"),
+    current_user: User = Depends(get_current_user),
+    _auth=Depends(
+        require_access(
+            "kuaiplm.production-file",
+            "read",
+            required_permissions=["kuaiplm:production-file:read"],
+        )
+    ),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        codes = await _permission_codes(current_user, tenant_id)
+        return await service.resolve_download(
+            tenant_id,
+            file_id,
+            current_user,
+            version_id=version_id,
+            permission_codes=codes,
+            production_view=production_view,
+        )
     except Exception as e:
         raise _http(e)
 

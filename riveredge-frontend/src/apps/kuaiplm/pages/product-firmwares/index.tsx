@@ -2,7 +2,7 @@
  * 产品固件列表（R-15 #28）
  */
 
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import type { ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
@@ -14,10 +14,16 @@ import {
   ProFormTextArea,
   ProFormUploadDragger,
 } from '@ant-design/pro-components';
-import { App, Alert, Button, Descriptions, Result } from 'antd';
+import { App, Alert, Button, Col, Descriptions, Result, Row } from 'antd';
 import { InboxOutlined } from '@ant-design/icons';
+import { ActionConfirmPopconfirm } from '../../../../components/action-confirm';
 import { UniTable } from '../../../../components/uni-table';
-import { rowActionKind } from '../../../../components/uni-action';
+import {
+  rowActionDownloadFirmware,
+  rowActionKind,
+  rowActionLabelKeep,
+} from '../../../../components/uni-action';
+import { ThemedSegmented } from '../../../../components/themed-segmented';
 import {
   DetailDrawerTemplate,
   FormModalTemplate,
@@ -28,10 +34,18 @@ import { detailDrawerDescriptionItems } from '../../../../components/layout-temp
 import { useResourcePermissions } from '../../../../hooks/useResourcePermissions';
 import { getApiErrorMessage } from '../../../../utils/errorHandler';
 import { formatDateBySiteSetting, todaySiteDateString } from '../../../../utils/format';
+import { formDateFormItemProps, toApiDateString } from '../../../../utils/formDate';
 import { downloadRecordsAsXlsx, type ExportXlsxColumn } from '../../../../utils/exportRecordsXlsx';
 import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
 import { renderDocumentStatusTag } from '../../../../utils/documentLifecycleStatusTag';
-import { uploadMultipleFiles } from '../../../../services/file';
+import { normalizeFilePreviewUrl, uploadFile } from '../../../../services/file';
+import {
+  extractUploadFileUuids,
+  normalizeCustomFieldFileUuids,
+  normalizeUploadFileList,
+} from '../../../../components/custom-fields/customFieldFileUtils';
+import { useCurrentUser } from '../../../../hooks/useCurrentUser';
+import { canViewDocumentHistory } from '../../../../utils/permissionContract';
 import {
   alignDescriptionColumns,
   alignProColumns,
@@ -39,12 +53,15 @@ import {
   GLOBAL_DOC_LIST_FIELD_RANK,
 } from '../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../../kuaizhizao/pages/shared/documentAuditColumns';
-import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../utils/uniTableLayoutColumns';
 import { NEW_SHORTCUT_HINT } from '../../../../utils/globalNewShortcut';
-import Phase2ProjectSelect from '../../components/Phase2ProjectSelect';
+import Phase2ProjectSelect, {
+  formatProjectRefLabel,
+  resolveProjectRefPick,
+} from '../../components/Phase2ProjectSelect';
 import {
   productFirmwareApi,
   type ProductFirmware,
+  type ProductFirmwarePayload,
   type ProductFirmwareStatus,
 } from '../../services/product-firmware';
 
@@ -73,9 +90,41 @@ const STATUS_KEYS: ProductFirmwareStatus[] = [
   'obsolete',
 ];
 
+const DOWNLOADABLE_STATUSES: ProductFirmwareStatus[] = ['approved', 'released'];
+
+function sanitizeOptionalProjectId(value: unknown): number | undefined {
+  if (value === null || value === undefined || value === '') return undefined;
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+/** 升版草稿：同项目下已有已发布固件，新建首版时不展示变更说明 */
+function isProductFirmwareReviseContext(
+  row: ProductFirmware | null,
+  listRows: ProductFirmware[],
+): boolean {
+  if (!row || row.status !== 'draft') {
+    return false;
+  }
+  const projectId = row.project_id;
+  const projectCode = String(row.project_code ?? '').trim();
+  return listRows.some((other) => {
+    if (other.id === row.id || other.status !== 'released') {
+      return false;
+    }
+    if (projectId != null) {
+      return other.project_id === projectId;
+    }
+    return projectCode !== '' && String(other.project_code ?? '').trim() === projectCode;
+  });
+}
+
 const ProductFirmwaresPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const currentUser = useCurrentUser();
+  const canViewHistory = canViewDocumentHistory(currentUser);
   const perms = useResourcePermissions(RESOURCE);
   const [searchParams] = useSearchParams();
   const filterProjectId = searchParams.get('project_id')
@@ -85,14 +134,31 @@ const ProductFirmwaresPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   const tableRowsRef = useRef<ProductFirmware[]>([]);
   const formRef = useRef<ProFormInstance | undefined>(undefined);
+  const projectRefIdMapRef = useRef(new Map<string, number>());
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<ProductFirmware | null>(null);
   const [detail, setDetail] = useState<ProductFirmware | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [listViewScope, setListViewScope] = useState<'all' | 'production'>('all');
+  const listScopeReadyRef = useRef(false);
 
   const reload = useCallback(() => actionRef.current?.reload(), []);
+
+  const showChangeSummary = useMemo(
+    () => isProductFirmwareReviseContext(editing, tableRowsRef.current),
+    [editing, modalOpen],
+  );
+
+  useEffect(() => {
+    if (!listScopeReadyRef.current) {
+      listScopeReadyRef.current = true;
+      return;
+    }
+    reload();
+  }, [listViewScope, reload]);
+
   const openCreate = useCallback(() => {
     setEditing(null);
     setModalOpen(true);
@@ -103,19 +169,47 @@ const ProductFirmwaresPage: React.FC = () => {
     [t],
   );
 
-  const openDetail = useCallback(async (row: ProductFirmware) => {
-    if (!row.id) return;
-    setDetailLoading(true);
-    setDetailError(null);
-    setDetail(row);
-    try {
-      const full = await productFirmwareApi.get(row.id);
-      setDetail(full);
-    } catch (e) {
-      setDetailError(getApiErrorMessage(e));
-    } finally {
-      setDetailLoading(false);
-    }
+  const resolveStoredFileUuid = useCallback((fileUuid: unknown) => {
+    return normalizeCustomFieldFileUuids(fileUuid)[0] ?? null;
+  }, []);
+
+  const downloadFirmwareFile = useCallback(
+    async (row: ProductFirmware) => {
+      if (!row.id) return;
+      try {
+        const { preview_url } = await productFirmwareApi.getDownloadUrl(row.id, {
+          production_view: listViewScope === 'production',
+        });
+        window.open(normalizeFilePreviewUrl(preview_url), '_blank', 'noopener,noreferrer');
+      } catch (e) {
+        messageApi.error(getApiErrorMessage(e));
+      }
+    },
+    [listViewScope, messageApi],
+  );
+
+  const openDetail = useCallback(
+    async (row: ProductFirmware) => {
+      if (!row.id) return;
+      setDetailLoading(true);
+      setDetailError(null);
+      setDetail(row);
+      try {
+        const full = await productFirmwareApi.get(row.id, {
+          production_view: listViewScope === 'production',
+        });
+        setDetail(full);
+      } catch (e) {
+        setDetailError(getApiErrorMessage(e));
+      } finally {
+        setDetailLoading(false);
+      }
+    },
+    [listViewScope],
+  );
+
+  const canDownloadRow = useCallback((row: ProductFirmware) => {
+    return DOWNLOADABLE_STATUSES.includes(row.status);
   }, []);
 
   const columns = useMemo<ProColumns<ProductFirmware>[]>(() => {
@@ -125,41 +219,60 @@ const ProductFirmwaresPage: React.FC = () => {
         dataIndex: 'firmware_code',
         key: 'document_code',
         width: 140,
+        minWidth: 140,
         copyable: true,
         uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
+      },
+      {
+        title: t('app.kuaiplm.productFirmware.fields.title'),
+        dataIndex: 'title',
+        key: 'title',
+        minWidth: 160,
+        uniTablePrimaryFlex: true,
+        uniTableRemainderFlex: true,
+        ellipsis: true,
       },
       {
         title: t('app.kuaiplm.productFirmware.fields.project'),
         dataIndex: 'project_name',
         key: 'project_name',
         width: 180,
+        minWidth: 180,
+        uniTableKeepWidth: true,
+        resizable: false,
         ellipsis: true,
-        render: (_, r) => `${r.project_name || ''} (${r.project_code || ''})`,
+        render: (_, r) => {
+          const code = r.project_code || '';
+          const name = r.project_name || '';
+          if (code && name && name !== code) {
+            return `${name} (${code})`;
+          }
+          return code || name || '—';
+        },
       },
       {
         title: t('app.kuaiplm.productFirmware.fields.version'),
         dataIndex: 'version',
         key: 'version',
         width: 100,
+        minWidth: 100,
         uniTableKeepWidth: true,
-      },
-      {
-        title: t('app.kuaiplm.productFirmware.fields.title'),
-        dataIndex: 'title',
-        key: 'title',
+        resizable: false,
         ellipsis: true,
-        uniTableRemainderFlex: true,
       },
       {
         title: t('app.kuaiplm.productFirmware.fields.releaseDate'),
         dataIndex: 'release_date',
         key: 'business_date',
         width: 120,
+        minWidth: 120,
         uniTableKeepWidth: true,
+        resizable: false,
         render: (_, r) => formatDateBySiteSetting(r.release_date) || '—',
       },
       {
-        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         title: t('common.status'),
         dataIndex: 'status',
         key: 'lifecycle',
@@ -176,12 +289,11 @@ const ProductFirmwaresPage: React.FC = () => {
         key: 'option',
         fixed: 'right',
         render: (_, row) => {
+          if (row.id == null) return [];
           const actions: React.ReactNode[] = [
             <Button
               key="detail"
-              type="link"
-              size="small"
-              {...rowActionKind('detail')}
+              {...rowActionKind('read')}
               onClick={() => void openDetail(row)}
             />,
           ];
@@ -189,9 +301,7 @@ const ProductFirmwaresPage: React.FC = () => {
             actions.push(
               <Button
                 key="edit"
-                type="link"
-                size="small"
-                {...rowActionKind('edit')}
+                {...rowActionKind('update')}
                 onClick={() => {
                   setEditing(row);
                   setModalOpen(true);
@@ -199,12 +309,27 @@ const ProductFirmwaresPage: React.FC = () => {
               />,
             );
           }
-          if (row.status === 'draft' && perms.canAction?.('submit') && row.id) {
+          if (row.status === 'draft' && perms.canDelete) {
+            actions.push(
+              <Button
+                key="delete"
+                {...rowActionKind('delete')}
+                onClick={async () => {
+                  try {
+                    await productFirmwareApi.remove(row.id!);
+                    messageApi.success(t('common.deleteSuccess'));
+                    reload();
+                  } catch (e) {
+                    messageApi.error(getApiErrorMessage(e));
+                  }
+                }}
+              />,
+            );
+          }
+          if (row.status === 'draft' && perms.canAction?.('submit')) {
             actions.push(
               <Button
                 key="submit"
-                type="link"
-                size="small"
                 {...rowActionKind('submit')}
                 onClick={async () => {
                   try {
@@ -218,12 +343,10 @@ const ProductFirmwaresPage: React.FC = () => {
               />,
             );
           }
-          if (row.status === 'pending' && perms.canAction?.('approve') && row.id) {
+          if (row.status === 'pending' && perms.canAction?.('approve')) {
             actions.push(
               <Button
                 key="approve"
-                type="link"
-                size="small"
                 {...rowActionKind('approve')}
                 onClick={async () => {
                   try {
@@ -237,12 +360,10 @@ const ProductFirmwaresPage: React.FC = () => {
               />,
             );
           }
-          if (row.status === 'pending' && perms.canAction?.('reject') && row.id) {
+          if (row.status === 'pending' && perms.canAction?.('reject')) {
             actions.push(
               <Button
                 key="reject"
-                type="link"
-                size="small"
                 {...rowActionKind('reject')}
                 onClick={async () => {
                   try {
@@ -256,13 +377,12 @@ const ProductFirmwaresPage: React.FC = () => {
               />,
             );
           }
-          if (row.status === 'approved' && perms.canAction?.('execute') && row.id) {
+          if (row.status === 'approved' && perms.canAction?.('execute')) {
             actions.push(
               <Button
                 key="release"
-                type="link"
-                size="small"
                 {...rowActionKind('execute')}
+                {...rowActionLabelKeep()}
                 onClick={async () => {
                   try {
                     await productFirmwareApi.release(row.id!);
@@ -272,7 +392,45 @@ const ProductFirmwaresPage: React.FC = () => {
                     messageApi.error(getApiErrorMessage(e));
                   }
                 }}
+              >
+                {t('app.kuaiplm.productFirmware.actions.release')}
+              </Button>,
+            );
+          }
+          if (canDownloadRow(row) && perms.canRead) {
+            actions.push(
+              <Button
+                key="download"
+                {...rowActionDownloadFirmware('read')}
+                onClick={() => void downloadFirmwareFile(row)}
               />,
+            );
+          }
+          if (row.status === 'released' && perms.canUpdate) {
+            actions.push(
+              <ActionConfirmPopconfirm
+                key="revise"
+                title={t('app.kuaiplm.productFirmware.messages.reviseConfirm')}
+                onConfirm={async () => {
+                  try {
+                    const draft = await productFirmwareApi.revise(row.id!, {});
+                    messageApi.success(t('app.kuaiplm.productFirmware.messages.reviseSuccess'));
+                    reload();
+                    setEditing(draft);
+                    setModalOpen(true);
+                  } catch (e) {
+                    messageApi.error(getApiErrorMessage(e));
+                  }
+                }}
+              >
+                <Button
+                  {...rowActionKind('update')}
+                  {...rowActionLabelKeep()}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {t('app.kuaiplm.productFirmware.actions.revise')}
+                </Button>
+              </ActionConfirmPopconfirm>,
             );
           }
           return actions;
@@ -280,7 +438,16 @@ const ProductFirmwaresPage: React.FC = () => {
       },
     ];
     return cols;
-  }, [t, statusLabel, openDetail, perms, messageApi, reload]);
+  }, [
+    t,
+    statusLabel,
+    openDetail,
+    perms,
+    messageApi,
+    reload,
+    canDownloadRow,
+    downloadFirmwareFile,
+  ]);
 
   const basicColumns = useMemo(() => {
     const cols: ProDescriptionsItemProps<ProductFirmware>[] = [
@@ -293,7 +460,14 @@ const ProductFirmwaresPage: React.FC = () => {
         key: 'project_name',
         title: t('app.kuaiplm.productFirmware.fields.project'),
         dataIndex: 'project_name',
-        render: (_, r) => `${r.project_name || ''} (${r.project_code || ''})`,
+        render: (_, r) => {
+          const code = r.project_code || '';
+          const name = r.project_name || '';
+          if (code && name && name !== code) {
+            return `${name} (${code})`;
+          }
+          return code || name || '—';
+        },
       },
       {
         key: 'version',
@@ -347,6 +521,14 @@ const ProductFirmwaresPage: React.FC = () => {
           title={t('app.kuaiplm.phase2.common.projectFilterHint', { id: filterProjectId })}
         />
       ) : null}
+      {!canViewHistory && listViewScope === 'all' ? (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 12 }}
+          title={t('app.kuaiplm.productFirmware.messages.latestVersionOnlyHint')}
+        />
+      ) : null}
       <UniTable<ProductFirmware>
         headerTitle={t('app.kuaiplm.productFirmware.title')}
         actionRef={actionRef}
@@ -358,8 +540,23 @@ const ProductFirmwaresPage: React.FC = () => {
         onTableDataChange={(rows) => {
           tableRowsRef.current = rows;
         }}
+        beforeSearchButtons={
+          <ThemedSegmented
+            surfaceBackground
+            size="medium"
+            value={listViewScope}
+            onChange={(v) => setListViewScope(v as 'all' | 'production')}
+            options={[
+              { label: t('app.kuaiplm.productFirmware.viewScope.all'), value: 'all' },
+              {
+                label: t('app.kuaiplm.productFirmware.viewScope.production'),
+                value: 'production',
+              },
+            ]}
+          />
+        }
         columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
-        columnPersistenceId="apps.kuaiplm.pages.product-firmwares.v1"
+        columnPersistenceId="apps.kuaiplm.pages.product-firmwares.width-v3"
         showCreateButton={perms.canCreate}
         createButtonText={t('app.kuaiplm.productFirmware.createButton') + NEW_SHORTCUT_HINT}
         onCreate={openCreate}
@@ -386,6 +583,7 @@ const ProductFirmwaresPage: React.FC = () => {
                     productFirmwareApi.list({
                       ...p,
                       project_id: filterProjectId,
+                      production_download_only: listViewScope === 'production',
                     }),
                   );
             if (type === 'selected' && keys?.length) {
@@ -416,6 +614,7 @@ const ProductFirmwaresPage: React.FC = () => {
             status: params.status as string | undefined,
             keyword: (params.keyword || params.title) as string | undefined,
             project_id: filterProjectId,
+            production_download_only: listViewScope === 'production',
           });
           return { data: res.items, total: res.total, success: true };
         }}
@@ -423,18 +622,25 @@ const ProductFirmwaresPage: React.FC = () => {
 
       <FormModalTemplate
         key={editing?.uuid ?? 'create'}
-        title={editing ? t('common.edit') : t('common.create')}
+        title={
+          editing
+            ? t('app.kuaiplm.productFirmware.modal.editTitle')
+            : t('app.kuaiplm.productFirmware.modal.createTitle')
+        }
         open={modalOpen}
         onClose={() => {
           setModalOpen(false);
           setEditing(null);
         }}
         formRef={formRef}
-        grid
+        grid={false}
+        width={960}
         initialValues={
           editing
             ? {
-                project_id: editing.project_id,
+                project_ref: editing.project_id
+                  ? formatProjectRefLabel(editing.project_code, editing.project_name)
+                  : editing.project_code || '',
                 version: editing.version,
                 title: editing.title,
                 release_date: editing.release_date,
@@ -456,36 +662,61 @@ const ProductFirmwaresPage: React.FC = () => {
                 change_summary: editing.change_summary,
                 remarks: editing.remarks,
               }
-            : filterProjectId
-              ? { project_id: filterProjectId, file_upload: [] }
-              : { file_upload: [] }
+            : { file_upload: [] }
         }
         onFinish={async (values) => {
           try {
-            const uploadList = Array.isArray(values.file_upload) ? values.file_upload : [];
-            const done = uploadList.find((f: { status?: string }) => f.status === 'done' || !f.status);
-            const response = done?.response;
+            // Upload 字段以 form 真源为准（validateFields 偶发与 fileList 不同步）
+            const formUpload = formRef.current?.getFieldValue?.('file_upload');
+            const formFileUuid = formRef.current?.getFieldValue?.('file_uuid');
+            const formFileName = formRef.current?.getFieldValue?.('file_name');
+            const uploadList = normalizeUploadFileList(formUpload ?? values.file_upload);
+            const uploadedUuids = extractUploadFileUuids(uploadList);
             const fileUuid =
-              (typeof response === 'object' && response?.uuid) ||
-              done?.uid ||
-              values.file_uuid ||
+              uploadedUuids[0] ??
+              normalizeCustomFieldFileUuids(formFileUuid ?? values.file_uuid)[0] ??
+              normalizeCustomFieldFileUuids(editing?.file_uuid)[0] ??
               null;
+            const done = uploadList.find((f) => f.status === 'done' || !f.status);
+            const response = done?.response as
+              | { uuid?: string; original_name?: string; name?: string }
+              | Array<{ uuid?: string; original_name?: string; name?: string }>
+              | undefined;
+            const responseMeta = Array.isArray(response) ? response[0] : response;
             const fileName =
-              (typeof response === 'object' &&
-                (response.original_name || response.name)) ||
+              responseMeta?.original_name ||
+              responseMeta?.name ||
               done?.name ||
-              values.file_name ||
+              (typeof formFileName === 'string' ? formFileName : null) ||
+              (typeof values.file_name === 'string' ? values.file_name : null) ||
+              editing?.file_name ||
               null;
-            const payload = {
-              project_id: Number(values.project_id),
+            if (!fileUuid) {
+              messageApi.error(t('app.kuaiplm.productFirmware.messages.fileRequired'));
+              return false;
+            }
+            const projectFields = resolveProjectRefPick(
+              values.project_ref,
+              projectRefIdMapRef.current,
+            );
+            const projectId = sanitizeOptionalProjectId(projectFields.project_id);
+            const projectCode = String(projectFields.project_code ?? '').trim() || undefined;
+            const payload: ProductFirmwarePayload = {
               version: String(values.version || '').trim(),
               title: String(values.title || '').trim(),
-              release_date: values.release_date || null,
+              release_date: toApiDateString(values.release_date) ?? null,
               file_uuid: fileUuid,
               file_name: fileName,
-              change_summary: values.change_summary || null,
+              change_summary: showChangeSummary
+                ? String(values.change_summary || '').trim() || null
+                : null,
               remarks: values.remarks || null,
             };
+            if (projectId !== undefined) {
+              payload.project_id = projectId;
+            } else if (projectCode) {
+              payload.project_code = projectCode;
+            }
             if (editing?.id) {
               await productFirmwareApi.update(editing.id, payload);
             } else {
@@ -495,42 +726,51 @@ const ProductFirmwaresPage: React.FC = () => {
             setModalOpen(false);
             setEditing(null);
             reload();
+            return true;
           } catch (e) {
             messageApi.error(getApiErrorMessage(e));
-            throw e;
+            return false;
           }
         }}
       >
-        <Phase2ProjectSelect
-          name="project_id"
-          label={t('app.kuaiplm.productFirmware.fields.project')}
-          rules={[{ required: true }]}
-          disabled={!!editing}
-          colProps={{ span: 12 }}
-        />
-        <ProFormText
-          name="version"
-          label={t('app.kuaiplm.productFirmware.fields.version')}
-          rules={[{ required: true }]}
-          colProps={{ span: 12 }}
-        />
-        <ProFormText
-          name="title"
-          label={t('app.kuaiplm.productFirmware.fields.title')}
-          rules={[{ required: true }]}
-          colProps={{ span: 24 }}
-        />
-        <ProFormDatePicker
-          name="release_date"
-          label={t('app.kuaiplm.productFirmware.fields.releaseDate')}
-          colProps={{ span: 12 }}
-          fieldProps={{ style: { width: '100%' } }}
-        />
+        <ProFormText name="file_uuid" hidden />
+        <ProFormText name="file_name" hidden />
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormText
+              name="title"
+              label={t('app.kuaiplm.productFirmware.fields.title')}
+              rules={[{ required: true }]}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormText
+              name="version"
+              label={t('app.kuaiplm.productFirmware.fields.version')}
+              rules={[{ required: true }]}
+            />
+          </Col>
+          <Col span={12}>
+            <Phase2ProjectSelect
+              allowManualProjectCode
+              idByLabelRef={projectRefIdMapRef}
+              label={t('app.kuaiplm.productFirmware.fields.project')}
+              disabled={!!editing}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormDatePicker
+              name="release_date"
+              label={t('app.kuaiplm.productFirmware.fields.releaseDate')}
+              formItemProps={formDateFormItemProps}
+              fieldProps={{ style: { width: '100%' }, format: 'YYYY-MM-DD' }}
+            />
+          </Col>
+        </Row>
         <ProFormUploadDragger
           name="file_upload"
           label={t('app.kuaiplm.productFirmware.fields.file')}
           max={1}
-          colProps={{ span: 24 }}
           icon={<InboxOutlined />}
           title={t('app.kuaiplm.productFirmware.fields.fileUploadHint')}
           description={t('app.kuaiplm.productFirmware.fields.fileUploadSubHint')}
@@ -541,22 +781,51 @@ const ProductFirmwaresPage: React.FC = () => {
             style: { width: '100%' },
             customRequest: async (options) => {
               try {
-                const res = await uploadMultipleFiles([options.file as File], {
+                const raw = options.file as File;
+                const res = await uploadFile(raw, {
                   category: FIRMWARE_FILE_CATEGORY,
                 });
-                options.onSuccess?.(res[0], options.file as any);
+                const uuid = String(res?.uuid || '').trim();
+                if (!uuid) {
+                  throw new Error(t('app.kuaiplm.productFirmware.messages.fileRequired'));
+                }
+                const fileName = res.original_name || res.name || raw.name;
+                // 同步隐藏字段，避免仅靠 Upload.response 在提交时丢失 UUID
+                formRef.current?.setFieldsValue?.({
+                  file_uuid: uuid,
+                  file_name: fileName,
+                });
+                options.onSuccess?.(
+                  { uuid, original_name: fileName, name: res.name || fileName },
+                  raw as never,
+                );
               } catch (err) {
                 options.onError?.(err as Error);
               }
             },
+            onRemove: () => {
+              formRef.current?.setFieldsValue?.({
+                file_uuid: undefined,
+                file_name: undefined,
+              });
+              return true;
+            },
           }}
         />
-        <ProFormTextArea
-          name="change_summary"
-          label={t('app.kuaiplm.productFirmware.fields.changeSummary')}
-          colProps={{ span: 24 }}
-        />
-        <ProFormTextArea name="remarks" label={t('common.remark')} colProps={{ span: 24 }} />
+        <Row gutter={16}>
+          {showChangeSummary ? (
+            <Col span={24}>
+              <ProFormTextArea
+                name="change_summary"
+                label={t('app.kuaiplm.productFirmware.fields.changeSummary')}
+                rules={[{ required: true, message: t('common.required') }]}
+              />
+            </Col>
+          ) : null}
+          <Col span={24}>
+            <ProFormTextArea name="remarks" label={t('common.remark')} />
+          </Col>
+        </Row>
       </FormModalTemplate>
 
       <DetailDrawerTemplate
@@ -567,6 +836,13 @@ const ProductFirmwaresPage: React.FC = () => {
         }}
         title={detail?.firmware_code || t('app.kuaiplm.productFirmware.title')}
         loading={detailLoading}
+        extra={
+          detail && !detailError && canDownloadRow(detail) && perms.canRead ? (
+            <Button type="primary" onClick={() => void downloadFirmwareFile(detail)}>
+              {t('app.kuaiplm.productFirmware.actions.downloadFirmware')}
+            </Button>
+          ) : undefined
+        }
         plainBody={
           detailError ? (
             <Result

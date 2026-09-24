@@ -149,14 +149,20 @@ const PrototypeBuildSheetsPage: React.FC = () => {
         dataIndex: 'sheet_code',
         key: 'document_code',
         width: 140,
+        minWidth: 140,
         copyable: true,
         uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
       },
       {
         title: t('app.kuaiplm.prototypeBuildSheet.fields.project'),
         dataIndex: 'project_name',
         key: 'project_name',
         width: 180,
+        minWidth: 180,
+        uniTableKeepWidth: true,
+        resizable: false,
         ellipsis: true,
         render: (_, r) => `${r.project_name} (${r.project_code})`,
       },
@@ -165,7 +171,9 @@ const PrototypeBuildSheetsPage: React.FC = () => {
         dataIndex: 'round_key',
         key: 'round_key',
         width: 100,
+        minWidth: 100,
         uniTableKeepWidth: true,
+        resizable: false,
         valueEnum: Object.fromEntries(ROUND_KEYS.map((k) => [k, { text: roundLabel(k) }])),
         render: (_, r) => <MarkerTag variant="filled">{roundLabel(r.round_key)}</MarkerTag>,
       },
@@ -173,8 +181,10 @@ const PrototypeBuildSheetsPage: React.FC = () => {
         title: t('app.kuaiplm.prototypeBuildSheet.fields.title'),
         dataIndex: 'title',
         key: 'title',
-        ellipsis: true,
+        minWidth: 160,
+        uniTablePrimaryFlex: true,
         uniTableRemainderFlex: true,
+        ellipsis: true,
       },
       {
         ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
@@ -197,7 +207,7 @@ const PrototypeBuildSheetsPage: React.FC = () => {
               key="detail"
               type="link"
               size="small"
-              {...rowActionKind('detail')}
+              {...rowActionKind('read')}
               onClick={() => void openDetail(row)}
             />,
           ];
@@ -207,7 +217,7 @@ const PrototypeBuildSheetsPage: React.FC = () => {
                 key="edit"
                 type="link"
                 size="small"
-                {...rowActionKind('edit')}
+                {...rowActionKind('update')}
                 onClick={() => openEdit(row)}
               />,
             );
@@ -311,7 +321,7 @@ const PrototypeBuildSheetsPage: React.FC = () => {
           enableRowSelection
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
-          columnPersistenceId="apps.kuaiplm.pages.prototype-build-sheets.v2"
+          columnPersistenceId="apps.kuaiplm.pages.prototype-build-sheets.width-v3"
           headerTitle={t('app.kuaiplm.prototypeBuildSheet.title')}
           showCreateButton={perms.canCreate}
           createButtonText={t('app.kuaiplm.prototypeBuildSheet.createButton') + NEW_SHORTCUT_HINT}

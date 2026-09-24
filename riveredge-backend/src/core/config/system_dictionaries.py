@@ -624,4 +624,47 @@ SYSTEM_DICTIONARIES: List[Dict[str, Any]] = [
             {"label": "其他", "value": "其他", "description": "其他原因出库", "sort_order": 99},
         ],
     },
+    {
+        "code": "LAB_REQUEST_BUSINESS_TYPE",
+        "name": "实验委托类型",
+        "description": "快研发实验委托单的委托类型（IQC/研发/材料试验/整机例试/委外/通用）",
+        "items": [
+            {
+                "label": "IQC委托",
+                "value": "iqc",
+                "description": "IQC 来料委托实验",
+                "sort_order": 1,
+            },
+            {
+                "label": "研发委托",
+                "value": "rd",
+                "description": "研发电子等发起的委托实验（须经理审核）",
+                "sort_order": 2,
+            },
+            {
+                "label": "材料试验",
+                "value": "project_material",
+                "description": "项目侧材料试验委托",
+                "sort_order": 3,
+            },
+            {
+                "label": "整机例试",
+                "value": "project_product",
+                "description": "项目侧整机例试委托",
+                "sort_order": 4,
+            },
+            {
+                "label": "委外试验",
+                "value": "outsource",
+                "description": "委外试验（须采购填价后方可受理）",
+                "sort_order": 5,
+            },
+            {
+                "label": "通用委托",
+                "value": "general",
+                "description": "通用实验委托",
+                "sort_order": 6,
+            },
+        ],
+    },
 ]

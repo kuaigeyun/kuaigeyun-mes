@@ -18,7 +18,9 @@ class ProductionFileCreate(BaseModel):
     process_code: Optional[str] = Field(None, max_length=80)
     process_name: Optional[str] = Field(None, max_length=200)
     product_model: Optional[str] = Field(None, max_length=120)
-    project_id: Optional[int] = None
+    project_id: Optional[int] = Field(None, description="研发项目ID（与 project_code 二选一或皆空）")
+    project_code: Optional[str] = Field(None, max_length=50, description="项目代号（存量项目手填）")
+    project_name: Optional[str] = Field(None, max_length=200, description="项目名称（手填时可空，默认同代号）")
     release_date: Optional[date] = None
     file_uuid: Optional[str] = Field(None, max_length=36)
     file_name: Optional[str] = Field(None, max_length=200)
@@ -160,3 +162,9 @@ class ProductionFileAccessLogResponse(BaseModel):
 class ProductionFileAccessLogListResponse(BaseModel):
     items: List[ProductionFileAccessLogResponse]
     total: int
+
+
+class ProductionFileDownloadResponse(BaseModel):
+    preview_url: str = Field(..., description="带 token 的下载预览 URL")
+    file_name: Optional[str] = Field(None, description="文件名快照")
+    version_id: Optional[int] = Field(None, description="版本行 ID")

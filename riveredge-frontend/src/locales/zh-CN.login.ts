@@ -182,6 +182,14 @@ export default {
   'pages.login.wecomQrLoginHint': '请使用企业微信客户端扫码并确认登录',
   'common.cancel': '取消',
 
+  // 手机号后四位核验（与 zh-CN.ts 保持一致）
+  'components.phoneVerification.title': '验证手机号',
+  'components.phoneVerification.hint':
+    '检测到多个组织存在相同用户名与密码。请输入您绑定手机号的后四位以确认身份；若各组织均未绑定手机号或手机号相同，则无需此步骤。',
+  'components.phoneVerification.placeholder': '手机号后四位',
+  'components.phoneVerification.failed': '手机号后四位不正确，请重试',
+  'common.confirm': '确认',
+
   // 多组织选择弹窗（TenantSelectionModal，与 zh-CN.ts 保持一致）
   'components.tenantSelection.title': '选择组织',
   'components.tenantSelection.hint': '您属于多个组织，请选择要进入的组织：',

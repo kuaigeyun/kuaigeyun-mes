@@ -1,4 +1,10 @@
-"""R-02 实验委托业务类型（通用；行业字段走可选 profile）。"""
+"""R-02 实验委托业务类型（通用；行业字段走可选 profile）。
+
+委托类型展示项真源：系统数据字典 `LAB_REQUEST_BUSINESS_TYPE`。
+下列常量保留业务码与特殊流程分支（经理审核、委外填价等），禁止另起一套码表。
+"""
+
+LAB_REQUEST_BUSINESS_TYPE_DICT_CODE = "LAB_REQUEST_BUSINESS_TYPE"
 
 LAB_REQUEST_TYPE_IQC = "iqc"
 LAB_REQUEST_TYPE_RD = "rd"
@@ -20,3 +26,14 @@ LAB_REQUEST_TYPES = frozenset(
 
 LAB_REQUEST_TYPE_DEFAULT = LAB_REQUEST_TYPE_GENERAL
 LAB_REQUEST_PRIORITIES = frozenset({"normal", "urgent"})
+
+# 26.9.1 Excel R30：研发委托须经理审核后再进实验室受理
+LAB_REQUEST_TYPES_REQUIRE_MANAGER_REVIEW = frozenset({LAB_REQUEST_TYPE_RD})
+
+LAB_REQUEST_STATUS_DRAFT = "draft"
+LAB_REQUEST_STATUS_PENDING_REVIEW = "pending_review"
+LAB_REQUEST_STATUS_PENDING = "pending"
+LAB_REQUEST_STATUS_IN_LAB = "in_lab"
+LAB_REQUEST_STATUS_COMPLETED = "completed"
+LAB_REQUEST_STATUS_REJECTED = "rejected"
+LAB_REQUEST_STATUS_REVOKED = "revoked"

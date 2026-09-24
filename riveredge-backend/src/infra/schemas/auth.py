@@ -25,6 +25,22 @@ class LoginRequest(BaseModel):
     username: str = Field(..., min_length=1, max_length=255, description="用户名或手机号（支持用户名或手机号登录）")
     password: str = Field(..., min_length=1, description="密码")
     tenant_id: Optional[int] = Field(None, description="组织 ID（可选，如果提供则直接设置组织上下文）")
+    phone_last4: Optional[str] = Field(
+        None,
+        min_length=4,
+        max_length=4,
+        description="手机号后四位（总入口同名同密跨租户歧义时必填）",
+    )
+
+    @field_validator("phone_last4")
+    @classmethod
+    def validate_phone_last4(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        raw = value.strip()
+        if len(raw) != 4 or not raw.isdigit():
+            raise ValueError("手机号后四位须为 4 位数字")
+        return raw
 
 
 class TenantInfo(BaseModel):
@@ -64,13 +80,17 @@ class LoginResponse(BaseModel):
         requires_tenant_selection: 是否需要选择组织（当用户有多个组织时）
     """
     
-    access_token: str = Field(..., description="JWT 访问令牌")
+    access_token: Optional[str] = Field(None, description="JWT 访问令牌（需手机号核验时尚未签发）")
     token_type: str = Field(default="bearer", description="令牌类型")
-    expires_in: int = Field(..., description="令牌过期时间（秒）")
+    expires_in: int = Field(default=0, description="令牌过期时间（秒）")
     user: Optional[dict] = Field(None, description="用户信息（可选）")
     tenants: Optional[List[TenantInfo]] = Field(None, description="用户可访问的组织列表（可选）")
     default_tenant_id: Optional[int] = Field(None, description="默认组织 ID（可选，超级用户使用）")
     requires_tenant_selection: bool = Field(default=False, description="是否需要选择组织（当用户有多个组织时）")
+    requires_phone_verification: bool = Field(
+        default=False,
+        description="是否需要输入手机号后四位（同名同密且跨租户手机号不一致时）",
+    )
 
 
 class SwitchTenantRequest(BaseModel):
