@@ -61,6 +61,8 @@ export interface CreateDataBackupData {
   backup_scope: 'all' | 'tenant' | 'table';
   include_files?: boolean;
   backup_tables?: string[];
+  /** 平台超管指定租户备份时使用 */
+  target_tenant_id?: number;
 }
 
 export interface RestoreBackupRequest {

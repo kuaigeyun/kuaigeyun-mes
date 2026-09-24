@@ -5,8 +5,7 @@
  * 注意：所有 API 自动过滤当前组织的应用
  */
 
-import { getToken } from '../utils/auth';
-import { apiRequest } from './api';
+import { apiRequest, buildWriteAuthHeaders } from './api';
 
 export interface Application {
   uuid: string;
@@ -365,11 +364,7 @@ export async function syncAllManifestsAndMenus(): Promise<SyncAllManifestsAndMen
   try {
     const response = await fetch(`${baseUrl}/api/v1/core/applications/sync-all-manifests-and-menus`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${getToken()}`,
-        'X-Tenant-ID': localStorage.getItem('tenant_id') || '',
-      },
+      headers: buildWriteAuthHeaders(),
       signal: controller.signal,
     });
     if (!response.ok) {
@@ -403,11 +398,7 @@ export async function syncApplicationManifest(appCode: string): Promise<{
   const baseUrl = window.location.origin;
   const response = await fetch(`${baseUrl}/api/v1/core/applications/sync-manifest/${appCode}`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${getToken()}`,
-      'X-Tenant-ID': localStorage.getItem('tenant_id') || '',
-    },
+    headers: buildWriteAuthHeaders(),
   });
 
   if (!response.ok) {

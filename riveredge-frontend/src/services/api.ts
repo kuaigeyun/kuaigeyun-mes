@@ -67,11 +67,13 @@ export function getCurrentTenantId(): string | null {
 }
 
 /**
- * P3-D-X：非 apiRequest 的 raw fetch 统一拼 Authorization + X-Tenant-ID
- *（禁止业务页/服务各自手写 localStorage 租户头）
+ * P3-D-X：非 apiRequest 的 raw fetch 统一拼 Authorization + X-Tenant-ID + X-Client-Channel
+ *（禁止业务页/服务各自手写 localStorage 租户头；写接口缺渠道会被后端 403）
  */
 export function buildAuthTenantHeaders(): Record<string, string> {
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = {
+    ...webClientChannelHeaders(),
+  };
   const token = getToken();
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
@@ -79,6 +81,27 @@ export function buildAuthTenantHeaders(): Record<string, string> {
   const tenantId = getCurrentTenantId();
   if (tenantId) {
     headers['X-Tenant-ID'] = tenantId;
+  }
+  return headers;
+}
+
+/** 写请求用的 raw fetch 头（渠道 + 鉴权 + 幂等键） */
+export function buildWriteAuthHeaders(
+  extra?: Record<string, string>,
+): Record<string, string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...buildAuthTenantHeaders(),
+    ...extra,
+  };
+  const hasIdempotency = Object.keys(headers).some(
+    (k) => k.toLowerCase() === 'idempotency-key',
+  );
+  if (!hasIdempotency) {
+    headers['Idempotency-Key'] =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `idemp-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
   }
   return headers;
 }

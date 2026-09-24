@@ -19,7 +19,10 @@ class DataBackupBase(BaseModel):
 
 
 class DataBackupCreate(DataBackupBase):
-    pass
+    target_tenant_id: Optional[int] = Field(
+        None,
+        description="指定租户备份的目标租户 ID（仅平台管理员在 backup_scope=tenant 时可用）",
+    )
 
 
 class DataBackupResponse(DataBackupBase):
