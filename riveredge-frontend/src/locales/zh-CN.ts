@@ -28471,6 +28471,10 @@ export default {
     '标准成本库二次编辑可正常保存',
   'pages.dashboard.updateLog.entries.standard-cost-edit-save-r01.description':
     '编辑已有标准成本点保存不再因回传审核相位等响应字段导致服务器内部错误；表单提交统一剥离列表回显元数据。',
+  'pages.dashboard.updateLog.entries.data-backup-stream-csv-oom-r01.title':
+    '数据备份改为流式导出避免内存暴涨',
+  'pages.dashboard.updateLog.entries.data-backup-stream-csv-oom-r01.description':
+    '全量/租户备份不再把整表 CSV 载入后台任务进程内存，改为边 COPY 边写盘，避免大库备份时任务进程被系统 OOM 杀掉导致机器卡顿。',
   'pages.dashboard.updateLog.entries.drawing-watermark-switch-order-r01.title':
     '水印开关移到模板之后',
   'pages.dashboard.updateLog.entries.drawing-watermark-switch-order-r01.description':

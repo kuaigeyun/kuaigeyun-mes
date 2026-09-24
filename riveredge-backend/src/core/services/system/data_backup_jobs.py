@@ -183,17 +183,33 @@ async def _asyncpg_connect():
     return await asyncpg.connect(_pg_dsn(), command_timeout=600)
 
 
-async def _copy_query_to_csv_text(conn, select_sql: str) -> str:
-    """用 asyncpg COPY 导出 CSV（含表头），无需本机 psql。"""
-    import io
-    buf = io.BytesIO()
+async def _copy_query_to_file(conn, select_sql: str, file_obj) -> int:
+    """
+    用 asyncpg COPY 流式导出 CSV（含表头）到已打开的二进制文件。
+
+    禁止整表进内存：大表 COPY 进 BytesIO/str 会把 taskiq worker 打到数 GB 触发 OOM。
+    返回本次写入字节数。
+    """
+    start = file_obj.tell()
     await conn.copy_from_query(
         select_sql,
-        output=buf,
+        output=file_obj,
         format="csv",
         header=True,
     )
-    return buf.getvalue().decode("utf-8", errors="replace")
+    return max(0, file_obj.tell() - start)
+
+
+def _ensure_binary_file_ends_with_newline(file_obj) -> None:
+    pos = file_obj.tell()
+    if pos <= 0:
+        file_obj.write(b"\n")
+        return
+    file_obj.seek(pos - 1)
+    last = file_obj.read(1)
+    file_obj.seek(0, os.SEEK_END)
+    if last != b"\n":
+        file_obj.write(b"\n")
 
 
 async def _load_core_user_fk_children_async(conn, *, export_tables: list[str]) -> dict[str, str]:
@@ -447,13 +463,13 @@ async def _export_tenant_csv_dump(
     total_tables = max(len(tables), 1)
     junction_tables = sorted(TENANT_JUNCTION_TABLES)
 
-    with open(db_dump_path, "w", encoding="utf-8") as f:
-        f.write("-- Tenant Isolated Backup\n")
-        f.write(f"-- Tenant ID: {tenant_id}\n")
-        f.write(f"-- Engine: asyncpg\n")
-        f.write(f"-- Date: {resolve_business_datetime()}\n\n")
+    with open(db_dump_path, "wb") as f:
+        f.write(b"-- Tenant Isolated Backup\n")
+        f.write(f"-- Tenant ID: {tenant_id}\n".encode("utf-8"))
+        f.write(b"-- Engine: asyncpg\n")
+        f.write(f"-- Date: {resolve_business_datetime()}\n\n".encode("utf-8"))
         if skipped_tables:
-            f.write(f"-- Skipped tables: {', '.join(skipped_tables)}\n\n")
+            f.write(f"-- Skipped tables: {', '.join(skipped_tables)}\n\n".encode("utf-8"))
 
         for index, table in enumerate(tables, start=1):
             logger.info("租户隔离备份导出表 [{}/{}]: {}", index, len(tables), table)
@@ -464,22 +480,19 @@ async def _export_tenant_csv_dump(
             select_sql = _build_tenant_table_copy_sql(
                 table, int(tenant_id), user_ref_subqueries, user_fk_children, tables_with_user_id
             )
+            section_start = f.tell()
+            f.write(f"-- Data for table: {table}\n".encode("utf-8"))
+            f.write(f"--- TABLE: {table} ---\n".encode("utf-8"))
             try:
-                csv_text = await _copy_query_to_csv_text(conn, select_sql) or ""
+                nbytes = await _copy_query_to_file(conn, select_sql, f)
             except Exception as e:
+                f.truncate(section_start)
+                f.seek(section_start)
                 logger.error("导出表 {} 失败: {}", table, e)
                 continue
-            f.write(f"-- Data for table: {table}\n")
-            f.write(f"--- TABLE: {table} ---\n")
-            f.write(csv_text)
-            if not csv_text.endswith("\n"):
-                f.write("\n")
-            f.write("\n")
-            logger.info(
-                "租户隔离备份导出完成表 {}，bytes={}",
-                table,
-                len(csv_text.encode("utf-8", errors="ignore")),
-            )
+            _ensure_binary_file_ends_with_newline(f)
+            f.write(b"\n")
+            logger.info("租户隔离备份导出完成表 {}，bytes={}", table, nbytes)
 
         for index, table in enumerate(junction_tables, start=1):
             logger.info("租户隔离备份导出关联表 [{}/{}]: {}", index, len(junction_tables), table)
@@ -487,21 +500,18 @@ async def _export_tenant_csv_dump(
                 pct = 88 + int(index * 4 / max(len(junction_tables), 1))
                 await on_progress(pct, f"导出关联表 {index}/{len(junction_tables)}: {table}")
             select_sql = _build_tenant_junction_copy_sql(table, int(tenant_id))
+            section_start = f.tell()
+            f.write(f"-- Data for table: {table}\n".encode("utf-8"))
+            f.write(f"--- TABLE: {table} ---\n".encode("utf-8"))
             try:
-                csv_text = await _copy_query_to_csv_text(conn, select_sql) or ""
+                nbytes = await _copy_query_to_file(conn, select_sql, f)
             except Exception as e:
+                f.truncate(section_start)
+                f.seek(section_start)
                 raise RuntimeError(f"导出关联表 {table} 失败: {e}") from e
-            f.write(f"-- Data for table: {table}\n")
-            f.write(f"--- TABLE: {table} ---\n")
-            f.write(csv_text)
-            if not csv_text.endswith("\n"):
-                f.write("\n")
-            f.write("\n")
-            logger.info(
-                "租户隔离备份导出完成关联表 {}，bytes={}",
-                table,
-                len(csv_text.encode("utf-8", errors="ignore")),
-            )
+            _ensure_binary_file_ends_with_newline(f)
+            f.write(b"\n")
+            logger.info("租户隔离备份导出完成关联表 {}，bytes={}", table, nbytes)
     if on_progress:
         await on_progress(92, "数据导出完成，准备打包…")
 
@@ -531,25 +541,26 @@ async def _export_all_csv_dump(
         and not _is_platform_level_table(r["table_name"])
     ]
     total_tables = max(len(tables), 1)
-    with open(db_dump_path, "w", encoding="utf-8") as f:
-        f.write("-- Full Logical Backup (asyncpg CSV)\n")
-        f.write(f"-- Date: {resolve_business_datetime()}\n\n")
+    with open(db_dump_path, "wb") as f:
+        f.write(b"-- Full Logical Backup (asyncpg CSV)\n")
+        f.write(f"-- Date: {resolve_business_datetime()}\n\n".encode("utf-8"))
         for index, table in enumerate(tables, start=1):
             logger.info("全量备份导出表 [{}/{}]: {}", index, len(tables), table)
             if on_progress:
                 pct = 8 + int(index * 84 / total_tables)
                 await on_progress(pct, f"导出表 {index}/{len(tables)}: {table}")
+            section_start = f.tell()
+            f.write(f"-- Data for table: {table}\n".encode("utf-8"))
+            f.write(f"--- TABLE: {table} ---\n".encode("utf-8"))
             try:
-                csv_text = await _copy_query_to_csv_text(conn, f'SELECT * FROM "{table}"') or ""
+                await _copy_query_to_file(conn, f'SELECT * FROM "{table}"', f)
             except Exception as e:
+                f.truncate(section_start)
+                f.seek(section_start)
                 logger.error("导出表 {} 失败: {}", table, e)
                 continue
-            f.write(f"-- Data for table: {table}\n")
-            f.write(f"--- TABLE: {table} ---\n")
-            f.write(csv_text)
-            if not csv_text.endswith("\n"):
-                f.write("\n")
-            f.write("\n")
+            _ensure_binary_file_ends_with_newline(f)
+            f.write(b"\n")
     if on_progress:
         await on_progress(92, "数据导出完成，准备打包…")
 

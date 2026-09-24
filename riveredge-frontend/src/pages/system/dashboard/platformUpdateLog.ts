@@ -44,6 +44,14 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'data-backup-stream-csv-oom-r01',
+    date: '2026-09-24',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.data-backup-stream-csv-oom-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.data-backup-stream-csv-oom-r01.description',
+  },
+  {
     id: 'drawing-watermark-switch-order-r01',
     date: '2026-09-24',
     type: 'improvement',
