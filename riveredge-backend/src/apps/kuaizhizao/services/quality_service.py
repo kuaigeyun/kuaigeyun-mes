@@ -881,6 +881,11 @@ _CONDUCT_PAYLOAD_SKIP_KEYS = frozenset({
     "inspector_id",
     "inspector_name",
     "inspector_uuid",
+    # C-03：IQC/IPQC/FQC 的 inspection_result 为过程态「已检验」，判定走 quality_status；
+    # 禁止请求体覆盖服务端权威字段（OQC 另有专用 conduct，不走本 SKIP）
+    "inspection_result",
+    "quality_status",
+    "status",
     # 仅当模型有 measurement_data 字段时由下方 build 写入；禁止请求体直接落入 ORM
     "measurement_data",
     "qualified_qty_with_unit",

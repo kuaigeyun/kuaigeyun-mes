@@ -5235,8 +5235,16 @@ class ReportService:
         out.sort(key=lambda x: str(x["group_key"]))
         return out
 
-    async def get_performance_report(self, tenant_id: int, report_type: str = "employee-efficiency-ranking", date_start: Optional[datetime] = None, date_end: Optional[datetime] = None) -> Dict[str, Any]:
-        """绩效报表汇总"""
+    async def get_performance_report(
+        self,
+        tenant_id: int,
+        report_type: str = "employee-efficiency-ranking",
+        date_start: Optional[datetime] = None,
+        date_end: Optional[datetime] = None,
+        employee_id: Optional[int] = None,
+        worker_id: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """绩效报表汇总。employee_id/worker_id 可选过滤（C-05，防全租户薪酬越权下发）。"""
         from apps.kuaizhizao.models.reporting_record import ReportingRecord
         from apps.master_data.models.employee_performance import PerformanceSummary
         from decimal import Decimal as D
@@ -5258,6 +5266,11 @@ class ReportService:
                 status="approved",
                 deleted_at__isnull=True,
             )
+            if worker_id is not None:
+                query = query.filter(worker_id=int(worker_id))
+            elif employee_id is not None:
+                # 效率榜按报工 worker_id；无 worker_id 时用 employee_id 同值过滤
+                query = query.filter(worker_id=int(employee_id))
             if date_start:
                 query = query.filter(reported_at__gte=date_start)
             if date_end:
@@ -5303,6 +5316,10 @@ class ReportService:
 
         if normalized == "piece-rate-salary-summary":
             query = PerformanceSummary.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+            if employee_id is not None:
+                query = query.filter(employee_id=int(employee_id))
+            elif worker_id is not None:
+                query = query.filter(employee_id=int(worker_id))
             if date_start:
                 period_start = date_start.strftime("%Y-%m")
                 query = query.filter(period__gte=period_start)

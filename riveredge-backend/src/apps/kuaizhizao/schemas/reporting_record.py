@@ -11,6 +11,7 @@ from decimal import Decimal
 
 from core.schemas.base import BaseSchema
 from apps.kuaizhizao.services.document_action_policy.types import ReportingRecordCapabilities
+from apps.kuaizhizao.schemas.defect_record import DefectRecordCreateFromReporting
 
 
 class ReportingRecordBase(BaseSchema):
@@ -58,7 +59,13 @@ class ReportingRecordCreate(ReportingRecordBase):
     报工记录创建Schema
 
     用于创建新报工记录的数据验证。须指定生产人员或工作小组。
+    C-02：可选嵌入 defect，与报工同事务创建不良品（避免报工成功、缺陷丢失）。
     """
+
+    defect: Optional[DefectRecordCreateFromReporting] = Field(
+        None,
+        description="可选：与报工同事务创建的不良品记录（有不合格数量时推荐）",
+    )
 
     @model_validator(mode="before")
     @classmethod

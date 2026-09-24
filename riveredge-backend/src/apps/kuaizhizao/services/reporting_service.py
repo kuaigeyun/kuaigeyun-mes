@@ -1153,6 +1153,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
         post_commit_mold = False
         post_commit_qc = False
         created_reporting_record = None
+        pending_defect = None
 
         async with in_transaction():
             # 验证工单是否存在且状态正确
@@ -1752,12 +1753,57 @@ class ReportingService(AppBaseService[ReportingRecord]):
             post_commit_qc = reporting_record.status == "approved"
             created_reporting_record = reporting_record
 
+            # C-02：可选同事务创建不良品（失败则整单回滚，避免报工成功缺陷丢失）
+            pending_defect = getattr(reporting_data, "defect", None)
+            if pending_defect is not None:
+                await self._persist_defect_from_reporting(
+                    tenant_id=tenant_id,
+                    reporting_record=reporting_record,
+                    work_order=work_order,
+                    defect_data=pending_defect,
+                    created_by=reported_by,
+                )
+
             logger.info(f"报工成功：工单 {work_order.code}，工序 {work_order_operation.operation_name}，数量 {reporting_data.reported_quantity}")
 
             trigger_direct_inbound = reporting_record.status == "approved"
             reporting_record_id_for_auto = reporting_record.id
 
         # —— 事务已提交：副作用 ——
+        # C-02：同事务缺陷的处置副作用（隔离仓等）在提交后执行
+        if pending_defect is not None and created_reporting_record is not None:
+            try:
+                from apps.kuaizhizao.services.defect_record_service import DefectRecordService
+
+                defect_row = await DefectRecord.filter(
+                    tenant_id=tenant_id,
+                    reporting_record_id=created_reporting_record.id,
+                    deleted_at__isnull=True,
+                ).order_by("-id").first()
+                if defect_row:
+                    await DefectRecordService()._apply_disposition_after_persist(
+                        tenant_id=tenant_id,
+                        defect_id=int(defect_row.id),
+                        updated_by=reported_by,
+                        quarantine_location=pending_defect.quarantine_location,
+                        quarantine_warehouse_id=getattr(
+                            pending_defect, "quarantine_warehouse_id", None
+                        ),
+                        stock_warehouse_id=getattr(
+                            pending_defect, "stock_warehouse_id", None
+                        ),
+                        downgrade_material_id=getattr(
+                            pending_defect, "downgrade_material_id", None
+                        ),
+                        downgrade_warehouse_id=getattr(
+                            pending_defect, "downgrade_warehouse_id", None
+                        ),
+                    )
+            except Exception as defect_disp_err:
+                logger.error(
+                    f"报工同事务不良品已落库但处置副作用失败（可补偿）: {defect_disp_err}"
+                )
+
         if post_commit_backflush and created_reporting_record is not None:
             try:
                 from apps.kuaizhizao.services.backflush_service import BackflushService
@@ -3210,6 +3256,76 @@ class ReportingService(AppBaseService[ReportingRecord]):
             logger.info(f"创建报废记录成功: {code}, 工单: {work_order.code}, 报废数量: {scrap_data.scrap_quantity}")
             return ScrapRecordResponse.model_validate(scrap_record)
 
+    async def _persist_defect_from_reporting(
+        self,
+        *,
+        tenant_id: int,
+        reporting_record: ReportingRecord,
+        work_order: WorkOrder,
+        defect_data: DefectRecordCreateFromReporting,
+        created_by: int,
+    ) -> DefectRecord:
+        """
+        在当前事务内从报工创建不良品草稿（C-02）。
+        调用方负责事务边界；处置副作用由 _apply_disposition_after_persist 在提交后执行。
+        """
+        quality_params = (
+            (await BusinessConfigService().get_business_config(tenant_id))
+            .get("parameters", {})
+            .get("quality", {})
+        )
+        if not quality_params.get("defect_handling", False):
+            raise BusinessLogicError("当前组织未开启不良品处理，禁止创建不良品记录")
+
+        if defect_data.defect_quantity > reporting_record.unqualified_quantity:
+            raise ValidationError(
+                f"不良品数量({defect_data.defect_quantity})不能超过报工记录的不合格数量({reporting_record.unqualified_quantity})"
+            )
+
+        today = today_site_str()
+        code = await self.generate_code(
+            tenant_id=tenant_id,
+            code_type="DEFECT_RECORD_CODE",
+            prefix=f"DF{today}",
+        )
+        user_info = await self.get_user_info(created_by)
+        defect_record = await DefectRecord.create(
+            tenant_id=tenant_id,
+            uuid=str(uuid.uuid4()),
+            code=code,
+            reporting_record_id=int(reporting_record.id),
+            work_order_id=reporting_record.work_order_id,
+            work_order_code=reporting_record.work_order_code,
+            operation_id=reporting_record.operation_id,
+            operation_code=reporting_record.operation_code,
+            operation_name=reporting_record.operation_name,
+            product_id=work_order.product_id,
+            product_code=work_order.product_code,
+            product_name=work_order.product_name,
+            defect_quantity=defect_data.defect_quantity,
+            defect_type=defect_data.defect_type,
+            defect_reason=defect_data.defect_reason,
+            disposition=defect_data.disposition,
+            quarantine_location=defect_data.quarantine_location,
+            status="draft",
+            remarks=defect_data.remarks,
+            created_by=created_by,
+            created_by_name=user_info["name"],
+            updated_by=created_by,
+            updated_by_name=user_info["name"],
+        )
+        await self._update_work_order_unqualified_quantity(
+            tenant_id=tenant_id,
+            work_order_id=work_order.id,
+            work_order=work_order,
+        )
+        await work_order.save()
+        logger.info(
+            f"创建不良品记录成功: {code}, 工单: {work_order.code}, "
+            f"不良品数量: {defect_data.defect_quantity}, 处理方式: {defect_data.disposition}"
+        )
+        return defect_record
+
     async def record_defect(
         self,
         tenant_id: int,
@@ -3233,15 +3349,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
             NotFoundError: 报工记录不存在
             ValidationError: 数据验证失败
         """
-        quality_params = (
-            (await BusinessConfigService().get_business_config(tenant_id))
-            .get("parameters", {})
-            .get("quality", {})
-        )
-        if not quality_params.get("defect_handling", False):
-            raise BusinessLogicError("当前组织未开启不良品处理，禁止创建不良品记录")
         async with in_transaction():
-            # 获取报工记录
             reporting_record = await ReportingRecord.get_or_none(
                 id=reporting_record_id,
                 tenant_id=tenant_id
@@ -3250,7 +3358,6 @@ class ReportingService(AppBaseService[ReportingRecord]):
             if not reporting_record:
                 raise NotFoundError(f"报工记录不存在: {reporting_record_id}")
 
-            # 获取工单信息
             work_order = await WorkOrder.get_or_none(
                 id=reporting_record.work_order_id,
                 tenant_id=tenant_id
@@ -3259,58 +3366,14 @@ class ReportingService(AppBaseService[ReportingRecord]):
             if not work_order:
                 raise NotFoundError(f"工单不存在: {reporting_record.work_order_id}")
 
-            # 验证不良品数量不能超过报工记录的不合格数量
-            if defect_data.defect_quantity > reporting_record.unqualified_quantity:
-                raise ValidationError(
-                    f"不良品数量({defect_data.defect_quantity})不能超过报工记录的不合格数量({reporting_record.unqualified_quantity})"
-                )
-
-            # 生成不良品记录编码
-            today = today_site_str()
-            code = await self.generate_code(
+            defect_record = await self._persist_defect_from_reporting(
                 tenant_id=tenant_id,
-                code_type="DEFECT_RECORD_CODE",
-                prefix=f"DF{today}"
-            )
-
-            # 获取创建人信息
-            user_info = await self.get_user_info(created_by)
-
-            # 创建不良品记录
-            defect_record = await DefectRecord.create(
-                tenant_id=tenant_id,
-                uuid=str(uuid.uuid4()),
-                code=code,
-                reporting_record_id=reporting_record_id,
-                work_order_id=reporting_record.work_order_id,
-                work_order_code=reporting_record.work_order_code,
-                operation_id=reporting_record.operation_id,
-                operation_code=reporting_record.operation_code,
-                operation_name=reporting_record.operation_name,
-                product_id=work_order.product_id,
-                product_code=work_order.product_code,
-                product_name=work_order.product_name,
-                defect_quantity=defect_data.defect_quantity,
-                defect_type=defect_data.defect_type,
-                defect_reason=defect_data.defect_reason,
-                disposition=defect_data.disposition,
-                quarantine_location=defect_data.quarantine_location,
-                status="draft",
-                remarks=defect_data.remarks,
+                reporting_record=reporting_record,
+                work_order=work_order,
+                defect_data=defect_data,
                 created_by=created_by,
-                created_by_name=user_info["name"],
-                updated_by=created_by,
-                updated_by_name=user_info["name"],
             )
             created_id = int(defect_record.id)
-
-            # 更新工单的不合格数量
-            await self._update_work_order_unqualified_quantity(
-                tenant_id=tenant_id,
-                work_order_id=work_order.id,
-                work_order=work_order
-            )
-            await work_order.save()
 
         from apps.kuaizhizao.services.defect_record_service import DefectRecordService
 
@@ -3325,10 +3388,6 @@ class ReportingService(AppBaseService[ReportingRecord]):
             downgrade_warehouse_id=getattr(defect_data, "downgrade_warehouse_id", None),
         )
 
-        logger.info(
-            f"创建不良品记录成功: {code}, 工单: {work_order.code}, "
-            f"不良品数量: {defect_data.defect_quantity}, 处理方式: {defect_data.disposition}"
-        )
         return DefectRecordResponse.model_validate(defect_record)
 
     async def correct_reporting_data(

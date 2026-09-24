@@ -1190,6 +1190,13 @@ class ExceptionService:
         if not exception:
             raise NotFoundError("质量异常记录不存在")
 
+        # C-04：已结案 / 已取消不可再 handle（移动端 detail 已防御，后端加固）
+        current_status = str(exception.status or "").strip().lower()
+        if current_status in ("closed", "cancelled"):
+            raise ValidationError(
+                f"质量异常当前状态为「{exception.status}」，不可再处理"
+            )
+
         # 获取处理人信息
         user_info = await self.work_order_service.get_user_info(handled_by)
 

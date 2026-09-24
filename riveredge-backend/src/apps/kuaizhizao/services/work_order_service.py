@@ -4774,6 +4774,8 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             - actual_end_date: 实际结束日期
             - delay_days: 延期天数
             - status: 工单状态
+            - planned_quantity: 计划数量（C-01）
+            - completed_quantity: 完成数量（C-01）
         """
         # 两侧必须同为站点墙钟 naive；不可把 UTC aware 的 resolve_business_datetime()
         # 直接与剥掉 tz 后的 planned_end 比较（会 TypeError → 500）。
@@ -4824,6 +4826,9 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 "delay_days": delay_days,
                 "status": wo.status,
                 "priority": wo.priority,
+                # C-01：补计划/完成数量，供移动端逾期卡展示（字段名与工单列表对齐）
+                "planned_quantity": float(wo.quantity or 0),
+                "completed_quantity": float(wo.completed_quantity or 0),
             })
 
         # 按延期天数降序排序

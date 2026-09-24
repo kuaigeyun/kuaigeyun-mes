@@ -655,6 +655,8 @@ async def get_performance_report(
     report_type: str = Query("employee-efficiency-ranking", description="报表类型"),
     date_start: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
     date_end: Optional[str] = Query(None, description="结束日期（YYYY-MM-DD）"),
+    employee_id: Optional[int] = Query(None, description="按员工过滤（C-05，移动端薪酬自查）"),
+    worker_id: Optional[int] = Query(None, description="按报工工人过滤（效率榜）"),
     skip: int = Query(0, ge=0, description="分页偏移"),
     limit: int = Query(100, ge=1, le=REPORT_LIST_MAX_LIMIT, description="分页条数"),
     order_by: Optional[str] = Query(None, description="排序字段（前缀-表示降序）"),
@@ -680,6 +682,8 @@ async def get_performance_report(
             report_type=report_type,
             date_start=date_start_dt,
             date_end=date_end_dt,
+            employee_id=employee_id,
+            worker_id=worker_id,
         ),
         **_report_finalize_kwargs(
             order_by=order_by,
