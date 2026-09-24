@@ -25347,6 +25347,7 @@ export default {
   'pages.system.dataBackups.fileNotOnServer':
     '备份文件不在当前服务器上。请在创建备份的同一环境下载，或通过「上传备份」将 zip 传到本服务器后再恢复。',
   'pages.system.dataBackups.statusPending': '待执行',
+  'pages.system.dataBackups.columnProgress': '进度',
   'pages.system.dataBackups.statusRunning': '执行中',
   'pages.system.dataBackups.statusSuccess': '成功',
   'pages.system.dataBackups.statusFailed': '失败',
@@ -25398,15 +25399,6 @@ export default {
   'pages.system.dataBackups.contentScopePlaceholder': '请选择备份内容',
   'pages.system.dataBackups.restoreDataOnlyHint':
     '此备份仅含数据表，恢复时不会覆盖或还原附件文件；数据库记录中的文件路径仍保留，需附件时请使用「数据表+文件」备份或单独迁移 uploads。',
-  'pages.system.dataBackups.labelScopeField': '备份类型',
-  'pages.system.dataBackups.scopeRequired': '请选择备份类型',
-  'pages.system.dataBackups.scopeAllLabel': '全量备份（所有租户）',
-  'pages.system.dataBackups.scopeTenantLabel': '备份指定租户',
-  'pages.system.dataBackups.scopeTableLabel': '表 (特定数据)',
-  'pages.system.dataBackups.scopePlaceholder': '请选择备份类型',
-  'pages.system.dataBackups.targetTenantLabel': '目标租户',
-  'pages.system.dataBackups.targetTenantRequired': '请选择要备份的租户',
-  'pages.system.dataBackups.targetTenantPlaceholder': '请选择租户',
   'pages.system.dataBackups.createNeedTenant': '当前未绑定租户，无法创建租户级备份',
   'pages.system.dataBackups.detailTitle': '备份详情',
   'pages.system.dataBackups.columnFilePath': '文件路径',
