@@ -5,7 +5,7 @@
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ProFormInstance, ProFormSelect, ProFormSwitch, ProFormText } from '@ant-design/pro-components';
-import { App } from 'antd';
+import { App, Form } from 'antd';
 import { FormModalTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
 import {
   getUserByUuid,
@@ -70,6 +70,21 @@ function applyFormValues(formRef: React.RefObject<ProFormInstance | undefined>, 
   });
 }
 
+function normalizeRoleUuids(raw: unknown): string[] {
+  return (Array.isArray(raw) ? raw : raw != null ? [raw] : [])
+    .map((v: any) => (typeof v === 'string' ? v : v?.value || v?.uuid || ''))
+    .filter(Boolean);
+}
+
+/** 在 ProForm 内同步 role_uuids → draft（不可用 fieldProps.onChange，会挡写回） */
+const RoleUuidsDraftSync: React.FC<{ onDraftChange: (uuids: string[]) => void }> = ({ onDraftChange }) => {
+  const roleUuids = Form.useWatch('role_uuids');
+  useEffect(() => {
+    onDraftChange(normalizeRoleUuids(roleUuids));
+  }, [roleUuids, onDraftChange]);
+  return null;
+};
+
 export const UserFormModal: React.FC<UserFormModalProps> = ({
   open,
   onClose,
@@ -95,6 +110,8 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
   const [manufacturerOptions, setManufacturerOptions] = useState<UserFormSelectOption[]>([]);
 
   const isEdit = Boolean(editUuid);
+  const onRoleDraftChange = useMemo(() => (uuids: string[]) => setRoleUuidsDraft(uuids), []);
+
 
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -293,15 +310,13 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
       }
 
       const latestRoleValue = formRef.current?.getFieldValue?.('role_uuids');
-      const draftRoleValue = roleUuidsDraft;
+      // 优先表单当前值（ProForm 写回），draft 仅作外部角色区联动兜底
       const rawRoleValue =
-        (Array.isArray(draftRoleValue) ? draftRoleValue : undefined) ??
-        submitData.role_uuids ??
         latestRoleValue ??
+        submitData.role_uuids ??
+        roleUuidsDraft ??
         (isEdit ? formInitialValues?.role_uuids : undefined);
-      const normalizedRoleUuids = (Array.isArray(rawRoleValue) ? rawRoleValue : rawRoleValue != null ? [rawRoleValue] : [])
-        .map((v: any) => (typeof v === 'string' ? v : v?.value || v?.uuid || ''))
-        .filter(Boolean);
+      const normalizedRoleUuids = normalizeRoleUuids(rawRoleValue);
       if (isEdit || normalizedRoleUuids.length > 0 || rawRoleValue !== undefined) {
         submitData.role_uuids = normalizedRoleUuids;
       }
@@ -368,6 +383,7 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
       width={MODAL_CONFIG.STANDARD_WIDTH}
       grid={true}
     >
+      <RoleUuidsDraftSync onDraftChange={onRoleDraftChange} />
       <ProFormText
         name="username"
         label={t('field.user.username')}
@@ -504,12 +520,7 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
         fieldProps={{
           mode: 'multiple',
           showSearch: true,
-          onChange: (value: any) => {
-            const next = (Array.isArray(value) ? value : [value])
-              .map((v: any) => (typeof v === 'string' ? v : v?.value || v?.uuid || ''))
-              .filter(Boolean);
-            setRoleUuidsDraft(next);
-          },
+          // 勿在 fieldProps 覆盖 onChange，否则 ProForm 不写回 role_uuids，二次保存角色不变
         }}
         colProps={{ span: 8 }}
       />

@@ -1123,7 +1123,13 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             setup_time = extra_data.get("setup_time")
 
             reporting_type = extra_data.get("reporting_type") or extra_data.get("reportingType") or "quantity"
-            allow_jump = False
+            allow_jump_raw = extra_data.get("allow_jump")
+            if allow_jump_raw is None:
+                allow_jump_raw = extra_data.get("allowJump")
+            if allow_jump_raw is None:
+                allow_jump = bool(getattr(operation, "allow_jump", False))
+            else:
+                allow_jump = bool(allow_jump_raw)
             is_node = extra_data.get("is_node_operation")
             if is_node is None:
                 is_node = extra_data.get("isNodeOperation")
@@ -1652,24 +1658,22 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 )
 
             resolved_operation_sequence: Optional[Any] = None
+            # 产品工艺优先：无论是否手工带工序，都解析产品工艺的「允许工序跳转」
             resolved_allow_jump = False
-            if process_route_resolved and not has_manual_ops:
-                resolved_operation_sequence, resolved_allow_jump = (
-                    await MaterialProductProcessService.resolve_sequence_for_material(
-                        tenant_id,
-                        product_id,
-                        process_route_resolved,
-                    )
+            pp_sequence, pp_allow_jump = (
+                await MaterialProductProcessService.resolve_sequence_for_material(
+                    tenant_id,
+                    product_id,
+                    process_route_resolved,
                 )
+            )
+            resolved_allow_jump = bool(pp_allow_jump)
+            if process_route_resolved and not has_manual_ops:
+                resolved_operation_sequence = pp_sequence
 
             wo_jump_req = getattr(work_order_data, "allow_operation_jump", None)
             if wo_jump_req is None:
-                if process_route_resolved and not has_manual_ops:
-                    wo_allow_jump = resolved_allow_jump
-                else:
-                    wo_allow_jump = bool(
-                        getattr(process_route_resolved, "allow_operation_jump", False)
-                    ) if process_route_resolved else False
+                wo_allow_jump = resolved_allow_jump
             else:
                 wo_allow_jump = bool(wo_jump_req)
 
@@ -1855,16 +1859,25 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                             # 未维护工时：与开始同一时刻，不默认 +1 小时
                             planned_end_date = planned_start_date
                         
-                        # 创建工序单：报工类型可覆盖；跳转由工单级控制；节点仅来自开单传入
+                        # 创建工序单：报工类型可覆盖；跳转=工单级或工序行；开单未传则按「工单允许跳转且非节点」
                         rt = getattr(op_data, "reporting_type", None)
                         if rt is None:
                             rt = operation.reporting_type or "quantity"
-                        aj = False
                         ino = getattr(op_data, "is_node_operation", None)
                         if ino is not None:
                             ino = bool(ino)
                         else:
                             ino = False
+                        aj = getattr(op_data, "allow_jump", None)
+                        if aj is None:
+                            # 前端常显式传 false；以 model_fields_set 区分「未传」与「传 false」
+                            fs_aj = getattr(op_data, "model_fields_set", set()) or set()
+                            if "allow_jump" not in fs_aj:
+                                aj = bool(wo_allow_jump) and not ino
+                            else:
+                                aj = False
+                        else:
+                            aj = bool(aj)
 
                         fs = getattr(op_data, "model_fields_set", set()) or set()
                         line_explicit = bool(fs & {"over_report_mode", "over_report_value"})
@@ -3207,16 +3220,20 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                             await op.save(
                                 update_fields=["deleted_at", "sequence", "updated_at"]
                             )
+                        # 更换路线时优先产品工艺序列与允许跳转
+                        pp_seq, pp_jump = await MaterialProductProcessService.resolve_sequence_for_material(
+                            tenant_id,
+                            int(work_order.product_id),
+                            pr,
+                        )
                         await self._generate_work_order_operations_from_route(
                             tenant_id=tenant_id,
                             work_order=work_order,
                             process_route=pr,
                             created_by=updated_by,
-                            operation_sequence=pr.operation_sequence,
+                            operation_sequence=pp_seq if pp_seq is not None else pr.operation_sequence,
                         )
-                        update_data["allow_operation_jump"] = bool(
-                            getattr(pr, "allow_operation_jump", False)
-                        )
+                        update_data["allow_operation_jump"] = bool(pp_jump)
                     update_data["process_route_id"] = new_pr_id
                 else:
                     update_data["process_route_id"] = new_pr_id
@@ -4073,12 +4090,13 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             elif work_order.status not in ["draft", "cancelled"]:
                 raise ValidationError("只能删除草稿、已取消或未执行的工单")
 
-            # 检查是否有报工记录（包括待审核的）
+            # 检查是否有有效报工（已软删的不算；取消工单时常会级联软删草稿报工）
             reporting_count = await ReportingRecord.filter(
                 tenant_id=tenant_id,
-                work_order_id=work_order_id
+                work_order_id=work_order_id,
+                deleted_at__isnull=True,
             ).count()
-            
+
             if reporting_count > 0:
                 raise ValidationError("工单存在相关的报工记录，不允许删除")
 
@@ -5605,6 +5623,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             resolve_process_inspection_link_id,
             sum_process_inspection_quality_quantities,
         )
+        from apps.kuaizhizao.services.operation_jump_rules import resolve_material_incoming_qty
         from apps.kuaizhizao.services.inspection_policy_service import get_quality_effective_config
 
         # 展开前并行拉辅助数据；完成态 sync / IPQC 补建仍串行（有写依赖）
@@ -5896,6 +5915,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 op_data["inspection_unqualified_quantity"] = None
 
             # 物料剩余：上道可转下道（首道为计划数）- 本道已消耗。
+            # 允许跳转时不卡紧邻上道转入，仅受计划/节点工序约束。
             completed = op.completed_quantity or Decimal("0")
             insp_q = Decimal(str(op_data.get("inspection_qualified_quantity") or 0))
             insp_u = Decimal(str(op_data.get("inspection_unqualified_quantity") or 0))
@@ -5908,7 +5928,17 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 inspection_unqualified=insp_u,
                 scrap_qty=Decimal(str(scrap_by_op.get(op.operation_id) or 0)),
             )
-            material_remaining = prev_transfer - material_consumed
+            incoming = await resolve_material_incoming_qty(
+                tenant_id,
+                work_order,
+                op,
+                plan_qty=Decimal(str(plan_qty)),
+                adjacent_prev_transfer=prev_transfer,
+                ordered_operations=operations,
+                policy_cache=policy_cache,
+                inspections_by_op=inspections_by_op,
+            )
+            material_remaining = incoming - material_consumed
             if material_remaining < 0:
                 material_remaining = Decimal("0")
             op_data["material_remaining"] = material_remaining
@@ -6199,7 +6229,12 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                         existing_op.reporting_type = op_data.reporting_type or "quantity"
                     elif op_id_changed and master_op:
                         existing_op.reporting_type = master_op.reporting_type or "quantity"
-                    existing_op.allow_jump = False
+                    if getattr(op_data, "allow_jump", None) is not None:
+                        existing_op.allow_jump = bool(op_data.allow_jump)
+                    elif op_id_changed and master_op:
+                        existing_op.allow_jump = bool(getattr(master_op, "allow_jump", False))
+                    elif op_id_changed:
+                        existing_op.allow_jump = False
                     if getattr(op_data, "is_node_operation", None) is not None:
                         existing_op.is_node_operation = bool(op_data.is_node_operation)
                     elif op_id_changed:
@@ -6237,7 +6272,10 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     reporting_type = op_data.reporting_type if getattr(op_data, "reporting_type", None) is not None else None
                     if reporting_type is None:
                         reporting_type = (master_op.reporting_type or "quantity") if master_op else "quantity"
-                    allow_jump_new = False
+                    if getattr(op_data, "allow_jump", None) is not None:
+                        allow_jump_new = bool(op_data.allow_jump)
+                    else:
+                        allow_jump_new = bool(getattr(master_op, "allow_jump", False)) if master_op else False
                     is_node_new = (
                         bool(op_data.is_node_operation)
                         if getattr(op_data, "is_node_operation", None) is not None

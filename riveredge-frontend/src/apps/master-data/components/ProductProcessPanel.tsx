@@ -479,7 +479,17 @@ export const ProductProcessPanel: React.FC<ProductProcessPanelProps> = ({
           lines={lines}
           onChange={setLines}
           allowOperationJump={allowOperationJump}
-          onAllowOperationJumpChange={setAllowOperationJump}
+          onAllowOperationJumpChange={(v) => {
+            setAllowOperationJump(v);
+            // 关闭「允许工序跳转」时同步关闭各行「节点工序」
+            if (!v) {
+              setLines((prev) =>
+                prev.some((ln) => ln.isNodeOperation)
+                  ? prev.map((ln) => (ln.isNodeOperation ? { ...ln, isNodeOperation: false } : ln))
+                  : prev,
+              );
+            }
+          }}
           disabled={loading}
         />
       ) : (

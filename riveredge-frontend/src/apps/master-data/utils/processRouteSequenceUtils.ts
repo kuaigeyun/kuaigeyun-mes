@@ -362,6 +362,8 @@ export function buildOperationSequencePayload(
         name: op.name,
         reportingType: op.reportingType ?? 'quantity',
         isNodeOperation: allowOperationJump ? (op.isNodeOperation ?? false) : false,
+        allowJump: allowOperationJump && !(op.isNodeOperation ?? false),
+        allow_jump: allowOperationJump && !(op.isNodeOperation ?? false),
       };
       const om = op.overReportMode ?? 'none';
       const ov = Number(op.overReportValue) || 0;

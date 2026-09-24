@@ -136,22 +136,28 @@ export function validateFlowGraph(graph: FlowGraph): string[] {
 /** 表单 approverIds ↔ UI 分字段 */
 export function nodeDataToFormValues(data: ApprovalNodeData): ApprovalNodeData {
   const v = { ...data };
-  if (v.approverType === 'user') v.approvers = v.approverIds;
-  if (v.approverType === 'role') v.roles = v.approverIds;
+  if (v.approverType === 'user') v.approvers = v.approverIds ?? [];
+  if (v.approverType === 'role') v.roles = v.approverIds ?? [];
   if (v.approverType === 'department') {
     v.departmentScope = v.departmentScope || 'submitter';
-    if (v.departmentScope === 'specified') v.departments = v.approverIds;
+    if (v.departmentScope === 'specified') v.departments = v.approverIds ?? [];
   }
   return v;
 }
 
 export function formValuesToNodeData(values: ApprovalNodeData): ApprovalNodeData {
   const v = { ...values };
-  if (v.approverType === 'user' && v.approvers) v.approverIds = v.approvers as string[];
-  if (v.approverType === 'role' && v.roles) v.approverIds = v.roles as string[];
-  if (v.approverType === 'department') {
-    if (v.departmentScope === 'specified' && v.departments) {
-      v.approverIds = v.departments as string[];
+  if (v.approverType === 'user') {
+    if ('approvers' in v) {
+      v.approverIds = asList(v.approvers as string[] | string | undefined).map(String).filter(Boolean);
+    }
+  } else if (v.approverType === 'role') {
+    if ('roles' in v) {
+      v.approverIds = asList(v.roles as string[] | string | undefined).map(String).filter(Boolean);
+    }
+  } else if (v.approverType === 'department') {
+    if (v.departmentScope === 'specified' && 'departments' in v) {
+      v.approverIds = asList(v.departments as string[] | string | undefined).map(String).filter(Boolean);
     } else {
       v.departmentScope = 'submitter';
       delete v.approverIds;

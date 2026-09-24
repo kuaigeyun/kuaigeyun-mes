@@ -20,6 +20,22 @@ async function applyDefaultProcessRouteToPeerGroupRow(
   materialUuid: string
 ): Promise<void> {
   try {
+    // 优先产品工艺（含允许工序跳转）；无记录时回落物料默认路线
+    try {
+      const { productProcessApi } = await import('../../../../../master-data/services/productProcess')
+      const pp = await productProcessApi.get(materialUuid)
+      if (pp?.processRouteId) {
+        form.setFieldValue(['group_items', index, 'process_route_id'], pp.processRouteId)
+        form.setFieldValue(
+          ['group_items', index, 'allow_operation_jump'],
+          Boolean(pp.allowOperationJump),
+        )
+        return
+      }
+    } catch {
+      /* 回落路线 */
+    }
+
     const route = await processRouteApi.getProcessRouteForMaterial(materialUuid)
     if (!route?.id) {
       form.setFieldValue(['group_items', index, 'process_route_id'], undefined)
@@ -123,6 +139,7 @@ const PeerGroupMaterialCell: React.FC<{ index: number; sourceType?: string }> = 
             if (!val || !material) {
               form.setFieldValue(['group_items', index, 'product_code'], undefined)
               form.setFieldValue(['group_items', index, 'product_name'], undefined)
+              form.setFieldValue(['group_items', index, 'product_uuid'], undefined)
               form.setFieldValue(['group_items', index, 'process_route_id'], undefined)
               form.setFieldValue(['group_items', index, 'allow_operation_jump'], false)
               return
@@ -130,6 +147,7 @@ const PeerGroupMaterialCell: React.FC<{ index: number; sourceType?: string }> = 
             const m = material as Material
             form.setFieldValue(['group_items', index, 'product_code'], m.mainCode || (m as { code?: string }).code)
             form.setFieldValue(['group_items', index, 'product_name'], m.name)
+            form.setFieldValue(['group_items', index, 'product_uuid'], m.uuid)
             if (m.uuid) {
               await applyDefaultProcessRouteToPeerGroupRow(form, index, m.uuid)
             } else {
@@ -217,11 +235,26 @@ const PeerGroupProcessRouteCell: React.FC<{
           if (!route?.uuid) return
           try {
             const routeDetail = await processRouteApi.get(route.uuid)
-            const routeJump =
+            let routeJump = Boolean(
               (routeDetail as { allow_operation_jump?: boolean; allowOperationJump?: boolean })
                 ?.allow_operation_jump ??
-              (routeDetail as { allowOperationJump?: boolean })?.allowOperationJump ??
-              false
+                (routeDetail as { allowOperationJump?: boolean })?.allowOperationJump ??
+                false,
+            )
+            const productUuid = form.getFieldValue(['group_items', index, 'product_uuid'])
+            if (productUuid) {
+              try {
+                const { productProcessApi } = await import(
+                  '../../../../../master-data/services/productProcess'
+                )
+                const pp = await productProcessApi.get(String(productUuid))
+                if (pp?.processRouteId != null && Number(pp.processRouteId) === Number(value)) {
+                  routeJump = Boolean(pp.allowOperationJump)
+                }
+              } catch {
+                /* 回落路线开关 */
+              }
+            }
             form.setFieldValue(['group_items', index, 'allow_operation_jump'], routeJump)
           } catch {
             /* 路线详情失败时保留用户可手动改跳转开关 */

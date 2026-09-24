@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { App, Form, Space, Tag } from 'antd';
 import { ProFormSelect } from '@ant-design/pro-components';
 import { useDebounceFn } from 'ahooks';
@@ -11,7 +11,6 @@ import {
   type User,
   type UserDisplayItem,
 } from '../../services/user';
-import { useGlobalStore } from '../../stores';
 import { useProFormReadonlyMode } from '../../utils/proFormReadonly';
 import {
   canPickUsersForDisplay,
@@ -46,7 +45,10 @@ interface UniUserSelectProps {
   mode?: 'multiple' | 'tags';
   /** 自定义宽度 */
   width?: number | 'sm' | 'md' | 'xl' | 'xs' | 'lg';
-  /** 值改变时的回调，返回完整的 User 对象以供业务表单进一步同步字段 */
+  /**
+   * 值改变时的回调，返回完整的 User 对象以供业务表单进一步同步字段。
+   * 注意：不要经 fieldProps.onChange 转发——会覆盖 ProForm 写回表单值，导致二次保存不生效。
+   */
   onChange?: (value: any, user: User | User[] | undefined) => void;
   /** 下拉中对这些用户 ID 展示「默认」徽章（如工序档案默认生产人员） */
   defaultBadgeUserIds?: number[];
@@ -86,6 +88,11 @@ function mergeUsersByUuid(prev: User[], incoming: User[]): User[] {
     next.unshift(user);
   }
   return next;
+}
+
+function orderUsersByUuids(users: User[], uuids: string[]): User[] {
+  const byUuid = new Map(users.map((u) => [u.uuid, u]));
+  return uuids.map((id) => byUuid.get(id)).filter((u): u is User => Boolean(u));
 }
 
 const DEFAULT_PICKER_PAGE_SIZE = 200;
@@ -151,6 +158,10 @@ export const UniUserSelect: React.FC<UniUserSelectProps> = ({
   const [loading, setLoading] = useState(false);
   const form = Form.useFormInstance();
   const watchedValue = Form.useWatch(name, form);
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  const dataRef = useRef(data);
+  dataRef.current = data;
 
   const fetchUsers = async (searchText: string = '') => {
     if (!canInteract) {
@@ -236,18 +247,55 @@ export const UniUserSelect: React.FC<UniUserSelectProps> = ({
     };
   }, [watchedValue, canInteract, mode]);
 
-  const handleChange = (val: any, _option: any) => {
-    if (!onChange) return;
+  /**
+   * 经 Form.useWatch 通知父级，避免 fieldProps.onChange 覆盖 ProForm 写值
+   *（覆盖后受控值卡住，编辑保存仍提交旧人员）。
+   */
+  useEffect(() => {
+    const notify = onChangeRef.current;
+    if (!notify) return;
 
-    if (mode === 'multiple' || mode === 'tags') {
-      const vals = Array.isArray(val) ? val : [];
-      const selectedUsers = data.filter((u) => vals.includes(u.uuid));
-      onChange(val, selectedUsers);
-    } else {
-      const selectedUser = data.find((u) => u.uuid === val);
-      onChange(val, selectedUser);
-    }
-  };
+    let cancelled = false;
+    void (async () => {
+      const selectedUuids = collectSelectedUuids(watchedValue, mode);
+      if (!selectedUuids.length) {
+        if (!cancelled) {
+          notify(
+            mode === 'multiple' || mode === 'tags' ? [] : undefined,
+            mode === 'multiple' || mode === 'tags' ? [] : undefined,
+          );
+        }
+        return;
+      }
+
+      const cached = dataRef.current.filter((u) => selectedUuids.includes(u.uuid));
+      const missing = selectedUuids.filter((id) => !cached.some((u) => u.uuid === id));
+      let pool = cached;
+      if (missing.length) {
+        try {
+          const resolved = await resolveUserDisplay({ user_uuids: missing });
+          pool = mergeUsersByUuid(cached, resolved.map(displayItemToUser));
+          if (!cancelled) {
+            setData((prev) => mergeUsersByUuid(prev, resolved.map(displayItemToUser)));
+          }
+        } catch (error) {
+          console.error('Failed to resolve users for onChange:', error);
+        }
+      }
+      if (cancelled) return;
+
+      const ordered = orderUsersByUuids(pool, selectedUuids);
+      if (mode === 'multiple' || mode === 'tags') {
+        notify(watchedValue, ordered);
+      } else {
+        notify(watchedValue, ordered[0]);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [watchedValue, mode]);
 
   const defaultIdSet = useMemo(
     () => new Set((defaultBadgeUserIds || []).filter((n) => typeof n === 'number')),
@@ -289,7 +337,7 @@ export const UniUserSelect: React.FC<UniUserSelectProps> = ({
         loading,
         filterOption: false,
         onSearch: canInteract ? debounceFetch : undefined,
-        onChange: handleChange,
+        // 故意不传 onChange：会覆盖 ProForm createField 写回逻辑
         optionRender: (ori) => {
           const u = data.find((item) => item.uuid === ori.value);
           const text =

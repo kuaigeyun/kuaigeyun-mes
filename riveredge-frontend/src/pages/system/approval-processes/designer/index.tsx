@@ -214,8 +214,8 @@ const ApprovalProcessDesignerPage: React.FC = () => {
       
       const initialDataMap: Record<string, any> = {};
       nodesData.forEach(node => {
-        const normalized = normalizeNodeData(String(node.type), { ...(node.data as object) });
-        initialDataMap[node.id] = nodeDataToFormValues(normalized);
+        // 存规范化节点数据，不要存表单临时字段 approvers/roles（否则会盖掉后续改动）
+        initialDataMap[node.id] = normalizeNodeData(String(node.type), { ...(node.data as object) });
       });
       setNodeDataMap(initialDataMap);
 
@@ -294,11 +294,33 @@ const ApprovalProcessDesignerPage: React.FC = () => {
     if (!processUuid || !processData) return;
     try {
       setSaving(true);
+      // 右侧表单打开时，以当前表单为准刷进 map，避免 Select 变更未完全写入
+      const livePatch =
+        selectedNode &&
+        (selectedNode.type === 'approval' || selectedNode.type === 'cc' || selectedNode.type === 'condition')
+          ? {
+              [selectedNode.id]: (() => {
+                const merged = mergeFormToNodeData(
+                  String(selectedNode.type),
+                  nodeConfigForm.getFieldsValue(true) as Record<string, unknown>,
+                );
+                delete merged.approvers;
+                delete merged.roles;
+                return { ...nodeDataMap[selectedNode.id], ...merged };
+              })(),
+            }
+          : {};
+      const latestMap = { ...nodeDataMap, ...livePatch };
+      if (Object.keys(livePatch).length > 0) {
+        setNodeDataMap(latestMap);
+      }
       const strippedNodes = nodes.map((node) => {
         const merged = mergeFormToNodeData(String(node.type), {
           ...node.data,
-          ...nodeDataMap[node.id],
+          ...latestMap[node.id],
         });
+        delete merged.approvers;
+        delete merged.roles;
         const data = normalizeNodeData(String(node.type), merged);
         return {
           id: node.id,
@@ -314,9 +336,8 @@ const ApprovalProcessDesignerPage: React.FC = () => {
         return;
       }
       await updateApprovalProcess(processUuid, { ...processData, nodes: graph });
-      const refreshed = await getApprovalProcessByUuid(processUuid);
-      setProcessData(refreshed);
       messageApi.success(t('common.saveSuccess'));
+      await loadProcessData();
     } catch (error: any) {
       messageApi.error(error.message || t('common.saveFailed'));
     } finally {
@@ -443,8 +464,11 @@ const ApprovalProcessDesignerPage: React.FC = () => {
         nodeTypes={nodeTypes}
         onNodeClick={(_, node) => {
           setSelectedNode(node); setSelectedEdge(null);
-          const raw = nodeDataMap[node.id] || node.data || {};
+          const raw = { ...(node.data || {}), ...(nodeDataMap[node.id] || {}) };
+          delete (raw as Record<string, unknown>).approvers;
+          delete (raw as Record<string, unknown>).roles;
           const formValues = nodeDataToFormValues(normalizeNodeData(String(node.type), raw));
+          nodeConfigForm.resetFields();
           nodeConfigForm.setFieldsValue({ label: formValues.label || node.id, ...formValues });
         }}
         onEdgeClick={(_, edge) => { setSelectedEdge(edge); setSelectedNode(null); }}
@@ -470,12 +494,24 @@ const ApprovalProcessDesignerPage: React.FC = () => {
   const rightPanel = selectedNode && (selectedNode.type === 'approval' || selectedNode.type === 'cc' || selectedNode.type === 'condition') ? {
     title: t('pages.approval.designer.nodeConfig'),
     children: (
-      <ProForm form={nodeConfigForm} submitter={false} onValuesChange={(_, values) => {
-        if (selectedNode) {
-          const merged = mergeFormToNodeData(String(selectedNode.type), values as Record<string, unknown>);
-          setNodeDataMap(prev => ({ ...prev, [selectedNode.id]: { ...prev[selectedNode.id], ...merged } }));
-          setNodes(nodes.map(n => n.id === selectedNode.id ? { ...n, data: { ...n.data, ...merged } } : n));
-        }
+      <ProForm form={nodeConfigForm} submitter={false} onValuesChange={() => {
+        if (!selectedNode) return;
+        // 用 getFieldsValue(true) 拿完整表单（含 ProFormDependency 内字段），避免 allValues 缺 approvers
+        const values = nodeConfigForm.getFieldsValue(true) as Record<string, unknown>;
+        const merged = mergeFormToNodeData(String(selectedNode.type), values);
+        setNodeDataMap((prev) => {
+          const nextNode = { ...prev[selectedNode.id], ...merged };
+          delete nextNode.approvers;
+          delete nextNode.roles;
+          return { ...prev, [selectedNode.id]: nextNode };
+        });
+        setNodes((nds) =>
+          nds.map((n) =>
+            n.id === selectedNode.id
+              ? { ...n, data: { ...n.data, ...merged } }
+              : n,
+          ) as any,
+        );
       }}>
         <ProFormText name="label" label={t('pages.approval.designer.nodeLabel')} rules={[{ required: true }]} />
         {selectedNode.type === 'approval' && <ApprovalNodeForm />}

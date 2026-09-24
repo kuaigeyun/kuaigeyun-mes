@@ -221,6 +221,7 @@ async def _compute_operation_reportable_remaining(
         remaining_completed_headroom,
         tuple_from_model,
     )
+    from apps.kuaizhizao.services.operation_jump_rules import resolve_material_incoming_qty
     from apps.kuaizhizao.services.operation_transfer_service import (
         build_operation_policy_cache,
         material_consumed_against_incoming,
@@ -247,11 +248,19 @@ async def _compute_operation_reportable_remaining(
             break
 
     if op_index == 0:
-        prev_transfer = plan_qty
+        adjacent_prev = plan_qty
     else:
-        prev_transfer = await resolve_operation_transfer_qualified(
+        adjacent_prev = await resolve_operation_transfer_qualified(
             tenant_id, int(work_order.id), ops[op_index - 1]
         )
+    prev_transfer = await resolve_material_incoming_qty(
+        tenant_id,
+        work_order,
+        work_order_operation,
+        plan_qty=plan_qty,
+        adjacent_prev_transfer=adjacent_prev,
+        ordered_operations=ops,
+    )
 
     master_id = int(work_order_operation.operation_id) if work_order_operation.operation_id else 0
     mode = "none"
@@ -1970,6 +1979,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
             resolve_operation_transfer_qualified,
             sum_process_inspection_quality_quantities,
         )
+        from apps.kuaizhizao.services.operation_jump_rules import resolve_material_incoming_qty
         from apps.kuaizhizao.services.inspection_policy_service import get_quality_effective_config
         from apps.kuaizhizao.services.work_order_service import WORK_ORDER_IN_PROGRESS_STATUS
 
@@ -2106,14 +2116,24 @@ class ReportingService(AppBaseService[ReportingRecord]):
                     scrap_qty=scrap_by_wo_op.get((wo_id, master_id), Decimal("0")),
                 )
 
-                material_remaining = prev_transfer - material_consumed
+                incoming = await resolve_material_incoming_qty(
+                    tenant_id,
+                    wo,
+                    op,
+                    plan_qty=plan_qty,
+                    adjacent_prev_transfer=prev_transfer,
+                    ordered_operations=wo_ops,
+                    policy_cache=policy_cache,
+                    inspections_by_op={master_id: op_inspections} if master_id else None,
+                )
+                material_remaining = incoming - material_consumed
                 if material_remaining < 0:
                     material_remaining = Decimal("0")
 
                 om, ov = tuple_from_model(op)
                 rule_cap = max_completed_quantity_for_plan(plan_qty, om, ov)
                 plan_remaining = max(Decimal("0"), rule_cap - completed)
-                # 报工上限：计划+超报累计完成上限；前序转入不足时本次可报更小。
+                # 报工上限：计划+超报累计完成上限；前序转入不足时本次可报更小（允许跳转时不卡紧邻上道）。
                 plan_side_cap = completed + plan_remaining
                 effective = min(plan_remaining, material_remaining)
 

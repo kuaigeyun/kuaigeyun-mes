@@ -3,7 +3,7 @@
 """
 
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
 from apps.kuaizhizao.services.operation_transfer_service import resolve_operation_transfer_qualified
@@ -11,8 +11,12 @@ from infra.exceptions.exceptions import BusinessLogicError
 
 
 def effective_allow_jump(work_order: Any, work_order_operation: Optional[WorkOrderOperation] = None) -> bool:
-    """仅工单快照 allow_operation_jump 决定；工序行 allow_jump 已废弃不参与计算。"""
-    return bool(getattr(work_order, "allow_operation_jump", False))
+    """工单允许跳转，或当前工序行允许跳转，任一为真即放宽上道流转数量校验。"""
+    if bool(getattr(work_order, "allow_operation_jump", False)):
+        return True
+    if work_order_operation is not None and bool(getattr(work_order_operation, "allow_jump", False)):
+        return True
+    return False
 
 
 def qualified_transfer_quantity(operation: WorkOrderOperation) -> Decimal:
@@ -36,6 +40,58 @@ async def qualified_transfer_quantity_async(
         policy_cache=policy_cache,
         inspections_by_op=inspections_by_op,
     )
+
+
+async def resolve_material_incoming_qty(
+    tenant_id: int,
+    work_order: Any,
+    work_order_operation: WorkOrderOperation,
+    *,
+    plan_qty: Decimal,
+    adjacent_prev_transfer: Decimal,
+    ordered_operations: Optional[Sequence[WorkOrderOperation]] = None,
+    policy_cache: Optional[Dict[int, Any]] = None,
+    inspections_by_op: Optional[Dict[int, List[Any]]] = None,
+) -> Decimal:
+    """
+    本道可用的在制转入上限。
+
+    - 不允许跳转：紧邻上道合格转出（首道为计划数）
+    - 允许跳转：不校验紧邻上道流转量，按计划数；若有前序节点工序则取节点转入量最小值
+    """
+    plan = plan_qty if plan_qty > 0 else Decimal("0")
+    if not effective_allow_jump(work_order, work_order_operation):
+        return adjacent_prev_transfer if adjacent_prev_transfer > 0 else Decimal("0")
+
+    work_order_id = int(getattr(work_order_operation, "work_order_id", None) or getattr(work_order, "id") or 0)
+    current_seq = int(getattr(work_order_operation, "sequence", None) or 0)
+    nodes: List[WorkOrderOperation] = []
+    if ordered_operations is not None:
+        nodes = [
+            op
+            for op in ordered_operations
+            if int(getattr(op, "sequence", None) or 0) < current_seq
+            and bool(getattr(op, "is_node_operation", False))
+            and getattr(op, "deleted_at", None) is None
+        ]
+    else:
+        nodes = await list_node_predecessors(tenant_id, work_order_id, current_seq)
+
+    if not nodes:
+        return plan
+
+    caps: List[Decimal] = []
+    for n in nodes:
+        caps.append(
+            await qualified_transfer_quantity_async(
+                tenant_id,
+                work_order_id,
+                n,
+                policy_cache=policy_cache,
+                inspections_by_op=inspections_by_op,
+            )
+        )
+    return min(caps) if caps else plan
 
 
 async def list_node_predecessors(

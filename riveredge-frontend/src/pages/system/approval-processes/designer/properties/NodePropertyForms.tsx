@@ -292,17 +292,30 @@ export function mergeFormToNodeData(
   const v = { ...values };
   if (nodeType === 'approval' || nodeType === 'cc') {
     const approverType = v.approverType as string;
-    if (approverType === 'user' && v.approvers) v.approverIds = v.approvers;
-    if (approverType === 'role' && v.roles) v.approverIds = v.roles;
-    if (approverType === 'department') {
-      if (v.departmentScope === 'specified' && v.departments) {
-        v.approverIds = v.departments;
-      } else {
+    // 必须用 `'approvers' in v`：空数组是合法清空；且不能让残留的旧 approvers 覆盖已写入的 approverIds
+    if (approverType === 'user' && 'approvers' in v) {
+      const raw = v.approvers;
+      v.approverIds = (Array.isArray(raw) ? raw : raw != null ? [raw] : [])
+        .map((x) => String(x ?? '').trim())
+        .filter(Boolean);
+    } else if (approverType === 'role' && 'roles' in v) {
+      const raw = v.roles;
+      v.approverIds = (Array.isArray(raw) ? raw : raw != null ? [raw] : [])
+        .map((x) => String(x ?? '').trim())
+        .filter(Boolean);
+    } else if (approverType === 'department') {
+      if (v.departmentScope === 'specified' && 'departments' in v) {
+        const raw = v.departments;
+        v.approverIds = (Array.isArray(raw) ? raw : raw != null ? [raw] : [])
+          .map((x) => String(x ?? '').trim())
+          .filter(Boolean);
+      } else if (v.departmentScope !== 'specified') {
         v.departmentScope = 'submitter';
         delete v.approverIds;
       }
       delete v.departments;
     }
+    // 表单临时字段不得残留进 nodeDataMap，否则保存时旧 approvers 会盖掉新 approverIds
     delete v.approvers;
     delete v.roles;
   }

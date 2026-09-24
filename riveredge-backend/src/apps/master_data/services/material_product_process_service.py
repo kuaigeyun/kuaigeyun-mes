@@ -81,14 +81,18 @@ def _convert_route_row_times_to_seconds(row: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _line_to_operation_payload(line: ProductProcessLineSchema, allow_jump: bool) -> Dict[str, Any]:
+    is_node = allow_jump and bool(line.is_node_operation)
+    # 产品工艺开启「允许工序跳转」时：非节点工序落 allow_jump=true，报工不卡紧邻上道
     row: Dict[str, Any] = {
         "uuid": line.operation_uuid,
         "code": line.code,
         "name": line.name,
         "reporting_type": line.reporting_type or "quantity",
         "reportingType": line.reporting_type or "quantity",
-        "is_node_operation": allow_jump and bool(line.is_node_operation),
-        "isNodeOperation": allow_jump and bool(line.is_node_operation),
+        "allow_jump": bool(allow_jump) and not is_node,
+        "allowJump": bool(allow_jump) and not is_node,
+        "is_node_operation": is_node,
+        "isNodeOperation": is_node,
     }
     if line.operation_id is not None:
         row["operation_id"] = line.operation_id

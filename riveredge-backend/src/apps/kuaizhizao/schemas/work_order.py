@@ -122,11 +122,11 @@ class WorkOrderCreate(WorkOrderBase):
     - 如果只提供 product_code，product_id 将被自动查找
     - code 和 code_rule 至少提供一个：如果提供 code 则手工填写，如果提供 code_rule 则使用编码规则生成
     - operations: 可选，如果提供则使用提供的工序，否则自动匹配工艺路线生成工序
-    - allow_operation_jump 为 None 时，默认采用来源工艺路线的路线级设置（无路线则为 False）
+    - allow_operation_jump 为 None 时，默认采用产品工艺「允许工序跳转」（无产品工艺则回落工艺路线）
     """
     allow_operation_jump: Optional[bool] = Field(
         None,
-        description="是否允许跳转工序；不传则采用工艺路线默认值",
+        description="是否允许跳转工序；不传则采用产品工艺/工艺路线默认值",
     )
     code: Optional[str] = Field(None, description="工单编码（可选，如果未提供 code_rule 则为必填）")
     code_rule: Optional[str] = Field(None, description="编码规则代码（可选，如果未提供 code 则为必填）")
@@ -709,7 +709,7 @@ class WorkOrderOperationCreate(WorkOrderOperationBase):
     allow_jump: Optional[bool] = Field(
         None,
         alias="allowJump",
-        description="已废弃：不参与校验，服务端恒按 False 落库",
+        description="是否允许跳转（true:本工序不依赖上道流转数量；未传则按工序档案）",
     )
     is_node_operation: Optional[bool] = Field(
         None,
@@ -778,7 +778,7 @@ class WorkOrderOperationResponse(WorkOrderOperationBase):
     sop_name: Optional[str] = Field(None, description="关联SOP 名称")
 
     reporting_type: str = Field("quantity", description="报工类型（quantity/status）")
-    allow_jump: bool = Field(False, description="已废弃：不参与跳转判断，恒为 False（新数据）")
+    allow_jump: bool = Field(False, description="是否允许跳转（与工单 allow_operation_jump 任一为真则不校验上道流转数量）")
     is_node_operation: bool = Field(False, description="是否节点工序（允许跳转时前序节点仍不可跳过）")
     default_operators: List[DefaultOperatorSnapshot] = Field(
         default_factory=list,

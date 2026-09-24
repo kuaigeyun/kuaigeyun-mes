@@ -99,10 +99,12 @@ interface Operation {
   defectTypes?: Array<{ code?: string; name?: string; uuid?: string; id?: number }>;
   inspection_mode?: string;
   inspectionMode?: string;
+  allow_jump?: boolean;
+  allowJump?: boolean;
 }
 
-const effectiveAllowJump = (workOrder: WorkOrder | null, _operation?: Operation | null) =>
-  !!workOrder?.allow_operation_jump;
+const effectiveAllowJump = (workOrder: WorkOrder | null, operation?: Operation | null) =>
+  !!workOrder?.allow_operation_jump || !!operation?.allow_jump || !!operation?.allowJump;
 
 /**
  * 报工管理 - 工位机触屏模式页面
