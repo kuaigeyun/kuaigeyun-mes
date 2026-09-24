@@ -20,7 +20,7 @@ from apps.kuaioa.services.payroll_service import (
     RewardRecordService,
 )
 from apps.kuaioa.services.welfare_service import AnnualPayrollStatsService
-from core.api.deps.access import require_access
+from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
@@ -49,13 +49,7 @@ async def list_living_advances(
     keyword: Optional[str] = Query(None),
     year_month: Optional[str] = Query(None),
     status_filter: Optional[str] = Query(None, alias="status"),
-    _auth=Depends(
-        require_access(
-            "kuaioa.living-advance",
-            "read",
-            required_permissions=["kuaioa:living-advance:read"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:living-advance:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     rows = await living_svc.list_rows(
@@ -67,13 +61,7 @@ async def list_living_advances(
 @router.get("/living-advances/{row_id}")
 async def get_living_advance(
     row_id: int = Path(..., ge=1),
-    _auth=Depends(
-        require_access(
-            "kuaioa.living-advance",
-            "read",
-            required_permissions=["kuaioa:living-advance:read"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:living-advance:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -86,13 +74,7 @@ async def get_living_advance(
 async def create_living_advance(
     data: LivingAdvanceCreate,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaioa.living-advance",
-            "create",
-            required_permissions=["kuaioa:living-advance:create"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:living-advance:create")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -109,13 +91,7 @@ async def update_living_advance(
     data: LivingAdvanceUpdate,
     row_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaioa.living-advance",
-            "update",
-            required_permissions=["kuaioa:living-advance:update"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:living-advance:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -131,13 +107,7 @@ async def update_living_advance(
 async def delete_living_advance(
     row_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaioa.living-advance",
-            "delete",
-            required_permissions=["kuaioa:living-advance:delete"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:living-advance:delete")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -155,11 +125,7 @@ async def list_rewards(
     keyword: Optional[str] = Query(None),
     year_month: Optional[str] = Query(None),
     status_filter: Optional[str] = Query(None, alias="status"),
-    _auth=Depends(
-        require_access(
-            "kuaioa.reward", "read", required_permissions=["kuaioa:reward:read"]
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:reward:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     rows = await reward_svc.list_rows(
@@ -171,11 +137,7 @@ async def list_rewards(
 @router.get("/rewards/{row_id}")
 async def get_reward(
     row_id: int = Path(..., ge=1),
-    _auth=Depends(
-        require_access(
-            "kuaioa.reward", "read", required_permissions=["kuaioa:reward:read"]
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:reward:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -188,11 +150,7 @@ async def get_reward(
 async def create_reward(
     data: RewardRecordCreate,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaioa.reward", "create", required_permissions=["kuaioa:reward:create"]
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:reward:create")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -209,11 +167,7 @@ async def update_reward(
     data: RewardRecordUpdate,
     row_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaioa.reward", "update", required_permissions=["kuaioa:reward:update"]
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:reward:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -229,11 +183,7 @@ async def update_reward(
 async def delete_reward(
     row_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaioa.reward", "delete", required_permissions=["kuaioa:reward:delete"]
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:reward:delete")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -252,11 +202,7 @@ async def list_settlements(
     year_month: Optional[str] = Query(None),
     workshop_name: Optional[str] = Query(None),
     status_filter: Optional[str] = Query(None, alias="status"),
-    _auth=Depends(
-        require_access(
-            "kuaioa.payroll", "read", required_permissions=["kuaioa:payroll:read"]
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:payroll:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     rows = await payroll_svc.list_settlements(
@@ -272,11 +218,7 @@ async def list_settlements(
 @router.get("/settlements/{settlement_id}")
 async def get_settlement(
     settlement_id: int = Path(..., ge=1),
-    _auth=Depends(
-        require_access(
-            "kuaioa.payroll", "read", required_permissions=["kuaioa:payroll:read"]
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:payroll:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -289,11 +231,7 @@ async def get_settlement(
 async def create_settlement(
     data: PayrollSettlementCreate,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaioa.payroll", "create", required_permissions=["kuaioa:payroll:create"]
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:payroll:create")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -310,11 +248,7 @@ async def update_settlement(
     data: PayrollSettlementUpdate,
     settlement_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaioa.payroll", "update", required_permissions=["kuaioa:payroll:update"]
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:payroll:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -332,11 +266,7 @@ async def update_settlement(
 async def delete_settlement(
     settlement_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaioa.payroll", "delete", required_permissions=["kuaioa:payroll:delete"]
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:payroll:delete")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -350,11 +280,7 @@ async def delete_settlement(
 async def rebuild_settlement(
     settlement_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaioa.payroll", "update", required_permissions=["kuaioa:payroll:update"]
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:payroll:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -372,11 +298,7 @@ async def update_settlement_line(
     settlement_id: int = Path(..., ge=1),
     line_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaioa.payroll", "update", required_permissions=["kuaioa:payroll:update"]
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:payroll:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -394,11 +316,7 @@ async def update_settlement_line(
 async def confirm_settlement(
     settlement_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaioa.payroll", "submit", required_permissions=["kuaioa:payroll:submit"]
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:payroll:submit")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -414,11 +332,7 @@ async def confirm_settlement(
 async def reopen_settlement(
     settlement_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaioa.payroll", "update", required_permissions=["kuaioa:payroll:update"]
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:payroll:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -434,13 +348,7 @@ async def reopen_settlement(
 async def living_payout_report(
     year_month: str = Query(..., min_length=7, max_length=7),
     workshop_name: Optional[str] = Query(None),
-    _auth=Depends(
-        require_access(
-            "kuaioa.living-advance",
-            "read",
-            required_permissions=["kuaioa:living-advance:read"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:living-advance:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -457,9 +365,7 @@ async def annual_payroll_stats(
     year: int = Query(..., ge=2000, le=2100),
     workshop_name: Optional[str] = Query(None),
     keyword: Optional[str] = Query(None),
-    _auth=Depends(
-        require_access("kuaioa.payroll", "read", required_permissions=["kuaioa:payroll:read"])
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:payroll:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -475,9 +381,7 @@ async def annual_payroll_stats(
 async def personal_payroll_stats(
     employee_id: int = Query(..., ge=1),
     year: int = Query(..., ge=2000, le=2100),
-    _auth=Depends(
-        require_access("kuaioa.payroll", "read", required_permissions=["kuaioa:payroll:read"])
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:payroll:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -492,9 +396,7 @@ async def import_settlement_lines(
     data: PayrollLineImportRequest,
     settlement_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access("kuaioa.payroll", "update", required_permissions=["kuaioa:payroll:update"])
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:payroll:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:

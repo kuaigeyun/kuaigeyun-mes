@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 
 from apps.kuaioa.schemas.employee import EmployeeProfileCreate, EmployeeProfileUpdate
 from apps.kuaioa.services.employee_service import EmployeeProfileService
-from core.api.deps.access import require_access
+from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
@@ -22,9 +22,7 @@ async def list_employees(
     status_filter: Optional[str] = Query(None, alias="status"),
     employment_type: Optional[str] = Query(None),
     workshop_name: Optional[str] = Query(None),
-    _auth=Depends(
-        require_access("kuaioa.employee", "read", required_permissions=["kuaioa:employee:read"])
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:employee:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     rows = await service.list_profiles(
@@ -42,9 +40,7 @@ async def list_employee_movements(
     year_month: str = Query(..., min_length=7, max_length=7),
     workshop_name: Optional[str] = Query(None),
     movement_type: Optional[str] = Query(None),
-    _auth=Depends(
-        require_access("kuaioa.employee", "read", required_permissions=["kuaioa:employee:read"])
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:employee:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -62,9 +58,7 @@ async def list_employee_movements(
 @router.get("/{profile_id}", summary="Get employee profile")
 async def get_employee(
     profile_id: int = Path(..., ge=1),
-    _auth=Depends(
-        require_access("kuaioa.employee", "read", required_permissions=["kuaioa:employee:read"])
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:employee:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -78,11 +72,7 @@ async def get_employee(
 async def create_employee(
     data: EmployeeProfileCreate,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaioa.employee", "create", required_permissions=["kuaioa:employee:create"]
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:employee:create")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -97,11 +87,7 @@ async def update_employee(
     data: EmployeeProfileUpdate,
     profile_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaioa.employee", "update", required_permissions=["kuaioa:employee:update"]
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:employee:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -117,11 +103,7 @@ async def update_employee(
 async def delete_employee(
     profile_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaioa.employee", "delete", required_permissions=["kuaioa:employee:delete"]
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:employee:delete")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:

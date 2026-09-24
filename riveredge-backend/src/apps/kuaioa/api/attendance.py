@@ -12,7 +12,7 @@ from apps.kuaioa.schemas.attendance import (
     AttendanceSheetUpdate,
 )
 from apps.kuaioa.services.attendance_service import AttendanceService
-from core.api.deps.access import require_access
+from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
@@ -28,11 +28,7 @@ async def list_sheets(
     year_month: Optional[str] = Query(None),
     workshop_name: Optional[str] = Query(None),
     status_filter: Optional[str] = Query(None, alias="status"),
-    _auth=Depends(
-        require_access(
-            "kuaioa.attendance", "read", required_permissions=["kuaioa:attendance:read"]
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:attendance:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     rows = await service.list_sheets(
@@ -48,11 +44,7 @@ async def list_sheets(
 @router.get("/sheets/{sheet_id}", summary="Get attendance sheet")
 async def get_sheet(
     sheet_id: int = Path(..., ge=1),
-    _auth=Depends(
-        require_access(
-            "kuaioa.attendance", "read", required_permissions=["kuaioa:attendance:read"]
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:attendance:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -66,11 +58,7 @@ async def get_sheet(
 async def create_sheet(
     data: AttendanceSheetCreate,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaioa.attendance", "create", required_permissions=["kuaioa:attendance:create"]
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:attendance:create")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -85,11 +73,7 @@ async def update_sheet(
     data: AttendanceSheetUpdate,
     sheet_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaioa.attendance", "update", required_permissions=["kuaioa:attendance:update"]
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:attendance:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -105,11 +89,7 @@ async def update_sheet(
 async def delete_sheet(
     sheet_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaioa.attendance", "delete", required_permissions=["kuaioa:attendance:delete"]
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:attendance:delete")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -125,11 +105,7 @@ async def delete_sheet(
 async def refresh_roster(
     sheet_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaioa.attendance", "update", required_permissions=["kuaioa:attendance:update"]
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:attendance:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -147,11 +123,7 @@ async def update_day(
     sheet_id: int = Path(..., ge=1),
     day_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaioa.attendance", "update", required_permissions=["kuaioa:attendance:update"]
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:attendance:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -168,11 +140,7 @@ async def batch_mark(
     data: AttendanceBatchMark,
     sheet_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaioa.attendance", "update", required_permissions=["kuaioa:attendance:update"]
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:attendance:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -188,11 +156,7 @@ async def batch_mark(
 async def submit_sheet(
     sheet_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaioa.attendance", "submit", required_permissions=["kuaioa:attendance:submit"]
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:attendance:submit")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -208,11 +172,7 @@ async def submit_sheet(
 async def reopen_sheet(
     sheet_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaioa.attendance", "update", required_permissions=["kuaioa:attendance:update"]
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:attendance:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -227,11 +187,7 @@ async def reopen_sheet(
 @router.get("/sheets/{sheet_id}/export", summary="Export attendance sheet as Excel")
 async def export_sheet(
     sheet_id: int = Path(..., ge=1),
-    _auth=Depends(
-        require_access(
-            "kuaioa.attendance", "export", required_permissions=["kuaioa:attendance:export"]
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:attendance:export")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:

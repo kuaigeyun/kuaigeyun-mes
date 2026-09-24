@@ -10,7 +10,7 @@ from apps.kuaioa.schemas.welfare import (
     WelfareBatchUpdate,
 )
 from apps.kuaioa.services.welfare_service import WelfareBatchService
-from core.api.deps.access import require_access
+from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
@@ -35,9 +35,7 @@ async def list_batches(
     festival_type: Optional[str] = Query(None),
     workshop_name: Optional[str] = Query(None),
     status_filter: Optional[str] = Query(None, alias="status"),
-    _auth=Depends(
-        require_access("kuaioa.welfare", "read", required_permissions=["kuaioa:welfare:read"])
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:welfare:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     rows = await svc.list_batches(
@@ -54,9 +52,7 @@ async def list_batches(
 @router.get("/batches/{batch_id}")
 async def get_batch(
     batch_id: int = Path(..., ge=1),
-    _auth=Depends(
-        require_access("kuaioa.welfare", "read", required_permissions=["kuaioa:welfare:read"])
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:welfare:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -69,11 +65,7 @@ async def get_batch(
 async def create_batch(
     data: WelfareBatchCreate,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaioa.welfare", "create", required_permissions=["kuaioa:welfare:create"]
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:welfare:create")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -90,11 +82,7 @@ async def update_batch(
     data: WelfareBatchUpdate,
     batch_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaioa.welfare", "update", required_permissions=["kuaioa:welfare:update"]
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:welfare:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -110,11 +98,7 @@ async def update_batch(
 async def delete_batch(
     batch_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaioa.welfare", "delete", required_permissions=["kuaioa:welfare:delete"]
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:welfare:delete")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -128,11 +112,7 @@ async def delete_batch(
 async def rebuild_batch(
     batch_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaioa.welfare", "update", required_permissions=["kuaioa:welfare:update"]
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:welfare:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -150,11 +130,7 @@ async def update_line(
     batch_id: int = Path(..., ge=1),
     line_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaioa.welfare", "update", required_permissions=["kuaioa:welfare:update"]
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:welfare:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -172,11 +148,7 @@ async def update_line(
 async def confirm_batch(
     batch_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaioa.welfare", "submit", required_permissions=["kuaioa:welfare:submit"]
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:welfare:submit")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -192,11 +164,7 @@ async def confirm_batch(
 async def reopen_batch(
     batch_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaioa.welfare", "update", required_permissions=["kuaioa:welfare:update"]
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:welfare:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:

@@ -28406,10 +28406,14 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.permission-require-codes-migrate-r05.title':
+    '权限调用面收敛：轻办公人事薪资 API 改为显式权限码',
+  'pages.dashboard.updateLog.entries.permission-require-codes-migrate-r05.description':
+    '员工档案、考勤、薪资结算、生活费预支、奖惩、福利、岗位补贴、最低工资等 kuaioa API 已逐文件迁为 require_permission_codes；轻办公后端 require_access 清零。',
   'pages.dashboard.updateLog.entries.permission-require-codes-migrate-r04.title':
     '权限调用面收敛：轻办公 API 改为显式权限码',
   'pages.dashboard.updateLog.entries.permission-require-codes-migrate-r04.description':
-    '制造协同、培训、资产、表单、用章、证照、请假、公告与工作台等 kuaioa API 已逐文件迁为 require_permission_codes；轻办公后端 require_access 清零。',
+    '制造协同、培训、资产、表单、用章、证照、请假、公告与工作台等 kuaioa API 已逐文件迁为 require_permission_codes。',
   'pages.dashboard.updateLog.entries.permission-require-codes-migrate-r03.title':
     '权限调用面收敛：快研发剩余单据 API 改为显式权限码',
   'pages.dashboard.updateLog.entries.permission-require-codes-migrate-r03.description':
@@ -28426,6 +28430,10 @@ export default {
     '权限治理：菜单精确匹配、状态机与数据范围收紧、强制下线鉴权',
   'pages.dashboard.updateLog.entries.permission-governance-p0-r01.description':
     '侧栏菜单改为与按钮一致的精确权限码匹配；状态流转库表规则未配权限/角色时拒绝执行；无功能授予时数据范围不再回退全部角色；在线用户强制下线需 system:online-user:execute；切回窗口重拉权限；新增 manifest 权限声明扫描。',
+  'pages.dashboard.updateLog.entries.site-logo-invalid-file-ref-r01.title':
+    '站点 Logo 误绑业务文件不再反复报错',
+  'pages.dashboard.updateLog.entries.site-logo-invalid-file-ref-r01.description':
+    '站点 Logo 配置若误填工程图纸等业务文件 UUID，读取设置时将自动清空并回退默认 Logo，不再请求 preview/public 导致 500。',
   'pages.dashboard.updateLog.entries.drawing-file-content-missing-r01.title':
     '工程图纸预览文件丢失提示修复',
   'pages.dashboard.updateLog.entries.drawing-file-content-missing-r01.description':

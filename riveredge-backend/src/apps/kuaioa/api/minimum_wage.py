@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, status
 
 from apps.kuaioa.schemas.minimum_wage import MinimumWageCreate, MinimumWageUpdate
 from apps.kuaioa.services.minimum_wage_service import MinimumWageService
-from core.api.deps.access import require_access
+from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
@@ -16,11 +16,7 @@ svc = MinimumWageService()
 
 @router.get("")
 async def list_minimum_wage(
-    _auth=Depends(
-        require_access(
-            "kuaioa.minimum-wage", "read", required_permissions=["kuaioa:minimum-wage:read"]
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:minimum-wage:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     rows = await svc.list_configs(tenant_id)
@@ -30,11 +26,7 @@ async def list_minimum_wage(
 @router.get("/{config_id}")
 async def get_minimum_wage(
     config_id: int = Path(..., ge=1),
-    _auth=Depends(
-        require_access(
-            "kuaioa.minimum-wage", "read", required_permissions=["kuaioa:minimum-wage:read"]
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:minimum-wage:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -47,11 +39,7 @@ async def get_minimum_wage(
 async def create_minimum_wage(
     data: MinimumWageCreate,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaioa.minimum-wage", "create", required_permissions=["kuaioa:minimum-wage:create"]
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:minimum-wage:create")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -68,11 +56,7 @@ async def update_minimum_wage(
     data: MinimumWageUpdate,
     config_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaioa.minimum-wage", "update", required_permissions=["kuaioa:minimum-wage:update"]
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:minimum-wage:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -90,11 +74,7 @@ async def update_minimum_wage(
 async def delete_minimum_wage(
     config_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaioa.minimum-wage", "delete", required_permissions=["kuaioa:minimum-wage:delete"]
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:minimum-wage:delete")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:

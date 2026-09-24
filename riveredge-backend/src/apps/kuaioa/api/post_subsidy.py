@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 
 from apps.kuaioa.schemas.post_subsidy import PostSubsidyCreate, PostSubsidyUpdate
 from apps.kuaioa.services.post_subsidy_service import PostSubsidyService
-from core.api.deps.access import require_access
+from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
@@ -21,9 +21,7 @@ async def list_post_subsidies(
     keyword: Optional[str] = Query(None),
     year_month: Optional[str] = Query(None),
     workshop_name: Optional[str] = Query(None),
-    _auth=Depends(
-        require_access("kuaioa.post-subsidy", "read", required_permissions=["kuaioa:post-subsidy:read"])
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:post-subsidy:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     rows = await svc.list_rows(
@@ -35,9 +33,7 @@ async def list_post_subsidies(
 @router.get("/{row_id}")
 async def get_post_subsidy(
     row_id: int = Path(..., ge=1),
-    _auth=Depends(
-        require_access("kuaioa.post-subsidy", "read", required_permissions=["kuaioa:post-subsidy:read"])
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:post-subsidy:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -50,11 +46,7 @@ async def get_post_subsidy(
 async def create_post_subsidy(
     data: PostSubsidyCreate,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaioa.post-subsidy", "create", required_permissions=["kuaioa:post-subsidy:create"]
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:post-subsidy:create")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -71,11 +63,7 @@ async def update_post_subsidy(
     data: PostSubsidyUpdate,
     row_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaioa.post-subsidy", "update", required_permissions=["kuaioa:post-subsidy:update"]
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:post-subsidy:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -93,11 +81,7 @@ async def update_post_subsidy(
 async def delete_post_subsidy(
     row_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaioa.post-subsidy", "delete", required_permissions=["kuaioa:post-subsidy:delete"]
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaioa:post-subsidy:delete")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
