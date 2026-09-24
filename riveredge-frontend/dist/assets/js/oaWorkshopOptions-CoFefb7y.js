@@ -1,0 +1,1 @@
+import{l as r}from"./employees-DudcLr_f.js";async function l(){const a=await r();return Array.from(new Set(a.items.map(o=>String(o.workshop_name??"").trim()).filter(Boolean))).sort((o,e)=>o.localeCompare(e,"zh-CN")).map(o=>({label:o,value:o}))}export{l};
