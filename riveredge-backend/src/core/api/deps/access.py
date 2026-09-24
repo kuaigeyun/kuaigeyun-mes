@@ -115,6 +115,24 @@ async def ensure_permission_codes(
         err = validate_permission_code(code)
         if err:
             raise ValueError(f"无效权限码：{err}")
+
+    # 开放 API：用 Token 内 grants 校验，不走角色 RBAC
+    open_grants = getattr(request.state, "open_api_grants", None)
+    if open_grants is not None or bool(getattr(request.state, "open_api_app_id", None)):
+        from core.services.open_api.open_api_auth_service import OpenApiAuthService
+
+        grants = list(open_grants or [])
+        if not OpenApiAuthService.grants_allow(grants, codes, require_all=require_all):
+            _make_error(
+                http_status=status.HTTP_403_FORBIDDEN,
+                code="OPEN_API_GRANT_DENIED",
+                message="开放 API 未授权该模块操作",
+                request_id=auth.request_id,
+                reason="open_api_grant_missing",
+                required=codes,
+            )
+        return
+
     parsed = parse_permission_code(codes[0]) if codes else None
     resource = f"{parsed[0]}:{parsed[1]}" if parsed else ""
     action = parsed[2] if parsed else ""
@@ -297,32 +315,14 @@ def require_module_access(
                 required = list(collection_create_permissions)
             else:
                 required = [AccessControlService.build_permission_code(resource, action)]
-        env = {
-            "method": request.method,
-            "path": request.url.path,
-            "client_ip": request.client.host if request.client else None,
-        }
-        decision = await AccessControlService.check_access(
-            user_id=auth.user_id,
-            tenant_id=tenant_id,
-            resource=resource,
-            action=action,
-            is_infra_admin=auth.is_infra_admin,
-            is_tenant_admin=auth.is_tenant_admin,
-            check_abac=check_abac,
+        await ensure_permission_codes(
+            auth,
+            tenant_id,
+            request,
+            required,
             require_all=False,
-            required_permissions=required,
-            env=env,
+            check_abac=check_abac,
         )
-        if not decision.allowed:
-            _make_error(
-                http_status=status.HTTP_403_FORBIDDEN,
-                code="ACCESS_DENIED",
-                message="权限不足",
-                request_id=auth.request_id,
-                reason=decision.reason,
-                required=decision.required,
-            )
         auth.tenant_id = tenant_id
         return auth
 

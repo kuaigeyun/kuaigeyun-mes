@@ -103,6 +103,7 @@ class DynamicDatabaseConfigService:
             "core.models.client_product",
             "core.models.client_release",
             "core.models.integration_config",
+            "core.models.open_api_account",  # 开放 API 账套/应用/授权
             "core.models.file",
             "core.models.file_preview_markup",
             "core.models.resource_category",

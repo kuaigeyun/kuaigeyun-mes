@@ -78,6 +78,10 @@ API_IDEMPOTENCY_SOFT_TTL_SECONDS=2.5
 # —— integration 渠道 IP 白名单（空=不限制）——
 # 多个 IP 用英文逗号分隔
 INTEGRATION_CLIENT_IP_ALLOWLIST=
+
+# —— 开放 API（金蝶式账套鉴权，默认 true）——
+OPEN_API_INTEGRATION_CREDENTIAL_REQUIRED=true
+OPEN_API_TOKEN_EXPIRE_MINUTES=120
 ```
 
 **应急关闭整站写防护（不推荐，仅排障）**：
@@ -86,6 +90,7 @@ INTEGRATION_CLIENT_IP_ALLOWLIST=
 CLIENT_CHANNEL_WRITE_GUARD_ENABLED=false
 API_WRITE_RATE_LIMIT_ENABLED=false
 API_IDEMPOTENCY_GUARD_ENABLED=false
+OPEN_API_INTEGRATION_CREDENTIAL_REQUIRED=false
 ```
 
 改完 `.env` 后再次重启后端。
@@ -102,7 +107,7 @@ API_IDEMPOTENCY_GUARD_ENABLED=false
 |---------|--------|------|
 | 新的官方端渠道码（如新 App） | 代码：`src/core/utils/client_channel.py` → `CLIENT_CHANNEL_DEVICE_LABELS` | 例如增加 `"pad": "平板端"`，前后端都要发这个码 |
 | 渠道别名 | 同文件 `normalize_client_channel` 的 `aliases` | 如 `"tablet": "pad"` |
-| 正式对接脚本 | **不改代码**：请求头带 `X-Client-Channel: integration` | 或别名 `api` / `sync` / `connector` |
+| 正式对接脚本 | 系统「开放 API」发账套+应用秘钥换票，且请求头 `X-Client-Channel: integration` | 普通用户 JWT 在 integration 渠道会被 403 |
 | 对接机器 IP 限制 | `.env` → `INTEGRATION_CLIENT_IP_ALLOWLIST` | 仅当渠道为 `integration` 时校验；空=不限 IP |
 
 **前端已自动带渠道，一般不用你配：**
@@ -110,15 +115,47 @@ API_IDEMPOTENCY_GUARD_ENABLED=false
 - PC：`riveredge-frontend/src/utils/clientChannel.ts`（可用环境变量 `VITE_CLIENT_CHANNEL`，默认 pc；工位可设 `station`）
 - 移动：`kuaigeyun-client/.../platform/clientChannel.ts`（android/ios/mobile_h5/miniprogram）
 
-**对接方（Postman / Python / 中间件）示例：**
+### 1.1）开放 API 对接步骤（推荐）
+
+1. 打开 **基础设施 → 开放 API**（`/infra/open-api`），选择/确认组织上下文后查看账套 ID，新建应用并**按单据模块 + 动作勾选授权**（目录覆盖销售/采购/仓存/生产/质检/委外/计划交付/售后物流/主数据等；如仅 `sales-order:read`＝GET，或再加 `create`＝POST 新建）
+2. 换票：`POST /api/v1/open/auth/token`，body：`{"acct_id","app_id","app_secret"}`（页面「API 使用文档」含 curl / Python 完整示例）
+3. 业务请求携带：`Authorization: Bearer <open_token>`、`X-Client-Channel: integration`、`X-Tenant-ID`；写操作另加 `Idempotency-Key`
+4. 未授权的权限码返回 `403 OPEN_API_GRANT_DENIED`（与 PC 角色 RBAC 独立，只看应用 grants）
+
+可授权单据目录由 `src/core/config/open_api_module_catalog.py` 维护（可用 `_gen_open_api_catalog.py` 按 manifest 重生成）。权限码须与 `apps/*/manifest.json` 一致（主数据为 `master-data:…`，非历史简化写法）。
+
+**权限与 HTTP 对照：**
+
+| 权限动作 | HTTP | 说明 |
+| --- | --- | --- |
+| `*:read` | GET | 列表/详情 |
+| `*:create` | POST（集合路径） | 新建 |
+| `*:update` | PUT / PATCH | 修改 |
+| `*:delete` | DELETE | 删除 |
+| `*:submit` / `audit` / `revoke` / `execute` | POST 子路径 | 业务动作 |
+
+**对接方示例（开放 Token）：**
 
 ```http
 POST /api/v1/apps/kuaizhizao/sales-orders HTTP/1.1
-Authorization: Bearer <token>
+Authorization: Bearer <open_access_token>
 X-Tenant-ID: 1
 X-Client-Channel: integration
 Idempotency-Key: <每次业务操作一个 UUID，重试不变>
 Content-Type: application/json
+```
+
+```bash
+# 换票
+curl -X POST 'https://your-host/api/v1/open/auth/token' \
+  -H 'Content-Type: application/json' \
+  -d '{"acct_id":"<账套ID>","app_id":"<AppId>","app_secret":"<AppSecret>"}'
+
+# 只读列表（需授权 kuaizhizao:sales-order:read）
+curl -X GET 'https://your-host/api/v1/apps/kuaizhizao/sales-orders' \
+  -H 'Authorization: Bearer <access_token>' \
+  -H 'X-Tenant-ID: 1' \
+  -H 'X-Client-Channel: integration'
 ```
 
 **IP 白名单示例（仅 integration）：**
@@ -133,7 +170,7 @@ INTEGRATION_CLIENT_IP_ALLOWLIST=127.0.0.1,10.0.0.8,192.168.1.100
 
 文件：`src/core/utils/interactive_client_guard.py`
 
-- `_EXEMPT_EXACT_PATHS`：精确路径（登录/注册/超管登录/站点 LOGO 激活等）
+- `_EXEMPT_EXACT_PATHS`：精确路径（登录/注册/超管登录/站点 LOGO 激活/`/api/v1/open/auth/token` 等）
 - `_EXEMPT_PREFIXES`：前缀（生物识别、企微登录等）
 
 **若新增「必须匿名可写」的公开 API**，把路径加进上述豁免，否则会被 403。

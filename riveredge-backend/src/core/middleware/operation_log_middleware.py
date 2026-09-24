@@ -88,6 +88,11 @@ class OperationLogMiddleware(BaseHTTPMiddleware):
             channel = request.headers.get("X-Client-Channel") or request.headers.get("x-client-channel") or "-"
             idem = request.headers.get("Idempotency-Key") or request.headers.get("idempotency-key") or ""
             idem_part = f" idem={idem[:36]}" if idem else ""
+            open_app = getattr(getattr(request, "state", None), "open_api_app_id", None) or ""
+            open_acct = getattr(getattr(request, "state", None), "open_api_acct_id", None) or ""
+            open_part = ""
+            if open_app or open_acct:
+                open_part = f" open_app={open_app or '-'} acct={open_acct or '-'}"
             payload = {
                 "tenant_id": tenant_id,
                 "user_id": user_id,
@@ -98,7 +103,9 @@ class OperationLogMiddleware(BaseHTTPMiddleware):
                 "operation_content": (
                     f"{request.method} {request.url.path} - "
                     f"{'成功' if response.status_code < 400 else '失败'} "
-                    f"(状态码: {response.status_code}, channel={channel}{idem_part})"
+                    f"(状态码: {response.status_code}, channel={channel}"
+                    f"{idem_part}"
+                    f"{open_part})"
                 ),
                 "ip_address": ip_address,
                 "user_agent": request.headers.get("User-Agent", ""),

@@ -55,6 +55,14 @@ class InfraSettings(BaseSettings):
         default=True,
         description="是否对 /api 写请求强制要求官方 X-Client-Channel（pc/android/…/integration）",
     )
+    OPEN_API_INTEGRATION_CREDENTIAL_REQUIRED: bool = Field(
+        default=True,
+        description="integration 渠道写请求是否强制要求开放 API Token（拒绝普通用户 JWT）",
+    )
+    OPEN_API_TOKEN_EXPIRE_MINUTES: int = Field(
+        default=120,
+        description="开放 API Token 有效期（分钟）",
+    )
     API_WRITE_RATE_LIMIT_ENABLED: bool = Field(
         default=True,
         description="是否对 /api 写请求启用进程内按用户限流",

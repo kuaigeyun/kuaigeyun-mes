@@ -42,6 +42,7 @@ _EXEMPT_EXACT_PATHS = frozenset(
         "/api/v1/auth/register/organization",
         "/api/v1/infra/auth/login",
         "/api/v1/infra/station-logo-license/activate",
+        "/api/v1/open/auth/token",
     }
 )
 

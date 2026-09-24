@@ -96,6 +96,7 @@ from core.api.files.public import router as files_public_router
 from core.api.apis.apis import router as apis_router
 from core.api.data_sources.data_sources import router as data_sources_router
 from core.api.application_connections.application_connections import router as application_connections_router
+from core.api.open_api import open_api_auth_router, open_api_admin_router
 from core.api.mobile_jsapi.mobile_jsapi import router as mobile_jsapi_router
 from core.api.connector_definitions.connector_definitions import router as connector_definitions_router
 from core.api.datasets.datasets import router as datasets_router
@@ -560,6 +561,10 @@ app.add_middleware(SensitiveWordMiddleware)
 from core.middleware.client_channel_write_guard_middleware import ClientChannelWriteGuardMiddleware
 app.add_middleware(ClientChannelWriteGuardMiddleware)
 
+# integration 渠道强制开放 API Token（拒绝普通用户 JWT 对接写）
+from core.middleware.open_api_integration_guard_middleware import OpenApiIntegrationGuardMiddleware
+app.add_middleware(OpenApiIntegrationGuardMiddleware)
+
 # 写限流 / 幂等（内存、不读 body；置于渠道门禁之外侧以便拒掉头后仍可计数——实际后注册先执行）
 from core.middleware.api_write_rate_limit_middleware import ApiWriteRateLimitMiddleware
 app.add_middleware(ApiWriteRateLimitMiddleware)
@@ -935,6 +940,8 @@ app.include_router(files_router, prefix="/api/v1/core")
 app.include_router(apis_router, prefix="/api/v1/core")
 app.include_router(data_sources_router, prefix="/api/v1/core")
 app.include_router(application_connections_router, prefix="/api/v1/core")
+app.include_router(open_api_admin_router, prefix="/api/v1/core")
+app.include_router(open_api_auth_router, prefix="/api/v1")
 app.include_router(mobile_jsapi_router, prefix="/api/v1/core")
 app.include_router(connector_definitions_router, prefix="/api/v1/core")
 app.include_router(datasets_router, prefix="/api/v1/core")

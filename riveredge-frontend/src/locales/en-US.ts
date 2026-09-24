@@ -211,6 +211,7 @@ export default {
   'menu.infra.tenantApplicationCenterPermissions': 'Application Center Permissions',
   'menu.infra.packages': 'Package Management',
   'menu.infra.admin': 'Platform Management',
+  'menu.infra.open-api': 'Open API',
   'menu.infra.scripts': 'Script Management',
   'menu.infra.scheduled-tasks': 'Scheduled Tasks',
   'menu.infra.client-releases': 'Client Releases',

@@ -570,6 +570,7 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
       '/infra/scheduled-tasks': ManufacturingIcons.clock,
       '/infra/admin': ManufacturingIcons.shield,
       '/infra/official-api-library': ManufacturingIcons.database,
+      '/infra/open-api': ManufacturingIcons.key,
       '/infra/client-releases': ManufacturingIcons.smartphone,
       '/infra/license-management': ManufacturingIcons.certificate,
     };
@@ -768,6 +769,7 @@ const getMenuConfig = (
       { path: '/infra/scripts', name: t('menu.infra.scripts'), icon: getMenuIcon(t('menu.infra.scripts'), '/infra/scripts') },
       { path: '/infra/scheduled-tasks', name: t('menu.infra.scheduled-tasks'), icon: getMenuIcon(t('menu.infra.scheduled-tasks'), '/infra/scheduled-tasks') },
       { path: '/infra/official-api-library', name: t('menu.infra.official-api-library'), icon: getMenuIcon(t('menu.infra.official-api-library'), '/infra/official-api-library') },
+      { path: '/infra/open-api', name: t('menu.infra.open-api'), icon: getMenuIcon(t('menu.infra.open-api'), '/infra/open-api') },
       { path: '/infra/client-releases', name: t('menu.infra.client-releases'), icon: getMenuIcon(t('menu.infra.client-releases'), '/infra/client-releases') },
       { path: '/infra/license-management', name: t('menu.infra.license-management'), icon: getMenuIcon(t('menu.infra.license-management'), '/infra/license-management') },
       ...(options?.showSensitiveWordBlacklist

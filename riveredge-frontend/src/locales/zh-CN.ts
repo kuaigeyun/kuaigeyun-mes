@@ -224,6 +224,7 @@ export default {
   'menu.infra.packages': '套餐管理',
   'menu.infra.admin': '平台管理',
   'menu.infra.official-api-library': '接口库管理',
+  'menu.infra.open-api': '开放 API',
   'menu.infra.scripts': '脚本管理',
   'menu.infra.scheduled-tasks': '定时任务',
   'menu.infra.client-releases': '客户端发布',

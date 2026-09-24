@@ -228,6 +228,7 @@ TORTOISE_ORM = {
                 "core.models.menu",
                 "core.models.tenant_backend_home",
                 "core.models.integration_config",
+                "core.models.open_api_account",  # 开放 API 账套/应用/授权
                 "core.models.file",
                 "core.models.file_preview_markup",
                 "core.models.resource_category",

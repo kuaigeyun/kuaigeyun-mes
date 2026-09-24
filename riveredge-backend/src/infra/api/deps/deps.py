@@ -123,8 +123,53 @@ async def get_current_user(
         
         return virtual_user
 
-    # 验证普通用户 Token
+    # 开放 API Token（账套+应用换票）
+    from core.services.open_api.open_api_auth_service import (
+        is_open_api_payload,
+        virtual_user_id_for_app,
+    )
+
     payload = get_token_payload(token)
+    if payload and is_open_api_payload(payload):
+        tid = payload.get("tenant_id")
+        if tid is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="开放 API Token 缺少租户",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        app_pk = int(payload.get("app_pk") or 0)
+        virtual_uid = virtual_user_id_for_app(app_pk) if app_pk else int(payload.get("sub") or 0)
+        virtual_user = User()
+        setattr(virtual_user, "id", virtual_uid)
+        setattr(virtual_user, "username", str(payload.get("username") or f"open_api:{payload.get('app_id')}"))
+        setattr(virtual_user, "email", None)
+        setattr(virtual_user, "is_active", True)
+        setattr(virtual_user, "tenant_id", int(tid))
+        setattr(virtual_user, "is_infra_admin", False)
+        setattr(virtual_user, "is_tenant_admin", False)
+        setattr(virtual_user, "password_hash", "")
+        setattr(virtual_user, "full_name", f"OpenAPI {payload.get('app_id')}")
+        setattr(virtual_user, "_is_open_api", True)
+        setattr(virtual_user, "_open_api_app_id", payload.get("app_id"))
+        setattr(virtual_user, "_open_api_acct_id", payload.get("acct_id"))
+        setattr(virtual_user, "_open_api_grants", list(payload.get("grants") or []))
+
+        try:
+            request.state.user_id = virtual_uid
+            request.state.tenant_id = int(tid)
+            request.state.jwt_payload = payload
+            request.state.open_api_grants = list(payload.get("grants") or [])
+            request.state.open_api_app_id = payload.get("app_id")
+            request.state.open_api_acct_id = payload.get("acct_id")
+            request.state.open_api_app_pk = app_pk
+        except Exception:
+            pass
+
+        set_current_tenant_id(int(tid))
+        return virtual_user
+
+    # 验证普通用户 Token
     if not payload:
         # Token 非法通常意味着过期或被篡改，不打印 token 原文，减少敏感数据泄漏 & 噪声
         logger.debug("普通用户 Token 验证失败（过期或非法）")

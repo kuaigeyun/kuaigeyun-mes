@@ -212,6 +212,8 @@ export default {
   'menu.infra.tenantApplicationCenterPermissions': '應用中心權限',
   'menu.infra.packages': '套餐管理',
   'menu.infra.admin': '平臺管理',
+  'menu.infra.official-api-library': '介面庫管理',
+  'menu.infra.open-api': '開放 API',
   'menu.infra.scripts': '指令碼管理',
   'menu.infra.scheduled-tasks': '定時任務',
   'menu.infra.client-releases': '客戶端釋出',

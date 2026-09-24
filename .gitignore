@@ -58,6 +58,7 @@ riveredge-backend/backups/
 # ===== IDE / Agent 本地产物 =====
 .agent/
 .agent-teams/
+.agent-audit/
 .argo/
 .cursor/
 .trae/
