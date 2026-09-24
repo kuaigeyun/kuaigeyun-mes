@@ -44,6 +44,14 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'data-backup-queue-redelivery-guard-r01',
+    date: '2026-09-24',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.data-backup-queue-redelivery-guard-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.data-backup-queue-redelivery-guard-r01.description',
+  },
+  {
     id: 'data-backup-stream-csv-oom-r01',
     date: '2026-09-24',
     type: 'fix',

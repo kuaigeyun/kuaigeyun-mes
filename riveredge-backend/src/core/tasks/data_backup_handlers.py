@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 import shutil
 import zipfile
+from datetime import timedelta
 from typing import Optional
 
 from loguru import logger
@@ -37,6 +38,48 @@ from core.services.system.data_backup_jobs import (
 )
 from core.tasks.dispatcher import TaskContext, TaskStep, register_event_handler
 from core.utils.timezone_utils import resolve_business_datetime
+
+# 全站同时只允许一个备份任务跑，避免多任务并发打爆内存（专用连接持锁，不用连接池）
+_BACKUP_ADVISORY_LOCK_KEY = 824_601_001
+_BACKUP_STALE_AFTER = timedelta(hours=12)
+
+
+async def _try_acquire_backup_lock():
+    """
+    用独立 asyncpg 连接获取 session 级 advisory lock。
+    成功返回连接（须在 finally 中 unlock+close）；失败返回 None。
+    """
+    from core.services.system.data_backup_jobs import _asyncpg_connect
+
+    conn = await _asyncpg_connect()
+    try:
+        locked = await conn.fetchval(
+            "SELECT pg_try_advisory_lock($1)",
+            _BACKUP_ADVISORY_LOCK_KEY,
+        )
+        if not locked:
+            await conn.close()
+            return None
+        return conn
+    except Exception:
+        await conn.close()
+        raise
+
+
+async def _release_backup_lock(lock_conn) -> None:
+    if lock_conn is None:
+        return
+    try:
+        await lock_conn.execute(
+            "SELECT pg_advisory_unlock($1)",
+            _BACKUP_ADVISORY_LOCK_KEY,
+        )
+    except Exception as e:
+        logger.warning("释放备份 advisory lock 失败: {}", e)
+    try:
+        await lock_conn.close()
+    except Exception as e:
+        logger.warning("关闭备份 lock 连接失败: {}", e)
 
 
 async def _mark_restore_status(
@@ -78,6 +121,7 @@ async def handle_database_backup_requested(ctx: TaskContext, step: TaskStep) -> 
     backup_dir = resolve_data_backup_dir()
     temp_dir = os.path.join(backup_dir, f"temp_{backup_uuid}")
     backup = None
+    lock_conn = None
 
     try:
         backup = await DataBackup.get(uuid=backup_uuid)
@@ -92,6 +136,47 @@ async def handle_database_backup_requested(ctx: TaskContext, step: TaskStep) -> 
     if include_files is None:
         include_files = backup.include_files
 
+    # 终态任务禁止被 PG 队列僵尸消息再次拉起（OOM 重启死循环根因）
+    if backup.status in ("success", "failed"):
+        logger.warning(
+            "跳过已终态备份任务 uuid={} status={} name={}",
+            backup_uuid,
+            backup.status,
+            backup.name,
+        )
+        return
+
+    now = resolve_business_datetime()
+    created_at = backup.created_at
+    if created_at is not None:
+        age = now - created_at if created_at.tzinfo else now.replace(tzinfo=None) - created_at
+        if age > _BACKUP_STALE_AFTER:
+            backup.status = "failed"
+            backup.error_message = (
+                f"过期备份任务已自动取消（创建已超过 {_BACKUP_STALE_AFTER.total_seconds() / 3600:.0f} 小时，"
+                "避免队列重投导致机器 OOM）"
+            )
+            backup.progress_message = "已取消：任务过期"
+            backup.completed_at = now
+            await backup.save()
+            logger.warning(
+                "取消过期备份任务 uuid={} age_hours={:.1f} name={}",
+                backup_uuid,
+                age.total_seconds() / 3600,
+                backup.name,
+            )
+            return
+
+    lock_conn = await _try_acquire_backup_lock()
+    if lock_conn is None:
+        backup.status = "failed"
+        backup.error_message = "已有备份任务在执行，拒绝并发（防止内存打爆）"
+        backup.progress_message = "已取消：并发冲突"
+        backup.completed_at = now
+        await backup.save()
+        logger.warning("拒绝并发备份 uuid={} name={}", backup_uuid, backup.name)
+        return
+
     try:
         backup.status = "running"
         backup.progress = 0
@@ -102,6 +187,8 @@ async def handle_database_backup_requested(ctx: TaskContext, step: TaskStep) -> 
         await backup.save()
     except Exception as e:
         logger.exception(f"备份任务进入 running 状态失败: {e}")
+        await _release_backup_lock(lock_conn)
+        lock_conn = None
         return
 
     progress = BackupProgressReporter(str(backup_uuid))
@@ -142,6 +229,8 @@ async def handle_database_backup_requested(ctx: TaskContext, step: TaskStep) -> 
             except Exception as save_e:
                 logger.error(f"写入备份失败状态异常: {save_e}")
     finally:
+        await _release_backup_lock(lock_conn)
+        lock_conn = None
         if os.path.exists(temp_dir):
             shutil.rmtree(temp_dir, ignore_errors=True)
 

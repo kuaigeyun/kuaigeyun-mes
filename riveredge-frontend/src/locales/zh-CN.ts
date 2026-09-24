@@ -28471,6 +28471,10 @@ export default {
     '标准成本库二次编辑可正常保存',
   'pages.dashboard.updateLog.entries.standard-cost-edit-save-r01.description':
     '编辑已有标准成本点保存不再因回传审核相位等响应字段导致服务器内部错误；表单提交统一剥离列表回显元数据。',
+  'pages.dashboard.updateLog.entries.data-backup-queue-redelivery-guard-r01.title':
+    '备份队列重投防护：过期与并发任务不再打爆机器',
+  'pages.dashboard.updateLog.entries.data-backup-queue-redelivery-guard-r01.description':
+    '后台任务队列在进程崩溃后会重投未完成的备份；现跳过已失败/成功与超过 12 小时的僵尸任务，并限制全站同时只跑一个备份，避免重启后多任务并发导致内存耗尽反复宕机。',
   'pages.dashboard.updateLog.entries.data-backup-stream-csv-oom-r01.title':
     '数据备份改为流式导出避免内存暴涨',
   'pages.dashboard.updateLog.entries.data-backup-stream-csv-oom-r01.description':
