@@ -1264,13 +1264,121 @@ function Ensure-VectorExtensionCreated {
     Write-LogOk '已在应用库创建 vector 扩展'
 }
 
+function Test-IndRelayTablesReady {
+    $host_ = Read-EnvValue 'DB_HOST'; if (-not $host_) { $host_ = 'localhost' }
+    $port = Read-EnvValue 'DB_PORT'; if (-not $port) { $port = '5432' }
+    $user = Read-EnvValue 'DB_USER'; if (-not $user) { $user = 'postgres' }
+    $pass = Read-EnvValue 'DB_PASSWORD'
+    $dbname = Read-EnvValue 'DB_NAME'; if (-not $dbname) { $dbname = 'riveredge' }
+    $sql = @"
+SELECT CASE
+  WHEN to_regclass('public.apps_ind_relay_line_capacities') IS NOT NULL
+   AND to_regclass('public.apps_ind_relay_changeover_matrix') IS NOT NULL
+  THEN 1 ELSE 0 END
+"@
+    $env:PGPASSWORD = $pass
+    try {
+        $out = & psql -h $host_ -p $port -U $user -d $dbname -tAc $sql 2>$null
+        return (($out | Out-String).Trim() -eq '1')
+    } catch {
+        return $false
+    } finally {
+        Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue
+    }
+}
+
+function Ensure-IndRelayTables804 {
+    $mig = Join-Path $script:BackendDir 'migrations\models\804_20260925093000_ind_relay_tables.py'
+    if (-not (Test-Path $mig)) { return }
+    if (Test-IndRelayTablesReady) {
+        Write-LogOk 'ind_relay 表已就绪（迁移 804）'
+        return
+    }
+    Write-LogInfo '补建 ind_relay 表（迁移 804 兜底，aerich 后仍缺表）...'
+    $host_ = Read-EnvValue 'DB_HOST'; if (-not $host_) { $host_ = 'localhost' }
+    $port = Read-EnvValue 'DB_PORT'; if (-not $port) { $port = '5432' }
+    $user = Read-EnvValue 'DB_USER'; if (-not $user) { $user = 'postgres' }
+    $pass = Read-EnvValue 'DB_PASSWORD'
+    $dbname = Read-EnvValue 'DB_NAME'; if (-not $dbname) { $dbname = 'riveredge' }
+    $sql = @'
+CREATE TABLE IF NOT EXISTS "apps_ind_relay_line_capacities" (
+    "id" SERIAL PRIMARY KEY,
+    "uuid" VARCHAR(36) NOT NULL,
+    "tenant_id" INT NOT NULL,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "created_by" INT,
+    "created_by_name" VARCHAR(100),
+    "updated_by" INT,
+    "updated_by_name" VARCHAR(100),
+    "production_line_id" INT NOT NULL,
+    "production_line_code" VARCHAR(50),
+    "production_line_name" VARCHAR(200),
+    "takt_seconds" NUMERIC(12,2) NOT NULL DEFAULT 0,
+    "daily_capacity_qty" NUMERIC(14,2) NOT NULL DEFAULT 0,
+    "changeover_minutes_default" NUMERIC(10,2) NOT NULL DEFAULT 0,
+    "is_active" BOOL NOT NULL DEFAULT TRUE,
+    "remarks" TEXT,
+    "deleted_at" TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS "idx_ind_relay_line_cap_tenant"
+    ON "apps_ind_relay_line_capacities" ("tenant_id");
+CREATE INDEX IF NOT EXISTS "idx_ind_relay_line_cap_line"
+    ON "apps_ind_relay_line_capacities" ("production_line_id");
+CREATE INDEX IF NOT EXISTS "idx_ind_relay_line_cap_uuid"
+    ON "apps_ind_relay_line_capacities" ("uuid");
+CREATE UNIQUE INDEX IF NOT EXISTS "uid_ind_relay_line_cap_active"
+    ON "apps_ind_relay_line_capacities" ("tenant_id", "production_line_id")
+    WHERE "deleted_at" IS NULL;
+COMMENT ON TABLE "apps_ind_relay_line_capacities" IS '继电器行业 - 产线节拍产能';
+CREATE TABLE IF NOT EXISTS "apps_ind_relay_changeover_matrix" (
+    "id" SERIAL PRIMARY KEY,
+    "uuid" VARCHAR(36) NOT NULL,
+    "tenant_id" INT NOT NULL,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "created_by" INT,
+    "created_by_name" VARCHAR(100),
+    "updated_by" INT,
+    "updated_by_name" VARCHAR(100),
+    "from_family" VARCHAR(100) NOT NULL,
+    "to_family" VARCHAR(100) NOT NULL,
+    "changeover_minutes" NUMERIC(10,2) NOT NULL DEFAULT 0,
+    "forbid_same_line" BOOL NOT NULL DEFAULT FALSE,
+    "remarks" TEXT,
+    "deleted_at" TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS "idx_ind_relay_chg_tenant"
+    ON "apps_ind_relay_changeover_matrix" ("tenant_id");
+CREATE INDEX IF NOT EXISTS "idx_ind_relay_chg_family"
+    ON "apps_ind_relay_changeover_matrix" ("from_family", "to_family");
+CREATE INDEX IF NOT EXISTS "idx_ind_relay_chg_uuid"
+    ON "apps_ind_relay_changeover_matrix" ("uuid");
+CREATE UNIQUE INDEX IF NOT EXISTS "uid_ind_relay_chg_active"
+    ON "apps_ind_relay_changeover_matrix" ("tenant_id", "from_family", "to_family")
+    WHERE "deleted_at" IS NULL;
+COMMENT ON TABLE "apps_ind_relay_changeover_matrix" IS '继电器行业 - 换型矩阵';
+'@
+    $env:PGPASSWORD = $pass
+    try {
+        & psql -h $host_ -p $port -U $user -d $dbname -v ON_ERROR_STOP=1 -c $sql
+        if ($LASTEXITCODE -ne 0) { throw 'ind_relay 表兜底建表失败（迁移 804）' }
+    } finally {
+        Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue
+    }
+    if (-not (Test-IndRelayTablesReady)) {
+        throw 'ind_relay 表仍未就绪（迁移 804）'
+    }
+    Write-LogOk 'ind_relay 表已补建（迁移 804）'
+}
+
 function Invoke-Migrate {
     Sync-BackendDeps
     Ensure-TimezoneEnv
     Ensure-SensitiveLexiconPack
     Ensure-Pgvector
     Ensure-VectorExtensionCreated
-    Write-LogInfo '执行数据库迁移...'
+    Write-LogInfo '执行数据库迁移（aerich upgrade，含 804 ind_relay）...'
     $uv = Resolve-Uv
     Push-Location $script:BackendDir
     try {
@@ -1280,6 +1388,7 @@ function Invoke-Migrate {
         & $uv run aerich upgrade
         if ($LASTEXITCODE -ne 0) { throw '数据库迁移失败' }
     } finally { Pop-Location }
+    Ensure-IndRelayTables804
     Write-LogOk '迁移完成'
 }
 
