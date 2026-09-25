@@ -1,0 +1,1073 @@
+{
+  "kuaizhizao:service-dispatch:create": {
+    "module_key": "kuaizhizao:service-dispatch",
+    "schema_local": "ServiceDispatchCreate",
+    "import_module": "apps.kuaizhizao.schemas.after_sales_service",
+    "import_name": "ServiceDispatchCreate",
+    "file": "apps/kuaizhizao/api/after_sales/dispatch_orders.py",
+    "path": "/api/v1/apps/kuaizhizao/after-sales/dispatch-orders",
+    "method": "POST"
+  },
+  "kuaizhizao:service-dispatch:update": {
+    "module_key": "kuaizhizao:service-dispatch",
+    "schema_local": "ServiceDispatchUpdate",
+    "import_module": "apps.kuaizhizao.schemas.after_sales_service",
+    "import_name": "ServiceDispatchUpdate",
+    "file": "apps/kuaizhizao/api/after_sales/dispatch_orders.py",
+    "path": "/api/v1/apps/kuaizhizao/after-sales/dispatch-orders/{dispatch_id}",
+    "method": "PUT"
+  },
+  "kuaizhizao:repair-order:create": {
+    "module_key": "kuaizhizao:repair-order",
+    "schema_local": "RepairOrderCreate",
+    "import_module": "apps.kuaizhizao.schemas.after_sales_service",
+    "import_name": "RepairOrderCreate",
+    "file": "apps/kuaizhizao/api/after_sales/repair_orders.py",
+    "path": "/api/v1/apps/kuaizhizao/after-sales/repair-orders",
+    "method": "POST"
+  },
+  "kuaizhizao:repair-order:update": {
+    "module_key": "kuaizhizao:repair-order",
+    "schema_local": "RepairOrderUpdate",
+    "import_module": "apps.kuaizhizao.schemas.after_sales_service",
+    "import_name": "RepairOrderUpdate",
+    "file": "apps/kuaizhizao/api/after_sales/repair_orders.py",
+    "path": "/api/v1/apps/kuaizhizao/after-sales/repair-orders/{order_id}",
+    "method": "PUT"
+  },
+  "kuaizhizao:customer-return-visit:create": {
+    "module_key": "kuaizhizao:customer-return-visit",
+    "schema_local": "CustomerReturnVisitCreate",
+    "import_module": "apps.kuaizhizao.schemas.after_sales_service",
+    "import_name": "CustomerReturnVisitCreate",
+    "file": "apps/kuaizhizao/api/after_sales/return_visits.py",
+    "path": "/api/v1/apps/kuaizhizao/after-sales/return-visits",
+    "method": "POST"
+  },
+  "kuaizhizao:customer-return-visit:update": {
+    "module_key": "kuaizhizao:customer-return-visit",
+    "schema_local": "CustomerReturnVisitUpdate",
+    "import_module": "apps.kuaizhizao.schemas.after_sales_service",
+    "import_name": "CustomerReturnVisitUpdate",
+    "file": "apps/kuaizhizao/api/after_sales/return_visits.py",
+    "path": "/api/v1/apps/kuaizhizao/after-sales/return-visits/{visit_id}",
+    "method": "PUT"
+  },
+  "kuaizhizao:service-settlement:create": {
+    "module_key": "kuaizhizao:service-settlement",
+    "schema_local": "ServiceSettlementCreate",
+    "import_module": "apps.kuaizhizao.schemas.after_sales_service",
+    "import_name": "ServiceSettlementCreate",
+    "file": "apps/kuaizhizao/api/after_sales/service_settlements.py",
+    "path": "/api/v1/apps/kuaizhizao/after-sales/service-settlements",
+    "method": "POST"
+  },
+  "kuaizhizao:service-settlement:update": {
+    "module_key": "kuaizhizao:service-settlement",
+    "schema_local": "ServiceSettlementUpdate",
+    "import_module": "apps.kuaizhizao.schemas.after_sales_service",
+    "import_name": "ServiceSettlementUpdate",
+    "file": "apps/kuaizhizao/api/after_sales/service_settlements.py",
+    "path": "/api/v1/apps/kuaizhizao/after-sales/service-settlements/{settlement_id}",
+    "method": "PUT"
+  },
+  "kuaizhizao:after-sales-spare-part-requisition:create": {
+    "module_key": "kuaizhizao:after-sales-spare-part-requisition",
+    "schema_local": "AfterSalesSparePartRequisitionCreate",
+    "import_module": "apps.kuaizhizao.schemas.after_sales_service",
+    "import_name": "AfterSalesSparePartRequisitionCreate",
+    "file": "apps/kuaizhizao/api/after_sales/spare_part_requisitions.py",
+    "path": "/api/v1/apps/kuaizhizao/after-sales/spare-part-requisitions",
+    "method": "POST"
+  },
+  "kuaizhizao:after-sales-spare-part-requisition:update": {
+    "module_key": "kuaizhizao:after-sales-spare-part-requisition",
+    "schema_local": "AfterSalesSparePartRequisitionUpdate",
+    "import_module": "apps.kuaizhizao.schemas.after_sales_service",
+    "import_name": "AfterSalesSparePartRequisitionUpdate",
+    "file": "apps/kuaizhizao/api/after_sales/spare_part_requisitions.py",
+    "path": "/api/v1/apps/kuaizhizao/after-sales/spare-part-requisitions/{requisition_id}",
+    "method": "PUT"
+  },
+  "kuaizhizao:after-sales-ticket:create": {
+    "module_key": "kuaizhizao:after-sales-ticket",
+    "schema_local": "AfterSalesTicketCreate",
+    "import_module": "apps.kuaizhizao.schemas.after_sales_ticket",
+    "import_name": "AfterSalesTicketCreate",
+    "file": "apps/kuaizhizao/api/after_sales_tickets/after_sales_tickets.py",
+    "path": "/api/v1/apps/kuaizhizao/after-sales-tickets",
+    "method": "POST"
+  },
+  "kuaizhizao:after-sales-ticket:update": {
+    "module_key": "kuaizhizao:after-sales-ticket",
+    "schema_local": "AfterSalesTicketUpdate",
+    "import_module": "apps.kuaizhizao.schemas.after_sales_ticket",
+    "import_name": "AfterSalesTicketUpdate",
+    "file": "apps/kuaizhizao/api/after_sales_tickets/after_sales_tickets.py",
+    "path": "/api/v1/apps/kuaizhizao/after-sales-tickets/{ticket_id}",
+    "method": "PUT"
+  },
+  "kuaizhizao:delivery-issue:create": {
+    "module_key": "kuaizhizao:delivery-issue",
+    "schema_local": "DeliveryIssueCreate",
+    "import_module": "apps.kuaizhizao.schemas.delivery_project",
+    "import_name": "DeliveryIssueCreate",
+    "file": "apps/kuaizhizao/api/delivery_issues/delivery_issues.py",
+    "path": "/api/v1/apps/kuaizhizao/delivery-issues",
+    "method": "POST"
+  },
+  "kuaizhizao:delivery-issue:update": {
+    "module_key": "kuaizhizao:delivery-issue",
+    "schema_local": "DeliveryIssueUpdate",
+    "import_module": "apps.kuaizhizao.schemas.delivery_project",
+    "import_name": "DeliveryIssueUpdate",
+    "file": "apps/kuaizhizao/api/delivery_issues/delivery_issues.py",
+    "path": "/api/v1/apps/kuaizhizao/delivery-issues/{issue_id:int}",
+    "method": "PUT"
+  },
+  "kuaizhizao:delivery-node-report:create": {
+    "module_key": "kuaizhizao:delivery-node-report",
+    "schema_local": "DeliveryNodeReportCreate",
+    "import_module": "apps.kuaizhizao.schemas.delivery_project",
+    "import_name": "DeliveryNodeReportCreate",
+    "file": "apps/kuaizhizao/api/delivery_node_reports/delivery_node_reports.py",
+    "path": "/api/v1/apps/kuaizhizao/delivery-node-reports",
+    "method": "POST"
+  },
+  "kuaizhizao:delivery-node-report:update": {
+    "module_key": "kuaizhizao:delivery-node-report",
+    "schema_local": "DeliveryNodeReportUpdate",
+    "import_module": "apps.kuaizhizao.schemas.delivery_project",
+    "import_name": "DeliveryNodeReportUpdate",
+    "file": "apps/kuaizhizao/api/delivery_node_reports/delivery_node_reports.py",
+    "path": "/api/v1/apps/kuaizhizao/delivery-node-reports/{report_id:int}",
+    "method": "PUT"
+  },
+  "kuaizhizao:delivery-notice:create": {
+    "module_key": "kuaizhizao:delivery-notice",
+    "schema_local": "DeliveryNoticeCreate",
+    "import_module": "apps.kuaizhizao.schemas.delivery_notice",
+    "import_name": "DeliveryNoticeCreate",
+    "file": "apps/kuaizhizao/api/delivery_notices/delivery_notices.py",
+    "path": "/api/v1/apps/kuaizhizao/delivery-notices",
+    "method": "POST"
+  },
+  "kuaizhizao:delivery-notice:update": {
+    "module_key": "kuaizhizao:delivery-notice",
+    "schema_local": "DeliveryNoticeUpdate",
+    "import_module": "apps.kuaizhizao.schemas.delivery_notice",
+    "import_name": "DeliveryNoticeUpdate",
+    "file": "apps/kuaizhizao/api/delivery_notices/delivery_notices.py",
+    "path": "/api/v1/apps/kuaizhizao/delivery-notices/{notice_id}",
+    "method": "PUT"
+  },
+  "kuaizhizao:delivery-process-template:create": {
+    "module_key": "kuaizhizao:delivery-process-template",
+    "schema_local": "DeliveryProcessTemplateCreate",
+    "import_module": "apps.kuaizhizao.schemas.delivery_project",
+    "import_name": "DeliveryProcessTemplateCreate",
+    "file": "apps/kuaizhizao/api/delivery_process_templates/delivery_process_templates.py",
+    "path": "/api/v1/apps/kuaizhizao/delivery-process-templates",
+    "method": "POST"
+  },
+  "kuaizhizao:delivery-process-template:update": {
+    "module_key": "kuaizhizao:delivery-process-template",
+    "schema_local": "DeliveryProcessTemplateUpdate",
+    "import_module": "apps.kuaizhizao.schemas.delivery_project",
+    "import_name": "DeliveryProcessTemplateUpdate",
+    "file": "apps/kuaizhizao/api/delivery_process_templates/delivery_process_templates.py",
+    "path": "/api/v1/apps/kuaizhizao/delivery-process-templates/{template_id:int}",
+    "method": "PUT"
+  },
+  "kuaizhizao:delivery-project:create": {
+    "module_key": "kuaizhizao:delivery-project",
+    "schema_local": "DeliveryProjectCreate",
+    "import_module": "apps.kuaizhizao.schemas.delivery_project",
+    "import_name": "DeliveryProjectCreate",
+    "file": "apps/kuaizhizao/api/delivery_projects/delivery_projects.py",
+    "path": "/api/v1/apps/kuaizhizao/delivery-projects",
+    "method": "POST"
+  },
+  "kuaizhizao:delivery-project:update": {
+    "module_key": "kuaizhizao:delivery-project",
+    "schema_local": "DeliveryProjectUpdate",
+    "import_module": "apps.kuaizhizao.schemas.delivery_project",
+    "import_name": "DeliveryProjectUpdate",
+    "file": "apps/kuaizhizao/api/delivery_projects/delivery_projects.py",
+    "path": "/api/v1/apps/kuaizhizao/delivery-projects/{project_id:int}",
+    "method": "PUT"
+  },
+  "kuaizhizao:plan-management-demand-management:create": {
+    "module_key": "kuaizhizao:plan-management-demand-management",
+    "schema_local": "DemandCreate",
+    "import_module": "apps.kuaizhizao.schemas.demand",
+    "import_name": "DemandCreate",
+    "file": "apps/kuaizhizao/api/demands/demands.py",
+    "path": "/api/v1/apps/kuaizhizao/demands",
+    "method": "POST"
+  },
+  "kuaizhizao:plan-management-demand-management:update": {
+    "module_key": "kuaizhizao:plan-management-demand-management",
+    "schema_local": "DemandUpdate",
+    "import_module": "apps.kuaizhizao.schemas.demand",
+    "import_name": "DemandUpdate",
+    "file": "apps/kuaizhizao/api/demands/demands.py",
+    "path": "/api/v1/apps/kuaizhizao/demands/{demand_id}",
+    "method": "PUT"
+  },
+  "kuaizhizao:after-sales-install:create": {
+    "module_key": "kuaizhizao:after-sales-install",
+    "schema_local": "InstallExecutionCreate",
+    "import_module": "apps.kuaizhizao.schemas.install_execution",
+    "import_name": "InstallExecutionCreate",
+    "file": "apps/kuaizhizao/api/install_executions/install_executions.py",
+    "path": "/api/v1/apps/kuaizhizao/install-executions",
+    "method": "POST"
+  },
+  "kuaizhizao:after-sales-install:update": {
+    "module_key": "kuaizhizao:after-sales-install",
+    "schema_local": "InstallExecutionUpdate",
+    "import_module": "apps.kuaizhizao.schemas.install_execution",
+    "import_name": "InstallExecutionUpdate",
+    "file": "apps/kuaizhizao/api/install_executions/install_executions.py",
+    "path": "/api/v1/apps/kuaizhizao/install-executions/{job_id}",
+    "method": "PUT"
+  },
+  "kuaizhizao:freight-bill:create": {
+    "module_key": "kuaizhizao:freight-bill",
+    "schema_local": "FreightBillCreate",
+    "import_module": "apps.kuaizhizao.schemas.logistics",
+    "import_name": "FreightBillCreate",
+    "file": "apps/kuaizhizao/api/logistics/freight_bills.py",
+    "path": "/api/v1/apps/kuaizhizao/logistics/freight-bills",
+    "method": "POST"
+  },
+  "kuaizhizao:freight-bill:update": {
+    "module_key": "kuaizhizao:freight-bill",
+    "schema_local": "FreightBillUpdate",
+    "import_module": "apps.kuaizhizao.schemas.logistics",
+    "import_name": "FreightBillUpdate",
+    "file": "apps/kuaizhizao/api/logistics/freight_bills.py",
+    "path": "/api/v1/apps/kuaizhizao/logistics/freight-bills/{bill_id}",
+    "method": "PUT"
+  },
+  "kuaizhizao:freight-order:create": {
+    "module_key": "kuaizhizao:freight-order",
+    "schema_local": "FreightOrderCreate",
+    "import_module": "apps.kuaizhizao.schemas.logistics",
+    "import_name": "FreightOrderCreate",
+    "file": "apps/kuaizhizao/api/logistics/freight_orders.py",
+    "path": "/api/v1/apps/kuaizhizao/logistics/freight-orders",
+    "method": "POST"
+  },
+  "kuaizhizao:freight-order:update": {
+    "module_key": "kuaizhizao:freight-order",
+    "schema_local": "FreightOrderUpdate",
+    "import_module": "apps.kuaizhizao.schemas.logistics",
+    "import_name": "FreightOrderUpdate",
+    "file": "apps/kuaizhizao/api/logistics/freight_orders.py",
+    "path": "/api/v1/apps/kuaizhizao/logistics/freight-orders/{order_id}",
+    "method": "PUT"
+  },
+  "kuaizhizao:outsource-receipt:create": {
+    "module_key": "kuaizhizao:outsource-receipt",
+    "schema_local": "OutsourceMaterialReceiptCreate",
+    "import_module": "apps.kuaizhizao.schemas.outsource_work_order",
+    "import_name": "OutsourceMaterialReceiptCreate",
+    "file": "apps/kuaizhizao/api/productions/outsource_receipt_api.py",
+    "path": "/api/v1/apps/kuaizhizao/outsource-material-receipts",
+    "method": "POST"
+  },
+  "kuaizhizao:outsource-settlement:create": {
+    "module_key": "kuaizhizao:outsource-settlement",
+    "schema_local": "OutsourceSettlementCreate",
+    "import_module": "apps.kuaizhizao.schemas.outsource_settlement",
+    "import_name": "OutsourceSettlementCreate",
+    "file": "apps/kuaizhizao/api/productions/outsource_settlement_api.py",
+    "path": "/api/v1/apps/kuaizhizao/outsource-settlements",
+    "method": "POST"
+  },
+  "kuaizhizao:outsource-settlement:update": {
+    "module_key": "kuaizhizao:outsource-settlement",
+    "schema_local": "OutsourceSettlementUpdate",
+    "import_module": "apps.kuaizhizao.schemas.outsource_settlement",
+    "import_name": "OutsourceSettlementUpdate",
+    "file": "apps/kuaizhizao/api/productions/outsource_settlement_api.py",
+    "path": "/api/v1/apps/kuaizhizao/outsource-settlements/{settlement_id}",
+    "method": "PUT"
+  },
+  "kuaizhizao:sales-forecast:create": {
+    "module_key": "kuaizhizao:sales-forecast",
+    "schema_local": "SalesForecastCreate",
+    "import_module": "apps.kuaizhizao.schemas.sales",
+    "import_name": "SalesForecastCreate",
+    "file": "apps/kuaizhizao/api/productions/productions.py",
+    "path": "/api/v1/apps/kuaizhizao/sales-forecasts",
+    "method": "POST"
+  },
+  "kuaizhizao:sales-forecast:update": {
+    "module_key": "kuaizhizao:sales-forecast",
+    "schema_local": "SalesForecastUpdate",
+    "import_module": "apps.kuaizhizao.schemas.sales",
+    "import_name": "SalesForecastUpdate",
+    "file": "apps/kuaizhizao/api/productions/productions.py",
+    "path": "/api/v1/apps/kuaizhizao/sales-forecasts/{forecast_id}",
+    "method": "PUT"
+  },
+  "kuaizhizao:warehouse-management-stocktaking:create": {
+    "module_key": "kuaizhizao:warehouse-management-stocktaking",
+    "schema_local": "StocktakingCreate",
+    "import_module": "apps.kuaizhizao.schemas.stocktaking",
+    "import_name": "StocktakingCreate",
+    "file": "apps/kuaizhizao/api/productions/productions.py",
+    "path": "/api/v1/apps/kuaizhizao/stocktakings",
+    "method": "POST"
+  },
+  "kuaizhizao:warehouse-management-stocktaking:update": {
+    "module_key": "kuaizhizao:warehouse-management-stocktaking",
+    "schema_local": "StocktakingUpdate",
+    "import_module": "apps.kuaizhizao.schemas.stocktaking",
+    "import_name": "StocktakingUpdate",
+    "file": "apps/kuaizhizao/api/productions/productions.py",
+    "path": "/api/v1/apps/kuaizhizao/stocktakings/{stocktaking_id}",
+    "method": "PUT"
+  },
+  "kuaizhizao:warehouse-management-inventory-transfer:create": {
+    "module_key": "kuaizhizao:warehouse-management-inventory-transfer",
+    "schema_local": "InventoryTransferCreateWithItems",
+    "import_module": "apps.kuaizhizao.schemas.inventory_transfer",
+    "import_name": "InventoryTransferCreateWithItems",
+    "file": "apps/kuaizhizao/api/productions/productions.py",
+    "path": "/api/v1/apps/kuaizhizao/inventory-transfers",
+    "method": "POST"
+  },
+  "kuaizhizao:warehouse-management-inventory-transfer:update": {
+    "module_key": "kuaizhizao:warehouse-management-inventory-transfer",
+    "schema_local": "InventoryTransferUpdate",
+    "import_module": "apps.kuaizhizao.schemas.inventory_transfer",
+    "import_name": "InventoryTransferUpdate",
+    "file": "apps/kuaizhizao/api/productions/productions.py",
+    "path": "/api/v1/apps/kuaizhizao/inventory-transfers/{transfer_id}",
+    "method": "PUT"
+  },
+  "kuaizhizao:warehouse-management-assembly-orders:create": {
+    "module_key": "kuaizhizao:warehouse-management-assembly-orders",
+    "schema_local": "AssemblyOrderCreate",
+    "import_module": "apps.kuaizhizao.schemas.assembly_order",
+    "import_name": "AssemblyOrderCreate",
+    "file": "apps/kuaizhizao/api/productions/productions.py",
+    "path": "/api/v1/apps/kuaizhizao/assembly-orders",
+    "method": "POST"
+  },
+  "kuaizhizao:warehouse-management-assembly-orders:update": {
+    "module_key": "kuaizhizao:warehouse-management-assembly-orders",
+    "schema_local": "AssemblyOrderUpdate",
+    "import_module": "apps.kuaizhizao.schemas.assembly_order",
+    "import_name": "AssemblyOrderUpdate",
+    "file": "apps/kuaizhizao/api/productions/productions.py",
+    "path": "/api/v1/apps/kuaizhizao/assembly-orders/{order_id}",
+    "method": "PUT"
+  },
+  "kuaizhizao:warehouse-management-disassembly-orders:create": {
+    "module_key": "kuaizhizao:warehouse-management-disassembly-orders",
+    "schema_local": "DisassemblyOrderCreate",
+    "import_module": "apps.kuaizhizao.schemas.disassembly_order",
+    "import_name": "DisassemblyOrderCreate",
+    "file": "apps/kuaizhizao/api/productions/productions.py",
+    "path": "/api/v1/apps/kuaizhizao/disassembly-orders",
+    "method": "POST"
+  },
+  "kuaizhizao:warehouse-management-disassembly-orders:update": {
+    "module_key": "kuaizhizao:warehouse-management-disassembly-orders",
+    "schema_local": "DisassemblyOrderUpdate",
+    "import_module": "apps.kuaizhizao.schemas.disassembly_order",
+    "import_name": "DisassemblyOrderUpdate",
+    "file": "apps/kuaizhizao/api/productions/productions.py",
+    "path": "/api/v1/apps/kuaizhizao/disassembly-orders/{order_id}",
+    "method": "PUT"
+  },
+  "kuaizhizao:outsource-work-order:create": {
+    "module_key": "kuaizhizao:outsource-work-order",
+    "schema_local": "OutsourceWorkOrderCreate",
+    "import_module": "apps.kuaizhizao.schemas.outsource_work_order",
+    "import_name": "OutsourceWorkOrderCreate",
+    "file": "apps/kuaizhizao/api/productions/productions.py",
+    "path": "/api/v1/apps/kuaizhizao/outsource-work-orders",
+    "method": "POST"
+  },
+  "kuaizhizao:outsource-work-order:update": {
+    "module_key": "kuaizhizao:outsource-work-order",
+    "schema_local": "OutsourceWorkOrderUpdate",
+    "import_module": "apps.kuaizhizao.schemas.outsource_work_order",
+    "import_name": "OutsourceWorkOrderUpdate",
+    "file": "apps/kuaizhizao/api/productions/productions.py",
+    "path": "/api/v1/apps/kuaizhizao/outsource-work-orders/{work_order_id}",
+    "method": "PUT"
+  },
+  "kuaizhizao:outsource-issue:create": {
+    "module_key": "kuaizhizao:outsource-issue",
+    "schema_local": "OutsourceMaterialIssueCreate",
+    "import_module": "apps.kuaizhizao.schemas.outsource_work_order",
+    "import_name": "OutsourceMaterialIssueCreate",
+    "file": "apps/kuaizhizao/api/productions/productions.py",
+    "path": "/api/v1/apps/kuaizhizao/outsource-material-issues",
+    "method": "POST"
+  },
+  "kuaizhizao:outsource-material-return:create": {
+    "module_key": "kuaizhizao:outsource-material-return",
+    "schema_local": "OutsourceMaterialReturnCreate",
+    "import_module": "apps.kuaizhizao.schemas.outsource_work_order",
+    "import_name": "OutsourceMaterialReturnCreate",
+    "file": "apps/kuaizhizao/api/productions/productions.py",
+    "path": "/api/v1/apps/kuaizhizao/outsource-material-returns",
+    "method": "POST"
+  },
+  "kuaizhizao:outsource-product-return:create": {
+    "module_key": "kuaizhizao:outsource-product-return",
+    "schema_local": "OutsourceProductReturnCreate",
+    "import_module": "apps.kuaizhizao.schemas.outsource_work_order",
+    "import_name": "OutsourceProductReturnCreate",
+    "file": "apps/kuaizhizao/api/productions/productions.py",
+    "path": "/api/v1/apps/kuaizhizao/outsource-product-returns",
+    "method": "POST"
+  },
+  "kuaizhizao:quality-management-incoming-inspection:create": {
+    "module_key": "kuaizhizao:quality-management-incoming-inspection",
+    "schema_local": "IncomingInspectionCreate",
+    "import_module": "apps.kuaizhizao.schemas.quality",
+    "import_name": "IncomingInspectionCreate",
+    "file": "apps/kuaizhizao/api/productions/quality_execution.py",
+    "path": "/api/v1/apps/kuaizhizao/incoming-inspections",
+    "method": "POST"
+  },
+  "kuaizhizao:quality-management-process-inspection:create": {
+    "module_key": "kuaizhizao:quality-management-process-inspection",
+    "schema_local": "ProcessInspectionCreate",
+    "import_module": "apps.kuaizhizao.schemas.quality",
+    "import_name": "ProcessInspectionCreate",
+    "file": "apps/kuaizhizao/api/productions/quality_execution.py",
+    "path": "/api/v1/apps/kuaizhizao/process-inspections",
+    "method": "POST"
+  },
+  "kuaizhizao:quality-management-finished-goods-inspection:create": {
+    "module_key": "kuaizhizao:quality-management-finished-goods-inspection",
+    "schema_local": "FinishedGoodsInspectionCreate",
+    "import_module": "apps.kuaizhizao.schemas.quality",
+    "import_name": "FinishedGoodsInspectionCreate",
+    "file": "apps/kuaizhizao/api/productions/quality_execution.py",
+    "path": "/api/v1/apps/kuaizhizao/finished-goods-inspections",
+    "method": "POST"
+  },
+  "kuaizhizao:quality-management-fai-orders:create": {
+    "module_key": "kuaizhizao:quality-management-fai-orders",
+    "schema_local": "FaiOrderCreate",
+    "import_module": "apps.kuaizhizao.schemas.quality_fai",
+    "import_name": "FaiOrderCreate",
+    "file": "apps/kuaizhizao/api/productions/quality_fai.py",
+    "path": "/api/v1/apps/kuaizhizao/fai-orders",
+    "method": "POST"
+  },
+  "kuaizhizao:quality-management-fai-orders:update": {
+    "module_key": "kuaizhizao:quality-management-fai-orders",
+    "schema_local": "FaiOrderUpdate",
+    "import_module": "apps.kuaizhizao.schemas.quality_fai",
+    "import_name": "FaiOrderUpdate",
+    "file": "apps/kuaizhizao/api/productions/quality_fai.py",
+    "path": "/api/v1/apps/kuaizhizao/fai-orders/{order_id}",
+    "method": "PUT"
+  },
+  "kuaizhizao:quality-management-oqc-inspection:create": {
+    "module_key": "kuaizhizao:quality-management-oqc-inspection",
+    "schema_local": "OQCInspectionCreate",
+    "import_module": "apps.kuaizhizao.schemas.quality_improvement",
+    "import_name": "OQCInspectionCreate",
+    "file": "apps/kuaizhizao/api/productions/quality_improvement.py",
+    "path": "/api/v1/apps/kuaizhizao/oqc-inspections",
+    "method": "POST"
+  },
+  "kuaizhizao:production-execution-reporting:create": {
+    "module_key": "kuaizhizao:production-execution-reporting",
+    "schema_local": "ReportingRecordCreate",
+    "import_module": "apps.kuaizhizao.schemas.reporting_record",
+    "import_name": "ReportingRecordCreate",
+    "file": "apps/kuaizhizao/api/productions/reporting.py",
+    "path": "/api/v1/apps/kuaizhizao/reporting",
+    "method": "POST"
+  },
+  "kuaizhizao:other-inbound:create": {
+    "module_key": "kuaizhizao:other-inbound",
+    "schema_local": "OtherInboundCreate",
+    "import_module": "apps.kuaizhizao.schemas.warehouse",
+    "import_name": "OtherInboundCreate",
+    "file": "apps/kuaizhizao/api/productions/warehouse_execution.py",
+    "path": "/api/v1/apps/kuaizhizao/other-inbounds",
+    "method": "POST"
+  },
+  "kuaizhizao:other-inbound:update": {
+    "module_key": "kuaizhizao:other-inbound",
+    "schema_local": "OtherInboundUpdate",
+    "import_module": "apps.kuaizhizao.schemas.warehouse",
+    "import_name": "OtherInboundUpdate",
+    "file": "apps/kuaizhizao/api/productions/warehouse_execution.py",
+    "path": "/api/v1/apps/kuaizhizao/other-inbounds/{inbound_id}",
+    "method": "PUT"
+  },
+  "kuaizhizao:other-outbound:create": {
+    "module_key": "kuaizhizao:other-outbound",
+    "schema_local": "OtherOutboundCreate",
+    "import_module": "apps.kuaizhizao.schemas.warehouse",
+    "import_name": "OtherOutboundCreate",
+    "file": "apps/kuaizhizao/api/productions/warehouse_execution.py",
+    "path": "/api/v1/apps/kuaizhizao/other-outbounds",
+    "method": "POST"
+  },
+  "kuaizhizao:other-outbound:update": {
+    "module_key": "kuaizhizao:other-outbound",
+    "schema_local": "OtherOutboundUpdate",
+    "import_module": "apps.kuaizhizao.schemas.warehouse",
+    "import_name": "OtherOutboundUpdate",
+    "file": "apps/kuaizhizao/api/productions/warehouse_execution.py",
+    "path": "/api/v1/apps/kuaizhizao/other-outbounds/{outbound_id}",
+    "method": "PUT"
+  },
+  "kuaizhizao:material-borrow:create": {
+    "module_key": "kuaizhizao:material-borrow",
+    "schema_local": "MaterialBorrowCreate",
+    "import_module": "apps.kuaizhizao.schemas.warehouse",
+    "import_name": "MaterialBorrowCreate",
+    "file": "apps/kuaizhizao/api/productions/warehouse_execution.py",
+    "path": "/api/v1/apps/kuaizhizao/material-borrows",
+    "method": "POST"
+  },
+  "kuaizhizao:material-borrow:update": {
+    "module_key": "kuaizhizao:material-borrow",
+    "schema_local": "MaterialBorrowUpdate",
+    "import_module": "apps.kuaizhizao.schemas.warehouse",
+    "import_name": "MaterialBorrowUpdate",
+    "file": "apps/kuaizhizao/api/productions/warehouse_execution.py",
+    "path": "/api/v1/apps/kuaizhizao/material-borrows/{borrow_id}",
+    "method": "PUT"
+  },
+  "kuaizhizao:material-return:create": {
+    "module_key": "kuaizhizao:material-return",
+    "schema_local": "MaterialReturnCreate",
+    "import_module": "apps.kuaizhizao.schemas.warehouse",
+    "import_name": "MaterialReturnCreate",
+    "file": "apps/kuaizhizao/api/productions/warehouse_execution.py",
+    "path": "/api/v1/apps/kuaizhizao/material-returns",
+    "method": "POST"
+  },
+  "kuaizhizao:material-return:update": {
+    "module_key": "kuaizhizao:material-return",
+    "schema_local": "MaterialReturnUpdate",
+    "import_module": "apps.kuaizhizao.schemas.warehouse",
+    "import_name": "MaterialReturnUpdate",
+    "file": "apps/kuaizhizao/api/productions/warehouse_execution.py",
+    "path": "/api/v1/apps/kuaizhizao/material-returns/{return_id}",
+    "method": "PUT"
+  },
+  "kuaizhizao:outbound:create": {
+    "module_key": "kuaizhizao:outbound",
+    "schema_local": "SalesDeliveryCreate",
+    "import_module": "apps.kuaizhizao.schemas.warehouse",
+    "import_name": "SalesDeliveryCreate",
+    "file": "apps/kuaizhizao/api/productions/warehouse_execution.py",
+    "path": "/api/v1/apps/kuaizhizao/sales-deliveries",
+    "method": "POST"
+  },
+  "kuaizhizao:outbound:update": {
+    "module_key": "kuaizhizao:outbound",
+    "schema_local": "SalesDeliveryUpdate",
+    "import_module": "apps.kuaizhizao.schemas.warehouse",
+    "import_name": "SalesDeliveryUpdate",
+    "file": "apps/kuaizhizao/api/productions/warehouse_execution.py",
+    "path": "/api/v1/apps/kuaizhizao/sales-deliveries/{delivery_id}",
+    "method": "PUT"
+  },
+  "kuaizhizao:sales-return:create": {
+    "module_key": "kuaizhizao:sales-return",
+    "schema_local": "SalesReturnCreate",
+    "import_module": "apps.kuaizhizao.schemas.warehouse",
+    "import_name": "SalesReturnCreate",
+    "file": "apps/kuaizhizao/api/productions/warehouse_execution.py",
+    "path": "/api/v1/apps/kuaizhizao/sales-returns",
+    "method": "POST"
+  },
+  "kuaizhizao:sales-return:update": {
+    "module_key": "kuaizhizao:sales-return",
+    "schema_local": "SalesReturnUpdate",
+    "import_module": "apps.kuaizhizao.schemas.warehouse",
+    "import_name": "SalesReturnUpdate",
+    "file": "apps/kuaizhizao/api/productions/warehouse_execution.py",
+    "path": "/api/v1/apps/kuaizhizao/sales-returns/{return_id}",
+    "method": "PUT"
+  },
+  "kuaizhizao:inbound:create": {
+    "module_key": "kuaizhizao:inbound",
+    "schema_local": "PurchaseReceiptCreate",
+    "import_module": "apps.kuaizhizao.schemas.warehouse",
+    "import_name": "PurchaseReceiptCreate",
+    "file": "apps/kuaizhizao/api/productions/warehouse_execution.py",
+    "path": "/api/v1/apps/kuaizhizao/purchase-receipts",
+    "method": "POST"
+  },
+  "kuaizhizao:inbound:update": {
+    "module_key": "kuaizhizao:inbound",
+    "schema_local": "PurchaseReceiptUpdate",
+    "import_module": "apps.kuaizhizao.schemas.warehouse",
+    "import_name": "PurchaseReceiptUpdate",
+    "file": "apps/kuaizhizao/api/productions/warehouse_execution.py",
+    "path": "/api/v1/apps/kuaizhizao/purchase-receipts/{receipt_id}",
+    "method": "PUT"
+  },
+  "kuaizhizao:purchase-return:create": {
+    "module_key": "kuaizhizao:purchase-return",
+    "schema_local": "PurchaseReturnCreate",
+    "import_module": "apps.kuaizhizao.schemas.warehouse",
+    "import_name": "PurchaseReturnCreate",
+    "file": "apps/kuaizhizao/api/productions/warehouse_execution.py",
+    "path": "/api/v1/apps/kuaizhizao/purchase-returns",
+    "method": "POST"
+  },
+  "kuaizhizao:purchase-return:update": {
+    "module_key": "kuaizhizao:purchase-return",
+    "schema_local": "PurchaseReturnUpdate",
+    "import_module": "apps.kuaizhizao.schemas.warehouse",
+    "import_name": "PurchaseReturnUpdate",
+    "file": "apps/kuaizhizao/api/productions/warehouse_execution.py",
+    "path": "/api/v1/apps/kuaizhizao/purchase-returns/{return_id}",
+    "method": "PUT"
+  },
+  "kuaizhizao:work-order:create": {
+    "module_key": "kuaizhizao:work-order",
+    "schema_local": "WorkOrderCreate",
+    "import_module": "apps.kuaizhizao.schemas.work_order",
+    "import_name": "WorkOrderCreate",
+    "file": "apps/kuaizhizao/api/productions/work_orders.py",
+    "path": "/api/v1/apps/kuaizhizao/work-orders",
+    "method": "POST"
+  },
+  "master-data:process:operation:update": {
+    "module_key": "master-data:process:operation",
+    "schema_local": "WorkOrderOperationsUpdateRequest",
+    "import_module": "apps.kuaizhizao.schemas.work_order",
+    "import_name": "WorkOrderOperationsUpdateRequest",
+    "file": "apps/kuaizhizao/api/productions/work_orders.py",
+    "path": "/api/v1/apps/kuaizhizao/work-orders/{work_order_id}/operations",
+    "method": "PUT"
+  },
+  "kuaizhizao:work-order:update": {
+    "module_key": "kuaizhizao:work-order",
+    "schema_local": "WorkOrderUpdate",
+    "import_module": "apps.kuaizhizao.schemas.work_order",
+    "import_name": "WorkOrderUpdate",
+    "file": "apps/kuaizhizao/api/productions/work_orders.py",
+    "path": "/api/v1/apps/kuaizhizao/work-orders/{work_order_id:int}",
+    "method": "PUT"
+  },
+  "kuaizhizao:rework-order:create": {
+    "module_key": "kuaizhizao:rework-order",
+    "schema_local": "ReworkOrderCreate",
+    "import_module": "apps.kuaizhizao.schemas.rework_order",
+    "import_name": "ReworkOrderCreate",
+    "file": "apps/kuaizhizao/api/productions/work_orders.py",
+    "path": "/api/v1/apps/kuaizhizao/rework-orders",
+    "method": "POST"
+  },
+  "kuaizhizao:rework-order:update": {
+    "module_key": "kuaizhizao:rework-order",
+    "schema_local": "ReworkOrderUpdate",
+    "import_module": "apps.kuaizhizao.schemas.rework_order",
+    "import_name": "ReworkOrderUpdate",
+    "file": "apps/kuaizhizao/api/productions/work_orders.py",
+    "path": "/api/v1/apps/kuaizhizao/rework-orders/{rework_order_id}",
+    "method": "PUT"
+  },
+  "kuaizhizao:outsource-order:create": {
+    "module_key": "kuaizhizao:outsource-order",
+    "schema_local": "OutsourceOrderCreate",
+    "import_module": "apps.kuaizhizao.schemas.outsource_order",
+    "import_name": "OutsourceOrderCreate",
+    "file": "apps/kuaizhizao/api/productions/work_orders.py",
+    "path": "/api/v1/apps/kuaizhizao/outsource-orders",
+    "method": "POST"
+  },
+  "kuaizhizao:outsource-order:update": {
+    "module_key": "kuaizhizao:outsource-order",
+    "schema_local": "OutsourceOrderUpdate",
+    "import_module": "apps.kuaizhizao.schemas.outsource_order",
+    "import_name": "OutsourceOrderUpdate",
+    "file": "apps/kuaizhizao/api/productions/work_orders.py",
+    "path": "/api/v1/apps/kuaizhizao/outsource-orders/{outsource_order_id}",
+    "method": "PUT"
+  },
+  "kuaizhizao:purchase-order:create": {
+    "module_key": "kuaizhizao:purchase-order",
+    "schema_local": "PurchaseOrderCreate",
+    "import_module": "apps.kuaizhizao.schemas.purchase",
+    "import_name": "PurchaseOrderCreate",
+    "file": "apps/kuaizhizao/api/purchases/purchases.py",
+    "path": "/api/v1/apps/kuaizhizao/purchase-orders",
+    "method": "POST"
+  },
+  "kuaizhizao:purchase-order:update": {
+    "module_key": "kuaizhizao:purchase-order",
+    "schema_local": "PurchaseOrderUpdate",
+    "import_module": "apps.kuaizhizao.schemas.purchase",
+    "import_name": "PurchaseOrderUpdate",
+    "file": "apps/kuaizhizao/api/purchases/purchases.py",
+    "path": "/api/v1/apps/kuaizhizao/purchase-orders/{order_id}",
+    "method": "PUT"
+  },
+  "kuaizhizao:purchase-inquiry:create": {
+    "module_key": "kuaizhizao:purchase-inquiry",
+    "schema_local": "PurchaseInquiryCreate",
+    "import_module": "apps.kuaizhizao.schemas.purchase_inquiry",
+    "import_name": "PurchaseInquiryCreate",
+    "file": "apps/kuaizhizao/api/purchase_inquiries/purchase_inquiries.py",
+    "path": "/api/v1/apps/kuaizhizao/purchase-inquiries",
+    "method": "POST"
+  },
+  "kuaizhizao:purchase-inquiry:update": {
+    "module_key": "kuaizhizao:purchase-inquiry",
+    "schema_local": "PurchaseInquiryUpdate",
+    "import_module": "apps.kuaizhizao.schemas.purchase_inquiry",
+    "import_name": "PurchaseInquiryUpdate",
+    "file": "apps/kuaizhizao/api/purchase_inquiries/purchase_inquiries.py",
+    "path": "/api/v1/apps/kuaizhizao/purchase-inquiries/{inquiry_id}",
+    "method": "PUT"
+  },
+  "kuaizhizao:purchase-order-change:create": {
+    "module_key": "kuaizhizao:purchase-order-change",
+    "schema_local": "PurchaseOrderChangeCreate",
+    "import_module": "apps.kuaizhizao.schemas.order_change",
+    "import_name": "PurchaseOrderChangeCreate",
+    "file": "apps/kuaizhizao/api/purchase_order_changes/purchase_order_changes.py",
+    "path": "/api/v1/apps/kuaizhizao/purchase-order-change-orders",
+    "method": "POST"
+  },
+  "kuaizhizao:purchase-order-change:update": {
+    "module_key": "kuaizhizao:purchase-order-change",
+    "schema_local": "PurchaseOrderChangeUpdate",
+    "import_module": "apps.kuaizhizao.schemas.order_change",
+    "import_name": "PurchaseOrderChangeUpdate",
+    "file": "apps/kuaizhizao/api/purchase_order_changes/purchase_order_changes.py",
+    "path": "/api/v1/apps/kuaizhizao/purchase-order-change-orders/{change_id}",
+    "method": "PUT"
+  },
+  "kuaizhizao:purchase-requisition:create": {
+    "module_key": "kuaizhizao:purchase-requisition",
+    "schema_local": "PurchaseRequisitionCreate",
+    "import_module": "apps.kuaizhizao.schemas.purchase_requisition",
+    "import_name": "PurchaseRequisitionCreate",
+    "file": "apps/kuaizhizao/api/purchase_requisitions/purchase_requisitions.py",
+    "path": "/api/v1/apps/kuaizhizao/purchase-requisitions",
+    "method": "POST"
+  },
+  "kuaizhizao:purchase-requisition:update": {
+    "module_key": "kuaizhizao:purchase-requisition",
+    "schema_local": "PurchaseRequisitionUpdate",
+    "import_module": "apps.kuaizhizao.schemas.purchase_requisition",
+    "import_name": "PurchaseRequisitionUpdate",
+    "file": "apps/kuaizhizao/api/purchase_requisitions/purchase_requisitions.py",
+    "path": "/api/v1/apps/kuaizhizao/purchase-requisitions/{requisition_id}",
+    "method": "PUT"
+  },
+  "kuaizhizao:quotation:create": {
+    "module_key": "kuaizhizao:quotation",
+    "schema_local": "QuotationCreate",
+    "import_module": "apps.kuaizhizao.schemas.quotation",
+    "import_name": "QuotationCreate",
+    "file": "apps/kuaizhizao/api/quotations/quotations.py",
+    "path": "/api/v1/apps/kuaizhizao/quotations",
+    "method": "POST"
+  },
+  "kuaizhizao:quotation:update": {
+    "module_key": "kuaizhizao:quotation",
+    "schema_local": "QuotationUpdate",
+    "import_module": "apps.kuaizhizao.schemas.quotation",
+    "import_name": "QuotationUpdate",
+    "file": "apps/kuaizhizao/api/quotations/quotations.py",
+    "path": "/api/v1/apps/kuaizhizao/quotations/{quotation_id}",
+    "method": "PUT"
+  },
+  "kuaizhizao:receipt-notice:create": {
+    "module_key": "kuaizhizao:receipt-notice",
+    "schema_local": "ReceiptNoticeCreate",
+    "import_module": "apps.kuaizhizao.schemas.receipt_notice",
+    "import_name": "ReceiptNoticeCreate",
+    "file": "apps/kuaizhizao/api/receipt_notices/receipt_notices.py",
+    "path": "/api/v1/apps/kuaizhizao/receipt-notices",
+    "method": "POST"
+  },
+  "kuaizhizao:receipt-notice:update": {
+    "module_key": "kuaizhizao:receipt-notice",
+    "schema_local": "ReceiptNoticeUpdate",
+    "import_module": "apps.kuaizhizao.schemas.receipt_notice",
+    "import_name": "ReceiptNoticeUpdate",
+    "file": "apps/kuaizhizao/api/receipt_notices/receipt_notices.py",
+    "path": "/api/v1/apps/kuaizhizao/receipt-notices/{notice_id}",
+    "method": "PUT"
+  },
+  "kuaizhizao:sales-contract:create": {
+    "module_key": "kuaizhizao:sales-contract",
+    "schema_local": "SalesContractCreate",
+    "import_module": "apps.kuaizhizao.schemas.sales_contract",
+    "import_name": "SalesContractCreate",
+    "file": "apps/kuaizhizao/api/sales_contracts/sales_contracts.py",
+    "path": "/api/v1/apps/kuaizhizao/sales-contracts",
+    "method": "POST"
+  },
+  "kuaizhizao:sales-contract:update": {
+    "module_key": "kuaizhizao:sales-contract",
+    "schema_local": "SalesContractUpdate",
+    "import_module": "apps.kuaizhizao.schemas.sales_contract",
+    "import_name": "SalesContractUpdate",
+    "file": "apps/kuaizhizao/api/sales_contracts/sales_contracts.py",
+    "path": "/api/v1/apps/kuaizhizao/sales-contracts/{contract_id}",
+    "method": "PUT"
+  },
+  "kuaizhizao:sales-order:create": {
+    "module_key": "kuaizhizao:sales-order",
+    "schema_local": "SalesOrderCreate",
+    "import_module": "apps.kuaizhizao.schemas.sales_order",
+    "import_name": "SalesOrderCreate",
+    "file": "apps/kuaizhizao/api/sales_orders/sales_orders.py",
+    "path": "/api/v1/apps/kuaizhizao/sales-orders",
+    "method": "POST"
+  },
+  "kuaizhizao:sales-order:update": {
+    "module_key": "kuaizhizao:sales-order",
+    "schema_local": "SalesOrderUpdate",
+    "import_module": "apps.kuaizhizao.schemas.sales_order",
+    "import_name": "SalesOrderUpdate",
+    "file": "apps/kuaizhizao/api/sales_orders/sales_orders.py",
+    "path": "/api/v1/apps/kuaizhizao/sales-orders/{sales_order_id}",
+    "method": "PUT"
+  },
+  "kuaizhizao:sales-order-change:create": {
+    "module_key": "kuaizhizao:sales-order-change",
+    "schema_local": "SalesOrderChangeCreate",
+    "import_module": "apps.kuaizhizao.schemas.order_change",
+    "import_name": "SalesOrderChangeCreate",
+    "file": "apps/kuaizhizao/api/sales_order_changes/sales_order_changes.py",
+    "path": "/api/v1/apps/kuaizhizao/sales-order-change-orders",
+    "method": "POST"
+  },
+  "kuaizhizao:sales-order-change:update": {
+    "module_key": "kuaizhizao:sales-order-change",
+    "schema_local": "SalesOrderChangeUpdate",
+    "import_module": "apps.kuaizhizao.schemas.order_change",
+    "import_name": "SalesOrderChangeUpdate",
+    "file": "apps/kuaizhizao/api/sales_order_changes/sales_order_changes.py",
+    "path": "/api/v1/apps/kuaizhizao/sales-order-change-orders/{change_id}",
+    "method": "PUT"
+  },
+  "kuaizhizao:sales-review:create": {
+    "module_key": "kuaizhizao:sales-review",
+    "schema_local": "SalesReviewCreate",
+    "import_module": "apps.kuaizhizao.schemas.sales_review",
+    "import_name": "SalesReviewCreate",
+    "file": "apps/kuaizhizao/api/sales_reviews/sales_reviews.py",
+    "path": "/api/v1/apps/kuaizhizao/sales-reviews",
+    "method": "POST"
+  },
+  "kuaizhizao:sales-review:update": {
+    "module_key": "kuaizhizao:sales-review",
+    "schema_local": "SalesReviewUpdate",
+    "import_module": "apps.kuaizhizao.schemas.sales_review",
+    "import_name": "SalesReviewUpdate",
+    "file": "apps/kuaizhizao/api/sales_reviews/sales_reviews.py",
+    "path": "/api/v1/apps/kuaizhizao/sales-reviews/{review_id:int}",
+    "method": "PUT"
+  },
+  "kuaizhizao:shipment-notice:create": {
+    "module_key": "kuaizhizao:shipment-notice",
+    "schema_local": "ShipmentNoticeCreate",
+    "import_module": "apps.kuaizhizao.schemas.shipment_notice",
+    "import_name": "ShipmentNoticeCreate",
+    "file": "apps/kuaizhizao/api/shipment_notices/shipment_notices.py",
+    "path": "/api/v1/apps/kuaizhizao/shipment-notices",
+    "method": "POST"
+  },
+  "kuaizhizao:shipment-notice:update": {
+    "module_key": "kuaizhizao:shipment-notice",
+    "schema_local": "ShipmentNoticeUpdate",
+    "import_module": "apps.kuaizhizao.schemas.shipment_notice",
+    "import_name": "ShipmentNoticeUpdate",
+    "file": "apps/kuaizhizao/api/shipment_notices/shipment_notices.py",
+    "path": "/api/v1/apps/kuaizhizao/shipment-notices/{notice_id}",
+    "method": "PUT"
+  },
+  "master-data:process:drawing:create": {
+    "module_key": "master-data:process:drawing",
+    "schema_local": "EngineeringDrawingCreate",
+    "import_module": "apps.master_data.schemas.drawing_schemas",
+    "import_name": "EngineeringDrawingCreate",
+    "file": "apps/master_data/api/drawings.py",
+    "path": "/api/v1/apps/master_data/process/drawings",
+    "method": "POST"
+  },
+  "master-data:process:drawing:update": {
+    "module_key": "master-data:process:drawing",
+    "schema_local": "EngineeringDrawingUpdate",
+    "import_module": "apps.master_data.schemas.drawing_schemas",
+    "import_name": "EngineeringDrawingUpdate",
+    "file": "apps/master_data/api/drawings.py",
+    "path": "/api/v1/apps/master_data/process/drawings/{drawing_uuid}",
+    "method": "PUT"
+  },
+  "master-data:process:drawing-distribution:create": {
+    "module_key": "master-data:process:drawing-distribution",
+    "schema_local": "DrawingDistributionCreate",
+    "import_module": "apps.master_data.schemas.drawing_distribution_schemas",
+    "import_name": "DrawingDistributionCreate",
+    "file": "apps/master_data/api/drawing_distributions.py",
+    "path": "/api/v1/apps/master_data/process/drawing-distributions",
+    "method": "POST"
+  },
+  "master-data:process:drawing-distribution:update": {
+    "module_key": "master-data:process:drawing-distribution",
+    "schema_local": "DrawingDistributionUpdate",
+    "import_module": "apps.master_data.schemas.drawing_distribution_schemas",
+    "import_name": "DrawingDistributionUpdate",
+    "file": "apps/master_data/api/drawing_distributions.py",
+    "path": "/api/v1/apps/master_data/process/drawing-distributions/{dist_uuid}",
+    "method": "PUT"
+  },
+  "master-data:process:drawing-loan:create": {
+    "module_key": "master-data:process:drawing-loan",
+    "schema_local": "DrawingLoanCreate",
+    "import_module": "apps.master_data.schemas.drawing_loan_schemas",
+    "import_name": "DrawingLoanCreate",
+    "file": "apps/master_data/api/drawing_loans.py",
+    "path": "/api/v1/apps/master_data/process/drawing-loans",
+    "method": "POST"
+  },
+  "master-data:process:drawing-loan:update": {
+    "module_key": "master-data:process:drawing-loan",
+    "schema_local": "DrawingLoanUpdate",
+    "import_module": "apps.master_data.schemas.drawing_loan_schemas",
+    "import_name": "DrawingLoanUpdate",
+    "file": "apps/master_data/api/drawing_loans.py",
+    "path": "/api/v1/apps/master_data/process/drawing-loans/{loan_uuid}",
+    "method": "PUT"
+  },
+  "master-data:process:engineering-bom:create": {
+    "module_key": "master-data:process:engineering-bom",
+    "schema_local": "BOMBatchCreate",
+    "import_module": "apps.master_data.schemas.material_schemas",
+    "import_name": "BOMBatchCreate",
+    "file": "apps/master_data/api/material.py",
+    "path": "/api/v1/apps/master_data/materials/bom",
+    "method": "POST"
+  },
+  "master-data:process:engineering-bom:update": {
+    "module_key": "master-data:process:engineering-bom",
+    "schema_local": "BOMUpdate",
+    "import_module": "apps.master_data.schemas.material_schemas",
+    "import_name": "BOMUpdate",
+    "file": "apps/master_data/api/material.py",
+    "path": "/api/v1/apps/master_data/materials/bom/{bom_uuid}",
+    "method": "PUT"
+  },
+  "master-data:material:create": {
+    "module_key": "master-data:material",
+    "schema_local": "MaterialCreate",
+    "import_module": "apps.master_data.schemas.material_schemas",
+    "import_name": "MaterialCreate",
+    "file": "apps/master_data/api/material.py",
+    "path": "/api/v1/apps/master_data/materials",
+    "method": "POST"
+  },
+  "master-data:material:update": {
+    "module_key": "master-data:material",
+    "schema_local": "MaterialUpdate",
+    "import_module": "apps.master_data.schemas.material_schemas",
+    "import_name": "MaterialUpdate",
+    "file": "apps/master_data/api/material.py",
+    "path": "/api/v1/apps/master_data/materials/{material_uuid}",
+    "method": "PUT"
+  },
+  "master-data:process:operation:create": {
+    "module_key": "master-data:process:operation",
+    "schema_local": "OperationCreate",
+    "import_module": "apps.master_data.schemas.process_schemas",
+    "import_name": "OperationCreate",
+    "file": "apps/master_data/api/process.py",
+    "path": "/api/v1/apps/master_data/process/operations",
+    "method": "POST"
+  },
+  "master-data:process:route:create": {
+    "module_key": "master-data:process:route",
+    "schema_local": "ProcessRouteCreate",
+    "import_module": "apps.master_data.schemas.process_schemas",
+    "import_name": "ProcessRouteCreate",
+    "file": "apps/master_data/api/process.py",
+    "path": "/api/v1/apps/master_data/process/routes",
+    "method": "POST"
+  },
+  "master-data:process:route:update": {
+    "module_key": "master-data:process:route",
+    "schema_local": "ProcessRouteUpdate",
+    "import_module": "apps.master_data.schemas.process_schemas",
+    "import_name": "ProcessRouteUpdate",
+    "file": "apps/master_data/api/process.py",
+    "path": "/api/v1/apps/master_data/process/routes/{process_route_uuid}",
+    "method": "PUT"
+  },
+  "master-data:process:sop:create": {
+    "module_key": "master-data:process:sop",
+    "schema_local": "SOPCreate",
+    "import_module": "apps.master_data.schemas.process_schemas",
+    "import_name": "SOPCreate",
+    "file": "apps/master_data/api/process.py",
+    "path": "/api/v1/apps/master_data/process/sop",
+    "method": "POST"
+  },
+  "master-data:process:sop:update": {
+    "module_key": "master-data:process:sop",
+    "schema_local": "SOPUpdate",
+    "import_module": "apps.master_data.schemas.process_schemas",
+    "import_name": "SOPUpdate",
+    "file": "apps/master_data/api/process.py",
+    "path": "/api/v1/apps/master_data/process/sop/{sop_uuid}",
+    "method": "PUT"
+  },
+  "master-data:supply-chain:customer:create": {
+    "module_key": "master-data:supply-chain:customer",
+    "schema_local": "CustomerCreate",
+    "import_module": "apps.master_data.schemas.supply_chain_schemas",
+    "import_name": "CustomerCreate",
+    "file": "apps/master_data/api/supply_chain.py",
+    "path": "/api/v1/apps/master_data/supply-chain/customers",
+    "method": "POST"
+  },
+  "master-data:supply-chain:customer:update": {
+    "module_key": "master-data:supply-chain:customer",
+    "schema_local": "CustomerUpdate",
+    "import_module": "apps.master_data.schemas.supply_chain_schemas",
+    "import_name": "CustomerUpdate",
+    "file": "apps/master_data/api/supply_chain.py",
+    "path": "/api/v1/apps/master_data/supply-chain/customers/{customer_uuid}",
+    "method": "PUT"
+  },
+  "master-data:supply-chain:supplier:create": {
+    "module_key": "master-data:supply-chain:supplier",
+    "schema_local": "SupplierCreate",
+    "import_module": "apps.master_data.schemas.supply_chain_schemas",
+    "import_name": "SupplierCreate",
+    "file": "apps/master_data/api/supply_chain.py",
+    "path": "/api/v1/apps/master_data/supply-chain/suppliers",
+    "method": "POST"
+  },
+  "master-data:supply-chain:supplier:update": {
+    "module_key": "master-data:supply-chain:supplier",
+    "schema_local": "SupplierUpdate",
+    "import_module": "apps.master_data.schemas.supply_chain_schemas",
+    "import_name": "SupplierUpdate",
+    "file": "apps/master_data/api/supply_chain.py",
+    "path": "/api/v1/apps/master_data/supply-chain/suppliers/{supplier_uuid}",
+    "method": "PUT"
+  }
+}

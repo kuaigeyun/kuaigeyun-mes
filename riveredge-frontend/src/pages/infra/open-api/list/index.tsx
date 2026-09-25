@@ -496,7 +496,7 @@ const OpenApiPage: React.FC = () => {
                   ? [
                       {
                         key: 'body',
-                        label: '请求体',
+                        label: '请求体示例',
                         children: (
                           <Space direction="vertical" style={{ width: '100%' }}>
                             <Button
@@ -508,6 +508,267 @@ const OpenApiPage: React.FC = () => {
                               复制
                             </Button>
                             <pre style={codeBlockStyle}>{ep.sample_body}</pre>
+                          </Space>
+                        ),
+                      },
+                    ]
+                  : []),
+                ...(ep.request_fields?.groups?.length
+                  ? [
+                      {
+                        key: 'fields',
+                        label: `请求字段（${ep.request_fields.field_count}）`,
+                        children: (
+                          <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                            <Typography.Text type="secondary">
+                              Schema：{ep.request_fields.schema}
+                              {ep.request_fields.schema_module
+                                ? ` · ${ep.request_fields.schema_module}`
+                                : ''}
+                            </Typography.Text>
+                            {(ep.request_fields.groups || []).map((g) => (
+                              <div key={g.category}>
+                                <Typography.Text strong style={{ display: 'block', marginBottom: 6 }}>
+                                  {g.category}
+                                  <Typography.Text type="secondary" style={{ marginLeft: 8, fontWeight: 400 }}>
+                                    {g.fields.length} 项
+                                  </Typography.Text>
+                                </Typography.Text>
+                                <Table
+                                  size="small"
+                                  pagination={false}
+                                  rowKey={(r) => r.name}
+                                  dataSource={g.fields}
+                                  columns={[
+                                    {
+                                      title: '字段',
+                                      dataIndex: 'name',
+                                      width: 220,
+                                      render: (v: string) => (
+                                        <Typography.Text code style={{ fontSize: 12 }}>
+                                          {v}
+                                        </Typography.Text>
+                                      ),
+                                    },
+                                    {
+                                      title: '类型',
+                                      dataIndex: 'type',
+                                      width: 160,
+                                      ellipsis: true,
+                                      render: (v: string) => (
+                                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                                          {v}
+                                        </Typography.Text>
+                                      ),
+                                    },
+                                    {
+                                      title: '必填',
+                                      dataIndex: 'required',
+                                      width: 64,
+                                      render: (v: boolean) =>
+                                        v ? <Tag color="red">是</Tag> : <Tag>否</Tag>,
+                                    },
+                                    {
+                                      title: '说明',
+                                      dataIndex: 'description',
+                                      render: (v?: string | null) => v || '—',
+                                    },
+                                  ]}
+                                />
+                              </div>
+                            ))}
+                          </Space>
+                        ),
+                      },
+                    ]
+                  : []),
+                ...(ep.read_fields?.query?.groups?.length
+                  ? [
+                      {
+                        key: 'query',
+                        label: `查询参数（${ep.read_fields.query.field_count}）`,
+                        children: (
+                          <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                            {ep.read_fields.note ? (
+                              <Typography.Text type="secondary">{ep.read_fields.note}</Typography.Text>
+                            ) : null}
+                            {ep.read_fields.list_path ? (
+                              <Typography.Text type="secondary">
+                                列表：<Typography.Text code>{ep.read_fields.list_path}</Typography.Text>
+                              </Typography.Text>
+                            ) : null}
+                            {ep.read_fields.detail_path ? (
+                              <Typography.Text type="secondary">
+                                详情：<Typography.Text code>{ep.read_fields.detail_path}</Typography.Text>
+                              </Typography.Text>
+                            ) : null}
+                            {(ep.read_fields.query.groups || []).map((g) => (
+                              <div key={g.category}>
+                                <Typography.Text strong style={{ display: 'block', marginBottom: 6 }}>
+                                  {g.category}
+                                  <Typography.Text type="secondary" style={{ marginLeft: 8, fontWeight: 400 }}>
+                                    {g.fields.length} 项
+                                  </Typography.Text>
+                                </Typography.Text>
+                                <Table
+                                  size="small"
+                                  pagination={false}
+                                  rowKey={(r) => `${r.in || 'q'}-${r.name}`}
+                                  dataSource={g.fields}
+                                  columns={[
+                                    {
+                                      title: '参数',
+                                      dataIndex: 'name',
+                                      width: 180,
+                                      render: (v: string) => (
+                                        <Typography.Text code style={{ fontSize: 12 }}>
+                                          {v}
+                                        </Typography.Text>
+                                      ),
+                                    },
+                                    {
+                                      title: '位置',
+                                      dataIndex: 'in',
+                                      width: 72,
+                                      render: (v?: string) => <Tag>{v === 'path' ? 'path' : 'query'}</Tag>,
+                                    },
+                                    {
+                                      title: '类型',
+                                      dataIndex: 'type',
+                                      width: 140,
+                                      ellipsis: true,
+                                    },
+                                    {
+                                      title: '必填',
+                                      dataIndex: 'required',
+                                      width: 64,
+                                      render: (v: boolean) =>
+                                        v ? <Tag color="red">是</Tag> : <Tag>否</Tag>,
+                                    },
+                                    {
+                                      title: '说明',
+                                      dataIndex: 'description',
+                                      render: (v?: string | null) => v || '—',
+                                    },
+                                  ]}
+                                />
+                              </div>
+                            ))}
+                          </Space>
+                        ),
+                      },
+                    ]
+                  : []),
+                ...(ep.read_fields?.detail_response?.groups?.length ||
+                ep.read_fields?.list_response?.groups?.length
+                  ? [
+                      {
+                        key: 'response',
+                        label: `响应字段（${
+                          (ep.read_fields?.detail_response?.field_count ||
+                            ep.read_fields?.list_response?.field_count ||
+                            0)
+                        }）`,
+                        children: (
+                          <Space direction="vertical" size={16} style={{ width: '100%' }}>
+                            {ep.read_fields?.detail_response?.groups?.length ? (
+                              <div>
+                                <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>
+                                  详情响应 · {ep.read_fields.detail_response.schema}
+                                </Typography.Text>
+                                {(ep.read_fields.detail_response.groups || []).map((g) => (
+                                  <div key={`d-${g.category}`} style={{ marginBottom: 12 }}>
+                                    <Typography.Text strong style={{ display: 'block', marginBottom: 6 }}>
+                                      {g.category}
+                                      <Typography.Text
+                                        type="secondary"
+                                        style={{ marginLeft: 8, fontWeight: 400 }}
+                                      >
+                                        {g.fields.length} 项
+                                      </Typography.Text>
+                                    </Typography.Text>
+                                    <Table
+                                      size="small"
+                                      pagination={false}
+                                      rowKey={(r) => `d-${r.name}`}
+                                      dataSource={g.fields}
+                                      columns={[
+                                        {
+                                          title: '字段',
+                                          dataIndex: 'name',
+                                          width: 220,
+                                          render: (v: string) => (
+                                            <Typography.Text code style={{ fontSize: 12 }}>
+                                              {v}
+                                            </Typography.Text>
+                                          ),
+                                        },
+                                        {
+                                          title: '类型',
+                                          dataIndex: 'type',
+                                          width: 160,
+                                          ellipsis: true,
+                                        },
+                                        {
+                                          title: '说明',
+                                          dataIndex: 'description',
+                                          render: (v?: string | null) => v || '—',
+                                        },
+                                      ]}
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                            ) : null}
+                            {ep.read_fields?.list_response?.groups?.length ? (
+                              <div>
+                                <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>
+                                  列表响应 · {ep.read_fields.list_response.schema}
+                                </Typography.Text>
+                                {(ep.read_fields.list_response.groups || []).map((g) => (
+                                  <div key={`l-${g.category}`} style={{ marginBottom: 12 }}>
+                                    <Typography.Text strong style={{ display: 'block', marginBottom: 6 }}>
+                                      {g.category}
+                                      <Typography.Text
+                                        type="secondary"
+                                        style={{ marginLeft: 8, fontWeight: 400 }}
+                                      >
+                                        {g.fields.length} 项
+                                      </Typography.Text>
+                                    </Typography.Text>
+                                    <Table
+                                      size="small"
+                                      pagination={false}
+                                      rowKey={(r) => `l-${r.name}`}
+                                      dataSource={g.fields}
+                                      columns={[
+                                        {
+                                          title: '字段',
+                                          dataIndex: 'name',
+                                          width: 220,
+                                          render: (v: string) => (
+                                            <Typography.Text code style={{ fontSize: 12 }}>
+                                              {v}
+                                            </Typography.Text>
+                                          ),
+                                        },
+                                        {
+                                          title: '类型',
+                                          dataIndex: 'type',
+                                          width: 160,
+                                          ellipsis: true,
+                                        },
+                                        {
+                                          title: '说明',
+                                          dataIndex: 'description',
+                                          render: (v?: string | null) => v || '—',
+                                        },
+                                      ]}
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                            ) : null}
                           </Space>
                         ),
                       },

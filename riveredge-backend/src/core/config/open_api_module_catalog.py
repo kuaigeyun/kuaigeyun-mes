@@ -4571,56 +4571,32 @@ def module_keys_from_codes(permission_codes: list[str]) -> list[str]:
 
 
 def _sample_body_for_action(act: dict[str, Any], method: str) -> str:
-    """按动作给出可直接改的请求体示例。"""
+    """按动作给出可直接改的请求体示例（字段来自业务 Schema）。"""
+    from core.config.open_api_sample_bodies import sample_body_for_permission
+
+    return sample_body_for_permission(act.get("code") or "", method)
+
+
+def _request_fields_for_action(act: dict[str, Any], method: str) -> dict[str, Any] | None:
+    """按动作抽取请求字段说明（分类分组）。"""
+    from core.config.open_api_request_fields import request_fields_for_permission
+
     code = act.get("code") or ""
-    need_body = method in ("POST", "PUT", "PATCH")
-    if not need_body:
-        return ""
+    if method not in ("POST", "PUT", "PATCH") and not (
+        code.endswith(":create") or code.endswith(":update")
+    ):
+        return None
+    return request_fields_for_permission(code)
 
-    if code.endswith(":create"):
-        if "sales-order" in code:
-            return """{
-  "customer_name": "测试客户",
-  "order_date": "2026-09-24",
-  "items": [{"material_code": "M001", "qty": 1, "unit_price": 10}]
-}"""
-        if "work-order" in code:
-            return """{
-  "material_code": "M001",
-  "plan_qty": 10,
-  "plan_start_date": "2026-09-24"
-}"""
-        if "purchase-order" in code:
-            return """{
-  "supplier_name": "测试供应商",
-  "order_date": "2026-09-24",
-  "items": [{"material_code": "M001", "qty": 5, "unit_price": 8}]
-}"""
-        if "customer" in code:
-            return """{
-  "name": "测试客户",
-  "code": "C001",
-  "contact_phone": "13800000000"
-}"""
-        if "material" in code and "bom" not in code:
-            return """{
-  "code": "M001",
-  "name": "测试物料",
-  "unit": "PCS"
-}"""
-        return "{\n  /* 按业务 Schema 填写必填字段 */\n}"
 
-    if code.endswith(":update"):
-        return "{\n  /* 只传需要更新的字段 */\n}"
+def _read_fields_for_action(act: dict[str, Any], method: str) -> dict[str, Any] | None:
+    """GET/read：查询参数 + 响应字段。"""
+    from core.config.open_api_request_fields import read_fields_for_permission
 
-    if any(code.endswith(f":{x}") for x in ("submit", "revoke", "execute", "release", "assign", "complete", "close")):
-        return "{}"
-    if code.endswith(":audit") or code.endswith(":approve"):
-        return '{\n  "approved": true,\n  "comment": "对接审核通过"\n}'
-    if code.endswith(":reject"):
-        return '{\n  "comment": "驳回原因"\n}'
-
-    return "{\n  /* 按业务 Schema 填写 */\n}" if need_body else ""
+    code = act.get("code") or ""
+    if method != "GET" and not code.endswith(":read"):
+        return None
+    return read_fields_for_permission(code)
 
 
 def build_integration_docs(
@@ -4672,8 +4648,32 @@ with httpx.Client(timeout=30) as client:
             method = methods[0] if methods else "GET"
             body_hint = _sample_body_for_action(act, method)
             need_body = bool(body_hint)
+            field_docs = _request_fields_for_action(act, method)
+            read_docs = _read_fields_for_action(act, method)
 
             curl_lines = [f"curl -X {method} '{full}' \\"]
+            # GET 列表：把常用查询参数拼进示例 URL，方便对照字段说明
+            if method == "GET" and read_docs and (read_docs.get("query") or {}).get("fields"):
+                q_parts: list[str] = []
+                for f in (read_docs["query"]["fields"] or [])[:8]:
+                    if f.get("in") == "path":
+                        continue
+                    name = f.get("name") or ""
+                    if not name:
+                        continue
+                    default = f.get("default")
+                    if default is None:
+                        if name == "skip":
+                            default = 0
+                        elif name == "limit":
+                            default = 20
+                        elif name == "keyword":
+                            default = "测试"
+                        else:
+                            continue
+                    q_parts.append(f"{name}={default}")
+                if q_parts:
+                    curl_lines[0] = f"curl -X {method} '{full}?{'&'.join(q_parts)}' \\"
             curl_lines.append("  -H 'Authorization: Bearer <access_token>' \\")
             curl_lines.append(f"  -H 'X-Tenant-ID: {tenant_id}' \\")
             curl_lines.append("  -H 'X-Client-Channel: integration' \\")
@@ -4706,9 +4706,12 @@ with httpx.Client(timeout=30) as client:
             if method in ("POST", "PUT", "PATCH", "DELETE"):
                 py_snippet += 'headers["Idempotency-Key"] = str(__import__("uuid").uuid4())\n'
             if need_body:
-                py_snippet += f"""payload = {body_hint}
-resp = client.request("{method}", "{full}", headers=headers, json=payload)
-"""
+                # body_hint 是 JSON 文本（含 true/false/null），用 json.loads 才是合法 Python
+                py_snippet += (
+                    "import json\n"
+                    f'payload = json.loads("""{body_hint}""")\n'
+                    f'resp = client.request("{method}", "{full}", headers=headers, json=payload)\n'
+                )
             else:
                 py_snippet += f"""resp = client.request("{method}", "{full}", headers=headers)
 """
@@ -4726,6 +4729,8 @@ resp = client.request("{method}", "{full}", headers=headers, json=payload)
                     "curl_detail": detail_curl,
                     "python": py_snippet,
                     "sample_body": body_hint or None,
+                    "request_fields": field_docs,
+                    "read_fields": read_docs,
                 }
             )
 

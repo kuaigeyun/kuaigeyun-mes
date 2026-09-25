@@ -50,6 +50,42 @@ export interface OpenApiModuleCatalogItem {
   actions: OpenApiModuleAction[];
 }
 
+export interface OpenApiRequestField {
+  name: string;
+  type: string;
+  required: boolean;
+  description?: string | null;
+  category: string;
+  default?: unknown;
+  in?: 'query' | 'path' | string;
+}
+
+export interface OpenApiRequestFieldGroup {
+  category: string;
+  fields: OpenApiRequestField[];
+}
+
+export interface OpenApiRequestFieldsDoc {
+  schema: string;
+  schema_module?: string | null;
+  field_count: number;
+  groups: OpenApiRequestFieldGroup[];
+  fields: OpenApiRequestField[];
+}
+
+export interface OpenApiReadFieldsDoc {
+  list_path?: string | null;
+  detail_path?: string | null;
+  note?: string | null;
+  query: {
+    field_count: number;
+    groups: OpenApiRequestFieldGroup[];
+    fields: OpenApiRequestField[];
+  };
+  list_response?: OpenApiRequestFieldsDoc | null;
+  detail_response?: OpenApiRequestFieldsDoc | null;
+}
+
 export interface OpenApiDocEndpoint {
   code: string;
   label: string;
@@ -61,6 +97,8 @@ export interface OpenApiDocEndpoint {
   curl_detail?: string | null;
   python: string;
   sample_body?: string | null;
+  request_fields?: OpenApiRequestFieldsDoc | null;
+  read_fields?: OpenApiReadFieldsDoc | null;
 }
 
 export interface OpenApiDocModule {
