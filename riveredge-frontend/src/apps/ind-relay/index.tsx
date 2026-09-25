@@ -23,7 +23,7 @@ export default function IndustryRelayApp() {
       <Route path="line-capacity" element={withPageSuspense(LineCapacityPage)} />
       <Route path="changeover" element={withPageSuspense(ChangeoverPage)} />
       <Route path="line-output" element={withPageSuspense(LineOutputPage)} />
-      <Route path="*" element={<Navigate to="." replace />} />
+      <Route path="*" element={<Navigate to="/apps/ind-relay" replace />} />
     </Routes>
   );
 }

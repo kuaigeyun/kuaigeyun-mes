@@ -45,7 +45,7 @@ export default function RelayHomePage() {
   return (
     <ListPageTemplate>
       <Spin spinning={loading}>
-        <Space direction="vertical" size={16} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={16} style={{ width: '100%' }}>
           <Typography.Title level={4} style={{ margin: 0 }}>
             {t('app.ind-relay.home.title')}
           </Typography.Title>
@@ -53,13 +53,13 @@ export default function RelayHomePage() {
             {t('app.ind-relay.home.intro')}
           </Typography.Paragraph>
 
-          <Alert type="info" showIcon message={t('app.ind-relay.home.apsBoundary')} />
+          <Alert type="info" showIcon title={t('app.ind-relay.home.apsBoundary')} />
 
           {!status?.tables_ready && (
             <Alert
               type="warning"
               showIcon
-              message={t('app.ind-relay.home.tablesMissing')}
+              title={t('app.ind-relay.home.tablesMissing')}
               description={t('app.ind-relay.home.tablesMissingHint')}
             />
           )}
@@ -100,7 +100,7 @@ export default function RelayHomePage() {
           </Card>
 
           <Card title={t('app.ind-relay.home.nextSteps')}>
-            <Space direction="vertical">
+            <Space orientation="vertical">
               <Link to="/apps/ind-relay/line-capacity">{t('app.ind-relay.menu.lineCapacity')}</Link>
               <Link to="/apps/ind-relay/changeover">{t('app.ind-relay.menu.changeover')}</Link>
               <Link to="/apps/ind-relay/line-output">{t('app.ind-relay.menu.lineOutput')}</Link>

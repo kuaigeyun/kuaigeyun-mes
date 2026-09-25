@@ -32,6 +32,8 @@ const VERSION_SUFFIX_RE = /^(.+)-v(\d+)$/
 export function parseVersionedTablePersistenceId(
   tableId: string,
 ): { base: string; version: number } | null {
+  // headerTitle 误传入 ReactNode 时 tableId 非 string，禁止 .match
+  if (typeof tableId !== 'string' || !tableId) return null
   const m = tableId.match(VERSION_SUFFIX_RE)
   if (!m) return null
   const version = Number(m[2])

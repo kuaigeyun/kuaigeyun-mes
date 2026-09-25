@@ -107,13 +107,17 @@ export default function RelayChangeoverPage() {
         type="info"
         showIcon
         style={{ marginBottom: 12 }}
-        message={t('app.ind-relay.changeover.engineHint')}
+        title={t('app.ind-relay.changeover.engineHint')}
       />
       <UniTable<RelayChangeover>
         actionRef={actionRef}
         rowKey="id"
+        headerTitle={t('app.ind-relay.menu.changeover')}
+        columnPersistenceId="apps.ind-relay.pages.changeover-v1"
+        permissionResource="ind-relay:changeover"
         createButtonText={t('app.ind-relay.changeover.createButton')}
-        onCreateClick={perms.canCreate ? openCreate : undefined}
+        showCreateButton
+        onCreate={openCreate}
         columns={columns}
         request={async () => {
           const items = await industryRelayApi.listChangeovers();

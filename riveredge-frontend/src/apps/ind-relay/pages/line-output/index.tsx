@@ -60,10 +60,12 @@ export default function RelayLineOutputPage() {
       <UniTable<RelayLineOutput>
         actionRef={actionRef}
         rowKey="production_line_id"
+        headerTitle={t('app.ind-relay.menu.lineOutput')}
+        columnPersistenceId="apps.ind-relay.pages.line-output-v1"
         columns={columns}
         search={false}
-        headerTitle={
-          <Space>
+        toolBarActionsBeforeCreate={[
+          <Space key="date-range">
             <span>{t('app.ind-relay.lineOutput.dateRange')}</span>
             <RangePicker
               value={dateRange}
@@ -75,8 +77,8 @@ export default function RelayLineOutputPage() {
                 }
               }}
             />
-          </Space>
-        }
+          </Space>,
+        ]}
         request={async () => {
           const items = await industryRelayApi.listLineOutput({
             date_start: dateRange[0].format('YYYY-MM-DD'),

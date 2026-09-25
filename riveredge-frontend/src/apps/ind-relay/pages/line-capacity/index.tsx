@@ -135,8 +135,12 @@ export default function RelayLineCapacityPage() {
       <UniTable<RelayLineCapacity>
         actionRef={actionRef}
         rowKey="id"
+        headerTitle={t('app.ind-relay.menu.lineCapacity')}
+        columnPersistenceId="apps.ind-relay.pages.line-capacity-v1"
+        permissionResource="ind-relay:line-capacity"
         createButtonText={t('app.ind-relay.lineCapacity.createButton')}
-        onCreateClick={perms.canCreate ? openCreate : undefined}
+        showCreateButton
+        onCreate={openCreate}
         columns={columns}
         request={async () => {
           const items = await industryRelayApi.listLineCapacities();

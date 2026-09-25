@@ -159,6 +159,7 @@ function isAppNameKeyMisassignedToNonRootPath(
   path: string | undefined,
   children?: { path?: string; children?: any[] }[]
 ): boolean {
+  if (typeof name !== 'string') return false;
   const m = name.match(/^app\.([a-z0-9-]+)\.name$/i);
   if (!m) return false;
   // 无 path 的应用名分组合法（行业包 → 电子制造）：不得用子孙 path 误判为「错挂到非根路径」

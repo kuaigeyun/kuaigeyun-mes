@@ -1869,10 +1869,16 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
 
   // 全项目统一策略：结构化列保留页面 width；主文本列由布局引擎分配 primary flex；
   // 不启用拖拽改宽与本地列宽持久化，避免「代码 width」与 localStorage 双控制源竞争。
-  const tableId = columnPersistenceId ?? headerTitle
+  // 仅字符串可作为偏好 key；ReactNode headerTitle 不得回落为 tableId（否则 .match 崩溃）
+  const tableId =
+    typeof columnPersistenceId === 'string' && columnPersistenceId.trim()
+      ? columnPersistenceId.trim()
+      : typeof headerTitle === 'string' && headerTitle.trim()
+        ? headerTitle.trim()
+        : undefined
 
   React.useEffect(() => {
-    if (typeof tableId !== 'string' || !tableId.trim()) return
+    if (!tableId) return
     void ensureUniTablePreferenceMigrated(tableId)
   }, [tableId])
 
