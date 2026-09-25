@@ -2841,6 +2841,25 @@ class ReportingService(AppBaseService[ReportingRecord]):
         total_unqualified_quantity = Decimal(str(totals.get("unqualified_q") or 0))
         total_work_hours = Decimal(str(totals.get("hours_q") or 0))
 
+        # 实现产能口径：看板产能达成等使用 output_basis；工序/人效明细仍用全工序累加
+        from apps.kuaizhizao.services.output_basis_service import OutputBasisService
+
+        output_stats = await OutputBasisService.sum_output_quantities(
+            tenant_id,
+            date_start=date_start,
+            date_end=date_end,
+            worker_id=worker_id,
+        )
+        output_basis = str(output_stats.get("output_basis") or "all_operations")
+        output_qualified_quantity = Decimal(str(output_stats.get("qualified_quantity") or 0))
+        output_reported_quantity = Decimal(str(output_stats.get("reported_quantity") or 0))
+        output_unqualified_quantity = Decimal(str(output_stats.get("unqualified_quantity") or 0))
+        if output_basis != "all_operations":
+            total_qualified_quantity = output_qualified_quantity
+            # 达成率分母口径：实现产能用末道报工/有效合格对应的 reported
+            total_reported_quantity = output_reported_quantity
+            total_unqualified_quantity = output_unqualified_quantity
+
         wage_rate = await self._get_reporting_estimated_wage_rate(tenant_id)
         qualification_rate = (
             float(total_qualified_quantity / total_reported_quantity * 100)
@@ -2981,6 +3000,8 @@ class ReportingService(AppBaseService[ReportingRecord]):
             "unqualified_rate": unqualified_rate,
             "avg_quantity_per_hour": avg_quantity_per_hour,
             "efficiency": qualification_rate,
+            "output_basis": output_basis,
+            "output_qualified_quantity": float(output_qualified_quantity),
             "operation_stats": operation_stats_list,
             "worker_stats": worker_stats_list,
             "trends": {

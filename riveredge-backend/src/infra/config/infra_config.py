@@ -63,6 +63,18 @@ class InfraSettings(BaseSettings):
         default=120,
         description="开放 API Token 有效期（分钟）",
     )
+    OPEN_API_JWT_SECRET: str = Field(
+        default="",
+        description="开放 API Token 独立签名密钥；空则回退 JWT_SECRET_KEY（生产务必单独配置）",
+    )
+    INFRA_SUPERADMIN_JWT_SECRET: str = Field(
+        default="",
+        description="平台超管 Token 独立签名密钥；空则回退 JWT_SECRET_KEY",
+    )
+    INFRA_SUPERADMIN_TOKEN_EXPIRE_MINUTES: int = Field(
+        default=15,
+        description="平台超管访问令牌过期时间（分钟），默认 15",
+    )
     API_WRITE_RATE_LIMIT_ENABLED: bool = Field(
         default=True,
         description="是否对 /api 写请求启用进程内按用户限流",
@@ -485,6 +497,18 @@ class InfraSettings(BaseSettings):
             str: JWT 密钥
         """
         return self.JWT_SECRET_KEY
+
+    @property
+    def resolved_open_api_jwt_secret(self) -> str:
+        """开放 API 签名密钥；未单独配置时回退用户 JWT 密钥。"""
+        custom = (self.OPEN_API_JWT_SECRET or "").strip()
+        return custom if custom else self.JWT_SECRET_KEY
+
+    @property
+    def resolved_infra_superadmin_jwt_secret(self) -> str:
+        """平台超管签名密钥；未单独配置时回退用户 JWT 密钥。"""
+        custom = (self.INFRA_SUPERADMIN_JWT_SECRET or "").strip()
+        return custom if custom else self.JWT_SECRET_KEY
 
     @property
     def docs_basic_auth_enabled(self) -> bool:

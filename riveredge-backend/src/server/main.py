@@ -601,6 +601,9 @@ app.add_middleware(PerformanceMiddleware)
 from core.middleware.operation_log_middleware import OperationLogMiddleware
 app.add_middleware(OperationLogMiddleware)
 
+from core.middleware.security_headers_middleware import SecurityHeadersMiddleware
+app.add_middleware(SecurityHeadersMiddleware)
+
 from core.ai.middleware import AiAuditMiddleware
 app.add_middleware(AiAuditMiddleware)
 

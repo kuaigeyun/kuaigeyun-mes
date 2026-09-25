@@ -169,6 +169,8 @@ const DEFAULT_SCHEDULING_CONSTRAINTS: SchedulingConstraints = {
   setup_changeover_hours: 1,
   schedule_mode: 'forward',
   material_hard_constraint: false,
+  resource_mode: 'workstation',
+  line_exclusive: true,
 };
 
 function pickVisualSchedulingConstraints(constraints: SchedulingConstraints): SchedulingConstraints {
@@ -182,6 +184,8 @@ function pickVisualSchedulingConstraints(constraints: SchedulingConstraints): Sc
     setup_changeover_hours: constraints.setup_changeover_hours ?? 1,
     schedule_mode: constraints.schedule_mode === 'backward' ? 'backward' : 'forward',
     material_hard_constraint: Boolean(constraints.material_hard_constraint),
+    resource_mode: constraints.resource_mode === 'production_line' ? 'production_line' : 'workstation',
+    line_exclusive: constraints.line_exclusive !== false,
   };
 }
 
@@ -648,17 +652,91 @@ const SchedulingPage: React.FC = () => {
     { refreshDeps: [] }
   );
 
-  const { data: workstationResources = [] as WorkstationResource[] } = useRequest(async () => {
+  const { data: stationCatalog = [] as Array<{
+    id: number;
+    name: string;
+    code?: string;
+    production_line_id: number;
+    production_line_name?: string;
+  }> } = useRequest(async () => {
     const res = await workstationApi.list({ is_active: true, limit: 1000 });
     const items = factoryListItems(res);
     return items
-      .map((s: { id?: number; name?: string; code?: string }) => ({
-        id: Number(s.id),
-        name: String(s.name || s.code || s.id),
-        code: s.code ? String(s.code) : undefined,
-      }))
+      .map(
+        (s: {
+          id?: number;
+          name?: string;
+          code?: string;
+          production_line_id?: number;
+          productionLineId?: number;
+          production_line_name?: string;
+          productionLineName?: string;
+        }) => ({
+          id: Number(s.id),
+          name: String(s.name || s.code || s.id),
+          code: s.code ? String(s.code) : undefined,
+          production_line_id: Number(s.production_line_id ?? s.productionLineId ?? 0),
+          production_line_name: String(
+            s.production_line_name || s.productionLineName || ''
+          ).trim() || undefined,
+        })
+      )
       .filter((s) => Number.isInteger(s.id) && s.id > 0);
   });
+
+  const workstationResources = useMemo(() => {
+    if (schedulingConstraints.resource_mode !== 'production_line') {
+      return stationCatalog.map((s) => ({
+        id: s.id,
+        name: s.name,
+        code: s.code,
+      })) as WorkstationResource[];
+    }
+    const byLine = new Map<number, WorkstationResource>();
+    stationCatalog.forEach((s) => {
+      const lineId = s.production_line_id;
+      if (!lineId) return;
+      if (!byLine.has(lineId)) {
+        byLine.set(lineId, {
+          id: lineId,
+          name: s.production_line_name || `Line#${lineId}`,
+          code: String(lineId),
+        });
+      }
+    });
+    return Array.from(byLine.values());
+  }, [schedulingConstraints.resource_mode, stationCatalog]);
+
+  const stationToLineId = useMemo(() => {
+    const m = new Map<number, number>();
+    stationCatalog.forEach((s) => {
+      if (s.production_line_id > 0) m.set(s.id, s.production_line_id);
+    });
+    return m;
+  }, [stationCatalog]);
+
+  const ganttDisplayWorkOrders = useMemo(() => {
+    if (schedulingConstraints.resource_mode !== 'production_line') return ganttWorkOrders;
+    return ganttWorkOrders.map((wo) => ({
+      ...wo,
+      operations: (wo.operations || []).map((op) => {
+        const sid = Number(op.assigned_station_id || 0);
+        const lineId = stationToLineId.get(sid) || 0;
+        if (!lineId) return op;
+        return {
+          ...op,
+          assigned_station_id: lineId,
+          assigned_station_name:
+            workstationResources.find((r) => r.id === lineId)?.name || op.assigned_station_name,
+        };
+      }),
+    }));
+  }, [ganttWorkOrders, schedulingConstraints.resource_mode, stationToLineId, workstationResources]);
+
+  const ganttBoardDisplayWorkOrders = useMemo(
+    () => ganttDisplayWorkOrders.filter((wo) => isWorkOrderScheduledOnBoard(wo)),
+    [ganttDisplayWorkOrders]
+  );
 
   const { data: schedulingWorkCenters = [] } = useRequest(async () => {
     const res = await workCenterApi.list({ is_active: true, limit: 500 });
@@ -1196,12 +1274,26 @@ const SchedulingPage: React.FC = () => {
     setFocusTaskId(null);
   }, []);
 
+  const resolvePersistStationId = useCallback(
+    (resourceId: number): number => {
+      if (schedulingConstraints.resource_mode !== 'production_line') return resourceId;
+      const onLine = stationCatalog.filter((s) => s.production_line_id === resourceId);
+      if (onLine.length > 0) return onLine[0].id;
+      return resourceId;
+    },
+    [schedulingConstraints.resource_mode, stationCatalog]
+  );
+
   const handleBatchUpdateOperationStations = useCallback(
     async (updates: Array<{ operation_id: number; assigned_station_id: number }>) => {
       if (!canScheduleUpdate || updates.length === 0) return;
+      const normalized = updates.map((u) => ({
+        ...u,
+        assigned_station_id: resolvePersistStationId(Number(u.assigned_station_id)),
+      }));
       try {
         const validation = await visualSchedulingApi.validateAdjustments({
-          operation_station_updates: updates,
+          operation_station_updates: normalized,
         });
         if (!validation.valid) {
           const preview = (validation.conflicts || []).slice(0, 3).map((c) => c.message).join('\n');
@@ -1209,7 +1301,7 @@ const SchedulingPage: React.FC = () => {
           refreshGantt();
           return;
         }
-        const result = await workOrderApi.batchUpdateOperationStations(updates);
+        const result = await workOrderApi.batchUpdateOperationStations(normalized);
         const stationLabel = t('app.kuaizhizao.scheduling.batch.label.operationStations');
         reportBatchUpdateResult(messageApi, stationLabel, {
           updated: result.updated,
@@ -1224,7 +1316,7 @@ const SchedulingPage: React.FC = () => {
         refreshGantt();
       }
     },
-    [canScheduleUpdate, messageApi, refreshBoardScan, refreshGantt, t]
+    [canScheduleUpdate, messageApi, refreshBoardScan, refreshGantt, resolvePersistStationId, t]
   );
 
   const handleBatchUpdateOperationAssignments = useCallback(
@@ -1374,7 +1466,11 @@ const SchedulingPage: React.FC = () => {
   }, [handleSchedulingQuickAction, t]);
 
   const applyEngineProposalToDraft = useCallback(
-    async (scope: 'selected' | 'overdue' | 'unscheduled', workOrderIds: number[]) => {
+    async (
+      scope: 'selected' | 'overdue' | 'unscheduled' | 'local',
+      workOrderIds: number[],
+      opts?: { local_window_hours?: number }
+    ) => {
       if (!canScheduleUpdate || workOrderIds.length === 0) return false;
       setAutoRescheduleLoading(true);
       try {
@@ -1382,6 +1478,7 @@ const SchedulingPage: React.FC = () => {
           work_order_ids: workOrderIds,
           scope,
           plan_date: filterPlanDate,
+          local_window_hours: opts?.local_window_hours,
         });
         const proposal = convertEngineProposalToAiProposal(res.proposal);
         if ((res.proposal.unfreezed?.length ?? 0) > 0) {
@@ -1389,6 +1486,9 @@ const SchedulingPage: React.FC = () => {
         }
         if (proposal.warnings.length > 0) {
           messageApi.info(proposal.warnings.slice(0, 3).join('；'));
+        }
+        if (proposal.confidenceNotes) {
+          messageApi.info(proposal.confidenceNotes.slice(0, 200));
         }
         return applySchedulingAiProposal({
           proposal,
@@ -1479,6 +1579,12 @@ const SchedulingPage: React.FC = () => {
     modal,
     t,
   ]);
+
+  const handleLocalReschedule = useCallback(async () => {
+    const ids = selectedWorkOrderIds.slice(0, 50);
+    if (ids.length === 0) return;
+    await applyEngineProposalToDraft('local', ids, { local_window_hours: 24 });
+  }, [applyEngineProposalToDraft, selectedWorkOrderIds]);
 
   const handleMissingSettingsBackfill = useCallback(async () => {
     if (!canScheduleUpdate) return;
@@ -2254,6 +2360,14 @@ const SchedulingPage: React.FC = () => {
       description: t('app.kuaizhizao.scheduling.msg.autoRescheduleConfirm', { count: schedulingActionCount }),
       okText: schedulingConfirmOkText,
     },
+    onLocalReschedule: handleLocalReschedule,
+    localRescheduleConfirm: {
+      title: t('app.kuaizhizao.scheduling.msg.localRescheduleTitle'),
+      description: t('app.kuaizhizao.scheduling.msg.localRescheduleConfirm', {
+        count: schedulingActionCount,
+      }),
+      okText: schedulingConfirmOkText,
+    },
     onEditOperation: () => {
       if (!operationEditContext) return;
       setOperationEditOpen(true);
@@ -2348,7 +2462,7 @@ const SchedulingPage: React.FC = () => {
                   boardScan={boardScan}
                   taskLevel={ganttTaskLevel}
                   horizonDays={schedulingConstraints.rolling_horizon_days || 14}
-                  workOrders={ganttBoardWorkOrders}
+                  workOrders={ganttBoardDisplayWorkOrders}
                   pinnedResourceIds={pinnedResourceIds}
                   showPinnedOnly={showPinnedOnly}
                   loading={ganttLoading}
@@ -2357,7 +2471,7 @@ const SchedulingPage: React.FC = () => {
                 <SchedulingCardBoard
                   t={t}
                   loading={ganttLoading}
-                  workOrders={ganttBoardWorkOrders}
+                  workOrders={ganttBoardDisplayWorkOrders}
                   taskLevel={ganttTaskLevel}
                   stations={visibleWorkstationResources}
                   equipments={visibleSchedulingEquipments}
@@ -2381,7 +2495,7 @@ const SchedulingPage: React.FC = () => {
                 }
               >
                 <GanttSchedulingChart
-                  workOrders={ganttBoardWorkOrders}
+                  workOrders={ganttBoardDisplayWorkOrders}
                   workstations={visibleWorkstationResources}
                   equipments={visibleSchedulingEquipments}
                   workers={visibleSchedulingWorkers}
@@ -2818,6 +2932,41 @@ const SchedulingPage: React.FC = () => {
                 }
               />
             </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>{t('app.kuaizhizao.scheduling.config.resourceMode')}</span>
+              <Select
+                size="small"
+                style={{ width: 140 }}
+                value={schedulingConstraints.resource_mode || 'workstation'}
+                options={[
+                  {
+                    value: 'workstation',
+                    label: t('app.kuaizhizao.scheduling.config.resourceModeWorkstation'),
+                  },
+                  {
+                    value: 'production_line',
+                    label: t('app.kuaizhizao.scheduling.config.resourceModeProductionLine'),
+                  },
+                ]}
+                onChange={(v) =>
+                  setSchedulingConstraints((c) => ({
+                    ...c,
+                    resource_mode: v === 'production_line' ? 'production_line' : 'workstation',
+                  }))
+                }
+              />
+            </div>
+            {schedulingConstraints.resource_mode === 'production_line' && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>{t('app.kuaizhizao.scheduling.config.lineExclusive')}</span>
+                <Switch
+                  checked={schedulingConstraints.line_exclusive !== false}
+                  onChange={(v) =>
+                    setSchedulingConstraints((c) => ({ ...c, line_exclusive: v }))
+                  }
+                />
+              </div>
+            )}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>{t('app.kuaizhizao.scheduling.config.materialHardConstraint')}</span>
               <Switch

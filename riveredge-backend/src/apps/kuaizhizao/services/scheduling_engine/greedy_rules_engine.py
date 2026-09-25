@@ -85,28 +85,58 @@ def _apply_changeover_earliest(
     timeline: List[Tuple],
     earliest: datetime,
     product_id: int,
-    changeover_hours: float,
+    changeover_ctx,
     *,
+    production_line_id: int,
     holidays,
     work_hours,
     overtime,
-) -> datetime:
-    if changeover_hours <= 0 or product_id <= 0 or not timeline:
-        return earliest
+) -> Tuple[datetime, Optional[str]]:
+    """返回 (earliest, reason_code|None)。禁共线时 reason_code=forbid_same_line。"""
+    if product_id <= 0 or not timeline:
+        return earliest, None
     prev = _prev_interval(timeline, earliest)
     if prev is None:
-        return earliest
+        return earliest, None
     prev_pid = int(prev[3]) if len(prev) > 3 else 0
     if prev_pid <= 0 or prev_pid == product_id:
-        return earliest
+        return earliest, None
+    hours, forbid, source = changeover_ctx.lookup(
+        prev_pid, product_id, production_line_id=production_line_id or None
+    )
+    if forbid:
+        return earliest, "forbid_same_line"
+    if hours <= 0:
+        return earliest, None
     ready = add_working_hours(
         prev[1],
-        changeover_hours,
+        hours,
         holidays=holidays,
         config=work_hours,
         overtime=overtime,
     )
-    return max(earliest, ready)
+    if ready > earliest:
+        return max(earliest, ready), f"changeover:{source}"
+    return earliest, None
+
+
+def _neighbor_changeover_hours(
+    changeover_ctx,
+    from_pid: int,
+    to_pid: int,
+    *,
+    production_line_id: int,
+    fallback_hours: float,
+) -> Tuple[float, bool, str]:
+    if changeover_ctx is not None:
+        return changeover_ctx.lookup(
+            from_pid, to_pid, production_line_id=production_line_id or None
+        )
+    if from_pid <= 0 or to_pid <= 0 or from_pid == to_pid:
+        return 0.0, False, "same"
+    if fallback_hours > 0:
+        return float(fallback_hours), False, "fallback"
+    return 0.0, False, "none"
 
 
 class GreedyRulesSchedulingEngine:
@@ -133,11 +163,17 @@ class GreedyRulesSchedulingEngine:
         changeover_hours = float(constraints.get("setup_changeover_hours") or 0.0)
         schedule_mode = str(constraints.get("schedule_mode") or "forward").strip().lower()
         material_hard = bool(constraints.get("material_hard_constraint"))
+        resource_mode = str(constraints.get("resource_mode") or "workstation").strip().lower()
+        line_exclusive = bool(constraints.get("line_exclusive", True))
+        use_line_resource = resource_mode == "production_line"
         station_rows = await Workstation.filter(
             tenant_id=tenant_id, deleted_at__isnull=True
-        ).values("id", "max_parallel")
+        ).values("id", "max_parallel", "production_line_id")
         station_parallel = {
             int(r["id"]): max(1, int(r.get("max_parallel") or 1)) for r in station_rows
+        }
+        station_to_line = {
+            int(r["id"]): int(r.get("production_line_id") or 0) for r in station_rows
         }
 
         # 锚点为业务墙钟（厂级上班时刻），须按站点时区 make_aware，不可走 to_site_timezone（naive=UTC）
@@ -151,6 +187,7 @@ class GreedyRulesSchedulingEngine:
             return {
                 "summary": "无可重排工单",
                 "warnings": ["未找到符合范围的工单"],
+                "reasons": [],
                 "unfreezed": [],
                 "work_order_adjustments": [],
                 "operation_adjustments": [],
@@ -193,8 +230,8 @@ class GreedyRulesSchedulingEngine:
                 if op.status not in {"completed", "cancelled"}:
                     candidate_op_ids.add(int(op.id))
 
-        # (start, end, op_id, product_id)
-        station_timeline: Dict[int, List[Tuple[datetime, datetime, int, int]]] = defaultdict(list)
+        # (start, end, op_id, product_id)；产线模式下 key 为 production_line_id
+        resource_timeline: Dict[int, List[Tuple[datetime, datetime, int, int]]] = defaultdict(list)
         existing_wo_ids = list({int(op.work_order_id) for op in existing_ops if op.work_order_id})
         product_by_wo: Dict[int, int] = {}
         if existing_wo_ids:
@@ -209,6 +246,17 @@ class GreedyRulesSchedulingEngine:
             .values_list("work_order_operation_id", flat=True)
         )
 
+        def _resource_key(station_id: int) -> int:
+            if not use_line_resource:
+                return station_id
+            line_id = station_to_line.get(station_id, 0)
+            return line_id if line_id > 0 else station_id
+
+        def _resource_capacity(station_id: int) -> int:
+            if use_line_resource and line_exclusive:
+                return 1
+            return station_parallel.get(station_id, 1)
+
         for op in existing_ops:
             sid = int(op.assigned_station_id or 0)
             if sid <= 0 or not op.planned_start_date or not op.planned_end_date:
@@ -220,7 +268,10 @@ class GreedyRulesSchedulingEngine:
             # 将被重排的工序从占用时间线中排除，避免自己挡自己
             if int(op.id) in candidate_op_ids:
                 continue
-            station_timeline[sid].append(
+            rkey = _resource_key(sid)
+            if use_line_resource and station_to_line.get(sid, 0) <= 0:
+                continue
+            resource_timeline[rkey].append(
                 (
                     _scheduling_dt(op.planned_start_date),
                     _scheduling_dt(op.planned_end_date),
@@ -238,7 +289,8 @@ class GreedyRulesSchedulingEngine:
             sid = int(row.station_id or 0)
             if sid <= 0 or not row.start_at or not row.end_at:
                 continue
-            station_timeline[sid].append(
+            rkey = _resource_key(sid)
+            resource_timeline[rkey].append(
                 (
                     _scheduling_dt(row.start_at),
                     _scheduling_dt(row.end_at),
@@ -247,9 +299,28 @@ class GreedyRulesSchedulingEngine:
                 )
             )
 
+        product_ids: Set[int] = set(product_by_wo.values())
+        for wo in wos:
+            pid = int(wo.product_id or 0)
+            if pid > 0:
+                product_ids.add(pid)
+                product_by_wo[int(wo.id)] = pid
+        changeover_ctx = None
+        try:
+            from apps.ind_relay.services.changeover_lookup import load_changeover_context
+
+            changeover_ctx = await load_changeover_context(
+                tenant_id,
+                fallback_hours=changeover_hours,
+                product_ids=product_ids,
+            )
+        except Exception:
+            changeover_ctx = None
+
         proposals: Dict[str, Any] = {
             "summary": None,
             "warnings": [],
+            "reasons": [],
             "unfreezed": [],
             "work_order_adjustments": [],
             "operation_adjustments": [],
@@ -345,8 +416,16 @@ class GreedyRulesSchedulingEngine:
                     break
 
                 product_id = int(wo.product_id or 0)
-                timeline = station_timeline.get(station_id, [])
-                capacity = station_parallel.get(station_id, 1)
+                if use_line_resource and station_to_line.get(station_id, 0) <= 0:
+                    proposals["warnings"].append(
+                        f"工单 {wo.code} 工序 {op.operation_name} 工位未绑定产线，产线排程模式下跳过"
+                    )
+                    wo_op_slots = []
+                    break
+                rkey = _resource_key(station_id)
+                line_id = station_to_line.get(station_id, 0) if use_line_resource else 0
+                timeline = resource_timeline.get(rkey, [])
+                capacity = _resource_capacity(station_id)
                 earliest = cursor
                 try:
                     start = end = None
@@ -367,41 +446,88 @@ class GreedyRulesSchedulingEngine:
                             for iv in timeline:
                                 if iv[0] >= end and (nxt is None or iv[0] < nxt[0]):
                                     nxt = iv
-                            if (
-                                nxt
-                                and changeover_hours > 0
-                                and product_id > 0
-                                and int(nxt[3] if len(nxt) > 3 else 0)
-                                not in (0, product_id)
-                            ):
-                                ready = add_working_hours(
-                                    end,
-                                    changeover_hours,
-                                    holidays=holidays,
-                                    config=work_hours,
-                                    overtime=overtime,
+                            if nxt and product_id > 0:
+                                nxt_pid = int(nxt[3] if len(nxt) > 3 else 0)
+                                ch_hours, forbid, source = _neighbor_changeover_hours(
+                                    changeover_ctx,
+                                    product_id,
+                                    nxt_pid,
+                                    production_line_id=line_id or rkey,
+                                    fallback_hours=changeover_hours,
                                 )
-                                if ready > nxt[0]:
-                                    latest = subtract_working_hours(
-                                        nxt[0],
-                                        changeover_hours,
+                                if forbid:
+                                    proposals["warnings"].append(
+                                        f"工单 {wo.code} 工序 {op.operation_name} 与后续产品禁共线，跳过"
+                                    )
+                                    proposals["reasons"].append(
+                                        {
+                                            "code": "forbid_same_line",
+                                            "work_order_id": int(wo.id),
+                                            "operation_id": int(op.id),
+                                            "message": "料号族禁共线，无法倒排到该资源",
+                                        }
+                                    )
+                                    raise ValueError("禁共线")
+                                if ch_hours > 0 and nxt_pid not in (0, product_id):
+                                    ready = add_working_hours(
+                                        end,
+                                        ch_hours,
                                         holidays=holidays,
                                         config=work_hours,
                                         overtime=overtime,
                                     )
-                                    continue
+                                    if ready > nxt[0]:
+                                        latest = subtract_working_hours(
+                                            nxt[0],
+                                            ch_hours,
+                                            holidays=holidays,
+                                            config=work_hours,
+                                            overtime=overtime,
+                                        )
+                                        continue
                             break
                     else:
                         for _attempt in range(40):
-                            earliest = _apply_changeover_earliest(
-                                timeline,
-                                earliest,
-                                product_id,
-                                changeover_hours,
-                                holidays=holidays,
-                                work_hours=work_hours,
-                                overtime=overtime,
-                            )
+                            if changeover_ctx is not None:
+                                earliest, ch_reason = _apply_changeover_earliest(
+                                    timeline,
+                                    earliest,
+                                    product_id,
+                                    changeover_ctx,
+                                    production_line_id=line_id or rkey,
+                                    holidays=holidays,
+                                    work_hours=work_hours,
+                                    overtime=overtime,
+                                )
+                                if ch_reason == "forbid_same_line":
+                                    proposals["warnings"].append(
+                                        f"工单 {wo.code} 工序 {op.operation_name} 与前序产品禁共线，跳过"
+                                    )
+                                    proposals["reasons"].append(
+                                        {
+                                            "code": "forbid_same_line",
+                                            "work_order_id": int(wo.id),
+                                            "operation_id": int(op.id),
+                                            "message": "料号族禁共线，无法排到该资源",
+                                        }
+                                    )
+                                    raise ValueError("禁共线")
+                            else:
+                                ch_reason = None
+                                if changeover_hours > 0 and product_id > 0:
+                                    prev = _prev_interval(timeline, earliest)
+                                    if prev and int(prev[3] if len(prev) > 3 else 0) not in (
+                                        0,
+                                        product_id,
+                                    ):
+                                        earliest = add_working_hours(
+                                            prev[1],
+                                            changeover_hours,
+                                            holidays=holidays,
+                                            config=work_hours,
+                                            overtime=overtime,
+                                        )
+                                        ch_reason = "changeover:fallback"
                             start, end = find_earliest_working_slot(
                                 _timeline_3(timeline),
                                 earliest,
@@ -413,22 +539,51 @@ class GreedyRulesSchedulingEngine:
                                 max_parallel=capacity,
                             )
                             prev = _prev_interval(timeline, start)
-                            if (
-                                prev
-                                and changeover_hours > 0
-                                and product_id > 0
-                                and int(prev[3] if len(prev) > 3 else 0) not in (0, product_id)
-                            ):
-                                ready = add_working_hours(
-                                    prev[1],
-                                    changeover_hours,
-                                    holidays=holidays,
-                                    config=work_hours,
-                                    overtime=overtime,
+                            if prev and product_id > 0:
+                                prev_pid = int(prev[3] if len(prev) > 3 else 0)
+                                ch_hours, forbid, source = _neighbor_changeover_hours(
+                                    changeover_ctx,
+                                    prev_pid,
+                                    product_id,
+                                    production_line_id=line_id or rkey,
+                                    fallback_hours=changeover_hours,
                                 )
-                                if start < ready:
-                                    earliest = ready
-                                    continue
+                                if forbid:
+                                    proposals["warnings"].append(
+                                        f"工单 {wo.code} 工序 {op.operation_name} 与前序产品禁共线，跳过"
+                                    )
+                                    proposals["reasons"].append(
+                                        {
+                                            "code": "forbid_same_line",
+                                            "work_order_id": int(wo.id),
+                                            "operation_id": int(op.id),
+                                            "message": "料号族禁共线，无法排到该资源",
+                                        }
+                                    )
+                                    raise ValueError("禁共线")
+                                if ch_hours > 0 and prev_pid not in (0, product_id):
+                                    ready = add_working_hours(
+                                        prev[1],
+                                        ch_hours,
+                                        holidays=holidays,
+                                        config=work_hours,
+                                        overtime=overtime,
+                                    )
+                                    if start < ready:
+                                        earliest = ready
+                                        continue
+                                    if ch_reason and ch_reason.startswith("changeover:"):
+                                        proposals["reasons"].append(
+                                            {
+                                                "code": ch_reason,
+                                                "work_order_id": int(wo.id),
+                                                "operation_id": int(op.id),
+                                                "message": (
+                                                    f"插入换型 {ch_hours:g}h（来源 {source}）"
+                                                ),
+                                                "changeover_hours": ch_hours,
+                                            }
+                                        )
                             break
                     if start is None or end is None:
                         raise ValueError("无法找到可行槽位")
@@ -436,6 +591,15 @@ class GreedyRulesSchedulingEngine:
                     proposals["warnings"].append(
                         f"工单 {wo.code} 工序 {op.operation_name} 无法安排工作时段：{e}"
                     )
+                    if str(e) != "禁共线":
+                        proposals["reasons"].append(
+                            {
+                                "code": "no_slot",
+                                "work_order_id": int(wo.id),
+                                "operation_id": int(op.id),
+                                "message": str(e),
+                            }
+                        )
                     wo_op_slots = []
                     break
 
@@ -445,7 +609,7 @@ class GreedyRulesSchedulingEngine:
                 else:
                     wo_op_slots.append((op, start, end, station_id))
                     cursor = end
-                station_timeline[station_id].append((start, end, int(op.id), product_id))
+                resource_timeline[rkey].append((start, end, int(op.id), product_id))
 
             if not wo_op_slots:
                 continue
@@ -483,7 +647,10 @@ class GreedyRulesSchedulingEngine:
             )
             scheduled_wo += 1
 
-        proposals["summary"] = f"规则引擎已为 {scheduled_wo} 张工单生成排产提案（锚点 {anchor_day}）"
+        proposals["summary"] = (
+            f"规则引擎已为 {scheduled_wo} 张工单生成排产提案（锚点 {anchor_day}"
+            f"{'，含换型矩阵' if changeover_ctx and changeover_ctx.available else ''}）"
+        )
         return proposals
 
     async def _resolve_candidate_ids(
@@ -495,6 +662,9 @@ class GreedyRulesSchedulingEngine:
         scope = str(request.scope or "selected").strip()
         if scope == "selected" and request.work_order_ids:
             return [int(i) for i in request.work_order_ids if int(i) > 0][:50]
+
+        if scope == "local":
+            return await self._resolve_local_candidate_ids(tenant_id, request, now)
 
         query = WorkOrder.filter(
             tenant_id=tenant_id,
@@ -533,6 +703,65 @@ class GreedyRulesSchedulingEngine:
             allowed = {int(i) for i in request.work_order_ids}
             ids = [i for i in ids if i in allowed]
         return ids[:50]
+
+    async def _resolve_local_candidate_ids(
+        self,
+        tenant_id: int,
+        request: SchedulingPlanRequest,
+        now: datetime,
+    ) -> List[int]:
+        """局部重排：种子工单 + 同资源时间窗内邻域工单。"""
+        window_hours = float(getattr(request, "local_window_hours", None) or 24)
+        window_hours = max(1.0, min(window_hours, 168.0))
+        seed_ids = [int(i) for i in (request.work_order_ids or []) if int(i) > 0]
+        if not seed_ids:
+            # 无种子时取当前时刻附近已排工单
+            window_end = now + timedelta(hours=window_hours)
+            near_ops = await WorkOrderOperation.filter(
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+                planned_start_date__lte=window_end,
+                planned_end_date__gte=now,
+                assigned_station_id__gt=0,
+            ).limit(80)
+            seed_ids = list({int(op.work_order_id) for op in near_ops if op.work_order_id})[:20]
+        if not seed_ids:
+            return []
+
+        seed_ops = await WorkOrderOperation.filter(
+            tenant_id=tenant_id,
+            work_order_id__in=seed_ids,
+            deleted_at__isnull=True,
+            assigned_station_id__gt=0,
+        ).all()
+        station_ids = {int(op.assigned_station_id) for op in seed_ops if op.assigned_station_id}
+        resource_ids = {int(i) for i in (getattr(request, "resource_ids", None) or []) if int(i) > 0}
+        if resource_ids:
+            station_ids |= resource_ids
+            # 产线 id 也可能传入：扩展为线内工位
+            line_stations = await Workstation.filter(
+                tenant_id=tenant_id,
+                production_line_id__in=list(resource_ids),
+                deleted_at__isnull=True,
+            ).values_list("id", flat=True)
+            station_ids |= {int(i) for i in line_stations}
+
+        if not station_ids:
+            return seed_ids[:50]
+
+        window_end = now + timedelta(hours=window_hours)
+        neighbor_ops = await WorkOrderOperation.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            assigned_station_id__in=list(station_ids),
+            planned_start_date__lte=window_end,
+            planned_end_date__gte=now - timedelta(hours=window_hours),
+        ).all()
+        ids = set(seed_ids)
+        for op in neighbor_ops:
+            if op.work_order_id:
+                ids.add(int(op.work_order_id))
+        return list(ids)[:50]
 
     @staticmethod
     async def _resolve_default_station_id(tenant_id: int, op: WorkOrderOperation) -> int:

@@ -179,6 +179,23 @@ REGISTRY_PARAM_CONTROL_META: Dict[str, Dict[str, Any]] = {
             },
         ],
     },
+    "parameters.production.output_basis": {
+        "type": "select",
+        "options": [
+            {
+                "value": "all_operations",
+                "labelKey": "pages.system.configCenter.param.production_output_basis_opt_all",
+            },
+            {
+                "value": "last_operation_qualified",
+                "labelKey": "pages.system.configCenter.param.production_output_basis_opt_last_qualified",
+            },
+            {
+                "value": "last_operation_effective_qualified",
+                "labelKey": "pages.system.configCenter.param.production_output_basis_opt_last_effective",
+            },
+        ],
+    },
     "parameters.reporting.default_production_worker_mode": {
         "type": "select",
         "options": [
@@ -346,6 +363,7 @@ PARAMETER_KEYS = {
     "parameters.work_order.show_customer_name",
     "parameters.work_order.score_enabled",
     "parameters.work_order.score_stale_minutes",
+    "parameters.production.output_basis",
     "parameters.reporting.quick_reporting",
     "parameters.reporting.parameter_reporting",
     "parameters.reporting.default_reporting_quantity_mode",
@@ -426,6 +444,7 @@ IMPLEMENTED_PARAMETER_KEYS = {
     "parameters.work_order.show_customer_name",
     "parameters.work_order.score_enabled",
     "parameters.work_order.score_stale_minutes",
+    "parameters.production.output_basis",
     "parameters.reporting.quick_reporting",
     "parameters.reporting.parameter_reporting",
     "parameters.reporting.default_reporting_quantity_mode",
@@ -652,6 +671,9 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
             "fail_on_error": False,
         },
         "document_push_targets": ["kingdee_prd_morpt"],
+    },
+    "production": {
+        "output_basis": "all_operations",
     },
     "warehouse": {
         "batch_management": True,

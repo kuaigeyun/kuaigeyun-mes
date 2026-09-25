@@ -5,7 +5,7 @@
 """
 
 from typing import Optional, List
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 
 from core.schemas.invitation_code import (
     InvitationCodeCreate,
@@ -219,26 +219,30 @@ async def verify_invitation_code(
 
 @router.post("/use", response_model=InvitationCodeResponse)
 async def use_invitation_code(
-    request: InvitationCodeVerifyRequest,
+    body: InvitationCodeVerifyRequest,
+    request: Request,
 ):
     """
-    使用邀请码（增加使用次数）
-    
-    使用邀请码，会增加使用次数。
-    
-    Args:
-        request: 邀请码验证请求数据
-        
-    Returns:
-        InvitationCodeResponse: 邀请码对象
-        
-    Raises:
-        HTTPException: 当邀请码无效时抛出
+    使用邀请码（增加使用次数）。
+
+    P1-4：按 IP + code 防爆破（复用 LoginBruteForceGuard / PG Cache）。
     """
+    from infra.services.login_brute_force_guard import LoginBruteForceGuard
+
+    client_ip = request.client.host if request.client else ""
+    code = (body.code or "").strip()
+    identity = f"invite:{code.lower()}"
+    await LoginBruteForceGuard.check(client_ip, identity)
     try:
-        invitation_code = await InvitationCodeService.use_invitation_code(request.code)
+        invitation_code = await InvitationCodeService.use_invitation_code(code)
+        await LoginBruteForceGuard.clear_identity(identity)
         return InvitationCodeResponse.model_validate(invitation_code)
     except ValidationError as e:
+        await LoginBruteForceGuard.record_failure(
+            client_ip,
+            identity,
+            ident_max_failures=10,
+        )
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(e)

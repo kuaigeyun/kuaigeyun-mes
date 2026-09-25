@@ -27,7 +27,9 @@ pwd_context = CryptContext(
 
 def create_access_token(
     data: Dict[str, Any],
-    expires_delta: Optional[timedelta] = None
+    expires_delta: Optional[timedelta] = None,
+    *,
+    secret: Optional[str] = None,
 ) -> str:
     """
     创建 JWT 访问令牌
@@ -37,16 +39,10 @@ def create_access_token(
     Args:
         data: 要编码到 Token 中的数据（必须包含 sub 和 tenant_id）
         expires_delta: 过期时间增量（可选，默认使用配置中的过期时间）
+        secret: 签名密钥（可选，默认 JWT_SECRET_KEY；开放 API / 超管可传独立密钥）
         
     Returns:
         str: JWT Token 字符串
-        
-    Example:
-        >>> token = create_access_token(
-        ...     data={"sub": "user123", "tenant_id": 1, "username": "testuser"}
-        ... )
-        >>> len(token) > 0
-        True
     """
     to_encode = data.copy()
     
@@ -59,14 +55,14 @@ def create_access_token(
     
     encoded_jwt = jwt.encode(
         to_encode,
-        settings.JWT_SECRET_KEY,
+        secret if secret is not None else settings.JWT_SECRET_KEY,
         algorithm=settings.JWT_ALGORITHM
     )
     
     return encoded_jwt
 
 
-def verify_token(token: str) -> Optional[Dict[str, Any]]:
+def verify_token(token: str, *, secret: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """
     验证 JWT Token
     
@@ -74,37 +70,31 @@ def verify_token(token: str) -> Optional[Dict[str, Any]]:
     
     Args:
         token: JWT Token 字符串
+        secret: 验签密钥（可选，默认 JWT_SECRET_KEY）
         
     Returns:
         Optional[Dict[str, Any]]: Token 载荷数据，如果验证失败则返回 None
-        
-    Example:
-        >>> token = create_access_token({"sub": "user123", "tenant_id": 1})
-        >>> payload = verify_token(token)
-        >>> payload is not None
-        True
-        >>> payload["sub"]
-        'user123'
     """
     try:
         payload = jwt.decode(
             token,
-            settings.JWT_SECRET_KEY,
+            secret if secret is not None else settings.JWT_SECRET_KEY,
             algorithms=[settings.JWT_ALGORITHM]
         )
         return payload
     except JWTError as e:
         from loguru import logger
-        logger.error(f"❌ Token 验证失败 (JWTError): {e}")
-        logger.error(f"❌ Token 前50个字符: {token[:50] if token else 'None'}")
-        logger.error(f"❌ JWT_SECRET_KEY 长度: {len(settings.JWT_SECRET_KEY) if settings.JWT_SECRET_KEY else 0}")
-        logger.error(f"❌ JWT_ALGORITHM: {settings.JWT_ALGORITHM}")
+        logger.debug(f"Token 验证失败 (JWTError): {e}")
         return None
     except Exception as e:
         from loguru import logger
-        logger.error(f"❌ Token 验证失败 (Exception): {e}")
-        logger.error(f"❌ Token 前50个字符: {token[:50] if token else 'None'}")
+        logger.debug(f"Token 验证失败 (Exception): {e}")
         return None
+
+
+def get_token_payload(token: str, *, secret: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """获取 Token 载荷（等同 verify_token）。"""
+    return verify_token(token, secret=secret)
 
 
 def hash_password(password: str) -> str:
@@ -198,30 +188,7 @@ def create_token_for_user(
     return create_access_token(data, expires_delta)
 
 
-def get_token_payload(token: str) -> Optional[Dict[str, Any]]:
-    """
-    获取 Token 载荷数据
-    
-    验证并返回 Token 中的载荷数据。
-    
-    Args:
-        token: JWT Token 字符串
-        
-    Returns:
-        Optional[Dict[str, Any]]: Token 载荷数据，包含：
-            - sub: 用户 ID
-            - username: 用户名
-            - tenant_id: 组织 ID
-            - is_infra_admin: 是否为平台管理
-            - is_tenant_admin: 是否为组织管理员
-            - exp: 过期时间
-            - iat: 签发时间
-        如果验证失败则返回 None
-    """
-    return verify_token(token)
-
-
-def get_token_payload_for_refresh(token: str) -> Optional[Dict[str, Any]]:
+def get_token_payload_for_refresh(token: str, *, secret: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """
     用于刷新接口：校验签名与结构；在 JWT_REFRESH_TOKEN_EXPIRE_DAYS 内允许用过期访问令牌换发新令牌。
 
@@ -230,7 +197,7 @@ def get_token_payload_for_refresh(token: str) -> Optional[Dict[str, Any]]:
     try:
         payload = jwt.decode(
             token,
-            settings.JWT_SECRET_KEY,
+            secret if secret is not None else settings.JWT_SECRET_KEY,
             algorithms=[settings.JWT_ALGORITHM],
             options={"verify_exp": False},
         )

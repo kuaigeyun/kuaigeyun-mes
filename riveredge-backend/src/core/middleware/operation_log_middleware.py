@@ -65,6 +65,24 @@ class OperationLogMiddleware(BaseHTTPMiddleware):
             return response
 
         tenant_id, user_id = self._extract_identity(request)
+        # 平台超管：tenant_id 哨兵 0，仍记操作日志
+        if user_id is not None and tenant_id is None:
+            if getattr(getattr(request, "state", None), "is_infra_superadmin", False):
+                tenant_id = 0
+            else:
+                # 再尝试从 JWT 识别超管
+                authorization = request.headers.get("Authorization")
+                if authorization and authorization.startswith("Bearer "):
+                    from infra.domain.security.infra_superadmin_security import (
+                        get_infra_superadmin_token_payload,
+                    )
+                    infra_payload = get_infra_superadmin_token_payload(authorization[7:])
+                    if infra_payload:
+                        tenant_id = 0
+                        try:
+                            user_id = int(infra_payload.get("sub"))
+                        except (TypeError, ValueError):
+                            pass
         if tenant_id is None or user_id is None:
             logger.debug(
                 "⚠️ 未能从请求中解析身份 path={} tenant_id={} user_id={}", 

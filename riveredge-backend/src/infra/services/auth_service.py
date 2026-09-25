@@ -1154,21 +1154,15 @@ class AuthService:
         from infra.domain.security.security import get_token_payload_for_refresh
         from infra.domain.security.infra_superadmin_security import (
             create_token_for_infra_superadmin,
+            get_infra_superadmin_token_payload_for_refresh,
         )
         from infra.models.infra_superadmin import InfraSuperAdmin
         from infra.config.infra_config import infra_settings as settings
-        
-        # 验证 Token（允许短时过期后的静默续期，避免前端定时器与请求竞态导致误踢出）
-        payload = get_token_payload_for_refresh(token)
-        if not payload:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="无效的 Token"
-            )
 
-        # 平台超管：独立身份表 + 独立票结构，禁止按 User.id 续期
-        if payload.get("is_infra_superadmin") is True:
-            admin_id = int(payload.get("sub"))
+        # 平台超管：独立密钥 + 活动滑动续签（空闲超时后须重登）
+        infra_payload = get_infra_superadmin_token_payload_for_refresh(token)
+        if infra_payload:
+            admin_id = int(infra_payload.get("sub"))
             admin = await InfraSuperAdmin.get_or_none(id=admin_id)
             if not admin or not admin.is_active:
                 raise HTTPException(
@@ -1177,6 +1171,30 @@ class AuthService:
                     headers={"WWW-Authenticate": "Bearer"},
                 )
             return create_token_for_infra_superadmin(admin)
+
+        # 验证普通用户 Token（允许短时过期后的静默续期）
+        payload = get_token_payload_for_refresh(token)
+        if not payload:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="无效的 Token"
+            )
+
+        # 开放 API Token 不走用户 refresh
+        if payload.get("typ") == "open_api":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="开放 API 令牌不支持刷新，请重新换票",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        # 误用用户密钥解出的超管声明（不应发生）
+        if payload.get("is_infra_superadmin") is True:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="无效的 Token",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
         
         # 获取用户信息（排除已软删除的用户）
         user_id = int(payload.get("sub"))

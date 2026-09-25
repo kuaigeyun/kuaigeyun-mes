@@ -26,6 +26,14 @@ class SchedulingConstraints(BaseSchema):
     schedule_mode: str = Field("forward", description="排产方向 forward|backward")
     material_hard_constraint: bool = Field(False, description="物料齐套硬约束（不足则阻断）")
     bottleneck_work_center_ids: List[int] = Field(default_factory=list, description="重点关注的工作中心ID")
+    resource_mode: str = Field(
+        "workstation",
+        description="排程资源维度 workstation|production_line",
+    )
+    line_exclusive: bool = Field(
+        True,
+        description="产线模式下同线同刻是否互斥（不可并行多工单）",
+    )
 
     @field_validator("schedule_mode", mode="before")
     @classmethod
@@ -33,6 +41,14 @@ class SchedulingConstraints(BaseSchema):
         mode = str(v or "forward").strip().lower()
         if mode not in {"forward", "backward"}:
             raise ValueError("schedule_mode 须为 forward 或 backward")
+        return mode
+
+    @field_validator("resource_mode", mode="before")
+    @classmethod
+    def normalize_resource_mode(cls, v: Any) -> str:
+        mode = str(v or "workstation").strip().lower()
+        if mode not in {"workstation", "production_line"}:
+            raise ValueError("resource_mode 须为 workstation 或 production_line")
         return mode
 
     @model_validator(mode="before")

@@ -698,7 +698,7 @@ class VisualSchedulingService(BaseService):
 
 
 
-        if op_updates and float(constraints.get("setup_changeover_hours") or 0) > 0:
+        if op_updates:
             conflicts.extend(
                 await self._check_changeover_for_updates(
                     tenant_id, op_updates, constraints, holidays, work_hours, overtime
@@ -727,10 +727,25 @@ class VisualSchedulingService(BaseService):
         overtime,
     ) -> List[Dict[str, Any]]:
         from apps.kuaizhizao.utils.working_time import add_working_hours
+        from apps.master_data.models.factory import Workstation
 
         changeover_hours = float(constraints.get("setup_changeover_hours") or 0.0)
-        if changeover_hours <= 0:
+        resource_mode = str(constraints.get("resource_mode") or "workstation").strip().lower()
+        use_line = resource_mode == "production_line"
+
+        changeover_ctx = None
+        try:
+            from apps.ind_relay.services.changeover_lookup import load_changeover_context
+
+            changeover_ctx = await load_changeover_context(
+                tenant_id, fallback_hours=changeover_hours
+            )
+        except Exception:
+            changeover_ctx = None
+
+        if changeover_hours <= 0 and not (changeover_ctx and changeover_ctx.available):
             return []
+
         update_by_id = {
             int(u["operation_id"]): u
             for u in op_updates
@@ -750,8 +765,29 @@ class VisualSchedulingService(BaseService):
                     int(row.get("product_id") or 0),
                     row.get("code"),
                 )
-        # Build proposed intervals by station
-        by_station: Dict[int, List[Dict[str, Any]]] = {}
+
+        station_ids_all = {
+            int(op.assigned_station_id or 0) for op in ops if int(op.assigned_station_id or 0) > 0
+        }
+        station_to_line: Dict[int, int] = {}
+        if station_ids_all:
+            for row in await Workstation.filter(
+                tenant_id=tenant_id, id__in=list(station_ids_all), deleted_at__isnull=True
+            ).values("id", "production_line_id"):
+                station_to_line[int(row["id"])] = int(row.get("production_line_id") or 0)
+
+        if changeover_ctx is not None and product_by_wo:
+            try:
+                changeover_ctx = await load_changeover_context(
+                    tenant_id,
+                    fallback_hours=changeover_hours,
+                    product_ids={pid for pid, _ in product_by_wo.values() if pid > 0},
+                )
+            except Exception:
+                pass
+
+        # Build proposed intervals by resource key (station or line)
+        by_resource: Dict[int, List[Dict[str, Any]]] = {}
         for op in ops:
             patch = update_by_id.get(op.id) or {}
             start_dt = _parse_dt(patch.get("planned_start_date"))
@@ -761,19 +797,32 @@ class VisualSchedulingService(BaseService):
             sid = int(op.assigned_station_id or 0)
             if sid <= 0:
                 continue
+            line_id = station_to_line.get(sid, 0)
+            rkey = line_id if use_line and line_id > 0 else sid
             pid, code = product_by_wo.get(int(op.work_order_id or 0), (0, None))
-            by_station.setdefault(sid, []).append(
+            by_resource.setdefault(rkey, []).append(
                 {
                     "op_id": int(op.id),
                     "wo_id": int(op.work_order_id or 0),
                     "wo_code": code,
                     "product_id": pid,
+                    "station_id": sid,
+                    "line_id": line_id,
                     "start": start_dt,
                     "end": end_dt,
                 }
             )
-        # Also load neighboring fixed ops on same stations
-        station_ids = list(by_station.keys())
+        # Also load neighboring fixed ops on same stations/lines
+        station_ids = list({item["station_id"] for items in by_resource.values() for item in items})
+        if use_line:
+            line_ids = list({item["line_id"] for items in by_resource.values() for item in items if item["line_id"] > 0})
+            if line_ids:
+                extra = await Workstation.filter(
+                    tenant_id=tenant_id,
+                    production_line_id__in=line_ids,
+                    deleted_at__isnull=True,
+                ).values_list("id", flat=True)
+                station_ids = list({*station_ids, *[int(i) for i in extra]})
         if station_ids:
             others = await WorkOrderOperation.filter(
                 tenant_id=tenant_id,
@@ -793,24 +842,33 @@ class VisualSchedulingService(BaseService):
                     )
             for op in others:
                 sid = int(op.assigned_station_id or 0)
+                if sid not in station_to_line:
+                    st = await Workstation.get_or_none(
+                        tenant_id=tenant_id, id=sid, deleted_at__isnull=True
+                    )
+                    station_to_line[sid] = int(st.production_line_id or 0) if st else 0
+                line_id = station_to_line.get(sid, 0)
+                rkey = line_id if use_line and line_id > 0 else sid
                 pid, code = product_by_wo.get(int(op.work_order_id or 0), (0, None))
                 other_start = _parse_dt(op.planned_start_date)
                 other_end = _parse_dt(op.planned_end_date)
                 if not other_start or not other_end:
                     continue
-                by_station.setdefault(sid, []).append(
+                by_resource.setdefault(rkey, []).append(
                     {
                         "op_id": int(op.id),
                         "wo_id": int(op.work_order_id or 0),
                         "wo_code": code,
                         "product_id": pid,
+                        "station_id": sid,
+                        "line_id": line_id,
                         "start": other_start,
                         "end": other_end,
                     }
                 )
         conflicts: List[Dict[str, Any]] = []
         touched = set(op_ids)
-        for sid, items in by_station.items():
+        for rkey, items in by_resource.items():
             items.sort(key=lambda x: x["start"])
             for i in range(len(items) - 1):
                 a, b = items[i], items[i + 1]
@@ -820,9 +878,33 @@ class VisualSchedulingService(BaseService):
                     continue
                 if a["op_id"] not in touched and b["op_id"] not in touched:
                     continue
+                line_id = a.get("line_id") or b.get("line_id") or (rkey if use_line else 0)
+                if changeover_ctx is not None:
+                    need_hours, forbid, source = changeover_ctx.lookup(
+                        a["product_id"],
+                        b["product_id"],
+                        production_line_id=line_id or None,
+                    )
+                else:
+                    need_hours, forbid, source = changeover_hours, False, "fallback"
+                if forbid:
+                    target = b if b["op_id"] in touched else a
+                    conflicts.append(
+                        _conflict_item(
+                            conflict_type="forbid_same_line",
+                            message="同资源料号族禁共线",
+                            work_order_id=target["wo_id"] or None,
+                            work_order_code=target["wo_code"],
+                            operation_id=target["op_id"],
+                            station_id=target["station_id"],
+                        )
+                    )
+                    continue
+                if need_hours <= 0:
+                    continue
                 ready = add_working_hours(
                     to_site_timezone(a["end"]),
-                    changeover_hours,
+                    need_hours,
                     holidays=holidays,
                     config=work_hours,
                     overtime=overtime,
@@ -832,11 +914,14 @@ class VisualSchedulingService(BaseService):
                     conflicts.append(
                         _conflict_item(
                             conflict_type="insufficient_changeover",
-                            message=f"同工位跨产品换型不足（需净工时 {changeover_hours:g}h）",
+                            message=(
+                                f"{'同产线' if use_line else '同工位'}跨产品换型不足"
+                                f"（需净工时 {need_hours:g}h，来源 {source}）"
+                            ),
                             work_order_id=target["wo_id"] or None,
                             work_order_code=target["wo_code"],
                             operation_id=target["op_id"],
-                            station_id=sid,
+                            station_id=target["station_id"],
                         )
                     )
         return conflicts

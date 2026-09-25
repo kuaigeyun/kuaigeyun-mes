@@ -14,6 +14,8 @@ class SchedulingPlanRequest:
     scope: str = "selected"
     plan_date: Optional[date] = None
     updated_by: Optional[int] = None
+    local_window_hours: Optional[float] = None
+    resource_ids: List[int] = field(default_factory=list)
 
 
 class SchedulingEngine(Protocol):

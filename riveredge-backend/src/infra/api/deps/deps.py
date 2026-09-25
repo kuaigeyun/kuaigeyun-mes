@@ -73,7 +73,13 @@ async def get_current_user(
     infra_superadmin_payload = get_infra_superadmin_token_payload(token)
     if infra_superadmin_payload:
         # 这是平台超级管理员 Token，允许全局访问
-        logger.debug("检测到平台超级管理员 Token，允许全局访问")
+        client_ip = request.client.host if request.client else None
+        logger.info(
+            "infra_superadmin_token_accepted admin_id={} ip={} path={}",
+            infra_superadmin_payload.get("sub"),
+            client_ip,
+            request.url.path,
+        )
         
         # 获取平台超级管理员 ID
         admin_id = int(infra_superadmin_payload.get("sub"))
@@ -110,10 +116,12 @@ async def get_current_user(
         setattr(virtual_user, '_infra_superadmin_id', admin_id)
 
         # 缓存身份到 request.state，operation_log_middleware 可直接复用
+        # tenant_id=0 为超管操作日志哨兵（非真实租户）
         try:
             request.state.user_id = admin_id
-            request.state.tenant_id = None
+            request.state.tenant_id = 0
             request.state.jwt_payload = infra_superadmin_payload
+            request.state.is_infra_superadmin = True
         except Exception:
             pass
         
@@ -123,14 +131,16 @@ async def get_current_user(
         
         return virtual_user
 
-    # 开放 API Token（账套+应用换票）
+    # 开放 API Token（账套+应用换票，独立签名密钥）
     from core.services.open_api.open_api_auth_service import (
+        OpenApiAuthService,
         is_open_api_payload,
         virtual_user_id_for_app,
     )
 
-    payload = get_token_payload(token)
-    if payload and is_open_api_payload(payload):
+    open_payload = OpenApiAuthService.parse_open_api_token(token)
+    if open_payload and is_open_api_payload(open_payload):
+        payload = open_payload
         tid = payload.get("tenant_id")
         if tid is None:
             raise HTTPException(
@@ -170,9 +180,18 @@ async def get_current_user(
         return virtual_user
 
     # 验证普通用户 Token
+    payload = get_token_payload(token)
     if not payload:
         # Token 非法通常意味着过期或被篡改，不打印 token 原文，减少敏感数据泄漏 & 噪声
         logger.debug("普通用户 Token 验证失败（过期或非法）")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="无效的 Token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # 防止误用开放 API / 超管票走用户密钥验签通过后的旁路（独立密钥下通常不会到此）
+    if is_open_api_payload(payload) or payload.get("is_infra_superadmin"):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="无效的 Token",

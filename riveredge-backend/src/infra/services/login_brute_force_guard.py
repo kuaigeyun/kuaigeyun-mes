@@ -47,19 +47,29 @@ class LoginBruteForceGuard:
             await LoginBruteForceGuard._ensure_not_locked("ip", ip)
 
     @staticmethod
-    async def record_failure(client_ip: str, identity: str) -> None:
+    async def record_failure(
+        client_ip: str,
+        identity: str,
+        *,
+        ident_max_failures: int | None = None,
+        ip_max_failures: int | None = None,
+    ) -> None:
         """密码错误后累加失败次数，达阈值则写入锁定键。"""
         await LoginBruteForceGuard._increment_failure(
             "ident",
             identity,
-            infra_settings.LOGIN_BRUTE_FORCE_IDENT_MAX_FAILURES,
+            ident_max_failures
+            if ident_max_failures is not None
+            else infra_settings.LOGIN_BRUTE_FORCE_IDENT_MAX_FAILURES,
         )
         ip = (client_ip or "").strip()
         if ip:
             await LoginBruteForceGuard._increment_failure(
                 "ip",
                 ip,
-                infra_settings.LOGIN_BRUTE_FORCE_IP_MAX_FAILURES,
+                ip_max_failures
+                if ip_max_failures is not None
+                else infra_settings.LOGIN_BRUTE_FORCE_IP_MAX_FAILURES,
             )
 
     @staticmethod

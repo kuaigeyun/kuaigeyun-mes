@@ -7,7 +7,7 @@
  * 与 core/config/industry_app_catalog.py 保持一致。
  */
 
-export const FREE_INDUSTRY_APP_CODES = ['spoke-wheel', 'ind-electronics', 'ind-mold'] as const;
+export const FREE_INDUSTRY_APP_CODES = ['spoke-wheel', 'ind-electronics', 'ind-mold', 'ind-relay'] as const;
 
 /** 改编码合并完成前 DB 可能暂留旧 code（见 app_code_renames）；分类仍须归行业 */
 export const LEGACY_INDUSTRY_APP_CODES = ['kuaielectronics', 'industry-mold'] as const;
@@ -44,6 +44,7 @@ export const FREE_INDUSTRY_SORT_ORDER: Record<FreeIndustryAppCode, number> = {
   'spoke-wheel': 300,
   'ind-electronics': 310,
   'ind-mold': 320,
+  'ind-relay': 330,
 };
 
 /** 侧栏行业包容器（不在应用中心展示） */

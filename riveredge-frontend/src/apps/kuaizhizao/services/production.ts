@@ -25,6 +25,8 @@ export interface SchedulingConstraints {
   schedule_mode?: 'forward' | 'backward';
   material_hard_constraint?: boolean;
   bottleneck_work_center_ids?: number[];
+  resource_mode?: 'workstation' | 'production_line';
+  line_exclusive?: boolean;
 }
 
 export interface VisualSchedulingConflict {
@@ -711,13 +713,22 @@ export const visualSchedulingApi = {
   },
   autoReschedule: async (data: {
     work_order_ids?: number[];
-    scope?: 'selected' | 'overdue' | 'unscheduled';
+    scope?: 'selected' | 'overdue' | 'unscheduled' | 'local';
     plan_date?: string;
+    local_window_hours?: number;
+    resource_ids?: number[];
   }) => {
     return apiRequest<{
       proposal: {
         summary?: string | null;
         warnings: string[];
+        reasons?: Array<{
+          code: string;
+          message: string;
+          work_order_id?: number | null;
+          operation_id?: number | null;
+          changeover_hours?: number | null;
+        }>;
         unfreezed?: number[];
         work_order_adjustments: Array<{
           work_order_id: number;

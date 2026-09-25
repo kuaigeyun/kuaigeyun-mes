@@ -514,21 +514,41 @@ class RollingScheduleService:
         candidates: List[Dict[str, Any]],
     ) -> RollingScheduleCapacityAdvisory:
         from apps.kuaizhizao.utils.working_time import load_scheduling_work_context
+        from apps.kuaizhizao.services.visual_scheduling_service import VisualSchedulingService
 
         _holidays, work_hours, _overtime = await load_scheduling_work_context(
             tenant_id, around=plan_date, span_days=7
         )
         daily_capacity = max(1.0, work_hours.daily_net_hours())
+        constraints = await VisualSchedulingService()._load_constraints(tenant_id)
+        resource_mode = str(constraints.get("resource_mode") or "workstation").strip().lower()
+
         station_rows = await Workstation.filter(
             tenant_id=tenant_id,
             is_active=True,
             deleted_at__isnull=True,
-        ).values("max_parallel")
+        ).values("max_parallel", "production_line_id")
         station_count = len(station_rows)
         parallel_sum = sum(max(1, int(r.get("max_parallel") or 1)) for r in station_rows)
         station_count = max(1, station_count)
         parallel_sum = max(1, parallel_sum)
         available_hours = daily_capacity * parallel_sum
+        capacity_note = ""
+
+        if resource_mode == "production_line":
+            line_hours = await self._line_mode_available_hours(tenant_id, daily_capacity)
+            if line_hours is not None:
+                available_hours = line_hours
+                capacity_note = "（产线节拍/日产能）"
+            else:
+                line_ids = {
+                    int(r.get("production_line_id") or 0)
+                    for r in station_rows
+                    if int(r.get("production_line_id") or 0) > 0
+                }
+                line_count = max(1, len(line_ids) if line_ids else station_count)
+                available_hours = daily_capacity * line_count
+                capacity_note = "（产线模式·日历工时）"
 
         wo_ids = [c["work_order_id"] for c in candidates]
         required_hours = 0.0
@@ -549,7 +569,7 @@ class RollingScheduleService:
         overloaded = required_hours > available_hours
         msg = (
             f"计划日 {plan_date} 粗产能：可用 {available_hours:.1f}h，候选标准工时合计 {required_hours:.1f}h"
-            f"（{utilization}%）"
+            f"（{utilization}%）{capacity_note}"
         )
         if overloaded:
             msg += "；已超载，请至可视排产做工位级确认"
@@ -563,6 +583,35 @@ class RollingScheduleService:
             overloaded=overloaded,
             message=msg,
         )
+
+    @staticmethod
+    async def _line_mode_available_hours(tenant_id: int, daily_capacity: float) -> Optional[float]:
+        """优先读继电器行业包产线日产能；无数据返回 None。"""
+        try:
+            from apps.ind_relay.models.line_capacity import RelayLineCapacity
+        except Exception:
+            return None
+        rows = await RelayLineCapacity.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            is_active=True,
+        ).all()
+        if not rows:
+            return None
+        total = 0.0
+        for row in rows:
+            qty = float(row.daily_capacity_qty or 0)
+            takt = float(row.takt_seconds or 0)
+            if qty > 0 and takt > 0:
+                total += qty * takt / 3600.0
+            elif qty > 0:
+                total += daily_capacity
+            elif takt > 0:
+                # 无日产能时按单班日历小时估算可产出再转回小时（保守：一班）
+                total += daily_capacity
+            else:
+                total += daily_capacity
+        return max(1.0, total)
 
     async def sync_from_aps_confirm(
         self,

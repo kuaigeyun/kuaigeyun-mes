@@ -18,6 +18,7 @@ FREE_INDUSTRY_APP_CODES: FrozenSet[str] = frozenset(
         "spoke-wheel",
         "ind-electronics",
         "ind-mold",
+        "ind-relay",
     }
 )
 

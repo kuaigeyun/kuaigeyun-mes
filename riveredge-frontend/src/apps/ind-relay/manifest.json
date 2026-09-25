@@ -1,0 +1,9 @@
+{
+  "code": "ind-relay",
+  "name": "继电器制造",
+  "version": "1.0.0",
+  "description": "继电器自动化产线行业插件",
+  "icon": "thunderbolt",
+  "entry_point": "./index.tsx",
+  "route_path": "/apps/ind-relay"
+}

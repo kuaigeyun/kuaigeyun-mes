@@ -1,8 +1,17 @@
 import type { SchedulingAiProposal } from '../../../services/scheduling-ai';
 
+export interface EngineSchedulingReason {
+  code: string;
+  message: string;
+  work_order_id?: number | null;
+  operation_id?: number | null;
+  changeover_hours?: number | null;
+}
+
 export interface EngineSchedulingProposal {
   summary?: string | null;
   warnings?: string[];
+  reasons?: EngineSchedulingReason[];
   unfreezed?: number[];
   work_order_adjustments?: Array<{
     work_order_id: number;
@@ -51,9 +60,16 @@ export function convertEngineProposalToAiProposal(
     });
   }
 
+  const reasonNotes = (engineProposal.reasons ?? [])
+    .slice(0, 12)
+    .map((r) => r.message)
+    .filter(Boolean);
+  const confidenceNotes =
+    reasonNotes.length > 0 ? reasonNotes.join('；') : null;
+
   return {
     summary: engineProposal.summary,
-    confidenceNotes: null,
+    confidenceNotes,
     warnings: engineProposal.warnings ?? [],
     workOrderAdjustments: (engineProposal.work_order_adjustments ?? []).map((item) => ({
       workOrderId: item.work_order_id,

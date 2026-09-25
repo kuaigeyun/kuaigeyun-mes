@@ -154,6 +154,7 @@ class OpenApiAuthService:
                 "is_tenant_admin": False,
             },
             expires_delta=expires_delta,
+            secret=infra_settings.resolved_open_api_jwt_secret,
         )
         return {
             "access_token": token,
@@ -170,7 +171,10 @@ class OpenApiAuthService:
     def parse_open_api_token(token: str) -> Optional[dict[str, Any]]:
         if not token:
             return None
-        payload = get_token_payload(token)
+        payload = get_token_payload(
+            token,
+            secret=infra_settings.resolved_open_api_jwt_secret,
+        )
         if not is_open_api_payload(payload):
             return None
         return payload

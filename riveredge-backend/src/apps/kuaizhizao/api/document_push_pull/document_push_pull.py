@@ -156,7 +156,11 @@ async def reverse_document(
 
 
 @router.get("/reverse/supported", summary="List supported reverse types")
-async def get_supported_reverses() -> Dict[str, list]:
-    """返回各单据类型支持的撤回类型，供前端展示"""
+async def get_supported_reverses(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, list]:
+    """返回各单据类型支持的撤回类型，供前端展示（需登录）。"""
+    _ = current_user, tenant_id
     engine = DocumentStateEngine()
     return engine.get_supported_reverses()

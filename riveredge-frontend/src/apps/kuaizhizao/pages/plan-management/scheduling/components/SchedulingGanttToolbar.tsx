@@ -66,6 +66,8 @@ interface SchedulingGanttToolbarProps {
   onAutoReschedule?: () => void;
   autoRescheduleConfirm?: SchedulingActionConfirm;
   autoRescheduleLoading?: boolean;
+  onLocalReschedule?: () => void;
+  localRescheduleConfirm?: SchedulingActionConfirm;
   onEditOperation?: () => void;
   canEditOperation?: boolean;
 }
@@ -155,6 +157,8 @@ function buildSchedulingGanttToolbar({
   onAutoReschedule,
   autoRescheduleConfirm,
   autoRescheduleLoading = false,
+  onLocalReschedule,
+  localRescheduleConfirm,
   onEditOperation,
   canEditOperation = false,
 }: SchedulingGanttToolbarProps): SchedulingGanttToolbarNodes {
@@ -233,6 +237,32 @@ function buildSchedulingGanttToolbar({
               {t('app.kuaizhizao.scheduling.ganttToolbar.autoReschedule')}
             </Button>
           )}
+          {localRescheduleConfirm ? (
+            <ActionConfirmPopconfirm
+              title={localRescheduleConfirm.title}
+              description={localRescheduleConfirm.description}
+              okText={localRescheduleConfirm.okText}
+              onConfirm={() => void onLocalReschedule?.()}
+            >
+              <Button
+                size="small"
+                disabled={selectedWorkOrderCount === 0}
+                loading={autoRescheduleLoading}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {t('app.kuaizhizao.scheduling.ganttToolbar.localReschedule')}
+              </Button>
+            </ActionConfirmPopconfirm>
+          ) : onLocalReschedule ? (
+            <Button
+              size="small"
+              disabled={selectedWorkOrderCount === 0}
+              loading={autoRescheduleLoading}
+              onClick={onLocalReschedule}
+            >
+              {t('app.kuaizhizao.scheduling.ganttToolbar.localReschedule')}
+            </Button>
+          ) : null}
           {canEditOperation ? (
             <Button size="small" onClick={onEditOperation}>
               {t('app.kuaizhizao.scheduling.ganttToolbar.editOperation')}

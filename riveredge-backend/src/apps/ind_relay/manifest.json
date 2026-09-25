@@ -1,0 +1,78 @@
+{
+  "code": "ind-relay",
+  "name": "继电器制造",
+  "version": "1.0.0",
+  "description": "继电器自动化产线行业包：产线节拍/换型、末道质检计入产能、产线资源排程默认。",
+  "icon": "thunderbolt",
+  "author": "RiverEdge",
+  "market_category": "industry",
+  "is_pro": false,
+  "entry_point": "../apps/ind-relay/index.tsx",
+  "route_path": "/apps/ind-relay",
+  "sort_order": 330,
+  "industry_pack_menu": {
+    "children": [
+      {
+        "title": "app.ind-relay.menu.home",
+        "path": "/apps/ind-relay",
+        "permission": "ind-relay:entry:read",
+        "sort_order": 1
+      },
+      {
+        "title": "app.ind-relay.menu.lineCapacity",
+        "path": "/apps/ind-relay/line-capacity",
+        "permission": "ind-relay:line-capacity:read",
+        "sort_order": 10
+      },
+      {
+        "title": "app.ind-relay.menu.changeover",
+        "path": "/apps/ind-relay/changeover",
+        "permission": "ind-relay:changeover:read",
+        "sort_order": 20
+      },
+      {
+        "title": "app.ind-relay.menu.lineOutput",
+        "path": "/apps/ind-relay/line-output",
+        "permission": "ind-relay:line-output:read",
+        "sort_order": 30
+      }
+    ]
+  },
+  "industry_extensions": [
+    {
+      "id": "relay.line_capacity",
+      "kind": "standalone",
+      "pack_menu": true
+    },
+    {
+      "id": "relay.changeover",
+      "kind": "standalone",
+      "pack_menu": true
+    },
+    {
+      "id": "relay.line_output_dashboard",
+      "kind": "standalone",
+      "pack_menu": true
+    },
+    {
+      "id": "relay.host_defaults",
+      "kind": "standalone",
+      "pack_menu": false
+    }
+  ],
+  "permissions": [
+    "ind-relay:entry:read",
+    "ind-relay:entry:update",
+    "ind-relay:line-capacity:read",
+    "ind-relay:line-capacity:create",
+    "ind-relay:line-capacity:update",
+    "ind-relay:changeover:read",
+    "ind-relay:changeover:create",
+    "ind-relay:changeover:update",
+    "ind-relay:line-output:read"
+  ],
+  "dependencies": {
+    "riveredge-backend": ">=1.0.0",
+    "riveredge-frontend": ">=1.0.0"
+  }
+}

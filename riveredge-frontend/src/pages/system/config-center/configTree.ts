@@ -367,6 +367,25 @@ export const AUTOMATION_CATEGORIES: ConfigCategory[] = createCategories({
         { value: 'inbound_notice', labelKey: 'pages.system.configCenter.param.work_order_last_operation_auto_inbound_mode_opt_notice' },
       ],
     },
+    {
+      key: 'production.output_basis',
+      nameKey: 'pages.system.configCenter.param.production_output_basis',
+      descriptionKey: 'pages.system.configCenter.param.production_output_basis_desc',
+      source: 'business_config',
+      sourcePath: 'parameters.production.output_basis',
+      type: 'select',
+      selectOptions: [
+        { value: 'all_operations', labelKey: 'pages.system.configCenter.param.production_output_basis_opt_all' },
+        {
+          value: 'last_operation_qualified',
+          labelKey: 'pages.system.configCenter.param.production_output_basis_opt_last_qualified',
+        },
+        {
+          value: 'last_operation_effective_qualified',
+          labelKey: 'pages.system.configCenter.param.production_output_basis_opt_last_effective',
+        },
+      ],
+    },
   ],
   warehouse: [
     { key: 'warehouse.auto_outbound', nameKey: 'pages.system.configCenter.param.warehouse_auto_outbound', descriptionKey: 'pages.system.configCenter.param.warehouse_auto_outbound_desc', source: 'business_config', sourcePath: 'parameters.warehouse.auto_outbound', type: 'boolean' },

@@ -358,9 +358,37 @@ class SchedulingAutoRescheduleRequest(BaseSchema):
 
     work_order_ids: List[int] = Field(default_factory=list, description="待重排工单ID")
 
-    scope: str = Field("selected", description="selected/overdue/unscheduled")
+    scope: str = Field(
+        "selected",
+        description="selected/overdue/unscheduled/local",
+    )
 
     plan_date: Optional[str] = Field(None, description="滚动计划日（可选）")
+
+    local_window_hours: Optional[float] = Field(
+        None, ge=1, le=168, description="局部重排时间窗（小时），仅 scope=local"
+    )
+
+    resource_ids: List[int] = Field(
+        default_factory=list,
+        description="局部重排资源ID（工位或产线），可选",
+    )
+
+
+
+
+
+class SchedulingReasonItem(BaseSchema):
+
+    code: str = Field(..., description="原因码")
+
+    message: str = Field(..., description="可读说明")
+
+    work_order_id: Optional[int] = None
+
+    operation_id: Optional[int] = None
+
+    changeover_hours: Optional[float] = None
 
 
 
@@ -371,6 +399,10 @@ class SchedulingAdjustmentProposal(BaseSchema):
     summary: Optional[str] = None
 
     warnings: List[str] = Field(default_factory=list)
+
+    reasons: List[SchedulingReasonItem] = Field(
+        default_factory=list, description="结构化排程原因"
+    )
 
     unfreezed: List[int] = Field(default_factory=list, description="自动重排时已解冻的逾期工单 ID")
 

@@ -512,11 +512,16 @@ async def download_file(
         from loguru import logger
         logger.debug(f"🔍 download_file 调试: token={token[:50] if token else None}..., access_token={access_token[:50] if access_token else None}..., x_tenant_id={x_tenant_id}, uuid={uuid}")
 
-        # 1. 尝试验证标准 access_token
-        if access_token:
+        # 1. 尝试验证标准 access_token（query 或 Authorization Bearer）
+        bearer = access_token
+        if not bearer:
+            auth_header = request.headers.get("Authorization") or ""
+            if auth_header.lower().startswith("bearer "):
+                bearer = auth_header[7:].strip()
+        if bearer:
             from infra.domain.security.security import verify_token
             try:
-                payload = verify_token(access_token)
+                payload = verify_token(bearer)
                 if payload:
                     tenant_id = payload.get("tenant_id")
                     logger.debug(f"✅ 从 access_token 提取 tenant_id: {tenant_id}")
@@ -551,26 +556,14 @@ async def download_file(
                     detail=str(e)
                 )
         
-        # 如果没有token或token中没有tenant_id，从请求头获取
+        # P1-3：禁止仅凭 X-Tenant-ID 匿名下载；必须 access_token 或 preview token
         if tenant_id is None:
-            logger.debug("⚠️ Token 中没有 tenant_id，尝试从请求头获取")
-            if x_tenant_id:
-                try:
-                    tenant_id = int(x_tenant_id)
-                    logger.debug(f"✅ 从请求头获取 tenant_id: {tenant_id}")
-                except ValueError:
-                    logger.error(f"❌ 无效的组织ID: {x_tenant_id}")
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="无效的组织ID"
-                    )
-            else:
-                # 如果没有token也没有请求头，抛出错误
-                logger.error("❌ 组织上下文未设置：没有token也没有X-Tenant-ID请求头")
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="组织上下文未设置（请提供token或X-Tenant-ID请求头）"
-                )
+            logger.error("❌ 下载鉴权失败：缺少 access_token / preview token")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="下载需要 access_token 或预览 token",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
 
         logger.debug(f"🎯 最终 tenant_id: {tenant_id}, 将查询文件 uuid: {uuid}")
         

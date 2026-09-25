@@ -161,6 +161,16 @@ class IndustryPackMenuService:
         """
         if not is_industry_module_app_code(app_code):
             return 0
+        # 新模块权限可能尚未写入 core_permissions；授予前强制同步一次
+        try:
+            from core.services.authorization.permission_sync_service import PermissionSyncService
+
+            await PermissionSyncService.ensure_permissions(tenant_id=tenant_id, force=True)
+        except Exception as exc:
+            logger.warning(
+                f"租户 {tenant_id} 行业模块 {app_code} 授权前权限同步失败: {exc}"
+            )
+
         manifest = ApplicationService._get_manifest_by_code(app_code) or {}
         codes = [
             str(c).strip()
@@ -172,6 +182,7 @@ class IndustryPackMenuService:
         conn = await get_db_connection()
         try:
             granted = 0
+            missing_codes: list[str] = []
             for code in codes:
                 row = await conn.fetchrow(
                     """
@@ -183,6 +194,7 @@ class IndustryPackMenuService:
                     code,
                 )
                 if not row:
+                    missing_codes.append(code)
                     continue
                 perm_id = int(row["id"])
                 result = await conn.execute(
@@ -214,6 +226,10 @@ class IndustryPackMenuService:
                     granted += int(str(result).split()[-1])
                 except Exception:
                     pass
+            if missing_codes:
+                logger.warning(
+                    f"租户 {tenant_id} 行业模块 {app_code} 权限未入库，无法授予: {missing_codes}"
+                )
             if granted:
                 logger.info(
                     f"租户 {tenant_id} 行业模块 {app_code} 已向持有行业包入口权限的角色授予 {granted} 条权限"

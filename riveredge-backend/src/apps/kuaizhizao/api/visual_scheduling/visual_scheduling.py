@@ -160,6 +160,8 @@ async def auto_reschedule(
             scope=body.scope,
             plan_date=plan_date,
             updated_by=int(current_user.id),
+            local_window_hours=body.local_window_hours,
+            resource_ids=list(body.resource_ids or []),
         )
     )
     return SchedulingAutoRescheduleResponse(proposal=raw)
