@@ -74,6 +74,8 @@ const WorkCentersPage: React.FC = () => {
   const [workCenterDetail, setWorkCenterDetail] = useState<WorkCenter | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [workstationMap, setWorkstationMap] = useState<Record<number, Workstation>>({});
+  /** 顶部维度说明提示；收起入口在 UniTable 功能按钮区末尾 */
+  const [dimensionHintVisible, setDimensionHintVisible] = useState(true);
 
   const {
     customFields,
@@ -573,13 +575,14 @@ const WorkCentersPage: React.FC = () => {
   return (
     <>
       <ListPageTemplate>
-        <Alert
-          type="info"
-          showIcon
-          closable
-          style={{ marginBottom: 12 }}
-          title={t('app.master-data.workCenters.dimensionHint')}
-        />
+        {dimensionHintVisible ? (
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 12 }}
+            title={t('app.master-data.workCenters.dimensionHint')}
+          />
+        ) : null}
         <UniTable<WorkCenter>
           columnPersistenceId="apps.master-data.pages.factory.work-centers.list-v3"
           actionRef={actionRef}
@@ -643,6 +646,16 @@ const WorkCentersPage: React.FC = () => {
               selectedRowKeys={selectedRowKeys}
               menuItems={batchActiveMenuItems}
             />,
+          ]}
+          toolBarActionsEnd={[
+            <Button
+              key="dimension-hint-toggle"
+              onClick={() => setDimensionHintVisible((v) => !v)}
+            >
+              {dimensionHintVisible
+                ? t('app.master-data.factory.collapseDimensionHint')
+                : t('app.master-data.factory.expandDimensionHint')}
+            </Button>,
           ]}
           enableRowSelection
           selectedRowKeys={selectedRowKeys}

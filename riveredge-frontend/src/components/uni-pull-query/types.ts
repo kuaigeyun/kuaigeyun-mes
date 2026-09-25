@@ -61,6 +61,12 @@ export interface UniPullQueryModalProps<T extends object> {
   scope?: string;
   onScopeChange?: (scope: string) => void;
 
+  /**
+   * 取单筛选与表格之前的独立区块（如外推的推送目标与连接配置）。
+   * 不进入筛选栏，避免和单据选择混在同一块。
+   */
+  leading?: ReactNode;
+
   /** 搜索框右侧扩展筛选 */
   filterExtra?: ReactNode;
   /** inline：与搜索框同一行（默认）；block：独占下一行 */
@@ -77,6 +83,11 @@ export interface UniPullQueryModalProps<T extends object> {
 
   /** 表格下方提示（如重复下推警告） */
   alert?: ReactNode;
+  /** 内嵌在父级 Modal（如同步中心）时不另开取单 Modal */
+  embedded?: boolean;
+  /** 内嵌时不渲染底部取消/确认，由外层布局统一放按钮 */
+  hideFooter?: boolean;
+
   /** 表格下方补充说明 */
   footerHint?: ReactNode;
   tableScroll?: TableProps<T>['scroll'];

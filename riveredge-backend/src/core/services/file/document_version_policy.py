@@ -49,6 +49,11 @@ def can_view_historical_versions(audience: DocumentVersionAudience) -> bool:
     }
 
 
+def can_download_historical_versions(audience: DocumentVersionAudience) -> bool:
+    """历史版下载：仅资深制定方 / 全局总查看；普通制定方仅可查看履历。"""
+    return audience == DocumentVersionAudience.GLOBAL_VIEWER
+
+
 def filter_version_rows(
     rows: Sequence[dict],
     *,

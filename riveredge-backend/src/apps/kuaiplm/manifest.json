@@ -454,7 +454,7 @@
       "entity_type": "drawing_change",
       "resource": "kuaiplm:change",
       "name": "图纸工程变更审核",
-      "template": "simple",
+      "template": "rd_file_change",
       "config_category": "common"
     },
     {
@@ -537,7 +537,7 @@
       "entity_type": "rd_deliverable",
       "resource": "kuaiplm:project",
       "name": "研发交付物审核",
-      "template": "simple",
+      "template": "rd_file_change",
       "config_category": "common",
       "business_type": ""
     },

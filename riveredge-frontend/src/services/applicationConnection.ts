@@ -193,7 +193,7 @@ export interface LoadConnectorApiPresetsResponse {
   skipped_codes: string[];
 }
 
-/** 为业务系统连接器加载常用接口预设（如金蝶云星空） */
+/** 为业务系统连接器加载常用接口预设（金蝶AI星空 / 金蝶AI苍穹 OpenAPI） */
 export async function loadApplicationConnectionApiPresets(
   uuid: string,
 ): Promise<LoadConnectorApiPresetsResponse> {

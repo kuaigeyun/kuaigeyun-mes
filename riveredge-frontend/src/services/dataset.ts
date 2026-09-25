@@ -16,7 +16,7 @@ export interface Dataset {
   name: string;
   code: string;
   description?: string;
-  query_type: 'sql' | 'api';
+  query_type: 'sql' | 'sql_write' | 'api';
   query_config: Record<string, any>;
   output_type?: OutputType;
   display_config?: Record<string, any>;
@@ -53,7 +53,7 @@ export interface CreateDatasetData {
   name: string;
   code: string;
   description?: string;
-  query_type: 'sql' | 'api';
+  query_type: 'sql' | 'sql_write' | 'api';
   query_config: Record<string, any>;
   output_type?: OutputType;
   display_config?: Record<string, any>;
@@ -66,7 +66,7 @@ export interface UpdateDatasetData {
   name?: string;
   code?: string;
   description?: string;
-  query_type?: 'sql' | 'api';
+  query_type?: 'sql' | 'sql_write' | 'api';
   query_config?: Record<string, any>;
   output_type?: OutputType;
   display_config?: Record<string, any>;
@@ -94,6 +94,7 @@ export interface ExecuteQueryResponse {
   columns?: string[];
   elapsed_time: number;
   error?: string;
+  affected?: number;
 }
 
 

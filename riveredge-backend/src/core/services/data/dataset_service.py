@@ -454,8 +454,15 @@ class DatasetService:
                 )
             else:
                 # 兼容历史错误数据：visual 等无效值按 sql 处理
-                qt = dataset.query_type if dataset.query_type in ('sql', 'api') else 'sql'
-                if qt == 'sql':
+                qt = dataset.query_type if dataset.query_type in ('sql', 'sql_write', 'api') else 'sql'
+                if qt == 'sql_write':
+                    result = await self._execute_sql_write(
+                        tenant_id=tenant_id,
+                        integration_config=integration_config,
+                        query_config=effective_qc,
+                        parameters=execute_request.parameters,
+                    )
+                elif qt == 'sql':
                     result = await self._execute_sql_query(
                         tenant_id=tenant_id,
                         integration_config=integration_config,
@@ -511,6 +518,7 @@ class DatasetService:
                 columns=result.get('columns'),
                 elapsed_time=round(elapsed_time, 3),
                 error=result.get('error'),
+                affected=result.get('affected'),
             )
         except Exception as e:
             elapsed_time = time.time() - start_time
@@ -803,6 +811,172 @@ class DatasetService:
             else:
                 sql = sql.rstrip().rstrip(";") + " WHERE " + tenant_condition
         return sql
+
+    @staticmethod
+    def _normalize_single_write_sql(sql: str) -> str:
+        """只允许一条 INSERT 或 UPDATE，去掉末尾分号后不得再有分号。"""
+        text = str(sql or "").strip()
+        if text.endswith(";"):
+            text = text[:-1].rstrip()
+        if not text:
+            raise ValueError("SQL 语句不能为空")
+        if ";" in text:
+            raise ValueError("写入语句只能有一条")
+        if not re.match(r"^(INSERT|UPDATE)\b", text, flags=re.IGNORECASE):
+            raise ValueError("写入只允许单条 INSERT 或 UPDATE")
+        banned = re.search(
+            r"\b(DELETE|DROP|ALTER|TRUNCATE|EXEC|EXECUTE|MERGE|GRANT|REVOKE)\b",
+            text,
+            flags=re.IGNORECASE,
+        )
+        if banned:
+            raise ValueError(f"写入语句不允许 {banned.group(1).upper()}")
+        return text
+
+    async def _execute_sql_write(
+        self,
+        tenant_id: int,
+        integration_config: IntegrationConfig,
+        query_config: Dict[str, Any],
+        parameters: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """把一行参数写入数据集绑定的外部库。不写系统默认库，不注入分页。"""
+        try:
+            config = integration_config.get_config()
+            if config.get("_system_default"):
+                return {
+                    "success": False,
+                    "data": [],
+                    "total": None,
+                    "columns": None,
+                    "affected": 0,
+                    "error": "写入只允许外部数据源，不能写系统默认库",
+                }
+            db_type = integration_config.type
+            if db_type not in ("postgresql", "sqlserver"):
+                return {
+                    "success": False,
+                    "data": [],
+                    "total": None,
+                    "columns": None,
+                    "affected": 0,
+                    "error": f"写入暂不支持该数据连接类型: {db_type}（支持: postgresql、sqlserver）",
+                }
+            try:
+                sql = self._normalize_single_write_sql(query_config.get("sql", ""))
+            except ValueError as exc:
+                return {
+                    "success": False,
+                    "data": [],
+                    "total": None,
+                    "columns": None,
+                    "affected": 0,
+                    "error": str(exc),
+                }
+            query_params = self._build_sql_query_parameters(
+                sql,
+                query_config,
+                parameters,
+                tenant_id=tenant_id,
+                apply_tenant_isolation=False,
+                fill_missing_sql_parameters=False,
+            )
+            if db_type == "postgresql":
+                sql_exec, args = self._convert_named_params_to_positional(sql, query_params)
+                import asyncpg
+
+                conn = await asyncpg.connect(
+                    host=config.get("host", "localhost"),
+                    port=int(config.get("port", 5432)),
+                    user=config.get("user") or config.get("username", ""),
+                    password=config.get("password", ""),
+                    database=config.get("database", ""),
+                )
+                try:
+                    status = await conn.execute(sql_exec, *args) if args else await conn.execute(sql_exec)
+                finally:
+                    await conn.close()
+                affected = 0
+                parts = str(status or "").split()
+                if parts and parts[-1].isdigit():
+                    affected = int(parts[-1])
+                return {
+                    "success": True,
+                    "data": [],
+                    "total": affected,
+                    "columns": [],
+                    "affected": affected,
+                }
+            sql_exec, args = self._convert_named_params_to_pymssql(sql, query_params)
+            return await asyncio.to_thread(
+                DatasetService._execute_sqlserver_write_sync,
+                config,
+                sql_exec,
+                args,
+            )
+        except KeyError as exc:
+            return {
+                "success": False,
+                "data": [],
+                "total": None,
+                "columns": None,
+                "affected": 0,
+                "error": str(exc),
+            }
+        except Exception as exc:
+            return {
+                "success": False,
+                "data": [],
+                "total": None,
+                "columns": None,
+                "affected": 0,
+                "error": f"写入执行失败: {exc}",
+            }
+
+    @staticmethod
+    def _execute_sqlserver_write_sync(config: Dict[str, Any], sql: str, args: List[Any]) -> Dict[str, Any]:
+        """在线程中对外部 SQL Server 执行一条写入并提交。"""
+        import pymssql
+
+        from core.services.integration.integration_config_service import IntegrationConfigService
+
+        tup = tuple(args) if args else tuple()
+        sql_pymssql = DatasetService._escape_pymssql_literal_percents(sql)
+        base_attempts = IntegrationConfigService._sqlserver_connection_attempt_kwargs(config)
+        charset = IntegrationConfigService._sqlserver_resolve_charset(config)
+        last_exc: Optional[BaseException] = None
+        for base_kw in base_attempts:
+            kw = dict(base_kw)
+            kw["charset"] = charset
+            try:
+                conn = pymssql.connect(**kw)
+                try:
+                    cur = conn.cursor()
+                    if tup:
+                        cur.execute(sql_pymssql, tup)
+                    else:
+                        cur.execute(sql_pymssql)
+                    affected = int(cur.rowcount or 0)
+                    conn.commit()
+                finally:
+                    conn.close()
+                return {
+                    "success": True,
+                    "data": [],
+                    "total": affected,
+                    "columns": [],
+                    "affected": affected,
+                }
+            except Exception as exc:
+                last_exc = exc
+        return {
+            "success": False,
+            "data": [],
+            "total": None,
+            "columns": None,
+            "affected": 0,
+            "error": f"写入执行失败: {last_exc}",
+        }
 
     async def _execute_sql_query(
         self,

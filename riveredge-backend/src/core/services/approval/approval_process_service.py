@@ -96,11 +96,16 @@ class ApprovalProcessService:
 
     @staticmethod
     def build_audit_process_create_data(node_key: str) -> ApprovalProcessCreate:
-        """按 manifest.audit 模板构建单据审核流程（启用开关时按需创建）。"""
+        """按 manifest.audit.template 内置模板构建单据审核流程（启用开关时按需创建）。"""
+        from core.config.audit_process_templates import build_flow_from_template
+
         entry = entry_by_node_key(node_key)
         if not entry:
             raise ValidationError(f"单据节点 {node_key} 未在 manifest.audit 中声明")
-        nodes = ApprovalProcessService._default_audit_nodes(entry.name)
+        try:
+            nodes = build_flow_from_template(entry.template, entry.name)
+        except ValueError as exc:
+            raise ValidationError(str(exc)) from exc
         return ApprovalProcessCreate(
             name=entry.name,
             code=entry.node_key,
@@ -359,37 +364,40 @@ class ApprovalProcessService:
         }
 
     @staticmethod
-    def _default_audit_nodes(label: str) -> Dict[str, Any]:
-        """默认审核流程：开始 → 单级审批 → 结束。"""
-        return {
-            "nodes": [
-                {
-                    "id": "start",
-                    "type": "start",
-                    "position": {"x": 250, "y": 50},
-                    "data": {"label": "开始", "layoutDirection": "vertical"},
-                },
-                {
-                    "id": "approval_1",
-                    "type": "approval",
-                    "position": {"x": 250, "y": 200},
-                    "data": {
-                        "label": label,
-                        "approverType": "manager",
-                        "approvalType": "OR",
-                        "layoutDirection": "vertical",
-                    },
-                },
-                {
-                    "id": "end",
-                    "type": "end",
-                    "position": {"x": 250, "y": 350},
-                    "data": {"label": "结束", "layoutDirection": "vertical"},
-                },
-            ],
-            "edges": [
-                {"source": "start", "target": "approval_1"},
-                {"source": "approval_1", "target": "end"},
-            ],
-        }
+    async def upgrade_pristine_process_to_template(
+        tenant_id: int,
+        node_key: str,
+    ) -> bool:
+        """若流程仍是旧「单级 manager」默认图，且 manifest 模板已升级，则按内置模板重写节点。
+
+        仅在无进行中实例、且图未被租户改过时升级；禁止按业务 node_key 硬编码旁路。
+        """
+        from core.config.audit_process_templates import (
+            build_flow_from_template,
+            is_pristine_simple_default,
+        )
+
+        entry = entry_by_node_key(node_key)
+        if not entry or entry.template in {"simple", "sme"}:
+            return False
+        process = await ApprovalProcessService.get_approval_process_by_code(tenant_id, node_key)
+        if not process:
+            return False
+        if not is_pristine_simple_default(process.nodes, label=entry.name):
+            return False
+        has_running = await ApprovalInstance.filter(
+            tenant_id=tenant_id,
+            process_id=process.id,
+            status="pending",
+            deleted_at__isnull=True,
+        ).exists()
+        if has_running:
+            return False
+        try:
+            nodes = build_flow_from_template(entry.template, entry.name)
+        except ValueError as exc:
+            raise ValidationError(str(exc)) from exc
+        process.nodes = normalize_and_validate_flow(nodes)
+        await process.save(update_fields=["nodes", "updated_at"])
+        return True
 

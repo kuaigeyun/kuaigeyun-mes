@@ -72,6 +72,7 @@ _SENSITIVE_CONFIG_KEYS = (
     "security_code",
     "js_key",
     "app_code",
+    "x_acgw_identity",
 )
 
 
@@ -478,9 +479,22 @@ class IntegrationConfigService:
 
                 result = await test_kingdee_galaxy_connection_config(integration.config or {})
             elif integration.type in (
+                "kingdee_cosmic",
+                "kingdee_xinghan",
+                "kingdee_ai_suite",
+            ):
+                from core.services.integration.kingdee_cosmic_service import (
+                    test_kingdee_cosmic_connection_config,
+                )
+
+                result = await test_kingdee_cosmic_connection_config(integration.config or {})
+            elif integration.type in (
                 "kingdee_xingchen", "kingdee_kis_cloud", "kingdee_kis",
-                "yonyou_yonbip", "yonyou_u8", "yonyou_u9", "yonyou_nc",
-                "sap_s4hana", "sap_b1", "oracle_netsuite", "odoo",
+                "kingdee_eas_cloud", "kingdee_jingdouyun", "kingdee_k3_wise", "kingdee_eas",
+                "yonyou_yonbip", "yonyou_yonsuite", "yonyou_u8_cloud", "yonyou_u9_cloud",
+                "yonyou_u8", "yonyou_u9", "yonyou_nc", "yonyou_nc5",
+                "sap_s4hana", "sap_s4hana_op", "sap_ecc", "sap_bydesign", "sap_b1",
+                "oracle_netsuite", "oracle_fusion", "oracle_ebs", "dynamics_365", "odoo",
                 "inspur_gs", "inspur_ps",
                 "digiwin_t100", "digiwin_yifei", "digiwin_yizhu", "digiwin_yituo", "digiwin_e10",
                 "chanjet_tplus", "grasp_huihuang", "super_erp", "erpnext", "sunlike_erp",
@@ -722,9 +736,22 @@ class IntegrationConfigService:
 
                 result = await test_kingdee_galaxy_connection_config(temp.config or {})
             elif temp.type in (
+                "kingdee_cosmic",
+                "kingdee_xinghan",
+                "kingdee_ai_suite",
+            ):
+                from core.services.integration.kingdee_cosmic_service import (
+                    test_kingdee_cosmic_connection_config,
+                )
+
+                result = await test_kingdee_cosmic_connection_config(temp.config or {})
+            elif temp.type in (
                 "kingdee_xingchen", "kingdee_kis_cloud", "kingdee_kis",
-                "yonyou_yonbip", "yonyou_u8", "yonyou_u9", "yonyou_nc",
-                "sap_s4hana", "sap_b1", "oracle_netsuite", "odoo",
+                "kingdee_eas_cloud", "kingdee_jingdouyun", "kingdee_k3_wise", "kingdee_eas",
+                "yonyou_yonbip", "yonyou_yonsuite", "yonyou_u8_cloud", "yonyou_u9_cloud",
+                "yonyou_u8", "yonyou_u9", "yonyou_nc", "yonyou_nc5",
+                "sap_s4hana", "sap_s4hana_op", "sap_ecc", "sap_bydesign", "sap_b1",
+                "oracle_netsuite", "oracle_fusion", "oracle_ebs", "dynamics_365", "odoo",
                 "inspur_gs", "inspur_ps",
                 "digiwin_t100", "digiwin_yifei", "digiwin_yizhu", "digiwin_yituo", "digiwin_e10",
                 "chanjet_tplus", "grasp_huihuang", "super_erp", "erpnext", "sunlike_erp",

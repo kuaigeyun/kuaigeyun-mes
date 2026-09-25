@@ -266,6 +266,7 @@ const DatasetListPage: React.FC = () => {
           const value = String(record.query_type ?? '');
           const typeMap: Record<string, string> = {
             sql: t('pages.system.datasets.queryTypeSql'),
+            sql_write: t('pages.system.datasets.queryTypeSqlWrite'),
             api: t('pages.system.datasets.queryTypeApi'),
           };
           return typeMap[value] || value;
@@ -583,11 +584,13 @@ const DatasetListPage: React.FC = () => {
       valueType: 'select',
       valueEnum: {
         sql: { text: t('pages.system.datasets.queryTypeSql'), status: 'Success' },
+        sql_write: { text: t('pages.system.datasets.queryTypeSqlWrite'), status: 'Warning' },
         api: { text: t('pages.system.datasets.queryTypeApi'), status: 'Processing' },
       },
       render: (_, record) => {
         const typeMap: Record<string, { color: string; text: string }> = {
           sql: { color: 'processing', text: t('pages.system.datasets.queryTypeSql') },
+          sql_write: { color: 'success', text: t('pages.system.datasets.queryTypeSqlWrite') },
           api: { color: 'warning', text: t('pages.system.datasets.queryTypeApi') },
         };
         const typeInfo = typeMap[record.query_type] || { color: 'default', text: record.query_type };

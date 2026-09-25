@@ -801,8 +801,8 @@ class DrawingService:
         drawing = await DrawingService._get_active_or_404(tenant_id, drawing_uuid)
         if (drawing.status or "") == "Editing":
             raise ValidationError("检出中的图纸请先撤销检出再删除")
-        if (drawing.status or "") not in ("Draft", "Obsolete"):
-            raise ValidationError("仅草稿或已作废状态图纸可删除")
+        if (drawing.status or "") != "Draft":
+            raise ValidationError("仅草稿状态图纸可删除；已发布或作废图纸只能升版，不可删除")
         drawing.deleted_at = _utcnow()
         await drawing.save()
 

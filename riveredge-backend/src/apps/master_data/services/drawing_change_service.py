@@ -120,6 +120,22 @@ class DrawingChangeService:
                 submitter_id=row.applicant_id or operator_id,
             )
             from core.services.approval.audit_flow_guard import approval_instance_finished_on_submit
+            from apps.kuaiplm.services.plm_pending_approval_reminder_service import (
+                ENTITY_DRAWING_CHANGE,
+                PlmPendingApprovalReminderService,
+            )
+            from core.utils.timezone_utils import resolve_business_datetime
+
+            await PlmPendingApprovalReminderService.sync_after_submit(
+                tenant_id,
+                entity_type=ENTITY_DRAWING_CHANGE,
+                entity_id=row.id,
+                entity_uuid=str(row.uuid),
+                submitted_at=resolve_business_datetime(),
+                doc_code=str(row.drawing_code or row.uuid),
+                title=str(row.drawing_name or row.change_content or "图纸工程变更")[:200],
+                doc_label="图纸工程变更",
+            )
 
             if approval_instance_finished_on_submit(instance):
                 return await DrawingChangeService.approve_change(
@@ -251,6 +267,17 @@ class DrawingChangeService:
                 flow_reject=_do_reject,
             )
         if result is not None:
+            from apps.kuaiplm.services.plm_pending_approval_reminder_service import (
+                ENTITY_DRAWING_CHANGE,
+                PlmPendingApprovalReminderService,
+            )
+
+            await PlmPendingApprovalReminderService.sync_after_terminal(
+                tenant_id,
+                entity_type=ENTITY_DRAWING_CHANGE,
+                entity_id=row.id,
+                reason="审核通过" if approved else "审核驳回",
+            )
             return result
         return _to_response(await DrawingChangeService._get_or_404(tenant_id, change_uuid))
 
@@ -279,6 +306,17 @@ class DrawingChangeService:
             flow_withdraw=_do_withdraw,
         )
         if result is not None:
+            from apps.kuaiplm.services.plm_pending_approval_reminder_service import (
+                ENTITY_DRAWING_CHANGE,
+                PlmPendingApprovalReminderService,
+            )
+
+            await PlmPendingApprovalReminderService.sync_after_terminal(
+                tenant_id,
+                entity_type=ENTITY_DRAWING_CHANGE,
+                entity_id=row.id,
+                reason="撤回提交",
+            )
             return result
         return _to_response(await DrawingChangeService._get_change_or_raise(tenant_id, change_id))
 

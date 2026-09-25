@@ -83,6 +83,7 @@ from apps.kuaiplm.utils.rd_project_progress import compute_project_progress
 from apps.kuaiplm.utils.rd_project_execution import gates_not_executed
 from apps.master_data.models.material import Material
 from core.services.file.document_version_policy import (
+    can_download_historical_versions,
     can_view_historical_versions,
     filter_version_rows,
     resolve_audience,
@@ -1530,16 +1531,24 @@ class RdProjectService(AppBaseService[RdProject]):
             current_user_id=current_user_id,
         )
         visible_ids = {r.get("id") for r in visible_policy}
-        items = [
-            RdProjectDeliverableVersionResponse.model_validate(v)
-            for v in versions
-            if v.id in visible_ids
-        ]
+        allow_history_download = can_download_historical_versions(audience)
+        items: List[RdProjectDeliverableVersionResponse] = []
+        for v in versions:
+            if v.id not in visible_ids:
+                continue
+            item = RdProjectDeliverableVersionResponse.model_validate(v)
+            is_current_effective = bool(getattr(v, "is_effective", False))
+            if not is_current_effective and not allow_history_download:
+                item = item.model_copy(
+                    update={"file_uuid": None, "file_url": None}
+                )
+            items.append(item)
         return RdProjectDeliverableVersionListResponse(
             items=items,
             total=len(items),
             audience=audience.value,
             can_view_history=can_view_historical_versions(audience),
+            can_download_history=allow_history_download,
         )
 
     async def revise_deliverable(
@@ -1739,6 +1748,20 @@ class RdProjectService(AppBaseService[RdProject]):
         )
         if not row:
             raise NotFoundError(f"交付物不存在: {deliverable_id}")
+        status = (row.status or "").strip().upper()
+        if status not in {
+            RdDeliverableStatus.DRAFT.value,
+            RdDeliverableStatus.REJECTED.value,
+        }:
+            raise BusinessLogicError("仅草稿或已驳回交付物可删除；已进入审核或发布的文件只能升版")
+        has_published_history = await RdProjectDeliverableVersion.filter(
+            tenant_id=tenant_id,
+            deliverable_id=deliverable_id,
+            deleted_at__isnull=True,
+            status__in=["effective", "obsolete"],
+        ).exists()
+        if has_published_history:
+            raise BusinessLogicError("已有发布履历的交付物不可删除，请升版保留历史")
         user_info = await self.get_user_info(deleted_by)
         now = resolve_business_datetime()
         await row.update_from_dict({

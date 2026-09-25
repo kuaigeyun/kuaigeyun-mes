@@ -20,7 +20,7 @@ export interface ApprovalNodeData {
   refreshContextOnEdit?: boolean;
   allowTransfer?: boolean;
   allowAddSign?: boolean;
-  emptyApproverPolicy?: 'auto_pass' | 'fallback_user' | 'escalate_admin';
+  emptyApproverPolicy?: 'block' | 'auto_pass' | 'fallback_user' | 'escalate_admin';
   editableFields?: string[] | '*';
   conditions?: ConditionItem[];
   [key: string]: unknown;
@@ -32,6 +32,8 @@ export interface FlowGraph {
 }
 
 const MANAGER_TYPES = new Set(['manager', 'department', 'multi_level_manager', 'initiator_select']);
+/** 设计期可不预配人员（启用前须在设计器绑角色；发起人自选在提交时勾选） */
+const DESIGN_TIME_EMPTY_OK = new Set([...MANAGER_TYPES, 'role']);
 
 function asList<T>(value: T | T[] | null | undefined): T[] {
   if (value == null) return [];
@@ -63,7 +65,7 @@ export function normalizeNodeData(nodeType: string, data: ApprovalNodeData = {})
       out.refreshContextOnEdit = out.refreshContextOnEdit !== false;
       out.allowTransfer = Boolean(out.allowTransfer);
       out.allowAddSign = Boolean(out.allowAddSign);
-      if (!out.emptyApproverPolicy) out.emptyApproverPolicy = 'auto_pass';
+      if (!out.emptyApproverPolicy) out.emptyApproverPolicy = 'block';
     }
   }
   if (nodeType === 'condition') {
@@ -118,7 +120,7 @@ export function validateFlowGraph(graph: FlowGraph): string[] {
         if (node.data.departmentScope === 'specified' && idsLen === 0) {
           errors.push(`审批节点「${node.data.label || node.id}」未选择部门`);
         }
-      } else if (!MANAGER_TYPES.has(t) && idsLen === 0) {
+      } else if (!DESIGN_TIME_EMPTY_OK.has(t) && idsLen === 0) {
         errors.push(`审批节点「${node.data.label || node.id}」未配置审批人`);
       }
     }

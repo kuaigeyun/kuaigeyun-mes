@@ -1,4 +1,4 @@
-"""PLM 待审超时提醒（INF-03）— 研发交付物 8h / 固件与生产文件 24h。"""
+"""PLM 待审超时提醒（INF-03）— 研发交付物 / 固件 / 生产文件 / 图纸 默认 24h。"""
 
 from __future__ import annotations
 
@@ -30,16 +30,18 @@ RULE_APPROVAL = f"{RULE_PREFIX}.approval"
 CHANNEL_INTERNAL = "internal"
 APPROVAL_DELAY_HOURS_DEFAULT = 24
 DELAY_HOURS_BY_ENTITY = {
-    "rd_deliverable": 8,
+    "rd_deliverable": 24,
     "product_firmware": 24,
     "production_file": 24,
     "engineering_drawing": 24,
+    "drawing_change": 24,
 }
 
 ENTITY_RD_DELIVERABLE = "rd_deliverable"
 ENTITY_PRODUCT_FIRMWARE = "product_firmware"
 ENTITY_PRODUCTION_FILE = "production_file"
 ENTITY_ENGINEERING_DRAWING = "engineering_drawing"
+ENTITY_DRAWING_CHANGE = "drawing_change"
 
 
 def approval_delay_hours(entity_type: str) -> int:
@@ -169,6 +171,12 @@ async def _load_pending_row(tenant_id: int, entity_type: str, entity_id: int):
         return await EngineeringDrawing.filter(
             tenant_id=tenant_id, id=entity_id, deleted_at__isnull=True
         ).first()
+    if entity_type == ENTITY_DRAWING_CHANGE:
+        from apps.master_data.models.drawing_change import DrawingChange
+
+        return await DrawingChange.filter(
+            tenant_id=tenant_id, id=entity_id, deleted_at__isnull=True
+        ).first()
     return None
 
 
@@ -179,6 +187,8 @@ def _is_still_pending(entity_type: str, row) -> bool:
         return row.status == RdDeliverableStatus.SUBMITTED.value
     if entity_type == ENTITY_ENGINEERING_DRAWING:
         return (row.status or "") == "Pending"
+    if entity_type == ENTITY_DRAWING_CHANGE:
+        return (row.status or "") == "pending"
     return (row.status or "") == "pending"
 
 
@@ -213,8 +223,17 @@ async def dispatch_plm_pending_approval_reminder(
             doc_code = row.file_code or f"文件#{row.id}"
         elif entity_type == ENTITY_ENGINEERING_DRAWING:
             doc_code = f"{row.code}-{row.revision}" if row.code else f"图纸#{row.id}"
+        elif entity_type == ENTITY_DRAWING_CHANGE:
+            doc_code = str(getattr(row, "drawing_code", None) or f"变更#{row.id}")
     if not title:
-        title = getattr(row, "title", None) or getattr(row, "name", None) or doc_code
+        if entity_type == ENTITY_DRAWING_CHANGE:
+            title = str(
+                getattr(row, "drawing_name", None)
+                or getattr(row, "change_content", None)
+                or doc_code
+            )
+        else:
+            title = getattr(row, "title", None) or getattr(row, "name", None) or doc_code
     if entity_type == ENTITY_RD_DELIVERABLE and not project_code:
         project = await RdProject.filter(
             tenant_id=tenant_id, id=row.project_id, deleted_at__isnull=True

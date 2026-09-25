@@ -227,7 +227,7 @@ async def load_application_connection_api_presets(
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    """为业务系统连接器加载常用接口预设（金蝶云星空等）。"""
+    """为业务系统连接器加载常用接口预设（金蝶AI星空等）。"""
     try:
         ic = await IntegrationConfigService.get_integration_by_uuid(
             tenant_id=tenant_id, uuid=str(uuid)

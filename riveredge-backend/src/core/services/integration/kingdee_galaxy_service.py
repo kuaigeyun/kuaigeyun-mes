@@ -1,5 +1,5 @@
 """
-金蝶云星空（K3Cloud）WebAPI 连接测试。
+金蝶AI星空（K3Cloud）WebAPI 连接测试。
 
 鉴权接口：LoginByAppSecret
 文档：https://openapi.open.kingdee.com/ApiDoc
@@ -21,7 +21,7 @@ def normalize_kingdee_galaxy_base_url(base_url: str) -> str:
     url = str(base_url or "").strip()
     if not url:
         raise ValueError(
-            "请填写 Base URL（金蝶云星空站点地址，须以 /K3Cloud/ 或 /k3cloud/ 结尾，例如 https://xxx/K3Cloud/）"
+            "请填写 Base URL（金蝶AI星空站点地址，须以 /K3Cloud/ 或 /k3cloud/ 结尾，例如 https://xxx/K3Cloud/）"
         )
     if not url.endswith("/"):
         url += "/"
@@ -113,24 +113,24 @@ def parse_kingdee_login_response(
     """解析 LoginByAppSecret 响应，返回 (成功, 消息, session_id)。"""
     login_type = _extract_login_result_type(payload)
     if login_type == 1:
-        return True, "金蝶云星空登录成功", session_id
+        return True, "金蝶AI星空登录成功", session_id
     if login_type is not None and login_type != 1:
         return False, f"金蝶登录失败（LoginResultType={login_type}）", None
 
     is_success, message = _extract_response_status(payload)
     if is_success is True:
-        return True, message or "金蝶云星空登录成功", session_id
+        return True, message or "金蝶AI星空登录成功", session_id
     if is_success is False:
         return False, message or "金蝶登录失败，请检查账套 ID、集成用户名、应用 ID 与应用密钥", None
 
     if session_id:
-        return True, "金蝶云星空登录成功", session_id
+        return True, "金蝶AI星空登录成功", session_id
 
     return False, message or "金蝶登录响应无法识别，请检查 Base URL 与第三方系统登录授权配置", None
 
 
 async def test_kingdee_galaxy_connection_config(config: Dict[str, Any]) -> Dict[str, Any]:
-    """调用 LoginByAppSecret 校验金蝶云星空连接器配置。"""
+    """调用 LoginByAppSecret 校验金蝶AI星空连接器配置。"""
     base_url = str(config.get("base_url") or config.get("url") or "").strip()
     acct_id = str(config.get("acct_id") or "").strip()
     username = str(config.get("username") or config.get("user_name") or "").strip()
@@ -169,7 +169,7 @@ async def test_kingdee_galaxy_connection_config(config: Dict[str, Any]) -> Dict[
     except Exception as exc:
         return {
             "success": False,
-            "message": f"无法连接金蝶云星空地址：{exc}",
+            "message": f"无法连接金蝶AI星空地址：{exc}",
         }
 
     raw_text = (resp.text or "").strip()
@@ -182,16 +182,38 @@ async def test_kingdee_galaxy_connection_config(config: Dict[str, Any]) -> Dict[
         return {"success": False, "message": "金蝶登录接口返回空响应，请检查 Base URL 是否正确"}
 
     content_type = (resp.headers.get("content-type") or "").lower()
-    if "html" in content_type and resp.status_code != 200:
+    looks_like_html = "html" in content_type or raw_text[:32].lower().lstrip().startswith("<!DOCTYPE html") or raw_text[:6].lower() == "<html>"
+    if looks_like_html and resp.status_code != 200:
+        if resp.status_code == 404:
+            return {
+                "success": False,
+                "message": (
+                    "金蝶 Base URL 不是 WebAPI 站点（HTTP 404 返回了网页）。"
+                    "请到星空「第三方系统登录授权」点「生成测试链接」复制站点地址，"
+                    "不要用浏览器门户域名（如 *.kdgalaxy.com）自行拼接 /K3Cloud/"
+                ),
+            }
         return {
             "success": False,
-            "message": "金蝶地址返回 HTML 页面，请确认 Base URL 指向 K3Cloud 站点（以 /K3Cloud/ 结尾）",
+            "message": (
+                f"金蝶地址返回 HTML 页面（HTTP {resp.status_code}），"
+                "请确认 Base URL 指向 K3Cloud WebAPI 站点（以 /K3Cloud/ 或 /k3cloud/ 结尾）"
+            ),
         }
 
     try:
         payload = resp.json()
     except Exception:
         snippet = raw_text[:200]
+        if looks_like_html:
+            return {
+                "success": False,
+                "message": (
+                    "金蝶登录接口返回了网页而不是 JSON。"
+                    "请到星空「第三方系统登录授权」用「生成测试链接」核对 Base URL，"
+                    "App ID 须为授权里的应用 ID（不是应用名称）"
+                ),
+            }
         return {
             "success": False,
             "message": f"金蝶登录响应非 JSON：{snippet}",
@@ -226,14 +248,14 @@ async def login_kingdee_galaxy_session(config: Dict[str, Any]) -> Dict[str, Any]
     """
     result = await test_kingdee_galaxy_connection_config(config)
     if not result.get("success"):
-        raise ValueError(str(result.get("message") or "金蝶云星空登录失败"))
+        raise ValueError(str(result.get("message") or "金蝶AI星空登录失败"))
     session_id = result.get("session_id")
     if not session_id:
         raise ValueError("金蝶登录成功但未返回会话（kdservice-sessionid），请检查站点 Cookie 策略")
     return {
         "session_id": str(session_id),
         "login_url": result.get("login_url"),
-        "message": result.get("message") or "金蝶云星空登录成功",
+        "message": result.get("message") or "金蝶AI星空登录成功",
     }
 
 

@@ -22,9 +22,19 @@ router = APIRouter(
 )
 
 
+class DocumentPushTargetBody(BaseModel):
+    connection_code: Optional[str] = None
+    save_api_uuid: Optional[str] = None
+    target_profile: str
+
+
 class DocumentPushBody(BaseModel):
     source_type: str = Field(..., description="源单据类型，如 work_order / reporting_record")
     source_id: int = Field(..., description="源单据 ID")
+    targets: Optional[List[DocumentPushTargetBody]] = Field(
+        None,
+        description="多连接器目标（每条独立 connection + Save 接口 + profile）",
+    )
     target_profile: Optional[str] = Field(
         None,
         description="单一目标，如 kingdee_prd_mo / oa_http_webhook；传 * 则按业务配置多目标",
@@ -71,11 +81,15 @@ async def push_document_external(
     tenant_id: int = Depends(get_current_tenant),
 ) -> Dict[str, Any]:
     try:
+        targets_payload = None
+        if body.targets:
+            targets_payload = [t.model_dump() for t in body.targets]
         return await DocumentPushService().push(
             tenant_id=tenant_id,
             acting_user_id=int(getattr(current_user, "id", 0) or 0),
             source_type=body.source_type,
             source_id=body.source_id,
+            targets=targets_payload,
             target_profile=body.target_profile,
             target_profiles=body.target_profiles,
             connection_code=body.connection_code,

@@ -7,7 +7,10 @@ from typing import Any, Dict, List, Optional
 from infra.exceptions.exceptions import ValidationError
 
 APPROVAL_NODE_TYPES = frozenset({"start", "approval", "cc", "condition", "end"})
+# 设计期可不预配人员：发起人自选 / 角色（启用前须绑角色）/ 动态主管类
 MANAGER_APPROVER_TYPES = frozenset({"manager", "department", "multi_level_manager", "initiator_select"})
+DESIGN_TIME_EMPTY_OK_TYPES = frozenset({"role", "initiator_select"}) | MANAGER_APPROVER_TYPES
+EMPTY_APPROVER_POLICIES = frozenset({"block", "auto_pass", "fallback_user", "escalate_admin"})
 CONDITION_OPERATORS = frozenset({"==", "eq", "!=", "ne", ">", "gt", "<", "lt", ">=", "gte", "<=", "lte", "contains", "in", "between"})
 
 
@@ -45,8 +48,24 @@ def normalize_node_data(node_type: str, data: Optional[Dict[str, Any]]) -> Dict[
             out.setdefault("refreshContextOnEdit", bool(out.get("refreshContextOnEdit", True)))
             out.setdefault("allowTransfer", bool(out.get("allowTransfer", False)))
             out.setdefault("allowAddSign", bool(out.get("allowAddSign", False)))
-            if out.get("emptyApproverPolicy") is None:
-                out["emptyApproverPolicy"] = "auto_pass"
+            policy = out.get("emptyApproverPolicy") or out.get("empty_approver_policy")
+            if policy is None:
+                out["emptyApproverPolicy"] = "block"
+            else:
+                out["emptyApproverPolicy"] = str(policy).strip().lower() or "block"
+            out.pop("empty_approver_policy", None)
+            timeout = out.get("timeoutHours")
+            if timeout is None and out.get("timeout_hours") is not None:
+                timeout = out.get("timeout_hours")
+            if timeout is not None:
+                try:
+                    hours = int(timeout)
+                except (TypeError, ValueError) as exc:
+                    raise ValidationError(f"审批节点 timeoutHours 非法: {timeout!r}") from exc
+                if hours < 0:
+                    raise ValidationError("审批节点 timeoutHours 不可为负")
+                out["timeoutHours"] = hours
+                out.pop("timeout_hours", None)
     if node_type == "condition":
         conditions = out.get("conditions") or out.get("condition_list") or []
         normalized_conditions: List[Dict[str, Any]] = []
@@ -128,11 +147,17 @@ def validate_flow_graph(graph: Dict[str, Any]) -> None:
         if node_type == "approval":
             approver_type = data.get("approverType") or "user"
             approver_ids = data.get("approverIds") or []
+            policy = str(data.get("emptyApproverPolicy") or "block").strip().lower()
+            if policy not in EMPTY_APPROVER_POLICIES:
+                raise ValidationError(
+                    f"审批节点 {node_id} emptyApproverPolicy 非法: {policy!r}，"
+                    f"仅支持 {sorted(EMPTY_APPROVER_POLICIES)}"
+                )
             if approver_type == "department":
                 scope = str(data.get("departmentScope") or "submitter").strip().lower()
                 if scope == "specified" and not approver_ids:
                     raise ValidationError(f"审批节点 {node_id} 已选择指定部门但未选择部门")
-            elif approver_type not in MANAGER_APPROVER_TYPES and not approver_ids:
+            elif approver_type not in DESIGN_TIME_EMPTY_OK_TYPES and not approver_ids:
                 raise ValidationError(f"审批节点 {node_id} 未配置审批人")
         if node_type == "condition":
             out_edges = [e for e in edges if e.get("source") == node_id]
@@ -149,6 +174,32 @@ def validate_flow_graph(graph: Dict[str, Any]) -> None:
     for edge in edges:
         if edge.get("source") not in ids or edge.get("target") not in ids:
             raise ValidationError(f"连线 {edge.get('id')} 引用不存在的节点")
+
+
+def assert_flow_executable(graph: Dict[str, Any]) -> None:
+    """启用审核 / 发起实例前：角色节点必须已绑定角色；发起人自选可留空。"""
+    for node in graph.get("nodes") or []:
+        if not isinstance(node, dict) or node.get("type") != "approval":
+            continue
+        data = node.get("data") or {}
+        node_id = node.get("id")
+        label = (data.get("label") or node_id or "").strip()
+        approver_type = str(data.get("approverType") or "user").strip()
+        approver_ids = data.get("approverIds") or []
+        if approver_type == "role" and not approver_ids:
+            raise ValidationError(
+                f"审批节点「{label}」尚未绑定角色，请先在审批流程设计器完成配置再启用审核"
+            )
+        if approver_type == "user" and not approver_ids:
+            raise ValidationError(
+                f"审批节点「{label}」尚未指定审批人，请先在审批流程设计器完成配置再启用审核"
+            )
+        if approver_type == "department":
+            scope = str(data.get("departmentScope") or "submitter").strip().lower()
+            if scope == "specified" and not approver_ids:
+                raise ValidationError(
+                    f"审批节点「{label}」已选择指定部门但未选择部门"
+                )
 
 
 def normalize_and_validate_flow(raw: Any) -> Dict[str, Any]:

@@ -13,6 +13,8 @@ from apps.kuaizhizao.schemas.purchase import (
     PurchaseOrderUpdate,
 )
 from apps.kuaizhizao.schemas.purchase_order_sync import (
+    PurchaseOrderPushBindingOut,
+    PurchaseOrderPushBindingUpsert,
     PurchaseOrderSyncBindingOut,
     PurchaseOrderSyncBindingUpsert,
     PurchaseOrderSyncFromSourceOut,
@@ -20,14 +22,19 @@ from apps.kuaizhizao.schemas.purchase_order_sync import (
 )
 from apps.kuaizhizao.services.purchase_service import PurchaseService
 from apps.master_data.services.master_data_sync_common import (
+    apply_mapped_custom_field_values,
+    fetch_sync_rows,
+    load_custom_fields_by_code,
     mark_binding_failure,
     mark_binding_success,
     mark_external_sync_record,
     normalize_schedule_interval,
     normalize_sync_mode,
     resolve_incremental_since,
-    apply_mapped_custom_field_values,
-    load_custom_fields_by_code,
+    resolve_sync_sources,
+    serialize_binding_row,
+    sources_from_upsert_body,
+    upsert_sync_binding,
 )
 PURCHASE_ORDER_CUSTOM_FIELD_TABLE = "apps_kuaizhizao_purchase_orders"
 from apps.master_data.services.sync_association_service import (
@@ -44,66 +51,87 @@ class PurchaseOrderSyncService:
     def serialize_binding(self, row: Optional[PurchaseOrderSyncBinding]) -> PurchaseOrderSyncBindingOut:
         if not row:
             return PurchaseOrderSyncBindingOut()
-        mapping = row.field_mapping if isinstance(row.field_mapping, dict) else {}
-        return PurchaseOrderSyncBindingOut(
-            source_type=row.source_type,
-            api_uuid=row.api_uuid,
-            dataset_uuid=row.dataset_uuid,
-            field_mapping={str(k): str(v) for k, v in mapping.items()},
-            match_key_field=row.match_key_field or "order_code",
-            sync_mode=row.sync_mode or "manual_full",
-            schedule_interval_minutes=int(row.schedule_interval_minutes or 15),
-            last_success_at=row.last_success_at,
-            last_attempt_at=row.last_attempt_at,
-            last_error=row.last_error,
-        )
+        data = serialize_binding_row(row, default_match_key="order_code")
+        return PurchaseOrderSyncBindingOut(**data)
     async def upsert_binding(
         self,
         tenant_id: int,
         body: PurchaseOrderSyncBindingUpsert,
     ) -> PurchaseOrderSyncBindingOut:
-        source_type = (body.source_type or "").strip()
-        api_uuid = (body.api_uuid or "").strip() or None
-        dataset_uuid = (body.dataset_uuid or "").strip() or None
-        if not source_type and not api_uuid and not dataset_uuid:
+        if body.sources is not None and len(body.sources) == 0:
             await PurchaseOrderSyncBinding.filter(tenant_id=tenant_id).delete()
             return PurchaseOrderSyncBindingOut()
-        if source_type not in ("api", "dataset"):
-            raise ValidationError("来源类型须为 api 或 dataset")
-        if source_type == "api" and not api_uuid:
-            raise ValidationError("已选择数据接口时须指定接口")
-        if source_type == "dataset" and not dataset_uuid:
-            raise ValidationError("已选择数据集时须指定数据集")
-        field_mapping = body.field_mapping if isinstance(body.field_mapping, dict) else {}
-        if not field_mapping:
-            raise ValidationError("请配置字段映射")
+        sources = sources_from_upsert_body(body)
         match_key = (body.match_key_field or "order_code").strip() or "order_code"
-        if match_key not in field_mapping.values():
-            raise ValidationError(f"字段映射须包含匹配键 {match_key}")
         sync_mode = normalize_sync_mode(body.sync_mode)
         interval = normalize_schedule_interval(body.schedule_interval_minutes)
-        existing = await PurchaseOrderSyncBinding.filter(tenant_id=tenant_id).first()
-        preserve = {
-            "last_success_at": existing.last_success_at if existing else None,
-            "last_attempt_at": existing.last_attempt_at if existing else None,
-            "last_error": existing.last_error if existing else None,
-        }
-        await PurchaseOrderSyncBinding.filter(tenant_id=tenant_id).delete()
-        row = await PurchaseOrderSyncBinding.create(
-            tenant_id=tenant_id,
-            source_type=source_type,
-            api_uuid=api_uuid if source_type == "api" else None,
-            dataset_uuid=dataset_uuid if source_type == "dataset" else None,
-            field_mapping=field_mapping,
+        row = await upsert_sync_binding(
+            PurchaseOrderSyncBinding,
+            tenant_id,
+            sources=sources,
             match_key_field=match_key,
             sync_mode=sync_mode,
             schedule_interval_minutes=interval,
-            **preserve,
         )
         return self.serialize_binding(row)
     async def get_binding(self, tenant_id: int) -> PurchaseOrderSyncBindingOut:
         row = await PurchaseOrderSyncBinding.filter(tenant_id=tenant_id).first()
         return self.serialize_binding(row)
+
+    def serialize_push_binding(self, row: Optional[PurchaseOrderSyncBinding]) -> PurchaseOrderPushBindingOut:
+        from core.schemas.sync_binding_contract import DocumentPushTargetItem
+        from core.services.data.sync_binding_sources import (
+            push_targets_from_row,
+            trigger_actions_from_row,
+        )
+
+        if not row or not isinstance(getattr(row, "push_targets", None), list):
+            return PurchaseOrderPushBindingOut()
+        stored = [DocumentPushTargetItem.model_validate(item) for item in push_targets_from_row(row)]
+        targets = [item for item in stored if item.user_saved]
+        first = targets[0] if targets else None
+        return PurchaseOrderPushBindingOut(
+            targets=targets,
+            trigger_actions=trigger_actions_from_row(row) if targets else [],
+            connection_code=first.connection_code if first else None,
+            save_api_uuid=first.save_api_uuid if first else None,
+            sync_mode=str(getattr(row, "sync_mode", None) or "manual_full"),
+            schedule_interval_minutes=int(getattr(row, "schedule_interval_minutes", None) or 15),
+            targets_configured=True,
+        )
+
+    async def get_push_binding(self, tenant_id: int) -> PurchaseOrderPushBindingOut:
+        row = await PurchaseOrderSyncBinding.filter(tenant_id=tenant_id).first()
+        out = self.serialize_push_binding(row)
+        if (
+            row
+            and isinstance(getattr(row, "push_targets", None), list)
+            and out.targets_configured
+            and not out.targets
+            and getattr(row, "push_targets", None)
+        ):
+            await PurchaseOrderSyncBinding.filter(id=row.id).update(push_targets=[], trigger_actions=[])
+        return out
+
+    async def upsert_push_binding(
+        self,
+        tenant_id: int,
+        body: PurchaseOrderPushBindingUpsert,
+    ) -> PurchaseOrderPushBindingOut:
+        from core.services.data.sync_binding_sources import normalize_push_targets_json
+
+        row = await PurchaseOrderSyncBinding.filter(tenant_id=tenant_id).first()
+        if not row:
+            row = await PurchaseOrderSyncBinding.create(tenant_id=tenant_id)
+        targets = normalize_push_targets_json([item.model_dump(mode="json") for item in body.targets])
+        triggers = [str(action).strip().lower() for action in body.trigger_actions if str(action).strip()]
+        await PurchaseOrderSyncBinding.filter(id=row.id).update(
+            push_targets=targets,
+            trigger_actions=triggers,
+        )
+        fresh = await PurchaseOrderSyncBinding.get(id=row.id)
+        return self.serialize_push_binding(fresh)
+
     async def sync_from_source(
         self,
         tenant_id: int,
@@ -111,24 +139,13 @@ class PurchaseOrderSyncService:
         request: Optional[PurchaseOrderSyncFromSourceRequest] = None,
     ) -> PurchaseOrderSyncFromSourceOut:
         req = request or PurchaseOrderSyncFromSourceRequest()
-        binding = await PurchaseOrderSyncBinding.filter(tenant_id=tenant_id).first()
-        source_type = (req.source_type or (binding.source_type if binding else "") or "").strip()
-        api_uuid = (req.api_uuid or (binding.api_uuid if binding else "") or "").strip() or None
-        dataset_uuid = (
-            (req.dataset_uuid or (binding.dataset_uuid if binding else "") or "").strip() or None
+        sources, match_key, binding = await resolve_sync_sources(
+            PurchaseOrderSyncBinding,
+            tenant_id,
+            req,
+            default_match_key="order_code",
         )
-        field_mapping = req.field_mapping if isinstance(req.field_mapping, dict) else None
-        if not field_mapping and binding and isinstance(binding.field_mapping, dict):
-            field_mapping = binding.field_mapping
-        match_key = (
-            (binding.match_key_field if binding else None) or "order_code"
-        ).strip() or "order_code"
-        if not source_type:
-            raise ValidationError("请配置同步来源（数据接口或数据集）")
-        if not field_mapping:
-            raise ValidationError("请配置字段映射")
-        if match_key not in field_mapping.values():
-            raise ValidationError(f"字段映射须包含匹配键 {match_key}")
+        binding = binding or await PurchaseOrderSyncBinding.filter(tenant_id=tenant_id).first()
         sync_mode = normalize_sync_mode(
             req.sync_mode or (binding.sync_mode if binding else None)
         )
@@ -141,10 +158,7 @@ class PurchaseOrderSyncService:
             await self.upsert_binding(
                 tenant_id,
                 PurchaseOrderSyncBindingUpsert(
-                    source_type=source_type,
-                    api_uuid=api_uuid,
-                    dataset_uuid=dataset_uuid,
-                    field_mapping=field_mapping,
+                    sources=req.sources,
                     match_key_field=match_key,
                     sync_mode=sync_mode,
                     schedule_interval_minutes=interval,
@@ -157,17 +171,27 @@ class PurchaseOrderSyncService:
             request_incremental=req.incremental,
         )
         try:
-            if source_type == "api":
-                if not api_uuid:
-                    raise ValidationError("数据接口同步须指定接口")
-                raw_rows = await fetch_rows_from_api(tenant_id, api_uuid, since=since, active_only=req.active_only)
-            elif source_type == "dataset":
-                if not dataset_uuid:
-                    raise ValidationError("数据集同步须指定数据集")
-                raw_rows = await fetch_rows_from_dataset(tenant_id, dataset_uuid, since=since)
-            else:
-                raise ValidationError("来源类型须为 api 或 dataset")
-            orders = self._build_orders_from_rows(raw_rows, field_mapping, match_key)
+            order_map: Dict[str, Dict[str, Any]] = {}
+            source_errors: List[str] = []
+            for src in sources:
+                kind = str(src.get("kind") or "").strip()
+                field_mapping = src.get("field_mapping") or {}
+                try:
+                    raw_rows = await fetch_sync_rows(
+                        tenant_id,
+                        source_type=kind,
+                        api_uuid=str(src.get("api_uuid") or "").strip() or None,
+                        dataset_uuid=str(src.get("dataset_uuid") or "").strip() or None,
+                        since=since,
+                        active_only=req.active_only,
+                    )
+                    for order in self._build_orders_from_rows(raw_rows, field_mapping, match_key):
+                        key_val = self._stringify(order.get(match_key))
+                        if key_val:
+                            order_map[key_val] = order
+                except Exception as exc:
+                    source_errors.append(str(exc))
+            orders = list(order_map.values())
             from infra.models.user import User
             current_user = await User.get_or_none(id=user_id)
             if not current_user:
@@ -178,8 +202,8 @@ class PurchaseOrderSyncService:
                     tenant_id, current_user
                 )
             result = await self._upsert_orders(tenant_id, user_id, orders, match_key)
-            if prerequisite_errors:
-                result.errors = (prerequisite_errors + list(result.errors))[:20]
+            if prerequisite_errors or source_errors:
+                result.errors = (prerequisite_errors + source_errors + list(result.errors))[:20]
             if binding:
                 if result.failed and not (result.created or result.updated):
                     await mark_binding_failure(

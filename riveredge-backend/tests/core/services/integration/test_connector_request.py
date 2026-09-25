@@ -20,10 +20,18 @@ resolve_connector_request = _connector_request.resolve_connector_request
 
 
 class _FakeIntegrationConfig:
-    def __init__(self, config: dict, *, is_active: bool = True, name: str = "测试连接器"):
+    def __init__(
+        self,
+        config: dict,
+        *,
+        is_active: bool = True,
+        name: str = "测试连接器",
+        type: str = "",
+    ):
         self.config = config
         self.is_active = is_active
         self.name = name
+        self.type = type
 
     def get_config(self) -> dict:
         return self.config
@@ -65,11 +73,29 @@ def test_resolve_connector_request_missing_base_url_raises():
         resolve_connector_request(ic, endpoint="/api/orders")
 
 
+def test_resolve_connector_request_kingdee_v2_omits_ierp_in_base():
+    ic = _FakeIntegrationConfig({"base_url": "https://lzhtech.kdgalaxy.com/ierp"})
+    url, _ = resolve_connector_request(
+        ic,
+        endpoint="kapi/v2/basedata/bd_material/batchQuery",
+    )
+    assert url == "https://lzhtech.kdgalaxy.com/kapi/v2/basedata/bd_material/batchQuery"
+
+
+def test_resolve_connector_request_collapses_double_ierp_before_kapi():
+    ic = _FakeIntegrationConfig({"base_url": "https://tenant.kdgalaxy.com/ierp"})
+    url, _ = resolve_connector_request(
+        ic,
+        endpoint="ierp/kapi/sys/bd_material/query",
+    )
+    assert url == "https://tenant.kdgalaxy.com/kapi/v2/basedata/bd_material/batchQuery"
+
+
 def test_resolve_connector_request_inactive_raises():
     ic = _FakeIntegrationConfig(
         {"base_url": "https://erp.example.com"},
         is_active=False,
-        name="金蝶云星空",
+        name="金蝶AI星空",
     )
     with pytest.raises(ValidationError, match="已停用"):
         resolve_connector_request(ic, endpoint="/k3cloud/Kingdee.BOS.WebApi.ServicesStub")

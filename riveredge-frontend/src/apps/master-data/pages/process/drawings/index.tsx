@@ -1265,15 +1265,6 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
             ) : null}
           </>
         )}
-        {record.status === 'Obsolete' && canDelete && (
-          <Popconfirm
-            key="delete"
-            title={t('common.confirmDelete')}
-            onConfirm={() => handleDeleteDrawing(record)}
-          >
-            <Button {...rowActionKind('delete')} onClick={(e) => e.stopPropagation()} />
-          </Popconfirm>
-        )}
         {canPrint ? (
           <Button key="print" {...rowActionKind('print')} onClick={() => void openDrawingPrint(record)} />
         ) : null}

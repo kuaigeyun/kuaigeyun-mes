@@ -25,10 +25,12 @@ from apps.master_data.services.master_data_sync_common import (
     normalize_schedule_interval,
     normalize_sync_mode,
     resolve_incremental_since,
-    resolve_sync_config,
+    resolve_sync_sources,
     serialize_binding_row,
+    sources_from_upsert_body,
     upsert_sync_binding,
 )
+from core.services.data.sync_binding_sources import fetch_mapped_rows_from_sources
 
 SUPPLIER_CUSTOM_FIELD_TABLE = "master_data_suppliers"
 SUPPLIER_SYNC_STRING_FIELDS = frozenset({
@@ -52,23 +54,17 @@ class SupplierSyncService:
         tenant_id: int,
         body: MasterDataSyncBindingUpsert,
     ) -> MasterDataSyncBindingOut:
-        source_type = (body.source_type or "").strip()
-        api_uuid = (body.api_uuid or "").strip() or None
-        dataset_uuid = (body.dataset_uuid or "").strip() or None
-        if not source_type and not api_uuid and not dataset_uuid:
+        if body.sources is not None and len(body.sources) == 0:
             await SupplierSyncBinding.filter(tenant_id=tenant_id).delete()
             return MasterDataSyncBindingOut()
-        field_mapping = body.field_mapping if isinstance(body.field_mapping, dict) else {}
+        sources = sources_from_upsert_body(body)
         match_key = (body.match_key_field or self.MATCH_KEY).strip() or self.MATCH_KEY
         sync_mode = normalize_sync_mode(body.sync_mode)
         interval = normalize_schedule_interval(body.schedule_interval_minutes)
         row = await upsert_sync_binding(
             SupplierSyncBinding,
             tenant_id,
-            source_type=source_type,
-            api_uuid=api_uuid,
-            dataset_uuid=dataset_uuid,
-            field_mapping=field_mapping,
+            sources=sources,
             match_key_field=match_key,
             sync_mode=sync_mode,
             schedule_interval_minutes=interval,
@@ -84,19 +80,13 @@ class SupplierSyncService:
         request: Optional[MasterDataSyncFromSourceRequest] = None,
     ) -> MasterDataSyncFromSourceOut:
         req = request or MasterDataSyncFromSourceRequest()
-        source_type, api_uuid, dataset_uuid, field_mapping, match_key = await resolve_sync_config(
+        sources, match_key, binding = await resolve_sync_sources(
             SupplierSyncBinding,
             tenant_id,
             req,
             default_match_key=self.MATCH_KEY,
         )
-        if not source_type:
-            raise ValidationError("请配置同步来源（数据接口或数据集）")
-        if not field_mapping:
-            raise ValidationError("请配置字段映射")
-        if match_key not in field_mapping.values():
-            raise ValidationError(f"字段映射须包含匹配键 {match_key}")
-        binding = await SupplierSyncBinding.filter(tenant_id=tenant_id).first()
+        binding = binding or await SupplierSyncBinding.filter(tenant_id=tenant_id).first()
         sync_mode = normalize_sync_mode(
             req.sync_mode or (binding.sync_mode if binding else None)
         )
@@ -109,10 +99,7 @@ class SupplierSyncService:
             await self.upsert_binding(
                 tenant_id,
                 MasterDataSyncBindingUpsert(
-                    source_type=source_type,
-                    api_uuid=api_uuid,
-                    dataset_uuid=dataset_uuid,
-                    field_mapping=field_mapping,
+                    sources=req.sources,
                     match_key_field=match_key,
                     sync_mode=sync_mode,
                     schedule_interval_minutes=interval,
@@ -125,17 +112,26 @@ class SupplierSyncService:
             request_incremental=req.incremental,
         )
         try:
-            raw_rows = await fetch_sync_rows(
+            invalid_skipped_holder = {"n": 0}
+
+            def _filter_raw(raw_rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+                if not req.active_only:
+                    return raw_rows
+                kept, skipped = filter_kingdee_approved_active_master_rows(raw_rows)
+                invalid_skipped_holder["n"] += skipped
+                return kept
+
+            rows, source_errors, _fetched = await fetch_mapped_rows_from_sources(
                 tenant_id,
-                source_type=source_type,
-                api_uuid=api_uuid,
-                dataset_uuid=dataset_uuid,
+                sources,
                 since=since,
                 active_only=req.active_only,
+                transform_raw_rows=_filter_raw,
             )
-            raw_rows, invalid_skipped = filter_kingdee_approved_active_master_rows(raw_rows)
-            rows = map_sync_rows(raw_rows, field_mapping)
+            invalid_skipped = invalid_skipped_holder["n"]
             result = await self._upsert_suppliers(tenant_id, current_user, rows, match_key)
+            if source_errors:
+                result.errors = (source_errors + list(result.errors))[:20]
             if invalid_skipped:
                 result.skipped = int(getattr(result, "skipped", 0) or 0) + invalid_skipped
             if binding:

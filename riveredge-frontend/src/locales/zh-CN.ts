@@ -2291,7 +2291,26 @@ export default {
   'components.syncFromDataset.noDataToSync': '暂无数据可同步',
 
   // SyncFromSourceModal
-  'components.syncFromSource.loadOptionsFailed': '加载接口或数据集列表失败',
+  'components.syncFromSource.addSource': '添加来源',
+  'components.syncFromSource.activeSource': '当前来源',
+  'components.syncFromSource.sourcesTableTitle': '同步来源',
+  'components.syncFromSource.sourcesTableHint':
+    '在列表中点「设置」选择数据接口或数据集并完成字段映射，支持多来源合并写入',
+  'components.syncFromSource.sourcesEmpty': '暂无同步来源，请点「添加来源」',
+  'components.syncFromSource.noSources': '请先添加并配置至少一个同步来源',
+  'components.syncFromSource.sourceIndex': '序号',
+  'components.syncFromSource.sourceKind': '类型',
+  'components.syncFromSource.sourceKindField': '来源类型',
+  'components.syncFromSource.sourceName': '名称',
+  'components.syncFromSource.mappingFieldCount': '映射字段',
+  'components.syncFromSource.configureSource': '设置',
+  'components.syncFromSource.sourceNotConfigured': '未选择',
+  'components.syncFromSource.sourceSettingTitle': '来源设置',
+  'components.syncFromSource.sourceRowLabel': '来源 {{index}}',
+  'components.syncFromSource.sourceConfigureFirst': '请先完成{{source}}的设置',
+  'components.syncFromSource.mappingRequiredForSource': '{{source}}：请映射必填字段 {{field}}',
+  'components.syncFromSource.loadOptionsFailed': '加载数据接口或数据集列表失败',
+  'app.kuaizhizao.documentPush.batch.triggerActions': '绑定审核动作',
   'components.syncFromSource.selectApiFirst': '请先选择数据接口',
   'components.syncFromSource.selectDatasetFirst': '请先选择数据集',
   'components.syncFromSource.queryFailed': '拉取预览数据失败',
@@ -2324,10 +2343,10 @@ export default {
     '确认同步时按上次成功时间增量拉取；后台定时任务同样增量',
   'components.syncFromSource.syncMode.fullHint':
     '确认同步将全量拉取；适合首次或需要整体对齐时',
-  'components.syncPushHub.button': '同步/推送',
+  'components.syncPushHub.button': '同步',
   'components.syncPushHub.title': '数据互通',
-  'components.syncPushHub.tabSync': '从外部同步',
-  'components.syncPushHub.tabPush': '推送到外部',
+  'components.syncPushHub.tabSync': '入站方向',
+  'components.syncPushHub.tabPush': '出站方向',
   'components.syncPushHub.pushNotReady': '推送未就绪：暂无可用目标，或缺少应用连接/接口配置',
   'components.syncPushHub.goConfigureConnection': '去配置',
   'components.syncPushHub.configLayerTitle': '配置 / 连接',
@@ -2361,8 +2380,8 @@ export default {
   'components.externalSyncSource.iconHint': '该记录来自外部系统同步',
   'components.syncFromSource.sourceApi': '数据接口',
   'components.syncFromSource.sourceDataset': '数据集',
-  'components.syncFromSource.selectApi': '选择接口',
-  'components.syncFromSource.selectApiPlaceholder': '请选择接口管理中的接口',
+  'components.syncFromSource.selectApi': '选择数据接口',
+  'components.syncFromSource.selectApiPlaceholder': '请选择数据接口',
   'components.syncFromSource.selectDataset': '选择数据集',
   'components.syncFromSource.selectDatasetPlaceholder': '请选择数据集',
   'components.syncFromSource.saveBinding': '记住同步配置',
@@ -6894,7 +6913,7 @@ export default {
   'app.kuaizhizao.documentPush.preview': '预览报文',
   'app.kuaizhizao.documentPush.previewTitle': '推送报文预览（dry-run）',
   'app.kuaizhizao.documentPush.previewSourceNote':
-    '本预览来自 Pipeline 组装，不是接口管理里的 request_body 模板。单位编码请在 Save 接口的「来源类型编码转换」中配置。',
+    '本预览来自推送组装，不是接口管理里的请求模板。单位编码请在数据接口的「来源类型编码转换」中配置。',
   'app.kuaizhizao.documentPush.pushFailed': '推送失败',
   'app.kuaizhizao.documentPush.profile.kingdee_prd_mo': '金蝶生产订单',
   'app.kuaizhizao.documentPush.profile.kingdee_prd_morpt': '金蝶生产汇报单',
@@ -6907,16 +6926,48 @@ export default {
   'app.kuaizhizao.documentPush.batch.targetProfiles': '推送目标',
   'app.kuaizhizao.documentPush.batch.needTargetProfile': '请至少选择一个推送目标（profile）',
   'app.kuaizhizao.documentPush.batch.needConnector': '请先选择应用连接器',
-  'app.kuaizhizao.documentPush.batch.needApi': '请先选择接口管理中的 Save 接口',
+  'app.kuaizhizao.documentPush.batch.needApi': '请先选择数据接口',
   'app.kuaizhizao.documentPush.batch.profilesLoading': '正在加载可用推送目标…',
   'app.kuaizhizao.documentPush.batch.noProfiles': '当前单据类型暂无已注册的推送目标，请先配置应用连接',
   'app.kuaizhizao.documentPush.batch.connectorPlaceholder': '应用连接器',
-  'app.kuaizhizao.documentPush.batch.apiPlaceholder': 'Save 接口（接口管理）',
-  'app.kuaizhizao.documentPush.batch.connectorEmpty': '暂无启用的金蝶云星空连接器',
-  'app.kuaizhizao.documentPush.batch.apiEmpty': '该连接器下暂无 Save 类接口，请先在接口管理加载 presets',
+  'app.kuaizhizao.documentPush.batch.apiPlaceholder': '数据接口',
+  'app.kuaizhizao.documentPush.batch.destinationKind': '目标类型',
+  'app.kuaizhizao.documentPush.batch.destinationDataset': '数据集',
+  'app.kuaizhizao.documentPush.batch.destinationDataSource': '数据源',
+  'app.kuaizhizao.documentPush.batch.dataSourcePlaceholder': '请选择数据源',
+  'app.kuaizhizao.documentPush.batch.dataSourceEmpty': '暂无启用的数据源',
+  'app.kuaizhizao.documentPush.batch.needDataSource': '请先选择数据源',
+  'app.kuaizhizao.documentPush.batch.writeDatasetPlaceholder': '选择数据集',
+  'app.kuaizhizao.documentPush.batch.writeDatasetEmpty':
+    '该数据源下暂无写入用数据集，请先在数据集管理里把语句设为写入',
+  'app.kuaizhizao.documentPush.batch.needWriteDataset': '请先选择数据集',
+  'app.kuaizhizao.documentPush.batch.writeDatasetNoted':
+    '推送时按该数据集的 INSERT 或 UPDATE 写入外部库，:参数名 对应单据字段。',
+  'app.kuaizhizao.documentPush.batch.dataSourceNoted':
+    '请选择写入用数据集；推送时按数据集语句写入外部库。',
+  'app.kuaizhizao.documentPush.batch.connectorEmpty': '暂无启用的应用连接器',
+  'app.kuaizhizao.documentPush.batch.apiEmpty': '该连接器下暂无数据接口，请先在接口管理中加载',
   'app.kuaizhizao.documentPush.batch.modeManual': '手动推送',
+  'app.kuaizhizao.documentPush.batch.modeAuto': '自动推送',
   'app.kuaizhizao.documentPush.batch.modeScheduled': '定时推送',
   'app.kuaizhizao.documentPush.batch.modeLabel': '推送方式',
+  'app.kuaizhizao.documentPush.batch.targetsHint':
+    '在列表中点「设置」选择数据接口或数据集，确认时按列表中的目标写出',
+  'app.kuaizhizao.documentPush.batch.targetsEmpty': '暂无推送目标，请点「添加目标」',
+  'app.kuaizhizao.documentPush.batch.addTarget': '添加目标',
+  'app.kuaizhizao.documentPush.batch.targetRemoved': '已删除推送目标',
+  'app.kuaizhizao.documentPush.batch.targetRemoveFailed': '删除推送目标失败，请重试',
+  'app.kuaizhizao.documentPush.batch.targetSettingTitle': '目标设置',
+  'app.kuaizhizao.documentPush.batch.noMoreTargets': '可用推送目标都已添加',
+  'app.kuaizhizao.documentPush.batch.rememberBinding': '记住推送配置',
+  'app.kuaizhizao.documentPush.batch.targetKind': '推送目标',
+  'app.kuaizhizao.documentPush.batch.modeManualHint': '在下方勾选单据后手动推送',
+  'app.kuaizhizao.documentPush.batch.modeAutoHint':
+    '勾选要绑定的按钮，对应操作成功后自动推送，此处不选择单据',
+  'app.kuaizhizao.documentPush.batch.bindActions': '绑定按钮',
+  'app.kuaizhizao.documentPush.batch.confirmAuto': '确认',
+  'app.kuaizhizao.documentPush.batch.autoSaved': '已记住自动推送配置',
+  'app.kuaizhizao.documentPush.batch.autoNeedBinding': '当前单据尚未接入自动推送保存',
   'app.kuaizhizao.documentPush.batch.intervalLabel': '推送间隔',
   'app.kuaizhizao.documentPush.batch.interval': '每 {{n}} 分钟',
   'app.kuaizhizao.documentPush.batch.previewNeedOne': '请先勾选至少一条记录再预览',
@@ -6924,9 +6975,9 @@ export default {
   'app.kuaizhizao.documentPush.batch.partial': '推送部分成功：新建 {{created}}，跳过 {{skipped}}，失败 {{failed}}',
   'app.kuaizhizao.documentPush.batch.skippedHint': '另有 {{skipped}} 条因已关联或不符合条件已跳过。',
   'app.kuaizhizao.workReporting.pushBatchTitle': '推送外部系统',
-  'app.kuaizhizao.workReporting.pushBatchHint': '仅列出已审核报工；勾选后按 Pipeline 推送到外部系统。',
+  'app.kuaizhizao.workReporting.pushBatchHint': '按已添加的推送目标写出报工记录',
   'app.kuaizhizao.workReporting.pushBatchPipelineDesc':
-    '流程：选择推送目标 →（金蝶）连接器与 Save 接口 → 预览报文 → 推送选中。与工单推送同一标准。',
+    '流程：选择推送目标 →（金蝶）连接器与数据接口 → 预览报文 → 推送选中。与工单推送同一标准。',
   'app.kuaizhizao.workReporting.pushBatchSearchPlaceholder': '按工单/工序/操作工搜索',
   'app.kuaizhizao.workReporting.pushBatchNeedSelect': '请先勾选要推送的已审核报工',
   'app.kuaizhizao.workReporting.pushBatchColKingdeeStatus': '金蝶推送',
@@ -9893,10 +9944,9 @@ export default {
   // 销售订单页面
   'app.kuaizhizao.salesOrder.title': '销售订单',
   'app.kuaizhizao.salesOrder.documentPush.title': '推送外部系统',
-  'app.kuaizhizao.salesOrder.documentPush.hint':
-    '列出销售订单供勾选；已确认/已审核订单优先。勾选后按 Pipeline 推送到外部系统。',
+  'app.kuaizhizao.salesOrder.documentPush.hint': '按已添加的推送目标写出销售订单',
   'app.kuaizhizao.salesOrder.documentPush.pipelineDesc':
-    '流程：选择推送目标 →（金蝶）连接器与 Save 接口 → 预览报文 → 推送选中。标准与工单/报工一致。',
+    '流程：选择推送目标 →（金蝶）连接器与数据接口 → 预览报文 → 推送选中。标准与工单/报工一致。',
   'app.kuaizhizao.salesOrder.documentPush.searchPlaceholder': '按订单号/客户搜索',
   'app.kuaizhizao.salesOrder.documentPush.needSelect': '请先勾选要推送的销售订单',
   'app.kuaizhizao.salesOrder.listScopeAll': '全部',
@@ -10378,10 +10428,9 @@ export default {
   'app.kuaizhizao.purchaseOrder.col.supplierAndOrder': '供应商 / 订单',
   'app.kuaizhizao.purchaseOrder.col.orderCode': '订单编号',
   'app.kuaizhizao.purchaseOrder.documentPush.title': '推送外部系统',
-  'app.kuaizhizao.purchaseOrder.documentPush.hint':
-    '列出采购订单供勾选；已确认/已审核订单优先。勾选后按 Pipeline 推送到外部系统。',
+  'app.kuaizhizao.purchaseOrder.documentPush.hint': '按已添加的推送目标写出采购订单',
   'app.kuaizhizao.purchaseOrder.documentPush.pipelineDesc':
-    '流程：选择推送目标 →（金蝶）连接器与 Save 接口 → 预览报文 → 推送选中。标准与工单/报工一致。',
+    '流程：选择推送目标 →（金蝶）连接器与数据接口 → 预览报文 → 推送选中。标准与工单/报工一致。',
   'app.kuaizhizao.purchaseOrder.documentPush.searchPlaceholder': '按订单号/供应商搜索',
   'app.kuaizhizao.purchaseOrder.documentPush.needSelect': '请先勾选要推送的采购订单',
   'app.kuaizhizao.purchaseOrder.col.supplier': '供应商',
@@ -12219,10 +12268,9 @@ export default {
   'app.kuaizhizao.workOrder.pushToKingdeeButton': '推送',
   'app.kuaizhizao.workOrder.pushToKingdeeTitle': '推送外部系统',
   'app.kuaizhizao.workOrder.pushToKingdeeConfirm': '推送选中',
-  'app.kuaizhizao.workOrder.pushToKingdeeHint':
-    '走通用单据推送 Pipeline。可勾选多个目标（金蝶生产订单 / OA Webhook / 飞书通知）。选金蝶时需指定连接器与 Save 接口。',
+  'app.kuaizhizao.workOrder.pushToKingdeeHint': '按已添加的推送目标写出生产工单',
   'app.kuaizhizao.workOrder.pushToKingdeePipelineDesc':
-    '可先「预览报文」查看即将提交的字段（不落库）。接口管理示例模板不参与推送；单位编码请在 Save 接口的「来源类型编码转换」中配置。',
+    '可先「预览报文」查看即将提交的字段（不落库）。接口管理示例模板不参与推送；单位编码请在数据接口的「来源类型编码转换」中配置。',
   'app.kuaizhizao.workOrder.pushToKingdeeSearchPlaceholder': '按工单编码搜索',
   'app.kuaizhizao.workOrder.pushToKingdeeNeedSelect': '请先勾选要推送的工单',
   'app.kuaizhizao.workOrder.pushToKingdeeSkippedHint': '另有 {{skipped}} 张因已关联或不符合条件已跳过。',
@@ -15071,10 +15119,9 @@ export default {
   'app.kuaizhizao.customerMaterialRegistration.batchingOrders': '，线边备料单 {{codes}}',
   'app.kuaizhizao.warehouseInventory.headerTitle': '即时库存查询',
   'app.kuaizhizao.warehouseInventory.documentPush.title': '推送外部系统',
-  'app.kuaizhizao.warehouseInventory.documentPush.hint':
-    '按物料批次（MaterialBatch）勾选推送；不使用即时库存结存伪 id。勾选后按 Pipeline 推送金蝶其他入库单。',
+  'app.kuaizhizao.warehouseInventory.documentPush.hint': '按已添加的推送目标写出物料批次',
   'app.kuaizhizao.warehouseInventory.documentPush.pipelineDesc':
-    '流程：选择推送目标 →（金蝶）连接器与 Save 接口 → 预览报文 → 推送选中。标准与工单/报工一致。',
+    '流程：选择推送目标 →（金蝶）连接器与数据接口 → 预览报文 → 推送选中。标准与工单/报工一致。',
   'app.kuaizhizao.warehouseInventory.documentPush.searchPlaceholder': '按物料编码/批号/仓库搜索',
   'app.kuaizhizao.warehouseInventory.documentPush.needSelect': '请先勾选要推送的物料批次',
   'app.kuaizhizao.warehouseInventory.loadWarehousesFailed': '加载仓库列表失败',
@@ -20377,6 +20424,8 @@ export default {
   'app.master-data.productionLines.importSuccess': '成功导入 {{count}} 条产线数据',
   'app.master-data.productionLines.dimensionHint':
     '产线是工厂组织树中间层（车间下的线组），用于工位归属与设备线组；不参与排产、派工或线边仓匹配。产能与派工请维护工作中心。',
+  'app.master-data.factory.collapseDimensionHint': '收起提示',
+  'app.master-data.factory.expandDimensionHint': '展开提示',
   'app.master-data.workstations.getListFailed': '获取工位列表失败',
   'app.master-data.workstations.code': '工位编码',
   'app.master-data.workstations.name': '工位名称',
@@ -25541,7 +25590,15 @@ export default {
   'pages.system.datasets.columnEnabled': '启用状态',
   'pages.system.datasets.columnLastExecuted': '最后执行时间',
   'pages.system.datasets.queryTypeSql': 'SQL',
+  'pages.system.datasets.queryTypeSqlWrite': '写入',
   'pages.system.datasets.queryTypeApi': 'API',
+  'pages.system.datasets.statementKind': '语句',
+  'pages.system.datasets.statementRead': '读取',
+  'pages.system.datasets.statementWrite': '写入',
+  'pages.system.datasets.executeWrite': '执行写入',
+  'pages.system.datasets.writeSqlTip':
+    '只允许一条 INSERT 或 UPDATE，用 :参数名 绑定值。写入打到该数据集绑定的外部库，不会写系统默认库。',
+  'pages.system.datasets.writeAffected': '已写入 {{count}} 行',
   'pages.system.datasets.outputTypeList': '列表',
   'pages.system.datasets.outputTypeMetric': '单值指标',
   'pages.system.datasets.outputTypeMultiMetric': '多指标',
@@ -26170,6 +26227,13 @@ export default {
   'pages.system.applicationConnections.categoryAll': '全部',
   'pages.system.applicationConnections.categoryCollaboration': '协作',
   'pages.system.applicationConnections.categoryErp': 'ERP 企业资源',
+  'pages.system.applicationConnections.erpVendorKingdee': '金蝶',
+  'pages.system.applicationConnections.erpVendorYonyou': '用友',
+  'pages.system.applicationConnections.erpVendorDigiwin': '鼎捷',
+  'pages.system.applicationConnections.erpVendorSap': 'SAP',
+  'pages.system.applicationConnections.erpVendorOther': '其他',
+  'pages.system.applicationConnections.erpDeploymentCloud': '云产品',
+  'pages.system.applicationConnections.erpDeploymentTraditional': '传统产品',
   'pages.system.applicationConnections.categoryPlm': 'PLM 产品生命周期',
   'pages.system.applicationConnections.categoryCrm': 'CRM 客户管理',
   'pages.system.applicationConnections.categoryOa': 'OA 办公',
@@ -26221,26 +26285,44 @@ export default {
   'pages.system.applicationConnections.typeFeishu': '飞书',
   'pages.system.applicationConnections.typeDingtalk': '钉钉',
   'pages.system.applicationConnections.typeWecom': '企业微信',
-  'pages.system.applicationConnections.typeKingdee_galaxy': '金蝶云星空',
-  'pages.system.applicationConnections.typeKingdee_xingchen': '金蝶云星辰',
-  'pages.system.applicationConnections.typeKingdee_kis_cloud': '金蝶 KIS 云',
-  'pages.system.applicationConnections.typeKingdee_kis': '金蝶 KIS',
-  'pages.system.applicationConnections.typeYonyou_yonbip': '用友 YonBIP',
-  'pages.system.applicationConnections.typeYonyou_u8': '用友 U8',
-  'pages.system.applicationConnections.typeYonyou_u9': '用友 U9',
-  'pages.system.applicationConnections.typeYonyou_nc': '用友 NC Cloud',
-  'pages.system.applicationConnections.typeSap_s4hana': 'SAP S/4HANA',
+  'pages.system.applicationConnections.typeKingdee_cosmic': '金蝶AI苍穹 OpenAPI',
+  'pages.system.applicationConnections.typeKingdee_xinghan': '金蝶AI星瀚',
+  'pages.system.applicationConnections.typeKingdee_ai_suite': '金蝶AI套件',
+  'pages.system.applicationConnections.typeKingdee_galaxy': '金蝶AI星空',
+  'pages.system.applicationConnections.typeKingdee_xingchen': '金蝶AI星辰',
+  'pages.system.applicationConnections.typeKingdee_eas_cloud': '金蝶EAS Cloud',
+  'pages.system.applicationConnections.typeKingdee_kis_cloud': '金蝶KIS云',
+  'pages.system.applicationConnections.typeKingdee_jingdouyun': '金蝶精斗云',
+  'pages.system.applicationConnections.typeKingdee_k3_wise': '金蝶K/3 WISE',
+  'pages.system.applicationConnections.typeKingdee_eas': '金蝶EAS',
+  'pages.system.applicationConnections.typeKingdee_kis': '金蝶KIS',
+  'pages.system.applicationConnections.typeYonyou_yonbip': '用友BIP',
+  'pages.system.applicationConnections.typeYonyou_yonsuite': '用友YonSuite',
+  'pages.system.applicationConnections.typeYonyou_u9_cloud': '用友U9 cloud',
+  'pages.system.applicationConnections.typeYonyou_u8_cloud': '用友U8 cloud',
+  'pages.system.applicationConnections.typeYonyou_nc': '用友NC Cloud',
+  'pages.system.applicationConnections.typeYonyou_u8': '用友U8+',
+  'pages.system.applicationConnections.typeYonyou_u9': '用友U9',
+  'pages.system.applicationConnections.typeYonyou_nc5': '用友NC',
+  'pages.system.applicationConnections.typeSap_s4hana': 'SAP S/4HANA Cloud',
+  'pages.system.applicationConnections.typeSap_bydesign': 'SAP Business ByDesign',
+  'pages.system.applicationConnections.typeSap_s4hana_op': 'SAP S/4HANA',
+  'pages.system.applicationConnections.typeSap_ecc': 'SAP ECC',
   'pages.system.applicationConnections.typeSap_b1': 'SAP Business One',
-  'pages.system.applicationConnections.typeInspur_gs': '浪潮 GS Cloud',
-  'pages.system.applicationConnections.typeInspur_ps': '浪潮 PS Cloud',
-  'pages.system.applicationConnections.typeDigiwin_t100': '鼎捷 T100',
+  'pages.system.applicationConnections.typeInspur_gs': '浪潮海岳 GS Cloud',
+  'pages.system.applicationConnections.typeInspur_ps': '浪潮海岳 PS Cloud',
+  'pages.system.applicationConnections.typeDigiwin_t100': '鼎捷T100 AIGP',
+  'pages.system.applicationConnections.typeDigiwin_e10': '鼎捷E10 AIGP',
   'pages.system.applicationConnections.typeDigiwin_yifei': '鼎捷易飞',
   'pages.system.applicationConnections.typeDigiwin_yizhu': '鼎捷易助',
   'pages.system.applicationConnections.typeDigiwin_yituo': '鼎捷易拓',
   'pages.system.applicationConnections.typeGrasp_huihuang': '管家婆辉煌',
-  'pages.system.applicationConnections.typeSuper_erp': '速达 ERP',
-  'pages.system.applicationConnections.typeChanjet_tplus': '畅捷通 T+',
-  'pages.system.applicationConnections.typeSunlike_erp': '天心天思 ERP',
+  'pages.system.applicationConnections.typeSuper_erp': '速达ERP',
+  'pages.system.applicationConnections.typeChanjet_tplus': '畅捷通T+',
+  'pages.system.applicationConnections.typeSunlike_erp': '天心天思ERP',
+  'pages.system.applicationConnections.typeOracle_fusion': 'Oracle Fusion Cloud ERP',
+  'pages.system.applicationConnections.typeDynamics_365': 'Microsoft Dynamics 365',
+  'pages.system.applicationConnections.typeOracle_ebs': 'Oracle E-Business Suite',
   'pages.system.applicationConnections.typeSanpin_plm': '三品 PLM',
   'pages.system.applicationConnections.typeSunlike_plm': '天心天思 PLM',
   'pages.system.applicationConnections.typeSipm': '思普 PLM',
@@ -26262,7 +26344,6 @@ export default {
   'pages.system.applicationConnections.typeKejian_wms': '科箭 WMS',
   'pages.system.applicationConnections.typeDigiwin_wms': '鼎捷 WMS',
   'pages.system.applicationConnections.typeCaxa': 'CAXA (数码大方)',
-  'pages.system.applicationConnections.typeDigiwin_e10': '鼎捷 E10',
   'pages.system.applicationConnections.typeOracle_netsuite': 'Oracle NetSuite',
   'pages.system.applicationConnections.typeErpnext': 'ERPNext',
   'pages.system.applicationConnections.typeOdoo': 'Odoo',
@@ -26332,30 +26413,47 @@ export default {
   'pages.system.applicationConnections.descFeishu': '飞书开放平台自建应用',
   'pages.system.applicationConnections.descDingtalk': '钉钉企业内部应用',
   'pages.system.applicationConnections.descWecom': '企业微信自建应用（登录、消息、通讯录同步）',
-  'pages.system.applicationConnections.descKingdee_galaxy': '金蝶云星空 WebAPI',
-  'pages.system.applicationConnections.descKingdee_xingchen': '金蝶云星辰开放接口',
-  'pages.system.applicationConnections.descKingdee_kis_cloud': '金蝶 KIS 云开放接口',
-  'pages.system.applicationConnections.descKingdee_kis': '金蝶 KIS 专业版 / 商贸版接口',
-  'pages.system.applicationConnections.descYonyou_yonbip': '用友 YonBIP 开放平台',
-  'pages.system.applicationConnections.descYonyou_u8': '用友 U8 OpenAPI',
-  'pages.system.applicationConnections.descYonyou_u9': '用友 U9 开放接口',
-  'pages.system.applicationConnections.descYonyou_nc': '用友 NC Cloud 开放平台',
-  'pages.system.applicationConnections.descSap_s4hana': 'SAP S/4HANA Cloud OData / API',
-  'pages.system.applicationConnections.descSap_b1': 'SAP Business One Service Layer',
-  'pages.system.applicationConnections.descOracle_netsuite': 'Oracle NetSuite SuiteTalk / REST',
-  'pages.system.applicationConnections.descOdoo': 'Odoo External API / XML-RPC',
-  'pages.system.applicationConnections.descInspur_gs': '浪潮 GS Cloud 开放接口',
-  'pages.system.applicationConnections.descInspur_ps': '浪潮 PS Cloud 开放接口',
-  'pages.system.applicationConnections.descDigiwin_t100': '鼎捷 T100 REST API',
-  'pages.system.applicationConnections.descDigiwin_yifei': '鼎捷易飞 REST API',
-  'pages.system.applicationConnections.descDigiwin_yizhu': '鼎捷易助 REST API',
-  'pages.system.applicationConnections.descDigiwin_yituo': '鼎捷易拓 REST API',
-  'pages.system.applicationConnections.descDigiwin_e10': '鼎捷 E10 ERP 开放接口',
-  'pages.system.applicationConnections.descChanjet_tplus': '畅捷通 T+ OpenAPI',
-  'pages.system.applicationConnections.descGrasp_huihuang': '管家婆辉煌系列开放接口',
-  'pages.system.applicationConnections.descSuper_erp': '速达 ERP 接口服务',
-  'pages.system.applicationConnections.descErpnext': 'ERPNext REST API',
-  'pages.system.applicationConnections.descSunlike_erp': '天心天思天思系列 ERP',
+  'pages.system.applicationConnections.descKingdee_galaxy': '面向中型企业',
+  'pages.system.applicationConnections.descKingdee_cosmic': '企业级 PaaS 技术底座',
+  'pages.system.applicationConnections.descKingdee_xinghan': '面向央国企及大型集团',
+  'pages.system.applicationConnections.descKingdee_ai_suite': '面向大中型企业',
+  'pages.system.applicationConnections.descKingdee_xingchen': '面向小微企业',
+  'pages.system.applicationConnections.descKingdee_eas_cloud': '面向集团企业',
+  'pages.system.applicationConnections.descKingdee_kis_cloud': '面向小微企业',
+  'pages.system.applicationConnections.descKingdee_jingdouyun': '面向微型企业',
+  'pages.system.applicationConnections.descKingdee_k3_wise': '面向中型企业',
+  'pages.system.applicationConnections.descKingdee_eas': '面向大型集团',
+  'pages.system.applicationConnections.descKingdee_kis': '面向小微企业',
+  'pages.system.applicationConnections.descYonyou_yonbip': '企业数智化商业创新平台',
+  'pages.system.applicationConnections.descYonyou_yonsuite': '面向成长型创新企业',
+  'pages.system.applicationConnections.descYonyou_u9_cloud': '面向中大型制造企业',
+  'pages.system.applicationConnections.descYonyou_u8_cloud': '面向成长型集团',
+  'pages.system.applicationConnections.descYonyou_nc': '面向大型企业',
+  'pages.system.applicationConnections.descYonyou_u8': '面向成长型企业',
+  'pages.system.applicationConnections.descYonyou_u9': '面向制造企业',
+  'pages.system.applicationConnections.descYonyou_nc5': '面向大型集团',
+  'pages.system.applicationConnections.descSap_s4hana': '面向大中型企业的云 ERP',
+  'pages.system.applicationConnections.descSap_bydesign': '面向成长型企业的云 ERP',
+  'pages.system.applicationConnections.descSap_s4hana_op': '面向大中型企业的本地 ERP',
+  'pages.system.applicationConnections.descSap_ecc': '面向大中型企业的传统 ERP',
+  'pages.system.applicationConnections.descSap_b1': '面向中小企业',
+  'pages.system.applicationConnections.descOracle_fusion': '面向大中型企业的云 ERP',
+  'pages.system.applicationConnections.descOracle_netsuite': '面向成长型企业的云 ERP',
+  'pages.system.applicationConnections.descDynamics_365': '面向大中型企业的云 ERP',
+  'pages.system.applicationConnections.descOdoo': '开源企业管理套件',
+  'pages.system.applicationConnections.descInspur_gs': '面向大型企业的云 ERP',
+  'pages.system.applicationConnections.descInspur_ps': '面向成长型企业的云 ERP',
+  'pages.system.applicationConnections.descDigiwin_t100': '面向集团企业',
+  'pages.system.applicationConnections.descDigiwin_e10': '面向中大型成长企业',
+  'pages.system.applicationConnections.descDigiwin_yifei': '面向中小制造企业',
+  'pages.system.applicationConnections.descDigiwin_yizhu': '面向小微企业',
+  'pages.system.applicationConnections.descDigiwin_yituo': '面向中小企业',
+  'pages.system.applicationConnections.descChanjet_tplus': '面向小微企业的云产品',
+  'pages.system.applicationConnections.descErpnext': '开源企业管理套件',
+  'pages.system.applicationConnections.descOracle_ebs': '面向大中型企业的传统 ERP',
+  'pages.system.applicationConnections.descGrasp_huihuang': '面向小微企业的传统 ERP',
+  'pages.system.applicationConnections.descSuper_erp': '面向中小企业的传统 ERP',
+  'pages.system.applicationConnections.descSunlike_erp': '面向中小企业的传统 ERP',
   'pages.system.applicationConnections.descTeamcenter': '西门子 Teamcenter',
   'pages.system.applicationConnections.descWindchill': 'PTC Windchill REST',
   'pages.system.applicationConnections.descCaxa': 'CAXA 数码大方 PLM 数据服务',
@@ -27616,6 +27714,8 @@ export default {
   'pages.system.apis.testRequestJsonInvalid': '测试请求 JSON 格式不正确',
   'pages.system.apis.testSuccess': '接口测试成功',
   'pages.system.apis.testCompleteStatus': '接口测试完成，状态码: {{code}}',
+  'pages.system.apis.testCosmicPathPlaceholderHint':
+    '当前接口路径仍含占位符 __API_NUMBER__，直接测试会报网关路由未找到。请先在接口编辑页改为贵司苍穹开放服务云里已发布且已授权的实际接口编码。',
   'pages.system.apis.testFailed': '接口测试失败',
   'pages.system.apis.columnName': '接口名称',
   'pages.system.apis.columnCode': '接口代码',
@@ -27685,9 +27785,9 @@ export default {
   'pages.system.apis.libraryCategory': '分类 {{name}}',
   'pages.system.apis.libraryViewItems': '查看接口清单',
   'pages.system.apis.libraryConnectorLabel': '绑定应用连接器',
-  'pages.system.apis.libraryConnectorPlaceholder': '请选择金蝶云星空应用连接器',
+  'pages.system.apis.libraryConnectorPlaceholder': '请选择金蝶AI星空应用连接器',
   'pages.system.apis.libraryConnectorPlaceholderGeneric': '请选择匹配的应用连接器',
-  'pages.system.apis.libraryNoConnector': '暂无金蝶云星空连接器，请先在应用连接器中配置',
+  'pages.system.apis.libraryNoConnector': '暂无金蝶AI星空连接器，请先在应用连接器中配置',
   'pages.system.apis.libraryNoConnectorGeneric': '暂无匹配的应用连接器，请先在应用连接器中配置',
   'pages.system.apis.librarySelectConnector': '请选择应用连接器',
   'pages.system.apis.libraryInstall': '加载到本组织',
@@ -28502,6 +28602,201 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.outbound-manual-push-status-i18n-r01.title':
+    '手动推送单据状态改为中文',
+  'pages.dashboard.updateLog.entries.outbound-manual-push-status-i18n-r01.description':
+    '采购出站手动推送勾选单据时，状态列显示已确认等中文，不再直接显示 CONFIRMED 这类英文码。',
+  'pages.dashboard.updateLog.entries.outbound-dataset-manual-pick-docs-r01.title':
+    '数据集手动推送也能勾选单据',
+  'pages.dashboard.updateLog.entries.outbound-dataset-manual-pick-docs-r01.description':
+    '出站目标写成数据集、推送方式为手动时，设置里会列出可勾选的单据，和写成数据接口时一样，不再只剩数据源和数据集下拉。',
+  'pages.dashboard.updateLog.entries.outbound-targets-match-inbound-r01.title':
+    '出站推送目标对齐入站来源列表',
+  'pages.dashboard.updateLog.entries.outbound-targets-match-inbound-r01.description':
+    '出站打开时先空表，只显示已经确认保存的目标，不再自动填金蝶采购订单。点添加目标先开设置，保存后才进列表，和入站添加来源一样。',
+  'pages.dashboard.updateLog.entries.outbound-drop-unsaved-kingdee-target-r01.title':
+    '没点确认的出站目标会被清掉',
+  'pages.dashboard.updateLog.entries.outbound-drop-unsaved-kingdee-target-r01.description':
+    '采购出站里以前自动出现、并未点确认的推送目标（例如金蝶采购订单）打开后不再显示，并会从配置里删掉。只有点确认之后的目标才会留下；删掉也会马上保存。',
+  'pages.dashboard.updateLog.entries.outbound-targets-only-after-confirm-r01.title':
+    '出站推送目标只有确认后才会记住',
+  'pages.dashboard.updateLog.entries.outbound-targets-only-after-confirm-r01.description':
+    '未点过确认的出站目标不会再出现在列表里，并会清掉误写入的配置；删掉已确认的目标会立刻保存，不用删很多遍。',
+  'pages.dashboard.updateLog.entries.outbound-shell-target-not-listed-r01.title':
+    '未确认的出站目标不再出现在列表',
+  'pages.dashboard.updateLog.entries.outbound-shell-target-not-listed-r01.description':
+    '以前自动塞进配置、却从未选连接器或数据集的空壳推送目标，打开出站时不再显示，并会清掉；只有点确认保存过的目标才会留在列表里。',
+  'pages.dashboard.updateLog.entries.outbound-delete-target-persist-r02.title':
+    '出站删除推送目标会立刻写入配置',
+  'pages.dashboard.updateLog.entries.outbound-delete-target-persist-r02.description':
+    '点删除会马上保存空列表或剩余目标，失败会提示；空目标时也可以点确认保存，下次打开不会再冒出已删的行。',
+  'pages.dashboard.updateLog.entries.sync-push-copy-align-r01.title':
+    '数据互通出入站文案对齐',
+  'pages.dashboard.updateLog.entries.sync-push-copy-align-r01.description':
+    '入站与出站统一使用「数据接口」「数据集」。入站为来源类型，出站为目标类型；出站不再单独叫写入接口。',
+  'pages.dashboard.updateLog.entries.outbound-no-auto-default-target-r01.title':
+    '出站未保存时不再自动出现推送目标',
+  'pages.dashboard.updateLog.entries.outbound-no-auto-default-target-r01.description':
+    '打开出站若从未保存过推送配置，列表保持空，与入站同步来源一致；只有点「添加目标」或已记住的配置才会出现行。',
+  'pages.dashboard.updateLog.entries.outbound-target-table-no-spinner-r01.title':
+    '出站推送目标表与入站一样不再转圈',
+  'pages.dashboard.updateLog.entries.outbound-target-table-no-spinner-r01.description':
+    '打开出站时推送目标表不再整表 loading，配置未就绪前显示空表，就绪后一次画出，与入站同步来源一致。',
+  'pages.dashboard.updateLog.entries.outbound-target-setting-fixed-width-r01.title':
+    '出站目标设置窗口宽度固定',
+  'pages.dashboard.updateLog.entries.outbound-target-setting-fixed-width-r01.description':
+    '切换自动推送和手动推送时，目标设置窗口保持同一宽度，不再跟着变宽变窄。',
+  'pages.dashboard.updateLog.entries.outbound-destination-segment-first-r01.title':
+    '出站写出到分段与入站对齐',
+  'pages.dashboard.updateLog.entries.outbound-destination-segment-first-r01.description':
+    '目标设置里「写出到」排在第一项，分段轨道与入站来源类型同一套样式。',
+  'pages.dashboard.updateLog.entries.outbound-target-list-no-flash-r01.title':
+    '出站目标列表不再先闪出默认目标',
+  'pages.dashboard.updateLog.entries.outbound-target-list-no-flash-r01.description':
+    '打开出站时先等已保存的推送目标，有几条显示几条，空列表不再先冒出默认目标再消失。',
+  'pages.dashboard.updateLog.entries.dataset-sql-write-r01.title': '数据集可以写入外部数据库',
+  'pages.dashboard.updateLog.entries.dataset-sql-write-r01.description':
+    '数据集设计器可把语句设为写入，执行单条 INSERT 或 UPDATE 到所绑定的外部库。出站选数据源时需再选该写入数据集，推送按单据字段绑定参数。',
+  'pages.dashboard.updateLog.entries.outbound-destination-data-source-r01.title':
+    '出站目标可以写出到数据源',
+  'pages.dashboard.updateLog.entries.outbound-destination-data-source-r01.description':
+    '目标设置里可以选择写入接口或数据源。选中的数据源会随推送配置记住；单据行写入该库尚未开通，按写入接口的写出保持不变。',
+  'pages.dashboard.updateLog.entries.outbound-connector-hint-in-modal-r01.title':
+    '未选连接器的提示改到目标设置',
+  'pages.dashboard.updateLog.entries.outbound-connector-hint-in-modal-r01.description':
+    '出站目标未选应用连接器时，提示只出现在该目标的设置窗口里，不再写在列表名称下面。',
+  'pages.dashboard.updateLog.entries.outbound-target-delete-persist-r01.title':
+    '采购订单删掉的出站目标会记住',
+  'pages.dashboard.updateLog.entries.outbound-target-delete-persist-r01.description':
+    '采购订单出站里删掉默认推送目标后会保存空列表，下次打开不再自动补回。',
+  'pages.dashboard.updateLog.entries.outbound-write-api-label-r01.title':
+    '出站目标设置改为写入接口',
+  'pages.dashboard.updateLog.entries.outbound-write-api-label-r01.description':
+    '目标设置里选择外部写入用的接口时，文案改为「写入接口」，不再使用 Save 接口。',
+  'pages.dashboard.updateLog.entries.outbound-connector-from-active-r01.title':
+    '出站目标从已启用连接器中选择',
+  'pages.dashboard.updateLog.entries.outbound-connector-from-active-r01.description':
+    '目标设置里的应用连接器不再只列金蝶AI星空，改为列出当前已启用的应用连接器。',
+  'pages.dashboard.updateLog.entries.outbound-manual-pick-in-target-r01.title':
+    '手动推送的单据选择放进目标设置',
+  'pages.dashboard.updateLog.entries.outbound-manual-pick-in-target-r01.description':
+    '出站列表不再铺单据勾选。某个目标选了手动推送后，在该目标的设置窗口里勾选并推送。',
+  'pages.dashboard.updateLog.entries.outbound-connector-hint-on-target-r01.title':
+    '出站缺连接器的提示改到目标行',
+  'pages.dashboard.updateLog.entries.outbound-connector-hint-on-target-r01.description':
+    '未选应用连接器时，提示写在对应推送目标上，不再在出站列表下方单独提示。',
+  'pages.dashboard.updateLog.entries.outbound-push-mode-per-target-r01.title':
+    '出站推送方式改到每个目标上',
+  'pages.dashboard.updateLog.entries.outbound-push-mode-per-target-r01.description':
+    '每个推送目标单独选择自动或手动，默认自动。只有存在手动目标时才出现单据勾选，自动目标按各自绑定的按钮写出。',
+  'pages.dashboard.updateLog.entries.outbound-target-setting-modal-r01.title':
+    '出站连接器改到目标设置窗口',
+  'pages.dashboard.updateLog.entries.outbound-target-setting-modal-r01.description':
+    '出站推送目标的应用连接器和 Save 接口在「设置」窗口里填写，不再铺在目标列表下面。',
+  'pages.dashboard.updateLog.entries.outbound-push-hint-removed-r01.title':
+    '出站方向提示改为一行',
+  'pages.dashboard.updateLog.entries.outbound-push-hint-removed-r01.description':
+    '数据互通出站方向保留与入站相同的蓝色提示，只写写出哪类单据，不再展开推送流程。',
+  'pages.dashboard.updateLog.entries.outbound-push-layout-r01.title':
+    '出站方向对齐入站的多目标布局',
+  'pages.dashboard.updateLog.entries.outbound-push-layout-r01.description':
+    '出站先维护多个推送目标。自动推送可绑定提交和审核按钮；只有选择手动推送时才出现单据勾选。',
+  'pages.dashboard.updateLog.entries.outbound-push-setup-split-r01.title':
+    '出站方向把推送配置和选单分开',
+  'pages.dashboard.updateLog.entries.outbound-push-setup-split-r01.description':
+    '数据互通出站方向里，推送目标、应用连接和 Save 接口单独成一块，单据搜索和勾选不再和配置挤在同一筛选区。',
+  'pages.dashboard.updateLog.entries.toolbar-sync-icon-unified-r01.title':
+    '列表同步按钮统一为循环箭头图标',
+  'pages.dashboard.updateLog.entries.toolbar-sync-icon-unified-r01.description':
+    '销售、采购、工单等数据互通入口与主数据同步按钮使用同一套循环箭头，不再使用云同步图标。',
+  'pages.dashboard.updateLog.entries.api-test-body-table-nested-r01.title':
+    '接口测试恢复苍穹批量查询的表格预览',
+  'pages.dashboard.updateLog.entries.api-test-body-table-nested-r01.description':
+    '响应行在 data.rows 这类嵌套数组里时，接口测试结果仍用表格展示，并可切换 JSON。',
+  'pages.dashboard.updateLog.entries.kingdee-cosmic-basedata-batch-r01.title':
+    '苍穹基础资料接口统一为批量查询',
+  'pages.dashboard.updateLog.entries.kingdee-cosmic-basedata-batch-r01.description':
+    '计量单位、物料分组、供应商、客户、仓库与物料一样，使用 kapi/v2/basedata/{对象}/batchQuery，请求体为 data、pageNo、pageSize。',
+  'pages.dashboard.updateLog.entries.kingdee-cosmic-v2-data-body-r01.title':
+    '苍穹 v2 接口测试自动补上 data',
+  'pages.dashboard.updateLog.entries.kingdee-cosmic-v2-data-body-r01.description':
+    '调用基础资料批量查询时，请求体带上 data、pageNo 和 pageSize，避免金蝶依次返回缺少 data 或页大小为空。',
+  'pages.dashboard.updateLog.entries.kingdee-cosmic-material-batch-query-r01.title':
+    '苍穹物料查询改为开放平台批量查询地址',
+  'pages.dashboard.updateLog.entries.kingdee-cosmic-material-batch-query-r01.description':
+    '物料接口路径改为 kapi/v2/basedata/bd_material/batchQuery，筛选放在请求体的 data 内，与基础资料API服务中的物料批量查询一致。',
+  'pages.dashboard.updateLog.entries.kingdee-cosmic-gateway-2530-r01.title':
+    '苍穹接口测试在网关无路由时说明要填操作服务编码',
+  'pages.dashboard.updateLog.entries.kingdee-cosmic-gateway-2530-r01.description':
+    '金蝶返回 2530 时，测试结果会说明 kapi/sys 后面须填写开放平台已发布的操作服务编码，不能直接使用业务对象标识。',
+  'pages.dashboard.updateLog.entries.kingdee-cosmic-sys-query-ierp-r02.title':
+    '修复苍穹 Base 含 ierp 时接口测试双段路径',
+  'pages.dashboard.updateLog.entries.kingdee-cosmic-sys-query-ierp-r02.description':
+    '接口测试拼出的地址若出现 /ierp/ierp/kapi，会在发出前收成一段 /ierp/kapi，避免苍穹网关 404。',
+  'pages.dashboard.updateLog.entries.kingdee-cosmic-sys-query-ierp-r01.title':
+    '修复苍穹业务 query 接口测试网关 404',
+  'pages.dashboard.updateLog.entries.kingdee-cosmic-sys-query-ierp-r01.description':
+    '金蝶AI苍穹 OpenAPI 的 kapi/sys 业务查询会自动拼上 ierp 前缀，避免网关返回路由未找到；getToken 路径不变，已保存的旧路径无需手工改。',
+  'pages.dashboard.updateLog.entries.kingdee-cosmic-inbound-presets-r01.title':
+    '苍穹接口库改为入站主数据与采购订单查询',
+  'pages.dashboard.updateLog.entries.kingdee-cosmic-inbound-presets-r01.description':
+    '金蝶AI苍穹 OpenAPI 预置包提供物料、计量单位、分组、供应商、客户、仓库、采购订单等 kapi/sys 标准 query，并精简占位符模板与少用鉴权接口；加载后可在接口管理中微调 select 与 filter。',
+  'pages.dashboard.updateLog.entries.sync-source-table-settings-r01.title':
+    '从外部同步改为来源列表与分窗设置',
+  'pages.dashboard.updateLog.entries.sync-source-table-settings-r01.description':
+    '数据互通入站以表格展示各来源，点设置可在独立窗口选择接口或数据集并完成拉取预览与字段映射。',
+  'pages.dashboard.updateLog.entries.sync-multi-source-push-r01.title':
+    '同步与外推支持多接口多连接器',
+  'pages.dashboard.updateLog.entries.sync-multi-source-push-r01.description':
+    '入站可按来源分别映射并合并写入，出站可配置多条连接器目标；推送内容内嵌在同步窗口，提交等审核动作可触发无感外推。',
+  'pages.dashboard.updateLog.entries.erp-connector-desc-formal-r01.title':
+    '应用连接器 ERP 卡片说明改为正式定位文案',
+  'pages.dashboard.updateLog.entries.erp-connector-desc-formal-r01.description':
+    '市场卡片副文案统一为简短产品定位（如「面向大型集团」），去掉鉴权说明、协议名与「非某某产品」等解释性表述。',
+  'pages.dashboard.updateLog.entries.erp-connector-tier-sort-r01.title':
+    '应用连接器 ERP 按产品等级排序大型在前',
+  'pages.dashboard.updateLog.entries.erp-connector-tier-sort-r01.description':
+    '金蝶/用友等厂商云产品与传统产品均按企业规模从大到小排列（如金蝶：苍穹、星瀚、EAS Cloud、AI套件、星空、星辰、KIS云、精斗云）。市场展示序以本地产品目录为准，避免接口旧序把新品挤到末尾。',
+  'pages.dashboard.updateLog.entries.erp-connector-catalog-traditional-expand-r01.title':
+    '应用连接器 ERP 补全传统存量与各厂商最新云产品',
+  'pages.dashboard.updateLog.entries.erp-connector-catalog-traditional-expand-r01.description':
+    '金蝶传统补 K/3 WISE、EAS，云侧补 EAS Cloud、精斗云；用友云补 YonSuite、U9/U8 cloud，传统补 NC 本地并将 U8 展示为 U8+；鼎捷展示名对齐 T100/E10 AIGP；SAP 补 ByDesign、S/4HANA 本地、ECC；其他补 Oracle Fusion、Dynamics 365、Oracle EBS。仍按厂商下云产品/传统产品分组。',
+  'pages.dashboard.updateLog.entries.kingdee-ai-product-line-align-r01.title':
+    '金蝶连接器对齐 AI 产品序列并补全星瀚套件',
+  'pages.dashboard.updateLog.entries.kingdee-ai-product-line-align-r01.description':
+    '「金蝶云星空」更名为「金蝶AI星空」（类型码仍为 kingdee_galaxy）。云产品按官网序展示：金蝶AI苍穹 OpenAPI、金蝶AI星瀚、金蝶AI套件、金蝶AI星空、金蝶AI星辰、金蝶KIS云；星瀚与 AI套件复用苍穹 OpenAPI 鉴权与常用接口加载。',
+  'pages.dashboard.updateLog.entries.connector-market-erp-cloud-traditional-r01.title':
+    '应用连接器市场 ERP 按云产品与传统产品分组',
+  'pages.dashboard.updateLog.entries.connector-market-erp-cloud-traditional-r01.description':
+    'ERP Tab 仍按金蝶、用友、鼎捷、SAP、其他分区；各厂商下再分「云产品」「传统产品」。展示名对齐厂商现行产品序列（如金蝶AI苍穹 OpenAPI、金蝶AI星辰、用友YonBIP、SAP S/4HANA Cloud、浪潮海岳 GS/PS Cloud 等）。',
+  'pages.dashboard.updateLog.entries.connector-market-erp-vendor-groups-r01.title':
+    '应用连接器市场 ERP 按厂商分组',
+  'pages.dashboard.updateLog.entries.connector-market-erp-vendor-groups-r01.description':
+    '「选择应用连接器」仍保留单一「ERP 企业资源」Tab；进入后按金蝶、用友、鼎捷、SAP、其他分区展示，卡片标签同步显示厂商，不再拆成多个顶层 Tab。',
+  'pages.dashboard.updateLog.entries.kingdee-cosmic-naming-r01.title':
+    '金蝶 OpenAPI 连接器按产品序列更正命名',
+  'pages.dashboard.updateLog.entries.kingdee-cosmic-naming-r01.description':
+    '对外名称由「金蝶云苍穹」改为「金蝶AI苍穹 OpenAPI」：苍穹是企业级 PaaS 技术底座（非与星空并列的业务产品）；星空/星瀚等业务产品可基于苍穹，本连接器对接开放服务云第三方应用 OpenAPI，与星空 K3Cloud WebAPI 分立。',
+  'pages.dashboard.updateLog.entries.kingdee-cosmic-api-presets-r01.title':
+    '接口库预置金蝶AI苍穹 OpenAPI 常用接口',
+  'pages.dashboard.updateLog.entries.kingdee-cosmic-api-presets-r01.description':
+    '苍穹（PaaS）OpenAPI 与星空 K3Cloud WebAPI 体系不同：前者为 /kapi/oauth2 增强型 Token 与 /kapi/sys/{编码}/{操作}。接口库与连接器「加载常用接口」已支持该包；业务编码须按本环境 OpenAPI 初始化与服务授权替换。',
+  'pages.dashboard.updateLog.entries.app-connector-secret-mask-save-r01.title':
+    '修复应用连接器编辑保存把脱敏星号当成真实密钥',
+  'pages.dashboard.updateLog.entries.app-connector-secret-mask-save-r01.description':
+    '编辑连接器时不再把接口返回的 **** 回填进密钥框；保存时占位或留空保留原密钥。金蝶云苍穹等需重填 AccessToken 密钥时，编辑页明确提示重新粘贴后再测连接。',
+  'pages.dashboard.updateLog.entries.kingdee-cosmic-openapi-connector-r01.title':
+    '新增金蝶AI苍穹 OpenAPI 应用连接器',
+  'pages.dashboard.updateLog.entries.kingdee-cosmic-openapi-connector-r01.description':
+    '苍穹为企业级 PaaS 技术底座。面向开放服务云第三方应用：用 accountId、client_id、AccessToken 密钥、x-acgw-identity 与代理用户调用 /kapi/oauth2/getToken；与星空 K3Cloud WebAPI 连接器分立，接口调用自动携带网关身份与 access_token。',
+  'pages.dashboard.updateLog.entries.kingdee-galaxy-baseurl-html-hint-r01.title':
+    '金蝶云星空连接测试：Base URL 填错时提示更明确',
+  'pages.dashboard.updateLog.entries.kingdee-galaxy-baseurl-html-hint-r01.description':
+    '测试连接遇到门户网页或 404 HTML 时，提示到「第三方系统登录授权」用生成测试链接复制真实 WebAPI 地址，并区分应用名称与 App ID，避免误把 *.kdgalaxy.com 当 K3Cloud 站点。',
+  'pages.dashboard.updateLog.entries.factory-dimension-hint-toolbar-r01.title':
+    '产线与工作中心说明提示改到功能按钮区收起',
+  'pages.dashboard.updateLog.entries.factory-dimension-hint-toolbar-r01.description':
+    '产线管理、工作中心列表顶部说明提示不再用提示条关闭钮；收起/展开改到 UniTable 功能按钮区末尾，避免与批量操作区错位。',
   'pages.dashboard.updateLog.entries.material-bulk-import-throughput-r01.title':
     '物料批量导入吞吐提升',
   'pages.dashboard.updateLog.entries.material-bulk-import-throughput-r01.description':
@@ -28546,6 +28841,19 @@ export default {
     '数据备份改为流式导出避免内存暴涨',
   'pages.dashboard.updateLog.entries.data-backup-stream-csv-oom-r01.description':
     '全量/租户备份不再把整表 CSV 载入后台任务进程内存，改为边 COPY 边写盘，避免大库备份时任务进程被系统 OOM 杀掉导致机器卡顿。',
+  'pages.dashboard.updateLog.entries.audit-rd-file-change-template-r01.title':
+    '内置研发文件变更五级审核模板',
+  'pages.dashboard.updateLog.entries.audit-rd-file-change-template-r01.description':
+    '审核模块新增 rd_file_change 内置流程模板（经理→项目经理→采购→生产→总监）；交付物与图纸工程变更按模板生成，设计器可配空审批人策略与发起人自选；启用前须绑定角色，24 小时待审提醒对齐。',
+
+  'pages.dashboard.updateLog.entries.rd-deliverable-no-delete-after-publish-r01.title':
+    '研发文件发布后禁止删除仅可升版',
+  'pages.dashboard.updateLog.entries.rd-deliverable-no-delete-after-publish-r01.description':
+    '交付物仅草稿/驳回且无发布履历可删；已进入审核或已有生效/作废履历须升版保留历史。历史版下载仅资深制定方可用。',
+  'pages.dashboard.updateLog.entries.drawing-watermark-template-rows-r01.title':
+    '水印模板输入框加高',
+  'pages.dashboard.updateLog.entries.drawing-watermark-template-rows-r01.description':
+    '打印水印设置中的水印模板输入区改为 8 行，便于编辑较长模板。',
   'pages.dashboard.updateLog.entries.drawing-watermark-switch-order-r01.title':
     '水印开关移到模板之后',
   'pages.dashboard.updateLog.entries.drawing-watermark-switch-order-r01.description':
@@ -34724,6 +35032,12 @@ export default {
   'pages.approval.designer.selectDepartment': '选择部门',
   'pages.approval.designer.selectDepartmentRequired': '请选择至少一个部门',
   'pages.approval.designer.approverTypeOptional': '发起人自选 (流程发起时由发起人指定)',
+  'pages.approval.designer.emptyApproverPolicy': '空审批人策略',
+  'pages.approval.designer.emptyApproverPolicyTip': '节点解析不到审批人时的处理方式；正式单据建议「阻断」。',
+  'pages.approval.designer.emptyApproverPolicyBlock': '阻断（必须配置审批人）',
+  'pages.approval.designer.emptyApproverPolicyAutoPass': '自动通过（跳过本节点）',
+  'pages.approval.designer.emptyApproverPolicyEscalate': '升级组织管理员',
+  'pages.approval.designer.emptyApproverPolicyFallback': '使用兜底审批人',
   'pages.approval.designer.functionalTitle': '审批流设计',
   'pages.approval.designer.nodeLabel': '节点名称',
   'pages.approval.designer.conditionCount': '{{count}} 条',
@@ -37600,13 +37914,36 @@ export default {
   'pages.system.applicationConnections.amapHint':
     '用于物流跟踪地图展示；请在高德开放平台创建应用并开通 Web 端（JS API）与 Web 服务',
   'pages.system.applicationConnections.kingdeeGalaxyHint':
-    '请在金蝶云星空「第三方系统登录授权」中创建应用，点击「生成测试链接」获取账套 ID、集成用户名与应用 ID，并在「查看密钥」获取 App Secret。文档见 openapi.open.kingdee.com/ApiDoc',
+    '请在金蝶AI星空「第三方系统登录授权」中创建应用，点击「生成测试链接」获取账套 ID、集成用户名与应用 ID，并在「查看密钥」获取 App Secret。文档见 openapi.open.kingdee.com/ApiDoc',
   'pages.system.applicationConnections.kingdeeGalaxyBaseUrlExtra':
     '私有云/专属云填写站点地址并以 /K3Cloud/ 结尾；公有云租户使用星空登录页同源地址',
   'pages.system.applicationConnections.kingdeeGalaxyAcctIdExtra': '数据中心 ID，即第三方系统登录授权中的账套 ID',
   'pages.system.applicationConnections.kingdeeGalaxyUsername': '集成用户名',
   'pages.system.applicationConnections.kingdeeGalaxyUsernameExtra':
     '第三方系统登录授权中的集成用户；若勾选「允许全部用户登录」可填星空内任一有效用户名',
+  'pages.system.applicationConnections.kingdeeCosmicHint':
+    '用于金蝶AI苍穹（PaaS 技术底座）OpenAPI。请在「开放服务云 → OpenAPI → 第三方应用」创建应用，填写 accountId、client_id、AccessToken 密钥（client_secret）、x-acgw-identity 与代理用户。Base URL 填门户根地址，不要拼 /K3Cloud/（那是星空 WebAPI）。',
+  'pages.system.applicationConnections.kingdeeCosmicBaseUrlExtra':
+    '门户根地址，例如 https://xxx.kdgalaxy.com；测试连接将请求 /kapi/oauth2/getToken',
+  'pages.system.applicationConnections.kingdeeCosmicAccountIdExtra':
+    '第三方应用详情中的 accountId（数据中心 ID）',
+  'pages.system.applicationConnections.kingdeeCosmicUsername': '代理用户名',
+  'pages.system.applicationConnections.kingdeeCosmicUsernameExtra':
+    '第三方应用配置的代理用户（getToken 的 username）',
+  'pages.system.applicationConnections.kingdeeCosmicClientIdExtra':
+    '第三方应用系统编码（详情中的 appId / client_id）',
+  'pages.system.applicationConnections.kingdeeCosmicClientSecretExtra':
+    'AccessToken 认证策略中的密钥（appSecret），与 x-acgw-identity 不是同一个值',
+  'pages.system.applicationConnections.kingdeeCosmicClientSecretConfiguredExtra':
+    '库中已有密钥（编辑框故意不回显）。留空点更新＝不改旧密钥；测试仍报密钥错误时，请在此重新粘贴金蝶 AccessToken 密钥后再更新',
+  'pages.system.applicationConnections.kingdeeCosmicClientSecretMissingExtra':
+    '库中尚未保存 AccessToken 密钥，必须在此填写后再更新，否则测试一定失败',
+  'pages.system.applicationConnections.kingdeeCosmicIdentityExtra':
+    '第三方应用详情中的系统身份标识；每次 OpenAPI 请求 Header 必带',
+  'pages.system.applicationConnections.kingdeeCosmicIdentityConfiguredExtra':
+    '库中已有身份标识（故意不回显）。留空＝不修改；若点过「更新身份标识」须重新粘贴最新值',
+  'pages.system.applicationConnections.kingdeeCosmicIdentityMissingExtra':
+    '库中尚未保存 x-acgw-identity，必须从第三方应用详情复制粘贴后再更新',
   'pages.system.applicationConnections.amapJsKey': '高德 JS Key',
   'pages.system.applicationConnections.amapJsKeyExtra': '浏览器端地图 SDK 使用的 Key',
   'pages.system.applicationConnections.amapRestKey': '高德 REST Key',

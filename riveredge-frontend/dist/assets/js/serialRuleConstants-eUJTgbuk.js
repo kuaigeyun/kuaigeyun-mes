@@ -1,0 +1,1 @@
+import{d as e,c as t}from"./index-qR0xpjLp.js";const _=[{field_name:"material_code",field_label:"物料编号",field_type:"string"},{field_name:"group_code",field_label:"物料分组编号",field_type:"string"},{field_name:"product_code",field_label:"产品编号",field_type:"string"}],a=[{...e(0),text:"SN-"},t(1,8,"never")];export{a as D,_ as S};

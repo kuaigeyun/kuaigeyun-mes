@@ -32,10 +32,12 @@ from apps.master_data.services.master_data_sync_common import (
     normalize_schedule_interval,
     normalize_sync_mode,
     resolve_incremental_since,
-    resolve_sync_config,
+    resolve_sync_sources,
     serialize_binding_row,
+    sources_from_upsert_body,
     upsert_sync_binding,
 )
+from core.services.data.sync_binding_sources import fetch_mapped_rows_from_sources
 from apps.master_data.services.sync_association_service import (
     ensure_material_groups_from_material_rows,
     load_material_group_id_lookup,
@@ -172,24 +174,18 @@ class MaterialSyncService:
         tenant_id: int,
         body: MasterDataSyncBindingUpsert,
     ) -> MasterDataSyncBindingOut:
-        source_type = (body.source_type or "").strip()
-        api_uuid = (body.api_uuid or "").strip() or None
-        dataset_uuid = (body.dataset_uuid or "").strip() or None
-        if not source_type and not api_uuid and not dataset_uuid:
+        if body.sources is not None and len(body.sources) == 0:
             await MaterialSyncBinding.filter(tenant_id=tenant_id).delete()
             return MasterDataSyncBindingOut(match_key_field=self.MATCH_KEY)
 
-        field_mapping = body.field_mapping if isinstance(body.field_mapping, dict) else {}
+        sources = sources_from_upsert_body(body)
         match_key = (body.match_key_field or self.MATCH_KEY).strip() or self.MATCH_KEY
         sync_mode = normalize_sync_mode(body.sync_mode)
         interval = normalize_schedule_interval(body.schedule_interval_minutes)
         row = await upsert_sync_binding(
             MaterialSyncBinding,
             tenant_id,
-            source_type=source_type,
-            api_uuid=api_uuid,
-            dataset_uuid=dataset_uuid,
-            field_mapping=field_mapping,
+            sources=sources,
             match_key_field=match_key,
             sync_mode=sync_mode,
             schedule_interval_minutes=interval,
@@ -209,39 +205,14 @@ class MaterialSyncService:
         skip_prerequisite_syncs: bool = False,
     ) -> MasterDataSyncFromSourceOut:
         req = request or MasterDataSyncFromSourceRequest()
-        source_type, api_uuid, dataset_uuid, field_mapping, match_key = await resolve_sync_config(
+        sources, match_key, binding = await resolve_sync_sources(
             MaterialSyncBinding,
             tenant_id,
             req,
             default_match_key=self.MATCH_KEY,
         )
-        conversion_entries = None
-        source_field_names: set[str] = set()
-        if isinstance(field_mapping, dict):
-            source_field_names = {
-                str(source).strip()
-                for source, target in field_mapping.items()
-                if str(target).strip() == "source_type"
-            }
-        # SOURCE_TYPE_CONVERSION: 仅从当前接口配置读取映射，不在同步页面维护编码。
-        if api_uuid:
-            from core.models.api import API
 
-            api_obj = await API.filter(tenant_id=tenant_id, uuid=api_uuid).first()
-            conv = getattr(api_obj, "source_type_conversion_map", None) if api_obj else None
-            if isinstance(conv, list):
-                conversion_entries = conv
-            elif isinstance(conv, dict):
-                # 兼容旧格式：扁平映射，字段名默认为 source_type
-                conversion_entries = [{"field_name": "source_type", "mapping": conv}]
-        if not source_type:
-            raise ValidationError("请配置同步来源（数据接口或数据集）")
-        if not field_mapping:
-            raise ValidationError("请配置字段映射")
-        if match_key not in field_mapping.values():
-            raise ValidationError(f"字段映射须包含匹配键 {match_key}")
-
-        binding = await MaterialSyncBinding.filter(tenant_id=tenant_id).first()
+        binding = binding or await MaterialSyncBinding.filter(tenant_id=tenant_id).first()
         sync_mode = normalize_sync_mode(
             req.sync_mode or (binding.sync_mode if binding else None)
         )
@@ -255,10 +226,7 @@ class MaterialSyncService:
             await self.upsert_binding(
                 tenant_id,
                 MasterDataSyncBindingUpsert(
-                    source_type=source_type,
-                    api_uuid=api_uuid,
-                    dataset_uuid=dataset_uuid,
-                    field_mapping=field_mapping,
+                    sources=req.sources,
                     match_key_field=match_key,
                     sync_mode=sync_mode,
                     schedule_interval_minutes=interval,
@@ -280,25 +248,48 @@ class MaterialSyncService:
 
         try:
             await emit_sync_progress("开始同步物料…")
-            raw_rows = await fetch_sync_rows(
-                tenant_id,
-                source_type=source_type,
-                api_uuid=api_uuid,
-                dataset_uuid=dataset_uuid,
-                since=since,
-                active_only=req.active_only,
-            )
-            rows = map_sync_rows(raw_rows, field_mapping)
-            await emit_sync_progress(f"字段映射完成，准备写入 {len(rows)} 条物料…")
-            result = await self._upsert_materials(
-                tenant_id,
-                current_user,
-                rows,
-                match_key,
-                conversion_entries=conversion_entries,
-                source_field_names=source_field_names,
-            )
-            attach_sync_fetch_meta(result, fetched=len(raw_rows), since=since)
+            from core.models.api import API
+
+            result = MasterDataSyncFromSourceOut()
+            fetched_total = 0
+            for src in sources:
+                field_mapping = src.get("field_mapping") or {}
+                source_field_names = {
+                    str(source).strip()
+                    for source, target in field_mapping.items()
+                    if str(target).strip() == "source_type"
+                }
+                conversion_entries = None
+                api_uuid = str(src.get("api_uuid") or "").strip() or None
+                if api_uuid:
+                    api_obj = await API.filter(tenant_id=tenant_id, uuid=api_uuid).first()
+                    conv = getattr(api_obj, "source_type_conversion_map", None) if api_obj else None
+                    if isinstance(conv, list):
+                        conversion_entries = conv
+                    elif isinstance(conv, dict):
+                        conversion_entries = [{"field_name": "source_type", "mapping": conv}]
+                rows, source_errors, fetched = await fetch_mapped_rows_from_sources(
+                    tenant_id,
+                    [src],
+                    since=since,
+                    active_only=req.active_only,
+                )
+                fetched_total += fetched
+                one = await self._upsert_materials(
+                    tenant_id,
+                    current_user,
+                    rows,
+                    match_key,
+                    conversion_entries=conversion_entries,
+                    source_field_names=source_field_names,
+                )
+                result.created += one.created
+                result.updated += one.updated
+                result.skipped += one.skipped
+                result.failed += one.failed
+                result.errors = (result.errors + source_errors + list(one.errors))[:20]
+            await emit_sync_progress(f"字段映射完成，共处理 {fetched_total} 行源数据…")
+            attach_sync_fetch_meta(result, fetched=fetched_total, since=since)
             if prerequisite_errors:
                 result.errors = (prerequisite_errors + list(result.errors))[:20]
             if binding:

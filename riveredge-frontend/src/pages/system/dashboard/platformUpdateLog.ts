@@ -44,6 +44,388 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'outbound-manual-push-status-i18n-r01',
+    date: '2026-09-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.outbound-manual-push-status-i18n-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.outbound-manual-push-status-i18n-r01.description',
+  },
+  {
+    id: 'outbound-dataset-manual-pick-docs-r01',
+    date: '2026-09-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.outbound-dataset-manual-pick-docs-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.outbound-dataset-manual-pick-docs-r01.description',
+  },
+  {
+    id: 'outbound-targets-match-inbound-r01',
+    date: '2026-09-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.outbound-targets-match-inbound-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.outbound-targets-match-inbound-r01.description',
+  },
+  {
+    id: 'outbound-drop-unsaved-kingdee-target-r01',
+    date: '2026-09-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.outbound-drop-unsaved-kingdee-target-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.outbound-drop-unsaved-kingdee-target-r01.description',
+  },
+  {
+    id: 'outbound-targets-only-after-confirm-r01',
+    date: '2026-09-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.outbound-targets-only-after-confirm-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.outbound-targets-only-after-confirm-r01.description',
+  },
+  {
+    id: 'outbound-shell-target-not-listed-r01',
+    date: '2026-09-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.outbound-shell-target-not-listed-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.outbound-shell-target-not-listed-r01.description',
+  },
+  {
+    id: 'outbound-delete-target-persist-r02',
+    date: '2026-09-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.outbound-delete-target-persist-r02.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.outbound-delete-target-persist-r02.description',
+  },
+  {
+    id: 'sync-push-copy-align-r01',
+    date: '2026-09-26',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.sync-push-copy-align-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.sync-push-copy-align-r01.description',
+  },
+  {
+    id: 'outbound-no-auto-default-target-r01',
+    date: '2026-09-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.outbound-no-auto-default-target-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.outbound-no-auto-default-target-r01.description',
+  },
+  {
+    id: 'outbound-target-table-no-spinner-r01',
+    date: '2026-09-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.outbound-target-table-no-spinner-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.outbound-target-table-no-spinner-r01.description',
+  },
+  {
+    id: 'outbound-target-setting-fixed-width-r01',
+    date: '2026-09-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.outbound-target-setting-fixed-width-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.outbound-target-setting-fixed-width-r01.description',
+  },
+  {
+    id: 'outbound-destination-segment-first-r01',
+    date: '2026-09-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.outbound-destination-segment-first-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.outbound-destination-segment-first-r01.description',
+  },
+  {
+    id: 'outbound-target-list-no-flash-r01',
+    date: '2026-09-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.outbound-target-list-no-flash-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.outbound-target-list-no-flash-r01.description',
+  },
+  {
+    id: 'dataset-sql-write-r01',
+    date: '2026-09-26',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.dataset-sql-write-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.dataset-sql-write-r01.description',
+  },
+  {
+    id: 'outbound-destination-data-source-r01',
+    date: '2026-09-26',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.outbound-destination-data-source-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.outbound-destination-data-source-r01.description',
+  },
+  {
+    id: 'outbound-connector-hint-in-modal-r01',
+    date: '2026-09-26',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.outbound-connector-hint-in-modal-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.outbound-connector-hint-in-modal-r01.description',
+  },
+  {
+    id: 'outbound-target-delete-persist-r01',
+    date: '2026-09-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.outbound-target-delete-persist-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.outbound-target-delete-persist-r01.description',
+  },
+  {
+    id: 'outbound-write-api-label-r01',
+    date: '2026-09-26',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.outbound-write-api-label-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.outbound-write-api-label-r01.description',
+  },
+  {
+    id: 'outbound-connector-from-active-r01',
+    date: '2026-09-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.outbound-connector-from-active-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.outbound-connector-from-active-r01.description',
+  },
+  {
+    id: 'outbound-manual-pick-in-target-r01',
+    date: '2026-09-26',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.outbound-manual-pick-in-target-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.outbound-manual-pick-in-target-r01.description',
+  },
+  {
+    id: 'outbound-connector-hint-on-target-r01',
+    date: '2026-09-26',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.outbound-connector-hint-on-target-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.outbound-connector-hint-on-target-r01.description',
+  },
+  {
+    id: 'outbound-push-mode-per-target-r01',
+    date: '2026-09-26',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.outbound-push-mode-per-target-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.outbound-push-mode-per-target-r01.description',
+  },
+  {
+    id: 'outbound-target-setting-modal-r01',
+    date: '2026-09-26',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.outbound-target-setting-modal-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.outbound-target-setting-modal-r01.description',
+  },
+  {
+    id: 'outbound-push-hint-removed-r01',
+    date: '2026-09-26',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.outbound-push-hint-removed-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.outbound-push-hint-removed-r01.description',
+  },
+  {
+    id: 'outbound-push-layout-r01',
+    date: '2026-09-26',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.outbound-push-layout-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.outbound-push-layout-r01.description',
+  },
+  {
+    id: 'outbound-push-setup-split-r01',
+    date: '2026-09-26',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.outbound-push-setup-split-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.outbound-push-setup-split-r01.description',
+  },
+  {
+    id: 'toolbar-sync-icon-unified-r01',
+    date: '2026-09-26',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.toolbar-sync-icon-unified-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.toolbar-sync-icon-unified-r01.description',
+  },
+  {
+    id: 'kingdee-cosmic-basedata-batch-r01',
+    date: '2026-09-26',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kingdee-cosmic-basedata-batch-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kingdee-cosmic-basedata-batch-r01.description',
+  },
+  {
+    id: 'api-test-body-table-nested-r01',
+    date: '2026-09-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.api-test-body-table-nested-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.api-test-body-table-nested-r01.description',
+  },
+  {
+    id: 'kingdee-cosmic-v2-data-body-r01',
+    date: '2026-09-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kingdee-cosmic-v2-data-body-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kingdee-cosmic-v2-data-body-r01.description',
+  },
+  {
+    id: 'kingdee-cosmic-material-batch-query-r01',
+    date: '2026-09-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kingdee-cosmic-material-batch-query-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kingdee-cosmic-material-batch-query-r01.description',
+  },
+  {
+    id: 'kingdee-cosmic-gateway-2530-r01',
+    date: '2026-09-25',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kingdee-cosmic-gateway-2530-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kingdee-cosmic-gateway-2530-r01.description',
+  },
+  {
+    id: 'kingdee-cosmic-sys-query-ierp-r02',
+    date: '2026-09-25',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kingdee-cosmic-sys-query-ierp-r02.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kingdee-cosmic-sys-query-ierp-r02.description',
+  },
+  {
+    id: 'kingdee-cosmic-sys-query-ierp-r01',
+    date: '2026-09-25',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kingdee-cosmic-sys-query-ierp-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kingdee-cosmic-sys-query-ierp-r01.description',
+  },
+  {
+    id: 'kingdee-cosmic-inbound-presets-r01',
+    date: '2026-09-25',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kingdee-cosmic-inbound-presets-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.kingdee-cosmic-inbound-presets-r01.description',
+  },
+  {
+    id: 'sync-source-table-settings-r01',
+    date: '2026-09-25',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.sync-source-table-settings-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.sync-source-table-settings-r01.description',
+  },
+  {
+    id: 'sync-multi-source-push-r01',
+    date: '2026-09-25',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.sync-multi-source-push-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.sync-multi-source-push-r01.description',
+  },
+  {
+    id: 'erp-connector-desc-formal-r01',
+    date: '2026-09-25',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.erp-connector-desc-formal-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.erp-connector-desc-formal-r01.description',
+  },
+  {
+    id: 'erp-connector-tier-sort-r01',
+    date: '2026-09-25',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.erp-connector-tier-sort-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.erp-connector-tier-sort-r01.description',
+  },
+  {
+    id: 'erp-connector-catalog-traditional-expand-r01',
+    date: '2026-09-25',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.erp-connector-catalog-traditional-expand-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.erp-connector-catalog-traditional-expand-r01.description',
+  },
+  {
+    id: 'kingdee-ai-product-line-align-r01',
+    date: '2026-09-25',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kingdee-ai-product-line-align-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kingdee-ai-product-line-align-r01.description',
+  },
+  {
+    id: 'connector-market-erp-cloud-traditional-r01',
+    date: '2026-09-25',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.connector-market-erp-cloud-traditional-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.connector-market-erp-cloud-traditional-r01.description',
+  },
+  {
+    id: 'connector-market-erp-vendor-groups-r01',
+    date: '2026-09-25',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.connector-market-erp-vendor-groups-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.connector-market-erp-vendor-groups-r01.description',
+  },
+  {
+    id: 'kingdee-cosmic-naming-r01',
+    date: '2026-09-25',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kingdee-cosmic-naming-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kingdee-cosmic-naming-r01.description',
+  },
+  {
+    id: 'kingdee-cosmic-api-presets-r01',
+    date: '2026-09-25',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.kingdee-cosmic-api-presets-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kingdee-cosmic-api-presets-r01.description',
+  },
+  {
+    id: 'app-connector-secret-mask-save-r01',
+    date: '2026-09-25',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.app-connector-secret-mask-save-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.app-connector-secret-mask-save-r01.description',
+  },
+  {
+    id: 'kingdee-cosmic-openapi-connector-r01',
+    date: '2026-09-25',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.kingdee-cosmic-openapi-connector-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kingdee-cosmic-openapi-connector-r01.description',
+  },
+  {
+    id: 'kingdee-galaxy-baseurl-html-hint-r01',
+    date: '2026-09-25',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kingdee-galaxy-baseurl-html-hint-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kingdee-galaxy-baseurl-html-hint-r01.description',
+  },
+  {
+    id: 'factory-dimension-hint-toolbar-r01',
+    date: '2026-09-25',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.factory-dimension-hint-toolbar-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.factory-dimension-hint-toolbar-r01.description',
+  },
+  {
     id: 'data-backup-queue-redelivery-guard-r01',
     date: '2026-09-24',
     type: 'fix',
@@ -58,6 +440,31 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
     titleKey: 'pages.dashboard.updateLog.entries.data-backup-stream-csv-oom-r01.title',
     descriptionKey:
       'pages.dashboard.updateLog.entries.data-backup-stream-csv-oom-r01.description',
+  },
+  {
+    id: 'audit-rd-file-change-template-r01',
+    date: '2026-09-24',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.audit-rd-file-change-template-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.audit-rd-file-change-template-r01.description',
+  },
+
+  {
+    id: 'rd-deliverable-no-delete-after-publish-r01',
+    date: '2026-09-24',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.rd-deliverable-no-delete-after-publish-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.rd-deliverable-no-delete-after-publish-r01.description',
+  },
+  {
+    id: 'drawing-watermark-template-rows-r01',
+    date: '2026-09-24',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.drawing-watermark-template-rows-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.drawing-watermark-template-rows-r01.description',
   },
   {
     id: 'drawing-watermark-switch-order-r01',

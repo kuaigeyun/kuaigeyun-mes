@@ -58,7 +58,7 @@ import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer'
 import { getApiErrorMessage } from '../../../../utils/errorHandler';
 import AppConnectorMarket from '../AppConnectorMarket';
 import type { AppConnectorDefinition } from '../connectors';
-import { isLlmConnectionType, resolveAppConnectorTypeLabel } from '../connectors';
+import { isKingdeeCosmicOpenApiType, isLlmConnectionType, resolveAppConnectorTypeLabel } from '../connectors';
 import {
   getApplicationConnectionList,
   getApplicationConnectionListAll,
@@ -87,28 +87,45 @@ const TYPE_COLORS: Record<string, { color: string; icon: React.ReactNode }> = {
   dingtalk: { color: 'cyan', icon: <MessageOutlined /> },
   wecom: { color: 'green', icon: <MessageOutlined /> },
   kingdee_galaxy: { color: 'orange', icon: <CloudOutlined /> },
+  kingdee_cosmic: { color: 'orange', icon: <CloudOutlined /> },
+  kingdee_xinghan: { color: 'orange', icon: <CloudOutlined /> },
+  kingdee_ai_suite: { color: 'orange', icon: <CloudOutlined /> },
   kingdee_xingchen: { color: 'orange', icon: <CloudOutlined /> },
+  kingdee_eas_cloud: { color: 'orange', icon: <CloudOutlined /> },
   kingdee_kis_cloud: { color: 'orange', icon: <CloudOutlined /> },
-  kingdee_kis: { color: 'cyan', icon: <CloudOutlined /> },
+  kingdee_jingdouyun: { color: 'orange', icon: <CloudOutlined /> },
+  kingdee_k3_wise: { color: 'cyan', icon: <DatabaseOutlined /> },
+  kingdee_eas: { color: 'cyan', icon: <DatabaseOutlined /> },
+  kingdee_kis: { color: 'cyan', icon: <DatabaseOutlined /> },
   yonyou_yonbip: { color: 'purple', icon: <CloudOutlined /> },
-  yonyou_u8: { color: 'purple', icon: <CloudOutlined /> },
-  yonyou_u9: { color: 'purple', icon: <CloudOutlined /> },
+  yonyou_yonsuite: { color: 'purple', icon: <CloudOutlined /> },
+  yonyou_u9_cloud: { color: 'purple', icon: <CloudOutlined /> },
+  yonyou_u8_cloud: { color: 'purple', icon: <CloudOutlined /> },
   yonyou_nc: { color: 'purple', icon: <CloudOutlined /> },
+  yonyou_u8: { color: 'purple', icon: <DatabaseOutlined /> },
+  yonyou_u9: { color: 'purple', icon: <DatabaseOutlined /> },
+  yonyou_nc5: { color: 'purple', icon: <DatabaseOutlined /> },
   sap_s4hana: { color: 'gold', icon: <DatabaseOutlined /> },
+  sap_bydesign: { color: 'gold', icon: <CloudOutlined /> },
+  sap_s4hana_op: { color: 'gold', icon: <DatabaseOutlined /> },
+  sap_ecc: { color: 'gold', icon: <DatabaseOutlined /> },
   sap_b1: { color: 'gold', icon: <DatabaseOutlined /> },
+  oracle_fusion: { color: 'blue', icon: <CloudOutlined /> },
   oracle_netsuite: { color: 'blue', icon: <CloudOutlined /> },
+  dynamics_365: { color: 'blue', icon: <CloudOutlined /> },
   odoo: { color: 'purple', icon: <CloudOutlined /> },
   inspur_gs: { color: 'cyan', icon: <CloudOutlined /> },
   inspur_ps: { color: 'cyan', icon: <CloudOutlined /> },
   digiwin_t100: { color: 'magenta', icon: <DatabaseOutlined /> },
+  digiwin_e10: { color: 'blue', icon: <DatabaseOutlined /> },
   digiwin_yifei: { color: 'magenta', icon: <DatabaseOutlined /> },
   digiwin_yizhu: { color: 'magenta', icon: <DatabaseOutlined /> },
   digiwin_yituo: { color: 'magenta', icon: <DatabaseOutlined /> },
-  digiwin_e10: { color: 'blue', icon: <DatabaseOutlined /> },
   chanjet_tplus: { color: 'blue', icon: <CloudOutlined /> },
+  erpnext: { color: 'blue', icon: <CloudOutlined /> },
+  oracle_ebs: { color: 'blue', icon: <DatabaseOutlined /> },
   grasp_huihuang: { color: 'orange', icon: <DatabaseOutlined /> },
   super_erp: { color: 'magenta', icon: <DatabaseOutlined /> },
-  erpnext: { color: 'blue', icon: <CloudOutlined /> },
   sunlike_erp: { color: 'cyan', icon: <DatabaseOutlined /> },
   teamcenter: { color: 'blue', icon: <AppstoreOutlined /> },
   windchill: { color: 'geekblue', icon: <AppstoreOutlined /> },
@@ -177,6 +194,7 @@ const SENSITIVE_KEYS = [
   'security_code',
   'js_key',
   'app_code',
+  'x_acgw_identity',
 ];
 
 const ApplicationConnectionsListPage: React.FC = () => {
@@ -204,6 +222,8 @@ const ApplicationConnectionsListPage: React.FC = () => {
   const [currentUuid, setCurrentUuid] = useState<string | null>(null);
   const [formLoading, setFormLoading] = useState(false);
   const [formInitialValues, setFormInitialValues] = useState<Record<string, any> | undefined>(undefined);
+  /** 编辑时敏感字段是否已在库中配置（脱敏后不回显，用此提示避免误以为未保存） */
+  const [sensitiveConfigured, setSensitiveConfigured] = useState<Record<string, boolean>>({});
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detailData, setDetailData] = useState<ApplicationConnection | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -273,6 +293,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
     const suggestedCode = isLlmConnectionType(connector.type)
       ? `${connector.type}_${modelHint}`.slice(0, 50)
       : undefined;
+    setSensitiveConfigured({});
     setFormInitialValues({
       type: connector.type,
       is_active: true,
@@ -294,14 +315,16 @@ const ApplicationConnectionsListPage: React.FC = () => {
       const detail = await getApplicationConnectionByUuid(record.uuid);
       const config = { ...(detail.config || {}) };
       delete config.api_key_configured;
-      if (config.api_key === '****') {
-        config.api_key = '';
-      }
-      for (const key of ['rest_key', 'security_code', 'js_key', 'app_code'] as const) {
+      const configured: Record<string, boolean> = {};
+      for (const key of SENSITIVE_KEYS) {
+        const raw = config[key];
+        configured[key] = raw === '****' || Boolean(typeof raw === 'string' && raw.trim() && raw !== '****');
         if (config[key] === '****') {
+          // 脱敏占位勿回填进表单，否则保存会把 **** 当真实密钥
           config[key] = '';
         }
       }
+      setSensitiveConfigured(configured);
       setFormInitialValues({
         name: detail.name,
         code: detail.code,
@@ -481,7 +504,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
   };
 
   const handleLoadApiPresets = async (record: ApplicationConnection) => {
-    if (record.type !== 'kingdee_galaxy') return;
+    if (record.type !== 'kingdee_galaxy' && !isKingdeeCosmicOpenApiType(record.type)) return;
     try {
       setLoadingApiPresetsUuid(record.uuid);
       const result = await loadApplicationConnectionApiPresets(record.uuid);
@@ -512,11 +535,11 @@ const ApplicationConnectionsListPage: React.FC = () => {
         ...restConfig
       } = values;
       const config = { ...restConfig };
-      if (config.api_key === '****') {
-        delete config.api_key;
-      }
-      if (config.app_code === '****') {
-        delete config.app_code;
+      for (const key of SENSITIVE_KEYS) {
+        if (config[key] === '****' || config[key] === '') {
+          // 编辑留空/占位：交给后端合并保留原密钥；新建则字段缺失由必填校验拦截
+          delete config[key];
+        }
       }
       if (isEdit && currentUuid) {
         await updateApplicationConnection(currentUuid, {
@@ -539,6 +562,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
       }
       setModalVisible(false);
       setFormInitialValues(undefined);
+      setSensitiveConfigured({});
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || t('common.operationFailed'));
@@ -602,6 +626,9 @@ const ApplicationConnectionsListPage: React.FC = () => {
           </>
         );
       case 'sap_s4hana':
+      case 'sap_s4hana_op':
+      case 'sap_ecc':
+      case 'sap_bydesign':
         return (
           <>
             {common}
@@ -657,8 +684,79 @@ const ApplicationConnectionsListPage: React.FC = () => {
             <ProFormText name="lcid" label="LCID" initialValue="2052" colProps={{ span: 12 }} />
           </>
         );
+      case 'kingdee_cosmic':
+      case 'kingdee_xinghan':
+      case 'kingdee_ai_suite':
+        return (
+          <>
+            <FormModalGridBlock>
+              <Alert
+                title={t('pages.system.applicationConnections.kingdeeCosmicHint')}
+                type="info"
+              />
+            </FormModalGridBlock>
+            <ProFormText
+              name="base_url"
+              label="Base URL"
+              placeholder="https://xxx.kdgalaxy.com"
+              rules={[{ required: true }]}
+              extra={t('pages.system.applicationConnections.kingdeeCosmicBaseUrlExtra')}
+              colProps={{ span: 24 }}
+            />
+            <ProFormText
+              name="account_id"
+              label="accountId"
+              rules={[{ required: true }]}
+              extra={t('pages.system.applicationConnections.kingdeeCosmicAccountIdExtra')}
+              colProps={{ span: 12 }}
+            />
+            <ProFormText
+              name="username"
+              label={t('pages.system.applicationConnections.kingdeeCosmicUsername')}
+              rules={[{ required: true }]}
+              extra={t('pages.system.applicationConnections.kingdeeCosmicUsernameExtra')}
+              colProps={{ span: 12 }}
+            />
+            <ProFormText
+              name="client_id"
+              label="client_id / appId"
+              rules={[{ required: true }]}
+              extra={t('pages.system.applicationConnections.kingdeeCosmicClientIdExtra')}
+              colProps={{ span: 12 }}
+            />
+            <ProFormText.Password
+              name="client_secret"
+              label="client_secret"
+              rules={isEdit ? [] : [{ required: true }]}
+              extra={
+                isEdit
+                  ? sensitiveConfigured.client_secret
+                    ? t('pages.system.applicationConnections.kingdeeCosmicClientSecretConfiguredExtra')
+                    : t('pages.system.applicationConnections.kingdeeCosmicClientSecretMissingExtra')
+                  : t('pages.system.applicationConnections.kingdeeCosmicClientSecretExtra')
+              }
+              colProps={{ span: 12 }}
+            />
+            <ProFormText.Password
+              name="x_acgw_identity"
+              label="x-acgw-identity"
+              rules={isEdit ? [] : [{ required: true }]}
+              extra={
+                isEdit
+                  ? sensitiveConfigured.x_acgw_identity
+                    ? t('pages.system.applicationConnections.kingdeeCosmicIdentityConfiguredExtra')
+                    : t('pages.system.applicationConnections.kingdeeCosmicIdentityMissingExtra')
+                  : t('pages.system.applicationConnections.kingdeeCosmicIdentityExtra')
+              }
+              colProps={{ span: 24 }}
+            />
+            <ProFormText name="language" label="language" initialValue="zh_CN" colProps={{ span: 12 }} />
+          </>
+        );
       case 'kingdee_xingchen':
       case 'kingdee_kis_cloud':
+      case 'kingdee_eas_cloud':
+      case 'kingdee_jingdouyun':
         return (
           <>
             {common}
@@ -669,9 +767,13 @@ const ApplicationConnectionsListPage: React.FC = () => {
           </>
         );
       case 'yonyou_yonbip':
+      case 'yonyou_yonsuite':
+      case 'yonyou_u9_cloud':
+      case 'yonyou_u8_cloud':
       case 'yonyou_u8':
       case 'yonyou_u9':
       case 'yonyou_nc':
+      case 'yonyou_nc5':
         return (
           <>
             {common}
@@ -744,11 +846,24 @@ const ApplicationConnectionsListPage: React.FC = () => {
       case 'digiwin_wms':
       case 'openwms':
       case 'thingsboard':
+      case 'kingdee_k3_wise':
+      case 'kingdee_eas':
+      case 'oracle_fusion':
+      case 'oracle_ebs':
         return (
           <>
             {common}
             <ProFormText name="username" label={t('pages.system.applicationConnections.formUsernameLabel')} rules={[{ required: true }]} colProps={{ span: 12 }} />
             <ProFormText.Password name="password" label={t('pages.system.applicationConnections.formPasswordLabel')} rules={[{ required: true }]} colProps={{ span: 12 }} />
+          </>
+        );
+      case 'dynamics_365':
+        return (
+          <>
+            {common}
+            <ProFormText name="tenant_id" label="Tenant ID" rules={[{ required: true }]} colProps={{ span: 12 }} />
+            <ProFormText name="client_id" label="Client ID" rules={[{ required: true }]} colProps={{ span: 12 }} />
+            <ProFormText.Password name="client_secret" label="Client Secret" rules={[{ required: true }]} colProps={{ span: 12 }} />
           </>
         );
       case 'kingdee_kis':
@@ -1188,12 +1303,15 @@ const ApplicationConnectionsListPage: React.FC = () => {
   const canTestInForm = (type: string) => {
     return [
       'feishu', 'dingtalk', 'wecom',
-      'kingdee_galaxy', 'kingdee_xingchen', 'kingdee_kis_cloud', 'kingdee_kis',
-      'yonyou_yonbip', 'yonyou_u8', 'yonyou_u9', 'yonyou_nc',
-      'sap_s4hana', 'sap_b1', 'oracle_netsuite', 'odoo',
+      'kingdee_cosmic', 'kingdee_xinghan', 'kingdee_ai_suite', 'kingdee_galaxy', 'kingdee_xingchen',
+      'kingdee_eas_cloud', 'kingdee_kis_cloud', 'kingdee_jingdouyun', 'kingdee_k3_wise', 'kingdee_eas', 'kingdee_kis',
+      'yonyou_yonbip', 'yonyou_yonsuite', 'yonyou_u9_cloud', 'yonyou_u8_cloud', 'yonyou_nc',
+      'yonyou_u8', 'yonyou_u9', 'yonyou_nc5',
+      'sap_s4hana', 'sap_bydesign', 'sap_s4hana_op', 'sap_ecc', 'sap_b1',
+      'oracle_fusion', 'oracle_netsuite', 'dynamics_365', 'odoo',
       'inspur_gs', 'inspur_ps',
-      'digiwin_t100', 'digiwin_yifei', 'digiwin_yizhu', 'digiwin_yituo', 'digiwin_e10',
-      'chanjet_tplus', 'grasp_huihuang', 'super_erp', 'erpnext', 'sunlike_erp',
+      'digiwin_t100', 'digiwin_e10', 'digiwin_yifei', 'digiwin_yizhu', 'digiwin_yituo',
+      'chanjet_tplus', 'erpnext', 'oracle_ebs', 'grasp_huihuang', 'super_erp', 'sunlike_erp',
       'teamcenter', 'windchill', 'caxa', 'sanpin_plm', 'sunlike_plm', 'sipm', 'inteplm',
       'salesforce', 'xiaoshouyi', 'fenxiang', 'qidian', 'supra_crm',
       'weaver', 'seeyon', 'landray', 'cloudhub', 'tongda_oa',
@@ -1227,8 +1345,8 @@ const ApplicationConnectionsListPage: React.FC = () => {
     {
       title: t('pages.system.applicationConnections.columnType'),
       dataIndex: 'type',
-      width: 120,
-      minWidth: 120,
+      width: 200,
+      minWidth: 200,
       uniTableKeepWidth: true,
       resizable: false,
       render: (_, record) => {
@@ -1339,7 +1457,8 @@ const ApplicationConnectionsListPage: React.FC = () => {
                 </Button>
               </Popconfirm>
             ) : null,
-            record.type === 'kingdee_galaxy' && canLoadApiPresets ? (
+            (record.type === 'kingdee_galaxy' || isKingdeeCosmicOpenApiType(record.type)) &&
+            canLoadApiPresets ? (
               <Button
                 {...rowActionKind('skip')}
                 {...rowActionLabelKeep()}
@@ -1433,7 +1552,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
         <UniTable<ApplicationConnection>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('system.applicationConnections')}
-          columnPersistenceId="pages.system.application-connections.list-v2"
+          columnPersistenceId="pages.system.application-connections.list-v3"
           actionRef={actionRef}
           columns={columns}
           request={async (params, _sort, _filter, searchFormValues) => {
@@ -1584,7 +1703,11 @@ const ApplicationConnectionsListPage: React.FC = () => {
           </Space>
         }
         open={modalVisible}
-        onClose={() => { setModalVisible(false); setFormInitialValues(undefined); }}
+        onClose={() => {
+          setModalVisible(false);
+          setFormInitialValues(undefined);
+          setSensitiveConfigured({});
+        }}
         onFinish={handleSubmit}
         isEdit={isEdit}
         initialValues={formInitialValues}
@@ -1703,7 +1826,10 @@ const ApplicationConnectionsListPage: React.FC = () => {
                 },
                 {
                   key: 'load-api-presets',
-                  visible: detailData.type === 'kingdee_galaxy' && canLoadApiPresets,
+                  visible:
+                    (detailData.type === 'kingdee_galaxy' ||
+                      isKingdeeCosmicOpenApiType(detailData.type)) &&
+                    canLoadApiPresets,
                   render: (
                     <Button
                       icon={<ApiOutlined />}

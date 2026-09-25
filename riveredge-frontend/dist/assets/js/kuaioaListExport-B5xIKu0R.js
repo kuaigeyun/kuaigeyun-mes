@@ -1,1 +1,0 @@
-import{d as u}from"./exportRecordsXlsx-DBBAzyeM.js";async function g(i){const{type:t,keys:a,pageData:n,listFn:s,columns:r,filename:l,messageApi:o,noDataText:c}=i;let e=t==="currentPage"&&n?.length?n:(await s()).items;if(t==="selected"&&a?.length&&(e=e.filter(m=>a.includes(Number(m.id)))),e.length===0){o.warning(c);return}await u(e,r,l)}export{g as r};

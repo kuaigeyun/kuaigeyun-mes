@@ -6,12 +6,14 @@ from typing import Dict, List, Optional
 from pydantic import Field
 
 from core.schemas.base import BaseSchema
+from core.schemas.sync_binding_contract import SyncSourceItem
 
 VALID_SYNC_MODES = frozenset({"manual_full", "scheduled_full", "scheduled_incremental"})
 VALID_SYNC_DIRECTIONS = frozenset({"pull", "push", "bidirectional"})
 
 
 class MasterDataSyncBindingOut(BaseSchema):
+    sources: List[SyncSourceItem] = Field(default_factory=list)
     source_type: Optional[str] = None
     api_uuid: Optional[str] = None
     dataset_uuid: Optional[str] = None
@@ -25,6 +27,7 @@ class MasterDataSyncBindingOut(BaseSchema):
 
 
 class MasterDataSyncBindingUpsert(BaseSchema):
+    sources: Optional[List[SyncSourceItem]] = None
     source_type: Optional[str] = None
     api_uuid: Optional[str] = None
     dataset_uuid: Optional[str] = None
@@ -35,6 +38,7 @@ class MasterDataSyncBindingUpsert(BaseSchema):
 
 
 class MasterDataSyncFromSourceRequest(BaseSchema):
+    sources: Optional[List[SyncSourceItem]] = None
     source_type: Optional[str] = None
     api_uuid: Optional[str] = None
     dataset_uuid: Optional[str] = None

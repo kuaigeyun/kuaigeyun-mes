@@ -31,8 +31,11 @@ from apps.master_data.services.master_data_sync_common import (
     record_sync_run_log,
     resolve_business_datetime,
     resolve_incremental_since,
-    resolve_sync_config,
+    resolve_sync_sources,
+    sources_from_upsert_body,
+    upsert_sync_binding,
 )
+from core.services.data.sync_binding_sources import fetch_mapped_rows_from_sources
 
 from core.services.data.sync_progress import emit_sync_progress
 from tortoise.expressions import Q
@@ -65,24 +68,19 @@ class InventorySyncService:
         tenant_id: int,
         body: InventorySyncBindingUpsert,
     ) -> InventorySyncBindingOut:
-        source_type = (body.source_type or "").strip()
-        api_uuid = (body.api_uuid or "").strip() or None
-        dataset_uuid = (body.dataset_uuid or "").strip() or None
-        if not source_type and not api_uuid and not dataset_uuid:
+        if body.sources is not None and len(body.sources) == 0:
             await InventorySyncBinding.filter(tenant_id=tenant_id).delete()
             return InventorySyncBindingOut(match_key_field=self.MATCH_KEY)
 
-        field_mapping = body.field_mapping if isinstance(body.field_mapping, dict) else {}
+        sources = sources_from_upsert_body(body)
         match_key = (body.match_key_field or self.MATCH_KEY).strip() or self.MATCH_KEY
         sync_mode = normalize_sync_mode(body.sync_mode)
         sync_direction = normalize_sync_direction(body.sync_direction)
         interval = normalize_schedule_interval(body.schedule_interval_minutes)
-        row = await self._upsert_sync_binding(
+        row = await upsert_sync_binding(
+            InventorySyncBinding,
             tenant_id,
-            source_type=source_type,
-            api_uuid=api_uuid,
-            dataset_uuid=dataset_uuid,
-            field_mapping=field_mapping,
+            sources=sources,
             match_key_field=match_key,
             sync_mode=sync_mode,
             sync_direction=sync_direction,
@@ -103,20 +101,14 @@ class InventorySyncService:
         skip_prerequisite_syncs: bool = False,
     ) -> InventorySyncFromSourceOut:
         req = request or InventorySyncFromSourceRequest()
-        source_type, api_uuid, dataset_uuid, field_mapping, match_key = await resolve_sync_config(
+        sources, match_key, binding = await resolve_sync_sources(
             InventorySyncBinding,
             tenant_id,
             req,
             default_match_key=self.MATCH_KEY,
         )
-        if not source_type:
-            raise ValidationError("请配置同步来源（数据接口或数据集）")
-        if not field_mapping:
-            raise ValidationError("请配置字段映射")
-        if match_key not in field_mapping.values():
-            raise ValidationError(f"字段映射须包含匹配键 {match_key}")
 
-        binding = await InventorySyncBinding.filter(tenant_id=tenant_id).first()
+        binding = binding or await InventorySyncBinding.filter(tenant_id=tenant_id).first()
         sync_mode = normalize_sync_mode(
             req.sync_mode or (binding.sync_mode if binding else None)
         )
@@ -133,10 +125,7 @@ class InventorySyncService:
             await self.upsert_binding(
                 tenant_id,
                 InventorySyncBindingUpsert(
-                    source_type=source_type,
-                    api_uuid=api_uuid,
-                    dataset_uuid=dataset_uuid,
-                    field_mapping=field_mapping,
+                    sources=req.sources,
                     match_key_field=match_key,
                     sync_mode=sync_mode,
                     sync_direction=sync_direction,
@@ -154,30 +143,22 @@ class InventorySyncService:
         started_at = resolve_business_datetime()
         try:
             await emit_sync_progress("开始同步即时库存…")
-            raw_rows, truncated = await fetch_sync_rows(
+            rows, source_errors, fetched = await fetch_mapped_rows_from_sources(
                 tenant_id,
-                source_type=source_type,
-                api_uuid=api_uuid,
-                dataset_uuid=dataset_uuid,
+                sources,
                 since=since,
                 active_only=req.active_only,
             )
-            rows = map_sync_rows(raw_rows, field_mapping)
             await emit_sync_progress(f"字段映射完成，准备写入 {len(rows)} 条库存记录…")
             result = await self._upsert_batches(tenant_id, current_user, rows, match_key)
-            attach_sync_fetch_meta(
-                result, fetched=len(raw_rows), since=since, truncated=truncated
-            )
+            if source_errors:
+                result.errors = (source_errors + list(result.errors))[:20]
+            attach_sync_fetch_meta(result, fetched=fetched, since=since, truncated=False)
             if binding:
                 if result.failed and not (result.created or result.updated):
                     await mark_binding_failure(
                         binding,
                         "; ".join(result.errors) or "即时库存同步失败",
-                    )
-                elif truncated:
-                    await mark_binding_partial_success(
-                        binding,
-                        "源端数据超过单次最大拉取页数，本轮未拉完，水位未推进，待下次同步补拉",
                     )
                 elif result.failed and (result.created or result.updated):
                     await mark_binding_partial_success(
@@ -192,7 +173,7 @@ class InventorySyncService:
                 entity_type="inventory",
                 result=result,
                 started_at=started_at,
-                truncated=truncated,
+                truncated=False,
             )
             return result
         except Exception as exc:

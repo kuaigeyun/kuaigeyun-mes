@@ -19,6 +19,9 @@ class PurchaseOrderSyncBinding(BaseModel):
     api_uuid = fields.CharField(max_length=36, null=True, description="关联的数据接口 UUID")
     dataset_uuid = fields.CharField(max_length=36, null=True, description="关联的数据集 UUID")
     field_mapping = fields.JSONField(null=True, description="字段映射：来源列名 -> 目标字段名")
+    sources = fields.JSONField(null=True, description="多来源：kind + 接口/数据集 + field_mapping")
+    push_targets = fields.JSONField(null=True, description="多目标外推")
+    trigger_actions = fields.JSONField(null=True, description="触发无感外推的审核动作")
     match_key_field = fields.CharField(
         max_length=64,
         default="order_code",

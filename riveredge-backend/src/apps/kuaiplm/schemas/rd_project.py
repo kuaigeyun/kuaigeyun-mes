@@ -199,6 +199,7 @@ class RdProjectDeliverableVersionListResponse(BaseModel):
     total: int
     audience: str
     can_view_history: bool
+    can_download_history: bool = False
 
 
 class RdProjectDeliverableReviseRequest(BaseModel):

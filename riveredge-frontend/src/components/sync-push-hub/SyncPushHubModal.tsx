@@ -1,5 +1,5 @@
 /**
- * 同步/推送组合弹窗：页内 Tabs 分别承载「从外部同步」与「推送到外部」内容区。
+ * 同步/推送组合弹窗：页内 Tabs 分别为「入站方向」与「出站方向」内容区。
  *
  * 面板内容故意放在 Tabs 外：antd Tabs 的 items 每次父级重渲染都会换新引用，
  * 若把 DocumentPushBatchPanel / SyncFromSource 放进 items[].children，

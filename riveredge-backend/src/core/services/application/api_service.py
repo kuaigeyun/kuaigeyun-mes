@@ -169,12 +169,22 @@ class APIService:
         """
         按连接器类型加载常用接口预设（已存在 code 则跳过）。
 
-        当前支持：kingdee_galaxy
+        当前支持：kingdee_galaxy（金蝶AI星空 WebAPI）、
+        kingdee_cosmic / kingdee_xinghan / kingdee_ai_suite（苍穹 OpenAPI）
         """
         integration = await self._resolve_business_connector(tenant_id, connection_uuid)
         conn_type = str(integration.type or "").strip()
+        if conn_type in ("kingdee_cosmic", "kingdee_xinghan", "kingdee_ai_suite"):
+            return await self._ensure_kingdee_cosmic_api_presets(
+                tenant_id,
+                integration,
+                category_id=category_id,
+                preset_code_suffixes=preset_code_suffixes,
+            )
         if conn_type != "kingdee_galaxy":
-            raise ValidationError("当前仅支持金蝶云星空连接器加载常用接口")
+            raise ValidationError(
+                "当前仅支持金蝶AI星空或金蝶AI苍穹/星瀚/套件 OpenAPI 连接器加载常用接口"
+            )
 
         from core.services.integration.kingdee_galaxy_api_presets import (
             CUSTOMER_PRESET_CODE_SUFFIX,
@@ -337,6 +347,82 @@ class APIService:
             "skipped_codes": skipped,
             "categorized_codes": categorized,
             "upgraded_codes": upgraded,
+        }
+
+    async def _ensure_kingdee_cosmic_api_presets(
+        self,
+        tenant_id: int,
+        integration: IntegrationConfig,
+        *,
+        category_id: Optional[int] = None,
+        preset_code_suffixes: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """加载金蝶云苍穹 OpenAPI 常用接口预设。"""
+        from core.services.integration.kingdee_cosmic_api_presets import (
+            list_kingdee_cosmic_api_presets,
+            resolve_preset_api_code,
+        )
+
+        allowed_suffixes: Optional[set[str]] = None
+        if preset_code_suffixes is not None:
+            allowed_suffixes = {
+                str(suffix).strip() for suffix in preset_code_suffixes if str(suffix).strip()
+            }
+            if not allowed_suffixes:
+                raise ValidationError("请至少选择一个接口")
+
+        created: List[str] = []
+        skipped: List[str] = []
+        categorized: List[str] = []
+        for preset in list_kingdee_cosmic_api_presets():
+            code_suffix = str(preset["code_suffix"] or "").strip()
+            if allowed_suffixes is not None and code_suffix not in allowed_suffixes:
+                continue
+            code = resolve_preset_api_code(integration.code, preset["code_suffix"])
+            existing = await API.filter(
+                tenant_id=tenant_id,
+                code=code,
+                deleted_at__isnull=True,
+            ).first()
+            if existing:
+                if category_id is not None and existing.category_id is None:
+                    existing.category_id = category_id
+                    await existing.save(update_fields=["category_id", "updated_at"])
+                    categorized.append(code)
+                skipped.append(code)
+                continue
+            request_params = preset.get("request_params")
+            api = await API.create(
+                tenant_id=tenant_id,
+                name=preset["name"],
+                code=code,
+                description=preset["description"],
+                path=preset["path"],
+                method=preset["method"],
+                request_headers={"Content-Type": "application/json"},
+                request_params=request_params if request_params else None,
+                request_body=preset.get("request_body") or {},
+                response_format=None,
+                response_example=None,
+                is_active=True,
+                is_system=False,
+                integration_config_id=integration.id,
+                category_id=category_id,
+            )
+            created.append(api.code)
+
+        return {
+            "connection_uuid": str(integration.uuid),
+            "connection_code": integration.code,
+            "connection_type": str(integration.type or "kingdee_cosmic"),
+            "created_count": len(created),
+            "skipped_count": len(skipped),
+            "categorized_count": len(categorized),
+            "upgraded_count": 0,
+            "created_codes": created,
+            "skipped_codes": skipped,
+            "categorized_codes": categorized,
+            "upgraded_codes": [],
         }
 
     async def list_api_library(self) -> Dict[str, Any]:
@@ -919,6 +1005,20 @@ class APIService:
             raise ValidationError(
                 f"应用连接器「{api.integration_config.name}」已停用，无法调用"
             )
+        api_path = str(api.path or "").strip()
+        if "__API_NUMBER__" in api_path:
+            return {
+                "status_code": 0,
+                "headers": {},
+                "body": {
+                    "error": (
+                        "接口路径仍含占位符 __API_NUMBER__，网关会返回路由未找到。"
+                        "请在接口编辑页将路径中的占位符改为贵司苍穹「开放服务云」里已发布、"
+                        "且已对第三方应用完成服务授权的实际接口编码后再测试。"
+                    ),
+                },
+                "elapsed_time": 0,
+            }
         # 1. 合并请求头（测试请求头优先）
         request_headers = dict(api.request_headers or {})
         
@@ -945,7 +1045,8 @@ class APIService:
                 request_headers = connector_headers
                 if test_request.headers:
                     request_headers.update(test_request.headers)
-                if str(api.integration_config.type or "").strip() == "kingdee_galaxy":
+                conn_type = str(api.integration_config.type or "").strip()
+                if conn_type == "kingdee_galaxy":
                     from core.services.integration.kingdee_galaxy_service import (
                         apply_kingdee_galaxy_session_headers,
                         login_kingdee_galaxy_session,
@@ -958,6 +1059,27 @@ class APIService:
                         request_headers = apply_kingdee_galaxy_session_headers(
                             request_headers,
                             session_id=str(session["session_id"]),
+                        )
+                    except ValueError as exc:
+                        return {
+                            "status_code": 0,
+                            "headers": {},
+                            "body": {"error": str(exc)},
+                            "elapsed_time": 0,
+                        }
+                elif conn_type in ("kingdee_cosmic", "kingdee_xinghan", "kingdee_ai_suite"):
+                    from core.services.integration.kingdee_cosmic_service import (
+                        apply_kingdee_cosmic_session_headers,
+                        login_kingdee_cosmic_session,
+                    )
+
+                    try:
+                        cfg = api.integration_config.get_config()
+                        session = await login_kingdee_cosmic_session(cfg)
+                        request_headers = apply_kingdee_cosmic_session_headers(
+                            request_headers,
+                            config=cfg,
+                            access_token=str(session["access_token"]),
                         )
                     except ValueError as exc:
                         return {
@@ -987,6 +1109,13 @@ class APIService:
             }
         
         # 5. 发送请求
+        if "/kapi/v2/" in str(url or "").lower():
+            from core.services.integration.kingdee_cosmic_paths import (
+                ensure_kingdee_v2_request_body,
+            )
+
+            request_body = ensure_kingdee_v2_request_body(url, request_body)
+
         start_time = time.time()
         try:
             client = get_http_client()
@@ -1037,6 +1166,18 @@ class APIService:
                 response_body = response.json()
             except Exception:
                 response_body = response.text
+
+            if (
+                isinstance(response_body, dict)
+                and str(response_body.get("errorCode") or "") == "2530"
+            ):
+                response_body = {
+                    **response_body,
+                    "说明": (
+                        f"网关没有这条路由。本次实际请求：{url}。"
+                        "该地址未在开放平台发布。请打开这条基础资料 API 的详情，使用页面上的请求地址，不要沿用物料的 batchQuery。"
+                    ),
+                }
 
             return {
                 "status_code": response.status_code,
@@ -1095,7 +1236,8 @@ class APIService:
                 headers=request_headers,
             )
             request_headers = connector_headers
-            if str(integration.type or "").strip() == "kingdee_galaxy":
+            conn_type = str(integration.type or "").strip()
+            if conn_type == "kingdee_galaxy":
                 from core.services.integration.kingdee_galaxy_service import (
                     apply_kingdee_galaxy_session_headers,
                     login_kingdee_galaxy_session,
@@ -1106,6 +1248,27 @@ class APIService:
                     request_headers = apply_kingdee_galaxy_session_headers(
                         request_headers,
                         session_id=str(session["session_id"]),
+                    )
+                except ValueError as exc:
+                    return {
+                        "status_code": 0,
+                        "headers": {},
+                        "body": {"error": str(exc)},
+                        "elapsed_time": 0,
+                    }
+            elif conn_type in ("kingdee_cosmic", "kingdee_xinghan", "kingdee_ai_suite"):
+                from core.services.integration.kingdee_cosmic_service import (
+                    apply_kingdee_cosmic_session_headers,
+                    login_kingdee_cosmic_session,
+                )
+
+                try:
+                    cfg = integration.get_config()
+                    session = await login_kingdee_cosmic_session(cfg)
+                    request_headers = apply_kingdee_cosmic_session_headers(
+                        request_headers,
+                        config=cfg,
+                        access_token=str(session["access_token"]),
                     )
                 except ValueError as exc:
                     return {

@@ -390,6 +390,7 @@ class DocumentPushService:
         source_id: int,
         target_profile: Optional[str] = None,
         target_profiles: Optional[List[str]] = None,
+        targets: Optional[List[Dict[str, Any]]] = None,
         connection_code: Optional[str] = None,
         save_api_uuid: Optional[str] = None,
         dry_run: bool = False,
@@ -397,6 +398,63 @@ class DocumentPushService:
         source_type = str(source_type or "").strip()
         if int(source_id or 0) <= 0:
             raise ValidationError("source_id 无效")
+
+        if targets:
+            results: List[Dict[str, Any]] = []
+            for item in targets:
+                profile = str(item.get("target_profile") or "").strip()
+                if not profile:
+                    raise ValidationError("targets 每条须包含 target_profile")
+                if str(item.get("destination_kind") or "api").strip() == "data_source":
+                    one = await self._push_dataset_write(
+                        tenant_id=tenant_id,
+                        source_type=source_type,
+                        source_id=int(source_id),
+                        target_profile=profile,
+                        data_source_uuid=item.get("data_source_uuid"),
+                        dataset_uuid=item.get("dataset_uuid"),
+                        dry_run=dry_run,
+                    )
+                    results.append(one)
+                    continue
+                try:
+                    one = await self._push_one(
+                        tenant_id=tenant_id,
+                        acting_user_id=acting_user_id,
+                        source_type=source_type,
+                        source_id=int(source_id),
+                        target_profile=profile,
+                        connection_code=item.get("connection_code") or connection_code,
+                        save_api_uuid=item.get("save_api_uuid") or save_api_uuid,
+                        dry_run=dry_run,
+                    )
+                except Exception as exc:
+                    one = {
+                        "success": False,
+                        "source_type": source_type,
+                        "source_id": int(source_id),
+                        "target_profile": profile,
+                        "message": str(exc),
+                    }
+                results.append(one)
+            ok_count = sum(1 for r in results if r.get("success") and not r.get("skipped"))
+            skip_count = sum(1 for r in results if r.get("skipped"))
+            fail_count = sum(1 for r in results if r.get("success") is False)
+            return {
+                "success": fail_count == 0,
+                "multi": True,
+                "source_type": source_type,
+                "source_id": int(source_id),
+                "target_profiles": [str(t.get("target_profile")) for t in targets],
+                "created": ok_count,
+                "skipped": skip_count,
+                "failed": fail_count,
+                "results": results,
+                "message": f"多目标推送：成功 {ok_count}，跳过 {skip_count}，失败 {fail_count}",
+                "dry_run": dry_run,
+                "model": next((r.get("model") for r in results if r.get("model")), None),
+                "body": next((r.get("body") for r in results if r.get("body")), None),
+            }
 
         profiles = await self.resolve_target_profiles(
             tenant_id=tenant_id,
@@ -461,6 +519,80 @@ class DocumentPushService:
             "model": next((r.get("model") for r in results if r.get("model")), None),
             "body": next((r.get("body") for r in results if r.get("body")), None),
         }
+
+    async def _push_dataset_write(
+        self,
+        *,
+        tenant_id: int,
+        source_type: str,
+        source_id: int,
+        target_profile: str,
+        data_source_uuid: Optional[str],
+        dataset_uuid: Optional[str],
+        dry_run: bool,
+    ) -> Dict[str, Any]:
+        """按写入数据集把单据标量字段写入其绑定的外部库。"""
+        from datetime import date, datetime
+        from decimal import Decimal
+        from uuid import UUID
+
+        from apps.kuaizhizao.models.purchase_order import PurchaseOrder
+        from apps.kuaizhizao.models.reporting_record import ReportingRecord
+        from apps.kuaizhizao.models.sales_order import SalesOrder
+        from apps.kuaizhizao.models.work_order import WorkOrder
+        from apps.master_data.models.material_batch import MaterialBatch
+        from core.models.dataset import Dataset
+        from core.schemas.dataset import ExecuteQueryRequest
+        from core.services.data.dataset_service import DatasetService
+
+        base = {
+            "source_type": source_type,
+            "source_id": int(source_id),
+            "target_profile": target_profile,
+            "dry_run": dry_run,
+        }
+        if not str(dataset_uuid or "").strip():
+            return {**base, "success": False, "message": "请先选择写入数据集"}
+        dataset = await Dataset.get_or_none(
+            tenant_id=tenant_id,
+            uuid=str(dataset_uuid),
+            deleted_at__isnull=True,
+        )
+        if dataset is None or dataset.query_type != "sql_write" or not dataset.is_active:
+            return {**base, "success": False, "message": "写入数据集不存在或未启用"}
+        await dataset.fetch_related("integration_config")
+        bound = str(dataset.integration_config.uuid)
+        if data_source_uuid and str(data_source_uuid) != bound:
+            return {**base, "success": False, "message": "写入数据集不属于所选数据源"}
+        models = {
+            "purchase_order": PurchaseOrder,
+            "sales_order": SalesOrder,
+            "work_order": WorkOrder,
+            "reporting_record": ReportingRecord,
+            "material_batch": MaterialBatch,
+        }
+        model = models.get(source_type)
+        if model is None:
+            return {**base, "success": False, "message": f"暂不支持把 {source_type} 写入数据集"}
+        row = await model.get_or_none(id=int(source_id), tenant_id=tenant_id)
+        if row is None:
+            return {**base, "success": False, "message": "单据不存在"}
+        params: Dict[str, Any] = {}
+        for name in model._meta.db_fields:
+            value = getattr(row, name, None)
+            if isinstance(value, (str, int, float, bool, datetime, date, Decimal, UUID)) or value is None:
+                params[name] = value
+        if dry_run:
+            return {**base, "success": True, "model": params, "message": "写入参数预览"}
+        result = await DatasetService().execute_query(
+            tenant_id=tenant_id,
+            dataset_uuid=UUID(str(dataset.uuid)),
+            execute_request=ExecuteQueryRequest(parameters=params, limit=1, offset=0),
+        )
+        if not result.success:
+            return {**base, "success": False, "message": result.error or "写入失败"}
+        affected = int(result.affected or 0)
+        return {**base, "success": True, "affected": affected, "message": f"已写入 {affected} 行"}
 
     async def _push_one(
         self,

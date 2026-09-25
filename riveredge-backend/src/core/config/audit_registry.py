@@ -2,7 +2,8 @@
 
 「单据是否可审核」的唯一声明源是各 app 的 `manifest.json` 顶层 `audit` 数组，
 每条形如：``{ node_key, entity_type, resource, name, template, config_category? }``，
-``template`` ∈ ``simple`` | ``sme``；``config_category`` 用于配置中心侧边栏分组（默认 ``common``）。
+``template`` ∈ ``simple`` | ``sme`` | ``rd_file_change``（构图见 ``audit_process_templates``）；
+``config_category`` 用于配置中心侧边栏分组（默认 ``common``）。
 
 本模块在进程内扫描一次（manifest 仅随部署/重启变化），聚合为单一注册表，供下列
 全部从此派生，消除并行硬编码表：
@@ -22,7 +23,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-VALID_TEMPLATES = {"simple", "sme"}
+VALID_TEMPLATES = {"simple", "sme", "rd_file_change"}
 
 
 VALID_CONFIG_CATEGORIES = frozenset({

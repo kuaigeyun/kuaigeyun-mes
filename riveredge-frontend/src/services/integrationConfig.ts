@@ -231,7 +231,7 @@ const TYPE_CATEGORIES: Record<string, string[]> = {
   API: ['api'],
   协作: ['feishu', 'dingtalk', 'wecom'],
   ERP: [
-    'kingdee_galaxy', 'kingdee_xingchen', 'kingdee_kis_cloud', 'kingdee_kis',
+    'kingdee_galaxy', 'kingdee_cosmic', 'kingdee_xingchen', 'kingdee_kis_cloud', 'kingdee_kis',
     'yonyou_yonbip', 'yonyou_u8', 'yonyou_u9', 'yonyou_nc',
     'sap_s4hana', 'sap_b1', 'oracle_netsuite', 'odoo',
     'inspur_gs', 'inspur_ps',

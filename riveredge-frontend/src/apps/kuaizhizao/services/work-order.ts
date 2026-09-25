@@ -710,7 +710,19 @@ export async function listWorkOrderPushToKingdeeCandidates(params?: {
   });
 }
 
+export interface WorkOrderPushTargetBinding {
+  connection_code?: string | null;
+  save_api_uuid?: string | null;
+  target_profile: string;
+  push_mode?: 'auto' | 'manual';
+  trigger_actions?: string[];
+  destination_kind?: 'api' | 'data_source';
+  data_source_uuid?: string | null;
+}
+
 export interface WorkOrderPushBinding {
+  targets?: WorkOrderPushTargetBinding[];
+  trigger_actions?: string[];
   connection_code?: string | null;
   save_api_uuid?: string | null;
   sync_mode: string;

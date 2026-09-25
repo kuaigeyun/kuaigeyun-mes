@@ -31,7 +31,7 @@ class DatasetBase(BaseModel):
     @classmethod
     def validate_query_type(cls, v):
         """验证查询类型"""
-        allowed_types = ['sql', 'api']
+        allowed_types = ['sql', 'sql_write', 'api']
         if v not in allowed_types:
             raise ValueError(f'查询类型必须是 {allowed_types} 之一')
         return v
@@ -105,6 +105,7 @@ class ExecuteQueryResponse(BaseModel):
     columns: Optional[List[str]] = Field(None, description="列信息")
     elapsed_time: float = Field(..., description="查询耗时（秒）")
     error: Optional[str] = Field(None, description="错误信息")
+    affected: Optional[int] = Field(None, description="写入影响行数（仅 sql_write）")
 
 
 class StatCardItem(BaseModel):

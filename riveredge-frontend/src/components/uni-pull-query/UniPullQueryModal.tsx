@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flex, Modal, Table, theme } from 'antd';
+import { Button, Flex, Modal, Table, theme } from 'antd';
 import { MODAL_CONFIG } from '../layout-templates/constants';
 import { UniPullQueryFilterBar } from './UniPullQueryFilterBar';
 import {
@@ -53,6 +53,7 @@ export function UniPullQueryModal<T extends object>({
   scopeOptions,
   scope,
   onScopeChange,
+  leading,
   filterExtra,
   filterExtraPlacement,
   okText,
@@ -67,6 +68,8 @@ export function UniPullQueryModal<T extends object>({
   tableScroll = { y: 360 },
   selectedRows,
   getRowLabel,
+  embedded = false,
+  hideFooter = false,
 }: UniPullQueryModalProps<T>) {
   const { t } = useTranslation();
   const { token } = theme.useToken();
@@ -170,23 +173,9 @@ export function UniPullQueryModal<T extends object>({
     [dataSource, isRowDisabled, onSelectedRowKeysChange, rowKey, selectedRowKeys, selectionType],
   );
 
-  return (
-    <Modal
-      title={title}
-      styles={{ header: { marginBottom: 0 }, body: { paddingTop: 12 } }}
-      style={{ maxWidth: 'calc(100vw - 32px)' }}
-      open={open}
-      width={width}
-      zIndex={zIndex}
-      onCancel={onCancel}
-      onOk={onOk}
-      okText={resolvedOkText}
-      cancelText={resolvedCancelText}
-      okButtonProps={okButtonProps}
-      confirmLoading={confirmLoading}
-      destroyOnHidden={destroyOnHidden}
-      afterOpenChange={afterOpenChange}
-    >
+  const inner = (
+    <>
+      {leading}
       <UniPullQueryFilterBar
         searchDraft={searchDraft}
         onSearchDraftChange={onSearchDraftChange}
@@ -253,6 +242,49 @@ export function UniPullQueryModal<T extends object>({
       />
       {footerHint ? <div style={{ marginTop: 12 }}>{footerHint}</div> : null}
       {alert ? <div style={{ marginTop: 12 }}>{alert}</div> : null}
+    </>
+  );
+
+  if (embedded) {
+    if (!open) return null;
+    return (
+      <div style={{ paddingTop: 4 }}>
+        {inner}
+        {hideFooter ? null : (
+        <Flex justify="flex-end" gap={8} style={{ marginTop: 16 }}>
+          <Button onClick={onCancel}>{resolvedCancelText}</Button>
+          <Button
+            type="primary"
+            onClick={() => void onOk()}
+            loading={confirmLoading}
+            {...okButtonProps}
+          >
+            {resolvedOkText}
+          </Button>
+        </Flex>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <Modal
+      title={title}
+      styles={{ header: { marginBottom: 0 }, body: { paddingTop: 12 } }}
+      style={{ maxWidth: 'calc(100vw - 32px)' }}
+      open={open}
+      width={width}
+      zIndex={zIndex}
+      onCancel={onCancel}
+      onOk={onOk}
+      okText={resolvedOkText}
+      cancelText={resolvedCancelText}
+      okButtonProps={okButtonProps}
+      confirmLoading={confirmLoading}
+      destroyOnHidden={destroyOnHidden}
+      afterOpenChange={afterOpenChange}
+    >
+      {inner}
     </Modal>
   );
 }

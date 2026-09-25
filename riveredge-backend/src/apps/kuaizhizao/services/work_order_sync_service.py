@@ -24,6 +24,7 @@ from apps.kuaizhizao.services.kingdee_production_order_push_service import (
 from apps.kuaizhizao.services.work_order_service import WorkOrderService
 from apps.kuaizhizao.models.document_relation import DocumentRelation
 from apps.master_data.services.master_data_sync_common import (
+    fetch_sync_rows,
     map_sync_rows,
     mark_binding_failure,
     mark_binding_success,
@@ -33,9 +34,14 @@ from apps.master_data.services.master_data_sync_common import (
     normalize_sync_mode,
     record_sync_run_log,
     resolve_incremental_since,
+    resolve_sync_sources,
+    serialize_binding_row,
+    sources_from_upsert_body,
+    upsert_sync_binding,
     apply_mapped_custom_field_values,
     load_custom_fields_by_code,
 )
+from core.services.data.sync_binding_sources import fetch_mapped_rows_from_sources
 WORK_ORDER_CUSTOM_FIELD_TABLE = "apps_kuaizhizao_work_orders"
 from apps.master_data.services.sync_association_service import (
     find_material_by_code,
@@ -67,61 +73,27 @@ class WorkOrderSyncService:
     def serialize_binding(self, row: Optional[WorkOrderSyncBinding]) -> WorkOrderSyncBindingOut:
         if not row:
             return WorkOrderSyncBindingOut()
-        mapping = row.field_mapping if isinstance(row.field_mapping, dict) else {}
-        return WorkOrderSyncBindingOut(
-            source_type=row.source_type,
-            api_uuid=row.api_uuid,
-            dataset_uuid=row.dataset_uuid,
-            field_mapping={str(k): str(v) for k, v in mapping.items()},
-            match_key_field=row.match_key_field or "code",
-            sync_mode=row.sync_mode or "manual_full",
-            schedule_interval_minutes=int(row.schedule_interval_minutes or 15),
-            last_success_at=row.last_success_at,
-            last_attempt_at=row.last_attempt_at,
-            last_error=row.last_error,
-        )
+        data = serialize_binding_row(row, default_match_key="code")
+        return WorkOrderSyncBindingOut(**data)
     async def upsert_binding(
         self,
         tenant_id: int,
         body: WorkOrderSyncBindingUpsert,
     ) -> WorkOrderSyncBindingOut:
-        source_type = (body.source_type or "").strip()
-        api_uuid = (body.api_uuid or "").strip() or None
-        dataset_uuid = (body.dataset_uuid or "").strip() or None
-        if not source_type and not api_uuid and not dataset_uuid:
+        if body.sources is not None and len(body.sources) == 0:
             await WorkOrderSyncBinding.filter(tenant_id=tenant_id).delete()
             return WorkOrderSyncBindingOut()
-        if source_type not in ("api", "dataset"):
-            raise ValidationError("来源类型须为 api 或 dataset")
-        if source_type == "api" and not api_uuid:
-            raise ValidationError("已选择数据接口时须指定接口")
-        if source_type == "dataset" and not dataset_uuid:
-            raise ValidationError("已选择数据集时须指定数据集")
-        field_mapping = body.field_mapping if isinstance(body.field_mapping, dict) else {}
-        if not field_mapping:
-            raise ValidationError("请配置字段映射")
+        sources = sources_from_upsert_body(body)
         match_key = (body.match_key_field or "code").strip() or "code"
-        if match_key not in field_mapping.values():
-            raise ValidationError(f"字段映射须包含匹配键 {match_key}")
         sync_mode = normalize_sync_mode(body.sync_mode)
         interval = normalize_schedule_interval(body.schedule_interval_minutes)
-        existing = await WorkOrderSyncBinding.filter(tenant_id=tenant_id).first()
-        preserve = {
-            "last_success_at": existing.last_success_at if existing else None,
-            "last_attempt_at": existing.last_attempt_at if existing else None,
-            "last_error": existing.last_error if existing else None,
-        }
-        await WorkOrderSyncBinding.filter(tenant_id=tenant_id).delete()
-        row = await WorkOrderSyncBinding.create(
-            tenant_id=tenant_id,
-            source_type=source_type,
-            api_uuid=api_uuid if source_type == "api" else None,
-            dataset_uuid=dataset_uuid if source_type == "dataset" else None,
-            field_mapping=field_mapping,
+        row = await upsert_sync_binding(
+            WorkOrderSyncBinding,
+            tenant_id,
+            sources=sources,
             match_key_field=match_key,
             sync_mode=sync_mode,
             schedule_interval_minutes=interval,
-            **preserve,
         )
         return self.serialize_binding(row)
 
@@ -131,12 +103,22 @@ class WorkOrderSyncService:
 
     def serialize_push_binding(self, row: Optional[WorkOrderSyncBinding]) -> "WorkOrderPushBindingOut":
         from apps.kuaizhizao.schemas.work_order_sync import WorkOrderPushBindingOut
+        from core.schemas.sync_binding_contract import DocumentPushTargetItem
+        from core.services.data.sync_binding_sources import (
+            push_targets_from_row,
+            trigger_actions_from_row,
+        )
 
         if not row:
             return WorkOrderPushBindingOut()
+        targets_raw = push_targets_from_row(row)
+        targets = [DocumentPushTargetItem.model_validate(t) for t in targets_raw]
+        first = targets[0] if targets else None
         return WorkOrderPushBindingOut(
-            connection_code=getattr(row, "push_connection_code", None),
-            save_api_uuid=getattr(row, "push_save_api_uuid", None),
+            targets=targets,
+            trigger_actions=trigger_actions_from_row(row),
+            connection_code=first.connection_code if first else getattr(row, "push_connection_code", None),
+            save_api_uuid=first.save_api_uuid if first else getattr(row, "push_save_api_uuid", None),
             sync_mode=normalize_work_order_push_sync_mode(
                 getattr(row, "push_sync_mode", None)
             ),
@@ -154,19 +136,27 @@ class WorkOrderSyncService:
 
     async def upsert_push_binding(self, tenant_id: int, body):
         from apps.kuaizhizao.schemas.work_order_sync import WorkOrderPushBindingUpsert
+        from core.services.data.sync_binding_sources import normalize_push_targets_json
 
         if not isinstance(body, WorkOrderPushBindingUpsert):
             body = WorkOrderPushBindingUpsert.model_validate(body)
         row = await WorkOrderSyncBinding.filter(tenant_id=tenant_id).first()
         if not row:
             row = await WorkOrderSyncBinding.create(tenant_id=tenant_id)
-        connection_code = str(body.connection_code or "").strip() or None
-        save_api_uuid = str(body.save_api_uuid or "").strip() or None
         sync_mode = normalize_work_order_push_sync_mode(body.sync_mode)
         interval = normalize_schedule_interval(body.schedule_interval_minutes)
+        if not body.targets:
+            raise ValidationError("请配置外推目标")
+        targets = normalize_push_targets_json(
+            [t.model_dump(mode="json") for t in body.targets],
+        )
+        triggers = [str(a).strip().lower() for a in (body.trigger_actions or []) if str(a).strip()]
+        first = targets[0] if targets else {}
         await WorkOrderSyncBinding.filter(id=row.id).update(
-            push_connection_code=connection_code,
-            push_save_api_uuid=save_api_uuid,
+            push_targets=targets or None,
+            trigger_actions=triggers or None,
+            push_connection_code=str(first.get("connection_code") or "").strip() or None,
+            push_save_api_uuid=str(first.get("save_api_uuid") or "").strip() or None,
             push_sync_mode=sync_mode,
             push_schedule_interval_minutes=interval,
         )
@@ -257,29 +247,13 @@ class WorkOrderSyncService:
         request: Optional[WorkOrderSyncFromSourceRequest] = None,
     ) -> WorkOrderSyncFromSourceOut:
         req = request or WorkOrderSyncFromSourceRequest()
-        binding = await WorkOrderSyncBinding.filter(tenant_id=tenant_id).first()
-        source_type = (
-            req.source_type or (getattr(binding, "source_type", None) if binding else "") or ""
-        ).strip()
-        api_uuid = (
-            req.api_uuid or (getattr(binding, "api_uuid", None) if binding else "") or ""
-        ).strip() or None
-        dataset_uuid = (
-            req.dataset_uuid or (getattr(binding, "dataset_uuid", None) if binding else "") or ""
-        ).strip() or None
-        field_mapping = req.field_mapping if isinstance(req.field_mapping, dict) else None
-        binding_field_mapping = getattr(binding, "field_mapping", None) if binding else None
-        if not field_mapping and isinstance(binding_field_mapping, dict):
-            field_mapping = binding_field_mapping
-        match_key = (
-            (getattr(binding, "match_key_field", None) if binding else None) or "code"
-        ).strip() or "code"
-        if not source_type:
-            raise ValidationError("请配置同步来源（数据接口或数据集）")
-        if not field_mapping:
-            raise ValidationError("请配置字段映射")
-        if match_key not in field_mapping.values():
-            raise ValidationError(f"字段映射须包含匹配键 {match_key}")
+        sources, match_key, binding = await resolve_sync_sources(
+            WorkOrderSyncBinding,
+            tenant_id,
+            req,
+            default_match_key="code",
+        )
+        binding = binding or await WorkOrderSyncBinding.filter(tenant_id=tenant_id).first()
         sync_mode = normalize_sync_mode(
             req.sync_mode or (binding.sync_mode if binding else None)
         )
@@ -292,10 +266,7 @@ class WorkOrderSyncService:
             await self.upsert_binding(
                 tenant_id,
                 WorkOrderSyncBindingUpsert(
-                    source_type=source_type,
-                    api_uuid=api_uuid,
-                    dataset_uuid=dataset_uuid,
-                    field_mapping=field_mapping,
+                    sources=req.sources,
                     match_key_field=match_key,
                     sync_mode=sync_mode,
                     schedule_interval_minutes=interval,
@@ -308,17 +279,12 @@ class WorkOrderSyncService:
             request_incremental=req.incremental,
         )
         try:
-            if source_type == "api":
-                if not api_uuid:
-                    raise ValidationError("数据接口同步须指定接口")
-                raw_rows = await fetch_rows_from_api(tenant_id, api_uuid, since=since, active_only=req.active_only)
-            elif source_type == "dataset":
-                if not dataset_uuid:
-                    raise ValidationError("数据集同步须指定数据集")
-                raw_rows = await fetch_rows_from_dataset(tenant_id, dataset_uuid, since=since)
-            else:
-                raise ValidationError("来源类型须为 api 或 dataset")
-            rows = map_sync_rows(raw_rows, field_mapping)
+            rows, source_errors, _fetched = await fetch_mapped_rows_from_sources(
+                tenant_id,
+                sources,
+                since=since,
+                active_only=req.active_only,
+            )
             from infra.models.user import User
             current_user = await User.get_or_none(id=user_id)
             if not current_user:
@@ -329,8 +295,8 @@ class WorkOrderSyncService:
                     tenant_id, current_user
                 )
             result = await self._upsert_work_orders(tenant_id, user_id, rows, match_key)
-            if prerequisite_errors:
-                result.errors = (prerequisite_errors + list(result.errors))[:20]
+            if prerequisite_errors or source_errors:
+                result.errors = (prerequisite_errors + source_errors + list(result.errors))[:20]
             if binding:
                 if result.failed and not (result.created or result.updated):
                     await mark_binding_failure(

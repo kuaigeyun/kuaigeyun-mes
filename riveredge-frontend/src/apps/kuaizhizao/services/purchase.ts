@@ -727,6 +727,52 @@ export interface PurchaseOrderSyncFromSourceResult {
   errors: string[];
 }
 
+export async function getPurchaseOrderPushBinding(): Promise<{
+  targets?: Array<{
+    target_profile: string;
+    connection_code?: string;
+    save_api_uuid?: string;
+    push_mode?: 'auto' | 'manual';
+    trigger_actions?: string[];
+    destination_kind?: 'api' | 'data_source';
+    data_source_uuid?: string;
+    dataset_uuid?: string;
+    user_saved?: boolean;
+  }>;
+  trigger_actions?: string[];
+  connection_code?: string;
+  save_api_uuid?: string;
+  sync_mode?: string;
+  schedule_interval_minutes?: number;
+  targets_configured?: boolean;
+}> {
+  return apiRequest('/apps/kuaizhizao/purchase-orders/push-binding');
+}
+
+export async function savePurchaseOrderPushBinding(payload: {
+  targets: Array<{
+    target_profile: string;
+    connection_code?: string;
+    save_api_uuid?: string;
+    push_mode?: 'auto' | 'manual';
+    trigger_actions?: string[];
+    destination_kind?: 'api' | 'data_source';
+    data_source_uuid?: string;
+    dataset_uuid?: string;
+    user_saved?: boolean;
+  }>;
+  trigger_actions?: string[];
+  connection_code?: string;
+  save_api_uuid?: string;
+  sync_mode?: string;
+  schedule_interval_minutes?: number;
+}): Promise<unknown> {
+  return apiRequest('/apps/kuaizhizao/purchase-orders/push-binding', {
+    method: 'PUT',
+    data: payload,
+  });
+}
+
 export async function getPurchaseOrderSyncBinding(): Promise<PurchaseOrderSyncBinding> {
   return apiRequest<PurchaseOrderSyncBinding>('/apps/kuaizhizao/purchase-orders/sync-binding');
 }

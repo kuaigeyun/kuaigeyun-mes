@@ -69,6 +69,9 @@ class AuditBindingService:
         created = 0
         for node_key in target_keys:
             if node_key in existing_codes:
+                await ApprovalProcessService.upgrade_pristine_process_to_template(
+                    tenant_id, node_key
+                )
                 continue
             await ApprovalProcessService.create_audit_process_for_node(tenant_id, node_key)
             created += 1
@@ -338,9 +341,19 @@ class AuditBindingService:
 
         if is_enabled is not None:
             if is_enabled:
+                await ApprovalProcessService.upgrade_pristine_process_to_template(
+                    tenant_id, node_key
+                )
                 process = await AuditBindingService._resolve_or_create_bound_process(
                     tenant_id, node_key
                 )
+                from core.schemas.approval_flow_schema import (
+                    assert_flow_executable,
+                    normalize_and_validate_flow,
+                )
+
+                graph = normalize_and_validate_flow(process.nodes or {})
+                assert_flow_executable(graph)
                 binding.process_id = process.id
                 await AuditBindingService._activate_process(process)
                 binding.is_enabled = True

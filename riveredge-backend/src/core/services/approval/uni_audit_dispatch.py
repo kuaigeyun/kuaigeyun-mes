@@ -459,13 +459,23 @@ async def execute_uni_audit(
     if handler is None:
         raise ValidationError(f"实体 {entity_type} 尚未接入统一执行入口")
 
-    return await handler(
+    result = await handler(
         act,
         tenant_id=tenant_id,
         entity_id=entity_id,
         user_id=user_id,
         reason=reason,
     )
+    from core.services.integration.document_push_silent import maybe_silent_push_after_audit
+
+    await maybe_silent_push_after_audit(
+        tenant_id=tenant_id,
+        user_id=user_id,
+        entity_type=entry.entity_type,
+        entity_id=entity_id,
+        action=act,
+    )
+    return result
 
 
 async def _dispatch_advanced(

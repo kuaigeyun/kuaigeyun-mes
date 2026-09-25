@@ -30,6 +30,8 @@ from apps.kuaizhizao.schemas.purchase import (
 )
 from apps.kuaizhizao.schemas.partner_material_price_trend import PartnerMaterialPriceTrendResponse
 from apps.kuaizhizao.schemas.purchase_order_sync import (
+    PurchaseOrderPushBindingOut,
+    PurchaseOrderPushBindingUpsert,
     PurchaseOrderSyncBindingOut,
     PurchaseOrderSyncBindingUpsert,
     PurchaseOrderSyncFromSourceOut,
@@ -86,6 +88,35 @@ async def put_purchase_order_sync_binding(
         return await purchase_order_sync_service.upsert_binding(tenant_id, body)
     except ValidationError as e:
         raise HTTPException(status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.get(
+    "/purchase-orders/push-binding",
+    response_model=PurchaseOrderPushBindingOut,
+    summary="采购订单出站目标",
+)
+async def get_purchase_order_push_binding(
+    current_user: CurrentUser = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_permission_codes("kuaizhizao:purchase-order:read")),
+):
+    _ = current_user
+    return await purchase_order_sync_service.get_push_binding(tenant_id)
+
+
+@router.put(
+    "/purchase-orders/push-binding",
+    response_model=PurchaseOrderPushBindingOut,
+    summary="保存采购订单出站目标",
+)
+async def put_purchase_order_push_binding(
+    body: PurchaseOrderPushBindingUpsert,
+    current_user: CurrentUser = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_permission_codes("kuaizhizao:purchase-order:update")),
+):
+    _ = current_user
+    return await purchase_order_sync_service.upsert_push_binding(tenant_id, body)
 
 
 @router.post(

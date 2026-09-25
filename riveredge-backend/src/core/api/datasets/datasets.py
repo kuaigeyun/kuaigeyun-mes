@@ -50,7 +50,7 @@ def model_to_response(dataset, data_source_uuid: UUID) -> DatasetResponse:
         DatasetResponse: 数据集响应对象
     """
     # 兼容历史错误数据：query_type 仅支持 sql/api，其他值（如 visual）归一为 sql
-    query_type = dataset.query_type if dataset.query_type in ('sql', 'api') else 'sql'
+    query_type = dataset.query_type if dataset.query_type in ('sql', 'sql_write', 'api') else 'sql'
     output_type = getattr(dataset, 'output_type', 'list') or 'list'
     category_uuid = None
     category_name = None

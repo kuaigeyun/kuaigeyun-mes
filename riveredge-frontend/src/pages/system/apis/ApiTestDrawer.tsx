@@ -4,7 +4,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { App, Button, Input, Result, Space, Tag, Typography } from 'antd';
+import { Alert, App, Button, Input, Result, Space, Tag, Typography } from 'antd';
 import { ThunderboltOutlined } from '@ant-design/icons';
 import { DetailDrawerTemplate, DRAWER_CONFIG } from '../../../components/layout-templates';
 import { CODE_FONT_FAMILY } from '../../../constants/fonts';
@@ -64,6 +64,7 @@ export const ApiTestDrawer: React.FC<ApiTestDrawerProps> = ({ open, apiUuid, onC
   const [testRequestJson, setTestRequestJson] = useState('{}');
   const [testResult, setTestResult] = useState<APITestResponse | null>(null);
   const [testLoading, setTestLoading] = useState(false);
+  const [apiPath, setApiPath] = useState('');
 
   useEffect(() => {
     if (!open || !apiUuid) {
@@ -75,6 +76,7 @@ export const ApiTestDrawer: React.FC<ApiTestDrawerProps> = ({ open, apiUuid, onC
     setPreviewError(null);
     setPreviewLoading(true);
     setTestRequestJson('{}');
+    setApiPath('');
 
     let cancelled = false;
 
@@ -84,6 +86,7 @@ export const ApiTestDrawer: React.FC<ApiTestDrawerProps> = ({ open, apiUuid, onC
         if (cancelled) {
           return;
         }
+        setApiPath(detail.path || '');
         setTestRequestJson(formatTestRequestPreview(detail));
       } catch (error) {
         if (cancelled) {
@@ -91,6 +94,7 @@ export const ApiTestDrawer: React.FC<ApiTestDrawerProps> = ({ open, apiUuid, onC
         }
         setPreviewError(getApiErrorMessage(error, t('pages.system.apis.getDetailFailed')));
         setTestRequestJson('{}');
+        setApiPath('');
       } finally {
         if (!cancelled) {
           setPreviewLoading(false);
@@ -119,6 +123,7 @@ export const ApiTestDrawer: React.FC<ApiTestDrawerProps> = ({ open, apiUuid, onC
     setPreviewError(null);
     try {
       const detail = await getAPIByUuid(apiUuid);
+      setApiPath(detail.path || '');
       setTestRequestJson(formatTestRequestPreview(detail));
       setTestResult(null);
     } catch (error) {
@@ -146,6 +151,13 @@ export const ApiTestDrawer: React.FC<ApiTestDrawerProps> = ({ open, apiUuid, onC
       setTestResult(result);
       if (result.status_code >= 200 && result.status_code < 300) {
         messageApi.success(t('pages.system.apis.testSuccess'));
+      } else if (
+        result.status_code === 0 &&
+        result.body &&
+        typeof result.body === 'object' &&
+        'error' in result.body
+      ) {
+        messageApi.warning(String((result.body as { error: string }).error));
       } else {
         messageApi.warning(t('pages.system.apis.testCompleteStatus', { code: result.status_code }));
       }
@@ -159,6 +171,7 @@ export const ApiTestDrawer: React.FC<ApiTestDrawerProps> = ({ open, apiUuid, onC
 
   const contentReady = Boolean(apiUuid) && !previewLoading && !previewError;
   const showError = Boolean(previewError) && !previewLoading;
+  const cosmicPathNeedsEdit = contentReady && apiPath.includes('__API_NUMBER__');
 
   if (!open) {
     return null;
@@ -201,13 +214,18 @@ export const ApiTestDrawer: React.FC<ApiTestDrawerProps> = ({ open, apiUuid, onC
       basicTitle={contentReady ? t('pages.system.apis.testRequestLabel') : undefined}
       basic={
         contentReady ? (
-          <TextArea
-            value={testRequestJson}
-            onChange={(event) => setTestRequestJson(event.target.value)}
-            rows={14}
-            placeholder={t('pages.system.apis.testRequestPlaceholder')}
-            style={{ fontFamily: CODE_FONT_FAMILY, fontSize: 12 }}
-          />
+          <Space orientation="vertical" size={12} style={{ width: '100%' }}>
+            {cosmicPathNeedsEdit ? (
+              <Alert type="warning" showIcon title={t('pages.system.apis.testCosmicPathPlaceholderHint')} />
+            ) : null}
+            <TextArea
+              value={testRequestJson}
+              onChange={(event) => setTestRequestJson(event.target.value)}
+              rows={14}
+              placeholder={t('pages.system.apis.testRequestPlaceholder')}
+              style={{ fontFamily: CODE_FONT_FAMILY, fontSize: 12 }}
+            />
+          </Space>
         ) : showError ? null : (
           <div style={{ minHeight: 120 }} />
         )

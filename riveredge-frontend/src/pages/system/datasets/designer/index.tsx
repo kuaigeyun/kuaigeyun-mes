@@ -10,7 +10,8 @@
 import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { App, Button, Card, Tabs, Input, Table, Badge, Space, Spin, Form } from 'antd';
+import { App, Button, Card, Tabs, Input, Table, Badge, Space, Spin, Form, Typography } from 'antd';
+import { ThemedSegmented } from '../../../../components/themed-segmented/ThemedSegmented';
 import { SaveOutlined, CloseOutlined, PlayCircleOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { CanvasPageTemplate } from '../../../../components/layout-templates/hmi';
 import DatasetQueryBuilder from '../../../../components/dataset-query-builder/DatasetQueryBuilder';
@@ -37,6 +38,7 @@ const DatasetDesignerPage: React.FC = () => {
   const [executing, setExecuting] = useState(false);
   const [dataset, setDataset] = useState<Dataset | null>(null);
   const [editorTab, setEditorTab] = useState<'sql' | 'visual'>('sql');
+  const [statementKind, setStatementKind] = useState<'read' | 'write'>('read');
   const [sqlText, setSqlText] = useState<string>('');
   const [parametersList, setParametersList] = useState<Array<{ key: string; value: string }>>([{ key: '', value: '' }]);
   const [queryConfigForVisual, setQueryConfigForVisual] = useState<Record<string, any>>({});
@@ -72,6 +74,7 @@ const DatasetDesignerPage: React.FC = () => {
       try {
         const detail = await getDatasetByUuid(uuid);
         setDataset(detail);
+        setStatementKind(detail.query_type === 'sql_write' ? 'write' : 'read');
         const cfg = detail.query_config || {};
         setSqlText(cfg.sql || '');
         const params = cfg.parameters || {};
@@ -104,7 +107,7 @@ const DatasetDesignerPage: React.FC = () => {
     const queryConfig = editorTab === 'visual'
       ? queryConfigForVisual
       : buildQueryConfigFromForm();
-    const saveQueryType = 'sql';
+    const saveQueryType = dataset?.query_type === 'api' ? 'api' : statementKind === 'write' ? 'sql_write' : 'sql';
     try {
       setSaving(true);
       await updateDataset(uuid, {
@@ -176,7 +179,9 @@ const DatasetDesignerPage: React.FC = () => {
         {t('common.save')}
       </Button>
       <Button icon={<PlayCircleOutlined />} loading={executing} onClick={handleExecute}>
-        {t('pages.system.datasets.executeQuery')}
+        {statementKind === 'write'
+          ? t('pages.system.datasets.executeWrite')
+          : t('pages.system.datasets.executeQuery')}
       </Button>
       <Button icon={<CloseOutlined />} onClick={handleBack}>
         {t('common.back')}
@@ -188,6 +193,25 @@ const DatasetDesignerPage: React.FC = () => {
   );
 
   const queryConfigPanel = (
+    <>
+    {dataset.query_type !== 'api' ? (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+        <Typography.Text type="secondary">{t('pages.system.datasets.statementKind')}</Typography.Text>
+        <ThemedSegmented
+          style={{ width: 220 }}
+          value={statementKind}
+          onChange={(value) => {
+            const kind = value === 'write' ? 'write' : 'read';
+            setStatementKind(kind);
+            if (kind === 'write') setEditorTab('sql');
+          }}
+          options={[
+            { label: t('pages.system.datasets.statementRead'), value: 'read' },
+            { label: t('pages.system.datasets.statementWrite'), value: 'write' },
+          ]}
+        />
+      </div>
+    ) : null}
     <Tabs
       activeKey={editorTab}
       size="small"
@@ -214,7 +238,9 @@ const DatasetDesignerPage: React.FC = () => {
                   color: 'var(--ant-color-info)',
                 }}
               >
-                {t('pages.system.datasets.tenantIsolationTip')}
+                {statementKind === 'write'
+                  ? t('pages.system.datasets.writeSqlTip')
+                  : t('pages.system.datasets.tenantIsolationTip')}
               </div>
               <Form layout="vertical" size="small" style={{ marginBottom: 0 }}>
                 <Form.Item label={t('pages.system.datasets.sqlLabel')} style={{ marginBottom: 8 }}>
@@ -284,6 +310,7 @@ const DatasetDesignerPage: React.FC = () => {
         },
       ]}
     />
+    </>
   );
 
   const panelShellStyle: React.CSSProperties = {
@@ -388,6 +415,10 @@ const DatasetDesignerPage: React.FC = () => {
               size="small"
             />
           )
+        ) : executeResult.success && statementKind === 'write' ? (
+          <div style={{ textAlign: 'center', padding: '24px 16px' }}>
+            {t('pages.system.datasets.writeAffected', { count: executeResult.affected ?? executeResult.total ?? 0 })}
+          </div>
         ) : executeResult.success && (!executeResult.data || executeResult.data.length === 0) ? (
           <div style={{ textAlign: 'center', padding: '24px 16px', color: 'var(--ant-color-text-secondary)' }}>
             {t('pages.system.datasets.emptyResult')}

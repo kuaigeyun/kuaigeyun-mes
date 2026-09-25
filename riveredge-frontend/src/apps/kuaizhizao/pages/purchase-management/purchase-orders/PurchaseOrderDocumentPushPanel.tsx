@@ -5,10 +5,15 @@ import React, { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ApplicationConnection } from '../../../../../services/applicationConnection';
 import type { API } from '../../../../../services/apiManagement';
+import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
+import { renderDocumentStatusTag } from '../../../../../utils/documentLifecycleStatusTag';
 import { DocumentPushBatchPanel } from '../../../components/DocumentPushBatchPanel';
+import { getPurchaseOrderLifecycle } from '../../../utils/purchaseOrderLifecycle';
 import {
   getPurchaseOrder,
+  getPurchaseOrderPushBinding,
   listPurchaseOrders,
+  savePurchaseOrderPushBinding,
   type PurchaseOrder,
 } from '../../../services/purchase';
 
@@ -115,6 +120,7 @@ export const PurchaseOrderDocumentPushPanel: React.FC<PurchaseOrderDocumentPushP
   embedded = false,
 }) => {
   const { t } = useTranslation();
+  const purchaseOrderAuditEnabled = useAuditRequired('purchase_order', false);
 
   const columns = useMemo(
     () => [
@@ -144,10 +150,13 @@ export const PurchaseOrderDocumentPushPanel: React.FC<PurchaseOrderDocumentPushP
         title: t('common.status'),
         dataIndex: 'status',
         width: 100,
-        ellipsis: true,
+        render: (_value: string, record: PurchaseOrderPushCandidate) => {
+          const lifecycle = getPurchaseOrderLifecycle(record, purchaseOrderAuditEnabled, t);
+          return renderDocumentStatusTag(lifecycle.stageName, record.status);
+        },
       },
     ],
-    [t],
+    [purchaseOrderAuditEnabled, t],
   );
 
   const loadCandidates = useCallback(
@@ -197,6 +206,13 @@ export const PurchaseOrderDocumentPushPanel: React.FC<PurchaseOrderDocumentPushP
     [],
   );
 
+  const loadBinding = useCallback(() => getPurchaseOrderPushBinding(), []);
+  const saveBinding = useCallback(
+    (payload: Parameters<typeof savePurchaseOrderPushBinding>[0]) =>
+      savePurchaseOrderPushBinding(payload),
+    [],
+  );
+
   if (!open) return null;
 
   return (
@@ -221,6 +237,8 @@ export const PurchaseOrderDocumentPushPanel: React.FC<PurchaseOrderDocumentPushP
       matchSaveApi={isKingdeePurPurchaseOrderSaveApi}
       preferSaveApi={preferPurApiUuid}
       saveApiSearchHints={PURCHASE_SAVE_API_HINTS}
+      loadBinding={loadBinding}
+      saveBinding={saveBinding}
       showScheduleControls={false}
       successCountKey="app.kuaizhizao.documentPush.batch.success"
       partialCountKey="app.kuaizhizao.documentPush.batch.partial"

@@ -2,6 +2,14 @@ import type { TFunction } from 'i18next';
 
 export type SyncSourceType = 'api' | 'dataset';
 
+export interface SyncSourceItem {
+  kind: SyncSourceType;
+  api_uuid?: string;
+  dataset_uuid?: string;
+  field_mapping: Record<string, string>;
+  label?: string;
+}
+
 export interface SyncTargetField {
   value: string;
   /** i18n key；与 label 二选一，优先 label */
@@ -28,6 +36,7 @@ export function syncCustomFieldCodeFromTarget(value: string): string {
 }
 
 export interface SyncBinding {
+  sources?: SyncSourceItem[];
   source_type?: SyncSourceType | null;
   api_uuid?: string | null;
   dataset_uuid?: string | null;
@@ -41,6 +50,7 @@ export interface SyncBinding {
 }
 
 export interface SyncFromSourcePayload {
+  sources?: SyncSourceItem[];
   source_type?: SyncSourceType;
   api_uuid?: string;
   dataset_uuid?: string;

@@ -178,7 +178,7 @@ export const DrawingWatermarkSettingsModal: React.FC<Props> = ({ open, onClose }
       name={name}
       label={label}
       fieldProps={{
-        rows: 3,
+        rows: 8,
         onChange: () => {
           setFormSnapshot((prev) => ({ ...prev, ...formRef.current?.getFieldsValue() }));
         },

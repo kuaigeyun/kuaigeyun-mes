@@ -8,9 +8,17 @@ export interface DocumentPushProfile {
   target_profile: string;
 }
 
+export interface DocumentPushTargetPayload {
+  connection_code?: string;
+  save_api_uuid?: string;
+  target_profile: string;
+}
+
 export interface DocumentPushPayload {
   source_type: string;
   source_id: number;
+  /** 多连接器目标（每条独立连接器与 Save 接口） */
+  targets?: DocumentPushTargetPayload[];
   /** 单一目标；传 "*" 按业务配置 document_push_targets 多目标 */
   target_profile?: string;
   /** 多目标列表（优先）；一单可同时推金蝶+OA */

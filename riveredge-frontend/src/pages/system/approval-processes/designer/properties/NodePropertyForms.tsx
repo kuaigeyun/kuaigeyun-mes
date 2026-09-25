@@ -34,6 +34,7 @@ const APPROVER_OPTIONS = (t: (k: string) => string) => [
   { label: t('pages.approval.designer.approverTypeRole'), value: 'role' },
   { label: t('pages.approval.designer.approverTypeDept'), value: 'department' },
   { label: t('pages.approval.designer.approverTypeManager'), value: 'manager' },
+  { label: t('pages.approval.designer.approverTypeOptional'), value: 'initiator_select' },
 ];
 
 interface ApprovalNodeFormProps {
@@ -151,6 +152,18 @@ export const ApprovalNodeForm: React.FC<ApprovalNodeFormProps> = () => {
       </ProFormDependency>
       <ProFormSwitch name="allowTransfer" label={t('pages.approval.designer.allowTransfer')} />
       <ProFormSwitch name="allowAddSign" label={t('pages.approval.designer.allowAddSign')} />
+      <ProFormSelect
+        name="emptyApproverPolicy"
+        label={t('pages.approval.designer.emptyApproverPolicy')}
+        options={[
+          { label: t('pages.approval.designer.emptyApproverPolicyBlock'), value: 'block' },
+          { label: t('pages.approval.designer.emptyApproverPolicyAutoPass'), value: 'auto_pass' },
+          { label: t('pages.approval.designer.emptyApproverPolicyEscalate'), value: 'escalate_admin' },
+          { label: t('pages.approval.designer.emptyApproverPolicyFallback'), value: 'fallback_user' },
+        ]}
+        initialValue="block"
+        tooltip={t('pages.approval.designer.emptyApproverPolicyTip')}
+      />
       <ProFormDigit
         name="timeoutHours"
         label={t('pages.approval.designer.timeoutHours')}

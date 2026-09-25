@@ -19,6 +19,7 @@ class CustomerSyncBinding(BaseModel):
     api_uuid = fields.CharField(max_length=36, null=True, description="数据接口 UUID")
     dataset_uuid = fields.CharField(max_length=36, null=True, description="数据集 UUID")
     field_mapping = fields.JSONField(null=True, description="来源列 -> 目标字段")
+    sources = fields.JSONField(null=True, description="多来源：kind + 接口/数据集 + field_mapping")
     match_key_field = fields.CharField(max_length=64, default="code", description="匹配键目标字段")
     sync_mode = fields.CharField(
         max_length=32,
@@ -45,6 +46,7 @@ class SupplierSyncBinding(BaseModel):
     api_uuid = fields.CharField(max_length=36, null=True, description="数据接口 UUID")
     dataset_uuid = fields.CharField(max_length=36, null=True, description="数据集 UUID")
     field_mapping = fields.JSONField(null=True, description="来源列 -> 目标字段")
+    sources = fields.JSONField(null=True, description="多来源：kind + 接口/数据集 + field_mapping")
     match_key_field = fields.CharField(max_length=64, default="code", description="匹配键目标字段")
     sync_mode = fields.CharField(
         max_length=32,
@@ -71,6 +73,7 @@ class WarehouseSyncBinding(BaseModel):
     api_uuid = fields.CharField(max_length=36, null=True, description="数据接口 UUID")
     dataset_uuid = fields.CharField(max_length=36, null=True, description="数据集 UUID")
     field_mapping = fields.JSONField(null=True, description="来源列 -> 目标字段")
+    sources = fields.JSONField(null=True, description="多来源：kind + 接口/数据集 + field_mapping")
     match_key_field = fields.CharField(max_length=64, default="code", description="匹配键目标字段")
     sync_mode = fields.CharField(
         max_length=32,
@@ -97,6 +100,7 @@ class MaterialSyncBinding(BaseModel):
     api_uuid = fields.CharField(max_length=36, null=True, description="数据接口 UUID")
     dataset_uuid = fields.CharField(max_length=36, null=True, description="数据集 UUID")
     field_mapping = fields.JSONField(null=True, description="来源列 -> 目标字段")
+    sources = fields.JSONField(null=True, description="多来源：kind + 接口/数据集 + field_mapping")
     match_key_field = fields.CharField(max_length=64, default="main_code", description="匹配键目标字段")
     sync_mode = fields.CharField(
         max_length=32,
@@ -123,6 +127,7 @@ class MaterialUnitSyncBinding(BaseModel):
     api_uuid = fields.CharField(max_length=36, null=True, description="数据接口 UUID")
     dataset_uuid = fields.CharField(max_length=36, null=True, description="数据集 UUID")
     field_mapping = fields.JSONField(null=True, description="来源列 -> 目标字段")
+    sources = fields.JSONField(null=True, description="多来源：kind + 接口/数据集 + field_mapping")
     match_key_field = fields.CharField(max_length=64, default="code", description="匹配键目标字段")
     sync_mode = fields.CharField(
         max_length=32,
@@ -149,6 +154,7 @@ class MaterialGroupSyncBinding(BaseModel):
     api_uuid = fields.CharField(max_length=36, null=True, description="数据接口 UUID")
     dataset_uuid = fields.CharField(max_length=36, null=True, description="数据集 UUID")
     field_mapping = fields.JSONField(null=True, description="来源列 -> 目标字段")
+    sources = fields.JSONField(null=True, description="多来源：kind + 接口/数据集 + field_mapping")
     match_key_field = fields.CharField(max_length=64, default="code", description="匹配键目标字段")
     sync_mode = fields.CharField(
         max_length=32,

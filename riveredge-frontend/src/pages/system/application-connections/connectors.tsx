@@ -33,6 +33,69 @@ export type AppConnectorCategory =
   | 'ai'
   | 'other';
 
+/** ERP Tab 内厂商分组（非顶层 Tab） */
+export type ErpVendorGroup = 'kingdee' | 'yonyou' | 'digiwin' | 'sap' | 'other';
+
+/** ERP 产品形态：云产品 / 传统产品 */
+export type ErpDeploymentKind = 'cloud' | 'traditional';
+
+export const ERP_VENDOR_GROUP_ORDER: ErpVendorGroup[] = [
+  'kingdee',
+  'yonyou',
+  'digiwin',
+  'sap',
+  'other',
+];
+
+export const ERP_DEPLOYMENT_KIND_ORDER: ErpDeploymentKind[] = ['cloud', 'traditional'];
+
+/** 云产品（SaaS / 云平台 / 云版） */
+const ERP_CLOUD_TYPES = new Set([
+  // 金蝶
+  'kingdee_cosmic',
+  'kingdee_xinghan',
+  'kingdee_ai_suite',
+  'kingdee_galaxy',
+  'kingdee_xingchen',
+  'kingdee_eas_cloud',
+  'kingdee_kis_cloud',
+  'kingdee_jingdouyun',
+  // 用友
+  'yonyou_yonbip',
+  'yonyou_yonsuite',
+  'yonyou_u8_cloud',
+  'yonyou_u9_cloud',
+  'yonyou_nc',
+  // 鼎捷
+  'digiwin_t100',
+  'digiwin_e10',
+  // SAP
+  'sap_s4hana',
+  'sap_bydesign',
+  // 其他
+  'oracle_netsuite',
+  'oracle_fusion',
+  'dynamics_365',
+  'odoo',
+  'inspur_gs',
+  'inspur_ps',
+  'chanjet_tplus',
+  'erpnext',
+]);
+
+/** 金蝶苍穹 OpenAPI 族（星瀚 / AI套件 / 苍穹底座共用鉴权） */
+export const KINGDEE_COSMIC_OPENAPI_TYPES = [
+  'kingdee_cosmic',
+  'kingdee_xinghan',
+  'kingdee_ai_suite',
+] as const;
+
+export type KingdeeCosmicOpenApiType = (typeof KINGDEE_COSMIC_OPENAPI_TYPES)[number];
+
+export function isKingdeeCosmicOpenApiType(type: string): type is KingdeeCosmicOpenApiType {
+  return (KINGDEE_COSMIC_OPENAPI_TYPES as readonly string[]).includes(type);
+}
+
 /** OpenAI 兼容 LLM 应用连接类型（可多条不同 model；选用在 KU-AI → 模型设置） */
 export const LLM_CONNECTION_TYPES = [
   'deepseek',
@@ -91,6 +154,26 @@ export interface AppConnectorDefinition {
   defaultConfig?: Record<string, any>;
 }
 
+export function resolveErpVendorGroup(
+  connector: Pick<AppConnectorDefinition, 'id' | 'type' | 'category'>,
+): ErpVendorGroup | null {
+  if (connector.category !== 'erp') return null;
+  const key = String(connector.type || connector.id || '').trim().toLowerCase();
+  if (key.startsWith('kingdee_')) return 'kingdee';
+  if (key.startsWith('yonyou_')) return 'yonyou';
+  if (key.startsWith('digiwin_')) return 'digiwin';
+  if (key.startsWith('sap_')) return 'sap';
+  return 'other';
+}
+
+export function resolveErpDeploymentKind(
+  connector: Pick<AppConnectorDefinition, 'id' | 'type' | 'category'>,
+): ErpDeploymentKind | null {
+  if (connector.category !== 'erp') return null;
+  const key = String(connector.type || connector.id || '').trim().toLowerCase();
+  return ERP_CLOUD_TYPES.has(key) ? 'cloud' : 'traditional';
+}
+
 export const APP_CONNECTOR_DEFINITIONS: AppConnectorDefinition[] = [
   // 协作
   {
@@ -120,148 +203,232 @@ export const APP_CONNECTOR_DEFINITIONS: AppConnectorDefinition[] = [
     icon: <MessageOutlined />,
     defaultConfig: { corp_id: '', corp_secret: '', agent_id: '', token: '', encoding_aes_key: '' },
   },
-  // ERP（精确到具体产品）
+  // ERP（Tab 内按厂商 → 云产品/传统产品；各厂商内大型在前）
+  // 金蝶云：苍穹 → 星瀚 → EAS Cloud → AI套件 → 星空 → 星辰 → KIS云 → 精斗云
+  {
+    id: 'kingdee_cosmic',
+    name: '金蝶AI苍穹 OpenAPI',
+    type: 'kingdee_cosmic',
+    category: 'erp',
+    description: '企业级 PaaS 技术底座',
+    icon: <CloudOutlined />,
+    defaultConfig: {
+      base_url: '',
+      account_id: '',
+      client_id: '',
+      client_secret: '',
+      x_acgw_identity: '',
+      username: '',
+      language: 'zh_CN',
+    },
+  },
+  {
+    id: 'kingdee_xinghan',
+    name: '金蝶AI星瀚',
+    type: 'kingdee_xinghan',
+    category: 'erp',
+    description: '面向央国企及大型集团',
+    icon: <CloudOutlined />,
+    defaultConfig: {
+      base_url: '',
+      account_id: '',
+      client_id: '',
+      client_secret: '',
+      x_acgw_identity: '',
+      username: '',
+      language: 'zh_CN',
+    },
+  },
+  {
+    id: 'kingdee_eas_cloud',
+    name: '金蝶EAS Cloud',
+    type: 'kingdee_eas_cloud',
+    category: 'erp',
+    description: '面向集团企业',
+    icon: <CloudOutlined />,
+    defaultConfig: { base_url: '', app_id: '', app_secret: '', username: '', password: '' },
+  },
+  {
+    id: 'kingdee_ai_suite',
+    name: '金蝶AI套件',
+    type: 'kingdee_ai_suite',
+    category: 'erp',
+    description: '面向大中型企业',
+    icon: <CloudOutlined />,
+    defaultConfig: {
+      base_url: '',
+      account_id: '',
+      client_id: '',
+      client_secret: '',
+      x_acgw_identity: '',
+      username: '',
+      language: 'zh_CN',
+    },
+  },
   {
     id: 'kingdee_galaxy',
-    name: '金蝶云星空',
+    name: '金蝶AI星空',
     type: 'kingdee_galaxy',
     category: 'erp',
-    description: '金蝶云星空 WebAPI',
+    description: '面向中型企业',
     icon: <CloudOutlined />,
     defaultConfig: { base_url: '', app_id: '', app_secret: '', acct_id: '', username: '', lcid: '2052' },
   },
   {
     id: 'kingdee_xingchen',
-    name: '金蝶云星辰',
+    name: '金蝶AI星辰',
     type: 'kingdee_xingchen',
     category: 'erp',
-    description: '金蝶云星辰开放接口',
+    description: '面向小微企业',
     icon: <CloudOutlined />,
     defaultConfig: { base_url: '', app_id: '', app_secret: '', acct_id: '', lcid: '2052' },
   },
   {
     id: 'kingdee_kis_cloud',
-    name: '金蝶 KIS 云',
+    name: '金蝶KIS云',
     type: 'kingdee_kis_cloud',
     category: 'erp',
-    description: '金蝶 KIS 云开放接口',
+    description: '面向小微企业',
     icon: <CloudOutlined />,
     defaultConfig: { base_url: '', app_id: '', app_secret: '', acct_id: '', lcid: '2052' },
   },
   {
+    id: 'kingdee_jingdouyun',
+    name: '金蝶精斗云',
+    type: 'kingdee_jingdouyun',
+    category: 'erp',
+    description: '面向微型企业',
+    icon: <CloudOutlined />,
+    defaultConfig: { base_url: '', app_id: '', app_secret: '', acct_id: '' },
+  },
+  // 金蝶传统：EAS → K/3 WISE → KIS
+  {
+    id: 'kingdee_eas',
+    name: '金蝶EAS',
+    type: 'kingdee_eas',
+    category: 'erp',
+    description: '面向大型集团',
+    icon: <DatabaseOutlined />,
+    defaultConfig: { base_url: '', username: '', password: '', org_number: '' },
+  },
+  {
+    id: 'kingdee_k3_wise',
+    name: '金蝶K/3 WISE',
+    type: 'kingdee_k3_wise',
+    category: 'erp',
+    description: '面向中型企业',
+    icon: <DatabaseOutlined />,
+    defaultConfig: { base_url: '', username: '', password: '', database: '' },
+  },
+  {
     id: 'kingdee_kis',
-    name: '金蝶 KIS',
+    name: '金蝶KIS',
     type: 'kingdee_kis',
     category: 'erp',
-    description: '金蝶 KIS 专业版 / 商贸版接口',
-    icon: <CloudOutlined />,
+    description: '面向小微企业',
+    icon: <DatabaseOutlined />,
     defaultConfig: { base_url: '', instance_id: '', app_secret: '' },
   },
+  // 用友云：BIP → NC Cloud → U9 cloud → U8 cloud → YonSuite
   {
     id: 'yonyou_yonbip',
-    name: '用友 YonBIP',
+    name: '用友BIP',
     type: 'yonyou_yonbip',
     category: 'erp',
-    description: '用友 YonBIP 开放平台',
-    icon: <CloudOutlined />,
-    defaultConfig: { base_url: '', app_key: '', app_secret: '', corp_id: '', user_id: '' },
-  },
-  {
-    id: 'yonyou_u8',
-    name: '用友 U8',
-    type: 'yonyou_u8',
-    category: 'erp',
-    description: '用友 U8 OpenAPI',
-    icon: <CloudOutlined />,
-    defaultConfig: { base_url: '', app_key: '', app_secret: '', corp_id: '', user_id: '' },
-  },
-  {
-    id: 'yonyou_u9',
-    name: '用友 U9',
-    type: 'yonyou_u9',
-    category: 'erp',
-    description: '用友 U9 开放接口',
+    description: '企业数智化商业创新平台',
     icon: <CloudOutlined />,
     defaultConfig: { base_url: '', app_key: '', app_secret: '', corp_id: '', user_id: '' },
   },
   {
     id: 'yonyou_nc',
-    name: '用友 NC Cloud',
+    name: '用友NC Cloud',
     type: 'yonyou_nc',
     category: 'erp',
-    description: '用友 NC Cloud 开放平台',
+    description: '面向大型企业',
     icon: <CloudOutlined />,
     defaultConfig: { base_url: '', app_key: '', app_secret: '', corp_id: '', user_id: '' },
   },
   {
-    id: 'sap_s4hana',
-    name: 'SAP S/4HANA',
-    type: 'sap_s4hana',
+    id: 'yonyou_u9_cloud',
+    name: '用友U9 cloud',
+    type: 'yonyou_u9_cloud',
     category: 'erp',
-    description: 'SAP S/4HANA Cloud OData / API',
+    description: '面向中大型制造企业',
+    icon: <CloudOutlined />,
+    defaultConfig: { base_url: '', app_key: '', app_secret: '', corp_id: '', user_id: '' },
+  },
+  {
+    id: 'yonyou_u8_cloud',
+    name: '用友U8 cloud',
+    type: 'yonyou_u8_cloud',
+    category: 'erp',
+    description: '面向成长型集团',
+    icon: <CloudOutlined />,
+    defaultConfig: { base_url: '', app_key: '', app_secret: '', corp_id: '', user_id: '' },
+  },
+  {
+    id: 'yonyou_yonsuite',
+    name: '用友YonSuite',
+    type: 'yonyou_yonsuite',
+    category: 'erp',
+    description: '面向成长型创新企业',
+    icon: <CloudOutlined />,
+    defaultConfig: { base_url: '', app_key: '', app_secret: '', corp_id: '', user_id: '' },
+  },
+  // 用友传统：NC → U9 → U8+
+  {
+    id: 'yonyou_nc5',
+    name: '用友NC',
+    type: 'yonyou_nc5',
+    category: 'erp',
+    description: '面向大型集团',
     icon: <DatabaseOutlined />,
-    defaultConfig: { base_url: '', client: '', username: '', password: '', language: 'ZH' },
+    defaultConfig: { base_url: '', app_key: '', app_secret: '', corp_id: '', user_id: '' },
   },
   {
-    id: 'sap_b1',
-    name: 'SAP Business One',
-    type: 'sap_b1',
+    id: 'yonyou_u9',
+    name: '用友U9',
+    type: 'yonyou_u9',
     category: 'erp',
-    description: 'SAP Business One Service Layer',
+    description: '面向制造企业',
     icon: <DatabaseOutlined />,
-    defaultConfig: { base_url: '', company_db: '', username: '', password: '', language: 'ZH' },
+    defaultConfig: { base_url: '', app_key: '', app_secret: '', corp_id: '', user_id: '' },
   },
   {
-    id: 'oracle_netsuite',
-    name: 'Oracle NetSuite',
-    type: 'oracle_netsuite',
+    id: 'yonyou_u8',
+    name: '用友U8+',
+    type: 'yonyou_u8',
     category: 'erp',
-    description: 'Oracle NetSuite SuiteTalk / REST',
-    icon: <CloudOutlined />,
-    defaultConfig: { base_url: '', account: '', consumer_key: '', consumer_secret: '', token_id: '', token_secret: '' },
+    description: '面向成长型企业',
+    icon: <DatabaseOutlined />,
+    defaultConfig: { base_url: '', app_key: '', app_secret: '', corp_id: '', user_id: '' },
   },
-  {
-    id: 'odoo',
-    name: 'Odoo',
-    type: 'odoo',
-    category: 'erp',
-    description: 'Odoo External API / XML-RPC',
-    icon: <CloudOutlined />,
-    defaultConfig: { base_url: '', db: '', username: '', password: '' },
-  },
-  {
-    id: 'inspur_gs',
-    name: '浪潮 GS Cloud',
-    type: 'inspur_gs',
-    category: 'erp',
-    description: '浪潮 GS Cloud 开放接口',
-    icon: <CloudOutlined />,
-    defaultConfig: { base_url: '', app_key: '', app_secret: '' },
-  },
-  {
-    id: 'inspur_ps',
-    name: '浪潮 PS Cloud',
-    type: 'inspur_ps',
-    category: 'erp',
-    description: '浪潮 PS Cloud 开放接口',
-    icon: <CloudOutlined />,
-    defaultConfig: { base_url: '', app_key: '', app_secret: '' },
-  },
+  // 鼎捷云
   {
     id: 'digiwin_t100',
-    name: '鼎捷 T100',
+    name: '鼎捷T100 AIGP',
     type: 'digiwin_t100',
     category: 'erp',
-    description: '鼎捷 T100 REST API',
+    description: '面向集团企业',
     icon: <DatabaseOutlined />,
     defaultConfig: { base_url: '', username: '', password: '', company_id: '' },
   },
+  {
+    id: 'digiwin_e10',
+    name: '鼎捷E10 AIGP',
+    type: 'digiwin_e10',
+    category: 'erp',
+    description: '面向中大型成长企业',
+    icon: <DatabaseOutlined />,
+    defaultConfig: { base_url: '', username: '', password: '', tenant_id: '' },
+  },
+  // 鼎捷传统
   {
     id: 'digiwin_yifei',
     name: '鼎捷易飞',
     type: 'digiwin_yifei',
     category: 'erp',
-    description: '鼎捷易飞 REST API',
+    description: '面向中小制造企业',
     icon: <DatabaseOutlined />,
     defaultConfig: { base_url: '', username: '', password: '', company_id: '' },
   },
@@ -270,7 +437,7 @@ export const APP_CONNECTOR_DEFINITIONS: AppConnectorDefinition[] = [
     name: '鼎捷易助',
     type: 'digiwin_yizhu',
     category: 'erp',
-    description: '鼎捷易助 REST API',
+    description: '面向小微企业',
     icon: <DatabaseOutlined />,
     defaultConfig: { base_url: '', username: '', password: '', company_id: '' },
   },
@@ -279,61 +446,164 @@ export const APP_CONNECTOR_DEFINITIONS: AppConnectorDefinition[] = [
     name: '鼎捷易拓',
     type: 'digiwin_yituo',
     category: 'erp',
-    description: '鼎捷易拓 REST API',
+    description: '面向中小企业',
     icon: <DatabaseOutlined />,
     defaultConfig: { base_url: '', username: '', password: '', company_id: '' },
   },
+  // SAP 云
   {
-    id: 'digiwin_e10',
-    name: '鼎捷 E10',
-    type: 'digiwin_e10',
+    id: 'sap_s4hana',
+    name: 'SAP S/4HANA Cloud',
+    type: 'sap_s4hana',
     category: 'erp',
-    description: '鼎捷 E10 ERP 开放接口',
+    description: '面向大中型企业的云 ERP',
     icon: <DatabaseOutlined />,
-    defaultConfig: { base_url: '', username: '', password: '', tenant_id: '' },
+    defaultConfig: { base_url: '', client: '', username: '', password: '', language: 'ZH' },
   },
   {
-    id: 'chanjet_tplus',
-    name: '畅捷通 T+',
-    type: 'chanjet_tplus',
+    id: 'sap_bydesign',
+    name: 'SAP Business ByDesign',
+    type: 'sap_bydesign',
     category: 'erp',
-    description: '畅捷通 T+ OpenAPI',
+    description: '面向成长型企业的云 ERP',
+    icon: <DatabaseOutlined />,
+    defaultConfig: { base_url: '', username: '', password: '', language: 'ZH' },
+  },
+  // SAP 传统 / 本地
+  {
+    id: 'sap_s4hana_op',
+    name: 'SAP S/4HANA',
+    type: 'sap_s4hana_op',
+    category: 'erp',
+    description: '面向大中型企业的本地 ERP',
+    icon: <DatabaseOutlined />,
+    defaultConfig: { base_url: '', client: '', username: '', password: '', language: 'ZH' },
+  },
+  {
+    id: 'sap_ecc',
+    name: 'SAP ECC',
+    type: 'sap_ecc',
+    category: 'erp',
+    description: '面向大中型企业的传统 ERP',
+    icon: <DatabaseOutlined />,
+    defaultConfig: { base_url: '', client: '', username: '', password: '', language: 'ZH' },
+  },
+  {
+    id: 'sap_b1',
+    name: 'SAP Business One',
+    type: 'sap_b1',
+    category: 'erp',
+    description: '面向中小企业',
+    icon: <DatabaseOutlined />,
+    defaultConfig: { base_url: '', company_db: '', username: '', password: '', language: 'ZH' },
+  },
+  // 其他云
+  {
+    id: 'oracle_fusion',
+    name: 'Oracle Fusion Cloud ERP',
+    type: 'oracle_fusion',
+    category: 'erp',
+    description: '面向大中型企业的云 ERP',
+    icon: <CloudOutlined />,
+    defaultConfig: { base_url: '', username: '', password: '' },
+  },
+  {
+    id: 'oracle_netsuite',
+    name: 'Oracle NetSuite',
+    type: 'oracle_netsuite',
+    category: 'erp',
+    description: '面向成长型企业的云 ERP',
+    icon: <CloudOutlined />,
+    defaultConfig: { base_url: '', account: '', consumer_key: '', consumer_secret: '', token_id: '', token_secret: '' },
+  },
+  {
+    id: 'dynamics_365',
+    name: 'Microsoft Dynamics 365',
+    type: 'dynamics_365',
+    category: 'erp',
+    description: '面向大中型企业的云 ERP',
+    icon: <CloudOutlined />,
+    defaultConfig: { base_url: '', tenant_id: '', client_id: '', client_secret: '' },
+  },
+  {
+    id: 'inspur_gs',
+    name: '浪潮海岳 GS Cloud',
+    type: 'inspur_gs',
+    category: 'erp',
+    description: '面向大型企业的云 ERP',
     icon: <CloudOutlined />,
     defaultConfig: { base_url: '', app_key: '', app_secret: '' },
   },
   {
-    id: 'grasp_huihuang',
-    name: '管家婆辉煌',
-    type: 'grasp_huihuang',
+    id: 'inspur_ps',
+    name: '浪潮海岳 PS Cloud',
+    type: 'inspur_ps',
     category: 'erp',
-    description: '管家婆辉煌系列开放接口',
-    icon: <DatabaseOutlined />,
+    description: '面向成长型企业的云 ERP',
+    icon: <CloudOutlined />,
     defaultConfig: { base_url: '', app_key: '', app_secret: '' },
   },
   {
-    id: 'super_erp',
-    name: '速达 ERP',
-    type: 'super_erp',
+    id: 'chanjet_tplus',
+    name: '畅捷通T+',
+    type: 'chanjet_tplus',
     category: 'erp',
-    description: '速达 ERP 接口服务',
-    icon: <DatabaseOutlined />,
-    defaultConfig: { base_url: '', username: '', password: '' },
+    description: '面向小微企业的云产品',
+    icon: <CloudOutlined />,
+    defaultConfig: { base_url: '', app_key: '', app_secret: '' },
+  },
+  {
+    id: 'odoo',
+    name: 'Odoo',
+    type: 'odoo',
+    category: 'erp',
+    description: '开源企业管理套件',
+    icon: <CloudOutlined />,
+    defaultConfig: { base_url: '', db: '', username: '', password: '' },
   },
   {
     id: 'erpnext',
     name: 'ERPNext',
     type: 'erpnext',
     category: 'erp',
-    description: 'ERPNext REST API',
+    description: '开源企业管理套件',
     icon: <CloudOutlined />,
     defaultConfig: { base_url: '', api_key: '', api_secret: '' },
   },
+  // 其他传统
+  {
+    id: 'oracle_ebs',
+    name: 'Oracle E-Business Suite',
+    type: 'oracle_ebs',
+    category: 'erp',
+    description: '面向大中型企业的传统 ERP',
+    icon: <DatabaseOutlined />,
+    defaultConfig: { base_url: '', username: '', password: '', responsibility: '' },
+  },
+  {
+    id: 'grasp_huihuang',
+    name: '管家婆辉煌',
+    type: 'grasp_huihuang',
+    category: 'erp',
+    description: '面向小微企业的传统 ERP',
+    icon: <DatabaseOutlined />,
+    defaultConfig: { base_url: '', app_key: '', app_secret: '' },
+  },
+  {
+    id: 'super_erp',
+    name: '速达ERP',
+    type: 'super_erp',
+    category: 'erp',
+    description: '面向中小企业的传统 ERP',
+    icon: <DatabaseOutlined />,
+    defaultConfig: { base_url: '', username: '', password: '' },
+  },
   {
     id: 'sunlike_erp',
-    name: '天心天思 ERP',
+    name: '天心天思ERP',
     type: 'sunlike_erp',
     category: 'erp',
-    description: '天心天思天思系列 ERP',
+    description: '面向中小企业的传统 ERP',
     icon: <DatabaseOutlined />,
     defaultConfig: { base_url: '', username: '', password: '' },
   },

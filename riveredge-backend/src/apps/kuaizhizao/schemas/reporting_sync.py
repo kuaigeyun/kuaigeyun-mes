@@ -6,9 +6,11 @@ from typing import Dict, List, Optional
 from pydantic import Field
 
 from core.schemas.base import BaseSchema
+from core.schemas.sync_binding_contract import SyncSourceItem
 
 
 class ReportingSyncBindingOut(BaseSchema):
+    sources: List[SyncSourceItem] = Field(default_factory=list)
     source_type: Optional[str] = None
     api_uuid: Optional[str] = None
     dataset_uuid: Optional[str] = None
@@ -23,6 +25,7 @@ class ReportingSyncBindingOut(BaseSchema):
 
 
 class ReportingSyncBindingUpsert(BaseSchema):
+    sources: Optional[List[SyncSourceItem]] = None
     source_type: Optional[str] = None
     api_uuid: Optional[str] = None
     dataset_uuid: Optional[str] = None
@@ -34,6 +37,7 @@ class ReportingSyncBindingUpsert(BaseSchema):
 
 
 class ReportingSyncFromSourceRequest(BaseSchema):
+    sources: Optional[List[SyncSourceItem]] = None
     source_type: Optional[str] = None
     api_uuid: Optional[str] = None
     dataset_uuid: Optional[str] = None

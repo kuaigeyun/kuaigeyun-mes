@@ -27,6 +27,7 @@ APPLICATION_CONNECTOR_TYPES: tuple[str, ...] = (
     "dingtalk",
     "wecom",
     "kingdee_galaxy",
+    "kingdee_cosmic",
     "kingdee_xingchen",
     "kingdee_kis_cloud",
     "kingdee_kis",

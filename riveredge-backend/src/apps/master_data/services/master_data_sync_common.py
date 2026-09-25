@@ -9,6 +9,12 @@ from typing import Any, Dict, List, Optional, Type, TypeVar
 from infra.exceptions.exceptions import ValidationError
 
 from apps.master_data.schemas.master_data_sync import VALID_SYNC_DIRECTIONS, VALID_SYNC_MODES
+from core.services.data.sync_binding_sources import (
+    normalize_sources_json,
+    resolve_sources_from_request,
+    sources_from_row,
+    validate_sources_for_match_key,
+)
 from core.services.data.sync_from_source_fetch import fetch_rows_from_api, fetch_rows_from_dataset
 from core.utils.timezone_utils import resolve_business_datetime
 
@@ -54,6 +60,7 @@ def serialize_binding_row(
 ) -> Dict[str, Any]:
     if not row:
         return {
+            "sources": [],
             "source_type": None,
             "api_uuid": None,
             "dataset_uuid": None,
@@ -66,11 +73,17 @@ def serialize_binding_row(
             "last_attempt_at": None,
             "last_error": None,
         }
-    mapping = row.field_mapping if isinstance(row.field_mapping, dict) else {}
+    sources = sources_from_row(row)
+    first = sources[0] if sources else {}
+    mapping = first.get("field_mapping") if isinstance(first.get("field_mapping"), dict) else {}
+    if not mapping and isinstance(row.field_mapping, dict):
+        mapping = row.field_mapping
+    kind = str(first.get("kind") or "").strip() or None
     return {
-        "source_type": row.source_type,
-        "api_uuid": row.api_uuid,
-        "dataset_uuid": row.dataset_uuid,
+        "sources": sources,
+        "source_type": kind or row.source_type,
+        "api_uuid": first.get("api_uuid") if kind == "api" else None,
+        "dataset_uuid": first.get("dataset_uuid") if kind == "dataset" else None,
         "field_mapping": {str(k): str(v) for k, v in mapping.items()},
         "match_key_field": row.match_key_field or default_match_key,
         "sync_mode": row.sync_mode or "manual_full",
@@ -88,29 +101,30 @@ async def upsert_sync_binding(
     binding_model: Type[TBinding],
     tenant_id: int,
     *,
-    source_type: str,
-    api_uuid: Optional[str],
-    dataset_uuid: Optional[str],
-    field_mapping: Dict[str, str],
+    sources: List[Dict[str, Any]],
     match_key_field: str,
     sync_mode: str = "manual_full",
     sync_direction: str = "pull",
     schedule_interval_minutes: Optional[int] = None,
 ) -> TBinding:
-    if source_type not in ("api", "dataset"):
-        raise ValidationError("来源类型须为 api 或 dataset")
-    if source_type == "api" and not api_uuid:
-        raise ValidationError("已选择数据接口时须指定接口")
-    if source_type == "dataset" and not dataset_uuid:
-        raise ValidationError("已选择数据集时须指定数据集")
-    if not field_mapping:
-        raise ValidationError("请配置字段映射")
-    if match_key_field not in field_mapping.values():
-        raise ValidationError(f"字段映射须包含匹配键 {match_key_field}")
+    normalized = normalize_sources_json(sources)
+    validate_sources_for_match_key(normalized, match_key_field)
 
     mode = normalize_sync_mode(sync_mode)
     direction = normalize_sync_direction(sync_direction)
     interval = normalize_schedule_interval(schedule_interval_minutes)
+
+    first = normalized[0]
+    source_type = str(first.get("kind") or "")
+    api_uuid = str(first.get("api_uuid") or "").strip() or None if source_type == "api" else None
+    dataset_uuid = (
+        str(first.get("dataset_uuid") or "").strip() or None if source_type == "dataset" else None
+    )
+    field_mapping = {
+        str(k): str(v)
+        for k, v in (first.get("field_mapping") or {}).items()
+        if str(k).strip() and str(v).strip()
+    }
 
     existing = await binding_model.filter(tenant_id=tenant_id).first()
     preserve = {
@@ -118,43 +132,67 @@ async def upsert_sync_binding(
         "last_attempt_at": getattr(existing, "last_attempt_at", None) if existing else None,
         "last_error": getattr(existing, "last_error", None) if existing else None,
     }
+    push_preserve = {}
+    if existing:
+        for key in (
+            "push_connection_code",
+            "push_save_api_uuid",
+            "push_sync_mode",
+            "push_schedule_interval_minutes",
+            "push_last_success_at",
+            "push_last_attempt_at",
+            "push_last_error",
+            "push_targets",
+            "trigger_actions",
+        ):
+            if hasattr(existing, key):
+                push_preserve[key] = getattr(existing, key)
     await binding_model.filter(tenant_id=tenant_id).delete()
     return await binding_model.create(
         tenant_id=tenant_id,
+        sources=normalized,
         source_type=source_type,
-        api_uuid=api_uuid if source_type == "api" else None,
-        dataset_uuid=dataset_uuid if source_type == "dataset" else None,
+        api_uuid=api_uuid,
+        dataset_uuid=dataset_uuid,
         field_mapping=field_mapping,
         match_key_field=match_key_field,
         sync_mode=mode,
         sync_direction=direction,
         schedule_interval_minutes=interval,
         **preserve,
+        **push_preserve,
     )
 
 
-async def resolve_sync_config(
+def sources_from_upsert_body(body: Any) -> List[Dict[str, Any]]:
+    raw = getattr(body, "sources", None)
+    if not raw:
+        raise ValidationError("请配置同步来源")
+    items: List[Any] = []
+    for item in raw:
+        if hasattr(item, "model_dump"):
+            items.append(item.model_dump(mode="json"))
+        elif isinstance(item, dict):
+            items.append(item)
+    return normalize_sources_json(items)
+
+
+async def resolve_sync_sources(
     binding_model: Type[TBinding],
     tenant_id: int,
     request: Optional[Any],
     *,
     default_match_key: str,
-) -> tuple[str, Optional[str], Optional[str], Dict[str, str], str]:
+) -> tuple[List[Dict[str, Any]], str, Optional[Any]]:
     binding = await binding_model.filter(tenant_id=tenant_id).first()
-    source_type = (getattr(request, "source_type", None) or (binding.source_type if binding else "") or "").strip()
-    api_uuid = (
-        (getattr(request, "api_uuid", None) or (binding.api_uuid if binding else "") or "").strip() or None
+    sources = resolve_sources_from_request(binding, request)
+    match_key = (
+        (getattr(request, "match_key_field", None) or (binding.match_key_field if binding else None) or default_match_key)
+        .strip()
+        or default_match_key
     )
-    dataset_uuid = (
-        (getattr(request, "dataset_uuid", None) or (binding.dataset_uuid if binding else "") or "").strip() or None
-    )
-    field_mapping = getattr(request, "field_mapping", None)
-    if not isinstance(field_mapping, dict) and binding and isinstance(binding.field_mapping, dict):
-        field_mapping = binding.field_mapping
-    if not isinstance(field_mapping, dict):
-        field_mapping = {}
-    match_key = ((binding.match_key_field if binding else None) or default_match_key).strip() or default_match_key
-    return source_type, api_uuid, dataset_uuid, field_mapping, match_key
+    validate_sources_for_match_key(sources, match_key)
+    return sources, match_key, binding
 
 
 def resolve_incremental_since(

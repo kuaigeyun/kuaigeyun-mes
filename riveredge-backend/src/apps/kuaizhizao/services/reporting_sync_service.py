@@ -32,8 +32,11 @@ from apps.master_data.services.master_data_sync_common import (
     normalize_sync_mode,
     record_sync_run_log,
     resolve_incremental_since,
-    resolve_sync_config,
+    resolve_sync_sources,
+    sources_from_upsert_body,
+    upsert_sync_binding,
 )
+from core.services.data.sync_binding_sources import fetch_mapped_rows_from_sources
 from core.utils.timezone_utils import resolve_business_datetime
 from infra.exceptions.exceptions import ValidationError
 
@@ -81,33 +84,19 @@ class ReportingSyncService:
         sync_direction = normalize_reporting_binding_sync_direction(body.sync_direction or "pull")
         sync_mode = normalize_sync_mode(body.sync_mode)
         interval = normalize_schedule_interval(body.schedule_interval_minutes)
-        source_type = (body.source_type or "").strip() or None
-        api_uuid = (body.api_uuid or "").strip() or None
-        dataset_uuid = (body.dataset_uuid or "").strip() or None
-        field_mapping = body.field_mapping if isinstance(body.field_mapping, dict) else {}
+        if body.sources is not None and len(body.sources) == 0:
+            await ReportingSyncBinding.filter(tenant_id=tenant_id).delete()
+            return ReportingSyncBindingOut()
+        sources = sources_from_upsert_body(body)
         match_key = (body.match_key_field or self.MATCH_KEY).strip() or self.MATCH_KEY
-
-        if source_type and source_type not in ("api", "dataset"):
-            raise ValidationError("来源类型须为 api 或 dataset")
-
-        existing = await ReportingSyncBinding.filter(tenant_id=tenant_id).first()
-        preserve = {
-            "last_success_at": existing.last_success_at if existing else None,
-            "last_attempt_at": existing.last_attempt_at if existing else None,
-            "last_error": existing.last_error if existing else None,
-        }
-        await ReportingSyncBinding.filter(tenant_id=tenant_id).delete()
-        row = await ReportingSyncBinding.create(
-            tenant_id=tenant_id,
-            source_type=source_type,
-            api_uuid=api_uuid if source_type == "api" else None,
-            dataset_uuid=dataset_uuid if source_type == "dataset" else None,
-            field_mapping=field_mapping,
+        row = await upsert_sync_binding(
+            ReportingSyncBinding,
+            tenant_id,
+            sources=sources,
             match_key_field=match_key,
             sync_mode=sync_mode,
             sync_direction=sync_direction,
             schedule_interval_minutes=interval,
-            **preserve,
         )
         return self.serialize_binding(row)
 
@@ -190,18 +179,14 @@ class ReportingSyncService:
         request: Optional[ReportingSyncFromSourceRequest] = None,
     ) -> ReportingSyncFromSourceOut:
         req = request or ReportingSyncFromSourceRequest()
-        source_type, api_uuid, dataset_uuid, field_mapping, match_key = await resolve_sync_config(
+        sources, match_key, binding = await resolve_sync_sources(
             ReportingSyncBinding,
             tenant_id,
             req,
             default_match_key=self.MATCH_KEY,
         )
-        if not source_type:
-            raise ValidationError("请配置同步来源（数据接口或数据集）")
-        if not field_mapping:
-            raise ValidationError("请配置字段映射")
 
-        binding = await ReportingSyncBinding.filter(tenant_id=tenant_id).first()
+        binding = binding or await ReportingSyncBinding.filter(tenant_id=tenant_id).first()
         sync_mode = normalize_sync_mode(req.sync_mode or (binding.sync_mode if binding else None))
         sync_direction = normalize_reporting_binding_sync_direction(
             req.sync_direction or (binding.sync_direction if binding else None) or "pull"
@@ -216,10 +201,7 @@ class ReportingSyncService:
             await self.upsert_binding(
                 tenant_id,
                 ReportingSyncBindingUpsert(
-                    source_type=source_type,
-                    api_uuid=api_uuid,
-                    dataset_uuid=dataset_uuid,
-                    field_mapping=field_mapping,
+                    sources=req.sources,
                     match_key_field=match_key,
                     sync_mode=sync_mode,
                     sync_direction=sync_direction,
@@ -235,27 +217,19 @@ class ReportingSyncService:
         )
         started_at = resolve_business_datetime()
         try:
-            raw_rows, truncated = await fetch_sync_rows(
+            rows, source_errors, fetched = await fetch_mapped_rows_from_sources(
                 tenant_id,
-                source_type=source_type,
-                api_uuid=api_uuid,
-                dataset_uuid=dataset_uuid,
+                sources,
                 since=since,
                 active_only=req.active_only,
             )
-            rows = map_sync_rows(raw_rows, field_mapping)
             result = await self._create_reporting_records(tenant_id, user_id, rows)
-            attach_sync_fetch_meta(
-                result, fetched=len(raw_rows), since=since, truncated=truncated
-            )
+            if source_errors:
+                result.errors = (source_errors + list(result.errors))[:20]
+            attach_sync_fetch_meta(result, fetched=fetched, since=since, truncated=False)
             if binding:
                 if result.failed and not result.created:
                     await mark_binding_failure(binding, "; ".join(result.errors) or "报工同步失败")
-                elif truncated:
-                    await mark_binding_partial_success(
-                        binding,
-                        "源端数据超过单次最大拉取页数，本轮未拉完，水位未推进，待下次同步补拉",
-                    )
                 else:
                     await mark_binding_success(binding)
             await record_sync_run_log(
@@ -264,7 +238,7 @@ class ReportingSyncService:
                 entity_type="reporting",
                 result=result,
                 started_at=started_at,
-                truncated=truncated,
+                truncated=False,
             )
             return result
         except Exception as exc:

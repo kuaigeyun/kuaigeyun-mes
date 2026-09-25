@@ -1,5 +1,5 @@
 """
-金蝶云星空（kingdee_galaxy）常用接口预设。
+金蝶AI星空（kingdee_galaxy）常用接口预设。
 
 绑定应用连接器后，path 为相对 K3Cloud 站点路径；请求体为 .common.kdsvc format=1 信封。
 调用前须 LoginByAppSecret 取得 kdservice-sessionid（见 kingdee_galaxy_service）。

@@ -6,9 +6,11 @@ from typing import Dict, List, Optional
 from pydantic import Field
 
 from core.schemas.base import BaseSchema
+from core.schemas.sync_binding_contract import DocumentPushTargetItem, SyncSourceItem
 
 
 class WorkOrderSyncBindingOut(BaseSchema):
+    sources: List[SyncSourceItem] = Field(default_factory=list)
     source_type: Optional[str] = None
     api_uuid: Optional[str] = None
     dataset_uuid: Optional[str] = None
@@ -22,6 +24,7 @@ class WorkOrderSyncBindingOut(BaseSchema):
 
 
 class WorkOrderSyncBindingUpsert(BaseSchema):
+    sources: Optional[List[SyncSourceItem]] = None
     source_type: Optional[str] = None
     api_uuid: Optional[str] = None
     dataset_uuid: Optional[str] = None
@@ -32,6 +35,7 @@ class WorkOrderSyncBindingUpsert(BaseSchema):
 
 
 class WorkOrderSyncFromSourceRequest(BaseSchema):
+    sources: Optional[List[SyncSourceItem]] = None
     source_type: Optional[str] = None
     api_uuid: Optional[str] = None
     dataset_uuid: Optional[str] = None
@@ -54,6 +58,8 @@ class WorkOrderSyncFromSourceOut(BaseSchema):
 
 
 class WorkOrderPushBindingOut(BaseSchema):
+    targets: List[DocumentPushTargetItem] = Field(default_factory=list)
+    trigger_actions: List[str] = Field(default_factory=list)
     connection_code: Optional[str] = None
     save_api_uuid: Optional[str] = None
     sync_mode: str = "manual_full"
@@ -64,6 +70,8 @@ class WorkOrderPushBindingOut(BaseSchema):
 
 
 class WorkOrderPushBindingUpsert(BaseSchema):
+    targets: Optional[List[DocumentPushTargetItem]] = None
+    trigger_actions: Optional[List[str]] = None
     connection_code: Optional[str] = None
     save_api_uuid: Optional[str] = None
     sync_mode: Optional[str] = None

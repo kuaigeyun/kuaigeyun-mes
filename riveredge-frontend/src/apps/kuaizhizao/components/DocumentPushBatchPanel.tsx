@@ -4,25 +4,26 @@
  * SyncPushHub 内嵌时设 embedded。
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Button, Checkbox, Col, Flex, Modal, Row, Select, Typography, theme } from 'antd';
+import { Alert, App, Button, Checkbox, Empty, Flex, Modal, Select, Space, Table, Typography } from 'antd';
+import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import type { TableColumnsType } from 'antd';
 import { useTranslation } from 'react-i18next';
 import {
   UniPullQueryModal,
   useUniPullQuery,
 } from '../../../components/uni-pull-query';
-import { DocumentPushUnavailablePanel, ConnectorCategoryConfigLayer } from '../../../components/sync-push-hub';
 import {
   getApplicationConnectionListAll,
   type ApplicationConnection,
 } from '../../../services/applicationConnection';
 import { getAPIList, type API } from '../../../services/apiManagement';
+import { ThemedSegmented } from '../../../components/themed-segmented/ThemedSegmented';
+import { getDataSourceListAllMatching, type DataSource } from '../../../services/dataSource';
+import { getDatasetList, type Dataset } from '../../../services/dataset';
 import {
   filterProfilesForSource,
   listDocumentPushProfiles,
   pushDocumentExternal,
-  resolveDefaultTargetProfiles,
-  categoriesWithRegisteredPush,
 } from '../services/document-push';
 
 export const DOCUMENT_PUSH_PROFILE_LABEL_KEYS: Record<string, string> = {
@@ -35,7 +36,24 @@ export const DOCUMENT_PUSH_PROFILE_LABEL_KEYS: Record<string, string> = {
   kingdee_stk_miscellaneous: 'app.kuaizhizao.documentPush.profile.kingdee_stk_miscellaneous',
 };
 
+export interface DocumentPushTargetBinding {
+  connection_code?: string;
+  save_api_uuid?: string;
+  target_profile: string;
+  push_mode?: 'auto' | 'manual';
+  trigger_actions?: string[];
+  destination_kind?: 'api' | 'data_source';
+  data_source_uuid?: string;
+  dataset_uuid?: string;
+  /** 仅点过确认保存的目标。缺省的历史行不展示。 */
+  user_saved?: boolean;
+}
+
 export interface DocumentPushBindingState {
+  targets?: DocumentPushTargetBinding[];
+  /** 已保存过出站目标（含空列表）。未点确认的目标不展示。 */
+  targets_configured?: boolean;
+  trigger_actions?: string[];
   connection_code?: string;
   save_api_uuid?: string;
   sync_mode?: string;
@@ -99,7 +117,6 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
   kingdeeProfiles = EMPTY_STRING_ARRAY,
   title,
   hint,
-  pipelineDesc,
   searchPlaceholder,
   needSelectMessage,
   confirmText,
@@ -111,7 +128,6 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
   saveApiSearchHints = EMPTY_STRING_ARRAY,
   loadBinding,
   saveBinding,
-  showScheduleControls = false,
   successCountKey = 'app.kuaizhizao.documentPush.batch.success',
   partialCountKey = 'app.kuaizhizao.documentPush.batch.partial',
   failedTitleKey = 'app.kuaizhizao.documentPush.pushFailed',
@@ -120,11 +136,22 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
   // 关闭态直接不渲染：hooks 仍执行，但下方网络 effect 均以 open 门控
   // （embedded Hub 在 push Tab 未激活时由上层不挂载本组件）
   const { t } = useTranslation();
+  const { message: messageApi } = App.useApp();
   const [connectors, setConnectors] = useState<ApplicationConnection[]>([]);
   const [connectionCode, setConnectionCode] = useState<string | undefined>();
   const [saveApis, setSaveApis] = useState<API[]>([]);
   const [saveApiUuid, setSaveApiUuid] = useState<string | undefined>();
   const [syncMode, setSyncMode] = useState<string>('manual_full');
+  const [targetModes, setTargetModes] = useState<Record<string, 'auto' | 'manual'>>({});
+  const [targetActionMap, setTargetActionMap] = useState<Record<string, string[]>>({});
+  const [destinationKinds, setDestinationKinds] = useState<Record<string, 'api' | 'data_source'>>({});
+  const [dataSourceUuids, setDataSourceUuids] = useState<Record<string, string | undefined>>({});
+  const [dataSources, setDataSources] = useState<DataSource[]>([]);
+  const [dataSourcesLoading, setDataSourcesLoading] = useState(false);
+  const [datasetUuids, setDatasetUuids] = useState<Record<string, string | undefined>>({});
+  const [writeDatasets, setWriteDatasets] = useState<Dataset[]>([]);
+  const [rememberBinding, setRememberBinding] = useState(true);
+  const [settingProfile, setSettingProfile] = useState<string | null>(null);
   const [scheduleIntervalMinutes, setScheduleIntervalMinutes] = useState<number>(15);
   const [connectorsLoading, setConnectorsLoading] = useState(false);
   const [apisLoading, setApisLoading] = useState(false);
@@ -135,17 +162,40 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
   const [profileOptions, setProfileOptions] = useState<Array<{ label: string; value: string }>>([]);
   const preferIdsRef = useRef<number[]>([]);
   const prefilledRef = useRef(false);
-  const bindingLoadedRef = useRef(false);
+  /** 添加目标：保存前只在设置弹窗，不进列表（对齐入站 pendingNewSourceDraft） */
+  const [pendingNewProfile, setPendingNewProfile] = useState<string | null>(null);
   const connectionCodeRef = useRef<string | undefined>();
   const saveApiUuidRef = useRef<string | undefined>();
   const syncModeRef = useRef('manual_full');
+  const settingSnapshotRef = useRef<{
+    connection?: string;
+    api?: string;
+    mode: 'auto' | 'manual';
+    actions: string[];
+    destination: 'api' | 'data_source';
+    dataSourceUuid?: string;
+  } | null>(null);
   const scheduleIntervalRef = useRef(15);
+  const rememberBindingRef = useRef(true);
+  const targetModesRef = useRef<Record<string, 'auto' | 'manual'>>({});
+  const destinationKindsRef = useRef<Record<string, 'api' | 'data_source'>>({});
+  const dataSourceUuidsRef = useRef<Record<string, string | undefined>>({});
+  const datasetUuidsRef = useRef<Record<string, string | undefined>>({});
+  const targetActionMapRef = useRef<Record<string, string[]>>({});
+  const pushOnlyProfileRef = useRef<string | null>(null);
+  const settingProfileRef = useRef<string | null>(null);
   const targetProfilesRef = useRef<string[]>([]);
   const profileOptionsRef = useRef<Array<{ label: string; value: string }>>([]);
   connectionCodeRef.current = connectionCode;
   saveApiUuidRef.current = saveApiUuid;
   syncModeRef.current = syncMode;
   scheduleIntervalRef.current = scheduleIntervalMinutes;
+  rememberBindingRef.current = rememberBinding;
+  targetModesRef.current = targetModes;
+  destinationKindsRef.current = destinationKinds;
+  dataSourceUuidsRef.current = dataSourceUuids;
+  datasetUuidsRef.current = datasetUuids;
+  targetActionMapRef.current = targetActionMap;
   targetProfilesRef.current = targetProfiles;
   profileOptionsRef.current = profileOptions;
 
@@ -172,13 +222,12 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
     setConnectorsLoading(true);
     try {
       const rows = await getApplicationConnectionListAll({
-        type: 'kingdee_galaxy',
         is_active: true,
       });
       setConnectors(rows);
       setConnectionCode((prev) => {
         if (prev && rows.some((row) => row.code === prev)) return prev;
-        return rows[0]?.code;
+        return rows.length === 1 ? rows[0]?.code : undefined;
       });
     } catch {
       setConnectors([]);
@@ -243,7 +292,6 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    const preferred = defaultProfilesRef.current;
     const labelOf = profileLabelRef.current;
     setProfilesLoading(true);
     setProfilesLoaded(false);
@@ -251,19 +299,16 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
       try {
         const rows = await listDocumentPushProfiles();
         if (cancelled) return;
-        // 仅展示接口 ∩ 已知 SUPPORTED profile；不把 connector 目录品类当目标
         const available = filterProfilesForSource(rows, sourceType);
-        const opts = available.map((value) => ({
-          value,
-          label: labelOf(value),
-        }));
-        setProfileOptions(opts);
-        setTargetProfiles(resolveDefaultTargetProfiles(available, preferred));
+        setProfileOptions(
+          available.map((value) => ({
+            value,
+            label: labelOf(value),
+          })),
+        );
       } catch {
         if (cancelled) return;
-        // 失败时禁止回退到硬编码默认（避免伪造成功可推）
         setProfileOptions([]);
-        setTargetProfiles([]);
       } finally {
         if (!cancelled) {
           setProfilesLoading(false);
@@ -274,7 +319,6 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
     return () => {
       cancelled = true;
     };
-    // defaultProfilesKey / 不用 profileLabel：父页重渲染不得重复拉 profiles
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional stable keys
   }, [defaultProfilesKey, open, sourceType]);
 
@@ -285,31 +329,66 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
   }, [loadSaveApis, needsKingdeeConnector, open, selectedConnector]);
 
   useEffect(() => {
-    if (!open || bindingLoadedRef.current || !loadBinding) return;
-    bindingLoadedRef.current = true;
+    if (!open) return;
+    // 对齐入站：打开先空表，只回填接口里已经保存的目标，绝不填默认 profile
+    setTargetProfiles([]);
+    setPendingNewProfile(null);
+    setSettingProfile(null);
+    if (!loadBinding) return;
+    let cancelled = false;
     void (async () => {
       try {
         const binding = await loadBinding();
-        if (!binding) return;
-        if (binding.connection_code) setConnectionCode(binding.connection_code);
-        if (binding.save_api_uuid) setSaveApiUuid(binding.save_api_uuid);
+        if (cancelled) return;
+        if (!binding) {
+          setTargetProfiles([]);
+          return;
+        }
+        const rows = (binding.targets || []).filter((row) =>
+          sourceType === 'purchase_order' ? row.user_saved === true : Boolean(row.target_profile),
+        );
+        setTargetProfiles(rows.map((row) => row.target_profile).filter(Boolean));
+        const modes: Record<string, 'auto' | 'manual'> = {};
+        const actions: Record<string, string[]> = {};
+        const kinds: Record<string, 'api' | 'data_source'> = {};
+        const sources: Record<string, string | undefined> = {};
+        const datasets: Record<string, string | undefined> = {};
+        for (const row of rows) {
+          modes[row.target_profile] = row.push_mode === 'manual' ? 'manual' : 'auto';
+          actions[row.target_profile] = row.trigger_actions?.length
+            ? row.trigger_actions
+            : binding.trigger_actions || [];
+          kinds[row.target_profile] =
+            row.destination_kind === 'data_source' ? 'data_source' : 'api';
+          sources[row.target_profile] = row.data_source_uuid;
+          datasets[row.target_profile] = row.dataset_uuid;
+        }
+        setTargetModes(modes);
+        setTargetActionMap(actions);
+        setDestinationKinds(kinds);
+        setDataSourceUuids(sources);
+        setDatasetUuids(datasets);
+        const kd = rows.find((row) => row.connection_code || row.save_api_uuid);
+        if (kd?.connection_code) setConnectionCode(kd.connection_code);
+        else if (binding.connection_code) setConnectionCode(binding.connection_code);
+        if (kd?.save_api_uuid) setSaveApiUuid(kd.save_api_uuid);
+        else if (binding.save_api_uuid) setSaveApiUuid(binding.save_api_uuid);
         if (binding.sync_mode) setSyncMode(binding.sync_mode);
         if (binding.schedule_interval_minutes) {
           setScheduleIntervalMinutes(binding.schedule_interval_minutes);
         }
       } catch {
-        // 无绑定则用默认
+        if (cancelled) return;
+        setTargetProfiles([]);
       }
     })();
-  }, [loadBinding, open]);
+    return () => {
+      cancelled = true;
+    };
+  }, [loadBinding, open, sourceType]);
 
   const allowedProfileSet = useMemo(
     () => new Set(profileOptions.map((o) => o.value)),
-    [profileOptions],
-  );
-
-  const writableCategories = useMemo(
-    () => [...categoriesWithRegisteredPush(profileOptions.map((option) => option.value))],
     [profileOptions],
   );
 
@@ -326,7 +405,10 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
   ]);
 
   const connectorReady = useMemo(() => {
-    if (!needsKingdeeConnector) return true;
+    const needsApiConnector = targetProfiles.some(
+      (profile) => kingdeeProfiles.includes(profile) && (destinationKinds[profile] ?? 'api') === 'api',
+    );
+    if (!needsApiConnector) return true;
     if (connectorsLoading) return false;
     if (!connectionCode) return false;
     if (matchSaveApi) {
@@ -338,9 +420,11 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
     apisLoading,
     connectionCode,
     connectorsLoading,
+    destinationKinds,
+    kingdeeProfiles,
     matchSaveApi,
-    needsKingdeeConnector,
     saveApiUuid,
+    targetProfiles,
   ]);
 
   const pushReady = profilesReady && connectorReady;
@@ -406,7 +490,12 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
       const conn = connectionCodeRef.current;
       const apiUuid = saveApiUuidRef.current;
       const allowed = new Set(profileOptionsRef.current.map((o) => o.value));
-      const profiles = targetProfilesRef.current.filter((p) => p && allowed.has(p));
+      const onlyProfile = pushOnlyProfileRef.current;
+      const profiles = targetProfilesRef.current.filter((p) => {
+        if (!p || !allowed.has(p)) return false;
+        if (onlyProfile) return p === onlyProfile;
+        return (targetModesRef.current[p] ?? 'auto') === 'manual';
+      });
       if (!profiles.length) {
         Modal.warning({
           title,
@@ -414,7 +503,20 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
         });
         return;
       }
-      const needKd = profiles.some((p) => kingdeeProfiles.includes(p));
+      const dataSourceProfiles = profiles.filter(
+        (profile) => (destinationKindsRef.current[profile] ?? 'api') === 'data_source',
+      );
+      if (dataSourceProfiles.some((profile) => !datasetUuidsRef.current[profile])) {
+        Modal.warning({
+          title,
+          content: t('app.kuaizhizao.documentPush.batch.needWriteDataset'),
+        });
+        return;
+      }
+      const apiProfiles = profiles.filter(
+        (profile) => (destinationKindsRef.current[profile] ?? 'api') !== 'data_source',
+      );
+      const needKd = apiProfiles.some((p) => kingdeeProfiles.includes(p));
       if (needKd && !conn) {
         Modal.warning({
           title,
@@ -430,8 +532,41 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
         return;
       }
       try {
-        if (needKd && conn && apiUuid && saveBinding) {
+        if (saveBinding && rememberBindingRef.current) {
+          const allProfiles = targetProfilesRef.current.filter((p) => p && allowed.has(p));
+          const bound = allProfiles.map((profile) => ({
+            target_profile: profile,
+            push_mode: targetModesRef.current[profile] ?? 'auto',
+            destination_kind: destinationKindsRef.current[profile] ?? 'api',
+            data_source_uuid:
+              (destinationKindsRef.current[profile] ?? 'api') === 'data_source'
+                ? dataSourceUuidsRef.current[profile]
+                : undefined,
+            dataset_uuid:
+              (destinationKindsRef.current[profile] ?? 'api') === 'data_source'
+                ? datasetUuidsRef.current[profile]
+                : undefined,
+            trigger_actions:
+              (targetModesRef.current[profile] ?? 'auto') === 'auto'
+                ? targetActionMapRef.current[profile] ?? []
+                : [],
+            connection_code:
+              kingdeeProfiles.includes(profile) &&
+              (destinationKindsRef.current[profile] ?? 'api') === 'api'
+                ? conn
+                : undefined,
+            save_api_uuid:
+              kingdeeProfiles.includes(profile) &&
+              (destinationKindsRef.current[profile] ?? 'api') === 'api'
+                ? apiUuid
+                : undefined,
+          }));
+          const autoActions = [
+            ...new Set(bound.flatMap((row) => row.trigger_actions)),
+          ];
           await saveBinding({
+            targets: bound,
+            trigger_actions: autoActions,
             connection_code: conn,
             save_api_uuid: apiUuid,
             sync_mode: syncModeRef.current,
@@ -446,12 +581,32 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
 
         for (const id of ids) {
           try {
+            const targets = profiles.map((profile) => ({
+              target_profile: profile,
+              destination_kind: destinationKindsRef.current[profile] ?? 'api',
+              data_source_uuid:
+                (destinationKindsRef.current[profile] ?? 'api') === 'data_source'
+                  ? dataSourceUuidsRef.current[profile]
+                  : undefined,
+              dataset_uuid:
+                (destinationKindsRef.current[profile] ?? 'api') === 'data_source'
+                  ? datasetUuidsRef.current[profile]
+                  : undefined,
+              connection_code:
+                kingdeeProfiles.includes(profile) &&
+                (destinationKindsRef.current[profile] ?? 'api') === 'api'
+                  ? conn
+                  : undefined,
+              save_api_uuid:
+                kingdeeProfiles.includes(profile) &&
+                (destinationKindsRef.current[profile] ?? 'api') === 'api'
+                  ? apiUuid
+                  : undefined,
+            }));
             const result = await pushDocumentExternal({
               source_type: sourceType,
               source_id: id,
-              target_profiles: profiles,
-              connection_code: needKd ? conn : undefined,
-              save_api_uuid: needKd ? apiUuid : undefined,
+              targets,
               dry_run: false,
             });
             if (result.multi) {
@@ -480,31 +635,37 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
           }
         }
 
+        const notify = embedded ? messageApi : null;
         if (failed > 0 && created === 0) {
-          Modal.error({
-            title: t(failedTitleKey),
-            content: (
-              <div>
-                {errors.slice(0, 5).map((err) => (
-                  <Typography.Paragraph key={err} type="danger" style={{ marginBottom: 4 }}>
-                    {err}
-                  </Typography.Paragraph>
-                ))}
-              </div>
-            ),
-          });
+          const detail = errors.slice(0, 5).join('\n') || t(failedTitleKey);
+          if (notify) notify.error(detail);
+          else
+            Modal.error({
+              title: t(failedTitleKey),
+              content: (
+                <div>
+                  {errors.slice(0, 5).map((err) => (
+                    <Typography.Paragraph key={err} type="danger" style={{ marginBottom: 4 }}>
+                      {err}
+                    </Typography.Paragraph>
+                  ))}
+                </div>
+              ),
+            });
           return;
         }
         if (failed > 0) {
-          Modal.warning({
-            title: t(partialCountKey, { created, skipped, failed }),
-            content: errors.slice(0, 5).join('\n') || undefined,
-          });
+          const title = t(partialCountKey, { created, skipped, failed });
+          if (notify) notify.warning(title);
+          else Modal.warning({ title, content: errors.slice(0, 5).join('\n') || undefined });
         } else {
-          Modal.success({
-            title: t(successCountKey, { count: created }),
-            content: skipped > 0 ? t(skippedHintKey, { skipped }) : undefined,
-          });
+          const title = t(successCountKey, { count: created });
+          if (notify) notify.success(title);
+          else
+            Modal.success({
+              title,
+              content: skipped > 0 ? t(skippedHintKey, { skipped }) : undefined,
+            });
         }
         onComplete?.();
         onClose();
@@ -523,8 +684,17 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
     if (open) {
       preferIdsRef.current = (preferIds || []).filter((id) => Number.isFinite(id));
       prefilledRef.current = false;
-      bindingLoadedRef.current = false;
+      setPendingNewProfile(null);
+      setSettingProfile(null);
       void loadConnectors();
+      setDataSourcesLoading(true);
+      void getDataSourceListAllMatching({ is_active: true })
+        .then((rows) => setDataSources(rows))
+        .catch(() => setDataSources([]))
+        .finally(() => setDataSourcesLoading(false));
+      void getDatasetList({ query_type: 'sql_write', is_active: true, page: 1, page_size: 200 })
+        .then((res) => setWriteDatasets(res.items || []))
+        .catch(() => setWriteDatasets([]));
       pull.openModal();
       return;
     }
@@ -568,7 +738,12 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
     const conn = connectionCodeRef.current;
     const apiUuid = saveApiUuidRef.current;
     const allowed = new Set(profileOptionsRef.current.map((o) => o.value));
-    const profiles = targetProfilesRef.current.filter((p) => p && allowed.has(p));
+    const onlyProfile = settingProfileRef.current;
+    const profiles = targetProfilesRef.current.filter((p) => {
+      if (!p || !allowed.has(p)) return false;
+      if (onlyProfile) return p === onlyProfile;
+      return true;
+    });
     if (!profiles.length) {
       Modal.warning({
         title: t('app.kuaizhizao.documentPush.previewTitle'),
@@ -576,7 +751,17 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
       });
       return;
     }
-    const needKd = profiles.some((p) => kingdeeProfiles.includes(p));
+    const apiProfiles = profiles.filter(
+      (profile) => (destinationKindsRef.current[profile] ?? 'api') !== 'data_source',
+    );
+    if (!apiProfiles.length) {
+      Modal.info({
+        title: t('app.kuaizhizao.documentPush.previewTitle'),
+        content: t('app.kuaizhizao.documentPush.batch.dataSourceNoted'),
+      });
+      return;
+    }
+    const needKd = apiProfiles.some((p) => kingdeeProfiles.includes(p));
     if (needKd && !conn) {
       Modal.warning({
         title: t('app.kuaizhizao.documentPush.previewTitle'),
@@ -596,7 +781,7 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
       const result = await pushDocumentExternal({
         source_type: sourceType,
         source_id: Number(first.id),
-        target_profiles: profiles,
+        target_profiles: apiProfiles,
         connection_code: needKd ? conn : undefined,
         save_api_uuid: needKd ? apiUuid : undefined,
         dry_run: true,
@@ -664,159 +849,536 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
     [saveApis],
   );
 
-  const { token } = theme.useToken();
-  const fieldLabelStyle: React.CSSProperties = {
-    display: 'block',
-    marginBottom: 4,
-    fontSize: token.fontSizeSM,
-    color: token.colorTextSecondary,
+  settingProfileRef.current = settingProfile;
+
+  const closeTargetSetting = (apply: boolean) => {
+    if (!apply && settingSnapshotRef.current && settingProfile) {
+      const snap = settingSnapshotRef.current;
+      setConnectionCode(snap.connection);
+      setSaveApiUuid(snap.api);
+      setTargetModes((prev) => ({ ...prev, [settingProfile]: snap.mode }));
+      setTargetActionMap((prev) => ({ ...prev, [settingProfile]: snap.actions }));
+      setDestinationKinds((prev) => ({ ...prev, [settingProfile]: snap.destination }));
+      setDataSourceUuids((prev) => ({ ...prev, [settingProfile]: snap.dataSourceUuid }));
+    }
+    if (apply && pendingNewProfile && settingProfile) {
+      setTargetProfiles((prev) =>
+        prev.includes(settingProfile) ? prev : [...prev, settingProfile],
+      );
+    }
+    setPendingNewProfile(null);
+    setSettingProfile(null);
   };
+
+  const settingModal = settingProfile ? (
+    <Modal
+      title={t('app.kuaizhizao.documentPush.batch.targetSettingTitle')}
+      open
+      onCancel={() => closeTargetSetting(false)}
+      width={1100}
+      zIndex={1100}
+      destroyOnHidden
+      footer={[
+        <Button key="cancel" onClick={() => closeTargetSetting(false)}>
+          {t('common.cancel')}
+        </Button>,
+        (targetModes[settingProfile] ?? 'auto') === 'manual' &&
+        (destinationKinds[settingProfile] ?? 'api') === 'api' ? (
+          <Button
+            key="preview"
+            loading={previewLoading}
+            disabled={!pushReady}
+            onClick={() => void handlePreviewPayload()}
+          >
+            {t('app.kuaizhizao.documentPush.preview')}
+          </Button>
+        ) : null,
+        (targetModes[settingProfile] ?? 'auto') === 'manual' ? (
+          <Button
+            key="push"
+            type="primary"
+            loading={pull.confirmLoading}
+            disabled={!pushReady || pull.confirmLoading}
+            onClick={() => {
+              pushOnlyProfileRef.current = settingProfile;
+              void pull.handleConfirm().finally(() => {
+                pushOnlyProfileRef.current = null;
+              });
+            }}
+          >
+            {confirmText || t('app.kuaizhizao.documentPush.batch.confirm')}
+          </Button>
+        ) : (
+          <Button key="save" type="primary" onClick={() => closeTargetSetting(true)}>
+            {t('common.save')}
+          </Button>
+        ),
+      ]}
+    >
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'max-content minmax(0, 1fr)',
+          columnGap: 12,
+          rowGap: 12,
+          alignItems: 'center',
+        }}
+      >
+        <Typography.Text type="secondary" style={{ whiteSpace: 'nowrap', lineHeight: '32px' }}>
+          {t('app.kuaizhizao.documentPush.batch.destinationKind')}
+        </Typography.Text>
+        <div style={{ display: 'flex', alignItems: 'center', minWidth: 0 }}>
+          <ThemedSegmented
+            block
+            style={{ width: 200, maxWidth: '100%' }}
+            value={destinationKinds[settingProfile] ?? 'api'}
+            onChange={(value) => {
+              const kind = value === 'data_source' ? 'data_source' : 'api';
+              setDestinationKinds((prev) => ({ ...prev, [settingProfile]: kind }));
+              if (kind === 'data_source' && dataSources.length === 1 && !dataSourceUuids[settingProfile]) {
+                setDataSourceUuids((prev) => ({ ...prev, [settingProfile]: dataSources[0]?.uuid }));
+              }
+            }}
+            options={[
+              { label: t('app.kuaizhizao.documentPush.batch.apiPlaceholder'), value: 'api' },
+              { label: t('app.kuaizhizao.documentPush.batch.destinationDataset'), value: 'data_source' },
+            ]}
+          />
+        </div>
+        <Typography.Text type="secondary" style={{ whiteSpace: 'nowrap', lineHeight: '32px' }}>
+          {t('app.kuaizhizao.documentPush.batch.modeLabel')}
+        </Typography.Text>
+        <Select
+          style={{ width: 220 }}
+          value={targetModes[settingProfile] ?? 'auto'}
+          onChange={(value: 'auto' | 'manual') =>
+            setTargetModes((prev) => ({ ...prev, [settingProfile]: value }))
+          }
+          options={[
+            { value: 'auto', label: t('app.kuaizhizao.documentPush.batch.modeAuto') },
+            { value: 'manual', label: t('app.kuaizhizao.documentPush.batch.modeManual') },
+          ]}
+        />
+        {(targetModes[settingProfile] ?? 'auto') === 'auto' ? (
+          <>
+            <Typography.Text type="secondary" style={{ whiteSpace: 'nowrap', lineHeight: '32px' }}>
+              {t('app.kuaizhizao.documentPush.batch.bindActions')}
+            </Typography.Text>
+            <Checkbox.Group
+              options={[
+                { label: t('permission.action.submit'), value: 'submit' },
+                { label: t('permission.action.approve'), value: 'approve' },
+              ]}
+              value={targetActionMap[settingProfile] ?? []}
+              onChange={(vals) =>
+                setTargetActionMap((prev) => ({ ...prev, [settingProfile]: vals.map(String) }))
+              }
+            />
+          </>
+        ) : null}
+        {(destinationKinds[settingProfile] ?? 'api') === 'data_source' ? (
+          <>
+            <Typography.Text type="secondary" style={{ whiteSpace: 'nowrap', lineHeight: '32px' }}>
+              {t('app.kuaizhizao.documentPush.batch.destinationDataSource')}
+            </Typography.Text>
+            <Select
+              style={{ width: '100%', maxWidth: 520 }}
+              loading={dataSourcesLoading}
+              placeholder={t('app.kuaizhizao.documentPush.batch.dataSourcePlaceholder')}
+              options={dataSources.map((row) => ({
+                value: row.uuid,
+                label: row.name ? `${row.name}（${row.code}）` : row.code,
+              }))}
+              value={dataSourceUuids[settingProfile]}
+              onChange={(value) =>
+                setDataSourceUuids((prev) => ({ ...prev, [settingProfile]: value }))
+              }
+              allowClear={false}
+              showSearch
+              optionFilterProp="label"
+              notFoundContent={t('app.kuaizhizao.documentPush.batch.dataSourceEmpty')}
+            />
+            <Typography.Text type="secondary" style={{ whiteSpace: 'nowrap', lineHeight: '32px' }}>
+              {t('app.kuaizhizao.documentPush.batch.writeDatasetPlaceholder')}
+            </Typography.Text>
+            <Select
+              style={{ width: '100%', maxWidth: 520 }}
+              placeholder={t('app.kuaizhizao.documentPush.batch.writeDatasetPlaceholder')}
+              options={writeDatasets
+                .filter((row) => !dataSourceUuids[settingProfile] || row.data_source_uuid === dataSourceUuids[settingProfile])
+                .map((row) => ({
+                  value: row.uuid,
+                  label: row.name ? `${row.name}（${row.code}）` : row.code,
+                }))}
+              value={datasetUuids[settingProfile]}
+              onChange={(value) =>
+                setDatasetUuids((prev) => ({ ...prev, [settingProfile]: value }))
+              }
+              allowClear={false}
+              showSearch
+              optionFilterProp="label"
+              notFoundContent={t('app.kuaizhizao.documentPush.batch.writeDatasetEmpty')}
+            />
+          </>
+        ) : null}
+        {(destinationKinds[settingProfile] ?? 'api') === 'api' &&
+        kingdeeProfiles.includes(settingProfile) ? (
+          <>
+        <Typography.Text type="secondary" style={{ whiteSpace: 'nowrap', lineHeight: '32px' }}>
+          {t('app.kuaizhizao.documentPush.batch.connectorPlaceholder')}
+        </Typography.Text>
+        <Select
+          style={{ width: '100%', maxWidth: 520 }}
+          loading={connectorsLoading}
+          placeholder={t('app.kuaizhizao.documentPush.batch.connectorPlaceholder')}
+          options={connectorOptions}
+          value={connectionCode}
+          onChange={(value) => setConnectionCode(value)}
+          allowClear={false}
+          showSearch
+          optionFilterProp="label"
+          notFoundContent={t('app.kuaizhizao.documentPush.batch.connectorEmpty')}
+        />
+        {matchSaveApi ? (
+          <>
+            <Typography.Text type="secondary" style={{ whiteSpace: 'nowrap', lineHeight: '32px' }}>
+              {t('app.kuaizhizao.documentPush.batch.apiPlaceholder')}
+            </Typography.Text>
+            <Select
+              style={{ width: '100%', maxWidth: 520 }}
+              loading={apisLoading}
+              placeholder={t('app.kuaizhizao.documentPush.batch.apiPlaceholder')}
+              options={apiOptions}
+              value={saveApiUuid}
+              onChange={(value) => setSaveApiUuid(value)}
+              allowClear={false}
+              showSearch
+              optionFilterProp="label"
+              notFoundContent={t('app.kuaizhizao.documentPush.batch.apiEmpty')}
+            />
+          </>
+        ) : null}
+          </>
+        ) : null}
+      </div>
+      {(destinationKinds[settingProfile] ?? 'api') === 'api' &&
+      kingdeeProfiles.includes(settingProfile) &&
+      !connectionCode ? (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginTop: 12 }}
+          title={t('app.kuaizhizao.documentPush.batch.needConnector')}
+        />
+      ) : null}
+      {(destinationKinds[settingProfile] ?? 'api') === 'data_source' &&
+      !dataSourceUuids[settingProfile] ? (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginTop: 12 }}
+          title={t('app.kuaizhizao.documentPush.batch.needDataSource')}
+        />
+      ) : null}
+      {(destinationKinds[settingProfile] ?? 'api') === 'data_source' &&
+      dataSourceUuids[settingProfile] &&
+      !datasetUuids[settingProfile] ? (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginTop: 12 }}
+          title={t('app.kuaizhizao.documentPush.batch.needWriteDataset')}
+        />
+      ) : null}
+      {(destinationKinds[settingProfile] ?? 'api') === 'data_source' &&
+      datasetUuids[settingProfile] ? (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginTop: 12 }}
+          title={t('app.kuaizhizao.documentPush.batch.writeDatasetNoted')}
+        />
+      ) : null}
+      {(targetModes[settingProfile] ?? 'auto') === 'manual' ? (
+        <div style={{ marginTop: 16 }}>
+          <UniPullQueryModal<T>
+            open
+            embedded
+            hideFooter
+            title={title}
+            onCancel={() => closeTargetSetting(false)}
+            onOk={pull.handleConfirm}
+            confirmLoading={pull.confirmLoading}
+            rowKey="id"
+            columns={columns}
+            dataSource={pull.dataSource}
+            loading={pull.loading}
+            selectionType="checkbox"
+            selectedRowKeys={pull.selectedRowKeys}
+            onSelectedRowKeysChange={pull.handleSelectedRowKeysChange}
+            selectedRows={pull.selectedRows}
+            getRowLabel={getRowLabel}
+            searchDraft={pull.searchDraft}
+            onSearchDraftChange={pull.setSearchDraft}
+            onSearchApply={pull.handleSearchApply}
+            onSearchClear={pull.handleSearchClear}
+            appliedKeyword={pull.appliedKeyword}
+            searchPlaceholder={searchPlaceholder}
+            page={pull.page}
+            pageSize={pull.pageSize}
+            total={pull.total}
+            onPageChange={pull.handlePageChange}
+          />
+        </div>
+      ) : null}
+    </Modal>
+  ) : null;
 
   if (!open) return null;
 
-  return (
-    <UniPullQueryModal<T>
-      open={pull.open}
-      embedded={embedded}
-      title={title}
-      onCancel={pull.closeModal}
-      onOk={pull.handleConfirm}
-      confirmLoading={pull.confirmLoading}
-      okButtonProps={{ disabled: !pushReady || pull.confirmLoading }}
-      rowKey="id"
-      columns={columns}
-      dataSource={pull.dataSource}
-      loading={pull.loading}
-      selectionType="checkbox"
-      selectedRowKeys={pull.selectedRowKeys}
-      onSelectedRowKeysChange={pull.handleSelectedRowKeysChange}
-      selectedRows={pull.selectedRows}
-      getRowLabel={getRowLabel}
-      searchDraft={pull.searchDraft}
-      onSearchDraftChange={pull.setSearchDraft}
-      onSearchApply={pull.handleSearchApply}
-      onSearchClear={pull.handleSearchClear}
-      appliedKeyword={pull.appliedKeyword}
-      searchPlaceholder={searchPlaceholder}
-      page={pull.page}
-      pageSize={pull.pageSize}
-      total={pull.total}
-      onPageChange={pull.handlePageChange}
-      okText={confirmText || t('app.kuaizhizao.documentPush.batch.confirm')}
-      alert={
-        <Flex vertical gap={8}>
-          <Alert type="info" showIcon message={hint} description={pipelineDesc} />
-          {!pushReady && profilesLoaded ? (
-            <DocumentPushUnavailablePanel message={notReadyReason || undefined} />
-          ) : null}
-        </Flex>
-      }
-      filterExtraPlacement="block"
-      filterExtra={
-        <Flex vertical gap={8} style={{ width: '100%' }}>
-          <Flex wrap="wrap" gap={8} align="center" justify="space-between">
-            <Flex wrap="wrap" gap={8} align="center" style={{ flex: 1, minWidth: 0 }}>
-              <Typography.Text type="secondary" style={{ whiteSpace: 'nowrap' }}>
-                {t('app.kuaizhizao.documentPush.batch.targetProfiles')}
-              </Typography.Text>
-              <Checkbox.Group
-                style={{ flex: 1, minWidth: 0 }}
-                options={profileOptions}
-                value={targetProfiles}
-                disabled={profilesLoading || !profileOptions.length}
-                onChange={(vals) => setTargetProfiles(vals.map(String))}
-              />
-            </Flex>
-            <Button
-              loading={previewLoading}
-              disabled={!pushReady}
-              onClick={() => void handlePreviewPayload()}
-            >
-              {t('app.kuaizhizao.documentPush.preview')}
-            </Button>
-          </Flex>
-          <ConnectorCategoryConfigLayer writableCategories={writableCategories} />
-          {needsKingdeeConnector ? (
-            <Row gutter={[12, 8]}>
-              <Col xs={24} sm={12} md={8}>
-                <Typography.Text style={fieldLabelStyle}>
-                  {t('app.kuaizhizao.documentPush.batch.connectorPlaceholder')}
-                </Typography.Text>
-                <Select
-                  style={{ width: '100%' }}
-                  loading={connectorsLoading}
-                  placeholder={t('app.kuaizhizao.documentPush.batch.connectorPlaceholder')}
-                  options={connectorOptions}
-                  value={connectionCode}
-                  onChange={(value) => setConnectionCode(value)}
-                  allowClear={false}
-                  showSearch
-                  optionFilterProp="label"
-                  notFoundContent={t('app.kuaizhizao.documentPush.batch.connectorEmpty')}
+  const targetRows = targetProfiles.map((profile, index) => ({
+    key: profile,
+    index: index + 1,
+    profile,
+    name: profileLabel(profile),
+  }));
+
+  const addTarget = () => {
+    const preferred = (defaultProfilesRef.current || []).filter(Boolean);
+    const used = new Set([...targetProfiles, pendingNewProfile].filter(Boolean) as string[]);
+    const next =
+      preferred
+        .map((value) => profileOptions.find((option) => option.value === value))
+        .find((option) => option && !used.has(option.value)) ||
+      profileOptions.find((option) => !used.has(option.value));
+    if (!next) {
+      messageApi.info(t('app.kuaizhizao.documentPush.batch.noMoreTargets'));
+      return;
+    }
+    setPendingNewProfile(next.value);
+    setTargetModes((prev) => ({ ...prev, [next.value]: prev[next.value] ?? 'auto' }));
+    settingSnapshotRef.current = {
+      connection: connectionCode,
+      api: saveApiUuid,
+      mode: 'auto',
+      actions: [],
+      destination: destinationKinds[next.value] ?? 'api',
+      dataSourceUuid: dataSourceUuids[next.value],
+    };
+    setSettingProfile(next.value);
+  };
+
+  const confirmAuto = async () => {
+    if (targetProfiles.length > 0 && !pushReady) {
+      Modal.warning({
+        title,
+        content: notReadyReason || t('components.syncPushHub.pushNotReady'),
+      });
+      return;
+    }
+    if (!saveBinding) {
+      messageApi.info(t('app.kuaizhizao.documentPush.batch.autoNeedBinding'));
+      return;
+    }
+    if (!rememberBinding) {
+      onClose();
+      return;
+    }
+    const profiles = targetProfiles.filter((profile) => allowedProfileSet.has(profile));
+    if (
+      profiles.some(
+        (profile) =>
+          (destinationKinds[profile] ?? 'api') === 'data_source' && !dataSourceUuids[profile],
+      )
+    ) {
+      Modal.warning({
+        title,
+        content: t('app.kuaizhizao.documentPush.batch.needDataSource'),
+      });
+      return;
+    }
+    if (
+      profiles.some(
+        (profile) =>
+          (destinationKinds[profile] ?? 'api') === 'data_source' && !datasetUuids[profile],
+      )
+    ) {
+      Modal.warning({
+        title,
+        content: t('app.kuaizhizao.documentPush.batch.needWriteDataset'),
+      });
+      return;
+    }
+    const bound = profiles.map((profile) => ({
+      target_profile: profile,
+      push_mode: targetModes[profile] ?? 'auto',
+      destination_kind: destinationKinds[profile] ?? 'api',
+      data_source_uuid:
+        (destinationKinds[profile] ?? 'api') === 'data_source' ? dataSourceUuids[profile] : undefined,
+      dataset_uuid:
+        (destinationKinds[profile] ?? 'api') === 'data_source' ? datasetUuids[profile] : undefined,
+      trigger_actions:
+        (targetModes[profile] ?? 'auto') === 'auto' ? targetActionMap[profile] ?? [] : [],
+      connection_code:
+        kingdeeProfiles.includes(profile) && (destinationKinds[profile] ?? 'api') === 'api'
+          ? connectionCode
+          : undefined,
+      save_api_uuid:
+        kingdeeProfiles.includes(profile) && (destinationKinds[profile] ?? 'api') === 'api'
+          ? saveApiUuid
+          : undefined,
+      user_saved: true,
+    }));
+    await saveBinding({
+      targets: bound,
+      trigger_actions: [...new Set(bound.flatMap((row) => row.trigger_actions))],
+      connection_code: connectionCode,
+      save_api_uuid: saveApiUuid,
+      sync_mode: syncMode,
+      schedule_interval_minutes: scheduleIntervalMinutes,
+    });
+    messageApi.success(t('app.kuaizhizao.documentPush.batch.autoSaved'));
+  };
+
+  const footer = (
+    <Flex justify="flex-end" gap={8}>
+      <Button onClick={onClose}>{t('common.cancel')}</Button>
+      <Button
+        type="primary"
+        disabled={targetProfiles.length > 0 && !pushReady}
+        onClick={() => {
+          void confirmAuto();
+        }}
+      >
+        {t('app.kuaizhizao.documentPush.batch.confirmAuto')}
+      </Button>
+    </Flex>
+  );
+
+  const body = (
+    <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
+      {hint ? <Alert type="info" showIcon title={hint} /> : null}
+      <Flex justify="space-between" align="center" gap={12} wrap="wrap">
+        <Space size={8} wrap align="center" style={{ flex: 1, minWidth: 200 }}>
+          <Typography.Text strong>{t('app.kuaizhizao.documentPush.batch.targetProfiles')}</Typography.Text>
+          <Typography.Text type="secondary" style={{ fontSize: 12, lineHeight: 1.5 }}>
+            {t('app.kuaizhizao.documentPush.batch.targetsHint')}
+          </Typography.Text>
+        </Space>
+        <Space wrap>
+          <Button icon={<PlusOutlined />} onClick={addTarget} disabled={profilesLoading}>
+            {t('app.kuaizhizao.documentPush.batch.addTarget')}
+          </Button>
+          <Checkbox checked={rememberBinding} onChange={(event) => setRememberBinding(event.target.checked)}>
+            {t('app.kuaizhizao.documentPush.batch.rememberBinding')}
+          </Checkbox>
+        </Space>
+      </Flex>
+      <Table
+        size="small"
+        pagination={false}
+        rowKey="key"
+        dataSource={targetRows}
+        locale={{
+          emptyText: (
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={t('app.kuaizhizao.documentPush.batch.targetsEmpty')}
+            />
+          ),
+        }}
+        columns={[
+          {
+            title: t('components.syncFromSource.sourceIndex'),
+            dataIndex: 'index',
+            width: 56,
+          },
+          {
+            title: t('components.syncFromSource.sourceKind'),
+            dataIndex: 'profile',
+            width: 120,
+            render: (profile: string) =>
+              (destinationKinds[profile] ?? 'api') === 'data_source'
+                ? t('app.kuaizhizao.documentPush.batch.destinationDataset')
+                : t('app.kuaizhizao.documentPush.batch.apiPlaceholder'),
+          },
+          {
+            title: t('components.syncFromSource.sourceName'),
+            dataIndex: 'name',
+            ellipsis: true,
+          },
+          {
+            title: t('app.kuaizhizao.documentPush.batch.modeLabel'),
+            dataIndex: 'profile',
+            width: 96,
+            render: (profile: string) =>
+              (targetModes[profile] ?? 'auto') === 'manual'
+                ? t('app.kuaizhizao.documentPush.batch.modeManual')
+                : t('app.kuaizhizao.documentPush.batch.modeAuto'),
+          },
+          {
+            title: t('common.actions'),
+            key: 'actions',
+            width: 140,
+            render: (_value, record: { profile: string }) => (
+              <Space size="small">
+                  <Button
+                    type="link"
+                    size="small"
+                    onClick={() => {
+                      settingSnapshotRef.current = {
+                        connection: connectionCode,
+                        api: saveApiUuid,
+                        mode: targetModes[record.profile] ?? 'auto',
+                        actions: targetActionMap[record.profile] ?? [],
+                        destination: destinationKinds[record.profile] ?? 'api',
+                        dataSourceUuid: dataSourceUuids[record.profile],
+                      };
+                      setSettingProfile(record.profile);
+                    }}
+                  >
+                    {t('components.syncFromSource.configureSource')}
+                  </Button>
+                <Button
+                  type="link"
+                  size="small"
+                  danger
+                  icon={<DeleteOutlined />}
+                  onClick={() => {
+                    setTargetProfiles((prev) => prev.filter((item) => item !== record.profile));
+                    if (settingProfile === record.profile) setSettingProfile(null);
+                  }}
                 />
-              </Col>
-              {matchSaveApi ? (
-                <Col xs={24} sm={12} md={8}>
-                  <Typography.Text style={fieldLabelStyle}>
-                    {t('app.kuaizhizao.documentPush.batch.apiPlaceholder')}
-                  </Typography.Text>
-                  <Select
-                    style={{ width: '100%' }}
-                    loading={apisLoading}
-                    placeholder={t('app.kuaizhizao.documentPush.batch.apiPlaceholder')}
-                    options={apiOptions}
-                    value={saveApiUuid}
-                    onChange={(value) => setSaveApiUuid(value)}
-                    allowClear={false}
-                    showSearch
-                    optionFilterProp="label"
-                    notFoundContent={t('app.kuaizhizao.documentPush.batch.apiEmpty')}
-                  />
-                </Col>
-              ) : null}
-              {showScheduleControls ? (
-                <Col xs={24} sm={12} md={4}>
-                  <Typography.Text style={fieldLabelStyle}>
-                    {t('app.kuaizhizao.documentPush.batch.modeLabel')}
-                  </Typography.Text>
-                  <Select
-                    style={{ width: '100%' }}
-                    value={syncMode}
-                    onChange={setSyncMode}
-                    options={[
-                      {
-                        value: 'manual_full',
-                        label: t('app.kuaizhizao.documentPush.batch.modeManual'),
-                      },
-                      {
-                        value: 'scheduled_full',
-                        label: t('app.kuaizhizao.documentPush.batch.modeScheduled'),
-                      },
-                    ]}
-                  />
-                </Col>
-              ) : null}
-              {showScheduleControls && syncMode !== 'manual_full' ? (
-                <Col xs={24} sm={12} md={4}>
-                  <Typography.Text style={fieldLabelStyle}>
-                    {t('app.kuaizhizao.documentPush.batch.intervalLabel')}
-                  </Typography.Text>
-                  <Select
-                    style={{ width: '100%' }}
-                    value={scheduleIntervalMinutes}
-                    onChange={setScheduleIntervalMinutes}
-                    options={[5, 15, 60, 360].map((n) => ({
-                      value: n,
-                      label: t('app.kuaizhizao.documentPush.batch.interval', { n }),
-                    }))}
-                  />
-                </Col>
-              ) : null}
-            </Row>
-          ) : null}
-        </Flex>
-      }
-    />
+              </Space>
+            ),
+          },
+        ]}
+      />
+    </Space>
+  );
+
+  if (!embedded) {
+    return (
+      <Modal
+        title={title}
+        open={open}
+        onCancel={onClose}
+        width={1100}
+        destroyOnHidden
+        footer={footer}
+      >
+        {body}
+        {settingModal}
+      </Modal>
+    );
+  }
+
+  return (
+    <div>
+      {body}
+      <div style={{ marginTop: 16 }}>{footer}</div>
+      {settingModal}
+    </div>
   );
 }
 

@@ -33,12 +33,24 @@ function normalizeBodyValue(body: unknown): unknown {
   }
 }
 
-function extractArrayFromObject(body: Record<string, unknown>): unknown[] | null {
+function extractArrayFromObject(body: Record<string, unknown>, depth = 0): unknown[] | null {
   const candidates = ['data', 'items', 'rows', 'records', 'Results', 'result', 'list'];
   for (const key of candidates) {
     const value = body[key];
     if (Array.isArray(value) && value.length > 0) {
       return value;
+    }
+  }
+  if (depth >= 2) {
+    return null;
+  }
+  for (const key of candidates) {
+    const value = body[key];
+    if (isPlainObject(value)) {
+      const nested = extractArrayFromObject(value, depth + 1);
+      if (nested) {
+        return nested;
+      }
     }
   }
   return null;

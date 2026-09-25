@@ -4,7 +4,7 @@
 import React, { useState } from 'react';
 import { Button, Tooltip } from 'antd';
 import type { ButtonProps } from 'antd';
-import { CloudSyncOutlined } from '@ant-design/icons';
+import { SyncOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import {
   SyncPushHubModal,
@@ -57,7 +57,7 @@ export const SyncPushHubButton: React.FC<SyncPushHubButtonProps> = ({
     <Button
       type={type}
       size={size}
-      icon={<CloudSyncOutlined />}
+      icon={<SyncOutlined />}
       aria-label={typeof label === 'string' ? label : t('components.syncPushHub.button')}
       onClick={() => setOpen(true)}
       {...buttonRest}
