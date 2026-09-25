@@ -1,1 +1,0 @@
-import{F as t}from"./clientRelease-BgYRGwPZ.js";const a="/apps/kuaizhizao/rework-position-plan-templates",n={list:async e=>t(a,{method:"GET",params:e}),get:async e=>t(`${a}/${e}`,{method:"GET"}),create:async e=>t(a,{method:"POST",data:e}),update:async(e,o)=>t(`${a}/${e}`,{method:"PUT",data:o}),delete:async e=>t(`${a}/${e}`,{method:"DELETE"})};export{n as r};
