@@ -1,1 +1,0 @@
-import{b as e,d as t,c as a}from"./index-CE_3SvMp.js";const _=[{field_name:"material_code",field_label:"物料编号",field_type:"string"},{field_name:"group_code",field_label:"物料分组编号",field_type:"string"},{field_name:"supplier_code",field_label:"供应商编号",field_type:"string"}],i=[e(0,"YYYYMMDD"),{...t(1),text:"-"},a(2,3,"daily")];export{_ as B,i as D};

@@ -1,0 +1,1 @@
+import{L as s,d as u,M as r}from"./clientRelease-ByYGAEmB.js";const i=["businessConfigTrialRunMode"];function a(){return u({queryKey:i,queryFn:r,staleTime:5*60*1e3})}function t(n=!1){const{data:e}=a();return e===void 0?n:s(e)}export{i as T,t as u};

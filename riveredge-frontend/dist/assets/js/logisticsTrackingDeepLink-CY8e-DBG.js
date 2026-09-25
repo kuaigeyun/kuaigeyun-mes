@@ -1,0 +1,1 @@
+import{cH as c}from"./main-C-1u3C5k.js";function s(i={}){const t=new URLSearchParams,n=i.id!=null?String(i.id).trim():"",u=i.uuid!=null?String(i.uuid).trim():"";n&&t.set("id",n),u&&t.set("uuid",u);const r=t.toString();return r?`${c.LOGISTICS_TRACKING}?${r}`:c.LOGISTICS_TRACKING}export{s as b};
