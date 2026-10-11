@@ -17,7 +17,7 @@ import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { formatDateTimeBySiteSetting } from '../../../../../utils/format';
 import { alignDescriptionColumns } from '../../sales-management/shared/documentFieldAlignment';
 import { getDocumentTimingLifecycle } from '../../../utils/documentTimingLifecycle';
-import { renderReportDocTypeMarker } from '../../../../kuaireport/utils/reportListPresentation';
+import { renderReportDocTypeMarker } from '../../../utils/reportDocTypeMarker';
 
 export type DocumentTimingNode = {
   id?: number;

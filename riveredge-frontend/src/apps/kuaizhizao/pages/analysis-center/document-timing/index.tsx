@@ -17,7 +17,7 @@ import { getDocumentTimingLifecycle } from '../../../utils/documentTimingLifecyc
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { downloadFile } from '../../../../../utils/fileDownload';
-import { renderReportDocTypeMarker } from '../../../../kuaireport/utils/reportListPresentation';
+import { renderReportDocTypeMarker } from '../../../utils/reportDocTypeMarker';
 import { todaySiteDateString } from '../../../../../utils/format';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 import {
