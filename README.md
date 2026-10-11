@@ -1,15 +1,16 @@
 # 快格云制造
 
-React
-TypeScript
-Vite
-Ant Design
-Expo
-Electron
-FastAPI
-Python
-Pydantic
-PostgreSQL
+
+![React](https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript)
+![Vite](https://img.shields.io/badge/Vite-5-646CFF?style=flat-square&logo=vite)
+![Ant Design](https://img.shields.io/badge/Ant%20Design-6-0170FE?style=flat-square&logo=antdesign)
+![Expo](https://img.shields.io/badge/Expo-54-000020?style=flat-square&logo=expo)
+![Electron](https://img.shields.io/badge/Electron-33-47848F?style=flat-square&logo=electron)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?style=flat-square&logo=fastapi)
+![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=flat-square&logo=python)
+![Pydantic](https://img.shields.io/badge/Pydantic-2-E92063?style=flat-square&logo=pydantic)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-336791?style=flat-square&logo=postgresql)
 
 ---
 
@@ -42,6 +43,8 @@ PostgreSQL
 - **完整文档**：[docs/部署指南.md](docs/部署指南.md)
 
 ### 微信沟通反馈群
+
+<img src="docs/screenshots/wechat/wechat.png" alt="快格云 MES 交流群" width="280" />
 
 扫码加入 **快格云 MES 交流群**，反馈问题与建议。
 
