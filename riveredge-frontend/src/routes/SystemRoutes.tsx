@@ -142,16 +142,12 @@ const PrintDevicesPage = React.lazy(() => import('../pages/system/print-devices/
 const PrintTemplatesPage = React.lazy(() => import('../pages/system/print-templates/list'));
 const CodeRulesPage = React.lazy(() => import('../pages/system/code-rules/list'));
 const DataDictionariesPage = React.lazy(() => import('../pages/system/data-dictionaries/list'));
-const DataSourcesPage = React.lazy(() => import('../pages/system/data-sources/list'));
-const ApplicationConnectionsPage = React.lazy(() => import('../pages/system/application-connections/list'));
-const DatasetsPage = React.lazy(() => import('../pages/system/datasets/list'));
-const DatasetDesignerPage = React.lazy(() => import('../pages/system/datasets/designer'));
+const ProDataCenterUpgradePage = React.lazy(() => import('../pages/system/pro-data-center-upgrade'));
 /** 期初数据导入：业务页面仍在快智造模块，系统级入口挂载于此路径 */
 const InitialDataImportPage = React.lazy(() => import('../apps/kuaizhizao/pages/warehouse-management/initial-data'));
 
 const DataBackupsPage = React.lazy(() => import('../pages/system/data-backups'));
 const CustomFieldsPage = React.lazy(() => import('../pages/system/custom-fields/list'));
-const ApiServicesPage = React.lazy(() => import('../pages/system/apis/list'));
 const IntegrationConfigsPage = React.lazy(() => import('../pages/system/integration-configs/list'));
 const MessageTemplatesPage = React.lazy(() => import('../pages/system/messages/template'));
 const MessageConfigsPage = React.lazy(() => import('../pages/system/messages/config'));
@@ -242,19 +238,19 @@ const SystemRoutes: React.FC = () => (
     <Route path="/system/print-templates/design/:uuid" element={withPermission(withSuspense(PrintTemplateDesignPage), ['system:print-template:update'])} />
     <Route path="/system/code-rules" element={withPermission(withSuspense(CodeRulesPage), ['system:code-rule:read'])} />
     <Route path="/system/data-dictionaries" element={withPermission(withSuspense(DataDictionariesPage), ['system:data-dictionary:read'])} />
-    <Route path="/system/data-sources" element={withPermission(withSuspense(DataSourcesPage), ['system:data-source:read'])} />
-    <Route path="/system/application-connections" element={withPermission(withSuspense(ApplicationConnectionsPage), ['system:application-connection:read'])} />
+    <Route path="/system/data-sources" element={withPermission(withSuspense(ProDataCenterUpgradePage), ['system:data-source:read'])} />
+    <Route path="/system/application-connections" element={withPermission(withSuspense(ProDataCenterUpgradePage), ['system:application-connection:read'])} />
     <Route
       path="/system/initial-data"
       element={withPermission(withSuspense(InitialDataImportPage), ['kuaizhizao:warehouse-management-initial-data:read'])}
     />
-    <Route path="/system/datasets" element={withPermission(withSuspense(DatasetsPage), ['system:dataset:read'])} />
-    <Route path="/system/datasets/designer" element={withPermission(withSuspense(DatasetDesignerPage), ['system:dataset:update'])} />
+    <Route path="/system/datasets" element={withPermission(withSuspense(ProDataCenterUpgradePage), ['system:dataset:read'])} />
+    <Route path="/system/datasets/designer" element={withPermission(withSuspense(ProDataCenterUpgradePage), ['system:dataset:update'])} />
 
     <Route path="/system/data-backups" element={withPermission(withSuspense(DataBackupsPage), ['system:data-backup:read'])} />
     <Route path="/system/custom-fields" element={withPermission(withSuspense(CustomFieldsPage), ['system:custom-field:read'])} />
-    <Route path="/system/api-services" element={withPermission(withSuspense(ApiServicesPage), ['system:api:read'])} />
-    <Route path="/system/apis" element={withPermission(withSuspense(ApiServicesPage), ['system:api:read'])} />
+    <Route path="/system/api-services" element={withPermission(withSuspense(ProDataCenterUpgradePage), ['system:api:read'])} />
+    <Route path="/system/apis" element={withPermission(withSuspense(ProDataCenterUpgradePage), ['system:api:read'])} />
     <Route path="/system/integration-configs" element={withSuspense(IntegrationConfigsPage)} />
     <Route path="/system/message-templates" element={withPermission(withSuspense(MessageTemplatesPage), ['system:message-template:read'])} />
     <Route path="/system/messages/template" element={withPermission(withSuspense(MessageTemplatesPage), ['system:message-template:read'])} />

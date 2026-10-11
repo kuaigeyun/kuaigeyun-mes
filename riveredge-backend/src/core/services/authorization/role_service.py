@@ -293,6 +293,7 @@ class RoleService:
                 "permission_count": permission_count,
                 "user_count": user_count,
                 "created_at": role.created_at,
+                "updated_at": role.updated_at,
             })
         
         return {

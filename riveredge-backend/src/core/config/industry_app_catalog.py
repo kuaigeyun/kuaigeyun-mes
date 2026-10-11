@@ -13,26 +13,22 @@ from typing import FrozenSet
 
 from core.config.app_code_renames import LEGACY_INDUSTRY_RENAME_SOURCE_CODES
 
-FREE_INDUSTRY_APP_CODES: FrozenSet[str] = frozenset(
+# 原免费行业包已并入 PRO_INDUSTRY；开源主仓不再发布源码，应用中心仍展示于「行业」Tab
+FREE_INDUSTRY_APP_CODES: FrozenSet[str] = frozenset()
+
+# 重命名迁移/扫描合并完成前，旧 code 仍须归行业分类
+LEGACY_INDUSTRY_APP_CODES: FrozenSet[str] = LEGACY_INDUSTRY_RENAME_SOURCE_CODES
+
+# 历史免费行业原作者（现均为 PRO 行业包）
+FREE_INDUSTRY_AUTHOR_GITHUB: dict[str, str] = {}
+
+PRO_INDUSTRY_APP_CODES: FrozenSet[str] = frozenset(
     {
         "spoke-wheel",
         "ind-electronics",
         "ind-mold",
         "ind-relay",
         "ind-foreign-trade",
-    }
-)
-
-# 重命名迁移/扫描合并完成前，旧 code 仍须归行业分类
-LEGACY_INDUSTRY_APP_CODES: FrozenSet[str] = LEGACY_INDUSTRY_RENAME_SOURCE_CODES
-
-# 行业免费版原作者 GitHub（与 manifest author / author_github 一致）
-FREE_INDUSTRY_AUTHOR_GITHUB: dict[str, str] = {
-    "spoke-wheel": "xyt123lyq",
-}
-
-PRO_INDUSTRY_APP_CODES: FrozenSet[str] = frozenset(
-    {
         "kuaimachinery",
         "kuaimolding",
         "kuaiautoparts",

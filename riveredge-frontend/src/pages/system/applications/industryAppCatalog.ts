@@ -1,27 +1,26 @@
 /**
- * 行业应用清单（免费版 / 付费版）。
+ * 行业应用清单（付费 PRO 行业包）。
  *
- * - 免费版：主仓发布，应用中心「行业」分类展示，无需 License Key
- * - 付费版：私仓 kuaigeyun-pro compose 后入库展示，启用需 License Key（无占位卡片）
+ * 源码在 kuaigeyun-pro compose 后入库；应用中心「行业」Tab 展示，启用需 License Key。
  *
  * 与 core/config/industry_app_catalog.py 保持一致。
  */
 
-export const FREE_INDUSTRY_APP_CODES = [
+/** @deprecated 开源主仓不再含免费行业源码；保留空数组供类型兼容 */
+export const FREE_INDUSTRY_APP_CODES = [] as const;
+
+/** 改编码合并完成前 DB 可能暂留旧 code（见 app_code_renames）；分类仍须归行业 */
+export const LEGACY_INDUSTRY_APP_CODES = ['kuaielectronics', 'industry-mold'] as const;
+
+export type FreeIndustryAppCode = never;
+
+/** 付费行业应用 code（私仓实装后入库；用于分类与 License 判定） */
+export const PRO_INDUSTRY_APP_CODES = [
   'spoke-wheel',
   'ind-electronics',
   'ind-mold',
   'ind-relay',
   'ind-foreign-trade',
-] as const;
-
-/** 改编码合并完成前 DB 可能暂留旧 code（见 app_code_renames）；分类仍须归行业 */
-export const LEGACY_INDUSTRY_APP_CODES = ['kuaielectronics', 'industry-mold'] as const;
-
-export type FreeIndustryAppCode = (typeof FREE_INDUSTRY_APP_CODES)[number];
-
-/** 付费行业应用 code（私仓实装后入库；用于分类与 License 判定） */
-export const PRO_INDUSTRY_APP_CODES = [
   'kuaimachinery',
   'kuaimolding',
   'kuaiautoparts',
@@ -41,18 +40,7 @@ export const PRO_INDUSTRY_APP_CODES = [
 
 export type ProIndustryAppCode = (typeof PRO_INDUSTRY_APP_CODES)[number];
 
-export const ALL_INDUSTRY_APP_CODES = [
-  ...FREE_INDUSTRY_APP_CODES,
-  ...PRO_INDUSTRY_APP_CODES,
-] as const;
-
-export const FREE_INDUSTRY_SORT_ORDER: Record<FreeIndustryAppCode, number> = {
-  'spoke-wheel': 300,
-  'ind-electronics': 310,
-  'ind-mold': 320,
-  'ind-relay': 330,
-  'ind-foreign-trade': 340,
-};
+export const ALL_INDUSTRY_APP_CODES = [...PRO_INDUSTRY_APP_CODES] as const;
 
 /** 侧栏行业包容器（不在应用中心展示） */
 export const INDUSTRY_PACK_APP_CODE = 'industry-pack';
@@ -65,13 +53,11 @@ export function shouldHideFromApplicationCenter(code: string | undefined | null)
   return isIndustryPackShellCode(code);
 }
 
-/** 行业免费版原作者 GitHub ID（与 manifest author / author_github 一致） */
-export const FREE_INDUSTRY_AUTHOR_GITHUB: Record<FreeIndustryAppCode, string> = {
-  'spoke-wheel': 'xyt123lyq',
-};
+/** @deprecated 无免费行业包 */
+export const FREE_INDUSTRY_AUTHOR_GITHUB: Record<string, string> = {};
 
-export function isFreeIndustryAppCode(code: string | undefined | null): boolean {
-  return (FREE_INDUSTRY_APP_CODES as readonly string[]).includes(String(code || ''));
+export function isFreeIndustryAppCode(_code: string | undefined | null): boolean {
+  return false;
 }
 
 export function isProIndustryAppCode(code: string | undefined | null): boolean {
@@ -81,7 +67,6 @@ export function isProIndustryAppCode(code: string | undefined | null): boolean {
 export function isIndustryAppCode(code: string | undefined | null): boolean {
   const normalized = String(code || '');
   return (
-    isFreeIndustryAppCode(normalized) ||
     isProIndustryAppCode(normalized) ||
     (LEGACY_INDUSTRY_APP_CODES as readonly string[]).includes(normalized)
   );
@@ -96,10 +81,9 @@ export function requiresProLicense(app: {
   return isProIndustryAppCode(app?.code);
 }
 
-/** 行业免费包原作者 GitHub 用户名（应用中心编码行展示） */
+/** @deprecated 无免费行业包 */
 export function resolveFreeIndustryAuthorUsername(
-  code: string | undefined | null,
+  _code: string | undefined | null,
 ): string | undefined {
-  if (!isFreeIndustryAppCode(code)) return undefined;
-  return FREE_INDUSTRY_AUTHOR_GITHUB[code as FreeIndustryAppCode];
+  return undefined;
 }

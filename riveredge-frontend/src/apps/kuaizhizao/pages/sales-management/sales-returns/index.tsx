@@ -15,7 +15,7 @@ import { useDocumentHighlightDeepLink } from '../../../../../hooks/useDocumentHi
 import {
   receiptRefundService,
   RECEIPT_REFUND_RESOURCE,
-} from '../../../../kuaicaiwu/services/finance/receipt-refund';
+} from '../../../services/finance/receipt-refund';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { LinkedDocumentCode } from '../../../../../components/linked-document-code';
@@ -612,7 +612,7 @@ const SalesReturnsPage: React.FC = () => {
           messageApi.warning(t('app.kuaizhizao.salesReturn.refundNoReceipt'));
           return;
         }
-        navigate('/apps/kuaicaiwu/finance-management/receipt-refunds', {
+        navigate('/apps/kuaizhizao/finance-management/receipt-refunds', {
           state: { pullSourceIds: ids },
         });
       } catch (error) {

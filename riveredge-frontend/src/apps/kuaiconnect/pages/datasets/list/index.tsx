@@ -1,0 +1,1061 @@
+/**
+ * 数据集管理列表页面
+ * 
+ * 用于系统管理员查看和管理组织内的数据集。
+ * 支持数据集的 CRUD 操作和查询执行功能。
+ */
+
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import {
+  ActionType,
+  ProColumns,
+  ProFormText,
+  ProFormTextArea,
+  ProFormSwitch,
+  ProFormSelect,
+  ProDescriptionsItemProps,
+} from '@ant-design/pro-components';
+import SafeProFormSelect from '../../../../components/safe-pro-form-select';
+import { App, Popconfirm, Button, Tag, Space, Modal, Badge, Table } from 'antd';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../utils/uniTableLayoutColumns';
+import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { renderSystemActiveTag, renderSystemTypeMarker } from '../../utils/systemListPresentation';
+import { EditOutlined, DeleteOutlined, EyeOutlined, PlayCircleOutlined, CopyOutlined, HighlightOutlined } from '@ant-design/icons';
+import { useNavigate } from 'react-router-dom';
+import { UniTable } from '../../../../components/uni-table';
+import { DetailDrawerActions, FormModalTemplate, MODAL_CONFIG, TwoColumnLayout } from '../../../../components/layout-templates';
+import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer';
+import { getApiErrorMessage } from '../../../../utils/errorHandler';
+import {
+  getDatasetList,
+  getDatasetByUuid,
+  createDataset,
+  updateDataset,
+  deleteDataset,
+  executeDatasetQuery,
+  Dataset,
+  CreateDatasetData,
+  UpdateDatasetData,
+  ExecuteQueryResponse,
+} from '../../../../services/dataset';
+import {
+  buildFactoryImportTemplate,
+  resolveFactoryImportHeaderIndexMap,
+} from '../../../../utils/spreadsheetImportTemplate';
+import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
+import {
+  pickListSearchKeywordOrFields,
+  pickSearchString,
+  pickSearchTriStateBoolean,
+} from '../../../../utils/tableQueryKey';
+import {
+  getDataConnectionsForDataset,
+  IntegrationConfig,
+} from '../../../../services/integrationConfig';
+import { rowActionKind, rowActionLabelKeep, rowActionCopyCreate } from '../../../../components/uni-action';
+import { todaySiteDateString } from '../../../../utils/format';
+import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
+import { useResourceCategoryPanel } from '../../shared/useResourceCategoryPanel';
+import { RESOURCE_CATEGORY_UNCATEGORIZED_KEY, type ResourceCategoryListFilter } from '../../../../services/resourceCategory';
+/**
+ * 数据集管理列表页面组件
+ */
+const DatasetListPage: React.FC = () => {
+  const { t, i18n } = useTranslation();
+  const { message: messageApi } = App.useApp();
+  const navigate = useNavigate();
+  const actionRef = useRef<ActionType>(null);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+
+  const reloadList = useCallback(() => {
+    actionRef.current?.reload();
+  }, []);
+
+  const categoryListFilterRef = useRef<ResourceCategoryListFilter>({});
+
+  const handleCategorySelectionChange = useCallback(
+    (nextFilter: ResourceCategoryListFilter) => {
+      categoryListFilterRef.current = nextFilter;
+      reloadList();
+    },
+    [reloadList],
+  );
+
+  const {
+    leftPanel: categoryLeftPanel,
+    listFilter: categoryListFilter,
+    selectedCategoryKey,
+    categorySelectOptions,
+    reloadCategories,
+    categoryFormModal,
+  } = useResourceCategoryPanel({
+    resourceType: 'dataset',
+    onSelectionChange: handleCategorySelectionChange,
+  });
+
+  categoryListFilterRef.current = categoryListFilter;
+  
+  // Modal 相关状态（创建/编辑数据集）
+  const [modalVisible, setModalVisible] = useState(false);
+  const [isEdit, setIsEdit] = useState(false);
+  const [currentDatasetUuid, setCurrentDatasetUuid] = useState<string | null>(null);
+  const [formLoading, setFormLoading] = useState(false);
+  const [formInitialValues, setFormInitialValues] = useState<Record<string, any> | undefined>(undefined);
+  const [dataConnectionGroups, setDataConnectionGroups] = useState<{ label: string; options: { label: string; value: string }[] }[]>([]);
+  const [dataConnectionsFlat, setDataConnectionsFlat] = useState<IntegrationConfig[]>([]);
+  
+  // Drawer 相关状态（详情查看）
+  const [drawerVisible, setDrawerVisible] = useState(false);
+  const [detailData, setDetailData] = useState<Dataset | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryUuidRef = useRef<string | null>(null);
+  
+  // 查询执行状态
+  const [executeVisible, setExecuteVisible] = useState(false);
+  const [executeLoading, setExecuteLoading] = useState(false);
+  const [executeResult, setExecuteResult] = useState<ExecuteQueryResponse | null>(null);
+  const [executingUuid, setExecutingUuid] = useState<string | null>(null);
+
+  const datasetImportTemplate = useMemo(
+    () =>
+      buildFactoryImportTemplate(
+        t,
+        [
+          { field: 'name', required: true, labelKey: 'pages.system.datasets.importHeaderName' },
+          { field: 'code', required: true, labelKey: 'pages.system.datasets.importHeaderCode' },
+          {
+            field: 'dataSourceUuid',
+            required: true,
+            labelKey: 'pages.system.datasets.importHeaderDataSourceUuid',
+          },
+          { field: 'queryType', required: true, labelKey: 'pages.system.datasets.importHeaderQueryType' },
+          { field: 'description', labelKey: 'common.remark', aliases: ['备注', '描述'] },
+          { field: 'isActive', labelKey: 'pages.system.datasets.importHeaderEnabled', aliases: ['启用状态'] },
+          {
+            field: 'queryConfigJson',
+            required: true,
+            labelKey: 'pages.system.datasets.importHeaderQueryConfigJson',
+            aliases: ['查询配置(JSON)'],
+          },
+        ],
+        [
+          t('pages.system.datasets.importExampleName'),
+          'example_ds',
+          'uuid-of-data-source',
+          'sql',
+          t('pages.system.datasets.importExampleDescription'),
+          t('common.yes'),
+          t('pages.system.datasets.importExampleQueryConfigJson'),
+        ],
+      ),
+    [t, i18n.language],
+  );
+
+  /**
+   * 加载数据连接列表（合并数据源 + 应用连接器）
+   */
+  useEffect(() => {
+    const loadDataConnections = async () => {
+      try {
+        const { groups, items } = await getDataConnectionsForDataset();
+        setDataConnectionGroups(groups);
+        setDataConnectionsFlat(items);
+      } catch (error: any) {
+        console.error(error);
+        messageApi.error(
+          error?.message || t('pages.system.datasets.loadDataConnectionsFailed'),
+        );
+      }
+    };
+    loadDataConnections();
+  }, [messageApi, t]);
+
+  /**
+   * 处理新建数据集（仅创建记录，不配置查询，创建后跳转设计器）
+   */
+  const handleCreate = () => {
+    setIsEdit(false);
+    setCurrentDatasetUuid(null);
+    const presetCategoryUuid =
+      selectedCategoryKey !== 'all' && selectedCategoryKey !== RESOURCE_CATEGORY_UNCATEGORIZED_KEY
+        ? selectedCategoryKey
+        : undefined;
+    setFormInitialValues({
+      is_active: true,
+      category_uuid: presetCategoryUuid,
+    });
+    setModalVisible(true);
+  };
+
+  /**
+   * 处理编辑数据集（仅编辑基本信息，查询配置在设计器中）
+   */
+  const handleEdit = async (record: Dataset) => {
+    try {
+      setIsEdit(true);
+      setCurrentDatasetUuid(record.uuid);
+      const detail = await getDatasetByUuid(record.uuid);
+      setFormInitialValues({
+        name: detail.name,
+        code: detail.code,
+        description: detail.description,
+        category_uuid: detail.category_uuid || undefined,
+        output_type: detail.output_type ?? 'list',
+        display_config: detail.display_config ? JSON.stringify(detail.display_config, null, 2) : '',
+        is_active: detail.is_active,
+      });
+      setModalVisible(true);
+    } catch (error: any) {
+      messageApi.error(error.message || t('pages.system.datasets.getDetailFailed'));
+    }
+  };
+
+  /**
+   * 处理设计数据集（跳转到设计器，新建 tab）
+   */
+  const handleDesign = (record: Dataset) => {
+    navigate(`/system/datasets/designer?uuid=${record.uuid}`);
+  };
+
+  /**
+   * 处理查看详情
+   */
+  const loadDetail = async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
+    try {
+      const detail = await getDatasetByUuid(uuid);
+      setDetailData(detail);
+    } catch (error) {
+      setDetailData(null);
+      setDetailError(getApiErrorMessage(error, t('pages.system.datasets.getDetailFailed')));
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const handleView = async (record: Dataset) => {
+    detailRetryUuidRef.current = record.uuid;
+    setDrawerVisible(true);
+    setDetailData(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
+  };
+
+  const datasetDetailDescColumns = useMemo<ProDescriptionsItemProps<Dataset>[]>(
+    () => [
+      {
+        title: t('pages.system.datasets.columnName'),
+        dataIndex: 'name',
+      },
+      {
+        title: t('pages.system.datasets.columnCode'),
+        dataIndex: 'code',
+      },
+      {
+        title: t('pages.system.datasets.columnDataConnection'),
+        dataIndex: 'data_source_uuid',
+        render: (_, record) => {
+          const value = String(record.data_source_uuid ?? '');
+          const conn = dataConnectionsFlat.find((c) => c.uuid === value);
+          return conn ? `${conn.name} (${conn.type})` : value;
+        },
+      },
+      {
+        title: t('pages.system.datasets.columnQueryType'),
+        dataIndex: 'query_type',
+        render: (_, record) => {
+          const value = String(record.query_type ?? '');
+          const typeMap: Record<string, string> = {
+            sql: t('pages.system.datasets.queryTypeSql'),
+            sql_write: t('pages.system.datasets.queryTypeSqlWrite'),
+            api: t('pages.system.datasets.queryTypeApi'),
+          };
+          return typeMap[value] || value;
+        },
+      },
+      {
+        title: t('common.remark'),
+        dataIndex: 'description',
+      },
+      {
+        title: t('pages.system.datasets.columnQueryConfig'),
+        dataIndex: 'query_config',
+        render: (_, record) => (
+          <pre
+            style={{
+              margin: 0,
+              padding: '8px',
+              backgroundColor: '#f5f5f5',
+              borderRadius: '4px',
+              overflow: 'auto',
+              maxHeight: '300px',
+              fontSize: 12,
+            }}
+          >
+            {JSON.stringify(record.query_config ?? {}, null, 2)}
+          </pre>
+        ),
+      },
+      {
+        title: t('pages.system.datasets.columnEnabled'),
+        dataIndex: 'is_active',
+        render: (_, record) =>
+          renderSystemActiveTag(t, record.is_active, 'common.enabled', 'common.disabled'),
+      },
+      {
+        title: t('pages.system.datasets.columnLastExecuted'),
+        dataIndex: 'last_executed_at',
+        valueType: 'dateTime',
+      },
+      {
+        title: t('pages.system.datasets.columnLastError'),
+        dataIndex: 'last_error',
+        render: (_, record) => (record.last_error ? <Tag color="error">{record.last_error}</Tag> : t('common.dash')),
+      },
+      {
+        title: t('common.createdAt'),
+        dataIndex: 'created_at',
+        valueType: 'dateTime',
+      },
+      {
+        title: t('common.updatedAt'),
+        dataIndex: 'updated_at',
+        valueType: 'dateTime',
+      },
+    ],
+    [t, dataConnectionsFlat]
+  );
+
+  /**
+   * 批量启用/禁用
+   */
+  const handleBatchStatus = async (enable: boolean) => {
+    if (selectedRowKeys.length === 0) {
+      messageApi.warning(t('pages.system.datasets.selectToOperate'));
+      return;
+    }
+    try {
+      let done = 0;
+      for (const uuid of selectedRowKeys) {
+        await updateDataset(String(uuid), { is_active: enable });
+        done++;
+      }
+      messageApi.success(t('pages.system.datasets.batchStatusSuccess', { action: enable ? t('common.enabled') : t('common.disabled'), count: done }));
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || t('common.operationFailed'));
+    }
+  };
+
+  /**
+   * 处理删除数据集
+   */
+  const handleDelete = async (record: Dataset) => {
+    try {
+      await deleteDataset(record.uuid);
+      messageApi.success(t('common.deleteSuccess'));
+      actionRef.current?.reload();
+      void reloadCategories();
+    } catch (error: any) {
+      messageApi.error(error.message || t('common.deleteFailed'));
+    }
+  };
+
+  /**
+   * 批量删除数据集
+   */
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    if (keys.length === 0) {
+      messageApi.warning(t('pages.system.datasets.selectToDelete'));
+      return;
+    }
+    try {
+          let done = 0;
+          let fail = 0;
+          for (const uuid of keys) {
+            try {
+              await deleteDataset(String(uuid));
+              done++;
+            } catch {
+              fail++;
+            }
+          }
+          if (fail > 0) {
+            messageApi.warning(t('pages.system.datasets.batchDeletePartial', { done, fail }));
+          } else {
+            messageApi.success(t('pages.system.datasets.batchDeleteSuccess', { count: done }));
+          }
+          setSelectedRowKeys([]);
+    actionRef.current?.reload();
+          void reloadCategories();
+        } catch (error: any) {
+          messageApi.error(error?.message || t('pages.system.datasets.batchDeleteFailed'));
+        }
+  };;
+
+  /**
+   * 处理复制数据集（创建副本后跳转设计器）
+   */
+  const handleCopy = async (record: Dataset) => {
+    try {
+      const detail = await getDatasetByUuid(record.uuid);
+      const created = await createDataset({
+        name: `${detail.name} (副本)`,
+        code: `${detail.code}_copy_${Date.now().toString(36)}`,
+        query_type: detail.query_type,
+        query_config: detail.query_config || {},
+        description: detail.description,
+        data_source_uuid: detail.data_source_uuid,
+        is_active: true,
+      } as CreateDatasetData);
+      messageApi.success(t('pages.system.datasets.copySuccess'));
+      actionRef.current?.reload();
+      navigate(`/system/datasets/designer?uuid=${created.uuid}`);
+    } catch (error: any) {
+      messageApi.error(error?.message || t('pages.system.datasets.copyFailed'));
+    }
+  };
+
+  /**
+   * 处理执行查询
+   */
+  const handleExecute = async (record: Dataset) => {
+    try {
+      setExecutingUuid(record.uuid);
+      setExecuteLoading(true);
+      setExecuteVisible(true);
+      setExecuteResult(null);
+      
+      const result = await executeDatasetQuery(record.uuid, {
+        limit: 100,
+        offset: 0,
+      });
+      
+      setExecuteResult(result);
+      if (result.success) {
+        messageApi.success(t('pages.system.datasets.executeSuccess'));
+      } else {
+        messageApi.error(result.error || t('pages.system.datasets.executeFailed'));
+      }
+    } catch (error: any) {
+      messageApi.error(error.message || t('pages.system.datasets.executeFailed'));
+      setExecuteResult({
+        success: false,
+        data: [],
+        total: 0,
+        columns: [],
+        elapsed_time: 0,
+        error: error.message || t('pages.system.datasets.executeFailed'),
+      });
+    } finally {
+      setExecuteLoading(false);
+      setExecutingUuid(null);
+    }
+  };
+
+  /**
+   * 处理提交表单（创建/更新数据集）
+   * 新建：仅名称、代码、数据连接、描述、启用状态，创建后跳转设计器
+   * 编辑：仅基本信息
+   */
+  const handleSubmit = async (values: any): Promise<void> => {
+    try {
+      setFormLoading(true);
+      
+      if (isEdit && currentDatasetUuid) {
+        const updateData: UpdateDatasetData = {
+          name: values.name,
+          code: String(values.code ?? '').trim(),
+          description: values.description,
+          category_uuid: values.category_uuid ?? null,
+          is_active: values.is_active,
+        };
+        if (values.output_type) updateData.output_type = values.output_type;
+        if (values.display_config) {
+          try {
+            updateData.display_config = JSON.parse(values.display_config);
+          } catch {
+            // 忽略无效 JSON
+          }
+        }
+        await updateDataset(currentDatasetUuid, updateData);
+        messageApi.success(t('common.updateSuccess'));
+        setModalVisible(false);
+        setFormInitialValues(undefined);
+    actionRef.current?.reload();
+        void reloadCategories();
+      } else {
+        const createData: CreateDatasetData = {
+          name: values.name,
+          code: values.code,
+          query_type: 'sql',
+          query_config: {},
+          description: values.description,
+          data_source_uuid: values.data_source_uuid,
+          category_uuid: values.category_uuid || undefined,
+          is_active: values.is_active,
+        };
+        if (values.output_type) createData.output_type = values.output_type;
+        if (values.display_config) {
+          try {
+            createData.display_config = JSON.parse(values.display_config);
+          } catch {
+            // 忽略无效 JSON
+          }
+        }
+        const created = await createDataset(createData);
+        messageApi.success(t('pages.system.datasets.createSuccess'));
+        setModalVisible(false);
+        setFormInitialValues(undefined);
+    actionRef.current?.reload();
+        void reloadCategories();
+        navigate(`/system/datasets/designer?uuid=${created.uuid}`);
+      }
+    } catch (error: any) {
+      messageApi.error(error.message || t('common.operationFailed'));
+      throw error;
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  /**
+   * 表格列定义
+   */
+  const columns = useMemo<ProColumns<Dataset>[]>(() => alignProColumns([
+    {
+      title: t('pages.system.datasets.columnName'),
+      dataIndex: 'name',
+      width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
+    },
+    {
+      title: t('pages.system.datasets.columnCode'),
+      dataIndex: 'code',
+      width: 140,
+      minWidth: 140,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
+    },
+    {
+      title: t('pages.system.datasets.columnDataConnection'),
+      dataIndex: 'data_source_uuid',
+      width: 160,
+      minWidth: 160,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
+      hideInSearch: true,
+      render: (_, record) => {
+        const conn = dataConnectionsFlat.find(c => c.uuid === record.data_source_uuid);
+        return conn ? conn.name : record.data_source_uuid;
+      },
+    },
+    {
+      title: t('pages.system.datasets.columnOutputType'),
+      dataIndex: 'output_type',
+      width: 110,
+      minWidth: 110,
+      uniTableKeepWidth: true,
+      resizable: false,
+      hideInSearch: true,
+      render: (_, record) => {
+        const typeMap: Record<string, { color: string; text: string }> = {
+          list: { color: 'default', text: t('pages.system.datasets.outputTypeList') },
+          metric: { color: 'processing', text: t('pages.system.datasets.outputTypeMetric') },
+          multi_metric: { color: 'success', text: t('pages.system.datasets.outputTypeMultiMetric') },
+        };
+        const ot = (record as any).output_type || 'list';
+        const info = typeMap[ot] || { color: 'default', text: ot };
+        return renderSystemTypeMarker(info.text, info.color);
+      },
+    },
+    {
+      title: t('pages.system.datasets.columnQueryType'),
+      dataIndex: 'query_type',
+      width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
+      valueType: 'select',
+      valueEnum: {
+        sql: { text: t('pages.system.datasets.queryTypeSql'), status: 'Success' },
+        sql_write: { text: t('pages.system.datasets.queryTypeSqlWrite'), status: 'Warning' },
+        api: { text: t('pages.system.datasets.queryTypeApi'), status: 'Processing' },
+      },
+      render: (_, record) => {
+        const typeMap: Record<string, { color: string; text: string }> = {
+          sql: { color: 'processing', text: t('pages.system.datasets.queryTypeSql') },
+          sql_write: { color: 'success', text: t('pages.system.datasets.queryTypeSqlWrite') },
+          api: { color: 'warning', text: t('pages.system.datasets.queryTypeApi') },
+        };
+        const typeInfo = typeMap[record.query_type] || { color: 'default', text: record.query_type };
+        return renderSystemTypeMarker(typeInfo.text, typeInfo.color);
+      },
+    },
+    {
+      // 备注长短不一：唯一 RemainderFlex
+      title: t('common.remark'),
+      dataIndex: 'description',
+      minWidth: 140,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
+      resizable: false,
+      ellipsis: true,
+      hideInSearch: true,
+    },
+    {
+      title: t('pages.system.datasets.columnEnabled'),
+      dataIndex: 'is_active',
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+      valueType: 'select',
+      valueEnum: {
+        true: { text: t('common.enabled'), status: 'Success' },
+        false: { text: t('common.disabled'), status: 'Default' },
+      },
+      render: (_, record) =>
+        renderSystemActiveTag(t, record.is_active, 'common.enabled', 'common.disabled'),
+    },
+    {
+      title: t('pages.system.datasets.columnLastExecuted'),
+      dataIndex: 'last_executed_at',
+      width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
+      valueType: 'dateTime',
+      hideInSearch: true,
+      sorter: true,
+    },
+    {
+      title: t('common.createdAt'),
+      dataIndex: 'created_at',
+      width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
+      valueType: 'dateTime',
+      hideInSearch: true,
+      sorter: true,
+    },
+    {
+      title: t('common.actions'),
+      key: 'action',
+      fixed: 'right',
+      hideInSearch: true,
+      render: (_, record) => [
+            <Button key="view" {...rowActionKind('read')} onClick={() => handleView(record)} />,
+            <Button
+              key="design"
+              {...rowActionKind('skip')}
+              {...rowActionLabelKeep()}
+              onClick={() => handleDesign(record)}
+            >
+              {t('pages.system.datasets.design')}
+            </Button>,
+            <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)} />,
+            <Button
+              key="execute"
+              {...rowActionKind('skip')}
+              {...rowActionLabelKeep()}
+              loading={executingUuid === record.uuid}
+              onClick={() => handleExecute(record)}
+            >
+              {t('pages.system.datasets.executeQuery')}
+            </Button>,
+            <Button key="copy" {...rowActionCopyCreate('create')} onClick={() => handleCopy(record)} />,
+            <Popconfirm
+              key="delete"
+              title={t('pages.system.datasets.confirmDelete')}
+              onConfirm={() => handleDelete(record)}
+              okText={t('common.confirm')}
+              cancelText={t('common.cancel')}
+            >
+              <Button {...rowActionKind('delete')} />
+            </Popconfirm>,
+          ],
+    },
+  ], GLOBAL_DOC_LIST_FIELD_RANK), [t, dataConnectionsFlat, executingUuid, handleView, handleDesign, handleEdit, handleExecute, handleCopy, handleDelete]);
+
+
+  return (
+    <>
+      <TwoColumnLayout
+        layoutPersistenceId="pages.system.datasets.list"
+        style={{ height: '100%' }}
+        leftPanel={categoryLeftPanel}
+        rightPanel={{
+          content: (
+            <UniTable<Dataset>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('system.datasets')}
+          columnPersistenceId="pages.system.datasets.list-v4"
+          tanstackQuery={{ queryKeyPrefix: ['pages.system.datasets.list', selectedCategoryKey] }}
+          actionRef={actionRef}
+          columns={columns}
+          request={async (params, sort, _filter, searchFormValues) => {
+            const categoryFilter = categoryListFilterRef.current;
+            // 处理搜索参数
+            const apiParams: any = {
+              page: params.current || 1,
+              page_size: params.pageSize || 20,
+              ...categoryFilter,
+            };
+            
+            const search = pickListSearchKeywordOrFields(searchFormValues, 'search');
+            if (search) {
+              apiParams.search = search;
+            }
+
+            const queryType = pickSearchString(searchFormValues, 'query_type');
+            if (queryType) {
+              apiParams.query_type = queryType;
+            }
+            const outputType = pickSearchString(searchFormValues, 'output_type');
+            if (outputType) {
+              apiParams.output_type = outputType;
+            }
+
+            const dataSourceUuid = pickSearchString(searchFormValues, 'data_source_uuid');
+            if (dataSourceUuid) {
+              apiParams.data_source_uuid = dataSourceUuid;
+            }
+
+            const isActive = pickSearchTriStateBoolean(searchFormValues, 'is_active');
+            if (isActive !== undefined) {
+              apiParams.is_active = isActive;
+            }
+            
+            try {
+              const result = await getDatasetList(apiParams);
+              return {
+                data: result.items,
+                success: true,
+                total: result.total,
+              };
+            } catch (error: any) {
+              console.error(error);
+              messageApi.error(error?.message || t('pages.system.datasets.loadListFailed'));
+              return {
+                data: [],
+                success: false,
+                total: 0,
+              };
+            }
+          }}
+          rowKey="uuid"
+          showAdvancedSearch={true}
+          pagination={{
+            defaultPageSize: 20,
+            showSizeChanger: true,
+          }}
+          showCreateButton
+          onCreate={handleCreate}
+          createButtonText={t('pages.system.datasets.createButton')}
+          enableRowSelection
+          onRowSelectionChange={setSelectedRowKeys}
+          rowSelection={{
+            selectedRowKeys,
+            onChange: setSelectedRowKeys,
+          }}
+          showDeleteButtondeleteConfirmTitle={t('pages.system.datasets.confirmBatchDelete', { count: selectedRowKeys.length })}
+          
+          onDelete={handleBatchDelete}
+          deleteButtonText={t('common.batchDelete')}
+          toolBarRender={() =>
+            selectedRowKeys.length > 0
+              ? [
+                  <Button {...rowActionKind('update')} key="batch-enable" onClick={() => handleBatchStatus(true)}>{t('pages.system.datasets.batchEnable')}</Button>,
+                  <Button {...rowActionKind('update')} key="batch-disable" onClick={() => handleBatchStatus(false)}>{t('pages.system.datasets.batchDisable')}</Button>,
+                ]
+              : []
+          }
+          showImportButton
+          onImport={async (data) => {
+            if (!data || data.length < 2) {
+              messageApi.warning(t('pages.system.datasets.fillImportData'));
+              return;
+            }
+            const headers = (data[0] || []).map((h: any) => String(h || '').trim());
+            const rows = data.slice(2).filter((row: any[]) =>
+              row.some((c: any) => c != null && String(c).trim()),
+            );
+            const headerIndexMap = resolveFactoryImportHeaderIndexMap(
+              headers,
+              datasetImportTemplate.importHeaderMap,
+            );
+            const val = (row: any[], field: string) => {
+              const idx = headerIndexMap[field];
+              return idx !== undefined && row[idx] != null ? row[idx] : undefined;
+            };
+            let done = 0;
+            const ts = Date.now();
+            for (let i = 0; i < rows.length; i++) {
+              const row = rows[i];
+              const name = val(row, 'name');
+              const code = val(row, 'code');
+              const dataSourceUuid = val(row, 'dataSourceUuid');
+              if (name && code && dataSourceUuid) {
+                let queryConfig: Record<string, any> = {};
+                const queryConfigJson = val(row, 'queryConfigJson');
+                if (queryConfigJson) {
+                  try {
+                    queryConfig = JSON.parse(String(queryConfigJson));
+                  } catch {
+                    queryConfig = {};
+                  }
+                }
+                const queryTypeRaw = val(row, 'queryType');
+                const queryType = queryTypeRaw === 'api' ? 'api' : 'sql';
+                const isActiveRaw = val(row, 'isActive');
+                await createDataset({
+                  name: String(name),
+                  code: `${String(code).replace(/[^a-z0-9_]/g, '_').slice(0, 30)}_${ts}${i}`,
+                  data_source_uuid: String(dataSourceUuid),
+                  query_type: queryType,
+                  query_config: queryConfig,
+                  description: val(row, 'description') ? String(val(row, 'description')) : undefined,
+                  is_active:
+                    isActiveRaw !== 'false' && isActiveRaw !== '0' && isActiveRaw !== '',
+                });
+                done++;
+              }
+            }
+            messageApi.success(t('pages.system.datasets.importSuccess', { count: done }));
+    actionRef.current?.reload();
+          }}
+          importHeaders={datasetImportTemplate.importHeaders}
+          importExampleRow={datasetImportTemplate.importExampleRow}
+          importFieldMap={datasetImportTemplate.importHeaderMap}
+          showExportButton
+          onExport={async (type, keys, pageData) => {
+            let items: Dataset[] = [];
+            if (type === 'selected' && keys?.length) {
+              items = await Promise.all(keys.map((k) => getDatasetByUuid(String(k))));
+            } else if (type === 'currentPage' && pageData?.length) {
+              items = pageData;
+            } else {
+              const pageSize = 100;
+              const collected: Dataset[] = [];
+              let page = 1;
+              const maxPages = 100;
+              while (page <= maxPages) {
+                const res = await getDatasetList({ page, page_size: pageSize });
+                collected.push(...res.items);
+                if (res.items.length < pageSize || collected.length >= res.total) break;
+                page += 1;
+              }
+              items = collected;
+            }
+            if (items.length === 0) {
+              messageApi.warning(t('common.exportNoData'));
+              return;
+            }
+            await downloadRecordsAsXlsx(
+              items as Array<Record<string, unknown>>,
+              t('pages.system.datasets.exportFileName', {
+                date: todaySiteDateString(),
+              }),
+            );
+            messageApi.success(t('pages.system.datasets.exportSuccess'));
+          }}
+        />
+          ),
+        }}
+      />
+
+      {categoryFormModal}
+
+      {/* 创建/编辑数据集 Modal */}
+      <FormModalTemplate
+        title={isEdit ? t('pages.system.datasets.modalEdit') : t('pages.system.datasets.modalCreate')}
+        open={modalVisible}
+        onClose={() => {
+          setModalVisible(false);
+          setFormInitialValues(undefined);
+        }}
+        onFinish={handleSubmit}
+        isEdit={isEdit}
+        initialValues={formInitialValues}
+        loading={formLoading}
+        width={MODAL_CONFIG.SMALL_WIDTH}
+      >
+        <ProFormText
+          name="code"
+          label={t('pages.system.datasets.labelCode')}
+          rules={[
+            { required: true, message: t('pages.system.datasets.codeRequired') },
+            { pattern: /^[a-z0-9_]+$/, message: t('pages.system.datasets.codePattern') },
+          ]}
+          placeholder={t('pages.system.datasets.codePlaceholder')}
+          colProps={{ span: 12 }}
+        />
+        <ProFormText
+          name="name"
+          label={t('pages.system.datasets.labelName')}
+          rules={[{ required: true, message: t('pages.system.datasets.nameRequired') }]}
+          placeholder={t('pages.system.datasets.namePlaceholder')}
+          colProps={{ span: 12 }}
+        />
+        {!isEdit && (
+          <SafeProFormSelect
+            name="data_source_uuid"
+            label={t('pages.system.datasets.labelDataConnection')}
+            rules={[{ required: true, message: t('pages.system.datasets.dataConnectionRequired') }]}
+            options={dataConnectionGroups}
+            colProps={{ span: 12 }}
+          />
+        )}
+        <SafeProFormSelect
+          name="category_uuid"
+          label={t('pages.system.resourceCategory.fieldCategory')}
+          options={categorySelectOptions}
+          allowClear
+          placeholder={t('pages.system.resourceCategory.categoryPlaceholder')}
+          colProps={{ span: 12 }}
+        />
+        <ProFormSelect
+          name="output_type"
+          label={t('pages.system.datasets.labelOutputType')}
+          initialValue="list"
+          options={[
+            { label: t('pages.system.datasets.outputTypeList'), value: 'list' },
+            { label: t('pages.system.datasets.outputTypeMetric'), value: 'metric' },
+            { label: t('pages.system.datasets.outputTypeMultiMetric'), value: 'multi_metric' },
+          ]}
+          colProps={{ span: 12 }}
+        />
+        <ProFormTextArea
+          name="display_config"
+          label={t('pages.system.datasets.labelDisplayConfig')}
+          placeholder={t('pages.system.datasets.displayConfigPlaceholder')}
+          colProps={{ span: 24 }}
+          fieldProps={{ rows: 4 }}
+        />
+        <ProFormTextArea
+          name="description"
+          label={t('common.remark')}
+          placeholder={t('pages.system.datasets.remarkOptional')}
+          fieldProps={{ rows: 3 }}
+          colProps={{ span: 24 }}
+        />
+        <ProFormSwitch name="is_active" label={t('common.enabled')} colProps={{ span: 12 }} />
+      </FormModalTemplate>
+
+      {/* 查看详情 Drawer */}
+      <SystemMasterDetailDrawer
+        title={t('pages.system.datasets.detailTitle')}
+        open={drawerVisible}
+        onClose={() => {
+          setDrawerVisible(false);
+          setDetailData(null);
+          setDetailError(null);
+        }}
+        detail={detailData}
+        detailColumns={datasetDetailDescColumns}
+        loading={detailLoading}
+        error={detailError}
+        onRetry={() => {
+          const uuid = detailRetryUuidRef.current;
+          if (uuid) void loadDetail(uuid);
+        }}
+        extra={
+          detailData ? (
+            <DetailDrawerActions
+              items={[
+                {
+                  key: 'exec',
+                  visible: true,
+                  render: (
+                    <Button
+                      icon={<PlayCircleOutlined />}
+                      loading={executingUuid === detailData.uuid}
+                      onClick={() => handleExecute(detailData)}
+                    >
+                      {t('pages.system.datasets.executeQuery')}
+                    </Button>
+                  ),
+                },
+                {
+                  key: 'edit',
+                  visible: true,
+                  render: (
+                    <Button {...rowActionKind('update')} icon={<EditOutlined />} onClick={() => handleEdit(detailData)}>
+                      {t('common.edit')}
+                    </Button>
+                  ),
+                },
+              ]}
+            />
+          ) : null
+        }
+      />
+
+      {/* 执行查询结果 Modal */}
+      <Modal
+        title={t('pages.system.datasets.executeResultTitle')}
+        open={executeVisible}
+        onCancel={() => setExecuteVisible(false)}
+        footer={[
+          <Button {...rowActionKind('close')} key="close" onClick={() => setExecuteVisible(false)}>
+            {t('common.close')}
+          </Button>,
+        ]}
+        width={1000}
+      >
+        {executeLoading ? (
+          <div style={{ textAlign: 'center', padding: '40px 0' }}>
+            {t('pages.system.datasets.executing')}
+          </div>
+        ) : executeResult ? (
+          <div>
+            <Space style={{ marginBottom: 16 }}>
+              <Badge status={executeResult.success ? 'success' : 'error'} />
+              <span>{executeResult.success ? t('pages.system.datasets.executeSuccessShort') : t('pages.system.datasets.executeFailedShort')}</span>
+              <span>{t('pages.system.datasets.elapsedTime')}: {executeResult.elapsed_time}s</span>
+              {executeResult.total !== undefined && (
+                <span>{t('pages.system.datasets.totalRows')}: {executeResult.total}</span>
+              )}
+            </Space>
+            {executeResult.error && (
+              <div style={{ marginBottom: 16, padding: '8px', backgroundColor: '#fff2f0', borderRadius: '4px' }}>
+                <Tag color="error">{t('pages.system.datasets.errorLabel')}: {executeResult.error}</Tag>
+              </div>
+            )}
+            {executeResult.success && executeResult.data && executeResult.data.length > 0 && (
+              <Table
+                dataSource={executeResult.data}
+                columns={executeResult.columns?.map(col => ({
+                  title: col,
+                  dataIndex: col,
+                  key: col,
+                })) || []}
+                pagination={{
+                  pageSize: 20,
+                  showSizeChanger: true,
+                }}
+                scroll={{ x: 'max-content' }}
+                size="small"
+              />
+            )}
+            {executeResult.success && (!executeResult.data || executeResult.data.length === 0) && (
+              <div style={{ textAlign: 'center', padding: '40px 0', color: '#999' }}>
+                {t('pages.system.datasets.emptyResult')}
+              </div>
+            )}
+          </div>
+        ) : null}
+      </Modal>
+    </>
+  );
+};
+
+export default DatasetListPage;

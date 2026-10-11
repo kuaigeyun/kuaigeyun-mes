@@ -12,7 +12,7 @@
  */
 
 import React, { Component, useEffect, useState, useMemo, useRef, Suspense, type ErrorInfo, type ReactNode } from 'react';
-import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
+import { Routes, Route, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { Alert, Button } from 'antd';
 import { AlertTriangle, CircleX, Lightbulb, Search } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -25,6 +25,15 @@ import type { Application } from '../services/application';
 import PageSkeleton from '../components/page-skeleton';
 import ProUpgradePrompt from '../components/pro-upgrade-prompt';
 import { PAGE_SPACING } from '../components/layout-templates/constants';
+
+/** 财务管理 URL 已迁至快制造（API 仍走 compose 后的 kuaicaiwu） */
+function KuaicaiwuFinancePathRedirect() {
+  const location = useLocation();
+  const next =
+    location.pathname.replace('/apps/kuaicaiwu/finance-management', '/apps/kuaizhizao/finance-management') +
+    location.search;
+  return <Navigate to={next} replace />;
+}
 
 /** 须含 tenantId：切换组织后不得复用上一组织的已启用列表 */
 function installedAppsQueryKey(tenantId: string | null) {
@@ -289,7 +298,13 @@ const AppRoutes: React.FC = () => {
   // 彻底消除 useEffect 异步延迟造成的"空路由"竞态窗口，无需任何延迟兜底）
   const appRoutes = useMemo<React.ReactNode[]>(() => {
     if (!applications.length) return [];
-    const routes: React.ReactNode[] = [];
+    const routes: React.ReactNode[] = [
+      <Route
+        key="kuaicaiwu-finance-legacy"
+        path="kuaicaiwu/finance-management/*"
+        element={<KuaicaiwuFinancePathRedirect />}
+      />,
+    ];
     for (const app of applications) {
       // 缺省时按约定补齐，避免 DB 空 entry_point 导致整应用无路由、菜单点进去内容纯白
       const entryPoint = (app.entry_point || '').trim() || `../apps/${app.code}/index.tsx`;

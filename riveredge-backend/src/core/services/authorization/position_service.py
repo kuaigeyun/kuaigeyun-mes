@@ -183,6 +183,7 @@ class PositionService:
                 "is_active": position.is_active,
                 "user_count": user_count,
                 "created_at": position.created_at,
+                "updated_at": position.updated_at,
             })
         
         return {

@@ -136,7 +136,9 @@ def _iter_app_bindings(cfg: dict) -> Iterator[BindingTuple]:
             code = str(app).strip()
             if not code:
                 continue
-            yield mode, repo, code, code, code
+            be_name = code.replace("-", "_")
+            fe_name = code
+            yield mode, repo, code, be_name, fe_name
 
 
 def compose(cfg: dict) -> None:

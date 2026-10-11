@@ -13,6 +13,7 @@ import React, { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom';
 import PageSkeleton from '../../components/page-skeleton';
 import { LinkedDocumentDetailProvider } from '../../components/linked-document-detail';
+import { FinanceManagementRoutes } from './financeManagementRoutes';
 
 /** 页面懒加载包装：Suspense + Spin fallback */
 const withPageSuspense = (LazyComponent: React.LazyExoticComponent<React.ComponentType<any>>) => (
@@ -733,8 +734,10 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="logistics-management/tracking" element={withPageSuspense(LogisticsTrackingPage)} />
       <Route path="logistics-management/freight-bills" element={withPageSuspense(LogisticsFreightBillsPage)} />
 
+      {FinanceManagementRoutes()}
+
       {/* 成本管理已归属快财务；旧路径跳转 */}
-      <Route path="cost-management/dashboard" element={<Navigate to="/apps/kuaicaiwu/finance-management/dashboard" replace />} />
+      <Route path="cost-management/dashboard" element={<Navigate to="/apps/kuaizhizao/finance-management/dashboard" replace />} />
       <Route path="cost-management/cost-calculations" element={<Navigate to="/apps/kuaicaiwu/cost-management/cost-calculations" replace />} />
       <Route path="cost-management/cost-comparison" element={<Navigate to="/apps/kuaicaiwu/cost-management/cost-calculations?cat=compare" replace />} />
       <Route path="cost-management/cost-rules" element={<Navigate to="/apps/kuaicaiwu/cost-management/cost-rules" replace />} />

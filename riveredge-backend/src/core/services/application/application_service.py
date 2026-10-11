@@ -801,6 +801,11 @@ class ApplicationService:
             ValidationError: 当应用已安装时抛出
         """
         application = await ApplicationService.get_application_by_uuid(tenant_id, uuid)
+        app_code = str(application.get("code") or "").strip()
+        if app_code and not ApplicationService.is_manifest_deployed_on_node(app_code):
+            raise ValidationError(
+                f"应用 {app_code} 的后端包未部署到当前节点，请先在 workspace compose 专业/定制包后再安装。"
+            )
         
         if application.get('is_installed'):
             raise ValidationError("应用已安装")
@@ -995,7 +1000,11 @@ class ApplicationService:
             NotFoundError: 当应用不存在时抛出
         """
         application = await ApplicationService.get_application_by_uuid(tenant_id, uuid)
-        app_code = str(application.get("code") or "")
+        app_code = str(application.get("code") or "").strip()
+        if app_code and not ApplicationService.is_manifest_deployed_on_node(app_code):
+            raise ValidationError(
+                f"应用 {app_code} 的后端包未部署到当前节点，请先在 workspace compose 专业/定制包后再启用。"
+            )
         if app_code and not await ApplicationService._can_enable_or_install_app(tenant_id=tenant_id, app_code=app_code):
             controls = await ApplicationService._resolve_package_controls(tenant_id)
             manifest = ApplicationService._get_manifest_by_code(app_code)
@@ -1483,6 +1492,15 @@ class ApplicationService:
         return plugins
     
     @staticmethod
+    def is_manifest_deployed_on_node(code: str) -> bool:
+        """
+        当前运行节点 src/apps 是否已部署该应用（存在可读 manifest.json）。
+
+        侧栏 navigation-tree、启用/安装门禁均以此为准；库内 is_installed 不能代替磁盘包。
+        """
+        return ApplicationService._get_manifest_by_code(code) is not None
+
+    @staticmethod
     def _get_manifest_by_code(code: str) -> Optional[Dict[str, Any]]:
         """
         根据应用 code 读取 manifest.json，用于获取 is_pro 等字段。
@@ -1740,6 +1758,7 @@ class ApplicationService:
         )
         manifest_synced = 0
         manifest_errors: List[Dict[str, str]] = []
+        skipped_not_deployed: List[str] = []
 
         conn = await get_db_connection()
         try:
@@ -1748,10 +1767,16 @@ class ApplicationService:
                 app_uuid = app.get("uuid")
                 if not app_code or not app_uuid:
                     continue
+                if not ApplicationService.is_manifest_deployed_on_node(app_code):
+                    skipped_not_deployed.append(app_code)
+                    continue
                 manifest = manifest_by_code.get(app_code)
                 if not manifest:
                     manifest_errors.append(
-                        {"code": app_code, "detail": f"manifest.json 不存在: {app_code}"}
+                        {
+                            "code": app_code,
+                            "detail": f"manifest.json 已部署但扫描未命中: {app_code}",
+                        }
                     )
                     continue
                 try:
@@ -1788,18 +1813,24 @@ class ApplicationService:
             tenant_id,
             skip_permission_sync=False,
         )
-        manifest_total = len([a for a in apps if a.get("code")])
+        manifest_total = manifest_synced + len(manifest_errors)
 
         return {
             "success": menu_count > 0 or manifest_synced > 0,
             "manifest_synced": manifest_synced,
             "manifest_total": manifest_total,
             "manifest_errors": manifest_errors,
+            "skipped_not_deployed": skipped_not_deployed,
             "menu_count": menu_count,
             "message": (
-                f"已同步 {manifest_synced}/{manifest_total} 个应用清单，"
-                f"写入 {menu_count} 个菜单"
-                + (f"（{len(manifest_errors)} 个应用无本地 manifest，排序以库内 sort_order 为准）" if manifest_errors else "")
+                f"已同步 {manifest_synced}/{manifest_total} 个本节点已部署应用清单，"
+                f"写入 {menu_count} 条菜单"
+                + (
+                    f"（{len(skipped_not_deployed)} 个应用未 compose 到本节点，已跳过）"
+                    if skipped_not_deployed
+                    else ""
+                )
+                + (f"（{len(manifest_errors)} 个应用清单同步失败）" if manifest_errors else "")
             ),
         }
     

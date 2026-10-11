@@ -129,7 +129,7 @@ const APP_ACTION_ICON = {
  * - 行业：按行业特性启用的小场景插件（industry_extensions）
  * - 定制：按客户需求组织菜单 / 插件 / 完全自定义页面（is_dedicated）
  */
-const BASIC_APP_CODES = ['kuaizhizao', 'kuaiplm', 'kuaicaiwu', 'kuaioa', 'master-data'];
+const BASIC_APP_CODES = ['kuaizhizao', 'master-data', 'kuaiqms', 'kuaiems'];
 
 const APP_DESCRIPTION_OVERRIDES: Record<string, string> = {
   // 快财务当前聚焦管理会计，不包含总账
@@ -520,12 +520,25 @@ const ApplicationListPage: React.FC = () => {
           duration: 10,
         });
       } else {
+        const skipped = (result.skipped_not_deployed ?? []).filter(Boolean);
+        const skippedHint =
+          skipped.length > 0
+            ? `\n${t('pages.system.applications.syncAllSkippedPro', {
+                codes: skipped.join('、'),
+              })}`
+            : '';
         messageApi.success({
-          content: t('pages.system.applications.syncAllSuccess', {
-            count: menuCount,
-            defaultValue: `已写入 ${menuCount} 个菜单项，导航菜单已更新。`,
-          }),
+          content: (
+            <span style={{ whiteSpace: 'pre-line' }}>
+              {t('pages.system.applications.syncAllSuccess', {
+                count: menuCount,
+                defaultValue: `已写入 ${menuCount} 条菜单，导航菜单已更新。`,
+              })}
+              {skippedHint}
+            </span>
+          ),
           key: 'sync-all',
+          duration: skipped.length > 0 ? 10 : undefined,
         });
       }
       actionRef.current?.reload();
@@ -589,13 +602,32 @@ const ApplicationListPage: React.FC = () => {
     [t],
   );
 
+  const showProPlaceholderHelp = useCallback(
+    (record?: Application) => {
+      getAntdModal().info({
+        title: t('pages.system.applications.proPlaceholderHelpTitle', {
+          defaultValue: '专业应用尚未注册',
+        }),
+        content: t('pages.system.applications.proPlaceholderHelpDesc', {
+          name: record?.name || record?.code || '',
+          defaultValue:
+            '「{{name}}」尚未写入应用清单。请确认 workspace 已 compose 该专业包，再点击页面上方「扫描应用」，然后在更多操作中选择安装。启用时如需 License Key 会另行提示。',
+        }),
+        okText: t('pages.system.applications.proPlaceholderHelpOk', {
+          defaultValue: '知道了',
+        }),
+      });
+    },
+    [t],
+  );
+
   const handleInstall = async (record: Application) => {
     if (!canToggleAppLifecycle(record)) {
       messageApi.warning(lifecycleDisabledTooltip(record) ?? t('pages.system.applications.lifecyclePermissionDenied'));
       return;
     }
     if (isPlaceholderApplication(record)) {
-      showProUpgradeRequired(record);
+      showProPlaceholderHelp(record);
       return;
     }
     try {
@@ -635,7 +667,7 @@ const ApplicationListPage: React.FC = () => {
       return;
     }
     if (isPlaceholderApplication(record)) {
-      showProUpgradeRequired(record);
+      showProPlaceholderHelp(record);
       return;
     }
     try {
@@ -1025,13 +1057,14 @@ const ApplicationListPage: React.FC = () => {
         } else if (isPlaceholderApplication(record)) {
           actions.push(
             <Button
-              key="pro-upgrade"
+              key="scan-register"
               {...rowActionLabelKeep()}
               type="link"
               size="small"
-              onClick={() => showProUpgradeRequired(record)}
+              loading={scanning}
+              onClick={() => void handleScanApplications()}
             >
-              {t('pages.system.applications.proLockedTag', { defaultValue: '需升级专业版' })}
+              {t('pages.system.applications.scanAndRegister', { defaultValue: '扫描并注册' })}
             </Button>,
           );
         } else {
@@ -1058,7 +1091,7 @@ const ApplicationListPage: React.FC = () => {
         return actions;
       },
     },
-  ], GLOBAL_DOC_LIST_FIELD_RANK), [t, canToggleAppLifecycle, handleView, handleInstall, handleUninstall, showProUpgradeRequired, openDedicatedBindingModal, currentUser?.is_infra_admin]);
+  ], GLOBAL_DOC_LIST_FIELD_RANK), [t, canToggleAppLifecycle, handleView, handleInstall, handleUninstall, handleScanApplications, scanning, showProUpgradeRequired, openDedicatedBindingModal, currentUser?.is_infra_admin]);
 
   /**
    * 渲染应用卡片
@@ -1167,10 +1200,11 @@ const ApplicationListPage: React.FC = () => {
       !application.is_installed
         ? isPlaceholderApplication(application)
           ? {
-              key: 'install',
-              label: t('pages.system.applications.proLockedTag', { defaultValue: '需升级专业版' }),
-              icon: <LockOutlined />,
-              onClick: () => showProUpgradeRequired(application),
+              key: 'scan-register',
+              label: t('pages.system.applications.scanAndRegister', { defaultValue: '扫描并注册' }),
+              icon: <APP_ACTION_ICON.install />,
+              disabled: scanning || !canToggleAppLifecycle(application),
+              onClick: () => void handleScanApplications(),
             }
           : {
           key: 'install',
@@ -1384,7 +1418,8 @@ const ApplicationListPage: React.FC = () => {
                               { bg: themeToken.colorWarningBg, color: themeToken.colorWarningText },
                             )}
                           {(application.is_pro || needsLicenseKey(application)) &&
-                            !application.can_access && (
+                            !application.can_access &&
+                            !isPlaceholderApplication(application) && (
                             <Tooltip
                               title={t('pages.system.applications.proLockedTag', {
                                 defaultValue: '需升级专业版',
@@ -1506,7 +1541,7 @@ const ApplicationListPage: React.FC = () => {
             </Tag>
             {isPlaceholderApplication(application) && (
               <Tag color="warning" style={{ margin: 0, fontSize: 11 }}>
-                {t('pages.system.applications.proLockedTag', { defaultValue: '需升级专业版' })}
+                {t('pages.system.applications.proPendingScanTag', { defaultValue: '待扫描注册' })}
               </Tag>
             )}
           </div>

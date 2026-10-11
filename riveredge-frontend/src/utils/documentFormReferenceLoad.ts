@@ -4,7 +4,7 @@
 
 import type { Material } from '../apps/master-data/types/material';
 import type { Customer, Supplier } from '../apps/master-data/types/supply-chain';
-import { formatBankAccountOptionLabel } from '../apps/kuaicaiwu/utils/financeSharedOptions';
+import { formatBankAccountOptionLabel } from '../apps/kuaizhizao/utils/financeSharedOptions';
 import {
   searchReferenceDisplay,
   searchReferenceDisplayAll,

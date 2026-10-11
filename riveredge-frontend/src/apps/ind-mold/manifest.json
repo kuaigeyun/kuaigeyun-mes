@@ -1,9 +1,0 @@
-{
-  "code": "ind-mold",
-  "name": "模具机加",
-  "version": "1.0.0",
-  "description": "模具机加行业插件",
-  "icon": "tool",
-  "entry_point": "./index.tsx",
-  "route_path": "/apps/ind-mold"
-}

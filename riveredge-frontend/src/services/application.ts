@@ -354,6 +354,8 @@ export type SyncAllManifestsAndMenusResult = {
   manifest_synced: number;
   manifest_total: number;
   manifest_errors: Array<{ code: string; detail: string }>;
+  /** 库内已登记但 src/apps 未部署 manifest 的应用（PRO 未 compose），不参与同步 */
+  skipped_not_deployed?: string[];
   menu_count?: number;
 };
 

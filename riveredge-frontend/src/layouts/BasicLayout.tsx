@@ -30,7 +30,7 @@ import {
   PlayCircleOutlined,
   SendOutlined,
 } from '@ant-design/icons';
-import { message, Button, Tooltip, Badge, Avatar, Dropdown, Space, Breadcrumb, Typography, Empty, Divider, Modal, Grid, Skeleton } from 'antd';
+import { message, Button, Tooltip, Badge, Avatar, Dropdown, Space, Breadcrumb, Typography, Empty, Divider, Modal, Grid, Skeleton, Popover } from 'antd';
 import type { MenuProps } from 'antd';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -76,6 +76,10 @@ import {
   type SidebarSearchBgFollow,
 } from './basicLayout/sidebarSearchBgFollow';
 import { readSidebarMenuDensityPref } from './basicLayout/sidebarMenuDensity';
+import {
+  KuaiconnectLockedPopoverContent,
+  KuaiconnectLockedPopoverTitle,
+} from './basicLayout/KuaiconnectLockedPopoverContent';
 import dayjs from 'dayjs';
 import { nextSiteLogoUrlAfterImageError } from '../constants/siteAssets';
 import { useSiteLogoUrl } from '../hooks/useSiteLogoUrl';
@@ -150,6 +154,10 @@ import { clearSessionScopedQueries } from '../utils/clearSessionQueries';
 import { swallowRequestCancellation } from '../utils/requestCancellation';
 import { prefetchNumericPrecision } from '../hooks/useNumericPrecision';
 import { getInstalledApplicationList } from '../services/application';
+import {
+  isDataCenterSystemPath,
+  isKuaiconnectReady,
+} from '../utils/kuaiconnectAccess';
 import { getChatIntegrationStatus } from '../services/deepseekChat';
 import { buildChatIntegrationStatusQueryKey } from '../hooks/useChatIntegrationStatus';
 import { hasPermission, resolveUserForMenuPermission } from '../utils/permission';
@@ -1272,10 +1280,10 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             child.path !== '/system/launch-progress'
         );
         const itemCount = items.length;
+        const rawKey = String(group.key || group.name || `system-group-${index}`);
         // 每个分组固定显示为两行：列数按数量自动计算
         const itemCols = Math.max(2, Math.ceil(itemCount / 2));
         // 组宽度按设计占位，确保每行总占位凑满 12，避免右侧空白列
-        const rawKey = String(group.key || group.name || `system-group-${index}`);
         const groupSpan = spanByKey[rawKey] ?? Math.min(6, Math.max(3, itemCols + 1));
         // 数据中心后续将剥离为 PRO；浮层组标题与侧栏同款 PRO 徽标
         const groupNameText = typeof group.name === 'string' ? group.name : '';
@@ -1370,16 +1378,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     );
   }, [systemSettingsPanelGridColumns]);
 
-  const handleSystemSettingsNavigate = useCallback((path?: string) => {
-    if (!path) return;
-    unmountSystemSettingsPanel();
-    if (path.startsWith('http://') || path.startsWith('https://')) {
-      window.open(path, '_blank', 'noopener,noreferrer');
-      return;
-    }
-    navigate(path);
-  }, [navigate, unmountSystemSettingsPanel]);
-
   const getSystemPanelIcon = useCallback((path?: string): React.ReactNode => {
     if (!path) return <IconifyIcon icon="fluent-color:apps-24" />;
     const iconMap: Record<string, string> = {
@@ -1434,6 +1432,31 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     ...layoutShellQueryOptions,
     staleTime: 5 * 60 * 1000,
   });
+
+  const { data: installedAppsAll } = useQuery({
+    queryKey: ['installedApplicationsAll', { tenantId: tenantIdStrForHome }],
+    queryFn: () => getInstalledApplicationList(),
+    enabled: systemSettingsPanelMounted,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const kuaiconnectReady = useMemo(
+    () => isKuaiconnectReady(installedAppsAll),
+    [installedAppsAll],
+  );
+
+  const handleSystemSettingsNavigate = useCallback((path?: string) => {
+    if (!path) return;
+    if (isDataCenterSystemPath(path) && !kuaiconnectReady) {
+      return;
+    }
+    unmountSystemSettingsPanel();
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      window.open(path, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    navigate(path);
+  }, [navigate, unmountSystemSettingsPanel, kuaiconnectReady]);
 
   const hasAiAssistantEntry = useMemo(() => {
     const kuaiaiApp = (installedApps ?? []).find((app) => app.code === 'kuaiai');
@@ -3368,21 +3391,58 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                       style={{ gridTemplateColumns: `repeat(${group.itemCols}, minmax(0, 1fr))` }}
                     >
                       {group.items.map((child) => {
-                        return (
+                        const path = child.path as string | undefined;
+                        const dataCenterLocked =
+                          group.key === 'data-center-group' &&
+                          isDataCenterSystemPath(path) &&
+                          !kuaiconnectReady;
+
+                        const itemKey = String(child.key || child.path);
+                        const itemButton = (
                           <button
-                            key={String(child.key || child.path)}
                             type="button"
-                            className="riveredge-system-settings-item"
-                            onClick={() => handleSystemSettingsNavigate(child.path)}
+                            className={`riveredge-system-settings-item${dataCenterLocked ? ' riveredge-system-settings-item--locked' : ''}`}
+                            onClick={() => handleSystemSettingsNavigate(path)}
                             title={typeof child.name === 'string' ? child.name : undefined}
                           >
-                            <span
-                              className="riveredge-system-settings-item-icon"
-                            >
-                              {getSystemPanelIcon(child.path)}
+                            <span className="riveredge-system-settings-item-icon">
+                              {getSystemPanelIcon(path)}
+                              {dataCenterLocked ? (
+                                <span className="riveredge-system-settings-item-icon-lock" aria-hidden>
+                                  <LockOutlined />
+                                </span>
+                              ) : null}
                             </span>
-                            <span className="riveredge-system-settings-item-label">{child.name as React.ReactNode}</span>
+                            <span className="riveredge-system-settings-item-label">
+                              {child.name as React.ReactNode}
+                            </span>
                           </button>
+                        );
+
+                        if (!dataCenterLocked) {
+                          return <React.Fragment key={itemKey}>{itemButton}</React.Fragment>;
+                        }
+
+                        return (
+                          <Popover
+                            key={itemKey}
+                            trigger="click"
+                            placement="top"
+                            getPopupContainer={() => document.body}
+                            zIndex={1350}
+                            title={<KuaiconnectLockedPopoverTitle featurePath={path} />}
+                            content={
+                              <KuaiconnectLockedPopoverContent
+                                featurePath={path}
+                                onGoAppCenter={() => {
+                                  unmountSystemSettingsPanel();
+                                  navigate('/system/applications');
+                                }}
+                              />
+                            }
+                          >
+                            {itemButton}
+                          </Popover>
                         );
                       })}
                     </div>

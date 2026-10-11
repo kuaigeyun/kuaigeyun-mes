@@ -15,6 +15,9 @@ import { MarkerTag } from '../../constants/statusBadges';
 
 export const INLINE_MARKER_TAG_PREVIEW_MAX = 2;
 
+/** UniTable primaryFlex 列实测徽章组宽度（与 data-uni-flex-col 配合） */
+export const INLINE_MARKER_TAG_GROUP_CLASS = 'uni-table-inline-marker-tag-group';
+
 const TAG_STYLE: React.CSSProperties = {
   fontSize: 'inherit',
   /* 勿 inherit 行高：会把 Tag 撑得比邻列单枚 MarkerTag 更高，middle 后顶边看起来上浮 */
@@ -57,6 +60,7 @@ export function renderInlineMarkerTagGroup(
   if (!items.length) return options?.empty ?? '-';
   return (
     <div
+      className={INLINE_MARKER_TAG_GROUP_CLASS}
       style={{
         ...GROUP_STYLE,
         flexWrap: options?.wrap === false ? 'nowrap' : 'wrap',
@@ -130,4 +134,41 @@ export function renderInlineMarkerTagPreview(
     });
   }
   return renderInlineMarkerTagGroup(items);
+}
+
+export type InlineMarkerTagGroupPreviewOptions = InlineMarkerTagPreviewOptions &
+  InlineMarkerTagGroupOptions & {
+    /** 溢出摘要徽章 Tooltip；默认用未展示项 label 顿号拼接 */
+    overflowTitle?: (hiddenItems: InlineMarkerTagItem[], totalCount: number) => React.ReactNode;
+  };
+
+/** 多枚 MarkerTag 预览：前 N 条可点击/带色，超出一条「等共…」摘要（单行 nowrap 默认） */
+export function renderInlineMarkerTagGroupPreview(
+  items: InlineMarkerTagItem[],
+  options?: InlineMarkerTagGroupPreviewOptions,
+): React.ReactNode {
+  if (!items.length) return options?.empty ?? '-';
+  const previewMax = options?.previewMax ?? INLINE_MARKER_TAG_PREVIEW_MAX;
+  const preview = items.slice(0, previewMax);
+  const totalCount = items.length;
+  const hasMore = totalCount > preview.length;
+  const rendered: InlineMarkerTagItem[] = [...preview];
+  if (hasMore && options?.formatMore) {
+    const hidden = items.slice(previewMax);
+    rendered.push({
+      key: 'more',
+      label: options.formatMore(totalCount),
+      color: options?.color ?? 'default',
+      title:
+        options?.overflowTitle?.(hidden, totalCount) ??
+        hidden
+          .map((item) => item.label)
+          .filter((label) => label != null && label !== '')
+          .join('、'),
+    });
+  }
+  return renderInlineMarkerTagGroup(rendered, {
+    empty: options?.empty,
+    wrap: options?.wrap ?? false,
+  });
 }

@@ -11,9 +11,19 @@ mode: link
 plugins:
   - repo: ../kuaigeyun-pro
     apps:
-      - kuaiai
+      - kuaipd
+      - kuaiplm
+      - kuaicaiwu
+      - kuaioa
       - kuaireport
       - kuaiiot
+      - kuaiai
+      - kuaiconnect
+      - spoke-wheel
+      - ind-electronics
+      - ind-mold
+      - ind-relay
+      - ind-foreign-trade
   - repo: ../kuaigeyun-custom
     app_bindings:
       - project: funide-oa

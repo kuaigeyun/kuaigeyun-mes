@@ -44,6 +44,100 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'user-mgmt-list-audit-datetime-r01',
+    date: '2026-10-11',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.user-mgmt-list-audit-datetime-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.user-mgmt-list-audit-datetime-r01.description',
+  },
+  {
+    id: 'system-users-list-roles-preview-r01',
+    date: '2026-10-11',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.system-users-list-roles-preview-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.system-users-list-roles-preview-r01.description',
+  },
+  {
+    id: 'kuaiplm-off-master-data-process-menu-r01',
+    date: '2026-10-11',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiplm-off-master-data-process-menu-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-off-master-data-process-menu-r01.description',
+  },
+  {
+    id: 'kuaiconnect-popover-no-upgrade-btn-r01',
+    date: '2026-10-11',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiconnect-popover-no-upgrade-btn-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiconnect-popover-no-upgrade-btn-r01.description',
+  },
+  {
+    id: 'kuaiconnect-popover-pro-features-r01',
+    date: '2026-10-11',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiconnect-popover-pro-features-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiconnect-popover-pro-features-r01.description',
+  },
+  {
+    id: 'menu-group-kuaiconnect-rename-r01',
+    date: '2026-10-11',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.menu-group-kuaiconnect-rename-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.menu-group-kuaiconnect-rename-r01.description',
+  },
+  {
+    id: 'data-center-popover-kuaiconnect-r01',
+    date: '2026-10-11',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.data-center-popover-kuaiconnect-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.data-center-popover-kuaiconnect-r01.description',
+  },
+  {
+    id: 'pro-app-placeholder-scan-install-r01',
+    date: '2026-10-11',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.pro-app-placeholder-scan-install-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.pro-app-placeholder-scan-install-r01.description',
+  },
+  {
+    id: 'dedicated-host-disable-separation-r01',
+    date: '2026-10-11',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.dedicated-host-disable-separation-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.dedicated-host-disable-separation-r01.description',
+  },
+  {
+    id: 'pro-app-center-order-kuailianjie-r01',
+    date: '2026-10-11',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.pro-app-center-order-kuailianjie-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.pro-app-center-order-kuailianjie-r01.description',
+  },
+  {
+    id: 'sidebar-navigation-tree-pro-compose-r01',
+    date: '2026-10-11',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sidebar-navigation-tree-pro-compose-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sidebar-navigation-tree-pro-compose-r01.description',
+  },
+  {
+    id: 'app-pro-migration-wave1-r01',
+    date: '2026-10-11',
+    type: 'major',
+    titleKey: 'pages.dashboard.updateLog.entries.app-pro-migration-wave1-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.app-pro-migration-wave1-r01.description',
+  },
+  {
     id: 'purchase-order-batch-push-in-menu-r01',
     date: '2026-10-11',
     type: 'improvement',

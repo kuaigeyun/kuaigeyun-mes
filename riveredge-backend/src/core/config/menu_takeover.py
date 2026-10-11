@@ -43,6 +43,11 @@ MENU_TAKEOVER_RULES: Dict[str, MenuTakeoverRule] = {
             "/apps/kuaizhizao/after-sales-service",
         ),
     ),
+    "kuaicaiwu": MenuTakeoverRule(
+        consumer_app_code="kuaicaiwu",
+        source_app_code="kuaizhizao",
+        path_prefixes=("/apps/kuaizhizao/finance-management",),
+    ),
 }
 
 META_SUPPRESSED_BY_TAKEOVER = "suppressed_by_takeover"

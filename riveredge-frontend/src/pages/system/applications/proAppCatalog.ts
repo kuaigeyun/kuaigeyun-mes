@@ -3,13 +3,17 @@
  * 与 core/config/pro_app_catalog.py 的 PRO_APP_CODES 保持一致。
  *
  * 应用排序唯一真源：各应用 manifest.json → core_applications.sort_order（API 返回）。
- * 未入库占位使用同一 PRO 段编号（310–350），KU-AI 固定末位 350。
- * 快协同（kuaisrm）短期不做，不进清单。kuaiems 已作为基础应用「快设备」落地，不在本 PRO 清单。
+ * 未入库占位使用同一 PRO 段编号，KU-AI 固定末位 350。
  */
 
 export const PRO_APP_CODES = [
-  'kuaireport',
+  'kuaiplm',
+  'kuaipd',
+  'kuaioa',
+  'kuaicaiwu',
   'kuaiiot',
+  'kuaireport',
+  'kuaiconnect',
   'kuaiai',
 ] as const;
 
@@ -17,8 +21,13 @@ export type ProAppCode = (typeof PRO_APP_CODES)[number];
 
 /** 专业版应用 sort_order（与 manifest / 迁移一致；KU-AI 末位） */
 export const PRO_APP_SORT_ORDER: Record<ProAppCode, number> = {
-  kuaireport: 310,
+  kuaiplm: 300,
+  kuaipd: 305,
+  kuaioa: 310,
+  kuaicaiwu: 315,
   kuaiiot: 320,
+  kuaireport: 325,
+  kuaiconnect: 330,
   kuaiai: 350,
 };
 
@@ -32,6 +41,34 @@ type ProPlaceholderMeta = {
 
 /** 与应用中心 PRO 展示文案键一致 */
 export const PRO_PLACEHOLDER_META: Record<ProAppCode, ProPlaceholderMeta> = {
+  kuaipd: {
+    nameKey: 'sys.app.kuaipd.name',
+    descKey: 'sys.app.kuaipd.desc',
+    nameDefault: '快交付',
+    descDefault: '交付项目、物流与售后履约',
+    version: 'PRO',
+  },
+  kuaiplm: {
+    nameKey: 'sys.app.kuaiplm.name',
+    descKey: 'sys.app.kuaiplm.desc',
+    nameDefault: '快研发',
+    descDefault: '研发项目 / NPI 阶段门、设计变更与知识中心协同平台',
+    version: 'PRO',
+  },
+  kuaicaiwu: {
+    nameKey: 'sys.app.kuaicaiwu.name',
+    descKey: 'sys.app.kuaicaiwu.desc',
+    nameDefault: '轻财务',
+    descDefault: '管理会计与经营分析协同平台',
+    version: 'PRO',
+  },
+  kuaioa: {
+    nameKey: 'sys.app.kuaioa.name',
+    descKey: 'sys.app.kuaioa.desc',
+    nameDefault: '轻办公',
+    descDefault: '轻量办公与协同',
+    version: 'PRO',
+  },
   kuaireport: {
     nameKey: 'sys.app.kuaireport.name',
     descKey: 'sys.app.kuaireport.desc',
@@ -43,14 +80,21 @@ export const PRO_PLACEHOLDER_META: Record<ProAppCode, ProPlaceholderMeta> = {
     nameKey: 'sys.app.kuaiiot.name',
     descKey: 'sys.app.kuaiiot.desc',
     nameDefault: '快数采',
-    descDefault: '工业物联网设备数采集成平台，敬请期待',
+    descDefault: '工业物联网设备数采集成平台',
     version: 'PRO',
   },
   kuaiai: {
     nameKey: 'sys.app.kuaiai.name',
     descKey: 'sys.app.kuaiai.desc',
     nameDefault: 'KU-AI',
-    descDefault: '嵌入业务场景的 AI 智能辅助引擎，提供对话助手与业务智能建议',
+    descDefault: '嵌入业务场景的 AI 智能辅助引擎',
+    version: 'PRO',
+  },
+  kuaiconnect: {
+    nameKey: 'sys.app.kuaiconnect.name',
+    descKey: 'sys.app.kuaiconnect.desc',
+    nameDefault: '快连接',
+    descDefault: '应用连接器、接口、数据源与数据集管理',
     version: 'PRO',
   },
 };

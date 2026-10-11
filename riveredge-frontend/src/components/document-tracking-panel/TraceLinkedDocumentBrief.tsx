@@ -88,19 +88,19 @@ async function loadApiRequest() {
   return apiRequest;
 }
 async function loadReceiptService() {
-  const { receiptService } = await import('../../apps/kuaicaiwu/services/finance/receipt');
+  const { receiptService } = await import('../../apps/kuaizhizao/services/finance/receipt');
   return receiptService;
 }
 async function loadReceivableService() {
-  const { receivableService } = await import('../../apps/kuaicaiwu/services/finance/receivable');
+  const { receivableService } = await import('../../apps/kuaizhizao/services/finance/receivable');
   return receivableService;
 }
 async function loadPayableService() {
-  const { payableService } = await import('../../apps/kuaicaiwu/services/finance/payable');
+  const { payableService } = await import('../../apps/kuaizhizao/services/finance/payable');
   return payableService;
 }
 async function loadPurchaseInvoiceService() {
-  const { purchaseInvoiceService } = await import('../../apps/kuaicaiwu/services/finance/purchase-invoice');
+  const { purchaseInvoiceService } = await import('../../apps/kuaizhizao/services/finance/purchase-invoice');
   return purchaseInvoiceService;
 }
 

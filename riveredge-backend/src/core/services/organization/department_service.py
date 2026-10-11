@@ -281,6 +281,8 @@ class DepartmentService:
                 "children_count": children_count,
                 "user_count": user_count,
                 "position_count": position_count,
+                "created_at": dept.created_at,
+                "updated_at": dept.updated_at,
                 "children": [],
             }
             DepartmentService._apply_manager_fields(item, dept.manager_id, manager_map)
@@ -358,6 +360,8 @@ class DepartmentService:
                 "children_count": children_count,
                 "user_count": user_count,
                 "position_count": position_count,
+                "created_at": dept.created_at,
+                "updated_at": dept.updated_at,
                 "children": children,
             }
             DepartmentService._apply_manager_fields(item, dept.manager_id, manager_map)

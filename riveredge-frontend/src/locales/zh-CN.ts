@@ -288,17 +288,17 @@ export default {
   'menu.infra.sensitive-word-blacklist': '黑名单管理',
   'menu.group.user-management': '用户管理',
   'menu.group.core-config': '核心配置',
-  'menu.group.data-center': '数据中心', // 数据接入、抽取与对外接口
+  'menu.group.data-center': '连接管理', // 四字分组；四页能力由专业应用 kuaiconnect（快连接）提供
   'menu.group.process-management': '协同配置',
   'menu.group.monitoring-ops': '监控运维',
   /** 历史/同步落库的英文分组 slug（与上列分组同义，菜单管理展示用） */
   'menu.group.settings': '核心配置',
   'menu.group.organization': '用户管理',
-  'menu.group.integration': '数据中心',
+  'menu.group.integration': '连接管理',
   'menu.group.workflow-and-message': '协同配置',
   'menu.group.security-and-logs': '监控运维',
   'menu.system.roles-permissions': '角色权限',
-  'menu.system.data-center': '数据中心',
+  'menu.system.data-center': '连接管理',
   'menu.system.process-management': '协同配置',
   'menu.system.appMenu': '应用',
   'menu.system.systemMenu': '系统',
@@ -316,6 +316,24 @@ export default {
   'ui.systemSettingsPanel.versionLabel': '版本',
   'ui.systemSettingsPanel.expiresLabel': '到期时间',
   'ui.systemSettingsPanel.neverExpires': '永久',
+  'ui.systemSettingsPanel.kuaiconnectRequiredTitle': '快连接 专业版能力',
+  'ui.systemSettingsPanel.kuaiconnectRequiredIntro':
+    '连接管理包含在专业版套餐中。升级后可安装启用快连接，统一对接外部系统、开放接口与数据资产。',
+  'ui.systemSettingsPanel.kuaiconnectSingleIntro':
+    '「{{name}}」属于快连接专业版能力。请由管理员在应用中心安装并启用快连接后使用。',
+  'ui.systemSettingsPanel.kuaiconnectRequiredDesc':
+    '应用连接器、接口管理、数据源与数据集由专业应用「快连接」提供。请先在应用中心安装并启用快连接（如需 License Key 请先激活）。',
+  'ui.systemSettingsPanel.kuaiconnectRequiredFoot':
+    '尚未开通请联系管理员购买专业版并激活 License；已具备权限可在应用中心扫描注册后安装。',
+  'ui.systemSettingsPanel.kuaiconnectFeat.connectors':
+    '对接 ERP、MES、IoT 等外部应用，统一管理鉴权、映射与同步任务。',
+  'ui.systemSettingsPanel.kuaiconnectFeat.apis':
+    '注册与治理开放 API，配置鉴权、限流与调用监控，支撑系统集成。',
+  'ui.systemSettingsPanel.kuaiconnectFeat.dataSources':
+    '连接数据库与第三方数据源，为报表、大屏与数据集提供稳定取数。',
+  'ui.systemSettingsPanel.kuaiconnectFeat.datasets':
+    '定义指标与页面数据集，复用到快报表与大屏，减少重复建模。',
+  'ui.systemSettingsPanel.kuaiconnectGoAppCenter': '前往应用中心',
   'ui.message.notification': '消息通知',
   'ui.aiAssistant.tooltip': '按 F1 可快速唤起我',
   'ui.aiAssistant.title': 'KU-AI',
@@ -24772,6 +24790,12 @@ export default {
   'pages.system.applications.exportSuccessCount': '已导出 {{count}} 条记录',
   'pages.system.applications.loadListFailed': '获取应用列表失败',
   'pages.system.applications.scanApplications': '扫描应用',
+  'pages.system.applications.proPendingScanTag': '待扫描注册',
+  'pages.system.applications.scanAndRegister': '扫描并注册',
+  'pages.system.applications.proPlaceholderHelpTitle': '专业应用尚未注册',
+  'pages.system.applications.proPlaceholderHelpDesc':
+    '「{{name}}」尚未写入应用清单。请确认 workspace 已 compose 该专业包，再点击页面上方「扫描应用」，然后在更多操作中选择安装。启用时如需 License Key 会另行提示。',
+  'pages.system.applications.proPlaceholderHelpOk': '知道了',
   'pages.system.applications.scanSuccess': '已扫描并注册 {{count}} 个应用',
   'pages.system.applications.scanMenuHint': '扫描仅更新应用注册信息。若侧边栏菜单未更新，请点击「一键同步菜单」。',
   'pages.system.applications.scanFailed': '扫描应用失败',
@@ -24779,7 +24803,9 @@ export default {
   'pages.system.applications.syncAllNoApps': '暂无已安装的应用',
   'pages.system.applications.syncAllLoading': '正在同步菜单（全量约需 3–6 分钟），请勿重复点击…',
   'pages.system.applications.syncAllSuccess':
-    '已完成 {{count}} 个应用的菜单同步，导航菜单已更新。',
+    '已写入 {{count}} 条菜单，导航菜单已更新。',
+  'pages.system.applications.syncAllSkippedPro':
+    '以下应用未 assemble 到本节点，已跳过清单同步：{{codes}}',
   'pages.system.applications.syncAllPartial':
     '菜单同步部分完成（{{success}}/{{total}}）。\n{{errors}}',
   'pages.system.applications.syncAllErrManifest': '应用「{{code}}」：{{detail}}',
@@ -24802,6 +24828,8 @@ export default {
   'sys.app.kuaiqms.desc': '质检、改善、体系与质量报表（业务能力由快制造提供）',
   'sys.app.kuaiems.name': '快设备',
   'sys.app.kuaiems.desc': '设备、模具、工装台账与运维单据（业务能力由快制造提供）',
+  'sys.app.kuaiconnect.name': '快连接',
+  'sys.app.kuaiconnect.desc': '应用连接器、接口管理、数据源与数据集（专业插件）',
   'sys.app.kuaipd.name': '快交付',
   'sys.app.kuaipd.desc': '交付项目、物流与售后履约（业务能力由快制造提供）',
   'sys.app.kuaicaiwu.name': '轻财务',
@@ -30772,6 +30800,54 @@ export default {
     'Gitee 快捷登录可读取邮箱并支持个人资料绑定',
   'pages.dashboard.updateLog.entries.gitee-oauth-email-scope-bind-r01.description':
     '授权范围增加 emails，并在公开邮箱为空时从邮箱列表取主邮箱以自动匹配系统用户；个人资料补充 Gitee 授权绑定与解绑入口。',
+  'pages.dashboard.updateLog.entries.user-mgmt-list-audit-datetime-r01.title':
+    '用户管理列表补全创建与更新时间',
+  'pages.dashboard.updateLog.entries.user-mgmt-list-audit-datetime-r01.description':
+    '部门树、职位列表、用户列表与角色列表接口返回 created_at/updated_at，部门树此前未带审计时间导致列表显示为横线。',
+  'pages.dashboard.updateLog.entries.system-users-list-roles-preview-r01.title':
+    '账户管理角色列单行预览',
+  'pages.dashboard.updateLog.entries.system-users-list-roles-preview-r01.description':
+    '用户列表角色列占表格剩余宽度，最多展示两枚角色徽章，超出显示等共 N 项；悬停摘要可看其余角色。',
+  'pages.dashboard.updateLog.entries.kuaiplm-off-master-data-process-menu-r01.title':
+    '快研发关闭后主数据恢复工艺菜单',
+  'pages.dashboard.updateLog.entries.kuaiplm-off-master-data-process-menu-r01.description':
+    '快研发禁用或未部署到当前节点时，自动交还主数据「工艺数据」菜单；侧栏拉取导航树前对齐菜单接管状态，避免工艺入口长期不可见。',
+  'pages.dashboard.updateLog.entries.kuaiconnect-popover-no-upgrade-btn-r01.title':
+    '连接管理 Popover 不再跳转组织管理',
+  'pages.dashboard.updateLog.entries.kuaiconnect-popover-no-upgrade-btn-r01.description':
+    '快连接未启用时的说明弹层去掉「升级套餐」入口，文案改为联系管理员开通；保留前往应用中心。',
+  'pages.dashboard.updateLog.entries.kuaiconnect-popover-pro-features-r01.title':
+    '连接管理未开通时展示能力说明与升级引导',
+  'pages.dashboard.updateLog.entries.kuaiconnect-popover-pro-features-r01.description':
+    '系统配置浮层内快连接入口布局不变；点击各图标 Popover 分别说明该项专业版能力，并支持升级套餐或前往应用中心安装。',
+  'pages.dashboard.updateLog.entries.menu-group-kuaiconnect-rename-r01.title':
+    '系统菜单分组更名为连接管理',
+  'pages.dashboard.updateLog.entries.menu-group-kuaiconnect-rename-r01.description':
+    '系统配置浮层与系统菜单原「数据中心」分组改为四字「连接管理」，对应快连接专业应用；金蝶等对接文案中的「数据中心 ID」不变。',
+  'pages.dashboard.updateLog.entries.data-center-popover-kuaiconnect-r01.title':
+    '系统设置数据中心入口未启用时 Popover 提示',
+  'pages.dashboard.updateLog.entries.data-center-popover-kuaiconnect-r01.description':
+    '快连接未安装或未启用时，系统配置浮层内四个数据中心入口点击弹出说明，不再直接进入升级占位页；可一键跳转应用中心。',
+  'pages.dashboard.updateLog.entries.pro-app-placeholder-scan-install-r01.title':
+    '专业应用占位卡支持扫描并注册',
+  'pages.dashboard.updateLog.entries.pro-app-placeholder-scan-install-r01.description':
+    '未入库的专业应用（如快连接）不再误显示为需升级专业版；更多操作提供扫描并注册，compose 后扫描即可出现安装入口。',
+  'pages.dashboard.updateLog.entries.dedicated-host-disable-separation-r01.title':
+    '定制应用不再阻止停用通用宿主应用',
+  'pages.dashboard.updateLog.entries.dedicated-host-disable-separation-r01.description':
+    '应用中心停用轻办公等专业/基础应用时，已启用的定制壳（如好力 GO）不再拦截；定制仍通过 requires_apps 在运行时加载宿主 API，侧栏按 hide_required_app_menus 与定制菜单展示。',
+  'pages.dashboard.updateLog.entries.pro-app-center-order-kuailianjie-r01.title':
+    '应用中心专业应用排序与快连接命名',
+  'pages.dashboard.updateLog.entries.pro-app-center-order-kuailianjie-r01.description':
+    '专业 Tab 展示顺序调整为快研发、快交付、轻办公、轻财务、快数采、快报表、快连接、KU-AI；快连接应用编码为 kuaiconnect（原 pro-data-center）。',
+  'pages.dashboard.updateLog.entries.sidebar-navigation-tree-pro-compose-r01.title':
+    '修复未 compose 专业应用时侧栏 APP 菜单空白',
+  'pages.dashboard.updateLog.entries.sidebar-navigation-tree-pro-compose-r01.description':
+    '侧栏导航只纳入本节点已部署 manifest 的应用；未 compose 的专业包不得启用/安装，避免整棵菜单树因缺 manifest 排序而失败。',
+  'pages.dashboard.updateLog.entries.app-pro-migration-wave1-r01.title':
+    '专业应用与行业包迁私仓、财务管理托管快制造',
+  'pages.dashboard.updateLog.entries.app-pro-migration-wave1-r01.description':
+    '快交付/快研发/轻财务/轻办公与行业插件改 PRO compose；开源主仓保留应用中心占位与数据中心升级提示；应收应付菜单归属快制造，轻财务启用时侧栏接管。',
   'pages.dashboard.updateLog.entries.purchase-order-batch-push-in-menu-r01.title':
     '采购订单批量下推收进批量操作',
   'pages.dashboard.updateLog.entries.purchase-order-batch-push-in-menu-r01.description':
@@ -37853,6 +37929,7 @@ export default {
   'field.user.department': '部门',
   'field.user.position': '职位',
   'field.user.roles': '角色',
+  'field.user.rolesAndMore': '等共{{count}}项',
   'field.user.isTenantAdmin': '组织管理员',
   'field.user.lastLogin': '最后登录',
   'field.user.resetPassword': '重置密码',

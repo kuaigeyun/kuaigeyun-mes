@@ -38,12 +38,16 @@
 
 ## 立即体验与接入
 
-- **在线演示**：[https://kuaigeyun.com](https://kuaigeyun.com)（建议使用 Gitee 快捷登录；数据可能定期重置）
+- **在线演示**：[https://kuaigeyun.com](https://kuaigeyun.com)（建议使用 Gitee 快捷登录或自行注册；数据可能定期重置）
 - **部署入口**：[fast-deploy/deploy.sh](fast-deploy/README.md)（Windows / Linux）
 - **完整文档**：[docs/部署指南.md](docs/部署指南.md)
 
 > [!WARNING]
-> **开源范围**：本仓库仅公开 **后端 API** 与 **PC Web 前端**（`riveredge-backend` + `riveredge-frontend`）；移动端 App、H5、企微/钉钉/飞书、触屏工位、TV 看板等源码在私仓维护。
+> **开源范围（本仓库）**：公开 **后端 API** 与 **PC Web 前端**（`riveredge-backend` + `riveredge-frontend`），随仓发布的应用以 **主数据、快制造、快质量、快设备** 等基础能力为主。
+>
+> **专业版应用**（快研发、快交付、轻办公、轻财务、快报表、快数采、快连接、KU-AI 及行业增值包）源码在私仓 [kuaigeyun-pro](https://gitee.com/kuaigeyun/kuaigeyun-pro)，经 [工作区组装](fast-deploy/tools/workspace/README.md) 或部署向导 **扩展应用** 链入本机，**不在**开源主仓内提交完整源码。
+>
+> **多端终端**（移动 App、H5、企微/钉钉/飞书、触屏工位、TV 看板）在私仓 [kuaigeyun-client](https://gitee.com/kuaigeyun/kuaigeyun-client)。**客户定制**页面在 [kuaigeyun-custom](https://gitee.com/kuaigeyun/kuaigeyun-custom)（可选组装）。
 >
 > 产品仍在**积极开发**，功能与数据模型可能频繁变更；在线演示与本地部署**仅供预览评估**，勿用于正式生产或承载真实业务数据。
 >
@@ -64,7 +68,7 @@
 
 ## 核心能力
 
-业务覆盖 **快制造** 全流程，并与 **主数据**、**快财务**、**快研发** 等插件协同。
+业务以 **快制造** 执行闭环为主，**主数据** 统一工厂与物料/BOM/工艺；与 **专业版** 插件（研发、交付、办公、财务、报表、数采、连接、AI）及 **行业包** 按需组合。
 
 
 | 业务域     | 能力要点                                         |
@@ -72,47 +76,48 @@
 | 销售与 CRM | 客户池、报价/跟进/合同、预测、订单与变更、发货/退货、销售看板             |
 | 计划与排程   | 统一需求、需求计算（BOM/净需求）、变更、排程/甘特、缺料预警             |
 | 采购协同    | 申请/询价、订单与变更、到货/退货、采购执行与报表                    |
-| 生产执行    | 工单、报工、返工、委外、装箱、异常闭环；工位/移动端执行                 |
+| 生产执行    | 工单、报工、返工、委外、装箱、异常闭环；工位/移动端执行（终端见私仓）           |
 | 质量与追溯   | 来料/过程/成品/OQC、检验方案、8D、SPC、不合格与全链路追溯           |
 | 仓储物流    | 入出库、批次/序列号、盘点/调拨、组装拆卸、线边仓/倒冲、库存预警            |
 | 设备与资材   | 点检/巡检/故障/维修/保养；模具工装借还、维保、校准与备件               |
 | 绩效      | 班次排班、工作日历、技能/计件/KPI                          |
-| 财务（快财务） | 应收应付、收付款、发票、对账、成本与总账                         |
-| 主档与研发   | 工厂/物料/BOM/工艺/图纸/SOP；NPI 阶段门、变更、FMEA（主数据/快研发） |
+| 财务      | 开源仓含快制造侧 **财务管理** 菜单与页面；完整 **轻财务**（独立应用与后端 API）需组装专业版 |
+| 主档与研发   | **主数据**（工厂/物料/BOM/工艺等）开源；NPI、设计变更、知识中心等 **快研发** 为专业版 |
 
 
-**平台（本仓库开源）**：多租户与 RBAC、插件装配、配置中心、审批与消息、编码与自定义字段、打印与连接器、内置看板报表、上线检查与审计。高级分析 / AI / 数采见下方高级版插件。
+**平台（本仓库开源）**：多租户与 RBAC、插件装配、配置中心、审批与消息、编码与自定义字段、打印、内置看板报表、上线检查与审计。
+
+**专业版平台能力**（需 [kuaigeyun-pro](https://gitee.com/kuaigeyun/kuaigeyun-pro) 组装后启用）：**快连接**（连接器/接口/数据源/数据集）、**快报表** BI、**快数采**、**KU-AI** 等。未组装时在应用中心展示占位说明，不影响开源核心制造流程。
 
 ---
 
 ## 插件应用
 
-插件按需装配。**开源版**随本仓库发布；**高级版 / 行业付费版**在私仓 `[kuaigeyun-pro](https://gitee.com/kuaigeyun/kuaigeyun-pro)`，经 `./fast-deploy/deploy.sh pro-apps` 或部署向导 **[4] 扩展应用** 安装。应用中心仅展示已扫描入库的实装应用。
+应用中心按 **基础 / 专业 / 行业 / 定制** 分层展示。**已扫描入库** 的应用方可启用菜单；专业版与行业包源码在私仓，通过组装链入工作区。
 
 
-| 分层       | 插件 / 包        | 说明                                                               |
-| -------- | ------------- | ---------------------------------------------------------------- |
-| **开源**   | 快制造           | 销售、计划、采购、执行、质量、设备、仓储、分析、绩效                                       |
-| **开源**   | 主数据           | 工厂建模、物料/BOM/工艺、客户/供应商                                            |
-| **开源**   | 快财务           | 应收应付、发票、成本、总账                                                    |
-| **开源**   | 快研发           | 研发项目 / NPI、设计变更、知识中心                                             |
-| **行业免费** | 本仓库行业包        | 无需 License；示例：辐条轮毂总装（[@xyt123lyq](https://github.com/xyt123lyq)） |
-| **行业付费** | kuaigeyun-pro | 需 License；机械加工、注塑、电子、汽配等增值包                                      |
-| **高级版**  | KU-AI         | 顶栏助手、单据问答、知识库 RAG                                                |
-| **高级版**  | 快报表           | 报表设计、BI 看板、多源聚合                                                  |
-| **高级版**  | 快数采           | 工业设备数采与集成（持续迭代）                                                  |
+| 分层       | 插件 / 包        | 源码位置 | 说明 |
+| -------- | ------------- | -------- | ---------------------------------------------------------------- |
+| **基础（开源）** | 主数据           | 本仓库 | 工厂建模、物料/BOM/工艺、客户/供应商 |
+| **基础（开源）** | 快制造           | 本仓库 | 销售、计划、采购、执行、质量、设备、仓储、分析、绩效；含财务管理入口 UI |
+| **基础（开源）** | 快质量 / 快设备     | 本仓库 | 质量、设备域菜单与导航（核心单据能力由快制造提供） |
+| **专业**   | 快研发、快交付、轻办公、轻财务 | kuaigeyun-pro | 需 License；组装后完整菜单与 API |
+| **专业**   | 快报表、快数采、快连接、KU-AI | kuaigeyun-pro | 需 License；报表 BI、设备数采、集成连接、AI 助手 |
+| **行业**   | 机械、注塑、电子、汽配、食品等增值包 | kuaigeyun-pro | 需 License；原主仓行业免费包已并入专业行业目录 |
+| **定制**   | 客户专属应用        | kuaigeyun-custom | 可选；按 `CUSTOM_PROJECTS` 仅组装声明项目 |
 
+组装说明：[fast-deploy/tools/workspace/README.md](fast-deploy/tools/workspace/README.md)。生产环境亦可通过 `./fast-deploy/deploy.sh` 向导 **[4] 扩展应用** 配置私仓与 Token。
 
 ---
 
 ## 终端形态
 
-同一套后端 API 与业务模型，按岗位与现场组合部署。本仓库开源 **PC Web + 后端**；其余终端源码在私仓 `[kuaigeyun-client](https://gitee.com/kuaigeyun/kuaigeyun-client)`。
+同一套后端 API 与业务模型，按岗位与现场组合部署。本仓库开源 **PC Web + 后端**；其余终端源码在私仓 [kuaigeyun-client](https://gitee.com/kuaigeyun/kuaigeyun-client)。
 
 
 | 终端               | 技术栈                                         | 源码      | 典型场景                  |
 | ---------------- | ------------------------------------------- | ------- | --------------------- |
-| **PC Web**       | React 18 + TS + Vite 5 + Ant Design 6       | 本仓库（开源） | 计划、主数据、销售/采购/财务、审批、报表 |
+| **PC Web**       | React 18 + TS + Vite 5 + Ant Design 6       | 本仓库（开源） | 计划、主数据、销售/采购/制造执行、审批、内置报表 |
 | **后端 API**       | FastAPI + Tortoise + PostgreSQL 15 + Taskiq | 本仓库（开源） | 全终端共用业务与权限            |
 | **移动 App**       | Expo 54 + React Native                      | 私仓      | 工业 PDA 扫码、移动报工、收发货、巡检 |
 | **H5 / 小程序**     | 与 App 同仓导出；小程序为 web-view 壳                  | 私仓      | 轻量访问、iOS 过渡、外协/访客     |
@@ -152,6 +157,16 @@ cd kuaigeyun   # 或 kuaigeyun-mes，取决于 clone 目录名
 - 部署文档：[docs/部署指南.md](docs/部署指南.md)（含**开发预览**与**备份**警告）
 - 脚本速查：[fast-deploy/README.md](fast-deploy/README.md)
 
+### 本地启用专业版应用（可选）
+
+仅克隆本仓库即可运行 **开源基础包**。若要调试快研发、轻财务、行业包等：
+
+1. 将 [kuaigeyun-pro](https://gitee.com/kuaigeyun/kuaigeyun-pro) 克隆到与主仓**同级**目录（分支 `develop`）。
+2. 复制并编辑 `fast-deploy/tools/workspace/workspace.example.yaml` → `workspace.yaml`。
+3. 执行 `python fast-deploy/tools/workspace/compose.py`，重启后端与前端。
+
+详见 [fast-deploy/tools/workspace/README.md](fast-deploy/tools/workspace/README.md)。开源 CI 会运行 `scan_pro_oss_layout.py`，确保专业应用源码不以普通目录形式提交进主仓。
+
 ---
 
 ## 推荐配置
@@ -176,6 +191,7 @@ cd kuaigeyun   # 或 kuaigeyun-mes，取决于 clone 目录名
 - [README](README.md)：产品定位、核心能力、插件与终端、快速启动、推荐配置
 - [docs/部署指南.md](docs/部署指南.md)：环境准备、发布流程、运维排查
 - [fast-deploy/README.md](fast-deploy/README.md)：部署脚本参数与速查
+- [fast-deploy/tools/workspace/README.md](fast-deploy/tools/workspace/README.md)：专业版/定制应用组装
 
 ---
 

@@ -1,0 +1,778 @@
+"""
+数据集管理 API 路由
+
+提供数据集的 CRUD 操作和查询执行功能。
+"""
+
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, status, Query
+from uuid import UUID
+
+from core.schemas.dataset import (
+    DatasetCreate,
+    DatasetUpdate,
+    DatasetResponse,
+    ExecuteQueryRequest,
+    ExecuteQueryResponse,
+    PageMetricsResponse,
+    StatCardItem,
+    PageMetricConfigCreate,
+    PageMetricConfigItem,
+)
+from core.schemas.api import APITestResponse
+from core.schemas.data_source import TestConnectionResponse
+from core.schemas.resource_category import (
+    ResourceCategoryCreate,
+    ResourceCategoryUpdate,
+    ResourceCategoryResponse,
+    ResourceCategoryListResponse,
+)
+from core.services.data.dataset_service import DatasetService
+from core.services.resource.resource_category_service import ResourceCategoryService
+from core.models.resource_category import RESOURCE_TYPE_DATASET
+from core.api.deps.deps import get_current_tenant
+from infra.api.deps.deps import get_current_user as soil_get_current_user
+from infra.models.user import User
+from infra.exceptions.exceptions import NotFoundError, ValidationError
+
+router = APIRouter(prefix="/datasets", tags=["Core - Datasets"])
+
+
+def model_to_response(dataset, data_source_uuid: UUID) -> DatasetResponse:
+    """
+    将数据集模型对象转换为响应对象
+    
+    Args:
+        dataset: 数据集模型对象
+        data_source_uuid: 数据源UUID
+        
+    Returns:
+        DatasetResponse: 数据集响应对象
+    """
+    # 兼容历史错误数据：query_type 仅支持 sql/api，其他值（如 visual）归一为 sql
+    query_type = dataset.query_type if dataset.query_type in ('sql', 'sql_write', 'api') else 'sql'
+    output_type = getattr(dataset, 'output_type', 'list') or 'list'
+    category_uuid = None
+    category_name = None
+    category = getattr(dataset, 'category', None)
+    if category is not None:
+        category_uuid = UUID(str(category.uuid))
+        category_name = category.name
+    return DatasetResponse(
+        uuid=dataset.uuid,
+        tenant_id=dataset.tenant_id,
+        name=dataset.name,
+        code=dataset.code,
+        description=dataset.description,
+        query_type=query_type,
+        query_config=dataset.query_config,
+        output_type=output_type,
+        display_config=getattr(dataset, 'display_config', None),
+        is_active=dataset.is_active,
+        data_source_uuid=data_source_uuid,
+        category_uuid=category_uuid,
+        category_name=category_name,
+        last_executed_at=dataset.last_executed_at,
+        last_error=dataset.last_error,
+        created_at=dataset.created_at,
+        updated_at=dataset.updated_at,
+    )
+
+
+@router.post("", response_model=DatasetResponse, status_code=status.HTTP_201_CREATED)
+async def create_dataset(
+    data: DatasetCreate,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    创建数据集
+    
+    创建新的数据集定义。
+    
+    Args:
+        data: 数据集创建数据
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        DatasetResponse: 创建的数据集信息
+        
+    Raises:
+        HTTPException: 当创建失败时抛出
+    """
+    try:
+        dataset = await DatasetService().create_dataset(
+            tenant_id=tenant_id,
+            dataset_data=data,
+        )
+        
+        await dataset.fetch_related('integration_config')
+        data_source_uuid = UUID(str(dataset.integration_config.uuid))
+        return model_to_response(dataset, data_source_uuid)
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"创建数据集失败: {str(e)}"
+        )
+
+
+@router.get("", response_model=dict)
+async def list_datasets(
+    page: int = Query(1, ge=1, description="页码"),
+    page_size: int = Query(20, ge=1, le=100, description="每页数量"),
+    search: Optional[str] = Query(None, description="搜索关键词（名称、代码）"),
+    query_type: Optional[str] = Query(None, description="查询类型筛选"),
+    output_type: Optional[str] = Query(None, description="输出类型筛选：list/metric/multi_metric"),
+    data_source_uuid: Optional[UUID] = Query(None, description="数据源UUID筛选"),
+    is_active: Optional[bool] = Query(None, description="是否启用筛选"),
+    category_uuid: Optional[UUID] = Query(None, description="分类 UUID 筛选"),
+    no_category: bool = Query(False, description="仅未分类"),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    获取数据集列表
+    
+    支持分页、搜索和筛选。
+    
+    Args:
+        page: 页码
+        page_size: 每页数量
+        search: 搜索关键词（名称、代码）
+        query_type: 查询类型筛选
+        data_source_uuid: 数据源UUID筛选
+        is_active: 是否启用筛选
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        dict: 数据集列表响应数据
+        {
+            "items": [...],
+            "total": 100,
+            "page": 1,
+            "page_size": 20
+        }
+    """
+    try:
+        if category_uuid and no_category:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="category_uuid 与 no_category 不能同时使用",
+            )
+        datasets, total = await DatasetService().list_datasets(
+            tenant_id=tenant_id,
+            page=page,
+            page_size=page_size,
+            search=search,
+            query_type=query_type,
+            output_type=output_type,
+            data_source_uuid=data_source_uuid,
+            is_active=is_active,
+            category_uuid=category_uuid,
+            no_category=no_category,
+        )
+        
+        # 转换为响应对象
+        items = []
+        for dataset in datasets:
+            await dataset.fetch_related('integration_config')
+            items.append(model_to_response(dataset, UUID(str(dataset.integration_config.uuid))))
+        
+        return {
+            "items": items,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取数据集列表失败: {str(e)}"
+        )
+
+
+@router.get("/metrics/by-page", response_model=PageMetricsResponse)
+async def get_metrics_by_page(
+    page_path: str = Query(..., description="页面路由，如 /apps/kuaizhizao/sales-orders"),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    按页面路径获取指标卡。
+
+    查 page_metric_config -> 执行绑定的 multi_metric 数据集 -> 返回 stat_cards。
+    无配置时返回空列表。
+    """
+    result = await DatasetService().get_metrics_by_page(
+        tenant_id=tenant_id,
+        page_path=page_path,
+    )
+    if not result:
+        return PageMetricsResponse(stat_cards=[], dataset_code=None)
+    return PageMetricsResponse(
+        stat_cards=[StatCardItem(**c) for c in result["stat_cards"]],
+        dataset_code=result.get("dataset_code"),
+    )
+
+
+@router.get("/page-metric-configs", response_model=list)
+async def list_page_metric_configs(
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """列出当前租户的页面指标配置"""
+    configs = await DatasetService().list_page_metric_configs(tenant_id=tenant_id)
+    return [
+        PageMetricConfigItem(
+            uuid=str(c.uuid),
+            page_path=c.page_path,
+            dataset_code=c.dataset_code,
+            sort_order=c.sort_order,
+        )
+        for c in configs
+    ]
+
+
+@router.post("/page-metric-config", status_code=status.HTTP_201_CREATED)
+async def bind_page_metric_config(
+    data: PageMetricConfigCreate,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    绑定页面与指标型数据集。
+    若该页面已有配置则更新，否则创建。
+    """
+    try:
+        await DatasetService().bind_page_metric(
+            tenant_id=tenant_id,
+            page_path=data.page_path,
+            dataset_code=data.dataset_code,
+            sort_order=data.sort_order,
+        )
+        return {"success": True, "message": "配置已保存"}
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.delete("/page-metric-config", status_code=status.HTTP_204_NO_CONTENT)
+async def unbind_page_metric_config(
+    page_path: str = Query(..., description="页面路由"),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """解除页面与指标数据集的绑定"""
+    await DatasetService().unbind_page_metric(tenant_id=tenant_id, page_path=page_path)
+
+
+@router.post("/init-sales-order-metrics")
+async def init_sales_order_metrics(
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    一键初始化销售订单指标：创建 sales_order_metrics 数据集并绑定到销售订单页面。
+    若数据集已存在则跳过创建，仅确保页面绑定存在。
+    """
+    try:
+        result = await DatasetService().init_sales_order_metrics(tenant_id=tenant_id)
+        return result
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e)
+        )
+
+
+@router.post("/init-sales-forecast-metrics")
+async def init_sales_forecast_metrics(
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    一键初始化销售预测指标：创建 sales_forecast_metrics 数据集并绑定到销售预测页面。
+    """
+    try:
+        result = await DatasetService().init_sales_forecast_metrics(tenant_id=tenant_id)
+        return result
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e)
+        )
+
+
+@router.post("/sync-page-metrics")
+async def sync_page_metrics(
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    同步/刷新所有预设的页面指标数据集。
+    """
+    try:
+        result = await DatasetService().sync_all_page_metrics(tenant_id=tenant_id)
+        return result
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"同步指标失败: {str(e)}"
+        )
+
+
+@router.get("/categories", response_model=ResourceCategoryListResponse)
+async def list_dataset_categories(
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """获取数据集分类列表"""
+    try:
+        result = await ResourceCategoryService().list_categories(tenant_id, RESOURCE_TYPE_DATASET)
+        return ResourceCategoryListResponse(**result)
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取数据集分类失败: {str(e)}",
+        )
+
+
+@router.post("/categories", response_model=ResourceCategoryResponse, status_code=status.HTTP_201_CREATED)
+async def create_dataset_category(
+    data: ResourceCategoryCreate,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """创建数据集分类"""
+    try:
+        category = await ResourceCategoryService().create_category(
+            tenant_id, RESOURCE_TYPE_DATASET, data
+        )
+        return ResourceCategoryService()._build_response(category, 0)
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"创建数据集分类失败: {str(e)}",
+        )
+
+
+@router.get("/categories/{category_uuid}", response_model=ResourceCategoryResponse)
+async def get_dataset_category(
+    category_uuid: UUID,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """获取数据集分类详情"""
+    try:
+        category = await ResourceCategoryService().get_category_by_uuid(
+            tenant_id, RESOURCE_TYPE_DATASET, category_uuid
+        )
+        count = await ResourceCategoryService()._count_items(
+            tenant_id, RESOURCE_TYPE_DATASET, category.id
+        )
+        return ResourceCategoryService()._build_response(category, count)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取数据集分类失败: {str(e)}",
+        )
+
+
+@router.put("/categories/{category_uuid}", response_model=ResourceCategoryResponse)
+async def update_dataset_category(
+    category_uuid: UUID,
+    data: ResourceCategoryUpdate,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """更新数据集分类"""
+    try:
+        category = await ResourceCategoryService().update_category(
+            tenant_id, RESOURCE_TYPE_DATASET, category_uuid, data
+        )
+        count = await ResourceCategoryService()._count_items(
+            tenant_id, RESOURCE_TYPE_DATASET, category.id
+        )
+        return ResourceCategoryService()._build_response(category, count)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"更新数据集分类失败: {str(e)}",
+        )
+
+
+@router.delete("/categories/{category_uuid}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_dataset_category(
+    category_uuid: UUID,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """删除数据集分类（分类下数据集变为未分类）"""
+    try:
+        await ResourceCategoryService().delete_category(
+            tenant_id, RESOURCE_TYPE_DATASET, category_uuid
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"删除数据集分类失败: {str(e)}",
+        )
+
+
+@router.get("/{dataset_uuid}", response_model=DatasetResponse)
+async def get_dataset(
+    dataset_uuid: UUID,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    获取数据集详情
+    
+    根据数据集UUID获取数据集详细信息。
+    
+    Args:
+        dataset_uuid: 数据集UUID
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        DatasetResponse: 数据集详情响应数据
+        
+    Raises:
+        HTTPException: 当数据集不存在时抛出
+    """
+    try:
+        dataset = await DatasetService().get_dataset_by_uuid(
+            tenant_id=tenant_id,
+            dataset_uuid=dataset_uuid,
+        )
+        
+        await dataset.fetch_related('integration_config')
+        data_source_uuid = UUID(str(dataset.integration_config.uuid))
+        return model_to_response(dataset, data_source_uuid)
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取数据集详情失败: {str(e)}"
+        )
+
+
+@router.put("/{dataset_uuid}", response_model=DatasetResponse)
+async def update_dataset(
+    dataset_uuid: UUID,
+    data: DatasetUpdate,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    更新数据集
+    
+    更新数据集定义。
+    
+    Args:
+        dataset_uuid: 数据集UUID
+        data: 数据集更新数据
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        DatasetResponse: 更新后的数据集信息
+        
+    Raises:
+        HTTPException: 当更新失败时抛出
+    """
+    try:
+        dataset = await DatasetService().update_dataset(
+            tenant_id=tenant_id,
+            dataset_uuid=dataset_uuid,
+            dataset_data=data,
+        )
+        
+        await dataset.fetch_related('integration_config')
+        data_source_uuid = UUID(str(dataset.integration_config.uuid))
+        return model_to_response(dataset, data_source_uuid)
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"更新数据集失败: {str(e)}"
+        )
+
+
+@router.delete("/{dataset_uuid}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_dataset(
+    dataset_uuid: UUID,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    删除数据集（软删除）
+    
+    删除数据集定义。
+    
+    Args:
+        dataset_uuid: 数据集UUID
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Raises:
+        HTTPException: 当删除失败时抛出
+    """
+    try:
+        await DatasetService().delete_dataset(
+            tenant_id=tenant_id,
+            dataset_uuid=dataset_uuid,
+        )
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"删除数据集失败: {str(e)}"
+        )
+
+
+@router.post("/{dataset_uuid}/execute", response_model=ExecuteQueryResponse)
+async def execute_dataset_query(
+    dataset_uuid: UUID,
+    execute_request: ExecuteQueryRequest,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    执行数据集查询
+    
+    执行数据集查询并返回查询结果。
+    
+    Args:
+        dataset_uuid: 数据集UUID
+        execute_request: 执行查询请求
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        ExecuteQueryResponse: 查询结果
+        {
+            "success": true,
+            "data": [...],
+            "total": 100,
+            "columns": ["col1", "col2"],
+            "elapsed_time": 0.123,
+            "error": null
+        }
+        
+    Raises:
+        HTTPException: 当查询失败时抛出
+    """
+    try:
+        result = await DatasetService().execute_query(
+            tenant_id=tenant_id,
+            dataset_uuid=dataset_uuid,
+            execute_request=execute_request,
+        )
+        
+        return result
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"执行数据集查询失败: {str(e)}"
+        )
+
+
+@router.post("/{dataset_uuid}/test-api", response_model=APITestResponse)
+async def test_api_for_dataset(
+    dataset_uuid: UUID,
+    test_parameters: Optional[dict] = None,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    使用接口管理的测试功能测试数据集关联的 API
+    
+    仅当数据集的 query_type 为 'api' 且 query_config 中包含 api_uuid 或 api_code 时可用。
+    
+    Args:
+        dataset_uuid: 数据集UUID
+        test_parameters: 测试参数（可选，覆盖数据集定义的参数）
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        APITestResponse: 测试结果
+        {
+            "status_code": 200,
+            "headers": {...},
+            "body": {...},
+            "elapsed_time": 0.123
+        }
+        
+    Raises:
+        HTTPException: 当测试失败时抛出
+    """
+    try:
+        result = await DatasetService().test_api_for_dataset(
+            tenant_id=tenant_id,
+            dataset_uuid=dataset_uuid,
+            test_parameters=test_parameters,
+        )
+        
+        return APITestResponse(**result)
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"测试数据集 API 失败: {str(e)}"
+        )
+
+
+@router.post("/{dataset_uuid}/test-data-source", response_model=TestConnectionResponse)
+async def test_data_source_for_dataset(
+    dataset_uuid: UUID,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    使用数据源管理的测试功能测试数据集关联的数据源连接
+    
+    测试数据集关联的数据源连接，并返回测试结果。
+    
+    Args:
+        dataset_uuid: 数据集UUID
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        TestConnectionResponse: 测试结果
+        {
+            "success": true,
+            "message": "连接成功",
+            "elapsed_time": 0.123
+        }
+        
+    Raises:
+        HTTPException: 当测试失败时抛出
+    """
+    try:
+        result = await DatasetService().test_data_source_for_dataset(
+            tenant_id=tenant_id,
+            dataset_uuid=dataset_uuid,
+        )
+        
+        return TestConnectionResponse(**result)
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"测试数据集数据源连接失败: {str(e)}"
+        )
+
+
+@router.post("/code/{dataset_code}/query", response_model=ExecuteQueryResponse)
+async def query_dataset_by_code(
+    dataset_code: str,
+    execute_request: ExecuteQueryRequest,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    通过数据集代码查询数据集数据（供业务模块使用）
+    
+    这是一个便捷端点，供业务模块通过数据集代码快速获取数据。
+    仅返回已启用且未删除的数据集数据。
+    
+    Args:
+        dataset_code: 数据集代码
+        execute_request: 执行查询请求
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        ExecuteQueryResponse: 查询结果
+        {
+            "success": true,
+            "data": [...],
+            "total": 100,
+            "columns": ["col1", "col2"],
+            "elapsed_time": 0.123,
+            "error": null
+        }
+        
+    Raises:
+        HTTPException: 当查询失败时抛出
+    """
+    try:
+        result = await DatasetService.query_dataset_by_code(
+            tenant_id=tenant_id,
+            dataset_code=dataset_code,
+            parameters=execute_request.parameters,
+            limit=execute_request.limit or 100,
+            offset=execute_request.offset or 0,
+        )
+        
+        return result
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"查询数据集失败: {str(e)}"
+        )
+

@@ -16,7 +16,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   paymentRefundService,
   PAYMENT_REFUND_RESOURCE,
-} from '../../../../kuaicaiwu/services/finance/payment-refund';
+} from '../../../services/finance/payment-refund';
 import {
   ActionType,
   ProColumns,
@@ -1402,7 +1402,7 @@ const PurchaseReturnsPage: React.FC = () => {
           messageApi.warning(t('app.kuaizhizao.purchaseReturn.refundNoPayment'));
           return;
         }
-        navigate('/apps/kuaicaiwu/finance-management/payment-refunds', {
+        navigate('/apps/kuaizhizao/finance-management/payment-refunds', {
           state: { pullSourceIds: ids },
         });
       } catch (error) {

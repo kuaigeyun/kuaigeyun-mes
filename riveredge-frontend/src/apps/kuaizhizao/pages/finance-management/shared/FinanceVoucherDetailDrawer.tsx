@@ -1,0 +1,329 @@
+/**
+ * 收款单 / 付款单原版详情抽屉。
+ * 单一 DetailDrawerTemplate：加载中遮罩，失败 Result+重试。
+ */
+
+import React, { useMemo } from 'react';
+import { Button, Descriptions, Result } from 'antd';
+import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
+import type { ProDescriptionsItemProps } from '@ant-design/pro-components';
+import {
+  DetailDrawerTemplate,
+  DRAWER_CONFIG,
+  detailDrawerBasicColumn,
+  useDetailDrawerDescriptionItems,
+} from '../../../../../components/layout-templates';
+import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import { alignDescriptionColumns } from '../../sales-management/shared/documentFieldAlignment';
+import { getFinanceVoucherLifecycle } from '../../../utils/financeLifecycle';
+import {
+  formatPaymentMethod,
+  formatPaymentSettlementType,
+  formatReceiptSettlementType,
+  isNotePaymentMethod,
+} from '../../../utils/financeSharedOptions';
+import type { PaymentVoucher } from '../../../services/finance/payment';
+import type { ReceiptVoucher } from '../../../services/finance/receipt';
+import type { FinanceNote } from '../../../services/finance/note';
+import { formatNoteBillType, renderRefundExecutionMarker } from '../../../utils/financeUiLabels';
+import { MarkerTag } from '../../../../../constants/statusBadges';
+import type { FinanceVoucherLinkHandlers } from '../../../components/FinanceVoucherDetailProvider';
+import type { FinanceVoucherLinkFields } from '../../../types/finance/financeVoucherLinks';
+import { FinanceVoucherRelationLinks } from '../../../utils/financeVoucherRelationLinks';
+import { formatCurrencyAmount } from '../../../../../utils/format';
+
+export type FinanceVoucherKind = 'receipt' | 'payment';
+export type FinanceVoucherDetail = (ReceiptVoucher | PaymentVoucher) & FinanceVoucherLinkFields;
+
+const RECEIPT_PLACEHOLDER: ReceiptVoucher = {
+  id: 0,
+  receipt_code: '',
+  customer_id: 0,
+  customer_name: '',
+  total_amount: 0,
+  settled_amount: 0,
+  unsettled_amount: 0,
+  receipt_date: '',
+  payment_method: '',
+  status: '',
+  created_at: '',
+};
+
+const PAYMENT_PLACEHOLDER: PaymentVoucher = {
+  id: 0,
+  payment_code: '',
+  supplier_id: 0,
+  supplier_name: '',
+  total_amount: 0,
+  settled_amount: 0,
+  unsettled_amount: 0,
+  payment_date: '',
+  payment_method: '',
+  status: '',
+  created_at: '',
+};
+
+function formatMoney(value: unknown): string {
+  return formatCurrencyAmount(value ?? 0);
+}
+
+export type FinanceVoucherDetailDrawerProps = {
+  kind: FinanceVoucherKind;
+  open: boolean;
+  onClose: () => void;
+  record: FinanceVoucherDetail | null;
+  loading?: boolean;
+  error?: string | null;
+  onRetry?: () => void;
+  extra?: React.ReactNode;
+  zIndex?: number;
+  bankAccountLabel: string;
+  linkedNote?: FinanceNote | null;
+  linkedNotePath?: string;
+  linkHandlers?: FinanceVoucherLinkHandlers;
+  isRefund?: boolean;
+};
+
+export const FinanceVoucherDetailDrawer: React.FC<FinanceVoucherDetailDrawerProps> = ({
+  kind,
+  open,
+  onClose,
+  record,
+  loading = false,
+  error = null,
+  onRetry,
+  extra,
+  zIndex,
+  bankAccountLabel,
+  linkedNote,
+  linkedNotePath,
+  linkHandlers,
+  isRefund = false,
+}) => {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const isReceipt = kind === 'receipt';
+  const prefix = isReceipt ? 'app.kuaicaiwu.receipt' : 'app.kuaicaiwu.payment';
+
+  const contentReady = Boolean(record);
+  const showError = Boolean(error) && !contentReady && !loading;
+  const showLoading = loading || (!contentReady && !showError);
+  const effective = record ?? (isReceipt ? RECEIPT_PLACEHOLDER : PAYMENT_PLACEHOLDER);
+
+  const basicColumns = useMemo(
+    () =>
+      alignDescriptionColumns([
+        isReceipt
+          ? { title: t(`${prefix}.detail.code`), dataIndex: 'receipt_code' }
+          : { title: t('app.kuaicaiwu.receipt.detail.code'), dataIndex: 'payment_code' },
+        isReceipt
+          ? { title: t(`${prefix}.col.receiptDate`), dataIndex: 'receipt_date', valueType: 'date' }
+          : { title: t(`${prefix}.col.paymentDate`), dataIndex: 'payment_date', valueType: 'date' },
+        isReceipt
+          ? { title: t('app.kuaicaiwu.common.customer'), dataIndex: 'customer_name' }
+          : { title: t('app.kuaicaiwu.common.supplier'), dataIndex: 'supplier_name' },
+        {
+          title: t(`${prefix}.col.paymentMethod`),
+          dataIndex: 'payment_method',
+          render: (_, row) => formatPaymentMethod(row.payment_method, t),
+        },
+        ...(isNotePaymentMethod(effective.payment_method)
+          ? [
+              {
+                title: t('app.kuaicaiwu.common.referenceNumber'),
+                dataIndex: 'bank_account',
+                key: 'reference_number',
+                render: (_: unknown, row: FinanceVoucherDetail) => row.bank_account || '—',
+              } as ProDescriptionsItemProps<FinanceVoucherDetail>,
+              ...(linkedNote
+                ? [
+                    {
+                      title: t('app.kuaicaiwu.notes.linkField'),
+                      key: 'linked_note',
+                      render: () =>
+                        linkedNotePath ? (
+                          <a
+                            onClick={() =>
+                              navigate(
+                                `${linkedNotePath}?keyword=${encodeURIComponent(linkedNote.bill_no)}`,
+                              )
+                            }
+                          >
+                            {linkedNote.bill_no} ({linkedNote.note_code})
+                          </a>
+                        ) : (
+                          `${linkedNote.bill_no} (${linkedNote.note_code})`
+                        ),
+                    } as ProDescriptionsItemProps<FinanceVoucherDetail>,
+                    {
+                      title: t('app.kuaicaiwu.notes.col.billType'),
+                      key: 'linked_note_type',
+                      render: () => formatNoteBillType(linkedNote.bill_type, t),
+                    } as ProDescriptionsItemProps<FinanceVoucherDetail>,
+                  ]
+                : []),
+            ]
+          : [
+              {
+                title: t('app.kuaicaiwu.receipt.detail.bankAccount'),
+                dataIndex: 'bank_account_id',
+                key: 'bank_account',
+                render: () => bankAccountLabel || '—',
+              } as ProDescriptionsItemProps<FinanceVoucherDetail>,
+              {
+                title: t('app.kuaicaiwu.receipt.detail.accountNote'),
+                dataIndex: 'bank_account',
+                key: 'bank_account_note',
+                render: (_: unknown, row: FinanceVoucherDetail) => row.bank_account || '—',
+              } as ProDescriptionsItemProps<FinanceVoucherDetail>,
+            ]),
+        {
+          title: t(`${prefix}.settlementType.label`),
+          dataIndex: 'settlement_type',
+          render: (_, row) =>
+            isReceipt
+              ? formatReceiptSettlementType(row.settlement_type, t)
+              : formatPaymentSettlementType(row.settlement_type, t),
+        },
+        {
+          title: t(`${prefix}.col.amount`),
+          dataIndex: 'total_amount',
+          render: (_, row) => formatMoney(row.total_amount),
+        },
+        {
+          title: t('app.kuaicaiwu.receipt.detail.settled'),
+          dataIndex: 'settled_amount',
+          render: (_, row) => formatMoney(row.settled_amount),
+        },
+        {
+          title: t('app.kuaicaiwu.receipt.detail.unsettled'),
+          dataIndex: 'unsettled_amount',
+          render: (_, row) => formatMoney(row.unsettled_amount),
+        },
+        ...(String(effective.settlement_type || 'normal') !== 'refund'
+          ? [
+              {
+                title: t(`${prefix}.detail.refundedAmount`),
+                dataIndex: 'refunded_amount',
+                render: (_: unknown, row: FinanceVoucherDetail) => formatMoney(row.refunded_amount),
+              } as ProDescriptionsItemProps<FinanceVoucherDetail>,
+              {
+                title: t('app.kuaicaiwu.financeUi.refundExecution.label'),
+                dataIndex: 'refund_execution_status',
+                render: (_: unknown, row: FinanceVoucherDetail) => {
+                  const { label, color } = renderRefundExecutionMarker(row.refund_execution_status, t);
+                  return <MarkerTag color={color}>{label}</MarkerTag>;
+                },
+              } as ProDescriptionsItemProps<FinanceVoucherDetail>,
+            ]
+          : []),
+        {
+          title: t('common.remark'),
+          dataIndex: 'notes',
+          span: 3,
+        },
+        { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+      ] as ProDescriptionsItemProps<FinanceVoucherDetail>[]),
+    [
+      bankAccountLabel,
+      effective.payment_method,
+      effective.settlement_type,
+      isReceipt,
+      linkedNote,
+      linkedNotePath,
+      navigate,
+      prefix,
+      t,
+    ],
+  );
+
+  const lifecycle = getFinanceVoucherLifecycle(effective as unknown as Record<string, unknown>, t);
+  const steps = lifecycle.mainStages ?? [];
+  const isRefundVoucher =
+    isRefund || String(effective.settlement_type || 'normal') === 'refund';
+  const hasRelationContent =
+    contentReady
+    && Boolean(linkHandlers)
+    && ((isRefundVoucher && (Boolean(effective.source_voucher_id) || (effective.source_vouchers?.length ?? 0) > 0))
+      || (!isRefundVoucher && (effective.linked_refund_vouchers?.length ?? 0) > 0)
+      || (effective.linked_partner_statements?.length ?? 0) > 0);
+  const code = isReceipt
+    ? String((effective as ReceiptVoucher).receipt_code ?? '').trim()
+    : String((effective as PaymentVoucher).payment_code ?? '').trim();
+  const title = code
+    ? t(`${prefix}.detailDrawerTitle`, { code })
+    : t(`${prefix}.detailTitle`);
+
+  const voucherDocumentType = isReceipt ? 'finance_receipt' : 'finance_payment';
+  const basicItems = useDetailDrawerDescriptionItems(
+    basicColumns,
+    contentReady ? effective : null,
+    voucherDocumentType,
+  );
+
+  if (!open) return null;
+
+  return (
+    <DetailDrawerTemplate
+      title={title}
+      open={open}
+      onClose={onClose}
+      size={DRAWER_CONFIG.HALF_WIDTH}
+      zIndex={zIndex}
+      loading={showLoading}
+      extra={contentReady ? extra ?? null : null}
+      plainBody={
+        showError ? (
+          <Result
+            status="error"
+            title={error}
+            extra={
+              onRetry ? (
+                <Button type="primary" onClick={onRetry}>
+                  {t('common.retry', { defaultValue: '重试' })}
+                </Button>
+              ) : null
+            }
+          />
+        ) : undefined
+      }
+      basic={
+        contentReady ? (
+          <Descriptions
+            column={detailDrawerBasicColumn(false)}
+            size="small"
+            items={basicItems}
+          />
+        ) : showError ? null : (
+          <div style={{ minHeight: 80 }} />
+        )
+      }
+      collaborationTitle={t('app.kuaicaiwu.common.lifecycle')}
+      collaborationLifecycle={
+        contentReady && steps.length > 0 ? (
+          <UniLifecycleStepper
+            steps={steps}
+            showLabels
+            status={lifecycle.status}
+            nextStepSuggestions={lifecycle.nextStepSuggestions}
+            hideNextStepSuggestions
+          />
+        ) : undefined
+      }
+      lines={
+        hasRelationContent ? (
+          <FinanceVoucherRelationLinks
+            kind={kind}
+            isRefund={isRefundVoucher}
+            record={effective}
+            linkHandlers={linkHandlers}
+            t={t}
+          />
+        ) : undefined
+      }
+      linesTitle={t('app.kuaicaiwu.financeUi.voucher.relationsSection')}
+      linesVisible={hasRelationContent}
+    />
+  );
+};

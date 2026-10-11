@@ -20,11 +20,8 @@ import { drawingApi, DRAWING_TYPE_DICTIONARY_CODE, type EngineeringDrawing, type
 import { DictionarySelect } from '../../../components/dictionary-select';
 import type { DrawingFolder } from '../services/drawingFolder';
 import { FolderTreeSelectField } from '../pages/process/drawings/drawingFolderModals';
-import {
-  formatProjectRefLabel,
-  Phase2ProjectSelect,
-  resolveProjectRefPick,
-} from '../../kuaiplm/components/Phase2ProjectSelect';
+import { DrawingProjectRefSelect } from './DrawingProjectRefSelect';
+import { formatProjectRefLabel, resolveProjectRefPick } from '../utils/projectRefLabel';
 import { materialApi } from '../services/material';
 import { operationApi, processRouteApi, unwrapProcessPagedList } from '../services/process';
 import { uploadMultipleFiles, buildImageUploadFileUrls } from '../../../services/file';
@@ -492,7 +489,7 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
         fieldProps={makeUploadFieldProps(true, 'supplementaryFiles')}
         colProps={{ span: 12 }}
       />
-      <Phase2ProjectSelect
+      <DrawingProjectRefSelect
         name="projectRef"
         label={t('app.master-data.drawings.project')}
         allowManualProjectCode

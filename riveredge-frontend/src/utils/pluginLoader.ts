@@ -75,17 +75,14 @@ function getPluginSourcePath(pluginCode: string): string {
 }
 
 /**
- * 开源主仓应用：静态 import，保证 Vite 打出独立 chunk。
- * 专业/定制应用：由 import.meta.glob 在构建时发现（需先 compose 进 src/apps）。
+ * 开源主仓「基础」应用：静态 import，保证 Vite 打出独立 chunk。
+ * 专业包（kuaioa/kuaipd/kuaicaiwu/kuaiplm 等）与定制应用：须 compose 进 src/apps，
+ * 由 import.meta.glob 在构建时发现；未 compose 时不应在此写死 import（否则 Vite 解析失败）。
  */
 const OPEN_SOURCE_APP_LOADERS: Record<string, () => Promise<unknown>> = {
   kuaizhizao: () => import('../apps/kuaizhizao/index'),
-  kuaioa: () => import('../apps/kuaioa/index'),
   kuaiqms: () => import('../apps/kuaiqms/index'),
   kuaiems: () => import('../apps/kuaiems/index'),
-  kuaipd: () => import('../apps/kuaipd/index'),
-  kuaicaiwu: () => import('../apps/kuaicaiwu/index'),
-  kuaiplm: () => import('../apps/kuaiplm/index'),
   'master-data': () => import('../apps/master-data/index'),
 };
 

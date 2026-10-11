@@ -1,0 +1,11 @@
+{
+  "code": "kuaiconnect",
+  "name": "快连接",
+  "version": "1.0.0",
+  "description": "应用连接器、接口、数据源与数据集管理",
+  "icon": "database",
+  "author": "RiverEdge Team",
+  "market_category": "pro",
+  "is_pro": true,
+  "sort_order": 330
+}

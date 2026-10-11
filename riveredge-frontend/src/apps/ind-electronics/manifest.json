@@ -1,9 +1,0 @@
-{
-  "code": "ind-electronics",
-  "name": "电子制造",
-  "version": "0.4.3",
-  "description": "电子制造 / EMS-OEM 行业包：返工策划/返工工单入口、ESD、OEM 签样（标签工位 document 替代）",
-  "icon": "cpu",
-  "entry_point": "./index.tsx",
-  "route_path": "/apps/ind-electronics"
-}

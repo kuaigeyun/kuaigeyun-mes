@@ -13,7 +13,10 @@ import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pr
 import { App, Popconfirm, Button, Space, message, Modal, Table } from 'antd';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { renderSystemActiveTag } from '../../utils/systemListPresentation';
-import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../utils/uniTableLayoutColumns';
+import {
+  UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+  UNI_TABLE_SITE_DATETIME_COLUMN_DEFAULTS,
+} from '../../../../utils/uniTableLayoutColumns';
 import { UniTable } from '../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../utils/errorHandler';

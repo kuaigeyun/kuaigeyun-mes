@@ -59,6 +59,16 @@ def manifest_hides_required_app_menus(app_code: str) -> bool:
     return bool(data and data.get("hide_required_app_menus") is True)
 
 
+def manifest_is_dedicated_app(app_code: str) -> bool:
+    """定制应用（整合层）：requires_apps 为宿主 API/表，不阻塞宿主在应用中心单独停用。"""
+    data = read_manifest_data(app_code)
+    if not data:
+        return False
+    if data.get("is_dedicated") is True:
+        return True
+    return str(data.get("market_category") or "").strip().lower() == "dedicated"
+
+
 def hidden_app_codes_for_dedicated_shell(
     *,
     hide: bool,
@@ -194,7 +204,11 @@ async def resolve_enabled_app_codes(*, tenant_id: int | None = None) -> frozense
 
 
 async def list_active_dependents(tenant_id: int, app_code: str) -> list[tuple[str, str]]:
-    """返回仍启用且 manifest 声明依赖 app_code 的应用 (code, name)。"""
+    """返回仍启用且 manifest 声明依赖 app_code 的应用 (code, name)。
+
+    定制应用（is_dedicated / market_category=dedicated）不计入：宿主可在应用中心停用，
+    运行时仍由 resolve_enabled_app_codes 的 requires_apps 闭包拉起已安装宿主包。
+    """
     from infra.infrastructure.database.database import get_db_connection
 
     conn = await get_db_connection()
@@ -218,6 +232,8 @@ async def list_active_dependents(tenant_id: int, app_code: str) -> list[tuple[st
     dependents: list[tuple[str, str]] = []
     for row in rows:
         code = str(row["code"])
+        if manifest_is_dedicated_app(code):
+            continue
         reqs = expand_requires_apps({code})
         if app_code in reqs:
             dependents.append((code, str(row["name"] or code)))

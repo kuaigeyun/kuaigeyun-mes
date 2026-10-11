@@ -28,7 +28,7 @@ standard: 主仓记跨端总表；client/pro 薄入口指路；AOCI 分仓不合
 |------|------|------|
 | 主仓 | `D:\kuaigeyun-pro\kuaigeyun` | FastAPI + PC Web；平台契约与跨端记忆枢纽（本目录） |
 | 终端私仓 | `D:\kuaigeyun-pro\kuaigeyun-client` | Mobile / Station / TV / 小程序真源 |
-| Pro 私仓 | `D:\kuaigeyun-pro\kuaigeyun-pro` | kuaiai / kuaiiot / kuaireport 等闭源包真源 |
+| Pro 私仓 | `f:/dev/kuaigeyun-pro`（或 `D:\kuaigeyun-pro\kuaigeyun-pro`） | kuaipd/kuaiplm/kuaicaiwu/kuaioa、kuaiai/kuaiiot/kuaireport、kuaiconnect、全部行业 `ind-*` 与 spoke-wheel |
 
 ### 真源与组装
 

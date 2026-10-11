@@ -1,0 +1,58 @@
+.api-form-url-bar {
+  margin-top: 4px;
+}
+
+.api-form-url-bar .ant-form-item {
+  margin-bottom: 0;
+}
+
+.api-form-tabs {
+  margin-top: 16px;
+}
+
+.api-form-tabs .ant-tabs-content {
+  padding-top: 8px;
+  min-height: 280px;
+}
+
+.api-form-response-tab .api-form-json-field:last-child {
+  margin-bottom: 0;
+}
+
+.api-form-footer-fields {
+  margin-top: 8px;
+}
+
+.api-form-json-field .ant-form-item {
+  margin-bottom: 0;
+}
+
+.api-form-kv-list-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.api-form-kv-list-item__fields {
+  flex: 1;
+  min-width: 0;
+}
+
+.api-form-kv-list-item__fields .ant-form-item {
+  margin-bottom: 0;
+}
+
+.api-form-kv-list-item__actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  height: 32px;
+}
+
+.api-form-kv-list-item__actions .ant-pro-form-list-action {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-block: 0;
+}

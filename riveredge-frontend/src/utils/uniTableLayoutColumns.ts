@@ -42,6 +42,21 @@ export const UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS = {
 } as const;
 
 /**
+ * 站点墙钟 `YYYY-MM-DD HH:MM:SS` 单列（含表头排序图标），禁止 180px 导致「创建/更新时间」裁切。
+ */
+export const UNI_TABLE_SITE_DATETIME_COLUMN_WIDTH = 200;
+
+export const UNI_TABLE_SITE_DATETIME_COLUMN_DEFAULTS = {
+  width: UNI_TABLE_SITE_DATETIME_COLUMN_WIDTH,
+  minWidth: UNI_TABLE_SITE_DATETIME_COLUMN_WIDTH,
+  uniTableKeepWidth: true,
+  resizable: false,
+  ellipsis: false,
+  hideInSearch: true,
+  valueType: 'dateTime' as const,
+} as const;
+
+/**
  * 操作列宽度布局令牌（1280 视口 / small 表格 / type="link" + 图标，Playwright 实测）：
  * 单槽按**最宽单动作**预算——四字标签 92px（双字实测 64px），
  * 「更多」按钮 70px、Space 间距 4px、单元格左右内边距 8+8=16px。

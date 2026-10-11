@@ -23,10 +23,6 @@ BASE_APP_CODES = frozenset(
         "kuaizhizao",
         "kuaiqms",
         "kuaiems",
-        "kuaipd",
-        "kuaiplm",
-        "kuaicaiwu",
-        "kuaioa",
         "master-data",
     }
 )

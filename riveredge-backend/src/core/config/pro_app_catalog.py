@@ -14,16 +14,27 @@ GLOBAL_LICENSE_SCOPE = "*"
 
 PRO_APP_CODES: FrozenSet[str] = frozenset(
     {
-        "kuaiai",
+        "kuaipd",
+        "kuaiplm",
+        "kuaicaiwu",
+        "kuaioa",
         "kuaireport",
         "kuaiiot",
+        "kuaiai",
+        "kuaiconnect",
     }
 )
 
 # 与 manifest / 前端 proAppCatalog.ts PRO_APP_SORT_ORDER 一致（3xx 段，位于行业包 290 之后）
+# 展示序：快研发 → 快交付 → 轻办公 → 轻财务 → 快数采 → 快报表 → 快连接 → KU-AI
 PRO_APP_SORT_ORDER: dict[str, int] = {
-    "kuaireport": 310,
+    "kuaiplm": 300,
+    "kuaipd": 305,
+    "kuaioa": 310,
+    "kuaicaiwu": 315,
     "kuaiiot": 320,
+    "kuaireport": 325,
+    "kuaiconnect": 330,
     "kuaiai": 350,
 }
 
@@ -33,7 +44,7 @@ def resolve_application_sort_order(
     manifest_sort_order: int | None,
 ) -> int:
     """
-    应用侧栏排序唯一真源：行业包 290、行业模块 manifest、专业 APP 310–350。
+    应用侧栏排序唯一真源：行业包 290、行业模块 manifest、专业 APP 300–350。
 
     manifest 与库内 sort_order 均须经此函数，避免历史 210–250 段再次写入。
     """

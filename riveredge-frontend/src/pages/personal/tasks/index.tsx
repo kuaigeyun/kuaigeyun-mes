@@ -30,7 +30,7 @@ import { formatDateTimeBySiteSetting, formatDateBySiteSetting, todaySiteDateStri
 import {
   KUAIPLM_APPROVAL_TITLE_PREFIX_I18N,
   KUAIPLM_CHANGE_TYPE_I18N,
-} from '../../../apps/kuaiplm/components/kuaiplmMeta';
+} from './kuaiplmApprovalTaskMeta';
 import { buildListPageHelpViewConfig } from '../../../components/page-help-wiki';
 import { pickSearchString } from '../../../utils/tableQueryKey';
 

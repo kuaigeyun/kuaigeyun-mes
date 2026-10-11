@@ -1095,6 +1095,11 @@ class MenuService:
             f"_i{is_active if is_active is not None else 'all'}_v8{suffix}_m{manifest_fp}_{overlay_tag}"
         )
         cache_key = MenuService._get_cache_key(tenant_id, "tree", cache_key_value)
+
+        if cache_key_suffix == NAV_TREE_CACHE_SUFFIX:
+            from core.services.system.menu_takeover_service import MenuTakeoverService
+
+            await MenuTakeoverService.reconcile_takeovers_for_tenant(tenant_id)
         
         # 尝试从缓存获取（命中直出）。
         # 缓存写入的就是已做孤儿过滤 + manifest 排序的成品树（见下方构建逻辑），
@@ -1137,19 +1142,20 @@ class MenuService:
         all_menus_raw = await query.order_by("sort_order", "created_at").all()
         menu_by_id_full = {menu.id: menu for menu in all_menus_raw}
 
-        # 过滤孤儿菜单：application_uuid 对应的应用已卸载/禁用/软删除/占位时不显示
+        # 过滤孤儿菜单：application_uuid 对应的应用已卸载/禁用/软删除/占位时不显示；
+        # 且须在本节点已部署 manifest（PRO 未 compose 时不得进入 navigation-tree）。
         # 说明：平台/系统菜单（application_uuid 为 NULL）照常保留。
         all_menus = list(all_menus_raw)
-        try:
-            visible_apps = await ApplicationService.get_installed_applications(tenant_id=tenant_id)
-            visible_app_uuids = {str(a["uuid"]) for a in visible_apps}
-            all_menus = [
-                m for m in all_menus
-                if (not m.application_uuid) or (str(m.application_uuid) in visible_app_uuids)
-            ]
-        except Exception:
-            # 过滤失败不影响主流程（降级返回未过滤结果）
-            pass
+        visible_apps = await ApplicationService.get_installed_applications(tenant_id=tenant_id)
+        visible_app_uuids = {
+            str(a["uuid"])
+            for a in visible_apps
+            if ApplicationService.is_manifest_deployed_on_node(str(a.get("code") or "").strip())
+        }
+        all_menus = [
+            m for m in all_menus
+            if (not m.application_uuid) or (str(m.application_uuid) in visible_app_uuids)
+        ]
         
         # 构建菜单映射
         menu_map: Dict[int, MenuTreeResponse] = {}
@@ -1235,8 +1241,14 @@ class MenuService:
             m.sort_order or 0,
         ))
 
-        if overlay_manifest_sort and cache_key_suffix == NAV_TREE_CACHE_SUFFIX:
-            from apps.kuaioa.services.form_template_menu_extension import append_mounted_form_template_menus
+        if (
+            overlay_manifest_sort
+            and cache_key_suffix == NAV_TREE_CACHE_SUFFIX
+            and ApplicationService.is_manifest_deployed_on_node("kuaioa")
+        ):
+            from apps.kuaioa.services.form_template_menu_extension import (
+                append_mounted_form_template_menus,
+            )
 
             await append_mounted_form_template_menus(tenant_id, root_menus)
 

@@ -43,7 +43,7 @@ import { ProcessMasterDetailDrawer } from '../shared/processMasterDetailDrawer';
 import { DetailDrawerActions } from '../../../../../components/layout-templates/DetailDrawerActions';
 import { MarkerTag, StatusTag } from '../../../../../constants/statusBadges';
 import { DictionaryLabel } from '../../../../../components/dictionary-label';
-import { formatProjectRefLabel } from '../../../../kuaiplm/components/Phase2ProjectSelect';
+import { formatProjectRefLabel } from '../../../utils/projectRefLabel';
 import { getDictionaryOptions } from '../../../services/supply-chain';
 import { DrawingFormModal } from '../../../components/DrawingFormModal';
 import { DrawingBatchUploadModal } from '../../../components/DrawingBatchUploadModal';
@@ -104,7 +104,7 @@ import { useResourcePermissions } from '../../../../../hooks/useResourcePermissi
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import { canViewDocumentHistory } from '../../../../../utils/permissionContract';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
-import { buildDrawingChangeCreateUrl } from '../../../../kuaiplm/services/master-data-links';
+import { buildDrawingChangeCreateUrl } from '../../../utils/plmDeepLinks';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 const DRAWING_PERMISSION = 'master-data:process:drawing';
 

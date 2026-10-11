@@ -94,8 +94,8 @@ import {
   type ContractTermFieldBindingContext,
 } from '../sales-contracts/contract-term-placeholders';
 import { formatBusinessDateOnly } from '../../../../../utils/format';
-import { glService } from '../../../../kuaicaiwu/services/gl';
-import { exchangeRateService } from '../../../../kuaicaiwu/services/exchange-rate';
+import { glService } from '../../../services/finance/gl';
+import { exchangeRateService } from '../../../services/finance/exchange-rate';
 import {
   documentCurrencyTitleVars,
   resolveDocumentCurrencyInputPrefix,

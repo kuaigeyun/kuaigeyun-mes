@@ -12,6 +12,7 @@ from typing import Dict, FrozenSet
 APPLICATION_CODE_RENAMES: Dict[str, str] = {
     "kuaielectronics": "ind-electronics",
     "industry-mold": "ind-mold",
+    "pro-data-center": "kuaiconnect",
 }
 
 LEGACY_INDUSTRY_RENAME_SOURCE_CODES: FrozenSet[str] = frozenset(APPLICATION_CODE_RENAMES.keys())

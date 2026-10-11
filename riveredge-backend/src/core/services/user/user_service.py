@@ -271,6 +271,7 @@ class UserService:
                     "is_tenant_admin": user.is_tenant_admin,
                     "last_login": user.last_login,
                     "created_at": user.created_at,
+                    "updated_at": user.updated_at,
                 }
 
                 # 部门信息（已通过 prefetch_related 加载）
