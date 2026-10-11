@@ -16,14 +16,30 @@ export type DocumentReplacementDecl = {
   replacement_path: string;
 };
 
-/** replacement_path → 懒加载组件（仅行业 APP 内页） */
+const IND_ELECTRONICS_LABEL_OEM = import.meta.glob(
+  '../apps/ind-electronics/pages/label-oem/index.tsx',
+);
+const KUAIPLM_PROJECT_PROPOSALS = import.meta.glob(
+  '../apps/kuaiplm/pages/project-proposals/ProjectProposalsGenericPage.tsx',
+);
+
+async function loadComposedPage(
+  globs: Record<string, () => Promise<unknown>>,
+): Promise<{ default: ComponentType }> {
+  const loader = Object.values(globs)[0];
+  if (loader) {
+    return (await loader()) as { default: ComponentType };
+  }
+  const mod = await import('../components/documentReplacementUnavailable');
+  return { default: mod.default };
+}
+
+/** replacement_path → 懒加载组件（pro/行业/定制须 compose，避免 OSS 构建静态解析缺失目录） */
 const REPLACEMENT_LOADERS: Record<string, () => Promise<{ default: ComponentType }>> = {
-  '/apps/ind-electronics/label-oem': () => import('../apps/ind-electronics/pages/label-oem/index'),
-  // 定制仓 compose 前无 funide-oa 目录（gitignore）；回退通用壳，组装后可再指回定制页
-  '/apps/funide-oa/project-proposals': () =>
-    import('../apps/kuaiplm/pages/project-proposals/ProjectProposalsGenericPage'),
+  '/apps/ind-electronics/label-oem': () => loadComposedPage(IND_ELECTRONICS_LABEL_OEM),
+  '/apps/funide-oa/project-proposals': () => loadComposedPage(KUAIPLM_PROJECT_PROPOSALS),
   '/apps/funide-oa/production-execution/label-station': () =>
-    import('../apps/ind-electronics/pages/label-oem/index'),
+    loadComposedPage(IND_ELECTRONICS_LABEL_OEM),
 };
 
 const lazyCache = new Map<string, LazyExoticComponent<ComponentType>>();

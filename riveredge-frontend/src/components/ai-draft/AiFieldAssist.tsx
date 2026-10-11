@@ -6,7 +6,7 @@ import React, { useState } from 'react';
 import { App, Button, Tooltip } from 'antd';
 import { BulbOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../services/api';
-import { useKuaiaiEntryAvailable } from '../../apps/kuaiai/hooks/useKuaiaiEntryAvailable';
+import { useKuaiaiEntryAvailable } from '../../hooks/useKuaiaiEntryAvailable';
 
 export type AiFieldAssistProps = {
   value?: string;

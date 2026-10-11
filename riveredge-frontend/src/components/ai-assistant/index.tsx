@@ -19,7 +19,7 @@ import {
 } from '../../services/deepseekChat'
 import { useChatIntegrationStatus } from '../../hooks/useChatIntegrationStatus'
 import { useAiContext, toAiContextApiPayload } from '../../contexts/AiContext'
-import { executeAiAction } from '../../apps/kuaiai/services/catalog'
+import { executeAiAction } from '../../services/kuaiaiCatalog'
 import assistAnimation from '../../../static/lottie/assist.json'
 import welcomeAnimation from '../../../static/lottie/welcome.json'
 import AiAssistantMarkdown from './AiAssistantMarkdown'
