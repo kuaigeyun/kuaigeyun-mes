@@ -32,7 +32,9 @@ standard: 真源在 pro 仓；主仓 gitignore + 占位；`scan_pro_oss_layout.p
 - 系统数据中心四入口（`/system/application-connections|apis|data-sources|datasets`）：`KuaiconnectRouteGate` — 快连接就绪进业务页，否则 `ProUpgradePrompt`（勿再在 SystemRoutes 写死 upgrade 页）
 - 无 compose / 未启用未授权：门禁显示升级占位
 - 门禁：`riveredge-backend/scripts/scan_pro_oss_layout.py`
+- **ORM**：`TORTOISE_ORM` 静态列表只挂开源应用；`kuaicaiwu`/`kuaiplm`/行业等由 `apps/*/orm_models.py` + `plugin_orm.discover_plugin_orm_modules` 合并。禁止再硬编码 pro 模型路径，否则未 compose 时 `aerich upgrade` 报 `ModuleNotFoundError`
 
 ## 扩展
 
 - 组装后财务 API 仍走 `/apps/kuaicaiwu/*`（须 compose kuaicaiwu 后端）
+- 生产带财务/研发：部署前 `compose` 链入 pro，再跑 migrate；纯开源可不 compose，migrate 应能通过
