@@ -11,7 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { DRAWER_CONFIG } from '../../../../../../components/layout-templates';
 import { UniDetail } from '../../../../../../components/uni-detail';
 import { UniAiButton, UniAiLottieIcon } from '../../../../../../components/uni-ai-button';
-import { useKuaiaiEntryAvailable } from '../../../../../kuaiai/hooks/useKuaiaiEntryAvailable';
+import { useKuaiaiEntryAvailable } from '../../../../../../hooks/useKuaiaiEntryAvailable';
 import { formatApiErrorDetail } from '../../../../../../services/api';
 import type { WorkOrderForGantt } from '../../../../components/GanttSchedulingChart/types';
 import type { VisualSchedulingBoardScan } from '../../../../services/production';

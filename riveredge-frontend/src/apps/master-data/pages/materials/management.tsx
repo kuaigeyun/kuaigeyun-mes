@@ -143,7 +143,7 @@ import {
 import { variantAttributeApi } from '../../services/variant-attribute'
 import type { VariantAttributeDefinition } from '../../types/variant-attribute'
 import FabricationRawMaterialWizard from '../../components/FabricationRawMaterialWizard'
-import { MaterialHealthAssistantTrigger } from '../../../kuaiai/components/material-health/MaterialHealthAssistant'
+import { MaterialHealthAssistantTrigger } from '../../../../components/material-health/MaterialHealthAssistantTrigger';
 import { MaterialDedupConfigTrigger } from '../../components/MaterialDedupAssistant'
 import {
   fabricationMaterialNeedsRawMaterialSetup,

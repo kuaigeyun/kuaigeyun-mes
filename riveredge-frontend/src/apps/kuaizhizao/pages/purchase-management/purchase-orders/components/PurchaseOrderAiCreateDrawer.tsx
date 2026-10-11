@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { UniAiButton } from '../../../../../../components/uni-ai-button';
 import { UniDetail } from '../../../../../../components/uni-detail';
 import { DRAWER_CONFIG } from '../../../../../../components/layout-templates';
-import { useKuaiaiEntryAvailable } from '../../../../../kuaiai/hooks/useKuaiaiEntryAvailable';
+import { useKuaiaiEntryAvailable } from '../../../../../../hooks/useKuaiaiEntryAvailable';
 import {
   extractPurchaseOrderFromImage,
   parsePurchaseOrderFromText,

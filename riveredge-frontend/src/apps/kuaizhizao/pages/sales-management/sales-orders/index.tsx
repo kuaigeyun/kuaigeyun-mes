@@ -59,7 +59,7 @@ import { MaterialInventoryIndicator } from '../../../components/MaterialInventor
 import { MaterialBomIndicator } from '../../../components/MaterialBomIndicator';
 import { SalesOrderIndicatorsProvider } from '../../../components/SalesOrderIndicatorsProvider';
 import { SalesOrderAiCreateTrigger } from './components/SalesOrderAiCreateDrawer';
-import { useKuaiaiEntryAvailable } from '../../../../kuaiai/hooks/useKuaiaiEntryAvailable';
+import { useKuaiaiEntryAvailable } from '../../../../../hooks/useKuaiaiEntryAvailable';
 import { SalesOrderDetailDrawer } from './components/SalesOrderDetailDrawer';
 import {
   alignProColumns,

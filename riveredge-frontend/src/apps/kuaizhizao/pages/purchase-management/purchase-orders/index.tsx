@@ -189,7 +189,7 @@ import {
   PurchaseOrderDetailDrawer,
   PURCHASE_ORDER_WORKFLOW_PROPS,
 } from './components/PurchaseOrderDetailDrawer';
-import { useKuaiaiEntryAvailable } from '../../../../kuaiai/hooks/useKuaiaiEntryAvailable';
+import { useKuaiaiEntryAvailable } from '../../../../../hooks/useKuaiaiEntryAvailable';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
 import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
