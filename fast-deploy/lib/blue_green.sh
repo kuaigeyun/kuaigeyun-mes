@@ -511,6 +511,12 @@ bg_run_update_prod() {
         return 1
     fi
 
+    prepare_workbuddy_mcp_for_prod_deploy || true
+    start_workbuddy_mcp_prod || {
+        bg_rollback_update
+        return 1
+    }
+
     bg_state_set active_slot "$inactive"
     if ! bg_reload_caddy_prod_config; then
         bg_state_set active_slot "$old_active"

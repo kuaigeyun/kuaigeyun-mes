@@ -1479,6 +1479,9 @@ stop_service() {
         scheduler)
             patterns=("taskiq scheduler.*core.tasks.taskiq_app:scheduler")
             ;;
+        workbuddy-mcp)
+            patterns=("tools/workbuddy-mcp/server.py" "workbuddy-mcp Sidecar")
+            ;;
         dev-api-proxy)
             patterns=("caddy run.*Caddyfile.dev-api")
             ;;
@@ -2746,6 +2749,8 @@ start_prod_via_systemd() {
         log_error "Caddy 未就绪，查看: journalctl -u ${SYSTEMD_CADDY_UNIT_NAME} -n 50 --no-pager"
         return 1
     fi
+    prepare_workbuddy_mcp_for_prod_deploy || true
+    start_workbuddy_mcp_prod || return 1
     log_ok "systemd 生产栈已就绪"
     return 0
 }
@@ -4148,9 +4153,146 @@ resolve_workbuddy_mcp_dir() {
     printf '%s\n' "$sidecar_dir"
 }
 
+workbuddy_mcp_env_file() {
+    load_deploy_env
+    printf '%s\n' "${WORKBUDDY_MCP_ENV_FILE:-$FAST_DEPLOY_CONFIG_DIR/workbuddy-mcp.env}"
+}
+
+workbuddy_mcp_env_filled() {
+    local env_file key missing=0
+    env_file="$(workbuddy_mcp_env_file)"
+    [ -f "$env_file" ] || return 1
+    for key in RIVEREDGE_BASE_URL OPEN_API_ACCT_ID OPEN_API_APP_ID OPEN_API_APP_SECRET OPEN_API_TENANT_ID; do
+        if ! grep -qE "^[[:space:]]*${key}=.+" "$env_file" 2>/dev/null; then
+            missing=1
+        fi
+    done
+    [ "$missing" -eq 0 ]
+}
+
+# 显式 WORKBUDDY_MCP_ENABLE=1，或生产已配公网域名且 workbuddy-mcp.env 凭证齐全
 workbuddy_mcp_enabled() {
     load_deploy_env
-    deploy_env_flag_enabled "${WORKBUDDY_MCP_ENABLE:-0}"
+    if deploy_env_flag_enabled "${WORKBUDDY_MCP_ENABLE:-0}"; then
+        return 0
+    fi
+    if [ "$DEPLOY_MODE" = "prod" ] && [ -n "${CADDY_DOMAIN:-}" ] && workbuddy_mcp_env_filled; then
+        return 0
+    fi
+    return 1
+}
+
+ensure_workbuddy_mcp_env_scaffold() {
+    [ "$DEPLOY_MODE" = "prod" ] || return 0
+    [ -n "${CADDY_DOMAIN:-}" ] || return 0
+    local env_file example base_url
+    env_file="$(workbuddy_mcp_env_file)"
+    example="$FAST_DEPLOY_CONFIG_DIR/workbuddy-mcp.env.example"
+    if [ -f "$env_file" ]; then
+        return 0
+    fi
+    [ -f "$example" ] || return 0
+    cp "$example" "$env_file"
+    base_url="$(read_env_value BASE_URL 2>/dev/null || true)"
+    if [ -z "$base_url" ]; then
+        base_url="https://${CADDY_DOMAIN}"
+    fi
+    base_url="${base_url%/}"
+    _env_file_set RIVEREDGE_BASE_URL "$base_url" "$env_file"
+    log_warn "已生成 ${env_file}，请填写 OPEN_API_* 后再次 update/start，/mcp 才会反代 Sidecar"
+}
+
+sync_workbuddy_mcp_deploy_env_flag() {
+    workbuddy_mcp_enabled || return 0
+    if ! deploy_env_flag_enabled "${WORKBUDDY_MCP_ENABLE:-0}"; then
+        set_deploy_env_value WORKBUDDY_MCP_ENABLE 1
+        export WORKBUDDY_MCP_ENABLE=1
+        log_info "已自动启用 WORKBUDDY_MCP_ENABLE（生产域名 + workbuddy-mcp.env 已就绪）"
+    fi
+}
+
+ensure_workbuddy_mcp_systemd_unit() {
+    workbuddy_mcp_enabled || return 0
+    is_linux_systemd || return 0
+    [ -f "$SYSTEMD_WORKBUDDY_MCP_UNIT_PATH" ] && return 0
+    local service_user uv_bin caddy_bin prereq unit_content tmp
+    service_user="$(resolve_service_user)" || return 1
+    if ! sudo -n true 2>/dev/null && [ "$(id -u)" -ne 0 ]; then
+        log_warn "缺少 ${SYSTEMD_WORKBUDDY_MCP_UNIT_PATH}，请 sudo ./fast-deploy/deploy.sh install-service 注册 Sidecar 单元"
+        return 1
+    fi
+    prereq="$(prepare_systemd_prerequisites "$service_user")" || return 1
+    uv_bin="${prereq%%|*}"
+    caddy_bin="${prereq#*|}"
+    unit_content="$(_render_systemd_unit_template "$SYSTEMD_WORKBUDDY_MCP_UNIT_TEMPLATE" "$service_user" "$uv_bin" "$caddy_bin")" || return 1
+    tmp="$(mktemp)"
+    printf '%s\n' "$unit_content" > "$tmp"
+    sudo cp "$tmp" "$SYSTEMD_WORKBUDDY_MCP_UNIT_PATH"
+    rm -f "$tmp"
+    sudo systemctl daemon-reload
+    sudo systemctl enable "$SYSTEMD_WORKBUDDY_MCP_UNIT_NAME" 2>/dev/null || true
+    log_ok "已注册 ${SYSTEMD_WORKBUDDY_MCP_UNIT_NAME}"
+}
+
+start_workbuddy_mcp_prod() {
+    workbuddy_mcp_enabled || return 0
+    if ! workbuddy_mcp_env_filled; then
+        log_warn "WorkBuddy MCP 未启动：workbuddy-mcp.env 凭证未填全（/mcp 仍可能走 SPA）"
+        return 0
+    fi
+    ensure_workbuddy_mcp_sidecar_deps || return 1
+    local port="${WORKBUDDY_MCP_PORT:-8765}"
+    if systemd_managed_prod_stack && [ -f "$SYSTEMD_WORKBUDDY_MCP_UNIT_PATH" ]; then
+        ensure_workbuddy_mcp_systemd_unit || true
+        log_info "启动 ${SYSTEMD_WORKBUDDY_MCP_UNIT_NAME}..."
+        if [ "$(id -u)" -eq 0 ]; then
+            systemctl restart "$SYSTEMD_WORKBUDDY_MCP_UNIT_NAME"
+        else
+            sudo systemctl restart "$SYSTEMD_WORKBUDDY_MCP_UNIT_NAME"
+        fi
+        sleep 1
+        if systemctl is-active --quiet "$SYSTEMD_WORKBUDDY_MCP_UNIT_NAME" 2>/dev/null \
+            || sudo systemctl is-active --quiet "$SYSTEMD_WORKBUDDY_MCP_UNIT_NAME" 2>/dev/null; then
+            log_ok "WorkBuddy MCP Sidecar 已运行（127.0.0.1:${port}/mcp）"
+            return 0
+        fi
+        log_error "Sidecar 未就绪，查看: journalctl -u ${SYSTEMD_WORKBUDDY_MCP_UNIT_NAME} -n 40 --no-pager"
+        return 1
+    fi
+    if pidfile_alive "$LOGS_DIR/workbuddy-mcp.pid"; then
+        log_info "WorkBuddy MCP Sidecar 已在运行"
+        return 0
+    fi
+    stop_service workbuddy-mcp
+    log_info "启动 WorkBuddy MCP Sidecar（nohup，127.0.0.1:${port}）..."
+    rm -f "$LOGS_DIR/workbuddy-mcp.pid"
+    nohup "$SYSTEMD_WORKBUDDY_MCP_EXEC_SCRIPT" > "$LOGS_DIR/workbuddy-mcp.log" 2>&1 &
+    echo $! > "$LOGS_DIR/workbuddy-mcp.pid"
+    sleep 2
+    if pidfile_alive "$LOGS_DIR/workbuddy-mcp.pid"; then
+        log_ok "WorkBuddy MCP Sidecar 已启动"
+        return 0
+    fi
+    log_error "Sidecar 启动失败，查看 $LOGS_DIR/workbuddy-mcp.log"
+    [ -f "$LOGS_DIR/workbuddy-mcp.log" ] && tail -20 "$LOGS_DIR/workbuddy-mcp.log" >&2
+    return 1
+}
+
+prepare_workbuddy_mcp_for_prod_deploy() {
+    [ "$DEPLOY_MODE" = "prod" ] || return 0
+    load_deploy_env
+    ensure_workbuddy_mcp_env_scaffold
+    workbuddy_mcp_enabled || {
+        log_info "WorkBuddy MCP：未启用（设 WORKBUDDY_MCP_ENABLE=1 或填全 workbuddy-mcp.env + CADDY_DOMAIN）"
+        return 0
+    }
+    sync_workbuddy_mcp_deploy_env_flag
+    validate_workbuddy_mcp_production_config || {
+        log_warn "WorkBuddy MCP 配置不完整，跳过 Sidecar（Caddy /mcp 反代需 Sidecar 就绪）"
+        return 0
+    }
+    ensure_workbuddy_mcp_systemd_unit || true
+    return 0
 }
 
 workbuddy_mcp_render_caddy_block() {
@@ -4628,6 +4770,7 @@ rollback_partial_prod_start() {
     load_deploy_env
     log_warn "回滚已启动的生产服务..."
     stop_service caddy
+    stop_service workbuddy-mcp
     stop_service backend
     if bg_enabled; then
         bg_stop_all_backends
@@ -4636,6 +4779,7 @@ rollback_partial_prod_start() {
     stop_service scheduler
     kill_all_caddy_processes
     kill_port "$BACKEND_PORT"
+    kill_port "${WORKBUDDY_MCP_PORT:-8765}" 2>/dev/null || true
     if bg_enabled; then
         kill_port "$BACKEND_PORT_BLUE" 2>/dev/null || true
         kill_port "$BACKEND_PORT_GREEN" 2>/dev/null || true
@@ -4739,6 +4883,11 @@ cmd_start_prod() {
     fi
     start_backend_prod
     start_worker_prod
+    prepare_workbuddy_mcp_for_prod_deploy || true
+    start_workbuddy_mcp_prod || {
+        DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"
+        exit 1
+    }
     if ! start_caddy_prod; then
         rollback_partial_prod_start
         DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"
@@ -4780,6 +4929,7 @@ cmd_stop_prod() {
         stop_prod_via_systemd
     fi
     stop_service caddy
+    stop_service workbuddy-mcp
     stop_service worker
     stop_service scheduler
     stop_service backend
@@ -4787,6 +4937,8 @@ cmd_stop_prod() {
         bg_stop_all_backends
     fi
     kill_all_caddy_processes
+    load_deploy_env
+    kill_port "${WORKBUDDY_MCP_PORT:-8765}" 2>/dev/null || true
     if caddy_https_enabled; then
         ensure_port_free 80 || true
         ensure_port_free 443 || true
@@ -7574,6 +7726,7 @@ run_update_prod() {
         sync_git_from_origin || return 1
     fi
     recompose_extension_apps_if_enabled || return 1
+    prepare_workbuddy_mcp_for_prod_deploy || true
     cmd_stop_prod || return 1
     cmd_migrate || return 1
     cmd_ensure_frontend_dist || return 1

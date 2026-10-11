@@ -34,11 +34,11 @@ WorkBuddy Agent
 
 在 **生产机**（与 MES 同机 Caddy）：
 
-1. `fast-deploy/config/deploy.env`：`WORKBUDDY_MCP_ENABLE=1`，`PRO_REPO_PATH` 指向已克隆的 `kuaigeyun-pro`。
-2. `cp fast-deploy/config/workbuddy-mcp.env.example fast-deploy/config/workbuddy-mcp.env`，填写 `RIVEREDGE_BASE_URL` 与 `OPEN_API_*`（勿写入 WorkBuddy）。
-3. 重新生成 Caddy 并重载：`./fast-deploy/deploy.sh prod start` 或 `sudo systemctl reload riveredge-caddy` 前先 `./fast-deploy/linux/prod.sh` 触发生成（`install-service` 会注册 `riveredge-workbuddy-mcp.service`）。
-4. 校验：`curl -sI https://<域名>/mcp` **不应**再是 `Content-Type: text/html`（Sidecar 未起时可能为 502，仍优于 SPA）。
-5. WorkBuddy：`"url": "https://<域名>/mcp"`，`disabled` 设为 false；勿用 `sse` 类型。
+1. `deploy.env` 配置 `CADDY_DOMAIN`、`PRO_REPO_PATH`（kuaigeyun-pro）。
+2. 首次 `./fast-deploy/deploy.sh update` 会生成 `fast-deploy/config/workbuddy-mcp.env`（若不存在）；填齐 `OPEN_API_*`。
+3. 再次 `update` 或 `prod start`：脚本自动写入 `WORKBUDDY_MCP_ENABLE=1`、生成 Caddy `/mcp` 反代、uv sync Sidecar、启动 Sidecar（systemd 或 nohup）。
+4. 校验：`curl -sI https://<域名>/mcp` **不应**再是 `text/html` + 8904（Sidecar 未起时可能 502）。
+5. WorkBuddy：`type: http`，`url: https://<域名>/mcp`。
 
 ## Sidecar 环境变量
 
