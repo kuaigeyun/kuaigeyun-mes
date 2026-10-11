@@ -19,7 +19,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
 
         UPDATE infra_license_keys
         SET app_code = 'kuaiconnect', updated_at = NOW()
-        WHERE app_code = 'pro-data-center' AND deleted_at IS NULL;
+        WHERE app_code = 'pro-data-center';
     """
 
 
