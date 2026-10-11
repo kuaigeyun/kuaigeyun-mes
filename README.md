@@ -1,20 +1,19 @@
-# <img src="docs/screenshots/logo/kuaige.png" alt="Logo" height="36" align="absmiddle" /> 快格云制造
+#  快格云制造
 
-
-![React](https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react)
-![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript)
-![Vite](https://img.shields.io/badge/Vite-5-646CFF?style=flat-square&logo=vite)
-![Ant Design](https://img.shields.io/badge/Ant%20Design-6-0170FE?style=flat-square&logo=antdesign)
-![Expo](https://img.shields.io/badge/Expo-54-000020?style=flat-square&logo=expo)
-![Electron](https://img.shields.io/badge/Electron-33-47848F?style=flat-square&logo=electron)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?style=flat-square&logo=fastapi)
-![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=flat-square&logo=python)
-![Pydantic](https://img.shields.io/badge/Pydantic-2-E92063?style=flat-square&logo=pydantic)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-336791?style=flat-square&logo=postgresql)
+React
+TypeScript
+Vite
+Ant Design
+Expo
+Electron
+FastAPI
+Python
+Pydantic
+PostgreSQL
 
 ---
 
-## 15 秒了解快格云制造
+## ⚡ 15 秒了解快格云制造
 
 为离散制造企业打造的轻量级 MES：以统一需求模型贯通「销售-研发-计划-执行-质量-设备-仓储」，帮助企业在可控成本下快速上线并持续扩展。
 
@@ -36,19 +35,19 @@
 
 ---
 
-## 立即体验与接入
+## 🚀 立即体验与接入
 
-- **在线演示**：[https://kuaigeyun.com](https://kuaigeyun.com)（建议使用 Gitee 快捷登录或自行注册；数据可能定期重置）
+- **在线演示**：[https://kuaigeyun.com](https://kuaigeyun.com)（建议使用 **Gitee 快捷登录** 或自行注册；数据可能定期重置）
 - **部署入口**：[fast-deploy/deploy.sh](fast-deploy/README.md)（Windows / Linux）
 - **完整文档**：[docs/部署指南.md](docs/部署指南.md)
 
-### 微信沟通反馈群
+### 💬 微信沟通反馈群
 
-<img src="docs/screenshots/wechat/wechat.png" alt="快格云 MES 交流群" width="280" />
+
 
 扫码加入 **快格云 MES 交流群**，反馈问题与建议。
 
-### 支持我们
+### ⭐ 支持我们
 
 快格云制造持续开源迭代，离不开社区关注与支持。若项目对你有帮助，欢迎：
 
@@ -76,7 +75,7 @@
 
 ---
 
-## 核心能力
+## 🛠️ 核心能力
 
 业务以 **快制造** 执行闭环为主，**主数据** 统一工厂与物料/BOM/工艺；与 **专业版** 插件（研发、交付、办公、财务、报表、数采、连接、AI）及 **行业包** 按需组合。
 
@@ -101,7 +100,7 @@
 
 ---
 
-### 插件应用
+### 🧩 插件应用
 
 应用中心按 **基础 / 专业 / 行业 / 定制** 分层展示。**已扫描入库** 的应用方可启用菜单；专业版与行业包源码在私仓，通过组装链入工作区。
 
@@ -121,7 +120,7 @@
 
 ---
 
-### 终端形态
+### 📱 终端形态
 
 同一套后端 API 与业务模型，按岗位与现场组合部署。本仓库开源 **PC Web + 后端**；其余终端源码在私仓 [kuaigeyun-client](https://gitee.com/kuaigeyun/kuaigeyun-client)。
 
@@ -143,7 +142,7 @@
 
 ---
 
-## 快速开始
+## 🏁 快速开始
 
 环境要求：Node.js 22+、Python 3.12+（运行时由 uv 锁定 3.11）、PostgreSQL 15+、Caddy（生产）；默认无需 Redis。
 
@@ -168,11 +167,15 @@ cd kuaigeyun   # 或 kuaigeyun-mes，取决于 clone 目录名
 - 部署文档：[docs/部署指南.md](docs/部署指南.md)（含**开发预览**与**备份**警告）
 - 脚本速查：[fast-deploy/README.md](fast-deploy/README.md)
 
-### 本地启用专业版应用（可选）
+### ✨ 专业应用（可选）
 
-仅克隆本仓库即可运行 **开源基础包**。若要调试快研发、轻财务、行业包等：
+仅克隆本仓库即可运行 **开源基础包**。
 
-1. 将 [kuaigeyun-pro](https://gitee.com/kuaigeyun/kuaigeyun-pro) 克隆到与主仓**同级**目录（分支 `develop`）。
+**专业版（PRO）** 应用（快研发、轻财务、行业包等）为商业授权能力，源码在私仓 [kuaigeyun-pro](https://gitee.com/kuaigeyun/kuaigeyun-pro)，需 **License** 与私仓访问权限。**使用前请先联系我们**获取 PRO 授权与拉取说明（[官网](https://kuaigeyun.com) / [联系方式](#-联系方式)）。
+
+已获授权后，本地组装调试可按以下步骤：
+
+1. 将 **kuaigeyun-pro** 克隆到与主仓**同级**目录（分支 `develop`；仓库地址与 Token 以商务交付为准）。
 2. 复制并编辑 `fast-deploy/tools/workspace/workspace.example.yaml` → `workspace.yaml`。
 3. 执行 `python fast-deploy/tools/workspace/compose.py`，重启后端与前端。
 
@@ -180,7 +183,7 @@ cd kuaigeyun   # 或 kuaigeyun-mes，取决于 clone 目录名
 
 ---
 
-### 推荐配置
+### ⚙️ 推荐配置
 
 单机部署（PostgreSQL 与后端、Taskiq、Caddy 同机）时的硬件参考；详细说明见 [docs/部署指南.md](docs/部署指南.md#硬件建议)。
 
@@ -197,7 +200,7 @@ cd kuaigeyun   # 或 kuaigeyun-mes，取决于 clone 目录名
 
 ---
 
-## 文档导航
+## 📚 文档导航
 
 - [README](README.md)：产品定位、核心能力、插件与终端、快速启动、推荐配置
 - [docs/部署指南.md](docs/部署指南.md)：环境准备、发布流程、运维排查
@@ -206,7 +209,7 @@ cd kuaigeyun   # 或 kuaigeyun-mes，取决于 clone 目录名
 
 ---
 
-## 联系方式
+## 📞 联系方式
 
 - 官网：[https://kuaigeyun.com](https://kuaigeyun.com)
 - 反馈：Issue 或内部渠道
@@ -215,7 +218,7 @@ cd kuaigeyun   # 或 kuaigeyun-mes，取决于 clone 目录名
 
 ---
 
-## 捐赠鸣谢
+## 🙏 捐赠鸣谢
 
 感谢以下朋友对项目的支持（按捐赠时间先后排列）：
 
