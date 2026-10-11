@@ -646,9 +646,11 @@ export default {
   'pages.login.giteeLinkModeFirst': '首次登录',
   'pages.login.giteeLinkModeBind': '绑定已有账户',
   'pages.login.giteeFirstLoginHint':
-    '确认 Gitee 账户与登录密码，在本组织创建账号并登录；手机号与邮箱为选填。',
-  'pages.login.giteeFirstLoginUsername': 'Gitee 账户',
-  'pages.login.giteeFirstLoginUsernamePlaceholder': '默认为 Gitee 登录名，可修改',
+    '将在本组织创建系统账号并登录。用户名可沿用 Gitee 登录名；请设置本系统登录密码（不是 Gitee 密码）。手机号与邮箱为选填。',
+  'pages.login.giteeFirstLoginUsername': '本系统用户名',
+  'pages.login.giteeFirstLoginUsernamePlaceholder': '可沿用 Gitee 登录名，也可自行修改',
+  'pages.login.giteeFirstLoginPassword': '设置登录密码',
+  'pages.login.giteeFirstLoginPasswordPlaceholder': '设置本系统密码，非 Gitee 密码',
   'pages.login.giteeFirstLoginUsernameLen': '用户名长度为 2-50 个字符',
   'pages.login.giteeFieldPhoneOptional': '手机号（选填）',
   'pages.login.giteeFieldEmailOptional': '邮箱（选填）',
@@ -30770,6 +30772,22 @@ export default {
     'Gitee 快捷登录可读取邮箱并支持个人资料绑定',
   'pages.dashboard.updateLog.entries.gitee-oauth-email-scope-bind-r01.description':
     '授权范围增加 emails，并在公开邮箱为空时从邮箱列表取主邮箱以自动匹配系统用户；个人资料补充 Gitee 授权绑定与解绑入口。',
+  'pages.dashboard.updateLog.entries.purchase-order-batch-push-in-menu-r01.title':
+    '采购订单批量下推收进批量操作',
+  'pages.dashboard.updateLog.entries.purchase-order-batch-push-in-menu-r01.description':
+    '「批量下推收货通知」并入「批量操作」下拉，与审核批量项同一入口，工具栏更紧凑。',
+  'pages.dashboard.updateLog.entries.toolbar-sync-hub-icon-only-r01.title':
+    '列表工具栏窄屏同步按钮仅图标',
+  'pages.dashboard.updateLog.entries.toolbar-sync-hub-icon-only-r01.description':
+    'SyncPushHub 与数据集配置按钮跟随 UniTable 宽度策略，空间不足时隐藏文案并保留 Tooltip，与打印导入导出一致。',
+  'pages.dashboard.updateLog.entries.inventory-clear-tenant-removed-r01.title':
+    '移除即时库存「全部删除」入口',
+  'pages.dashboard.updateLog.entries.inventory-clear-tenant-removed-r01.description':
+    '下线一键清空租户即时库存的页面按钮与 API，避免误操作导致整租户库存不可见；单条删除等能力不变。',
+  'pages.dashboard.updateLog.entries.gitee-first-login-copy-clarity-r01.title':
+    'Gitee 首次登录文案区分本系统账号',
+  'pages.dashboard.updateLog.entries.gitee-first-login-copy-clarity-r01.description':
+    '首次登录窗改为「本系统用户名」「设置登录密码」，并说明密码不是 Gitee 密码，避免误解。',
   'pages.dashboard.updateLog.entries.gitee-first-login-profile-form-r01.title':
     'Gitee 首次登录可确认账户并设置密码',
   'pages.dashboard.updateLog.entries.gitee-first-login-profile-form-r01.description':

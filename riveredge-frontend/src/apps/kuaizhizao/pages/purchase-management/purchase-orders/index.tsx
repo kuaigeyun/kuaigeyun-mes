@@ -51,7 +51,12 @@ import {
   DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
   renderDocumentLineMaterialsPreview,
 } from '../../sales-management/shared/documentLineMaterialsPreview';
-import { UniAuditBatchMenuButton, UniCapabilityBatchButton } from '../../../../../components/uni-batch';
+import {
+  UniAuditBatchMenuButton,
+  UniCapabilityBatchButton,
+  runCapabilityBatchLoop,
+  type UniBatchMenuItem,
+} from '../../../../../components/uni-batch';
 import { SyncFreshnessBadge } from '../../../../../components/sync-from-source-modal/SyncFreshnessBadge';
 import { SyncPushHubButton } from '../../../../../components/sync-push-hub';
 import { useToolbarSyncPushFlags, TOOLBAR_SYNC_PUSH_FLAGS_QUERY_KEY } from '../../../../../hooks/useToolbarSyncPushFlags';
@@ -535,6 +540,45 @@ const PurchaseOrdersPage: React.FC = () => {
     invalidateMenuBadgeCounts();
     actionRef.current?.reload();
   }, [invalidateMenuBadgeCounts]);
+
+  const purchaseOrderBatchPushReceiptNoticePermAllowed =
+    purchaseOrderPerms.canAction?.('execute') ?? false;
+
+  const purchaseOrderBatchExtraMenuItems = useMemo<UniBatchMenuItem[]>(
+    () => [
+      {
+        key: 'purchase-order-push-receipt-notice',
+        label: t('app.kuaizhizao.purchaseOrder.batchPushNotice'),
+        icon: <FileTextOutlined />,
+        disabled: !purchaseOrderBatchPushReceiptNoticeAllowed(
+          selectedOrdersForBatch,
+          purchaseOrderBatchPushReceiptNoticePermAllowed,
+        ),
+        onClick: async (keys) => {
+          await runCapabilityBatchLoop({
+            keys,
+            records: selectedOrdersForBatch,
+            capabilityKey: 'push_receipt_notice',
+            permAllowed: purchaseOrderBatchPushReceiptNoticePermAllowed,
+            notAllowedMessage: t('app.kuaizhizao.purchaseOrder.batchPushNoticePartial', {
+              count: 1,
+            }),
+            onRun: (id) => pushPurchaseOrderToReceiptNoticeFromPreview(id),
+            message: messageApi,
+            t,
+            onSuccess: handlePurchaseOrderAuditBatchSuccess,
+          });
+        },
+      },
+    ],
+    [
+      handlePurchaseOrderAuditBatchSuccess,
+      messageApi,
+      purchaseOrderBatchPushReceiptNoticePermAllowed,
+      selectedOrdersForBatch,
+      t,
+    ],
+  );
 
   const leavePurchaseOrderFormPage = useLeaveFormTab(PURCHASE_ORDER_LIST_PATH);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
@@ -3798,27 +3842,9 @@ const PurchaseOrdersPage: React.FC = () => {
               auditEnabled={purchaseOrderAuditEnabled}
               permGates={purchaseOrderPerms}
               handlers={purchaseOrderAuditBatchHandlers}
+              extraMenuItems={purchaseOrderBatchExtraMenuItems}
               onSuccess={handlePurchaseOrderAuditBatchSuccess}
               toolBarButtonSize="middle"
-            />,
-          ]}
-          toolBarActionsAfterBatch={[
-            <UniCapabilityBatchButton
-              key="purchase-order-push-receipt-notice"
-              selectedRowKeys={selectedRowKeys}
-              selectedRecords={selectedOrdersForBatch}
-              capabilityKey="push_receipt_notice"
-              permAllowed={purchaseOrderPerms.canAction?.('execute') ?? false}
-              batchAllowed={purchaseOrderBatchPushReceiptNoticeAllowed}
-              onRun={(id) => pushPurchaseOrderToReceiptNoticeFromPreview(id)}
-              notAllowedMessage={t('app.kuaizhizao.purchaseOrder.batchPushNoticePartial', { count: 1 })}
-              onSuccess={handlePurchaseOrderAuditBatchSuccess}
-              labels={{
-                single: t('app.kuaizhizao.purchaseOrder.batchPushNotice'),
-                batch: t('app.kuaizhizao.purchaseOrder.batchPushNotice'),
-              }}
-              icon={<FileTextOutlined />}
-              size="medium"
             />,
           ]}
           rightToolBarActionsBeforeExport={[

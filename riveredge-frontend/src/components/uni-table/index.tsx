@@ -2874,16 +2874,27 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     }
 
     if (showDatasetConfigButton && onDatasetConfig) {
-      rightButtons.push(
+      const datasetLabel = datasetConfigButtonText ?? t('components.uniTable.datasetConfig')
+      const datasetBtn = (
         <Button
           key="dataset-config"
           type="default"
           size={toolBarButtonSize}
           icon={<TableOutlined />}
           onClick={() => onDatasetConfig()}
+          aria-label={datasetLabel}
         >
-          {datasetConfigButtonText ?? t('components.uniTable.datasetConfig')}
+          {iconOnly ? null : datasetLabel}
         </Button>
+      )
+      rightButtons.push(
+        iconOnly ? (
+          <Tooltip key="dataset-config" title={datasetLabel}>
+            {datasetBtn}
+          </Tooltip>
+        ) : (
+          datasetBtn
+        ),
       )
     }
 

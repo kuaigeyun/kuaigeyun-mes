@@ -11,6 +11,7 @@ import {
   type SyncPushHubModalProps,
   type SyncPushHubTabKey,
 } from './SyncPushHubModal';
+import { useUniTableDataActionIconOnly } from '../uni-table/dataActionIconOnlyContext';
 
 export interface SyncPushHubButtonProps
   extends Omit<SyncPushHubModalProps, 'open' | 'onClose'>,
@@ -47,26 +48,33 @@ export const SyncPushHubButton: React.FC<SyncPushHubButtonProps> = ({
 }) => {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
+  const toolbarIconOnly = useUniTableDataActionIconOnly();
+  const effectiveIconOnly = iconOnly || toolbarIconOnly;
 
   const showSync = Boolean(syncEnabled) && Boolean(renderSyncPanel || syncPanel);
   const showPush = Boolean(pushEnabled) && Boolean(renderPushPanel || pushPanel);
   if (!showSync && !showPush) return null;
 
   const label = buttonText ?? t('components.syncPushHub.button');
+  const ariaLabel = typeof label === 'string' ? label : t('components.syncPushHub.button');
   const btn = (
     <Button
       type={type}
       size={size}
       icon={<SyncOutlined />}
-      aria-label={typeof label === 'string' ? label : t('components.syncPushHub.button')}
+      aria-label={ariaLabel}
       onClick={() => setOpen(true)}
       {...buttonRest}
     >
-      {iconOnly ? null : label}
+      {effectiveIconOnly ? null : label}
     </Button>
   );
 
-  const wrapped = wrapButton ? wrapButton(btn) : iconOnly ? <Tooltip title={label}>{btn}</Tooltip> : btn;
+  const wrapped = wrapButton
+    ? wrapButton(btn)
+    : effectiveIconOnly
+      ? <Tooltip title={ariaLabel}>{btn}</Tooltip>
+      : btn;
 
   return (
     <>

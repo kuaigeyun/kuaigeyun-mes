@@ -10,9 +10,7 @@ from infra.models.user import User
 from tortoise import connections
 
 from apps.kuaizhizao.models.inventory_sync_binding import InventorySyncBinding
-from apps.kuaizhizao.models.line_side_inventory import LineSideInventory
 from apps.kuaizhizao.schemas.inventory_sync import (
-    InventoryClearTenantOut,
     InventorySyncBindingOut,
     InventorySyncBindingUpsert,
     InventorySyncFromSourceOut,
@@ -135,22 +133,6 @@ class InventorySyncService:
     def serialize_binding(self, row: Optional[InventorySyncBinding]) -> InventorySyncBindingOut:
         data = serialize_binding_row(row, default_match_key=self.MATCH_KEY)
         return InventorySyncBindingOut(**data)
-
-    async def clear_tenant_inventory(self, tenant_id: int) -> InventoryClearTenantOut:
-        """软删除当前租户全部主仓批次库存与线边仓库存（即时库存口径）。"""
-        now = resolve_business_datetime()
-        material_batch_deleted = await MaterialBatch.filter(
-            tenant_id=tenant_id,
-            deleted_at__isnull=True,
-        ).update(deleted_at=now, updated_at=now)
-        line_side_deleted = await LineSideInventory.filter(
-            tenant_id=tenant_id,
-            deleted_at__isnull=True,
-        ).update(deleted_at=now, updated_at=now)
-        return InventoryClearTenantOut(
-            material_batch_deleted=int(material_batch_deleted or 0),
-            line_side_deleted=int(line_side_deleted or 0),
-        )
 
     async def upsert_binding(
         self,

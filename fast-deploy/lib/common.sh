@@ -7750,6 +7750,74 @@ cmd_update_prod() {
     log_ok "生产环境已更新"
 }
 
+# 生产机排查：为何公网 /mcp 仍返回 SPA 的 text/html
+cmd_diag_workbuddy_mcp() {
+    load_deploy_env
+    local env_file port caddy_cfg
+    env_file="$(workbuddy_mcp_env_file)"
+    port="${WORKBUDDY_MCP_PORT:-8765}"
+    caddy_cfg="$(caddy_resolved_config_path 2>/dev/null || echo "$CADDYFILE")"
+
+    echo ""
+    echo "======== WorkBuddy MCP 诊断（须在 Linux 生产机执行）========"
+    echo "说明: 公网 curl /mcp 若为 text/html + Content-Length≈8904，表示 Caddy 未反代 Sidecar。"
+    echo ""
+    echo "DEPLOY_MODE=${DEPLOY_MODE:-（未设）}"
+    echo "CADDY_DOMAIN=${CADDY_DOMAIN:-（空，无法自动启用 MCP）}"
+    echo "WORKBUDDY_MCP_ENABLE=${WORKBUDDY_MCP_ENABLE:-0}"
+    echo "PRO_REPO_PATH=${PRO_REPO_PATH:-（空，Sidecar 代码在 pro 仓 tools/workbuddy-mcp）}"
+    echo "workbuddy-mcp.env → ${env_file}"
+    if [ -f "$env_file" ]; then
+        if workbuddy_mcp_env_filled; then
+            echo "  OPEN_API_* / RIVEREDGE_BASE_URL: 已填齐"
+        else
+            echo "  OPEN_API_* / RIVEREDGE_BASE_URL: 未填齐 ← 不会自动启用 /mcp 反代"
+        fi
+    else
+        echo "  文件不存在 ← 先 prod update 生成模板，再填写后第二次 update"
+    fi
+    if workbuddy_mcp_enabled; then
+        echo "workbuddy_mcp_enabled: 是（将生成 Caddy handle /mcp*）"
+    else
+        echo "workbuddy_mcp_enabled: 否 ← 当前公网 /mcp 会走前端 index.html"
+        echo "  启用条件: WORKBUDDY_MCP_ENABLE=1，或 prod + CADDY_DOMAIN + workbuddy-mcp.env 填齐"
+    fi
+    echo "生效 Caddy 配置: ${caddy_cfg}"
+    if [ -f "$caddy_cfg" ]; then
+        if grep -qE 'handle /mcp\*' "$caddy_cfg" 2>/dev/null; then
+            echo "Caddy: 已含 handle /mcp*"
+        elif grep -q 'WORKBUDDY_MCP_ENABLE=0' "$caddy_cfg" 2>/dev/null; then
+            echo "Caddy: 仅占位注释（MCP 未启用）"
+        else
+            echo "Caddy: 无 /mcp 块 ← 可能未 pull 含模板的代码或未执行 update 重生 Caddyfile"
+        fi
+    else
+        echo "Caddy: 配置文件不存在"
+    fi
+    if command -v curl >/dev/null 2>&1; then
+        local sidecar_code
+        sidecar_code="$(curl -s -o /dev/null -w '%{http_code}' -m 3 "http://127.0.0.1:${port}/mcp" 2>/dev/null || echo "000")"
+        echo "本机 Sidecar http://127.0.0.1:${port}/mcp → HTTP ${sidecar_code}（000=未监听）"
+    fi
+    if command -v systemctl >/dev/null 2>&1; then
+        if systemctl is-active --quiet "$SYSTEMD_WORKBUDDY_MCP_UNIT_NAME" 2>/dev/null \
+            || sudo systemctl is-active --quiet "$SYSTEMD_WORKBUDDY_MCP_UNIT_NAME" 2>/dev/null; then
+            echo "systemd ${SYSTEMD_WORKBUDDY_MCP_UNIT_NAME}: active"
+        else
+            echo "systemd ${SYSTEMD_WORKBUDDY_MCP_UNIT_NAME}: 非 active（install-service + update/start）"
+        fi
+    fi
+    echo ""
+    echo "推荐步骤:"
+    echo "  1. cd 项目根 && git pull origin develop"
+    echo "  2. 编辑 fast-deploy/config/workbuddy-mcp.env（OPEN_API_* + 租户 ID）"
+    echo "  3. ./fast-deploy/deploy.sh prod update"
+    echo "  4. 本机: curl -sI http://127.0.0.1:${port}/mcp  公网: curl -sI https://\${CADDY_DOMAIN}/mcp"
+    echo "     成功时不应再是 text/html; charset=utf-8"
+    echo "============================================================"
+    echo ""
+}
+
 cmd_default() {
     cmd_wizard
 }
@@ -7796,10 +7864,13 @@ fd_dispatch() {
         pro-apps-status|ext-apps-status)
             cmd_pro_apps_status
             ;;
+        diag-workbuddy-mcp|workbuddy-mcp-diag)
+            cmd_diag_workbuddy_mcp
+            ;;
         wizard|""|deploy) cmd_wizard ;;
         *)
             log_error "未知命令: $cmd"
-            echo "用法: wizard | check | install | configure | migrate | low-spec-mode [on|off|status] | setup-swap | free-memory | build | start | stop | status | update | pro-apps [pro|custom|all] | install-custom | install-service | uninstall-service"
+            echo "用法: wizard | check | install | configure | migrate | low-spec-mode [on|off|status] | setup-swap | free-memory | build | start | stop | status | update | diag-workbuddy-mcp | pro-apps [pro|custom|all] | install-custom | install-service | uninstall-service"
             exit 1
             ;;
     esac

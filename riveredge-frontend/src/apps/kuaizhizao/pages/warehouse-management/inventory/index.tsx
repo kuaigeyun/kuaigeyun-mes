@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ProColumns } from '@ant-design/pro-components';
-import { App, Button, Popover, Select, Space, Typography } from 'antd';
-import { DeleteOutlined } from '@ant-design/icons';
+import { App, Popover, Select, Space, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { formatQuantity, todaySiteDateString } from '../../../../../utils/format';
 import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
@@ -23,10 +22,9 @@ import { buildListPageHelpViewConfig } from '../../../../../components/page-help
 import { SyncPushHubButton } from '../../../../../components/sync-push-hub';
 import { SyncFreshnessBadge } from '../../../../../components/sync-from-source-modal/SyncFreshnessBadge';
 import { useToolbarSyncPushFlags } from '../../../../../hooks/useToolbarSyncPushFlags';
-import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import InventoryDocumentPushPanel from './InventoryDocumentPushPanel';
 import { InventorySyncFromSourceModal } from '../../../components/InventorySyncFromSourceModal';
-import { clearTenantInventory, getInventorySyncBinding } from '../../../services/inventory';
+import { getInventorySyncBinding } from '../../../services/inventory';
 import { fetchAllCurrentPageItems } from '../../../../../utils/fetchAllListPages';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
@@ -164,14 +162,12 @@ function renderInventoryStockStatus(status: string) {
 
 const InventoryPage: React.FC = () => {
   const { t } = useTranslation();
-  const { message: messageApi, modal } = App.useApp();
+  const { message: messageApi } = App.useApp();
   const actionRef = useRef<any>(null);
   const lastQueryRef = useRef<Record<string, any>>({});
   const toolbarSyncPush = useToolbarSyncPushFlags('warehouse');
-  const inventoryPerms = useResourcePermissions('kuaizhizao:inventory');
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [syncFreshnessKey, setSyncFreshnessKey] = useState(0);
-  const [clearingAll, setClearingAll] = useState(false);
   const loadInventorySyncBinding = useCallback(() => getInventorySyncBinding(), []);
 
   const [includeZeroStock, setIncludeZeroStock] = useState(true);
@@ -542,53 +538,6 @@ const InventoryPage: React.FC = () => {
     }
   };
 
-  const handleClearAllInventory = useCallback(() => {
-    modal.confirm({
-      title: t('app.kuaizhizao.warehouseInventory.clearAllConfirmTitle'),
-      content: t('app.kuaizhizao.warehouseInventory.clearAllConfirmContent'),
-      okText: t('app.kuaizhizao.warehouseInventory.clearAll'),
-      okType: 'danger',
-      cancelText: t('common.cancel'),
-      onOk: async () => {
-        setClearingAll(true);
-        try {
-          const result = await clearTenantInventory();
-          messageApi.success(
-            t('app.kuaizhizao.warehouseInventory.clearAllSuccess', {
-              batchCount: result.material_batch_deleted ?? 0,
-              lineSideCount: result.line_side_deleted ?? 0,
-            }),
-          );
-          setSelectedRowKeys([]);
-          actionRef.current?.reload?.();
-        } catch (error: any) {
-          messageApi.error(error?.message || t('app.kuaizhizao.warehouseInventory.clearAllFailed'));
-          throw error;
-        } finally {
-          setClearingAll(false);
-        }
-      },
-    });
-  }, [messageApi, modal, t]);
-
-  const clearAllToolbarActions = useMemo(
-    () =>
-      inventoryPerms.canDelete
-        ? [
-            <Button
-              key="clear-all-inventory"
-              danger
-              icon={<DeleteOutlined />}
-              loading={clearingAll}
-              onClick={handleClearAllInventory}
-            >
-              {t('app.kuaizhizao.warehouseInventory.clearAll')}
-            </Button>,
-          ]
-        : undefined,
-    [clearingAll, handleClearAllInventory, inventoryPerms.canDelete, t],
-  );
-
   const statCards: StatCard[] = useMemo(
     () => [
       { title: t('app.kuaizhizao.warehouseCommon.statRecords'), value: summary?.total_records ?? '-' },
@@ -624,7 +573,6 @@ const InventoryPage: React.FC = () => {
         }}
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
-        rightToolBarActionsBeforeExport={clearAllToolbarActions}
         showSyncButton={toolbarSyncPush.hubVisible}
         onSync={() => undefined}
         syncToolbarExtra={

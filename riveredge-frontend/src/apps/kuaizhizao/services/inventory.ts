@@ -36,20 +36,8 @@ export type InventorySyncFromSourceResult = {
   mode?: string;
 };
 
-export type InventoryClearTenantResult = {
-  material_batch_deleted: number;
-  line_side_deleted: number;
-};
-
 export async function getInventorySyncBinding(): Promise<InventorySyncBinding> {
   return api.get('/apps/kuaizhizao/reports/inventory/sync-binding');
-}
-
-export async function clearTenantInventory(): Promise<InventoryClearTenantResult> {
-  return apiRequest<InventoryClearTenantResult>(
-    '/apps/kuaizhizao/reports/inventory/clear-tenant',
-    { method: 'POST' },
-  );
 }
 
 export async function syncInventoryFromSource(

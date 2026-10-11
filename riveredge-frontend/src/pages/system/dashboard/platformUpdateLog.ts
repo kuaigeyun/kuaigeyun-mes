@@ -44,6 +44,37 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'purchase-order-batch-push-in-menu-r01',
+    date: '2026-10-11',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-order-batch-push-in-menu-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-order-batch-push-in-menu-r01.description',
+  },
+  {
+    id: 'toolbar-sync-hub-icon-only-r01',
+    date: '2026-10-11',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.toolbar-sync-hub-icon-only-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.toolbar-sync-hub-icon-only-r01.description',
+  },
+  {
+    id: 'inventory-clear-tenant-removed-r01',
+    date: '2026-10-11',
+    type: 'security',
+    titleKey: 'pages.dashboard.updateLog.entries.inventory-clear-tenant-removed-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.inventory-clear-tenant-removed-r01.description',
+  },
+  {
+    id: 'gitee-first-login-copy-clarity-r01',
+    date: '2026-10-11',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.gitee-first-login-copy-clarity-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.gitee-first-login-copy-clarity-r01.description',
+  },
+  {
     id: 'gitee-first-login-profile-form-r01',
     date: '2026-10-11',
     type: 'improvement',

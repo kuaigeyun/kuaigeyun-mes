@@ -51,7 +51,7 @@ case "$SUBCMD" in
 esac
 export DEPLOY_MODE="${DEPLOY_MODE:-prod}"
 
-KNOWN_CMDS="wizard check install configure migrate low-spec-mode low_spec_mode lowspec setup-swap setup_swap swap free-memory build start stop status update install-service uninstall-service deploy pro-apps install-pro install-custom install-client install-h5 ext-apps pro-apps-status ext-apps-status"
+KNOWN_CMDS="wizard check install configure migrate low-spec-mode low_spec_mode lowspec setup-swap setup_swap swap free-memory build start stop status update install-service uninstall-service deploy pro-apps install-pro install-custom install-client install-h5 ext-apps pro-apps-status ext-apps-status diag-workbuddy-mcp workbuddy-mcp-diag"
 is_known_cmd() {
     case " ${KNOWN_CMDS} " in
         *" $1 "*) return 0 ;;

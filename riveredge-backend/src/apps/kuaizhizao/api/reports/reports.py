@@ -21,7 +21,6 @@ from infra.exceptions.exceptions import ValidationError
 from apps.kuaizhizao.services.report_service import ReportService
 from apps.kuaizhizao.services.report_enhancements import REPORT_LIST_MAX_LIMIT
 from apps.kuaizhizao.schemas.inventory_sync import (
-    InventoryClearTenantOut,
     InventorySyncBindingUpsert,
     InventorySyncFromSourceRequest,
 )
@@ -856,18 +855,3 @@ async def sync_inventory_from_source(
         return await InventorySyncService().sync_from_source(tenant_id, current_user, body)
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
-
-
-@router.post(
-    "/inventory/clear-tenant",
-    summary="一键清空当前租户即时库存",
-    response_model=InventoryClearTenantOut,
-    dependencies=[Depends(require_permission_codes("kuaizhizao:inventory:delete"))],
-)
-async def clear_tenant_inventory(
-    tenant_id: Annotated[int, Depends(get_current_tenant)],
-):
-    """软删除当前租户全部主仓批次库存与线边仓库存。"""
-    from apps.kuaizhizao.services.inventory_sync_service import InventorySyncService
-
-    return await InventorySyncService().clear_tenant_inventory(tenant_id)

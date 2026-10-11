@@ -60,10 +60,3 @@ class InventorySyncFromSourceOut(BaseSchema):
     """达到单次最大拉取页数，源端还有数据未拉完。"""
     truncated: bool = False
     errors: List[str] = Field(default_factory=list)
-
-
-class InventoryClearTenantOut(BaseSchema):
-    """清空当前租户即时库存结果。"""
-
-    material_batch_deleted: int = 0
-    line_side_deleted: int = 0

@@ -40,6 +40,31 @@ WorkBuddy Agent
 4. 校验：`curl -sI https://<域名>/mcp` **不应**再是 `text/html` + 8904（Sidecar 未起时可能 502）。
 5. WorkBuddy：`type: http`，`url: https://<域名>/mcp`。
 
+### 公网仍是 HTML（8904 字节）时
+
+**在 Windows 开发机 push / curl 不会改变生产 Caddy**；必须在 **Linux 生产机** 拉代码并 `update`。
+
+| 现象 | 含义 |
+|------|------|
+| `Content-Type: text/html` 且 `Content-Length: 8904` | `/mcp` 仍被 SPA `try_files` 吃掉，Caddy **没有**生效的 `handle /mcp*` |
+| `502` / 非 HTML | 反代已挂上，Sidecar 未起或崩溃 |
+| MCP 正常 | 通常非 HTML（如 405/406/JSON），且本机 `curl -sI http://127.0.0.1:8765/mcp` 有响应 |
+
+生产机一键诊断：
+
+```bash
+cd /path/to/kuaigeyun
+git pull origin develop
+./fast-deploy/deploy.sh prod diag-workbuddy-mcp
+```
+
+常见未生效原因：
+
+1. 生产未 `git pull` 到含 `{{WORKBUDDY_MCP_CADDY_BLOCK}}` 的 fast-deploy 版本。
+2. `fast-deploy/config/workbuddy-mcp.env` 未填齐 `OPEN_API_*`（且未显式 `WORKBUDDY_MCP_ENABLE=1`）→ 脚本**故意**不写反代，避免误暴露。
+3. 只改了 Gitee 代码，未在生产执行 `./fast-deploy/deploy.sh prod update`（重生 Caddyfile + reload + 启 Sidecar）。
+4. `PRO_REPO_PATH` 未指向含 `tools/workbuddy-mcp` 的 pro 仓。
+
 ## Sidecar 环境变量
 
 | 变量 | 说明 |

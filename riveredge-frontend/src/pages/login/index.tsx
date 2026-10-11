@@ -2897,7 +2897,11 @@ export default function LoginPage() {
             <Col span={12}>
               <Form.Item
                 name="password"
-                label={t('pages.login.password')}
+                label={
+                  giteeLinkMode === 'first'
+                    ? t('pages.login.giteeFirstLoginPassword')
+                    : t('pages.login.password')
+                }
                 rules={
                   giteeLinkMode === 'first'
                     ? [
@@ -2912,7 +2916,7 @@ export default function LoginPage() {
                   autoComplete={giteeLinkMode === 'first' ? 'new-password' : 'current-password'}
                   placeholder={
                     giteeLinkMode === 'first'
-                      ? t('pages.login.passwordPlaceholderLong')
+                      ? t('pages.login.giteeFirstLoginPasswordPlaceholder')
                       : t('pages.login.passwordPlaceholder')
                   }
                 />
