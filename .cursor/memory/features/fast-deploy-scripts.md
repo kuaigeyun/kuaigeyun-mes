@@ -13,6 +13,9 @@ keywords:
   - cmd_ensure_frontend_dist
   - build:16g
   - 没改前端
+  - install-service
+  - 开机自启
+  - SERVICE_USER
 standard: 先按 code-push-routing 分流；有 PC 前端改动才 build.web；禁止平行 npm run build 后手写 commit/push
 ---
 
@@ -43,6 +46,7 @@ standard: 先按 code-push-routing 分流；有 PC 前端改动才 build.web；�
 | 移动端 H5 本地构建 | `./fast-deploy/build.mobile.web.sh` | `riveredge-app/mobile` → `web-dist`，默认不进主仓 |
 | 部署机装 H5 | `./fast-deploy/deploy.sh install-h5` | 拉 `kuaigeyun-client`，Caddy `/mobile` |
 | 统一部署向导 | `./fast-deploy/deploy.sh` / `dev` / `wizard` | check/install/configure/migrate/build/start/stop/status/update |
+| 生产开机自启 | `./fast-deploy/deploy.sh install-service`（向导 BOOT） | 非 root；用户解析见下；缺 uv 自动装到服务用户 home |
 | 本机开发起停 | `./fast-deploy/launch.dev.sh`（`with-h5` / `stop` / `status`） | 不走蓝绿；需蓝绿用 `deploy.sh dev` |
 | Windows PS 起停 | `.\fast-deploy\launch.dev.ps1 withh5` | **勿**在 PS 里直接 `.\launch.dev.sh`（会另开 git-bash、无输出）；手机口 **8098** |
 | 专业/定制组装 | `python fast-deploy/tools/workspace/compose.py` | 或 `deploy.sh pro-apps` |
@@ -79,6 +83,13 @@ standard: 先按 code-push-routing 分流；有 PC 前端改动才 build.web；�
 - 新部署步骤：挂 `fd_dispatch` / `KNOWN_CMDS`
 - 新前端产物检查：与 `cmd_ensure_frontend_dist`（须含 `login.html`）对齐
 - H5 / 专业包：分别走 `install-h5` 与 `compose.py`，不要写进 `build.web.sh`
+
+## 开机自启（Linux systemd）
+
+- 运行用户优先级：`deploy.env` 的 `SERVICE_USER` → `SUDO_USER` → 当前用户 → `$PROJECT_ROOT` 属主；**禁止** `User=root`
+- `prepare_systemd_prerequisites`：服务用户无 uv 时 `ensure_uv_for_user` 自动 pip/官方脚本装到其 `~/.local/bin`，勿把 root 的 uv 写进 unit
+- 向导 BOOT 菜单展示运行用户、uv/caddy 就绪态；失败信息含可复制手装命令
+- 真源：`lib/common.sh` 的 `resolve_service_user` / `ensure_uv_for_user` / `cmd_install_service`
 
 ## 踩坑
 

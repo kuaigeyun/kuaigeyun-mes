@@ -610,7 +610,7 @@ wizard_show_ext_status_menu() {
 }
 
 wizard_show_boot_service_menu() {
-    local status_label boot_name
+    local status_label boot_name svc_user uv_label caddy_label caddy_bin
     load_deploy_env
     status_label="$(boot_service_status_label)"
     if is_windows_gitbash; then
@@ -618,12 +618,39 @@ wizard_show_boot_service_menu() {
     else
         boot_name="riveredge.service"
     fi
+    svc_user="$(resolve_service_user --quiet 2>/dev/null || true)"
+    if [ -z "$svc_user" ]; then
+        uv_label="—"
+        caddy_label="—"
+        svc_user="未解析"
+    elif is_windows_gitbash; then
+        uv_label="—"
+        caddy_label="—"
+    else
+        if resolve_systemd_tool_path "$svc_user" uv >/dev/null 2>&1; then
+            uv_label="就绪"
+        else
+            uv_label="将自动安装"
+        fi
+        caddy_bin="$(resolve_systemd_tool_path "$svc_user" caddy 2>/dev/null || true)"
+        if [ -z "$caddy_bin" ]; then
+            caddy_bin="$(resolve_caddy 2>/dev/null || true)"
+        fi
+        if [ -n "$caddy_bin" ] && [ -x "$caddy_bin" ]; then
+            caddy_label="就绪"
+        else
+            caddy_label="缺失（请先 install）"
+        fi
+    fi
     echo ""
     wizard_panel_begin
     wizard_panel_top
     wizard_panel_section "BOOT 开机自启"
     wizard_panel_kv "Service" "${boot_name}"
     wizard_panel_kv "Status" "${status_label}"
+    wizard_panel_kv "运行用户" "${svc_user}"
+    wizard_panel_kv "uv" "${uv_label}"
+    wizard_panel_kv "caddy" "${caddy_label}"
     wizard_panel_blank
     if boot_service_supported; then
         if is_boot_service_enabled; then
@@ -633,6 +660,8 @@ wizard_show_boot_service_menu() {
         fi
         if is_windows_gitbash; then
             wizard_panel_line "${WIZARD_DIM}Windows: 管理员=开机启动(SYSTEM)；普通用户=登录时启动${WIZARD_RESET}"
+        else
+            wizard_panel_line "${WIZARD_DIM}Linux: 禁止 User=root；缺 uv 时将自动装到运行用户 home${WIZARD_RESET}"
         fi
     else
         wizard_panel_line "${WIZARD_DIM}仅 Linux/Windows 生产模式支持开机自启${WIZARD_RESET}"
