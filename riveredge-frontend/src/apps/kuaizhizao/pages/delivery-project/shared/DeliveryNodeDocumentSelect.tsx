@@ -10,7 +10,7 @@ import { workOrderApi } from '../../../services/work-order';
 import { warehouseApi } from '../../../services/warehouse-execution';
 import { qualityApi } from '../../../services/quality-execution';
 import { qualityImprovementApi } from '../../../services/quality-improvement';
-import { listRdProjects } from '../../../../kuaiplm/services/rd-project';
+import { listRdProjects } from '../../../services/kuaiplm-rd-project-api';
 import { DELIVERY_NODE_DOCUMENT_TYPES } from '../../../services/delivery-project';
 
 export type DeliveryNodeDocumentKind = keyof typeof DELIVERY_NODE_DOCUMENT_TYPES;

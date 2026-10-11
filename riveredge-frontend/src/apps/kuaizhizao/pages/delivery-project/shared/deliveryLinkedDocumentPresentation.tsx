@@ -2,7 +2,7 @@ import React from 'react';
 import type { TFunction } from 'i18next';
 import type { ColumnsType } from 'antd/es/table';
 import { Button, Popconfirm, Typography } from 'antd';
-import { PROJECT_STATUS_LABELS } from '../../../../kuaiplm/services/rd-project';
+import { PROJECT_STATUS_LABELS } from '../../../services/kuaiplm-rd-project-api';
 import { getReviewStatusLabel, getStatusLabel } from '../../../constants/documentStatus';
 import { renderDocumentStatusTag } from '../../../../../utils/documentLifecycleStatusTag';
 import { formatBusinessDateOnly } from '../../../../../utils/format';
