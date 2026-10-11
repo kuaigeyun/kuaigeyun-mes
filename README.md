@@ -1,16 +1,15 @@
-# <img src="docs/screenshots/logo/kuaige.png" alt="Logo" height="36" align="absmiddle" /> 快格云制造
+# 快格云制造
 
-
-![React](https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react)
-![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript)
-![Vite](https://img.shields.io/badge/Vite-5-646CFF?style=flat-square&logo=vite)
-![Ant Design](https://img.shields.io/badge/Ant%20Design-6-0170FE?style=flat-square&logo=antdesign)
-![Expo](https://img.shields.io/badge/Expo-54-000020?style=flat-square&logo=expo)
-![Electron](https://img.shields.io/badge/Electron-33-47848F?style=flat-square&logo=electron)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?style=flat-square&logo=fastapi)
-![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=flat-square&logo=python)
-![Pydantic](https://img.shields.io/badge/Pydantic-2-E92063?style=flat-square&logo=pydantic)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-336791?style=flat-square&logo=postgresql)
+React
+TypeScript
+Vite
+Ant Design
+Expo
+Electron
+FastAPI
+Python
+Pydantic
+PostgreSQL
 
 ---
 
@@ -42,22 +41,30 @@
 - **部署入口**：[fast-deploy/deploy.sh](fast-deploy/README.md)（Windows / Linux）
 - **完整文档**：[docs/部署指南.md](docs/部署指南.md)
 
-> [!WARNING]
+### 微信沟通反馈群
+
+扫码加入 **快格云 MES 交流群**，反馈问题与建议。
+
+### 支持我们
+
+快格云制造持续开源迭代，离不开社区关注与支持。若项目对你有帮助，欢迎：
+
+- 在 [Gitee](https://gitee.com/kuaigeyun/kuaigeyun) / [GitHub](https://github.com/kuaigeyun/kuaigeyun-mes) 给仓库点一颗 **Star**，方便更多制造同行发现
+- 关注更新、提交 Issue / PR，一起把产品打磨得更好
+- 有条件时通过捐赠支持持续维护
+
+> 你的每一个 Star，都是我们继续更新的动力。
+
 > **开源范围（本仓库）**：公开 **后端 API** 与 **PC Web 前端**（`riveredge-backend` + `riveredge-frontend`），随仓发布的应用以 **主数据、快制造、快质量、快设备** 等基础能力为主。
 >
 > **专业版应用**（快研发、快交付、轻办公、轻财务、快报表、快数采、快连接、KU-AI 及行业增值包）源码在私仓 [kuaigeyun-pro](https://gitee.com/kuaigeyun/kuaigeyun-pro)，经 [工作区组装](fast-deploy/tools/workspace/README.md) 或部署向导 **扩展应用** 链入本机，**不在**开源主仓内提交完整源码。
 >
 > **多端终端**（移动 App、H5、企微/钉钉/飞书、触屏工位、TV 看板）在私仓 [kuaigeyun-client](https://gitee.com/kuaigeyun/kuaigeyun-client)。**客户定制**页面在 [kuaigeyun-custom](https://gitee.com/kuaigeyun/kuaigeyun-custom)（可选组装）。
->
+
+> [!WARNING]
 > 产品仍在**积极开发**，功能与数据模型可能频繁变更；在线演示与本地部署**仅供预览评估**，勿用于正式生产或承载真实业务数据。
 >
 > **安装与升级**请在独立空白服务器或虚拟机中验证，避免与既有系统端口、数据库或配置冲突；**勿**在已承载生产业务的服务器上直接试装。若必须在生产环境部署，**须先完整备份**，否则可能导致数据不可恢复。
-
-### 微信沟通反馈群
-
-<img src="docs/screenshots/wechat/wechat.png" alt="快格云 MES 交流群" width="280" />
-
-扫码加入 **快格云 MES 交流群**，反馈问题与建议。
 
 > [!CAUTION]
 > **渠道甄别**：版权方**未**在小红书、闲鱼等第三方平台销售或授权所谓「官方版」。若出现以 **快格云 / RiverEdge 官方授权** 名义的 MES 收费推广，或暗示与本项目（快格云制造）有关，**均非版权方提供或背书**。
@@ -71,18 +78,18 @@
 业务以 **快制造** 执行闭环为主，**主数据** 统一工厂与物料/BOM/工艺；与 **专业版** 插件（研发、交付、办公、财务、报表、数采、连接、AI）及 **行业包** 按需组合。
 
 
-| 业务域     | 能力要点                                         |
-| ------- | -------------------------------------------- |
-| 销售与 CRM | 客户池、报价/跟进/合同、预测、订单与变更、发货/退货、销售看板             |
-| 计划与排程   | 统一需求、需求计算（BOM/净需求）、变更、排程/甘特、缺料预警             |
-| 采购协同    | 申请/询价、订单与变更、到货/退货、采购执行与报表                    |
-| 生产执行    | 工单、报工、返工、委外、装箱、异常闭环；工位/移动端执行（终端见私仓）           |
-| 质量与追溯   | 来料/过程/成品/OQC、检验方案、8D、SPC、不合格与全链路追溯           |
-| 仓储物流    | 入出库、批次/序列号、盘点/调拨、组装拆卸、线边仓/倒冲、库存预警            |
-| 设备与资材   | 点检/巡检/故障/维修/保养；模具工装借还、维保、校准与备件               |
-| 绩效      | 班次排班、工作日历、技能/计件/KPI                          |
+| 业务域     | 能力要点                                                  |
+| ------- | ----------------------------------------------------- |
+| 销售与 CRM | 客户池、报价/跟进/合同、预测、订单与变更、发货/退货、销售看板                      |
+| 计划与排程   | 统一需求、需求计算（BOM/净需求）、变更、排程/甘特、缺料预警                      |
+| 采购协同    | 申请/询价、订单与变更、到货/退货、采购执行与报表                             |
+| 生产执行    | 工单、报工、返工、委外、装箱、异常闭环；工位/移动端执行（终端见私仓）                   |
+| 质量与追溯   | 来料/过程/成品/OQC、检验方案、8D、SPC、不合格与全链路追溯                    |
+| 仓储物流    | 入出库、批次/序列号、盘点/调拨、组装拆卸、线边仓/倒冲、库存预警                     |
+| 设备与资材   | 点检/巡检/故障/维修/保养；模具工装借还、维保、校准与备件                        |
+| 绩效      | 班次排班、工作日历、技能/计件/KPI                                   |
 | 财务      | 开源仓含快制造侧 **财务管理** 菜单与页面；完整 **轻财务**（独立应用与后端 API）需组装专业版 |
-| 主档与研发   | **主数据**（工厂/物料/BOM/工艺等）开源；NPI、设计变更、知识中心等 **快研发** 为专业版 |
+| 主档与研发   | **主数据**（工厂/物料/BOM/工艺等）开源；NPI、设计变更、知识中心等 **快研发** 为专业版  |
 
 
 **平台（本仓库开源）**：多租户与 RBAC、插件装配、配置中心、审批与消息、编码与自定义字段、打印、内置看板报表、上线检查与审计。
@@ -91,39 +98,40 @@
 
 ---
 
-## 插件应用
+### 插件应用
 
 应用中心按 **基础 / 专业 / 行业 / 定制** 分层展示。**已扫描入库** 的应用方可启用菜单；专业版与行业包源码在私仓，通过组装链入工作区。
 
 
-| 分层       | 插件 / 包        | 源码位置 | 说明 |
-| -------- | ------------- | -------- | ---------------------------------------------------------------- |
-| **基础（开源）** | 主数据           | 本仓库 | 工厂建模、物料/BOM/工艺、客户/供应商 |
-| **基础（开源）** | 快制造           | 本仓库 | 销售、计划、采购、执行、质量、设备、仓储、分析、绩效；含财务管理入口 UI |
-| **基础（开源）** | 快质量 / 快设备     | 本仓库 | 质量、设备域菜单与导航（核心单据能力由快制造提供） |
-| **专业**   | 快研发、快交付、轻办公、轻财务 | kuaigeyun-pro | 需 License；组装后完整菜单与 API |
-| **专业**   | 快报表、快数采、快连接、KU-AI | kuaigeyun-pro | 需 License；报表 BI、设备数采、集成连接、AI 助手 |
-| **行业**   | 机械、注塑、电子、汽配、食品等增值包 | kuaigeyun-pro | 需 License；原主仓行业免费包已并入专业行业目录 |
-| **定制**   | 客户专属应用        | kuaigeyun-custom | 可选；按 `CUSTOM_PROJECTS` 仅组装声明项目 |
+| 分层         | 插件 / 包             | 源码位置             | 说明                                    |
+| ---------- | ------------------ | ---------------- | ------------------------------------- |
+| **基础（开源）** | 主数据                | 本仓库              | 工厂建模、物料/BOM/工艺、客户/供应商                 |
+| **基础（开源）** | 快制造                | 本仓库              | 销售、计划、采购、执行、质量、设备、仓储、分析、绩效；含财务管理入口 UI |
+| **基础（开源）** | 快质量 / 快设备          | 本仓库              | 质量、设备域菜单与导航（核心单据能力由快制造提供）             |
+| **专业**     | 快研发、快交付、轻办公、轻财务    | kuaigeyun-pro    | 需 License；组装后完整菜单与 API                |
+| **专业**     | 快报表、快数采、快连接、KU-AI  | kuaigeyun-pro    | 需 License；报表 BI、设备数采、集成连接、AI 助手       |
+| **行业**     | 机械、注塑、电子、汽配、食品等增值包 | kuaigeyun-pro    | 需 License；原主仓行业免费包已并入专业行业目录           |
+| **定制**     | 客户专属应用             | kuaigeyun-custom | 可选；按 `CUSTOM_PROJECTS` 仅组装声明项目        |
+
 
 组装说明：[fast-deploy/tools/workspace/README.md](fast-deploy/tools/workspace/README.md)。生产环境亦可通过 `./fast-deploy/deploy.sh` 向导 **[4] 扩展应用** 配置私仓与 Token。
 
 ---
 
-## 终端形态
+### 终端形态
 
 同一套后端 API 与业务模型，按岗位与现场组合部署。本仓库开源 **PC Web + 后端**；其余终端源码在私仓 [kuaigeyun-client](https://gitee.com/kuaigeyun/kuaigeyun-client)。
 
 
-| 终端               | 技术栈                                         | 源码      | 典型场景                  |
-| ---------------- | ------------------------------------------- | ------- | --------------------- |
+| 终端               | 技术栈                                         | 源码      | 典型场景                      |
+| ---------------- | ------------------------------------------- | ------- | ------------------------- |
 | **PC Web**       | React 18 + TS + Vite 5 + Ant Design 6       | 本仓库（开源） | 计划、主数据、销售/采购/制造执行、审批、内置报表 |
-| **后端 API**       | FastAPI + Tortoise + PostgreSQL 15 + Taskiq | 本仓库（开源） | 全终端共用业务与权限            |
-| **移动 App**       | Expo 54 + React Native                      | 私仓      | 工业 PDA 扫码、移动报工、收发货、巡检 |
-| **H5 / 小程序**     | 与 App 同仓导出；小程序为 web-view 壳                  | 私仓      | 轻量访问、iOS 过渡、外协/访客     |
-| **企微 / 钉钉 / 飞书** | 办公平台内嵌 H5 + OAuth / JS-SDK                  | 私仓      | 待办审批、消息触达、移动审单与扫码     |
-| **触屏工位**         | Windows Electron；可复用 PC 业务模块                | 私仓      | 固定工位过站、戴手套触屏、可选刷脸共享   |
-| **TV 看板**        | Android TV + WebView                        | 私仓      | 车间大屏 KPI，开机直达、免登录     |
+| **后端 API**       | FastAPI + Tortoise + PostgreSQL 15 + Taskiq | 本仓库（开源） | 全终端共用业务与权限                |
+| **移动 App**       | Expo 54 + React Native                      | 私仓      | 工业 PDA 扫码、移动报工、收发货、巡检     |
+| **H5 / 小程序**     | 与 App 同仓导出；小程序为 web-view 壳                  | 私仓      | 轻量访问、iOS 过渡、外协/访客         |
+| **企微 / 钉钉 / 飞书** | 办公平台内嵌 H5 + OAuth / JS-SDK                  | 私仓      | 待办审批、消息触达、移动审单与扫码         |
+| **触屏工位**         | Windows Electron；可复用 PC 业务模块                | 私仓      | 固定工位过站、戴手套触屏、可选刷脸共享       |
+| **TV 看板**        | Android TV + WebView                        | 私仓      | 车间大屏 KPI，开机直达、免登录         |
 
 
 **选型建议**：办公室计划/物控 → PC；仓库 PDA / 无微信现场 → App；已用企微钉钉飞书 → 办公 H5；产线固定工序 → 触屏工位；班组巡视 → TV 看板。
@@ -169,7 +177,7 @@ cd kuaigeyun   # 或 kuaigeyun-mes，取决于 clone 目录名
 
 ---
 
-## 推荐配置
+### 推荐配置
 
 单机部署（PostgreSQL 与后端、Taskiq、Caddy 同机）时的硬件参考；详细说明见 [docs/部署指南.md](docs/部署指南.md#硬件建议)。
 
@@ -204,17 +212,7 @@ cd kuaigeyun   # 或 kuaigeyun-mes，取决于 clone 目录名
 
 ---
 
-## 支持我们
-
-快格云制造持续开源迭代，离不开社区关注与支持。若项目对你有帮助，欢迎：
-
-- 在 [Gitee](https://gitee.com/kuaigeyun/kuaigeyun) / [GitHub](https://github.com/kuaigeyun/kuaigeyun-mes) 给仓库点一颗 **Star**，方便更多制造同行发现
-- 关注更新、提交 Issue / PR，一起把产品打磨得更好
-- 有条件时通过捐赠支持持续维护（鸣谢名单见下）
-
-> 你的每一个 Star，都是我们继续更新的动力。
-
-### 捐赠鸣谢
+## 捐赠鸣谢
 
 感谢以下朋友对项目的支持（按捐赠时间先后排列）：
 
