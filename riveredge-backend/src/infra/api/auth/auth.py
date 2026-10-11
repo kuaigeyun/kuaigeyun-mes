@@ -8,7 +8,9 @@ Date: 2025-12-27
 """
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
-from pydantic import AliasChoices, BaseModel, Field
+import re
+
+from pydantic import AliasChoices, BaseModel, Field, field_validator
 from starlette.requests import Request
 from loguru import logger
 from typing import Any, Optional
@@ -198,6 +200,35 @@ class GiteeLinkLoginRequest(BaseModel):
 
 class GiteeFirstLoginRequest(BaseModel):
     ticket: str = Field(..., min_length=1, description="Gitee 关联凭证")
+    username: str = Field(..., min_length=2, max_length=50, description="登录用户名（默认可与 Gitee 账号一致）")
+    password: str = Field(..., min_length=8, description="登录密码（至少 8 位）")
+    phone: str | None = Field(None, description="手机号（选填）")
+    email: str | None = Field(None, description="邮箱（选填）")
+
+    @field_validator("username")
+    @classmethod
+    def validate_username(cls, v: str) -> str:
+        from infra.domain.security.reserved_username import assert_tenant_user_username_allowed
+
+        return assert_tenant_user_username_allowed(v.strip())
+
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, v: str | None) -> str | None:
+        if v is None or v == "":
+            return None
+        if not re.match(r"^1[3-9]\d{9}$", str(v).strip()):
+            raise ValueError("手机号格式不正确，须为11位中国大陆手机号")
+        return str(v).strip()
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: str | None) -> str | None:
+        if v is None or v == "":
+            return None
+        if "@" not in v:
+            raise ValueError("邮箱格式不正确，必须包含@符号")
+        return v.strip()
 
 
 class GiteeStarOfficialRequest(BaseModel):
@@ -569,7 +600,7 @@ async def gitee_first_login(
     data: GiteeFirstLoginRequest,
     request: Request,
 ):
-    """Gitee 首次登录：按授权资料在当前组织建号、绑定并签发会话（无需系统密码）。"""
+    """Gitee 首次登录：按用户确认的用户名/密码在当前组织建号、绑定并签发会话。"""
     creds = await get_gitee_oauth_credentials()
     if not creds:
         raise HTTPException(
@@ -584,6 +615,10 @@ async def gitee_first_login(
         login=ticket_data.get("login"),
         email=ticket_data.get("email"),
         name=ticket_data.get("name"),
+        username=data.username.strip(),
+        password=data.password,
+        phone=data.phone,
+        user_email=data.email,
     )
     result = await AuthService().generate_login_result(user, request, tenant_id)
     return LoginResponse(**result)

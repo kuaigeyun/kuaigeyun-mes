@@ -675,9 +675,13 @@ async def provision_user_for_gitee_first_login(
     login: str | None,
     email: str | None,
     name: str | None,
+    username: str,
+    password: str,
+    phone: str | None = None,
+    user_email: str | None = None,
 ) -> User:
     """
-    Gitee 首次登录：在当前组织创建系统用户并绑定 Gitee（密码随机，后续以 Gitee 快捷登录为主）。
+    Gitee 首次登录：在当前组织创建系统用户并绑定 Gitee（用户名/密码由用户在首次登录窗确认）。
     """
     from infra.domain.tenant.tenant_access import require_operational_tenant_by_id
     from infra.schemas.user import UserCreate
@@ -691,17 +695,26 @@ async def provision_user_for_gitee_first_login(
             status_code=status.HTTP_409_CONFLICT,
             detail="该 Gitee 账号已绑定其他用户，请直接使用 Gitee 登录",
         )
-    preferred = _sanitize_gitee_username_candidate(login, gitee_id=gitee_id)
-    username = await _allocate_unique_username(
-        tenant_id=tenant_id, preferred=preferred, gitee_id=gitee_id
+    from infra.domain.security.reserved_username import assert_tenant_user_username_allowed
+
+    uname = assert_tenant_user_username_allowed(username.strip())
+    taken = await User.get_or_none(
+        tenant_id=tenant_id,
+        username=uname,
+        deleted_at__isnull=True,
     )
-    password = secrets.token_urlsafe(18)
+    if taken:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="用户名已存在，请修改后重试",
+        )
+    resolved_email = user_email if user_email else email
     user_service = UserService()
     user = await user_service.create_user(
         UserCreate(
-            username=username,
-            phone=None,
-            email=email,
+            username=uname,
+            phone=phone,
+            email=resolved_email,
             password=password,
             full_name=(name or login or username)[:100],
             tenant_id=tenant_id,

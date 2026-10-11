@@ -52,6 +52,7 @@ import {
   type WeComWWLoginConfigResponse,
   tenantNameFromLoginResponse,
 } from '../../services/publicAuth';
+import { isReservedUsername } from '../../utils/reservedUsername';
 import { switchTenant } from '../../services/auth';
 import { setToken, setTenantId, setUserInfo, getTenantId, getToken } from '../../utils/auth';
 import { LANGUAGE_TOOLBAR_SHORT, SUPPORTED_UI_LANGUAGES, normalizeUiLanguage } from '../../utils/localeBootstrap';
@@ -755,7 +756,12 @@ export default function LoginPage() {
   const [giteeLinkSubmitting, setGiteeLinkSubmitting] = useState(false);
   const [giteeLinkMode, setGiteeLinkMode] = useState<'first' | 'bind'>('first');
   const [giteeLinkPostRedirect, setGiteeLinkPostRedirect] = useState('');
-  const [giteeLinkForm] = Form.useForm<{ username: string; password: string }>();
+  const [giteeLinkForm] = Form.useForm<{
+    username: string;
+    password: string;
+    phone?: string;
+    email?: string;
+  }>();
 
   // 频繁操作检测状态
   const [loginFailCount, setLoginFailCount] = useState(0);
@@ -1590,6 +1596,10 @@ export default function LoginPage() {
             setGiteeLinkPostRedirect(postRedirect);
             setGiteeLinkMode('first');
             giteeLinkForm.resetFields();
+            giteeLinkForm.setFieldsValue({
+              username: (response.gitee.login || '').trim(),
+              email: response.gitee.email?.trim() || undefined,
+            });
             setGiteeLinkOpen(true);
             return;
           }
@@ -2765,12 +2775,18 @@ export default function LoginPage() {
           void (async () => {
             try {
               setGiteeLinkSubmitting(true);
+              const values = await giteeLinkForm.validateFields();
               if (giteeLinkMode === 'first') {
-                const response = await giteeFirstLogin({ ticket: giteeLinkTicket });
+                const response = await giteeFirstLogin({
+                  ticket: giteeLinkTicket,
+                  username: values.username.trim(),
+                  password: values.password,
+                  phone: values.phone?.trim() || undefined,
+                  email: values.email?.trim() || undefined,
+                });
                 await finish(response);
                 return;
               }
-              const values = await giteeLinkForm.validateFields();
               const response = await giteeLinkLogin({
                 ticket: giteeLinkTicket,
                 username: values.username.trim(),
@@ -2819,8 +2835,15 @@ export default function LoginPage() {
           style={{ marginBottom: 16 }}
           value={giteeLinkMode}
           onChange={(value) => {
-            setGiteeLinkMode(value as 'first' | 'bind');
+            const mode = value as 'first' | 'bind';
+            setGiteeLinkMode(mode);
             giteeLinkForm.resetFields();
+            if (mode === 'first' && giteeLinkProfile) {
+              giteeLinkForm.setFieldsValue({
+                username: (giteeLinkProfile.login || '').trim(),
+                email: giteeLinkProfile.email?.trim() || undefined,
+              });
+            }
           }}
           options={[
             { label: t('pages.login.giteeLinkModeFirst'), value: 'first' },
@@ -2832,36 +2855,120 @@ export default function LoginPage() {
             ? t('pages.login.giteeFirstLoginHint')
             : t('pages.login.giteeBindExistingHint')}
         </Typography.Paragraph>
-        {giteeLinkMode === 'bind' ? (
-          <Form form={giteeLinkForm} layout="vertical" requiredMark={false}>
-            <Row gutter={12}>
-              <Col span={12}>
-                <Form.Item
-                  name="username"
-                  label={t('pages.login.username')}
-                  rules={[{ required: true, message: t('pages.login.usernameRequired') }]}
-                >
-                  <Input
-                    autoComplete="username"
-                    placeholder={t('pages.login.usernamePlaceholder')}
-                  />
-                </Form.Item>
-              </Col>
-              <Col span={12}>
-                <Form.Item
-                  name="password"
-                  label={t('pages.login.password')}
-                  rules={[{ required: true, message: t('pages.login.passwordRequired') }]}
-                >
-                  <Input.Password
-                    autoComplete="current-password"
-                    placeholder={t('pages.login.passwordPlaceholder')}
-                  />
-                </Form.Item>
-              </Col>
-            </Row>
-          </Form>
-        ) : null}
+        <Form form={giteeLinkForm} layout="vertical" requiredMark={false}>
+          <Row gutter={12}>
+            <Col span={12}>
+              <Form.Item
+                name="username"
+                label={
+                  giteeLinkMode === 'first'
+                    ? t('pages.login.giteeFirstLoginUsername')
+                    : t('pages.login.username')
+                }
+                rules={
+                  giteeLinkMode === 'first'
+                    ? [
+                        { required: true, message: t('pages.login.usernameRequired') },
+                        { min: 2, max: 50, message: t('pages.login.giteeFirstLoginUsernameLen') },
+                        {
+                          pattern: /^[a-zA-Z0-9_-]+$/,
+                          message: t('pages.login.usernamePattern'),
+                        },
+                        {
+                          validator: async (_, value) => {
+                            if (!value || !isReservedUsername(String(value))) return;
+                            throw new Error(t('pages.login.usernameReserved'));
+                          },
+                        },
+                      ]
+                    : [{ required: true, message: t('pages.login.usernameRequired') }]
+                }
+              >
+                <Input
+                  autoComplete="username"
+                  placeholder={
+                    giteeLinkMode === 'first'
+                      ? t('pages.login.giteeFirstLoginUsernamePlaceholder')
+                      : t('pages.login.usernamePlaceholder')
+                  }
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="password"
+                label={t('pages.login.password')}
+                rules={
+                  giteeLinkMode === 'first'
+                    ? [
+                        { required: true, message: t('pages.login.passwordRequired') },
+                        { min: 8, message: t('pages.login.passwordLen') },
+                        { max: 128, message: t('pages.login.passwordLenMax') },
+                      ]
+                    : [{ required: true, message: t('pages.login.passwordRequired') }]
+                }
+              >
+                <Input.Password
+                  autoComplete={giteeLinkMode === 'first' ? 'new-password' : 'current-password'}
+                  placeholder={
+                    giteeLinkMode === 'first'
+                      ? t('pages.login.passwordPlaceholderLong')
+                      : t('pages.login.passwordPlaceholder')
+                  }
+                />
+              </Form.Item>
+            </Col>
+            {giteeLinkMode === 'first' ? (
+              <>
+                <Col span={12}>
+                  <Form.Item
+                    name="phone"
+                    label={t('pages.login.giteeFieldPhoneOptional')}
+                    rules={[
+                      {
+                        validator: async (_, value) => {
+                          const v = typeof value === 'string' ? value.trim() : '';
+                          if (!v) return;
+                          if (!/^1[3-9]\d{9}$/.test(v)) {
+                            throw new Error(t('pages.login.phoneInvalid'));
+                          }
+                        },
+                      },
+                    ]}
+                  >
+                    <Input
+                      autoComplete="tel"
+                      maxLength={11}
+                      placeholder={t('pages.login.phonePlaceholder')}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item
+                    name="email"
+                    label={t('pages.login.giteeFieldEmailOptional')}
+                    rules={[
+                      {
+                        validator: async (_, value) => {
+                          const v = typeof value === 'string' ? value.trim() : '';
+                          if (!v) return;
+                          if (!v.includes('@')) {
+                            throw new Error(t('pages.login.emailInvalid'));
+                          }
+                        },
+                      },
+                    ]}
+                  >
+                    <Input
+                      autoComplete="email"
+                      placeholder={t('pages.login.emailPlaceholder')}
+                    />
+                  </Form.Item>
+                </Col>
+              </>
+            ) : null}
+          </Row>
+        </Form>
         {giteeLinkProfile ? (
           <div className="gitee-link-star-panel">
             <div className="gitee-link-star-body">

@@ -254,7 +254,13 @@ export async function giteeLoginCallback(data: {
   });
 }
 
-export async function giteeFirstLogin(data: { ticket: string }): Promise<LoginResponse> {
+export async function giteeFirstLogin(data: {
+  ticket: string;
+  username: string;
+  password: string;
+  phone?: string;
+  email?: string;
+}): Promise<LoginResponse> {
   return publicRequest<LoginResponse>('/auth/gitee/first-login', { method: 'POST', data });
 }
 
