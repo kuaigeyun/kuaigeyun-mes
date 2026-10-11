@@ -124,7 +124,9 @@ async def get_associated_options(
     table: str = Query(..., description="关联表名"),
     display_field: str = Query("name", description="显示字段（id/name/code/title/label/description）"),
     limit: int = Query(500, ge=1, le=1000, description="最大返回数量"),
-    host_resource: Optional[str] = Query(None, description="宿主 {app}:{module}，引用 display 隐式鉴权"),
+    host_resource: Optional[str] = Query(
+        None, description="宿主 {app}:{module}，审计透传；鉴权仅认目标 read|display"
+    ),
     tenant_id: int = Depends(get_current_tenant),
     current_user: User = Depends(get_current_user),
     _auth: object = Depends(require_custom_field_read),

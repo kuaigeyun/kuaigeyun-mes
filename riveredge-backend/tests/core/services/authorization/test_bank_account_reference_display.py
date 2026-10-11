@@ -1,4 +1,4 @@
-"""销售/采购建单引用银行账户隐式 display 鉴权。"""
+"""银行账户引用回显：须显式 read/display，不再宿主隐式放行。"""
 
 from __future__ import annotations
 
@@ -10,7 +10,26 @@ from core.services.authorization.access_control_service import AccessControlServ
 
 
 @pytest.mark.asyncio
-async def test_bank_account_display_allowed_with_sales_order_create():
+async def test_bank_account_display_allowed_with_explicit_display():
+    with patch(
+        "core.services.authorization.access_control_service.UserPermissionService.is_admin_bypass_flags",
+        new=AsyncMock(return_value=False),
+    ), patch(
+        "core.services.authorization.access_control_service.UserPermissionService.get_user_permissions",
+        new=AsyncMock(return_value={"kuaicaiwu:bank-account:display"}),
+    ):
+        decision = await AccessControlService.check_reference_display(
+            user_id=1,
+            tenant_id=1,
+            resource_key="kuaicaiwu:bank-account",
+            host_resource="kuaizhizao:sales-order",
+        )
+    assert decision.allowed is True
+    assert decision.reason == "explicit_read_or_display"
+
+
+@pytest.mark.asyncio
+async def test_bank_account_display_denied_with_only_host_create():
     with patch(
         "core.services.authorization.access_control_service.UserPermissionService.is_admin_bypass_flags",
         new=AsyncMock(return_value=False),
@@ -24,8 +43,8 @@ async def test_bank_account_display_allowed_with_sales_order_create():
             resource_key="kuaicaiwu:bank-account",
             host_resource="kuaizhizao:sales-order",
         )
-    assert decision.allowed is True
-    assert decision.reason == "implicit_host_grant"
+    assert decision.allowed is False
+    assert decision.reason == "reference_display_denied"
 
 
 @pytest.mark.asyncio

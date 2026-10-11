@@ -136,7 +136,7 @@ export interface DictionarySelectProps {
   quickCreatePopoverZIndex?: number;
   /**
    * 宿主单据 resource（{app}:{module}）。
-   * 无 system:data-dictionary read/display 时，通过 manifest module_references 隐式加载字典项。
+   * 审计透传；加载字典项须具备 system:data-dictionary 的 read 或 display（回显）。
    */
   hostResource?: string;
   /** 多选模式：存库为英文逗号分隔字符串，表单内为字符串数组 */

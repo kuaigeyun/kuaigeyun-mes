@@ -53,12 +53,25 @@ RBAC 管「能否操作」；`DataScopeService` 管「能看哪些行」。不�
 
 **错误面隔离**：仅 **主资源** API 失败可设置宿主 `*DetailError` / 整页 Result（如 `materialApi.get`）。关联图纸 / 路线 / 仓库 / 客户等 **次要** 请求失败：独立 try/catch，`console` 或空态，不得用 `getApiErrorMessage` 把次要 403 显示为「权限不足」阻塞宿主内容。
 
-**中长期**：单据表单优先 reference-display + `host_resource`（销售/采购已用）；主数据试点以门控 + 快照落地，不扩大 `module_references: *` 隐式授权。
+**引用回显**（与附属 GET OR、复合页严格分权是不同场景，勿混用）：
+
+| 职责 | 唯一真源 | 不是真源 |
+|------|----------|----------|
+| 矩阵是否出现「回显」、是否注册 `:display` 码 | 应用 `manifest.json` → `reference_resources`（系统级见 `core_reference_resources.py`） | `module_references`、Provider、宿主权限 |
+| 引用下拉/解析能否通过 | 用户具备目标 `permission_prefix:read` **或** `:display` | 宿主 `create/update/read`、`module_references` 隐式 |
+| 宿主「我会引用谁」（文档/扫描完整性） | `module_references`（目标必须已在 `reference_resources`） | 不得当授权放行 |
+| 引用 API 如何取数 | `reference_display/setup.py` Provider（运行实现） | 不决定矩阵有无回显 |
+| 复合页次要 list 的 OR | `affiliate_read_allowlist.py` | 与回显无关 |
+
+前后端应用 manifest 的 `reference_resources` 必须同改；改后须权限同步。新建角色与同步（切流回填 / 新建 display 码）默认授予全部非敏感 `:display`；取消后同步不强制恢复。
+
+主数据复合页仍默认严格分权 + 快照，附属 GET OR 仅走 `affiliate_read_allowlist`。
 
 ## 展示与矩阵
 
 - 矩阵勾选顺序：`manifest.json` → `permissions` 数组下标。
 - 操作文案：`ACTION_DISPLAY_LABELS` → 同步 `core_permissions.name`。
+- **`display`（回显）**：仅来自 `reference_resources`；矩阵可见、可取消；文案为「回显」。
 
 ## 自检
 

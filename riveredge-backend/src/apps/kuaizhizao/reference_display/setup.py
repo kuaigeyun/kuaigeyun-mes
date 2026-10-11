@@ -15,8 +15,10 @@ from apps.kuaizhizao.models.outsource_work_order import OutsourceWorkOrder
 from apps.kuaizhizao.models.process_inspection import ProcessInspection
 from apps.kuaizhizao.models.production_picking import ProductionPicking
 from apps.kuaizhizao.models.production_return import ProductionReturn
+from apps.kuaizhizao.models.purchase_inquiry import PurchaseInquiry
 from apps.kuaizhizao.models.purchase_order import PurchaseOrder
 from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+from apps.kuaizhizao.models.purchase_requisition import PurchaseRequisition
 from apps.kuaizhizao.models.purchase_return import PurchaseReturn
 from apps.kuaizhizao.models.rework_order import ReworkOrder
 from apps.kuaizhizao.models.rolling_schedule_plan import RollingSchedulePlan
@@ -51,6 +53,22 @@ _EXTRA_PROVIDERS = [
         name_field="supplier_name",
         order_by="order_code",
         scope_resource="kuaizhizao:purchase-order",
+    ),
+    make_tenant_model_display_provider(
+        resource_key="kuaizhizao:purchase-requisition",
+        model=PurchaseRequisition,
+        code_field="requisition_code",
+        name_field="requisition_name",
+        order_by="requisition_code",
+        scope_resource="kuaizhizao:purchase-requisition",
+    ),
+    make_tenant_model_display_provider(
+        resource_key="kuaizhizao:purchase-inquiry",
+        model=PurchaseInquiry,
+        code_field="inquiry_code",
+        name_field="inquiry_name",
+        order_by="inquiry_code",
+        scope_resource="kuaizhizao:purchase-inquiry",
     ),
     make_tenant_model_display_provider(
         resource_key="kuaizhizao:rework-order",

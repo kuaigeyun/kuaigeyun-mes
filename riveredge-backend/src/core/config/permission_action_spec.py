@@ -61,7 +61,7 @@ ACTION_DISPLAY_LABELS: dict[str, str] = {
     "import": "导入",
     "export": "导出",
     "print": "打印",
-    "display": "展示",
+    "display": "回显",
     "sync": "显示同步",
     "push": "显示推送",
     "submit": "提交",

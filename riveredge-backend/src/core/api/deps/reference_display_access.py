@@ -1,4 +1,4 @@
-"""统一的引用展示鉴权依赖（read/display + host_resource 隐式授权）。"""
+"""统一的引用展示鉴权依赖（目标 read|display；host_resource 仅审计透传）。"""
 
 from __future__ import annotations
 
@@ -17,7 +17,10 @@ def require_reference_display_access(resource_key: str, denied_detail: str):
     key = (resource_key or "").strip().lower()
 
     async def dependency(
-        host_resource: Optional[str] = Query(None, description="宿主 {app}:{module}，引用 display 隐式鉴权"),
+        host_resource: Optional[str] = Query(
+            None,
+            description="宿主 {app}:{module}，审计/透传用；鉴权仅认目标 read|display",
+        ),
         auth: AuthContext = Depends(get_auth_context),
         tenant_id: int = Depends(get_current_tenant),
         current_user: User = Depends(get_current_user),

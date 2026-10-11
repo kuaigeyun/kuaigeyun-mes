@@ -357,6 +357,7 @@ class PermissionSyncService:
 
             execute_grants = 0
             baseline_grants = 0
+            display_grants = 0
             if not dry_run:
                 execute_grants = await cls._propagate_quality_inspection_execute_grants(
                     conn, tenant_id=tenant_id
@@ -367,7 +368,17 @@ class PermissionSyncService:
                 baseline_grants = await cls._ensure_baseline_role_grants(
                     conn, tenant_id=tenant_id
                 )
-                if baseline_grants:
+                created_display_codes = {
+                    str(row[3])
+                    for row in create_rows
+                    if isinstance(row[3], str) and str(row[3]).endswith(":display")
+                }
+                display_grants = await cls._ensure_default_display_role_grants(
+                    conn,
+                    tenant_id=tenant_id,
+                    newly_created_codes=created_display_codes,
+                )
+                if baseline_grants or display_grants:
                     from core.services.authorization.permission_version_service import (
                         PermissionVersionService,
                     )
@@ -385,6 +396,7 @@ class PermissionSyncService:
                 "type_repaired": type_repaired,
                 "execute_grants": execute_grants,
                 "baseline_grants": baseline_grants,
+                "display_grants": display_grants,
                 "dry_run": 1 if dry_run else 0,
             }
             cls._last_run_stats[tenant_id] = result
@@ -751,6 +763,100 @@ class PermissionSyncService:
                     now_dt,
                 )
                 # asyncpg: "INSERT 0 1" when inserted
+                if isinstance(result, str) and result.endswith("1"):
+                    granted += 1
+        return granted
+
+    @classmethod
+    async def _ensure_default_display_role_grants(
+        cls,
+        conn,
+        *,
+        tenant_id: int,
+        newly_created_codes: set[str] | None = None,
+    ) -> int:
+        """
+        默认授予非敏感 :display（回显）。
+
+        - 若租户尚无任何回显授权（切流前），对全部角色回填全部非敏感 display（一次）。
+        - 否则仅把本次同步新建的 display 码授予全部角色（不恢复管理员已取消的勾选）。
+        """
+        from core.services.authorization.reference_registry_service import ReferenceRegistryService
+
+        display_codes = sorted(
+            {
+                code
+                for code, _source in ReferenceRegistryService.collect_display_permission_codes()
+                if code
+            }
+        )
+        if not display_codes:
+            return 0
+        perm_rows = await conn.fetch(
+            """
+            SELECT id, code
+            FROM core_permissions
+            WHERE tenant_id = $1
+              AND deleted_at IS NULL
+              AND code = ANY($2::text[])
+            """,
+            tenant_id,
+            display_codes,
+        )
+        if not perm_rows:
+            return 0
+        perm_ids = [int(r["id"]) for r in perm_rows]
+        existing_grant_count = await conn.fetchval(
+            """
+            SELECT COUNT(*)::int
+            FROM core_role_permissions rp
+            WHERE rp.permission_id = ANY($1::int[])
+            """,
+            perm_ids,
+        )
+        if int(existing_grant_count or 0) == 0:
+            codes_to_grant = display_codes
+        else:
+            created = {c.strip().lower() for c in (newly_created_codes or set()) if c}
+            codes_to_grant = sorted(c for c in display_codes if c in created)
+        if not codes_to_grant:
+            return 0
+        grant_rows = [r for r in perm_rows if str(r["code"]) in codes_to_grant]
+        if not grant_rows:
+            return 0
+        role_rows = await conn.fetch(
+            """
+            SELECT id
+            FROM core_roles
+            WHERE tenant_id = $1
+              AND deleted_at IS NULL
+            """,
+            tenant_id,
+        )
+        if not role_rows:
+            return 0
+
+        granted = 0
+        now_dt = now_utc()
+        for role in role_rows:
+            role_id = int(role["id"])
+            for perm in grant_rows:
+                perm_id = int(perm["id"])
+                result = await conn.execute(
+                    """
+                    INSERT INTO core_role_permissions (role_id, permission_id, created_at)
+                    SELECT $1, $2, $3
+                    WHERE NOT EXISTS (
+                      SELECT 1
+                      FROM core_role_permissions rp
+                      WHERE rp.role_id = $1
+                        AND rp.permission_id = $2
+                    )
+                    """,
+                    role_id,
+                    perm_id,
+                    now_dt,
+                )
                 if isinstance(result, str) and result.endswith("1"):
                     granted += 1
         return granted

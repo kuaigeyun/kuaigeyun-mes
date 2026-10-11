@@ -29,7 +29,8 @@ standard: 真源在 pro 仓；主仓 gitignore + 占位；`scan_pro_oss_layout.p
 
 ## 开源主仓
 
-- 无 compose 时：应用中心 PRO/行业占位；系统数据中心四入口 → `pro-data-center-upgrade.tsx`
+- 系统数据中心四入口（`/system/application-connections|apis|data-sources|datasets`）：`KuaiconnectRouteGate` — 快连接就绪进业务页，否则 `ProUpgradePrompt`（勿再在 SystemRoutes 写死 upgrade 页）
+- 无 compose / 未启用未授权：门禁显示升级占位
 - 门禁：`riveredge-backend/scripts/scan_pro_oss_layout.py`
 
 ## 扩展

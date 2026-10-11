@@ -322,7 +322,8 @@ const AppRoutes: React.FC = () => {
         lazyAppsCache.current.set(app.code, createLazyApp(appForLoad));
       }
       const LazyApp = lazyAppsCache.current.get(app.code)!;
-      const isProLocked = app.is_pro && !app.can_access;
+      // 仅显式 can_access===false 时锁定；缺省/undefined 不得当成未授权
+      const isProLocked = Boolean(app.is_pro) && app.can_access === false;
       routes.push(
         <Route
           key={`app-${app.code}-${relativePath}`}

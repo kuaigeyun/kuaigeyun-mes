@@ -184,8 +184,6 @@ class RolePermissionMatrixService:
             norm = normalize_permission_code(p.code or "")
             if not norm or norm in merged_review_codes:
                 continue
-            if action_key == "display":
-                continue
             actions_out.append(
                 FunctionGrantActionSchema(
                     action=action_key,
@@ -196,8 +194,10 @@ class RolePermissionMatrixService:
                     is_baseline=PermissionRegistryService.is_baseline_permission_code(norm),
                 )
             )
+        _action_priority = {"read": 0, "display": 1}
         actions_out.sort(
             key=lambda a: (
+                _action_priority.get(a.action or "", 50),
                 RolePermissionMatrixService._manifest_order_for_codes(
                     list(a.merged_codes or []) or ([a.code] if a.code else []),
                     code_order,

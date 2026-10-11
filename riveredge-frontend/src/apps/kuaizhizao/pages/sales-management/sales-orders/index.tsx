@@ -920,7 +920,7 @@ const SalesOrdersPage: React.FC = () => {
   const [paymentTermsOptions, setPaymentTermsOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [bankAccountOptions, setBankAccountOptions] = useState<Array<{ label: string; value: number }>>([]);
 
-  /** 表单引用数据：走 reference display + sales-order 宿主隐式授权，避免跨模块 read 403 */
+  /** 表单引用数据：走 reference-display；鉴权为目标 read|display */
   React.useEffect(() => {
     if (!isFormPage) return;
     let cancelled = false;

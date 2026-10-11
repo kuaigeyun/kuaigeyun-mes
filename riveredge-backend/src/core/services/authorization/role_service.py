@@ -181,6 +181,7 @@ class RoleService:
                     current_user_id=current_user_id,
                 )
             await RoleService.ensure_baseline_permissions_for_role(tenant_id, role)
+            await RoleService.ensure_default_display_permissions_for_role(tenant_id, role)
 
         return role
 
@@ -196,6 +197,41 @@ class RoleService:
             tenant_id=tenant_id,
             deleted_at__isnull=True,
             code__in=list(baseline_codes),
+        ).all()
+        if not permissions:
+            return 0
+        desired_ids = {p.id for p in permissions}
+        existing = await RolePermission.filter(role_id=role.id).all()
+        existing_ids = {rp.permission_id for rp in existing}
+        to_add = desired_ids - existing_ids
+        if not to_add:
+            return 0
+        await RolePermission.bulk_create(
+            [
+                RolePermission(role_id=role.id, permission_id=pid, created_at=now_utc())
+                for pid in to_add
+            ],
+            ignore_conflicts=True,
+        )
+        return len(to_add)
+
+    @staticmethod
+    async def ensure_default_display_permissions_for_role(tenant_id: int, role: Role) -> int:
+        """新建角色默认授予全部非敏感引用回显（:display），允许之后在矩阵取消。"""
+        from core.models.role_permission import RolePermission
+        from core.services.authorization.reference_registry_service import ReferenceRegistryService
+
+        display_codes = [
+            code
+            for code, _source in ReferenceRegistryService.collect_display_permission_codes()
+            if code
+        ]
+        if not display_codes:
+            return 0
+        permissions = await Permission.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            code__in=display_codes,
         ).all()
         if not permissions:
             return 0
@@ -1082,6 +1118,21 @@ class RoleService:
             code__in=list(PermissionRegistryService.BASELINE_PERMISSION_CODES),
         ).all()
         selected_ids = {*selected_ids, *[p.id for p in baseline_perms]}
+
+        from core.services.authorization.reference_registry_service import ReferenceRegistryService
+
+        display_codes = [
+            code
+            for code, _source in ReferenceRegistryService.collect_display_permission_codes()
+            if code
+        ]
+        if display_codes:
+            display_perms = await Permission.filter(
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+                code__in=display_codes,
+            ).all()
+            selected_ids = {*selected_ids, *[p.id for p in display_perms]}
 
         if not selected_ids:
             return

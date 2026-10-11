@@ -1282,6 +1282,28 @@
       ],
       "data_scope_key": "kuaizhizao:purchase-order"
     },
+    "purchase-requisition": {
+      "permission_prefix": "kuaizhizao:purchase-requisition",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": "kuaizhizao:purchase-requisition"
+    },
+    "purchase-inquiry": {
+      "permission_prefix": "kuaizhizao:purchase-inquiry",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": "kuaizhizao:purchase-inquiry"
+    },
     "rework-order": {
       "permission_prefix": "kuaizhizao:rework-order",
       "display_fields": [
@@ -1743,6 +1765,182 @@
         "label"
       ],
       "data_scope_key": "kuaizhizao:outsource-settlement"
+    },
+    "customer-follow-up": {
+      "permission_prefix": "kuaizhizao:customer-follow-up",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": "kuaizhizao:customer-follow-up"
+    },
+    "sales-forecast": {
+      "permission_prefix": "kuaizhizao:sales-forecast",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": "kuaizhizao:sales-forecast"
+    },
+    "purchase-order-change": {
+      "permission_prefix": "kuaizhizao:purchase-order-change",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": "kuaizhizao:purchase-order-change"
+    },
+    "receipt-notice": {
+      "permission_prefix": "kuaizhizao:receipt-notice",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": "kuaizhizao:receipt-notice"
+    },
+    "demand": {
+      "permission_prefix": "kuaizhizao:demand",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": "kuaizhizao:demand"
+    },
+    "plan-management-demand-management": {
+      "permission_prefix": "kuaizhizao:plan-management-demand-management",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": "kuaizhizao:plan-management-demand-management"
+    },
+    "plan-management-demand-computation": {
+      "permission_prefix": "kuaizhizao:plan-management-demand-computation",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": "kuaizhizao:plan-management-demand-computation"
+    },
+    "plan-management-demand-change": {
+      "permission_prefix": "kuaizhizao:plan-management-demand-change",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": "kuaizhizao:plan-management-demand-change"
+    },
+    "plan-management-scheduling": {
+      "permission_prefix": "kuaizhizao:plan-management-scheduling",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": "kuaizhizao:plan-management-scheduling"
+    },
+    "material-return": {
+      "permission_prefix": "kuaizhizao:material-return",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": "kuaizhizao:material-return"
+    },
+    "warehouse-management-customer-material-registration": {
+      "permission_prefix": "kuaizhizao:warehouse-management-customer-material-registration",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": "kuaizhizao:warehouse-management-customer-material-registration"
+    },
+    "material-borrow": {
+      "permission_prefix": "kuaizhizao:material-borrow",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": "kuaizhizao:material-borrow"
+    },
+    "delivery-notice": {
+      "permission_prefix": "kuaizhizao:delivery-notice",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": "kuaizhizao:delivery-notice"
+    },
+    "production-execution-packing-binding": {
+      "permission_prefix": "kuaizhizao:production-execution-packing-binding",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": "kuaizhizao:production-execution-packing-binding"
+    },
+    "performance-shifts": {
+      "permission_prefix": "kuaizhizao:performance-shifts",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": null
+    },
+    "performance-shift-rosters": {
+      "permission_prefix": "kuaizhizao:performance-shift-rosters",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": null
     }
   },
   "module_references": {

@@ -138,9 +138,62 @@ async def _save_pro_activation_registry(tenant_id: int, registry: Dict[str, Any]
     )
 
 
+async def _migrate_pro_activation_registry_codes(tenant_id: int, registry: Dict[str, Any]) -> Dict[str, Any]:
+    """将激活登记中的历史 app code（如 pro-data-center）迁到当前 code（kuaiconnect）。"""
+    from core.config.app_code_renames import APPLICATION_CODE_RENAMES, canonicalize_app_code
+
+    apps = registry.get("apps")
+    if not isinstance(apps, dict) or not apps:
+        return registry
+    if not any(k in APPLICATION_CODE_RENAMES for k in apps.keys()):
+        return registry
+
+    migrated: Dict[str, Any] = {}
+    for raw_code, meta in apps.items():
+        new_code = canonicalize_app_code(str(raw_code))
+        if not new_code:
+            continue
+        # 新旧并存时保留已是新码的条目
+        if new_code in migrated and str(raw_code) != new_code:
+            continue
+        migrated[new_code] = meta
+    registry = {**registry, "apps": migrated}
+    await _save_pro_activation_registry(tenant_id, registry)
+    return registry
+
+
 async def _get_activated_pro_codes(tenant_id: int) -> Set[str]:
+    """已激活的 PRO 应用 code（含 code 重命名迁移与许可证中心激活）。"""
+    from core.config.app_code_renames import canonicalize_app_code
+
     registry = await _load_pro_activation_registry(tenant_id)
-    return set((registry.get("apps") or {}).keys())
+    registry = await _migrate_pro_activation_registry_codes(tenant_id, registry)
+    codes: Set[str] = {
+        canonicalize_app_code(str(code))
+        for code in (registry.get("apps") or {}).keys()
+        if canonicalize_app_code(str(code))
+    }
+
+    from infra.infrastructure.database.database import get_db_connection
+
+    await LicenseCenterService._ensure_table()
+    conn = await get_db_connection()
+    try:
+        rows = await conn.fetch(
+            """
+            SELECT DISTINCT app_code
+            FROM infra_license_key_activations
+            WHERE tenant_id = $1
+            """,
+            tenant_id,
+        )
+    finally:
+        await conn.close()
+    for row in rows:
+        normalized = canonicalize_app_code(str(row.get("app_code") or ""))
+        if normalized:
+            codes.add(normalized)
+    return codes
 
 
 def _parse_pro_key_map_from_env() -> Dict[str, List[str]]:

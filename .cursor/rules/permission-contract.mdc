@@ -45,6 +45,7 @@ alwaysApply: true
 
 - **默认**：关联模块 list 须有该模块 `:read`；前端 `useResourcePermissions` 无 `canRead` 则不请求；无权限用宿主快照回显，区块隐藏或灰显。
 - **OR 例外**：仅 [`affiliate_read_allowlist.py`](riveredge-backend/src/core/config/affiliate_read_allowlist.py) 登记的附属只读 GET；禁止在 `*_route_access.py` 内联堆 OR。
+- **引用回显（单一真源）**：矩阵「回显」与 `:display` 码仅来自应用 `manifest.json` → `reference_resources`（系统级 `CORE_REFERENCE_RESOURCES`）。鉴权仅认目标 `:read` / `:display`。`module_references` 只声明宿主引用目标（须已登记），禁止当授权；禁止宿主 create/update/read 隐式放行。Provider 只负责取数，不决定有无回显。
 - **错误面**：仅主资源 API 失败可写宿主 `*DetailError` / 整页「权限不足」；次要请求失败独立降级（见 `docs/core/permission-contract.md`）。
 - **module 参数**：`require_*_module_access("material")` 禁止传 `master-data:material`（双前缀）；扫描器 fail-on high。
 

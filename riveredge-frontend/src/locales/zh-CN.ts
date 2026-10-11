@@ -1577,7 +1577,7 @@ export default {
   'permission.action.reject': '审核',
   'permission.action.revoke': '撤销',
   'permission.action.edit': '编辑',
-  'permission.action.display': '展示',
+  'permission.action.display': '回显',
   'permission.action.publish': '发布',
   'permission.action.obsolete': '作废',
   'permission.action.submit': '提交',
@@ -2176,7 +2176,11 @@ export default {
 
   'components.proUpgradePrompt.title': '{{name}} 为 PRO 应用',
   'components.proUpgradePrompt.description': '升级至专业版或企业版套餐即可解锁使用。',
+  'components.proUpgradePrompt.activateHint':
+    '若已购买授权：打开应用中心 → 该应用「更多操作」→「输入 License Key」（已启用也可激活）。',
+  'components.proUpgradePrompt.goAppCenter': '前往应用中心激活',
   'components.proUpgradePrompt.upgradeButton': '升级套餐',
+  'pages.system.applications.enterLicenseKey': '输入 License Key',
 
   // UniTable 组件
   'components.uniTable.fuzzySearch': '模糊搜索',
@@ -21567,6 +21571,7 @@ export default {
   'app.master-data.menu.process.operations': '工序管理',
   'app.master-data.menu.process.routes': '工艺路线',
   'app.master-data.menu.process.product-process': '产品工艺',
+  'app.master-data.menu.process.drawings-hub': '图纸管理',
   'app.master-data.menu.process.drawings': '图纸管理',
   'app.master-data.menu.process.engineering-bom': '物料清单 (BOM)',
   'app.master-data.menu.process.engineering-bom.designer': 'BOM设计',
@@ -30134,11 +30139,16 @@ export default {
   'pages.system.roles.pickAppPlaceholder': '选择应用（一级）',
   'pages.system.roles.pickModulePlaceholder': '选择模块（二级）',
   'pages.system.roles.selectAllVisible': '全选',
+  'pages.system.roles.nodeSelectAll': '全选',
+  'pages.system.roles.nodeClearSelectAll': '取消全选',
   'pages.system.roles.clearAllVisible': '全不选',
   'pages.system.roles.invertVisible': '反选',
   'pages.system.roles.templateViewer': '查看者',
   'pages.system.roles.templateEditor': '编辑者',
   'pages.system.roles.templateManager': '管理者',
+  'pages.system.roles.grantAllDisplayVisible': '一键回显',
+  'pages.system.roles.noDisplayInVisibleScope': '当前可见范围没有回显权限',
+  'pages.system.roles.displayGrantedToVisible': '已勾选当前范围内全部回显（{{count}} 项）',
   'pages.system.roles.selectScopeFirst': '请先选择筛选范围',
   'pages.system.roles.templateAppliedToVisible': '已对当前范围应用「{{name}}」模板',
   'pages.system.roles.dataGrantHint':
@@ -30800,6 +30810,54 @@ export default {
     'Gitee 快捷登录可读取邮箱并支持个人资料绑定',
   'pages.dashboard.updateLog.entries.gitee-oauth-email-scope-bind-r01.description':
     '授权范围增加 emails，并在公开邮箱为空时从邮箱列表取主邮箱以自动匹配系统用户；个人资料补充 Gitee 授权绑定与解绑入口。',
+  'pages.dashboard.updateLog.entries.purchase-requisition-inquiry-display-r01.title':
+    '采购申请与询价单支持回显权限',
+  'pages.dashboard.updateLog.entries.purchase-requisition-inquiry-display-r01.description':
+    '将采购申请、询价单登记为可引用资源，角色矩阵出现「回显」勾选，供下游取单/关联时按回显权限加载。',
+  'pages.dashboard.updateLog.entries.reference-display-single-source-r01.title':
+    '引用回显统一由登记资源控制',
+  'pages.dashboard.updateLog.entries.reference-display-single-source-r01.description':
+    '矩阵「回显」与引用下拉放行均以 reference_resources 登记为准；取消回显后不再依赖宿主建单权限或 module_references 隐式放行，无权限时提示授予目标查看或回显。',
+  'pages.dashboard.updateLog.entries.kuaizhizao-reference-resources-peer-gap-r01.title':
+    '快制造同组单据补齐回显权限',
+  'pages.dashboard.updateLog.entries.kuaizhizao-reference-resources-peer-gap-r01.description':
+    '按菜单同组对照补登记销售预测、到货通知、需求与需求计算、借还料、送货单等 reference_resources，角色矩阵可勾选对应回显。',
+  'pages.dashboard.updateLog.entries.role-matrix-node-clear-select-all-r01.title':
+    '角色权限节点全选可取消',
+  'pages.dashboard.updateLog.entries.role-matrix-node-clear-select-all-r01.description':
+    '功能权限树节点在子权限已全部勾选时，节点旁按钮变为实心「取消全选」，再次点击可清空该节点下全部勾选。',
+  'pages.dashboard.updateLog.entries.role-matrix-node-select-all-r01.title':
+    '角色权限树节点旁可全选',
+  'pages.dashboard.updateLog.entries.role-matrix-node-select-all-r01.description':
+    '功能权限树每个菜单节点标题后增加「全选」，一键勾选该节点及其下级全部可配置操作。',
+  'pages.dashboard.updateLog.entries.role-matrix-one-click-display-r01.title':
+    '角色功能权限一键回显',
+  'pages.dashboard.updateLog.entries.role-matrix-one-click-display-r01.description':
+    '功能权限工具栏在「管理者」旁增加「一键回显」，对当前可见范围勾选全部回显权限，不影响其它已勾选操作。',
+  'pages.dashboard.updateLog.entries.kuaiconnect-system-routes-gate-r01.title':
+    '快连接启用后连接管理可进入业务页',
+  'pages.dashboard.updateLog.entries.kuaiconnect-system-routes-gate-r01.description':
+    '应用连接器、接口、数据源、数据集等系统路由不再写死升级占位页；快连接已安装启用且授权通过后直接打开业务页面。',
+  'pages.dashboard.updateLog.entries.pro-app-license-key-menu-r01.title':
+    '专业应用可随时输入 License Key',
+  'pages.dashboard.updateLog.entries.pro-app-license-key-menu-r01.description':
+    '应用中心「更多操作」增加「输入 License Key」；已启用但未授权时不必先关掉开关。升级提示页也可跳转应用中心激活。',
+  'pages.dashboard.updateLog.entries.kuaiconnect-pro-activation-rename-r01.title':
+    '快连接改名后 PRO 激活仍识别',
+  'pages.dashboard.updateLog.entries.kuaiconnect-pro-activation-rename-r01.description':
+    '应用编码由 pro-data-center 迁为 kuaiconnect 后，历史 License 激活登记自动映射到新编码；已启用快连接但误提示升级套餐的问题已修复。',
+  'pages.dashboard.updateLog.entries.permission-display-echo-matrix-r01.title':
+    '权限矩阵回显与引用鉴权收紧',
+  'pages.dashboard.updateLog.entries.permission-display-echo-matrix-r01.description':
+    '功能权限中的 display 展示为「回显」并可勾选；引用下拉仅认目标查看或回显权限，取消回显后不再因宿主建单权限隐式放行。新建角色与权限同步会默认授予非敏感回显，取消后不会被同步强制恢复。',
+  'pages.dashboard.updateLog.entries.sidebar-pro-badge-kuaipd-host-r01.title':
+    '快交付等专业应用侧栏 PRO 徽标',
+  'pages.dashboard.updateLog.entries.sidebar-pro-badge-kuaipd-host-r01.description':
+    '侧栏应用 code 优先读应用根路径，快交付等托管在快制造路由下的 PRO 应用与行业包应用根菜单均显示 PRO 徽标。',
+  'pages.dashboard.updateLog.entries.master-data-process-drawings-menu-r01.title':
+    '主数据工艺数据图纸菜单分组',
+  'pages.dashboard.updateLog.entries.master-data-process-drawings-menu-r01.description':
+    '图纸管理、图纸反查、图纸发放与图纸借阅收拢为「图纸管理」子菜单，整组排在标准操作 (SOP) 之后。',
   'pages.dashboard.updateLog.entries.user-mgmt-list-audit-datetime-r01.title':
     '用户管理列表补全创建与更新时间',
   'pages.dashboard.updateLog.entries.user-mgmt-list-audit-datetime-r01.description':

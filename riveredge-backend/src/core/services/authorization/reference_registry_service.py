@@ -1,4 +1,11 @@
-"""引用资源注册表：manifest reference_resources + module_references 聚合。"""
+"""引用资源注册表。
+
+权限与矩阵「回显」的唯一真源：`reference_resources`（应用 manifest）
++ `CORE_REFERENCE_RESOURCES`（系统级）。
+
+`module_references` 仅声明宿主「会引用哪些目标」，供完整性校验与文档；
+不再参与鉴权，也不再构建宿主 create/update/read 隐式放行图。
+"""
 
 from __future__ import annotations
 
@@ -15,7 +22,6 @@ from core.config.core_reference_resources import (
 )
 from core.services.application.application_service import ApplicationService
 
-HOST_DISPLAY_ACTIONS = ("read", "create", "update")
 HOST_WILDCARD_KEYS = {"*", "__all__", "__all_modules__"}
 TARGET_WILDCARD_KEYS = {"*", "__all_targets__", "__all_reference_resources__"}
 
@@ -33,11 +39,11 @@ class ReferenceResourceDef:
 
 @dataclass
 class ReferenceRegistry:
+    """resources：可被引用的目标（唯一权限真源）。"""
+
     resources: dict[str, ReferenceResourceDef] = field(default_factory=dict)
-    """target resource_key → 可隐式授予 display 的宿主完整权限码"""
-    implicit_display_by_target: dict[str, set[str]] = field(default_factory=dict)
-    """宿主完整权限码 → 引用的 target resource_key 集合"""
-    host_permissions_by_target: dict[str, set[str]] = field(default_factory=dict)
+    """宿主完整模块键（{app}:{module} 或 system:{module}）→ 声明引用的 target resource_key。"""
+    declared_targets_by_host: dict[str, set[str]] = field(default_factory=dict)
 
 
 class ReferenceRegistryService:
@@ -76,7 +82,6 @@ class ReferenceRegistryService:
             cls._load_app_reference_resources(registry, app_code, data, str(manifest_file))
             cls._load_app_module_references(registry, app_code, data)
 
-        cls._finalize_implicit_map(registry)
         return registry
 
     @classmethod
@@ -109,11 +114,12 @@ class ReferenceRegistryService:
             hm = str(host_module).strip().lower()
             if not hm or not isinstance(targets, list):
                 continue
-            host_codes = {f"system:{hm}:{action}" for action in HOST_DISPLAY_ACTIONS}
+            host_key = f"system:{hm}"
+            bucket = registry.declared_targets_by_host.setdefault(host_key, set())
             for raw_target in targets:
                 target_key = str(raw_target).strip().lower()
                 if target_key:
-                    registry.host_permissions_by_target.setdefault(target_key, set()).update(host_codes)
+                    bucket.add(target_key)
 
     @staticmethod
     def _load_app_reference_resources(
@@ -156,35 +162,12 @@ class ReferenceRegistryService:
             hm = str(host_module).strip().lower()
             if not hm or not isinstance(targets, list):
                 continue
-            host_codes: set[str] = set()
-            is_wildcard = hm in HOST_WILDCARD_KEYS
-            for action in HOST_DISPLAY_ACTIONS:
-                host_codes.add(f"{app_code}:{'*' if is_wildcard else hm}:{action}")
+            host_key = f"{app_code}:{'*' if hm in HOST_WILDCARD_KEYS else hm}"
+            bucket = registry.declared_targets_by_host.setdefault(host_key, set())
             for raw_target in targets:
                 target_key = str(raw_target).strip().lower()
-                if not target_key:
-                    continue
-                registry.host_permissions_by_target.setdefault(target_key, set()).update(host_codes)
-
-    @staticmethod
-    def _finalize_implicit_map(registry: ReferenceRegistry) -> None:
-        wildcard_host_codes: set[str] = set()
-        for wildcard_key in TARGET_WILDCARD_KEYS:
-            wildcard_host_codes.update(registry.host_permissions_by_target.get(wildcard_key, set()))
-
-        for target_key, host_codes in registry.host_permissions_by_target.items():
-            if target_key in TARGET_WILDCARD_KEYS:
-                continue
-            defn = registry.resources.get(target_key)
-            if defn is None or defn.sensitive:
-                continue
-            registry.implicit_display_by_target[target_key] = set(host_codes)
-
-        if wildcard_host_codes:
-            for resource_key, defn in registry.resources.items():
-                if defn.sensitive:
-                    continue
-                registry.implicit_display_by_target.setdefault(resource_key, set()).update(wildcard_host_codes)
+                if target_key:
+                    bucket.add(target_key)
 
     @classmethod
     def collect_display_permission_codes(cls, *, enabled_apps: set[str] | None = None) -> list[tuple[str, str | None]]:
@@ -199,15 +182,18 @@ class ReferenceRegistryService:
 
     @classmethod
     def validate_module_references(cls, *, enabled_apps: set[str] | None = None) -> list[str]:
-        """校验 module_references 目标均在 reference_resources 中且非 sensitive。"""
+        """校验 module_references 目标均已登记在 reference_resources（或核心表）且非 sensitive。"""
         registry = cls.build(enabled_apps=enabled_apps)
         errors: list[str] = []
-        for target_key in registry.host_permissions_by_target:
-            if target_key in TARGET_WILDCARD_KEYS:
-                continue
-            defn = registry.resources.get(target_key)
-            if defn is None:
-                errors.append(f"module_references 目标未注册为 reference_resources: {target_key}")
-            elif defn.sensitive:
-                errors.append(f"module_references 目标为敏感资源，禁止隐式引用: {target_key}")
+        seen_targets: set[str] = set()
+        for targets in registry.declared_targets_by_host.values():
+            for target_key in targets:
+                if target_key in TARGET_WILDCARD_KEYS or target_key in seen_targets:
+                    continue
+                seen_targets.add(target_key)
+                defn = registry.resources.get(target_key)
+                if defn is None:
+                    errors.append(f"module_references 目标未注册为 reference_resources: {target_key}")
+                elif defn.sensitive:
+                    errors.append(f"module_references 目标为敏感资源，禁止声明引用: {target_key}")
         return errors

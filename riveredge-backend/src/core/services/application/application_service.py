@@ -2131,25 +2131,28 @@ class ApplicationService:
         if not requires_pro_license_for_app(app_code, is_pro=manifest_is_pro):
             return True
 
-        # 1) 平台许可证中心激活记录（标准路径）
+        from core.config.app_code_renames import app_code_activation_aliases, canonicalize_app_code
+
+        code_aliases = list(app_code_activation_aliases(app_code))
+        # 1) 平台许可证中心激活记录（标准路径；含历史 app code）
         conn = await get_db_connection()
         try:
             activated = await conn.fetchval(
                 """
                 SELECT 1
                 FROM infra_license_key_activations
-                WHERE tenant_id = $1 AND app_code = $2
+                WHERE tenant_id = $1 AND app_code = ANY($2::text[])
                 LIMIT 1
                 """,
                 tenant_id,
-                app_code,
+                code_aliases,
             )
             if activated:
                 return True
         finally:
             await conn.close()
 
-        # 2) 兼容历史/环境变量激活路径：检查租户激活注册表
+        # 2) 兼容历史/环境变量激活路径：检查租户激活注册表（含旧 code）
         from core.services.system.system_parameter_service import SystemParameterService
 
         parameter = await SystemParameterService.get_parameter(
@@ -2163,5 +2166,11 @@ class ApplicationService:
         if not isinstance(value, dict):
             return False
         apps = value.get("apps")
-        return isinstance(apps, dict) and bool(apps.get(app_code))
+        if not isinstance(apps, dict):
+            return False
+        canonical = canonicalize_app_code(app_code)
+        for raw_code in apps.keys():
+            if canonicalize_app_code(str(raw_code)) == canonical and apps.get(raw_code):
+                return True
+        return False
 

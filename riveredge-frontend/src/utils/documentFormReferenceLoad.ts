@@ -1,5 +1,5 @@
 /**
- * 业务单据表单引用数据加载（走 reference display + host_resource 隐式授权）。
+ * 业务单据表单引用数据加载（走 reference-display；鉴权为目标 read|display）。
  */
 
 import type { Material } from '../apps/master-data/types/material';

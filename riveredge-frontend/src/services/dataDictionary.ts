@@ -9,7 +9,7 @@ import { apiRequest } from './api';
 import { resolveDisplayHostResource } from './displayContract';
 
 export type DictionaryLoadOptions = {
-  /** 宿主单据 resource（{app}:{module}），无 data-dictionary read/display 时通过 module_references 隐式引用 */
+  /** 宿主单据 resource（{app}:{module}），审计透传；鉴权为 system:data-dictionary 的 read|display */
   hostResource?: string;
 };
 

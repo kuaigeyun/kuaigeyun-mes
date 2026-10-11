@@ -9,7 +9,11 @@
 | 新权限码 | 功能开发 | 应用 `manifest.json` `permissions[]` |
 | 入库与租户同步 | 平台 | `PermissionSyncService` / 应用中心权限同步 |
 | 基线必开 | 平台 | `BASELINE_PERMISSION_CODES`（前后端镜像） |
-| 矩阵展示顺序与文案 | 平台 | manifest 下标 + `permission_action_spec` |
+| 矩阵展示顺序与文案 | 平台 | manifest 下标 + `permission_action_spec`（`display` 文案「回显」，矩阵可见） |
+| 可回显资源登记（唯一） | 功能开发 | 应用 `manifest.json` → `reference_resources`（系统级 `CORE_REFERENCE_RESOURCES`）；前后端同改 |
+| 宿主引用声明（非授权） | 功能开发 | `module_references`：目标须已登记；扫描 `module_references_unknown_target` |
+| 引用取数 Provider | 功能开发 | `reference_display/setup.py`（运行实现，不替代登记） |
+| 引用回显默认授予 | 平台 | 新建角色 / 同步切流回填 / 新建 `:display` 码；非 baseline，可取消 |
 
 改 manifest 权限后：**同步 → 后端路由依赖 → 前端同一 resource 门控**。
 

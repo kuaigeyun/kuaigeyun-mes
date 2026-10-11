@@ -23,7 +23,7 @@ export function mapReferenceDisplayError(
     const e = err as { status?: number; message?: string; data?: { details?: { required?: string[] } } };
     if (e.status === 403) {
       return new ReferenceDisplayAccessError(
-        e.message || '无权引用该资源，请联系管理员配置宿主单据或引用资源权限',
+        e.message || '无权引用该资源，请联系管理员授予目标资源的查看或回显权限',
         403,
         e.data?.details?.required,
       );

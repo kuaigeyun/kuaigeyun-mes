@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Checkbox, Tooltip, Tree, theme } from 'antd';
+import { Button, Checkbox, Tooltip, Tree, theme } from 'antd';
 import { AppstoreOutlined } from '@ant-design/icons';
 import type { DataNode } from 'antd/es/tree';
 import type { FunctionGrantAction, FunctionGrantMenuNode } from '../../../../services/role';
@@ -171,54 +171,78 @@ export const FunctionGrantTree: React.FC<Props> = ({
       showIcon
       titleRender={(node: GrantTreeNode) => {
         const grantNode = node._grantNode;
-        if (!grantNode?.actions?.length) {
-          return (
-            <span style={{ fontWeight: node.children?.length ? 600 : undefined, color: token.colorPrimary }}>
-              {node._titleText ?? String(node.title ?? '')}
-            </span>
-          );
-        }
+        const titleText = node._titleText ?? String(node.title ?? '');
+        const hasChildren = Boolean(node.children?.length);
+        const subtreeCodes = grantNode
+          ? collectCodesFromGrantTree([grantNode]).filter((c) => !isBaselinePermissionCode(c))
+          : [];
+        const allSelected =
+          subtreeCodes.length > 0 && subtreeCodes.every((c) => grantedCodes.has(c));
+        const selectAllBtn =
+          subtreeCodes.length > 0 ? (
+            <Button
+              type={allSelected ? 'primary' : undefined}
+              variant={allSelected ? undefined : 'outlined'}
+              size="small"
+              className="permission-node-select-all"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onToggle(subtreeCodes, !allSelected);
+              }}
+            >
+              {allSelected
+                ? t('pages.system.roles.nodeClearSelectAll', { defaultValue: '取消全选' })
+                : t('pages.system.roles.nodeSelectAll', { defaultValue: '全选' })}
+            </Button>
+          ) : null;
+
         return (
           <span className="permission-menu-title-wrap">
-            <span style={{ fontWeight: node.children?.length ? 600 : undefined, color: token.colorPrimary }}>
-              {node._titleText ?? String(node.title ?? '')}
+            <span className="permission-menu-title-line">
+              <span style={{ fontWeight: hasChildren ? 600 : undefined, color: token.colorPrimary }}>
+                {titleText}
+              </span>
+              {selectAllBtn}
             </span>
-            <div className="permission-action-row">
-              {grantNode.actions.map((item) => {
-                const checked = isActionGranted(item, grantedCodes);
-                const baseline = isActionBaseline(item);
-                const chip = (
-                  <label className="permission-action-chip">
-                    <Checkbox
-                      checked={checked || baseline}
-                      disabled={baseline}
-                      onChange={(e) => {
-                        if (baseline) return;
-                        onToggle(codesFromAction(item), e.target.checked);
-                      }}
-                    />
-                    <span style={{ whiteSpace: 'nowrap' }}>{grantActionLabel(item, t)}</span>
-                  </label>
-                );
-                if (!baseline) {
-                  return (
-                    <React.Fragment key={`${grantNode.menu_uuid}:${item.code}`}>
-                      {chip}
-                    </React.Fragment>
+            {grantNode?.actions?.length ? (
+              <div className="permission-action-row">
+                {grantNode.actions.map((item) => {
+                  const checked = isActionGranted(item, grantedCodes);
+                  const baseline = isActionBaseline(item);
+                  const chip = (
+                    <label className="permission-action-chip">
+                      <Checkbox
+                        checked={checked || baseline}
+                        disabled={baseline}
+                        onChange={(e) => {
+                          if (baseline) return;
+                          onToggle(codesFromAction(item), e.target.checked);
+                        }}
+                      />
+                      <span style={{ whiteSpace: 'nowrap' }}>{grantActionLabel(item, t)}</span>
+                    </label>
                   );
-                }
-                return (
-                  <Tooltip
-                    key={`${grantNode.menu_uuid}:${item.code}`}
-                    title={t('pages.system.roles.baselinePermissionLocked', {
-                      defaultValue: '系统必开权限，不可取消',
-                    })}
-                  >
-                    {chip}
-                  </Tooltip>
-                );
-              })}
-            </div>
+                  if (!baseline) {
+                    return (
+                      <React.Fragment key={`${grantNode.menu_uuid}:${item.code}`}>
+                        {chip}
+                      </React.Fragment>
+                    );
+                  }
+                  return (
+                    <Tooltip
+                      key={`${grantNode.menu_uuid}:${item.code}`}
+                      title={t('pages.system.roles.baselinePermissionLocked', {
+                        defaultValue: '系统必开权限，不可取消',
+                      })}
+                    >
+                      {chip}
+                    </Tooltip>
+                  );
+                })}
+              </div>
+            ) : null}
           </span>
         );
       }}

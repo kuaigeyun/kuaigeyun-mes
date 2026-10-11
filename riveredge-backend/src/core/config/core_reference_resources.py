@@ -46,7 +46,7 @@ CORE_REFERENCE_RESOURCES: dict[str, ReferenceResourceSpec] = {
 }
 
 
-# 系统宿主模块 → 引用资源（无 manifest 的核心模块）
+# 系统宿主模块 → 声明引用的目标（完整性校验用；不参与鉴权）
 CORE_MODULE_REFERENCES: dict[str, list[str]] = {
     "user": [
         "master-data:supply-chain:customer",

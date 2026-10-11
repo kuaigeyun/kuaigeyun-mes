@@ -365,10 +365,10 @@ function permissionsForMenu(menu: MenuTree, pool: Permission[]): Permission[] {
     const bb = parseResourceAndAction(b.code || '')?.action || '';
     const order: Record<string, number> = {
       read: 0,
-      create: 1,
-      delete: 2,
-      update: 3,
-      display: 4,
+      display: 1,
+      create: 2,
+      delete: 3,
+      update: 4,
       import: 5,
       export: 6,
       submit: 7,
@@ -1670,6 +1670,39 @@ const RolesPermissionsPage: React.FC = () => {
     [functionGrantPermissionCodes, messageApi, t, visibleFunctionPermissionCodes]
   );
 
+  /** 当前可见范围内勾选全部「回显」(:display)，不改动其它已勾选操作 */
+  const grantAllVisibleDisplayPermissions = useCallback(() => {
+    if (!visibleFunctionPermissionCodes.length) {
+      messageApi.warning(t('pages.system.roles.selectScopeFirst', { defaultValue: '请先选择筛选范围' }));
+      return;
+    }
+    const displayCodes = visibleFunctionPermissionCodes.filter((code) => {
+      const parts = String(code || '')
+        .trim()
+        .toLowerCase()
+        .split(':')
+        .filter(Boolean);
+      return parts.length >= 3 && parts[parts.length - 1] === 'display';
+    });
+    if (!displayCodes.length) {
+      messageApi.warning(
+        t('pages.system.roles.noDisplayInVisibleScope', {
+          defaultValue: '当前可见范围没有回显权限',
+        }),
+      );
+      return;
+    }
+    setGrantedCodes((prev) =>
+      mergeBaselinePermissionCodes([...prev, ...displayCodes]),
+    );
+    messageApi.success(
+      t('pages.system.roles.displayGrantedToVisible', {
+        defaultValue: '已勾选当前范围内全部回显（{{count}} 项）',
+        count: displayCodes.length,
+      }),
+    );
+  }, [messageApi, t, visibleFunctionPermissionCodes]);
+
   return (
     <>
       <div
@@ -1996,6 +2029,9 @@ const RolesPermissionsPage: React.FC = () => {
                       onClick={() => applyFunctionTemplateToVisible('manager')}
                     >
                       {t('pages.system.roles.templateManager', { defaultValue: '管理者' })}
+                    </Button>
+                    <Button variant="outlined" onClick={grantAllVisibleDisplayPermissions}>
+                      {t('pages.system.roles.grantAllDisplayVisible', { defaultValue: '一键回显' })}
                     </Button>
                   </Flex>
                   {functionGrants?.tree?.length ? (

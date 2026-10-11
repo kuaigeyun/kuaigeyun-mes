@@ -56,7 +56,7 @@ import { prefetchPlugin } from '../utils/pluginLoader';
 import { prefetchKuaizhizaoRoute, schedulePrefetchKuaizhizaoTopRoutes } from '../apps/kuaizhizao/routePrefetch';
 import { prefetchMasterDataRoute } from '../apps/master-data/routePrefetch';
 import { prefetchSystemRoute, prefetchSystemRoutes } from '../routes/systemRoutePrefetch';
-import { PRO_APP_CODES } from '../pages/system/applications/proAppCatalog';
+import { isSidebarProAppCode } from '../pages/system/applications/proAppCatalog';
 import { layoutShellQueryOptions } from '../config/reactQuery';
 import { useDocumentVisible } from '../hooks/useDocumentVisible';
 import { useRealtimeInbox } from '../hooks/useRealtimeInbox';
@@ -198,6 +198,13 @@ function resolveSidebarAppGroupCode(item: {
   }
 
   return extractAppCodeFromPath(path);
+}
+
+function extractAppRootCodeFromMenuPath(path: string | undefined): string | null {
+  if (!path) return null;
+  const normalized = path.replace(/\/$/, '');
+  const match = normalized.match(/^\/apps\/([^/]+)$/);
+  return match?.[1] ?? null;
 }
 
 function isSidebarAppGroupTitleItem(item: { key?: React.Key; className?: string }): boolean {
@@ -3035,19 +3042,32 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         }}
         menuTextRender={(item: any, defaultText: React.ReactNode) => {
           // 应用分组标题：全部套主色样式；PRO 徽标仅对 PRO 应用
-          if (!isSidebarAppGroupTitleItem(item)) return defaultText;
-          const appCode = resolveSidebarAppGroupCode(item);
-          const showPro = Boolean(appCode && (PRO_APP_CODES as readonly string[]).includes(appCode));
-          return (
-            <span
-              className="menu-group-title-app-label"
-              data-app-menu-group={appCode || '1'}
-              style={APP_GROUP_TITLE_TEXT_STYLE}
-            >
-              {defaultText}
-              {showPro ? <span className="menu-item-badge menu-item-badge-pro">PRO</span> : null}
-            </span>
+          if (isSidebarAppGroupTitleItem(item)) {
+            const appCode = resolveSidebarAppGroupCode(item);
+            const showPro = isSidebarProAppCode(appCode);
+            return (
+              <span
+                className="menu-group-title-app-label"
+                data-app-menu-group={appCode || '1'}
+                style={APP_GROUP_TITLE_TEXT_STYLE}
+              >
+                {defaultText}
+                {showPro ? <span className="menu-item-badge menu-item-badge-pro">PRO</span> : null}
+              </span>
+            );
+          }
+          const rootAppCode = extractAppRootCodeFromMenuPath(
+            typeof item.path === 'string' ? item.path : undefined,
           );
+          if (rootAppCode && isSidebarProAppCode(rootAppCode)) {
+            return (
+              <>
+                {defaultText}
+                <span className="menu-item-badge menu-item-badge-pro">PRO</span>
+              </>
+            );
+          }
+          return defaultText;
         }}
         menuProps={{
           mode: 'inline',
@@ -3154,7 +3174,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             const groupTitle = appCode
               ? resolveAppMenuGroupDisplayName(appCode, fallback, t)
               : fallback;
-            const showPro = Boolean(appCode && (PRO_APP_CODES as readonly string[]).includes(appCode));
+            const showPro = isSidebarProAppCode(appCode);
 
             return (
               <div

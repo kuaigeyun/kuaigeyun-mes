@@ -53,6 +53,7 @@ import {
   BarChartOutlined,
   ApiOutlined,
   LockOutlined,
+  KeyOutlined,
   SyncOutlined,
   ReloadOutlined,
   ShareAltOutlined,
@@ -118,6 +119,7 @@ const APP_ACTION_ICON = {
   dedicatedBinding: TeamOutlined,
   install: DownloadOutlined,
   uninstall: StopOutlined,
+  licenseKey: KeyOutlined,
 } as const;
 
 /**
@@ -661,6 +663,15 @@ const ApplicationListPage: React.FC = () => {
   /**
    * 处理启用/禁用应用
    */
+  const openProLicenseKeyModal = useCallback((record: Application, enableAfterActivate: boolean) => {
+    setProKeyTargetApp(record);
+    setPendingEnableAfterActivation(enableAfterActivate);
+    setProKeyModalVisible(true);
+    setTimeout(() => {
+      proKeyFormRef.current?.setFieldsValue({ license_key: '' });
+    }, 0);
+  }, []);
+
   const handleToggleActive = async (record: Application, checked: boolean) => {
     if (!canToggleAppLifecycle(record)) {
       messageApi.warning(lifecycleDisabledTooltip(record) ?? t('pages.system.applications.lifecyclePermissionDenied'));
@@ -673,13 +684,8 @@ const ApplicationListPage: React.FC = () => {
     try {
       if (checked) {
         const isProApp = requiresProLicense(record);
-        if (isProApp && !record.can_access) {
-          setProKeyTargetApp(record);
-          setPendingEnableAfterActivation(true);
-          setProKeyModalVisible(true);
-          setTimeout(() => {
-            proKeyFormRef.current?.setFieldsValue({ license_key: '' });
-          }, 0);
+        if (isProApp && record.can_access === false) {
+          openProLicenseKeyModal(record, true);
           return;
         }
 
@@ -715,8 +721,10 @@ const ApplicationListPage: React.FC = () => {
       );
       setProKeyModalVisible(false);
       setPendingEnableAfterActivation(false);
+      setProKeyTargetApp(null);
       actionRef.current?.reload();
       refreshApplicationMenusAfterBackendMenuChange();
+      void queryClient.invalidateQueries({ queryKey: ['installedApplications'] });
     } catch (error: any) {
       messageApi.error(error?.message || t('pages.system.applications.proActivateFailed', { defaultValue: 'License Key 校验失败' }));
     } finally {
@@ -1181,6 +1189,23 @@ const ApplicationListPage: React.FC = () => {
             },
           ]
         : []),
+      ...(needsLicenseKey(application) && !isPlaceholderApplication(application)
+        ? [
+            {
+              key: 'activate-license',
+              label: t('pages.system.applications.enterLicenseKey', {
+                defaultValue: '输入 License Key',
+              }),
+              icon: <APP_ACTION_ICON.licenseKey />,
+              disabled: !canToggleAppLifecycle(application),
+              onClick: () =>
+                openProLicenseKeyModal(
+                  application,
+                  application.can_access === false && !application.is_active,
+                ),
+            },
+          ]
+        : []),
 
       application.code === "kuaizhizao" ? {
         key: 'reset-data',
@@ -1418,11 +1443,11 @@ const ApplicationListPage: React.FC = () => {
                               { bg: themeToken.colorWarningBg, color: themeToken.colorWarningText },
                             )}
                           {(application.is_pro || needsLicenseKey(application)) &&
-                            !application.can_access &&
+                            application.can_access === false &&
                             !isPlaceholderApplication(application) && (
                             <Tooltip
                               title={t('pages.system.applications.proLockedTag', {
-                                defaultValue: '需升级专业版',
+                                defaultValue: '未激活 License，点击输入密钥',
                               })}
                             >
                               <span
@@ -1430,13 +1455,21 @@ const ApplicationListPage: React.FC = () => {
                                 tabIndex={0}
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  showProUpgradeRequired(application);
+                                  if (canToggleAppLifecycle(application)) {
+                                    openProLicenseKeyModal(application, !application.is_active);
+                                  } else {
+                                    showProUpgradeRequired(application);
+                                  }
                                 }}
                                 onKeyDown={(e) => {
                                   if (e.key === 'Enter' || e.key === ' ') {
                                     e.preventDefault();
                                     e.stopPropagation();
-                                    showProUpgradeRequired(application);
+                                    if (canToggleAppLifecycle(application)) {
+                                      openProLicenseKeyModal(application, !application.is_active);
+                                    } else {
+                                      showProUpgradeRequired(application);
+                                    }
                                   }
                                 }}
                                 style={{

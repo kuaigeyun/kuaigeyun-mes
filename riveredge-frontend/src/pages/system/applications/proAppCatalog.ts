@@ -1,3 +1,5 @@
+import { isProIndustryAppCode } from './industryAppCatalog';
+
 /**
  * 专业版应用清单与前端占位（未 compose / 未入库时展示于应用中心「专业」）。
  * 与 core/config/pro_app_catalog.py 的 PRO_APP_CODES 保持一致。
@@ -18,6 +20,14 @@ export const PRO_APP_CODES = [
 ] as const;
 
 export type ProAppCode = (typeof PRO_APP_CODES)[number];
+
+/** 侧栏 PRO 徽标：专业版应用 + 付费行业包（与 License 适用范围一致） */
+export function isSidebarProAppCode(code: string | null | undefined): boolean {
+  const normalized = String(code ?? '').trim();
+  if (!normalized) return false;
+  if ((PRO_APP_CODES as readonly string[]).includes(normalized)) return true;
+  return isProIndustryAppCode(normalized);
+}
 
 /** 专业版应用 sort_order（与 manifest / 迁移一致；KU-AI 末位） */
 export const PRO_APP_SORT_ORDER: Record<ProAppCode, number> = {

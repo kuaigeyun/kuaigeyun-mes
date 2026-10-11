@@ -63,6 +63,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | 构建推送、要不要编前端、只改后端怎么推、web/H5/工位选哪条 | `principles/code-push-routing.md` + 规则 `build-push-aoci.mdc` |
 | 构建推送前 AOCI、提交前先索引、要不要跑 AOCI、每次 push 是否 maintain | `principles/aoci-git-commit.md` |
 | riveredge-app 组装、mklink、工位/TV/小程序私仓 | `features/riveredge-app-client-junctions.md` |
+| 回显权限、display、reference_resources 单一真源、取消回显 | `features/permission-display-echo.md` |
 | 角色同步创建职位、职位代码已存在 | `features/role-create-position-reuse-code.md` |
 | SOP 配错物料、工序兜底、QC 分域 | `features/sop-shopfloor-match-domain.md` |
 | 工作台更新说明、platformUpdateLog、版本卡 | `features/platform-update-log.md` |
@@ -100,6 +101,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 
 | slug | 标题 | domain | 状态 |
 |------|------|--------|------|
+| `features/permission-display-echo.md` | 权限回显 display 矩阵与鉴权 | rbac | 已交付 |
 | `features/aoci-mcp-three-repos.md` | AOCI MCP 三仓绑定 | tooling | 有效 |
 | `features/station-wo-queue-shared-filter.md` | 工位工单队列筛选固定/共享同一套 | mes-station | 已交付 |
 | `features/station-shift-handover-summary.md` | 交接班摘要按工位归属与写路径 | mes-station | 已交付 |

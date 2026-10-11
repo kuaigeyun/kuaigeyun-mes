@@ -27,7 +27,9 @@ class ReferenceDisplayResolveRequest(BaseModel):
     resource: str = Field(..., description="全局 resource_key，如 master-data:supply-chain:customer")
     record_ids: list[int] = Field(default_factory=list, max_length=200)
     record_uuids: list[str] = Field(default_factory=list, max_length=200)
-    host_resource: Optional[str] = Field(None, description="宿主 {app}:{module}，供隐式鉴权")
+    host_resource: Optional[str] = Field(
+        None, description="宿主 {app}:{module}，审计/透传用；鉴权仅认目标 read|display"
+    )
 
 
 class ReferenceDisplayResolveResponse(BaseModel):

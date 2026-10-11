@@ -44,6 +44,98 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'reference-display-single-source-r01',
+    date: '2026-10-11',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.reference-display-single-source-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.reference-display-single-source-r01.description',
+  },
+  {
+    id: 'kuaizhizao-reference-resources-peer-gap-r01',
+    date: '2026-10-11',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaizhizao-reference-resources-peer-gap-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaizhizao-reference-resources-peer-gap-r01.description',
+  },
+  {
+    id: 'role-matrix-node-clear-select-all-r01',
+    date: '2026-10-11',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.role-matrix-node-clear-select-all-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.role-matrix-node-clear-select-all-r01.description',
+  },
+  {
+    id: 'purchase-requisition-inquiry-display-r01',
+    date: '2026-10-11',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-requisition-inquiry-display-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-requisition-inquiry-display-r01.description',
+  },
+  {
+    id: 'role-matrix-node-select-all-r01',
+    date: '2026-10-11',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.role-matrix-node-select-all-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.role-matrix-node-select-all-r01.description',
+  },
+  {
+    id: 'role-matrix-one-click-display-r01',
+    date: '2026-10-11',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.role-matrix-one-click-display-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.role-matrix-one-click-display-r01.description',
+  },
+  {
+    id: 'kuaiconnect-system-routes-gate-r01',
+    date: '2026-10-11',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiconnect-system-routes-gate-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.kuaiconnect-system-routes-gate-r01.description',
+  },
+  {
+    id: 'pro-app-license-key-menu-r01',
+    date: '2026-10-11',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.pro-app-license-key-menu-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.pro-app-license-key-menu-r01.description',
+  },
+  {
+    id: 'kuaiconnect-pro-activation-rename-r01',
+    date: '2026-10-11',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiconnect-pro-activation-rename-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiconnect-pro-activation-rename-r01.description',
+  },
+  {
+    id: 'permission-display-echo-matrix-r01',
+    date: '2026-10-11',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.permission-display-echo-matrix-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.permission-display-echo-matrix-r01.description',
+  },
+  {
+    id: 'sidebar-pro-badge-kuaipd-host-r01',
+    date: '2026-10-11',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sidebar-pro-badge-kuaipd-host-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sidebar-pro-badge-kuaipd-host-r01.description',
+  },
+  {
+    id: 'master-data-process-drawings-menu-r01',
+    date: '2026-10-11',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.master-data-process-drawings-menu-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.master-data-process-drawings-menu-r01.description',
+  },
+  {
     id: 'user-mgmt-list-audit-datetime-r01',
     date: '2026-10-11',
     type: 'fix',

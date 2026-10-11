@@ -377,7 +377,10 @@ export function useUnifiedMenuData(
             return null;
           };
           const firstPath = findFirstAppPath(visibleChildren);
-          const code = firstPath ? extractAppCodeFromPath(firstPath) : null;
+          const codeFromRoot = extractAppCodeFromPath(String(appMenu.path || ''));
+          const codeFromFirstLeaf = firstPath ? extractAppCodeFromPath(firstPath) : null;
+          // 快交付等 PRO 应用菜单页在 kuaizhizao 路径下，须以应用根 path 识别 code，否则 PRO 徽标丢失
+          const code = codeFromRoot || codeFromFirstLeaf;
           // 行业包容器：分组标题固定用 industry-pack 显示名，勿用子模块 code 顶替（子模块名在下一级「电子制造」等）
           const isIndustryPackRoot =
             String(appMenu.path || '') === '/apps/industry-pack' ||
