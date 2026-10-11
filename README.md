@@ -42,13 +42,13 @@
 - **部署入口**：[fast-deploy/deploy.sh](fast-deploy/README.md)（Windows / Linux）
 - **完整文档**：[docs/部署指南.md](docs/部署指南.md)
 
-### 💬 微信沟通反馈群
+### 微信沟通反馈群
 
 <img src="docs/screenshots/wechat/wechat.png" alt="快格云 MES 交流群" width="280" />
 
 扫码加入 **快格云 MES 交流群**，反馈问题与建议。
 
-### ⭐ 支持我们
+### 支持我们
 
 快格云制造持续开源迭代，离不开社区关注与支持。若项目对你有帮助，欢迎：
 
@@ -101,7 +101,7 @@
 
 ---
 
-### 🧩 插件应用
+### 插件应用
 
 应用中心按 **基础 / 专业 / 行业 / 定制** 分层展示。**已扫描入库** 的应用方可启用菜单；专业版与行业包源码在私仓，通过组装链入工作区。
 
@@ -121,7 +121,7 @@
 
 ---
 
-### 📱 终端形态
+### 终端形态
 
 同一套后端 API 与业务模型，按岗位与现场组合部署。本仓库开源 **PC Web + 后端**；其余终端源码在私仓 [kuaigeyun-client](https://gitee.com/kuaigeyun/kuaigeyun-client)。
 
@@ -143,7 +143,7 @@
 
 ---
 
-## 🏁 快速开始
+## ✨ 快速开始
 
 环境要求：Node.js 22+、Python 3.12+（运行时由 uv 锁定 3.11）、PostgreSQL 15+、Caddy（生产）；默认无需 Redis。
 
@@ -168,7 +168,7 @@ cd kuaigeyun   # 或 kuaigeyun-mes，取决于 clone 目录名
 - 部署文档：[docs/部署指南.md](docs/部署指南.md)（含**开发预览**与**备份**警告）
 - 脚本速查：[fast-deploy/README.md](fast-deploy/README.md)
 
-### ✨ 专业应用（可选）
+### 专业应用（可选）
 
 仅克隆本仓库即可运行 **开源基础包**。
 
@@ -184,7 +184,7 @@ cd kuaigeyun   # 或 kuaigeyun-mes，取决于 clone 目录名
 
 ---
 
-### ⚙️ 推荐配置
+### 推荐配置
 
 单机部署（PostgreSQL 与后端、Taskiq、Caddy 同机）时的硬件参考；详细说明见 [docs/部署指南.md](docs/部署指南.md#硬件建议)。
 
@@ -234,6 +234,6 @@ cd kuaigeyun   # 或 kuaigeyun-mes，取决于 clone 目录名
 
 ---
 
-## 许可证
+## 📄 许可证
 
 见 [LICENSE](LICENSE)。
