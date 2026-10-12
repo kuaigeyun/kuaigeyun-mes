@@ -10,13 +10,13 @@ from decimal import Decimal
 
 from tortoise.expressions import Q
 
-from apps.kuaicaiwu.services.inventory_cost_service import InventoryCostService
 from apps.kuaizhizao.models.sales_delivery import SalesDelivery
 from apps.kuaizhizao.models.sales_delivery_item import SalesDeliveryItem
 from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
 from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
 from apps.master_data.models.material import Material
 from apps.master_data.models.material_batch import MaterialBatch
+from apps.common.optional_pro import import_pro_attr
 from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
 
 
@@ -24,10 +24,21 @@ class InventoryAnalysisService:
     """库存分析服务类"""
 
     def __init__(self):
-        self._cost_svc = InventoryCostService()
+        self._cost_svc = None
+
+    def _inventory_cost_service(self):
+        if self._cost_svc is None:
+            InventoryCostService = import_pro_attr(
+                "apps.kuaicaiwu.services.inventory_cost_service",
+                "InventoryCostService",
+            )
+            self._cost_svc = InventoryCostService()
+        return self._cost_svc
 
     async def _material_unit_cost(self, tenant_id: int, material_id: int) -> Decimal:
-        return await self._cost_svc.get_material_base_unit_cost(tenant_id, material_id)
+        return await self._inventory_cost_service().get_material_base_unit_cost(
+            tenant_id, material_id
+        )
 
     async def get_inventory_analysis(
         self,

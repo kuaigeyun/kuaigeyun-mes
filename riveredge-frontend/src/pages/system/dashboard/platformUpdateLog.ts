@@ -44,6 +44,22 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'oss-pro-decouple-startup-r01',
+    date: '2026-10-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.oss-pro-decouple-startup-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.oss-pro-decouple-startup-r01.description',
+  },
+  {
+    id: 'dashboard-todo-rbac-filter-r01',
+    date: '2026-10-12',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.dashboard-todo-rbac-filter-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.dashboard-todo-rbac-filter-r01.description',
+  },
+  {
     id: 'reference-display-single-source-r01',
     date: '2026-10-11',
     type: 'improvement',

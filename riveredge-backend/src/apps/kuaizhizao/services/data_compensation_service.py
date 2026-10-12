@@ -18,9 +18,8 @@ from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
 from apps.kuaizhizao.models.finished_goods_receipt import FinishedGoodsReceipt
 from apps.kuaizhizao.models.sales_delivery import SalesDelivery
 from apps.kuaizhizao.models.work_order import WorkOrder
-from apps.kuaicaiwu.models.receivable import Receivable
-from apps.kuaicaiwu.models.payable import Payable
 from apps.common.base_service import AppBaseService
+from apps.common.optional_pro import import_pro_attr, pro_app_available
 from infra.exceptions.exceptions import ValidationError
 from core.utils.timezone_utils import today_site_str, to_api_isoformat
 
@@ -372,8 +371,17 @@ class DataCompensationService:
         success_count = 0
         failure_count = 0
         errors = []
-        
+
+        if not pro_app_available("kuaicaiwu"):
+            return {
+                "success_count": 0,
+                "failure_count": 0,
+                "errors": [],
+            }
+
         try:
+            Receivable = import_pro_attr("apps.kuaicaiwu.models.receivable", "Receivable")
+            Payable = import_pro_attr("apps.kuaicaiwu.models.payable", "Payable")
             # 查询快照时间点之后新增的应收单
             new_receivables = await Receivable.filter(
                 tenant_id=tenant_id,
@@ -381,7 +389,7 @@ class DataCompensationService:
                 created_at__lt=launch_date,
                 deleted_at__isnull=True
             ).all()
-            
+
             # 查询快照时间点之后新增的应付单
             new_payables = await Payable.filter(
                 tenant_id=tenant_id,
@@ -389,19 +397,19 @@ class DataCompensationService:
                 created_at__lt=launch_date,
                 deleted_at__isnull=True
             ).all()
-            
+
             # 计算新增应收应付的净变化
             receivable_change = sum(float(r.remaining_amount) for r in new_receivables)
             payable_change = sum(float(p.remaining_amount) for p in new_payables)
-            
+
             # 简化处理：只记录变化数量
             success_count = len(new_receivables) + len(new_payables)
-            
+
         except Exception as e:
             logger.error(f"计算应收应付补偿失败: {e}")
             errors.append({"error": f"计算应收应付补偿失败: {str(e)}"})
             failure_count += 1
-        
+
         return {
             "success_count": success_count,
             "failure_count": failure_count,

@@ -30362,6 +30362,14 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.oss-pro-decouple-startup-r01.title':
+    '开源版可不装专业包独立启动',
+  'pages.dashboard.updateLog.entries.oss-pro-decouple-startup-r01.description':
+    '未安装轻财务/快研发等专业包时，快制造与主数据路由可正常注册；迁移不再因缺少许可证表失败；上线向导「业务蓝图」跳转至配置中心审核设置。',
+  'pages.dashboard.updateLog.entries.dashboard-todo-rbac-filter-r01.title':
+    '工作台待办仅展示有权限的单据',
+  'pages.dashboard.updateLog.entries.dashboard-todo-rbac-filter-r01.description':
+    '系统工作台「待办事项」按登录用户对各单据模块的查看权限过滤列表与分类计数；无权限的工单、检验、出入库等不再出现。指派给本人的审批待办仍可见。',
   'pages.dashboard.updateLog.entries.kuaioa-asset-registry-redirect-fa-r01.title':
     '行政办公资产台账改走轻财务资产清单',
   'pages.dashboard.updateLog.entries.kuaioa-asset-registry-redirect-fa-r01.description':

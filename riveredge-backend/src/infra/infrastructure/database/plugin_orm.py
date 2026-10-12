@@ -34,6 +34,10 @@ def discover_plugin_orm_modules(
         module_name = f"apps.{package_name}.orm_models"
         try:
             mod = importlib.import_module(module_name)
+        except ImportError as exc:
+            # 开源仓未 compose 专业包时目录可能以残缺状态存在；跳过不可导入的可选应用
+            logger.warning(f"跳过可选应用 ORM（不可导入）: {module_name}: {exc}")
+            continue
         except Exception as exc:
             logger.error(f"加载 {module_name} 失败: {exc}")
             raise

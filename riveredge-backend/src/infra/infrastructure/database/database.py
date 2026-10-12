@@ -327,46 +327,8 @@ TORTOISE_ORM = {
                 "apps.kuaizhizao.models.incoming_inspection",  # 来料检验模型
                 "apps.kuaizhizao.models.process_inspection",  # 过程检验模型
                 "apps.kuaizhizao.models.finished_goods_inspection",  # 成品检验模型
-                # Payable/Receivable/PurchaseInvoice 已迁移至 kuaicaiwu
-                "apps.kuaicaiwu.models.payable",  # 应付账款模型
-                "apps.kuaicaiwu.models.receivable",  # 应收账款模型
-                "apps.kuaicaiwu.models.purchase_invoice",  # 采购发票模型
-                "apps.kuaicaiwu.models.invoice",  # 销项/进项发票模型（从快制造迁移）
-                "apps.kuaicaiwu.models.receipt",  # 收款单
-                "apps.kuaicaiwu.models.payment",  # 付款单
-                "apps.kuaicaiwu.models.settlement",  # 核销单
-                "apps.kuaicaiwu.models.partner_statement",  # 往来对账单
-                "apps.kuaicaiwu.models.accounting_event",  # 会计事件链路
-                "apps.kuaicaiwu.models.standard_cost",  # 标准成本
-                "apps.kuaicaiwu.models.cost_rule",  # 成本规则
-                "apps.kuaicaiwu.models.cost_calculation",  # 成本核算
-                "apps.kuaicaiwu.models.bank_account",  # 银行账户
-                "apps.kuaicaiwu.models.bank_transaction",  # 银行流水
-                "apps.kuaicaiwu.models.chart_of_account",  # 会计科目
-                "apps.kuaicaiwu.models.voucher",  # 记账凭证
-                "apps.kuaicaiwu.models.voucher_line",  # 凭证分录
-                "apps.kuaicaiwu.models.gl_book_settings",  # 总账账套参数
-                "apps.kuaicaiwu.models.gl_exchange_rate",  # 汇率设置
-                "apps.kuaicaiwu.models.accounting_period",  # 会计期间
-                "apps.kuaicaiwu.models.account_balance",  # 科目余额
-                "apps.kuaicaiwu.models.voucher_summary",  # 摘要库
-                "apps.kuaicaiwu.models.gl_transfer_template",  # 转账模板
-                "apps.kuaicaiwu.models.bank_reconcile_item",  # 银行对账
-                "apps.kuaicaiwu.models.gl_project",  # 总账项目辅助
-                "apps.kuaicaiwu.models.gl_cash_flow_item",  # 现金流量项目
-                "apps.kuaicaiwu.models.gl_accrual_item",  # 摊销预提
-                "apps.kuaicaiwu.models.gl_cheque",  # 支票台账
-                "apps.kuaicaiwu.models.finance_note",  # 应收应付票据
-                "apps.kuaicaiwu.models.gl_tax_settings",  # 税务设置
-                "apps.kuaicaiwu.models.tax_period_record",  # 税务属期
-                "apps.kuaicaiwu.models.price_settlement_batch",  # 月结定价单
-                "apps.kuaicaiwu.models.price_settlement_line",  # 月结定价单行
-                "apps.kuaicaiwu.models.fixed_asset",  # 固定资产
-                # 快研发 kuaiplm
-                "apps.kuaiplm.models.rd_project",
-                "apps.kuaiplm.models.gate_template",
-                "apps.kuaiplm.models.knowledge_base",
-                "apps.kuaiplm.models.phase2",
+                # kuaicaiwu / kuaiplm / kuaioa / kuaipd 等专业包模型：勿硬编码入此列表；
+                # 由 _merge_plugin_orm_into_static_config → discover_plugin_orm_modules 按磁盘是否组装并入。
                 "apps.kuaizhizao.models.sales_forecast",  # 销售预测模型
                 "apps.kuaizhizao.models.sales_forecast_item",  # 销售预测明细模型
                 "apps.kuaizhizao.models.sales_order",  # 销售订单模型

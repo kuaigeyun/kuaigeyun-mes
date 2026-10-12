@@ -124,7 +124,7 @@ class BOMChangeService:
         if change.status != "draft":
             raise ValidationError(f"变更记录状态为 {change.status}，无法提交")
 
-        from apps.kuaiplm.services.engineering_change_audit import (
+        from apps.master_data.services.engineering_change_audit import (
             is_audit_required,
             start_change_approval_flow,
         )
@@ -194,7 +194,7 @@ class BOMChangeService:
         if change.status != "approved":
             raise ValidationError(f"变更记录状态为 {change.status}，无法撤销审核")
 
-        from apps.kuaiplm.services.engineering_change_audit import is_audit_required
+        from apps.master_data.services.engineering_change_audit import is_audit_required
         from core.services.approval.audit_transition import (
             resolve_revoke_to_draft_landing_phase,
         )
@@ -372,7 +372,7 @@ class BOMChangeService:
         approval_comment: Optional[str] = None,
     ) -> BOMChangeResponse:
         """审批变更记录（优先走平台审批流）。"""
-        from apps.kuaiplm.services.engineering_change_audit import is_audit_required
+        from apps.master_data.services.engineering_change_audit import is_audit_required
         from core.services.approval.uni_audit_service import UniAuditService
 
         change = await BOMChange.filter(

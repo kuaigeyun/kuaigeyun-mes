@@ -30,6 +30,10 @@ from apps.kuaizhizao.services.dashboard_todo_link import (
     build_dashboard_todo_link,
     dashboard_todo_handle_message,
 )
+from apps.kuaizhizao.services.dashboard_todo_permission import (
+    is_todo_id_allowed,
+    resolve_allowed_todo_prefixes,
+)
 from apps.kuaizhizao.services.exception_service import (
     ACTIVE_EXCEPTION_STATUSES,
     ACTIVE_QUALITY_EXCEPTION_STATUSES,
@@ -226,11 +230,19 @@ async def get_todos(
 
     包括：待处理工单、生产异常、库存预警、入库/出库/借还料、收货发货通知、
     采购申请待审核与采购退货、销售退货、叫料、设备故障待处理、各类检验待检验等。
+
+    单据类待办按登录用户对各模块的 :read 权限过滤；指派给本人的审批待办始终可见。
     """
     import asyncio as _asyncio
 
     # 每种来源独立 fetcher：内部自己 try/except，不会互相拖累；一次 gather 并发所有
     # 首次 cache miss 时耗时 ≈ max(单表查询) 而不是 sum（从 ~500ms 降到 ~50ms 级别）
+    allowed_prefixes = await resolve_allowed_todo_prefixes(current_user, tenant_id)
+
+    async def _gated(prefix: str, fetcher) -> List[TodoItem]:
+        if prefix not in allowed_prefixes:
+            return []
+        return await fetcher()
 
     async def _fetch_work_orders() -> List[TodoItem]:
         try:
@@ -1094,33 +1106,38 @@ async def get_todos(
 
     results = await _asyncio.gather(
         _fetch_approval_tasks(),
-        _fetch_work_orders(),
-        _fetch_material_shortages(),
-        _fetch_delivery_delays(),
-        _fetch_quality_exceptions(),
-        _fetch_inventory_alerts(),
-        _fetch_purchase_receipts(),
-        _fetch_finished_goods_receipts(),
-        _fetch_production_returns(),
-        _fetch_other_inbounds(),
-        _fetch_material_borrows(),
-        _fetch_material_returns(),
-        _fetch_material_calls(),
-        _fetch_receipt_notices(),
-        _fetch_production_pickings(),
-        _fetch_sales_deliveries(),
-        _fetch_other_outbounds(),
-        _fetch_purchase_requisitions(),
-        _fetch_purchase_returns(),
-        _fetch_shipment_notices(),
-        _fetch_sales_returns(),
-        _fetch_equipment_faults(),
-        _fetch_incoming_inspections(),
-        _fetch_process_inspections(),
-        _fetch_finished_inspections(),
+        _gated("work_order_", _fetch_work_orders),
+        _gated("exception_material_", _fetch_material_shortages),
+        _gated("exception_delay_", _fetch_delivery_delays),
+        _gated("exception_quality_", _fetch_quality_exceptions),
+        _gated("inventory_alert_", _fetch_inventory_alerts),
+        _gated("purchase_receipt_", _fetch_purchase_receipts),
+        _gated("finished_goods_receipt_", _fetch_finished_goods_receipts),
+        _gated("production_return_", _fetch_production_returns),
+        _gated("other_inbound_", _fetch_other_inbounds),
+        _gated("material_borrow_", _fetch_material_borrows),
+        _gated("material_return_", _fetch_material_returns),
+        _gated("material_call_", _fetch_material_calls),
+        _gated("receipt_notice_", _fetch_receipt_notices),
+        _gated("production_picking_", _fetch_production_pickings),
+        _gated("sales_delivery_", _fetch_sales_deliveries),
+        _gated("other_outbound_", _fetch_other_outbounds),
+        _gated("purchase_requisition_", _fetch_purchase_requisitions),
+        _gated("purchase_return_", _fetch_purchase_returns),
+        _gated("shipment_notice_", _fetch_shipment_notices),
+        _gated("sales_return_", _fetch_sales_returns),
+        _gated("equipment_fault_", _fetch_equipment_faults),
+        _gated("inspection_incoming_", _fetch_incoming_inspections),
+        _gated("inspection_process_", _fetch_process_inspections),
+        _gated("inspection_finished_", _fetch_finished_inspections),
     )
 
-    todos: List[TodoItem] = [item for sublist in results for item in sublist]
+    todos: List[TodoItem] = [
+        item
+        for sublist in results
+        for item in sublist
+        if is_todo_id_allowed(item.id, allowed_prefixes)
+    ]
 
     todos.sort(key=lambda x: (
         {"high": 0, "critical": 0, "medium": 1, "low": 2}.get((x.priority or "medium").lower(), 3),
@@ -1152,6 +1169,10 @@ async def handle_todo(
     - **todo_id**: 待办事项ID（格式：work_order_{id} 或 exception_material_{id} 等）
     - **action**: 处理动作（handle: 处理/跳转, ignore: 忽略）
     """
+    allowed_prefixes = await resolve_allowed_todo_prefixes(current_user, tenant_id)
+    if not is_todo_id_allowed(todo_id, allowed_prefixes):
+        raise HTTPException(status_code=403, detail="无权处理该待办事项")
+
     if todo_id.startswith("approval_task_"):
         # 工作流审批待办：按任务解析单据深链
         from core.models.approval_task import ApprovalTask

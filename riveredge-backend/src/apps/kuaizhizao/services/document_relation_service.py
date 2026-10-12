@@ -34,18 +34,25 @@ from apps.kuaizhizao.models.purchase_requisition import PurchaseRequisition
 from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
 from apps.kuaizhizao.models.purchase_return import PurchaseReturn
 from apps.kuaizhizao.models.demand_computation import DemandComputation
-from apps.kuaicaiwu.models.payable import Payable
-from apps.kuaicaiwu.models.receivable import Receivable
-from apps.kuaicaiwu.models.invoice import Invoice
-from apps.kuaicaiwu.models.purchase_invoice import PurchaseInvoice
-from apps.kuaicaiwu.models.receipt import Receipt
-from apps.kuaicaiwu.models.payment import Payment
-from apps.kuaicaiwu.models.settlement import SettlementRecord
-from apps.kuaicaiwu.constants import (
-    PAYABLE_SOURCE_PURCHASE_INVOICE,
-    RECEIVABLE_SOURCE_SALES_INVOICE,
-)
 from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
+
+try:
+    from apps.kuaicaiwu.models.payable import Payable
+    from apps.kuaicaiwu.models.receivable import Receivable
+    from apps.kuaicaiwu.models.invoice import Invoice
+    from apps.kuaicaiwu.models.purchase_invoice import PurchaseInvoice
+    from apps.kuaicaiwu.models.receipt import Receipt
+    from apps.kuaicaiwu.models.payment import Payment
+    from apps.kuaicaiwu.models.settlement import SettlementRecord
+    from apps.kuaicaiwu.constants import (
+        PAYABLE_SOURCE_PURCHASE_INVOICE,
+        RECEIVABLE_SOURCE_SALES_INVOICE,
+    )
+    _KUAICAIWU_AVAILABLE = True
+except ImportError:  # 开源仓未 compose 轻财务
+    Payable = Receivable = Invoice = PurchaseInvoice = Receipt = Payment = SettlementRecord = None  # type: ignore
+    PAYABLE_SOURCE_PURCHASE_INVOICE = RECEIVABLE_SOURCE_SALES_INVOICE = ""
+    _KUAICAIWU_AVAILABLE = False
 from apps.kuaizhizao.models.process_inspection import ProcessInspection
 from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection
 from apps.kuaizhizao.models.rework_order import ReworkOrder
@@ -155,16 +162,6 @@ class DocumentRelationService:
         },
         "purchase_receipt": {"model": PurchaseReceipt, "code_field": "receipt_code", "name_field": None},
         "purchase_return": {"model": PurchaseReturn, "code_field": "return_code", "name_field": None},
-        "payable": {"model": Payable, "code_field": "payable_code", "name_field": None},
-        "receivable": {"model": Receivable, "code_field": "receivable_code", "name_field": None},
-        "sales_invoice": {"model": Invoice, "code_field": "invoice_code", "name_field": "invoice_number"},
-        "receipt": {"model": Receipt, "code_field": "receipt_code", "name_field": "customer_name"},
-        "payment": {"model": Payment, "code_field": "payment_code", "name_field": "supplier_name"},
-        "purchase_invoice": {
-            "model": PurchaseInvoice,
-            "code_field": "invoice_code",
-            "name_field": "invoice_number",
-        },
         "incoming_inspection": {"model": IncomingInspection, "code_field": "inspection_code", "name_field": None},
         "process_inspection": {"model": ProcessInspection, "code_field": "inspection_code", "name_field": None},
         "finished_goods_inspection": {"model": FinishedGoodsInspection, "code_field": "inspection_code", "name_field": None},
@@ -1596,21 +1593,22 @@ class DocumentRelationService:
                 "created_at": to_api_isoformat(notice.created_at) if notice.created_at else None,
             })
 
-        # 通过source_type和source_id查找应收单
-        receivables = await Receivable.filter(
-            tenant_id=tenant_id,
-            source_type="销售出库",
-            source_id=delivery_id
-        ).limit(10)
-        for receivable in receivables:
-            downstream.append({
-                "document_type": "receivable",
-                "document_id": receivable.id,
-                "document_code": receivable.receivable_code if hasattr(receivable, 'receivable_code') else None,
-                "document_name": None,
-                "status": receivable.status if hasattr(receivable, 'status') else None,
-                "created_at": to_api_isoformat(receivable.created_at) if receivable.created_at else None
-            })
+        # 通过source_type和source_id查找应收单（需轻财务）
+        if _KUAICAIWU_AVAILABLE and Receivable is not None:
+            receivables = await Receivable.filter(
+                tenant_id=tenant_id,
+                source_type="销售出库",
+                source_id=delivery_id
+            ).limit(10)
+            for receivable in receivables:
+                downstream.append({
+                    "document_type": "receivable",
+                    "document_id": receivable.id,
+                    "document_code": receivable.receivable_code if hasattr(receivable, 'receivable_code') else None,
+                    "document_name": None,
+                    "status": receivable.status if hasattr(receivable, 'status') else None,
+                    "created_at": to_api_isoformat(receivable.created_at) if receivable.created_at else None
+                })
 
         # 销售退货单
         sales_returns = await SalesReturn.filter(
@@ -2310,7 +2308,7 @@ class DocumentRelationService:
         so = await SalesOrder.get_or_none(
             tenant_id=tenant_id, id=order_id, deleted_at__isnull=True
         )
-        if so and (so.order_code or "").strip():
+        if _KUAICAIWU_AVAILABLE and Invoice is not None and so and (so.order_code or "").strip():
             oc = so.order_code.strip()
             invs = await Invoice.filter(
                 tenant_id=tenant_id,
@@ -3543,20 +3541,21 @@ class DocumentRelationService:
                 "created_at": to_api_isoformat(receipt.created_at) if receipt.created_at else None
             })
 
-        pinvs = await PurchaseInvoice.filter(
-            tenant_id=tenant_id,
-            purchase_order_id=order_id,
-            deleted_at__isnull=True,
-        ).limit(20)
-        for inv in pinvs:
-            downstream.append({
-                "document_type": "purchase_invoice",
-                "document_id": inv.id,
-                "document_code": inv.invoice_code,
-                "document_name": inv.invoice_number,
-                "status": inv.status,
-                "created_at": to_api_isoformat(inv.created_at) if inv.created_at else None,
-            })
+        if _KUAICAIWU_AVAILABLE and PurchaseInvoice is not None:
+            pinvs = await PurchaseInvoice.filter(
+                tenant_id=tenant_id,
+                purchase_order_id=order_id,
+                deleted_at__isnull=True,
+            ).limit(20)
+            for inv in pinvs:
+                downstream.append({
+                    "document_type": "purchase_invoice",
+                    "document_id": inv.id,
+                    "document_code": inv.invoice_code,
+                    "document_name": inv.invoice_number,
+                    "status": inv.status,
+                    "created_at": to_api_isoformat(inv.created_at) if inv.created_at else None,
+                })
 
         return _dedupe_relation_documents(downstream)
 
@@ -3568,21 +3567,22 @@ class DocumentRelationService:
         """获取采购入库单的下游单据（应付单）"""
         downstream = []
 
-        # 通过source_type和source_id查找应付单
-        payables = await Payable.filter(
-            tenant_id=tenant_id,
-            source_type="采购入库",
-            source_id=receipt_id
-        ).limit(10)
-        for payable in payables:
-            downstream.append({
-                "document_type": "payable",
-                "document_id": payable.id,
-                "document_code": payable.payable_code,
-                "document_name": None,
-                "status": payable.status,
-                "created_at": to_api_isoformat(payable.created_at) if payable.created_at else None
-            })
+        # 通过source_type和source_id查找应付单（需轻财务）
+        if _KUAICAIWU_AVAILABLE and Payable is not None:
+            payables = await Payable.filter(
+                tenant_id=tenant_id,
+                source_type="采购入库",
+                source_id=receipt_id
+            ).limit(10)
+            for payable in payables:
+                downstream.append({
+                    "document_type": "payable",
+                    "document_id": payable.id,
+                    "document_code": payable.payable_code,
+                    "document_name": None,
+                    "status": payable.status,
+                    "created_at": to_api_isoformat(payable.created_at) if payable.created_at else None
+                })
 
         # 采购退货单
         purchase_returns = await PurchaseReturn.filter(
@@ -3859,6 +3859,27 @@ class DocumentRelationService:
             })
 
         return chain
+
+
+if _KUAICAIWU_AVAILABLE:
+    DocumentRelationService.DOCUMENT_TYPES.update(
+        {
+            "payable": {"model": Payable, "code_field": "payable_code", "name_field": None},
+            "receivable": {"model": Receivable, "code_field": "receivable_code", "name_field": None},
+            "sales_invoice": {
+                "model": Invoice,
+                "code_field": "invoice_code",
+                "name_field": "invoice_number",
+            },
+            "receipt": {"model": Receipt, "code_field": "receipt_code", "name_field": "customer_name"},
+            "payment": {"model": Payment, "code_field": "payment_code", "name_field": "supplier_name"},
+            "purchase_invoice": {
+                "model": PurchaseInvoice,
+                "code_field": "invoice_code",
+                "name_field": "invoice_number",
+            },
+        }
+    )
 
 
 def _build_document_relation_strategies() -> Dict[str, Any]:

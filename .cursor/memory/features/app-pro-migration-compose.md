@@ -32,6 +32,7 @@ standard: 真源在 pro 仓；主仓 gitignore + 占位；`scan_pro_oss_layout.p
 - 系统数据中心四入口（`/system/application-connections|apis|data-sources|datasets`）：`KuaiconnectRouteGate` — 快连接就绪进业务页，否则 `ProUpgradePrompt`（勿再在 SystemRoutes 写死 upgrade 页）
 - 无 compose / 未启用未授权：门禁显示升级占位
 - 门禁：`riveredge-backend/scripts/scan_pro_oss_layout.py`
+- **独立启动**：宿主禁止模块级 `import apps.kuaicaiwu|kuaiplm|…`；ORM 仅 `discover_plugin_orm_modules` 并入（见 `features/oss-pro-decouple-startup.md`）
 
 ## 扩展
 

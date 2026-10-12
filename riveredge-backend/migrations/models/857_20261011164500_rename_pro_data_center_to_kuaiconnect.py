@@ -8,6 +8,7 @@ RUN_IN_TRANSACTION = True
 
 
 async def upgrade(db: BaseDBAsyncClient) -> str:
+    # infra_license_keys 属专业包；开源仓可能无此表，须存在性保护后再 UPDATE
     return """
         UPDATE core_applications
         SET
@@ -17,9 +18,18 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             updated_at = NOW()
         WHERE code = 'pro-data-center' AND deleted_at IS NULL;
 
-        UPDATE infra_license_keys
-        SET app_code = 'kuaiconnect', updated_at = NOW()
-        WHERE app_code = 'pro-data-center' AND deleted_at IS NULL;
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1
+                FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'infra_license_keys'
+            ) THEN
+                UPDATE infra_license_keys
+                SET app_code = 'kuaiconnect', updated_at = NOW()
+                WHERE app_code = 'pro-data-center';
+            END IF;
+        END $$;
     """
 
 

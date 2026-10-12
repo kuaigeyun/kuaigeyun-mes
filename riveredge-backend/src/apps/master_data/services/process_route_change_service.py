@@ -19,7 +19,7 @@ from apps.master_data.schemas.process_route_change_schemas import (
     ProcessRouteChangeResponse,
     ProcessRouteChangeListResponse,
 )
-from apps.kuaiplm.services.engineering_change_audit import (
+from apps.master_data.services.engineering_change_audit import (
     cancel_change_approval_flow,
     is_audit_required,
     start_change_approval_flow,
@@ -212,7 +212,7 @@ class ProcessRouteChangeService:
         if change.status != "approved":
             raise ValidationError(f"变更记录状态为 {change.status}，无法反审核")
 
-        from apps.kuaiplm.services.engineering_change_audit import is_audit_required
+        from apps.master_data.services.engineering_change_audit import is_audit_required
         from core.services.approval.audit_transition import (
             resolve_revoke_to_draft_landing_phase,
         )
@@ -450,7 +450,7 @@ class ProcessRouteChangeService:
         if change.status not in ("pending",):
             raise ValidationError(f"变更记录状态为 {change.status}，无法审批")
 
-        from apps.kuaiplm.services.engineering_change_audit import is_audit_required
+        from apps.master_data.services.engineering_change_audit import is_audit_required
 
         sync_after_flow = False
         if await is_audit_required(tenant_id, "process_route"):
