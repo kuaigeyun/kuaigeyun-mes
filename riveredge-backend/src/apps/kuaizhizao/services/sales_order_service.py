@@ -35,12 +35,7 @@ from apps.kuaizhizao.models.demand import Demand
 from apps.kuaizhizao.models.demand_item import DemandItem
 from apps.kuaizhizao.models.sales_delivery import SalesDelivery
 from apps.kuaizhizao.models.sales_delivery_item import SalesDeliveryItem
-from apps.kuaicaiwu.models.receivable import Receivable
-from apps.kuaicaiwu.models.invoice import Invoice
-from apps.kuaicaiwu.constants.finance_source_types import (
-    RECEIVABLE_SOURCE_SALES_DELIVERY,
-    RECEIVABLE_SOURCE_SALES_INVOICE,
-)
+from apps.common.optional_pro import import_pro_attr, import_pro_module, pro_app_available
 from apps.kuaizhizao.models.shipment_notice import ShipmentNotice
 from apps.kuaizhizao.models.shipment_notice_item import ShipmentNoticeItem
 from apps.kuaizhizao.models.state_transition import StateTransitionLog
@@ -634,53 +629,58 @@ class SalesOrderService:
         invoiced_by_order: Dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
         received_by_order: Dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
 
-        if code_to_order_id:
-            invoice_rows = await Invoice.filter(
-                tenant_id=tenant_id,
-                category="OUT",
-                source_document_code__in=list(code_to_order_id.keys()),
-            ).exclude(status__in=self._EXCLUDED_SALES_INVOICE_STATUSES).values_list(
-                "id", "source_document_code", "total_amount"
-            )
-            invoice_id_to_order: Dict[int, int] = {}
-            for invoice_id, source_code, total_amount in invoice_rows:
-                oid = code_to_order_id.get(str(source_code or "").strip())
-                if not oid:
-                    continue
-                invoice_id_to_order[int(invoice_id)] = oid
-                invoiced_by_order[oid] += Decimal(str(total_amount or 0))
+        if pro_app_available("kuaicaiwu"):
+            Invoice = import_pro_attr("apps.kuaicaiwu.models.invoice", "Invoice")
+            Receivable = import_pro_attr("apps.kuaicaiwu.models.receivable", "Receivable")
+            source_types = import_pro_module("apps.kuaicaiwu.constants.finance_source_types")
 
-            if invoice_id_to_order:
-                recv_from_invoice = await Receivable.filter(
+            if code_to_order_id:
+                invoice_rows = await Invoice.filter(
                     tenant_id=tenant_id,
-                    source_type=RECEIVABLE_SOURCE_SALES_INVOICE,
-                    source_id__in=list(invoice_id_to_order.keys()),
+                    category="OUT",
+                    source_document_code__in=list(code_to_order_id.keys()),
+                ).exclude(status__in=self._EXCLUDED_SALES_INVOICE_STATUSES).values_list(
+                    "id", "source_document_code", "total_amount"
+                )
+                invoice_id_to_order: Dict[int, int] = {}
+                for invoice_id, source_code, total_amount in invoice_rows:
+                    oid = code_to_order_id.get(str(source_code or "").strip())
+                    if not oid:
+                        continue
+                    invoice_id_to_order[int(invoice_id)] = oid
+                    invoiced_by_order[oid] += Decimal(str(total_amount or 0))
+
+                if invoice_id_to_order:
+                    recv_from_invoice = await Receivable.filter(
+                        tenant_id=tenant_id,
+                        source_type=source_types.RECEIVABLE_SOURCE_SALES_INVOICE,
+                        source_id__in=list(invoice_id_to_order.keys()),
+                        deleted_at__isnull=True,
+                    ).values_list("source_id", "received_amount")
+                    for source_id, received_amount in recv_from_invoice:
+                        oid = invoice_id_to_order.get(int(source_id))
+                        if oid:
+                            received_by_order[oid] += Decimal(str(received_amount or 0))
+
+            delivery_to_order: Dict[int, int] = {}
+            all_delivery_ids: List[int] = []
+            for oid, dids in order_to_delivery_ids.items():
+                for did in dids:
+                    delivery_to_order[int(did)] = int(oid)
+                    all_delivery_ids.append(int(did))
+
+            if all_delivery_ids:
+                recv_from_delivery = await Receivable.filter(
+                    tenant_id=tenant_id,
+                    source_type=source_types.RECEIVABLE_SOURCE_SALES_DELIVERY,
+                    source_id__in=all_delivery_ids,
                     deleted_at__isnull=True,
                 ).values_list("source_id", "received_amount")
-                for source_id, received_amount in recv_from_invoice:
-                    oid = invoice_id_to_order.get(int(source_id))
-                    if oid:
-                        received_by_order[oid] += Decimal(str(received_amount or 0))
-
-        delivery_to_order: Dict[int, int] = {}
-        all_delivery_ids: List[int] = []
-        for oid, dids in order_to_delivery_ids.items():
-            for did in dids:
-                delivery_to_order[int(did)] = int(oid)
-                all_delivery_ids.append(int(did))
-
-        if all_delivery_ids:
-            recv_from_delivery = await Receivable.filter(
-                tenant_id=tenant_id,
-                source_type=RECEIVABLE_SOURCE_SALES_DELIVERY,
-                source_id__in=all_delivery_ids,
-                deleted_at__isnull=True,
-            ).values_list("source_id", "received_amount")
-            for source_id, received_amount in recv_from_delivery:
-                oid = delivery_to_order.get(int(source_id))
-                if not oid:
-                    continue
-                received_by_order[oid] += Decimal(str(received_amount or 0))
+                for source_id, received_amount in recv_from_delivery:
+                    oid = delivery_to_order.get(int(source_id))
+                    if not oid:
+                        continue
+                    received_by_order[oid] += Decimal(str(received_amount or 0))
 
         result: Dict[int, Dict[str, float]] = {}
         order_ids = [int(o.id) for o in orders if o.id]

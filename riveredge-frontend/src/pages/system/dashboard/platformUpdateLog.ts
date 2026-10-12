@@ -106,6 +106,22 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
       'pages.dashboard.updateLog.entries.data-backup-policy-schedule-storage-r01.description',
   },
   {
+    id: 'oss-pro-decouple-startup-r01',
+    date: '2026-10-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.oss-pro-decouple-startup-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.oss-pro-decouple-startup-r01.description',
+  },
+  {
+    id: 'dashboard-todo-rbac-filter-r01',
+    date: '2026-10-12',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.dashboard-todo-rbac-filter-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.dashboard-todo-rbac-filter-r01.description',
+  },
+  {
     id: 'data-backup-restore-target-tenant-r01',
     date: '2026-10-12',
     type: 'fix',

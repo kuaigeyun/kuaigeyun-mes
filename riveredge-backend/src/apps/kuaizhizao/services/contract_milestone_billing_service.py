@@ -8,13 +8,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Optional
 
-from apps.kuaicaiwu.constants.finance_source_types import (
-    PAYABLE_SOURCE_ORDER_MILESTONE,
-    RECEIVABLE_SOURCE_CONTRACT_MILESTONE,
-    RECEIVABLE_SOURCE_ORDER_MILESTONE,
-)
-from apps.kuaicaiwu.schemas.finance import PayableCreate, ReceivableCreate
-from apps.kuaicaiwu.services.finance_service import PayableService, ReceivableService
+from apps.common.optional_pro import import_pro_module
 from apps.kuaizhizao.models.sales_contract import SalesContract
 from apps.kuaizhizao.models.sales_contract_milestone import SalesContractMilestone
 from apps.kuaizhizao.models.purchase_order import PurchaseOrder
@@ -28,8 +22,33 @@ from infra.services.business_config_service import BusinessConfigService
 class ContractMilestoneBillingService:
     def __init__(self) -> None:
         self.business_config_service = BusinessConfigService()
-        self.receivable_service = ReceivableService()
-        self.payable_service = PayableService()
+        self._receivable_service = None
+        self._payable_service = None
+
+    def _ensure_finance(self) -> None:
+        if self._receivable_service is not None:
+            return
+        svc = import_pro_module("apps.kuaicaiwu.services.finance_service")
+        self._receivable_service = svc.ReceivableService()
+        self._payable_service = svc.PayableService()
+
+    @property
+    def receivable_service(self):
+        self._ensure_finance()
+        return self._receivable_service
+
+    @property
+    def payable_service(self):
+        self._ensure_finance()
+        return self._payable_service
+
+    @staticmethod
+    def _finance_schemas():
+        return import_pro_module("apps.kuaicaiwu.schemas.finance")
+
+    @staticmethod
+    def _finance_source_types():
+        return import_pro_module("apps.kuaicaiwu.constants.finance_source_types")
 
     async def resolve_contract_billing_mode(
         self, tenant_id: int, customer_id: Optional[int], contract: SalesContract
@@ -150,10 +169,12 @@ class ContractMilestoneBillingService:
         mode = await self.resolve_contract_billing_mode(tenant_id, contract.customer_id, contract)
         if mode not in ("on_milestone", "mixed"):
             raise BusinessLogicError("当前租户/客户未启用里程碑收款模式")
+        schemas = self._finance_schemas()
+        source_types = self._finance_source_types()
         receivable = await self.receivable_service.create_receivable(
             tenant_id=tenant_id,
-            receivable_data=ReceivableCreate(
-                source_type=RECEIVABLE_SOURCE_CONTRACT_MILESTONE,
+            receivable_data=schemas.ReceivableCreate(
+                source_type=source_types.RECEIVABLE_SOURCE_CONTRACT_MILESTONE,
                 source_id=milestone.id,
                 source_code=(contract.contract_code or "")[:50],
                 customer_id=contract.customer_id,
@@ -207,10 +228,12 @@ class ContractMilestoneBillingService:
             org_rev = str(cfg.get("parameters", {}).get("finance", {}).get("revenue_recognition") or "on_shipment")
             if org_rev not in ("on_milestone", "mixed"):
                 raise BusinessLogicError("当前租户未启用里程碑收款模式")
+        schemas = self._finance_schemas()
+        source_types = self._finance_source_types()
         receivable = await self.receivable_service.create_receivable(
             tenant_id=tenant_id,
-            receivable_data=ReceivableCreate(
-                source_type=RECEIVABLE_SOURCE_ORDER_MILESTONE,
+            receivable_data=schemas.ReceivableCreate(
+                source_type=source_types.RECEIVABLE_SOURCE_ORDER_MILESTONE,
                 source_id=milestone.id,
                 source_code=(order.order_code or "")[:50],
                 customer_id=order.customer_id,
@@ -273,10 +296,12 @@ class ContractMilestoneBillingService:
         amount = Decimal(str(milestone.planned_amount or 0))
         if amount <= 0:
             raise BusinessLogicError("里程碑计划金额须大于 0")
+        schemas = self._finance_schemas()
+        source_types = self._finance_source_types()
         payable = await self.payable_service.create_payable(
             tenant_id=tenant_id,
-            payable_data=PayableCreate(
-                source_type=PAYABLE_SOURCE_ORDER_MILESTONE,
+            payable_data=schemas.PayableCreate(
+                source_type=source_types.PAYABLE_SOURCE_ORDER_MILESTONE,
                 source_id=milestone.id,
                 source_code=(order.order_code or "")[:50],
                 supplier_id=order.supplier_id,

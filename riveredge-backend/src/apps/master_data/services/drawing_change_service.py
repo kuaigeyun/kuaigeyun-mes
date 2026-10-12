@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional
 from tortoise.expressions import Q
 
 from apps.common.audit_actor import apply_create_audit, apply_update_audit, audit_response_fields
-from apps.kuaiplm.services.engineering_change_audit import (
+from apps.master_data.services.engineering_change_audit import (
     is_audit_required,
     start_change_approval_flow,
 )

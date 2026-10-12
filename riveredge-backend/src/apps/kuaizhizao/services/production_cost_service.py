@@ -18,7 +18,7 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError, Business
 from apps.common.base_service import AppBaseService
 from apps.master_data.models.material import Material, BOM
 from apps.master_data.models.process import ProcessRoute
-from apps.kuaicaiwu.models.cost_calculation import CostCalculation
+from apps.common.optional_pro import import_pro_attr
 from apps.kuaizhizao.utils.bom_helper import (
     get_bom_items_by_material_id,
     calculate_material_requirements_from_bom,

@@ -19,9 +19,8 @@ from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
 from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
 from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
-from apps.kuaicaiwu.models.receivable import Receivable
-from apps.kuaicaiwu.models.payable import Payable
 from apps.kuaizhizao.models.launch_countdown import LaunchCountdown
+from apps.common.optional_pro import import_pro_attr, pro_app_available
 from apps.kuaizhizao.models.finished_goods_receipt import FinishedGoodsReceipt
 from apps.kuaizhizao.models.sales_delivery import SalesDelivery
 from apps.master_data.models.material import Material
@@ -749,7 +748,14 @@ class InitialDataService:
         missing_fields = [f for f in required_fields if f not in header_index_map]
         if missing_fields:
             raise ValidationError(f"缺少必填字段：{', '.join(missing_fields)}")
-        
+
+        if not pro_app_available("kuaicaiwu"):
+            raise ValidationError(
+                "当前环境未安装轻财务专业包，无法导入期初应收应付。请通过扩展应用/compose 安装后再试。"
+            )
+        Receivable = import_pro_attr("apps.kuaicaiwu.models.receivable", "Receivable")
+        Payable = import_pro_attr("apps.kuaicaiwu.models.payable", "Payable")
+
         # 解析数据行（从第三行开始，索引2，跳过表头和示例数据行）
         rows = data[2:] if len(data) > 2 else []
         

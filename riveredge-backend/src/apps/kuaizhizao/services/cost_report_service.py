@@ -16,11 +16,15 @@ from loguru import logger
 
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from apps.master_data.models.material import Material
-from apps.kuaicaiwu.models.cost_calculation import CostCalculation
+from apps.common.optional_pro import import_pro_attr
 from apps.kuaizhizao.services.production_cost_service import ProductionCostService
 from apps.kuaizhizao.services.purchase_cost_service import PurchaseCostService
 from apps.kuaizhizao.services.outsource_cost_service import OutsourceCostService
 from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
+
+
+def _cost_calculation_model():
+    return import_pro_attr("apps.kuaicaiwu.models.cost_calculation", "CostCalculation")
 
 
 class CostReportService:
@@ -61,7 +65,7 @@ class CostReportService:
             Dict[str, Any]: 成本趋势分析结果
         """
         # 获取成本核算记录
-        query = CostCalculation.filter(
+        query = _cost_calculation_model().filter(
             tenant_id=tenant_id,
             calculation_date__gte=start_date,
             calculation_date__lte=end_date,
@@ -187,7 +191,7 @@ class CostReportService:
             Dict[str, Any]: 成本结构分析结果
         """
         # 获取成本核算记录
-        query = CostCalculation.filter(
+        query = _cost_calculation_model().filter(
             tenant_id=tenant_id,
             calculation_status="已审核",
             deleted_at__isnull=True

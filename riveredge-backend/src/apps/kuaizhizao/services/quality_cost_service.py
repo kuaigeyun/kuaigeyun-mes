@@ -20,8 +20,12 @@ from apps.kuaizhizao.models.quality_exception import QualityException
 from apps.kuaizhizao.models.process_inspection import ProcessInspection
 from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
 from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection
-from apps.kuaicaiwu.models.cost_rule import CostRule
+from apps.common.optional_pro import import_pro_attr
 from core.utils.timezone_utils import to_api_isoformat
+
+
+def _cost_rule_model():
+    return import_pro_attr("apps.kuaicaiwu.models.cost_rule", "CostRule")
 
 
 class QualityCostService:
@@ -144,7 +148,7 @@ class QualityCostService:
         cost_breakdown = []
         
         # 获取预防成本规则
-        rules = await CostRule.filter(
+        rules = await _cost_rule_model().filter(
             tenant_id=tenant_id,
             rule_type="质量成本",
             cost_type="预防成本",
@@ -880,7 +884,7 @@ class QualityCostService:
             Decimal: 检验单价
         """
         # 从成本规则获取检验单价
-        rule = await CostRule.filter(
+        rule = await _cost_rule_model().filter(
             tenant_id=tenant_id,
             rule_type="质量成本",
             cost_type="鉴定成本",

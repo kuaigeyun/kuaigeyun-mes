@@ -234,8 +234,9 @@ const ConfigCenterPage: React.FC = () => {
     () => ['parameters', 'audit', 'automation', 'notification', 'scheduledTasks'],
     [],
   );
-  // 兼容历史链接：tab=flow 归并到 parameters
-  const normalizedInitialTab = tabFromUrl === 'flow' ? 'parameters' : tabFromUrl;
+  // 兼容历史链接：tab=flow 归并到 parameters；已下线的 tab=graph（业务蓝图）归并到审核设置
+  const normalizedInitialTab =
+    tabFromUrl === 'flow' ? 'parameters' : tabFromUrl === 'graph' ? 'audit' : tabFromUrl;
   const initialTab = validTabs.includes(normalizedInitialTab || '') ? normalizedInitialTab! : 'parameters';
   const [activeMainTab, setActiveMainTab] = useState<string>(initialTab);
 
