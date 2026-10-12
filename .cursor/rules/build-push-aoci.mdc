@@ -64,10 +64,12 @@ alwaysApply: true
 - 只交业务、故意不 maintain / 不提正式 `aoci*.txt`
 - 用「构建后再补索引」跳过顺序
 - 平行 `npm run build` 后手写 commit/push dist（须走 `build.web.sh`）
+- 把全仓清死代码做成推送前置（可选自检见交付清单 §7，不阻塞本 SOP）
 
 ## 关联
 
 - `.cursor/memory/principles/code-push-routing.md`
 - `.cursor/rules/aoci-git-commit.mdc`
+- `.cursor/rules/feature-delivery-checklist.mdc`（§7 死代码交付自检）
 - `.cursor/memory/features/fast-deploy-scripts.md`
 - Vault：`web-build-push-sop.md`（若有）

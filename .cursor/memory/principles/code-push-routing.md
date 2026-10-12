@@ -67,9 +67,11 @@ standard: 按改动路径选最小推送集；产物构建与源码 push 分离�
 - 没改 `riveredge-frontend` 却默认 Web 构建推送  
 - 把「业务发版」理解成「三端产物全打一遍」  
 - 索引脏着推 dist / H5  
+- 把「清死代码 / 全仓 unused」做成构建推送前置步骤（可选自检只在交付清单：`feature-delivery` §7，且不阻塞 push）
 
 ## 关联
 
 - `.cursor/rules/build-push-aoci.mdc`
 - `features/fast-deploy-scripts.md`
 - `principles/aoci-git-commit.md`
+- `principles/feature-delivery.md`（§7 死代码交付自检）

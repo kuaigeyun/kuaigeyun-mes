@@ -378,6 +378,7 @@ import { resolveDownstreamPushPercent } from '../../sales-management/shared/push
 import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn'
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions'
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired'
+import { useDeferAfterPaint } from '../../../../../hooks/useDeferAfterPaint'
 import { isManualAuditEnabled } from '../../../../../utils/auditMode'
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
@@ -1753,15 +1754,18 @@ const WorkOrdersPage: React.FC = () => {
     })
   }, [queryClient])
 
+  const secondaryStatsReady = useDeferAfterPaint()
   const { data: statistics } = useQuery({
     queryKey: ['workOrderStatistics'],
     queryFn: getWorkOrderStatistics,
     staleTime: WORK_ORDER_STATISTICS_STALE_MS,
+    enabled: secondaryStatsReady,
   })
   const { data: executionConfig } = useQuery({
     queryKey: ['workOrderExecutionConfig'],
     queryFn: () => workOrderApi.getExecutionConfig(),
     staleTime: WORK_ORDER_EXECUTION_CONFIG_STALE_MS,
+    enabled: secondaryStatsReady,
   })
 
   /** 指标卡折线推迟到空闲再挂载，避免与首屏表格抢主线程 */

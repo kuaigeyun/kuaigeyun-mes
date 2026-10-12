@@ -22,10 +22,9 @@ _VECTOR = ("milvus", "qdrant", "weaviate", "chroma")
 
 DATA_SOURCE_TYPES = _RELATIONAL + _DOCUMENT + _TIMESERIES + _OLAP + _KV + _VECTOR
 
-# 当前仅校验必填配置项，未对目标库发起真实连接（postgresql / sqlserver 等有独立实测逻辑）
-DATA_SOURCE_CONFIG_ONLY_TYPES = frozenset(
-    set(DATA_SOURCE_TYPES) - {"postgresql", "sqlserver"}
-)
+# 当前仅校验必填配置项，未对目标库发起真实连接（下列类型有独立实测逻辑）
+DATA_SOURCE_LIVE_TEST_TYPES = frozenset({"postgresql", "sqlserver", "influxdb"})
+DATA_SOURCE_CONFIG_ONLY_TYPES = frozenset(set(DATA_SOURCE_TYPES) - DATA_SOURCE_LIVE_TEST_TYPES)
 
 DATA_SOURCE_TYPE_LABELS: dict[str, str] = {
     "postgresql": "PostgreSQL",

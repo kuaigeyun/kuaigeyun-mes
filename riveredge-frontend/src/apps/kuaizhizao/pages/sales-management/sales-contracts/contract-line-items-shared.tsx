@@ -75,10 +75,12 @@ export const ContractMaterialSelectCell: React.FC<{
   index: number;
   materialList?: Material[];
   sourceType?: string;
+  onMaterialCached?: (material: Material) => void;
 }> = ({
   index,
   materialList,
   sourceType,
+  onMaterialCached,
 }) => {
   const { t } = useTranslation();
   const form = Form.useFormInstance();
@@ -99,6 +101,7 @@ export const ContractMaterialSelectCell: React.FC<{
   const onMaterialPicked = useCallback(
     (_val: number | undefined, material: Material | undefined) => {
       if (!material) return;
+      onMaterialCached?.(material);
       form.setFieldValue(
         ['items', index, 'material_code'],
         getMaterialField(material as unknown as Record<string, unknown>, 'mainCode') ??
@@ -123,7 +126,7 @@ export const ContractMaterialSelectCell: React.FC<{
         asOfField: 'contract_date',
       });
     },
-    [form, index, materialList],
+    [form, index, materialList, onMaterialCached],
   );
   return (
     <div

@@ -8,6 +8,7 @@ Author: Luigi Lu
 Date: 2025-01-14
 """
 
+import asyncio
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
 from tortoise.transactions import in_transaction
@@ -203,27 +204,35 @@ class DocumentRelationNewService:
         if document_type == "reporting_timeline":
             return DocumentRelationListResponse(upstream=[], downstream=[])
 
-        # 1. 查询 DocumentRelation 表
-        downstream_table = await DocumentRelation.filter(
-            tenant_id=tenant_id,
-            source_type=document_type,
-            source_id=document_id,
-        ).all()
-        upstream_table = await DocumentRelation.filter(
-            tenant_id=tenant_id,
-            target_type=document_type,
-            target_id=document_id,
-        ).all()
+        # 1. 并行查询 DocumentRelation 表上下游
+        downstream_table, upstream_table = await asyncio.gather(
+            DocumentRelation.filter(
+                tenant_id=tenant_id,
+                source_type=document_type,
+                source_id=document_id,
+            ).all(),
+            DocumentRelation.filter(
+                tenant_id=tenant_id,
+                target_type=document_type,
+                target_id=document_id,
+            ).all(),
+        )
 
         upstream_responses = [DocumentRelationResponse.model_validate(r) for r in upstream_table]
         downstream_responses = [DocumentRelationResponse.model_validate(r) for r in downstream_table]
         table_upstream_keys = {_relation_key(r.source_type, r.source_id, r.target_type, r.target_id) for r in upstream_responses}
         table_downstream_keys = {_relation_key(r.source_type, r.source_id, r.target_type, r.target_id) for r in downstream_responses}
 
-        # 2. 若单据类型在旧服务支持范围内，获取业务推导关联并合并
+        # 2. 有关联策略时合并业务推导；无策略类型（如 purchase_requisition）仅表驱动，勿抛异常拖慢整链
         try:
-            from apps.kuaizhizao.services.document_relation_service import DocumentRelationService
-            if document_type in DocumentRelationService.DOCUMENT_TYPES:
+            from apps.kuaizhizao.services.document_relation_service import (
+                DOCUMENT_RELATION_STRATEGIES,
+                DocumentRelationService,
+            )
+            if (
+                document_type in DocumentRelationService.DOCUMENT_TYPES
+                and document_type in DOCUMENT_RELATION_STRATEGIES
+            ):
                 legacy_result = await DocumentRelationService().get_document_relations(
                     tenant_id=tenant_id,
                     document_type=document_type,
@@ -342,17 +351,83 @@ class DocumentRelationNewService:
                         if not (r.source_type == "demand" and int(r.source_id or 0) in hide_demand_ids)
                     ]
 
-        upstream_responses = await self._enrich_relations_deleted_flags(
-            tenant_id, upstream_responses, side="upstream"
-        )
-        downstream_responses = await self._enrich_relations_deleted_flags(
-            tenant_id, downstream_responses, side="downstream"
+        upstream_responses, downstream_responses = await asyncio.gather(
+            self._enrich_relations_deleted_flags(
+                tenant_id, upstream_responses, side="upstream"
+            ),
+            self._enrich_relations_deleted_flags(
+                tenant_id, downstream_responses, side="downstream"
+            ),
         )
 
         return DocumentRelationListResponse(
             upstream=upstream_responses,
             downstream=downstream_responses,
         )
+
+    async def _batch_peer_deleted_flags(
+        self,
+        tenant_id: int,
+        peers: List[Tuple[str, int]],
+    ) -> Dict[Tuple[str, int], bool]:
+        """按单据类型批量判断对端是否已删/不存在（替代逐条 DocumentTracking 查询）。"""
+        if not peers:
+            return {}
+        from core.services.document_tracking_service import DOCUMENT_MODEL_REGISTRY
+
+        by_type: Dict[str, set] = {}
+        for doc_type, doc_id in peers:
+            if doc_type == "reporting_timeline":
+                continue
+            by_type.setdefault(str(doc_type), set()).add(int(doc_id))
+
+        alive: set = set()
+        registry = DOCUMENT_MODEL_REGISTRY()
+
+        async def _load(doc_type: str, ids: set) -> None:
+            reg = registry.get(doc_type)
+            if not reg:
+                # 无注册表项时与单条 resolve 一致：不标删除
+                for i in ids:
+                    alive.add((doc_type, int(i)))
+                return
+            model, _code_field = reg
+            try:
+                if doc_type == "sales_invoice":
+                    rows = await model.filter(
+                        tenant_id=tenant_id, id__in=list(ids), category="OUT"
+                    ).only("id", "deleted_at", "category")
+                elif doc_type in ("receipt", "payment", "purchase_invoice"):
+                    rows = await model.filter(
+                        tenant_id=tenant_id, id__in=list(ids), deleted_at__isnull=True
+                    ).only("id")
+                    for row in rows:
+                        alive.add((doc_type, int(row.id)))
+                    return
+                else:
+                    rows = await model.filter(
+                        tenant_id=tenant_id, id__in=list(ids)
+                    ).only("id", "deleted_at")
+            except Exception:
+                return
+            for row in rows:
+                if getattr(row, "deleted_at", None):
+                    continue
+                if doc_type == "sales_invoice" and getattr(row, "category", None) != "OUT":
+                    continue
+                alive.add((doc_type, int(row.id)))
+
+        if by_type:
+            await asyncio.gather(*[_load(t, ids) for t, ids in by_type.items()])
+
+        out: Dict[Tuple[str, int], bool] = {}
+        for doc_type, doc_id in peers:
+            key = (str(doc_type), int(doc_id))
+            if doc_type == "reporting_timeline":
+                out[key] = False
+            else:
+                out[key] = key not in alive
+        return out
 
     async def _enrich_relations_deleted_flags(
         self,
@@ -364,26 +439,26 @@ class DocumentRelationNewService:
         """为关联列表补齐对端 is_deleted（与追溯节点语义一致）。"""
         if not rows:
             return rows
-        out: List[DocumentRelationResponse] = []
+        peers: List[Tuple[str, int]] = []
         for r in rows:
             if side == "upstream":
-                deleted = await self._resolve_trace_node_deleted(
-                    tenant_id,
-                    r.source_type,
-                    r.source_id,
-                    r.source_code,
-                    r.created_at,
-                )
+                peers.append((r.source_type, int(r.source_id)))
             else:
-                deleted = await self._resolve_trace_node_deleted(
-                    tenant_id,
-                    r.target_type,
-                    r.target_id,
-                    r.target_code,
-                    r.created_at,
-                )
-            out.append(r.model_copy(update={"is_deleted": bool(deleted)}))
-        return out
+                peers.append((r.target_type, int(r.target_id)))
+        deleted_map = await self._batch_peer_deleted_flags(tenant_id, peers)
+        return [
+            r.model_copy(
+                update={
+                    "is_deleted": bool(
+                        deleted_map.get(
+                            (peers[i][0], peers[i][1]),
+                            True,
+                        )
+                    )
+                }
+            )
+            for i, r in enumerate(rows)
+        ]
     
     async def batch_create_relations(
         self,
@@ -493,6 +568,40 @@ class DocumentRelationNewService:
         
         return DocumentRelationResponse.model_validate(relation)
     
+    async def _cached_get_relations(
+        self,
+        tenant_id: int,
+        document_type: str,
+        document_id: int,
+        relations_cache: Dict[Tuple[str, int], DocumentRelationListResponse],
+        cache_lock: asyncio.Lock,
+    ) -> DocumentRelationListResponse:
+        key = (document_type, int(document_id))
+        cached = relations_cache.get(key)
+        if cached is not None:
+            return cached
+        async with cache_lock:
+            cached = relations_cache.get(key)
+            if cached is not None:
+                return cached
+            result = await self.get_relations(tenant_id, document_type, document_id)
+            relations_cache[key] = result
+            return result
+
+    async def _claim_trace_visit(
+        self,
+        visited: set,
+        visit_lock: asyncio.Lock,
+        document_type: str,
+        document_id: int,
+    ) -> bool:
+        key = f"{document_type}:{document_id}"
+        async with visit_lock:
+            if key in visited:
+                return False
+            visited.add(key)
+            return True
+
     async def trace_document_chain(
         self,
         tenant_id: int,
@@ -505,7 +614,7 @@ class DocumentRelationNewService:
         追溯单据关联链（完整追溯）
         
         支持向上追溯（查找所有上游单据）和向下追溯（查找所有下游单据），
-        自动避免循环引用。
+        自动避免循环引用。同一趟追溯内复用 get_relations 结果，兄弟节点并行展开。
         
         Args:
             tenant_id: 租户ID
@@ -517,61 +626,112 @@ class DocumentRelationNewService:
         Returns:
             DocumentTraceResponse: 完整的追溯链
         """
-        # 获取根单据信息
-        root_code, root_name, root_created_at = await self._get_document_info(tenant_id, document_type, document_id)
-        
-        # 初始化追溯结果
+        root_code, root_name, root_created_at = await self._get_document_info(
+            tenant_id, document_type, document_id
+        )
+
+        relations_cache: Dict[Tuple[str, int], DocumentRelationListResponse] = {}
+        cache_lock = asyncio.Lock()
+        visited_upstream: set = set()
+        visited_downstream: set = set()
+        visit_lock_up = asyncio.Lock()
+        visit_lock_down = asyncio.Lock()
+
+        do_up = direction in ("upstream", "both")
+        do_down = direction in ("downstream", "both")
+
         upstream_chain: List[DocumentTraceNode] = []
         downstream_chain: List[DocumentTraceNode] = []
-        
-        # 用于避免循环引用的集合
-        visited_upstream = set()
-        visited_downstream = set()
-        
-        if direction in ["upstream", "both"]:
-            # 向上追溯
+
+        if do_up and do_down:
+            upstream_chain, downstream_chain = await asyncio.gather(
+                self._trace_upstream_recursive(
+                    tenant_id=tenant_id,
+                    document_type=document_type,
+                    document_id=document_id,
+                    level=0,
+                    max_depth=max_depth,
+                    visited=visited_upstream,
+                    visit_lock=visit_lock_up,
+                    relations_cache=relations_cache,
+                    cache_lock=cache_lock,
+                ),
+                self._trace_downstream_recursive(
+                    tenant_id=tenant_id,
+                    document_type=document_type,
+                    document_id=document_id,
+                    level=0,
+                    max_depth=max_depth,
+                    visited=visited_downstream,
+                    visit_lock=visit_lock_down,
+                    relations_cache=relations_cache,
+                    cache_lock=cache_lock,
+                ),
+            )
+        elif do_up:
             upstream_chain = await self._trace_upstream_recursive(
                 tenant_id=tenant_id,
                 document_type=document_type,
                 document_id=document_id,
                 level=0,
                 max_depth=max_depth,
-                visited=visited_upstream
+                visited=visited_upstream,
+                visit_lock=visit_lock_up,
+                relations_cache=relations_cache,
+                cache_lock=cache_lock,
             )
-        
-        if direction in ["downstream", "both"]:
-            # 向下追溯
+        elif do_down:
             downstream_chain = await self._trace_downstream_recursive(
                 tenant_id=tenant_id,
                 document_type=document_type,
                 document_id=document_id,
                 level=0,
                 max_depth=max_depth,
-                visited=visited_downstream
+                visited=visited_downstream,
+                visit_lock=visit_lock_down,
+                relations_cache=relations_cache,
+                cache_lock=cache_lock,
             )
 
-        if direction in ["upstream", "both"]:
-            upstream_chain = await self._apply_work_order_reporting_timeline(tenant_id, upstream_chain)
-        if direction in ["downstream", "both"]:
-            # 根单据是工单时，downstream_chain 是「工单的直接下游」扁平列表，
-            # 其中不含 work_order 节点本身；须把根工单包一层再合并报工，否则每条
-            # reporting_record 会作为兄弟节点铺开，全链路图出现密集平行连线。
+        timeline_tasks = []
+        if do_up:
+            timeline_tasks.append(
+                self._apply_work_order_reporting_timeline(tenant_id, upstream_chain)
+            )
+        if do_down:
             if document_type == "work_order":
-                synth_root = DocumentTraceNode(
-                    document_type="work_order",
-                    document_id=document_id,
-                    document_code=root_code,
-                    document_name=root_name,
-                    created_at=root_created_at,
-                    level=0,
-                    children=downstream_chain,
-                )
-                merged_root = await self._transform_reporting_timeline_node(tenant_id, synth_root)
-                downstream_chain = merged_root.children
+                # 根单据是工单时，downstream_chain 是「工单的直接下游」扁平列表，
+                # 其中不含 work_order 节点本身；须把根工单包一层再合并报工，否则每条
+                # reporting_record 会作为兄弟节点铺开，全链路图出现密集平行连线。
+                async def _merge_root_wo_timeline() -> List[DocumentTraceNode]:
+                    synth_root = DocumentTraceNode(
+                        document_type="work_order",
+                        document_id=document_id,
+                        document_code=root_code,
+                        document_name=root_name,
+                        created_at=root_created_at,
+                        level=0,
+                        children=downstream_chain,
+                    )
+                    merged_root = await self._transform_reporting_timeline_node(
+                        tenant_id, synth_root
+                    )
+                    return merged_root.children
+
+                timeline_tasks.append(_merge_root_wo_timeline())
             else:
-                downstream_chain = await self._apply_work_order_reporting_timeline(
-                    tenant_id, downstream_chain
+                timeline_tasks.append(
+                    self._apply_work_order_reporting_timeline(tenant_id, downstream_chain)
                 )
+
+        if timeline_tasks:
+            timeline_results = await asyncio.gather(*timeline_tasks)
+            idx = 0
+            if do_up:
+                upstream_chain = timeline_results[idx]
+                idx += 1
+            if do_down:
+                downstream_chain = timeline_results[idx]
 
         return DocumentTraceResponse(
             document_type=document_type,
@@ -590,54 +750,52 @@ class DocumentRelationNewService:
         document_id: int,
         level: int,
         max_depth: int,
-        visited: set
+        visited: set,
+        visit_lock: asyncio.Lock,
+        relations_cache: Dict[Tuple[str, int], DocumentRelationListResponse],
+        cache_lock: asyncio.Lock,
     ) -> List[DocumentTraceNode]:
-        """递归向上追溯（使用合并后的 get_relations，含表驱动+业务推导）"""
+        """递归向上追溯（兄弟节点并行；同趟复用 get_relations）。"""
         if level >= max_depth:
             return []
-        
-        key = f"{document_type}:{document_id}"
-        if key in visited:
+        if not await self._claim_trace_visit(visited, visit_lock, document_type, document_id):
             return []
-        visited.add(key)
-        
-        result = await self.get_relations(tenant_id, document_type, document_id)
-        nodes: List[DocumentTraceNode] = []
-        
-        for rel in result.upstream:
-            children = await self._trace_upstream_recursive(
-                tenant_id=tenant_id,
-                document_type=rel.source_type,
-                document_id=rel.source_id,
-                level=level + 1,
-                max_depth=max_depth,
-                visited=visited
-            )
-            # 全链路展示以活单据编码为准，禁止关系表过期快照冒充真单号
-            live_code, live_name, live_created = await self._get_document_info(
-                tenant_id, rel.source_type, rel.source_id
-            )
-            node_code = live_code if live_code is not None else rel.source_code
-            node_name = live_name if live_name is not None else rel.source_name
-            node_created = live_created if live_created is not None else rel.created_at
-            nodes.append(DocumentTraceNode(
-                document_type=rel.source_type,
-                document_id=rel.source_id,
-                document_code=node_code,
-                document_name=node_name,
-                created_at=node_created,
-                level=level + 1,
-                is_deleted=await self._resolve_trace_node_deleted(
-                    tenant_id,
-                    rel.source_type,
-                    rel.source_id,
-                    node_code,
-                    node_created,
+
+        result = await self._cached_get_relations(
+            tenant_id, document_type, document_id, relations_cache, cache_lock
+        )
+        if not result.upstream:
+            return []
+
+        async def _build(rel: DocumentRelationResponse) -> DocumentTraceNode:
+            children, live = await asyncio.gather(
+                self._trace_upstream_recursive(
+                    tenant_id=tenant_id,
+                    document_type=rel.source_type,
+                    document_id=rel.source_id,
+                    level=level + 1,
+                    max_depth=max_depth,
+                    visited=visited,
+                    visit_lock=visit_lock,
+                    relations_cache=relations_cache,
+                    cache_lock=cache_lock,
                 ),
-                children=children
-            ))
-        
-        return nodes
+                self._get_document_info(tenant_id, rel.source_type, rel.source_id),
+            )
+            live_code, live_name, live_created = live
+            # 全链路展示以活单据编码为准；is_deleted 复用 get_relations 已补齐结果
+            return DocumentTraceNode(
+                document_type=rel.source_type,
+                document_id=rel.source_id,
+                document_code=live_code if live_code is not None else rel.source_code,
+                document_name=live_name if live_name is not None else rel.source_name,
+                created_at=live_created if live_created is not None else rel.created_at,
+                level=level + 1,
+                is_deleted=bool(getattr(rel, "is_deleted", False)),
+                children=children,
+            )
+
+        return list(await asyncio.gather(*[_build(rel) for rel in result.upstream]))
     
     async def _trace_downstream_recursive(
         self,
@@ -646,54 +804,51 @@ class DocumentRelationNewService:
         document_id: int,
         level: int,
         max_depth: int,
-        visited: set
+        visited: set,
+        visit_lock: asyncio.Lock,
+        relations_cache: Dict[Tuple[str, int], DocumentRelationListResponse],
+        cache_lock: asyncio.Lock,
     ) -> List[DocumentTraceNode]:
-        """递归向下追溯（使用合并后的 get_relations，含表驱动+业务推导）"""
+        """递归向下追溯（兄弟节点并行；同趟复用 get_relations）。"""
         if level >= max_depth:
             return []
-        
-        key = f"{document_type}:{document_id}"
-        if key in visited:
+        if not await self._claim_trace_visit(visited, visit_lock, document_type, document_id):
             return []
-        visited.add(key)
-        
-        result = await self.get_relations(tenant_id, document_type, document_id)
-        nodes: List[DocumentTraceNode] = []
-        
-        for rel in result.downstream:
-            children = await self._trace_downstream_recursive(
-                tenant_id=tenant_id,
-                document_type=rel.target_type,
-                document_id=rel.target_id,
-                level=level + 1,
-                max_depth=max_depth,
-                visited=visited
-            )
-            # 全链路展示以活单据编码为准，禁止关系表过期快照冒充真单号
-            live_code, live_name, live_created = await self._get_document_info(
-                tenant_id, rel.target_type, rel.target_id
-            )
-            node_code = live_code if live_code is not None else rel.target_code
-            node_name = live_name if live_name is not None else rel.target_name
-            node_created = live_created if live_created is not None else rel.created_at
-            nodes.append(DocumentTraceNode(
-                document_type=rel.target_type,
-                document_id=rel.target_id,
-                document_code=node_code,
-                document_name=node_name,
-                created_at=node_created,
-                level=level + 1,
-                is_deleted=await self._resolve_trace_node_deleted(
-                    tenant_id,
-                    rel.target_type,
-                    rel.target_id,
-                    node_code,
-                    node_created,
+
+        result = await self._cached_get_relations(
+            tenant_id, document_type, document_id, relations_cache, cache_lock
+        )
+        if not result.downstream:
+            return []
+
+        async def _build(rel: DocumentRelationResponse) -> DocumentTraceNode:
+            children, live = await asyncio.gather(
+                self._trace_downstream_recursive(
+                    tenant_id=tenant_id,
+                    document_type=rel.target_type,
+                    document_id=rel.target_id,
+                    level=level + 1,
+                    max_depth=max_depth,
+                    visited=visited,
+                    visit_lock=visit_lock,
+                    relations_cache=relations_cache,
+                    cache_lock=cache_lock,
                 ),
-                children=children
-            ))
-        
-        return nodes
+                self._get_document_info(tenant_id, rel.target_type, rel.target_id),
+            )
+            live_code, live_name, live_created = live
+            return DocumentTraceNode(
+                document_type=rel.target_type,
+                document_id=rel.target_id,
+                document_code=live_code if live_code is not None else rel.target_code,
+                document_name=live_name if live_name is not None else rel.target_name,
+                created_at=live_created if live_created is not None else rel.created_at,
+                level=level + 1,
+                is_deleted=bool(getattr(rel, "is_deleted", False)),
+                children=children,
+            )
+
+        return list(await asyncio.gather(*[_build(rel) for rel in result.downstream]))
 
     async def _apply_work_order_reporting_timeline(
         self,
@@ -701,7 +856,13 @@ class DocumentRelationNewService:
         nodes: List[DocumentTraceNode],
     ) -> List[DocumentTraceNode]:
         """将工单下多条报工合并为 reporting_timeline 节点，并从 DB 补全报工列表（全链路展示）。"""
-        return [await self._transform_reporting_timeline_node(tenant_id, n) for n in nodes]
+        if not nodes:
+            return nodes
+        return list(
+            await asyncio.gather(
+                *[self._transform_reporting_timeline_node(tenant_id, n) for n in nodes]
+            )
+        )
 
     async def _transform_reporting_timeline_node(
         self,
@@ -711,7 +872,17 @@ class DocumentRelationNewService:
         from apps.kuaizhizao.models.reporting_record import ReportingRecord
         from apps.kuaizhizao.services.document_relation_service import DocumentRelationService
 
-        new_children = [await self._transform_reporting_timeline_node(tenant_id, c) for c in node.children]
+        if node.children:
+            new_children = list(
+                await asyncio.gather(
+                    *[
+                        self._transform_reporting_timeline_node(tenant_id, c)
+                        for c in node.children
+                    ]
+                )
+            )
+        else:
+            new_children = []
         base = node.model_copy(update={"children": new_children})
 
         if base.document_type != "work_order":

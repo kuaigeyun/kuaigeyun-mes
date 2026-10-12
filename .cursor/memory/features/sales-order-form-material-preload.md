@@ -37,10 +37,15 @@ standard: 销售订单表单不预拉全量物料；选料/编辑 resolve/导入
 
 `riveredge-frontend/src/apps/kuaizhizao/pages/sales-management/sales-orders/index.tsx`
 
+## 同契约扩展（2026-10-13）
+
+报价单、销售合同新建/编辑页同样禁止 `isFormPage` mount 时 `loadMaterialFormReferenceList`；选料 `onMaterialCached` / 批量加料 merge；明细 Excel 与列表导入动作内再拉。
+
 ## 关联
 
 - `uni-material-select-reference-display.md`
 - `permission-display-echo.md`
+- `frontend-perf-baseline.md`
 
 ## 列表/详情（2026-10-12）
 

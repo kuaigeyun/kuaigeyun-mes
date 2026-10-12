@@ -44,6 +44,46 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'influxdb-live-connection-test-r01',
+    date: '2026-10-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.influxdb-live-connection-test-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.influxdb-live-connection-test-r01.description',
+  },
+  {
+    id: 'frontend-perf-list-form-r01',
+    date: '2026-10-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.frontend-perf-list-form-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.frontend-perf-list-form-r01.description',
+  },
+  {
+    id: 'work-purchase-order-detail-perf-r01',
+    date: '2026-10-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.work-purchase-order-detail-perf-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.work-purchase-order-detail-perf-r01.description',
+  },
+  {
+    id: 'document-trace-attach-perf-r01',
+    date: '2026-10-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.document-trace-attach-perf-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.document-trace-attach-perf-r01.description',
+  },
+  {
+    id: 'sales-order-detail-api-perf-r01',
+    date: '2026-10-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-order-detail-api-perf-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-order-detail-api-perf-r01.description',
+  },
+  {
     id: 'kuaiiot-command-device-id-migration-r01',
     date: '2026-10-12',
     type: 'fix',

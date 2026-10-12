@@ -70,6 +70,9 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | 回显权限、display、reference_resources 单一真源、预设角色物料回显 | `features/permission-display-echo.md` |
 | 选物料 403、仅回显加载物料列表失败、UniMaterialSelect | `features/uni-material-select-reference-display.md` |
 | 新建销售订单很慢、进页预拉物料 2000 | `features/sales-order-form-material-preload.md` |
+| 前端慢、进页卡、Top5 菜单性能基线、useDeferAfterPaint | `features/frontend-perf-baseline.md` |
+| 销售订单点详情很慢、get_sales_order_by_id 数秒 | `features/sales-order-detail-api-perf.md` |
+| 全链路追踪很慢、附件中心很慢、trace/attachment-center | `features/document-trace-attach-perf.md` |
 | 工作台待办、dashboard todos、无权限仍见待办 | `features/dashboard-todo-rbac-filter.md` |
 | 开源无专业包崩溃、kuaicaiwu ImportError、infra_license_keys、业务蓝图 graph | `features/oss-pro-decouple-startup.md` |
 | 设备状态实时、MQTT 无感、external_device_id 绑定、台账 status 联动 | `features/kuaiiot-device-status-realtime.md` |
@@ -81,7 +84,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | 审核反审核、空壳待审、writeback_failure、revoke_noop | `features/pc-audit-unreview-empty-pending.md` |
 | 原路反审、下推下游、销售已出库仍能删报工、出库撤回送货单 | `features/downstream-revoke-delete-original-path.md` |
 | 不要做两套、复用、标准入口 | `principles/reuse-existing-patterns.md` |
-| 迁移、菜单同步、manifest、权限码 | `principles/feature-delivery.md` |
+| 迁移、菜单同步、manifest、权限码、死代码交付自检 | `principles/feature-delivery.md` |
 | API 写防护、渠道头、幂等 | `principles/api-write-protection.md` |
 | 记忆库怎么写 | `principles/memory-note-format.md` |
 | AOCI 提交、aoci.txt、勿排除索引、可跳过 maintain 的情形 | `principles/aoci-git-commit.md` |
@@ -115,6 +118,9 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | `features/permission-display-echo.md` | 权限回显 display 矩阵与鉴权 | rbac | 已交付 |
 | `features/uni-material-select-reference-display.md` | 物料选择器走 reference-display | rbac | 已交付 |
 | `features/sales-order-form-material-preload.md` | 销售订单表单物料按需缓存 | master-data-ui | 已交付 |
+| `features/frontend-perf-baseline.md` | 前端性能基线与优化主线 | frontend-perf | 有效 |
+| `features/sales-order-detail-api-perf.md` | 销售订单详情接口并行取数 | kuaizhizao-sales | 已交付 |
+| `features/document-trace-attach-perf.md` | 全链路与附件中心取数加速 | kuaizhizao-trace | 已交付 |
 | `features/dashboard-todo-rbac-filter.md` | 工作台待办按单据 :read 过滤 | rbac | 已交付 |
 | `features/oss-pro-decouple-startup.md` | 开源仓无专业包可独立启动 | deploy | 已交付 |
 | `features/aoci-mcp-three-repos.md` | AOCI MCP 三仓绑定 | tooling | 有效 |

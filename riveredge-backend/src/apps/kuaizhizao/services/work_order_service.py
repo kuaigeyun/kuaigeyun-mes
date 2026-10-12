@@ -2236,66 +2236,108 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         """
         work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
         response = WorkOrderResponse.model_validate(work_order)
-        # 获取 UniLifecycle 里程碑历史
-        from apps.kuaizhizao.services.document_lifecycle_service import (
-            get_work_order_lifecycle,
-            get_document_milestones
-        )
-        milestones = await get_document_milestones(tenant_id, "work_order", work_order_id)
-        response.lifecycle = get_work_order_lifecycle(work_order, milestones=milestones)
-        # 制造模式 / 规格：物料主数据（product_id 即本单制造的产品物料）
-        if work_order.product_id:
-            product = await Material.get_or_none(
+        from apps.kuaizhizao.services.document_lifecycle_service import get_work_order_lifecycle
+        from apps.kuaizhizao.models.production_picking import ProductionPicking
+        from apps.kuaizhizao.models.process_inspection import ProcessInspection
+        from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection
+        from apps.kuaizhizao.models.finished_goods_receipt import FinishedGoodsReceipt
+        from core.services.approval.audit_record_enricher import audit_enabled_for, enrich_record
+
+        async def _load_product():
+            if not work_order.product_id:
+                return None
+            return await Material.get_or_none(
                 id=work_order.product_id,
                 tenant_id=tenant_id,
-                deleted_at__isnull=True
+                deleted_at__isnull=True,
             )
-            if product and product.source_config and isinstance(product.source_config, dict):
-                response.manufacturing_mode = product.source_config.get("manufacturing_mode") or "fabrication"
-            else:
-                response.manufacturing_mode = "fabrication"
-            spec = (getattr(product, "specification", None) or "").strip() if product else ""
-            if spec:
-                response.material_spec = spec
-            if product:
-                from apps.kuaizhizao.utils.material_unit_utils import build_work_order_unit_fields
 
-                response = response.model_copy(update=build_work_order_unit_fields(product, work_order))
-        else:
-            response.manufacturing_mode = "fabrication"
-        if work_order.sales_order_id and not work_order.sales_order_code:
-            rc, rn = await _resolve_sales_order_snapshot_fields(
+        async def _load_sales_snapshot():
+            if not (work_order.sales_order_id and not work_order.sales_order_code):
+                return None, None
+            return await _resolve_sales_order_snapshot_fields(
                 tenant_id,
                 work_order.sales_order_id,
                 work_order.sales_order_code,
                 work_order.sales_order_name,
             )
-            response.sales_order_code = rc
-            response.sales_order_name = rn
-        if (work_order.status or "") == "split" and work_order.parent_work_order_id is None:
+
+        async def _load_split_meta():
+            if (work_order.status or "") != "split" or work_order.parent_work_order_id is not None:
+                return None, None
             remaining = await self.compute_split_remaining_quantity(tenant_id, work_order_id)
-            response = response.model_copy(update={"split_remaining_quantity": remaining})
             child_count = await WorkOrder.filter(
                 tenant_id=tenant_id,
                 parent_work_order_id=work_order_id,
                 deleted_at__isnull=True,
             ).count()
+            return remaining, child_count
+
+        (
+            product,
+            sales_snap,
+            split_meta,
+            returnable_map,
+            downstream_map,
+            audit_required,
+            has_picking,
+            has_process_insp,
+            has_fg_insp,
+            has_fg_receipt,
+        ) = await asyncio.gather(
+            _load_product(),
+            _load_sales_snapshot(),
+            _load_split_meta(),
+            self._get_production_return_service().batch_work_orders_have_returnable_picking(
+                tenant_id, [work_order_id]
+            ),
+            self.batch_work_orders_have_revoke_blocking_downstream(tenant_id, [work_order_id]),
+            audit_enabled_for(tenant_id, "work_order"),
+            ProductionPicking.filter(
+                tenant_id=tenant_id, work_order_id=work_order_id, deleted_at__isnull=True
+            ).exists(),
+            ProcessInspection.filter(
+                tenant_id=tenant_id, work_order_id=work_order_id, deleted_at__isnull=True
+            ).exists(),
+            FinishedGoodsInspection.filter(
+                tenant_id=tenant_id, work_order_id=work_order_id, deleted_at__isnull=True
+            ).exists(),
+            FinishedGoodsReceipt.filter(
+                tenant_id=tenant_id, work_order_id=work_order_id, deleted_at__isnull=True
+            ).exists(),
+        )
+
+        response.lifecycle = get_work_order_lifecycle(
+            work_order,
+            has_production_picking=bool(has_picking),
+            has_process_inspection=bool(has_process_insp),
+            has_finished_goods_inspection=bool(has_fg_insp),
+            has_finished_goods_receipt=bool(has_fg_receipt),
+        )
+        if product:
+            if product.source_config and isinstance(product.source_config, dict):
+                response.manufacturing_mode = product.source_config.get("manufacturing_mode") or "fabrication"
+            else:
+                response.manufacturing_mode = "fabrication"
+            spec = (getattr(product, "specification", None) or "").strip()
+            if spec:
+                response.material_spec = spec
+            from apps.kuaizhizao.utils.material_unit_utils import build_work_order_unit_fields
+
+            response = response.model_copy(update=build_work_order_unit_fields(product, work_order))
+        else:
+            response.manufacturing_mode = "fabrication"
+        if sales_snap and sales_snap[0] is not None:
+            response.sales_order_code = sales_snap[0]
+            response.sales_order_name = sales_snap[1]
+        if split_meta and split_meta[0] is not None:
+            remaining, child_count = split_meta
+            response = response.model_copy(update={"split_remaining_quantity": remaining})
             if child_count:
                 response = response.model_copy(update={"serial_split_child_count": child_count})
         response = response.model_copy(
             update=WorkOrderTrackingService.tracking_fields_for_response(work_order)
         )
-        returnable_map = await self._get_production_return_service().batch_work_orders_have_returnable_picking(
-            tenant_id,
-            [work_order_id],
-        )
-        downstream_map = await self.batch_work_orders_have_revoke_blocking_downstream(
-            tenant_id,
-            [work_order_id],
-        )
-        from core.services.approval.audit_record_enricher import audit_enabled_for, enrich_record
-
-        audit_required = await audit_enabled_for(tenant_id, "work_order")
         response = enrich_work_order_capabilities_on_response(
             work_order,
             response,

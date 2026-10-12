@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from apps.kuaizhizao.schemas.document_relation import (
@@ -141,13 +142,13 @@ class DocumentAttachmentCenterService:
             for doc in documents
         }
 
-        for doc_type, doc_ids in by_type.items():
+        async def _load_type(doc_type: str, doc_ids: List[int]) -> None:
             cfg = DocumentRelationService.DOCUMENT_TYPES.get(doc_type)
             if not cfg:
-                continue
+                return
             model = cfg["model"]
             if not _model_has_attachments(model):
-                continue
+                return
             code_field = cfg["code_field"]
             only_fields = ["id", "attachments", code_field]
             rows = await model.filter(
@@ -162,6 +163,9 @@ class DocumentAttachmentCenterService:
                     code_val = getattr(row, code_field, None)
                     if code_val is not None and str(code_val).strip():
                         code_map[key] = str(code_val).strip()
+
+        if by_type:
+            await asyncio.gather(*[_load_type(dt, ids) for dt, ids in by_type.items()])
 
         groups: List[DocumentAttachmentCenterGroup] = []
         for doc in documents:

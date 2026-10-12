@@ -19,8 +19,11 @@ interface OrderChangeItemsTableProps {
   onChange?: (items: OrderChangeItem[]) => void;
 }
 
-function rowKey(row: OrderChangeItem, index: number): string {
-  return String(row.id ?? row.source_item_id ?? `new-${row.line_no ?? index}`);
+function resolveRowKey(row: OrderChangeItem): string {
+  if (row.id != null) return String(row.id);
+  if (row.source_item_id != null) return `src-${row.source_item_id}`;
+  // 新建行尚无 id：用行号+物料稳定标识，避免 rowKey(record, index) 触发 antd 弃用警告
+  return `new-${row.line_no ?? 0}-${row.material_id ?? row.material_code ?? 'x'}-${row.change_type ?? ''}`;
 }
 
 function calcDelta(row: OrderChangeItem): number {
@@ -292,7 +295,7 @@ export const OrderChangeItemsTable: React.FC<OrderChangeItemsTableProps> = ({ it
         ) : null}
       </div>
       <Table
-        rowKey={(r, index) => rowKey(r, index ?? 0)}
+        rowKey={resolveRowKey}
         size="small"
         pagination={false}
         scroll={{ x: 1200 }}

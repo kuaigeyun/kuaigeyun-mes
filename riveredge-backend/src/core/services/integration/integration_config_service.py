@@ -480,6 +480,8 @@ class IntegrationConfigService:
                 result = await IntegrationConfigService._test_mongodb_connection(integration)
             elif integration.type == "sqlserver":
                 result = await IntegrationConfigService._test_sqlserver_connection(integration)
+            elif integration.type == "influxdb":
+                result = await IntegrationConfigService._test_influxdb_connection(integration)
             elif integration.type in DATA_SOURCE_CONFIG_ONLY_TYPES or integration.type == "Database":
                 result = await IntegrationConfigService._test_database_config_validation(integration)
             elif integration.type == "feishu":
@@ -739,6 +741,8 @@ class IntegrationConfigService:
                 result = await IntegrationConfigService._test_mongodb_connection(temp)
             elif temp.type == "sqlserver":
                 result = await IntegrationConfigService._test_sqlserver_connection(temp)
+            elif temp.type == "influxdb":
+                result = await IntegrationConfigService._test_influxdb_connection(temp)
             elif temp.type in DATA_SOURCE_CONFIG_ONLY_TYPES or temp.type == "Database":
                 result = await IntegrationConfigService._test_database_config_validation(temp)
             elif temp.type == "feishu":
@@ -916,6 +920,74 @@ class IntegrationConfigService:
             return {"success": True, "message": "PostgreSQL 连接成功"}
         except Exception as e:
             return {"success": False, "message": f"PostgreSQL 连接失败: {str(e)}"}
+
+    @staticmethod
+    def _normalize_influxdb_config(config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        与快数采 TagHistoryStore 同一字段别名：
+        token←password，org←username/user，bucket←database；url 可由 host/port/use_tls 拼出。
+        """
+        raw = dict(config or {})
+        token = str(raw.get("token") or raw.get("password") or "").strip()
+        org = str(raw.get("org") or raw.get("username") or raw.get("user") or "").strip()
+        bucket = str(raw.get("bucket") or raw.get("database") or "").strip()
+        if not token or token == "****":
+            raise ValueError("InfluxDB 配置缺少 token（表单「密码」即 Token）")
+        if not org:
+            raise ValueError("InfluxDB 配置缺少 org（表单「用户名」即 Org）")
+        if not bucket:
+            raise ValueError("InfluxDB 配置缺少 bucket（表单「数据库」即 Bucket）")
+        url = str(raw.get("url") or "").strip().rstrip("/")
+        if not url:
+            host = str(raw.get("host") or "").strip()
+            if not host:
+                raise ValueError("InfluxDB 配置缺少 host 或 url")
+            port = int(raw.get("port") or 8086)
+            scheme = "https" if raw.get("use_tls") else "http"
+            url = f"{scheme}://{host}:{port}"
+        return {"url": url, "token": token, "org": org, "bucket": bucket}
+
+    @staticmethod
+    async def _test_influxdb_connection(integration: IntegrationConfig) -> Dict[str, Any]:
+        """真实探测 InfluxDB：ping + 按 org/token 查找 bucket（需安装 influxdb-client）。"""
+        try:
+            from influxdb_client import InfluxDBClient
+        except ImportError as exc:
+            raise ValueError("未安装 influxdb-client，无法测试 InfluxDB 连接") from exc
+
+        cfg = IntegrationConfigService._normalize_influxdb_config(integration.get_config())
+
+        def _probe() -> None:
+            client = InfluxDBClient(
+                url=cfg["url"],
+                token=cfg["token"],
+                org=cfg["org"],
+                timeout=10_000,
+            )
+            try:
+                if not client.ping():
+                    raise ValueError("InfluxDB ping 失败（请检查地址与端口）")
+                found = client.buckets_api().find_bucket_by_name(cfg["bucket"])
+                if found is None:
+                    raise ValueError(
+                        f"找不到 bucket「{cfg['bucket']}」，或 Token 无权访问该桶"
+                    )
+            finally:
+                client.close()
+
+        try:
+            await asyncio.to_thread(_probe)
+        except ValueError:
+            raise
+        except Exception as e:
+            return {"success": False, "message": f"InfluxDB 连接失败: {e}"}
+        return {
+            "success": True,
+            "message": "InfluxDB 连接成功",
+            "url": cfg["url"],
+            "org": cfg["org"],
+            "bucket": cfg["bucket"],
+        }
 
     @staticmethod
     def _normalize_sqlserver_host_and_port(config: Dict[str, Any]) -> tuple[str, int]:

@@ -49,6 +49,7 @@ import {
 export type ContractItemsFormTableProps = {
   formRef: React.RefObject<ProFormInstance | undefined>;
   materialList: Material[];
+  onMaterialCached?: (material: Material) => void;
   onOpenMaterialPicker: () => void;
   onOpenImport: () => void;
   showImportButton?: boolean;
@@ -62,6 +63,7 @@ export type ContractItemsFormTableProps = {
 export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> = ({
   formRef,
   materialList,
+  onMaterialCached,
   onOpenMaterialPicker,
   onOpenImport,
   showImportButton = true,
@@ -114,6 +116,7 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                           index={index}
                           materialList={materialList}
                           sourceType={materialSourceType}
+                          onMaterialCached={onMaterialCached}
                         />
                       ),
                     },

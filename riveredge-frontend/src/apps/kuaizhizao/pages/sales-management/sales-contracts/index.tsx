@@ -463,6 +463,25 @@ const SalesContractsPage: React.FC = () => {
   );
 
   const [materialList, setMaterialList] = useState<Material[]>([]);
+  const materialListRef = useRef(materialList);
+  materialListRef.current = materialList;
+
+  /** 物料缓存：选中/导入时按需写入，禁止进页预拉全量 */
+  const mergeMaterialsCache = useCallback((rows: Material[]) => {
+    if (!rows.length) return;
+    setMaterialList((prev) => {
+      const byId = new Map<number, Material>();
+      for (const m of prev) {
+        const id = Number(m.id);
+        if (Number.isFinite(id) && id > 0) byId.set(id, m);
+      }
+      for (const m of rows) {
+        const id = Number(m.id);
+        if (Number.isFinite(id) && id > 0) byId.set(id, m);
+      }
+      return Array.from(byId.values());
+    });
+  }, []);
 
   const [contractEditingIncl, setContractEditingIncl] = useState<{ index: number; value: number | null } | null>(null);
 
@@ -521,17 +540,6 @@ const SalesContractsPage: React.FC = () => {
 
   );
 
-
-  useEffect(() => {
-    if (!isFormPage) return;
-    let cancelled = false;
-    void loadMaterialFormReferenceList(KUAIZHIZAO_DOC_HOST.salesContract).then((list) => {
-      if (!cancelled) setMaterialList(list);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [isFormPage]);
 
   useEffect(() => {
     if (!isFormPage) return;
@@ -676,6 +684,8 @@ const SalesContractsPage: React.FC = () => {
   const appendContractItemsFromMaterials = useCallback(
 
     async (selected: Material[]) => {
+      if (!selected?.length) return;
+      mergeMaterialsCache(selected);
 
       const current = normalizeFormListItems<any>(formRef.current?.getFieldValue('items'));
 
@@ -697,7 +707,7 @@ const SalesContractsPage: React.FC = () => {
 
         priceType: pt,
 
-        materialList,
+        materialList: materialListRef.current,
 
       });
 
@@ -735,13 +745,22 @@ const SalesContractsPage: React.FC = () => {
 
     },
 
-    [materialList, messageApi, t],
+    [mergeMaterialsCache, messageApi, t],
 
   );
 
   const handleItemImport = useCallback(
-    (data: any[][]) => {
+    async (data: any[][]) => {
       const priceTypeForm = salesFormPriceType(formRef.current?.getFieldValue('price_type'));
+      // 明细 Excel 按编码匹配：仅在导入时按需拉引用清单，不在进页预拉
+      let materialsForImport = materialListRef.current;
+      if (materialsForImport.length < 50) {
+        const loaded = await loadMaterialFormReferenceList(KUAIZHIZAO_DOC_HOST.salesContract);
+        if (loaded.length) {
+          mergeMaterialsCache(loaded);
+          materialsForImport = loaded;
+        }
+      }
       const rows = data.slice(2);
       const newItems = rows
         .map((row) => {
@@ -755,7 +774,7 @@ const SalesContractsPage: React.FC = () => {
 
           if (!materialCode) return null;
 
-          const material = materialList.find(
+          const material = materialsForImport.find(
             (m) => (m.mainCode ?? (m as any).code) === materialCode,
           );
           const taxR =
@@ -795,7 +814,7 @@ const SalesContractsPage: React.FC = () => {
       messageApi.success(t('app.kuaizhizao.salesOrder.importSuccessItems', { count: newItems.length }));
       setImportModalVisible(false);
     },
-    [materialList, messageApi, t],
+    [mergeMaterialsCache, messageApi, t],
   );
 
   const handleListImport = async (data: any[][]) => {
@@ -811,11 +830,20 @@ const SalesContractsPage: React.FC = () => {
       return;
     }
 
+    let materialsForImport = materialListRef.current;
+    if (materialsForImport.length < 50) {
+      const loaded = await loadMaterialFormReferenceList(KUAIZHIZAO_DOC_HOST.salesContract);
+      if (loaded.length) {
+        mergeMaterialsCache(loaded);
+        materialsForImport = loaded;
+      }
+    }
+
     const { errors, items: toImport } = parseContractListImport(data, {
       t,
       importHeaderMap: contractListImportTemplate.importHeaderMap,
       customers: customerList,
-      materials: materialList,
+      materials: materialsForImport,
       parseDict: contractImportDictBag.parseDict,
     });
 
@@ -1498,6 +1526,7 @@ const SalesContractsPage: React.FC = () => {
         <SalesContractItemsFormTable
           formRef={formRef}
           materialList={materialList}
+          onMaterialCached={(m) => mergeMaterialsCache([m])}
           onOpenMaterialPicker={() => setMaterialPickerOpen(true)}
           onOpenImport={() => {
             if (!contractPerms.canImport) {

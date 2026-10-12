@@ -30489,6 +30489,26 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.influxdb-live-connection-test-r01.title':
+    'InfluxDB 数据源支持真实连接测试',
+  'pages.dashboard.updateLog.entries.influxdb-live-connection-test-r01.description':
+    '测试连接会对目标 InfluxDB 发起 ping，并用 Token 校验 Org 与 Bucket 是否可用；通过后标记为已连通，不再只做表单必填检查。',
+  'pages.dashboard.updateLog.entries.frontend-perf-list-form-r01.title':
+    '加快工单采购列表与报价合同新建打开',
+  'pages.dashboard.updateLog.entries.frontend-perf-list-form-r01.description':
+    '工单与采购订单列表指标卡延后到首屏绘制后再请求；报价单与销售合同新建编辑页不再进页全量预拉物料，改为选料缓存与导入时按需加载。',
+  'pages.dashboard.updateLog.entries.work-purchase-order-detail-perf-r01.title':
+    '加快工单与采购订单详情响应',
+  'pages.dashboard.updateLog.entries.work-purchase-order-detail-perf-r01.description':
+    '详情并行取齐关联事实后拼装生命周期；流程阶段按领料/检验/入库或到货通知/检验/收货/发票等业务事实判定，不再串行拉里程碑；全链路与附件中心仍按 Tab 懒挂载。',
+  'pages.dashboard.updateLog.entries.document-trace-attach-perf-r01.title':
+    '加快全链路追踪与附件中心加载',
+  'pages.dashboard.updateLog.entries.document-trace-attach-perf-r01.description':
+    '追溯同趟复用关联查询并并行展开兄弟节点；删除标记按类型批量解析；销售订单/工单下游推导与附件中心按类型并行取附件，缩短详情抽屉切 Tab 等待。',
+  'pages.dashboard.updateLog.entries.sales-order-detail-api-perf-r01.title':
+    '加快销售订单详情接口响应',
+  'pages.dashboard.updateLog.entries.sales-order-detail-api-perf-r01.description':
+    '详情取数改为并行查询账款、可发货、下推与配置；下游与改号门禁改走列表同款轻量检测，不再重复拉追溯链；执行中子阶段按需求/工单/发货通知/交货进度判定。',
   'pages.dashboard.updateLog.entries.kuaiiot-command-device-id-migration-r01.title':
     '修复快数采看板因缺 command_device_id 列报错',
   'pages.dashboard.updateLog.entries.kuaiiot-command-device-id-migration-r01.description':

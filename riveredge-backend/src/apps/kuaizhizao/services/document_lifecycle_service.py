@@ -334,11 +334,13 @@ def get_sales_order_lifecycle(
     invoice_amount_progress: Optional[float] = None,
     collection_progress: Optional[float] = None,
     pushed_to_computation: bool = False,
+    has_shipment_notice: bool = False,
     milestones: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     """
     根据销售订单数据计算生命周期，返回供前端展示的结构。
     order: ORM 或具 status, review_status 的对象。
+    执行中子阶段以业务事实为准（下推需求/明细工单/发货通知/交货进度），不依赖追溯链里程碑。
     """
     status = _norm(getattr(order, "status", None))
     review_status = _norm(getattr(order, "review_status", None))
@@ -446,14 +448,33 @@ def get_sales_order_lifecycle(
             }
     if effective and delivery < 100:
         milestones = milestones or []
-        actions = {m.get("action") for m in milestones}
-        
+        has_wo = any(getattr(it, "work_order_id", None) for it in (items or []))
         sub_stages = [
             {"key": "bom_check", "label": "BOM检查", "status": "done"},
-            {"key": "demand_compute", "label": "需求计算", "status": "done" if pushed or "push_to_demand_computation" in actions else "active"},
-            {"key": "work_order_released", "label": "工单下达", "status": "done" if "push_to_work_order" in actions else "pending"},
-            {"key": "shipment_waiting", "label": "待出库", "status": "done" if "push_to_shipment_notice" in actions else "pending"},
-            {"key": "delivered", "label": "已送货", "status": "done" if delivery >= 100 or "push_to_sales_delivery" in actions else "active" if delivery > 0 else "pending"},
+            {
+                "key": "demand_compute",
+                "label": "需求计算",
+                "status": "done" if pushed else "active",
+            },
+            {
+                "key": "work_order_released",
+                "label": "工单下达",
+                "status": "done" if has_wo else "pending",
+            },
+            {
+                "key": "shipment_waiting",
+                "label": "待出库",
+                "status": "done" if has_shipment_notice else "pending",
+            },
+            {
+                "key": "delivered",
+                "label": "已送货",
+                "status": (
+                    "done"
+                    if delivery >= 100
+                    else ("active" if delivery > 0 else "pending")
+                ),
+            },
         ]
 
         # 确保至少有一个 active (如果没完成)
@@ -543,29 +564,28 @@ WORK_ORDER_SUB_STAGES = [
 
 def get_work_order_lifecycle(
     work_order: Any,
-    milestones: Optional[List[Dict[str, Any]]] = None
+    milestones: Optional[List[Dict[str, Any]]] = None,
+    *,
+    has_production_picking: bool = False,
+    has_process_inspection: bool = False,
+    has_finished_goods_inspection: bool = False,
+    has_finished_goods_receipt: bool = False,
 ) -> Dict[str, Any]:
     """
     根据工单数据计算生命周期，返回供前端 UniLifecycleStepper 展示的结构。
-    work_order: ORM 或具 status 的对象。
+    执行子阶段以业务事实（领料/检验/入库存在性）为准，不依赖追溯链里程碑。
     """
     status = _norm(getattr(work_order, "status", None) or "")
     milestones = milestones or []
 
-    # 1. 计算子阶段状态 (基于里程碑)
-    sub_stages = []
-    actions = {m.get("action") for m in milestones}
-    
-    # 生产领料
-    picking_status = "done" if "push_to_production_picking" in actions else "pending"
-    # 首检
-    first_qc_status = "done" if "push_to_process_inspection" in actions else "pending"
-    # 报工
-    reporting_status = "done" if "push_to_finished_goods_inspection" in actions else "active" if status == "in_progress" else "pending"
-    # 成品检验
-    fg_qc_status = "done" if "push_to_finished_goods_inspection" in actions else "pending"
-    # 入库申请
-    fg_receipt_status = "done" if "push_to_finished_goods_receipt" in actions else "pending"
+    picking_status = "done" if has_production_picking else "pending"
+    reporting_status = (
+        "done"
+        if has_finished_goods_inspection
+        else ("active" if status == "in_progress" else "pending")
+    )
+    fg_qc_status = "done" if has_finished_goods_inspection else "pending"
+    fg_receipt_status = "done" if has_finished_goods_receipt else "pending"
 
     sub_stages = [
         {"key": "material_picking", "label": "生产领料", "status": picking_status},
@@ -573,6 +593,7 @@ def get_work_order_lifecycle(
         {"key": "fg_qc", "label": "成品检验", "status": fg_qc_status},
         {"key": "fg_receipt", "label": "入库申请", "status": fg_receipt_status},
     ]
+    _ = has_process_inspection  # 预留：首检子阶段若恢复展示可接入
 
     # 已拆分：原工单已拆成子工单，非用户取消
     if status in ("split", "已拆分"):
@@ -691,13 +712,19 @@ PURCHASE_ORDER_EXEC_SUB_STAGES = [
 
 def get_purchase_order_lifecycle(
     order: Any,
-    milestones: Optional[List[Dict[str, Any]]] = None
+    milestones: Optional[List[Dict[str, Any]]] = None,
+    *,
+    has_receipt_notice: bool = False,
+    has_incoming_inspection: bool = False,
+    has_purchase_receipt: bool = False,
+    has_purchase_invoice: bool = False,
 ) -> Dict[str, Any]:
-    """采购订单生命周期：对齐采购履约链路（确认→收货入库→发票→完成）。"""
+    """采购订单生命周期：对齐采购履约链路（确认→收货入库→发票→完成）。
+    执行子阶段以业务事实为准，不依赖追溯链里程碑。
+    """
     status = _norm(getattr(order, "status", None))
     review_status = _norm(getattr(order, "review_status", None))
     milestones = milestones or []
-    actions = {m.get("action") for m in milestones}
 
     from apps.kuaizhizao.services.document_action_policy.lifecycle_suggestions import (
         purchase_order_capabilities_to_suggestions,
@@ -713,22 +740,20 @@ def get_purchase_order_lifecycle(
             current_stage_key=stage_key,
         )
 
-    exec_started = bool(
-        actions
-        & {
-            "push_to_purchase_receipt",
-            "push_to_receipt_notice",
-            "push_to_incoming_inspection",
-            "push_to_purchase_invoice",
-        }
-    ) or status in ("IN_PROGRESS", "执行中", "进行中")
+    exec_started = (
+        has_receipt_notice
+        or has_incoming_inspection
+        or has_purchase_receipt
+        or has_purchase_invoice
+        or status in ("IN_PROGRESS", "执行中", "进行中")
+    )
 
     sub_stages = [
         {
             "key": "receipt_notice",
             "label": "收货通知",
             "status": "done"
-            if "push_to_receipt_notice" in actions or status in ("已完成", "COMPLETED", "completed")
+            if has_receipt_notice or status in ("已完成", "COMPLETED", "completed")
             else "active"
             if _is_approved(review_status) and (_is_confirmed(status) or status in LEGACY_AUDITED_VALUES)
             else "pending",
@@ -737,7 +762,7 @@ def get_purchase_order_lifecycle(
             "key": "incoming_inspection",
             "label": "来料检验",
             "status": "done"
-            if "push_to_incoming_inspection" in actions or status in ("已完成", "COMPLETED", "completed")
+            if has_incoming_inspection or status in ("已完成", "COMPLETED", "completed")
             else "active"
             if exec_started
             else "pending",
@@ -746,7 +771,7 @@ def get_purchase_order_lifecycle(
             "key": "purchase_receipt",
             "label": "采购入库",
             "status": "done"
-            if "push_to_purchase_receipt" in actions or status in ("已完成", "COMPLETED", "completed")
+            if has_purchase_receipt or status in ("已完成", "COMPLETED", "completed")
             else "active"
             if exec_started
             else "pending",
@@ -755,7 +780,7 @@ def get_purchase_order_lifecycle(
             "key": "purchase_invoice",
             "label": "采购发票",
             "status": "done"
-            if "push_to_purchase_invoice" in actions
+            if has_purchase_invoice
             else "active"
             if status in ("已完成", "COMPLETED", "completed")
             else "pending",
@@ -805,7 +830,7 @@ def get_purchase_order_lifecycle(
             "milestones": milestones,
         }
 
-    if exec_started and "push_to_purchase_receipt" in actions and "push_to_purchase_invoice" not in actions:
+    if exec_started and has_purchase_receipt and not has_purchase_invoice:
         return {
             "current_stage_key": "invoicing",
             "current_stage_name": "账款发票",

@@ -401,30 +401,76 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         if not order:
             raise NotFoundError(f"采购订单不存在: {order_id}")
 
+        import asyncio
         from apps.kuaizhizao.services.warehouse_service import sync_purchase_order_receipt_quantities
+        from apps.kuaizhizao.services.document_lifecycle_service import get_purchase_order_lifecycle
+        from apps.kuaizhizao.services.purchase_order_terms_service import PurchaseOrderTermsService
+        from apps.kuaizhizao.models.receipt_notice import ReceiptNotice
+        from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
+        from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+        from core.services.approval.audit_record_enricher import enrich_record
 
         await sync_purchase_order_receipt_quantities(tenant_id, order_id)
 
-        # 获取订单明细
         items = await PurchaseOrderItem.filter(tenant_id=tenant_id, order_id=order_id).all()
         material_fallback = await self._load_material_fallback_for_po_items(tenant_id, items)
-        
-        # 使用model_validate，但需要手动处理items字段（因为order.items是ReverseRelation）
-        # 先获取订单的所有字段，排除items
+
         order_data = order.__dict__.copy()
-        # 移除items键（如果存在），因为它是ReverseRelation对象
-        order_data.pop('items', None)
-        
-        # 使用model_construct构建响应对象
+        order_data.pop("items", None)
+
         response = PurchaseOrderResponse.model_construct(**order_data)
-        if response.buyer_id and not str(response.buyer_name or "").strip():
-            response.buyer_name = await self.get_user_name(int(response.buyer_id))
-        # 手动设置items（编码/名称以物料主数据为准，避免明细行仅存 material_id 时名称为空）
+
+        async def _buyer_name():
+            if response.buyer_id and not str(response.buyer_name or "").strip():
+                return await self.get_user_name(int(response.buyer_id))
+            return response.buyer_name
+
+        async def _invoice_exists() -> bool:
+            try:
+                from apps.kuaicaiwu.models.invoice import Invoice
+            except Exception:
+                return False
+            code = (order.order_code or "").strip()
+            if not code:
+                return False
+            return await Invoice.filter(
+                tenant_id=tenant_id,
+                category="IN",
+                source_document_code=code,
+            ).exists()
+
+        (
+            buyer_name,
+            _tol,
+            payment_milestones,
+            has_receipt_notice,
+            has_incoming_inspection,
+            has_purchase_receipt,
+            has_purchase_invoice,
+        ) = await asyncio.gather(
+            _buyer_name(),
+            self._apply_po_item_receipt_tolerance_fields(tenant_id, items),
+            PurchaseOrderTermsService.load_payment_milestones(tenant_id, order_id),
+            ReceiptNotice.filter(
+                tenant_id=tenant_id, purchase_order_id=order_id, deleted_at__isnull=True
+            ).exists(),
+            IncomingInspection.filter(
+                tenant_id=tenant_id, purchase_order_id=order_id, deleted_at__isnull=True
+            ).exists(),
+            PurchaseReceipt.filter(
+                tenant_id=tenant_id, purchase_order_id=order_id, deleted_at__isnull=True
+            ).exists(),
+            _invoice_exists(),
+        )
+        if buyer_name:
+            response.buyer_name = buyer_name
+
         response.items = []
-        await self._apply_po_item_receipt_tolerance_fields(tenant_id, items)
         for item in items:
             item_resp = PurchaseOrderItemResponse.model_validate(item)
-            material_code, material_name = self._resolve_po_item_material_display(item, material_fallback)
+            material_code, material_name = self._resolve_po_item_material_display(
+                item, material_fallback
+            )
             if material_code:
                 item_resp.material_code = material_code
             if material_name:
@@ -434,20 +480,18 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             if getattr(item, "_over_receipt_tolerance_pct", None) is not None:
                 item_resp.over_receipt_tolerance_pct = item._over_receipt_tolerance_pct
             response.items.append(item_resp)
-        # 生命周期
-        from apps.kuaizhizao.services.document_lifecycle_service import get_purchase_order_lifecycle, get_document_milestones
-        milestones = await get_document_milestones(order.tenant_id, "purchase_order", order.id)
-        response.lifecycle = get_purchase_order_lifecycle(order, milestones=milestones)
-        from core.services.approval.audit_record_enricher import enrich_record
 
+        response.lifecycle = get_purchase_order_lifecycle(
+            order,
+            has_receipt_notice=bool(has_receipt_notice),
+            has_incoming_inspection=bool(has_incoming_inspection),
+            has_purchase_receipt=bool(has_purchase_receipt),
+            has_purchase_invoice=bool(has_purchase_invoice),
+        )
         response = await enrich_purchase_order_detail_capabilities(
             tenant_id, order, response, has_items=len(items) > 0
         )
-        from apps.kuaizhizao.services.purchase_order_terms_service import PurchaseOrderTermsService
-
-        response.payment_milestones = await PurchaseOrderTermsService.load_payment_milestones(
-            tenant_id, order_id
-        )
+        response.payment_milestones = payment_milestones
         return await enrich_record(tenant_id, "purchase_order", response)
 
     async def list_purchase_orders(

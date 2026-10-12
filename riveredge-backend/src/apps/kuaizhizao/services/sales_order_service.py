@@ -8,6 +8,7 @@ Author: Luigi Lu
 Date: 2026-01-19
 """
 
+import asyncio
 from collections import defaultdict
 from typing import List, Optional, Dict, Any
 from datetime import datetime, date
@@ -1010,6 +1011,7 @@ class SalesOrderService:
         pushed_work_order_codes: Optional[List[str]] = None,
         audit_enabled: bool = False,
         lifecycle_items: Optional[List[Any]] = None,
+        has_shipment_notice: bool = False,
     ) -> SalesOrderResponse:
         """将 SalesOrder 转为 SalesOrderResponse"""
         from apps.kuaizhizao.services.document_lifecycle_service import get_sales_order_lifecycle
@@ -1024,6 +1026,7 @@ class SalesOrderService:
             invoice_amount_progress=invoice_amount_progress,
             collection_progress=collection_progress,
             pushed_to_computation=bool(demand and getattr(demand, "pushed_to_computation", False)),
+            has_shipment_notice=has_shipment_notice,
             milestones=milestones,
         )
         raw_review_status = getattr(order, "review_status", None)
@@ -2193,16 +2196,6 @@ class SalesOrderService:
                             "unit": self._material_master_unit_fallback(m),
                         }
 
-        demand = await self._get_linked_demand(tenant_id, sales_order_id)
-        
-        # 获取 UniLifecycle 里程碑历史
-        from apps.kuaizhizao.services.document_lifecycle_service import get_document_milestones
-        milestones = await get_document_milestones(tenant_id, "sales_order", sales_order_id)
-        
-        duration_info = None
-        if include_duration and demand:
-            duration_info = getattr(demand, "duration_info", None)
-
         # capabilities / 进度 / 可下推量：始终用明细（完整或轻量），勿依赖 include_items
         if items is not None:
             capability_items: List[Any] = list(items)
@@ -2234,39 +2227,94 @@ class SalesOrderService:
                 )()
                 for iid, oid, q, d, remaining, mid, work_order_id in agg_rows
             ]
-        shipped_by = await self._shipped_qty_by_sales_order(tenant_id, [sales_order_id])
+
+        from apps.kuaizhizao.utils.sales_order_push_qty import get_pushable_qty_for_order_items
+        from apps.kuaizhizao.services.sales_order_terms_service import SalesOrderTermsService
+        from apps.kuaizhizao.services.sales_order_code_sync import (
+            sales_order_downstream_by_ids,
+        )
+        from apps.kuaicaiwu.services.sales_invoice_service import SalesInvoiceService
+        from apps.kuaizhizao.services.sales_order_purchase_push import (
+            batch_has_purchasable_remaining,
+            require_purchase_requisition_for_tenant,
+        )
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            _order_prepayment_linked_by_ids,
+        )
+        from core.services.document_code_editability import resolve_document_code_editable
+        from core.config.code_rule_pages import CODE_RULE_PAGES
+
+        async def _load_deliveries_and_finance():
+            deliveries = await SalesDelivery.filter(
+                tenant_id=tenant_id,
+                sales_order_id=sales_order_id,
+                deleted_at__isnull=True,
+            ).values_list("id", "sales_order_id")
+            order_to_deliveries: Dict[int, List[int]] = {
+                sales_order_id: [int(d[0]) for d in deliveries]
+            }
+            finance_map = await self._batch_finance_progress_by_order(
+                tenant_id, [order], order_to_deliveries
+            )
+            return finance_map.get(sales_order_id, {})
+
+        (
+            demand,
+            shipped_by,
+            finance,
+            audit_enabled,
+            require_audit_before_print,
+            pushable_by_item,
+            has_existing_delivery_project,
+            pushed_wo,
+            payment_milestones,
+            downstream_map,
+            invoice_remainder,
+            purchasable_map,
+            prepay_map,
+            require_purchase_requisition,
+            require_shipment_notice_before_delivery,
+            has_shipment_notice,
+            shippable_map,
+        ) = await asyncio.gather(
+            self._get_linked_demand(tenant_id, sales_order_id),
+            self._shipped_qty_by_sales_order(tenant_id, [sales_order_id]),
+            _load_deliveries_and_finance(),
+            self.business_config_service.check_audit_required(tenant_id, "sales_order"),
+            self.business_config_service.get_sales_require_audit_before_print(tenant_id),
+            get_pushable_qty_for_order_items(tenant_id, sales_order_id, capability_items),
+            self._order_has_delivery_project(tenant_id, sales_order_id),
+            self._pushed_work_orders_by_sales_order(tenant_id, [sales_order_id]),
+            SalesOrderTermsService.load_payment_milestones(tenant_id, sales_order_id),
+            sales_order_downstream_by_ids(tenant_id, [sales_order_id]),
+            SalesInvoiceService().resolve_sales_order_invoice_remainder(tenant_id, order),
+            batch_has_purchasable_remaining(tenant_id, {int(order.id): capability_items}),
+            _order_prepayment_linked_by_ids(
+                tenant_id,
+                [int(order.id)],
+                source_type="sales_order",
+                target_type="receipt",
+            ),
+            require_purchase_requisition_for_tenant(tenant_id),
+            BusinessConfigService().require_shipment_notice_before_delivery(tenant_id),
+            ShipmentNotice.filter(
+                tenant_id=tenant_id,
+                sales_order_id=sales_order_id,
+                deleted_at__isnull=True,
+            ).exists(),
+            self._batch_shippable_by_order(tenant_id, [sales_order_id]),
+        )
+
+        duration_info = None
+        if include_duration and demand:
+            duration_info = getattr(demand, "duration_info", None)
+
         delivery_progress = self._merged_delivery_progress(
             order, capability_items, shipped_by.get(sales_order_id, Decimal("0"))
         )
-        shippable_map = (
-            await self._batch_shippable_by_order(tenant_id, [sales_order_id])
-            if delivery_progress < 100
-            else {}
-        )
+        if delivery_progress >= 100:
+            shippable_map = {}
 
-        deliveries = await SalesDelivery.filter(
-            tenant_id=tenant_id,
-            sales_order_id=sales_order_id,
-            deleted_at__isnull=True,
-        ).values_list("id", "sales_order_id")
-        order_to_deliveries: Dict[int, List[int]] = {sales_order_id: [int(d[0]) for d in deliveries]}
-        finance = (
-            await self._batch_finance_progress_by_order(tenant_id, [order], order_to_deliveries)
-        ).get(sales_order_id, {})
-
-        audit_enabled = await self.business_config_service.check_audit_required(tenant_id, "sales_order")
-        require_audit_before_print = (
-            await self.business_config_service.get_sales_require_audit_before_print(tenant_id)
-        )
-        from apps.kuaizhizao.utils.sales_order_push_qty import get_pushable_qty_for_order_items
-
-        pushable_by_item = await get_pushable_qty_for_order_items(
-            tenant_id, sales_order_id, capability_items
-        )
-        has_existing_delivery_project = await self._order_has_delivery_project(
-            tenant_id, sales_order_id
-        )
-        pushed_wo = await self._pushed_work_orders_by_sales_order(tenant_id, [sales_order_id])
         pushed_wo_qty = Decimal(str((pushed_wo.get(sales_order_id) or {}).get("qty") or 0))
         order_total = Decimal(str(order.total_quantity or 0))
         if order_total <= 0 and capability_items:
@@ -2275,42 +2323,8 @@ class SalesOrderService:
                 Decimal("0"),
             )
         remaining_wo = order_total - pushed_wo_qty
-        from apps.kuaizhizao.services.sales_order_terms_service import SalesOrderTermsService
+        has_downstream_documents = bool(downstream_map.get(sales_order_id, False))
 
-        payment_milestones = await SalesOrderTermsService.load_payment_milestones(
-            tenant_id, sales_order_id
-        )
-        from apps.kuaizhizao.services.sales_order_code_sync import (
-            sales_order_has_downstream_documents,
-        )
-
-        has_downstream_documents = await sales_order_has_downstream_documents(
-            tenant_id, sales_order_id
-        )
-        from apps.kuaicaiwu.services.sales_invoice_service import SalesInvoiceService
-
-        invoice_remainder = await SalesInvoiceService().resolve_sales_order_invoice_remainder(
-            tenant_id, order
-        )
-        from apps.kuaizhizao.services.sales_order_purchase_push import (
-            batch_has_purchasable_remaining,
-            require_purchase_requisition_for_tenant,
-        )
-        from infra.services.business_config_service import BusinessConfigService
-
-        purchasable_map = await batch_has_purchasable_remaining(
-            tenant_id, {int(order.id): capability_items}
-        )
-        from apps.kuaizhizao.services.document_action_policy.enricher import (
-            _order_prepayment_linked_by_ids,
-        )
-
-        prepay_map = await _order_prepayment_linked_by_ids(
-            tenant_id,
-            [int(order.id)],
-            source_type="sales_order",
-            target_type="receipt",
-        )
         resp = enrich_sales_order_capabilities_on_response(
             order,
             self._order_to_response(
@@ -2320,7 +2334,6 @@ class SalesOrderService:
                 duration_info=duration_info,
                 material_code_fallback=material_code_fallback,
                 material_fallback=material_fallback,
-                milestones=milestones,
                 payment_milestones=payment_milestones,
                 delivery_progress=delivery_progress,
                 invoice_progress=finance.get("invoice_progress", 0.0),
@@ -2329,6 +2342,7 @@ class SalesOrderService:
                 shippable_hint=shippable_map.get(sales_order_id),
                 audit_enabled=audit_enabled,
                 lifecycle_items=capability_items,
+                has_shipment_notice=bool(has_shipment_notice),
             ),
             require_audit_before_print=require_audit_before_print,
             has_downstream_documents=has_downstream_documents,
@@ -2338,26 +2352,19 @@ class SalesOrderService:
                 has_remaining_work_order_qty=remaining_wo > 0,
                 has_remaining_invoice_amount=invoice_remainder > Decimal("0"),
                 has_purchasable_remaining=purchasable_map.get(int(order.id), False),
-                require_purchase_requisition=await require_purchase_requisition_for_tenant(
-                    tenant_id
-                ),
-                require_shipment_notice_before_delivery=await BusinessConfigService().require_shipment_notice_before_delivery(
-                    tenant_id
-                ),
+                require_purchase_requisition=require_purchase_requisition,
+                require_shipment_notice_before_delivery=require_shipment_notice_before_delivery,
                 has_prepayment_receipt=prepay_map.get(int(order.id), False),
             ),
         )
-        from core.config.code_rule_pages import CODE_RULE_PAGES
-        from apps.kuaizhizao.services.sales_order_code_sync import resolve_sales_order_code_editable
-
         page_cfg = next(
             (p for p in CODE_RULE_PAGES if p.get("page_code") == "kuaizhizao-sales-order"),
             None,
         )
         allow_manual = bool(page_cfg.get("allow_manual_edit", True)) if page_cfg else True
-        code_editable, code_lock_reason = await resolve_sales_order_code_editable(
-            tenant_id,
-            order,
+        code_editable, code_lock_reason = resolve_document_code_editable(
+            is_draft=self._is_draft(order.status),
+            has_downstream=has_downstream_documents,
             allow_manual_edit=allow_manual,
         )
         resp.order_code_editable = code_editable
