@@ -182,15 +182,18 @@ export async function getBackupDetail(uuid: string): Promise<DataBackup> {
  * 恢复备份
  * @param createPreRestoreBackup 恢复前自动创建当前状态备份，便于误覆盖时撤回（默认 true）
  * @param sourceTenantId 备份中的租户ID，用于恢复时替换；上传备份或元数据缺失时需手动指定
+ * @param targetTenantId 恢复写入的目标组织；平台账号未绑定组织时必填
  */
 export async function restoreBackup(
   uuid: string,
   confirm: boolean = true,
   createPreRestoreBackup: boolean = true,
-  sourceTenantId?: number
+  sourceTenantId?: number,
+  targetTenantId?: number,
 ): Promise<RestoreBackupResponse> {
   const data: Record<string, unknown> = { confirm, create_pre_restore_backup: createPreRestoreBackup };
   if (sourceTenantId != null) data.source_tenant_id = sourceTenantId;
+  if (targetTenantId != null) data.target_tenant_id = targetTenantId;
   return apiRequest<RestoreBackupResponse>(`/core/data-backups/${uuid}/restore`, {
     method: 'POST',
     data,

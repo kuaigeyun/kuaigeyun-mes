@@ -69,14 +69,32 @@ async def test_worker_rejects_unapproved_global_restore(monkeypatch, tmp_path):
 @pytest.mark.asyncio
 @pytest.mark.parametrize("platform_admin", [False, True])
 async def test_admin_restore_passes_explicit_scope_authorization(monkeypatch, platform_admin):
-    user = SimpleNamespace(tenant_id=None if platform_admin else 1,
-                           is_infra_admin_user=lambda: platform_admin,
-                           is_organization_admin=lambda: not platform_admin)
+    user = SimpleNamespace(
+        tenant_id=None if platform_admin else 1,
+        is_infra_admin=platform_admin,
+        is_infra_admin_user=lambda: platform_admin,
+        is_organization_admin=lambda: not platform_admin,
+    )
     restore = AsyncMock(return_value=True)
     monkeypatch.setattr(api.DataBackupService, "restore_backup", restore)
-    result = await api.restore_backup("fixture", api.RestoreRequest(confirm=True), user)
+    expected_target = 2 if platform_admin else 1
+    req = api.RestoreRequest(
+        confirm=True,
+        target_tenant_id=expected_target if platform_admin else None,
+    )
+    import infra.models.tenant as tenant_mod
+
+    monkeypatch.setattr(
+        tenant_mod.Tenant,
+        "filter",
+        lambda **_kwargs: SimpleNamespace(
+            first=AsyncMock(return_value=SimpleNamespace(id=expected_target))
+        ),
+    )
+    result = await api.restore_backup("fixture", req, user)
     assert result.success
     assert restore.call_args.kwargs["allow_global_restore"] is platform_admin
+    assert restore.call_args.kwargs["target_tenant_id"] == expected_target
 
 
 @pytest.mark.asyncio

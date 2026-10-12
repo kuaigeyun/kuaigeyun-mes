@@ -1024,7 +1024,7 @@ def infer_source_tenant_id_from_zip(zip_path: str) -> Optional[int]:
 
 def resolve_restore_source_tenant_id(
     *,
-    target_tenant_id: int,
+    target_tenant_id: Optional[int] = None,
     user_source: Optional[int] = None,
     metadata_source: Optional[int] = None,
     inferred_source: Optional[int] = None,
@@ -1053,6 +1053,9 @@ def resolve_restore_source_tenant_id(
                 inferred_source,
             )
         effective = inferred_source
+
+    if effective is None:
+        raise ValueError("无法确定备份中的源租户 ID，请填写 source_tenant_id")
 
     return int(effective)
 
@@ -1860,14 +1863,17 @@ async def repair_tenant_scoped_file_paths(
         return 0
     source_prefix = f"{int(source_tenant_id)}/"
     target_prefix = f"{int(tenant_id)}/"
+    # SUBSTRING(x FROM $n) 在预处理参数下会走「正则」重载（期望 text）；
+    # 起始位置用字面量整数，与 _append_tenant_scoped_path_rewrites 一致。
+    start_pos = len(source_prefix) + 1
     conn = Tortoise.get_connection("default")
     await conn.execute_query(
-        """
+        f"""
         UPDATE core_files
-        SET file_path = $1 || SUBSTRING(file_path FROM $3)
-        WHERE tenant_id = $2 AND file_path LIKE $4
+        SET file_path = $1 || SUBSTRING(file_path FROM {start_pos})
+        WHERE tenant_id = $2 AND file_path LIKE $3
         """,
-        [target_prefix, int(tenant_id), len(source_prefix) + 1, source_prefix + "%"],
+        [target_prefix, int(tenant_id), source_prefix + "%"],
     )
     logger.info(
         "已执行 core_files.file_path 前缀修正: {} -> {}（tenant_id={}）",

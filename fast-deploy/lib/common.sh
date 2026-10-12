@@ -173,6 +173,11 @@ fix_systemd_runtime_permissions() {
     [ -n "$service_home" ] || { log_error "用户不存在: $service_user"; return 1; }
     ensure_logs_dir
     log_info "修复运行时目录归属 (${service_user})..."
+    # git 曾以 100644 入库时 checkout 无 +x，systemd 会 203/EXEC Permission denied
+    chmod +x "$SYSTEMD_SERVICE_SCRIPT" "$FAST_DEPLOY_DIR/linux/prod.sh" \
+        "$SYSTEMD_BACKEND_EXEC_SCRIPT" "$SYSTEMD_TASKIQ_WORKER_EXEC_SCRIPT" \
+        "$SYSTEMD_TASKIQ_SCHEDULER_EXEC_SCRIPT" "$SYSTEMD_CADDY_EXEC_SCRIPT" \
+        "$SYSTEMD_WORKBUDDY_MCP_EXEC_SCRIPT" 2>/dev/null || true
     sudo chown -R "${service_user}:${service_group}" "$LOGS_DIR" || return 1
     if [ -f "$ENV_FILE" ]; then
         sudo chown "${service_user}:${service_group}" "$ENV_FILE" || return 1
@@ -5068,18 +5073,45 @@ systemd_boot_status_label() {
     fi
 }
 
+# 合法的非 root 系统用户（存在于 passwd）
+_is_valid_service_user() {
+    local u="${1:-}"
+    [ -n "$u" ] && [ "$u" != "root" ] && getent passwd "$u" >/dev/null 2>&1
+}
+
+# 解析 systemd 运行用户。
+# 优先级：deploy.env SERVICE_USER → SUDO_USER → 当前 USER → PROJECT_ROOT 属主
+# 传 --quiet 时失败静默（供向导探测）；否则打印可复制命令后 return 1
 resolve_service_user() {
-    local u
-    if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != "root" ]; then
+    local quiet=0 u="" owner=""
+    [ "${1:-}" = "--quiet" ] && quiet=1
+    load_deploy_env
+
+    if _is_valid_service_user "${SERVICE_USER:-}"; then
+        u="$SERVICE_USER"
+    elif _is_valid_service_user "${SUDO_USER:-}"; then
         u="$SUDO_USER"
-    elif [ "$(id -u)" -eq 0 ] && command -v logname >/dev/null 2>&1; then
-        u="$(logname 2>/dev/null || echo "")"
+    elif _is_valid_service_user "${USER:-}"; then
+        u="$USER"
     else
-        u="${USER:-}"
+        owner="$(stat -c '%U' "$PROJECT_ROOT" 2>/dev/null || true)"
+        if _is_valid_service_user "$owner"; then
+            u="$owner"
+            if [ "$quiet" != "1" ]; then
+                log_info "root 会话：使用项目目录属主作为服务用户: ${u}"
+            fi
+        fi
     fi
-    if [ -z "$u" ] || [ "$u" = "root" ]; then
-        log_error "请用部署用户执行: ./fast-deploy/deploy.sh install-service"
-        log_error "或: sudo ./fast-deploy/deploy.sh install-service（将使用原登录用户运行服务）"
+
+    if ! _is_valid_service_user "$u"; then
+        if [ "$quiet" = "1" ]; then
+            return 1
+        fi
+        log_error "无法解析非 root 部署用户（禁止用 root 跑业务服务）"
+        log_error "请任选其一："
+        log_error "  1) 在 deploy.env 设置 SERVICE_USER=<部署用户>"
+        log_error "  2) su - <部署用户> && cd ${PROJECT_ROOT} && ./fast-deploy/deploy.sh install-service"
+        log_error "  3) sudo -u <部署用户> ./fast-deploy/deploy.sh install-service"
         return 1
     fi
     echo "$u"
@@ -5206,6 +5238,69 @@ resolve_systemd_tool_path() {
     return 1
 }
 
+# 以服务用户身份执行一行 bash（当前用户即本人时不强制 sudo）
+_run_as_service_user() {
+    local service_user=$1
+    local service_home=$2
+    shift 2
+    local user_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin:${service_home}/.local/bin:${service_home}/.cargo/bin"
+    if [ "$(id -un 2>/dev/null || true)" = "$service_user" ]; then
+        env HOME="$service_home" PATH="$user_path" bash -c "$*"
+    else
+        sudo -u "$service_user" -H env HOME="$service_home" PATH="$user_path" bash -c "$*"
+    fi
+}
+
+# 为 systemd 运行用户安装 uv（不复用 root 的 uv 路径写入 unit）
+ensure_uv_for_user() {
+    local service_user=$1
+    local service_home idx url
+    service_home="$(getent passwd "$service_user" | cut -d: -f6)"
+    [ -n "$service_home" ] || { log_error "用户不存在: $service_user"; return 1; }
+
+    if resolve_systemd_tool_path "$service_user" uv >/dev/null 2>&1; then
+        return 0
+    fi
+
+    log_info "用户 ${service_user} 未安装 uv，正在自动安装到其 home..."
+
+    for idx in \
+        "https://mirrors.aliyun.com/pypi/simple/" \
+        "https://pypi.tuna.tsinghua.edu.cn/simple/"; do
+        log_info "pip install uv (${service_user}): $idx"
+        if _run_as_service_user "$service_user" "$service_home" \
+            "python3 -m pip install --user uv -i '$idx' 2>/dev/null || pip3 install --user uv -i '$idx' 2>/dev/null"; then
+            if resolve_systemd_tool_path "$service_user" uv >/dev/null 2>&1; then
+                log_ok "uv 已为 ${service_user} 安装: $(resolve_systemd_tool_path "$service_user" uv)"
+                return 0
+            fi
+        fi
+    done
+
+    for url in \
+        "https://astral.sh/uv/install.sh" \
+        "https://gh-proxy.com/https://raw.githubusercontent.com/astral-sh/uv/main/scripts/install.sh" \
+        "https://ghproxy.net/https://raw.githubusercontent.com/astral-sh/uv/main/scripts/install.sh"; do
+        log_info "install uv (${service_user}): $url"
+        if _run_as_service_user "$service_user" "$service_home" \
+            "curl -fsSL '$url' | sh"; then
+            if resolve_systemd_tool_path "$service_user" uv >/dev/null 2>&1; then
+                log_ok "uv 已为 ${service_user} 安装: $(resolve_systemd_tool_path "$service_user" uv)"
+                return 0
+            fi
+            log_warn "uv 脚本执行后仍未检测到 ${service_user} 的 uv"
+        else
+            log_warn "uv 安装脚本失败: $url"
+        fi
+    done
+
+    log_error "已尝试自动为 ${service_user} 安装 uv，仍不可用"
+    log_error "请手动: su - ${service_user} -c 'python3 -m pip install --user uv -i https://mirrors.aliyun.com/pypi/simple/'"
+    log_error "或: su - ${service_user} -c 'curl -LsSf https://astral.sh/uv/install.sh | sh'"
+    log_error "确认: ls -l ${service_home}/.local/bin/uv 后重试 ./fast-deploy/deploy.sh install-service"
+    return 1
+}
+
 prepare_systemd_prerequisites() {
     local service_user=$1
     local uv_bin caddy_bin
@@ -5221,7 +5316,11 @@ prepare_systemd_prerequisites() {
     ensure_caddy_bind_caps "$caddy_bin" || return 1
     uv_bin="$(resolve_systemd_tool_path "$service_user" uv)" || true
     if [ -z "$uv_bin" ]; then
-        log_error "未找到用户 ${service_user} 的 uv，请先为该用户安装 uv"
+        ensure_uv_for_user "$service_user" || return 1
+        uv_bin="$(resolve_systemd_tool_path "$service_user" uv)" || true
+    fi
+    if [ -z "$uv_bin" ]; then
+        log_error "未找到用户 ${service_user} 的 uv（自动安装后仍失败）"
         return 1
     fi
     if [ ! -x "$uv_bin" ]; then

@@ -327,8 +327,9 @@ TORTOISE_ORM = {
                 "apps.kuaizhizao.models.incoming_inspection",  # 来料检验模型
                 "apps.kuaizhizao.models.process_inspection",  # 过程检验模型
                 "apps.kuaizhizao.models.finished_goods_inspection",  # 成品检验模型
-                # kuaicaiwu / kuaiplm / kuaioa / kuaipd 等专业包模型：勿硬编码入此列表；
-                # 由 _merge_plugin_orm_into_static_config → discover_plugin_orm_modules 按磁盘是否组装并入。
+                # kuaicaiwu / kuaiplm / kuaioa / kuaipd 等专业包：真源在 pro 仓，经 compose 后由
+                # apps/*/orm_models.py + _merge_plugin_orm_into_static_config() 注入。
+                # 勿在此硬编码，否则未组装时 aerich 会 ModuleNotFoundError。
                 "apps.kuaizhizao.models.sales_forecast",  # 销售预测模型
                 "apps.kuaizhizao.models.sales_forecast_item",  # 销售预测明细模型
                 "apps.kuaizhizao.models.sales_order",  # 销售订单模型

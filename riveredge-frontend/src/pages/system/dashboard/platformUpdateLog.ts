@@ -60,6 +60,14 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
       'pages.dashboard.updateLog.entries.dashboard-todo-rbac-filter-r01.description',
   },
   {
+    id: 'data-backup-restore-target-tenant-r01',
+    date: '2026-10-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.data-backup-restore-target-tenant-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.data-backup-restore-target-tenant-r01.description',
+  },
+  {
     id: 'reference-display-single-source-r01',
     date: '2026-10-11',
     type: 'improvement',
