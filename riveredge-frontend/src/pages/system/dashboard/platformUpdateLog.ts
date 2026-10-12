@@ -44,6 +44,37 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'sales-order-save-perf-r01',
+    date: '2026-10-12',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-order-save-perf-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.sales-order-save-perf-r01.description',
+  },
+  {
+    id: 'data-backup-auto-full-incremental-r01',
+    date: '2026-10-12',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.data-backup-auto-full-incremental-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.data-backup-auto-full-incremental-r01.description',
+  },
+  {
+    id: 'data-backup-broker-type-r01',
+    date: '2026-10-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.data-backup-broker-type-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.data-backup-broker-type-r01.description',
+  },
+  {
+    id: 'data-backup-policy-test-now-r01',
+    date: '2026-10-12',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.data-backup-policy-test-now-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.data-backup-policy-test-now-r01.description',
+  },
+  {
     id: 'sales-order-default-salesman-badge-r01',
     date: '2026-10-12',
     type: 'improvement',

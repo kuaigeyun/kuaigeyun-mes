@@ -504,15 +504,29 @@ async def maybe_trigger_scheduled_backup(
         return False
 
     wall = _site_wall_clock(now)
-    name = f"定时备份_{wall.strftime('%Y%m%d_%H%M')}"
+    include_files = bool(policy.get("include_files", True))
+    backup_type = await DataBackupService.resolve_auto_backup_type(
+        tenant_id=tenant_id,
+        backup_scope=backup_scope,
+    )
+    type_label = "全量" if backup_type == "full" else "增量"
+    name = f"定时{type_label}备份_{wall.strftime('%Y%m%d_%H%M')}"
     data = DataBackupCreate(
         name=name,
-        backup_type="full",
+        backup_type=backup_type,
         backup_scope=backup_scope,
-        include_files=bool(policy.get("include_files", True)),
+        include_files=include_files,
         trigger_source="scheduled",
     )
-    await DataBackupService.create_backup_task(tenant_id, data)
+    backup = await DataBackupService.create_backup_task(tenant_id, data)
+    if getattr(backup, "status", None) == "failed":
+        logger.error(
+            "定时备份投递失败，不推进 last_scheduled_at: scope={} tenant_id={} err={}",
+            backup_scope,
+            tenant_id,
+            getattr(backup, "error_message", None),
+        )
+        return False
     await _mark_policy_stamp(
         tenant_id=tenant_id, is_platform=is_platform, field="last_scheduled_at", when=now
     )
@@ -618,3 +632,49 @@ async def run_data_backup_policy_tick() -> Dict[str, Any]:
             logger.exception("租户备份策略 tick 失败 tenant_id={}", tid)
 
     return {"scheduled": scheduled, "retention_deleted": retention_deleted, "tenants": len(tenant_ids)}
+
+
+async def run_policy_backup_now(
+    *,
+    backup_scope: str,
+    tenant_id: Optional[int],
+    is_platform: bool,
+) -> DataBackup:
+    """按当前策略立即发起一次测试备份（不写 last_scheduled_at，不依赖 cron 窗口）。"""
+    from core.services.system.data_backup_service import DataBackupService
+
+    if is_platform:
+        policy = await get_platform_data_backup_policy()
+        backup_scope = "all"
+        tenant_id = None
+    else:
+        if tenant_id is None:
+            raise ValidationError("本组织测试备份缺少组织号")
+        policy = await get_tenant_data_backup_policy(int(tenant_id))
+        backup_scope = "tenant"
+
+    if await _has_active_backup(backup_scope=backup_scope, tenant_id=tenant_id):
+        raise ValidationError("已有进行中的备份任务，请稍后再试")
+
+    now = resolve_business_datetime()
+    wall = _site_wall_clock(now)
+    include_files = bool(policy.get("include_files", True))
+    backup_type = await DataBackupService.resolve_auto_backup_type(
+        tenant_id=tenant_id,
+        backup_scope=backup_scope,
+    )
+    type_label = "全量" if backup_type == "full" else "增量"
+    name = f"测试{type_label}备份_{wall.strftime('%Y%m%d_%H%M')}"
+    data = DataBackupCreate(
+        name=name,
+        backup_type=backup_type,
+        backup_scope=backup_scope,
+        include_files=include_files,
+        trigger_source="manual",
+    )
+    backup = await DataBackupService.create_backup_task(tenant_id, data)
+    if getattr(backup, "status", None) == "failed":
+        raise ValidationError(
+            getattr(backup, "error_message", None) or "测试备份投递失败，请确认 Taskiq worker 已运行"
+        )
+    return backup

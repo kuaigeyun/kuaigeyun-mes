@@ -732,8 +732,7 @@ const DataBackupsPage: React.FC = () => {
       resizable: false,
     },
     {
-      title: t('pages.system.dataBackups.columnTenantScope'),
-      dataIndex: 'backup_scope',
+      title: t('pages.system.dataBackups.columnTenantScope'),      dataIndex: 'backup_scope',
       key: 'backup_scope',
       width: 140,
       minWidth: 140,
@@ -965,7 +964,7 @@ const DataBackupsPage: React.FC = () => {
     <>
       <ListPageTemplate statCards={statCards}>
         <UniTable<DataBackup>
-          columnPersistenceId="pages.system.data-backups.list-v3"
+          columnPersistenceId="pages.system.data-backups.list-v4"
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {
@@ -1405,6 +1404,7 @@ const DataBackupsPage: React.FC = () => {
         isInfraAdmin={isInfraAdmin}
         boundTenantId={boundTenantId}
         boundTenantName={boundTenantName}
+        onTestStarted={() => actionRef.current?.reload()}
       />
     </>
   );

@@ -27148,6 +27148,10 @@ export default {
   'pages.system.dataBackups.policyLoadFailed': '加载备份策略失败',
   'pages.system.dataBackups.policySaveSuccess': '备份策略已保存',
   'pages.system.dataBackups.policySaveFailed': '保存备份策略失败',
+  'pages.system.dataBackups.policyTestButton': '立即测试备份',
+  'pages.system.dataBackups.policyTestSuccess':
+    '已按当前策略发起测试备份，请到列表查看进度；若落点为对象存储，成功后可见对象键',
+  'pages.system.dataBackups.policyTestFailed': '发起测试备份失败',
   'pages.system.dataBackups.loadListFailed': '加载备份列表失败',
   'pages.system.dataBackups.exportSuccess': '已导出 {{count}} 条记录',
   'pages.system.dataBackups.createButton': '新建备份',
@@ -30884,10 +30888,26 @@ export default {
     '采购申请与询价单支持回显权限',
   'pages.dashboard.updateLog.entries.purchase-requisition-inquiry-display-r01.description':
     '将采购申请、询价单登记为可引用资源，角色矩阵出现「回显」勾选，供下游取单/关联时按回显权限加载。',
+  'pages.dashboard.updateLog.entries.data-backup-broker-type-r01.title':
+    '修复定时备份投递失败与备份类型展示',
+  'pages.dashboard.updateLog.entries.data-backup-broker-type-r01.description':
+    '定时备份在后台投递时若 Taskiq 未就绪会自动补启动，投递失败不再占用当日定时窗口；备份类型按落点是否已有本组织全量成功包自动选全量或增量，列表显示「全量」「增量」。',
+  'pages.dashboard.updateLog.entries.data-backup-auto-full-incremental-r01.title':
+    '备份按落点自动选择全量或增量',
+  'pages.dashboard.updateLog.entries.data-backup-auto-full-incremental-r01.description':
+    '新建/定时/测试备份会先检查当前策略落点是否已有本组织成功的全量备份：没有则做全量，已有则做增量；列表备份类型显示全量或增量。',
+  'pages.dashboard.updateLog.entries.data-backup-policy-test-now-r01.title':
+    '备份策略支持立即测试备份',
+  'pages.dashboard.updateLog.entries.data-backup-policy-test-now-r01.description':
+    '备份策略弹窗新增「立即测试备份」：先保存当前落点与附件选项，再马上发起一次备份，便于验证定时与对象存储，而不必等 cron 窗口。',
   'pages.dashboard.updateLog.entries.sales-order-default-salesman-badge-r01.title':
     '销售订单默认归属业务员与菜单角标口径',
   'pages.dashboard.updateLog.entries.sales-order-default-salesman-badge-r01.description':
     '新建销售订单未填写归属业务员时默认带出当前登录账号；左侧菜单销售订单角标只统计归属业务员为当前用户的待办数量。',
+  'pages.dashboard.updateLog.entries.sales-order-save-perf-r01.title':
+    '加快销售订单保存速度',
+  'pages.dashboard.updateLog.entries.sales-order-save-perf-r01.description':
+    '保存时更新门禁不再拉整包下推能力上下文；明细改批量写入；无计划相关变更时跳过需求重算事件；保存回包改为轻量详情，避免每次保存都算账款与可发货。',
   'pages.dashboard.updateLog.entries.sales-order-list-detail-perf-r01.title':
     '加快销售订单列表与详情打开速度',
   'pages.dashboard.updateLog.entries.sales-order-list-detail-perf-r01.description':

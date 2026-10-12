@@ -34,8 +34,9 @@ standard: SiteSetting/PlatformSettings.data_backup_policy + data_backup_policy_t
 | BE 租户策略 | `Depends(get_current_tenant)`（认 `X-Tenant-ID`），勿用 `User.tenant_id` 判「未绑定」 |
 | FE 组织上下文 | 弹窗展示「组织名 + 租户号」；平台管理员 `getTenantList(..., true)` 选组织，策略/连接请求显式带 `X-Tenant-ID` |
 | BE 策略 | `SiteSetting.settings.data_backup_policy`；平台 `PlatformSettings.data_backup_policy` |
-| BE API | `GET/PUT /core/data-backups/policy`；`…/policy/platform`；`…/storage-connections` |
+| BE API | `GET/PUT /core/data-backups/policy`；`…/policy/platform`；`POST …/policy/run-now`；`POST …/policy/platform/run-now`；`…/storage-connections` |
 | 调度 | Taskiq `data_backup_policy_tick`（每分钟）→ `create_backup_task` / retention |
+| 立即测试 | 策略弹窗「立即测试备份」→ 先保存再 `run_policy_backup_now`（不写 `last_scheduled_at`） |
 | 落盘 | dump 成功后 `upload_backup_to_object_storage_if_needed`；下载/恢复 `ensure_local_backup_file` |
 
 ## 关键文件
@@ -60,12 +61,16 @@ standard: SiteSetting/PlatformSettings.data_backup_policy + data_backup_policy_t
 
 ## 踩坑
 
-- 路由须把 `/policy`、`/storage-connections` 注册在 `/{uuid}` 之前
+- 路由须把 `/policy`、`/policy/run-now`、`/storage-connections` 注册在 `/{uuid}` 之前
 - 全平台对象存储须固化 `storage_owner_tenant_id`（连接所属组织），禁止猜默认连接
 - Cron 按站点墙钟（`to_site_timezone` + `match_cron`），禁止硬 +8
 - 清理只动 `status=success` 且 `source_type=generated`，跳过 `restore_status=running`
 - 平台账号 `User.tenant_id` 常为空：前端用 `getTenantId()` / 当前用户组织，后端用 `get_current_tenant`，禁止再弹「请先绑定组织」误报
 - 周日 cron 用 `0`（与常见五段 cron 一致）；月日无该日则该月不触发
+- 测试备份不推进 `last_scheduled_at`，避免「测完当天定时不再跑」；有 pending/running 时拒绝并发
+- 定时触发经 `dispatch_event`：若 broker 未 startup 须按需 `ensure_taskiq_broker_started`，禁止硬失败后仍 stamp `last_scheduled_at`
+- `backup_type`：创建前查当前策略落点是否已有本组织 `status=success` 且 `backup_type=full`（本机或同 `storage_connection_uuid`）；无则 full，有则 incremental；与 `include_files` 无关
+- 列表「备份类型」展示全量/增量，真源为记录的 `backup_type`
 
 ## 关联
 

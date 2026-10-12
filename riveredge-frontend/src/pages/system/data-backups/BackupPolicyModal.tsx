@@ -8,11 +8,13 @@ import { useTranslation } from 'react-i18next';
 import {
   App,
   Alert,
+  Button,
   Form,
   Input,
   Modal,
   Radio,
   Select,
+  Space,
   Switch,
   Tabs,
   TimePicker,
@@ -24,6 +26,8 @@ import {
   getDataBackupPolicy,
   getPlatformDataBackupPolicy,
   getDataBackupStorageConnections,
+  runDataBackupPolicyNow,
+  runPlatformDataBackupPolicyNow,
   saveDataBackupPolicy,
   savePlatformDataBackupPolicy,
   type DataBackupPolicy,
@@ -373,6 +377,8 @@ export interface BackupPolicyModalProps {
   boundTenantId?: number | null;
   /** 当前会话组织名称（可缺省，弹窗内用组织列表补全） */
   boundTenantName?: string | null;
+  /** 测试备份已入队后回调（用于刷新列表） */
+  onTestStarted?: () => void;
 }
 
 const BackupPolicyModal: React.FC<BackupPolicyModalProps> = ({
@@ -381,6 +387,7 @@ const BackupPolicyModal: React.FC<BackupPolicyModalProps> = ({
   isInfraAdmin,
   boundTenantId,
   boundTenantName,
+  onTestStarted,
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -388,6 +395,7 @@ const BackupPolicyModal: React.FC<BackupPolicyModalProps> = ({
   const [platformForm] = Form.useForm<PolicyFormValues>();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
   const [activeTab, setActiveTab] = useState<'tenant' | 'platform'>('tenant');
   const [connections, setConnections] = useState<DataBackupStorageConnection[]>([]);
   const [tenantOptions, setTenantOptions] = useState<TenantOption[]>([]);
@@ -554,8 +562,38 @@ const BackupPolicyModal: React.FC<BackupPolicyModalProps> = ({
     }
   };
 
+  const handleTestBackup = async () => {
+    setTesting(true);
+    try {
+      if (activeTab === 'tenant') {
+        if (workingTenantId == null) {
+          messageApi.error(t('pages.system.dataBackups.policySelectTenantRequired'));
+          return;
+        }
+        const values = await tenantForm.validateFields();
+        await saveDataBackupPolicy(formToPayload(values), workingTenantId);
+        await runDataBackupPolicyNow(workingTenantId);
+      } else {
+        const values = await platformForm.validateFields();
+        await savePlatformDataBackupPolicy(formToPayload(values), workingTenantId);
+        await runPlatformDataBackupPolicyNow();
+      }
+      messageApi.success(t('pages.system.dataBackups.policyTestSuccess'));
+      onTestStarted?.();
+    } catch (error: unknown) {
+      if (error && typeof error === 'object' && 'errorFields' in error) {
+        return;
+      }
+      messageApi.error(getApiErrorMessage(error, t('pages.system.dataBackups.policyTestFailed')));
+    } finally {
+      setTesting(false);
+    }
+  };
+
   const showTenantTab = isInfraAdmin || workingTenantId != null || tenantPolicyReady;
   const canShowAnything = showTenantTab || isInfraAdmin;
+  const testDisabled =
+    loading || saving || testing || (activeTab === 'tenant' && workingTenantId == null);
 
   const tabItems: { key: string; label: string; children: React.ReactNode }[] = [];
   if (showTenantTab) {
@@ -634,12 +672,27 @@ const BackupPolicyModal: React.FC<BackupPolicyModalProps> = ({
       title={t('pages.system.dataBackups.policyModalTitle')}
       open={open}
       onCancel={onClose}
-      onOk={() => void handleOk()}
-      confirmLoading={saving}
       width={MODAL_CONFIG.STANDARD_WIDTH}
       destroyOnHidden
       mask={{ closable: false }}
-      okButtonProps={{ disabled: activeTab === 'tenant' && workingTenantId == null }}
+      footer={
+        <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
+          <Button onClick={() => void handleTestBackup()} loading={testing} disabled={testDisabled}>
+            {t('pages.system.dataBackups.policyTestButton')}
+          </Button>
+          <Button onClick={onClose} disabled={saving || testing}>
+            {t('common.cancel')}
+          </Button>
+          <Button
+            type="primary"
+            onClick={() => void handleOk()}
+            loading={saving}
+            disabled={loading || testing || (activeTab === 'tenant' && workingTenantId == null)}
+          >
+            {t('common.save')}
+          </Button>
+        </Space>
+      }
     >
       {!canShowAnything ? (
         <Alert type="warning" showIcon title={t('pages.system.dataBackups.policyNeedTenant')} />

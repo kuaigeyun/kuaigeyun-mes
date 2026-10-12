@@ -1293,6 +1293,11 @@ class SalesOrderService:
         action: str,
         items: Optional[List[SalesOrderItem]] = None,
     ) -> None:
+        # 更新门禁只看状态/锁定，禁止拉下推/发票/采购等整包上下文（保存路径会明显变慢）
+        if action == "update":
+            assert_sales_order_capability(order, "update")
+            return
+
         demand = await self._get_linked_demand(tenant_id, order.id)
         if items is None:
             items = await SalesOrderItem.filter(
@@ -2035,31 +2040,35 @@ class SalesOrderService:
                     decimal_places=self._SO_AMOUNT_DECIMAL_PLACES,
                     field_label="销售订单明细金额",
                 )
-            for idx, row in enumerate(item_rows):
-                await SalesOrderItem.create(
-                    tenant_id=tenant_id,
-                    sales_order_id=order.id,
-                    material_id=row["material_id"],
-                    material_code=row["material_code"],
-                    material_name=row["material_name"],
-                    material_spec=row["material_spec"],
-                    material_unit=row["material_unit"],
-                    order_quantity=row["order_quantity"],
-                    delivered_quantity=row["delivered_quantity"],
-                    remaining_quantity=row["remaining_quantity"],
-                    unit_price=row["unit_price"],
-                    tax_rate=row["tax_rate"],
-                    total_amount=allocated_amounts[idx],
-                    delivery_date=row["delivery_date"],
-                    delivery_status=row["delivery_status"],
-                    variant_attributes=row["variant_attributes"],
-                    configurable_selections=row["configurable_selections"],
-                    notes=row["notes"],
-                    is_gift=row["is_gift"],
-                    gift_ref_unit_price=row["gift_ref_unit_price"],
-                    price_settlement_status=row["price_settlement_status"],
-                    provisional_unit_price=row["provisional_unit_price"],
-                )
+            await SalesOrderItem.bulk_create(
+                [
+                    SalesOrderItem(
+                        tenant_id=tenant_id,
+                        sales_order_id=order.id,
+                        material_id=row["material_id"],
+                        material_code=row["material_code"],
+                        material_name=row["material_name"],
+                        material_spec=row["material_spec"],
+                        material_unit=row["material_unit"],
+                        order_quantity=row["order_quantity"],
+                        delivered_quantity=row["delivered_quantity"],
+                        remaining_quantity=row["remaining_quantity"],
+                        unit_price=row["unit_price"],
+                        tax_rate=row["tax_rate"],
+                        total_amount=allocated_amounts[idx],
+                        delivery_date=row["delivery_date"],
+                        delivery_status=row["delivery_status"],
+                        variant_attributes=row["variant_attributes"],
+                        configurable_selections=row["configurable_selections"],
+                        notes=row["notes"],
+                        is_gift=row["is_gift"],
+                        gift_ref_unit_price=row["gift_ref_unit_price"],
+                        price_settlement_status=row["price_settlement_status"],
+                        provisional_unit_price=row["provisional_unit_price"],
+                    )
+                    for idx, row in enumerate(item_rows)
+                ]
+            )
             await SalesOrder.filter(id=order.id).update(
                 total_quantity=total_qty,
                 total_amount=total_amt,
@@ -2071,15 +2080,14 @@ class SalesOrderService:
             items = await SalesOrderItem.filter(
                 tenant_id=tenant_id, sales_order_id=order.id
             ).order_by("id")
-            demand = await self._get_linked_demand(tenant_id, order.id)
-            shipped_by = await self._shipped_qty_by_sales_order(tenant_id, [order.id])
-            dp = self._merged_delivery_progress(order, list(items), shipped_by.get(order.id, Decimal("0")))
+            # 新建单尚无关联需求/出货，跳过无意义查询
+            dp = self._merged_delivery_progress(order, list(items), Decimal("0"))
             audit_enabled = await self.business_config_service.check_audit_required(tenant_id, "sales_order")
             payment_milestones = await terms_svc.load_payment_milestones(tenant_id, int(order.id))
             return self._order_to_response(
                 order,
                 items=items,
-                demand=demand,
+                demand=None,
                 delivery_progress=dp,
                 audit_enabled=audit_enabled,
                 payment_milestones=payment_milestones,
@@ -3265,29 +3273,35 @@ class SalesOrderService:
                         decimal_places=self._SO_AMOUNT_DECIMAL_PLACES,
                         field_label="销售订单明细金额",
                     )
-                for idx, row in enumerate(item_rows):
-                    await SalesOrderItem.create(
-                        tenant_id=tenant_id,
-                        sales_order_id=sales_order_id,
-                        material_id=row["material_id"],
-                        material_code=row["material_code"],
-                        material_name=row["material_name"],
-                        material_spec=row["material_spec"],
-                        material_unit=row["material_unit"],
-                        order_quantity=row["order_quantity"],
-                        delivered_quantity=row["delivered_quantity"],
-                        remaining_quantity=row["remaining_quantity"],
-                        unit_price=row["unit_price"],
-                        tax_rate=row["tax_rate"],
-                        total_amount=allocated_amounts[idx],
-                        delivery_date=row["delivery_date"],
-                        delivery_status=row["delivery_status"],
-                        variant_attributes=row["variant_attributes"],
-                        configurable_selections=row["configurable_selections"],
-                        notes=row["notes"],
-                        is_gift=row["is_gift"],
-                        gift_ref_unit_price=row["gift_ref_unit_price"],
-                    )
+                await SalesOrderItem.bulk_create(
+                    [
+                        SalesOrderItem(
+                            tenant_id=tenant_id,
+                            sales_order_id=sales_order_id,
+                            material_id=row["material_id"],
+                            material_code=row["material_code"],
+                            material_name=row["material_name"],
+                            material_spec=row["material_spec"],
+                            material_unit=row["material_unit"],
+                            order_quantity=row["order_quantity"],
+                            delivered_quantity=row["delivered_quantity"],
+                            remaining_quantity=row["remaining_quantity"],
+                            unit_price=row["unit_price"],
+                            tax_rate=row["tax_rate"],
+                            total_amount=allocated_amounts[idx],
+                            delivery_date=row["delivery_date"],
+                            delivery_status=row["delivery_status"],
+                            variant_attributes=row["variant_attributes"],
+                            configurable_selections=row["configurable_selections"],
+                            notes=row["notes"],
+                            is_gift=row["is_gift"],
+                            gift_ref_unit_price=row["gift_ref_unit_price"],
+                            price_settlement_status=row.get("price_settlement_status"),
+                            provisional_unit_price=row.get("provisional_unit_price"),
+                        )
+                        for idx, row in enumerate(item_rows)
+                    ]
+                )
                 await SalesOrder.filter(id=sales_order_id).update(
                     total_quantity=total_qty,
                     total_amount=total_amt,
@@ -3298,7 +3312,10 @@ class SalesOrderService:
                     tenant_id, sales_order_id, sales_order_data.payment_milestones
                 )
 
-        result = await self.get_sales_order_by_id(tenant_id, sales_order_id, include_items=True)
+        # 保存回包只需状态/明细摘要，勿走完整 capabilities/账款/可发货（会拖慢每次保存）
+        result = await self.get_sales_order_by_id(
+            tenant_id, sales_order_id, include_items=True, view="options"
+        )
         # 记录编辑操作及变更字段（含修改前后值，供操作记录展示）
         from core.utils.field_change_compare import (
             audit_field_values_equal,
@@ -3381,35 +3398,6 @@ class SalesOrderService:
                 logger.info("销售订单 %s 为待审核且无需审核，保存后自动通过", sales_order_id)
                 return await self.approve_sales_order(tenant_id, sales_order_id, updated_by, is_auto_approve=True)
 
-        # 只要有关联需求，订单任意保存都同步需求内容，使需求管理动态随上游变化（策略 A）
-        demand_synced = await self._sync_demand_if_exists(tenant_id, sales_order_id, updated_by)
-        # 计划锁定策略：上游变更时，对 draft/submitted 计划标记待重算
-        try:
-            from apps.kuaizhizao.services.document_relation_service import DocumentRelationService
-            doc_svc = DocumentRelationService()
-            await doc_svc.apply_upstream_change_impact(tenant_id, "sales_order", sales_order_id)
-        except Exception as e:
-            logger.warning("apply_upstream_change_impact failed: %s", e)
-        # 订单变更事件：统一进入需求重算编排链路
-        try:
-            from apps.kuaizhizao.services.demand_change_event_service import DemandChangeEventService
-            await DemandChangeEventService().create_event(
-                tenant_id=tenant_id,
-                event_type="order",
-                source_type="sales_order",
-                source_id=sales_order_id,
-                source_code=order.order_code,
-                source_name=order.order_code,
-                changed_fields=[str(x) for x in changed_fields] if changed_fields else [],
-                payload={"field_changes": field_changes or []},
-                effective_at=resolve_business_datetime(),
-                trigger_reason="sales_order_updated",
-                requested_by=updated_by,
-                correlation_id=f"sales_order:{sales_order_id}:{int(resolve_business_datetime().timestamp())}",
-                auto_create_task=True,
-            )
-        except Exception as e:
-            logger.warning("create demand change event failed: %s", e)
         delivery_changed = any(
             fc.get("field") == "delivery_date"
             for fc in (field_changes if changed_fields else [])
@@ -3418,6 +3406,54 @@ class SalesOrderService:
             and "delivery_date" in upd
             and not audit_field_values_equal(upd.get("delivery_date"), old_values.get("delivery_date"))
         )
+        planning_fields = {
+            "total_quantity",
+            "total_amount",
+            "order_date",
+            "delivery_date",
+            "customer_name",
+            "discount_amount",
+            "price_type",
+        }
+        planning_relevant = items_changed or delivery_changed or any(
+            fc.get("field") in planning_fields for fc in (field_changes or [])
+        )
+
+        # 明细未变时不必同步需求；无计划相关变更时跳过重算事件（原先每次保存都建任务会拖慢）
+        demand_synced = False
+        if items_changed:
+            demand_synced = await self._sync_demand_if_exists(tenant_id, sales_order_id, updated_by)
+        if planning_relevant:
+            try:
+                from apps.kuaizhizao.services.document_relation_service import DocumentRelationService
+
+                await DocumentRelationService().apply_upstream_change_impact(
+                    tenant_id, "sales_order", sales_order_id
+                )
+            except Exception as e:
+                logger.warning("apply_upstream_change_impact failed: %s", e)
+            try:
+                from apps.kuaizhizao.services.demand_change_event_service import DemandChangeEventService
+
+                await DemandChangeEventService().create_event(
+                    tenant_id=tenant_id,
+                    event_type="order",
+                    source_type="sales_order",
+                    source_id=sales_order_id,
+                    source_code=order.order_code,
+                    source_name=order.order_code,
+                    changed_fields=[str(x) for x in changed_fields] if changed_fields else [],
+                    payload={"field_changes": field_changes or []},
+                    effective_at=resolve_business_datetime(),
+                    trigger_reason="sales_order_updated",
+                    requested_by=updated_by,
+                    correlation_id=(
+                        f"sales_order:{sales_order_id}:{int(resolve_business_datetime().timestamp())}"
+                    ),
+                    auto_create_task=True,
+                )
+            except Exception as e:
+                logger.warning("create demand change event failed: %s", e)
         if delivery_changed or items_changed:
             try:
                 from apps.kuaizhizao.models.work_order import WorkOrder

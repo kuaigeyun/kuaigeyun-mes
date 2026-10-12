@@ -37,6 +37,7 @@ from core.services.system.data_backup_policy import (
     get_platform_data_backup_policy,
     save_platform_data_backup_policy,
     list_storage_connections,
+    run_policy_backup_now,
 )
 from core.services.system.backup_download_service import BackupDownloadService
 from core.utils.timezone_utils import resolve_business_datetime
@@ -270,6 +271,46 @@ async def put_platform_backup_policy(
                 current_user, x_tenant_id
             ),
         )
+    except ValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/policy/run-now", response_model=DataBackupResponse, status_code=status.HTTP_201_CREATED)
+async def run_tenant_backup_policy_now(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Any:
+    """按当前组织策略立即发起一次测试备份（不推进定时窗口）。"""
+    _require_backup_administrator(current_user)
+    try:
+        backup = await run_policy_backup_now(
+            backup_scope="tenant",
+            tenant_id=int(tenant_id),
+            is_platform=False,
+        )
+        return DataBackupService.to_response(backup)
+    except ValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post(
+    "/policy/platform/run-now",
+    response_model=DataBackupResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def run_platform_backup_policy_now(
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    """按全平台策略立即发起一次测试备份（仅平台管理员；不推进定时窗口）。"""
+    if not _is_platform_backup_admin(current_user):
+        raise HTTPException(status_code=403, detail="仅平台管理员可发起全平台测试备份")
+    try:
+        backup = await run_policy_backup_now(
+            backup_scope="all",
+            tenant_id=None,
+            is_platform=True,
+        )
+        return DataBackupService.to_response(backup)
     except ValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

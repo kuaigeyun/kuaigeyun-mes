@@ -396,6 +396,7 @@ def _pack_backup_zip(
     source_tenant_id: Optional[int],
     tenant_id: Optional[int],
     pack_uploads: bool,
+    backup_type: str = "full",
 ) -> str:
     final_zip_name = f"{backup_name}_{resolve_business_datetime().strftime('%Y%m%d%H%M%S')}.zip"
     final_zip_path = os.path.join(backup_dir, final_zip_name)
@@ -404,6 +405,7 @@ def _pack_backup_zip(
         metadata: dict[str, Any] = {
             "source_tenant_id": source_tenant_id,
             "backup_scope": backup_scope,
+            "backup_type": "incremental" if backup_type == "incremental" else "full",
             "include_files": pack_uploads,
             "engine": "asyncpg-csv",
         }
@@ -631,6 +633,7 @@ async def run_backup_dump_and_zip(
         source_tenant_id=source_tenant_id,
         tenant_id=tenant_id,
         pack_uploads=pack_uploads,
+        backup_type=backup_type,
     )
     if on_progress:
         await on_progress(99, "打包完成")

@@ -326,6 +326,21 @@ export async function savePlatformDataBackupPolicy(
   });
 }
 
+export async function runDataBackupPolicyNow(
+  tenantId?: number | null,
+): Promise<DataBackup> {
+  return apiRequest<DataBackup>('/core/data-backups/policy/run-now', {
+    method: 'POST',
+    ...dataBackupTenantHeaders(tenantId),
+  });
+}
+
+export async function runPlatformDataBackupPolicyNow(): Promise<DataBackup> {
+  return apiRequest<DataBackup>('/core/data-backups/policy/platform/run-now', {
+    method: 'POST',
+  });
+}
+
 export async function getDataBackupStorageConnections(
   tenantId?: number | null,
 ): Promise<DataBackupStorageConnection[]> {

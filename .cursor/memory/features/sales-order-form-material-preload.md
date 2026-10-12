@@ -46,3 +46,10 @@ standard: 销售订单表单不预拉全量物料；选料/编辑 resolve/导入
 
 - 订单视图列表：`resolveSalesOrderListApiParams` 仅明细视图 `includeItems: true`；订单视图不带全量 items，减轻 `list_sales_orders` 批量计算
 - 详情抽屉：先 `open` + loading，再 `getSalesOrder(id, true, false)` 与自定义字段并行；勿等数据返回才开抽屉
+
+## 保存慢（2026-10-12）
+
+- `update` 门禁：`_assert_sales_order_capability_for_order(..., "update")` 只跑状态/锁定，禁止每次保存拉下推/发票/采购上下文
+- 明细：`SalesOrderItem.bulk_create`（与 sync 路径一致），禁止逐行 `create`
+- 保存回包：`get_sales_order_by_id(..., view="options")`，勿完整 capabilities
+- 需求重算事件 / upstream impact：仅 `planning_relevant`（明细/交期/金额等）时触发

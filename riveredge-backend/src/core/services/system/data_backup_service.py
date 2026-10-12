@@ -149,6 +149,65 @@ class DataBackupService:
         )
 
     @staticmethod
+    async def has_successful_full_at_destination(
+        *,
+        backup_scope: str,
+        tenant_id: Optional[int],
+        storage: dict,
+    ) -> bool:
+        """当前策略落点是否已有该组织（或全平台）成功的全量备份。"""
+        scope = (backup_scope or "tenant").strip().lower()
+        q = DataBackup.filter(status="success", backup_type="full", backup_scope=scope)
+        if scope == "all":
+            q = q.filter(backup_scope="all")
+        else:
+            if tenant_id is None:
+                return False
+            q = q.filter(tenant_id=int(tenant_id))
+
+        backend = str((storage or {}).get("backend") or "local").strip().lower()
+        conn_uuid = (storage or {}).get("connection_uuid")
+        if backend == "connection" and conn_uuid:
+            q = q.filter(storage_connection_uuid=str(conn_uuid))
+        else:
+            q = q.filter(
+                Q(storage_backend="local")
+                | Q(storage_backend__isnull=True)
+                | Q(storage_backend="")
+            ).filter(Q(storage_connection_uuid__isnull=True) | Q(storage_connection_uuid=""))
+        return await q.exists()
+
+    @staticmethod
+    async def resolve_auto_backup_type(
+        *,
+        tenant_id: Optional[int],
+        backup_scope: str,
+    ) -> str:
+        """无落点全量 → full；已有落点全量 → incremental。"""
+        from core.services.system.data_backup_policy import (
+            get_platform_data_backup_policy,
+            get_tenant_data_backup_policy,
+            normalize_data_backup_policy,
+        )
+
+        scope = (backup_scope or "tenant").strip().lower()
+        if scope == "all":
+            policy = await get_platform_data_backup_policy()
+        elif tenant_id is not None:
+            policy = await get_tenant_data_backup_policy(int(tenant_id))
+        else:
+            policy = normalize_data_backup_policy(None)
+        storage = policy.get("storage") or {}
+        if await DataBackupService.has_successful_full_at_destination(
+            backup_scope=scope,
+            tenant_id=tenant_id,
+            storage=storage,
+        ):
+            return "incremental"
+        return "full"
+
+
+    @staticmethod
     async def get_backup_by_uuid(
         tenant_id: Optional[int],
         uuid: str,
@@ -185,13 +244,19 @@ class DataBackupService:
         if trigger_source not in ("manual", "scheduled"):
             trigger_source = "manual"
 
+        include_files = bool(getattr(data, "include_files", True))
+        backup_type = await DataBackupService.resolve_auto_backup_type(
+            tenant_id=record_tenant_id,
+            backup_scope=data.backup_scope,
+        )
+
         # 全平台备份 tenant_id 为空，避免组织管理员下载到全租户数据包
         backup = await DataBackup.create(
             tenant_id=record_tenant_id,
             name=data.name,
-            backup_type=data.backup_type,
+            backup_type=backup_type,
             backup_scope=data.backup_scope,
-            include_files=data.include_files,
+            include_files=include_files,
             backup_tables=data.backup_tables,
             trigger_source=trigger_source,
             storage_backend="local",
@@ -214,9 +279,9 @@ class DataBackupService:
                             data={
                                 "backup_uuid": str(backup.uuid),
                                 "tenant_id": record_tenant_id,
-                                "backup_type": data.backup_type,
+                                "backup_type": backup_type,
                                 "backup_scope": data.backup_scope,
-                                "include_files": data.include_files,
+                                "include_files": include_files,
                                 "backup_tables": data.backup_tables,
                             },
                             id=str(backup.uuid),
@@ -372,12 +437,15 @@ class DataBackupService:
             include_files = metadata.get("include_files")
             if include_files is None:
                 include_files = zip_has_upload_entries(file_path)
+            include_files = bool(include_files)
+            meta_type = str(metadata.get("backup_type") or "full").strip().lower()
+            backup_type = meta_type if meta_type in ("full", "incremental") else "full"
             backup = await DataBackup.create(
                 tenant_id=None if backup_scope == "all" else tenant_id,
                 name=backup_name,
-                backup_type="full",
+                backup_type=backup_type,
                 backup_scope=backup_scope,
-                include_files=bool(include_files),
+                include_files=include_files,
                 backup_tables=None,
                 file_path=store_backup_file_path(file_path),
                 file_size=file_size,

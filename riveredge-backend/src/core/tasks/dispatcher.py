@@ -1,3 +1,4 @@
+import asyncio
 import inspect
 from collections import defaultdict
 from dataclasses import dataclass
@@ -31,6 +32,7 @@ class TaskStep:
 
 _handlers: dict[str, list[Callable[..., Awaitable[Any]]]] = defaultdict(list)
 _handlers_bootstrapped = False
+_broker_startup_lock = asyncio.Lock()
 
 
 def register_event_handler(event_name: str, handler: Callable[..., Awaitable[Any]]) -> None:
@@ -45,6 +47,19 @@ def _ensure_default_handlers_registered() -> None:
 
     register_data_backup_handlers()
     _handlers_bootstrapped = True
+
+
+async def ensure_taskiq_broker_started() -> None:
+    """API lifespan / Worker 已 startup 则跳过；脚本或漏启动进程按需补一次。"""
+    from core.tasks.taskiq_app import broker
+
+    if getattr(broker, "_write_pool", None) is not None:
+        return
+    async with _broker_startup_lock:
+        if getattr(broker, "_write_pool", None) is not None:
+            return
+        await broker.startup()
+        logger.info("Taskiq broker 已按需 startup（dispatch_event）")
 
 
 async def execute_event_handlers(
@@ -78,12 +93,9 @@ async def dispatch_event(event: TaskEvent) -> list[str]:
         logger.warning("No task handler registered for event: {}", event.name)
         return []
 
-    from core.tasks.taskiq_app import broker, run_event_pipeline
+    from core.tasks.taskiq_app import run_event_pipeline
 
-    if not getattr(broker, "_write_pool", None):
-        msg = "Taskiq broker 未 startup，请在 FastAPI lifespan 中调用 await broker.startup()"
-        logger.error(msg)
-        raise RuntimeError(msg)
+    await ensure_taskiq_broker_started()
 
     task_ids: list[str] = []
     st = await run_event_pipeline.kiq(
