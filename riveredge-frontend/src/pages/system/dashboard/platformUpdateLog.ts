@@ -44,6 +44,15 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'iot-view-data-commands-table-scroll-r01',
+    date: '2026-10-12',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.iot-view-data-commands-table-scroll-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.iot-view-data-commands-table-scroll-r01.description',
+  },
+  {
     id: 'iot-auto-clear-use-device-connection-r01',
     date: '2026-10-12',
     type: 'improvement',

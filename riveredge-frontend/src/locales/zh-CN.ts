@@ -31151,6 +31151,10 @@ export default {
     '设备状态 MQTT 无感刷新：设备连接与台账联动',
   'pages.dashboard.updateLog.entries.kuaiiot-device-status-realtime-r01.description':
     '快数采入站后实时推送：设备连接「最后上报/在线」与设备台账「设备状态」无需手动刷新即可更新。绑定仍在设备连接新建/编辑中选择外部设备 ID（可改）并关联台账。',
+  'pages.dashboard.updateLog.entries.iot-view-data-commands-table-scroll-r01.title':
+    '设备查看数据指令表支持滚动',
+  'pages.dashboard.updateLog.entries.iot-view-data-commands-table-scroll-r01.description':
+    '「查看数据」指令下发表增加固定高度与横向滚动，避免记录过多时把抽屉撑得过长；回调设备 ID 悬停可看全文。',
   'pages.dashboard.updateLog.entries.iot-auto-clear-use-device-connection-r01.title':
     '自动报工清零改为使用设备连接配置',
   'pages.dashboard.updateLog.entries.iot-auto-clear-use-device-connection-r01.description':
