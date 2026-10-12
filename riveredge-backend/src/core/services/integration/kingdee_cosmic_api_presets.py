@@ -19,8 +19,9 @@ OAUTH_GET_TOKEN_PATH = "kapi/oauth2/getToken"
 
 # 标品业务对象标识（与 OpenAPI 初始化后的 sys 路径一致）
 BIZ_BD_MATERIAL = "bd_material"
+# 多数租户 OpenAPI 未发布独立 bd_measureunits（调测 404）；单位同步用多计量单位
 BIZ_BD_MEASUREUNITS = "bd_measureunits"
-BIZ_BD_MATERIALGROUP = "bd_materialgroup"
+BIZ_BD_MULTIMEASUREUNIT = "bd_multimeasureunit"
 BIZ_BD_SUPPLIER = "bd_supplier"
 BIZ_BD_CUSTOMER = "bd_customer"
 BIZ_BD_WAREHOUSE = "bd_warehouse"
@@ -42,6 +43,16 @@ class KingdeeCosmicApiPreset(TypedDict, total=False):
 
 
 WAREHOUSE_PRESET_CODE_SUFFIX = "query_warehouse"
+MEASUREUNITS_PRESET_CODE_SUFFIX = "query_measureunits"
+MATERIAL_PRESET_CODE_SUFFIX = "query_material"
+MATERIAL_GROUP_PRESET_CODE_SUFFIX = "query_material_group"
+# 单位同步只取物料编码/名称与基础单位，避免batchQuery默认吐全量列
+UNIT_SYNC_MATERIAL_SELECT = "number,name,baseunit.number,baseunit.name"
+# 物料同步：编码/名称/规格/基础单位/分组（字段以本环境模型为准，可微调）
+MATERIAL_SYNC_SELECT = (
+    "number,name,modelnum,baseunit.number,baseunit.name,group.number,group.name"
+)
+GOODS_CLASS_QUERY_PATH = "kapi/v2/gmc/mdr_goodsclass/getMalGoodsClass"
 
 
 def build_warehouse_batch_query_preset_body() -> Dict[str, Any]:
@@ -60,6 +71,143 @@ def warehouse_batch_query_preset_needs_upgrade(request_body: Any) -> bool:
     if not isinstance(data, dict):
         return True
     return not str(data.get("createorg_number") or data.get("createOrgNumber") or "").strip()
+
+
+def _resolve_request_select(request_body: Any = None, request_params: Any = None) -> str:
+    if isinstance(request_params, dict):
+        raw = request_params.get("select")
+        if raw not in (None, ""):
+            return str(raw).strip()
+    if isinstance(request_body, dict):
+        raw = request_body.get("select")
+        if raw not in (None, ""):
+            return str(raw).strip()
+        data = request_body.get("data")
+        if isinstance(data, dict) and data.get("select") not in (None, ""):
+            return str(data.get("select")).strip()
+    return ""
+
+
+def measureunits_preset_needs_upgrade(
+    path: Any,
+    request_body: Any = None,
+    request_params: Any = None,
+) -> bool:
+    """
+    旧预置常指向网关未挂通的单位对象，或未带精简 select，
+    须升级为物料 batchQuery + 仅基础单位字段。
+    """
+    lower = str(path or "").lower().replace("\\", "/")
+    if not lower:
+        return True
+    on_material = f"/{BIZ_BD_MATERIAL}/batchquery" in lower
+    if not on_material:
+        return True
+    select = _resolve_request_select(request_body, request_params).lower().replace(" ", "")
+    return "baseunit.number" not in select or "baseunit.name" not in select
+
+
+def material_preset_needs_upgrade(
+    path: Any,
+    request_body: Any = None,
+    request_params: Any = None,
+) -> bool:
+    """物料预置缺 select 或未带基础单位/分组字段时升级，便于同步映射自动对齐。"""
+    lower = str(path or "").lower().replace("\\", "/")
+    if f"/{BIZ_BD_MATERIAL}/batchquery" not in lower:
+        return False
+    select = _resolve_request_select(request_body, request_params).lower().replace(" ", "")
+    if not select:
+        return True
+    return "baseunit.number" not in select or "baseunit.name" not in select
+
+
+def build_material_batch_query_preset() -> KingdeeCosmicApiPreset:
+    """物料同步：batchQuery + select，返回列可自动映射主编码/名称/单位/分组。"""
+    return {
+        "code_suffix": MATERIAL_PRESET_CODE_SUFFIX,
+        "name": "苍穹查询物料",
+        "description": (
+            "基础资料物料批量查询 /v2/basedata/bd_material/batchQuery。"
+            f"请求 select={MATERIAL_SYNC_SELECT}，便于同步自动映射："
+            "主编码←number，名称←name，规格←modelnum，"
+            "基础单位←baseunit.number/name，分组←group.number/name。"
+            "字段名若与本环境模型不一致，请在接口管理中微调 select。"
+        ),
+        "path": f"kapi/v2/basedata/{BIZ_BD_MATERIAL}/batchQuery",
+        "method": "POST",
+        "request_params": {
+            "select": MATERIAL_SYNC_SELECT,
+        },
+        "request_body": {
+            "data": {},
+            "pageNo": 1,
+            "pageSize": 100,
+            "select": MATERIAL_SYNC_SELECT,
+        },
+    }
+
+
+def material_group_preset_needs_upgrade(path: Any) -> bool:
+    """旧预置指向未发布的 bd_materialgroup 时，升级为 getMalGoodsClass。"""
+    lower = str(path or "").lower().replace("\\", "/")
+    if not lower:
+        return True
+    if "getmalgoodsclass" in lower or "mdr_goodsclass" in lower:
+        return False
+    return "bd_materialgroup" in lower or "materialgroup" in lower
+
+
+def build_material_group_goods_class_preset() -> KingdeeCosmicApiPreset:
+    """无独立 bd_materialgroup 时，用 GMC 商品分类拉分组树。"""
+    return {
+        "code_suffix": MATERIAL_GROUP_PRESET_CODE_SUFFIX,
+        "name": "苍穹查询物料分组",
+        "description": (
+            "本环境常无 bd_materialgroup（OpenAPI 404）。"
+            f"改用 GMC 商品分类 {GOODS_CLASS_QUERY_PATH}；"
+            "pageSize 必填，筛选项与分页同级（勿包 data）。"
+            "同步映射：编码←number，名称←name，父编码←parent_parent_number。"
+        ),
+        "path": GOODS_CLASS_QUERY_PATH,
+        "method": "POST",
+        "request_body": {
+            "pageNo": 1,
+            "pageSize": 100,
+        },
+    }
+
+
+def build_measureunits_batch_query_preset() -> KingdeeCosmicApiPreset:
+    """
+    单位目录同步（苍穹）。
+
+    现场网关常对独立计量单位 / 多计量单位返回「路由未找到」；
+    物料 batchQuery 已探活。请求带 select，只拉编码/名称与基础单位。
+    """
+    return {
+        "code_suffix": MEASUREUNITS_PRESET_CODE_SUFFIX,
+        "name": "苍穹单位同步（从物料基础单位）",
+        "description": (
+            "本环境开放平台常未挂通 bd_measureunits / bd_multimeasureunit（网关 404）。"
+            f"单位目录请用已探活的物料批量查询 /v2/basedata/{BIZ_BD_MATERIAL}/batchQuery，"
+            f"请求 select={UNIT_SYNC_MATERIAL_SELECT}（只拉需要的列）。"
+            "字段映射：编码←baseunit.number / baseunit_number，名称←baseunit.name / baseunit_name；"
+            "按编码去重写入单位管理。"
+        ),
+        "path": f"kapi/v2/basedata/{BIZ_BD_MATERIAL}/batchQuery",
+        "method": "POST",
+        "request_params": {
+            "select": UNIT_SYNC_MATERIAL_SELECT,
+        },
+        "request_body": {
+            "data": {},
+            "pageNo": 1,
+            # 按物料翻页抽单位；单页太小且物料单位单一时，测试去重后会误以为「只有一个单位」
+            "pageSize": 500,
+            "select": UNIT_SYNC_MATERIAL_SELECT,
+        },
+    }
 
 
 def _basedata_batch_query_preset(
@@ -152,35 +300,15 @@ def list_kingdee_cosmic_api_presets() -> List[KingdeeCosmicApiPreset]:
             "method": "POST",
             "request_body": build_get_token_preset_body(),
         },
+        build_material_batch_query_preset(),
+        build_measureunits_batch_query_preset(),
+        build_material_group_goods_class_preset(),
         {
-            "code_suffix": "query_material",
-            "name": "苍穹查询物料",
-            "description": (
-                "基础资料API服务里的物料批量查询。"
-                "请求地址 /v2/basedata/bd_material/batchQuery，"
-                "完整地址为门户域名/kapi 加上该请求地址。"
-                "筛选放在请求体的 data 内，字段与开放平台该 API 的请求体一致；均为非必填。"
-            ),
-            "path": "kapi/v2/basedata/bd_material/batchQuery",
-            "method": "POST",
-            "request_body": {
-                "data": {},
-                "pageNo": 1,
-                "pageSize": 100,
-            },
+            # 与 query_material_group 同路径，便于在接口库按「商品分类」搜索
+            **build_material_group_goods_class_preset(),
+            "code_suffix": "query_goods_class",
+            "name": "苍穹查询物料分类（商品分类）",
         },
-        _basedata_batch_query_preset(
-            code_suffix="query_measureunits",
-            name="苍穹查询计量单位",
-            biz_object=BIZ_BD_MEASUREUNITS,
-            usage="计量单位",
-        ),
-        _basedata_batch_query_preset(
-            code_suffix="query_material_group",
-            name="苍穹查询物料分组",
-            biz_object=BIZ_BD_MATERIALGROUP,
-            usage="物料分组",
-        ),
         {
             "code_suffix": "query_supplier",
             "name": "苍穹查询供应商",

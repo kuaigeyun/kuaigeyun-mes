@@ -142,6 +142,8 @@ type PageConfig = {
   itemDoneStatus: string;
   attachmentCategory: string;
   getLifecycle: (record: Record<string, unknown>, t: LifecycleTranslateFn) => LifecycleResult;
+  /** manifest 资源前缀；拆卸单页须传 disassembly 模块 */
+  permissionResource?: string;
   enableTemplateApply?: boolean;
   /** product=拆卸扣成品；items=组装扣组件 */
   stockConsumeKind: 'product' | 'items';
@@ -170,10 +172,11 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
   const createFormRef = useRef<any>(null);
   const itemFormRef = useRef<any>(null);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
-  const { canUpdate: canUpdateAssemblyOrder } = useResourcePermissions(
-    'kuaizhizao:warehouse-management-assembly-orders'
+  const orderPerms = useResourcePermissions(
+    config.permissionResource ?? 'kuaizhizao:warehouse-management-assembly-orders',
   );
-  const canApplyTemplate = config.enableTemplateApply ? canUpdateAssemblyOrder : false;
+  const canExecuteOrder = orderPerms.canAction?.('execute') ?? false;
+  const canApplyTemplate = config.enableTemplateApply ? canExecuteOrder : false;
 
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [itemModalVisible, setItemModalVisible] = useState(false);
@@ -794,7 +797,8 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
               <Button {...rowActionKind('create')} {...rowActionLabelKeep()} onClick={() => openItemModal(record)}>
                 {t('app.kuaizhizao.warehouseCommon.addItem')}
               </Button>
-              <ActionConfirmPopconfirm title={config.executeActionLabel} description={t('app.kuaizhizao.warehouseCommon.executeConfirmContent', {
+              {canExecuteOrder ? (
+                <ActionConfirmPopconfirm title={config.executeActionLabel} description={t('app.kuaizhizao.warehouseCommon.executeConfirmContent', {
         action: config.executeActionLabel,
         code: record.code,
       })} onConfirm={() => executeconfirmExecuteOrder(record)}>
@@ -806,6 +810,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
                 {config.executeActionLabel}
               </Button>
             </ActionConfirmPopconfirm>
+              ) : null}
               <ActionConfirmPopconfirm title={t('app.kuaizhizao.warehouseCommon.deleteOrderTitle', { noun: config.actionNoun })} description={t('app.kuaizhizao.warehouseCommon.deleteOrderConfirm', { noun: config.actionNoun, code: record.code })} onConfirm={() => executeconfirmDeleteOrder(record)}>
               <Button {...rowActionKind('delete')} onClick={(e) => e.stopPropagation()} />
             </ActionConfirmPopconfirm>

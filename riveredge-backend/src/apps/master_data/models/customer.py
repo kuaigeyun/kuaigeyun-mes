@@ -61,6 +61,9 @@ class Customer(BaseModel):
     phone = fields.CharField(max_length=20, null=True, description="电话")
     email = fields.CharField(max_length=100, null=True, description="邮箱")
     contacts = fields.JSONField(null=True, default=list, description="联系人明细 JSON 数组")
+    settlement_accounts = fields.JSONField(
+        null=True, default=list, description="收付款账户明细 JSON 数组"
+    )
     address = fields.TextField(null=True, description="地址")
     
     # 分类信息

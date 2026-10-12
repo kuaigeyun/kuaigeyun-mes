@@ -5,7 +5,9 @@ import type { CurrentUser } from '../types/api';
 import {
   buildCurrentUserQueryKey,
   fetchCurrentUserRecord,
+  resolveSessionTenantScope,
 } from '../config/sessionQueries';
+import { syncStoredTenantId } from './auth';
 import { queryClient } from '../queryClient';
 import { useGlobalStore } from '../stores/globalStore';
 import { buildRestoredUserFromStorage } from './restoredUser';
@@ -13,7 +15,9 @@ import { resolveIsInfraSuperAdminSession } from './infraSuperAdminSession';
 
 export function readCurrentUserFromQueryCache(): CurrentUser | undefined {
   const isInfraSuperAdmin = resolveIsInfraSuperAdminSession();
-  return queryClient.getQueryData<CurrentUser>(buildCurrentUserQueryKey(isInfraSuperAdmin));
+  return queryClient.getQueryData<CurrentUser>(
+    buildCurrentUserQueryKey(isInfraSuperAdmin, resolveSessionTenantScope()),
+  );
 }
 
 /** 同步读取当前用户：优先 React Query，其次内存 store，最后 localStorage user_info */
@@ -29,7 +33,8 @@ export function getSessionCurrentUser(): CurrentUser | undefined {
 /** 强制刷新当前用户 Query 并返回最新数据 */
 export async function refetchSessionCurrentUser(): Promise<CurrentUser> {
   const isInfraSuperAdmin = resolveIsInfraSuperAdminSession();
-  const queryKey = buildCurrentUserQueryKey(isInfraSuperAdmin);
+  const tenantScope = resolveSessionTenantScope();
+  const queryKey = buildCurrentUserQueryKey(isInfraSuperAdmin, tenantScope);
   await queryClient.invalidateQueries({ queryKey });
   const user = await queryClient.fetchQuery({
     queryKey,
@@ -38,6 +43,9 @@ export async function refetchSessionCurrentUser(): Promise<CurrentUser> {
   const { setUserInfo } = await import('./auth');
   useGlobalStore.getState().setCurrentUser(user);
   setUserInfo(user);
+  if (user.tenant_id != null) {
+    syncStoredTenantId(user.tenant_id);
+  }
   return user;
 }
 
@@ -48,6 +56,9 @@ export function patchSessionCurrentUser(patch: Partial<CurrentUser>): CurrentUse
   const next = { ...current, ...patch } as CurrentUser;
   useGlobalStore.getState().setCurrentUser(next);
   void import('./auth').then(({ setUserInfo }) => setUserInfo(next));
-  queryClient.setQueryData(buildCurrentUserQueryKey(resolveIsInfraSuperAdminSession()), next);
+  queryClient.setQueryData(
+    buildCurrentUserQueryKey(resolveIsInfraSuperAdminSession(), resolveSessionTenantScope()),
+    next,
+  );
   return next;
 }

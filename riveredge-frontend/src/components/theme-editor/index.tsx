@@ -287,6 +287,9 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
     };
   } | null>(null);
   const [colorMode, setColorMode] = useState<'light' | 'dark' | 'auto'>('light');
+  /** 订阅表单颜色模式，避免仅 setFieldValue 时卡片高亮不刷新 */
+  const watchedColorMode = Form.useWatch('colorMode', form) as 'light' | 'dark' | 'auto' | undefined;
+  const activeColorMode = watchedColorMode || colorMode;
   /**
    * B端主流配色最佳实践 - 统一预设颜色配置
    * 
@@ -730,7 +733,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
         '#1890ff',
       );
       const resolvedColorMode =
-        (form.getFieldValue('colorMode') as 'light' | 'dark' | 'auto' | undefined) ||
+        (activeColorMode as 'light' | 'dark' | 'auto' | undefined) ||
         colorMode ||
         'light';
       values.colorMode = resolvedColorMode;
@@ -944,7 +947,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                       padding: '16px',
                       borderRadius: 8,
                       transition: 'all 0.2s',
-                      backgroundColor: form.getFieldValue('colorMode') === 'light'
+                      backgroundColor: activeColorMode === 'light'
                         ? `${token.colorPrimary || '#1890ff'}15`
                         : 'transparent',
                     }}
@@ -952,14 +955,14 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                       handleColorModeChange('light');
                     }}
                     onMouseEnter={(e) => {
-                      if (form.getFieldValue('colorMode') !== 'light') {
+                      if (activeColorMode !== 'light') {
                         // 深色模式下使用更深的背景色
-                        const isDark = colorMode === 'dark' || (colorMode === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+                        const isDark = activeColorMode === 'dark' || (activeColorMode === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
                         e.currentTarget.style.backgroundColor = isDark ? 'rgba(255, 255, 255, 0.08)' : '#f5f5f5';
                       }
                     }}
                     onMouseLeave={(e) => {
-                      if (form.getFieldValue('colorMode') !== 'light') {
+                      if (activeColorMode !== 'light') {
                         e.currentTarget.style.backgroundColor = 'transparent';
                       }
                     }}
@@ -967,7 +970,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                     <SunOutlined
                       style={{
                         fontSize: 32,
-                        color: form.getFieldValue('colorMode') === 'light'
+                        color: activeColorMode === 'light'
                           ? token.colorPrimary || '#1890ff'
                           : '#8c8c8c',
                         marginBottom: 8,
@@ -985,7 +988,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                       padding: '16px',
                       borderRadius: 8,
                       transition: 'all 0.2s',
-                      backgroundColor: form.getFieldValue('colorMode') === 'dark'
+                      backgroundColor: activeColorMode === 'dark'
                         ? `${token.colorPrimary || '#1890ff'}15`
                         : 'transparent',
                     }}
@@ -993,14 +996,14 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                       handleColorModeChange('dark');
                     }}
                     onMouseEnter={(e) => {
-                      if (form.getFieldValue('colorMode') !== 'dark') {
+                      if (activeColorMode !== 'dark') {
                         // 深色模式下使用更深的背景色
-                        const isDark = colorMode === 'dark' || (colorMode === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+                        const isDark = activeColorMode === 'dark' || (activeColorMode === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
                         e.currentTarget.style.backgroundColor = isDark ? 'rgba(255, 255, 255, 0.08)' : '#f5f5f5';
                       }
                     }}
                     onMouseLeave={(e) => {
-                      if (form.getFieldValue('colorMode') !== 'dark') {
+                      if (activeColorMode !== 'dark') {
                         e.currentTarget.style.backgroundColor = 'transparent';
                       }
                     }}
@@ -1008,7 +1011,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                     <MoonOutlined
                       style={{
                         fontSize: 32,
-                        color: form.getFieldValue('colorMode') === 'dark'
+                        color: activeColorMode === 'dark'
                           ? token.colorPrimary || '#1890ff'
                           : '#8c8c8c',
                         marginBottom: 8,
@@ -1026,7 +1029,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                       padding: '16px',
                       borderRadius: 8,
                       transition: 'all 0.2s',
-                      backgroundColor: form.getFieldValue('colorMode') === 'auto'
+                      backgroundColor: activeColorMode === 'auto'
                         ? `${token.colorPrimary || '#1890ff'}15`
                         : 'transparent',
                     }}
@@ -1034,14 +1037,14 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                       handleColorModeChange('auto');
                     }}
                     onMouseEnter={(e) => {
-                      if (form.getFieldValue('colorMode') !== 'auto') {
+                      if (activeColorMode !== 'auto') {
                         // 深色模式下使用更深的背景色
-                        const isDark = colorMode === 'dark' || (colorMode === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+                        const isDark = activeColorMode === 'dark' || (activeColorMode === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
                         e.currentTarget.style.backgroundColor = isDark ? 'rgba(255, 255, 255, 0.08)' : '#f5f5f5';
                       }
                     }}
                     onMouseLeave={(e) => {
-                      if (form.getFieldValue('colorMode') !== 'auto') {
+                      if (activeColorMode !== 'auto') {
                         e.currentTarget.style.backgroundColor = 'transparent';
                       }
                     }}
@@ -1049,7 +1052,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                     <DesktopOutlined
                       style={{
                         fontSize: 32,
-                        color: form.getFieldValue('colorMode') === 'auto'
+                        color: activeColorMode === 'auto'
                           ? token.colorPrimary || '#1890ff'
                           : '#8c8c8c',
                         marginBottom: 8,
@@ -1221,7 +1224,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
             </Card>
 
             {/* 左侧菜单栏设置（多彩 + 浅色模式） */}
-            {!isPlainStyle && (form.getFieldValue('colorMode') === 'light' || (!form.getFieldValue('colorMode') && colorMode === 'light')) && (
+            {!isPlainStyle && (activeColorMode === 'light' || (!activeColorMode && colorMode === 'light')) && (
               <Card
                 size="small"
                 title={
@@ -1372,7 +1375,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
             )}
 
             {/* 顶栏设置（多彩 + 浅色模式） */}
-            {!isPlainStyle && (form.getFieldValue('colorMode') === 'light' || (!form.getFieldValue('colorMode') && colorMode === 'light')) && (
+            {!isPlainStyle && (activeColorMode === 'light' || (!activeColorMode && colorMode === 'light')) && (
               <Card
                 size="small"
                 title={
@@ -1474,7 +1477,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
             )}
 
             {/* 标签栏设置（多彩 + 浅色模式） */}
-            {!isPlainStyle && (form.getFieldValue('colorMode') === 'light' || (!form.getFieldValue('colorMode') && colorMode === 'light')) && (
+            {!isPlainStyle && (activeColorMode === 'light' || (!activeColorMode && colorMode === 'light')) && (
               <Card
                 size="small"
                 title={
@@ -1576,7 +1579,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
             )}
 
             {/* 标签背景：激活标签 + 内容区（多彩 + 浅色模式） */}
-            {!isPlainStyle && (form.getFieldValue('colorMode') === 'light' || (!form.getFieldValue('colorMode') && colorMode === 'light')) && (
+            {!isPlainStyle && (activeColorMode === 'light' || (!activeColorMode && colorMode === 'light')) && (
               <Card
                 size="small"
                 title={

@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-10-07T06:04:21Z",
-  "updated_at": "2026-10-12T11:43:01Z",
+  "updated_at": "2026-10-12T23:24:37Z",
   "files": {
     ".cursor/rules/ai-memory.mdc": {
       "role": "index",
@@ -41,9 +41,15 @@
     },
     ".cursor/rules/reuse-existing-patterns.mdc": {
       "role": "index",
-      "sha256": "3064fcc384d3ff6e194502fa35f1bb8b3ac38137691c990d91f361b8aee62dd5",
-      "size": 1724,
-      "normalized_sha256": "dcb1a8365af59896e11fae5ba3d965bb93099a1ca3f367e46f2e1018db500671"
+      "sha256": "56bd4c728421dfc40516d2ddacc7dad375e7e868bea8792625bdc7ba473f1e4e",
+      "size": 2500,
+      "normalized_sha256": "56bd4c728421dfc40516d2ddacc7dad375e7e868bea8792625bdc7ba473f1e4e"
+    },
+    ".cursor/skills/new-document-page/SKILL.md": {
+      "role": "index",
+      "sha256": "91f2402587d43891be1ebafc0921fddde7bfb8a823283d00032d1f68e4c65330",
+      "size": 10839,
+      "normalized_sha256": "c6c970a663a73701e36c6872ee58f0fb977030a325e20503d1e11143c468b5ff"
     },
     ".gitattributes": {
       "role": "index",
@@ -77,9 +83,9 @@
     },
     "aoci.code.txt": {
       "role": "index",
-      "sha256": "01f2b582b104218423e43339f68fa726341e6c5be93a057fc177d22c9cb00bc3",
-      "size": 1002995,
-      "normalized_sha256": "01f2b582b104218423e43339f68fa726341e6c5be93a057fc177d22c9cb00bc3"
+      "sha256": "ec08e26a00dee9d088368d37d96250b1f52ed434260022ebaf02e4254e2c493e",
+      "size": 1005060,
+      "normalized_sha256": "ec08e26a00dee9d088368d37d96250b1f52ed434260022ebaf02e4254e2c493e"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -26473,6 +26479,12 @@
       "size": 13415,
       "normalized_sha256": "6ba0250aea2792b24b6fb42b6527d3488fa12dca47610bd61ea3882e5089b551"
     },
+    "riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/shared/MiscVoucherListPage.tsx": {
+      "role": "index",
+      "sha256": "14973017f657e762dd02fdfb2982d94a6ba0b7ff9b15d5aeb4f6fe21a4eb0fa1",
+      "size": 38399,
+      "normalized_sha256": "14973017f657e762dd02fdfb2982d94a6ba0b7ff9b15d5aeb4f6fe21a4eb0fa1"
+    },
     "riveredge-frontend/src/apps/kuaizhizao/pages/logistics-management/carriers/index.tsx": {
       "role": "index",
       "sha256": "33408432ee0bc01c13dcc86553a88e1ef95883b4027879687d4ac458deeac046",
@@ -34083,8 +34095,8 @@
     },
     "riveredge-frontend/src/components/uni-dropdown/index.tsx": {
       "role": "index",
-      "sha256": "aa8215c7c0e5ec873eac3c2e1cbbec98b939a7c9a2dd928564126d2076b04842",
-      "size": 11677,
+      "sha256": "bc0525a273d758f15123c2cd58fce77e2b125165371172c075e548e44c972ed6",
+      "size": 11364,
       "normalized_sha256": "bc0525a273d758f15123c2cd58fce77e2b125165371172c075e548e44c972ed6"
     },
     "riveredge-frontend/src/components/uni-dropdown/types.ts": {

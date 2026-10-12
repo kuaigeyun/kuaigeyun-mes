@@ -860,6 +860,18 @@ async def _load_freight_bill(tenant_id: int, entity_id: int) -> Any:
     return await FreightBillService().get_bill(tenant_id, entity_id)
 
 
+async def _load_other_income(tenant_id: int, entity_id: int) -> Any:
+    from apps.kuaicaiwu.services.other_income_service import OtherIncomeService
+
+    return await OtherIncomeService().get_by_id(tenant_id, entity_id)
+
+
+async def _load_other_expense(tenant_id: int, entity_id: int) -> Any:
+    from apps.kuaicaiwu.services.other_expense_service import OtherExpenseService
+
+    return await OtherExpenseService().get_by_id(tenant_id, entity_id)
+
+
 async def _load_kuaioa_form_request(tenant_id: int, entity_id: int) -> Any:
     from apps.kuaioa.services.form_service import FormRequestService
 
@@ -968,6 +980,8 @@ DOCUMENT_LOADERS: Dict[str, LoaderFn] = {
     "project_proposal": _load_project_proposal,
     "mold_sample": _load_mold_sample,
     "freight_bill": _load_freight_bill,
+    "other_income": _load_other_income,
+    "other_expense": _load_other_expense,
     "kuaioa_form_request": _load_kuaioa_form_request,
     "kuaioa_asset_purchase": _load_kuaioa_asset_purchase,
     "kuaioa_leave": _load_kuaioa_leave,

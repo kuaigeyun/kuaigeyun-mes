@@ -34,6 +34,9 @@ const BankAccountsPage = lazy(() => import('./pages/finance-management/bank-acco
 const NotesReceivablePage = lazy(() => import('./pages/finance-management/notes-receivable'));
 const NotesPayablePage = lazy(() => import('./pages/finance-management/notes-payable'));
 const PrepaymentsPage = lazy(() => import('./pages/finance-management/prepayments'));
+const OtherIncomesPage = lazy(() => import('./pages/finance-management/other-incomes'));
+const OtherExpensesPage = lazy(() => import('./pages/finance-management/other-expenses'));
+const FinanceMiscCategoriesPage = lazy(() => import('./pages/finance-management/finance-misc-categories'));
 
 const FINANCE_DASHBOARD = '/apps/kuaizhizao/finance-management/dashboard';
 
@@ -63,6 +66,8 @@ export function FinanceManagementRoutes() {
       <Route path="finance-management/receipts" element={withPageSuspense(ReceiptsPage)} />
       <Route path="finance-management/receipt-refunds" element={withPageSuspense(ReceiptRefundsPage)} />
       <Route path="finance-management/payments" element={withPageSuspense(PaymentsPage)} />
+      <Route path="finance-management/other-incomes" element={withPageSuspense(OtherIncomesPage)} />
+      <Route path="finance-management/other-expenses" element={withPageSuspense(OtherExpensesPage)} />
       <Route path="finance-management/payment-refunds" element={withPageSuspense(PaymentRefundsPage)} />
       <Route path="finance-management/settlement" element={withPageSuspense(SettlementPage)} />
       <Route path="finance-management/partner-statements" element={withPageSuspense(PartnerStatementsPage)} />
@@ -83,6 +88,10 @@ export function FinanceManagementRoutes() {
       <Route path="finance-management/notes-receivable" element={withPageSuspense(NotesReceivablePage)} />
       <Route path="finance-management/notes-payable" element={withPageSuspense(NotesPayablePage)} />
       <Route path="finance-management/prepayments" element={withPageSuspense(PrepaymentsPage)} />
+      <Route
+        path="finance-management/finance-misc-categories"
+        element={withPageSuspense(FinanceMiscCategoriesPage)}
+      />
     </Route>
   );
 }

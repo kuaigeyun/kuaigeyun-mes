@@ -15,6 +15,17 @@ alwaysApply: true
 2. **选定标准**：以已落地且用户熟悉的实现为唯一标准（例：销售订单外推 = SyncPushHub + DocumentPushBatchPanel + profiles 白名单 + 列表勾选传 ids）
 3. **对齐契约**：同一入口、同一组件/服务、同一权限与文案模式；只补业务差异（source_type、字段、候选加载），不改交互骨架
 
+## 新建 PC 页（最基础要求）
+
+**有规范必须先跟规范走**；禁止为赶进度自写第二套 UI 壳或交互。
+
+| 场景 | 先读 Skill / 真源 | 禁止 |
+|------|-------------------|------|
+| 业务单据列表+弹窗+抽屉 | `.cursor/skills/new-document-page/SKILL.md` + unitable-list / detail-drawer / form-modal | 裸 ProTable、缺新建/多选/批量/操作列 |
+| 主数据 / 设置类列表 | 同上 Skill「主数据/设置类列表」+ 域 Skill（如 kuaicaiwu） | 只有表格无工具栏 |
+| 下拉快速新建 | `UniDropdown.quickCreate` + `QuickCreateModal`（参照 `MaterialUnitQuickSelect`） | Select 自写 `popupRender`、裸 Modal、link 底栏 |
+| 列表分段/视图切换 | `ThemedSegmented` + UniTable `beforeSearchButtons` | 表上单独一行 Segmented |
+
 ## 禁止
 
 - 为「差不多」的需求再写一套面板、一套按钮门禁、一套 profile 过滤、一套勾选传递

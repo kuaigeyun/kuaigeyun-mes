@@ -430,6 +430,40 @@ async def _dispatch_purchase_order_change(
     _unsupported("purchase_order_change", action)
 
 
+async def _dispatch_payment_application(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaizhizao.services.payment_application_service import PaymentApplicationService
+
+    svc = PaymentApplicationService()
+    if action == "submit":
+        return await svc.submit_application(tenant_id, entity_id, user_id)
+    if action == "approve":
+        return await svc.approve_application(
+            tenant_id,
+            entity_id,
+            approved=True,
+            approved_by=user_id,
+            review_remarks=reason,
+        )
+    if action == "reject":
+        return await svc.approve_application(
+            tenant_id,
+            entity_id,
+            approved=False,
+            approved_by=user_id,
+            review_remarks=reason or "审批驳回",
+        )
+    if action == "withdraw":
+        return await svc.withdraw_application(tenant_id, entity_id, user_id)
+    _unsupported("payment_application", action)
+
+
 async def _dispatch_purchase_request(
     action: str,
     *,
@@ -1236,6 +1270,70 @@ async def _dispatch_mold_sample(
     _unsupported("mold_sample", action)
 
 
+async def _dispatch_other_income(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaicaiwu.services.other_income_service import OtherIncomeService
+
+    svc = OtherIncomeService()
+    if action == "submit":
+        return await svc.submit_income(tenant_id, entity_id, user_id)
+    if action == "approve":
+        return await svc.approve_income(
+            tenant_id, entity_id, approved=True, operator_id=user_id
+        )
+    if action == "reject":
+        return await svc.approve_income(
+            tenant_id,
+            entity_id,
+            approved=False,
+            operator_id=user_id,
+            review_remarks=reason or "审批驳回",
+        )
+    if action == "withdraw":
+        return await svc.withdraw_income_submit(tenant_id, entity_id, user_id)
+    if action == "revoke":
+        return await svc.revoke_income_approval(tenant_id, entity_id, user_id)
+    _unsupported("other_income", action)
+
+
+async def _dispatch_other_expense(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaicaiwu.services.other_expense_service import OtherExpenseService
+
+    svc = OtherExpenseService()
+    if action == "submit":
+        return await svc.submit_expense(tenant_id, entity_id, user_id)
+    if action == "approve":
+        return await svc.approve_expense(
+            tenant_id, entity_id, approved=True, operator_id=user_id
+        )
+    if action == "reject":
+        return await svc.approve_expense(
+            tenant_id,
+            entity_id,
+            approved=False,
+            operator_id=user_id,
+            review_remarks=reason or "审批驳回",
+        )
+    if action == "withdraw":
+        return await svc.withdraw_expense_submit(tenant_id, entity_id, user_id)
+    if action == "revoke":
+        return await svc.revoke_expense_approval(tenant_id, entity_id, user_id)
+    _unsupported("other_expense", action)
+
+
 async def _dispatch_freight_bill(
     action: str,
     *,
@@ -1475,6 +1573,7 @@ HANDLERS: Dict[str, DispatchFn] = {
     "purchase_order": _dispatch_purchase_order,
     "purchase_order_change": _dispatch_purchase_order_change,
     "purchase_arrival_delay": _dispatch_purchase_arrival_delay,
+    "payment_application": _dispatch_payment_application,
     "purchase_request": _dispatch_purchase_request,
     "purchase_inquiry": _dispatch_purchase_inquiry,
     "reporting_record": _dispatch_reporting_record,
@@ -1506,6 +1605,8 @@ HANDLERS: Dict[str, DispatchFn] = {
     "project_proposal": _dispatch_project_proposal,
     "mold_sample": _dispatch_mold_sample,
     "freight_bill": _dispatch_freight_bill,
+    "other_income": _dispatch_other_income,
+    "other_expense": _dispatch_other_expense,
     "kuaioa_form_request": _dispatch_kuaioa_form_request,
     "kuaioa_asset_purchase": _dispatch_kuaioa_asset_purchase,
     "kuaioa_leave": _dispatch_kuaioa_leave,

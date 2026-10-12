@@ -20,13 +20,14 @@ import { SyncApiCallParamsPanel } from './SyncApiCallParamsPanel';
 import { ThemedSegmented } from '../themed-segmented/ThemedSegmented';
 import { getAPIByUuid, testAPI } from '../../services/apiManagement';
 import {
+  collapseMaterialRowsToUniqueUnits,
   collectRowColumnKeys,
   expandNestedDetailRows,
   extractKingdeeFieldKeys,
+  filterPreviewColumns,
   formatSyncErrorMessage,
-  invertFieldMapping,
   isInactiveSyncSourceError,
-  mappingFromBinding,
+  mergeSuggestedMapping,
   normalizeApiBodyToRows,
   suggestTargetToSourceMapping,
   SYNC_PREVIEW_ROW_LIMIT,
@@ -265,7 +266,7 @@ export const SyncSourceSettingModal: React.FC<SyncSourceSettingModalProps> = ({
           throw new Error(detail);
         }
         const columnNames = extractKingdeeFieldKeys(baseBody);
-        rows = normalizeApiBodyToRows(result.body, columnNames).slice(0, SYNC_PREVIEW_ROW_LIMIT);
+        rows = normalizeApiBodyToRows(result.body, columnNames);
       } else if (kind === 'dataset' && datasetUuid) {
         const res = await executeDatasetQuery(datasetUuid, {
           limit: SYNC_PREVIEW_ROW_LIMIT,
@@ -274,21 +275,36 @@ export const SyncSourceSettingModal: React.FC<SyncSourceSettingModalProps> = ({
         if (!res.success) throw new Error(res.error || t('components.syncFromSource.queryFailed'));
         rows = expandNestedDetailRows(
           ((res.data || []) as Record<string, unknown>[]),
-        ).slice(0, SYNC_PREVIEW_ROW_LIMIT);
+        );
       }
 
-      const columns = collectRowColumnKeys(rows);
-      setPreviewRows(rows);
+      if (config.collapsePreviewToUniqueUnits) {
+        rows = collapseMaterialRowsToUniqueUnits(rows);
+      }
+      rows = rows.slice(0, SYNC_PREVIEW_ROW_LIMIT);
+
+      const allColumns = collectRowColumnKeys(rows);
+      const columns = filterPreviewColumns(
+        allColumns,
+        config.previewPreferredSourceKeys,
+        Object.values(targetToSource),
+      );
+      const previewData =
+        columns.length && columns.length < allColumns.length
+          ? rows.map((row) => {
+              const slim: Record<string, unknown> = {};
+              for (const key of columns) {
+                if (key in row) slim[key] = row[key];
+              }
+              return slim;
+            })
+          : rows;
+      setPreviewRows(previewData);
       setPreviewColumns(columns);
 
-      if (Object.keys(targetToSource).length > 0) {
-        const fromBinding = mappingFromBinding(columns, invertFieldMapping(targetToSource));
-        mergeAddedKeysFromMapping(fromBinding);
-        const suggested = suggestTargetToSourceMapping(columns, targetFieldValues);
-        setTargetToSource({ ...suggested, ...fromBinding, ...targetToSource });
-      } else {
-        setTargetToSource(suggestTargetToSourceMapping(columns, targetFieldValues));
-      }
+      const merged = mergeSuggestedMapping(columns, targetFieldValues, targetToSource);
+      mergeAddedKeysFromMapping(merged);
+      setTargetToSource(merged);
       messageApi.success(t('components.syncFromSource.previewOk', { count: rows.length }));
     } catch (error: unknown) {
       const detail = formatSyncErrorMessage(error, t('components.syncFromSource.queryFailed'));

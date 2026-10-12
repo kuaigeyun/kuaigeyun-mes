@@ -80,6 +80,7 @@ const OutsourceSettlementsPage = lazy(() => import('./pages/outsource-management
 // 采购管理页面
 const PurchaseDashboardPage = lazy(() => import('./pages/purchase-management/dashboard'));
 const PurchaseOrdersPage = lazy(() => import('./pages/purchase-management/purchase-orders'));
+const PaymentApplicationsPage = lazy(() => import('./pages/purchase-management/payment-applications'));
 const PurchaseOrderChangesPage = lazy(() => import('./pages/purchase-management/purchase-order-changes'));
 const PurchaseArrivalWarningsPage = lazy(() => import('./pages/purchase-management/arrival-warnings'));
 const PurchaseRequisitionsPage = lazy(() => import('./pages/purchase-management/purchase-requisitions'));
@@ -418,6 +419,7 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="purchase-management/purchase-orders/new" element={withPageSuspense(PurchaseOrdersPage)} />
       <Route path="purchase-management/purchase-orders/:id/edit" element={withPageSuspense(PurchaseOrdersPage)} />
       <Route path="purchase-management/purchase-orders" element={withPageSuspense(PurchaseOrdersPage)} />
+      <Route path="purchase-management/payment-applications" element={withPageSuspense(PaymentApplicationsPage)} />
       <Route path="purchase-management/purchase-order-changes" element={withPageSuspense(PurchaseOrderChangesPage)} />
       <Route path="purchase-management/arrival-warnings" element={withPageSuspense(PurchaseArrivalWarningsPage)} />
       <Route path="purchase-management/purchase-requisitions/new" element={withPageSuspense(PurchaseRequisitionsPage)} />

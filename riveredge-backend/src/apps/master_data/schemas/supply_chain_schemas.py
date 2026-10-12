@@ -73,6 +73,17 @@ class CustomerContactItem(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
+class PartnerSettlementAccountItem(BaseModel):
+    """客户/供应商收付款账户明细行"""
+
+    account_name: Optional[str] = Field(None, max_length=200, description="户名", alias="accountName")
+    bank_name: Optional[str] = Field(None, max_length=200, description="开户银行", alias="bankName")
+    bank_account: Optional[str] = Field(None, max_length=64, description="银行账号", alias="bankAccount")
+    is_default: bool = Field(False, description="是否默认账户", alias="isDefault")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
 class CustomerCreate(PartnerInvoiceAndExtendedMixin):
     """创建客户 Schema（归属仅通过 salesmanId，池状态由服务写入）"""
 
@@ -87,6 +98,9 @@ class CustomerCreate(PartnerInvoiceAndExtendedMixin):
     salesman_id: Optional[int] = Field(None, description="归属业务员ID", alias="salesmanId")
     contact_title: Optional[str] = Field(None, max_length=100, description="联系人职位", alias="contactTitle")
     contacts: Optional[List[CustomerContactItem]] = Field(None, description="联系人明细")
+    settlement_accounts: Optional[List[PartnerSettlementAccountItem]] = Field(
+        None, description="收付款账户明细", alias="settlementAccounts"
+    )
     industry_code: Optional[str] = Field(None, max_length=50, description="所属行业字典值", alias="industryCode")
     customer_level_code: Optional[str] = Field(None, max_length=50, description="客户级别字典值", alias="customerLevelCode")
     estimated_annual_purchase: Optional[Decimal] = Field(None, description="预估年采购量", alias="estimatedAnnualPurchase")
@@ -206,6 +220,9 @@ class CustomerBase(PartnerInvoiceAndExtendedMixin):
     )
     contact_title: Optional[str] = Field(None, max_length=100, description="联系人职位", alias="contactTitle")
     contacts: Optional[List[CustomerContactItem]] = Field(None, description="联系人明细")
+    settlement_accounts: Optional[List[PartnerSettlementAccountItem]] = Field(
+        None, description="收付款账户明细", alias="settlementAccounts"
+    )
     industry_code: Optional[str] = Field(None, max_length=50, description="所属行业字典值", alias="industryCode")
     customer_level_code: Optional[str] = Field(None, max_length=50, description="客户级别字典值", alias="customerLevelCode")
     estimated_annual_purchase: Optional[Decimal] = Field(None, description="预估年采购量", alias="estimatedAnnualPurchase")
@@ -236,6 +253,9 @@ class CustomerUpdate(PartnerInvoiceAndExtendedMixin):
     salesman_id: Optional[int] = Field(None, description="归属业务员ID", alias="salesmanId")
     contact_title: Optional[str] = Field(None, max_length=100, description="联系人职位", alias="contactTitle")
     contacts: Optional[List[CustomerContactItem]] = Field(None, description="联系人明细")
+    settlement_accounts: Optional[List[PartnerSettlementAccountItem]] = Field(
+        None, description="收付款账户明细", alias="settlementAccounts"
+    )
     industry_code: Optional[str] = Field(None, max_length=50, description="所属行业字典值", alias="industryCode")
     customer_level_code: Optional[str] = Field(None, max_length=50, description="客户级别字典值", alias="customerLevelCode")
     estimated_annual_purchase: Optional[Decimal] = Field(None, description="预估年采购量", alias="estimatedAnnualPurchase")
@@ -347,6 +367,9 @@ class SupplierBase(PartnerInvoiceAndExtendedMixin):
     buyer_name: Optional[str] = Field(None, max_length=100, description="归属采购员姓名", alias="buyerName")
     contact_title: Optional[str] = Field(None, max_length=100, description="联系人职位", alias="contactTitle")
     contacts: Optional[List[CustomerContactItem]] = Field(None, description="联系人明细")
+    settlement_accounts: Optional[List[PartnerSettlementAccountItem]] = Field(
+        None, description="收付款账户明细", alias="settlementAccounts"
+    )
     industry_code: Optional[str] = Field(None, max_length=50, description="所属行业字典值", alias="industryCode")
     estimated_annual_purchase: Optional[Decimal] = Field(None, description="预估年采购额", alias="estimatedAnnualPurchase")
     source_channel_code: Optional[str] = Field(None, max_length=50, description="来源渠道字典值", alias="sourceChannelCode")
@@ -443,6 +466,9 @@ class SupplierUpdate(PartnerInvoiceAndExtendedMixin):
     buyer_name: Optional[str] = Field(None, max_length=100, description="归属采购员姓名", alias="buyerName")
     contact_title: Optional[str] = Field(None, max_length=100, description="联系人职位", alias="contactTitle")
     contacts: Optional[List[CustomerContactItem]] = Field(None, description="联系人明细")
+    settlement_accounts: Optional[List[PartnerSettlementAccountItem]] = Field(
+        None, description="收付款账户明细", alias="settlementAccounts"
+    )
     industry_code: Optional[str] = Field(None, max_length=50, description="所属行业字典值", alias="industryCode")
     estimated_annual_purchase: Optional[Decimal] = Field(None, description="预估年采购额", alias="estimatedAnnualPurchase")
     source_channel_code: Optional[str] = Field(None, max_length=50, description="来源渠道字典值", alias="sourceChannelCode")

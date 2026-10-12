@@ -120,6 +120,7 @@ const StocktakingPage: React.FC = () => {
   const deepLinkFilterRef = useRef<{ id?: number; uuid?: string }>({});
   const { canCreate, canUpdate, canDelete, canAction } = useResourcePermissions(STOCKTAKING_RESOURCE);
   const canRevoke = canAction?.('revoke') ?? false;
+  const canExecuteStocktaking = canAction?.('execute') ?? false;
   /** 开始盘点：后端 create/update 任一即可；仅 create 时也应能启动刚建的单据 */
   const canStartStocktaking = canUpdate || canCreate;
 
@@ -716,7 +717,7 @@ const StocktakingPage: React.FC = () => {
               {t('app.kuaizhizao.stocktaking.actionAddItem')}
             </Button>
           )}
-          {record.status === 'in_progress' && canComplete(record) && canUpdate && (
+          {record.status === 'in_progress' && canComplete(record) && canExecuteStocktaking && (
             <ActionConfirmPopconfirm title={t('app.kuaizhizao.stocktaking.msgCompleteTitle')} description={(record.total_differences ?? 0) > 0
         ? t('app.kuaizhizao.stocktaking.msgCompleteWithDiff', {
             code: record.code,

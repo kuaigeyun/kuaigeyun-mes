@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 
 _BASEDATA_BATCH_OBJECTS = {
     "bd_material",
     "bd_measureunits",
+    "bd_multimeasureunit",
     "bd_materialgroup",
     "bd_supplier",
     "bd_customer",
@@ -86,18 +87,32 @@ def _kingdee_v2_needs_paging(path: str) -> bool:
     )
 
 
+def _is_flat_v2_query_path(path: str) -> bool:
+    """请求体顶层筛选项 + pageNo/pageSize，勿包进 data（库存、商品分类 getMalGoodsClass 等）。"""
+    lower = str(path or "").split("?", 1)[0].lower()
+    return (
+        "getinventory" in lower
+        or "getinvacc" in lower
+        or "/imrealbal" in lower
+        or "getmalgoodsclass" in lower
+        or "mdr_goodsclass" in lower
+        or "/gmc/" in lower
+    )
+
+
 def ensure_kingdee_v2_request_body(url: str, body: Dict[str, Any]) -> Dict[str, Any]:
     """
     v2 批量查询的请求体为 data，以及必填的 pageNo、pageSize。
     筛选字段在 data 内；pageSize 为空时金蝶返回 400。
 
-    即时库存等接口使用顶层 params（不是 data），不可强行包进 data。
+    即时库存、商品分类 getMalGoodsClass 等使用顶层字段（不是 data），不可强行包进 data。
     """
     path = str(url or "").split("?", 1)[0].lower()
     if "/kapi/v2/" not in path:
         return body
     payload: Dict[str, Any] = dict(body) if isinstance(body, dict) else {}
     is_inventory = "getinventory" in path or "getinvacc" in path or "/imrealbal" in path
+    is_flat = _is_flat_v2_query_path(path)
 
     # 误把 params 包进 data 时还原（旧逻辑 / 手工编辑常见），否则金蝶 NPE
     data_obj = payload.get("data")
@@ -118,6 +133,16 @@ def ensure_kingdee_v2_request_body(url: str, body: Dict[str, Any]) -> Dict[str, 
             if payload.get("data") in (None, {}, []):
                 payload.pop("data", None)
             return payload
+
+    if is_flat:
+        # 商品分类等：筛选字段与 pageNo/pageSize 同级；去掉误包的空 data
+        if payload.get("data") in (None, {}, []):
+            payload.pop("data", None)
+        if payload.get("pageNo") in (None, ""):
+            payload["pageNo"] = 1
+        if payload.get("pageSize") in (None, ""):
+            payload["pageSize"] = 100
+        return payload
 
     if "data" not in payload:
         # 库存路径即使没有 params 也不要瞎包一层 data
@@ -218,8 +243,190 @@ def prepare_kingdee_cosmic_outbound(
 
     if "batchquery" in lower:
         method_out = "POST"
+        # sys/query 改写为 batchQuery 时，把 select 落到请求体，避免仍拉全量返回列
+        select_raw = params_out.get("select")
+        if select_raw in (None, ""):
+            select_raw = body_out.get("select")
+        select_text = str(select_raw or "").strip()
+        if select_text:
+            body_out["select"] = select_text
+            params_out["select"] = select_text
 
     return method_out, url_out, params_out, body_out
+
+
+def _select_output_column(key: str) -> str:
+    """点号 select 输出为下划线列名，便于前端映射（group.number → group_number）。"""
+    raw = str(key or "").strip()
+    return raw.replace(".", "_") if raw else raw
+
+
+def _dig_nested_path(row: Dict[str, Any], dotted: str) -> tuple[bool, Any]:
+    """按 a.b.c 深入嵌套对象；返回 (是否命中路径, 值)。"""
+    cursor: Any = row
+    for part in str(dotted or "").split("."):
+        token = part.strip()
+        if not token or not isinstance(cursor, dict):
+            return False, None
+        lower_map = {str(k).lower(): k for k in cursor.keys()}
+        actual = lower_map.get(token.lower())
+        if actual is None:
+            return False, None
+        cursor = cursor.get(actual)
+    return True, cursor
+
+
+def project_row_by_select(row: Any, select_keys: List[str]) -> Any:
+    """
+    按 select 保留行字段。
+
+    - 平铺名：number、baseunit_number
+    - 点号路径：baseunit.number / group.number 从嵌套对象取值，输出为 baseunit_number / group_number
+    - 禁止用末段裸名（如 number）冒充 baseunit.number，否则会丢掉分组/单位嵌套列
+    """
+    if not isinstance(row, dict) or not select_keys:
+        return row
+    lower_map = {str(k).lower(): k for k in row.keys()}
+    projected: Dict[str, Any] = {}
+    for key in select_keys:
+        raw = str(key or "").strip()
+        if not raw:
+            continue
+        out_col = _select_output_column(raw)
+        value: Any = None
+        found = False
+
+        for variant in (raw, raw.replace(".", "_")):
+            actual = lower_map.get(variant.lower())
+            if actual is not None:
+                value = row.get(actual)
+                found = True
+                break
+
+        if not found and "." in raw:
+            hit, nested = _dig_nested_path(row, raw)
+            if hit:
+                value = nested
+                found = True
+
+        if found and out_col not in projected:
+            projected[out_col] = value
+    return projected if projected else row
+
+
+def collapse_material_rows_to_unique_units(rows: List[Any]) -> List[Dict[str, Any]]:
+    """
+    物料行 → 按基础单位编码去重。
+    单位同步源常是物料 batchQuery；同一 kg 会在每条物料上重复出现。
+    """
+    seen: set[str] = set()
+    out: List[Dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        code = (
+            row.get("baseunit_number")
+            or row.get("baseunit.number")
+            or row.get("measureunitid_number")
+            or row.get("measureunitid.number")
+        )
+        name = (
+            row.get("baseunit_name")
+            or row.get("baseunit.name")
+            or row.get("measureunitid_name")
+            or row.get("measureunitid.name")
+            or code
+        )
+        code_s = str(code or "").strip()
+        name_s = str(name or "").strip() or code_s
+        if not code_s:
+            continue
+        key = code_s.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(
+            {
+                "baseunit_number": code_s,
+                "baseunit_name": name_s,
+                "number": code_s,
+                "name": name_s,
+                "code": code_s,
+            }
+        )
+    return out
+
+
+def project_response_by_select(body: Any, select_text: str) -> Any:
+    """
+    对苍穹查询响应按 select 裁剪行对象字段。
+    网关常忽略 select 仍回全量时，测试预览与下游映射只见需要的列。
+
+    注意：此处**禁止**按单位去重。同步分页用「本页行数 < pageSize」判断是否结束；
+    若在 test_api 内先把 100 条物料收成 1 个单位，分页会误停，单位只剩一两个。
+    去重放在单位同步写入前 / 前端预览展示层。
+    """
+    keys = [part.strip() for part in str(select_text or "").split(",") if part.strip()]
+    if not keys:
+        return body
+
+    def project_rows(rows: Any) -> Any:
+        if not isinstance(rows, list):
+            return rows
+        return [
+            project_row_by_select(item, keys) if isinstance(item, dict) else item
+            for item in rows
+        ]
+
+    if isinstance(body, list):
+        return project_rows(body)
+    if not isinstance(body, dict):
+        return body
+
+    out = dict(body)
+    for nest_key in ("data", "items", "rows", "records", "result", "list", "Results"):
+        nested = out.get(nest_key)
+        if isinstance(nested, list) and nested and isinstance(nested[0], dict):
+            out[nest_key] = project_rows(nested)
+            return out
+        if isinstance(nested, dict):
+            for inner_key in ("rows", "items", "records", "list", "data"):
+                inner = nested.get(inner_key)
+                if isinstance(inner, list) and inner and isinstance(inner[0], dict):
+                    nested_out = dict(nested)
+                    nested_out[inner_key] = project_rows(inner)
+                    out[nest_key] = nested_out
+                    return out
+    return out
+
+
+def collapse_response_rows_to_unique_units(body: Any) -> Any:
+    """仅用于接口测试展示：把物料行收成唯一单位（不参与同步分页）。"""
+    def collapse_list(rows: Any) -> Any:
+        if not isinstance(rows, list):
+            return rows
+        collapsed = collapse_material_rows_to_unique_units(rows)
+        return collapsed if collapsed else rows
+
+    if isinstance(body, list):
+        return collapse_list(body)
+    if not isinstance(body, dict):
+        return body
+    out = dict(body)
+    for nest_key in ("data", "items", "rows", "records", "result", "list", "Results"):
+        nested = out.get(nest_key)
+        if isinstance(nested, list) and nested and isinstance(nested[0], dict):
+            out[nest_key] = collapse_list(nested)
+            return out
+        if isinstance(nested, dict):
+            for inner_key in ("rows", "items", "records", "list", "data"):
+                inner = nested.get(inner_key)
+                if isinstance(inner, list) and inner and isinstance(inner[0], dict):
+                    nested_out = dict(nested)
+                    nested_out[inner_key] = collapse_list(inner)
+                    out[nest_key] = nested_out
+                    return out
+    return out
 
 
 def normalize_kingdee_cosmic_api_path(endpoint: str) -> str:

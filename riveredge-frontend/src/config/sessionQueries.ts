@@ -5,7 +5,7 @@ import { getTenantById } from '../services/tenant';
 import { getSiteSetting, type SiteSetting } from '../services/siteSetting';
 import { getUserPreference, type UserPreference } from '../services/userPreference';
 import { getLanguageList } from '../services/language';
-import { getTenantId, getUserInfo } from '../utils/auth';
+import { getTenantId, getTokenTenantId, getUserInfo, isInfraSuperAdminFromToken } from '../utils/auth';
 import { isRequestCancellation } from '../utils/requestCancellation';
 import type { CurrentUser } from '../types/api';
 
@@ -14,8 +14,19 @@ export const SITE_SETTING_QUERY_ROOT = 'siteSetting' as const;
 export const USER_PREFERENCE_QUERY_ROOT = 'userPreference' as const;
 export const LANGUAGE_LIST_QUERY_ROOT = 'languageListActive' as const;
 
-export function buildCurrentUserQueryKey(isInfraSuperAdmin: boolean) {
-  return [CURRENT_USER_QUERY_ROOT, isInfraSuperAdmin] as const;
+/** 当前用户 Query 的租户维度（切换组织后必须变 key，避免复用上一组织缓存） */
+export function resolveSessionTenantScope(): number | null {
+  if (isInfraSuperAdminFromToken()) {
+    return getTenantId();
+  }
+  return getTokenTenantId() ?? getTenantId();
+}
+
+export function buildCurrentUserQueryKey(
+  isInfraSuperAdmin: boolean,
+  tenantScope: number | null = resolveSessionTenantScope(),
+) {
+  return [CURRENT_USER_QUERY_ROOT, isInfraSuperAdmin, tenantScope ?? null] as const;
 }
 
 export function buildSiteSettingQueryKey(tenantId: number | string | null | undefined) {

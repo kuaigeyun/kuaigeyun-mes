@@ -15677,8 +15677,8 @@ class OtherInboundService(AppBaseService[OtherInbound]):
 
             confirmer_name = await self.get_user_name(confirmed_by)
             from apps.kuaizhizao.utils.inbound_confirm_helper import (
-                resolve_inbound_confirm_business_time,
                 resolve_inbound_confirm_receiver,
+                resolve_inbound_posting_business_time,
             )
 
             receiver_id, receiver_name = await resolve_inbound_confirm_receiver(
@@ -15686,7 +15686,7 @@ class OtherInboundService(AppBaseService[OtherInbound]):
                 confirmation_data=confirmation_data,
                 get_user_name=self.get_user_name,
             )
-            receipt_time = resolve_inbound_confirm_business_time(
+            receipt_time = resolve_inbound_posting_business_time(
                 confirmation_data,
                 existing_time=getattr(inbound, "receipt_time", None),
             )

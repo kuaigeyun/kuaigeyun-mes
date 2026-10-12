@@ -843,6 +843,14 @@ export const AUTOMATION_CATEGORIES: ConfigCategory[] = createCategories({
       sourcePath: 'parameters.finance.credit_limit_enabled',
       type: 'boolean',
     },
+    {
+      key: 'finance.require_payment_application',
+      nameKey: 'pages.system.configCenter.param.finance_require_payment_application',
+      descriptionKey: 'pages.system.configCenter.param.finance_require_payment_application_desc',
+      source: 'business_config',
+      sourcePath: 'parameters.finance.require_payment_application',
+      type: 'boolean',
+    },
   ],
   quality: [
     {

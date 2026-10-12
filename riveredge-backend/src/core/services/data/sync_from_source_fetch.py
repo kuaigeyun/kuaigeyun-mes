@@ -49,8 +49,21 @@ async def _execute_api_once(
         timeout=timeout,
     )
     status_code = int(result.get("status_code") or 0)
+    body = result.get("body")
+    from core.services.integration.kingdee_cosmic_service import (
+        is_kingdee_cosmic_access_token_rejected,
+    )
+
+    if is_kingdee_cosmic_access_token_rejected(body, http_status=status_code):
+        detail = (
+            body.get("message")
+            if isinstance(body, dict) and body.get("message")
+            else "AccessToken 已过期或无效"
+        )
+        raise ValidationError(
+            f"苍穹鉴权失败：{detail}。请在连接器点「测试连接」换票后重试"
+        )
     if status_code < 200 or status_code >= 300:
-        body = result.get("body")
         detail = (
             body.get("error")
             if isinstance(body, dict) and body.get("error")
@@ -61,7 +74,7 @@ async def _execute_api_once(
     column_names = extract_kingdee_field_keys(
         request_body if isinstance(request_body, dict) else None
     )
-    return normalize_api_body_to_rows(result.get("body"), column_names=column_names)
+    return normalize_api_body_to_rows(body, column_names=column_names)
 
 
 def _overlay_json_object(

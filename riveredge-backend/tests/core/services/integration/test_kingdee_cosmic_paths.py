@@ -147,3 +147,27 @@ def test_warehouse_body_keeps_existing_createorg():
     )
     assert body["data"]["createorg_number"] == "ORG01"
     assert body["pageSize"] == 1000
+
+
+def test_project_row_by_select_reads_nested_group_and_baseunit():
+    project = _mod.project_row_by_select
+    row = {
+        "number": "M001",
+        "name": "螺丝",
+        "modelnum": "M8",
+        "baseunit": {"number": "kg", "name": "KG"},
+        "group": {"number": "G01", "name": "紧固件"},
+    }
+    select = (
+        "number,name,modelnum,baseunit.number,baseunit.name,group.number,group.name"
+    ).split(",")
+    out = project(row, select)
+    assert out["number"] == "M001"
+    assert out["name"] == "螺丝"
+    assert out["modelnum"] == "M8"
+    assert out["baseunit_number"] == "kg"
+    assert out["baseunit_name"] == "KG"
+    assert out["group_number"] == "G01"
+    assert out["group_name"] == "紧固件"
+    # 不得把 baseunit.number 误匹配成物料 number 后丢掉嵌套
+    assert out.get("baseunit") is None

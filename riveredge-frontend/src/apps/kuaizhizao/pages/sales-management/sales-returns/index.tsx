@@ -1987,7 +1987,7 @@ const SalesReturnsPage: React.FC = () => {
               selectedRowKeys={selectedRowKeys}
               selectedRecords={selectedReturnsForBatch}
               capabilityKey="confirm"
-              permAllowed={salesReturnPerms.canAction?.('submit') ?? false}
+              permAllowed={salesReturnPerms.canAction?.('execute') ?? false}
               batchAllowed={salesReturnBatchConfirmAllowed}
               onRun={(id) => warehouseApi.salesReturn.confirm(String(id))}
               notAllowedMessage={t('app.kuaizhizao.salesReturn.batchConfirmNotAllowed')}

@@ -302,6 +302,8 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   execution_no: 10,
   requisition_no: 10,
   application_no: 10,
+  /** 付款申请业务日期 */
+  application_date: 61.25,
   acceptance_no: 10,
   route_name: 11,
   plan_name: 11,

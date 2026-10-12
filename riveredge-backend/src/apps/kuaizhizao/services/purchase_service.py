@@ -173,7 +173,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         explicit_provisional_price: Optional[Decimal] = None,
     ) -> None:
         """明细落库前推导定价状态，避免 schema 默认 None 覆盖模型非空字段。"""
-        from apps.kuaicaiwu.utils.price_settlement_helpers import (
+        from apps.kuaizhizao.utils.price_settlement_helpers import (
             derive_price_settlement_status,
             derive_provisional_unit_price,
         )
@@ -199,10 +199,14 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         operator_id: int,
     ) -> None:
         """订单进入已确认后：按预付金额幂等生成预付付款单（供预收预付余额消费）。"""
-        from apps.kuaicaiwu.services.finance_integration_hooks import (
-            ensure_prepayment_payment_for_purchase_order,
-        )
+        from apps.common.optional_pro import import_pro_attr, pro_app_available
 
+        if not pro_app_available("kuaicaiwu"):
+            return
+        ensure_prepayment_payment_for_purchase_order = import_pro_attr(
+            "apps.kuaicaiwu.services.finance_integration_hooks",
+            "ensure_prepayment_payment_for_purchase_order",
+        )
         await ensure_prepayment_payment_for_purchase_order(
             tenant_id=tenant_id,
             order_id=int(order.id),
@@ -2164,8 +2168,15 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
     ) -> Dict[str, Any]:
         from decimal import Decimal
 
-        from apps.kuaicaiwu.services.finance_tax import money_to_json_float, quantize_money
-        from apps.kuaicaiwu.services.purchase_invoice_pull_service import PurchaseInvoicePullService
+        from apps.common.optional_pro import import_pro_attr, import_pro_module
+
+        finance_tax = import_pro_module("apps.kuaicaiwu.services.finance_tax")
+        money_to_json_float = finance_tax.money_to_json_float
+        quantize_money = finance_tax.quantize_money
+        PurchaseInvoicePullService = import_pro_attr(
+            "apps.kuaicaiwu.services.purchase_invoice_pull_service",
+            "PurchaseInvoicePullService",
+        )
 
         order_model = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=order_id)
         if not order_model:
@@ -2269,7 +2280,11 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         order_id: int,
     ) -> Dict[str, Any]:
         """下推预付付款单预览。"""
-        from apps.kuaicaiwu.services.finance_tax import money_to_json_float, quantize_money
+        from apps.common.optional_pro import import_pro_module
+
+        finance_tax = import_pro_module("apps.kuaicaiwu.services.finance_tax")
+        money_to_json_float = finance_tax.money_to_json_float
+        quantize_money = finance_tax.quantize_money
         from apps.kuaizhizao.services.document_action_policy.enricher import (
             _order_prepayment_linked_by_ids,
         )
@@ -2278,13 +2293,19 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         if not order_model:
             raise NotFoundError(f"采购订单不存在: {order_id}")
 
+        from infra.services.business_config_service import BusinessConfigService
+
         prepay_map = await _order_prepayment_linked_by_ids(
             tenant_id, [order_id], source_type="purchase_order", target_type="payment"
+        )
+        require_app = await BusinessConfigService().get_finance_require_payment_application(
+            tenant_id
         )
         assert_purchase_order_capability(
             order_model,
             "push_prepayment",
             has_prepayment_payment=prepay_map.get(order_id, False),
+            require_payment_application=require_app,
         )
 
         amount = quantize_money(Decimal(str(order_model.prepayment_amount or 0)))
@@ -2326,23 +2347,34 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         notes: Optional[str] = None,
     ) -> Dict[str, Any]:
         """从采购订单下推预付付款单。"""
-        from apps.kuaicaiwu.models.payment import Payment
-        from apps.kuaicaiwu.services.finance_integration_hooks import (
-            ensure_prepayment_payment_for_purchase_order,
+        from apps.common.optional_pro import import_pro_attr, import_pro_module
+
+        Payment = import_pro_attr("apps.kuaicaiwu.models.payment", "Payment")
+        ensure_prepayment_payment_for_purchase_order = import_pro_attr(
+            "apps.kuaicaiwu.services.finance_integration_hooks",
+            "ensure_prepayment_payment_for_purchase_order",
         )
-        from apps.kuaicaiwu.services.finance_tax import quantize_money
+        quantize_money = import_pro_module(
+            "apps.kuaicaiwu.services.finance_tax"
+        ).quantize_money
         from apps.kuaizhizao.services.document_action_policy.enricher import (
             _order_prepayment_linked_by_ids,
         )
+
+        from infra.services.business_config_service import BusinessConfigService
 
         order = await self.get_purchase_order_by_id(tenant_id, order_id)
         prepay_map = await _order_prepayment_linked_by_ids(
             tenant_id, [order_id], source_type="purchase_order", target_type="payment"
         )
+        require_app = await BusinessConfigService().get_finance_require_payment_application(
+            tenant_id
+        )
         assert_purchase_order_capability(
             order,
             "push_prepayment",
             has_prepayment_payment=prepay_map.get(order_id, False),
+            require_payment_application=require_app,
         )
 
         amount_override = None
@@ -3404,14 +3436,21 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         """
         from decimal import Decimal
 
-        from apps.kuaicaiwu.schemas.finance import PurchaseInvoiceCreate
-        from apps.kuaicaiwu.services.finance_service import PurchaseInvoiceService
-        from apps.kuaicaiwu.services.finance_tax import (
-            money_exceeds_max,
-            quantize_money,
-            resolve_invoice_amounts_for_create,
+        from apps.common.optional_pro import import_pro_attr, import_pro_module
+
+        finance_schemas = import_pro_module("apps.kuaicaiwu.schemas.finance")
+        PurchaseInvoiceCreate = finance_schemas.PurchaseInvoiceCreate
+        PurchaseInvoiceService = import_pro_attr(
+            "apps.kuaicaiwu.services.finance_service", "PurchaseInvoiceService"
         )
-        from apps.kuaicaiwu.services.purchase_invoice_pull_service import PurchaseInvoicePullService
+        finance_tax = import_pro_module("apps.kuaicaiwu.services.finance_tax")
+        money_exceeds_max = finance_tax.money_exceeds_max
+        quantize_money = finance_tax.quantize_money
+        resolve_invoice_amounts_for_create = finance_tax.resolve_invoice_amounts_for_create
+        PurchaseInvoicePullService = import_pro_attr(
+            "apps.kuaicaiwu.services.purchase_invoice_pull_service",
+            "PurchaseInvoicePullService",
+        )
 
         order = await self.get_purchase_order_by_id(tenant_id, order_id)
         order_items = await PurchaseOrderItem.filter(tenant_id=tenant_id, order_id=order_id).all()

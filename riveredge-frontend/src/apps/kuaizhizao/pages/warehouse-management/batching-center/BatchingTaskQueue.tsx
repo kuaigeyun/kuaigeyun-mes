@@ -201,6 +201,8 @@ const BatchingTaskQueue: React.FC<Props> = ({
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
   const outboundPerms = useResourcePermissions('kuaizhizao:outbound');
+  const batchingPerms = useResourcePermissions('kuaizhizao:warehouse-management-batching-center');
+  const canExecuteBatching = batchingPerms.canAction?.('execute') ?? false;
   const taskTypeLabel = useMemo(() => getBatchingTaskTypeLabel(t), [t]);
   const taskTypeMap = useMemo(
     () => ({
@@ -849,16 +851,18 @@ const BatchingTaskQueue: React.FC<Props> = ({
                 {t('app.kuaizhizao.batchingCenter.refreshShortage')}
               </Button>,
             );
-            actions.push(
-              <Button
-                key="confirm-batching"
-                {...rowActionKind('execute')}
-                size="small"
-                onClick={() => openBatchingConfirm(record)}
-              >
-                {record.status === 'picking' ? t('app.kuaizhizao.batchingCenter.continuePickingAction') : t('app.kuaizhizao.batchingCenter.confirmPickingAction')}
-              </Button>,
-            );
+            if (canExecuteBatching) {
+              actions.push(
+                <Button
+                  key="confirm-batching"
+                  {...rowActionKind('execute')}
+                  size="small"
+                  onClick={() => openBatchingConfirm(record)}
+                >
+                  {record.status === 'picking' ? t('app.kuaizhizao.batchingCenter.continuePickingAction') : t('app.kuaizhizao.batchingCenter.confirmPickingAction')}
+                </Button>,
+              );
+            }
           }
           return actions;
         }

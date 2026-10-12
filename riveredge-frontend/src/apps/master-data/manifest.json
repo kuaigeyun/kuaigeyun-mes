@@ -1,10 +1,12 @@
 {
-  "name": "基础数据管理",
+  "name": "主数据",
   "code": "master-data",
   "version": "1.0.0",
   "description": "企业主数据唯一真源与基础资料协同平台",
   "icon": "database",
   "author": "RiverEdge Team",
+  "market_category": "base",
+  "is_pro": false,
   "entry_point": "../apps/master-data/index.tsx",
   "route_path": "/apps/master-data",
   "sort_order": 150,
@@ -12,6 +14,7 @@
     "title": "app.master-data.name",
     "icon": "database",
     "path": "/apps/master-data",
+    "permission": "master-data:entry:read",
     "children": [
       {
         "title": "app.master-data.menu.factory",
@@ -140,6 +143,9 @@
         "title": "app.master-data.menu.process",
         "icon": "workflow",
         "sort_order": 4,
+        "meta": {
+          "takeover_by": "kuaiplm"
+        },
         "children": [
           {
             "title": "app.master-data.menu.process.defect-types",
@@ -212,7 +218,7 @@
       },
       {
         "title": "app.master-data.menu.supply-chain",
-        "icon": "handshake",
+        "icon": "truck",
         "sort_order": 5,
         "children": [
           {
@@ -244,11 +250,242 @@
     ]
   },
   "reference_resources": {
+    "factory:plant": {
+      "permission_prefix": "master-data:factory:plant",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": "master-data:factory:plant"
+    },
+    "factory:workshop": {
+      "permission_prefix": "master-data:factory:workshop",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": "master-data:factory:workshop"
+    },
+    "factory:work-center": {
+      "permission_prefix": "master-data:factory:work-center",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": "master-data:factory:work-center"
+    },
+    "warehouse:warehouse": {
+      "permission_prefix": "master-data:warehouse:warehouse",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": "master-data:warehouse:warehouse"
+    },
     "material": {
       "permission_prefix": "master-data:material",
-      "display_fields": ["id", "uuid", "code", "name", "label"],
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
       "data_scope_key": "master-data:material"
+    },
+    "supply-chain:customer": {
+      "permission_prefix": "master-data:supply-chain:customer",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": "master-data:supply-chain:customer"
+    },
+    "supply-chain:supplier": {
+      "permission_prefix": "master-data:supply-chain:supplier",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": "master-data:supply-chain:supplier"
+    },
+    "factory:production-line": {
+      "permission_prefix": "master-data:factory:production-line",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": "master-data:factory:production-line"
+    },
+    "factory:workstation": {
+      "permission_prefix": "master-data:factory:workstation",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": "master-data:factory:workstation"
+    },
+    "warehouse:storage-area": {
+      "permission_prefix": "master-data:warehouse:storage-area",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": "master-data:warehouse:storage-area"
+    },
+    "warehouse:storage-location": {
+      "permission_prefix": "master-data:warehouse:storage-location",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": "master-data:warehouse:storage-location"
+    },
+    "material:group": {
+      "permission_prefix": "master-data:material",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": "master-data:material"
+    },
+    "material:bom": {
+      "permission_prefix": "master-data:material",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": "master-data:material"
+    },
+    "process:defect-type": {
+      "permission_prefix": "master-data:process:defect-type",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": "master-data:process:defect-type"
+    },
+    "process:operation": {
+      "permission_prefix": "master-data:process:operation",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": "master-data:process:operation"
+    },
+    "process:route": {
+      "permission_prefix": "master-data:process:route",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": "master-data:process:route"
+    },
+    "process:sop": {
+      "permission_prefix": "master-data:process:sop",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": "master-data:process:sop"
+    },
+    "process:drawing": {
+      "permission_prefix": "master-data:process:drawing",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": null
+    },
+    "process:drawing-where-used": {
+      "permission_prefix": "master-data:process:drawing-where-used",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": null
+    },
+    "process:drawing-distribution": {
+      "permission_prefix": "master-data:process:drawing-distribution",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": null
+    },
+    "process:drawing-loan": {
+      "permission_prefix": "master-data:process:drawing-loan",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": null
     }
+  },
+  "module_references": {
+    "__all_modules__": [
+      "*"
+    ]
   },
   "permissions": [
     "master-data:factory:plant:read",
@@ -385,6 +622,18 @@
     "master-data:material-unit:revoke",
     "master-data:material-unit:audit",
     "master-data:material-unit:print",
+    "master-data:process:read",
+    "master-data:process:create",
+    "master-data:process:delete",
+    "master-data:process:update",
+    "master-data:process:import",
+    "master-data:process:export",
+    "master-data:process:submit",
+    "master-data:process:revoke",
+    "master-data:process:approve",
+    "master-data:process:audit",
+    "master-data:process:reject",
+    "master-data:process:print",
     "master-data:process:defect-type:read",
     "master-data:process:defect-type:create",
     "master-data:process:defect-type:delete",
@@ -409,6 +658,7 @@
     "master-data:process:engineering-bom:audit",
     "master-data:process:engineering-bom:reject",
     "master-data:process:engineering-bom:print",
+    "master-data:process:engineering-bom:execute",
     "master-data:process:engineering-bom:sync",
     "master-data:process:engineering-bom:push",
     "master-data:process:operation:read",
@@ -437,6 +687,7 @@
     "master-data:process:route:audit",
     "master-data:process:route:reject",
     "master-data:process:route:print",
+    "master-data:process:route:execute",
     "master-data:process:drawing:read",
     "master-data:process:drawing:create",
     "master-data:process:drawing:delete",
@@ -551,7 +802,6 @@
     "master-data:warehouse:storage-location:audit",
     "master-data:warehouse:storage-location:reject",
     "master-data:warehouse:storage-location:print",
-    "master-data:warehouse:warehouse:read",
     "master-data:warehouse:warehouse:read",
     "master-data:warehouse:warehouse:create",
     "master-data:warehouse:warehouse:delete",
@@ -687,9 +937,9 @@
       "available_fields": [
         {
           "field_name": "group_code",
-          "field_label": "物料分组编号",
+          "field_label": "物料分组编码",
           "field_type": "string",
-          "description": "物料所属分组的编号"
+          "description": "物料所属分组的编码"
         },
         {
           "field_name": "group_name",
@@ -699,9 +949,9 @@
         },
         {
           "field_name": "source_type",
-          "field_label": "物料类型",
+          "field_label": "物料来源类型",
           "field_type": "string",
-          "description": "物料类型（FIN/SEMI/RAW/PACK/AUX）"
+          "description": "物料来源类型（Make/Buy/Outsource/Phantom）"
         },
         {
           "field_name": "name",
@@ -855,10 +1105,10 @@
     },
     {
       "page_code": "master-data-engineering-bom",
-      "page_name": "物料清单BOM",
+      "page_name": "物料清单 (BOM)",
       "page_path": "/apps/master-data/process/engineering-bom",
       "table_name": "master_data_boms",
-      "table_name_label": "物料清单BOM表",
+      "table_name_label": "物料清单 (BOM)表",
       "module": "主数据管理",
       "module_icon": "database"
     },
@@ -900,10 +1150,10 @@
     },
     {
       "page_code": "master-data-manufacturing-bom",
-      "page_name": "标准操作SOP",
+      "page_name": "标准操作 (SOP)",
       "page_path": "/apps/master-data/process/sop",
       "table_name": "master_data_sops",
-      "table_name_label": "标准操作SOP表",
+      "table_name_label": "标准操作 (SOP)表",
       "module": "主数据管理",
       "module_icon": "database"
     },
@@ -942,6 +1192,17 @@
       "table_name_label": "技能表",
       "module": "快格轻制造",
       "module_icon": "production"
+    }
+  ],
+  "audit": [
+    {
+      "node_key": "engineering_drawing",
+      "entity_type": "engineering_drawing",
+      "resource": "master-data:process:drawing",
+      "name": "工程图纸审核",
+      "template": "simple",
+      "config_category": "plm",
+      "config_section": "plm_doc"
     }
   ]
 }

@@ -44,6 +44,7 @@ PAGE_CODE_TO_FIXED_TEXT_PRESET: Dict[str, str] = {
     "kuaizhizao-purchase-order-change": "CGBG",  # 采购变更单
     "kuaizhizao-purchase-arrival-delay": "PAD",  # 采购到货延期填报
     "kuaizhizao-purchase-requisition": "CGSQ",   # 采购申请
+    "kuaizhizao-payment-application": "FKSQ",    # 付款申请
     "kuaizhizao-purchase-inquiry": "CGXJ",       # 采购询价单
     "kuaizhizao-purchase-receipt": "CGSD",      # 采购收货
     "kuaizhizao-purchase-return": "CGTH",       # 采购退货
@@ -148,6 +149,8 @@ PAGE_CODE_TO_FIXED_TEXT_PRESET: Dict[str, str] = {
     "kuaicaiwu-finance-payment": "PK",              # 付款单
     "kuaicaiwu-finance-receipt-refund": "TK",       # 收款退款
     "kuaicaiwu-finance-payment-refund": "TP",       # 付款退款
+    "kuaicaiwu-finance-other-income": "QS",         # 其他费用收入
+    "kuaicaiwu-finance-other-expense": "QZ",        # 其他费用支出
     "kuaicaiwu-finance-purchase-invoice": "PI",     # 进项发票
     "kuaicaiwu-finance-settlement": "HX",           # 核销
     "kuaicaiwu-cost-calculations": "CC",            # 成本核算
@@ -658,6 +661,18 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "module_icon": "tool",
         "auto_generate": True,
         "rule_code": "PURCHASE_REQUISITION_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaizhizao-payment-application",
+        "page_name": "付款申请",
+        "page_path": "/apps/kuaizhizao/purchase-management/payment-applications",
+        "code_field": "application_code",
+        "code_field_label": "申请单号",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "PAYMENT_APPLICATION_CODE",
         "allow_manual_edit": True,
     },
     {
@@ -2147,6 +2162,30 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "module_icon": "account-book",
         "auto_generate": True,
         "rule_code": "PAYMENT_REFUND_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaicaiwu-finance-other-income",
+        "page_name": "其他费用收入",
+        "page_path": "/apps/kuaizhizao/finance-management/other-incomes",
+        "code_field": "income_code",
+        "code_field_label": "其他费用收入单号",
+        "module": "轻管理会计",
+        "module_icon": "account-book",
+        "auto_generate": True,
+        "rule_code": "OTHER_INCOME_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaicaiwu-finance-other-expense",
+        "page_name": "其他费用支出",
+        "page_path": "/apps/kuaizhizao/finance-management/other-expenses",
+        "code_field": "expense_code",
+        "code_field_label": "其他费用支出单号",
+        "module": "轻管理会计",
+        "module_icon": "account-book",
+        "auto_generate": True,
+        "rule_code": "OTHER_EXPENSE_CODE",
         "allow_manual_edit": True,
     },
     {

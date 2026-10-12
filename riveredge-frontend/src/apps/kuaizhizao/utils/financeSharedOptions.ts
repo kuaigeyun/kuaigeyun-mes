@@ -155,6 +155,18 @@ export function buildVoucherStatusEnum(t: TFunction) {
   };
 }
 
+/** 其他费用收入/支出：含审核态 + 确认过账态 */
+export function buildMiscVoucherStatusEnum(t: TFunction) {
+  return {
+    Draft: { text: t('app.kuaicaiwu.financeStatus.voucher.draft') },
+    PendingReview: { text: t('app.kuaicaiwu.financeStatus.review.pending') },
+    Approved: { text: t('app.kuaicaiwu.financeStatus.review.approved') },
+    Rejected: { text: t('app.kuaicaiwu.financeStatus.review.rejected') },
+    Confirmed: { text: t('app.kuaicaiwu.financeStatus.voucher.confirmed') },
+    Cancelled: { text: t('app.kuaicaiwu.financeStatus.voucher.cancelled') },
+  };
+}
+
 export function buildUnifiedInvoiceStatusEnum(t: TFunction) {
   return {
     DRAFT: { text: t('app.kuaicaiwu.financeStatus.unifiedInvoice.draft') },

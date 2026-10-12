@@ -11,6 +11,7 @@ export type KuaicaiwuDocumentActionKey =
   | 'purchase_invoice.pull_from_purchase_receipt'
   | 'purchase_invoice.pull_from_payable'
   | 'payment.pull_from_payable'
+  | 'payment.pull_from_payment_application'
   | 'receipt_refund.pull_from_receipt'
   | 'payment_refund.pull_from_payment';
 
@@ -118,6 +119,14 @@ export const KUAICAIWU_DOCUMENT_ACTION_REGISTRY: Record<KuaicaiwuDocumentActionK
     kind: 'pull_create',
     label: '从应付单创建付款单',
     sourceLabel: '应付单',
+    targetLabel: '付款单',
+  },
+  'payment.pull_from_payment_application': {
+    key: 'payment.pull_from_payment_application',
+    module: 'kuaicaiwu',
+    kind: 'pull_create',
+    label: '从付款申请单创建付款单',
+    sourceLabel: '付款申请单',
     targetLabel: '付款单',
   },
   'receipt_refund.pull_from_receipt': {

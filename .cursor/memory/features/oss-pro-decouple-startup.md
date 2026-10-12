@@ -11,7 +11,10 @@ keywords:
   - optional_pro
   - discover_plugin_orm_modules
   - IKKZ4P
-standard: 宿主禁止模块级 import pro；ORM 仅 discover 并入；857 表存在性保护
+  - IKL5HM
+  - sales-orders
+  - purchase-orders
+standard: 宿主禁止模块级 import pro；ORM 仅 discover 并入；857 表存在性保护；列表财务增强走 optional_pro
 ---
 
 # 开源仓无专业包可独立启动
@@ -56,7 +59,18 @@ standard: 宿主禁止模块级 import pro；ORM 仅 discover 并入；857 表�
 - `discover_plugin_orm_modules` 曾对 ImportError `raise`，compose 残缺时拖垮 database 初始化
 - 本机有 junction 时「目录存在但 import 被挡」与「开源 zip 无目录」路径不同，须两处都过
 
+## 列表运行时（IKL5HM）
+
+启动成功后，销售/采购订单 **list** 仍可能因函数内硬 `import apps.kuaicaiwu` 返回 500。
+
+| 路径 | 处理 |
+|------|------|
+| 销售列表开票余额 | `pro_app_available` 后 `import_pro_attr(SalesInvoiceService)`；无包则余量为 0 |
+| 采购列表进项阻断 | enricher `_purchase_order_invoice_by_ids` 无包则全 True（阻断下推发票） |
+| 月结定价辅助 | 真源 `kuaizhizao.utils.price_settlement_helpers`；kuaicaiwu re-export |
+| 提交/审核预收预付 | 无包跳过 hooks；下推发票/预收仍 `import_pro_*`（缺包明确报错） |
+
 ## 关联
 
 - `features/app-pro-migration-compose.md`
-- Gitee issue IKKZ4P
+- Gitee issue IKKZ4P / IKL5HM

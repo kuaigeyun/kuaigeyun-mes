@@ -229,6 +229,26 @@ async def list_purchase_inquiry_pull_lines(
         )
 
 
+@router.get(
+    "/purchase-requisitions/material-warehouse-stock",
+    summary="On-hand stock by warehouse for purchase requisition lines",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:purchase-requisition:read"))],
+)
+async def get_material_warehouse_stock_for_requisition(
+    material_ids: List[int] = Query(..., description="物料 ID 列表"),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """选料时展示各仓在库结存（自购在库；仅需采购申请查看权限）。"""
+    from apps.kuaizhizao.services.purchase_requisition_stock_service import (
+        PurchaseRequisitionStockService,
+    )
+
+    return await PurchaseRequisitionStockService.material_on_hand_by_warehouse(
+        tenant_id=tenant_id,
+        material_ids=material_ids,
+    )
+
+
 @router.get("/purchase-requisitions/{requisition_id}", response_model=PurchaseRequisitionResponse, summary="Get purchase requisition")
 async def get_requisition(
     requisition_id: int = Path(...),

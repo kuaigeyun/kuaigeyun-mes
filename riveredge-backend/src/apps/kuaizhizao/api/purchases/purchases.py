@@ -802,6 +802,40 @@ async def preview_push_purchase_order_to_prepayment(
     )
 
 
+@router.get(
+    "/purchase-orders/{order_id}/push-to-payment-application/preview",
+    summary="Preview push to payment application",
+)
+async def preview_push_purchase_order_to_payment_application(
+    order_id: int = Path(..., description="采购订单ID"),
+    current_user: CurrentUser = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    from apps.kuaizhizao.services.payment_application_pull_service import PaymentApplicationPullService
+
+    return await PaymentApplicationPullService().preview_from_purchase_order(tenant_id, order_id)
+
+
+@router.post(
+    "/purchase-orders/{order_id}/push-to-payment-application",
+    summary="Push purchase order to payment application",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:payment-application:create"))],
+)
+async def push_purchase_order_to_payment_application(
+    order_id: int = Path(..., description="采购订单ID"),
+    body: Optional[Dict[str, Any]] = Body(None),
+    current_user: CurrentUser = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    from decimal import Decimal
+    from apps.kuaizhizao.services.payment_application_pull_service import PaymentApplicationPullService
+
+    amount = Decimal(str((body or {}).get("amount") or 0))
+    return await PaymentApplicationPullService().create_from_purchase_order(
+        tenant_id, order_id, amount, current_user.id
+    )
+
+
 @router.get("/purchase-orders/{order_id}/push-to-purchase-return/preview", summary="Preview push to purchase return")
 async def preview_push_purchase_order_to_purchase_return(
     order_id: int = Path(..., description="采购订单ID"),

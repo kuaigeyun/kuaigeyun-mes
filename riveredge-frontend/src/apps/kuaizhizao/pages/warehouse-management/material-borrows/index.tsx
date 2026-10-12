@@ -10,6 +10,7 @@
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormItem, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Col, DatePicker, Descriptions, Form as AntForm, Input, InputNumber, Modal, Row, Select, Space, Table, Tag, Typography } from 'antd';
 import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined, ShoppingOutlined } from '@ant-design/icons';
@@ -119,6 +120,10 @@ const MaterialBorrowsPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   const deepLinkOpenedRef = useRef(false);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
+  const borrowPerms = useResourcePermissions('kuaizhizao:material-borrow');
+  const canConfirmBorrow = borrowPerms.canAction?.('execute') ?? false;
+  const canRevokeBorrow = borrowPerms.canAction?.('revoke') ?? false;
+  const canDeleteBorrow = borrowPerms.canDelete ?? false;
 
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -339,9 +344,8 @@ const MaterialBorrowsPage: React.FC = () => {
         return (
           <Space size="small" wrap>
             <Button {...rowActionKind('read')} onClick={() => handleDetail(record)} />
-            {record.status === '待借出' && (
-              <>
-                <ActionConfirmPopconfirm title={t('app.kuaizhizao.materialBorrow.msg.confirmTitle')} description={t('app.kuaizhizao.materialBorrow.msg.confirmContent', { code: record.borrow_code })} onConfirm={() => executeConfirm(record)}>
+            {record.status === '待借出' && canConfirmBorrow ? (
+              <ActionConfirmPopconfirm title={t('app.kuaizhizao.materialBorrow.msg.confirmTitle')} description={t('app.kuaizhizao.materialBorrow.msg.confirmContent', { code: record.borrow_code })} onConfirm={() => executeConfirm(record)}>
               <Button
                   {...rowActionKind('execute')}
                   {...rowActionLabelKeep()}
@@ -350,12 +354,13 @@ const MaterialBorrowsPage: React.FC = () => {
                   {t('app.kuaizhizao.materialBorrow.action.confirmBorrow')}
                 </Button>
             </ActionConfirmPopconfirm>
+            ) : null}
+            {record.status === '待借出' && canDeleteBorrow ? (
                 <ActionConfirmPopconfirm title={t('app.kuaizhizao.materialBorrow.msg.deleteTitle')} description={t('app.kuaizhizao.materialBorrow.msg.deleteContent', { code: record.borrow_code })} onConfirm={() => executeDelete(record)}>
               <Button {...rowActionKind('delete')} onClick={(e) => e.stopPropagation()} />
             </ActionConfirmPopconfirm>
-              </>
-            )}
-            {record.status === '已借出' && (
+            ) : null}
+            {record.status === '已借出' && canRevokeBorrow && (
               <ActionConfirmPopconfirm title={t('app.kuaizhizao.materialBorrow.msg.withdrawTitle')} description={t('app.kuaizhizao.materialBorrow.msg.withdrawContent', { code: record.borrow_code })} onConfirm={() => executeWithdraw(record)}>
               <Button {...rowActionKind('revoke')} {...rowActionLabelKeep()} onClick={(e) => e.stopPropagation()}>
                 {t('app.kuaizhizao.materialBorrow.action.withdrawBorrow')}

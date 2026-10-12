@@ -159,9 +159,23 @@ class MaterialUnitSyncService:
         sync_at = resolve_business_datetime()
 
         pending: List[tuple[str, str, bool, Dict[str, Any]]] = []
+        seen_codes: set[str] = set()
         for row in rows:
-            code = cell_str(row.get(match_key) or row.get("code"))
-            name = cell_str(row.get("name"))
+            # 物料源行：优先取基础单位；已映射行则用 code/name
+            code = cell_str(
+                row.get(match_key)
+                or row.get("code")
+                or row.get("baseunit_number")
+                or row.get("baseunit.number")
+                or row.get("measureunitid_number")
+            )
+            name = cell_str(
+                row.get("name")
+                or row.get("baseunit_name")
+                or row.get("baseunit.name")
+                or row.get("measureunitid_name")
+                or code
+            )
             if not code:
                 skipped += 1
                 errors.append("存在缺少单位编码的行，已跳过")
@@ -170,6 +184,11 @@ class MaterialUnitSyncService:
                 skipped += 1
                 errors.append(f"单位 {code} 缺少名称，已跳过")
                 continue
+            dedupe_key = code.casefold()
+            if dedupe_key in seen_codes:
+                skipped += 1
+                continue
+            seen_codes.add(dedupe_key)
             is_active_raw = row.get("is_active")
             is_active = True
             if is_active_raw is not None and str(is_active_raw).strip():

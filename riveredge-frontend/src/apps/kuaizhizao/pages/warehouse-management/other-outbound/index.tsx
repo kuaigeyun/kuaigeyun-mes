@@ -9,6 +9,7 @@
 
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useCustomFields } from '../../../../../hooks/useCustomFields';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import {
@@ -165,6 +166,10 @@ const OtherOutboundPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
 
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
+  const outboundPerms = useResourcePermissions('kuaizhizao:other-outbound');
+  const canConfirmOutbound = outboundPerms.canAction?.('execute') ?? false;
+  const canRevokeOutbound = outboundPerms.canAction?.('revoke') ?? false;
+  const canDeleteOutbound = outboundPerms.canDelete ?? false;
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [outboundDetail, setOutboundDetail] = useState<OtherOutboundDetail | null>(null);
@@ -451,7 +456,7 @@ const OtherOutboundPage: React.FC = () => {
         const actions: React.ReactNode[] = [
           <Button key="detail" {...rowActionKind('read')} onClick={() => handleDetail(record)} />,
         ];
-        if (record.status === '待出库') {
+        if (record.status === '待出库' && canConfirmOutbound) {
           actions.push(
             <ActionConfirmPopconfirm title={t('app.kuaizhizao.otherOutbound.msg.confirmTitle')} description={t('app.kuaizhizao.otherOutbound.msg.confirmContent', { code: record.outbound_code })} onConfirm={() => executeConfirm(record)}>
               <Button
@@ -464,13 +469,15 @@ const OtherOutboundPage: React.FC = () => {
             </Button>
             </ActionConfirmPopconfirm>,
           );
+        }
+        if (record.status === '待出库' && canDeleteOutbound) {
           actions.push(
             <ActionConfirmPopconfirm title={t('app.kuaizhizao.otherOutbound.msg.deleteTitle')} description={t('app.kuaizhizao.otherOutbound.msg.deleteContent', { code: record.outbound_code })} onConfirm={() => executeDelete(record)}>
               <Button key="delete" {...rowActionKind('delete')} onClick={(e) => e.stopPropagation()} />
             </ActionConfirmPopconfirm>,
           );
         }
-        if (record.status === '已出库') {
+        if (record.status === '已出库' && canRevokeOutbound) {
           actions.push(
             <ActionConfirmPopconfirm title={t('app.kuaizhizao.otherOutbound.msg.withdrawTitle')} description={t('app.kuaizhizao.otherOutbound.msg.withdrawContent', { code: record.outbound_code })} onConfirm={() => executeWithdraw(record)}>
               <Button key="withdraw" {...rowActionKind('revoke')} {...rowActionLabelKeep()} onClick={(e) => e.stopPropagation()}>

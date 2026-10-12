@@ -41,6 +41,7 @@ from .productions.production_control_api import router as production_control_rou
 from .productions.coordination_board_api import router as coordination_board_router
 from .purchases.purchases import router as purchase_router
 from .purchase_requisitions.purchase_requisitions import router as purchase_requisition_router
+from .payment_applications.payment_applications import router as payment_application_router
 from .purchase_inquiries.purchase_inquiries import router as purchase_inquiry_router
 from .material_calls.material_calls import router as material_call_router
 
@@ -182,6 +183,7 @@ router.include_router(production_router)
 router.include_router(document_relations_legacy_router)
 router.include_router(purchase_router)
 router.include_router(purchase_requisition_router)
+router.include_router(payment_application_router)
 router.include_router(purchase_inquiry_router)
 router.include_router(material_call_router)
 

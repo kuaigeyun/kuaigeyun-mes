@@ -275,6 +275,41 @@ async def _store_token_session_cache(
     )
 
 
+def is_kingdee_cosmic_access_token_rejected(
+    response_body: Any,
+    *,
+    http_status: Optional[int] = None,
+) -> bool:
+    """
+    判断苍穹业务调用是否因 AccessToken 失效被拒。
+
+    常见为 HTTP 200 + body.errorCode=401（「token已过期」），
+    也可能是 HTTP 401。
+    """
+    if http_status == 401:
+        return True
+    if not isinstance(response_body, dict):
+        return False
+    code = str(
+        response_body.get("errorCode")
+        or response_body.get("error_code")
+        or response_body.get("errcode")
+        or ""
+    ).strip()
+    if code == "401":
+        return True
+    message = str(
+        response_body.get("message")
+        or response_body.get("errorMsg")
+        or response_body.get("msg")
+        or ""
+    )
+    if "token已过期" in message or "AccessToken认证不通过" in message:
+        return True
+    lower = message.lower()
+    return "access token" in lower and ("expir" in lower or "invalid" in lower)
+
+
 async def invalidate_kingdee_cosmic_token_cache(config: Dict[str, Any]) -> None:
     """业务调用遇 token 失效时主动清缓存。"""
     cache_key = build_kingdee_cosmic_token_cache_key(config)

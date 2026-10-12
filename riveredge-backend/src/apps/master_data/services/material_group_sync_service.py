@@ -134,8 +134,10 @@ class MaterialGroupSyncService:
             attach_sync_fetch_meta(result, fetched=fetched, since=since)
             if not fetched:
                 raise ValidationError(
-                    "物料分组源端未返回任何行。请检查绑定的金蝶接口 FormId 是否为 BD_MATERIALGROUP，"
-                    "以及 FilterString/FieldKeys；可在连接器中重新「加载常用接口」升级物料分组预置后重试"
+                    "物料分组源端未返回任何行。"
+                    "星空请确认 FormId=BD_MATERIALGROUP；"
+                    "苍穹请使用 getMalGoodsClass（勿再调已禁用的 bd_materialgroup），"
+                    "并在连接器重新「加载常用接口」升级「苍穹查询物料分组」后重试"
                 )
             if result.created == 0 and result.updated == 0 and (result.skipped or result.failed):
                 raise ValidationError(
@@ -168,9 +170,18 @@ class MaterialGroupSyncService:
 
         pending: List[tuple[str, str, Optional[str], Dict[str, Any]]] = []
         for row in rows:
-            code = cell_str(row.get(match_key) or row.get("code"))
+            code = cell_str(row.get(match_key) or row.get("code") or row.get("number"))
             name = cell_str(row.get("name"))
-            parent_code = cell_str(row.get("parent_code")) or None
+            parent_code = (
+                cell_str(
+                    row.get("parent_code")
+                    or row.get("parent_parent_number")
+                    or row.get("parent_number")
+                    or row.get("parentid_number")
+                    or row.get("parent.number")
+                )
+                or None
+            )
             if not code:
                 skipped += 1
                 errors.append("存在缺少分组编码的行，已跳过")

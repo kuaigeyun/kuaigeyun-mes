@@ -5,7 +5,14 @@
  */
 
 // 使用 Fetch API 进行 HTTP 请求
-import { clearAuth, getToken, isTokenExpired, isInfraSuperAdminUser } from '../utils/auth';
+import {
+  clearAuth,
+  getToken,
+  getTokenTenantId,
+  isTokenExpired,
+  isInfraSuperAdminFromToken,
+  syncStoredTenantId,
+} from '../utils/auth';
 import { updateLastActivity, incrementPendingRequests, decrementPendingRequests } from '../utils/activityUtils';
 import { handleNetworkError, handleServerError, withRetry } from '../utils/errorRecovery';
 import { navigateTo } from '../utils/navigation';
@@ -20,18 +27,9 @@ import { isRequestCancellation } from '../utils/requestCancellation';
  */
 export const API_BASE_URL = '/api/v1';
 
-/**
- * 获取当前选择的组织ID
- *
- * 优先从 localStorage 的 tenant_id 获取，如果没有则尝试从 user_info 中获取
- *
- * @returns 组织ID 或 null
- */
-export function getCurrentTenantId(): string | null {
+function readTenantIdFromStorageOrUserInfo(): string | null {
   try {
-    // 优先从 localStorage 的 tenant_id 获取
     const tenantId = localStorage.getItem('tenant_id');
-    // ⚠️ 关键修复：检查 tenantId 是否有效（不为 null、undefined 或空字符串）
     if (tenantId !== null && tenantId !== undefined && tenantId !== '') {
       const trimmedTenantId = tenantId.trim();
       if (trimmedTenantId !== '') {
@@ -41,20 +39,16 @@ export function getCurrentTenantId(): string | null {
   } catch (error) {
     console.warn('⚠️ 读取 localStorage tenant_id 失败:', error);
   }
-  
-  // 如果 localStorage 中没有，尝试从 user_info 中获取
+
   try {
     const userInfoStr = localStorage.getItem('user_info');
     if (userInfoStr) {
       const userInfo = JSON.parse(userInfoStr);
-      // 尝试多个可能的字段名：tenant_id, tenantId
       const tenantIdFromUserInfo = userInfo?.tenant_id || userInfo?.tenantId;
       if (tenantIdFromUserInfo !== undefined && tenantIdFromUserInfo !== null) {
-        // 如果从 user_info 中获取到，同时保存到 tenant_id，避免下次再查找
         const tenantIdStr = String(tenantIdFromUserInfo).trim();
         if (tenantIdStr !== '') {
-          localStorage.setItem('tenant_id', tenantIdStr);
-          console.log('✅ 从 user_info 中恢复 tenant_id:', tenantIdStr);
+          syncStoredTenantId(tenantIdStr);
           return tenantIdStr;
         }
       }
@@ -62,8 +56,26 @@ export function getCurrentTenantId(): string | null {
   } catch (error) {
     console.warn('⚠️ 解析 user_info 失败:', error);
   }
-  
+
   return null;
+}
+
+/**
+ * 获取当前 API 请求应携带的组织 ID
+ *
+ * - 平台超管：localStorage / user_info 中选定的组织（JWT 不含 tenant_id）
+ * - 普通用户：JWT tenant_id 为真源，并回写 localStorage，避免切换后仍带上一组织请求头
+ */
+export function getCurrentTenantId(): string | null {
+  if (!isInfraSuperAdminFromToken()) {
+    const jwtTenantId = getTokenTenantId();
+    if (jwtTenantId != null) {
+      const jwtStr = String(jwtTenantId);
+      syncStoredTenantId(jwtStr);
+      return jwtStr;
+    }
+  }
+  return readTenantIdFromStorageOrUserInfo();
 }
 
 /**
@@ -235,36 +247,11 @@ export async function apiRequest<T = any>(
   //   });
   // }
   
-  // 2. 获取 Tenant ID 和用户信息（公开接口不需要）
+  // 2. 获取 Tenant ID（公开接口不需要）
   let tenantId: string | null = null;
-  let isInfraSuperAdmin = false;
-  
+
   if (!isPublicEndpoint) {
-    // 优先从 localStorage 获取 tenant_id
-    const tenantIdFromStorage = localStorage.getItem('tenant_id');
-    if (tenantIdFromStorage && tenantIdFromStorage.trim()) {
-      tenantId = tenantIdFromStorage.trim();
-    } else {
-      // 如果 localStorage 中没有，尝试从 user_info 恢复
-      try {
-        const userInfoStr = localStorage.getItem('user_info');
-        if (userInfoStr) {
-          const userInfo = JSON.parse(userInfoStr);
-          const tenantIdFromUserInfo = userInfo?.tenant_id || userInfo?.tenantId;
-          if (tenantIdFromUserInfo != null) {
-            tenantId = String(tenantIdFromUserInfo).trim();
-            // 保存到 localStorage，避免下次再查找
-            if (tenantId) {
-              localStorage.setItem('tenant_id', tenantId);
-            }
-          }
-          // 检查是否是平台超级管理员
-          isInfraSuperAdmin = isInfraSuperAdminUser(userInfo);
-        }
-      } catch (error) {
-        // 忽略解析错误
-      }
-    }
+    tenantId = getCurrentTenantId();
   }
   
   // 3. 构建请求头

@@ -140,4 +140,11 @@ export interface SyncFromSourceConfig {
   skipBackendPrerequisites?: boolean;
   /** 主同步步骤标题（有 prerequisiteSteps 时在进度条中展示） */
   mainStepTitleKey?: string;
+  /** 拉取预览时优先展示的源列（单位同步等只关心编码/名称） */
+  previewPreferredSourceKeys?: string[];
+  /**
+   * 预览时按基础单位编码去重（仅单位同步）。
+   * 物料同步也会在 preferredKeys 里带 baseunit.*，绝不能据此推断去重。
+   */
+  collapsePreviewToUniqueUnits?: boolean;
 }

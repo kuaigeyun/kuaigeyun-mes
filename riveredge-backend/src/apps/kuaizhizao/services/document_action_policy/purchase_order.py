@@ -155,6 +155,8 @@ def derive_purchase_order_capabilities(
     has_pending_change: bool = False,
     has_returnable: bool = False,
     has_prepayment_payment: bool = False,
+    require_payment_application: bool = False,
+    prepayment_application_remaining: Optional[Decimal] = None,
 ) -> PurchaseOrderCapabilities:
     del has_receipt_notice  # 历史参数：通知单是否存在不再阻断分批下推
     status = getattr(order, "status", None)
@@ -235,12 +237,30 @@ def derive_purchase_order_capabilities(
     if _is_audited_status(status):
         if prepay_amount <= 0:
             prepay_reason = "purchase_order.push_prepayment.no_amount"
+        elif require_payment_application:
+            prepay_reason = "purchase_order.push_prepayment.require_application"
         elif has_prepayment_payment:
             prepay_reason = "purchase_order.push_prepayment.already_exists"
         else:
             prepay_allowed = True
             prepay_reason = None
     push_prepayment_cap = _require_supplier_for_push(_cap(prepay_allowed, prepay_reason), order)
+
+    if prepayment_application_remaining is not None:
+        prepay_app_remaining = prepayment_application_remaining
+    else:
+        prepay_app_remaining = prepay_amount
+    push_app_allowed = False
+    push_app_reason = "purchase_order.push_payment_application.not_audited"
+    if _is_audited_status(status):
+        if prepay_amount <= 0 or prepay_app_remaining <= 0:
+            push_app_reason = "purchase_order.push_payment_application.no_amount"
+        else:
+            push_app_allowed = True
+            push_app_reason = None
+    push_payment_application_cap = _require_supplier_for_push(
+        _cap(push_app_allowed, push_app_reason), order
+    )
 
     return_allowed = False
     return_reason = "purchase_order.push_purchase_return.not_audited"
@@ -304,6 +324,7 @@ def derive_purchase_order_capabilities(
         push_receipt=push_receipt_cap,
         push_invoice=push_invoice_cap,
         push_prepayment=push_prepayment_cap,
+        push_payment_application=push_payment_application_cap,
         push_purchase_return=push_return_cap,
         push_incoming_inspection=push_incoming_inspection_cap,
         create_change_order=create_change_cap,
@@ -326,6 +347,8 @@ def assert_purchase_order_capability(
     has_pending_change: bool = False,
     has_returnable: bool = False,
     has_prepayment_payment: bool = False,
+    require_payment_application: bool = False,
+    prepayment_application_remaining: Optional[Decimal] = None,
 ) -> None:
     caps = derive_purchase_order_capabilities(
         order,
@@ -340,6 +363,8 @@ def assert_purchase_order_capability(
         has_pending_change=has_pending_change,
         has_returnable=has_returnable,
         has_prepayment_payment=has_prepayment_payment,
+        require_payment_application=require_payment_application,
+        prepayment_application_remaining=prepayment_application_remaining,
     )
     cap_map = {
         "update": caps.update,
@@ -352,6 +377,7 @@ def assert_purchase_order_capability(
         "push_receipt": caps.push_receipt,
         "push_invoice": caps.push_invoice,
         "push_prepayment": caps.push_prepayment,
+        "push_payment_application": caps.push_payment_application,
         "push_purchase_return": caps.push_purchase_return,
         "push_incoming_inspection": caps.push_incoming_inspection,
         "create_change_order": caps.create_change_order,

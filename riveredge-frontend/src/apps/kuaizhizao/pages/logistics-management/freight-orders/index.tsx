@@ -713,7 +713,7 @@ const FreightOrdersPage: React.FC = () => {
                     </Button>
                   ),
                 },
-                ...(perms.canUpdate
+                ...(perms.canAction?.('dispatch')
                   ? [
                       {
                         key: 'dispatch',
@@ -724,6 +724,10 @@ const FreightOrdersPage: React.FC = () => {
                           </Button>
                         ),
                       },
+                    ]
+                  : []),
+                ...(perms.canUpdate
+                  ? [
                       {
                         key: 'ship',
                         visible: detail.status === 'scheduled',

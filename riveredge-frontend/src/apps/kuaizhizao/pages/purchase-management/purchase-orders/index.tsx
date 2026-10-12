@@ -130,7 +130,8 @@ import {
   pushPurchaseOrderToReceiptNotice, pushPurchaseOrderToReceiptNoticeFromPreview, pushPurchaseOrderToInvoice, pushPurchaseOrderToPrepayment, pushPurchaseOrderToPurchaseReturn,
   getPurchaseOrderStatistics,
   getPurchaseOrderSyncBinding,
-  previewPushToReceiptNotice, previewPushToReceipt, previewPushToInvoice, previewPushToPrepayment, previewPushToPurchaseReturn,
+  previewPushToReceiptNotice, previewPushToReceipt, previewPushToInvoice, previewPushToPrepayment,
+  previewPushToPaymentApplication, pushPurchaseOrderToPaymentApplication, previewPushToPurchaseReturn,
   type DocumentPushPreview,
   type PurchaseInvoicePushMode,
   PurchaseOrder, PurchaseOrderItem
@@ -337,7 +338,14 @@ type PurchaseOrderDetail = PurchaseOrder;
 type PullPurchaseRequisitionCandidate = PurchaseRequisitionPullLine;
 type PullPurchaseInquiryCandidate = PurchaseInquiryPurchasePullLine;
 
-type PushPreviewKind = 'receipt_notice' | 'receipt' | 'invoice' | 'prepayment' | 'purchase_return' | 'incoming_inspection';
+type PushPreviewKind =
+  | 'receipt_notice'
+  | 'receipt'
+  | 'invoice'
+  | 'prepayment'
+  | 'payment_application'
+  | 'purchase_return'
+  | 'incoming_inspection';
 
 const defaultOrderItem = {
   material_id: undefined,
@@ -1362,6 +1370,7 @@ const PurchaseOrdersPage: React.FC = () => {
     if (pushPreviewKind === 'receipt') return pushToReceiptAction.label;
     if (pushPreviewKind === 'invoice') return pushToInvoiceAction.label;
     if (pushPreviewKind === 'prepayment') return pushToPrepaymentAction.label;
+    if (pushPreviewKind === 'payment_application') return t('app.kuaizhizao.paymentApplication.pushFromPurchaseOrder');
     if (pushPreviewKind === 'purchase_return') return pushToPurchaseReturnAction.label;
     if (pushPreviewKind === 'incoming_inspection') return pushToIncomingInspectionAction.label;
     return t('app.kuaizhizao.salesOrder.pushPreviewTitle');
@@ -1526,6 +1535,8 @@ const PurchaseOrdersPage: React.FC = () => {
           preview = await previewPushToInvoice(record.id);
         } else if (kind === 'prepayment') {
           preview = await previewPushToPrepayment(record.id);
+        } else if (kind === 'payment_application') {
+          preview = await previewPushToPaymentApplication(record.id);
         } else if (kind === 'incoming_inspection') {
           preview = (await qualityApi.incomingInspection.previewFromPurchaseOrder(
             record.id,
@@ -1544,6 +1555,8 @@ const PurchaseOrdersPage: React.FC = () => {
           setPushInvoiceAmount(Number(modeRow?.amount ?? preview.remaining_total ?? 0));
         } else if (kind === 'prepayment') {
           setPushInvoiceAmount(Number(preview.prepayment_amount ?? 0));
+        } else if (kind === 'payment_application') {
+          setPushInvoiceAmount(Number(preview.max_push_quantity ?? 0));
         }
         const rows = preview.items || [];
         const ids: number[] = [];
@@ -1595,7 +1608,12 @@ const PurchaseOrdersPage: React.FC = () => {
       const row = rowById.get(id);
       return row && Number(row.max_push_quantity ?? 0) > 0;
     });
-    if (pushPreviewKind !== 'invoice' && pushPreviewKind !== 'prepayment' && !selectedIds.length) {
+    if (
+      pushPreviewKind !== 'invoice' &&
+      pushPreviewKind !== 'prepayment' &&
+      pushPreviewKind !== 'payment_application' &&
+      !selectedIds.length
+    ) {
       messageApi.warning(t('app.kuaizhizao.purchaseOrder.push.selectLinesFirst'));
       return;
     }
@@ -1607,7 +1625,11 @@ const PurchaseOrdersPage: React.FC = () => {
 
     const quantities: Record<number, number> = {};
     const lineWarehouses: Record<number, number> = {};
-    if (pushPreviewKind !== 'invoice' && pushPreviewKind !== 'prepayment') {
+    if (
+      pushPreviewKind !== 'invoice' &&
+      pushPreviewKind !== 'prepayment' &&
+      pushPreviewKind !== 'payment_application'
+    ) {
       for (const id of selectedIds) {
         const row = rowById.get(id);
         const qty = Number(pushPreviewQuantities[id] ?? 0);
@@ -1787,6 +1809,36 @@ const PurchaseOrdersPage: React.FC = () => {
       return;
     }
 
+    if (kind === 'payment_application') {
+      if (!(pushInvoiceAmount > 0)) {
+        messageApi.warning(t('app.kuaizhizao.paymentApplication.amountInvalid'));
+        return;
+      }
+      setPushPreviewConfirming(true);
+      try {
+        const result = await pushPurchaseOrderToPaymentApplication(target.id!, {
+          amount: pushInvoiceAmount,
+        });
+        messageApi.success(
+          t('app.kuaizhizao.paymentApplication.createFromOrderSuccess', {
+            code: result.applicationCode,
+          }),
+        );
+        resetPushPreviewModal();
+        invalidateStatistics();
+        invalidateMenuBadgeCounts();
+        actionRef.current?.reload();
+        if (detailDrawerVisible && orderDetail?.id === target.id) {
+          getPurchaseOrder(target.id!).then(setOrderDetail);
+        }
+      } catch (error: unknown) {
+        messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.paymentApplication.createFailed')));
+      } finally {
+        setPushPreviewConfirming(false);
+      }
+      return;
+    }
+
     if (!(pushInvoiceAmount > 0)) {
       messageApi.warning(t('app.kuaizhizao.purchaseOrder.pushInvoiceAmountInvalid'));
       return;
@@ -1857,6 +1909,13 @@ const PurchaseOrdersPage: React.FC = () => {
   const handlePushToPrepayment = useCallback(
     (record: PurchaseOrder) => {
       void loadPushPreview(record, 'prepayment');
+    },
+    [loadPushPreview],
+  );
+
+  const handlePushToPaymentApplication = useCallback(
+    (record: PurchaseOrder) => {
+      void loadPushPreview(record, 'payment_application');
     },
     [loadPushPreview],
   );
@@ -2017,6 +2076,16 @@ const PurchaseOrdersPage: React.FC = () => {
           },
         },
         {
+          key: 'payment-application',
+          label: t('app.kuaizhizao.paymentApplication.pushFromPurchaseOrder'),
+          disabled: record.capabilities?.push_payment_application?.allowed !== true,
+          title: capReason(record.capabilities?.push_payment_application),
+          onClick: () => {
+            if (record.capabilities?.push_payment_application?.allowed !== true) return;
+            handlePushToPaymentApplication(record);
+          },
+        },
+        {
           key: 'incoming-inspection',
           label: pushToIncomingInspectionAction.label,
           disabled: record.capabilities?.push_incoming_inspection?.allowed !== true,
@@ -2053,6 +2122,7 @@ const PurchaseOrdersPage: React.FC = () => {
       handlePushToInvoice,
       handlePushToNotice,
       handlePushToPrepayment,
+      handlePushToPaymentApplication,
       handlePushToPurchaseOrderChange,
       handlePushToReceipt,
       handlePushToReturn,
@@ -2085,6 +2155,7 @@ const PurchaseOrdersPage: React.FC = () => {
       caps?.push_receipt?.allowed === true ||
       caps?.push_invoice?.allowed === true ||
       caps?.push_prepayment?.allowed === true ||
+      caps?.push_payment_application?.allowed === true ||
       caps?.push_incoming_inspection?.allowed === true ||
       caps?.push_purchase_return?.allowed === true ||
       (purchaseOrderChangePerms.canCreate && caps?.create_change_order?.allowed === true);
@@ -2095,6 +2166,7 @@ const PurchaseOrdersPage: React.FC = () => {
             caps?.push_receipt?.reason ||
             caps?.push_invoice?.reason ||
             caps?.push_prepayment?.reason ||
+            caps?.push_payment_application?.reason ||
             caps?.push_incoming_inspection?.reason ||
             caps?.push_purchase_return?.reason ||
             caps?.create_change_order?.reason,
@@ -4211,7 +4283,9 @@ const PurchaseOrdersPage: React.FC = () => {
             pushPreviewLoading ||
             !pushPreviewData ||
             !!pushPreviewData?.has_blocking_issues ||
-            (pushPreviewKind === 'invoice' || pushPreviewKind === 'prepayment'
+            (pushPreviewKind === 'invoice' ||
+            pushPreviewKind === 'prepayment' ||
+            pushPreviewKind === 'payment_application'
               ? !(pushInvoiceAmount > 0)
               : pushPreviewSelectedItemIds.length === 0),
         }}
@@ -4234,10 +4308,13 @@ const PurchaseOrdersPage: React.FC = () => {
                 title={purchaseOrderCapabilityReasonMessage(pushPreviewData.blocking_reason, t) || t('app.kuaizhizao.purchaseOrder.push.previewFailed')}
               />
             ) : null}
-            {pushPreviewKind === 'prepayment' && !pushPreviewData.has_blocking_issues ? (
+            {(pushPreviewKind === 'prepayment' || pushPreviewKind === 'payment_application') &&
+            !pushPreviewData.has_blocking_issues ? (
               <div style={{ marginBottom: 12 }}>
                 <div style={{ marginBottom: 8 }}>
-                  {t('app.kuaizhizao.purchaseOrder.pushPrepaymentAmount')}
+                  {pushPreviewKind === 'payment_application'
+                    ? t('app.kuaizhizao.paymentApplication.requestAmount')
+                    : t('app.kuaizhizao.purchaseOrder.pushPrepaymentAmount')}
                 </div>
                 <InputNumber
                   style={{ width: 280 }}
@@ -4248,7 +4325,10 @@ const PurchaseOrdersPage: React.FC = () => {
                 />
               </div>
             ) : null}
-            {pushPreviewKind !== 'invoice' && pushPreviewKind !== 'prepayment' && pushPreviewData.items?.length > 0 ? (
+            {pushPreviewKind !== 'invoice' &&
+            pushPreviewKind !== 'prepayment' &&
+            pushPreviewKind !== 'payment_application' &&
+            pushPreviewData.items?.length > 0 ? (
               <Table
                 size="small"
                 dataSource={pushPreviewData.items}

@@ -339,12 +339,44 @@ class MaterialSyncService:
         ]
         pending_rows: List[PendingRow] = []
         for row in rows:
-            main_code = cell_str(row.get(match_key) or row.get("main_code") or row.get("code"))
+            main_code = cell_str(
+                row.get(match_key) or row.get("main_code") or row.get("code") or row.get("number")
+            )
             name = cell_str(row.get("name"))
-            base_unit = cell_str(row.get("base_unit"))
-            base_unit_name = cell_str(row.get("base_unit_name")) or None
-            group_code = cell_str(row.get("group_code")) or None
-            group_name = cell_str(row.get("group_name")) or None
+            base_unit = cell_str(
+                row.get("base_unit")
+                or row.get("baseunit_number")
+                or row.get("baseunit.number")
+                or row.get("measureunitid_number")
+            )
+            base_unit_name = (
+                cell_str(
+                    row.get("base_unit_name")
+                    or row.get("baseunit_name")
+                    or row.get("baseunit.name")
+                    or row.get("measureunitid_name")
+                )
+                or None
+            )
+            group_code = (
+                cell_str(
+                    row.get("group_code")
+                    or row.get("group_number")
+                    or row.get("group.number")
+                    or row.get("materialgroup_number")
+                    or row.get("materialgroup.number")
+                )
+                or None
+            )
+            group_name = (
+                cell_str(
+                    row.get("group_name")
+                    or row.get("group.name")
+                    or row.get("materialgroup_name")
+                    or row.get("materialgroup.name")
+                )
+                or None
+            )
             if not main_code:
                 skipped += 1
                 errors.append("存在缺少物料编码的行，已跳过")
@@ -357,7 +389,15 @@ class MaterialSyncService:
                 failed += 1
                 errors.append(f"物料 {main_code} 缺少基本单位 base_unit / base_unit_name")
                 continue
-            specification = cell_str(row.get("specification")) or None
+            specification = (
+                cell_str(
+                    row.get("specification")
+                    or row.get("modelnum")
+                    or row.get("model")
+                    or row.get("modelNum")
+                )
+                or None
+            )
             pending_rows.append(
                 (
                     main_code,

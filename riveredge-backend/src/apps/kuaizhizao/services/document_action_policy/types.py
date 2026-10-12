@@ -199,6 +199,7 @@ class PurchaseOrderCapabilities(BaseModel):
     push_receipt: ActionCapability
     push_invoice: ActionCapability
     push_prepayment: ActionCapability
+    push_payment_application: ActionCapability
     push_purchase_return: ActionCapability
     push_incoming_inspection: ActionCapability
     create_change_order: ActionCapability
@@ -604,6 +605,17 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "purchase_order.push_prepayment.not_audited": "只有已审核或已确认的采购单才能下推预付付款单",
     "purchase_order.push_prepayment.no_amount": "采购单未填写预付款金额，无法下推预付付款单",
     "purchase_order.push_prepayment.already_exists": "该采购订单已关联预付付款单",
+    "purchase_order.push_prepayment.require_application": "组织已启用「预付款须走付款申请」，请下推付款申请单",
+    "purchase_order.push_payment_application.not_audited": "只有已审核或已确认的采购单才能下推付款申请",
+    "purchase_order.push_payment_application.no_amount": "采购单未填写预付款金额或无可请款预付额度",
+    "payment_application.pull_from_purchase_order.no_amount": "该采购订单预付请款额度已用尽",
+    "payment.pull_from_payment_application.not_allowed": "付款申请单不可取单生成付款（须已批准且有余额）",
+    "payment_application.update.not_allowed": "当前状态不可编辑付款申请",
+    "payment_application.delete.not_allowed": "仅草稿可删除付款申请",
+    "payment_application.submit.not_allowed": "当前状态不可提交",
+    "payment_application.approve.not_allowed": "当前状态不可审核",
+    "payment_application.withdraw.not_allowed": "当前状态不可撤回提交",
+    "payment_application.push_payment.not_allowed": "须已批准且有余额才可下推付款单",
     "sales_order.push_prepayment.not_audited": "只有已审核或已确认的销售订单才能下推预收收款单",
     "sales_order.push_prepayment.no_amount": "销售订单未填写预收款金额，无法下推预收收款单",
     "sales_order.push_prepayment.already_exists": "该销售订单已关联预收收款单",
