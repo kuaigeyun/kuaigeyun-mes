@@ -44,6 +44,14 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'kuaiconnect-settings-lock-flash-r01',
+    date: '2026-10-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiconnect-settings-lock-flash-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiconnect-settings-lock-flash-r01.description',
+  },
+  {
     id: 'sales-order-save-perf-r01',
     date: '2026-10-12',
     type: 'improvement',

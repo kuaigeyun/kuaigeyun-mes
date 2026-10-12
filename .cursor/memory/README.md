@@ -52,6 +52,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | 数据备份、任务堆积、pending 卡住、reclaim | `features/data-backup-stalled-reclaim.md` |
 | 数据备份定时、对象存储落点、保留天数/份数清理 | `features/data-backup-policy-schedule-storage.md` |
 | 应用连接器 RustFS、S3 兼容存储、文件/备份落点 | `features/connector-storage-rustfs.md` |
+| 系统配置连接管理闪锁定、已启用快连接仍短暂锁 | `features/kuaiconnect-settings-pro-flash.md` |
 | 备份一开始失败、error=`read`、UnsupportedOperation | `features/data-backup-csv-dump-newline.md` |
 | 备份下载 Connection Failed、ERR_CONNECTION_REFUSED | `features/data-backup-download-same-origin.md` |
 | 平台管理员全平台备份、backup_scope=all | `features/data-backup-platform-all-tenants.md` |
@@ -139,6 +140,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | `features/data-backup-stalled-reclaim.md` | 数据备份堆积回收 | system | 已交付 |
 | `features/data-backup-policy-schedule-storage.md` | 数据备份定时/存储/清理策略 | system | 已交付 |
 | `features/connector-storage-rustfs.md` | 应用连接器 RustFS 对象存储 | kuaiconnect | 已交付 |
+| `features/kuaiconnect-settings-pro-flash.md` | 已启用快连接时系统配置不闪锁定（PRO 常显） | kuaiconnect | 已交付 |
 | `features/data-backup-csv-dump-newline.md` | 数据备份 CSV dump 换行探测 | system | 已交付 |
 | `features/data-backup-download-same-origin.md` | 备份下载走当前页面 origin | system | 已交付 |
 | `features/data-backup-platform-all-tenants.md` | 平台管理员全平台租户备份 | system | 已交付 |

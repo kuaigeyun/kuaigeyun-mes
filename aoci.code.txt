@@ -1068,7 +1068,6 @@ base_service.py[CB4S]: F:应用级服务基类 | R:code:riveredge-backend/src/ap
 bulk_import.py[CC2T]: F:批量导入公共Schema | R:code:riveredge-backend/src/apps/common/base_service.py | A:BulkCreateResponse | S:per-item fail collect; 64L
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/ind_electronics/===
-__init__.py[AA2T]: F:电子行业包模块根 | R:code:riveredge-backend/src/apps/common/bulk_import.py | A:ind_electronics | S:1L; empty pkg
 extension_hooks.py[DE3T]: F:行业包扩展钩子 | R:code:riveredge-backend/src/apps/ind_electronics/api/router.py | A:esd apply/revert | S:deepcopy seed; 34L
 manifest.json[FG5S]: F:电子行业包应用清单 | R:- | A:4 extensions | S:profile replace; 112L
 orm_models.py[PC2T]: F:行业包ORM占位 | R:code:riveredge-backend/src/apps/ind_electronics/manifest.json | A:no tables | S:3L; empty list

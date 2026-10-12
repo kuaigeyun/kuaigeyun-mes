@@ -86,7 +86,7 @@ standard: 先按 code-push-routing 分流；有 PC 前端改动才 build.web；�
 
 ## 开机自启（Linux systemd）
 
-- 运行用户优先级：`deploy.env` 的 `SERVICE_USER` → `SUDO_USER` → 当前用户 → `$PROJECT_ROOT` 属主；**禁止** `User=root`
+- 运行用户优先级：`deploy.env` 的 `SERVICE_USER` → `SUDO_USER` → 当前用户 → `$PROJECT_ROOT` 属主 → **已安装 unit 的 `User=`**；**禁止** `User=root`。root 直登且目录属主也是 root 时，脚本会读 `/etc/systemd/system/riveredge-backend.service` 并写回 `SERVICE_USER`；仍失败则须人工写入 `SERVICE_USER`。
 - `prepare_systemd_prerequisites`：服务用户无 uv 时 `ensure_uv_for_user` 自动 pip/官方脚本装到其 `~/.local/bin`，勿把 root 的 uv 写进 unit
 - 向导 BOOT 菜单展示运行用户、uv/caddy 就绪态；失败信息含可复制手装命令
 - **203/EXEC**：`check_systemd_exec_scripts` 纳入 `deploy.sh check`；`ensure_systemd_exec_scripts_ready` 在 `install-service` / `start_prod_via_systemd` / `fix_systemd_runtime_permissions` 去 CRLF + `chmod +x`；仓库侧 `linux/.gitattributes` + `100755`
@@ -94,6 +94,7 @@ standard: 先按 code-push-routing 分流；有 PC 前端改动才 build.web；�
 
 ## 踩坑
 
+- `journalctl` 报 `deploy.env: Permission denied` 且 `riveredge-backend` 重启计数狂涨：服务用户读不到 `fast-deploy/config/deploy.env`（常见 root 编辑后 `chmod 600`）。`fix_systemd_runtime_permissions` 会 chown 配置目录与 `deploy.env`；`install-service` / systemd `start` 启动前会跑。应急：`sudo ./fast-deploy/deploy.sh install-service` 或手动 `chown` 给 `SERVICE_USER`。
 - `journalctl` 报 `status=203/EXEC` + `Permission denied`：包装脚本无 +x 或含 `\r`（Windows 检出）。先 `./fast-deploy/deploy.sh check`，再 `install-service` / `start`（会自动 `ensure_systemd_exec_scripts_ready`）。
 - PowerShell 执行 `.\fast-deploy\launch.dev.sh`：Windows 把 `.sh` 关联到 `git-bash.exe`，Cursor 终端无日志、exit 0，手机端未起。改用 `.\fast-deploy\launch.dev.ps1 withh5` 或 Git Bash。
 - 手机 H5 开发口默认 **8098**，不是 8081（Hyper-V 保留段）。

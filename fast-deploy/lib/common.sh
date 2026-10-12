@@ -293,6 +293,24 @@ fix_systemd_runtime_permissions() {
         sudo chown "${service_user}:${service_group}" "$ENV_FILE" || return 1
         sudo chmod u+rw "$ENV_FILE" || return 1
     fi
+    # systemd-exec-*.sh 以服务用户 source deploy.env；root 改成 600 会导致 Permission denied 秒退死循环
+    sudo mkdir -p "$FAST_DEPLOY_CONFIG_DIR" || return 1
+    sudo chown "${service_user}:${service_group}" "$FAST_DEPLOY_CONFIG_DIR" || return 1
+    sudo chmod u+rwx "$FAST_DEPLOY_CONFIG_DIR" || return 1
+    if [ -f "$DEPLOY_ENV_FILE" ]; then
+        sudo chown "${service_user}:${service_group}" "$DEPLOY_ENV_FILE" || return 1
+        sudo chmod u+rw "$DEPLOY_ENV_FILE" || return 1
+    fi
+    local workbuddy_env="${WORKBUDDY_MCP_ENV_FILE:-$FAST_DEPLOY_CONFIG_DIR/workbuddy-mcp.env}"
+    if [ -f "$workbuddy_env" ]; then
+        sudo chown "${service_user}:${service_group}" "$workbuddy_env" 2>/dev/null || true
+        sudo chmod u+rw "$workbuddy_env" 2>/dev/null || true
+    fi
+    if [ -f "$DEPLOY_ENV_FILE" ] && ! sudo -u "$service_user" test -r "$DEPLOY_ENV_FILE" 2>/dev/null; then
+        log_error "服务用户 ${service_user} 仍无法读取 ${DEPLOY_ENV_FILE}"
+        log_error "请检查父目录穿越权限: ls -ld ${PROJECT_ROOT} ${FAST_DEPLOY_DIR} ${FAST_DEPLOY_CONFIG_DIR}"
+        return 1
+    fi
     for dir in "${service_home}/.local/share/caddy" "${service_home}/.config/caddy"; do
         if [ -d "$dir" ]; then
             sudo chown -R "${service_user}:${service_group}" "$dir" 2>/dev/null || true
@@ -2842,17 +2860,25 @@ systemd_managed_prod_stack() {
 }
 
 start_prod_via_systemd() {
-    local unit
+    local unit service_user
     if ! command -v systemctl >/dev/null 2>&1; then
         return 1
     fi
     # pull 后可能再次变成 100644 / CRLF，启动前必须修好，否则 203/EXEC
     ensure_systemd_exec_scripts_ready || return 1
+    # root 改过 deploy.env 权限时，服务用户 source 失败 → 秒退死循环；启动前强制收口
+    service_user="$(resolve_service_user --quiet)" || {
+        log_error "无法解析非 root 服务用户，无法修复 deploy.env 归属"
+        return 1
+    }
+    fix_systemd_runtime_permissions "$service_user" || return 1
     log_info "通过 systemd 启动生产栈（子进程 OOM 后自动 Restart）..."
     if [ "$(id -u)" -eq 0 ]; then
+        systemctl reset-failed "$SYSTEMD_UNIT_NAME" "$SYSTEMD_BACKEND_UNIT_NAME" 2>/dev/null || true
         systemctl start "$SYSTEMD_UNIT_NAME"
-    elif sudo -n systemctl start "$SYSTEMD_UNIT_NAME" 2>/dev/null; then
-        :
+    elif sudo -n true 2>/dev/null; then
+        sudo systemctl reset-failed "$SYSTEMD_UNIT_NAME" "$SYSTEMD_BACKEND_UNIT_NAME" 2>/dev/null || true
+        sudo systemctl start "$SYSTEMD_UNIT_NAME"
     else
         log_error "需要 sudo 启动 systemd 单元: sudo systemctl start ${SYSTEMD_UNIT_NAME}"
         return 1
@@ -5191,8 +5217,36 @@ _is_valid_service_user() {
     [ -n "$u" ] && [ "$u" != "root" ] && getent passwd "$u" >/dev/null 2>&1
 }
 
+# 从已安装的 systemd unit 读取 User=（root 直登且目录属主也是 root 时的回退）
+_service_user_from_installed_unit() {
+    local unit_file="" line="" u=""
+    for unit_file in \
+        "${SYSTEMD_UNIT_PATH:-/etc/systemd/system/riveredge-backend.service}" \
+        /etc/systemd/system/riveredge-backend.service \
+        /etc/systemd/system/riveredge.service
+    do
+        [ -f "$unit_file" ] || continue
+        line="$(grep -E '^[[:space:]]*User=' "$unit_file" 2>/dev/null | head -n1 || true)"
+        u="${line#User=}"
+        u="${u%%[[:space:]]*}"
+        u="${u%%#*}"
+        if _is_valid_service_user "$u"; then
+            echo "$u"
+            return 0
+        fi
+    done
+    if command -v systemctl >/dev/null 2>&1; then
+        u="$(systemctl show -p User --value riveredge-backend.service 2>/dev/null || true)"
+        if _is_valid_service_user "$u"; then
+            echo "$u"
+            return 0
+        fi
+    fi
+    return 1
+}
+
 # 解析 systemd 运行用户。
-# 优先级：deploy.env SERVICE_USER → SUDO_USER → 当前 USER → PROJECT_ROOT 属主
+# 优先级：deploy.env SERVICE_USER → SUDO_USER → 当前 USER → PROJECT_ROOT 属主 → 已安装 unit User=
 # 传 --quiet 时失败静默（供向导探测）；否则打印可复制命令后 return 1
 resolve_service_user() {
     local quiet=0 u="" owner=""
@@ -5216,14 +5270,35 @@ resolve_service_user() {
     fi
 
     if ! _is_valid_service_user "$u"; then
+        u="$(_service_user_from_installed_unit || true)"
+        if _is_valid_service_user "$u"; then
+            if [ "$quiet" != "1" ]; then
+                log_info "root 会话：沿用已安装 systemd unit 的 User=${u}"
+            fi
+            # 写回 deploy.env，避免下次仍靠 unit 猜
+            if [ -f "${DEPLOY_ENV_FILE:-}" ] && [ "${SERVICE_USER:-}" != "$u" ]; then
+                set_deploy_env_value SERVICE_USER "$u" 2>/dev/null || true
+                SERVICE_USER="$u"
+                if [ "$quiet" != "1" ]; then
+                    log_info "已写入 deploy.env: SERVICE_USER=${u}"
+                fi
+            fi
+        fi
+    fi
+
+    if ! _is_valid_service_user "$u"; then
         if [ "$quiet" = "1" ]; then
             return 1
         fi
         log_error "无法解析非 root 部署用户（禁止用 root 跑业务服务）"
-        log_error "请任选其一："
-        log_error "  1) 在 deploy.env 设置 SERVICE_USER=<部署用户>"
+        log_error "当前是 root 直登，且 /opt 目录属主也是 root，脚本无法自动推断。"
+        log_error "请先查出历史部署用户后写入 deploy.env，例如："
+        log_error "  systemctl show -p User --value riveredge-backend.service"
+        log_error "  # 或: grep '^User=' /etc/systemd/system/riveredge-backend.service"
+        log_error "然后任选其一："
+        log_error "  1) 在 ${DEPLOY_ENV_FILE:-fast-deploy/config/deploy.env} 设置 SERVICE_USER=<部署用户>"
         log_error "  2) su - <部署用户> && cd ${PROJECT_ROOT} && ./fast-deploy/deploy.sh install-service"
-        log_error "  3) sudo -u <部署用户> ./fast-deploy/deploy.sh install-service"
+        log_error "  3) sudo -u <部署用户> bash -lc 'cd ${PROJECT_ROOT} && ./fast-deploy/deploy.sh install-service'"
         return 1
     fi
     echo "$u"
@@ -5307,12 +5382,21 @@ show_systemd_start_failure() {
     log_error "服务启动失败，最近日志："
     if command -v journalctl >/dev/null 2>&1; then
         local journal_tail
-        journal_tail="$(sudo journalctl -u "$SYSTEMD_UNIT_NAME" -n 40 --no-pager 2>/dev/null || true)"
+        journal_tail="$(sudo journalctl -u "$SYSTEMD_UNIT_NAME" -u "$SYSTEMD_BACKEND_UNIT_NAME" -n 40 --no-pager 2>/dev/null || true)"
         printf '%s\n' "$journal_tail"
-        if printf '%s\n' "$journal_tail" | grep -q 'Permission denied'; then
+        if printf '%s\n' "$journal_tail" | grep -q 'deploy.env: Permission denied'; then
+            local svc_user
+            svc_user="$(resolve_service_user --quiet 2>/dev/null || true)"
+            [ -z "$svc_user" ] && svc_user="${SUDO_USER:-${USER:-}}"
+            log_error "服务用户无法读取 deploy.env（常见于 root 编辑后 chmod 600）"
+            log_error "修复: sudo ./fast-deploy/deploy.sh install-service"
+            if [ -n "$svc_user" ]; then
+                log_error "或: sudo chown ${svc_user}:${svc_user} ${DEPLOY_ENV_FILE} ${FAST_DEPLOY_CONFIG_DIR} && sudo chmod u+rw ${DEPLOY_ENV_FILE}"
+            fi
+        elif printf '%s\n' "$journal_tail" | grep -q 'Permission denied'; then
             local run_user="${SUDO_USER:-${USER:-ubuntu}}"
             log_error "检测到权限问题：请勿使用 sudo 运行 deploy.sh start"
-            log_error "修复命令: sudo chown -R ${run_user}:${run_user} ${LOGS_DIR} ${ENV_FILE}"
+            log_error "修复命令: sudo chown -R ${run_user}:${run_user} ${LOGS_DIR} ${ENV_FILE} ${DEPLOY_ENV_FILE}"
         fi
     fi
     if [ -f "$LOGS_DIR/backend.log" ]; then
@@ -5518,8 +5602,8 @@ cmd_install_service() {
     echo "  后端日志: journalctl -u ${SYSTEMD_BACKEND_UNIT_NAME} -e"
     echo "  完整日志: journalctl -u riveredge -e"
     echo ""
-    echo "  提示: 请勿使用 sudo ./fast-deploy/deploy.sh start（会导致 .logs/.env 归属 root）"
-    echo "  提示: 启用 systemd 后，日常启停建议用 systemctl，避免与手动 start/stop 混用导致状态不一致"
+    echo "  提示: 请勿使用 sudo ./fast-deploy/deploy.sh start（会导致 .logs/.env/deploy.env 归属 root）"
+    echo "  提示: 启用 systemd 后，日常启停建议用 systemctl；若 journal 报 deploy.env Permission denied，重跑本命令即可收口权限"
 }
 
 cmd_uninstall_service() {

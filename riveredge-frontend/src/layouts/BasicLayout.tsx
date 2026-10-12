@@ -1440,16 +1440,10 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     staleTime: 5 * 60 * 1000,
   });
 
-  const { data: installedAppsAll } = useQuery({
-    queryKey: ['installedApplicationsAll', { tenantId: tenantIdStrForHome }],
-    queryFn: () => getInstalledApplicationList(),
-    enabled: systemSettingsPanelMounted,
-    staleTime: 5 * 60 * 1000,
-  });
-
+  // 用布局已拉的启用应用列表判定：未就绪始终锁定；已就绪不因浮层二次请求闪锁定
   const kuaiconnectReady = useMemo(
-    () => isKuaiconnectReady(installedAppsAll),
-    [installedAppsAll],
+    () => isKuaiconnectReady(installedApps),
+    [installedApps],
   );
 
   const handleSystemSettingsNavigate = useCallback((path?: string) => {

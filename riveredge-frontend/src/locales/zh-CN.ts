@@ -30965,6 +30965,10 @@ export default {
     '销售订单默认归属业务员与菜单角标口径',
   'pages.dashboard.updateLog.entries.sales-order-default-salesman-badge-r01.description':
     '新建销售订单未填写归属业务员时默认带出当前登录账号；左侧菜单销售订单角标只统计归属业务员为当前用户的待办数量。',
+  'pages.dashboard.updateLog.entries.kuaiconnect-settings-lock-flash-r01.title':
+    '已启用快连接时系统配置不再闪锁定',
+  'pages.dashboard.updateLog.entries.kuaiconnect-settings-lock-flash-r01.description':
+    '连接管理四入口改用布局已加载的启用应用列表判定：未开通仍显示锁定；已开通不再因浮层二次请求短暂闪锁定；分组 PRO 徽标保持常显。',
   'pages.dashboard.updateLog.entries.sales-order-save-perf-r01.title':
     '加快销售订单保存速度',
   'pages.dashboard.updateLog.entries.sales-order-save-perf-r01.description':
