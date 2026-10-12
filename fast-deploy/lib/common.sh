@@ -173,6 +173,11 @@ fix_systemd_runtime_permissions() {
     [ -n "$service_home" ] || { log_error "用户不存在: $service_user"; return 1; }
     ensure_logs_dir
     log_info "修复运行时目录归属 (${service_user})..."
+    # git 曾以 100644 入库时 checkout 无 +x，systemd 会 203/EXEC Permission denied
+    chmod +x "$SYSTEMD_SERVICE_SCRIPT" "$FAST_DEPLOY_DIR/linux/prod.sh" \
+        "$SYSTEMD_BACKEND_EXEC_SCRIPT" "$SYSTEMD_TASKIQ_WORKER_EXEC_SCRIPT" \
+        "$SYSTEMD_TASKIQ_SCHEDULER_EXEC_SCRIPT" "$SYSTEMD_CADDY_EXEC_SCRIPT" \
+        "$SYSTEMD_WORKBUDDY_MCP_EXEC_SCRIPT" 2>/dev/null || true
     sudo chown -R "${service_user}:${service_group}" "$LOGS_DIR" || return 1
     if [ -f "$ENV_FILE" ]; then
         sudo chown "${service_user}:${service_group}" "$ENV_FILE" || return 1
