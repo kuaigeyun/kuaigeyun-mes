@@ -2921,6 +2921,7 @@ export default {
   'app.kuaiiot.field.type': '类型',
   'app.kuaiiot.field.health': '健康状态',
   'app.kuaiiot.field.externalId': '外部设备 ID',
+  'app.kuaiiot.field.commandDeviceId': '指令设备 ID',
   'app.kuaiiot.field.mqttDevicePick': 'MQTT 现场设备',
   'app.kuaiiot.placeholder.mqttDevicePick': '选择「名称 / device_id」，自动回填外部设备 ID',
   'app.kuaiiot.message.mqttDevicePickHint':
@@ -2934,7 +2935,11 @@ export default {
   'app.kuaiiot.hint.product': '点位模板：这台设备有哪些采集点（如三易产线 PLC）。先在「产品模型」加载/新建。',
     'app.kuaiiot.hint.externalId':
       'MQTT 现场设备名录：名称 / device_id。来自该连接已收到的产线报文（不含点位值）。选 MES 后会按名称自动带出。',
+  'app.kuaiiot.hint.commandDeviceId':
+    '指令下发（含产线清零）报文里的 device_id。默认与外部设备 ID 相同，可单独修改。',
   'app.kuaiiot.placeholder.externalId': '从消息体选择，或搜索设备名称 / device_id',
+  'app.kuaiiot.placeholder.commandDeviceId': '默认等于外部设备 ID，可改',
+  'app.kuaiiot.action.syncCommandDeviceId': '同外部 ID',
   'app.kuaiiot.hint.equipment': '绑定「设备台账」里的 MES 设备；绑定后点位可写回该设备状态。',
   'app.kuaiiot.hint.group': '可选，仅用于列表分组，不影响 MQTT 匹配。',
   'app.kuaiiot.message.optionsLoadEmpty.connection': '没有接入配置。请先到「接入配置」新建并启用一条 MQTT。',
@@ -2989,6 +2994,49 @@ export default {
   'app.kuaiiot.field.brokerHost': 'Broker 地址',
   'app.kuaiiot.field.brokerPort': 'Broker 端口',
   'app.kuaiiot.field.topicFilter': 'Topic 订阅',
+  'app.kuaiiot.field.publishTopic': '发送主题',
+  'app.kuaiiot.field.direction': '接入/发送',
+  'app.kuaiiot.field.publishConnection': '发送 MQTT',
+  'app.kuaiiot.field.commandCode': '指令码',
+  'app.kuaiiot.tab.directionAll': '全部',
+  'app.kuaiiot.option.direction.ingest': '接入',
+  'app.kuaiiot.option.direction.publish': '发送',
+  'app.kuaiiot.option.direction.callback': '回调',
+  'app.kuaiiot.field.callbackTopic': '回调订阅主题',
+  'app.kuaiiot.field.callbackData': '回调原文',
+  'app.kuaiiot.field.callbackConnection': '回调 MQTT',
+  'app.kuaiiot.field.callbackDeviceId': '回调设备ID',
+  'app.kuaiiot.field.callbackCommandCode': '回调指令码',
+  'app.kuaiiot.field.callbackSuccess': '回调结果',
+  'app.kuaiiot.placeholder.callbackConnection': '请选择回调型 MQTT 连接',
+  'app.kuaiiot.hint.callbackConnection':
+    '选择接入配置中方向为「回调」的连接；回执按 device_id 匹配后写入本表字段',
+  'app.kuaiiot.hint.callbackTopic': '上位机/PLC 回执 publish 到此主题；系统订阅后写入指令下发记录',
+  'app.kuaiiot.hint.callbackTopicRequired': '请填写回调订阅主题',
+  'app.kuaiiot.message.noCallbackConnection': '暂无回调连接，请先在接入配置新建「回调」MQTT',
+  'app.kuaiiot.status.callbackWaiting': '等待回调',
+  'app.kuaiiot.status.callbackOk': '成功',
+  'app.kuaiiot.status.callbackFail': '失败',
+  'app.kuaiiot.hint.direction':
+    '接入=订阅收产量；发送=下发清零；回调=订阅指令回执，展示在设备「指令下发」记录中',
+  'app.kuaiiot.hint.publishTopic': '完整 MQTT Topic，报文将 publish 到此主题',
+  'app.kuaiiot.hint.publishTopicRequired': '请填写完整发送主题',
+  'app.kuaiiot.hint.publishConnectionUsesTopic': '主题使用所选发送 MQTT 连接中已配置的发送主题，无需在此再填',
+  'app.kuaiiot.message.commandsEmpty': '暂无下发记录；点击「下发清零」后会在此显示',
+  'app.kuaiiot.placeholder.publishTopic': '例如 factory/line1/command',
+  'app.kuaiiot.placeholder.publishConnection': '请选择发送型 MQTT 连接',
+  'app.kuaiiot.section.lineClear': '产线清零',
+  'app.kuaiiot.section.productFunction': '产品功能指令',
+  'app.kuaiiot.hint.lineClear':
+    '手动下发 JSON：timestamp + device_id（{{deviceId}}）+ command_code + value:true。发送/回调 MQTT 在接入配置中维护；自动报工开启清零后走同一套连接。',
+  'app.kuaiiot.field.dispatchType': '下发类型',
+  'app.kuaiiot.option.dispatchType.manual': '手动',
+  'app.kuaiiot.option.dispatchType.auto': '自动',
+  'app.kuaiiot.option.lineClear.t0': '时间清零 (t0)',
+  'app.kuaiiot.option.lineClear.c0': '产量清零 (c0)',
+  'app.kuaiiot.option.lineClear.z0': '总产量清零 (z0)',
+  'app.kuaiiot.action.dispatchLineClear': '下发清零',
+  'app.kuaiiot.message.lineClearDispatched': '清零指令已发送',
   'app.kuaiiot.field.qos': 'QoS',
   'app.kuaiiot.field.useTls': '启用 TLS',
   'app.kuaiiot.field.payloadFormat': '报文格式',
@@ -3131,7 +3179,7 @@ export default {
   'app.kuaiiot.option.dispatchChannel.thingsboard': 'ThingsBoard',
   'app.kuaiiot.option.dispatchChannel.jetlinks': 'JetLinks',
   'app.kuaiiot.option.dispatchChannel.http': 'HTTP（未实现下发）',
-  'app.kuaiiot.option.dispatchChannel.mqtt': 'MQTT（未实现下发）',
+  'app.kuaiiot.option.dispatchChannel.mqtt': 'MQTT',
   'app.kuaiiot.option.messageDirection.up': '上行',
   'app.kuaiiot.option.messageDirection.down': '下行',
   'app.kuaiiot.option.messageDirection.inbound': '入站',
@@ -3535,6 +3583,19 @@ export default {
   'app.ind-relay.autoReport.openProcessMaster': '打开工序档案',
   'app.ind-relay.autoReport.processOpCode': '工序编码',
   'app.ind-relay.autoReport.processOpName': '工序名称',
+  'app.ind-relay.autoReport.autoClear': '自动清零',
+  'app.ind-relay.autoReport.autoClearTip':
+    '开启后，自动报工成功会按设备连接里的发送/回调 MQTT 自动下发清零，无需在此再配主题',
+  'app.ind-relay.autoReport.dispatchType': '下发类型',
+  'app.ind-relay.autoReport.dispatchTypeAuto': '自动',
+  'app.ind-relay.autoReport.dispatchTypeManual': '手动',
+  'app.ind-relay.autoReport.clearCode.t0': '时间清零 (t0)',
+  'app.ind-relay.autoReport.clearCode.c0': '产量清零 (c0)',
+  'app.ind-relay.autoReport.clearCode.z0': '总产量清零 (z0)',
+  'app.ind-relay.autoReport.eventName.command': '指令下发',
+  'app.ind-relay.autoReport.eventName.auto_clear': '自动清零',
+  'app.ind-relay.autoReport.eventName.auto_clear_skip': '清零跳过',
+  'app.ind-relay.autoReport.eventName.auto_clear_error': '清零失败',
   'app.spoke-wheel.desc': '铝合金辐条轮毂 5 部件 + 总装调试业务模块(同心度 ≤ 0.8mm)',
   'app.spoke-wheel.menu.assembly-debug': '总装调试',
   'app.kuaioa.menu.group.approval': '审批协同',
@@ -31082,6 +31143,26 @@ export default {
     '修复工作台加载完成后再闪一下',
   'pages.dashboard.updateLog.entries.workplace-weather-15s-flash-r01.description':
     '天气在站点位置就绪前就请求，Open-Meteo 失败后还会再查地理编码和 wttr.in，三段超时约 15 秒才返回，日历天空背景随之重绘。现等位置配置完成且只请求 Open-Meteo，已有天气时不再换成加载中。',
+  'pages.dashboard.updateLog.entries.kuaiiot-command-device-id-r01.title':
+    '设备连接支持单独配置指令下发 device_id',
+  'pages.dashboard.updateLog.entries.kuaiiot-command-device-id-r01.description':
+    '新建/编辑设备连接时可填「指令设备 ID」，默认与外部设备 ID 相同且可改；产线清零等指令报文中的 device_id 使用该字段。',
+  'pages.dashboard.updateLog.entries.kuaiiot-device-status-realtime-r01.title':
+    '设备状态 MQTT 无感刷新：设备连接与台账联动',
+  'pages.dashboard.updateLog.entries.kuaiiot-device-status-realtime-r01.description':
+    '快数采入站后实时推送：设备连接「最后上报/在线」与设备台账「设备状态」无需手动刷新即可更新。绑定仍在设备连接新建/编辑中选择外部设备 ID（可改）并关联台账。',
+  'pages.dashboard.updateLog.entries.iot-auto-clear-use-device-connection-r01.title':
+    '自动报工清零改为使用设备连接配置',
+  'pages.dashboard.updateLog.entries.iot-auto-clear-use-device-connection-r01.description':
+    '自动报工页不再单独配置 MQTT 主题；报工成功后按设备连接的发送/回调 MQTT 自动下发清零。指令区分手动/自动，运行日志展示指令下发记录。',
+  'pages.dashboard.updateLog.entries.iot-line-clear-command-list-empty-r01.title':
+    '修复产线清零下发成功后指令记录表仍为空',
+  'pages.dashboard.updateLog.entries.iot-line-clear-command-list-empty-r01.description':
+    '查看数据刷新时点位列表 page_size 超过接口上限导致整次加载失败，指令与回调记录无法展示；已按上限拉取并隔离各接口失败。',
+  'pages.dashboard.updateLog.entries.iot-line-clear-mqtt-r01.title':
+    '产线 MQTT 清零：接入/发送、手动与报工后自动清零',
+  'pages.dashboard.updateLog.entries.iot-line-clear-mqtt-r01.description':
+    '快数采接入配置区分接入与发送；设备指令下发可选手动清零（t0/c0/z0）；继电器自动报工支持按设备开关与预配置，报工成功后下发清零 MQTT。',
   'pages.dashboard.updateLog.entries.approval-countersign-my-pending-task-r01.title':
     '修复会签时审批中心不显示同意/拒绝按钮',
   'pages.dashboard.updateLog.entries.approval-countersign-my-pending-task-r01.description':
