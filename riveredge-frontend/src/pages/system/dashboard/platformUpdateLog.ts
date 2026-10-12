@@ -44,6 +44,14 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'kuaiiot-command-device-id-migration-r01',
+    date: '2026-10-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiiot-command-device-id-migration-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiiot-command-device-id-migration-r01.description',
+  },
+  {
     id: 'kuaiconnect-settings-lock-flash-r01',
     date: '2026-10-12',
     type: 'fix',

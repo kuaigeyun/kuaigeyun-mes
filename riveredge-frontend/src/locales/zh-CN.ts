@@ -30489,6 +30489,10 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.kuaiiot-command-device-id-migration-r01.title':
+    '修复快数采看板因缺 command_device_id 列报错',
+  'pages.dashboard.updateLog.entries.kuaiiot-command-device-id-migration-r01.description':
+    '补齐 apps_kuaiiot_devices.command_device_id 迁移；部署执行 aerich upgrade 后，设备看板汇总接口恢复正常。',
   'pages.dashboard.updateLog.entries.oss-pro-decouple-startup-r01.title':
     '开源版可不装专业包独立启动',
   'pages.dashboard.updateLog.entries.oss-pro-decouple-startup-r01.description':
