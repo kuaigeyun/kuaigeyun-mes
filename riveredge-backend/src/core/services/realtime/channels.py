@@ -18,6 +18,10 @@ def tenant_andon_channel(*, tenant_id: int) -> str:
     return tenant_scoped_channel(tenant_id=tenant_id, scope="andon")
 
 
+def tenant_kuaiiot_channel(*, tenant_id: int) -> str:
+    return tenant_scoped_channel(tenant_id=tenant_id, scope="kuaiiot")
+
+
 def ai_session_channel(*, tenant_id: int, user_id: int, session_id: str) -> str:
     sid = (session_id or "").strip()
     if not sid:

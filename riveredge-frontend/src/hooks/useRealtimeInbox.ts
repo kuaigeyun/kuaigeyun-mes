@@ -9,8 +9,10 @@ import { getToken } from '../utils/auth';
 import {
   getRealtimeConfig,
   getRealtimeToken,
+  KUAIIOT_DEVICE_REALTIME_EVENT,
   resolveRealtimeWsUrl,
   resolveSocketIoOrigin,
+  type KuaiiotDeviceRealtimePayload,
   type RealtimeEnvelope,
 } from '../services/realtime';
 
@@ -51,6 +53,13 @@ export function useRealtimeInbox({ enabled, onEvent }: Options) {
       if (event.startsWith('andon.')) {
         queryClient.invalidateQueries({ queryKey: ['station-andon'] });
         queryClient.invalidateQueries({ queryKey: ['andon'] });
+      }
+      if (event.startsWith('kuaiiot.device.')) {
+        window.dispatchEvent(
+          new CustomEvent<KuaiiotDeviceRealtimePayload>(KUAIIOT_DEVICE_REALTIME_EVENT, {
+            detail: payload as KuaiiotDeviceRealtimePayload,
+          }),
+        );
       }
       if (event.startsWith('im.')) {
         refetchImInbox(queryClient, payload);
