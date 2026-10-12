@@ -29,6 +29,7 @@ import {
 import { SalesOrderOcrResultCard } from './SalesOrderOcrResultCard';
 import { SalesOrderOcrMasterConfirmModal } from './SalesOrderOcrMasterConfirmModal';
 import { useResourcePermissions } from '../../../../../../hooks/useResourcePermissions';
+import { loadMaterialFormReferenceList } from '../../../../../../utils/documentFormReferenceLoad';
 import './SalesOrderAiCreateDrawer.less';
 
 const I18N = 'app.kuaizhizao.salesOrder.aiCreate';
@@ -137,6 +138,20 @@ export function SalesOrderAiCreateDrawer({
   const [applyingKey, setApplyingKey] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingApplyMsg, setPendingApplyMsg] = useState<ChatMessage | null>(null);
+
+  /** 打开 AI 录单时再按需拉物料，避免新建页进页预拉全量 */
+  useEffect(() => {
+    if (!open || materials.length >= 50 || !onMaterialsChange) return;
+    let cancelled = false;
+    void loadMaterialFormReferenceList('kuaizhizao:sales-order').then((rows) => {
+      if (!cancelled && rows.length) {
+        onMaterialsChange(rows as MaterialLike[]);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, materials.length, onMaterialsChange]);
 
   const latestResult = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i -= 1) {

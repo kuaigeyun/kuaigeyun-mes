@@ -24,7 +24,7 @@ import { getTenantList, TenantStatus } from '../../../services/tenant';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { renderSystemStatusTag, renderSystemTypeMarker } from '../utils/systemListPresentation';
 import { StatCardTrendArea } from '../../../components/common/StatCardTrendArea';
-import { EyeOutlined, ReloadOutlined, DeleteOutlined, DownloadOutlined, UploadOutlined, SyncOutlined } from '@ant-design/icons';
+import { EyeOutlined, ReloadOutlined, DeleteOutlined, DownloadOutlined, UploadOutlined, SyncOutlined, SettingOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../components/layout-templates';
 import { SystemMasterDetailDrawer } from '../shared/systemMasterDetailDrawer';
@@ -49,6 +49,7 @@ import { getTenantId } from '../../../utils/auth';
 import { formatDateTime, todaySiteDateString } from '../../../utils/format';
 import { downloadRecordsAsXlsx } from '../../../utils/exportRecordsXlsx';
 import { buildListPageHelpViewConfig } from '../../../components/page-help-wiki';
+import BackupPolicyModal from './BackupPolicyModal';
 
 function formatFileSize(bytes?: number): string {
   if (!bytes) return '-';
@@ -123,6 +124,20 @@ const DataBackupsPage: React.FC = () => {
   const [reclaiming, setReclaiming] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [hasActiveBackupJobs, setHasActiveBackupJobs] = useState(false);
+  const [policyModalVisible, setPolicyModalVisible] = useState(false);
+  const boundTenantId = (() => {
+    const fromUser = currentUser?.tenant_id;
+    if (fromUser != null && Number.isFinite(Number(fromUser)) && Number(fromUser) > 0) {
+      return Number(fromUser);
+    }
+    const fromStore = getTenantId();
+    if (fromStore != null && Number.isFinite(fromStore) && fromStore > 0) {
+      return fromStore;
+    }
+    return null;
+  })();
+  const boundTenantName =
+    typeof currentUser?.tenant_name === 'string' ? currentUser.tenant_name : null;
 
   const loadWorkerHealth = React.useCallback(async (silent: boolean = true) => {
     if (!silent) {
@@ -768,6 +783,32 @@ const DataBackupsPage: React.FC = () => {
       resizable: false,
     },
     {
+      title: t('pages.system.dataBackups.columnStorage'),
+      dataIndex: 'storage_label',
+      key: 'storage_label',
+      search: false,
+      width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
+      render: (_: unknown, record: DataBackup) =>
+        record.storage_label || t('pages.system.dataBackups.policyStorageLocal'),
+    },
+    {
+      title: t('pages.system.dataBackups.columnTriggerSource'),
+      dataIndex: 'trigger_source',
+      key: 'trigger_source',
+      search: false,
+      width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
+      render: (_: unknown, record: DataBackup) =>
+        record.trigger_source === 'scheduled'
+          ? t('pages.system.dataBackups.triggerScheduled')
+          : t('pages.system.dataBackups.triggerManual'),
+    },
+    {
       title: t('common.createdAt'),
       dataIndex: 'created_at',
       key: 'created_at',
@@ -924,7 +965,7 @@ const DataBackupsPage: React.FC = () => {
     <>
       <ListPageTemplate statCards={statCards}>
         <UniTable<DataBackup>
-          columnPersistenceId="pages.system.data-backups.list-v2"
+          columnPersistenceId="pages.system.data-backups.list-v3"
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {
@@ -1057,6 +1098,13 @@ const DataBackupsPage: React.FC = () => {
           showExportButton={true}
           exportButtonText={t('pages.system.dataBackups.downloadBackup')}
           rightToolBarActionsBeforeExport={[
+            <Button
+              key="policy"
+              icon={<SettingOutlined />}
+              onClick={() => setPolicyModalVisible(true)}
+            >
+              {t('pages.system.dataBackups.policyButton')}
+            </Button>,
             <Button {...rowActionKind('import')}
               key="upload"
               icon={<UploadOutlined />}
@@ -1350,6 +1398,13 @@ const DataBackupsPage: React.FC = () => {
           const uuid = detailRetryUuidRef.current;
           if (uuid) void loadDetail(uuid);
         }}
+      />
+      <BackupPolicyModal
+        open={policyModalVisible}
+        onClose={() => setPolicyModalVisible(false)}
+        isInfraAdmin={isInfraAdmin}
+        boundTenantId={boundTenantId}
+        boundTenantName={boundTenantName}
       />
     </>
   );

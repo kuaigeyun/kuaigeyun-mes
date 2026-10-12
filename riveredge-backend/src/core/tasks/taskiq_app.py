@@ -287,6 +287,14 @@ async def data_backup_reclaim_tick() -> dict:
     return result
 
 
+@task(schedule=[{"cron": "* * * * *"}])
+async def data_backup_policy_tick() -> dict:
+    """每分钟：按租户/平台策略触发定时备份与保留清理。"""
+    from core.services.system.data_backup_policy import run_data_backup_policy_tick
+
+    return await run_data_backup_policy_tick()
+
+
 @task(schedule=[{"cron": "*/10 * * * *"}])
 async def online_user_cleanup_task() -> None:
     from core.services.logging.online_user_service import OnlineUserService

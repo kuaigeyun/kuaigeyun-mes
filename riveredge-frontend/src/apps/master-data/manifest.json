@@ -243,6 +243,13 @@
       }
     ]
   },
+  "reference_resources": {
+    "material": {
+      "permission_prefix": "master-data:material",
+      "display_fields": ["id", "uuid", "code", "name", "label"],
+      "data_scope_key": "master-data:material"
+    }
+  },
   "permissions": [
     "master-data:factory:plant:read",
     "master-data:factory:plant:create",

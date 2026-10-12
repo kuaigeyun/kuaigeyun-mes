@@ -223,12 +223,26 @@ async def handle_database_backup_requested(ctx: TaskContext, step: TaskStep) -> 
 
         final_zip_path = await step.run("dump_and_create_zip", dump_and_create_zip)
 
+        async def upload_remote_if_needed() -> None:
+            from core.services.system.data_backup_policy import (
+                upload_backup_to_object_storage_if_needed,
+            )
+
+            backup.file_path = store_backup_file_path(final_zip_path)
+            backup.file_size = os.path.getsize(final_zip_path)
+            await backup.save(update_fields=["file_path", "file_size", "updated_at"])
+            await upload_backup_to_object_storage_if_needed(backup, final_zip_path)
+
+        await step.run("upload_object_storage_if_needed", upload_remote_if_needed)
+
         backup.status = "success"
         backup.progress = 100
         backup.progress_message = "备份完成"
         backup.completed_at = resolve_business_datetime()
-        backup.file_path = store_backup_file_path(final_zip_path)
-        backup.file_size = os.path.getsize(final_zip_path)
+        if not backup.file_path:
+            backup.file_path = store_backup_file_path(final_zip_path)
+        if not backup.file_size:
+            backup.file_size = os.path.getsize(final_zip_path)
         await backup.save()
         logger.info(f"备份完成: {backup_uuid} -> {final_zip_path}")
     except Exception as e:

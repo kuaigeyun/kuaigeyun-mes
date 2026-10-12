@@ -120,15 +120,31 @@ class DataBackupService:
         return backup.tenant_id
 
     @staticmethod
+    def _storage_label(backup: DataBackup) -> str:
+        from core.services.file.storage.resolver import OBJECT_STORAGE_TYPE_LABELS
+
+        backend = str(getattr(backup, "storage_backend", None) or "local").strip().lower()
+        if backend in ("", "local"):
+            return "本机"
+        return OBJECT_STORAGE_TYPE_LABELS.get(backend, backend)
+
+    @staticmethod
     def to_response(backup: DataBackup, *, enrich: bool = False) -> "DataBackupResponse":
         from core.schemas.data_backup import DataBackupResponse
 
+        local_ok = resolve_backup_file_path(backup.file_path) is not None
+        remote_ok = (
+            str(getattr(backup, "storage_backend", None) or "local").strip().lower()
+            not in ("", "local")
+            and bool(getattr(backup, "storage_key", None))
+        )
         return DataBackupResponse.model_validate(backup).model_copy(
             update={
                 "source_tenant_id": DataBackupService.resolve_source_tenant_id(
                     backup, read_zip_meta=enrich
                 ),
-                "file_available": resolve_backup_file_path(backup.file_path) is not None,
+                "file_available": local_ok or remote_ok,
+                "storage_label": DataBackupService._storage_label(backup),
             }
         )
 
@@ -165,6 +181,10 @@ class DataBackupService:
 
         record_tenant_id = None if data.backup_scope == "all" else tenant_id
 
+        trigger_source = (getattr(data, "trigger_source", None) or "manual").strip() or "manual"
+        if trigger_source not in ("manual", "scheduled"):
+            trigger_source = "manual"
+
         # 全平台备份 tenant_id 为空，避免组织管理员下载到全租户数据包
         backup = await DataBackup.create(
             tenant_id=record_tenant_id,
@@ -173,6 +193,8 @@ class DataBackupService:
             backup_scope=data.backup_scope,
             include_files=data.include_files,
             backup_tables=data.backup_tables,
+            trigger_source=trigger_source,
+            storage_backend="local",
             status="pending",
             progress=0,
             progress_message=None,
@@ -387,10 +409,16 @@ class DataBackupService:
         backup = await DataBackupService.get_backup_by_uuid(
             tenant_id, uuid, is_infra_admin=is_infra_admin
         )
-        
-        # 如果有物理文件，发送删除事件或直接在此删除
-        # 这里选择发送事件让后台清理，或者简单起见如果本地可访问则直接删除
+
         import os
+
+        from core.services.system.data_backup_policy import delete_remote_backup_object
+
+        try:
+            await delete_remote_backup_object(backup)
+        except Exception as e:
+            logger.error("删除远程备份对象失败 uuid={}: {}", uuid, e)
+
         resolved = resolve_backup_file_path(backup.file_path)
         if resolved and os.path.exists(resolved):
             try:
@@ -398,7 +426,7 @@ class DataBackupService:
                 logger.info(f"已删除备份文件: {resolved}")
             except Exception as e:
                 logger.error(f"删除物理文件失败: {e}")
-                
+
         await backup.delete()
 
     @staticmethod
@@ -430,9 +458,9 @@ class DataBackupService:
             resolve_restore_source_tenant_id,
         )
 
-        resolved_path = resolve_backup_file_path(backup.file_path)
-        if not resolved_path:
-            raise ValueError("备份文件已丢失，请在本服务器重新创建或上传备份后再恢复")
+        from core.services.system.data_backup_policy import ensure_local_backup_file
+
+        resolved_path = await ensure_local_backup_file(backup)
 
         metadata = read_backup_metadata(resolved_path)
         backup_scope = metadata.get("backup_scope", backup.backup_scope)

@@ -378,6 +378,14 @@ class PermissionSyncService:
                     tenant_id=tenant_id,
                     newly_created_codes=created_display_codes,
                 )
+                from core.services.authorization.role_service import RoleService
+
+                preset_display_grants = (
+                    await RoleService.ensure_preset_default_display_permissions(
+                        tenant_id=tenant_id
+                    )
+                )
+                display_grants += int(preset_display_grants or 0)
                 if baseline_grants or display_grants:
                     from core.services.authorization.permission_version_service import (
                         PermissionVersionService,

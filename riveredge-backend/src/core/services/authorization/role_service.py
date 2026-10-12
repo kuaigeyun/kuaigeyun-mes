@@ -1069,12 +1069,77 @@ class RoleService:
 
     GUEST_ROLE_CODE = "GUEST"
 
+    # 预设角色默认勾选的回显码（仅追加，不进 baseline；矩阵可取消）
+    PRESET_DEFAULT_DISPLAY_CODES: frozenset[str] = frozenset(
+        {
+            "master-data:material:display",
+        }
+    )
+
+    @staticmethod
+    def _preset_role_codes() -> set[str]:
+        return {str(item["code"]) for item in RoleService.PRESET_ROLES if item.get("code")}
+
     @staticmethod
     def _resource_from_permission_code(code: str) -> str | None:
         parts = [x for x in (code or "").strip().lower().split(":") if x]
         if len(parts) < 3:
             return None
         return f"{parts[0]}:{':'.join(parts[1:-1])}"
+
+    @staticmethod
+    async def ensure_preset_default_display_permissions(
+        tenant_id: int,
+        role: Role | None = None,
+    ) -> int:
+        """
+        为预设角色幂等授予 PRESET_DEFAULT_DISPLAY_CODES（含物料回显）。
+        role 为空时对本租户全部预设角色补齐；非预设角色跳过。
+        """
+        from core.models.role_permission import RolePermission
+
+        codes = sorted(RoleService.PRESET_DEFAULT_DISPLAY_CODES)
+        if not codes:
+            return 0
+        permissions = await Permission.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            code__in=codes,
+        ).all()
+        if not permissions:
+            return 0
+        desired_ids = {p.id for p in permissions}
+
+        if role is not None:
+            if role.code not in RoleService._preset_role_codes():
+                return 0
+            roles = [role]
+        else:
+            roles = await Role.filter(
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+                code__in=list(RoleService._preset_role_codes()),
+            ).all()
+        if not roles:
+            return 0
+
+        granted = 0
+        now = now_utc()
+        for r in roles:
+            existing = await RolePermission.filter(role_id=r.id).all()
+            existing_ids = {rp.permission_id for rp in existing}
+            to_add = desired_ids - existing_ids
+            if not to_add:
+                continue
+            await RolePermission.bulk_create(
+                [
+                    RolePermission(role_id=r.id, permission_id=pid, created_at=now)
+                    for pid in to_add
+                ],
+                ignore_conflicts=True,
+            )
+            granted += len(to_add)
+        return granted
 
     @staticmethod
     async def _assign_preset_permissions(tenant_id: int, role: Role) -> None:
@@ -1133,6 +1198,14 @@ class RoleService:
                 code__in=display_codes,
             ).all()
             selected_ids = {*selected_ids, *[p.id for p in display_perms]}
+
+        # 预设默认回显（物料等）：显式并入，避免仅依赖全量 display 回填时机
+        default_display_perms = await Permission.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            code__in=list(RoleService.PRESET_DEFAULT_DISPLAY_CODES),
+        ).all()
+        selected_ids = {*selected_ids, *[p.id for p in default_display_perms]}
 
         if not selected_ids:
             return
@@ -1335,12 +1408,12 @@ class RoleService:
             items = [x for x in items if x.get("code") in allow]
         created = 0
         for item in items:
-            exists = await Role.filter(
+            role = await Role.filter(
                 tenant_id=tenant_id,
                 code=item["code"],
                 deleted_at__isnull=True,
-            ).exists()
-            if not exists:
+            ).first()
+            if role is None:
                 now = now_utc()
                 preset_domain = RoleService.resolve_preset_functional_domain(item["code"])
                 role = await Role.create(
@@ -1358,6 +1431,11 @@ class RoleService:
                 )
                 await RoleService._assign_preset_permissions(tenant_id=tenant_id, role=role)
                 created += 1
+            else:
+                # 已存在预设：补齐物料等默认回显（不重灌已取消的其它权限）
+                await RoleService.ensure_preset_default_display_permissions(
+                    tenant_id=tenant_id, role=role
+                )
         return created
 
     @staticmethod

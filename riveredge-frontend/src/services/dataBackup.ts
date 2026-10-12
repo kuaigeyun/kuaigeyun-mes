@@ -24,6 +24,14 @@ export interface DataBackup {
   file_uuid?: string;
   file_size?: number;
   source_type?: 'generated' | 'uploaded';
+  /** manual=手动 scheduled=定时 */
+  trigger_source?: 'manual' | 'scheduled';
+  storage_backend?: string;
+  storage_connection_uuid?: string | null;
+  storage_key?: string | null;
+  storage_owner_tenant_id?: number | null;
+  /** 本机 / 腾讯云 COS / MinIO */
+  storage_label?: string | null;
   status: string;
   /** 备份进度 0-100 */
   progress?: number;
@@ -248,4 +256,82 @@ export async function startBackupDownload(uuid: string, filename: string): Promi
   a.click();
   document.body.removeChild(a);
   updateLastActivity(true);
+}
+
+export interface DataBackupPolicyStorage {
+  backend: 'local' | 'connection';
+  connection_uuid?: string | null;
+  key_prefix?: string;
+  storage_owner_tenant_id?: number | null;
+}
+
+export interface DataBackupPolicyRetention {
+  mode: 'none' | 'days' | 'keep_count';
+  days?: number;
+  keep_count?: number;
+}
+
+export interface DataBackupPolicy {
+  schedule_enabled: boolean;
+  cron: string;
+  include_files: boolean;
+  storage: DataBackupPolicyStorage;
+  retention: DataBackupPolicyRetention;
+  last_scheduled_at?: string | null;
+  last_retention_at?: string | null;
+}
+
+export interface DataBackupStorageConnection {
+  uuid: string;
+  name?: string | null;
+  code?: string | null;
+  type: string;
+  type_label: string;
+}
+
+function dataBackupTenantHeaders(tenantId?: number | null): { headers?: Record<string, string> } {
+  if (tenantId == null || !Number.isFinite(Number(tenantId)) || Number(tenantId) <= 0) {
+    return {};
+  }
+  return { headers: { 'X-Tenant-ID': String(tenantId) } };
+}
+
+export async function getDataBackupPolicy(tenantId?: number | null): Promise<DataBackupPolicy> {
+  return apiRequest<DataBackupPolicy>('/core/data-backups/policy', dataBackupTenantHeaders(tenantId));
+}
+
+export async function saveDataBackupPolicy(
+  data: Partial<DataBackupPolicy>,
+  tenantId?: number | null,
+): Promise<DataBackupPolicy> {
+  return apiRequest<DataBackupPolicy>('/core/data-backups/policy', {
+    method: 'PUT',
+    data,
+    ...dataBackupTenantHeaders(tenantId),
+  });
+}
+
+export async function getPlatformDataBackupPolicy(): Promise<DataBackupPolicy> {
+  return apiRequest<DataBackupPolicy>('/core/data-backups/policy/platform');
+}
+
+export async function savePlatformDataBackupPolicy(
+  data: Partial<DataBackupPolicy>,
+  connectionOwnerTenantId?: number | null,
+): Promise<DataBackupPolicy> {
+  return apiRequest<DataBackupPolicy>('/core/data-backups/policy/platform', {
+    method: 'PUT',
+    data,
+    ...dataBackupTenantHeaders(connectionOwnerTenantId),
+  });
+}
+
+export async function getDataBackupStorageConnections(
+  tenantId?: number | null,
+): Promise<DataBackupStorageConnection[]> {
+  const res = await apiRequest<{ items: DataBackupStorageConnection[] }>(
+    '/core/data-backups/storage-connections',
+    dataBackupTenantHeaders(tenantId),
+  );
+  return res.items || [];
 }

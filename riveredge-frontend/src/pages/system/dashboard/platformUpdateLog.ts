@@ -44,6 +44,68 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'sales-order-default-salesman-badge-r01',
+    date: '2026-10-12',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-order-default-salesman-badge-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-order-default-salesman-badge-r01.description',
+  },
+  {
+    id: 'sales-order-list-detail-perf-r01',
+    date: '2026-10-12',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-order-list-detail-perf-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-order-list-detail-perf-r01.description',
+  },
+  {
+    id: 'sales-order-form-material-preload-r01',
+    date: '2026-10-12',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-order-form-material-preload-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-order-form-material-preload-r01.description',
+  },
+  {
+    id: 'uni-material-select-reference-display-r01',
+    date: '2026-10-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.uni-material-select-reference-display-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.uni-material-select-reference-display-r01.description',
+  },
+  {
+    id: 'preset-role-material-display-r01',
+    date: '2026-10-12',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.preset-role-material-display-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.preset-role-material-display-r01.description',
+  },
+  {
+    id: 'connector-storage-rustfs-r01',
+    date: '2026-10-12',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.connector-storage-rustfs-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.connector-storage-rustfs-r01.description',
+  },
+  {
+    id: 'data-backup-policy-ux-r01',
+    date: '2026-10-12',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.data-backup-policy-ux-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.data-backup-policy-ux-r01.description',
+  },
+  {
+    id: 'data-backup-policy-schedule-storage-r01',
+    date: '2026-10-12',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.data-backup-policy-schedule-storage-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.data-backup-policy-schedule-storage-r01.description',
+  },
+  {
     id: 'data-backup-restore-target-tenant-r01',
     date: '2026-10-12',
     type: 'fix',

@@ -11,9 +11,11 @@ import type { ColumnsType } from 'antd/es/table';
 import { useTranslation } from 'react-i18next';
 import {
   ReferenceDisplayAccessError,
+  resolveReferenceDisplay,
   searchReferenceDisplay,
 } from '../../utils/referenceDisplay';
-import { materialGroupApi, materialApi } from '../../apps/master-data/services/material';
+import { referenceDisplayItemsToMaterials } from '../../utils/documentFormReferenceLoad';
+import { materialGroupApi } from '../../apps/master-data/services/material';
 import type { Material } from '../../apps/master-data/types/material';
 import { SecureImage } from '../secure-image';
 import { UniTableStackedPrimaryCell } from '../uni-table/stackedPrimaryColumn';
@@ -151,20 +153,26 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
             setTotalHint(Number(balanceRes?.total ?? 0) || 0);
             return;
           }
-          const matRes = await materialApi.list({
-            ids: materialIds,
-            keyword: kw.trim() || undefined,
-            isActive: true,
-            mastersOnly: true,
-            sourceType: st || undefined,
-            groupId: gid,
-            limit: materialIds.length,
+          const displayItems = await resolveReferenceDisplay({
+            resource: 'master-data:material',
+            recordIds: materialIds,
+            hostResource,
           });
           if (seq !== fetchSeqRef.current) return;
           const order = new Map(materialIds.map((id, idx) => [id, idx]));
-          const rows = [...(matRes.items ?? [])].sort(
+          let rows = [...referenceDisplayItemsToMaterials(displayItems)].sort(
             (a, b) => (order.get(Number(a.id)) ?? 0) - (order.get(Number(b.id)) ?? 0),
           );
+          if (st) {
+            rows = rows.filter(
+              (m) => String((m as any).source_type ?? (m as any).sourceType ?? '') === String(st),
+            );
+          }
+          if (gid != null) {
+            rows = rows.filter(
+              (m) => Number((m as any).group_id ?? (m as any).groupId) === Number(gid),
+            );
+          }
           setList(rows);
           setTotalHint(Number(balanceRes?.total ?? rows.length) || rows.length);
           return;

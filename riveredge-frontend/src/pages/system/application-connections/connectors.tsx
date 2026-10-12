@@ -973,6 +973,24 @@ export const APP_CONNECTOR_DEFINITIONS: AppConnectorDefinition[] = [
     },
   },
   {
+    id: 'rustfs',
+    name: 'RustFS',
+    type: 'rustfs',
+    category: 'storage',
+    description: 'RustFS S3 兼容对象存储',
+    icon: <HddOutlined />,
+    defaultConfig: {
+      endpoint: '',
+      access_key: '',
+      secret_key: '',
+      bucket: '',
+      region: 'us-east-1',
+      use_path_style: true,
+      /** 默认强制 HTTPS；内网 RustFS 仅 HTTP 时请关闭 */
+      use_ssl: true,
+    },
+  },
+  {
     id: 'qiniu_kodo',
     name: '七牛云 Kodo',
     type: 'qiniu_kodo',

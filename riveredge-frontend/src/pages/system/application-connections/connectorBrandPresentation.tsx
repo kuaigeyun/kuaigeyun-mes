@@ -38,6 +38,7 @@ import zhipuIcon from '../../../assets/connectors/zhipu.png';
 import amapIcon from '../../../assets/connectors/amap.ico';
 import qiniuIcon from '../../../assets/connectors/qiniu.ico';
 import minioLogo from '../../../assets/connectors/minio.svg';
+import rustfsLogo from '../../../assets/connectors/rustfs.svg';
 import xiaoshouyiLogo from '../../../assets/connectors/xiaoshouyi.png';
 import supraCrmLogo from '../../../assets/connectors/supra_crm.png';
 import rootcloudLogo from '../../../assets/connectors/rootcloud.png';
@@ -334,6 +335,13 @@ const CONNECTOR_BRAND_BY_ID: Record<string, ConnectorBrandPresentation> = {
   minio: {
     logoSrc: minioLogo,
     tileBackground: '#C72C48',
+    iconColor: '#FFFFFF',
+    variant: 'onColor',
+    logoMonochrome: true,
+  },
+  rustfs: {
+    logoSrc: rustfsLogo,
+    tileBackground: '#DE4C2B',
     iconColor: '#FFFFFF',
     variant: 'onColor',
     logoMonochrome: true,

@@ -2,7 +2,7 @@
 数据备份 Schema 模块
 """
 
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from datetime import datetime
 from pydantic import BaseModel, Field
 
@@ -23,6 +23,10 @@ class DataBackupCreate(DataBackupBase):
         None,
         description="租户级备份的目标组织 ID；平台管理员未绑定租户时可指定",
     )
+    trigger_source: str = Field(
+        "manual",
+        description="触发来源：manual=手动，scheduled=定时策略",
+    )
 
 
 class DataBackupResponse(DataBackupBase):
@@ -39,6 +43,15 @@ class DataBackupResponse(DataBackupBase):
     file_uuid: Optional[str] = None
     file_size: Optional[int] = None
     source_type: str = "generated"
+    trigger_source: str = "manual"
+    storage_backend: str = "local"
+    storage_connection_uuid: Optional[str] = None
+    storage_key: Optional[str] = None
+    storage_owner_tenant_id: Optional[int] = None
+    storage_label: Optional[str] = Field(
+        None,
+        description="存储位置展示：本机 / 腾讯云 COS / MinIO / RustFS",
+    )
     status: str
     progress: int = Field(0, description="备份进度百分比 0-100")
     progress_message: Optional[str] = Field(None, description="备份进度说明")
@@ -62,3 +75,46 @@ class DataBackupListResponse(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class DataBackupStorageSettings(BaseModel):
+    backend: str = Field("local", description="local 或 connection")
+    connection_uuid: Optional[str] = None
+    key_prefix: str = "data-backups"
+    storage_owner_tenant_id: Optional[int] = None
+
+
+class DataBackupRetentionSettings(BaseModel):
+    mode: str = Field("none", description="none / days / keep_count")
+    days: int = 30
+    keep_count: int = 7
+
+
+class DataBackupPolicy(BaseModel):
+    schedule_enabled: bool = False
+    cron: str = "0 2 * * *"
+    include_files: bool = True
+    storage: DataBackupStorageSettings = Field(default_factory=DataBackupStorageSettings)
+    retention: DataBackupRetentionSettings = Field(default_factory=DataBackupRetentionSettings)
+    last_scheduled_at: Optional[str] = None
+    last_retention_at: Optional[str] = None
+
+
+class DataBackupPolicyUpdate(BaseModel):
+    schedule_enabled: Optional[bool] = None
+    cron: Optional[str] = None
+    include_files: Optional[bool] = None
+    storage: Optional[Dict[str, Any]] = None
+    retention: Optional[Dict[str, Any]] = None
+
+
+class DataBackupStorageConnectionItem(BaseModel):
+    uuid: str
+    name: Optional[str] = None
+    code: Optional[str] = None
+    type: str
+    type_label: str
+
+
+class DataBackupStorageConnectionList(BaseModel):
+    items: List[DataBackupStorageConnectionItem]

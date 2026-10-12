@@ -3,7 +3,6 @@ import { Form, App } from 'antd';
 import type { SelectProps } from 'antd';
 import { useDebounceFn } from 'ahooks';
 import { Material } from '../../apps/master-data/types/material';
-import { materialApi } from '../../apps/master-data/services/material';
 import { apiRequest } from '../../services/api';
 import { UniDropdown } from '../uni-dropdown';
 import type { QuickCreateConfig } from '../uni-dropdown/types';
@@ -11,10 +10,18 @@ import { NamePath } from 'antd/es/form/interface';
 import { MaterialFormModal } from '../../apps/master-data/components/MaterialFormModal';
 import { isVariantSkuMaterial } from '../../apps/master-data/components/MaterialVariantCombinationsTable';
 import {
+  ReferenceDisplayAccessError,
+  resolveReferenceDisplay,
+  searchReferenceDisplay,
+} from '../../utils/referenceDisplay';
+import { referenceDisplayItemsToMaterials } from '../../utils/documentFormReferenceLoad';
+import {
   MATERIAL_SELECT_OPTION_ITEM_HEIGHT,
   MaterialSelectOptionContent,
   formatMaterialSelectLabel,
 } from './materialSelectOption';
+
+const MATERIAL_REFERENCE_RESOURCE = 'master-data:material';
 
 export {
   MATERIAL_SELECT_OPTION_ITEM_HEIGHT,
@@ -120,6 +127,8 @@ interface UniMaterialSelectProps {
   groupId?: number;
   /** 限定为指定仓库内有库存的物料（即时库存汇总口径） */
   warehouseId?: number;
+  /** 宿主 {app}:{module}，供引用展示鉴权；未传时按当前路由菜单自动推断 */
+  hostResource?: string;
   /** 多选；与 fieldProps.mode='multiple' 等价，显式传入更稳妥 */
   mode?: 'multiple';
   onChange?: (
@@ -130,11 +139,12 @@ interface UniMaterialSelectProps {
 
 /**
  * 统一物料选择组件
- * 
+ *
  * @description
- * 1. 自动防抖搜索物料 (名称/编号/规格/拼音)
+ * 1. 自动防抖搜索物料 (名称/编号/规格)
  * 2. 选中物料后，根据 fillMapping 自动向当前的 Form 实例回填物料详情（如名、编号、图号等）
- * 3. 完美兼容 ProForm 和标准 Antd Form 以及 Form.List 动态增减行上下文
+ * 3. 兼容 ProForm / Antd Form / Form.List
+ * 4. 走 reference-display：具备物料 read 或 display（回显）即可拉选项，无需物料菜单 read
  */
 export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
   name,
@@ -162,6 +172,7 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
   sourceType,
   groupId,
   warehouseId,
+  hostResource,
   mode,
   onChange,
   formItemProps,
@@ -245,6 +256,22 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
     });
   };
 
+  const filterClientMaterialRows = (rows: Material[]): Material[] => {
+    let next = rows;
+    if (sourceType) {
+      const st = String(sourceType);
+      next = next.filter(
+        (m) => String((m as any).source_type ?? (m as any).sourceType ?? '') === st,
+      );
+    }
+    if (resolvedGroupId != null) {
+      next = next.filter(
+        (m) => Number((m as any).group_id ?? (m as any).groupId) === resolvedGroupId,
+      );
+    }
+    return filterSelectableMaterials(next, mastersOnly);
+  };
+
   const fetchMaterials = async (searchText: string = '') => {
     listAbortRef.current?.abort();
     const ac = new AbortController();
@@ -285,31 +312,34 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
           });
           return;
         }
-        const matRes = await materialApi.list({
-          ids: materialIds,
-          keyword: searchText || undefined,
-          isActive: activeOnly ? true : undefined,
-          mastersOnly: mastersOnly ? true : undefined,
-          sourceType: sourceType || undefined,
-          groupId: resolvedGroupId,
-          limit: materialIds.length,
+        const items = await resolveReferenceDisplay({
+          resource: MATERIAL_REFERENCE_RESOURCE,
+          recordIds: materialIds,
+          hostResource,
         });
         if (ac.signal.aborted) return;
-        rows = matRes.items ?? [];
+        const order = new Map(materialIds.map((id, idx) => [id, idx]));
+        rows = [...referenceDisplayItemsToMaterials(items)].sort(
+          (a, b) => (order.get(Number(a.id)) ?? 0) - (order.get(Number(b.id)) ?? 0),
+        );
+        rows = filterClientMaterialRows(rows);
       } else {
-        const response: any = await materialApi.list({
-          keyword: searchText,
+        const response = await searchReferenceDisplay({
+          resource: MATERIAL_REFERENCE_RESOURCE,
+          hostResource,
+          keyword: searchText.trim() || undefined,
           isActive: activeOnly ? true : undefined,
-          mastersOnly: mastersOnly ? true : undefined,
           sourceType: sourceType || undefined,
           groupId: resolvedGroupId,
-          limit: 200,
+          pageSize: 200,
         });
         if (ac.signal.aborted) return;
-        const raw = response?.data || response?.items || response || [];
-        rows = Array.isArray(raw) ? raw : [];
+        rows = filterSelectableMaterials(
+          referenceDisplayItemsToMaterials(response.items ?? []),
+          mastersOnly,
+        );
       }
-      const next = filterSelectableMaterials(rows, mastersOnly);
+      const next = rows;
       setData((prev) => {
         const selectedIds = isMultiple
           ? selectedIdsRef.current
@@ -324,7 +354,11 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
     } catch (error) {
       if (ac.signal.aborted) return;
       console.error('Failed to fetch materials:', error);
-      message.error('加载物料列表失败，请稍后重试');
+      if (error instanceof ReferenceDisplayAccessError) {
+        message.error(error.message);
+      } else {
+        message.error('加载物料列表失败，请稍后重试');
+      }
     } finally {
       if (!ac.signal.aborted) {
         setLoading(false);
@@ -346,7 +380,7 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
     };
     // fetchMaterials 闭包随 deps 更新；debounce 经 useLatest 取最新 fn
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅过滤条件变化时重拉
-  }, [activeOnly, mastersOnly, sourceType, resolvedGroupId, resolvedWarehouseId]);
+  }, [activeOnly, mastersOnly, sourceType, resolvedGroupId, resolvedWarehouseId, hostResource]);
 
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
@@ -384,9 +418,13 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
     let cancelled = false;
     void (async () => {
       try {
-        const result = await materialApi.list({ ids: missing, limit: missing.length });
+        const items = await resolveReferenceDisplay({
+          resource: MATERIAL_REFERENCE_RESOURCE,
+          recordIds: missing,
+          hostResource,
+        });
         if (cancelled) return;
-        const found = (result.items ?? []).filter((m) =>
+        const found = referenceDisplayItemsToMaterials(items).filter((m) =>
           missing.includes(Number((m as any).id)),
         );
         if (found.length) {
@@ -406,7 +444,7 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [currentValue, fallbackOption, isMultiple]);
+  }, [currentValue, fallbackOption, isMultiple, hostResource]);
 
   const resolveSelectedMaterial = async (
     val: number,
@@ -417,20 +455,40 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
       currentData.find((m) => Number((m as any).id) === Number(val)) ?? undefined;
     if (selected) return selected;
 
+    try {
+      const items = await resolveReferenceDisplay({
+        resource: MATERIAL_REFERENCE_RESOURCE,
+        recordIds: [Number(val)],
+        hostResource,
+      });
+      selected = referenceDisplayItemsToMaterials(items).find(
+        (m) => Number((m as any).id) === Number(val),
+      );
+      if (selected) {
+        mergeMaterialsIntoData([selected]);
+        return selected;
+      }
+    } catch (error) {
+      console.error('Failed to resolve material for fillMapping:', error);
+    }
+
     const labelStr = typeof opt?.label === 'string' ? opt.label : '';
     const codePart = labelStr.split(' - ')[0]?.trim();
     if (!codePart) return undefined;
 
     try {
-      const list = await materialApi.list({
-        code: codePart,
-        limit: 50,
+      const response = await searchReferenceDisplay({
+        resource: MATERIAL_REFERENCE_RESOURCE,
+        hostResource,
+        keyword: codePart,
         isActive: activeOnly ? true : undefined,
-        mastersOnly: mastersOnly ? true : undefined,
         sourceType: sourceType || undefined,
         groupId: resolvedGroupId,
+        pageSize: 50,
       });
-      selected = list.items.find((m) => Number((m as any).id) === Number(val));
+      selected = referenceDisplayItemsToMaterials(response.items ?? []).find(
+        (m) => Number((m as any).id) === Number(val),
+      );
       if (selected) {
         mergeMaterialsIntoData([selected]);
       }
@@ -596,29 +654,27 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
                     ),
                   ] as number[];
                   if (materialIds.length) {
-                    const matRes = await materialApi.list({
-                      ids: materialIds,
-                      keyword: kw || undefined,
-                      isActive: activeOnly ? true : undefined,
-                      mastersOnly: mastersOnly ? true : undefined,
-                      sourceType: sourceType || undefined,
-                      groupId: resolvedGroupId,
-                      limit: materialIds.length,
+                    const resolved = await resolveReferenceDisplay({
+                      resource: MATERIAL_REFERENCE_RESOURCE,
+                      recordIds: materialIds,
+                      hostResource,
                     });
-                    items = filterSelectableMaterials(matRes.items ?? [], mastersOnly);
+                    items = filterClientMaterialRows(referenceDisplayItemsToMaterials(resolved));
                   }
                 } else {
-                  const list = await materialApi.list({
-                    limit: 200,
+                  const response = await searchReferenceDisplay({
+                    resource: MATERIAL_REFERENCE_RESOURCE,
+                    hostResource,
+                    keyword: kw || undefined,
                     isActive: activeOnly ? true : undefined,
-                    mastersOnly: mastersOnly ? true : undefined,
                     sourceType: sourceType || undefined,
                     groupId: resolvedGroupId,
-                    ...(kw && { keyword: kw }),
+                    pageSize: 200,
                   });
-                  const raw = list as { items?: Material[]; data?: Material[] } | Material[];
-                  const rows = Array.isArray(raw) ? raw : raw?.items ?? raw?.data ?? [];
-                  items = filterSelectableMaterials(Array.isArray(rows) ? rows : [], mastersOnly);
+                  items = filterSelectableMaterials(
+                    referenceDisplayItemsToMaterials(response.items ?? []),
+                    mastersOnly,
+                  );
                 }
                 mergeMaterialsIntoData(items);
                 return items.map((m) => {

@@ -1,4 +1,4 @@
-"""文件物理存储适配器（本地磁盘 / 腾讯 COS / MinIO 等）。"""
+"""文件物理存储适配器（本地磁盘 / 腾讯 COS / MinIO / RustFS 等）。"""
 
 from .base import FileStorageBackend
 from .resolver import (

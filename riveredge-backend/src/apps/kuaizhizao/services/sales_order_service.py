@@ -1979,6 +1979,11 @@ class SalesOrderService:
                         order_dict["salesman_id"] = customer.salesman_id
                         order_dict["salesman_name"] = customer.salesman_name
 
+            if not order_dict.get("salesman_id"):
+                order_dict["salesman_id"] = created_by
+                if not order_dict.get("salesman_name"):
+                    order_dict["salesman_name"] = operator_name
+
             order = await SalesOrder.create(tenant_id=tenant_id, **order_dict)
 
             total_qty = Decimal("0")

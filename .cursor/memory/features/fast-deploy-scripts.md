@@ -89,10 +89,12 @@ standard: 先按 code-push-routing 分流；有 PC 前端改动才 build.web；�
 - 运行用户优先级：`deploy.env` 的 `SERVICE_USER` → `SUDO_USER` → 当前用户 → `$PROJECT_ROOT` 属主；**禁止** `User=root`
 - `prepare_systemd_prerequisites`：服务用户无 uv 时 `ensure_uv_for_user` 自动 pip/官方脚本装到其 `~/.local/bin`，勿把 root 的 uv 写进 unit
 - 向导 BOOT 菜单展示运行用户、uv/caddy 就绪态；失败信息含可复制手装命令
-- 真源：`lib/common.sh` 的 `resolve_service_user` / `ensure_uv_for_user` / `cmd_install_service`
+- **203/EXEC**：`check_systemd_exec_scripts` 纳入 `deploy.sh check`；`ensure_systemd_exec_scripts_ready` 在 `install-service` / `start_prod_via_systemd` / `fix_systemd_runtime_permissions` 去 CRLF + `chmod +x`；仓库侧 `linux/.gitattributes` + `100755`
+- 真源：`lib/common.sh` 的 `resolve_service_user` / `ensure_uv_for_user` / `ensure_systemd_exec_scripts_ready` / `cmd_install_service`
 
 ## 踩坑
 
+- `journalctl` 报 `status=203/EXEC` + `Permission denied`：包装脚本无 +x 或含 `\r`（Windows 检出）。先 `./fast-deploy/deploy.sh check`，再 `install-service` / `start`（会自动 `ensure_systemd_exec_scripts_ready`）。
 - PowerShell 执行 `.\fast-deploy\launch.dev.sh`：Windows 把 `.sh` 关联到 `git-bash.exe`，Cursor 终端无日志、exit 0，手机端未起。改用 `.\fast-deploy\launch.dev.ps1 withh5` 或 Git Bash。
 - 手机 H5 开发口默认 **8098**，不是 8081（Hyper-V 保留段）。
 - 工作区除 dist（及蓝绿槽、`.perf`）外必须干净，否则 `build_web_assert_source_tree_committed` 失败；**正式 AOCI 资产**（`aoci.txt` / `aoci.*.txt` / 放行的 `.aoci/config.json` 等）应已提交，勿故意排除——未跟踪的正式索引会挡住脚本；`.aoci` 下 lock/ledger/batch 助手文件仍勿提交（见 `.cursor/rules/aoci-git-commit.mdc`）

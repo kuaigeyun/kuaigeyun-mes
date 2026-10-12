@@ -261,6 +261,11 @@ async def _sales_order_open_delivery_base(tenant_id: int):
     )
 
 
+def _sales_order_menu_badge_query(qs, ctx: BadgeScopeCtx):
+    """销售订单菜单角标：只计归属业务员为当前用户的单据（与列表「我的」口径一致）。"""
+    return qs.filter(salesman_id=ctx.user.id)
+
+
 async def _section_sales(ctx: BadgeScopeCtx, now_date) -> BadgeFragment:
     from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
     from apps.kuaizhizao.models.sales_forecast import SalesForecast
@@ -270,7 +275,10 @@ async def _section_sales(ctx: BadgeScopeCtx, now_date) -> BadgeFragment:
         "IN_PROGRESS", "进行中", "APPROVED", "已审核", "CONFIRMED", "已确认",
         "AUDITED", "RELEASED", "执行中",
     ]
-    so_delivery_base = await _sales_order_open_delivery_base(tid)
+    so_delivery_base = _sales_order_menu_badge_query(
+        await _sales_order_open_delivery_base(tid),
+        ctx,
+    )
     undelivered_pending_item_ids = list(
         dict.fromkeys(
             await SalesOrderItem.filter(

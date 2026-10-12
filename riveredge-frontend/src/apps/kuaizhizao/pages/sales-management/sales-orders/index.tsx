@@ -285,6 +285,7 @@ import {
 import {
   loadBankAccountFormOptions,
   loadMaterialFormReferenceList,
+  resolveMaterialFormReference,
 } from '../../../../../utils/documentFormReferenceLoad';
 import { useConfigStore } from '../../../../../stores/configStore';
 import { getDictionaryItemsCached } from '../../../../../services/dataDictionaryCache';
@@ -332,6 +333,20 @@ function resolveDefaultSalesOrderListScope(): SalesOrderListScope {
   const u = useGlobalStore.getState().currentUser;
   if (u?.is_tenant_admin || u?.is_infra_admin) return 'all';
   return 'mine';
+}
+
+/** 新建销售订单未填归属业务员时，默认当前登录用户 */
+function resolveDefaultSalesOrderSalesman(): {
+  salesman_id?: number;
+  salesman_name?: string;
+} {
+  const u = useGlobalStore.getState().currentUser;
+  const id = Number(u?.id);
+  if (!Number.isFinite(id) || id <= 0) return {};
+  const name = normalizeUserDisplayName(
+    u?.full_name || u?.fullName || u?.username || u?.name,
+  );
+  return { salesman_id: id, salesman_name: name };
 }
 
 /** 销售明细行（订单 + 明细合并，用于明细表格平铺） */
@@ -865,6 +880,9 @@ const SalesOrdersPage: React.FC = () => {
 
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const pendingDetailIdRef = useRef<number | null>(null);
   const [currentSalesOrder, setCurrentSalesOrder] = useState<SalesOrder | null>(null);
   const detailCapabilityGates = useSalesOrderCapabilities(
     currentSalesOrder,
@@ -920,17 +938,46 @@ const SalesOrdersPage: React.FC = () => {
   const [paymentTermsOptions, setPaymentTermsOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [bankAccountOptions, setBankAccountOptions] = useState<Array<{ label: string; value: number }>>([]);
 
-  /** 表单引用数据：走 reference-display；鉴权为目标 read|display */
-  React.useEffect(() => {
-    if (!isFormPage) return;
-    let cancelled = false;
-    void loadMaterialFormReferenceList('kuaizhizao:sales-order').then((rows) => {
-      if (!cancelled) setMaterials(rows);
+  /** 物料缓存：按选中/编辑行按需写入，禁止进页预拉全量（原先最多 2000 条串行 display-search 会卡死新建页） */
+  const materialsRef = React.useRef(materials);
+  materialsRef.current = materials;
+
+  const mergeMaterialsCache = React.useCallback((rows: Material[]) => {
+    if (!rows.length) return;
+    setMaterials((prev) => {
+      const byId = new Map<number, Material>();
+      for (const m of prev) {
+        const id = Number((m as any).id);
+        if (Number.isFinite(id) && id > 0) byId.set(id, m);
+      }
+      for (const m of rows) {
+        const id = Number((m as any).id);
+        if (Number.isFinite(id) && id > 0) byId.set(id, m);
+      }
+      return Array.from(byId.values());
     });
-    return () => {
-      cancelled = true;
-    };
-  }, [isFormPage]);
+  }, []);
+
+  const ensureMaterialsByIds = React.useCallback(
+    async (ids: number[]) => {
+      const known = new Set(
+        materialsRef.current
+          .map((m) => Number((m as any).id))
+          .filter((id) => Number.isFinite(id) && id > 0),
+      );
+      const missing = [
+        ...new Set(
+          ids
+            .map((id) => Number(id))
+            .filter((id) => Number.isFinite(id) && id > 0 && !known.has(id)),
+        ),
+      ];
+      if (!missing.length) return;
+      const rows = await resolveMaterialFormReference('kuaizhizao:sales-order', missing);
+      mergeMaterialsCache(rows);
+    },
+    [mergeMaterialsCache],
+  );
 
   const currentUser = useCurrentUser();
 
@@ -1203,10 +1250,12 @@ const SalesOrdersPage: React.FC = () => {
     setTermsPreview([]);
     formRef.current?.resetFields();
     setTimeout(() => {
+      const defaultSalesman = resolveDefaultSalesOrderSalesman();
       formRef.current?.setFieldsValue({
         price_type: DEFAULT_SALES_PRICE_TYPE,
         items: [defaultOrderItem],
         order_date: dayjs(),
+        ...defaultSalesman,
       });
       lastPriceTypeRef.current = DEFAULT_SALES_PRICE_TYPE;
       const prefillCustomerId = options?.customerId;
@@ -1225,8 +1274,12 @@ const SalesOrdersPage: React.FC = () => {
             customer_name: c.name ?? (c as any).customer_name,
             customer_contact: (c as any).contactPerson ?? (c as any).contact_person ?? (c as any).contact,
             customer_phone: (c as any).phone ?? (c as any).customer_phone,
-            salesman_id: sId,
-            salesman_name: normalizeUserDisplayName(sName),
+            ...(sId != null && sId !== '' && Number.isFinite(Number(sId))
+              ? {
+                  salesman_id: Number(sId),
+                  salesman_name: normalizeUserDisplayName(sName),
+                }
+              : {}),
             shipping_address: (c as any).address ?? (c as any).shipping_address,
           });
         }
@@ -1304,11 +1357,29 @@ const SalesOrdersPage: React.FC = () => {
     try {
       const data = await getSalesOrder(orderId, true);
       setFormEditOrder(data);
+      const lineMaterialIds = (data.items || [])
+        .map((item: SalesOrderItem) =>
+          item.material_id != null ? Number(item.material_id) : NaN,
+        )
+        .filter((id) => Number.isFinite(id) && id > 0);
+      const resolvedMaterials = lineMaterialIds.length
+        ? await resolveMaterialFormReference('kuaizhizao:sales-order', lineMaterialIds)
+        : [];
+      if (resolvedMaterials.length) {
+        mergeMaterialsCache(resolvedMaterials);
+      }
+      const materialById = new Map(
+        resolvedMaterials.map((m) => [Number((m as any).id), m] as const),
+      );
       const items = (data.items || []).map((item: SalesOrderItem) => {
         const mid = item.material_id != null ? Number(item.material_id) : undefined;
-        const matchedById = mid ? materials.find((m: any) => m.id === mid) : null;
+        const matchedById = mid ? materialById.get(mid) ?? null : null;
         const matchedByCodeOrName = !mid
-          ? materials.find((m: any) => (m.mainCode || m.main_code || m.code) === item.material_code || m.name === item.material_name)
+          ? resolvedMaterials.find(
+              (m: any) =>
+                (m.mainCode || m.main_code || m.code) === item.material_code ||
+                m.name === item.material_name,
+            ) ?? null
           : null;
         const matched = matchedById ?? matchedByCodeOrName;
         const materialCode = item.material_code || (matched ? ((matched as any).mainCode || (matched as any).main_code || (matched as any).code) : undefined);
@@ -1417,19 +1488,27 @@ const SalesOrdersPage: React.FC = () => {
    * 处理详情查看
    */
   const handleDetail = async (keys: React.Key[]) => {
-    if (keys.length === 1) {
-      const id = Number(keys[0]);
-      try {
-        const data = await getSalesOrder(id, true, true);  // includeItems=true, includeDuration=true
-        setCurrentSalesOrder(data);
-
-        setDrawerVisible(true);
-        if (data.id != null) {
-          await loadSalesOrderFieldValuesForDetail(data.id);
-        }
-      } catch (error: any) {
-        messageApi.error(t('app.kuaizhizao.salesOrder.detailFailed'));
-      }
+    if (keys.length !== 1) return;
+    const id = Number(keys[0]);
+    if (!Number.isFinite(id) || id <= 0) return;
+    pendingDetailIdRef.current = id;
+    setDrawerVisible(true);
+    setDetailLoading(true);
+    setDetailError(null);
+    resetSalesOrderDetailFieldValues();
+    setCurrentSalesOrder(null);
+    try {
+      const [data] = await Promise.all([
+        getSalesOrder(id, true, false),
+        loadSalesOrderFieldValuesForDetail(id),
+      ]);
+      setCurrentSalesOrder(data);
+    } catch (error: any) {
+      const msg = error?.message || t('app.kuaizhizao.salesOrder.detailFailed');
+      setDetailError(msg);
+      messageApi.error(msg);
+    } finally {
+      setDetailLoading(false);
     }
   };
 
@@ -1654,11 +1733,15 @@ const SalesOrdersPage: React.FC = () => {
       }
 
       const mainDeliveryStr = toApiDateString(values.delivery_date);
+      const saveMaterialIds = validItems
+        .map((it: any) => Number(it?.material_id))
+        .filter((id: number) => Number.isFinite(id) && id > 0);
+      await ensureMaterialsByIds(saveMaterialIds);
       values.items = validItems.map((it: SalesOrderItem) => {
         const isGift = Boolean((it as any).is_gift);
         const unitPrice = isGift ? 0 : p(it);
         const line = calcSalesLineAmounts(q(it), unitPrice, taxR(it), values.price_type);
-        const material = materials.find((m) => m.id === Number((it as any).material_id));
+        const material = materialsRef.current.find((m) => m.id === Number((it as any).material_id));
         const conversionFactor = resolveSaleUnitConversionFactor(material, (it as any).material_unit);
         const deliveryDateStr = toApiDateString((it as any).delivery_date) ?? mainDeliveryStr;
         if (
@@ -3134,10 +3217,12 @@ const SalesOrdersPage: React.FC = () => {
     const targetId = id ?? currentSalesOrder?.id;
     if (targetId) {
       try {
-        const res = await getSalesOrder(targetId, true, true);
+        const [res] = await Promise.all([
+          getSalesOrder(targetId, true, false),
+          loadSalesOrderFieldValuesForDetail(targetId),
+        ]);
         setCurrentSalesOrder(res);
         setTrackingRefreshKey((k) => k + 1);
-        await loadSalesOrderFieldValuesForDetail(targetId);
       } catch {
         // 忽略
       }
@@ -3275,8 +3360,17 @@ const SalesOrdersPage: React.FC = () => {
     }
   };
 
-  const handleItemImport = (data: any[][]) => {
+  const handleItemImport = async (data: any[][]) => {
     const priceTypeForm = salesFormPriceType(formRef.current?.getFieldValue('price_type'));
+    // 明细 Excel 按编码匹配：仅在导入时按需拉引用清单，不在进页预拉
+    let materialList = materialsRef.current;
+    if (materialList.length < 50) {
+      const rows = await loadMaterialFormReferenceList('kuaizhizao:sales-order');
+      if (rows.length) {
+        mergeMaterialsCache(rows);
+        materialList = rows;
+      }
+    }
     // 假设数据从第3行开始（0:表头, 1:示例）
     const rows = data.slice(2);
     const newItems = rows
@@ -3291,7 +3385,7 @@ const SalesOrdersPage: React.FC = () => {
 
         if (!materialCode) return null;
 
-        const material = materials.find(m => m.mainCode === materialCode || m.code === materialCode);
+        const material = materialList.find(m => m.mainCode === materialCode || m.code === materialCode);
         const taxR = Number((material as any)?.defaults?.defaultTaxRate ?? (material as any)?.defaults?.default_tax_rate) || 0;
         let unitPrice =
           price ||
@@ -3341,12 +3435,15 @@ const SalesOrdersPage: React.FC = () => {
     async (index: number, attrs?: Record<string, unknown>) => {
       const customerId = formRef.current?.getFieldValue('customer_id');
       const materialId = formRef.current?.getFieldValue(['items', index, 'material_id']);
-      const material = materials.find((m) => m.id === Number(materialId));
+      if (materialId != null) {
+        await ensureMaterialsByIds([Number(materialId)]);
+      }
+      const material = materialsRef.current.find((m) => m.id === Number(materialId));
       const orderDate = formRef.current?.getFieldValue('order_date');
       const asOf = orderDate != null ? (dayjs.isDayjs(orderDate) ? orderDate : dayjs(orderDate)) : dayjs();
       const pt = salesFormPriceType(formRef.current?.getFieldValue('price_type'));
       const full = material
-        ? await resolveMaterialForPricing(material, materials)
+        ? await resolveMaterialForPricing(material, materialsRef.current)
         : undefined;
       const { unitPrice, taxRate } = await resolveOrderLineSalePrice(
         customerId ? Number(customerId) : undefined,
@@ -3382,12 +3479,13 @@ const SalesOrdersPage: React.FC = () => {
         formRef.current?.setFieldsValue({ items });
       }
     },
-    [materials],
+    [ensureMaterialsByIds],
   );
 
   /** 从产品多选面板批量追加明细行（与「添加明细」默认字段一致，数量默认为 1） */
   const appendOrderItemsFromMaterials = React.useCallback(
     async (selected: Material[]) => {
+      mergeMaterialsCache(selected);
       const pt = salesFormPriceType(formRef.current?.getFieldValue('price_type'));
       const customerId = formRef.current?.getFieldValue('customer_id');
       const orderDate = formRef.current?.getFieldValue('order_date');
@@ -3397,7 +3495,7 @@ const SalesOrdersPage: React.FC = () => {
         customerId: customerId ? Number(customerId) : undefined,
         asOf,
         priceType: pt,
-        materialList: materials,
+        materialList: materialsRef.current,
       });
 
       const rowFromMaterial = (m: Material, pricing: (typeof priced)[number]) => {
@@ -3441,7 +3539,7 @@ const SalesOrdersPage: React.FC = () => {
       formRef.current?.setFieldsValue({ items });
       messageApi.success(t('app.kuaizhizao.salesOrder.materialPickerAdded', { count: selected.length }));
     },
-    [messageApi, t, materials],
+    [messageApi, t, mergeMaterialsCache],
   );
 
   const appendEmptyOrderItem = React.useCallback(() => {
@@ -4858,9 +4956,11 @@ const SalesOrdersPage: React.FC = () => {
                                     showQuickCreate
                                     showAdvancedSearch
                                     skipFuzzyPinyinClientFilter
+                                    hostResource="kuaizhizao:sales-order"
                                     sourceType={materialSourceType}
                                     onChange={(_val, material) => {
-                                      if (!material) return;
+                                      if (!material || Array.isArray(material)) return;
+                                      mergeMaterialsCache([material]);
                                       formRef.current?.setFieldValue(
                                         ['items', index, 'material_unit'],
                                         resolveMaterialScenarioUnit(material, 'sale'),
@@ -4881,7 +4981,7 @@ const SalesOrdersPage: React.FC = () => {
                                         formRef.current,
                                         index,
                                         material,
-                                        { materialList: materials, asOfField: 'order_date' },
+                                        { materialList: materialsRef.current, asOfField: 'order_date' },
                                       );
                                     }}
                                   />
@@ -5635,6 +5735,7 @@ const SalesOrdersPage: React.FC = () => {
             const isPrefetch = meta?.purpose === 'prefetch';
             const apiParams = resolveSalesOrderListApiParams(params, sort, searchFormValues, {
               salesmanId: resolveListSalesmanId(salesmanFilterIdRef.current, searchFormValues),
+              includeItems: dataViewModeRef.current === 'detail',
             }) as SalesOrderListParams;
 
             const toFlatRows = (orders: SalesOrder[], writeRowKeyMap: boolean): SalesOrderItemRow[] => {
@@ -6013,7 +6114,16 @@ const SalesOrdersPage: React.FC = () => {
       </ListPageTemplate>
 
       <SalesOrderDetailDrawer
-        open={drawerVisible && Boolean(currentSalesOrder)}
+        open={drawerVisible}
+        loading={detailLoading}
+        error={detailError}
+        onRetry={
+          pendingDetailIdRef.current != null
+            ? () => {
+                void handleDetail([pendingDetailIdRef.current!]);
+              }
+            : undefined
+        }
         order={currentSalesOrder}
         auditRequired={auditEnabled}
         trackingRefreshKey={trackingRefreshKey}
@@ -6025,6 +6135,9 @@ const SalesOrdersPage: React.FC = () => {
         zIndex={salesOrderDetailDrawerZIndex}
         onClose={() => {
           setDrawerVisible(false);
+          setDetailLoading(false);
+          setDetailError(null);
+          pendingDetailIdRef.current = null;
           resetSalesOrderDetailFieldValues();
         }}
         onWorkflowSuccess={() => {

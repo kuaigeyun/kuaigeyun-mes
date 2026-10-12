@@ -54,7 +54,31 @@ class DataBackup(BaseModel):
     file_uuid = fields.CharField(max_length=100, null=True, description="文件UUID")
     file_size = fields.BigIntField(null=True, description="文件大小")
     source_type = fields.CharField(max_length=20, default="generated", description="备份来源：generated=系统生成，uploaded=用户上传")
-    
+    trigger_source = fields.CharField(
+        max_length=20,
+        default="manual",
+        description="触发来源：manual=手动，scheduled=定时策略",
+    )
+    storage_backend = fields.CharField(
+        max_length=32,
+        default="local",
+        description="存储后端：local / tencent_cos / minio / rustfs",
+    )
+    storage_connection_uuid = fields.CharField(
+        max_length=64,
+        null=True,
+        description="对象存储应用连接 UUID",
+    )
+    storage_key = fields.CharField(
+        max_length=500,
+        null=True,
+        description="对象存储对象键",
+    )
+    storage_owner_tenant_id = fields.IntField(
+        null=True,
+        description="对象存储连接所属组织 ID（全平台包落远程时必填）",
+    )
+
     status = fields.CharField(max_length=20, default="pending", description="备份状态")
     progress = fields.IntField(default=0, description="备份进度百分比 0-100")
     progress_message = fields.CharField(max_length=255, null=True, description="备份进度说明")

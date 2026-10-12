@@ -33,6 +33,7 @@ OBJECT_STORAGE_TYPES = (
     "huaweicloud_obs",
     "aws_s3",
     "minio",
+    "rustfs",
     "qiniu_kodo",
 )
 
@@ -1883,7 +1884,7 @@ class IntegrationConfigService:
                 return f"https://{endpoint}"
             return f"https://{bucket}.cos.{region}.myqcloud.com"
 
-        if storage_type == "minio":
+        if storage_type in ("minio", "rustfs"):
             return IntegrationConfigService._build_minio_base_url(config)
 
         if endpoint:
@@ -1962,15 +1963,18 @@ class IntegrationConfigService:
             secret = str(config.get("secret_access_key") or "").strip()
             if not secret or secret == "****":
                 raise ValueError("请填写 Secret Key")
-        elif storage_type in ("minio", "qiniu_kodo"):
+        elif storage_type in ("minio", "rustfs", "qiniu_kodo"):
             if not str(config.get("access_key") or "").strip():
                 raise ValueError("请填写 Access Key")
             secret = str(config.get("secret_key") or "").strip()
             if not secret or secret == "****":
                 raise ValueError("请填写 Secret Key")
 
-        if storage_type == "minio":
-            return await IntegrationConfigService._test_minio_endpoint(config, bucket)
+        if storage_type in ("minio", "rustfs"):
+            label = "RustFS" if storage_type == "rustfs" else "MinIO"
+            return await IntegrationConfigService._test_minio_endpoint(
+                config, bucket, product_label=label
+            )
 
         probe_url = IntegrationConfigService._build_object_storage_probe_url(storage_type, config)
         try:
@@ -1991,12 +1995,18 @@ class IntegrationConfigService:
         raise ValueError(f"存储探测失败 HTTP {resp.status_code}，请检查 Endpoint / Bucket / Region")
 
     @staticmethod
-    async def _test_minio_endpoint(config: Dict[str, Any], bucket: str) -> Dict[str, Any]:
+    async def _test_minio_endpoint(
+        config: Dict[str, Any],
+        bucket: str,
+        *,
+        product_label: str = "MinIO",
+    ) -> Dict[str, Any]:
         """
-        MinIO 连通性：对 path-style /{bucket} 发 HEAD。
-        根路径 HEAD / 在 MinIO 上经常直接 400，不能用来判断可达。
+        S3 兼容存储连通性（MinIO / RustFS）：对 path-style /{bucket} 发 HEAD。
+        根路径 HEAD / 经常直接 400，不能用来判断可达。
         未签名时 403 表示 API 可达（密钥正确性需实际上传/SDK 校验）。
         """
+        label = (product_label or "MinIO").strip() or "MinIO"
         base_url = IntegrationConfigService._build_minio_base_url(config)
         probe_url = IntegrationConfigService._build_minio_bucket_probe_url(config, bucket)
         try:
@@ -2005,24 +2015,24 @@ class IntegrationConfigService:
             err_text = str(e)
             if "WRONG_VERSION_NUMBER" in err_text or "wrong version number" in err_text.lower():
                 raise ValueError(
-                    "无法访问 MinIO：SSL 协议不匹配（WRONG_VERSION_NUMBER）。"
+                    f"无法访问 {label}：SSL 协议不匹配（WRONG_VERSION_NUMBER）。"
                     "通常是用 HTTPS 连接了仅提供 HTTP 的服务。"
-                    "请关闭「使用 HTTPS」并使用 http://host:9000，或为 MinIO 配置 TLS。"
+                    f"请关闭「使用 HTTPS」并使用 http://host:9000，或为 {label} 配置 TLS。"
                 ) from e
-            raise ValueError(f"无法访问 MinIO Endpoint：{e}") from e
+            raise ValueError(f"无法访问 {label} Endpoint：{e}") from e
 
         status = resp.status_code
         if status >= 500:
-            raise ValueError(f"MinIO 服务异常 HTTP {status}（Endpoint: {base_url}）")
+            raise ValueError(f"{label} 服务异常 HTTP {status}（Endpoint: {base_url}）")
         if status == 404:
             raise ValueError(
-                f"MinIO 桶不存在或路径不对：{bucket}。"
-                f"请确认 Bucket 名称，且 Endpoint 为 S3 API 地址（常见 :9000，不是控制台 :9001）。"
+                f"{label} 桶不存在或路径不对：{bucket}。"
+                f"请确认 Bucket 名称，且 Endpoint 为 S3 API 地址（常见 :9000，不是控制台端口）。"
             )
         # 200/204 桶可匿名读；301/302 重定向；401/403 需鉴权但服务可达
         if status in (200, 204, 301, 302, 401, 403):
             return {
-                "message": "MinIO Endpoint 可达（已校验必填项；未做签名鉴权）",
+                "message": f"{label} Endpoint 可达（已校验必填项；未做签名鉴权）",
                 "status_code": status,
                 "endpoint": base_url,
                 "probe_url": probe_url,
@@ -2035,9 +2045,9 @@ class IntegrationConfigService:
         except Exception:
             body_preview = ""
         hint = (
-            "请确认 Endpoint 为 MinIO S3 API（如 http://host:9000），"
+            f"请确认 Endpoint 为 {label} S3 API（如 http://host:9000），"
             "不要填控制台地址；Bucket 名称仅小写字母/数字/连字符。"
         )
         if body_preview:
-            raise ValueError(f"MinIO 存储探测失败 HTTP {status}：{body_preview}。{hint}")
-        raise ValueError(f"MinIO 存储探测失败 HTTP {status}。{hint}")
+            raise ValueError(f"{label} 存储探测失败 HTTP {status}：{body_preview}。{hint}")
+        raise ValueError(f"{label} 存储探测失败 HTTP {status}。{hint}")

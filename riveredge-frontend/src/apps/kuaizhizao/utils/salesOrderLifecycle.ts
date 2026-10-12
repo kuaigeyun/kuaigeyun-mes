@@ -414,7 +414,7 @@ export function resolveSalesOrderListApiParams(
   params: Record<string, unknown>,
   sort?: Record<string, unknown>,
   searchFormValues?: Record<string, unknown> | null,
-  options?: { salesmanId?: number | null },
+  options?: { salesmanId?: number | null; includeItems?: boolean },
 ): Record<string, unknown> {
   const { sortBy, sortOrder } = extractProTableSort(sort ?? {});
   const orderBy =
@@ -425,7 +425,7 @@ export function resolveSalesOrderListApiParams(
     skip: ((Number(params.current) || 1) - 1) * (Number(params.pageSize) || 20),
     limit: Number(params.pageSize) || 20,
     order_by: orderBy,
-    include_items: true,
+    include_items: options?.includeItems === true,
   };
 
   Object.assign(apiParams, resolveSalesOrderListLifecycleParams(searchFormValues, params));

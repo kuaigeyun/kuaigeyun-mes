@@ -23,7 +23,7 @@ export interface FileStorageSettingsModalProps {
 }
 
 /** 本轮前端可选的对象存储连接类型（与后端 SUPPORTED_OBJECT_STORAGE_TYPES 对齐） */
-const SUPPORTED_STORAGE_CONNECTION_TYPES = ['tencent_cos', 'minio'] as const;
+const SUPPORTED_STORAGE_CONNECTION_TYPES = ['tencent_cos', 'minio', 'rustfs'] as const;
 
 const LOCAL_LOCATION_VALUE = '__local__';
 
@@ -70,6 +70,7 @@ const FileStorageSettingsModal: React.FC<FileStorageSettingsModalProps> = ({
     (type: string) => {
       if (type === 'tencent_cos') return t('pages.system.files.storageTypeTencentCos');
       if (type === 'minio') return t('pages.system.files.storageTypeMinio');
+      if (type === 'rustfs') return t('pages.system.files.storageTypeRustfs');
       return type;
     },
     [t],
@@ -78,12 +79,13 @@ const FileStorageSettingsModal: React.FC<FileStorageSettingsModalProps> = ({
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [settings, cosList, minioList] = await Promise.all([
+      const [settings, cosList, minioList, rustfsList] = await Promise.all([
         getFileStorageSettings(),
         getApplicationConnectionListAll({ type: 'tencent_cos', is_active: true }),
         getApplicationConnectionListAll({ type: 'minio', is_active: true }),
+        getApplicationConnectionListAll({ type: 'rustfs', is_active: true }),
       ]);
-      const connections = [...cosList, ...minioList].filter((c) =>
+      const connections = [...cosList, ...minioList, ...rustfsList].filter((c) =>
         SUPPORTED_STORAGE_CONNECTION_TYPES.includes(
           c.type as (typeof SUPPORTED_STORAGE_CONNECTION_TYPES)[number],
         ),

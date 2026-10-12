@@ -27089,6 +27089,65 @@ export default {
   'pages.system.dataBackups.columnScope': '备份范围',
   'pages.system.dataBackups.columnRestoreStatus': '恢复状态',
   'pages.system.dataBackups.columnFileSize': '文件大小',
+  'pages.system.dataBackups.columnStorage': '存储位置',
+  'pages.system.dataBackups.columnTriggerSource': '来源',
+  'pages.system.dataBackups.triggerManual': '手动',
+  'pages.system.dataBackups.triggerScheduled': '定时',
+  'pages.system.dataBackups.policyButton': '备份策略',
+  'pages.system.dataBackups.policyModalTitle': '备份策略',
+  'pages.system.dataBackups.policyTabTenant': '本组织',
+  'pages.system.dataBackups.policyTabPlatform': '全平台',
+  'pages.system.dataBackups.policyPlatformHint':
+    '全平台策略仅影响「全平台所有组织」备份包的定时生成与清理；对象存储连接使用当前登录组织下已启用的腾讯 COS / MinIO / RustFS。',
+  'pages.system.dataBackups.policyPlatformStorageHint':
+    '全平台包上传对象存储时，将使用当前组织下所选连接；请确保该连接长期可用。',
+  'pages.system.dataBackups.policyNeedTenant': '当前账号未绑定组织，无法配置本组织备份策略',
+  'pages.system.dataBackups.policySelectTenant': '配置组织',
+  'pages.system.dataBackups.policySelectTenantRequired': '请选择要配置策略的组织',
+  'pages.system.dataBackups.policySelectTenantPlaceholder': '请选择全平台组织',
+  'pages.system.dataBackups.policyCurrentTenant': '当前组织：{{name}}（租户号 {{id}}）',
+  'pages.system.dataBackups.policyTenantNameUnknown': '未命名组织',
+  'pages.system.dataBackups.policyScheduleEnabled': '启用定时备份',
+  'pages.system.dataBackups.policyScheduleFreq': '备份周期',
+  'pages.system.dataBackups.policyScheduleFreqRequired': '请选择备份周期',
+  'pages.system.dataBackups.policyFreqDaily': '按天',
+  'pages.system.dataBackups.policyFreqWeekly': '按周',
+  'pages.system.dataBackups.policyFreqMonthly': '按月',
+  'pages.system.dataBackups.policyWeekday': '每周几',
+  'pages.system.dataBackups.policyWeekdayRequired': '请选择每周几',
+  'pages.system.dataBackups.policyWeekdayMon': '周一',
+  'pages.system.dataBackups.policyWeekdayTue': '周二',
+  'pages.system.dataBackups.policyWeekdayWed': '周三',
+  'pages.system.dataBackups.policyWeekdayThu': '周四',
+  'pages.system.dataBackups.policyWeekdayFri': '周五',
+  'pages.system.dataBackups.policyWeekdaySat': '周六',
+  'pages.system.dataBackups.policyWeekdaySun': '周日',
+  'pages.system.dataBackups.policyMonthDay': '每月几号',
+  'pages.system.dataBackups.policyMonthDayRequired': '请选择每月几号',
+  'pages.system.dataBackups.policyMonthDayOption': '{{day}} 日',
+  'pages.system.dataBackups.policyMonthDayHint': '若当月无该日（如 31 日），则该月不触发',
+  'pages.system.dataBackups.policyScheduleTime': '备份时刻',
+  'pages.system.dataBackups.policyScheduleTimeRequired': '请选择备份时刻',
+  'pages.system.dataBackups.policyIncludeFiles': '定时备份包含附件',
+  'pages.system.dataBackups.policyStorage': '备份落点',
+  'pages.system.dataBackups.policyStorageRequired': '请选择备份落点',
+  'pages.system.dataBackups.policyStorageLocal': '本机存储',
+  'pages.system.dataBackups.policyKeyPrefix': '对象键前缀',
+  'pages.system.dataBackups.policyKeyPrefixHint': '上传到对象存储时的目录前缀',
+  'pages.system.dataBackups.policyRetention': '定期清理',
+  'pages.system.dataBackups.policyRetentionRequired': '请选择清理策略',
+  'pages.system.dataBackups.policyRetentionNone': '不自动清理',
+  'pages.system.dataBackups.policyRetentionDays': '按天数',
+  'pages.system.dataBackups.policyRetentionKeepCount': '仅保留份数',
+  'pages.system.dataBackups.policyRetentionDaysValue': '保留天数',
+  'pages.system.dataBackups.policyRetentionDaysRequired': '请选择保留天数',
+  'pages.system.dataBackups.policyRetentionDaysOption': '{{days}} 天',
+  'pages.system.dataBackups.policyRetentionKeepCountValue': '保留最近份数',
+  'pages.system.dataBackups.policyRetentionKeepCountRequired': '请选择保留份数',
+  'pages.system.dataBackups.policyRetentionKeepOption': '{{count}} 份',
+  'pages.system.dataBackups.policyLoadFailed': '加载备份策略失败',
+  'pages.system.dataBackups.policySaveSuccess': '备份策略已保存',
+  'pages.system.dataBackups.policySaveFailed': '保存备份策略失败',
   'pages.system.dataBackups.loadListFailed': '加载备份列表失败',
   'pages.system.dataBackups.exportSuccess': '已导出 {{count}} 条记录',
   'pages.system.dataBackups.createButton': '新建备份',
@@ -27498,11 +27557,12 @@ export default {
   'pages.system.files.storageBackendCos': '腾讯云 COS',
   'pages.system.files.storageTypeTencentCos': '腾讯云 COS',
   'pages.system.files.storageTypeMinio': 'MinIO',
+  'pages.system.files.storageTypeRustfs': 'RustFS',
   'pages.system.files.storageLocationPlaceholder': '选择本地磁盘或已启用的对象存储连接',
   'pages.system.files.storageConnectionLabel': '对象存储连接',
   'pages.system.files.storageConnectionRequired': '请选择对象存储连接',
   'pages.system.files.storageConnectionPlaceholder': '选择已启用的对象存储连接',
-  'pages.system.files.storageConnectionHint': '可在应用连接器中新增或测试对象存储（腾讯云 COS、MinIO）：',
+  'pages.system.files.storageConnectionHint': '可在应用连接器中新增或测试对象存储（腾讯云 COS、MinIO、RustFS）：',
   'pages.system.files.storageConnectionLink': '应用连接器',
   'pages.system.files.storageKeyPrefixLabel': '环境 Key 前缀',
   'pages.system.files.storageKeyPrefixHint': '可选。同桶时建议开发填 dev、生产填 prod，避免对象 Key 冲突。',
@@ -30816,6 +30876,38 @@ export default {
     '采购申请与询价单支持回显权限',
   'pages.dashboard.updateLog.entries.purchase-requisition-inquiry-display-r01.description':
     '将采购申请、询价单登记为可引用资源，角色矩阵出现「回显」勾选，供下游取单/关联时按回显权限加载。',
+  'pages.dashboard.updateLog.entries.sales-order-default-salesman-badge-r01.title':
+    '销售订单默认归属业务员与菜单角标口径',
+  'pages.dashboard.updateLog.entries.sales-order-default-salesman-badge-r01.description':
+    '新建销售订单未填写归属业务员时默认带出当前登录账号；左侧菜单销售订单角标只统计归属业务员为当前用户的待办数量。',
+  'pages.dashboard.updateLog.entries.sales-order-list-detail-perf-r01.title':
+    '加快销售订单列表与详情打开速度',
+  'pages.dashboard.updateLog.entries.sales-order-list-detail-perf-r01.description':
+    '订单视图列表不再附带全量明细行，减少后端批量计算；点详情时抽屉立即打开并并行加载订单与自定义字段，新建后回到列表更快看到单据。',
+  'pages.dashboard.updateLog.entries.sales-order-form-material-preload-r01.title':
+    '加快销售订单新建页打开速度',
+  'pages.dashboard.updateLog.entries.sales-order-form-material-preload-r01.description':
+    '新建/编辑销售订单不再进页预拉最多两千条物料；改为选料、编辑回填与导入时按需加载，避免打开创建页长时间等待。',
+  'pages.dashboard.updateLog.entries.uni-material-select-reference-display-r01.title':
+    '修复业务单据选物料因缺少主数据权限失败',
+  'pages.dashboard.updateLog.entries.uni-material-select-reference-display-r01.description':
+    '统一物料下拉与批量选择改走引用展示接口；具备物料「回显」即可在销售/采购等单据中搜索选料，无需再分配物料管理菜单的查看权限。',
+  'pages.dashboard.updateLog.entries.preset-role-material-display-r01.title':
+    '预设角色默认勾选物料回显',
+  'pages.dashboard.updateLog.entries.preset-role-material-display-r01.description':
+    '销售/采购/仓管等预设角色默认授予物料「回显」权限；加载预设与权限同步时幂等补齐，不开放物料管理菜单查看。矩阵中仍可手动取消。',
+  'pages.dashboard.updateLog.entries.connector-storage-rustfs-r01.title':
+    '应用连接器支持 RustFS 对象存储',
+  'pages.dashboard.updateLog.entries.connector-storage-rustfs-r01.description':
+    '存储类连接器新增 RustFS（S3 兼容）；可在应用连接器中配置并测试，并用于文件存储落点与数据备份对象存储。',
+  'pages.dashboard.updateLog.entries.data-backup-policy-ux-r01.title':
+    '备份策略定时与清理交互优化',
+  'pages.dashboard.updateLog.entries.data-backup-policy-ux-r01.description':
+    '定时改为按天/按周/按月与时刻选择；定期清理先选按天或按份数再选预设数字；策略弹窗展示当前组织名称与租户号，平台管理员可从全平台组织列表选择后配置。',
+  'pages.dashboard.updateLog.entries.data-backup-policy-schedule-storage-r01.title':
+    '数据备份支持定时、对象存储与定期清理',
+  'pages.dashboard.updateLog.entries.data-backup-policy-schedule-storage-r01.description':
+    '数据备份页可配置本组织与全平台策略：按天/周/月定时备份、落盘本机或腾讯 COS/MinIO 应用连接，并按保留天数或最近份数自动清理成功备份。',
   'pages.dashboard.updateLog.entries.data-backup-restore-target-tenant-r01.title':
     '平台恢复租户备份须指定目标组织',
   'pages.dashboard.updateLog.entries.data-backup-restore-target-tenant-r01.description':

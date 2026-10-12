@@ -234,6 +234,12 @@ class PlatformSettings(Model):
         description="官方接口库域名，默认 kuaigeyun.com",
     )
 
+    # 全平台数据备份策略（定时 / 存储落点 / 保留）
+    data_backup_policy = fields.JSONField(
+        null=True,
+        description="全平台数据备份策略 JSON（schedule/storage/retention）",
+    )
+
     # 时间字段
     created_at = fields.DatetimeField(
         default=now_utc,

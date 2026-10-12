@@ -101,6 +101,9 @@ special_deps_status_label() {
         pending) echo "待配置数据库" ;;
         partial) echo "部分就绪" ;;
         opt-off) echo "选装未启用" ;;
+        not-executable) echo "不可执行（会 203/EXEC）" ;;
+        crlf) echo "含 CRLF（会 203/EXEC）" ;;
+        no-shebang) echo "缺 shebang" ;;
         n/a|na) echo "不适用" ;;
         old:*) echo "需升级 (${1#old:})" ;;
         *) echo "$1" ;;
@@ -165,6 +168,116 @@ ensure_logs_dir_writable() {
     return 1
 }
 
+# systemd ExecStart= 包装脚本：缺 +x / 含 CRLF / 无 shebang → journal 203/EXEC
+systemd_exec_script_list() {
+    printf '%s\n' \
+        "$SYSTEMD_SERVICE_SCRIPT" \
+        "$FAST_DEPLOY_DIR/linux/prod.sh" \
+        "$SYSTEMD_BACKEND_EXEC_SCRIPT" \
+        "$SYSTEMD_TASKIQ_WORKER_EXEC_SCRIPT" \
+        "$SYSTEMD_TASKIQ_SCHEDULER_EXEC_SCRIPT" \
+        "$SYSTEMD_CADDY_EXEC_SCRIPT" \
+        "$SYSTEMD_WORKBUDDY_MCP_EXEC_SCRIPT"
+}
+
+_file_has_cr() {
+    local f=$1
+    [ -f "$f" ] || return 1
+    LC_ALL=C grep -q $'\r' "$f" 2>/dev/null
+}
+
+# 探测：ok | missing | not-executable | crlf | no-shebang | skipped
+check_systemd_exec_scripts() {
+    if is_windows_gitbash || [ "$(uname -s 2>/dev/null || true)" != "Linux" ]; then
+        echo skipped
+        return 0
+    fi
+    local f first
+    while IFS= read -r f; do
+        [ -n "$f" ] || continue
+        if [ ! -f "$f" ]; then
+            echo missing
+            return 0
+        fi
+        if _file_has_cr "$f"; then
+            echo crlf
+            return 0
+        fi
+        if [ ! -x "$f" ]; then
+            echo not-executable
+            return 0
+        fi
+        IFS= read -r first < "$f" || true
+        first="${first%$'\r'}"
+        case "$first" in
+            '#!'*) ;;
+            *)
+                echo no-shebang
+                return 0
+                ;;
+        esac
+    done < <(systemd_exec_script_list)
+    echo ok
+}
+
+# 修复：去 CRLF、chmod +x、校验 shebang（check 失败时也可手动调用）
+ensure_systemd_exec_scripts_ready() {
+    if is_windows_gitbash || [ "$(uname -s 2>/dev/null || true)" != "Linux" ]; then
+        return 0
+    fi
+    local f first tmp failed=0
+    while IFS= read -r f; do
+        [ -n "$f" ] || continue
+        if [ ! -f "$f" ]; then
+            log_error "缺少 systemd 包装脚本: $f"
+            failed=1
+            continue
+        fi
+        if _file_has_cr "$f"; then
+            log_warn "去除 CRLF（避免 shebang/203/EXEC）: $f"
+            tmp="$(mktemp)"
+            if ! tr -d '\r' < "$f" > "$tmp"; then
+                rm -f "$tmp"
+                log_error "无法去除 CRLF: $f"
+                failed=1
+                continue
+            fi
+            if ! cat "$tmp" > "$f"; then
+                rm -f "$tmp"
+                log_error "无法写回去 CRLF 结果: $f"
+                failed=1
+                continue
+            fi
+            rm -f "$tmp"
+        fi
+        if ! chmod +x "$f"; then
+            log_error "无法 chmod +x: $f（systemd 会报 203/EXEC）"
+            failed=1
+            continue
+        fi
+        IFS= read -r first < "$f" || true
+        first="${first%$'\r'}"
+        case "$first" in
+            '#!'*) ;;
+            *)
+                log_error "缺少 shebang: $f"
+                failed=1
+                ;;
+        esac
+    done < <(systemd_exec_script_list)
+    if [ "$failed" -ne 0 ]; then
+        return 1
+    fi
+    local st
+    st="$(check_systemd_exec_scripts)"
+    if [ "$st" != "ok" ]; then
+        log_error "systemd 包装脚本未就绪: $(special_deps_status_label "$st")"
+        log_error "修复: ./fast-deploy/deploy.sh check 后重试 install-service，或 git pull 含 linux/.gitattributes 的提交"
+        return 1
+    fi
+    return 0
+}
+
 fix_systemd_runtime_permissions() {
     local service_user=$1
     local service_home service_group
@@ -173,11 +286,8 @@ fix_systemd_runtime_permissions() {
     [ -n "$service_home" ] || { log_error "用户不存在: $service_user"; return 1; }
     ensure_logs_dir
     log_info "修复运行时目录归属 (${service_user})..."
-    # git 曾以 100644 入库时 checkout 无 +x，systemd 会 203/EXEC Permission denied
-    chmod +x "$SYSTEMD_SERVICE_SCRIPT" "$FAST_DEPLOY_DIR/linux/prod.sh" \
-        "$SYSTEMD_BACKEND_EXEC_SCRIPT" "$SYSTEMD_TASKIQ_WORKER_EXEC_SCRIPT" \
-        "$SYSTEMD_TASKIQ_SCHEDULER_EXEC_SCRIPT" "$SYSTEMD_CADDY_EXEC_SCRIPT" \
-        "$SYSTEMD_WORKBUDDY_MCP_EXEC_SCRIPT" 2>/dev/null || true
+    # git 曾以 100644 入库 / CRLF checkout 时，systemd 会 203/EXEC
+    ensure_systemd_exec_scripts_ready || return 1
     sudo chown -R "${service_user}:${service_group}" "$LOGS_DIR" || return 1
     if [ -f "$ENV_FILE" ]; then
         sudo chown "${service_user}:${service_group}" "$ENV_FILE" || return 1
@@ -2736,6 +2846,8 @@ start_prod_via_systemd() {
     if ! command -v systemctl >/dev/null 2>&1; then
         return 1
     fi
+    # pull 后可能再次变成 100644 / CRLF，启动前必须修好，否则 203/EXEC
+    ensure_systemd_exec_scripts_ready || return 1
     log_info "通过 systemd 启动生产栈（子进程 OOM 后自动 Restart）..."
     if [ "$(id -u)" -eq 0 ]; then
         systemctl start "$SYSTEMD_UNIT_NAME"
@@ -5361,6 +5473,9 @@ cmd_install_service() {
         exit 1
     fi
 
+    log_info "校验 systemd 包装脚本（+x / 无 CRLF / shebang）..."
+    ensure_systemd_exec_scripts_ready || exit 1
+
     log_info "准备 systemd 运行前提（停止系统 caddy、检查端口权限）..."
     local prereq uv_bin caddy_bin
     prereq="$(prepare_systemd_prerequisites "$service_user")" || exit 1
@@ -5644,6 +5759,26 @@ cmd_check_baseline() {
     fi
     if [ "$need_caddy" -eq 1 ]; then
         st="$(check_caddy)"; print_dep_check_line "Caddy" "$st"; [ "$st" = "ok" ] || failed=1
+    fi
+    # Linux：包装脚本缺 +x / 含 CRLF → journalctl 203/EXEC，须在 install-service 前暴露
+    if ! is_windows_gitbash && [ "$(uname -s 2>/dev/null || true)" = "Linux" ]; then
+        st="$(check_systemd_exec_scripts)"
+        print_dep_check_line "systemd包装脚本" "$st"
+        if [ "$st" != "ok" ]; then
+            failed=1
+            case "$st" in
+                not-executable|crlf)
+                    echo "    修复: ./fast-deploy/deploy.sh install-service"
+                    echo "         或 ./fast-deploy/deploy.sh start（启动前会自动去 CRLF 并 chmod +x）"
+                    ;;
+                missing)
+                    echo "    缺少 fast-deploy/linux/systemd-exec-*.sh，请 git pull"
+                    ;;
+                no-shebang)
+                    echo "    包装脚本首行须为 #!/usr/bin/env bash（勿用 CRLF）"
+                    ;;
+            esac
+        fi
     fi
     return $failed
 }

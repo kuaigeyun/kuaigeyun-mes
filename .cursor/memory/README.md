@@ -50,6 +50,8 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | 导入 limit 2000、物料列表 le、采购订单 Excel | `features/list-api-import-limit.md` |
 | 定时任务、Taskiq、缺少 event、租户隔离 | `features/scheduled-task-tenant-isolation-event.md` |
 | 数据备份、任务堆积、pending 卡住、reclaim | `features/data-backup-stalled-reclaim.md` |
+| 数据备份定时、对象存储落点、保留天数/份数清理 | `features/data-backup-policy-schedule-storage.md` |
+| 应用连接器 RustFS、S3 兼容存储、文件/备份落点 | `features/connector-storage-rustfs.md` |
 | 备份一开始失败、error=`read`、UnsupportedOperation | `features/data-backup-csv-dump-newline.md` |
 | 备份下载 Connection Failed、ERR_CONNECTION_REFUSED | `features/data-backup-download-same-origin.md` |
 | 平台管理员全平台备份、backup_scope=all | `features/data-backup-platform-all-tenants.md` |
@@ -63,7 +65,10 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | 构建推送、要不要编前端、只改后端怎么推、web/H5/工位选哪条 | `principles/code-push-routing.md` + 规则 `build-push-aoci.mdc` |
 | 构建推送前 AOCI、提交前先索引、要不要跑 AOCI、每次 push 是否 maintain | `principles/aoci-git-commit.md` |
 | riveredge-app 组装、mklink、工位/TV/小程序私仓 | `features/riveredge-app-client-junctions.md` |
-| 回显权限、display、reference_resources 单一真源、取消回显 | `features/permission-display-echo.md` |
+| kuaicaiwu receivable ModuleNotFound、compose 空壳、external_master_data_sync | `features/compose-kuaicaiwu-empty-husk.md` |
+| 回显权限、display、reference_resources、预设角色物料回显 | `features/permission-display-echo.md` |
+| 选物料 403、仅回显加载物料列表失败、UniMaterialSelect | `features/uni-material-select-reference-display.md` |
+| 新建销售订单很慢、进页预拉物料 2000 | `features/sales-order-form-material-preload.md` |
 | 角色同步创建职位、职位代码已存在 | `features/role-create-position-reuse-code.md` |
 | SOP 配错物料、工序兜底、QC 分域 | `features/sop-shopfloor-match-domain.md` |
 | 工作台更新说明、platformUpdateLog、版本卡 | `features/platform-update-log.md` |
@@ -102,6 +107,8 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | slug | 标题 | domain | 状态 |
 |------|------|--------|------|
 | `features/permission-display-echo.md` | 权限回显 display 矩阵与鉴权 | rbac | 已交付 |
+| `features/uni-material-select-reference-display.md` | 物料选择器走 reference-display | rbac | 已交付 |
+| `features/sales-order-form-material-preload.md` | 销售订单表单物料按需缓存 | master-data-ui | 已交付 |
 | `features/aoci-mcp-three-repos.md` | AOCI MCP 三仓绑定 | tooling | 有效 |
 | `features/station-wo-queue-shared-filter.md` | 工位工单队列筛选固定/共享同一套 | mes-station | 已交付 |
 | `features/station-shift-handover-summary.md` | 交接班摘要按工位归属与写路径 | mes-station | 已交付 |
@@ -123,6 +130,8 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | `features/list-api-import-limit.md` | 单据导入物料列表分页不超过 2000 | master-data-ui | 已交付 |
 | `features/scheduled-task-tenant-isolation-event.md` | 定时任务执行：租户隔离缺 event | scheduler | 已交付 |
 | `features/data-backup-stalled-reclaim.md` | 数据备份堆积回收 | system | 已交付 |
+| `features/data-backup-policy-schedule-storage.md` | 数据备份定时/存储/清理策略 | system | 已交付 |
+| `features/connector-storage-rustfs.md` | 应用连接器 RustFS 对象存储 | kuaiconnect | 已交付 |
 | `features/data-backup-csv-dump-newline.md` | 数据备份 CSV dump 换行探测 | system | 已交付 |
 | `features/data-backup-download-same-origin.md` | 备份下载走当前页面 origin | system | 已交付 |
 | `features/data-backup-platform-all-tenants.md` | 平台管理员全平台租户备份 | system | 已交付 |
@@ -133,6 +142,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | `features/inspection-plan-quick-type-default.md` | 快速新建质检方案默认锁定类型 | master-data-ui | 已交付 |
 | `features/fast-deploy-scripts.md` | fast-deploy 脚本入口 | deploy | 已交付 |
 | `features/riveredge-app-client-junctions.md` | 主仓 riveredge-app 联接到私仓终端 | deploy | 已交付 |
+| `features/compose-kuaicaiwu-empty-husk.md` | Pro 空壳导致 kuaicaiwu.models 缺失 | deploy | 已交付 |
 | `features/station-settings-api-origin.md` | 工位 API 走服务器设置 | mes-station | 已交付 |
 | `features/station-face-settings-manage.md` | 工位人脸录入与采样管理在设备设置 | mes-station | 已交付 |
 | `features/station-assigned-wo-includes-team.md` | 指派给我含班组成员被指派工单 | mes-station | 已交付 |

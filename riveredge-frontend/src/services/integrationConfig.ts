@@ -244,7 +244,7 @@ const TYPE_CATEGORIES: Record<string, string[]> = {
   IoT: ['rootcloud', 'casicloud', 'alicloud_iot', 'huaweicloud_iot', 'thingsboard', 'jetlinks'],
   WMS: ['flux_wms', 'kejian_wms', 'digiwin_wms', 'openwms'],
   存储: [
-    'alicloud_oss', 'tencent_cos', 'huaweicloud_obs', 'aws_s3', 'minio', 'qiniu_kodo',
+    'alicloud_oss', 'tencent_cos', 'huaweicloud_obs', 'aws_s3', 'minio', 'rustfs', 'qiniu_kodo',
     'nas_webdav', 'nas_smb',
   ],
 };

@@ -700,6 +700,11 @@ class SalesOrderSyncService:
                 order_dict["salesman_id"] = customer.salesman_id
                 order_dict["salesman_name"] = customer.salesman_name
 
+        if not order_dict.get("salesman_id"):
+            order_dict["salesman_id"] = user_id
+            if not order_dict.get("salesman_name"):
+                order_dict["salesman_name"] = operator_name
+
         item_rows, total_qty, total_amt = self._build_priced_item_rows(
             create_data.items,
             material_by_id=material_by_id,
