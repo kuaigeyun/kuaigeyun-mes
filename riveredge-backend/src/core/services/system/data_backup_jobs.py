@@ -1863,14 +1863,17 @@ async def repair_tenant_scoped_file_paths(
         return 0
     source_prefix = f"{int(source_tenant_id)}/"
     target_prefix = f"{int(tenant_id)}/"
+    # SUBSTRING(x FROM $n) 在预处理参数下会走「正则」重载（期望 text）；
+    # 起始位置用字面量整数，与 _append_tenant_scoped_path_rewrites 一致。
+    start_pos = len(source_prefix) + 1
     conn = Tortoise.get_connection("default")
     await conn.execute_query(
-        """
+        f"""
         UPDATE core_files
-        SET file_path = $1 || SUBSTRING(file_path FROM $3)
-        WHERE tenant_id = $2 AND file_path LIKE $4
+        SET file_path = $1 || SUBSTRING(file_path FROM {start_pos})
+        WHERE tenant_id = $2 AND file_path LIKE $3
         """,
-        [target_prefix, int(tenant_id), len(source_prefix) + 1, source_prefix + "%"],
+        [target_prefix, int(tenant_id), source_prefix + "%"],
     )
     logger.info(
         "已执行 core_files.file_path 前缀修正: {} -> {}（tenant_id={}）",
