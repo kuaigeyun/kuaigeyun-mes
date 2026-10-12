@@ -15,6 +15,7 @@ IM_MESSAGE = "im.message"
 ANDON_CREATED = "andon.created"
 ANDON_UPDATED = "andon.updated"
 ANDON_RESOLVED = "andon.resolved"
+KUAIIOT_DEVICE_UPDATED = "kuaiiot.device.updated"
 
 
 def resolve_message_event(variables: dict | None) -> str:

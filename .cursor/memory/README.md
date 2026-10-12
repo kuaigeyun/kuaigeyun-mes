@@ -71,6 +71,9 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | 新建销售订单很慢、进页预拉物料 2000 | `features/sales-order-form-material-preload.md` |
 | 工作台待办、dashboard todos、无权限仍见待办 | `features/dashboard-todo-rbac-filter.md` |
 | 开源无专业包崩溃、kuaicaiwu ImportError、infra_license_keys、业务蓝图 graph | `features/oss-pro-decouple-startup.md` |
+| 设备状态实时、MQTT 无感、external_device_id 绑定、台账 status 联动 | `features/kuaiiot-device-status-realtime.md` |
+| 指令设备 ID、command_device_id、清零报文 device_id | `features/iot-line-clear-mqtt.md` + `kuaiiot-device-status-realtime.md` |
+| 产线清零、zscl 清 0、发送型 MQTT、command_code t0/c0/z0、报工后自动清零 | `features/iot-line-clear-mqtt.md` |
 | 角色同步创建职位、职位代码已存在 | `features/role-create-position-reuse-code.md` |
 | SOP 配错物料、工序兜底、QC 分域 | `features/sop-shopfloor-match-domain.md` |
 | 工作台更新说明、platformUpdateLog、版本卡 | `features/platform-update-log.md` |
@@ -141,6 +144,8 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | `features/data-backup-platform-all-tenants.md` | 平台管理员全平台租户备份 | system | 已交付 |
 | `features/data-backup-list-no-zip-extract.md` | 备份列表禁止解压 dump | system | 已交付 |
 | `features/kuaiiot-phased-hardening.md` | 快数采分阶段硬化 | kuaiiot | 进行中 |
+| `features/kuaiiot-device-status-realtime.md` | 设备连接/台账状态 MQTT 无感刷新 | kuaiiot | 已交付 |
+| `features/iot-line-clear-mqtt.md` | 产线 MQTT 清零（接入/发送 + 手动/自动） | kuaiiot | 已交付 |
 | `features/code-rule-page-config-load.md` | 编码规则页面配置加载 | code-rule | 已交付 |
 | `features/equipment-factory-binding-quick-add.md` | 设备台账工厂绑定快速新增 | master-data-ui | 已交付 |
 | `features/inspection-plan-quick-type-default.md` | 快速新建质检方案默认锁定类型 | master-data-ui | 已交付 |

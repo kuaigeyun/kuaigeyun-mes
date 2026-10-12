@@ -75,6 +75,47 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
       'pages.dashboard.updateLog.entries.data-backup-policy-test-now-r01.description',
   },
   {
+    id: 'iot-view-data-commands-table-scroll-r01',
+    date: '2026-10-12',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.iot-view-data-commands-table-scroll-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.iot-view-data-commands-table-scroll-r01.description',
+  },
+  {
+    id: 'iot-auto-clear-use-device-connection-r01',
+    date: '2026-10-12',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.iot-auto-clear-use-device-connection-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.iot-auto-clear-use-device-connection-r01.description',
+  },
+  {
+    id: 'iot-line-clear-command-list-empty-r01',
+    date: '2026-10-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.iot-line-clear-command-list-empty-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.iot-line-clear-command-list-empty-r01.description',
+  },
+  {
+    id: 'iot-line-clear-mqtt-r01',
+    date: '2026-10-11',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.iot-line-clear-mqtt-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.iot-line-clear-mqtt-r01.description',
+  },
+  {
+    id: 'kuaiiot-device-status-realtime-r01',
+    date: '2026-10-11',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiiot-device-status-realtime-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiiot-device-status-realtime-r01.description',
+  },
+  {
     id: 'sales-order-default-salesman-badge-r01',
     date: '2026-10-12',
     type: 'improvement',

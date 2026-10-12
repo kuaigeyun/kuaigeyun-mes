@@ -7,7 +7,11 @@ from typing import Any
 import socketio
 from loguru import logger
 
-from core.services.realtime.channels import personal_channel, tenant_andon_channel
+from core.services.realtime.channels import (
+    personal_channel,
+    tenant_andon_channel,
+    tenant_kuaiiot_channel,
+)
 from infra.config.infra_config import infra_settings
 from infra.domain.security.security import get_token_payload
 
@@ -48,15 +52,18 @@ def _register_handlers(sio: socketio.AsyncServer) -> None:
             return False
         personal_room = personal_channel(tenant_id=tenant_id, user_id=user_id)
         andon_room = tenant_andon_channel(tenant_id=tenant_id)
+        kuaiiot_room = tenant_kuaiiot_channel(tenant_id=tenant_id)
         await sio.enter_room(sid, personal_room)
         await sio.enter_room(sid, andon_room)
+        await sio.enter_room(sid, kuaiiot_room)
         _sid_context[sid] = {
             "tenant_id": tenant_id,
             "user_id": user_id,
             "room": personal_room,
             "andon_room": andon_room,
+            "kuaiiot_room": kuaiiot_room,
         }
-        logger.debug("Socket.IO 已连接 sid={} room={}", sid, room)
+        logger.debug("Socket.IO 已连接 sid={} room={}", sid, personal_room)
         return True
 
     @sio.event

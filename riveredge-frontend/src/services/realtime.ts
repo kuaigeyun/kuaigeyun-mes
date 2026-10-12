@@ -22,6 +22,21 @@ export interface RealtimeEnvelope {
   ts?: string;
 }
 
+/** 布局 Socket 收到 kuaiiot.device.* 后转发到页面的浏览器事件名 */
+export const KUAIIOT_DEVICE_REALTIME_EVENT = 'riveredge:kuaiiot-device-realtime';
+
+export type KuaiiotDeviceRealtimePayload = {
+  device_uuid?: string;
+  device_id?: number;
+  code?: string;
+  external_device_id?: string | null;
+  is_online?: boolean;
+  last_seen_at?: string | null;
+  equipment_uuid?: string | null;
+  equipment_status?: string | null;
+  synced_to_mes?: boolean;
+};
+
 export async function getRealtimeConfig(): Promise<RealtimeConfig> {
   return apiRequest<RealtimeConfig>('/core/realtime/config', { method: 'GET' });
 }
