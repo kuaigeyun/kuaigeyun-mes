@@ -492,45 +492,57 @@ async def maybe_trigger_scheduled_backup(
     last = _parse_iso_dt(policy.get("last_scheduled_at"))
     if _same_site_minute(last, now):
         return False
-    if await _has_active_backup(backup_scope=backup_scope, tenant_id=tenant_id):
-        logger.info(
-            "跳过定时备份（已有 pending/running）scope={} tenant_id={}",
-            backup_scope,
-            tenant_id,
+    from core.services.system.data_backup_jobs import (
+        release_backup_lock,
+        try_acquire_backup_lock,
+    )
+
+    # ponytail: 全局锁足够覆盖定时创建窗口；只有吞吐量成为问题时再拆分到租户锁。
+    lock_conn = await try_acquire_backup_lock()
+    if lock_conn is None:
+        return False
+    try:
+        if await _has_active_backup(backup_scope=backup_scope, tenant_id=tenant_id):
+            logger.info(
+                "跳过定时备份（已有 pending/running）scope={} tenant_id={}",
+                backup_scope,
+                tenant_id,
+            )
+            await _mark_policy_stamp(
+                tenant_id=tenant_id, is_platform=is_platform, field="last_scheduled_at", when=now
+            )
+            return False
+
+        wall = _site_wall_clock(now)
+        include_files = bool(policy.get("include_files", True))
+        backup_type = await DataBackupService.resolve_auto_backup_type(
+            tenant_id=tenant_id,
+            backup_scope=backup_scope,
         )
+        type_label = "全量" if backup_type == "full" else "增量"
+        name = f"定时{type_label}备份_{wall.strftime('%Y%m%d_%H%M')}"
+        data = DataBackupCreate(
+            name=name,
+            backup_type=backup_type,
+            backup_scope=backup_scope,
+            include_files=include_files,
+            trigger_source="scheduled",
+        )
+        backup = await DataBackupService.create_backup_task(tenant_id, data)
+        if getattr(backup, "status", None) == "failed":
+            logger.error(
+                "定时备份投递失败，不推进 last_scheduled_at: scope={} tenant_id={} err={}",
+                backup_scope,
+                tenant_id,
+                getattr(backup, "error_message", None),
+            )
+            return False
         await _mark_policy_stamp(
             tenant_id=tenant_id, is_platform=is_platform, field="last_scheduled_at", when=now
         )
-        return False
-
-    wall = _site_wall_clock(now)
-    include_files = bool(policy.get("include_files", True))
-    backup_type = await DataBackupService.resolve_auto_backup_type(
-        tenant_id=tenant_id,
-        backup_scope=backup_scope,
-    )
-    type_label = "全量" if backup_type == "full" else "增量"
-    name = f"定时{type_label}备份_{wall.strftime('%Y%m%d_%H%M')}"
-    data = DataBackupCreate(
-        name=name,
-        backup_type=backup_type,
-        backup_scope=backup_scope,
-        include_files=include_files,
-        trigger_source="scheduled",
-    )
-    backup = await DataBackupService.create_backup_task(tenant_id, data)
-    if getattr(backup, "status", None) == "failed":
-        logger.error(
-            "定时备份投递失败，不推进 last_scheduled_at: scope={} tenant_id={} err={}",
-            backup_scope,
-            tenant_id,
-            getattr(backup, "error_message", None),
-        )
-        return False
-    await _mark_policy_stamp(
-        tenant_id=tenant_id, is_platform=is_platform, field="last_scheduled_at", when=now
-    )
-    return True
+        return True
+    finally:
+        await release_backup_lock(lock_conn)
 
 
 async def maybe_run_retention(

@@ -232,6 +232,41 @@ async def is_backup_advisory_lock_held() -> Optional[bool]:
         return None
 
 
+async def try_acquire_backup_lock():
+    """用独立连接获取 session 级备份锁，成功返回连接，失败返回 None。"""
+    conn = await _asyncpg_connect()
+    try:
+        locked = await conn.fetchval(
+            "SELECT pg_try_advisory_lock($1)",
+            BACKUP_ADVISORY_LOCK_KEY,
+        )
+        if not locked:
+            await conn.close()
+            return None
+        return conn
+    except Exception:
+        await conn.close()
+        raise
+
+
+async def release_backup_lock(lock_conn) -> None:
+    if lock_conn is None:
+        return
+    try:
+        try:
+            await lock_conn.execute(
+                "SELECT pg_advisory_unlock($1)",
+                BACKUP_ADVISORY_LOCK_KEY,
+            )
+        except Exception as e:
+            logger.warning("释放备份 advisory lock 失败: {}", e)
+    finally:
+        try:
+            await lock_conn.close()
+        except Exception as e:
+            logger.warning("关闭备份 lock 连接失败: {}", e)
+
+
 async def _copy_query_to_file(conn, select_sql: str, file_obj) -> int:
     """
     用 asyncpg COPY 流式导出 CSV（含表头）到已打开的二进制文件。

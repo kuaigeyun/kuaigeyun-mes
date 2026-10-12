@@ -23,9 +23,9 @@ from core.services.system.backup_storage import (
     resolve_backup_file_path,
 )
 from core.services.system.data_backup_jobs import (
-    BACKUP_ADVISORY_LOCK_KEY,
     BackupProgressReporter,
     is_backup_advisory_lock_held,
+    release_backup_lock,
     read_backup_metadata,
     resolve_backup_scope_for_restore,
     is_full_logical_csv_dump,
@@ -38,6 +38,7 @@ from core.services.system.data_backup_jobs import (
     run_backup_dump_and_zip,
     run_pg_restore,
     run_tenant_id_replacement,
+    try_acquire_backup_lock,
 )
 from core.tasks.dispatcher import TaskContext, TaskStep, register_event_handler
 from core.utils.timezone_utils import resolve_business_datetime
@@ -46,44 +47,8 @@ from core.utils.timezone_utils import resolve_business_datetime
 _BACKUP_STALE_AFTER = timedelta(hours=12)
 _LOCK_RETRY_SEC = 20
 _LOCK_WAIT_MAX = timedelta(hours=1)
-
-
-async def _try_acquire_backup_lock():
-    """
-    用独立 asyncpg 连接获取 session 级 advisory lock。
-    成功返回连接（须在 finally 中 unlock+close）；失败返回 None。
-    """
-    from core.services.system.data_backup_jobs import _asyncpg_connect
-
-    conn = await _asyncpg_connect()
-    try:
-        locked = await conn.fetchval(
-            "SELECT pg_try_advisory_lock($1)",
-            BACKUP_ADVISORY_LOCK_KEY,
-        )
-        if not locked:
-            await conn.close()
-            return None
-        return conn
-    except Exception:
-        await conn.close()
-        raise
-
-
-async def _release_backup_lock(lock_conn) -> None:
-    if lock_conn is None:
-        return
-    try:
-        await lock_conn.execute(
-            "SELECT pg_advisory_unlock($1)",
-            BACKUP_ADVISORY_LOCK_KEY,
-        )
-    except Exception as e:
-        logger.warning("释放备份 advisory lock 失败: {}", e)
-    try:
-        await lock_conn.close()
-    except Exception as e:
-        logger.warning("关闭备份 lock 连接失败: {}", e)
+_try_acquire_backup_lock = try_acquire_backup_lock
+_release_backup_lock = release_backup_lock
 
 
 async def _mark_restore_status(

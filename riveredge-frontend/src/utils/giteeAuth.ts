@@ -24,7 +24,8 @@ export function decodeGiteeOAuthState(
     return null;
   }
   try {
-    const padded = state + '='.repeat((4 - (state.length % 4)) % 4);
+    const body = state.split('.')[0];
+    const padded = body + '='.repeat((4 - (body.length % 4)) % 4);
     const raw = atob(padded.replace(/-/g, '+').replace(/_/g, '/'));
     const payload = JSON.parse(raw) as { t?: unknown; r?: unknown; u?: unknown };
     const tenantId = Number(payload.t);

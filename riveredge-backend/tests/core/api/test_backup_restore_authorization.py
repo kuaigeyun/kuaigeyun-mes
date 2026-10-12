@@ -39,6 +39,22 @@ async def test_regular_user_cannot_upload_or_restore(monkeypatch, operation):
 
 
 @pytest.mark.asyncio
+async def test_regular_user_cannot_list_backup_storage_connections(monkeypatch):
+    user = SimpleNamespace(
+        tenant_id=1,
+        is_infra_admin_user=lambda: False,
+        is_organization_admin=lambda: False,
+    )
+    monkeypatch.setattr(api, "list_storage_connections", AsyncMock())
+
+    with pytest.raises(HTTPException) as exc:
+        await api.get_backup_storage_connections(user, 1)
+
+    assert exc.value.status_code == 403
+    api.list_storage_connections.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("scope", ["all", "table"])
 async def test_upload_service_rejects_global_scope_by_default(monkeypatch, tmp_path, scope):
     monkeypatch.setattr(service, "resolve_data_backup_dir", lambda: str(tmp_path))

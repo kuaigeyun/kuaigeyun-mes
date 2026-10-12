@@ -482,18 +482,15 @@ class DataBackupService:
 
         from core.services.system.data_backup_policy import delete_remote_backup_object
 
-        try:
-            await delete_remote_backup_object(backup)
-        except Exception as e:
-            logger.error("删除远程备份对象失败 uuid={}: {}", uuid, e)
+        await delete_remote_backup_object(backup)
 
         resolved = resolve_backup_file_path(backup.file_path)
         if resolved and os.path.exists(resolved):
             try:
                 os.remove(resolved)
-                logger.info(f"已删除备份文件: {resolved}")
             except Exception as e:
-                logger.error(f"删除物理文件失败: {e}")
+                logger.error("删除本地备份文件失败 uuid={}: {}", uuid, e)
+                raise
 
         await backup.delete()
 

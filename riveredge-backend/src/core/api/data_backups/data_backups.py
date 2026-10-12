@@ -321,7 +321,7 @@ async def get_backup_storage_connections(
     tenant_id: int = Depends(get_current_tenant),
 ) -> Any:
     """列出当前组织已启用的 COS/MinIO/RustFS 应用连接。"""
-    _ = current_user
+    _require_backup_administrator(current_user)
     items = await list_storage_connections(int(tenant_id))
     return {"items": items}
 

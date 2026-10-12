@@ -1,5 +1,6 @@
 """数据备份策略：normalize / 定时防重 / 保留选集。"""
 
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -57,6 +58,14 @@ async def test_maybe_trigger_skips_when_active_running(monkeypatch):
     monkeypatch.setattr(policy_mod, "match_cron", lambda *_a, **_k: True)
     monkeypatch.setattr(policy_mod, "_same_site_minute", lambda *_a, **_k: False)
     monkeypatch.setattr(policy_mod, "_has_active_backup", AsyncMock(return_value=True))
+    monkeypatch.setattr(
+        "core.services.system.data_backup_jobs.try_acquire_backup_lock",
+        AsyncMock(return_value=object()),
+    )
+    monkeypatch.setattr(
+        "core.services.system.data_backup_jobs.release_backup_lock",
+        AsyncMock(),
+    )
     stamp = AsyncMock()
     monkeypatch.setattr(policy_mod, "_mark_policy_stamp", stamp)
     create = AsyncMock()
@@ -75,6 +84,76 @@ async def test_maybe_trigger_skips_when_active_running(monkeypatch):
     assert triggered is False
     create.assert_not_awaited()
     stamp.assert_awaited()
+
+
+@pytest.mark.asyncio
+async def test_maybe_trigger_scheduled_backup_serializes_workers(monkeypatch):
+    policy = normalize_data_backup_policy(
+        {"schedule_enabled": True, "cron": "* * * * *"}
+    )
+    now = resolve_business_datetime()
+    monkeypatch.setattr(policy_mod, "match_cron", lambda *_a, **_k: True)
+    monkeypatch.setattr(policy_mod, "_same_site_minute", lambda *_a, **_k: False)
+    monkeypatch.setattr(policy_mod, "_has_active_backup", AsyncMock(return_value=False))
+    monkeypatch.setattr(
+        "core.services.system.data_backup_service.DataBackupService.resolve_auto_backup_type",
+        AsyncMock(return_value="full"),
+    )
+
+    held = asyncio.Lock()
+
+    async def acquire():
+        if held.locked():
+            return None
+        await held.acquire()
+        return held
+
+    async def release(lock):
+        lock.release()
+
+    monkeypatch.setattr(
+        "core.services.system.data_backup_jobs.try_acquire_backup_lock", acquire
+    )
+    monkeypatch.setattr(
+        "core.services.system.data_backup_jobs.release_backup_lock", release
+    )
+    create_started = asyncio.Event()
+    allow_create = asyncio.Event()
+
+    async def create(*_args, **_kwargs):
+        create_started.set()
+        await allow_create.wait()
+        return SimpleNamespace(status="pending")
+
+    create_mock = AsyncMock(side_effect=create)
+    monkeypatch.setattr(
+        "core.services.system.data_backup_service.DataBackupService.create_backup_task",
+        create_mock,
+    )
+    monkeypatch.setattr(policy_mod, "_mark_policy_stamp", AsyncMock())
+
+    first = asyncio.create_task(
+        maybe_trigger_scheduled_backup(
+            policy,
+            backup_scope="tenant",
+            tenant_id=1,
+            is_platform=False,
+            now=now,
+        )
+    )
+    await create_started.wait()
+    second = await maybe_trigger_scheduled_backup(
+        policy,
+        backup_scope="tenant",
+        tenant_id=1,
+        is_platform=False,
+        now=now,
+    )
+    allow_create.set()
+
+    assert await first is True
+    assert second is False
+    create_mock.assert_awaited_once()
 
 
 @pytest.mark.asyncio

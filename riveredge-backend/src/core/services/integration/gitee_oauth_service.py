@@ -15,6 +15,7 @@ from fastapi import HTTPException, status
 from loguru import logger
 
 from infra.constants.official_provenance import OFFICIAL_GITEE_REPO_SLUG
+from infra.config.infra_config import infra_settings
 from infra.infrastructure.http.client import get_http_client
 from infra.models.platform_settings import PlatformSettings
 from infra.models.user import User
@@ -29,6 +30,7 @@ GITEE_STARRED_LIST_API = "https://gitee.com/api/v5/user/starred"
 # 登录只需 user_info。勿再带 projects——部分生产应用会拒收并报「请求范围无效」；
 # Star 已改为官网引导，不再依赖 Star API 授权。
 GITEE_OAUTH_SCOPE = "user_info"
+GITEE_OAUTH_STATE_TTL_SECONDS = 600
 
 _GITEE_ID_KEYS = ("gitee_id", "gitee_user_id")
 _GITEE_NOREPLY_SUFFIX = "@user.noreply.gitee.com"
@@ -65,19 +67,37 @@ def encode_gitee_oauth_state(
         "u": redirect_uri.strip(),
         "r": (redirect or "").strip(),
         "n": secrets.token_urlsafe(8),
+        "exp": int(time.time()) + GITEE_OAUTH_STATE_TTL_SECONDS,
     }
     raw = json.dumps(payload, separators=(",", ":")).encode("utf-8")
-    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+    body = base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+    signature = hmac.new(
+        infra_settings.JWT_SECRET_KEY.encode("utf-8"),
+        body.encode("ascii"),
+        hashlib.sha256,
+    ).hexdigest()[:32]
+    return f"{body}.{signature}"
 
 
 def decode_gitee_oauth_state(state: str) -> dict[str, Any]:
     if not state or not isinstance(state, str):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OAuth state 无效")
-    padded = state + "=" * (-len(state) % 4)
+    try:
+        body, signature = state.rsplit(".", 1)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OAuth state 无效") from exc
+    expect = hmac.new(
+        infra_settings.JWT_SECRET_KEY.encode("utf-8"),
+        body.encode("ascii"),
+        hashlib.sha256,
+    ).hexdigest()[:32]
+    if not hmac.compare_digest(expect, signature):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OAuth state 无效")
+    padded = body + "=" * (-len(body) % 4)
     try:
         raw = base64.urlsafe_b64decode(padded.encode("ascii"))
         payload = json.loads(raw.decode("utf-8"))
-    except (ValueError, json.JSONDecodeError) as exc:
+    except (ValueError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OAuth state 无效") from exc
     if not isinstance(payload, dict):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OAuth state 无效")
@@ -89,6 +109,12 @@ def decode_gitee_oauth_state(state: str) -> dict[str, Any]:
     if not isinstance(redirect_uri, str) or not redirect_uri.strip():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OAuth state 缺少回调地址")
     redirect = payload.get("r")
+    try:
+        expires_at = int(payload.get("exp"))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OAuth state 已失效") from exc
+    if expires_at < int(time.time()):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OAuth state 已失效")
     return {
         "tenant_id": tenant_id_int,
         "redirect_uri": redirect_uri.strip(),
