@@ -19,7 +19,7 @@ import {
   type ProDescriptionsItemProps,
 } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../components/safe-pro-form-select';
-import { App, Card, Tag, Space, Modal, Descriptions, Popconfirm, Button, Badge, Typography, Alert, Progress, Tooltip, theme, Upload, InputNumber, Form } from 'antd';
+import { App, Card, Tag, Space, Modal, Descriptions, Popconfirm, Button, Badge, Typography, Alert, Progress, Tooltip, theme, Upload, InputNumber, Form, Select } from 'antd';
 import { getTenantList, TenantStatus } from '../../../services/tenant';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { renderSystemStatusTag, renderSystemTypeMarker } from '../utils/systemListPresentation';
@@ -114,6 +114,7 @@ const DataBackupsPage: React.FC = () => {
   const detailRetryUuidRef = useRef<string | null>(null);
   const [restoreModalVisible, setRestoreModalVisible] = useState(false);
   const [restoreBackupRecord, setRestoreBackupRecord] = useState<DataBackup | null>(null);
+  const [restoreTenantOptions, setRestoreTenantOptions] = useState<{ value: number; label: string }[]>([]);
   const [form] = ProForm.useForm();
   const [restoreForm] = Form.useForm();
   const [allBackups, setAllBackups] = useState<DataBackup[]>([]); // 用于统计
@@ -280,6 +281,30 @@ const DataBackupsPage: React.FC = () => {
   /**
    * 恢复备份（租户级备份需确认导出租户编号）
    */
+  const loadRestoreTenantOptions = React.useCallback(async (keyword?: string) => {
+    try {
+      const resp = await getTenantList(
+        {
+          page: 1,
+          page_size: 100,
+          status: TenantStatus.ACTIVE,
+          keyword: keyword || undefined,
+          sort: 'id',
+          order: 'asc',
+        },
+        true,
+      );
+      setRestoreTenantOptions(
+        (resp.items ?? []).map((tenant) => ({
+          value: Number(tenant.id),
+          label: `${tenant.name} (#${tenant.id})`,
+        })),
+      );
+    } catch {
+      setRestoreTenantOptions([]);
+    }
+  }, []);
+
   const handleRestore = async (record: DataBackup) => {
     try {
       const detail = await getBackupDetail(record.uuid);
@@ -289,7 +314,15 @@ const DataBackupsPage: React.FC = () => {
       }
       setRestoreBackupRecord(detail);
       const inferredSource = detail.source_tenant_id ?? detail.tenant_id ?? undefined;
-      restoreForm.setFieldsValue({ source_tenant_id: inferredSource });
+      const inferredTarget =
+        currentUser?.tenant_id ?? getTenantId() ?? detail.tenant_id ?? undefined;
+      restoreForm.setFieldsValue({
+        source_tenant_id: inferredSource,
+        target_tenant_id: inferredTarget != null ? Number(inferredTarget) : undefined,
+      });
+      if (isInfraAdmin && detail.backup_scope === 'tenant') {
+        void loadRestoreTenantOptions();
+      }
       setRestoreModalVisible(true);
     } catch (error: any) {
       messageApi.error(error.message || t('pages.system.dataBackups.getDetailFailed'));
@@ -301,9 +334,17 @@ const DataBackupsPage: React.FC = () => {
     const values = await restoreForm.validateFields().catch(() => null);
     if (!values) return;
     const sourceTenantId = values.source_tenant_id != null ? Number(values.source_tenant_id) : undefined;
+    const targetTenantId =
+      values.target_tenant_id != null
+        ? Number(values.target_tenant_id)
+        : currentUser?.tenant_id != null
+          ? Number(currentUser.tenant_id)
+          : getTenantId() != null
+            ? Number(getTenantId())
+            : undefined;
     const restoringUuid = restoreBackupRecord.uuid;
     try {
-      const result = await restoreBackup(restoringUuid, true, true, sourceTenantId);
+      const result = await restoreBackup(restoringUuid, true, true, sourceTenantId, targetTenantId);
       if (result.success) {
         messageApi.info(result.message || t('pages.system.dataBackups.restoreSuccess'));
         setRestoreModalVisible(false);
@@ -863,7 +904,9 @@ const DataBackupsPage: React.FC = () => {
     },
   ];
 
-  const restoreTargetTenantId = currentUser?.tenant_id ?? getTenantId();
+  const restoreTargetTenantIdWatched = Form.useWatch('target_tenant_id', restoreForm);
+  const restoreTargetTenantId =
+    restoreTargetTenantIdWatched ?? currentUser?.tenant_id ?? getTenantId();
   const restoreSourceTenantId = Form.useWatch('source_tenant_id', restoreForm);
   const isTenantBackupRestore = restoreBackupRecord?.backup_scope === 'tenant';
   const showMigrationHint =
@@ -1210,15 +1253,42 @@ const DataBackupsPage: React.FC = () => {
               description={t('pages.system.dataBackups.restorePlatformSafeHint')}
             />
 
-            <Descriptions bordered size="small" column={1} style={{ marginBottom: 16 }}>
-              <Descriptions.Item label={t('pages.system.dataBackups.restoreTargetTenantLabel')}>
-                {t('pages.system.dataBackups.restoreTargetTenantDesc', {
-                  id: restoreTargetTenantId ?? '-',
-                })}
-              </Descriptions.Item>
-            </Descriptions>
+            {!isInfraAdmin && (
+              <Descriptions bordered size="small" column={1} style={{ marginBottom: 16 }}>
+                <Descriptions.Item label={t('pages.system.dataBackups.restoreTargetTenantLabel')}>
+                  {t('pages.system.dataBackups.restoreTargetTenantDesc', {
+                    id: restoreTargetTenantId ?? '-',
+                  })}
+                </Descriptions.Item>
+              </Descriptions>
+            )}
 
             <Form form={restoreForm} layout="vertical">
+              {isInfraAdmin ? (
+                <Form.Item
+                  name="target_tenant_id"
+                  label={t('pages.system.dataBackups.labelTargetTenant')}
+                  extra={t('pages.system.dataBackups.restoreTargetTenantExtra')}
+                  rules={[
+                    {
+                      required: true,
+                      message: t('pages.system.dataBackups.restoreTargetTenantRequired'),
+                    },
+                  ]}
+                >
+                  <Select
+                    showSearch
+                    optionFilterProp="label"
+                    allowClear
+                    placeholder={t('pages.system.dataBackups.targetTenantPlaceholder')}
+                    options={restoreTenantOptions}
+                    onSearch={(keyword) => {
+                      void loadRestoreTenantOptions(keyword);
+                    }}
+                    style={{ width: '100%' }}
+                  />
+                </Form.Item>
+              ) : null}
               <Form.Item
                 name="source_tenant_id"
                 label={t('pages.system.dataBackups.restoreSourceTenantLabel')}

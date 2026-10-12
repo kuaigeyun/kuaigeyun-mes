@@ -396,6 +396,7 @@ class RestoreRequest(BaseModel):
     confirm: bool
     create_pre_restore_backup: bool = True  # 恢复前自动创建备份，便于误覆盖时撤回
     source_tenant_id: Optional[int] = None  # 备份中的租户ID（用于替换）；不填则从备份元数据或记录推断
+    target_tenant_id: Optional[int] = None  # 恢复写入的目标组织；平台账号未绑定组织时必填
 
 
 class RestoreBackupResponse(BaseModel):
@@ -420,13 +421,40 @@ async def restore_backup(
     if not data.confirm:
         raise HTTPException(status_code=400, detail="确认恢复标记必须为 true")
 
+    is_infra = _is_platform_backup_admin(current_user)
+    effective_target: Optional[int] = None
+    if data.target_tenant_id is not None:
+        effective_target = int(data.target_tenant_id)
+    elif current_user.tenant_id is not None:
+        effective_target = int(current_user.tenant_id)
+
+    if effective_target is not None:
+        from infra.models.tenant import Tenant
+
+        target = await Tenant.filter(id=int(effective_target)).first()
+        if target is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"目标组织不存在：{effective_target}",
+            )
+        if (
+            not is_infra
+            and current_user.tenant_id is not None
+            and int(effective_target) != int(current_user.tenant_id)
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="无权恢复到其他组织",
+            )
+
     try:
         success = await DataBackupService.restore_backup(
             current_user.tenant_id,
             uuid,
             create_pre_restore_backup=data.create_pre_restore_backup,
             source_tenant_id=data.source_tenant_id,
-            allow_global_restore=_is_platform_backup_admin(current_user),
+            target_tenant_id=effective_target,
+            allow_global_restore=is_infra,
         )
         if success:
             return RestoreBackupResponse(

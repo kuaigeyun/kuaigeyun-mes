@@ -407,6 +407,7 @@ class DataBackupService:
         uuid: str,
         create_pre_restore_backup: bool = True,
         source_tenant_id: Optional[int] = None,
+        target_tenant_id: Optional[int] = None,
         *,
         allow_global_restore: bool = False,
     ) -> bool:
@@ -415,6 +416,7 @@ class DataBackupService:
 
         若 create_pre_restore_backup=True，恢复前会自动创建当前状态的备份。
         source_tenant_id: 备份中的租户ID，用于恢复时替换；不填则从备份记录推断；若与目标租户不同则自动替换。
+        target_tenant_id: 恢复写入的目标组织；未传时回退到调用方 tenant_id（平台未绑定组织须显式传入）。
         """
         backup = await DataBackupService.get_backup_by_uuid(
             tenant_id, uuid, is_infra_admin=allow_global_restore
@@ -438,10 +440,15 @@ class DataBackupService:
             raise ValueError("无效的备份范围")
         if backup_scope != "tenant" and not allow_global_restore:
             raise PermissionError("仅平台管理员可恢复全局范围备份")
+
+        effective_target = target_tenant_id if target_tenant_id is not None else tenant_id
+        if backup_scope == "tenant" and effective_target is None:
+            raise ValueError("租户级恢复请指定目标组织（target_tenant_id）")
+
         meta_src = metadata.get("source_tenant_id")
         inferred = infer_source_tenant_id_from_zip(resolved_path)
         src = resolve_restore_source_tenant_id(
-            target_tenant_id=tenant_id,
+            target_tenant_id=int(effective_target) if effective_target is not None else None,
             user_source=source_tenant_id,
             metadata_source=int(meta_src) if meta_src is not None else None,
             inferred_source=inferred,
@@ -459,7 +466,7 @@ class DataBackupService:
                     name="database/restore.requested",
                     data={
                         "backup_uuid": str(backup.uuid),
-                        "target_tenant_id": tenant_id,
+                        "target_tenant_id": effective_target,
                         "source_tenant_id": src,
                         "file_path": resolved_path,
                         "create_pre_restore_backup": create_pre_restore_backup,

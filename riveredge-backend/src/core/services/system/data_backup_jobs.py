@@ -1024,7 +1024,7 @@ def infer_source_tenant_id_from_zip(zip_path: str) -> Optional[int]:
 
 def resolve_restore_source_tenant_id(
     *,
-    target_tenant_id: int,
+    target_tenant_id: Optional[int] = None,
     user_source: Optional[int] = None,
     metadata_source: Optional[int] = None,
     inferred_source: Optional[int] = None,
@@ -1053,6 +1053,9 @@ def resolve_restore_source_tenant_id(
                 inferred_source,
             )
         effective = inferred_source
+
+    if effective is None:
+        raise ValueError("无法确定备份中的源租户 ID，请填写 source_tenant_id")
 
     return int(effective)
 

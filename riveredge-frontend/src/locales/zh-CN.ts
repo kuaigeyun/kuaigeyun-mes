@@ -27144,6 +27144,8 @@ export default {
   'pages.system.dataBackups.restoreTenantMappingTitle': '租户数据恢复说明',
   'pages.system.dataBackups.restoreTargetTenantLabel': '恢复到',
   'pages.system.dataBackups.restoreTargetTenantDesc': '当前登录的组织（租户编号 {{id}}）',
+  'pages.system.dataBackups.restoreTargetTenantExtra': '平台账号未绑定组织时须选择要写入的目标组织；跨机恢复请选本机目标组织。',
+  'pages.system.dataBackups.restoreTargetTenantRequired': '请选择恢复到的目标组织',
   'pages.system.dataBackups.restoreSourceTenantLabel': '这份备份是在哪个租户下导出的？',
   'pages.system.dataBackups.restoreSourceTenantExtra': '系统已从备份文件自动预填，请核对。若从其他系统迁入，填写旧系统导出时的租户编号即可（只填数字，不需要输入箭头）。',
   'pages.system.dataBackups.restoreSourceTenantRequired': '请填写备份导出时的租户编号',
@@ -30814,6 +30816,10 @@ export default {
     '采购申请与询价单支持回显权限',
   'pages.dashboard.updateLog.entries.purchase-requisition-inquiry-display-r01.description':
     '将采购申请、询价单登记为可引用资源，角色矩阵出现「回显」勾选，供下游取单/关联时按回显权限加载。',
+  'pages.dashboard.updateLog.entries.data-backup-restore-target-tenant-r01.title':
+    '平台恢复租户备份须指定目标组织',
+  'pages.dashboard.updateLog.entries.data-backup-restore-target-tenant-r01.description':
+    '平台管理员恢复组织级备份时可选择写入的目标组织，并随请求传 target_tenant_id，避免未绑定组织时报「缺少目标 tenant_id」。',
   'pages.dashboard.updateLog.entries.reference-display-single-source-r01.title':
     '引用回显统一由登记资源控制',
   'pages.dashboard.updateLog.entries.reference-display-single-source-r01.description':
