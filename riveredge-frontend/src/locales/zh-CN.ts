@@ -38149,6 +38149,10 @@ export default {
     '修复采购申请审核误报权限不足',
   'pages.dashboard.updateLog.entries.purchase-requisition-uni-audit-resource-fix-r01.description':
     'manifest.audit 中采购申请 resource 与模块权限 kuaizhizao:purchase-requisition 对齐，uni-audit 不再校验错误的 purchase-request 前缀导致 403。',
+  'pages.dashboard.updateLog.entries.kuaioa-route-permission-import-fix.title':
+    '修复轻办公接口整包未注册',
+  'pages.dashboard.updateLog.entries.kuaioa-route-permission-import-fix.description':
+    '轻办公表单权限服务导入了已移除的 core.services.permission 路径，导致应用路由加载失败；已改为 authorization 真源并恢复注册。',
   'pages.dashboard.updateLog.entries.approval-status-viewer-import-fix-r01.title':
     '修复打开审核弹窗审批状态 500',
   'pages.dashboard.updateLog.entries.approval-status-viewer-import-fix-r01.description':
