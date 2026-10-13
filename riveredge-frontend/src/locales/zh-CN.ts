@@ -10501,13 +10501,13 @@ export default {
   'app.kuaizhizao.flowDataGenerate.previewOk': '预览成功',
   'app.kuaizhizao.flowDataGenerate.previewFail': '预览失败',
   'app.kuaizhizao.flowDataGenerate.executeOk': '全流程造数完成',
-  'app.kuaizhizao.flowDataGenerate.executePartial': '部分步骤失败，请查看结果',
-  'app.kuaizhizao.flowDataGenerate.executeFail': '执行失败',
+  'app.kuaizhizao.flowDataGenerate.executePartial': '造数未通过，请按提示修改后重试',
+  'app.kuaizhizao.flowDataGenerate.executeFail': '造数未通过，请修改后重试',
   'app.kuaizhizao.flowDataGenerate.confirmTitle': '确认生成全流程数据？',
   'app.kuaizhizao.flowDataGenerate.confirmContent':
-    '将按真实业务服务创建/审核/过账单据，失败不自动回滚。请确认销售订单、BOM、工艺与仓库配置正确。',
+    '将按真实业务服务创建/审核/过账单据。任一步失败将撤销本轮写入并提示修改，不会保留半成品数据。请确认销售订单、BOM、工艺与仓库配置正确。',
   'app.kuaizhizao.flowDataGenerate.confirmContentWithTenant':
-    '将在组织「{{tenant}}」下按真实业务服务创建/审核/过账单据，失败不自动回滚。请确认销售订单、BOM、工艺与仓库配置正确。',
+    '将在组织「{{tenant}}」下按真实业务服务创建/审核/过账单据。任一步失败将撤销本轮写入并提示修改，不会保留半成品数据。请确认销售订单、BOM、工艺与仓库配置正确。',
   'app.kuaizhizao.flowDataGenerate.previewCard': '预览时间线',
   'app.kuaizhizao.flowDataGenerate.previewSummary': '订单 {{order}} · 仓库 {{warehouse}}',
   'app.kuaizhizao.flowDataGenerate.resultOk': '执行成功',
@@ -10622,11 +10622,11 @@ export default {
   'app.kuaizhizao.equipmentOpsGenerate.previewOk': '预览成功',
   'app.kuaizhizao.equipmentOpsGenerate.previewFail': '预览失败',
   'app.kuaizhizao.equipmentOpsGenerate.executeOk': '造数完成',
-  'app.kuaizhizao.equipmentOpsGenerate.executePartial': '造数部分成功，请查看错误',
-  'app.kuaizhizao.equipmentOpsGenerate.executeFail': '造数失败',
+  'app.kuaizhizao.equipmentOpsGenerate.executePartial': '造数未通过，请按提示修改后重试',
+  'app.kuaizhizao.equipmentOpsGenerate.executeFail': '造数未通过，请修改后重试',
   'app.kuaizhizao.equipmentOpsGenerate.confirmTitle': '确认执行设备点检保养造数？',
   'app.kuaizhizao.equipmentOpsGenerate.confirmContent':
-    '将按当前配置批量创建点检单与/或保养执行，请确认组织与范围无误。',
+    '将按当前配置批量创建点检单与/或保养执行，并同步写入操作日志。任一条失败将撤销本轮全部写入并提示修改，不会保留半成品数据。请确认组织、计划与设备范围无误。',
   'app.kuaizhizao.equipmentOpsGenerate.previewCard': '预览结果',
   'app.kuaizhizao.equipmentOpsGenerate.previewSummary':
     '设备 {{equipment}} 台；点检计划 {{spotPlans}}、目标 {{spotTargets}}（约 {{spotDocs}} 张）；保养计划 {{maintPlans}}、目标 {{maintTargets}}（约 {{maintDocs}} 张）。',

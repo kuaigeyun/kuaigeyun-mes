@@ -564,14 +564,20 @@ export default function FlowDataGeneratePage() {
         try {
           const payload = await buildPayload();
           const data = await executeFlowGenerate(payload);
-          setResult(data);
-          if (data.success) {
-            message.success(t('app.kuaizhizao.flowDataGenerate.executeOk'));
-          } else {
-            message.warning(t('app.kuaizhizao.flowDataGenerate.executePartial'));
+          if (!data.success) {
+            // 后端失败应抛 400；若仍返回 success=false，按未写入处理
+            message.error(
+              (data.errors || []).join('；') ||
+                t('app.kuaizhizao.flowDataGenerate.executePartial'),
+            );
+            setResult(null);
+            return;
           }
+          setResult(data);
+          message.success(t('app.kuaizhizao.flowDataGenerate.executeOk'));
           void sourceDocQuery.refetch();
         } catch (e) {
+          setResult(null);
           message.error(getApiErrorMessage(e, t('app.kuaizhizao.flowDataGenerate.executeFail')));
         } finally {
           setLoadingExecute(false);

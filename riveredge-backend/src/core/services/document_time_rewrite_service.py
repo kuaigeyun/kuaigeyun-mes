@@ -121,6 +121,16 @@ REWRITE_SPECS: tuple[RewriteDocSpec, ...] = (
         person_name_field="inspector_name",
     ),
     RewriteDocSpec(
+        doc_type="process_inspection",
+        label="过程检验",
+        model_path="apps.kuaizhizao.models.process_inspection:ProcessInspection",
+        code_field="inspection_code",
+        date_fields=(),
+        optional_datetime_fields=("review_time", "inspection_time"),
+        person_id_field="inspector_id",
+        person_name_field="inspector_name",
+    ),
+    RewriteDocSpec(
         doc_type="finished_goods_inspection",
         label="成品检验",
         model_path="apps.kuaizhizao.models.finished_goods_inspection:FinishedGoodsInspection",
@@ -129,6 +139,14 @@ REWRITE_SPECS: tuple[RewriteDocSpec, ...] = (
         optional_datetime_fields=("review_time", "inspection_time"),
         person_id_field="inspector_id",
         person_name_field="inspector_name",
+    ),
+    RewriteDocSpec(
+        doc_type="outsource_work_order",
+        label="委外工单",
+        model_path="apps.kuaizhizao.models.outsource_work_order:OutsourceWorkOrder",
+        code_field="code",
+        date_fields=(),
+        optional_datetime_fields=("planned_start_date", "planned_end_date"),
     ),
     RewriteDocSpec(
         doc_type="production_picking",
@@ -229,6 +247,16 @@ REWRITE_SPECS: tuple[RewriteDocSpec, ...] = (
         optional_datetime_fields=("reviewed_at",),
         person_id_field="inspector_id",
         person_name_field="inspector_name",
+    ),
+    RewriteDocSpec(
+        doc_type="maintenance_execution",
+        label="保养执行",
+        model_path="apps.kuaizhizao.models.maintenance_plan:MaintenanceExecution",
+        code_field="execution_no",
+        date_fields=(),
+        optional_datetime_fields=("execution_date", "acceptance_date"),
+        person_id_field="executor_id",
+        person_name_field="executor_name",
     ),
     RewriteDocSpec(
         doc_type="equipment_route_patrol",

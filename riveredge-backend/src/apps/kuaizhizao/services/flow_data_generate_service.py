@@ -406,8 +406,8 @@ class FlowDataGenerateService:
 
         timeline: list[TimelineEntry] = []
         step_results: list[dict[str, Any]] = []
-        errors: list[str] = []
         outsource_notes: list[str] = []
+        demand_id: Optional[int] = None
         ops, op_notes = await self._resolve_step_operators(
             tenant_id=tenant_id,
             fallback_user_id=operator_id,
@@ -602,23 +602,28 @@ class FlowDataGenerateService:
                         run_id=run_id,
                     )
 
-            # 改写时间 + 日志回写
+            self._raise_if_step_errors(step_results)
+
+            # 改写时间 + 日志回写（仅成功路径）
             await self._rewrite_timeline(tenant_id, timeline)
             await self._align_operation_logs(timeline)
 
         except Exception as exc:
             logger.exception("flow-generate failed: {}", exc)
-            errors.append(str(exc))
-            # 尽力改写已产生单据时间
-            try:
-                if timeline:
-                    await self._rewrite_timeline(tenant_id, timeline)
-                    await self._align_operation_logs(timeline)
-            except Exception as rewrite_exc:
-                errors.append(f"时间改写失败: {rewrite_exc}")
+            revert_notes = await self._revert_failed_run(
+                tenant_id=tenant_id,
+                demand_id=demand_id,
+                timeline=timeline,
+            )
+            detail = str(exc).strip() or exc.__class__.__name__
+            if revert_notes:
+                detail = f"{detail}；回滚提示：{'；'.join(revert_notes[:5])}"
+            raise BusinessLogicError(
+                f"流程造数未通过，请修改后重试（本轮写入已撤销）：{detail}"
+            ) from exc
 
         return {
-            "success": len(errors) == 0,
+            "success": True,
             "run_id": run_id,
             "source_type": source,
             "sales_order_id": doc_id if source == "sales_order" else None,
@@ -642,7 +647,7 @@ class FlowDataGenerateService:
             ],
             "outsource_notes": outsource_notes,
             "operators": ops,
-            "errors": errors,
+            "errors": [],
         }
 
     # ── helpers ──────────────────────────────────────────────
@@ -653,6 +658,124 @@ class FlowDataGenerateService:
             if k in enabled:
                 enabled[k] = bool(v)
         return enabled
+
+    def _raise_if_step_errors(self, step_results: list[dict[str, Any]]) -> None:
+        hard = [
+            s
+            for s in step_results
+            if str(s.get("status") or "").strip().lower() == "error"
+        ]
+        if not hard:
+            return
+        parts: list[str] = []
+        for s in hard[:8]:
+            label = s.get("label") or s.get("step_key") or "步骤"
+            msg = s.get("message") or "失败"
+            parts.append(f"{label}: {msg}")
+        raise BusinessLogicError("；".join(parts))
+
+    def _is_already_done_error(self, exc: BaseException) -> bool:
+        text = str(exc or "")
+        markers = ("已审核", "已确认", "已过账", "已入库", "已出库", "已检验", "无需", "不需要")
+        return any(m in text for m in markers)
+
+    async def _soft_delete_generated_doc(
+        self, tenant_id: int, doc_type: str, doc_id: int
+    ) -> None:
+        """尽力软删本轮造数单据（库存已过账的下游撤回可能失败，由上层汇总提示）。"""
+        if doc_id <= 0:
+            return
+        now = resolve_business_datetime()
+        model = None
+        dtype = (doc_type or "").strip()
+        if dtype == "work_order":
+            from apps.kuaizhizao.models.work_order import WorkOrder
+
+            model = WorkOrder
+        elif dtype == "outsource_work_order":
+            from apps.kuaizhizao.models.outsource_work_order import OutsourceWorkOrder
+
+            model = OutsourceWorkOrder
+        elif dtype == "purchase_order":
+            from apps.kuaizhizao.models.purchase_order import PurchaseOrder
+
+            model = PurchaseOrder
+        elif dtype == "purchase_receipt":
+            from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+
+            model = PurchaseReceipt
+        elif dtype == "incoming_inspection":
+            from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
+
+            model = IncomingInspection
+        elif dtype == "process_inspection":
+            from apps.kuaizhizao.models.process_inspection import ProcessInspection
+
+            model = ProcessInspection
+        elif dtype == "reporting_record":
+            from apps.kuaizhizao.models.reporting_record import ReportingRecord
+
+            model = ReportingRecord
+        elif dtype == "finished_goods_inspection":
+            from apps.kuaizhizao.models.finished_goods_inspection import (
+                FinishedGoodsInspection,
+            )
+
+            model = FinishedGoodsInspection
+        elif dtype == "finished_goods_receipt":
+            from apps.kuaizhizao.models.finished_goods_receipt import FinishedGoodsReceipt
+
+            model = FinishedGoodsReceipt
+        elif dtype == "shipment_notice":
+            from apps.kuaizhizao.models.shipment_notice import ShipmentNotice
+
+            model = ShipmentNotice
+        elif dtype == "sales_delivery":
+            from apps.kuaizhizao.models.sales_delivery import SalesDelivery
+
+            model = SalesDelivery
+        elif dtype in ("other_inbound", "inventory_topup"):
+            from apps.kuaizhizao.models.other_inbound import OtherInbound
+
+            model = OtherInbound
+        elif dtype == "production_picking":
+            from apps.kuaizhizao.models.production_picking import ProductionPicking
+
+            model = ProductionPicking
+        if model is None:
+            return
+        await model.filter(tenant_id=tenant_id, id=doc_id, deleted_at__isnull=True).update(
+            deleted_at=now
+        )
+
+    async def _revert_failed_run(
+        self,
+        *,
+        tenant_id: int,
+        demand_id: Optional[int],
+        timeline: list[TimelineEntry],
+    ) -> list[str]:
+        """失败时撤销本轮写入：先软删时间线单据，再撤回需求计算（级联未执行下游）。"""
+        notes: list[str] = []
+        for entry in reversed(timeline):
+            try:
+                await self._soft_delete_generated_doc(
+                    tenant_id, entry.doc_type, int(entry.doc_id)
+                )
+            except Exception as exc:
+                notes.append(
+                    f"{entry.doc_type}#{entry.doc_id} 清理失败: {exc}"
+                )
+        if demand_id:
+            try:
+                from apps.kuaizhizao.services.demand_service import DemandService
+
+                await DemandService().withdraw_from_computation(
+                    tenant_id=tenant_id, demand_id=int(demand_id)
+                )
+            except Exception as exc:
+                notes.append(f"撤回需求计算失败: {exc}")
+        return notes
 
     async def _resolve_step_operators(
         self,
@@ -1441,6 +1564,25 @@ class FlowDataGenerateService:
                 timeline=timeline,
                 step_results=step_results,
             )
+        for owo in results.get("outsource_work_orders") or []:
+            owo_id = int(owo.get("id") or 0)
+            if owo_id <= 0:
+                continue
+            issued = planner.next("demand_computation")
+            await self._record_step(
+                tenant_id=tenant_id,
+                operator_id=operator_id,
+                run_id=run_id,
+                step_key="demand_computation",
+                doc_type="outsource_work_order",
+                doc_id=owo_id,
+                doc_code=str(owo.get("code") or owo_id),
+                label="委外工单",
+                issued_at=issued,
+                timeline=timeline,
+                step_results=step_results,
+                note="本版不自动走委外收发，需人工处理",
+            )
         return results
 
     async def _step_approve_purchase_orders(
@@ -1466,7 +1608,10 @@ class FlowDataGenerateService:
                     approved_by=operator_id,
                 )
             except Exception as exc:
-                logger.info("PO {} approve skipped/failed: {}", po_id, exc)
+                if self._is_already_done_error(exc):
+                    logger.info("PO {} approve skipped: {}", po_id, exc)
+                    continue
+                raise BusinessLogicError(f"采购订单审核失败 PO#{po_id}: {exc}") from exc
 
     async def _confirm_purchase_receipt(
         self,
@@ -1490,7 +1635,12 @@ class FlowDataGenerateService:
                 confirmed_by=operator_id,
             )
         except Exception as exc:
-            logger.info("confirm purchase receipt {}: {}", receipt_id, exc)
+            if self._is_already_done_error(exc):
+                logger.info("confirm purchase receipt {}: {}", receipt_id, exc)
+            else:
+                raise BusinessLogicError(
+                    f"采购入库确认失败 #{receipt_id}: {exc}"
+                ) from exc
         issued = planner.next(step_key)
         await self._record_step(
             tenant_id=tenant_id,
@@ -1515,7 +1665,7 @@ class FlowDataGenerateService:
         operator_id: int,
         quantity: Any,
     ) -> None:
-        """检验全合格 + 尽力审核（conduct 可能已 auto_pass）。"""
+        """检验全合格 + 审核（conduct 可能已 auto_pass）。"""
         qty = Decimal(str(quantity or 0))
         if qty < 0:
             qty = Decimal("0")
@@ -1530,7 +1680,10 @@ class FlowDataGenerateService:
                 inspected_by=operator_id,
             )
         except Exception as exc:
-            logger.info("conduct inspection {}: {}", inspection_id, exc)
+            if not self._is_already_done_error(exc):
+                raise BusinessLogicError(
+                    f"检验执行失败 #{inspection_id}: {exc}"
+                ) from exc
         try:
             await svc.approve_inspection(
                 tenant_id=tenant_id,
@@ -1539,7 +1692,10 @@ class FlowDataGenerateService:
                 is_auto_approve=True,
             )
         except Exception as exc:
-            logger.info("approve inspection {}: {}", inspection_id, exc)
+            if not self._is_already_done_error(exc):
+                raise BusinessLogicError(
+                    f"检验审核失败 #{inspection_id}: {exc}"
+                ) from exc
 
     async def _step_purchase_direct_receipt(
         self,
@@ -1569,15 +1725,9 @@ class FlowDataGenerateService:
                     warehouse_id=warehouse["id"],
                 )
             except Exception as exc:
-                step_results.append(
-                    {
-                        "step_key": "purchase",
-                        "status": "error",
-                        "label": f"采购入库(PO {po_id})",
-                        "message": str(exc),
-                    }
-                )
-                continue
+                raise BusinessLogicError(
+                    f"采购入库下推失败 PO#{po_id}: {exc}"
+                ) from exc
             receipt_id = int(pushed.get("id") or pushed.get("receipt_id") or 0) or None
             receipt_code = pushed.get("receipt_code") or pushed.get("code")
             if receipt_id:
@@ -1638,15 +1788,9 @@ class FlowDataGenerateService:
                     receipt_id = int(pushed.get("id") or pushed.get("receipt_id") or 0) or None
                     receipt_code = pushed.get("receipt_code") or pushed.get("code")
                 except Exception as exc2:
-                    step_results.append(
-                        {
-                            "step_key": "incoming_inspection",
-                            "status": "skipped",
-                            "label": f"来料检验(PO {po_id})",
-                            "message": str(exc2),
-                        }
-                    )
-                    continue
+                    raise BusinessLogicError(
+                        f"来料检验/入库失败 PO#{po_id}: {exc2}"
+                    ) from exc2
             else:
                 for insp in inspections or []:
                     insp_id = int(getattr(insp, "id", 0) or 0)
@@ -2090,7 +2234,7 @@ class FlowDataGenerateService:
                     doc_type="reporting_record",
                     doc_id=record_id,
                     doc_code=f"RR-{record_id}",
-                    label=f"报工-{op_name}·批{batch_idx}/{len(parts)}·{worker_name}",
+                    label=f"报工-{op_name} 批{batch_idx}/{len(parts)} {worker_name}",
                     issued_at=issued,
                     timeline=timeline,
                     step_results=step_results,
@@ -2118,15 +2262,19 @@ class FlowDataGenerateService:
                 created_by=operator_id,
             )
         except Exception as exc:
-            step_results.append(
-                {
-                    "step_key": "finished_goods_inspection",
-                    "status": "skipped",
-                    "label": f"成品检验 WO#{work_order_id}",
-                    "message": str(exc),
-                }
-            )
-            return
+            if self._is_already_done_error(exc):
+                step_results.append(
+                    {
+                        "step_key": "finished_goods_inspection",
+                        "status": "skipped",
+                        "label": f"成品检验 WO#{work_order_id}",
+                        "message": str(exc),
+                    }
+                )
+                return
+            raise BusinessLogicError(
+                f"成品检验失败 WO#{work_order_id}: {exc}"
+            ) from exc
 
         insp_id = int(insp.id)
         issued = planner.next("finished_goods_inspection")
@@ -2181,7 +2329,10 @@ class FlowDataGenerateService:
                 confirmed_by=operator_id,
             )
         except Exception as exc:
-            logger.info("confirm FG receipt {}: {}", receipt_id, exc)
+            if not self._is_already_done_error(exc):
+                raise BusinessLogicError(
+                    f"成品入库确认失败 #{receipt_id}: {exc}"
+                ) from exc
 
         issued = planner.next("finished_goods_receipt")
         await self._record_step(
@@ -2284,7 +2435,10 @@ class FlowDataGenerateService:
                     confirmed_by=operator_id,
                 )
             except Exception as exc:
-                logger.info("confirm delivery {}: {}", delivery_id, exc)
+                if not self._is_already_done_error(exc):
+                    raise BusinessLogicError(
+                        f"销售出库确认失败 #{delivery_id}: {exc}"
+                    ) from exc
             issued = planner.next("shipment_delivery")
             await self._record_step(
                 tenant_id=tenant_id,
@@ -2300,14 +2454,7 @@ class FlowDataGenerateService:
                 step_results=step_results,
             )
         else:
-            step_results.append(
-                {
-                    "step_key": "shipment_delivery",
-                    "status": "error",
-                    "label": "销售出库",
-                    "message": "未能生成销售出库单",
-                }
-            )
+            raise BusinessLogicError("未能生成销售出库单，请检查订单可出库量与仓库配置")
 
     async def _step_shipment_delivery_from_forecast(
         self,
@@ -2340,7 +2487,10 @@ class FlowDataGenerateService:
                     confirmed_by=operator_id,
                 )
             except Exception as exc:
-                logger.info("confirm forecast delivery {}: {}", delivery_id, exc)
+                if not self._is_already_done_error(exc):
+                    raise BusinessLogicError(
+                        f"销售出库确认失败 #{delivery_id}: {exc}"
+                    ) from exc
             issued = planner.next("shipment_delivery")
             await self._record_step(
                 tenant_id=tenant_id,
@@ -2356,13 +2506,8 @@ class FlowDataGenerateService:
                 step_results=step_results,
             )
         else:
-            step_results.append(
-                {
-                    "step_key": "shipment_delivery",
-                    "status": "error",
-                    "label": "销售出库(预测)",
-                    "message": "未能从销售预测生成销售出库单",
-                }
+            raise BusinessLogicError(
+                "未能从销售预测生成销售出库单，请检查预测可出库量与仓库配置"
             )
 
 

@@ -409,12 +409,15 @@ export default function EquipmentOpsGeneratePanel({
         try {
           const payload = await buildPayload();
           const data = await executeEquipmentOpsGenerate(payload);
-          setResult(data);
-          if (data.success) {
-            message.success(t('app.kuaizhizao.equipmentOpsGenerate.executeOk'));
-          } else {
-            message.warning(t('app.kuaizhizao.equipmentOpsGenerate.executePartial'));
+          if (!data.success) {
+            message.error(
+              (data.errors || []).join('；') ||
+                t('app.kuaizhizao.equipmentOpsGenerate.executeFail'),
+            );
+            return;
           }
+          setResult(data);
+          message.success(t('app.kuaizhizao.equipmentOpsGenerate.executeOk'));
         } catch (e) {
           message.error(getApiErrorMessage(e, t('app.kuaizhizao.equipmentOpsGenerate.executeFail')));
         } finally {

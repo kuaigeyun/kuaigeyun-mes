@@ -62,6 +62,16 @@ standard: StepOperatorConfig.mode + 前端各步骤 op_mode_*；报工按工序�
 
 池空一律回退当前用户。造数页不进平台更新日志（运维工具）。Windows 改 BE 后须重启 API（无热重载）。
 
+## 失败策略（全有或全无）
+
+确认执行任一步硬失败即停止：撤销本轮时间线单据（软删）并尽力 `withdraw_from_computation` 级联未执行下游，再以 400 提示「请修改后重试」。不返回部分成功落库。有意跳过（如质检模式 none）不算失败。
+
+## 操作日志同步
+
+每张本轮生成的业务单据经 `_record_step` → `OperationLog`（`operation_type=flow_generate`），成功后再 `_rewrite_timeline` + `_align_operation_logs`（日志 `created_at` = 时间线 `issued_at`）。单据时间改写须在 `DocumentTimeRewriteService.REWRITE_SPECS` 登记对应 `doc_type`（含 `process_inspection` / `outsource_work_order`），否则收工改写会整轮失败回滚。
+
+不单独记日志：源销售订单/预测（输入）、PO 审核动作本身（单据已在下推时记过）、质检模式 none 等跳过未建单。委外工单记日志并改写时间，本版仍不自动走委外收发。
+
 ## 关键文件
 
 | 角色 | 路径 |
