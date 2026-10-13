@@ -38110,6 +38110,14 @@ export default {
     '修复销项发票切换含税金额分币价差',
   'pages.dashboard.updateLog.entries.sales-invoice-tax-amount-cents-math.description':
     '开票金额互算改为分位整数（与后端价税拆分一致），避免 JS 浮点把 1769911.50×1.13 算成 1999999.99；切换含税后与可开票合计对齐，含税录入仍以价税合计为真源。',
+  'pages.dashboard.updateLog.entries.purchase-requisition-audit-status-fix-r01.title':
+    '修复采购申请审核与审批状态查询失败',
+  'pages.dashboard.updateLog.entries.purchase-requisition-audit-status-fix-r01.description':
+    '审批状态按单据精确查找实例，避免全表扫描漏实例导致 400/500；采购申请行内与批量审核统一走 uni-audit，与详情抽屉一致。',
+  'pages.dashboard.updateLog.entries.uni-audit-flow-gate-unified-r02.title':
+    '行内审核、批量审核与详情审核同一门控',
+  'pages.dashboard.updateLog.entries.uni-audit-flow-gate-unified-r02.description':
+    '列表与详情响应写入 record.audit.viewer_actions，行内 UniWorkflowActions、批量审核菜单与审核弹窗共用 auditFlowViewerGate 解析；与 execute_approval 一致，非待办人不再仅因 :review 权限显示可审。',
   'pages.dashboard.updateLog.entries.uni-audit-flow-viewer-actions-r01.title':
     '审核按钮与流程待办统一门控',
   'pages.dashboard.updateLog.entries.uni-audit-flow-viewer-actions-r01.description':

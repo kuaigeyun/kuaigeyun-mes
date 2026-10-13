@@ -146,7 +146,11 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         return await self.get_requisition_by_id(tenant_id, req_id)
 
     async def get_requisition_by_id(
-        self, tenant_id: int, requisition_id: int
+        self,
+        tenant_id: int,
+        requisition_id: int,
+        *,
+        viewer_id: Optional[int] = None,
     ) -> PurchaseRequisitionResponse:
         """获取采购申请详情"""
         req = await PurchaseRequisition.get_or_none(
@@ -319,7 +323,12 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         from core.services.approval.audit_record_enricher import enrich_record
 
         resp = await enrich_purchase_requisition_detail_capabilities(tenant_id, req, resp)
-        return await enrich_record(tenant_id, "purchase_request", resp)
+        return await enrich_record(
+            tenant_id,
+            "purchase_request",
+            resp,
+            viewer_id=viewer_id,
+        )
 
     async def _batch_requisition_items_count(
         self, tenant_id: int, requisition_ids: List[int]
@@ -439,6 +448,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         created_end_date: Optional[date] = None,
         order_by: Optional[str] = None,
         include_items: bool = False,
+        viewer_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """列表查询，返回 { data, total, success }"""
         from apps.kuaizhizao.utils.list_item_material_keyword import (
@@ -561,9 +571,16 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         enriched = await enrich_purchase_requisition_list_capabilities(tenant_id, reqs, result)
         from core.services.approval.audit_record_enricher import enrich_data_payload
 
-        return await enrich_data_payload(tenant_id, "purchase_request", {
-            "data": [item.model_dump() for item in enriched], "total": total, "success": True
-        })
+        return await enrich_data_payload(
+            tenant_id,
+            "purchase_request",
+            {
+                "data": [item.model_dump() for item in enriched],
+                "total": total,
+                "success": True,
+            },
+            viewer_id=viewer_id,
+        )
 
     async def _recalc_conversion_status(
         self, tenant_id: int, req: PurchaseRequisition

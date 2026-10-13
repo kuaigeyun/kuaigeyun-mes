@@ -165,13 +165,33 @@ class PaymentApplicationService(AppBaseService[PaymentApplication]):
             app_id = app.id
         return await self.get_by_id(tenant_id, app_id)
 
-    async def get_by_id(self, tenant_id: int, application_id: int) -> PaymentApplicationResponse:
+    async def get_by_id(
+        self,
+        tenant_id: int,
+        application_id: int,
+        *,
+        viewer_id: Optional[int] = None,
+    ) -> PaymentApplicationResponse:
         app = await PaymentApplication.get_or_none(
             tenant_id=tenant_id, id=application_id, deleted_at__isnull=True
         )
         if not app:
             raise NotFoundError(f"付款申请单不存在: {application_id}")
-        return await self._to_response(app)
+        resp = await self._to_response(app)
+        if viewer_id is not None:
+            from core.services.approval.audit_record_enricher import (
+                apply_viewer_flow_gate_after_capabilities,
+            )
+
+            resp = (
+                await apply_viewer_flow_gate_after_capabilities(
+                    tenant_id,
+                    "payment_application",
+                    [resp],
+                    viewer_id,
+                )
+            )[0]
+        return resp
 
     async def list_applications(
         self,
@@ -186,6 +206,7 @@ class PaymentApplicationService(AppBaseService[PaymentApplication]):
         sort_order: Optional[str] = None,
         approved_only: bool = False,
         with_remaining: bool = False,
+        viewer_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         query = PaymentApplication.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if status:
@@ -206,6 +227,17 @@ class PaymentApplicationService(AppBaseService[PaymentApplication]):
         total = await query.count()
         rows = await query.offset(skip).limit(limit).order_by(order)
         data = [await self._to_response(row) for row in rows]
+        if viewer_id is not None:
+            from core.services.approval.audit_record_enricher import (
+                apply_viewer_flow_gate_after_capabilities,
+            )
+
+            data = await apply_viewer_flow_gate_after_capabilities(
+                tenant_id,
+                "payment_application",
+                data,
+                viewer_id,
+            )
         return {"data": data, "total": total}
 
     async def update_application(

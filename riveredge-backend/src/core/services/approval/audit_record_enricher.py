@@ -6,6 +6,9 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 from core.services.approval.audit_binding_service import AuditBindingService
 from core.services.approval.audit_capability_gate import gate_audit_allowed_actions
+from core.services.approval.audit_flow_viewer_gate import (
+    apply_viewer_actions_to_audit_and_capabilities,
+)
 from core.services.approval.audit_phase import derive_audit_phase
 
 RecordLike = Union[Dict[str, Any], Any]
@@ -25,6 +28,80 @@ def _read_capabilities(item: RecordLike) -> Any:
     if isinstance(item, dict):
         return item.get("capabilities")
     return getattr(item, "capabilities", None)
+
+
+def _read_record_id(item: RecordLike, id_field: str = "id") -> Optional[int]:
+    raw = item.get(id_field) if isinstance(item, dict) else getattr(item, id_field, None)
+    try:
+        val = int(raw)
+    except (TypeError, ValueError):
+        return None
+    return val if val > 0 else None
+
+
+def _update_record_fields(item: RecordLike, updates: Dict[str, Any]) -> RecordLike:
+    if isinstance(item, dict):
+        item.update(updates)
+        return item
+    if hasattr(item, "model_copy"):
+        return item.model_copy(update=updates)
+    for key, value in updates.items():
+        setattr(item, key, value)
+    return item
+
+
+async def _attach_batch_viewer_actions(
+    tenant_id: int,
+    entity_type: str,
+    items: Sequence[RecordLike],
+    viewer_id: int,
+) -> List[RecordLike]:
+    from core.services.approval.approval_instance_service import ApprovalInstanceService
+
+    pending_ids: List[int] = []
+    for item in items:
+        audit = item.get("audit") if isinstance(item, dict) else getattr(item, "audit", None)
+        if not isinstance(audit, dict):
+            continue
+        if audit.get("phase") != "pending" or not audit.get("enabled"):
+            continue
+        rid = _read_record_id(item)
+        if rid is not None:
+            pending_ids.append(rid)
+
+    if not pending_ids:
+        return list(items)
+
+    viewer_map = await ApprovalInstanceService.batch_flow_viewer_actions_for_entities(
+        tenant_id,
+        entity_type,
+        pending_ids,
+        viewer_id,
+    )
+    if not viewer_map:
+        return list(items)
+
+    out: List[RecordLike] = []
+    for item in items:
+        rid = _read_record_id(item)
+        if rid is None or rid not in viewer_map:
+            out.append(item)
+            continue
+        audit = item.get("audit") if isinstance(item, dict) else getattr(item, "audit", None)
+        caps = _read_capabilities(item)
+        if not isinstance(audit, dict):
+            out.append(item)
+            continue
+        gated_audit, gated_caps = apply_viewer_actions_to_audit_and_capabilities(
+            audit,
+            caps,
+            viewer_map[rid],
+        )
+        updates: Dict[str, Any] = {"audit": gated_audit}
+        if gated_caps is not None:
+            updates["capabilities"] = gated_caps
+        out.append(_update_record_fields(item, updates))
+    return out
 
 
 def _apply_audit(
@@ -69,6 +146,7 @@ async def enrich_items(
     status_field: str = "status",
     review_status_field: str = "review_status",
     audit_enabled: Optional[bool] = None,
+    viewer_id: Optional[int] = None,
 ) -> List[RecordLike]:
     """为每条记录写入 ``audit`` 字段（原地修改 dict，Pydantic 返回 model_copy）。"""
     if not items:
@@ -89,6 +167,10 @@ async def enrich_items(
                 review_status_field=review_status_field,
             )
         )
+    if viewer_id is not None:
+        out = await _attach_batch_viewer_actions(
+            tenant_id, entity_type, out, int(viewer_id)
+        )
     return out
 
 
@@ -101,6 +183,7 @@ async def enrich_data_payload(
     status_field: str = "status",
     review_status_field: str = "review_status",
     audit_enabled: Optional[bool] = None,
+    viewer_id: Optional[int] = None,
 ) -> Dict[str, Any]:
     """``{ data: [...], total, success }`` 列表响应嵌入 audit。"""
     rows = payload.get(items_key)
@@ -113,6 +196,7 @@ async def enrich_data_payload(
         status_field=status_field,
         review_status_field=review_status_field,
         audit_enabled=audit_enabled,
+        viewer_id=viewer_id,
     )
     return payload
 
@@ -126,6 +210,7 @@ async def enrich_items_payload(
     status_field: str = "status",
     review_status_field: str = "review_status",
     audit_enabled: Optional[bool] = None,
+    viewer_id: Optional[int] = None,
 ) -> Dict[str, Any]:
     """``{ items: [...], total }`` 列表响应嵌入 audit。"""
     return await enrich_data_payload(
@@ -136,6 +221,7 @@ async def enrich_items_payload(
         status_field=status_field,
         review_status_field=review_status_field,
         audit_enabled=audit_enabled,
+        viewer_id=viewer_id,
     )
 
 
@@ -147,6 +233,7 @@ async def enrich_record(
     status_field: str = "status",
     review_status_field: str = "review_status",
     audit_enabled: Optional[bool] = None,
+    viewer_id: Optional[int] = None,
 ) -> RecordLike:
     """单条详情/响应嵌入 audit。"""
     enriched = await enrich_items(
@@ -156,5 +243,20 @@ async def enrich_record(
         status_field=status_field,
         review_status_field=review_status_field,
         audit_enabled=audit_enabled,
+        viewer_id=viewer_id,
     )
     return enriched[0]
+
+
+async def apply_viewer_flow_gate_after_capabilities(
+    tenant_id: int,
+    entity_type: str,
+    items: Sequence[RecordLike],
+    viewer_id: Optional[int],
+) -> List[RecordLike]:
+    """capabilities 写入后再次按流程待办裁剪（列表 enrich 第二段调用）。"""
+    if viewer_id is None or not items:
+        return list(items)
+    return await _attach_batch_viewer_actions(
+        tenant_id, entity_type, items, int(viewer_id)
+    )

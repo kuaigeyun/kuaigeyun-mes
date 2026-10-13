@@ -6,6 +6,10 @@ import { prepareRowActionButton, rowActionKind, type RowActionPermissionKind } f
 import { rowActionLabel } from '../uni-action/actionCatalog';
 import { useAuditRequired } from '../../hooks/useAuditRequired';
 import { isManualAuditEnabled, resolveAuditActionVisibility } from '../../utils/auditMode';
+import {
+  readAuditViewerActions,
+  resolveAuditFlowExecutePermission,
+} from '../../utils/auditFlowViewerGate';
 import { useGlobalStore } from '../../stores';
 import { hasModulePermission, hasReviewPermission } from '../../utils/permissionContract';
 import { isAdminBypass, resolveUserForMenuPermission } from '../../utils/permission';
@@ -285,11 +289,25 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
       || Boolean(actions.revoke)
       || Boolean(apiPrefix),
   };
+  const recordViewerActions = readAuditViewerActions(auditState);
+  const flowApprove = resolveAuditFlowExecutePermission('approve', {
+    adminBypass: adminOpen,
+    rbacAllowed: canReview,
+    audit: auditState,
+    liveViewerActions: recordViewerActions,
+  });
+  const flowReject = resolveAuditFlowExecutePermission('reject', {
+    adminBypass: adminOpen,
+    rbacAllowed: canReview,
+    audit: auditState,
+    liveViewerActions: recordViewerActions,
+  });
+
   const canExecuteByAction: Record<UniAuditAction, boolean> = {
     submit: canSubmit,
     withdraw: canSubmit,
-    approve: canReview,
-    reject: canReview,
+    approve: flowApprove.canExecute,
+    reject: flowReject.canExecute,
     revoke: canRevoke,
   };
 
@@ -320,6 +338,7 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
         action: 'approve',
         title: approveLabel,
         canExecute: canExecuteByAction.approve,
+        disabledReason: flowApprove.blockReason,
         primary: true,
       });
     }
@@ -328,6 +347,7 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
         action: 'reject',
         title: '驳回',
         canExecute: canExecuteByAction.reject,
+        disabledReason: flowReject.blockReason,
         danger: true,
       });
     }
@@ -342,6 +362,8 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
     canExecuteByAction.withdraw,
     canExecuteByAction.approve,
     canExecuteByAction.reject,
+    flowApprove.blockReason,
+    flowReject.blockReason,
     approveLabel,
   ]);
 

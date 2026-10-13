@@ -135,6 +135,7 @@ async def list_requisitions(
     created_end_date: Optional[date] = Query(None, description="创建日期止"),
     order_by: Optional[str] = Query(None, description="排序字段，如 updated_at、-created_at"),
     tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
 ):
     """获取采购申请列表"""
     safe_order_by = None
@@ -158,6 +159,7 @@ async def list_requisitions(
         created_end_date=created_end_date,
         order_by=safe_order_by,
         include_items=include_items,
+        viewer_id=current_user.id,
     )
 
 
@@ -253,11 +255,13 @@ async def get_material_warehouse_stock_for_requisition(
 async def get_requisition(
     requisition_id: int = Path(...),
     tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
 ):
     """获取采购申请详情"""
     return await PurchaseRequisitionService().get_requisition_by_id(
         tenant_id=tenant_id,
         requisition_id=requisition_id,
+        viewer_id=current_user.id,
     )
 
 

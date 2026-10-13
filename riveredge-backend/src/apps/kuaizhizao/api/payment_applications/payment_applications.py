@@ -76,6 +76,7 @@ async def list_payment_applications(
     approved_only: bool = Query(False),
     with_remaining: bool = Query(False),
     tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
     _auth: object = Depends(require_permission_codes("kuaizhizao:payment-application:read")),
 ):
     return await _svc.list_applications(
@@ -89,6 +90,7 @@ async def list_payment_applications(
         sort_order=sort_order,
         approved_only=approved_only,
         with_remaining=with_remaining,
+        viewer_id=current_user.id,
     )
 
 
@@ -164,10 +166,11 @@ async def preview_pull_from_purchase_order(
 async def get_payment_application(
     application_id: int = Path(..., ge=1),
     tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
     _auth: object = Depends(require_permission_codes("kuaizhizao:payment-application:read")),
 ):
     try:
-        return await _svc.get_by_id(tenant_id, application_id)
+        return await _svc.get_by_id(tenant_id, application_id, viewer_id=current_user.id)
     except NotFoundError as e:
         raise _http(404, str(e), f"/payment-applications/{application_id}", tenant_id) from e
 
