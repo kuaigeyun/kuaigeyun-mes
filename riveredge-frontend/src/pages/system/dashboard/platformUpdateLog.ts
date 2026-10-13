@@ -44,6 +44,13 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'material-stale-production-unit-prune-r01',
+    date: '2026-10-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.material-stale-production-unit-prune-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.material-stale-production-unit-prune-r01.description',
+  },
+  {
     id: 'sales-contract-form-hooks-order-r01',
     date: '2026-10-13',
     type: 'fix',

@@ -19,20 +19,53 @@ def _decimal(value: Any) -> Decimal:
         return Decimal("0")
 
 
+def _parse_material_units_cfg(units_cfg: Any) -> Optional[Dict[str, Any]]:
+    """规范化物料 units（dict / JSON 字符串）；非法则 None。"""
+    if isinstance(units_cfg, str):
+        text = units_cfg.strip()
+        if not text:
+            return None
+        try:
+            import json
+
+            units_cfg = json.loads(text)
+        except Exception:
+            return None
+    if isinstance(units_cfg, dict):
+        return units_cfg
+    return None
+
+
 def resolve_material_scenario_unit(material: Any, scenario: MaterialScenario) -> str:
-    """解析物料在指定场景下的单位；未配置时回退基础单位。"""
+    """解析物料在指定场景下的单位；未配置或映射已失效时回退基础单位。"""
     base_unit = str(getattr(material, "base_unit", None) or "").strip()
     if scenario == "inventory":
         return base_unit
 
-    units_cfg = getattr(material, "units", None)
-    if isinstance(units_cfg, dict):
-        scenarios = units_cfg.get("scenarios") or {}
-        if isinstance(scenarios, dict):
-            mapped = scenarios.get(scenario)
-            if mapped is not None and str(mapped).strip():
-                return str(mapped).strip()
+    units_cfg = _parse_material_units_cfg(getattr(material, "units", None))
+    if not units_cfg:
+        return base_unit
 
+    aux_units = units_cfg.get("units") or []
+    # 无辅助单位时场景映射 UI 不可见，残留 production 不得覆盖基础单位
+    if not isinstance(aux_units, list) or len(aux_units) == 0:
+        return base_unit
+
+    scenarios = units_cfg.get("scenarios") or {}
+    if not isinstance(scenarios, dict):
+        return base_unit
+    mapped = scenarios.get(scenario)
+    if mapped is None or not str(mapped).strip():
+        return base_unit
+    unit = str(mapped).strip()
+    allowed = {base_unit} if base_unit else set()
+    for row in aux_units:
+        if isinstance(row, dict):
+            name = str(row.get("unit") or "").strip()
+            if name:
+                allowed.add(name)
+    if unit in allowed:
+        return unit
     return base_unit
 
 

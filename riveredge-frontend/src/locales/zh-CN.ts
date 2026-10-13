@@ -38117,6 +38117,10 @@ export default {
     '销售合同列表与新建页切换不再闪 React 错误',
   'pages.dashboard.updateLog.entries.sales-contract-form-hooks-order-r01.description':
     '框架合同/销售合同同一组件在表单页提前 return 前未调用详情抽屉 hooks，列表与新建切换时 hooks 数量不一致触发 #300；已把 hooks 挪到分支之前。',
+  'pages.dashboard.updateLog.entries.material-stale-production-unit-prune-r01.title':
+    '物料基础单位已改千克时工单不再显示残留生产单位吨',
+  'pages.dashboard.updateLog.entries.material-stale-production-unit-prune-r01.description':
+    '删除全部辅助单位后场景映射区会隐藏，但 production 可能仍残留旧吨；解析与保存时会裁掉无效场景单位，工单计划数量改跟当前基础单位（如千克）。',
   'pages.dashboard.updateLog.entries.production-picking-audit-start-on-create-r01.title':
     '生产领料开启审核后拉单会真正进入审批流',
   'pages.dashboard.updateLog.entries.production-picking-audit-start-on-create-r01.description':

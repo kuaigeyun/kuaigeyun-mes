@@ -9581,6 +9581,7 @@ const WorkOrdersPage: React.FC = () => {
               required
               disabled={isEdit}
               sourceType={onlyShowMake ? 'Make' : undefined}
+              hostResource={KUAIZHIZAO_DOC_HOST.workOrder}
               formItemProps={{ style: { marginBottom: 24 } }}
               fallbackOption={
                 isEdit && currentWorkOrder?.product_id
@@ -9595,6 +9596,8 @@ const WorkOrdersPage: React.FC = () => {
               onChange={async (value, material) => {
                 if (value) {
                   const productId = Number(value)
+                  // 先清空，避免异步重拉期间仍显示上一物料的「吨」
+                  setFormProductMaterial(null)
                   // 选料后按 id 重拉引用展示（含 units.scenarios），避免下拉缓存里旧生产单位把计划数量标成吨等
                   let resolved =
                     material && !Array.isArray(material) ? (material as Material) : undefined
