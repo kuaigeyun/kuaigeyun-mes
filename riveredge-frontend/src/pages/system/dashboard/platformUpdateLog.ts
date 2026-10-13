@@ -44,6 +44,14 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'kuaioa-route-permission-import-fix',
+    date: '2026-10-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-route-permission-import-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-route-permission-import-fix.description',
+  },
+  {
     id: 'purchase-requisition-uni-audit-resource-fix-r01',
     date: '2026-10-13',
     type: 'fix',
