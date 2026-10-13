@@ -2267,16 +2267,27 @@ const WorkOrdersPage: React.FC = () => {
     if (so?.id) {
       setProductionMode('MTO')
     }
-    // 同步加载物料来源信息
+    // 同步加载物料来源信息与计划数量单位（须写入 formProductMaterial，禁止沿用上次弹窗缓存）
     const selectedMaterial = productSourceData.materials.find((p: any) => p.id === first.productId)
+    let cancelled = false
     if (selectedMaterial) {
       const sourceType = selectedMaterial.sourceType || selectedMaterial.source_type
       setSelectedMaterialSourceInfo(resolveMaterialSourceValidation(sourceType, t))
+      setFormProductMaterial(selectedMaterial as Material)
+      void resolveMaterialFormReference(KUAIZHIZAO_DOC_HOST.workOrder, [Number(first.productId)]).then(
+        (mats) => {
+          if (!cancelled && mats[0]) setFormProductMaterial(mats[0])
+        },
+      )
     } else {
       setSelectedMaterialSourceInfo(null)
+      setFormProductMaterial(null)
     }
     // 自动加载物料绑定的工艺路线及工序
     if (selectedMaterial?.uuid) loadProcessRouteForMaterial(selectedMaterial.uuid)
+    return () => {
+      cancelled = true
+    }
   }, [productSourceData, modalVisible, isEdit, t])
 
   // 创建/编辑弹窗所需数据是否已加载
@@ -2891,6 +2902,7 @@ const WorkOrdersPage: React.FC = () => {
     setProductionMode('MTS') // 重置为MTS模式
     setSelectedOperations([]) // 清空选中的工序
     setSelectedMaterialSourceInfo(null) // 清空物料来源信息
+    setFormProductMaterial(null) // 计划数量单位依赖此缓存，须与上次编辑/选料隔离
     setModalVisible(true)
     // FormModalTemplate 设置了 destroyOnHidden，每次打开 ProForm 都会重新挂载为空，
     // 不需要用 setTimeout 等 ref 就绪再 resetFields
@@ -9423,6 +9435,7 @@ const WorkOrdersPage: React.FC = () => {
           setCurrentWorkOrder(null)
           setCreateWorkOrderMode('normal')
           setSelectedMaterialSourceInfo(null)
+          setFormProductMaterial(null)
           setProductSourceData(null)
           setSelectedOperations([])
           setCreateProcessRouteId(undefined)
@@ -9581,14 +9594,27 @@ const WorkOrdersPage: React.FC = () => {
               }
               onChange={async (value, material) => {
                 if (value) {
-                  if (material) {
-                    setFormProductMaterial(material as Material)
-                    const sourceType = material.sourceType || material.source_type
+                  const productId = Number(value)
+                  // 选料后按 id 重拉引用展示（含 units.scenarios），避免下拉缓存里旧生产单位把计划数量标成吨等
+                  let resolved =
+                    material && !Array.isArray(material) ? (material as Material) : undefined
+                  if (Number.isFinite(productId) && productId > 0) {
+                    const mats = await resolveMaterialFormReference(KUAIZHIZAO_DOC_HOST.workOrder, [
+                      productId,
+                    ])
+                    if (mats[0]) resolved = mats[0]
+                  }
+                  if (resolved) {
+                    setFormProductMaterial(resolved)
+                    const sourceType = resolved.sourceType || (resolved as any).source_type
                     setSelectedMaterialSourceInfo(resolveMaterialSourceValidation(sourceType, t))
-                    if (material.uuid) {
-                      loadProcessRouteForMaterial(material.uuid)
+                    if (resolved.uuid) {
+                      loadProcessRouteForMaterial(resolved.uuid)
                     }
-                  } else setSelectedMaterialSourceInfo(null)
+                  } else {
+                    setSelectedMaterialSourceInfo(null)
+                    setFormProductMaterial(null)
+                  }
                 } else {
                   setSelectedMaterialSourceInfo(null)
                   setFormProductMaterial(null)

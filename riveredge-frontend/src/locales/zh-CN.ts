@@ -38113,6 +38113,18 @@ export default {
     '修复销项发票切换含税金额分币价差',
   'pages.dashboard.updateLog.entries.sales-invoice-tax-amount-cents-math.description':
     '开票金额互算改为分位整数（与后端价税拆分一致），避免 JS 浮点把 1769911.50×1.13 算成 1999999.99；切换含税后与可开票合计对齐，含税录入仍以价税合计为真源。',
+  'pages.dashboard.updateLog.entries.sales-contract-form-hooks-order-r01.title':
+    '销售合同列表与新建页切换不再闪 React 错误',
+  'pages.dashboard.updateLog.entries.sales-contract-form-hooks-order-r01.description':
+    '框架合同/销售合同同一组件在表单页提前 return 前未调用详情抽屉 hooks，列表与新建切换时 hooks 数量不一致触发 #300；已把 hooks 挪到分支之前。',
+  'pages.dashboard.updateLog.entries.production-picking-audit-start-on-create-r01.title':
+    '生产领料开启审核后拉单会真正进入审批流',
+  'pages.dashboard.updateLog.entries.production-picking-audit-start-on-create-r01.description':
+    '配置中心审核设置打开生产领料后，拉单/下推创建待审核单会启动审批实例（与销售出库一致）；未开审核仍为自动通过待领料。审批节点须配置审批人，空审批人且为 auto_pass 仍会瞬间通过。',
+  'pages.dashboard.updateLog.entries.work-order-planned-qty-unit-stale-r01.title':
+    '新建工单计划数量单位不再沿用上次物料',
+  'pages.dashboard.updateLog.entries.work-order-planned-qty-unit-stale-r01.description':
+    '计划数量旁单位取自物料生产单位；关闭/新建弹窗会清空缓存，选产品时按物料 id 重拉多单位配置，避免基础单位已是千克仍显示成吨。',
   'pages.dashboard.updateLog.entries.sales-order-drop-split-delivery-notify-r01.title':
     '销售订单审核后不再发送拆分交付计划提醒',
   'pages.dashboard.updateLog.entries.sales-order-drop-split-delivery-notify-r01.description':

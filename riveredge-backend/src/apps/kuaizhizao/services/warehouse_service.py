@@ -1606,6 +1606,50 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
             return "待审核", "待审核"
         return "待领料", "已通过"
 
+    async def _start_production_picking_approval_after_create(
+        self,
+        tenant_id: int,
+        picking_id: int,
+        user_id: int,
+    ) -> ProductionPickingWithItemsResponse:
+        """
+        创建落「待审核」后必须启动审批实例（对齐销售出库 create）。
+        空审批人 emptyApproverPolicy=auto_pass 时提交瞬间会写回已通过。
+        """
+        picking = await ProductionPicking.get_or_none(
+            tenant_id=tenant_id, id=picking_id, deleted_at__isnull=True
+        )
+        if not picking:
+            raise NotFoundError(f"生产领料单不存在: {picking_id}")
+        if str(picking.status or "").strip() != "待审核":
+            return await self.get_production_picking_by_id(tenant_id, picking_id)
+
+        from core.services.approval.approval_instance_service import ApprovalInstanceService
+        from core.services.approval.audit_flow_guard import approval_instance_finished_on_submit
+
+        instance = await ApprovalInstanceService.start_approval_for_node(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            node_key="production_picking",
+            entity_type="production_picking",
+            entity_id=picking.id,
+            entity_uuid=str(picking.uuid),
+            title=f"生产领料审批: {picking.picking_code}",
+            content=f"工单: {picking.work_order_code}",
+        )
+        if not instance:
+            raise BusinessLogicError(
+                "生产领料审核已开启但未找到可用的审批流程，请在配置中心检查 production_picking 审批流程是否已激活"
+            )
+        if approval_instance_finished_on_submit(instance):
+            return await self.approve_production_picking(
+                tenant_id=tenant_id,
+                picking_id=picking_id,
+                approver_id=user_id,
+                is_auto_approve=True,
+            )
+        return await self.get_production_picking_by_id(tenant_id, picking_id)
+
     async def _get_user_role_codes(self, user_id: int) -> set[str]:
         user = await User.get_or_none(id=user_id, deleted_at__isnull=True).prefetch_related("roles")
         if not user:
@@ -1695,6 +1739,7 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
 
     async def create_production_picking(self, tenant_id: int, picking_data: ProductionPickingCreate, created_by: int) -> ProductionPickingResponse:
         """创建生产领料单"""
+        created_picking_id: Optional[int] = None
         async with in_transaction():
             user_info = await self.get_user_info(created_by)
             today = today_site_str()
@@ -1713,6 +1758,7 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                 updated_by_name=user_info["name"],
                 **payload,
             )
+            created_picking_id = int(picking.id)
 
             # 建立工单→生产领料 的 DocumentRelation（支持单据追溯）
             work_order_id = getattr(picking, "work_order_id", None) or getattr(picking_data, "work_order_id", None)
@@ -1745,7 +1791,10 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                 except Exception as e:
                     logger.warning("建立工单→生产领料 单据关联失败: %s", e)
 
-            return ProductionPickingResponse.model_validate(picking)
+        detail = await self._start_production_picking_approval_after_create(
+            tenant_id, int(created_picking_id), created_by
+        )
+        return ProductionPickingResponse.model_validate(detail.model_dump())
 
     async def get_production_picking_by_id(self, tenant_id: int, picking_id: int) -> ProductionPickingWithItemsResponse:
         """根据ID获取生产领料单（含明细）"""
@@ -2219,8 +2268,6 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
         if not picking:
             raise NotFoundError(f"生产领料单不存在: {picking_id}")
         status = str(picking.status or "").strip()
-        if status == "待审核":
-            return await self.get_production_picking_by_id(tenant_id, picking_id)
 
         audit_required = await BusinessConfigService().check_audit_required(
             tenant_id, "production_picking"
@@ -2236,6 +2283,28 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                 updated_by=submitted_by,
             )
             return await self.get_production_picking_by_id(tenant_id, picking_id)
+
+        # 已是待审核：有进行中/已结束实例则幂等返回；无实例则补启（修复旧拉单未启流）
+        if status == "待审核":
+            from core.services.approval.audit_flow_guard import get_approval_gate_status
+
+            gate = await get_approval_gate_status(
+                tenant_id=tenant_id,
+                entity_type="production_picking",
+                entity_id=picking_id,
+            )
+            if gate.get("has_pending_flow") or gate.get("flow_completed_approved"):
+                if gate.get("flow_completed_approved"):
+                    return await self.approve_production_picking(
+                        tenant_id=tenant_id,
+                        picking_id=picking_id,
+                        approver_id=submitted_by,
+                        is_auto_approve=True,
+                    )
+                return await self.get_production_picking_by_id(tenant_id, picking_id)
+            return await self._start_production_picking_approval_after_create(
+                tenant_id, picking_id, submitted_by
+            )
 
         if status not in ("草稿", "待领料", "draft"):
             raise BusinessLogicError(f"当前状态不可提交审核: {status or '-'}")
@@ -3210,8 +3279,13 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                 )
             except Exception as e:
                 logger.warning("建立工单→生产领料 单据关联失败: %s", e)
-            
-            return ProductionPickingResponse.model_validate(picking)
+
+            created_picking_id = int(picking.id)
+
+        detail = await self._start_production_picking_approval_after_create(
+            tenant_id, created_picking_id, created_by
+        )
+        return ProductionPickingResponse.model_validate(detail.model_dump())
 
     async def preview_push_work_order_to_production_picking(
         self,
@@ -3549,7 +3623,11 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
             except Exception as e:
                 logger.warning("建立工单→生产领料 单据关联失败: %s", e)
 
-            return await self.get_production_picking_by_id(tenant_id, int(picking.id))
+            created_picking_id = int(picking.id)
+
+        return await self._start_production_picking_approval_after_create(
+            tenant_id, created_picking_id, created_by
+        )
 
     async def _resolve_material_call_picking_push_context(
         self,
@@ -3897,8 +3975,12 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
             except Exception as e:
                 logger.warning("建立补料→生产领料 单据关联失败: %s", e)
 
-            return await self.get_production_picking_by_id(tenant_id, int(picking.id))
-    
+            created_picking_id = int(picking.id)
+
+        return await self._start_production_picking_approval_after_create(
+            tenant_id, created_picking_id, created_by
+        )
+
     async def batch_pick_from_work_orders(
         self,
         tenant_id: int,
@@ -4063,8 +4145,12 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
             except Exception as e:
                 logger.warning("建立工单→生产领料 单据关联失败: %s", e)
 
-            detail = await self.get_production_picking_by_id(tenant_id, int(picking.id))
-            return [ProductionPickingResponse.model_validate(detail.model_dump())]
+            created_picking_id = int(picking.id)
+
+        detail = await self._start_production_picking_approval_after_create(
+            tenant_id, created_picking_id, created_by
+        )
+        return [ProductionPickingResponse.model_validate(detail.model_dump())]
 
 
 # 生产退料加载：可选取的领料单状态（唯一真源，与 capability / 预览一致）
