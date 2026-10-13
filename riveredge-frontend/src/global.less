@@ -2000,6 +2000,18 @@ code {
 .kuaizhizao-work-orders-table .ant-table-tbody > tr > td {
   vertical-align: middle !important;
 }
+/* 数量列：表头排序条默认把标题挤在左侧，这里表头与数字都靠右 */
+.kuaizhizao-work-orders-table .ant-table-thead > tr > th.wo-quantity-cell,
+.kuaizhizao-work-orders-table .ant-table-tbody > tr > td.wo-quantity-cell {
+  text-align: right !important;
+}
+.kuaizhizao-work-orders-table .ant-table-thead > tr > th.wo-quantity-cell .ant-table-column-sorters {
+  justify-content: flex-end;
+}
+.kuaizhizao-work-orders-table .ant-table-thead > tr > th.wo-quantity-cell .ant-table-column-title {
+  flex: none;
+  text-align: right;
+}
 /* 齐套率圆环：行增高时在单元格内垂直居中 */
 .kuaizhizao-work-orders-table .ant-table-tbody > tr > td.wo-readiness-cell {
   vertical-align: middle !important;

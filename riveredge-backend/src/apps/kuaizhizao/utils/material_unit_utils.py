@@ -1,7 +1,7 @@
 """
 物料多单位：场景单位解析与基础单位换算。
 
-约定：业务单据数量落库仍使用基础单位；生产/报工展示与录入使用 scenarios.production（缺省回退基础单位）。
+约定：业务单据数量落库使用基础单位。工单计划数量只展示物料基础单位，不读 units.scenarios。
 """
 
 from __future__ import annotations
@@ -167,27 +167,22 @@ def convert_from_base_quantity(
 
 
 def build_work_order_unit_fields(material: Any, wo: Any) -> Dict[str, Any]:
-    """为工单响应补充单位与按生产单位换算后的展示数量。"""
+    """工单数量按物料基础单位原样展示，不读 scenarios.production。"""
     if not material:
         return {}
 
     base_unit = str(getattr(material, "base_unit", None) or "").strip()
-    product_unit = resolve_material_scenario_unit(material, "production")
-    factor = resolve_unit_to_base_factor(material, product_unit)
 
-    def _display(field: str) -> Optional[Decimal]:
+    def _raw(field: str) -> Optional[Decimal]:
         raw = getattr(wo, field, None)
         if raw is None:
             return None
-        val = _decimal(raw)
-        if val <= 0 and field not in ("quantity",):
-            return val
-        return convert_from_base_quantity(material, val, to_unit=product_unit)
+        return _decimal(raw)
 
     out: Dict[str, Any] = {
         "base_unit": base_unit or None,
-        "product_unit": product_unit or None,
-        "unit_to_base_factor": float(factor) if factor else 1.0,
+        "product_unit": base_unit or None,
+        "unit_to_base_factor": 1.0,
     }
     for src, dst in (
         ("quantity", "display_quantity"),
@@ -196,7 +191,7 @@ def build_work_order_unit_fields(material: Any, wo: Any) -> Dict[str, Any]:
         ("qualified_quantity", "display_qualified_quantity"),
         ("unqualified_quantity", "display_unqualified_quantity"),
     ):
-        disp = _display(src)
-        if disp is not None:
-            out[dst] = disp
+        val = _raw(src)
+        if val is not None:
+            out[dst] = val
     return out

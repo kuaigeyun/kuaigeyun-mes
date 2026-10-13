@@ -38117,6 +38117,14 @@ export default {
     '销售合同列表与新建页切换不再闪 React 错误',
   'pages.dashboard.updateLog.entries.sales-contract-form-hooks-order-r01.description':
     '框架合同/销售合同同一组件在表单页提前 return 前未调用详情抽屉 hooks，列表与新建切换时 hooks 数量不一致触发 #300；已把 hooks 挪到分支之前。',
+  'pages.dashboard.updateLog.entries.work-order-list-quantity-column-align-r01.title':
+    '工单列表数量列加宽并右对齐',
+  'pages.dashboard.updateLog.entries.work-order-list-quantity-column-align-r01.description':
+    '数量列加宽，表头和数字都靠右，避免「20,000 吨 (T)」挤在窄列里。',
+  'pages.dashboard.updateLog.entries.work-order-planned-qty-uses-base-unit-r01.title':
+    '新建工单计划数量只显示物料基础单位',
+  'pages.dashboard.updateLog.entries.work-order-planned-qty-uses-base-unit-r01.description':
+    '没有辅助单位时，物料上那份不显示的生产单位配置会被删掉。新建工单的计划数量只跟物料基础单位，不再读这份配置。',
   'pages.dashboard.updateLog.entries.material-stale-production-unit-prune-r01.title':
     '物料基础单位已改千克时工单不再显示残留生产单位吨',
   'pages.dashboard.updateLog.entries.material-stale-production-unit-prune-r01.description':

@@ -364,13 +364,12 @@ import { formatDateTime, formatDateTimeBySiteSetting, formatQuantity, todaySiteD
 import {
   convertBaseQtyToProductionDisplay,
   convertProductionInputToBaseQty,
-  convertToBaseQuantity,
   formatWorkOrderDisplayQuantity,
-  resolveMaterialScenarioUnit,
   resolveWorkOrderFormQuantity,
 } from '../../../../../utils/materialScenarioUnit'
 import { formatQuantityWithUnit } from '../../../../../utils/materialUnitDisplay'
 import type { Material } from '../../../../master-data/types/material'
+import { useMaterialUnitOptions } from '../../../../master-data/hooks/useMaterialUnitOptions'
 import { formDateRangeFormItemProps, formDateFormItemProps, toApiDateTimeString } from '../../../../../utils/formDate'
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns'
 import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_DEFAULTS } from '../../sales-management/shared/DocumentPushProgressBar'
@@ -1959,6 +1958,9 @@ const WorkOrdersPage: React.FC = () => {
     canCreateWorkOrder?: boolean
   } | null>(null)
   const [formProductMaterial, setFormProductMaterial] = useState<Material | null>(null)
+  // 与物料档案基础单位下拉同一套：展示单位名称，不把单位编码原样拼进标题
+  const { valueToLabel: materialUnitLabelByCode, isFetched: materialUnitCatalogFetched } =
+    useMaterialUnitOptions()
   const [completeTrackingModalOpen, setCompleteTrackingModalOpen] = useState(false)
   const [completeTrackingLoading, setCompleteTrackingLoading] = useState(false)
   const [completeTrackingWorkOrder, setCompleteTrackingWorkOrder] = useState<WorkOrder | null>(null)
@@ -3445,7 +3447,7 @@ const WorkOrdersPage: React.FC = () => {
         console.error('加载工单工序失败', e)
         setSelectedOperations([])
       }
-      // 编辑时 product_id 禁用，仍须加载完整物料（含多单位）以便计划数量按生产单位回填
+      // 编辑时 product_id 禁用，仍须加载物料，计划数量单位跟基础单位
       let editProductMaterial: Material | null = null
       if (detail.product_id) {
         const mats = await resolveMaterialFormReference(KUAIZHIZAO_DOC_HOST.workOrder, [
@@ -3467,7 +3469,9 @@ const WorkOrdersPage: React.FC = () => {
           product_id: detail.product_id,
           product_code: detail.product_code,
           product_name: detail.product_name,
-          quantity: resolveWorkOrderFormQuantity(detail, 'quantity', editProductMaterial),
+          quantity: editProductMaterial
+            ? (Number(detail.quantity) || undefined)
+            : resolveWorkOrderFormQuantity(detail, 'quantity', editProductMaterial),
           production_mode: mode,
           variant_attributes: variantAttrs != null
             ? (typeof variantAttrs === 'string' ? variantAttrs : JSON.stringify(variantAttrs, null, 2))
@@ -5218,7 +5222,8 @@ const WorkOrdersPage: React.FC = () => {
           : null)
       if (values.quantity != null && quantityContext) {
         if (formProductMaterial) {
-          values.quantity = convertToBaseQuantity(formProductMaterial, Number(values.quantity))
+          const qty = Number(values.quantity)
+          values.quantity = Number.isFinite(qty) ? qty : values.quantity
         } else {
           values.quantity = convertProductionInputToBaseQty(Number(values.quantity), quantityContext)
         }
@@ -7411,11 +7416,14 @@ const WorkOrdersPage: React.FC = () => {
     {
       title: t('common.quantity'),
       dataIndex: 'quantity',
-      width: 88,
-      minWidth: 88,
+      width: 148,
+      minWidth: 148,
       uniTableKeepWidth: true,
       resizable: false,
       align: 'right',
+      className: 'wo-quantity-cell',
+      onCell: () => ({ className: 'wo-quantity-cell' }),
+      onHeaderCell: () => ({ className: 'wo-quantity-cell' }),
       sorter: true,
       render: (_, record) =>
         isWorkOrderGroupListRow(record) ? null : formatWorkOrderListQuantity(record),
@@ -8292,7 +8300,7 @@ const WorkOrdersPage: React.FC = () => {
         <UniTable<WorkOrder>
           className="kuaizhizao-work-orders-table"
           scroll={{ scrollToFirstRowOnChange: false }}
-          columnPersistenceId="apps.kuaizhizao.pages.production-execution.work-orders-width-v3"
+          columnPersistenceId="apps.kuaizhizao.pages.production-execution.work-orders-width-v4"
           headerTitle={t('app.kuaizhizao.workOrder.pageTitle')}
           formRef={tableSearchFormRef}
           searchParamsRef={tableSearchParamsRef}
@@ -9596,9 +9604,8 @@ const WorkOrdersPage: React.FC = () => {
               onChange={async (value, material) => {
                 if (value) {
                   const productId = Number(value)
-                  // 先清空，避免异步重拉期间仍显示上一物料的「吨」
                   setFormProductMaterial(null)
-                  // 选料后按 id 重拉引用展示（含 units.scenarios），避免下拉缓存里旧生产单位把计划数量标成吨等
+                  // 选料后按 id 重拉物料，计划数量单位用该物料的基础单位名称
                   let resolved =
                     material && !Array.isArray(material) ? (material as Material) : undefined
                   if (Number.isFinite(productId) && productId > 0) {
@@ -9747,13 +9754,16 @@ const WorkOrdersPage: React.FC = () => {
 
         <ProFormDigit
           name="quantity"
-          label={
-            formProductMaterial
-              ? `${t('app.kuaizhizao.workOrder.colPlannedQty')}（${resolveMaterialScenarioUnit(formProductMaterial, 'production')}）`
-              : currentWorkOrder?.product_unit
-                ? `${t('app.kuaizhizao.workOrder.colPlannedQty')}（${currentWorkOrder.product_unit}）`
-                : t('app.kuaizhizao.workOrder.colPlannedQty')
-          }
+          label={(() => {
+            const code = String(formProductMaterial?.baseUnit ?? '').trim()
+            if (!code) return t('app.kuaizhizao.workOrder.colPlannedQty')
+            const name = materialUnitLabelByCode[code]
+            if (name) {
+              return `${t('app.kuaizhizao.workOrder.colPlannedQty')}（${name}）`
+            }
+            if (!materialUnitCatalogFetched) return t('app.kuaizhizao.workOrder.colPlannedQty')
+            return `${t('app.kuaizhizao.workOrder.colPlannedQty')}（${code}）`
+          })()}
           placeholder={t('app.kuaizhizao.workOrder.formEnter')}
           min={0}
           precision={quantityDecimals}

@@ -1186,10 +1186,12 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         units: (() => {
           const raw = restValues.units as MaterialUnits | undefined;
           if (!raw) return raw;
-          return {
-            units: raw.units ?? [],
-            scenarios: pruneMaterialScenarioUnits(String(restValues.baseUnit ?? ''), raw),
-          };
+          const aux = raw.units ?? [];
+          const scenarios = pruneMaterialScenarioUnits(String(restValues.baseUnit ?? ''), raw);
+          if (!aux.length || !Object.keys(scenarios).length) {
+            return { units: aux };
+          }
+          return { units: aux, scenarios };
         })(),
         batch_managed: restValues.batchManaged,
         default_batch_rule_id: restValues.batchManaged
@@ -1907,7 +1909,11 @@ const MaterialUnitsEditor: React.FC<MaterialUnitsEditorProps> = ({ value, onChan
       units: nextUnits,
       scenarios: nextScenarios,
     });
-    onChange?.({ units: nextUnits, scenarios: pruned });
+    onChange?.(
+      Object.keys(pruned).length
+        ? { units: nextUnits, scenarios: pruned }
+        : { units: nextUnits },
+    );
   };
 
   // 基础单位变更后，裁掉已不在可选集合中的场景单位（删辅助单位走 commitUnits）
@@ -1925,7 +1931,11 @@ const MaterialUnitsEditor: React.FC<MaterialUnitsEditorProps> = ({ value, onChan
           String((pruned as Record<string, string>)[k] ?? ''),
       );
     if (same) return;
-    onChange?.({ units: value.units ?? [], scenarios: pruned });
+    onChange?.(
+      Object.keys(pruned).length
+        ? { units: value.units ?? [], scenarios: pruned }
+        : { units: value.units ?? [] },
+    );
     // 仅跟踪 baseUnit；units 变更由 commitUnits 裁剪
     // eslint-disable-next-line react-hooks/exhaustive-deps -- avoid onChange identity loops
   }, [baseUnit]);

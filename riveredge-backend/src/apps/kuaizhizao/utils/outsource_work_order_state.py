@@ -71,7 +71,6 @@ async def resolve_outsource_work_order_product_unit(
     if product_id is None:
         return default
     from apps.master_data.models.material import Material
-    from apps.kuaizhizao.utils.material_unit_utils import resolve_material_scenario_unit
 
     material = await Material.get_or_none(
         tenant_id=tenant_id,
@@ -79,7 +78,7 @@ async def resolve_outsource_work_order_product_unit(
         deleted_at__isnull=True,
     )
     if material:
-        unit = resolve_material_scenario_unit(material, "production")
+        unit = str(getattr(material, "base_unit", None) or "").strip()
         if unit:
-            return str(unit)
+            return unit
     return default

@@ -153,6 +153,51 @@ def _source_type_to_type_code(source_type: Optional[str]) -> str:
     return _SOURCE_TYPE_TO_TYPE_CODE.get(normalized, "RAW")
 
 
+def _aux_unit_rows(units: Any) -> list:
+    if isinstance(units, str):
+        text = units.strip()
+        if not text:
+            return []
+        try:
+            units = json.loads(text)
+        except (json.JSONDecodeError, TypeError):
+            return []
+    if not isinstance(units, dict):
+        return []
+    rows = units.get("units")
+    return rows if isinstance(rows, list) else []
+
+
+def _has_auxiliary_unit(units: Any) -> bool:
+    for row in _aux_unit_rows(units):
+        if isinstance(row, dict) and str(row.get("unit") or "").strip():
+            return True
+        if isinstance(row, str) and row.strip():
+            return True
+    return False
+
+
+def _drop_hidden_unit_scenarios(units: Any) -> Any:
+    """没有辅助单位时删掉 scenarios。场景单位只跟辅助单位一起保存。"""
+    if isinstance(units, str):
+        text = units.strip()
+        if not text:
+            return units
+        try:
+            parsed = json.loads(text)
+        except (json.JSONDecodeError, TypeError):
+            return units
+        cleaned = _drop_hidden_unit_scenarios(parsed)
+        return cleaned
+    if not isinstance(units, dict) or _has_auxiliary_unit(units):
+        return units
+    if "scenarios" not in units:
+        return units
+    cleaned = dict(units)
+    cleaned.pop("scenarios", None)
+    return cleaned
+
+
 def _apply_canonical_material_source_type(data: Dict[str, Any]) -> None:
     if "source_type" not in data or data.get("source_type") is None:
         return
@@ -1305,6 +1350,8 @@ class MaterialService:
 
         _normalize_material_logistics_fields(material_data, for_create=True)
         _apply_canonical_material_source_type(material_data)
+        if "units" in material_data:
+            material_data["units"] = _drop_hidden_unit_scenarios(material_data.get("units"))
         material_data["source_type"] = require_canonical_material_source_type(
             material_data.get("source_type"),
             material_code=material_data.get("main_code") or material_data.get("code"),
@@ -2859,6 +2906,8 @@ class MaterialService:
 
         _normalize_material_logistics_fields(update_data, for_create=False)
         _apply_canonical_material_source_type(update_data)
+        if "units" in update_data:
+            update_data["units"] = _drop_hidden_unit_scenarios(update_data.get("units"))
         
         for key, value in update_data.items():
             setattr(material, key, value)
