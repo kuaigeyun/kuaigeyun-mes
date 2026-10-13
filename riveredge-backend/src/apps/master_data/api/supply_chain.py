@@ -389,8 +389,15 @@ async def sync_suppliers_from_source(
     body: MasterDataSyncFromSourceRequest,
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
+    stream: bool = Query(False, description="为 true 时以 NDJSON 流式返回进度"),
 ):
     try:
+        if stream:
+            from core.services.data.sync_progress_stream import stream_sync_ndjson
+
+            return await stream_sync_ndjson(
+                lambda: _supplier_sync_service().sync_from_source(tenant_id, current_user, body)
+            )
         return await _supplier_sync_service().sync_from_source(tenant_id, current_user, body)
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))

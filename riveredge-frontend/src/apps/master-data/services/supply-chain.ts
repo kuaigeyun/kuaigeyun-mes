@@ -159,24 +159,30 @@ export async function getSupplierSyncBinding(): Promise<MasterDataSyncBinding> {
   return api.get('/apps/master-data/supply-chain/suppliers/sync-binding');
 }
 
-export async function syncSuppliersFromSource(payload: {
-  source_type?: 'api' | 'dataset';
-  api_uuid?: string;
-  dataset_uuid?: string;
-  field_mapping?: Record<string, string>;
-  save_binding?: boolean;
-  skip_prerequisite_syncs?: boolean;
-  sync_mode?: string;
-  schedule_interval_minutes?: number;
-  incremental?: boolean;
-  active_only?: boolean;
-}): Promise<MasterDataSyncFromSourceResult> {
-  return apiRequest<MasterDataSyncFromSourceResult>(
+export async function syncSuppliersFromSource(
+  payload: {
+    source_type?: 'api' | 'dataset';
+    api_uuid?: string;
+    dataset_uuid?: string;
+    field_mapping?: Record<string, string>;
+    save_binding?: boolean;
+    skip_prerequisite_syncs?: boolean;
+    sync_mode?: string;
+    schedule_interval_minutes?: number;
+    incremental?: boolean;
+    active_only?: boolean;
+  },
+  onProgress?: (message: string) => void,
+): Promise<MasterDataSyncFromSourceResult> {
+  const { apiRequestSyncNdjson } = await import(
+    '../../../components/sync-from-source-modal/apiRequestSyncNdjson'
+  );
+  return apiRequestSyncNdjson<MasterDataSyncFromSourceResult>(
     '/apps/master-data/supply-chain/suppliers/sync-from-source',
     {
-      method: 'POST',
       data: payload,
       timeoutMs: 600_000,
+      onProgress,
     },
   );
 }

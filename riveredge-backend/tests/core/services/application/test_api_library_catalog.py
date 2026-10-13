@@ -50,8 +50,10 @@ def test_kingdee_cosmic_presets_use_concrete_sys_query_paths():
     assert "基础单位" in (measureunits.get("name") or "")
     assert "baseunit.number" in str(measureunits.get("request_body", {}).get("select") or "")
     material_group = next(p for p in presets if p["code_suffix"] == "query_material_group")
-    assert material_group["path"] == "kapi/v2/gmc/mdr_goodsclass/getMalGoodsClass"
-    assert "data" not in (material_group.get("request_body") or {})
+    assert material_group["path"] == "kapi/v2/basedata/bd_materialgroup/batchQuery"
+    assert material_group["method"] == "POST"
+    assert (material_group.get("request_body") or {}).get("data") == {}
+    assert (material_group.get("request_body") or {}).get("pageSize") == 500
     goods_class = next(p for p in presets if p["code_suffix"] == "query_goods_class")
     assert goods_class["path"] == "kapi/v2/gmc/mdr_goodsclass/getMalGoodsClass"
     assert goods_class.get("request_body", {}).get("pageSize") == 100
@@ -59,7 +61,55 @@ def test_kingdee_cosmic_presets_use_concrete_sys_query_paths():
     customer = next(p for p in presets if p["code_suffix"] == "query_customer")
     assert customer["path"] == "kapi/v2/basedata/bd_customer/batchQuery"
     assert customer.get("request_body", {}).get("pageSize") == 100
+    supplier = next(p for p in presets if p["code_suffix"] == "query_supplier")
+    assert supplier["path"] == "kapi/v2/basedata/bd_supplier/query"
+    assert supplier["method"] == "POST"
+    assert (supplier.get("request_body") or {}).get("data") == {}
     assert "__API_NUMBER__" not in material["path"]
+
+
+def test_supplier_preset_needs_upgrade_detects_legacy_get_and_warehouse_body():
+    from core.services.integration.kingdee_cosmic_api_presets import (
+        build_supplier_query_preset_body,
+        supplier_preset_needs_upgrade,
+    )
+
+    assert supplier_preset_needs_upgrade(
+        "kapi/v2/basedata/bd_supplier/query",
+        "GET",
+        {},
+        {"number": "9chu"},
+    )
+    assert supplier_preset_needs_upgrade(
+        "kapi/v2/basedata/b",
+        "GET",
+        {},
+        {},
+    )
+    assert supplier_preset_needs_upgrade(
+        "kapi/v2/basedata/bd_supplier/batchQuery",
+        "POST",
+        build_supplier_query_preset_body(),
+    )
+    assert supplier_preset_needs_upgrade(
+        "kapi/v2/basedata/bd_supplier/query",
+        "POST",
+        {"data": {"createorg_number": "WANG"}, "pageNo": 1, "pageSize": 100},
+    )
+    assert supplier_preset_needs_upgrade(
+        "kapi/v2/basedata/bd_supplier/query",
+        "POST",
+        {
+            "data": {"createorg_number": ["WANG"], "status": ["C"]},
+            "pageNo": 1,
+            "pageSize": 100,
+        },
+    )
+    assert not supplier_preset_needs_upgrade(
+        "kapi/v2/basedata/bd_supplier/query",
+        "POST",
+        build_supplier_query_preset_body(),
+    )
 
 
 def test_measureunits_preset_needs_upgrade_detects_legacy_path():
@@ -88,14 +138,38 @@ def test_measureunits_preset_needs_upgrade_detects_legacy_path():
 
 def test_material_group_preset_needs_upgrade_detects_legacy_path():
     from core.services.integration.kingdee_cosmic_api_presets import (
+        build_material_group_batch_query_preset_body,
         material_group_preset_needs_upgrade,
     )
 
     assert material_group_preset_needs_upgrade(
-        "kapi/v2/basedata/bd_materialgroup/batchQuery"
+        "kapi/v2/gmc/mdr_goodsclass/getMalGoodsClass",
+        "POST",
+        {"pageNo": 1, "pageSize": 100},
+    )
+    assert material_group_preset_needs_upgrade(
+        "kapi/v2/basedata/bd_materialgroup/batchQuery",
+        "POST",
+        {
+            "data": {"createorg_number": ["WANG"], "status": ["C"]},
+            "pageNo": 1,
+            "pageSize": 100,
+        },
     )
     assert not material_group_preset_needs_upgrade(
-        "kapi/v2/gmc/mdr_goodsclass/getMalGoodsClass"
+        "kapi/v2/basedata/bd_materialgroup/batchQuery",
+        "POST",
+        build_material_group_batch_query_preset_body(),
+    )
+    assert not material_group_preset_needs_upgrade(
+        "kapi/v2/basedata/bd_materialgroup/batchQuery",
+        "POST",
+        build_material_group_batch_query_preset_body(createorg_numbers=["BU-00000"]),
+    )
+    assert material_group_preset_needs_upgrade(
+        "kapi/v2/basedata/bd_materialgroup/batchQuery",
+        "POST",
+        {"data": {"createorg_number": "WANG"}, "pageNo": 1, "pageSize": 100},
     )
 
 

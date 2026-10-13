@@ -5,6 +5,7 @@ from datetime import datetime
 from core.services.integration.kingdee_cosmic_since_filter import (
     apply_cosmic_since_filter,
     apply_cosmic_since_to_params,
+    cosmic_paged_response_is_last_page,
     filter_rows_by_since,
     is_cosmic_paged_query,
     with_cosmic_page,
@@ -91,3 +92,21 @@ def test_filter_rows_by_since_keeps_all_without_timestamps():
     rows = [{"number": "A"}, {"number": "B"}]
     kept = filter_rows_by_since(rows, since)
     assert len(kept) == 2
+
+
+def test_cosmic_paged_response_is_last_page():
+    assert cosmic_paged_response_is_last_page(
+        {"data": {"rows": [{}] * 500, "lastPage": True}},
+        chunk_len=500,
+        page_size=500,
+    )
+    assert not cosmic_paged_response_is_last_page(
+        {"data": {"rows": [{}] * 500, "lastPage": False}},
+        chunk_len=500,
+        page_size=500,
+    )
+    assert cosmic_paged_response_is_last_page(
+        {"data": {"rows": []}},
+        chunk_len=0,
+        page_size=500,
+    )

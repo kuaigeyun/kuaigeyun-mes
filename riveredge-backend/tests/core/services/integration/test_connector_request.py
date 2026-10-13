@@ -100,6 +100,15 @@ def test_resolve_connector_request_missing_base_url_raises():
         resolve_connector_request(ic, endpoint="/api/orders")
 
 
+def test_resolve_connector_request_repairs_truncated_supplier_path():
+    ic = _FakeIntegrationConfig({"base_url": "https://lzhtech.test.kdgalaxy.com"})
+    url, _ = resolve_connector_request(
+        ic,
+        endpoint="kapi/v2/basedata/b",
+    )
+    assert url == "https://lzhtech.test.kdgalaxy.com/kapi/v2/basedata/bd_supplier/query"
+
+
 def test_resolve_connector_request_kingdee_v2_omits_ierp_in_base():
     ic = _FakeIntegrationConfig({"base_url": "https://lzhtech.kdgalaxy.com/ierp"})
     url, _ = resolve_connector_request(

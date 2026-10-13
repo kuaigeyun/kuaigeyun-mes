@@ -17,21 +17,71 @@ _BASEDATA_BATCH_OBJECTS = {
 }
 
 
+_INCOMPLETE_SUPPLIER_PATH_MARKERS = frozenset(
+    {
+        "kapi/v2/basedata/b",
+        "kapi/v2/basedata/bd",
+        "v2/basedata/b",
+    }
+)
+SUPPLIER_QUERY_ENDPOINT = "kapi/v2/basedata/bd_supplier/query"
+
+
+def repair_incomplete_supplier_endpoint(endpoint: str) -> str:
+    """
+    接口库常见误存路径 …/basedata/b（缺 bd_supplier/query）。
+    补全为制造链路探活地址，不是另猜路由。
+    """
+    ep = str(endpoint or "").strip().lstrip("/")
+    lower = ep.lower().replace("\\", "/").rstrip("/")
+    if lower in _INCOMPLETE_SUPPLIER_PATH_MARKERS or lower.endswith("/basedata/b"):
+        return SUPPLIER_QUERY_ENDPOINT
+    return ep
+
+
+def normalize_cosmic_openapi_endpoint(endpoint: str) -> str:
+    """相对路径：开放平台 /v2/… 补 kapi 前缀，旧 sys/query 按物料/客户规则改写。"""
+    ep = str(endpoint or "").strip().lstrip("/")
+    if ep.lower().startswith("v2/"):
+        ep = f"kapi/{ep.lstrip('/')}"
+    ep = rewrite_basedata_sys_query_path(ep)
+    return repair_incomplete_supplier_endpoint(ep)
+
+
+def strip_invalid_kingdee_cosmic_base_url_suffix(base_url: str) -> str:
+    """
+    连接器 base_url 误粘贴了接口路径（含截断的 …/basedata/b）时，剥回到门户根。
+    """
+    url = str(base_url or "").strip().rstrip("/")
+    lower = url.lower()
+    cut_markers = (
+        "/kapi/v2/basedata/b",
+        "/kapi/v2/basedata/bd_supplier/query",
+        "/kapi/v2/basedata/bd_supplier/batchquery",
+        "/kapi/v2/basedata/bd_material/batchquery",
+    )
+    for marker in cut_markers:
+        idx = lower.find(marker)
+        if idx > 0:
+            return url[:idx].rstrip("/")
+    return url
+
+
 def rewrite_basedata_sys_query_path(endpoint: str) -> str:
-    """供应商查询是 /query；物料批量查询是 /batchQuery。"""
+    """
+    旧 sys/query → v2。物料/客户/仓库等 batchQuery；供应商与 mfg 探活一致为 …/query。
+    """
     ep = str(endpoint or "").strip().lstrip("/")
     if ep.lower().startswith("ierp/"):
         ep = ep[5:]
     lower = ep.lower()
-    if lower == "kapi/v2/basedata/bd_supplier/batchquery":
-        return "kapi/v2/basedata/bd_supplier/query"
     prefix = "kapi/sys/"
     suffix = "/query"
     if not lower.startswith(prefix) or not lower.endswith(suffix):
         return ep
     biz = lower[len(prefix) : -len(suffix)]
     if biz == "bd_supplier":
-        return "kapi/v2/basedata/bd_supplier/query"
+        return f"kapi/v2/basedata/{biz}/query"
     if biz not in _BASEDATA_BATCH_OBJECTS:
         return ep
     return f"kapi/v2/basedata/{biz}/batchQuery"
@@ -224,7 +274,6 @@ def prepare_kingdee_cosmic_outbound(
         url_out = re.sub(r"(?i)/query/?$", "/batchQuery", _path_without_query(url_out))
         method_out = "POST"
         params_out.pop("number", None)
-
     body_out = ensure_kingdee_v2_request_body(url_out, body_out)
     org = resolve_kingdee_cosmic_createorg_number(cfg)
     lower = _path_without_query(url_out).lower()

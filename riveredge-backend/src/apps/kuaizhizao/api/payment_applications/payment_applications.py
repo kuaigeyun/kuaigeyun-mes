@@ -92,6 +92,74 @@ async def list_payment_applications(
     )
 
 
+@router.get("/payment-applications/pull/payables")
+async def list_payables_for_application(
+    supplier_id: int = Query(...),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=200),
+    keyword: Optional[str] = None,
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_permission_codes("kuaizhizao:payment-application:read")),
+):
+    return await _pull.list_payable_pull_lines(
+        tenant_id, supplier_id, skip=skip, limit=limit, keyword=keyword
+    )
+
+
+@router.post("/payment-applications/pull-from-purchase-order", response_model=PaymentApplicationResponse)
+async def pull_from_purchase_order(
+    data: PullPaymentApplicationFromPurchaseOrderRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_permission_codes("kuaizhizao:payment-application:create")),
+):
+    try:
+        return await _pull.create_from_purchase_order(
+            tenant_id, data.purchase_order_id, data.amount, current_user.id
+        )
+    except (NotFoundError, ValidationError, BusinessLogicError) as e:
+        raise _http(400, str(e), "/payment-applications/pull-from-purchase-order", tenant_id) from e
+
+
+@router.post("/payment-applications/pull-from-purchase-receipt", response_model=PaymentApplicationResponse)
+async def pull_from_purchase_receipt(
+    data: PullPaymentApplicationFromPurchaseReceiptRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_permission_codes("kuaizhizao:payment-application:create")),
+):
+    try:
+        return await _pull.create_from_purchase_receipt(
+            tenant_id, data.purchase_receipt_id, data.amount, current_user.id
+        )
+    except (NotFoundError, ValidationError, BusinessLogicError) as e:
+        raise _http(400, str(e), "/payment-applications/pull-from-purchase-receipt", tenant_id) from e
+
+
+@router.post("/payment-applications/pull-from-reconciliation", response_model=PaymentApplicationResponse)
+async def pull_from_reconciliation(
+    data: PullPaymentApplicationFromReconciliationRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_permission_codes("kuaizhizao:payment-application:create")),
+):
+    try:
+        return await _pull.create_from_reconciliation(
+            tenant_id, data.supplier_id, data.items, current_user.id
+        )
+    except (ValidationError, BusinessLogicError) as e:
+        raise _http(400, str(e), "/payment-applications/pull-from-reconciliation", tenant_id) from e
+
+
+@router.get("/payment-applications/pull-from-purchase-order/preview")
+async def preview_pull_from_purchase_order(
+    purchase_order_id: int = Query(...),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_permission_codes("kuaizhizao:payment-application:read")),
+):
+    return await _pull.preview_from_purchase_order(tenant_id, purchase_order_id)
+
+
 @router.get("/payment-applications/{application_id}", response_model=PaymentApplicationResponse)
 async def get_payment_application(
     application_id: int = Path(..., ge=1),
@@ -183,71 +251,3 @@ async def push_payment_application_to_payment(
         raise _http(404, str(e), f"/payment-applications/{application_id}/push-payment", tenant_id) from e
     except (ValidationError, BusinessLogicError) as e:
         raise _http(400, str(e), f"/payment-applications/{application_id}/push-payment", tenant_id) from e
-
-
-@router.get("/payment-applications/pull/payables")
-async def list_payables_for_application(
-    supplier_id: int = Query(...),
-    skip: int = Query(0, ge=0),
-    limit: int = Query(20, ge=1, le=200),
-    keyword: Optional[str] = None,
-    tenant_id: int = Depends(get_current_tenant),
-    _auth: object = Depends(require_permission_codes("kuaizhizao:payment-application:read")),
-):
-    return await _pull.list_payable_pull_lines(
-        tenant_id, supplier_id, skip=skip, limit=limit, keyword=keyword
-    )
-
-
-@router.post("/payment-applications/pull-from-purchase-order", response_model=PaymentApplicationResponse)
-async def pull_from_purchase_order(
-    data: PullPaymentApplicationFromPurchaseOrderRequest,
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-    _auth: object = Depends(require_permission_codes("kuaizhizao:payment-application:create")),
-):
-    try:
-        return await _pull.create_from_purchase_order(
-            tenant_id, data.purchase_order_id, data.amount, current_user.id
-        )
-    except (NotFoundError, ValidationError, BusinessLogicError) as e:
-        raise _http(400, str(e), "/payment-applications/pull-from-purchase-order", tenant_id) from e
-
-
-@router.post("/payment-applications/pull-from-purchase-receipt", response_model=PaymentApplicationResponse)
-async def pull_from_purchase_receipt(
-    data: PullPaymentApplicationFromPurchaseReceiptRequest,
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-    _auth: object = Depends(require_permission_codes("kuaizhizao:payment-application:create")),
-):
-    try:
-        return await _pull.create_from_purchase_receipt(
-            tenant_id, data.purchase_receipt_id, data.amount, current_user.id
-        )
-    except (NotFoundError, ValidationError, BusinessLogicError) as e:
-        raise _http(400, str(e), "/payment-applications/pull-from-purchase-receipt", tenant_id) from e
-
-
-@router.post("/payment-applications/pull-from-reconciliation", response_model=PaymentApplicationResponse)
-async def pull_from_reconciliation(
-    data: PullPaymentApplicationFromReconciliationRequest,
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-    _auth: object = Depends(require_permission_codes("kuaizhizao:payment-application:create")),
-):
-    try:
-        return await _pull.create_from_reconciliation(
-            tenant_id, data.supplier_id, data.items, current_user.id
-        )
-    except (ValidationError, BusinessLogicError) as e:
-        raise _http(400, str(e), "/payment-applications/pull-from-reconciliation", tenant_id) from e
-
-
-@router.get("/payment-applications/pull-from-purchase-order/preview")
-async def preview_pull_from_purchase_order(
-    purchase_order_id: int = Query(...),
-    tenant_id: int = Depends(get_current_tenant),
-    _auth: object = Depends(require_permission_codes("kuaizhizao:payment-application:read")),
-):
-    return await _pull.preview_from_purchase_order(tenant_id, purchase_order_id)

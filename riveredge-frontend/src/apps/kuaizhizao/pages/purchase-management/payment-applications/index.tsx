@@ -506,7 +506,7 @@ const PaymentApplicationsPage: React.FC = () => {
                 {detail.supplierName}
               </Descriptions.Item>
               <Descriptions.Item label={t('app.kuaizhizao.paymentApplication.status')}>
-                {detail.status}
+                {renderDocumentStatusTag(detail.status, detail.status)}
               </Descriptions.Item>
               <Descriptions.Item label={t('app.kuaizhizao.paymentApplication.totalRequestAmount')}>
                 {formatCurrencyAmount(detail.totalRequestAmount)}

@@ -109,9 +109,19 @@ export interface ApprovalNodeOverview {
   executions: ApprovalNodeExecution[];
 }
 
+export interface ApprovalFlowViewerActions {
+  has_my_pending_task: boolean;
+  approve: boolean;
+  reject: boolean;
+  block_reason?: string | null;
+}
+
 export interface ApprovalStatusResponse {
   has_flow: boolean;
   has_instance?: boolean;
+  /** 与列表接口一致：当前用户在该 entity 流程上是否有 pending 任务 */
+  has_my_pending_task?: boolean;
+  viewer_actions?: ApprovalFlowViewerActions;
   status?: string;
   current_node?: string;
   current_approver_id?: number;

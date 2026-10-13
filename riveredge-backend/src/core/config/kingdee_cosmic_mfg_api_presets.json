@@ -88,8 +88,8 @@
     },
     {
       "code_suffix": "query_material_group",
-      "name": "苍穹查询物料分组",
-      "description": "基础资料API服务里的物料分组批量查询。请求地址 /v2/basedata/bd_materialgroup/batchQuery，请求体为 data、pageNo、pageSize。筛选字段放在 data 内。",
+      "name": "苍穹查询物料分类",
+      "description": "开放平台已发布：物料分类批量查询 batchQuery。POST /v2/basedata/bd_materialgroup/batchQuery。默认与物料 batchQuery 一致：data 为空，仅分页；筛选字段可选放在 data 内（数组）。",
       "path": "kapi/v2/basedata/bd_materialgroup/batchQuery",
       "method": "POST",
       "request_body": {
@@ -125,11 +125,14 @@
     {
       "code_suffix": "basedata_query_2",
       "name": "苍穹查询供应商信息",
-      "description": "调用此API查询供应商信息。服务应用 appid=basedata，接口编码 query。开放平台 urlformat=/v2/basedata/bd_supplier/query。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "description": "调用此API查询供应商信息。服务应用 appid=basedata，接口编码 query。开放平台 urlformat=/v2/basedata/bd_supplier/query。POST；data 内 createorg_number、status 等为数组，pageNo/pageSize 与 data 同级。",
       "path": "kapi/v2/basedata/bd_supplier/query",
       "method": "POST",
       "request_body": {
-        "data": {},
+        "data": {
+          "createorg_number": ["WANG"],
+          "status": ["C"]
+        },
         "pageNo": 1,
         "pageSize": 100
       }
