@@ -44,6 +44,14 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'purchase-requisition-uni-audit-resource-fix-r01',
+    date: '2026-10-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-requisition-uni-audit-resource-fix-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-requisition-uni-audit-resource-fix-r01.description',
+  },
+  {
     id: 'approval-status-viewer-import-fix-r01',
     date: '2026-10-13',
     type: 'fix',
