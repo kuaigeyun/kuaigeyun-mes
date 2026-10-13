@@ -672,17 +672,6 @@ const UnitsPage: React.FC = () => {
   const unitColumns: ProColumns<MaterialUnit>[] = useMemo(
     () => [
       {
-        title: t('app.master-data.units.code'),
-        dataIndex: 'code',
-        width: 120,
-        minWidth: 120,
-        uniTableKeepWidth: true,
-        resizable: false,
-        sorter: true,
-        // @ts-expect-error UniTable defaultShow：列设置可再打开
-        defaultShow: false,
-      },
-      {
         title: t('app.master-data.units.name'),
         dataIndex: 'name',
         width: 160,
@@ -702,6 +691,16 @@ const UnitsPage: React.FC = () => {
             ) : null}
           </span>
         ),
+      },
+      {
+        title: t('app.master-data.units.code'),
+        dataIndex: 'code',
+        width: 140,
+        minWidth: 140,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
+        sorter: true,
       },
       {
         title: t('app.master-data.units.sortOrder'),
@@ -918,7 +917,7 @@ const UnitsPage: React.FC = () => {
               <UniTable<MaterialUnit>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('masterData.units')}
-                columnPersistenceId="apps.master-data.pages.materials.units.catalog.list-v3"
+                columnPersistenceId="apps.master-data.pages.materials.units.catalog.list-v4"
                 permissionResource="master-data:material-unit"
                 actionRef={unitActionRef}
                 rowKey="uuid"

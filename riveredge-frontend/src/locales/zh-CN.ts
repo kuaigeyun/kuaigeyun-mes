@@ -38117,10 +38117,26 @@ export default {
     '销售合同列表与新建页切换不再闪 React 错误',
   'pages.dashboard.updateLog.entries.sales-contract-form-hooks-order-r01.description':
     '框架合同/销售合同同一组件在表单页提前 return 前未调用详情抽屉 hooks，列表与新建切换时 hooks 数量不一致触发 #300；已把 hooks 挪到分支之前。',
+  'pages.dashboard.updateLog.entries.material-unit-catalog-show-code-r01.title':
+    '单位管理默认显示单位编码',
+  'pages.dashboard.updateLog.entries.material-unit-catalog-show-code-r01.description':
+    '单位列表在名称旁默认展示编码列。此前编码列默认隐藏，名称改过之后无法直接看出物料上存的仍是旧编码。',
+  'pages.dashboard.updateLog.entries.inventory-unit-follows-material-base-unit-r01.title':
+    '即时库存单位改跟物料当前基础单位',
+  'pages.dashboard.updateLog.entries.inventory-unit-follows-material-base-unit-r01.description':
+    '即时库存不再沿用线边库存快照里的旧单位编码，也不再误读不存在的物料 unit 字段；单位列与数量旁都跟物料当前基础单位，并按单位目录显示名称。',
+  'pages.dashboard.updateLog.entries.inventory-unit-column-uses-catalog-name-r01.title':
+    '即时库存单位列与数量旁单位一致',
+  'pages.dashboard.updateLog.entries.inventory-unit-column-uses-catalog-name-r01.description':
+    '单位列改为显示单位目录名称，与库存数量旁的单位同一套。此前直接拼了单位编码，编码仍是旧文案时会和数量旁的名称不一致。',
   'pages.dashboard.updateLog.entries.work-order-list-quantity-column-align-r01.title':
     '工单列表数量列加宽并右对齐',
   'pages.dashboard.updateLog.entries.work-order-list-quantity-column-align-r01.description':
     '数量列加宽，表头和数字都靠右，避免「20,000 吨 (T)」挤在窄列里。',
+  'pages.dashboard.updateLog.entries.work-order-related-unit-snapshot-backfill-r01.title':
+    '工单相关单位快照已按物料基础单位回填',
+  'pages.dashboard.updateLog.entries.work-order-related-unit-snapshot-backfill-r01.description':
+    '工单本身不存单位，数量按基础单位落库。迁移已清理无效场景单位，并把线边库存、完工入库、生产领退料等制造单据上的单位快照对齐到当前物料基础单位；工单数量数值未改写。',
   'pages.dashboard.updateLog.entries.work-order-planned-qty-uses-base-unit-r01.title':
     '新建工单计划数量只显示物料基础单位',
   'pages.dashboard.updateLog.entries.work-order-planned-qty-uses-base-unit-r01.description':

@@ -44,6 +44,34 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'work-order-related-unit-snapshot-backfill-r01',
+    date: '2026-10-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.work-order-related-unit-snapshot-backfill-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.work-order-related-unit-snapshot-backfill-r01.description',
+  },
+  {
+    id: 'material-unit-catalog-show-code-r01',
+    date: '2026-10-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.material-unit-catalog-show-code-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.material-unit-catalog-show-code-r01.description',
+  },
+  {
+    id: 'inventory-unit-follows-material-base-unit-r01',
+    date: '2026-10-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.inventory-unit-follows-material-base-unit-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.inventory-unit-follows-material-base-unit-r01.description',
+  },
+  {
+    id: 'inventory-unit-column-uses-catalog-name-r01',
+    date: '2026-10-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.inventory-unit-column-uses-catalog-name-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.inventory-unit-column-uses-catalog-name-r01.description',
+  },
+  {
     id: 'work-order-list-quantity-column-align-r01',
     date: '2026-10-13',
     type: 'improvement',
