@@ -12,7 +12,7 @@ import asyncio
 import contextvars
 from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
 from datetime import datetime
-from typing import Optional, List, Dict, Any, Union
+from typing import Optional, List, Dict, Any, Union, Set
 from uuid import UUID
 from loguru import logger
 
@@ -535,6 +535,48 @@ class ApprovalInstanceService:
         ).first()
 
     @staticmethod
+    def _graph_node_ids_on_some_path_to_target(graph: Dict[str, Any], target_id: Optional[str]) -> Set[str]:
+        """从 start 能走到 target 的路径上可能出现的节点（forward ∩ backward）。"""
+        if not target_id:
+            return set()
+        edges = graph.get("edges") or []
+        start = ApprovalInstanceService._get_start_node(graph)
+        start_id = str(start.get("id") or "") if start else ""
+        if not start_id:
+            return set()
+        target_id = str(target_id)
+
+        def bfs_forward(source: str) -> Set[str]:
+            seen = {source}
+            queue = [source]
+            while queue:
+                nid = queue.pop(0)
+                for edge in edges:
+                    if not isinstance(edge, dict) or edge.get("source") != nid:
+                        continue
+                    tgt = str(edge.get("target") or "")
+                    if tgt and tgt not in seen:
+                        seen.add(tgt)
+                        queue.append(tgt)
+            return seen
+
+        def bfs_backward(sink: str) -> Set[str]:
+            seen = {sink}
+            queue = [sink]
+            while queue:
+                nid = queue.pop(0)
+                for edge in edges:
+                    if not isinstance(edge, dict) or edge.get("target") != nid:
+                        continue
+                    src = str(edge.get("source") or "")
+                    if src and src not in seen:
+                        seen.add(src)
+                        queue.append(src)
+            return seen
+
+        return bfs_forward(start_id) & bfs_backward(target_id)
+
+    @staticmethod
     async def _build_nodes_overview(
         tenant_id: int,
         process: ApprovalProcess,
@@ -545,6 +587,11 @@ class ApprovalInstanceService:
         graph = ApprovalInstanceService._normalize_process_graph(process.nodes)
         overview: List[Dict[str, Any]] = []
         user_ids: List[int] = []
+        on_path_to_current: Set[str] = set()
+        if instance and instance.status == "pending" and instance.current_node:
+            on_path_to_current = ApprovalInstanceService._graph_node_ids_on_some_path_to_target(
+                graph, str(instance.current_node)
+            )
 
         if instance:
             user_ids.append(instance.submitter_id)
@@ -586,6 +633,32 @@ class ApprovalInstanceService:
             elif instance and instance.status == "approved":
                 node_status = "approved"
             elif instance and instance.status in {"rejected", "cancelled"}:
+                node_status = "skipped"
+            elif any(
+                h.from_node == node_id
+                and (
+                    "空审批人自动通过" in (h.comment or "")
+                    or "emptyApproverPolicy=auto_pass" in (h.comment or "").lower()
+                )
+                for h in node_history
+            ):
+                node_status = "skipped"
+            elif any(
+                h.from_node == node_id
+                and ApprovalInstanceService._normalize_execution_action(h.action)
+                in ("approve", "approved")
+                for h in node_history
+            ):
+                node_status = "approved"
+            elif (
+                instance
+                and instance.status == "pending"
+                and instance.current_node
+                and node_status == "waiting"
+                and node_type == "approval"
+                and on_path_to_current
+                and node_id not in on_path_to_current
+            ):
                 node_status = "skipped"
             else:
                 node_status = "waiting"

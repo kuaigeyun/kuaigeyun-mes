@@ -11831,6 +11831,7 @@ export default {
   'app.kuaizhizao.purchaseRequisition.form.addLine': '添加明细',
   'app.kuaizhizao.purchaseRequisition.form.material': '物料',
   'app.kuaizhizao.purchaseRequisition.form.warehouseStock': '各仓库存',
+  'app.kuaizhizao.purchaseRequisition.form.totalStock': '总库存',
   'app.kuaizhizao.purchaseRequisition.form.stockLoading': '库存加载中',
   'app.kuaizhizao.purchaseRequisition.form.stockEmpty': '各仓无在库结存',
   'app.kuaizhizao.purchaseRequisition.form.stockUnavailable': '暂无法读取库存',
@@ -25686,6 +25687,8 @@ export default {
   'pages.system.configCenter.auditBinding.switch': '审核开关',
   'pages.system.configCenter.auditBinding.process': '审批流程',
   'pages.system.configCenter.auditBinding.processPlaceholder': '选择审批流程',
+  'pages.system.configCenter.auditBinding.design': '设计',
+  'pages.system.configCenter.auditBinding.selectProcessBeforeDesign': '请先选择审批流程后再设计',
   'pages.system.configCenter.auditBinding.bindRolesBeforeEnable':
     '流程已就绪。请先到「审批流程」设计器为各审批节点绑定角色，再打开右侧开关。',
   'pages.system.configCenter.auditBinding.sectionDesc':
@@ -26024,8 +26027,8 @@ export default {
     '开启后，在单据详情抽屉中显示「操作记录」区块。关闭后隐藏该区块。',
   'pages.system.configCenter.param.common_detail_basic_updated_at_enabled_desc':
     '开启后，在单据详情抽屉「基本信息」中显示更新时间。关闭后隐藏该字段。',
-  'pages.system.configCenter.paramGroup.common_numeric_precision': '数值精度',
-  'pages.system.configCenter.paramGroup.common_numeric_precision_desc':
+  'pages.system.configCenter.paramSection.common_numeric_precision': '数值精度',
+  'pages.system.configCenter.paramSection.common_numeric_precision_desc':
     '数量、单价、金额分项设定，默认均为 2 位，可配置范围 0–4。',
   'pages.system.configCenter.paramSection.production_work_order': '工单',
   'pages.system.configCenter.paramSection.production_work_order_desc':
@@ -26105,7 +26108,7 @@ export default {
   'pages.system.configCenter.category.systemDesc': '系统必备初始项的统一加载与补全',
   'pages.system.configCenter.category.master_data': '基础数据',
   'pages.system.configCenter.category.master_dataDesc': '主数据与文控相关参数',
-  'pages.system.configCenter.category.kuaiplm': '快研发',
+  'pages.system.configCenter.category.kuaiplm': '研发管理',
   'pages.system.configCenter.category.kuaiplmDesc': '实验委托等研发业务参数',
   'pages.system.configCenter.param.kuaiplm_lab_request_delegate_dept_uuids': '实验委托可选委托部门',
   'pages.system.configCenter.param.kuaiplm_lab_request_delegate_dept_uuids_desc':
@@ -38110,6 +38113,38 @@ export default {
     '修复销项发票切换含税金额分币价差',
   'pages.dashboard.updateLog.entries.sales-invoice-tax-amount-cents-math.description':
     '开票金额互算改为分位整数（与后端价税拆分一致），避免 JS 浮点把 1769911.50×1.13 算成 1999999.99；切换含税后与可开票合计对齐，含税录入仍以价税合计为真源。',
+  'pages.dashboard.updateLog.entries.sales-order-drop-split-delivery-notify-r01.title':
+    '销售订单审核后不再发送拆分交付计划提醒',
+  'pages.dashboard.updateLog.entries.sales-order-drop-split-delivery-notify-r01.description':
+    '审核通过仍保留订单审核消息；「请拆分交付计划」站内提醒已停发，业务员可自行在销售订单下推交付项目。',
+  'pages.dashboard.updateLog.entries.kuaiai-settings-remove-ocr-workbuddy-r02.title':
+    '模型设置再次去掉 OCR 与 WorkBuddy 配置块',
+  'pages.dashboard.updateLog.entries.kuaiai-settings-remove-ocr-workbuddy-r02.description':
+    'OCR 视觉识别与外部 Agent / WorkBuddy 已迁至应用连接器；模型设置仅保留对话模型选用、智能体开关与 KU-AI 能力，保存时不再覆盖连接器侧配置。',
+  'pages.dashboard.updateLog.entries.purchase-requisition-stock-total-popover-r01.title':
+    '采购申请明细改为总库存悬停看分仓',
+  'pages.dashboard.updateLog.entries.purchase-requisition-stock-total-popover-r01.description':
+    '申请明细列展示各仓合计；鼠标悬停用 Popover 展开分仓库存，物料选择下方不再重复展示库存文案。',
+  'pages.dashboard.updateLog.entries.config-center-kuaiplm-category-rename-r01.title':
+    '配置中心参数分类「快研发」更名为「研发管理」',
+  'pages.dashboard.updateLog.entries.config-center-kuaiplm-category-rename-r01.description':
+    '参数设置侧栏分类文案与销售管理、采购管理等业务模块命名对齐。',
+  'pages.dashboard.updateLog.entries.config-center-numeric-precision-cards-r01.title':
+    '通用配置数值精度拆为三张独立卡片',
+  'pages.dashboard.updateLog.entries.config-center-numeric-precision-cards-r01.description':
+    '数量、单价、金额小数位各自成卡，并归入「数值精度」分区，与工单/报工等参数分区交互一致。',
+  'pages.dashboard.updateLog.entries.config-center-audit-design-btn-r01.title':
+    '审核设置可一键进入流程设计',
+  'pages.dashboard.updateLog.entries.config-center-audit-design-btn-r01.description':
+    '配置中心审核设置各单据卡片的审批流程下拉旁增加「设计」按钮，点击跳转至对应审批流设计器。',
+  'pages.dashboard.updateLog.entries.uni-audit-node-record-ui-r01.title':
+    '审核弹窗节点记录更易区分人员与状态',
+  'pages.dashboard.updateLog.entries.uni-audit-node-record-ui-r01.description':
+    '节点执行记录中可审核人员改为姓名+图标 plain 展示；节点卡片与状态标签按进行中、已通过、已驳回、已跳过、待到达使用对应色底与边框。',
+  'pages.dashboard.updateLog.entries.kuaicaiwu-finance-menu-peer-sync-r01.title':
+    '快财务财务管理菜单与快制造对齐',
+  'pages.dashboard.updateLog.entries.kuaicaiwu-finance-menu-peer-sync-r01.description':
+    '同步快制造菜单时会一并刷新快财务侧栏的财务管理分组（收款管理/付款管理）；菜单同步检测也会识别「路径在库但分组未挂上」并提示重新同步。',
   'pages.dashboard.updateLog.entries.purchase-requisition-uni-audit-resource-fix-r01.title':
     '修复采购申请审核误报权限不足',
   'pages.dashboard.updateLog.entries.purchase-requisition-uni-audit-resource-fix-r01.description':

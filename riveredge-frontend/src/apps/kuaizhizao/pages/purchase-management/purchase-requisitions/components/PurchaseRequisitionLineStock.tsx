@@ -1,8 +1,8 @@
 /**
- * 采购申请明细：选料后展示各仓在库结存（走采购申请 read 专用接口）。
+ * 采购申请明细：选料后展示总库存；hover Popover 展开各仓在库结存。
  */
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { Typography } from 'antd';
+import { Popover, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { formatQuantity } from '../../../../../../utils/format';
 import { getPurchaseRequisitionMaterialWarehouseStock } from '../../../../services/purchase-requisition';
@@ -84,53 +84,28 @@ export function PurchaseRequisitionLineStockProvider({
   );
 }
 
-export function PurchaseRequisitionLineStockHint({ materialId }: { materialId: number | null | undefined }) {
-  const { t } = useTranslation();
-  const { status, byMaterial } = useContext(PurchaseRequisitionLineStockContext);
-  const mid = materialId != null ? Number(materialId) : 0;
-  if (!mid) return null;
-
-  if (status === 'loading') {
-    return (
-      <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 4 }}>
-        {t('app.kuaizhizao.purchaseRequisition.form.stockLoading')}
-      </Typography.Text>
-    );
-  }
-  if (status === 'error') {
-    return (
-      <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 4 }}>
-        {t('app.kuaizhizao.purchaseRequisition.form.stockUnavailable')}
-      </Typography.Text>
-    );
-  }
-
-  const lines = byMaterial[mid] ?? [];
-  if (!lines.length) {
-    return (
-      <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 4 }}>
-        {t('app.kuaizhizao.purchaseRequisition.form.stockEmpty')}
-      </Typography.Text>
-    );
-  }
-
-  const text = lines
-    .map((line) =>
-      t('app.kuaizhizao.purchaseRequisition.form.stockWarehouseQty', {
-        warehouse: line.warehouse_name,
-        qty: formatQuantity(line.quantity),
-      }),
-    )
-    .join(' ');
-
+function WarehouseStockPopoverContent({ lines }: { lines: WarehouseStockLine[] }) {
   return (
-    <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 4, lineHeight: 1.4 }}>
-      {text}
-    </Typography.Text>
+    <div style={{ maxWidth: 320, fontSize: 12 }}>
+      {lines.map((line, idx) => (
+        <div
+          key={`${line.warehouse_name}-${idx}`}
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            gap: 16,
+            marginBottom: idx < lines.length - 1 ? 6 : 0,
+          }}
+        >
+          <span>{line.warehouse_name}</span>
+          <Typography.Text strong>{formatQuantity(line.quantity)}</Typography.Text>
+        </div>
+      ))}
+    </div>
   );
 }
 
-/** 表格列：各仓库存 */
+/** 表格列：总库存；hover 展示各仓明细 */
 export function PurchaseRequisitionLineStockCell({ materialId }: { materialId: number | null | undefined }) {
   const { t } = useTranslation();
   const { status, byMaterial } = useContext(PurchaseRequisitionLineStockContext);
@@ -149,17 +124,18 @@ export function PurchaseRequisitionLineStockCell({ materialId }: { materialId: n
     return <Typography.Text type="secondary">{t('app.kuaizhizao.purchaseRequisition.form.stockEmpty')}</Typography.Text>;
   }
 
+  const total = lines.reduce((sum, line) => sum + (Number(line.quantity) || 0), 0);
+
   return (
-    <Typography.Text type="secondary" style={{ fontSize: 12, lineHeight: 1.45 }}>
-      {lines.map((line, idx) => (
-        <span key={`${line.warehouse_name}-${idx}`}>
-          {idx > 0 ? ' ' : null}
-          {t('app.kuaizhizao.purchaseRequisition.form.stockWarehouseQty', {
-            warehouse: line.warehouse_name,
-            qty: formatQuantity(line.quantity),
-          })}
-        </span>
-      ))}
-    </Typography.Text>
+    <Popover
+      title={t('app.kuaizhizao.purchaseRequisition.form.warehouseStock')}
+      content={<WarehouseStockPopoverContent lines={lines} />}
+      trigger="hover"
+      mouseEnterDelay={0.2}
+    >
+      <span style={{ cursor: 'help', borderBottom: '1px dashed rgba(0, 0, 0, 0.22)' }}>
+        {formatQuantity(total)}
+      </span>
+    </Popover>
   );
 }

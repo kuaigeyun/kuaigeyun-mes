@@ -44,6 +44,63 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'sales-order-drop-split-delivery-notify-r01',
+    date: '2026-10-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-order-drop-split-delivery-notify-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.sales-order-drop-split-delivery-notify-r01.description',
+  },
+  {
+    id: 'kuaiai-settings-remove-ocr-workbuddy-r02',
+    date: '2026-10-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiai-settings-remove-ocr-workbuddy-r02.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.kuaiai-settings-remove-ocr-workbuddy-r02.description',
+  },
+  {
+    id: 'purchase-requisition-stock-total-popover-r01',
+    date: '2026-10-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-requisition-stock-total-popover-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.purchase-requisition-stock-total-popover-r01.description',
+  },
+  {
+    id: 'config-center-kuaiplm-category-rename-r01',
+    date: '2026-10-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.config-center-kuaiplm-category-rename-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.config-center-kuaiplm-category-rename-r01.description',
+  },
+  {
+    id: 'config-center-numeric-precision-cards-r01',
+    date: '2026-10-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.config-center-numeric-precision-cards-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.config-center-numeric-precision-cards-r01.description',
+  },
+  {
+    id: 'config-center-audit-design-btn-r01',
+    date: '2026-10-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.config-center-audit-design-btn-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.config-center-audit-design-btn-r01.description',
+  },
+  {
+    id: 'uni-audit-node-record-ui-r01',
+    date: '2026-10-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.uni-audit-node-record-ui-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.uni-audit-node-record-ui-r01.description',
+  },
+  {
+    id: 'kuaicaiwu-finance-menu-peer-sync-r01',
+    date: '2026-10-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaicaiwu-finance-menu-peer-sync-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaicaiwu-finance-menu-peer-sync-r01.description',
+  },
+  {
     id: 'purchase-requisition-uni-audit-resource-fix-r01',
     date: '2026-10-13',
     type: 'fix',

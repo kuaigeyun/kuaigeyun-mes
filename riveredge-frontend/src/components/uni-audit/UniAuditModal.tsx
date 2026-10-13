@@ -59,6 +59,7 @@ import { getSessionCurrentUser } from '../../utils/sessionCurrentUser';
 import { isAdminBypass, resolveUserForMenuPermission } from '../../utils/permission';
 import { formatDateTimeBySiteSetting } from '../../utils/format';
 import { useTranslation } from 'react-i18next';
+import type { GlobalToken } from 'antd/es/theme/interface';
 
 
 
@@ -157,9 +158,43 @@ const NODE_STATUS_LABEL: Record<string, { color: string; text: string }> = {
 
   waiting: { color: 'default', text: '待到达' },
 
-  skipped: { color: 'default', text: '已跳过' },
+  skipped: { color: 'warning', text: '已跳过' },
 
 };
+
+function resolveNodeExecutionCardStyle(
+  status: string,
+  token: GlobalToken,
+): { border: string; background: string } {
+  switch (status) {
+    case 'approved':
+      return {
+        border: `1px solid ${token.colorSuccessBorder}`,
+        background: token.colorSuccessBg,
+      };
+    case 'rejected':
+      return {
+        border: `1px solid ${token.colorErrorBorder}`,
+        background: token.colorErrorBg,
+      };
+    case 'pending':
+      return {
+        border: `1px solid ${token.colorPrimary}`,
+        background: token.colorPrimaryBg,
+      };
+    case 'skipped':
+      return {
+        border: `1px solid ${token.colorWarningBorder}`,
+        background: token.colorWarningBg,
+      };
+    case 'waiting':
+    default:
+      return {
+        border: `1px solid ${token.colorBorderSecondary}`,
+        background: token.colorFillAlter,
+      };
+  }
+}
 
 
 
@@ -427,6 +462,7 @@ function AuditHubDetailPanel({
               {nodesOverview.map((node) => {
 
                 const statusMeta = NODE_STATUS_LABEL[node.status] || NODE_STATUS_LABEL.waiting;
+                const cardStyle = resolveNodeExecutionCardStyle(node.status, token);
 
                 return (
 
@@ -440,9 +476,9 @@ function AuditHubDetailPanel({
 
                       borderRadius: token.borderRadiusLG,
 
-                      border: `1px solid ${node.is_current ? token.colorPrimary : token.colorBorderSecondary}`,
+                      border: cardStyle.border,
 
-                      background: node.is_current ? token.colorPrimaryBg : token.colorFillAlter,
+                      background: cardStyle.background,
 
                     }}
 
@@ -460,25 +496,41 @@ function AuditHubDetailPanel({
 
                     {node.eligible_approvers.length > 0 && (
 
-                      <div style={{ marginTop: 8 }}>
+                      <Flex align="flex-start" gap={8} style={{ marginTop: 10 }}>
 
-                        <Text type="secondary" style={{ fontSize: 12 }}>
+                        <Text type="secondary" style={{ fontSize: 12, flexShrink: 0, lineHeight: '22px' }}>
 
-                          可审核人员：
+                          可审核人员
 
                         </Text>
 
-                        <Space size={[4, 4]} wrap style={{ marginTop: 4 }}>
+                        <Flex wrap gap={12} style={{ flex: 1, minWidth: 0 }}>
 
                           {node.eligible_approvers.map((u) => (
 
-                            <Tag key={u.user_id}>{u.name}</Tag>
+                            <span
+                              key={u.user_id}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 6,
+                                fontSize: 13,
+                                lineHeight: '22px',
+                                color: token.colorText,
+                              }}
+                            >
+
+                              <UserOutlined style={{ fontSize: 12, color: token.colorTextSecondary }} />
+
+                              {u.name}
+
+                            </span>
 
                           ))}
 
-                        </Space>
+                        </Flex>
 
-                      </div>
+                      </Flex>
 
                     )}
 
@@ -501,9 +553,13 @@ function AuditHubDetailPanel({
                               }}
                             >
 
-                              <Text>{ex.action_by_name || ex.action_by || '系统'}</Text>
+                              <Text style={{ fontWeight: 500 }}>
 
-                              <Tag color={getExecutionActionTagColor(ex.action)} variant="solid">
+                                {ex.action_by_name || ex.action_by || '系统'}
+
+                              </Text>
+
+                              <Tag color={getExecutionActionTagColor(ex.action)} variant="filled">
 
                                 {formatExecutionAction(ex.action, ex.action_label)}
 

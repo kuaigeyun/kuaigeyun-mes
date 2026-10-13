@@ -616,7 +616,6 @@ const SalesOrdersPage: React.FC = () => {
   const pushToBackfillSalesContractAction = resolveKuaizhizaoDocumentAction(t, 'sales_contract.pull_from_sales_order');
   const navigate = useNavigate();
   const location = useLocation();
-  const splitDeliveryHandlerRef = useRef<(id: number) => void>(() => undefined);
   const [searchParams] = useSearchParams();
   const isCreatePage = location.pathname.endsWith('/sales-orders/new');
   const editRouteMatch = location.pathname.match(/\/sales-orders\/(\d+)\/edit$/);
@@ -1443,17 +1442,6 @@ const SalesOrdersPage: React.FC = () => {
       leaveSalesOrderFormPage();
     }
   }
-
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    if (params.get('split_delivery') !== '1') return;
-    const orderId = Number(params.get('highlight'));
-    if (!Number.isFinite(orderId) || orderId <= 0) return;
-    params.delete('split_delivery');
-    const query = params.toString();
-    navigate({ pathname: location.pathname, search: query ? `?${query}` : '' }, { replace: true });
-    splitDeliveryHandlerRef.current(orderId);
-  }, [location.pathname, location.search, navigate]);
 
   useEffect(() => {
     if (!isFormPage || formPageInitializedRef.current) return;
@@ -2522,7 +2510,6 @@ const SalesOrdersPage: React.FC = () => {
       messageApi.error(e?.message ?? t('common.operationFailed'));
     }
   };
-  splitDeliveryHandlerRef.current = handlePushToDeliveryProject;
 
   /** 处理下推到发货通知单 */
   const handlePushToShipmentNotice = async (id: number) => {
