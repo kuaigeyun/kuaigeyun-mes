@@ -31556,6 +31556,10 @@ export default {
     '设备状态 MQTT 无感刷新：设备连接与台账联动',
   'pages.dashboard.updateLog.entries.kuaiiot-device-status-realtime-r01.description':
     '快数采入站后实时推送：设备连接「最后上报/在线」与设备台账「设备状态」无需手动刷新即可更新。绑定仍在设备连接新建/编辑中选择外部设备 ID（可改）并关联台账。',
+  'pages.dashboard.updateLog.entries.iot-device-connection-option-direction-r01.title':
+    '设备连接新建时接入配置显示方向并优先接入',
+  'pages.dashboard.updateLog.entries.iot-device-connection-option-direction-r01.description':
+    '设备连接新建/批量新建的接入配置下拉展示「接入/发送/回调」与协议类型，接入型排在最前，新建默认优先选接入 MQTT。',
   'pages.dashboard.updateLog.entries.iot-view-data-commands-table-scroll-r01.title':
     '设备查看数据指令表支持滚动',
   'pages.dashboard.updateLog.entries.iot-view-data-commands-table-scroll-r01.description':

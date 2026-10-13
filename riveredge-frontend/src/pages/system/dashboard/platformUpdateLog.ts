@@ -44,6 +44,15 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'iot-device-connection-option-direction-r01',
+    date: '2026-10-12',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.iot-device-connection-option-direction-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.iot-device-connection-option-direction-r01.description',
+  },
+  {
     id: 'finance-other-voucher-line-audit-columns-r01',
     date: '2026-10-13',
     type: 'fix',
