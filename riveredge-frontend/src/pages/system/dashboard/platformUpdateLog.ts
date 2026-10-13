@@ -44,6 +44,68 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'master-data-units-sync-i18n-r01',
+    date: '2026-10-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.master-data-units-sync-i18n-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.master-data-units-sync-i18n-r01.description',
+  },
+  {
+    id: 'common-remarks-i18n-sweep-r01',
+    date: '2026-10-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.common-remarks-i18n-sweep-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.common-remarks-i18n-sweep-r01.description',
+  },
+  {
+    id: 'drawing-balloon-list-unitable-shell-r01',
+    date: '2026-10-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.drawing-balloon-list-unitable-shell-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.drawing-balloon-list-unitable-shell-r01.description',
+  },
+  {
+    id: 'drawing-balloon-list-label-replace-r01',
+    date: '2026-10-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.drawing-balloon-list-label-replace-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.drawing-balloon-list-label-replace-r01.description',
+  },
+  {
+    id: 'role-data-grant-persisted-function-r01',
+    date: '2026-10-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.role-data-grant-persisted-function-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.role-data-grant-persisted-function-r01.description',
+  },
+  {
+    id: 'demand-computation-single-line-wo-group-r01',
+    date: '2026-10-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.demand-computation-single-line-wo-group-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.demand-computation-single-line-wo-group-r01.description',
+  },
+  {
+    id: 'quotation-price-type-switch-r01',
+    date: '2026-10-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.quotation-price-type-switch-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.quotation-price-type-switch-r01.description',
+  },
+  {
+    id: 'drawing-balloon-sheet-pro-r01',
+    date: '2026-10-13',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.drawing-balloon-sheet-pro-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.drawing-balloon-sheet-pro-r01.description',
+  },
+  {
     id: 'iot-auto-clear-after-work-order-end-r01',
     date: '2026-10-13',
     type: 'improvement',
@@ -68,6 +130,14 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
     titleKey: 'pages.dashboard.updateLog.entries.notify-warehouse-nested-tx-deadlock-r01.title',
     descriptionKey:
       'pages.dashboard.updateLog.entries.notify-warehouse-nested-tx-deadlock-r01.description',
+  },
+  {
+    id: 'quality-osqc-display-label-r01',
+    date: '2026-10-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.quality-osqc-display-label-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.quality-osqc-display-label-r01.description',
   },
   {
     id: 'sales-return-customer-name-string-r01',

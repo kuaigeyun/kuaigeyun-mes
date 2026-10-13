@@ -114,9 +114,19 @@
             "permission": "kuaizhizao:quality-management-quality-patrol:read"
           },
           {
+            "title": "app.kuaizhizao.menu.quality-management.drawing-balloon-sheets",
+            "path": "/apps/kuaizhizao/quality-management/drawing-balloon-sheets",
+            "sort_order": 8,
+            "meta": {
+              "module": "quality",
+              "is_pro": true
+            },
+            "permission": "kuaizhizao:quality-management-drawing-balloon-sheets:read"
+          },
+          {
             "title": "app.kuaizhizao.menu.quality-management.nonconforming-ledger",
             "path": "/apps/kuaizhizao/quality-management/nonconforming-ledger",
-            "sort_order": 8,
+            "sort_order": 9,
             "meta": {
               "module": "quality"
             },

@@ -290,10 +290,13 @@ const MENU_BADGE_PATH_KEY: Record<string, string> = {
   // 质量
   '/apps/kuaizhizao/quality-management/inspection-center': 'quality_inspection',
   '/apps/kuaizhizao/quality-management/incoming-inspection': 'incoming_inspection',
+  '/apps/kuaizhizao/quality-management/outsource-inspection': 'outsource_inspection',
   '/apps/kuaizhizao/quality-management/process-inspection': 'process_inspection',
   '/apps/kuaizhizao/quality-management/finished-goods-inspection': 'finished_goods_inspection',
   '/apps/kuaizhizao/quality-management/oqc-inspection': 'oqc_inspection',
   '/apps/kuaizhizao/quality-management/fai-orders': 'fai_order',
+  '/apps/kuaizhizao/quality-management/quality-patrol': 'quality_patrol',
+  '/apps/kuaizhizao/quality-management/drawing-balloon-sheets': 'drawing_balloon_sheet',
   '/apps/kuaizhizao/quality-management/inspection-plans': 'inspection_plan',
   // 仓储
   '/apps/kuaizhizao/warehouse-management/inbound': 'inbound',
@@ -3048,6 +3051,14 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                 {defaultText}
                 {showPro ? <span className="menu-item-badge menu-item-badge-pro">PRO</span> : null}
               </span>
+            );
+          }
+          if (item?.meta?.is_pro === true) {
+            return (
+              <>
+                {defaultText}
+                <span className="menu-item-badge menu-item-badge-pro">PRO</span>
+              </>
             );
           }
           const rootAppCode = extractAppRootCodeFromMenuPath(

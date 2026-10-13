@@ -1724,6 +1724,17 @@
       ],
       "data_scope_key": null
     },
+    "quality-management-drawing-balloon-sheets": {
+      "permission_prefix": "kuaizhizao:quality-management-drawing-balloon-sheets",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": null
+    },
     "quality-management-outsource-inspection": {
       "permission_prefix": "kuaizhizao:quality-management-outsource-inspection",
       "display_fields": [
@@ -3541,6 +3552,12 @@
     "kuaizhizao:quality-management-quality-patrol:reject",
     "kuaizhizao:quality-management-quality-patrol:print",
     "kuaizhizao:quality-management-quality-patrol:execute",
+    "kuaizhizao:quality-management-drawing-balloon-sheets:read",
+    "kuaizhizao:quality-management-drawing-balloon-sheets:create",
+    "kuaizhizao:quality-management-drawing-balloon-sheets:delete",
+    "kuaizhizao:quality-management-drawing-balloon-sheets:update",
+    "kuaizhizao:quality-management-drawing-balloon-sheets:export",
+    "kuaizhizao:quality-management-drawing-balloon-sheets:execute",
     "kuaizhizao:quality-management-process-inspection:read",
     "kuaizhizao:quality-management-process-inspection:create",
     "kuaizhizao:quality-management-process-inspection:delete",

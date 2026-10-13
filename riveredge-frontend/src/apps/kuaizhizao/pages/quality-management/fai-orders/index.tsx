@@ -10,11 +10,11 @@ import {
 import { App, Button, Col, Empty, Input, InputNumber, Row, Space, Table } from 'antd';
 import { DeleteOutlined, EyeOutlined, CheckOutlined, CloseOutlined, SendOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 import CodeField from '../../../../../components/code-field';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { UniTable } from '../../../../../components/uni-table';
-import { rowActionBalloonAnnotate, rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
 import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import PermissionGuard from '../../../../../components/permission/PermissionGuard';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
@@ -31,9 +31,12 @@ import {
 } from '../components/qualityTableColumns';
 import { MaterialStackedCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { faiOrderApi, FaiCharacteristic, FaiOrder } from '../../../services/fai-order';
+import {
+  drawingBalloonSheetApi,
+  DrawingBalloonSheet,
+} from '../../../services/drawing-balloon-sheet';
 import { inspectionPlanApi } from '../../../services/production';
 import { renderFaiConclusionTag, renderFaiStatusTag } from '../components/qualityMeta';
-import { faiBalloonPath } from './paths';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import { pickListSearchKeyword, pickSearchString } from '../../../../../utils/tableQueryKey';
 
@@ -80,7 +83,46 @@ const FaiOrdersPage: React.FC = () => {
   const [chars, setChars] = useState<FaiCharacteristic[]>([emptyChar(1)]);
   const [importPlanId, setImportPlanId] = useState<number | null>(null);
   const { canCreate, canUpdate, canDelete, canRead, canAction } = useResourcePermissions(RESOURCE);
-  const navigate = useNavigate();
+  const balloonSheetPull = useUniPullQuery<DrawingBalloonSheet>({
+    rowKey: 'id',
+    selectionType: 'radio',
+    loadData: async ({ keyword, page, pageSize }) => {
+      const res = await drawingBalloonSheetApi.list({
+        confirmed_only: true,
+        keyword: keyword.trim() || undefined,
+        skip: (page - 1) * pageSize,
+        limit: pageSize,
+      });
+      return { data: res.items, total: res.total };
+    },
+    onConfirm: async (_keys, rows) => {
+      const sheet = rows[0];
+      if (!sheet?.id || !editing?.id) {
+        messageApi.warning(t('app.kuaizhizao.quality.fai.messages.selectBalloonSheet'));
+        return;
+      }
+      try {
+        const updated = await faiOrderApi.importFromBalloonSheet(editing.id, sheet.id, true);
+        setEditing(updated);
+        setChars(updated.characteristics?.length ? updated.characteristics : [emptyChar(1)]);
+        messageApi.success(t('app.kuaizhizao.quality.fai.messages.importBalloonSuccess'));
+        balloonSheetPull.closeModal();
+      } catch (e: any) {
+        messageApi.error(e?.message || t('app.kuaizhizao.quality.fai.messages.importFailed'));
+      }
+    },
+  });
+
+  const balloonPullColumns = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.quality.drawingBalloon.sheetCode'), dataIndex: 'sheet_code', width: 160 },
+      { title: t('common.title'), dataIndex: 'title', ellipsis: true },
+      { title: t('app.kuaizhizao.quality.fai.materialCode'), dataIndex: 'material_code', width: 120 },
+      { title: t('app.kuaizhizao.quality.fai.materialName'), dataIndex: 'material_name', ellipsis: true },
+    ],
+    [t],
+  );
+
   const canSubmit = !!canAction?.('submit');
   const canApprove = !!canAction?.('approve');
   const canReject = !!canAction?.('reject');
@@ -250,13 +292,6 @@ const FaiOrdersPage: React.FC = () => {
     }, 0);
   };
 
-  const openBalloon = useCallback(
-    (row: FaiOrder) => {
-      navigate(faiBalloonPath(row.id));
-    },
-    [navigate],
-  );
-
   const handleSubmitRow = useCallback(
     async (row: FaiOrder) => {
       await faiOrderApi.submit(row.id);
@@ -328,20 +363,6 @@ const FaiOrdersPage: React.FC = () => {
           >
             {t('common.detail')}
           </Button>,
-        );
-      }
-      if (canRead || canUpdate) {
-        nodes.push(
-          <Button
-            {...rowActionBalloonAnnotate(canRead ? 'read' : 'update')}
-            key="balloon"
-            size="small"
-            type="link"
-            onClick={(e) => {
-              e.stopPropagation();
-              openBalloon(row);
-            }}
-          />,
         );
       }
       if (canUpdate && editable) {
@@ -451,7 +472,6 @@ const FaiOrdersPage: React.FC = () => {
       handleExportFairRow,
       handleRejectRow,
       handleSubmitRow,
-      openBalloon,
       t,
     ],
   );
@@ -938,23 +958,41 @@ const FaiOrdersPage: React.FC = () => {
               style={{ width: '100%', margin: 0 }}
             />
 
-            {editing?.id ? (
+            {editing?.id && isFaiOrderEditable(editing.status) ? (
               <Space style={{ marginTop: 8 }}>
-                <Button type="primary" onClick={() => openBalloon(editing)}>
-                  {t('app.kuaizhizao.quality.fai.balloon.openEditor')}
+                <Button type="default" onClick={() => balloonSheetPull.openModal()}>
+                  {t('app.kuaizhizao.quality.fai.importFromBalloonSheet')}
                 </Button>
-                <span style={{ color: 'var(--ant-color-text-secondary)' }}>
-                  {t('app.kuaizhizao.quality.fai.balloon.openEditorHint')}
-                </span>
               </Space>
-            ) : (
-              <div style={{ marginTop: 8, color: 'var(--ant-color-text-secondary)' }}>
-                {t('app.kuaizhizao.quality.fai.balloon.saveFirst')}
-              </div>
-            )}
+            ) : null}
           </div>
         </FormModalTemplate>
       </ListPageTemplate>
+
+      <UniPullQueryModal<DrawingBalloonSheet>
+        open={balloonSheetPull.open}
+        title={t('app.kuaizhizao.quality.fai.importFromBalloonSheet')}
+        onCancel={balloonSheetPull.closeModal}
+        onOk={balloonSheetPull.handleConfirm}
+        rowKey="id"
+        columns={balloonPullColumns}
+        dataSource={balloonSheetPull.dataSource}
+        loading={balloonSheetPull.loading}
+        confirmLoading={balloonSheetPull.confirmLoading}
+        selectionType={balloonSheetPull.selectionType}
+        selectedRowKeys={balloonSheetPull.selectedRowKeys}
+        selectedRows={balloonSheetPull.selectedRows}
+        onSelectedRowKeysChange={balloonSheetPull.handleSelectedRowKeysChange}
+        searchDraft={balloonSheetPull.searchDraft}
+        onSearchDraftChange={balloonSheetPull.setSearchDraft}
+        onSearchApply={balloonSheetPull.handleSearchApply}
+        onSearchClear={balloonSheetPull.handleSearchClear}
+        appliedKeyword={balloonSheetPull.appliedKeyword}
+        page={balloonSheetPull.page}
+        pageSize={balloonSheetPull.pageSize}
+        total={balloonSheetPull.total}
+        onPageChange={balloonSheetPull.handlePageChange}
+      />
     </PermissionGuard>
   );
 };

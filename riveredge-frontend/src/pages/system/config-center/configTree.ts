@@ -453,6 +453,16 @@ export const PARAMETER_CATEGORIES: ConfigCategory[] = [
       sectionDescriptionKey: 'pages.system.configCenter.paramSection.quality_stage_desc',
     },
     {
+      key: 'quality_stage.osqc_enabled',
+      nameKey: 'pages.system.configCenter.param.quality_stage_osqc_enabled',
+      descriptionKey: 'pages.system.configCenter.param.quality_stage_osqc_enabled_desc',
+      source: 'quality_stage_toggle',
+      sourcePath: 'quality_stage.osqc_enabled',
+      type: 'boolean',
+      sectionKey: 'quality.stage',
+      sectionNameKey: 'pages.system.configCenter.paramSection.quality_stage',
+    },
+    {
       key: 'quality_stage.ipqc_enabled',
       nameKey: 'pages.system.configCenter.param.quality_stage_ipqc_enabled',
       descriptionKey: 'pages.system.configCenter.param.quality_stage_ipqc_enabled_desc',

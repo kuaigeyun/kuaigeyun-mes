@@ -1612,7 +1612,7 @@ const SupplierEvaluationsPage: React.FC = () => {
 
           },
 
-          { title: t('common.remarks'), dataIndex: 'remarks', span: 2 },
+          { title: t('common.remark'), dataIndex: 'remarks', span: 2 },
 
         ],
 
@@ -1800,7 +1800,7 @@ const SupplierEvaluationsPage: React.FC = () => {
         ),
       },
       {
-        title: t('common.remarks'),
+        title: t('common.remark'),
         dataIndex: 'remarks',
         render: (_: unknown, __: unknown, index: number) => (
           <AntForm.Item name={[index, 'remarks']} style={{ marginBottom: 0 }}>
@@ -2743,7 +2743,7 @@ const SupplierEvaluationsPage: React.FC = () => {
 
           <Col span={24}>
 
-            <ProFormTextArea name="remarks" label={t('common.remarks')} />
+            <ProFormTextArea name="remarks" label={t('common.remark')} />
 
           </Col>
 
@@ -3039,7 +3039,7 @@ const SupplierEvaluationsPage: React.FC = () => {
 
           <Col span={24}>
 
-            <ProFormTextArea name="remarks" label={t('common.remarks')} />
+            <ProFormTextArea name="remarks" label={t('common.remark')} />
 
           </Col>
 
@@ -3299,7 +3299,7 @@ const SupplierEvaluationsPage: React.FC = () => {
 
           <Col span={24}>
 
-            <ProFormTextArea name="remarks" label={t('common.remarks')} />
+            <ProFormTextArea name="remarks" label={t('common.remark')} />
 
           </Col>
 
@@ -3497,7 +3497,7 @@ const SupplierEvaluationsPage: React.FC = () => {
 
         </Row>
 
-        <ProFormTextArea name="remarks" label={t('common.remarks')} />
+        <ProFormTextArea name="remarks" label={t('common.remark')} />
 
       </FormModalTemplate>
 

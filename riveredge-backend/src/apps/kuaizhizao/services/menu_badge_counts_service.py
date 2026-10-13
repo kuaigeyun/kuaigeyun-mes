@@ -410,6 +410,7 @@ async def _section_purchase(ctx: BadgeScopeCtx, now_date) -> BadgeFragment:
 
 
 async def _section_quality_inspection(ctx: BadgeScopeCtx) -> BadgeFragment:
+    from apps.kuaizhizao.models.drawing_balloon_sheet import DrawingBalloonSheet
     from apps.kuaizhizao.models.fai_order import FaiOrder
     from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
     from apps.kuaizhizao.models.outsource_inspection import OutsourceInspection
@@ -418,7 +419,7 @@ async def _section_quality_inspection(ctx: BadgeScopeCtx) -> BadgeFragment:
     from apps.kuaizhizao.models.quality_patrol import QualityPatrol
 
     tid = ctx.tenant_id
-    c1, c_osqc, c2, c3, c_patrol, fai_pending, fai_prog = await _gather_counts(
+    c1, c_osqc, c2, c3, c_patrol, fai_pending, fai_prog, balloon_draft = await _gather_counts(
         IncomingInspection.filter(tenant_id=tid, deleted_at__isnull=True, status="待检验").count(),
         OutsourceInspection.filter(tenant_id=tid, deleted_at__isnull=True, status="待检验").count(),
         ProcessInspection.filter(tenant_id=tid, deleted_at__isnull=True, status="待检验").count(),
@@ -426,6 +427,7 @@ async def _section_quality_inspection(ctx: BadgeScopeCtx) -> BadgeFragment:
         QualityPatrol.filter(tenant_id=tid, deleted_at__isnull=True, status="待检验").count(),
         FaiOrder.filter(tenant_id=tid, deleted_at__isnull=True, status="submitted").count(),
         FaiOrder.filter(tenant_id=tid, deleted_at__isnull=True, status="in_progress").count(),
+        DrawingBalloonSheet.filter(tenant_id=tid, deleted_at__isnull=True, status="draft").count(),
     )
     return {
         "incoming_inspection": {"overdue": 0, "pending": c1, "in_progress": 0},
@@ -434,6 +436,7 @@ async def _section_quality_inspection(ctx: BadgeScopeCtx) -> BadgeFragment:
         "finished_goods_inspection": {"overdue": 0, "pending": c3, "in_progress": 0},
         "quality_patrol": {"overdue": 0, "pending": c_patrol, "in_progress": 0},
         "fai_order": {"overdue": 0, "pending": fai_pending, "in_progress": fai_prog},
+        "drawing_balloon_sheet": {"overdue": 0, "pending": balloon_draft, "in_progress": 0},
         "quality_inspection": {
             "overdue": 0,
             "pending": c1 + c_osqc + c2 + c3 + c_patrol + fai_pending,

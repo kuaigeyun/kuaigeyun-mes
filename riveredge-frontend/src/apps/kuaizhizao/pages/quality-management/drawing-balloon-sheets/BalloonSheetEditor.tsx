@@ -16,8 +16,12 @@ import { DeleteOutlined } from '@ant-design/icons';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { getFileDownloadUrlWithToken, uploadFile } from '../../../../../services/file';
 import { useThemeStore } from '../../../../../stores/themeStore';
-import { faiOrderApi, FaiBalloonCandidate, FaiOrder } from '../../../services/fai-order';
-import FaiDrawingPickerModal from './FaiDrawingPickerModal';
+import { FaiBalloonCandidate } from '../../../services/fai-order';
+import {
+  drawingBalloonSheetApi,
+  DrawingBalloonSheet,
+} from '../../../services/drawing-balloon-sheet';
+import FaiDrawingPickerModal from '../fai-orders/FaiDrawingPickerModal';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -54,15 +58,15 @@ function normalizeCandidates(raw: unknown[]): FaiBalloonCandidate[] {
     });
 }
 
-export type FaiBalloonEditorProps = {
-  order: FaiOrder;
+export type BalloonSheetEditorProps = {
+  sheet: DrawingBalloonSheet;
   editable: boolean;
   onClose: () => void;
-  onApplied: (order: FaiOrder) => void;
+  onApplied: (sheet: DrawingBalloonSheet) => void;
 };
 
-export const FaiBalloonEditor: React.FC<FaiBalloonEditorProps> = ({
-  order,
+export const BalloonSheetEditor: React.FC<BalloonSheetEditorProps> = ({
+  sheet,
   editable,
   onClose,
   onApplied,
@@ -72,7 +76,7 @@ export const FaiBalloonEditor: React.FC<FaiBalloonEditorProps> = ({
   const { token } = theme.useToken();
   const isDark = useThemeStore((s) => s.resolved.isDark);
   const stageRef = useRef<HTMLDivElement>(null);
-  const [drawingRef, setDrawingRef] = useState(order.drawing_file_url || '');
+  const [drawingRef, setDrawingRef] = useState(sheet.drawing_file_url || '');
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [imageNatural, setImageNatural] = useState<{ w: number; h: number } | null>(null);
   const [candidates, setCandidates] = useState<FaiBalloonCandidate[]>([]);
@@ -84,11 +88,11 @@ export const FaiBalloonEditor: React.FC<FaiBalloonEditorProps> = ({
   const dragRef = useRef<{ id: string; moved: boolean } | null>(null);
 
   useEffect(() => {
-    setDrawingRef(order.drawing_file_url || '');
-    setCandidates(normalizeCandidates(order.balloon_candidates || []));
+    setDrawingRef(sheet.drawing_file_url || '');
+    setCandidates(normalizeCandidates(sheet.balloon_candidates || []));
     setSelectedId(null);
     setPlaceMode(true);
-  }, [order.id, order.drawing_file_url, order.balloon_candidates]);
+  }, [sheet.id, sheet.drawing_file_url, sheet.balloon_candidates]);
 
   useEffect(() => {
     let cancelled = false;
@@ -189,9 +193,16 @@ export const FaiBalloonEditor: React.FC<FaiBalloonEditorProps> = ({
   const handleUploadDrawing = async (file: File) => {
     if (!editable) return false;
     try {
-      const uploaded = await uploadFile(file, { category: 'fai-drawing', description: `FAI ${order.fai_code}` });
+      const uploaded = await uploadFile(file, {
+        category: 'fai-drawing',
+        description: `Balloon ${sheet.sheet_code}`,
+      });
       setDrawingRef(uploaded.uuid);
-      const updated = await faiOrderApi.saveBalloonCandidates(order.id, candidates, uploaded.uuid);
+      const updated = await drawingBalloonSheetApi.saveBalloonCandidates(
+        sheet.id,
+        candidates,
+        uploaded.uuid,
+      );
       onApplied(updated);
       messageApi.success(t('app.kuaizhizao.quality.fai.balloon.messages.drawingUploaded'));
     } catch (err: any) {
@@ -208,13 +219,13 @@ export const FaiBalloonEditor: React.FC<FaiBalloonEditorProps> = ({
     if (!editable) return;
     try {
       setDrawingRef(picked.fileUuid);
-      const updated = await faiOrderApi.update(order.id, {
+      const updated = await drawingBalloonSheetApi.update(sheet.id, {
         drawing_file_url: picked.fileUuid,
         drawing_no: picked.drawingCode,
         drawing_revision: picked.drawingRevision,
       });
-      const withCandidates = await faiOrderApi.saveBalloonCandidates(
-        order.id,
+      const withCandidates = await drawingBalloonSheetApi.saveBalloonCandidates(
+        sheet.id,
         candidates,
         picked.fileUuid,
       );
@@ -245,14 +256,14 @@ export const FaiBalloonEditor: React.FC<FaiBalloonEditorProps> = ({
         const res = await fetch(imageUrl);
         blob = await res.blob();
       }
-      const result = await faiOrderApi.balloonOcr(order.id, blob, true);
+      const result = await drawingBalloonSheetApi.balloonOcr(sheet.id, blob, true);
       const next = normalizeCandidates(result.candidates || []);
       setCandidates(next);
       if (next[0]?.id) setSelectedId(next[0].id);
       onApplied({
-        ...order,
+        ...sheet,
         balloon_candidates: next,
-        drawing_file_url: drawingRef || order.drawing_file_url,
+        drawing_file_url: drawingRef || sheet.drawing_file_url,
       });
       messageApi.success(
         t('app.kuaizhizao.quality.fai.balloon.messages.ocrSuccess', { count: next.length }),
@@ -267,7 +278,11 @@ export const FaiBalloonEditor: React.FC<FaiBalloonEditorProps> = ({
   const handleSave = async () => {
     setSaving(true);
     try {
-      const updated = await faiOrderApi.saveBalloonCandidates(order.id, candidates, drawingRef || undefined);
+      const updated = await drawingBalloonSheetApi.saveBalloonCandidates(
+        sheet.id,
+        candidates,
+        drawingRef || undefined,
+      );
       onApplied(updated);
       messageApi.success(t('app.kuaizhizao.quality.fai.messages.candidatesSaved'));
     } catch (err: any) {
@@ -283,15 +298,19 @@ export const FaiBalloonEditor: React.FC<FaiBalloonEditorProps> = ({
       return;
     }
     getAntdModal().confirm({
-      title: t('app.kuaizhizao.quality.fai.confirmBalloonsTitle'),
-      content: t('app.kuaizhizao.quality.fai.confirmBalloonsContent'),
+      title: t('app.kuaizhizao.quality.drawingBalloon.confirmLinesTitle'),
+      content: t('app.kuaizhizao.quality.drawingBalloon.confirmLinesContent'),
       onOk: async () => {
         setSaving(true);
         try {
-          await faiOrderApi.saveBalloonCandidates(order.id, candidates, drawingRef || undefined);
-          const updated = await faiOrderApi.confirmBalloons(order.id, candidates, true);
+          await drawingBalloonSheetApi.saveBalloonCandidates(
+            sheet.id,
+            candidates,
+            drawingRef || undefined,
+          );
+          const updated = await drawingBalloonSheetApi.confirmLines(sheet.id, candidates, true);
           onApplied(updated);
-          messageApi.success(t('app.kuaizhizao.quality.fai.messages.balloonsConfirmed'));
+          messageApi.success(t('app.kuaizhizao.quality.drawingBalloon.messages.linesConfirmed'));
           onClose();
         } catch (err: any) {
           messageApi.error(err?.message || t('app.kuaizhizao.quality.fai.balloon.messages.confirmFailed'));
@@ -652,4 +671,4 @@ export const FaiBalloonEditor: React.FC<FaiBalloonEditorProps> = ({
   );
 };
 
-export default FaiBalloonEditor;
+export default BalloonSheetEditor;

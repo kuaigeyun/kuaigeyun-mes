@@ -523,9 +523,8 @@ const OutsourceInspectionPage: React.FC = () => {
       />
 
       <DetailDrawerTemplate
-        title={t('app.kuaizhizao.quality.common.modal.detailTitle', {
+        title={t('app.kuaizhizao.quality.outsource.modal.detailTitle', {
           code: detailRow?.inspection_code || '',
-          defaultValue: `委外检验 ${detailRow?.inspection_code || ''}`,
         })}
         open={detailOpen}
         onClose={() => {
@@ -570,7 +569,7 @@ const OutsourceInspectionPage: React.FC = () => {
               >
                 {detailRow.status || '-'}
               </Descriptions.Item>
-              <Descriptions.Item label={t('common.remarks')} span={2}>
+              <Descriptions.Item label={t('common.remark')} span={2}>
                 {detailRow.notes || '-'}
               </Descriptions.Item>
             </Descriptions>
@@ -580,7 +579,13 @@ const OutsourceInspectionPage: React.FC = () => {
 
       <FormModalTemplate
         open={conductOpen}
-        title={t('app.kuaizhizao.quality.common.conduct', { defaultValue: '执行检验' })}
+        title={
+          conductRow?.inspection_code
+            ? t('app.kuaizhizao.quality.outsource.modal.conductTitle', {
+                code: conductRow.inspection_code,
+              })
+            : t('app.kuaizhizao.quality.common.conduct', { defaultValue: '执行检验' })
+        }
         width={MODAL_CONFIG.LARGE_WIDTH}
         grid={false}
         onOpenChange={(open) => {
@@ -628,7 +633,7 @@ const OutsourceInspectionPage: React.FC = () => {
             {hasInspectionPlanSteps(conductRow) ? (
               <InspectionTemplateConductFields templateSource={templateSource} />
             ) : null}
-            <ProFormTextArea name="notes" label={t('common.remarks')} fieldProps={{ rows: 2 }} />
+            <ProFormTextArea name="notes" label={t('common.remark')} fieldProps={{ rows: 2 }} />
           </>
         ) : null}
       </FormModalTemplate>

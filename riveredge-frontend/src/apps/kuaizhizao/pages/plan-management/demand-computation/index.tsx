@@ -924,7 +924,14 @@ const DemandComputationPage: React.FC = () => {
     purchase?: 'requisition' | 'purchase_order'
   }
   const pushPanelPresetRef = useRef<PushPanelPreset | null>(null)
+  const pushSelectionInitializedRef = useRef(false)
   const deepLinkHandledRef = useRef<string | null>(null)
+
+  React.useEffect(() => {
+    if (!pushPanelRecord) {
+      pushSelectionInitializedRef.current = false
+    }
+  }, [pushPanelRecord])
 
   /** 下推面板：打开时加载 options，初始化 config */
   React.useEffect(() => {
@@ -969,6 +976,9 @@ const DemandComputationPage: React.FC = () => {
       params.production = pushConfig.production
       params.generate_mode = 'work_order_only'
       params.work_order_granularity = workOrderGranularity
+      if (pushSelectedItemIds.length > 0) {
+        params.production_item_ids = pushSelectedItemIds
+      }
     }
     if (pushConfig.purchase) params.purchase = pushConfig.purchase
     if (pushConfig.purchase === 'purchase_order') params.push_mode = pushMode
@@ -977,14 +987,28 @@ const DemandComputationPage: React.FC = () => {
       .then((data) => {
         setPushPreviewData(data)
         setPushPreviewLoadError(null)
-        if (pushConfig.purchase === 'requisition' || pushConfig.purchase === 'purchase_order' || pushConfig.production === 'work_order') {
-          setPushSelectedItemIds(
-            (data.items || [])
-              .filter((row) => isDemandPushPreviewLineSelectable(row, pushConfig))
-              .map((row) => Number(row.item_id)),
-          )
-        } else {
-          setPushSelectedItemIds([])
+        if (
+          pushConfig.production === 'work_order' &&
+          (data.group_work_order_eligible === false || data.work_order_granularity === 'individual') &&
+          workOrderGranularity === 'grouped'
+        ) {
+          setWorkOrderGranularity('individual')
+        }
+        if (!pushSelectionInitializedRef.current) {
+          if (
+            pushConfig.purchase === 'requisition' ||
+            pushConfig.purchase === 'purchase_order' ||
+            pushConfig.production === 'work_order'
+          ) {
+            setPushSelectedItemIds(
+              (data.items || [])
+                .filter((row) => isDemandPushPreviewLineSelectable(row, pushConfig))
+                .map((row) => Number(row.item_id)),
+            )
+          } else {
+            setPushSelectedItemIds([])
+          }
+          pushSelectionInitializedRef.current = true
         }
       })
       .catch((e: any) => {
@@ -998,6 +1022,7 @@ const DemandComputationPage: React.FC = () => {
     pushConfig.purchase,
     pushMode,
     workOrderGranularity,
+    pushSelectedItemIds,
     t,
   ])
 
@@ -3261,7 +3286,9 @@ const DemandComputationPage: React.FC = () => {
                             {
                               label: t('app.kuaizhizao.demandComputation.workOrderGranularityGrouped'),
                               value: 'grouped',
-                              disabled: !pushOptions.has_demand_item_bom_trees,
+                              disabled:
+                                !pushOptions.has_demand_item_bom_trees ||
+                                pushPreviewData?.group_work_order_eligible === false,
                             },
                             {
                               label: t('app.kuaizhizao.demandComputation.workOrderGranularityIndividual'),

@@ -1678,6 +1678,8 @@ export default {
   'path.outsource-management': '委外管理',
   'path.quality-management': '质量管理',
   'path.incoming-inspection': '来料检验 (IQC)',
+  'path.outsource-inspection': '委外检验 (OSQC)',
+  'path.quality-patrol': '质量巡检',
   'path.traceability': '追溯管理',
   'path.process-inspection': '过程检验 (IPQC)',
   'path.finished-goods-inspection': '成品检验 (FQC)',
@@ -3669,6 +3671,7 @@ export default {
   'app.master-data.menu.process.drawing-loans': '图纸借阅',
   'app.kuaizhizao.menu.sales-management.sales-reviews': '订单评审',
   'app.kuaizhizao.menu.quality-management.fai-orders': '首件检验 (FAI)',
+  'app.kuaizhizao.menu.quality-management.drawing-balloon-sheets': '气泡标注',
   'app.kuaizhizao.menu.quality-management.quality-system': '质量体系',
   'app.kuaizhizao.menu.quality-management.iso-clauses': '条款管理',
   'app.kuaizhizao.menu.quality-management.clause-management': '条款管理',
@@ -10142,7 +10145,7 @@ export default {
   'app.kuaizhizao.menu.quality-management.dashboard': '质检中心',
   'app.kuaizhizao.menu.quality-management.inspection-center': '质检中心',
   'app.kuaizhizao.menu.quality-management.incoming-inspection': '来料检验 (IQC)',
-  'app.kuaizhizao.menu.quality-management.outsource-inspection': '委外检验',
+  'app.kuaizhizao.menu.quality-management.outsource-inspection': '委外检验 (OSQC)',
   'app.kuaizhizao.menu.quality-management.traceability': '追溯管理',
   'app.kuaizhizao.menu.quality-management.inspection-plans': '质检方案',
   'app.kuaizhizao.menu.quality-management.process-inspection': '过程检验 (IPQC)',
@@ -10159,7 +10162,7 @@ export default {
   'app.kuaizhizao.quality.patrol.messages.deleteConfirm': '确认删除选中的 {{count}} 条质量巡检单？',
   'app.kuaizhizao.quality.outsource.pullFromReceipt': '从委外收货取单',
   'app.kuaizhizao.quality.outsource.messages.deleteConfirm':
-    '确定要删除选中的 {{count}} 条委外检验单吗？',
+    '确定要删除选中的 {{count}} 条委外检验单 (OSQC) 吗？',
   'app.kuaizhizao.menu.quality-management.nonconforming-ledger': '不良处理',
   'app.kuaizhizao.menu.quality-management.eight-d-reports': '8D报告',
   'app.kuaizhizao.menu.quality-management.quality-complaints': '质量投诉',
@@ -21815,6 +21818,9 @@ export default {
   'app.master-data.units.syncField.description': '备注',
   'app.master-data.units.syncField.isActive': '是否启用',
   'app.master-data.units.syncField.sortOrder': '排序',
+  'app.master-data.units.syncComplete': '同步完成：新建 {{created}}，更新 {{updated}}，跳过 {{skipped}}',
+  'app.master-data.units.syncPartial': '同步完成：新建 {{created}}，更新 {{updated}}，跳过 {{skipped}}，失败 {{failed}}',
+  'app.master-data.units.syncFailed': '单位同步失败',
   'app.master-data.menu.materials.batch-rules': '批号规则',
   'app.master-data.menu.materials.batches': '批号台账',
   'app.master-data.menu.materials.serial-rules': '序列号规则',
@@ -26106,7 +26112,7 @@ export default {
   'app.master-data.materialForm.inspectionStagesHint': '按业务场景分别配置质检模式（无/简易/方案）及检验方案；过程检验（IPQC）请在工序资料中配置。',
   'app.master-data.materialForm.inspectionStageColumn': '场景',
   'app.master-data.materialForm.inspectionStageIqc': '来料 IQC',
-  'app.master-data.materialForm.inspectionStageOsqc': '委外检验',
+  'app.master-data.materialForm.inspectionStageOsqc': '委外检验 (OSQC)',
   'app.master-data.materialForm.inspectionStageFqc': '成品 FQC',
   'app.master-data.materialForm.inspectionStageOqc': '出货 OQC',
   'app.master-data.materialForm.inspectionStageIpqc': '过程 IPQC',
@@ -26219,6 +26225,8 @@ export default {
   'pages.system.configCenter.param.quality_defect_handling_desc': '是否启用不合格品处理',
   'pages.system.configCenter.param.quality_stage_iqc_enabled': '来料检验环节 (IQC)',
   'pages.system.configCenter.param.quality_stage_iqc_enabled_desc': '组织是否启用来料检验环节；关闭后不会自动创建 IQC 待检单，且无法手动下推来料检验。',
+  'pages.system.configCenter.param.quality_stage_osqc_enabled': '委外检验环节 (OSQC)',
+  'pages.system.configCenter.param.quality_stage_osqc_enabled_desc': '组织是否启用委外检验环节；关闭后不会自动创建 OSQC 待检单，且无法从委外收货取单建检验。',
   'pages.system.configCenter.param.quality_stage_ipqc_enabled': '过程检验环节 (IPQC)',
   'pages.system.configCenter.param.quality_stage_ipqc_enabled_desc': '组织是否启用过程检验环节；关闭后报工不会自动创建过程检验单。',
   'pages.system.configCenter.param.quality_stage_fqc_enabled': '成品检验环节 (FQC)',
@@ -26242,13 +26250,14 @@ export default {
   'app.kuaizhizao.quality.masterDataHint.material': '组织未启用来料/成品/出货检验环节，物料质检模式（简易/方案）仅在开启对应环节后才会生效。',
   'app.kuaizhizao.quality.masterDataHint.operation': '组织未启用过程检验环节，工序质检模式（简易/方案）仅在开启 IPQC 后才会生效。',
   'app.kuaizhizao.quality.masterDataHint.stageIqc': '组织未启用来料检验（IQC）环节，该场景配置保存后不会生效。',
-  'app.kuaizhizao.quality.masterDataHint.stageOsqc': '组织未启用委外检验环节，该场景配置保存后不会生效。',
+  'app.kuaizhizao.quality.masterDataHint.stageOsqc': '组织未启用委外检验（OSQC）环节，该场景配置保存后不会生效。',
   'app.kuaizhizao.quality.masterDataHint.stageFqc': '组织未启用成品检验（FQC）环节，该场景配置保存后不会生效。',
   'app.kuaizhizao.quality.masterDataHint.stageOqc': '组织未启用出货检验（OQC）环节，该场景配置保存后不会生效。',
   'app.kuaizhizao.quality.masterDataHint.stageIpqc': '组织未启用过程检验（IPQC）环节，该场景配置保存后不会生效。',
   'app.kuaizhizao.quality.masterDataHint.gotoConfigCenter': '配置中心',
   'app.kuaizhizao.quality.inspectionCenter.stageTogglesTitle': '质检环节开关',
   'app.kuaizhizao.quality.inspectionCenter.stageIqc': '来料检验 (IQC)',
+  'app.kuaizhizao.quality.inspectionCenter.stageOsqc': '委外检验 (OSQC)',
   'app.kuaizhizao.quality.inspectionCenter.stageIpqc': '过程检验 (IPQC)',
   'app.kuaizhizao.quality.inspectionCenter.stageFqc': '成品检验 (FQC)',
   'app.kuaizhizao.quality.inspectionCenter.stageOqc': '出货检验 (OQC)',
@@ -26284,7 +26293,7 @@ export default {
   'app.kuaizhizao.quality.common.qualityStatus.unqualified': '不合格',
   'app.kuaizhizao.quality.common.qualityStatus.pending': '待判定',
   'app.kuaizhizao.quality.common.type.incoming': '来料检验 (IQC)',
-  'app.kuaizhizao.quality.common.type.outsource': '委外检验',
+  'app.kuaizhizao.quality.common.type.outsource': '委外检验 (OSQC)',
   'app.kuaizhizao.quality.common.type.process': '过程检验 (IPQC)',
   'app.kuaizhizao.quality.common.type.finished': '成品检验 (FQC)',
   'app.kuaizhizao.quality.common.type.outbound': '出货检验 (OQC)',
@@ -26352,6 +26361,7 @@ export default {
   'app.kuaizhizao.quality.common.entity.processInspection': '过程检验单 (IPQC)',
   'app.kuaizhizao.quality.common.entity.finishedInspection': '成品检验单 (FQC)',
   'app.kuaizhizao.quality.common.entity.oqcInspection': '出货检验单 (OQC)',
+  'app.kuaizhizao.quality.common.entity.outsourceInspection': '委外检验单 (OSQC)',
   'app.kuaizhizao.quality.common.sections.basicInfo': '基本信息',
   'app.kuaizhizao.quality.common.sections.lifecycle': '生命周期',
   'app.kuaizhizao.quality.common.sections.detailInfo': '明细信息',
@@ -26464,6 +26474,9 @@ export default {
   'app.kuaizhizao.quality.common.label.workOrderCode': '工单编号',
   'app.kuaizhizao.quality.common.label.operationName': '工序名称',
   'app.kuaizhizao.quality.incoming.pageTitle': '来料检验 (IQC)',
+  'app.kuaizhizao.quality.outsource.pageTitle': '委外检验 (OSQC)',
+  'app.kuaizhizao.quality.outsource.modal.detailTitle': '委外检验详情 (OSQC) - {{code}}',
+  'app.kuaizhizao.quality.outsource.modal.conductTitle': '委外检验 (OSQC) - {{code}}',
   'app.kuaizhizao.quality.incoming.createFromReceipt': '从采购入库单创建',
   'app.kuaizhizao.quality.incoming.createButton': '新建来料检验单',
   'app.kuaizhizao.quality.incoming.createMore': '更多创建方式',
@@ -30524,6 +30537,11 @@ export default {
   'pages.system.roles.templateAppliedToVisible': '已对当前范围应用「{{name}}」模板',
   'pages.system.roles.dataGrantHint':
     '仅展示已在「功能权限」中勾选的业务资源。数据范围在能访问该功能的前提下生效；可用全部、按 APP、按模块或搜索在当前列表内筛选，勾选后批量设置范围并保存。',
+  'pages.system.roles.dataGrantUnsavedFunctionTitle': '功能权限尚未保存',
+  'pages.system.roles.dataGrantUnsavedFunctionDesc':
+    '数据范围仅按已保存的功能权限生效。请先在「功能权限」页签点击「保存权限」，再配置并保存数据权限。',
+  'pages.system.roles.dataGrantFunctionNotGranted':
+    '资源 {{resource}} 未授予功能权限。请切换到「功能权限」勾选对应模块（如快财务成本核算）并保存后，再配置数据范围。',
   'pages.system.roles.dataGrantNeedFunction':
     '请先在「功能权限」中勾选至少一项，再配置数据范围',
   'pages.system.roles.searchDataResource': '搜索资源名称或编码',
@@ -30745,6 +30763,14 @@ export default {
     '单位同步与物料同步配置拆开',
   'pages.dashboard.updateLog.entries.unit-material-sync-decouple-r01.description':
     '单位管理与物料管理同步按钮各自使用独立字段别名与优先接口；单位正式同步在写入前按基础单位去重，不再把物料编码误写成单位编码；接口测试仅对单位预置接口做单位去重。',
+  'pages.dashboard.updateLog.entries.drawing-balloon-sheet-pro-r01.title':
+    '图纸气泡标注独立为 PRO 单据',
+  'pages.dashboard.updateLog.entries.drawing-balloon-sheet-pro-r01.description':
+    '质量模块新增「图纸气泡标注」菜单（专业套餐），含独立列表与 OCR 编辑器；首件检验保留 FAIR 流程，可从已确认标注单导入特性。',
+  'pages.dashboard.updateLog.entries.quality-osqc-display-label-r01.title':
+    '委外检验菜单与方案类型统一显示 OSQC',
+  'pages.dashboard.updateLog.entries.quality-osqc-display-label-r01.description':
+    '侧栏、面包屑、质检方案类型、物料分场景与配置中心环节开关等文案与来料/过程等同级单据一致，统一为「委外检验 (OSQC)」。',
   'pages.dashboard.updateLog.entries.quality-patrol-form-list-r01.title':
     '质量巡检建单与列表能力完善',
   'pages.dashboard.updateLog.entries.quality-patrol-form-list-r01.description':
@@ -37895,6 +37921,34 @@ export default {
     '修复销项发票切换含税金额分币价差',
   'pages.dashboard.updateLog.entries.sales-invoice-tax-amount-cents-math.description':
     '开票金额互算改为分位整数（与后端价税拆分一致），避免 JS 浮点把 1769911.50×1.13 算成 1999999.99；切换含税后与可开票合计对齐，含税录入仍以价税合计为真源。',
+  'pages.dashboard.updateLog.entries.master-data-units-sync-i18n-r01.title':
+    '修复单位同步完成提示文案',
+  'pages.dashboard.updateLog.entries.master-data-units-sync-i18n-r01.description':
+    '补全单位管理同步完成、部分失败与失败提示的中文文案，不再露出 syncComplete 键名。',
+  'pages.dashboard.updateLog.entries.common-remarks-i18n-sweep-r01.title':
+    '全站备注字段统一 i18n',
+  'pages.dashboard.updateLog.entries.common-remarks-i18n-sweep-r01.description':
+    '扫描并修正误用不存在的 common.remarks，统一为 common.remark 显示「备注」；新增守门脚本防再犯。',
+  'pages.dashboard.updateLog.entries.drawing-balloon-list-unitable-shell-r01.title':
+    '气泡标注列表补齐标准 UniTable 壳',
+  'pages.dashboard.updateLog.entries.drawing-balloon-list-unitable-shell-r01.description':
+    '补 permissionResource、showCreateButton、新建气泡标注、高级搜索、勾选与批量删除；列序与叠列对齐单据列表规范。',
+  'pages.dashboard.updateLog.entries.drawing-balloon-list-label-replace-r01.title':
+    '修复气泡标注列表页无法打开',
+  'pages.dashboard.updateLog.entries.drawing-balloon-list-label-replace-r01.description':
+    '列表页误将整页组件当作新建按钮文案处理，导致 label.replace is not a function；已改为仅给新建按钮追加 Alt+N 提示；并补传 i18n 函数给物料隐藏列，修复 t is not a function。',
+  'pages.dashboard.updateLog.entries.role-data-grant-persisted-function-r01.title':
+    '修复角色数据权限保存误报未勾选功能',
+  'pages.dashboard.updateLog.entries.role-data-grant-persisted-function-r01.description':
+    '数据/字段权限范围改为仅依据已保存的功能权限推导；功能页未保存时提示先保存，避免 kuaicaiwu:cost 等资源保存数据范围时报「未在功能权限中勾选」。',
+  'pages.dashboard.updateLog.entries.demand-computation-single-line-wo-group-r01.title':
+    '修复需求计算单明细下推误建组工单',
+  'pages.dashboard.updateLog.entries.demand-computation-single-line-wo-group-r01.description':
+    '创建下游单据时仅 1 条可下推需求行一律生成独立工单；多条需求行且选择组工单时才编入工单组。勾选明细变化时预览与提交同步生效。',
+  'pages.dashboard.updateLog.entries.quotation-price-type-switch-r01.title':
+    '修复报价单切换含税不含税价差',
+  'pages.dashboard.updateLog.entries.quotation-price-type-switch-r01.description':
+    '报价单新建编辑与销售订单对齐：行 item_amount 真源、价类切换原子换算、价税合计失焦反算单价；保存时提交价税合计 total_amount，编辑回填不再丢金额。',
   'pages.dashboard.updateLog.entries.quotation-convert-order-downstream-unpack.title':
     '修复报价单转销售订单失败',
   'pages.dashboard.updateLog.entries.quotation-convert-order-downstream-unpack.description':
@@ -41697,6 +41751,24 @@ export default {
   'app.kuaizhizao.quality.fai.faiCode': 'FAI 单号',
   'app.kuaizhizao.quality.fai.gaugeCode': '量具编码',
   'app.kuaizhizao.quality.fai.importFromPlan': '从检验计划导入',
+  'app.kuaizhizao.quality.fai.importFromBalloonSheet': '从图纸气泡标注导入',
+  'app.kuaizhizao.quality.fai.messages.selectBalloonSheet': '请选择已确认的图纸气泡标注单',
+  'app.kuaizhizao.quality.fai.messages.importBalloonSuccess': '已从图纸气泡标注导入特性',
+  'app.kuaizhizao.quality.drawingBalloon.sheetCode': '标注单编码',
+  'app.kuaizhizao.quality.drawingBalloon.batchDeleteConfirm': '确定删除选中的 {{count}} 张气泡标注单？仅草稿可删。',
+  'app.kuaizhizao.quality.drawingBalloon.batchDeleteEmpty': '所选记录均不可删除，仅草稿状态可删',
+  'app.kuaizhizao.quality.drawingBalloon.createButton': '新建气泡标注',
+  'app.kuaizhizao.quality.drawingBalloon.createModalTitle': '新建气泡标注',
+  'app.kuaizhizao.quality.drawingBalloon.editModalTitle': '编辑气泡标注',
+  'app.kuaizhizao.quality.drawingBalloon.openEditor': '打开标注',
+  'app.kuaizhizao.quality.drawingBalloon.editorTitle': '图纸气泡标注 {{code}}',
+  'app.kuaizhizao.quality.drawingBalloon.confirmLinesTitle': '确认特性行',
+  'app.kuaizhizao.quality.drawingBalloon.confirmLinesContent': '将当前气泡候选写入标注单特性行并标记为已确认，是否继续？',
+  'app.kuaizhizao.quality.drawingBalloon.messages.linesConfirmed': '特性行已确认',
+  'app.kuaizhizao.quality.drawingBalloon.proRequiredTitle': '需要专业套餐',
+  'app.kuaizhizao.quality.drawingBalloon.proRequiredHint': '图纸气泡标注与 AI/OCR 识别为专业版能力，请升级套餐后使用。',
+  'app.kuaizhizao.quality.drawingBalloon.status.draft': '草稿',
+  'app.kuaizhizao.quality.drawingBalloon.status.confirmed': '已确认',
   'app.kuaizhizao.quality.fai.inspectionPlanId': '检验计划 ID',
   'app.kuaizhizao.quality.fai.keyword': '关键字',
   'app.kuaizhizao.quality.fai.lotNumber': '批号',

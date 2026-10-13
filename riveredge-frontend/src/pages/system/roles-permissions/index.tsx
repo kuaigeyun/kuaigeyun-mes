@@ -32,6 +32,7 @@ import {
   Table,
   List,
   Typography,
+  Alert,
 } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useNewShortcut } from '../../../hooks/useNewShortcut';
@@ -578,6 +579,8 @@ const RolesPermissionsPage: React.FC = () => {
   /** 功能权限：服务端矩阵（菜单树 + granted_codes） */
   const [functionGrants, setFunctionGrants] = useState<RoleFunctionGrants | null>(null);
   const [grantedCodes, setGrantedCodes] = useState<string[]>([]);
+  /** 已入库的功能权限码；数据/字段 TAB 仅据此推导资源，避免未保存的功能勾选导致保存数据权限 400 */
+  const [persistedGrantedCodes, setPersistedGrantedCodes] = useState<string[]>([]);
   const [menuTreeLoading, setMenuTreeLoading] = useState(false);
   const [savingPermissions, setSavingPermissions] = useState(false);
   const [permissionLayer, setPermissionLayer] = useState<'function' | 'data' | 'field'>('function');
@@ -678,6 +681,7 @@ const RolesPermissionsPage: React.FC = () => {
         if (prev?.uuid === role.uuid) {
           setFunctionGrants(null);
           setGrantedCodes([]);
+          setPersistedGrantedCodes([]);
           setSelectedRoleKeys([]);
           return null;
         }
@@ -875,7 +879,9 @@ const RolesPermissionsPage: React.FC = () => {
   const loadFunctionGrantsForRole = useCallback(async (roleUuid: string) => {
     const data = await getRoleFunctionGrants(roleUuid);
     setFunctionGrants(data);
-    setGrantedCodes(mergeBaselinePermissionCodes(data.granted_codes || []));
+    const merged = mergeBaselinePermissionCodes(data.granted_codes || []);
+    setGrantedCodes(merged);
+    setPersistedGrantedCodes(merged);
     if (!initializedExpandRef.current && data.tree?.length) {
       setPermissionTreeExpandedKeys(collectMenuExpandKeysFromGrantTree(data.tree, 1));
       initializedExpandRef.current = true;
@@ -926,15 +932,27 @@ const RolesPermissionsPage: React.FC = () => {
   const treeVisibleAssignedCount = functionGrants?.stats?.granted_visible_on_tree ?? 0;
   const grantedNotOnTree = functionGrants?.stats?.granted_not_on_tree ?? 0;
 
-  /** 功能权限树已勾选页 → 数据/字段权限可配置资源（唯一前端范围推导） */
+  const hasUnsavedFunctionGrants = useMemo(() => {
+    const live = new Set(grantedCodes.map((c) => String(c ?? '').trim().toLowerCase()).filter(Boolean));
+    const saved = new Set(
+      persistedGrantedCodes.map((c) => String(c ?? '').trim().toLowerCase()).filter(Boolean),
+    );
+    if (live.size !== saved.size) return true;
+    for (const c of live) {
+      if (!saved.has(c)) return true;
+    }
+    return false;
+  }, [grantedCodes, persistedGrantedCodes]);
+
+  /** 功能权限树已勾选页 → 数据/字段权限可配置资源（唯一前端范围推导，对齐已保存功能权限） */
   const functionScopedResourceOptions = useMemo(
-    () => collectGrantedResourceOptionsFromGrantTree(functionGrantBaseTree, grantedCodes, t),
-    [functionGrantBaseTree, grantedCodes, t]
+    () => collectGrantedResourceOptionsFromGrantTree(functionGrantBaseTree, persistedGrantedCodes, t),
+    [functionGrantBaseTree, persistedGrantedCodes, t]
   );
 
   const grantedDataResourceKeys = useMemo(
-    () => collectGrantedResourceKeysFromGrantTree(functionGrantBaseTree, grantedCodes),
-    [functionGrantBaseTree, grantedCodes]
+    () => collectGrantedResourceKeysFromGrantTree(functionGrantBaseTree, persistedGrantedCodes),
+    [functionGrantBaseTree, persistedGrantedCodes]
   );
 
   useEffect(() => {
@@ -1430,7 +1448,9 @@ const RolesPermissionsPage: React.FC = () => {
       if (permissionLayer === 'function') {
         const refreshed = await replaceRoleFunctionGrants(selectedRole.uuid, grantedCodes);
         setFunctionGrants(refreshed);
-        setGrantedCodes(mergeBaselinePermissionCodes(refreshed.granted_codes || []));
+        const mergedGranted = mergeBaselinePermissionCodes(refreshed.granted_codes || []);
+        setGrantedCodes(mergedGranted);
+        setPersistedGrantedCodes(mergedGranted);
         const roleFieldPolicies = await getRoleFieldPolicies(selectedRole.uuid);
         setFieldPolicies(roleFieldPolicies);
         messageApi.success(t('pages.system.roles.functionGrantSuccess', { count: refreshed.granted_codes?.length ?? 0, defaultValue: `功能权限保存成功：${refreshed.granted_codes?.length ?? 0} 项` }));
@@ -1502,6 +1522,17 @@ const RolesPermissionsPage: React.FC = () => {
         useGlobalStore.getState().incrementApplicationMenuVersion();
       }
     } catch (error: any) {
+      const detail = String(error?.response?.data?.detail ?? error?.message ?? '');
+      const dataGrantMismatch = detail.match(/数据权限资源未在功能权限中勾选:\s*(\S+)/);
+      if (dataGrantMismatch) {
+        messageApi.error(
+          t('pages.system.roles.dataGrantFunctionNotGranted', {
+            resource: dataGrantMismatch[1],
+            defaultValue: `资源 ${dataGrantMismatch[1]} 未授予功能权限。请先在「功能权限」勾选对应模块并保存，再保存数据权限。`,
+          }),
+        );
+        return;
+      }
       messageApi.error(
         getApiErrorMessage(error, t('pages.system.roles.assignFailed', { defaultValue: '权限保存失败' }))
       );
@@ -2064,6 +2095,19 @@ const RolesPermissionsPage: React.FC = () => {
               )}
               {permissionLayer === 'data' && (
                 <Space orientation="vertical" style={{ width: '100%' }} size={12}>
+                  {hasUnsavedFunctionGrants ? (
+                    <Alert
+                      type="warning"
+                      showIcon
+                      title={t('pages.system.roles.dataGrantUnsavedFunctionTitle', {
+                        defaultValue: '功能权限尚未保存',
+                      })}
+                      description={t('pages.system.roles.dataGrantUnsavedFunctionDesc', {
+                        defaultValue:
+                          '数据范围仅按已保存的功能权限生效。请先在「功能权限」页签点击「保存权限」，再配置并保存数据权限。',
+                      })}
+                    />
+                  ) : null}
                   <div style={{ color: token.colorTextSecondary, fontSize: 12 }}>
                     {t('pages.system.roles.dataGrantHint', {
                       defaultValue:

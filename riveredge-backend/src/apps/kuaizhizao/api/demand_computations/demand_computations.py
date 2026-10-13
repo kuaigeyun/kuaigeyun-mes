@@ -938,6 +938,10 @@ async def get_push_preview(
         None,
         description="工单下推粒度：grouped=组工单，individual=独立工单",
     ),
+    production_item_ids: Optional[List[int]] = Query(
+        None,
+        description="可选：仅按所选计算明细预览工单下推（与 push-all production_item_ids 一致）",
+    ),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -952,6 +956,8 @@ async def get_push_preview(
             push_config["outsource_only"] = True
         if work_order_granularity:
             push_config["work_order_granularity"] = work_order_granularity
+        if production_item_ids:
+            push_config["production_item_ids"] = production_item_ids
         return await computation_service.get_push_preview(
             tenant_id=tenant_id,
             computation_id=computation_id,

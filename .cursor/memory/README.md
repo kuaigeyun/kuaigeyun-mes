@@ -20,6 +20,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 
 | 任务在说… | 先读 |
 |-----------|------|
+| **新建 PC 页、新列表、新单据、脚手架、缺新建按钮、showCreateButton、没按规范** | **`principles/new-pc-page-hard-gate.md`** → **`.cursor/skills/new-document-page/SKILL.md`** → AOCI `keyword=new-document-page`；**禁止等用户口头提醒** |
 | 工位服务器设置、开发态工单不是设置地址、X-Station-Api-Origin | `features/station-settings-api-origin.md` |
 | 工位人脸录入、已录入账号采样、设备设置录脸、触屏专用角色 | `features/station-face-settings-manage.md` |
 | 工位指派给我、班组派工、assigned_worker_id 看不到班组工单 | `features/station-assigned-wo-includes-team.md` |
@@ -64,6 +65,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | 设备台账、车间/产线/工位快速新增、UniDropdown.quickCreate | `features/equipment-factory-binding-quick-add.md` |
 | 质检方案快速新建、方案类型空白、defaultPlanType | `features/inspection-plan-quick-type-default.md` |
 | 委外检验、质量巡检、OSQC、plan_type outsource/patrol | `features/quality-outsource-patrol.md` |
+| 图纸气泡标注、drawing_balloon、FAI 导入特性、PRO OCR | `features/drawing-balloon-sheet-pro.md` |
 | 构建 dist、deploy、H5、launch.dev、fast-deploy、开机自启 install-service | `features/fast-deploy-scripts.md` |
 | APP 转 PRO、compose、财务管理托管、数据中心占位 | `features/app-pro-migration-compose.md` |
 | 构建推送、要不要编前端、只改后端怎么推、web/H5/工位选哪条 | `principles/code-push-routing.md` + 规则 `build-push-aoci.mdc` |
@@ -113,6 +115,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | `principles/mes-vault-index.md` | MES Vault 入口与源码图谱 | 有效 |
 | `principles/three-repo-map.md` | 三仓职责与跨端功能落点 | 有效 |
 | `principles/reuse-existing-patterns.md` | 复用优先：同一功能一套标准 | 有效 |
+| `principles/new-pc-page-hard-gate.md` | 新建 PC 页：先 Skill + AOCI，UniTable 壳硬门禁 | 有效 |
 | `principles/feature-delivery.md` | 新功能交付：迁移 + 菜单同步 | 有效 |
 | `principles/api-write-protection.md` | API 写防护运维要点 | 有效 |
 | `principles/memory-note-format.md` | 记忆库书写与检索约定 | 有效 |

@@ -20,6 +20,7 @@ from .productions.quality_execution import router as quality_execution_router
 from .productions.quality_improvement import router as quality_improvement_router
 from .productions.quality_management import router as quality_management_router
 from .productions.quality_qms import router as quality_qms_router
+from .productions.drawing_balloon_sheets import router as drawing_balloon_sheets_router
 from .productions.quality_fai import router as quality_fai_router
 from .productions.quality_complaints import router as quality_complaints_router
 from .productions.supplier_evaluations import router as supplier_evaluations_router
@@ -167,6 +168,7 @@ router.include_router(quality_execution_router)
 router.include_router(quality_improvement_router)
 router.include_router(quality_qms_router)
 router.include_router(quality_fai_router)
+router.include_router(drawing_balloon_sheets_router)
 router.include_router(quality_complaints_router)
 router.include_router(supplier_evaluations_router)
 router.include_router(quality_complaint_batch_months_router)

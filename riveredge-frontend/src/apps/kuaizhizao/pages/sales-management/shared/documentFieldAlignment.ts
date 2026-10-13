@@ -71,6 +71,8 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   inspection_code: 10,
   /** 首件检验 FAI 单号 */
   fai_code: 10,
+  /** 气泡标注单号 */
+  sheet_code: 10,
   receipt_code: 10,
   /** 轻财务单据主标识叠列（伙伴名 + 单号） */
   finance_doc_partner_stacked: 10,

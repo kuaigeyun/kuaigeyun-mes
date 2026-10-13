@@ -411,6 +411,64 @@ def test_group_preview_item_id_is_computation_item_id(monkeypatch):
     assert rows[0]["max_push_quantity"] == 10
 
 
+def test_single_demand_line_forces_individual_work_order_granularity(monkeypatch):
+    import asyncio
+
+    from apps.kuaizhizao.services.work_order_group_service import WorkOrderGroupService
+
+    async def _no_pushed_keys(self, tenant_id: int, computation_id: int):
+        return set()
+
+    monkeypatch.setattr(WorkOrderGroupService, "collect_pushed_keys", _no_pushed_keys)
+
+    computation = SimpleNamespace(
+        id=16,
+        demand_item_bom_trees=[
+            {
+                "demand_item_id": 1,
+                "material_id": 101,
+                "material_code": "FG-01",
+                "material_name": "成品",
+                "source_type": SOURCE_TYPE_MAKE,
+                "required_quantity": 10,
+                "bom_level": 0,
+                "children": [],
+            }
+        ],
+    )
+    items = [
+        SimpleNamespace(
+            id=55,
+            material_id=101,
+            material_code="FG-01",
+            material_name="成品",
+            material_source_type=SOURCE_TYPE_MAKE,
+            suggested_work_order_quantity=10,
+        )
+    ]
+
+    async def _run():
+        svc = DemandComputationService()
+        effective = await svc.resolve_effective_work_order_granularity(
+            1,
+            computation,
+            items,
+            "grouped",
+            generate_mode="work_order_only",
+        )
+        count = await svc.count_pushable_demand_lines_for_work_order_group(
+            1,
+            computation,
+            items,
+            generate_mode="work_order_only",
+        )
+        return effective, count
+
+    effective, count = asyncio.run(_run())
+    assert count == 1
+    assert effective == "individual"
+
+
 def test_grouped_push_counts_one_group_for_multi_line_order():
     from apps.kuaizhizao.services.work_order_group_service import WorkOrderGroupService
 

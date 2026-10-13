@@ -147,7 +147,13 @@ const InternalAuditsPage = lazy(() => import('./pages/quality-management/interna
 const ManagementReviewsPage = lazy(() => import('./pages/quality-management/management-reviews'));
 const ClauseManagementPage = lazy(() => import('./pages/quality-management/clause-management'));
 const FaiOrdersPage = lazy(() => import('./pages/quality-management/fai-orders'));
-const FaiBalloonPage = lazy(() => import('./pages/quality-management/fai-orders/balloon'));
+const FaiBalloonLegacyRedirect = lazy(() => import('./pages/quality-management/fai-orders/balloon'));
+const DrawingBalloonSheetsPage = lazy(
+  () => import('./pages/quality-management/drawing-balloon-sheets'),
+);
+const DrawingBalloonSheetEditorPage = lazy(
+  () => import('./pages/quality-management/drawing-balloon-sheets/editor'),
+);
 
 // 设备管理页面
 const EquipmentDashboardPage = lazy(() => import('./pages/equipment-management/dashboard'));
@@ -545,7 +551,18 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="quality-management/qc-sop" element={withPageSuspense(QcSopPage)} />
       <Route path="quality-management/internal-audits" element={withPageSuspense(InternalAuditsPage)} />
       <Route path="quality-management/management-reviews" element={withPageSuspense(ManagementReviewsPage)} />
-      <Route path="quality-management/fai-orders/:id/balloon" element={withPageSuspense(FaiBalloonPage)} />
+      <Route
+        path="quality-management/fai-orders/:id/balloon"
+        element={withPageSuspense(FaiBalloonLegacyRedirect)}
+      />
+      <Route
+        path="quality-management/drawing-balloon-sheets/:id/editor"
+        element={withPageSuspense(DrawingBalloonSheetEditorPage)}
+      />
+      <Route
+        path="quality-management/drawing-balloon-sheets"
+        element={withPageSuspense(DrawingBalloonSheetsPage)}
+      />
       <Route path="quality-management/fai-orders" element={withPageSuspense(FaiOrdersPage)} />
 
       {/* 设备管理路由 */}
